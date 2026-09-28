@@ -253,6 +253,9 @@ authorities:
   Presentation preferences, keyboard events, and Desktop command IDs do not
   cross that boundary.
 
+Workbench 中 Preferences 入口、图形 Settings 页与用户设置 JSON 的页面分工见
+[Preferences 与 Settings 的职责](preferences-and-settings.md)。
+
 The current Desktop document is:
 
 ```json

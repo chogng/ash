@@ -1,5 +1,5 @@
 import './media/sessionsPreferences.css';
-import { h } from '../../../../base/browser/dom.js';
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { ContextView } from '../../../../base/browser/ui/contextview/contextview.js';
 import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
@@ -20,8 +20,8 @@ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextke
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { ActivityBarPosition } from '../../../../workbench/common/configuration.js';
 import '../../../../workbench/contrib/preferences/common/settingsEditorColorRegistry.js';
-import { PreferencesRenderer } from '../../../../workbench/contrib/preferences/browser/preferencesRenderers.js';
-import { PreferencesSearchQuery } from '../../../../workbench/contrib/preferences/browser/preferencesSearch.js';
+import { SettingsRenderer } from '../../../../workbench/contrib/preferences/browser/settingsRenderers.js';
+import { SettingsSearchQuery } from '../../../../workbench/contrib/preferences/browser/settingsSearch.js';
 import type { ISetting } from '../../../../workbench/services/preferences/common/preferences.js';
 import { SessionsConfiguration } from '../../../common/configuration.js';
 
@@ -129,10 +129,12 @@ export class SessionsPreferences extends Disposable {
 		const dialog = resources.add(new Dialog(this.container, {
 			title: localize('sessions.settings.title', 'Sessions Settings'),
 			content,
-			buttons: [{ label: localize('sessions.settings.close', 'Close'), value: 'close' }],
+		}));
+		resources.add(addDisposableListener(dialog.element, 'click', event => {
+			if (event.target === dialog.element) dialog.close();
 		}));
 		const contextView = resources.add(new ContextView(dialog.element));
-		const renderer = resources.add(new PreferencesRenderer(list, {
+		const renderer = resources.add(new SettingsRenderer(list, {
 			clipboardService: this.clipboardService,
 			configurationService: this.configurationService,
 			contextMenuProvider: this.contextMenuProvider,
@@ -175,7 +177,7 @@ export class SessionsPreferences extends Disposable {
 			}
 		}
 		const render = (): void => {
-			const query = new PreferencesSearchQuery(searchInput.value);
+			const query = new SettingsSearchQuery(searchInput.value);
 			const visible = query.isEmpty ? categories[activeCategory].settings : categories.flatMap(category => category.settings).filter(setting => query.matches(setting));
 			heading.textContent = query.isEmpty ? categories[activeCategory].title : localize('sessions.settings.results', 'Search results');
 			heading.hidden = query.isEmpty && visible.length === 0;

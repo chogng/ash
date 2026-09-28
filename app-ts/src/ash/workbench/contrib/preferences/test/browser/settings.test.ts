@@ -58,23 +58,22 @@ const { CodeEditorConfiguration } = await import('../../../../../workbench/contr
 const { ContentSearchConfiguration } = await import('../../../../../workbench/contrib/search/common/searchConfiguration.js');
 const { GitConfiguration } = await import('../../../../../workbench/services/git/common/gitConfiguration.js');
 const { ScmConfiguration } = await import('../../../../../workbench/contrib/scm/common/scmConfiguration.js');
+const { DictationConfiguration } = await import('../../../../../platform/dictation/common/dictationConfiguration.js');
 const { IGitService: GitServiceId } = await import('../../../../../workbench/services/git/common/gitService.js');
 const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(ConfigurationExtensions.Configuration);
 const { EditorPart } = await import('../../../../../workbench/browser/parts/editor/editorPart.js');
 const { EditorPaneMatch } = await import('../../../../../workbench/browser/parts/editor/editorPane.js');
 const { EditorPaneRegistry } = await import('../../../../../workbench/browser/parts/editor/editorRegistry.js');
-const { PreferencesEditor, PreferencesEditorId } = await import('../../../../../workbench/contrib/preferences/browser/preferencesEditor.js');
-const { PreferencesEditorPaneRegistry } = await import('../../../../../workbench/contrib/preferences/browser/preferencesEditorRegistry.js');
-const { PreferencesSearchQuery } = await import('../../../../../workbench/contrib/preferences/browser/preferencesSearch.js');
+const { SettingsSearchQuery } = await import('../../../../../workbench/contrib/preferences/browser/settingsSearch.js');
 const { createSettingsLayout, SettingsCategories, SettingsLayout } = await import('../../../../../workbench/contrib/preferences/browser/settingsLayout.js');
-const { SettingsEditorPane, SettingsEditorPaneId } = await import('../../../../../workbench/contrib/preferences/browser/settingsEditor.js');
+const { SettingsEditor, SettingsEditorId } = await import('../../../../../workbench/contrib/preferences/browser/settingsEditor.js');
 const { SettingsTree } = await import('../../../../../workbench/contrib/preferences/browser/settingsTree.js');
 const { SettingsTreeModel } = await import('../../../../../workbench/contrib/preferences/browser/settingsTreeModels.js');
 const { PreferencesService } = await import('../../../../../workbench/services/preferences/browser/preferencesService.js');
 const { BrowserEditorService } = await import('../../../../../workbench/services/editor/browser/browserEditorService.js');
 const { ILocalizationService: LocalizationServiceId } = await import('../../../../../workbench/services/localization/common/localizationService.js');
-const { isPreferencesEditorInput } = await import('../../../../../workbench/services/preferences/common/preferencesEditorInput.js');
-const { DefaultSettings, SettingsEditorModel } = await import('../../../../../workbench/services/preferences/common/preferencesModels.js');
+const { isSettingsEditorInput } = await import('../../../../../workbench/services/preferences/common/settingsEditorInput.js');
+const { DefaultSettings, SettingsEditorModel } = await import('../../../../../workbench/services/preferences/common/settingsModels.js');
 const { WorkbenchConfigurationService } = await import('../../../../../workbench/services/configuration/browser/configurationService.js');
 const { builtinLanguagePackCatalogs } = await import('../../../../../workbench/services/localization/common/localizationCatalogs.js');
 const { StartupEditorConfigurationKey } = await import('../../../../../workbench/contrib/welcomeGettingStarted/browser/startupPage.js');
@@ -175,6 +174,9 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.renderControlCharacters), 'editor');
 	assert.equal(findSettingCategory(layout, ContentSearchConfiguration.maxResults), 'editor');
 	assert.equal(findSettingCategory(layout, ScmConfiguration.diffDecorationsIgnoreTrimWhitespace), 'general');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'general');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.cloudProvider), 'general');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'general');
 	assert.equal(defaults.all.some(setting => setting.id === GitConfiguration.autofetch), false);
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetch)?.defaultValue, false);
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetchPeriod)?.defaultValue, 180);
@@ -229,8 +231,8 @@ test('SettingsLayout validates stable configuration identities', () => {
 	}]), /must not contain control characters/);
 });
 
-test('Preferences search normalizes pasted setting syntax and matches complete metadata terms', () => {
-	const query = new PreferencesSearchQuery('  "Editor.Font: Family"  ');
+test('Settings search normalizes pasted setting syntax and matches complete metadata terms', () => {
+	const query = new SettingsSearchQuery('  "Editor.Font: Family"  ');
 
 	assert.equal(query.text, 'editor.font family');
 	assert.equal(query.matches({
@@ -244,9 +246,9 @@ test('Preferences search normalizes pasted setting syntax and matches complete m
 	}), false);
 });
 
-test('Preferences search composes modified and setting ID filters', () => {
+test('Settings search composes modified and setting ID filters', () => {
 	const modifiedIds = new Set(['editor.fontFamily']);
-	const query = new PreferencesSearchQuery('@modified @id:font editor', {
+	const query = new SettingsSearchQuery('@modified @id:font editor', {
 		isModified: id => modifiedIds.has(id),
 	});
 
@@ -301,7 +303,7 @@ test('Settings tree preserves item identity while filtering and updating', () =>
 	]), /Duplicate tree node ID/);
 });
 
-test('PreferencesEditor renders and updates registry-backed settings only', async () => {
+test('SettingsEditor opens directly and updates registry-backed settings', async () => {
 	using disposables = new DisposableStore();
 	const ownerDocument = browserEnvironment.window.document;
 	ownerDocument.body.replaceChildren();
@@ -351,21 +353,14 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 	services.registerInstance(LocalizationServiceId, localizationService);
 	services.registerInstance(GitServiceId, gitService);
 	const instantiationService = services;
-	const preferencesPanes = disposables.add(new PreferencesEditorPaneRegistry());
-	disposables.add(preferencesPanes.registerPreferencesEditorPane({
-		id: SettingsEditorPaneId,
-		title: 'Settings',
-		order: 1,
-		ctorDescriptor: new ServiceConstructionDescriptor(SettingsEditorPane, {
-			serviceDependencies: [ClipboardServiceId, ConfigurationServiceId, IContextMenuService, IContextViewService, LocalizationServiceId, GitServiceId],
-		}),
-	}));
 	const editorPanes = new EditorPaneRegistry();
 	disposables.add(editorPanes.register({
-		id: PreferencesEditorId,
-		name: 'Preferences',
-		canOpen: input => isPreferencesEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
-		create: () => new PreferencesEditor(instantiationService, localizationService, preferencesPanes),
+		id: SettingsEditorId,
+		name: 'Settings',
+		canOpen: input => isSettingsEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
+		create: () => instantiationService.createInstance(new ServiceConstructionDescriptor(SettingsEditor, {
+			serviceDependencies: [ClipboardServiceId, ConfigurationServiceId, IContextMenuService, IContextViewService, LocalizationServiceId, GitServiceId],
+		})),
 	}));
 	const editor = disposables.add(new EditorPart(root, { registry: editorPanes, instantiationService }));
 	const preferences = disposables.add(new PreferencesService(() => new BrowserEditorService(editor)));

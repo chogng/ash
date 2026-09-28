@@ -39,7 +39,7 @@ const { KeybindingsResourceContribution } = await import('../../../../../workben
 const { WorkbenchKeybindingsResourceService } = await import('../../../../../workbench/services/keybinding/browser/keybindingsResourceService.js');
 const { createKeyboardShortcutsEditorInput, isKeyboardShortcutsEditorInput } = await import('../../../../../workbench/services/preferences/browser/keybindingsEditorInput.js');
 const { PreferencesService } = await import('../../../../../workbench/services/preferences/browser/preferencesService.js');
-const { isPreferencesEditorInput } = await import('../../../../../workbench/services/preferences/common/preferencesEditorInput.js');
+const { isSettingsEditorInput } = await import('../../../../../workbench/services/preferences/common/settingsEditorInput.js');
 
 suiteTeardown(() => browserEnvironment.window.close());
 
@@ -76,10 +76,10 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 	}, disposables.add(new BrowserNotificationService(ownerDocument.body))));
 	const registry = new EditorPaneRegistry();
 	registry.register({
-		id: 'test.preferences',
-		name: 'Preferences',
-		canOpen: input => isPreferencesEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
-		create: () => new TestPreferencesEditor(),
+		id: 'test.settings',
+		name: 'Settings',
+		canOpen: input => isSettingsEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
+		create: () => new TestSettingsEditor(),
 	});
 	registry.register({
 		id: KeyboardShortcutsEditorId,
@@ -170,8 +170,8 @@ function nextTurn(): Promise<void> {
 	return new Promise(resolve => globalThis.setTimeout(resolve, 0));
 }
 
-class TestPreferencesEditor extends Disposable {
-	readonly id = 'test.preferences';
+class TestSettingsEditor extends Disposable {
+	readonly id = 'test.settings';
 	private element: HTMLElement | undefined;
 
 	create(parent: HTMLElement): void {

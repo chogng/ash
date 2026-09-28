@@ -69,6 +69,12 @@ export const SettingsNavigation = [
 				description: 'Tune hover feedback and resize handles.',
 				settings: ['workbench.hover.*', 'workbench.sash.*', 'onboarding.enabled'],
 			},
+			{
+				id: 'dictation',
+				label: 'Voice input',
+				description: 'Choose how speech is transcribed in chat.',
+				settings: ['dictation.*'],
+			},
 		],
 	},
 	{

@@ -1,23 +1,23 @@
 import { URI } from '../../../../base/common/uri.js';
 import type { EditorInput } from '../../editor/common/editorService.js';
 
-export const PreferencesEditorContentType = 'application/vnd.ash.preferences';
-export const PreferencesEditorResource = URI.parse('ash-preferences:/preferences');
+export const SettingsEditorContentType = 'application/vnd.ash.settings-editor';
+export const SettingsEditorResource = URI.parse('ash-settings-editor:/settings');
 export const SettingsFileSystemScheme = 'ash-settings';
 export const UserSettingsResource = URI.parse(`${SettingsFileSystemScheme}:/user/settings.json`);
 
-/** Creates the singleton input routed to the Workbench Preferences editor. */
-export function createPreferencesEditorInput(): EditorInput {
+/** Creates the singleton input routed to the Workbench Settings editor. */
+export function createSettingsEditorInput(): EditorInput {
 	return {
-		resource: PreferencesEditorResource,
-		contentType: PreferencesEditorContentType,
+		resource: SettingsEditorResource,
+		contentType: SettingsEditorContentType,
 		label: 'Ash Settings',
 		readOnly: true,
 	};
 }
 
-export function isPreferencesEditorInput(input: EditorInput): boolean {
-	return input.contentType === PreferencesEditorContentType || input.resource.toString() === PreferencesEditorResource.toString();
+export function isSettingsEditorInput(input: EditorInput): boolean {
+	return input.contentType === SettingsEditorContentType || input.resource.toString() === SettingsEditorResource.toString();
 }
 
 /** Creates the editable JSONC projection of the current profile's user settings. */

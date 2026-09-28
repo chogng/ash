@@ -8,39 +8,30 @@ import { registerEditorPane } from '../../../browser/parts/editor/editorRegistry
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { IGitService } from '../../../services/git/common/gitService.js';
-import { isPreferencesEditorInput } from '../../../services/preferences/common/preferencesEditorInput.js';
-import { PreferencesEditor, PreferencesEditorId } from './preferencesEditor.js';
-import { registerPreferencesEditorPane } from './preferencesEditorRegistry.js';
-import { SettingsEditorPane, SettingsEditorPaneId } from './settingsEditor.js';
+import { isSettingsEditorInput } from '../../../services/preferences/common/settingsEditorInput.js';
+import { SettingsEditor, SettingsEditorId } from './settingsEditor.js';
 import { PreferencesContribution } from '../common/preferencesContribution.js';
 import '../common/settingsEditorColorRegistry.js';
 import './keyboardLayoutPicker.js';
 import './keyboardShortcutsEditor.contribution.js';
 import './preferencesActions.js';
 
-registerPreferencesEditorPane({
-	id: SettingsEditorPaneId,
-	title: 'Settings',
-	order: 1,
-	ctorDescriptor: new ServiceConstructionDescriptor(SettingsEditorPane, {
-		serviceDependencies: [
-			IClipboardService,
-			IConfigurationService,
-			IContextMenuService,
-			IContextViewService,
-			ILocalizationService,
-			IGitService,
-		],
-	}),
-});
-
 registerEditorPane({
-	id: PreferencesEditorId,
-	name: 'Preferences',
-	canOpen: input => isPreferencesEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
+	id: SettingsEditorId,
+	name: 'Settings',
+	canOpen: input => isSettingsEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	create: options => {
-		if (!options.instantiationService) throw new Error('Preferences editor requires the Instantiation Service');
-		return new PreferencesEditor(options.instantiationService, options.instantiationService.get(ILocalizationService));
+		if (!options.instantiationService) throw new Error('Settings editor requires the Instantiation Service');
+		return options.instantiationService.createInstance(new ServiceConstructionDescriptor(SettingsEditor, {
+			serviceDependencies: [
+				IClipboardService,
+				IConfigurationService,
+				IContextMenuService,
+				IContextViewService,
+				ILocalizationService,
+				IGitService,
+			],
+		}));
 	},
 });
 

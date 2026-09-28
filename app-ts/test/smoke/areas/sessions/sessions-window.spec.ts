@@ -100,16 +100,13 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await expect(settings.locator('.ash-sessions-settings-list')).toHaveCSS('border-top-width', '0px');
 	const sidebar = settings.locator('.ash-sessions-settings-sidebar');
 	const settingsPage = settings.locator('.ash-sessions-settings-page');
-	const actions = settings.locator('.ash-dialog-actions');
 	const sidebarBounds = await sidebar.boundingBox();
 	const pageBounds = await settingsPage.boundingBox();
-	const actionsBounds = await actions.boundingBox();
 	expect(sidebarBounds).not.toBeNull();
 	expect(pageBounds).not.toBeNull();
-	expect(actionsBounds).not.toBeNull();
 	expect(sidebarBounds!.x + sidebarBounds!.width).toBeLessThanOrEqual(pageBounds!.x + 1);
-	expect(pageBounds!.y + pageBounds!.height).toBeLessThanOrEqual(actionsBounds!.y + 1);
-	expect(sidebarBounds!.y + sidebarBounds!.height).toBeGreaterThanOrEqual(actionsBounds!.y + actionsBounds!.height - 1);
+	expect(sidebarBounds!.y + sidebarBounds!.height).toBeGreaterThanOrEqual(pageBounds!.y + pageBounds!.height - 1);
+	await expect(settings.locator('.ash-dialog-actions')).toHaveCount(0);
 	const navigation = settings.getByRole('navigation', { name: 'Settings categories' });
 	for (const [section, categories] of [
 		['Basics', ['General', 'Account', 'Appearance', 'Voice', 'Personalization']],
@@ -162,7 +159,7 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await expect(layoutStyle).toHaveText(changedLayoutStyle);
 	await layoutStyle.click();
 	await page.getByRole('option', { name: originalLayoutStyle }).click();
-	await settings.getByRole('button', { name: 'Close' }).click();
+	await page.keyboard.press('Escape');
 	await expect(settings).toHaveCount(0);
 	await expect(accounts).toBeFocused();
 	const chatButton = activityBar.locator('button').first();
@@ -292,7 +289,10 @@ test('Electron Sessions account menu opens the Sessions settings page', async ({
 	await expect(layoutStyle).toHaveText(changedLayoutStyle);
 	await layoutStyle.click();
 	await page.getByRole('option', { name: originalLayoutStyle }).click();
-	await settings.getByRole('button', { name: 'Close' }).click();
+	await expect(settings.locator('.ash-dialog-actions')).toHaveCount(0);
+	const dialogBounds = await settings.boundingBox();
+	expect(dialogBounds).not.toBeNull();
+	await page.mouse.click(dialogBounds!.x - 8, dialogBounds!.y - 8);
 	await expect(settings).toHaveCount(0);
 	await expect(accountButton).toBeFocused();
 });

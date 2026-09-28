@@ -1,4 +1,4 @@
-import './media/preferencesWidgets.css';
+import './media/settingsWidgets.css';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -14,18 +14,18 @@ import type { IClipboardService } from '../../../../platform/clipboard/common/cl
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import type { IBooleanSetting, INumberSetting, ISelectSetting, ISetting, IStringMapSetting, ITextSetting, SettingReference, SettingValueBinding, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
-import { configurationSettingBinding, SettingModel, type SettingState } from '../../../services/preferences/common/preferencesModels.js';
+import { configurationSettingBinding, SettingModel, type SettingState } from '../../../services/preferences/common/settingsModels.js';
 import { SettingsSearchMenu } from './settingsSearchMenu.js';
 import { SettingsTreeIndicatorsLabel } from './settingsEditorSettingIndicators.js';
 
-interface PreferencesSearchWidgetOptions {
+interface SettingsSearchWidgetOptions {
 	readonly ariaControls: string;
 	readonly contextMenuProvider: IContextMenuProvider;
 	readonly localizationService: ILocalizationService;
 }
 
-/** Owns Preferences search input, localization, and search-specific keyboard behavior. */
-export class PreferencesSearchWidget extends Disposable {
+/** Owns Settings search input, localization, and search-specific keyboard behavior. */
+export class SettingsSearchWidget extends Disposable {
 	public readonly domNode: HTMLDivElement;
 	public readonly onDidChange: Event<string>;
 	public readonly onDidRequestFocusResults: Event<void>;
@@ -34,7 +34,7 @@ export class PreferencesSearchWidget extends Disposable {
 	private readonly inputBox: InputBox;
 	private readonly searchMenu: SettingsSearchMenu;
 
-	constructor(container: HTMLElement, private readonly options: PreferencesSearchWidgetOptions) {
+	constructor(container: HTMLElement, private readonly options: SettingsSearchWidgetOptions) {
 		super();
 		this.domNode = h(container.ownerDocument, 'div');
 		this.domNode.className = 'ash-settings-search';

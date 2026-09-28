@@ -1,6 +1,6 @@
 import { ObjectTreeModel, type ObjectTreeElement, type ObjectTreeNode } from "../../../../base/browser/ui/tree/objectTreeModel.js";
 import { TreeVisibility } from "../../../../base/browser/ui/tree/tree.js";
-import { PreferencesSearchQuery } from "./preferencesSearch.js";
+import { SettingsSearchQuery } from "./settingsSearch.js";
 
 export interface SettingsTreeItem<T> {
 	readonly kind: "item";
@@ -26,7 +26,7 @@ export type SettingsTreeNode<T> = ObjectTreeElement<SettingsTreeElement<T>>;
 export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>> {
 	private navigationScopeIds: ReadonlySet<string> | undefined;
 	private navigationTargetId: string | undefined;
-	private searchQuery = new PreferencesSearchQuery("");
+	private searchQuery = new SettingsSearchQuery("");
 
 	constructor() {
 		super({ identityProvider: { getId: (node) => node.id } });
@@ -58,8 +58,8 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 		this.refreshNavigationScope();
 	}
 
-	setQuery(query: string | PreferencesSearchQuery): void {
-		const next = typeof query === "string" ? new PreferencesSearchQuery(query) : query;
+	setQuery(query: string | SettingsSearchQuery): void {
+		const next = typeof query === "string" ? new SettingsSearchQuery(query) : query;
 		if (next.key === this.searchQuery.key) return;
 		this.searchQuery = next;
 		this.refilter();

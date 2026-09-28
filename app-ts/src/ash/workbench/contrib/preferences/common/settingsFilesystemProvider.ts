@@ -6,7 +6,7 @@ import type { IConfigurationResourceService } from '../../../../platform/configu
 import { ConfigurationResourceRevisionConflictError } from '../../../../platform/configuration/common/configurationResourceService.js';
 import type { IFileSystemProvider } from '../../../../platform/files/common/fileSystemProviderService.js';
 import { FileKind, FileNotFoundError, FileOperationNotSupportedError, FileRevisionConflictError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileContent, type IFileEntry, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from '../../../../platform/files/common/files.js';
-import { SettingsFileSystemScheme, UserSettingsResource } from '../../../services/preferences/common/preferencesEditorInput.js';
+import { SettingsFileSystemScheme, UserSettingsResource } from '../../../services/preferences/common/settingsEditorInput.js';
 
 /** Exposes the editable current-profile settings source through one virtual scheme. */
 export class SettingsFileSystemProvider extends Disposable implements IFileSystemProvider {

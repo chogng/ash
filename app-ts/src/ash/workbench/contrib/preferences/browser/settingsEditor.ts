@@ -1,3 +1,4 @@
+import './media/settingsEditor.css';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { h } from '../../../../base/browser/dom.js';
 import type { IDimension } from '../../../../base/browser/dom.js';
@@ -11,42 +12,51 @@ import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } fr
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { DESKTOP_UPDATE_POLICY_SETTING, type DesktopUpdatePolicy } from '../../../../platform/update/common/updateService.js';
 import { localize } from '../../../../nls.js';
+import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
+import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import { GitConfiguration, type GitAutofetch } from '../../../services/git/common/gitConfiguration.js';
 import type { IGitService } from '../../../services/git/common/gitService.js';
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import type { ISetting, ISettingsEditorModel } from '../../../services/preferences/common/preferences.js';
-import { DefaultSettings, SettingsEditorModel } from '../../../services/preferences/common/preferencesModels.js';
-import type { IPreferencesEditorPane } from './preferencesEditorRegistry.js';
-import { PreferencesRenderer } from './preferencesRenderers.js';
-import { PreferencesSearchQuery } from './preferencesSearch.js';
+import { isSettingsEditorInput } from '../../../services/preferences/common/settingsEditorInput.js';
+import { DefaultSettings, SettingsEditorModel } from '../../../services/preferences/common/settingsModels.js';
+import { SettingsRenderer } from './settingsRenderers.js';
+import { SettingsSearchQuery } from './settingsSearch.js';
+import { SettingsSearchWidget } from './settingsWidgets.js';
 import { createSettingsLayout, settingsRootNodes, SettingsCategories, type SettingsCategoryDescriptor, type SettingsCategoryGroupDescriptor, type SettingsLayoutCategory } from './settingsLayout.js';
 import { SettingsTree } from './settingsTree.js';
 import { SettingsTreeModel } from './settingsTreeModels.js';
 import { TOCTree, TOCTreeModel, type SettingsTOCEntry, type SettingsTOCOpenEntry } from './tocTree.js';
 
-export const SettingsEditorPaneId = 'workbench.preferences.settings';
+export const SettingsEditorId = 'workbench.editor.settings';
 
-/** Owns the Configuration Registry-backed Settings navigation and setting widgets. */
-export class SettingsEditorPane extends Disposable implements IPreferencesEditorPane {
-	private readonly content: HTMLElement;
-	private readonly contentDescription: HTMLParagraphElement;
-	private readonly contentHeading: HTMLHeadingElement;
-	private readonly contentScrollable: ScrollableElement;
-	private readonly contentStatus: HTMLParagraphElement;
+/** Owns the Settings search, navigation, and Configuration Registry-backed controls. */
+export class SettingsEditor extends Disposable implements IEditorPane {
+	public readonly id = SettingsEditorId;
+	private content!: HTMLElement;
+	private contentDescription!: HTMLParagraphElement;
+	private contentHeading!: HTMLHeadingElement;
+	private contentScrollable!: ScrollableElement;
+	private contentStatus!: HTMLParagraphElement;
 	private readonly configurationService: IConfigurationService;
-	private readonly element: HTMLDivElement;
+	private readonly clipboardService: IClipboardService;
+	private readonly contextMenuProvider: IContextMenuProvider;
+	private readonly contextViewProvider: IContextViewProvider;
+	private element!: HTMLDivElement;
 	private readonly localizationService: ILocalizationService;
-	private readonly navigationEmpty: HTMLParagraphElement;
-	private readonly navigationScrollable: ScrollableElement;
+	private navigationEmpty!: HTMLParagraphElement;
+	private navigationScrollable!: ScrollableElement;
 	private readonly settingsModel: ISettingsEditorModel;
-	private readonly settingsTree: SettingsTree<ISetting>;
-	private readonly tocTree: TOCTree;
-	private readonly treeModel: SettingsTreeModel<ISetting>;
-	private activeCategory: SettingsCategoryDescriptor;
+	private settingsTree!: SettingsTree<ISetting>;
+	private tocTree!: TOCTree;
+	private treeModel!: SettingsTreeModel<ISetting>;
+	private activeCategory!: SettingsCategoryDescriptor;
 	private activeNavigationTarget: Extract<SettingsTOCEntry, { readonly kind: 'target' }> | undefined;
+	private rootDomNode: HTMLDivElement | undefined;
+	private searchWidget: SettingsSearchWidget | undefined;
+	private visible = false;
 
 	constructor(
-		container: HTMLElement,
 		clipboardService: IClipboardService,
 		configurationService: IConfigurationService,
 		contextMenuProvider: IContextMenuProvider,
@@ -61,18 +71,36 @@ export class SettingsEditorPane extends Disposable implements IPreferencesEditor
 			...new DefaultSettings().all.map(setting => setting.id === DESKTOP_UPDATE_POLICY_SETTING ? localUpdatePolicySetting(setting, configurationService) : setting),
 			...gitSettings(gitService),
 		]));
+		this.clipboardService = clipboardService;
+		this.contextMenuProvider = contextMenuProvider;
+		this.contextViewProvider = contextViewProvider;
+	}
+
+	public create(container: HTMLElement): void {
+		if (this.rootDomNode) throw new Error('Settings editor has already been created');
 		const settingsLayout = createSettingsLayout(this.settingsModel.settings);
-		const preferencesRenderer = this._register(new PreferencesRenderer(container, {
-			clipboardService,
-			configurationService,
-			contextMenuProvider,
-			contextViewProvider,
+		const settingsRenderer = this._register(new SettingsRenderer(container, {
+			clipboardService: this.clipboardService,
+			configurationService: this.configurationService,
+			contextMenuProvider: this.contextMenuProvider,
+			contextViewProvider: this.contextViewProvider,
 			onStatus: this.settingsModel.reportStatus,
 		}));
 
 		const ownerDocument = container.ownerDocument;
+		const rootDomNode = h(ownerDocument, 'div');
+		rootDomNode.className = 'ash-settings-editor';
+		const bodyId = `ash-settings-editor-body-${nextSettingsEditorId++}`;
+		this.searchWidget = this._register(new SettingsSearchWidget(rootDomNode, {
+			ariaControls: bodyId,
+			contextMenuProvider: this.contextMenuProvider,
+			localizationService: this.localizationService,
+		}));
+		this._register(this.searchWidget.onDidChange(value => this.search(value)));
+		this._register(this.searchWidget.onDidRequestFocusResults(() => this.focusResults()));
 		this.element = h(ownerDocument, 'div');
 		this.element.className = 'ash-settings-layout';
+		this.element.id = bodyId;
 
 		const navigation = h(ownerDocument, 'nav');
 		navigation.className = 'ash-settings-sidebar';
@@ -128,6 +156,9 @@ export class SettingsEditorPane extends Disposable implements IPreferencesEditor
 		this.contentScrollable.append(contentInner);
 		this.content.append(this.contentScrollable.element);
 		this.element.append(navigation, this.content);
+		rootDomNode.append(this.element);
+		container.append(rootDomNode);
+		this.rootDomNode = rootDomNode;
 
 		const initialCategory = SettingsCategories[0];
 		if (!initialCategory) throw new Error('Settings requires at least one category');
@@ -141,14 +172,14 @@ export class SettingsEditorPane extends Disposable implements IPreferencesEditor
 			groupClassName: 'ash-configuration-settings-group ash-settings-content-group',
 			groupDescriptionClassName: 'ash-configuration-settings-group-description',
 			itemsClassName: 'ash-configuration-settings-list',
-			renderItem: item => preferencesRenderer.render(item.value),
-			updateItem: item => preferencesRenderer.update(item.value),
-			disposeItem: item => preferencesRenderer.disposeSetting(item.id),
+			renderItem: item => settingsRenderer.render(item.value),
+			updateItem: item => settingsRenderer.update(item.value),
+			disposeItem: item => settingsRenderer.disposeSetting(item.id),
 		}));
 		this.renderCategory(initialCategory);
 
 		this._register(this.localizationService.onDidChange(() => this.updateLocalizedChrome()));
-		this._register(configurationService.onDidChangeConfiguration(() => this.treeModel.refreshQuery()));
+		this._register(this.configurationService.onDidChangeConfiguration(() => this.treeModel.refreshQuery()));
 		this._register(this.settingsModel.onDidChangeStatus(status => {
 			this.contentStatus.textContent = status.message;
 			this.contentStatus.classList.toggle('is-error', status.isError);
@@ -164,20 +195,35 @@ export class SettingsEditorPane extends Disposable implements IPreferencesEditor
 			const activeId = this.activeNavigationTarget?.id ?? this.activeCategory.id;
 			this.tocTree.setSelection([containsActiveCategory && collapsed ? element.id : activeId]);
 		}));
-		this._register(toDisposable(() => this.element.remove()));
+		this._register(toDisposable(() => rootDomNode.remove()));
 	}
 
-	getDomNode(): HTMLElement {
-		return this.element;
+	public async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
+		if (!isSettingsEditorInput(input)) throw new TypeError(`Settings editor cannot open ${input.resource}`);
+		if (signal.aborted) throw signal.reason;
+		this.search(this.searchWidget?.value ?? '');
 	}
 
-	layout(_dimension: IDimension): void {
+	public clearInput(): void {
+		if (this.searchWidget) this.searchWidget.value = '';
+	}
+
+	public layout(_dimension: IDimension): void {
 		this.navigationScrollable.layout();
 		this.contentScrollable.layout();
 	}
 
-	search(text: string): void {
-		const query = new PreferencesSearchQuery(text, { isModified: id => this.isModified(id) });
+	public setVisible(visibility: EditorPaneVisibility): void {
+		this.visible = visibility === EditorPaneVisibility.Visible;
+	}
+
+	public focus(): void {
+		if (!this.visible) return;
+		this.searchWidget?.focus();
+	}
+
+	private search(text: string): void {
+		const query = new SettingsSearchQuery(text, { isModified: id => this.isModified(id) });
 		this.tocTree.setFindPattern(query.text);
 		this.treeModel.setQuery(query);
 		this.navigationScrollable.scrollTo(0, 0);
@@ -192,7 +238,7 @@ export class SettingsEditorPane extends Disposable implements IPreferencesEditor
 		return JSON.stringify(configuration.serialize(this.configurationService.getValue(configuration.key))) !== JSON.stringify(configuration.serialize(configuration.defaultValue));
 	}
 
-	focus(): void {
+	private focusResults(): void {
 		this.tocTree.domFocus();
 	}
 

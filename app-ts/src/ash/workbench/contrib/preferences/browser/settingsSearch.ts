@@ -1,4 +1,4 @@
-export interface PreferencesSearchTarget {
+export interface SettingsSearchTarget {
 	readonly id?: string;
 	readonly title: string;
 	readonly description: string;
@@ -6,19 +6,19 @@ export interface PreferencesSearchTarget {
 	readonly tags?: readonly string[];
 }
 
-export interface PreferencesSearchQueryOptions {
+export interface SettingsSearchQueryOptions {
 	readonly isModified?: (id: string) => boolean;
 }
 
-/** Normalizes one Preferences query and matches it against searchable setting metadata. */
-export class PreferencesSearchQuery {
+/** Normalizes one Settings query and matches it against searchable setting metadata. */
+export class SettingsSearchQuery {
 	public readonly text: string;
 	public readonly key: string;
 	public readonly hasModifiedFilter: boolean;
 	private readonly idFilter: string | undefined;
 	private readonly terms: readonly string[];
 
-	constructor(value: string, private readonly options: PreferencesSearchQueryOptions = {}) {
+	constructor(value: string, private readonly options: SettingsSearchQueryOptions = {}) {
 		const textTokens: string[] = [];
 		let idFilter: string | undefined;
 		let modified = false;
@@ -49,7 +49,7 @@ export class PreferencesSearchQuery {
 		return this.terms.length === 0 && !this.idFilter && !this.hasModifiedFilter;
 	}
 
-	public matches(target: PreferencesSearchTarget): boolean {
+	public matches(target: SettingsSearchTarget): boolean {
 		if (this.hasModifiedFilter && (!target.id || !this.options.isModified?.(target.id))) return false;
 		if (this.idFilter && !target.id?.toLocaleLowerCase().includes(this.idFilter)) return false;
 		if (this.terms.length === 0) return true;

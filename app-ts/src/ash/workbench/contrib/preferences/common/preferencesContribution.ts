@@ -4,7 +4,7 @@ import { ConfigurationSchemaId, createConfigurationSchema } from '../../../../pl
 import { IFileSystemProviderService } from '../../../../platform/files/common/fileSystemProviderService.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { JsonSchemasRegistry } from '../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
-import { UserSettingsResource } from '../../../services/preferences/common/preferencesEditorInput.js';
+import { UserSettingsResource } from '../../../services/preferences/common/settingsEditorInput.js';
 import { SettingsFileSystemProvider } from './settingsFilesystemProvider.js';
 
 /** Owns Preferences resources that must exist before an editor resolves them. */

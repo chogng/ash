@@ -15,7 +15,7 @@ import { BrowserTextResourceStore } from '../../../../../workbench/contrib/codeE
 import type { EditorInput, EditorOpenOptions, EditorOpenTarget, IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import { PreferencesService } from '../../../../../workbench/services/preferences/browser/preferencesService.js';
 import { TextFileService } from '../../../../../workbench/services/textfile/common/textFileService.js';
-import { UserSettingsResource } from '../../../../../workbench/services/preferences/common/preferencesEditorInput.js';
+import { UserSettingsResource } from '../../../../../workbench/services/preferences/common/settingsEditorInput.js';
 import { SettingsFileSystemProvider } from '../../../../../workbench/contrib/preferences/common/settingsFilesystemProvider.js';
 import { createJsonCompletionProvider } from '../../../../../workbench/services/language/common/jsonLanguageFeatures.js';
 import { SmartSnippetInserter } from '../../../../../workbench/contrib/preferences/common/smartSnippetInserter.js';

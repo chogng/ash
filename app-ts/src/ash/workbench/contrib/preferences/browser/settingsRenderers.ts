@@ -1,9 +1,9 @@
 import { DisposableMap, Disposable } from '../../../../base/common/lifecycle.js';
 import type { ISetting } from '../../../services/preferences/common/preferences.js';
-import { createSettingWidget, type SettingWidget, type SettingWidgetOptions } from './preferencesWidgets.js';
+import { createSettingWidget, type SettingWidget, type SettingWidgetOptions } from './settingsWidgets.js';
 
 /** Creates and retains one Widget per stable Settings ID. */
-export class PreferencesRenderer extends Disposable {
+export class SettingsRenderer extends Disposable {
 	private readonly widgets = this._register(new DisposableMap<string, SettingWidget>());
 
 	constructor(private readonly container: HTMLElement, private readonly options: SettingWidgetOptions) {
