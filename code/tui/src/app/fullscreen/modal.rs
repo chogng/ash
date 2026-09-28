@@ -74,6 +74,11 @@ pub(super) fn dialog_body_area(app: &App, available: Rect) -> Option<Rect> {
     })
 }
 
+pub(super) fn selectable_text_area(app: &App, available: Rect) -> Option<Rect> {
+    is_open(app)
+        .then(|| dialog_body_area(app, available).unwrap_or(layout_for(app, available).content))
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::app) enum Target {
     Close,
@@ -82,7 +87,7 @@ pub(in crate::app) enum Target {
     Memories(crate::memories::Target),
     Backdrop,
     Blocked,
-    DialogText,
+    Text,
     Tab(usize),
     List(crate::widgets::list_selection::ListSelectionPointerTarget),
 }
@@ -113,11 +118,11 @@ pub(super) fn target_at(
         return Some(Target::Close);
     }
     if app.overlay().is_some() {
-        return None;
+        return layout.content.contains(position).then_some(Target::Text);
     }
     let panel = app.command_panel()?;
     if dialog_body_area(app, available).is_some_and(|body| body.contains(position)) {
-        return Some(Target::DialogText);
+        return Some(Target::Text);
     }
     if let Some(parent) = panel.parent_title() {
         if parent_area(layout, &crate::nls::localize(app.language(), parent)).contains(position) {
@@ -126,7 +131,9 @@ pub(super) fn target_at(
     }
     let body = body_area(panel, layout.content);
     if let crate::app::command_panel::CommandPanelBody::Provider(provider) = panel.body() {
-        return provider.target_at(body, position).map(Target::Provider);
+        if let Some(target) = provider.target_at(body, position) {
+            return Some(Target::Provider(target));
+        }
     }
     let tabs = Rect {
         height: panel
@@ -136,17 +143,18 @@ pub(super) fn target_at(
         ..layout.content
     };
     if let crate::app::command_panel::CommandPanelBody::Memories(memories) = panel.body() {
-        return memories
-            .target_at(tabs, body, position)
-            .map(Target::Memories);
+        if let Some(target) = memories.target_at(tabs, body, position) {
+            return Some(Target::Memories(target));
+        }
     }
-    match panel.list_selection() {
+    let target = match panel.list_selection() {
         Some(selection) => {
             crate::widgets::list_selection::pointer_target_at(selection, tabs, body, position)
                 .map(Target::List)
         }
         None => panel.tab_at(tabs, position).map(Target::Tab),
-    }
+    };
+    target.or_else(|| layout.content.contains(position).then_some(Target::Text))
 }
 
 pub(super) fn activate(
@@ -195,7 +203,7 @@ pub(super) fn activate(
             app.fullscreen.modal_alert = true;
             None
         }
-        Target::DialogText => None,
+        Target::Text => None,
         Target::List(target) => {
             app.fullscreen.modal_alert = false;
             let content = layout_for(app, available).content;

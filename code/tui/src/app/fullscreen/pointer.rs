@@ -328,14 +328,14 @@ pub(in crate::app) fn handle_mouse(
     if super::modal::is_open(app) {
         app.input_state_mut().pointer_up();
         let target = target_at(app, area, mouse.column, mouse.row);
-        let dialog_text_pressed = app.fullscreen.pointer.pressed()
-            == Some(&PointerTarget::Modal(super::modal::Target::DialogText));
+        let text_pressed = app.fullscreen.pointer.pressed()
+            == Some(&PointerTarget::Modal(super::modal::Target::Text));
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) => {
                 if super::modal::layout(area).surface.contains(position) {
                     app.fullscreen.modal_alert = false;
                 }
-                if target == Some(PointerTarget::Modal(super::modal::Target::DialogText)) {
+                if target == Some(PointerTarget::Modal(super::modal::Target::Text)) {
                     app.fullscreen.selection.begin(position);
                 } else {
                     app.fullscreen.selection.clear();
@@ -343,18 +343,18 @@ pub(in crate::app) fn handle_mouse(
                 app.fullscreen.pointer.update_pressed(target);
             }
             MouseEventKind::Drag(MouseButton::Left) => {
-                if dialog_text_pressed {
-                    let body = super::modal::dialog_body_area(app, area)
-                        .expect("pressed dialog text has a body area");
+                if text_pressed {
+                    let body = super::modal::selectable_text_area(app, area)
+                        .expect("pressed modal text has a body area");
                     app.fullscreen.selection.drag(clamp_to_rect(position, body));
                 } else {
                     app.fullscreen.pointer.cancel_click();
                 }
             }
             MouseEventKind::Up(MouseButton::Left) => {
-                if dialog_text_pressed {
-                    let body = super::modal::dialog_body_area(app, area)
-                        .expect("pressed dialog text has a body area");
+                if text_pressed {
+                    let body = super::modal::selectable_text_area(app, area)
+                        .expect("pressed modal text has a body area");
                     let position = clamp_to_rect(position, body);
                     let outcome = app.fullscreen.selection.finish(position, Instant::now());
                     app.fullscreen.pointer.cancel_click();
@@ -470,10 +470,11 @@ pub(in crate::app) fn handle_mouse(
                 app.input_state_mut().pointer_drag(hit);
             }
             MouseEventKind::Up(MouseButton::Left) => {
-                app.input_state_mut().pointer_drag(hit);
-                app.input_state_mut().pointer_up();
-                if let Some(range) = app.input_state().selection_range() {
-                    return MouseAction::InputSelection(app.input()[range].to_owned());
+                if let Some(text) =
+                    app.input_state_mut()
+                        .pointer_finish(hit, position, Instant::now())
+                {
+                    return MouseAction::InputSelection(text);
                 }
             }
             _ => unreachable!(),
@@ -688,12 +689,12 @@ pub(in crate::app) fn finish_pointer_gesture(
     outcome: Option<ScreenSelectionOutcome>,
 ) -> Result<Option<AppCommand>, std::io::Error> {
     let area = terminal.area()?;
-    let dialog_body = super::modal::dialog_body_area(app, area);
+    let text_area = super::modal::selectable_text_area(app, area);
     let select = |app: &mut App, range| {
         super::selection::apply_screen_selection(
             app,
             range,
-            |range| match dialog_body {
+            |range| match text_area {
                 Some(body) => terminal.selected_text_in_area(range, body),
                 None => terminal.selected_text(range),
             },

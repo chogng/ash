@@ -1054,6 +1054,106 @@ fn subscription_error_dialog_double_click_selects_one_word() {
 }
 
 #[test]
+fn read_only_detail_overlay_uses_the_same_word_selection() {
+    use crate::app::fullscreen::pointer::MouseAction;
+    use crate::app::fullscreen::selection::ClickCount;
+    use crate::app::fullscreen::selection::ScreenSelectionOutcome;
+
+    let mut app = crate::app::App::new();
+    app.show_overlay(crate::widgets::detail_list::DetailList::new(
+        "Output",
+        vec![crate::widgets::detail_list::DetailListRow::new(
+            "stdout", "details",
+        )],
+    ));
+    let area = Rect::new(0, 0, 80, 24);
+    let content = super::selectable_text_area(&app, area).unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, &app))
+        .unwrap();
+    let position = (content.y..content.bottom())
+        .flat_map(|row| (content.x..content.right()).map(move |column| (column, row)))
+        .find_map(|(column, row)| {
+            let position = ratatui::layout::Position::new(column, row);
+            let range =
+                crate::terminal::text::token_range_at(terminal.backend().buffer(), position)?;
+            (crate::terminal::text::text_in_range_in_area(
+                terminal.backend().buffer(),
+                range,
+                content,
+            ) == Some("details".into()))
+            .then_some(position)
+        })
+        .unwrap();
+    assert_eq!(
+        super::target_at(&app, area, position),
+        Some(super::Target::Text)
+    );
+    let event = |kind| MouseEvent {
+        kind,
+        column: position.x,
+        row: position.y,
+        modifiers: KeyModifiers::NONE,
+    };
+    crate::app::fullscreen::pointer::handle_mouse(
+        &mut app,
+        area,
+        event(MouseEventKind::Down(MouseButton::Left)),
+    );
+    assert!(matches!(
+        crate::app::fullscreen::pointer::handle_mouse(
+            &mut app,
+            area,
+            event(MouseEventKind::Up(MouseButton::Left)),
+        ),
+        MouseAction::Selection(None)
+    ));
+    crate::app::fullscreen::pointer::handle_mouse(
+        &mut app,
+        area,
+        event(MouseEventKind::Down(MouseButton::Left)),
+    );
+    let MouseAction::Selection(Some(ScreenSelectionOutcome::Click {
+        position,
+        count: ClickCount::Double,
+    })) = crate::app::fullscreen::pointer::handle_mouse(
+        &mut app,
+        area,
+        event(MouseEventKind::Up(MouseButton::Left)),
+    )
+    else {
+        panic!("second click on overlay text must select its word");
+    };
+    let range =
+        crate::terminal::text::token_range_at(terminal.backend().buffer(), position).unwrap();
+    let mut copied = None;
+    crate::app::fullscreen::selection::apply_screen_selection(
+        &mut app,
+        range,
+        |range| {
+            crate::terminal::text::text_in_range_in_area(
+                terminal.backend().buffer(),
+                range,
+                content,
+            )
+        },
+        |text| {
+            copied = Some(text.to_owned());
+            Ok(())
+        },
+    );
+    assert_eq!(copied.as_deref(), Some("details"));
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, &app))
+        .unwrap();
+    assert_eq!(
+        terminal.backend().buffer()[(position.x, position.y)].bg,
+        app.render_context().screen_selection_background()
+    );
+}
+
+#[test]
 fn editing_modal_blocks_backdrop_dismiss_and_protects_input() {
     use crate::memories::Event;
     use crate::memories::Page;
@@ -1633,7 +1733,7 @@ fn config_descriptions_expand_below_items_and_keep_mouse_targets_aligned() {
     let first = body.y + crate::widgets::search_box::SEARCH_BOX_HEIGHT;
     assert_eq!(
         super::target_at(&app, area, Position::new(body.x + 3, first + 1)),
-        None
+        Some(super::Target::Text)
     );
     assert_eq!(
         super::target_at(&app, area, Position::new(body.x + 3, first + 2)),

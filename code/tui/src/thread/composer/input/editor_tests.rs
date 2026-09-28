@@ -2,6 +2,9 @@ use super::TextArea;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use ratatui::layout::Position;
+use std::time::Duration;
+use std::time::Instant;
 
 #[test]
 fn editor_uses_unicode_cursor_boundaries() {
@@ -43,6 +46,50 @@ fn pointer_selection_replaces_text_and_keeps_atomic_elements_whole() {
     assert_eq!(textarea.text(), "xb");
     assert_eq!(textarea.selection_range(), None);
     assert!(!textarea.has_element(element));
+}
+
+#[test]
+fn double_and_triple_click_select_an_editable_word_then_line() {
+    let mut textarea = TextArea::new();
+    textarea.insert_text("alpha beta\nnext");
+    let position = Position::new(12, 4);
+    let now = Instant::now();
+
+    textarea.pointer_down(8);
+    assert_eq!(textarea.pointer_finish(8, position, now), None);
+    textarea.pointer_down(8);
+    assert_eq!(
+        textarea.pointer_finish(8, position, now + Duration::from_millis(100)),
+        Some(6..10)
+    );
+    assert_eq!(textarea.selection_range(), Some(6..10));
+    textarea.pointer_down(8);
+    assert_eq!(
+        textarea.pointer_finish(8, position, now + Duration::from_millis(200)),
+        Some(0..10)
+    );
+    assert_eq!(textarea.selection_range(), Some(0..10));
+
+    textarea.insert_text("replacement");
+    assert_eq!(textarea.text(), "replacement\nnext");
+}
+
+#[test]
+fn double_click_keeps_an_atomic_element_whole() {
+    let mut textarea = TextArea::new();
+    textarea.insert_text("a ");
+    textarea.insert_element("[Context]");
+    let position = Position::new(8, 2);
+    let now = Instant::now();
+
+    textarea.pointer_down(5);
+    assert_eq!(textarea.pointer_finish(5, position, now), None);
+    textarea.pointer_down(5);
+    assert_eq!(
+        textarea.pointer_finish(5, position, now + Duration::from_millis(100)),
+        Some(2..11)
+    );
+    assert_eq!(textarea.selection_range(), Some(2..11));
 }
 
 #[test]

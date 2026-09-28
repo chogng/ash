@@ -266,6 +266,54 @@ fn input_click_moves_the_cursor_and_drag_selects_editable_text() {
 }
 
 #[test]
+fn input_double_click_selects_a_word_and_triple_click_selects_the_line() {
+    let mut app = App::new();
+    app.insert_text("alpha beta");
+    let area = Rect::new(0, 0, 60, 16);
+    let input = crate::app::fullscreen::layout(&app, area).input;
+    let row = input.y + 1;
+    let column = (input.x..input.right())
+        .find(|column| {
+            super::chat_composer::cursor_at(
+                input,
+                super::chat_composer::ChatInputChrome::Box,
+                app.input(),
+                app.input_state().cursor_line(),
+                app.input_state().cursor_display_width(),
+                app.input_state().pointer_scroll_row(),
+                ratatui::layout::Position::new(*column, row),
+            )
+            .byte
+                == 8
+        })
+        .unwrap();
+    let event = |kind| MouseEvent {
+        kind,
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    };
+    for click in 0..3 {
+        handle_mouse(
+            &mut app,
+            area,
+            event(MouseEventKind::Down(MouseButton::Left)),
+        );
+        let outcome = handle_mouse(&mut app, area, event(MouseEventKind::Up(MouseButton::Left)));
+        match click {
+            0 => assert!(matches!(outcome, super::MouseAction::Selection(None))),
+            1 => assert!(
+                matches!(outcome, super::MouseAction::InputSelection(ref text) if text == "beta")
+            ),
+            _ => assert!(
+                matches!(outcome, super::MouseAction::InputSelection(ref text) if text == "alpha beta")
+            ),
+        }
+    }
+    assert_eq!(app.input_state().selection_range(), Some(0..10));
+}
+
+#[test]
 fn dragging_in_a_scrolled_input_keeps_the_clicked_rows_in_place() {
     let mut app = App::new();
     app.insert_text("0\n1\n2\n3\n4\n5\n6\n7");
@@ -551,7 +599,11 @@ fn detail_overlay_captures_only_its_surface_and_releases_mouse_on_close() {
                     Some(PointerTarget::Modal(super::super::modal::Target::Close))
                 );
             } else if surface.contains(position) {
-                assert_eq!(super::target_at(&app, area, column, row), None);
+                let expected = super::super::modal::layout(area)
+                    .content
+                    .contains(position)
+                    .then_some(PointerTarget::Modal(super::super::modal::Target::Text));
+                assert_eq!(super::target_at(&app, area, column, row), expected);
             } else {
                 assert_eq!(
                     super::target_at(&app, area, column, row),

@@ -21,6 +21,8 @@ use message_history::MessageHistory;
 use message_history::MessageHistoryKind as InputKind;
 use message_history::MessageHistoryRecall as HistoryRecall;
 use message_history::MessageHistoryRecallEffect as RecallEffect;
+use ratatui::layout::Position;
+use std::time::Instant;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ChatInputOutcome {
@@ -329,6 +331,17 @@ impl ChatInput {
 
     pub(crate) fn pointer_up(&mut self) {
         self.textarea.pointer_up();
+    }
+
+    pub(crate) fn pointer_finish(
+        &mut self,
+        hit: super::view::InputHit,
+        position: Position,
+        now: Instant,
+    ) -> Option<String> {
+        let range = self.textarea.pointer_finish(hit.byte, position, now);
+        self.sync_completion();
+        range.map(|range| self.textarea.text()[range].to_owned())
     }
 
     pub(crate) fn reset_pointer_view(&mut self) {

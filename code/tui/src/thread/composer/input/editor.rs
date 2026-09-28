@@ -3,7 +3,10 @@
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use ratatui::layout::Position;
 use std::ops::Range;
+use std::time::Duration;
+use std::time::Instant;
 use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 
@@ -11,6 +14,23 @@ use unicode_width::UnicodeWidthStr;
 pub(super) enum TextAreaOutcome {
     Consumed,
     Unhandled,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum TextClass {
+    Whitespace,
+    Word,
+    Symbol,
+}
+
+fn text_class(character: char) -> TextClass {
+    if character.is_whitespace() {
+        TextClass::Whitespace
+    } else if character.is_alphanumeric() || character == '_' {
+        TextClass::Word
+    } else {
+        TextClass::Symbol
+    }
 }
 
 /// Stable identity for one atomic element during the lifetime of a draft.
@@ -33,6 +53,9 @@ pub(super) struct TextArea {
     cursor: usize,
     selection_anchor: Option<usize>,
     pointer_anchor: Option<usize>,
+    pointer_down_byte: Option<usize>,
+    pointer_moved: bool,
+    last_click: Option<(Position, Instant, u8)>,
     elements: Vec<TextElement>,
     next_element_id: u64,
 }
@@ -44,12 +67,16 @@ impl TextArea {
             cursor: 0,
             selection_anchor: None,
             pointer_anchor: None,
+            pointer_down_byte: None,
+            pointer_moved: false,
+            last_click: None,
             elements: Vec::new(),
             next_element_id: 0,
         }
     }
 
     pub(super) fn handle_key(&mut self, key: KeyEvent) -> TextAreaOutcome {
+        self.last_click = None;
         if key
             .modifiers
             .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
@@ -122,6 +149,7 @@ impl TextArea {
     }
 
     pub(super) fn insert_text(&mut self, text: &str) {
+        self.last_click = None;
         if let Some(range) = self.selection_range() {
             self.remove_editable_range(range);
         }
@@ -153,22 +181,121 @@ impl TextArea {
     }
 
     pub(super) fn pointer_down(&mut self, cursor: usize) {
+        self.pointer_down_byte = Some(cursor);
         let cursor = self.snap_pointer_cursor(cursor, None);
         self.cursor = cursor;
         self.selection_anchor = None;
         self.pointer_anchor = Some(cursor);
+        self.pointer_moved = false;
     }
 
     pub(super) fn pointer_drag(&mut self, cursor: usize) {
         let Some(anchor) = self.pointer_anchor else {
             return;
         };
+        if !self.pointer_moved && self.pointer_down_byte == Some(cursor) {
+            return;
+        }
+        self.pointer_moved |= cursor != anchor;
         self.cursor = self.snap_pointer_cursor(cursor, Some(anchor));
         self.selection_anchor = (self.cursor != anchor).then_some(anchor);
     }
 
     pub(super) fn pointer_up(&mut self) {
         self.pointer_anchor = None;
+        self.pointer_down_byte = None;
+        self.pointer_moved = false;
+        self.last_click = None;
+    }
+
+    pub(super) fn pointer_finish(
+        &mut self,
+        cursor: usize,
+        position: Position,
+        now: Instant,
+    ) -> Option<Range<usize>> {
+        self.pointer_drag(cursor);
+        self.pointer_anchor = None;
+        self.pointer_down_byte = None;
+        if self.pointer_moved {
+            self.pointer_moved = false;
+            self.last_click = None;
+            return self.selection_range();
+        }
+        let count = self
+            .last_click
+            .map_or(1, |(previous, completed_at, count)| {
+                if previous.y == position.y
+                    && previous.x.abs_diff(position.x) <= 1
+                    && now
+                        .checked_duration_since(completed_at)
+                        .is_some_and(|elapsed| elapsed <= Duration::from_millis(500))
+                {
+                    count % 3 + 1
+                } else {
+                    1
+                }
+            });
+        self.last_click = Some((position, now, count));
+        match count {
+            2 => self.select_word_at(cursor),
+            3 => self.select_line_at(cursor),
+            _ => None,
+        }
+    }
+
+    fn select_word_at(&mut self, cursor: usize) -> Option<Range<usize>> {
+        let characters = self.text.char_indices().collect::<Vec<_>>();
+        if characters.is_empty() {
+            return None;
+        }
+        let mut index = characters
+            .partition_point(|(offset, _)| *offset < cursor)
+            .min(characters.len().saturating_sub(1));
+        if index > 0
+            && (cursor == self.text.len()
+                || characters[index].1.is_whitespace() && !characters[index - 1].1.is_whitespace())
+        {
+            index -= 1;
+        }
+        let start = characters[index].0;
+        if let Some(element) = self
+            .elements
+            .iter()
+            .find(|element| element.range.contains(&start))
+        {
+            return self.select_range(element.range.clone());
+        }
+        let class = text_class(characters[index].1);
+        let mut first = index;
+        while first > 0 && text_class(characters[first - 1].1) == class {
+            first -= 1;
+        }
+        let mut last = index;
+        while last + 1 < characters.len() && text_class(characters[last + 1].1) == class {
+            last += 1;
+        }
+        let end = characters
+            .get(last + 1)
+            .map_or(self.text.len(), |(offset, _)| *offset);
+        self.select_range(characters[first].0..end)
+    }
+
+    fn select_line_at(&mut self, cursor: usize) -> Option<Range<usize>> {
+        let start = self.text[..cursor].rfind('\n').map_or(0, |index| index + 1);
+        let end = self.text[cursor..]
+            .find('\n')
+            .map_or(self.text.len(), |index| cursor + index);
+        self.select_range(start..end)
+    }
+
+    fn select_range(&mut self, range: Range<usize>) -> Option<Range<usize>> {
+        if range.is_empty() {
+            return None;
+        }
+        self.selection_anchor = Some(range.start);
+        self.cursor = range.end;
+        Some(range)
     }
 
     pub(super) fn pointer_active(&self) -> bool {
