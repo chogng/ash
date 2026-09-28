@@ -2107,6 +2107,9 @@ impl AppServer {
             Some(ClientMethod::Initialize) => unreachable!("initialize handled before gate"),
             Some(ClientMethod::EnvCwdSet) => self.env_cwd_set(connection, &request.params),
             Some(ClientMethod::EnvDirsSet) => self.env_dirs_set(connection, &request.params),
+            Some(ClientMethod::EnvWorkspaceSet) => {
+                self.env_workspace_set(connection, &request.params)
+            }
             Some(ClientMethod::SessionDirList) => {
                 self.session_dir_list(connection, &request.params)
             }

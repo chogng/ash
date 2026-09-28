@@ -55,9 +55,8 @@ export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, 
 					return { type: 'user', commandId: checked.commandId, expectedRevision: checked.expectedRevision, permissions: checked.permissions };
 				}
 				case 'switchWorkspace': {
-					const request = decodeAppServerRequestParams('env/dirs/set', { dirs: [{ id: 'root', path: params.path, grant: params.grant }] });
-					await client.request(APP_SERVER_METHODS['env/cwd/set'], decodeAppServerRequestParams('env/cwd/set', { cwd: params.path }));
-					return client.request(APP_SERVER_METHODS['env/dirs/set'], request);
+					const request = decodeAppServerRequestParams('env/workspace/set', { path: params.path, grant: params.grant });
+					return client.request(APP_SERVER_METHODS['env/workspace/set'], request);
 				}
 				case 'setFolders': return client.request(APP_SERVER_METHODS['env/dirs/set'], decodeAppServerRequestParams('env/dirs/set', { dirs: params.folders }));
 				default: throw new Error('Unknown workspace operation');

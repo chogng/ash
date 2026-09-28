@@ -497,6 +497,10 @@ use crate::protocol::environment::EnvDirsSetParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::environment::EnvDirsSetResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::environment::EnvWorkspaceSetParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::environment::EnvWorkspaceSetResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::environment::PermissionDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::environment::SessionDirAddParams;
@@ -2369,6 +2373,11 @@ client_methods! {
     EnvDirsSet => "env/dirs/set" {
         params: EnvDirsSetParams,
         response: EnvDirsSetResult,
+        serialization: GlobalExclusive,
+    },
+    EnvWorkspaceSet => "env/workspace/set" {
+        params: EnvWorkspaceSetParams,
+        response: EnvWorkspaceSetResult,
         serialization: GlobalExclusive,
     },
     SessionDirList => "session/dirs/list" {
@@ -4376,6 +4385,8 @@ typescript_bindings! {
     EnvDirSetEntry,
     EnvDirsSetParams,
     EnvDirsSetResult,
+    EnvWorkspaceSetParams,
+    EnvWorkspaceSetResult,
     SessionDirSelector,
     SessionDirDto,
     DirContributionsDto,

@@ -110,6 +110,8 @@ import type { EnvCwdSetParams } from './types/EnvCwdSetParams.js';
 import type { EnvCwdSetResult } from './types/EnvCwdSetResult.js';
 import type { EnvDirsSetParams } from './types/EnvDirsSetParams.js';
 import type { EnvDirsSetResult } from './types/EnvDirsSetResult.js';
+import type { EnvWorkspaceSetParams } from './types/EnvWorkspaceSetParams.js';
+import type { EnvWorkspaceSetResult } from './types/EnvWorkspaceSetResult.js';
 import type { ExecPolicyRuleRemoveParams } from './types/ExecPolicyRuleRemoveParams.js';
 import type { ExecPolicyRuleUpsertParams } from './types/ExecPolicyRuleUpsertParams.js';
 import type { ExtensionHostInvokeCancelParams } from './types/ExtensionHostInvokeCancelParams.js';
@@ -461,6 +463,7 @@ export interface AppServerRequestMap {
   "initialize": { params: InitializeParams; response: InitializeResult };
   "env/cwd/set": { params: EnvCwdSetParams; response: EnvCwdSetResult };
   "env/dirs/set": { params: EnvDirsSetParams; response: EnvDirsSetResult };
+  "env/workspace/set": { params: EnvWorkspaceSetParams; response: EnvWorkspaceSetResult };
   "session/dirs/list": { params: SessionDirListParams; response: SessionDirListResult };
   "session/dirs/add": { params: SessionDirAddParams; response: SessionDirAddResult };
   "session/dirs/remove": { params: SessionDirRemoveParams; response: SessionDirMutationResult };
@@ -770,6 +773,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "initialize": { method: "initialize" },
   "env/cwd/set": { method: "env/cwd/set" },
   "env/dirs/set": { method: "env/dirs/set" },
+  "env/workspace/set": { method: "env/workspace/set" },
   "session/dirs/list": { method: "session/dirs/list" },
   "session/dirs/add": { method: "session/dirs/add" },
   "session/dirs/remove": { method: "session/dirs/remove" },

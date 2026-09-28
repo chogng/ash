@@ -277,6 +277,8 @@ export type { EnvDirSetEntry } from './EnvDirSetEntry.js';
 export type { EnvDirsSetParams } from './EnvDirsSetParams.js';
 export type { EnvDirsSetResult } from './EnvDirsSetResult.js';
 export type { EnvId } from './EnvId.js';
+export type { EnvWorkspaceSetParams } from './EnvWorkspaceSetParams.js';
+export type { EnvWorkspaceSetResult } from './EnvWorkspaceSetResult.js';
 export type { ExecPolicyActionKindDto } from './ExecPolicyActionKindDto.js';
 export type { ExecPolicyEffectDto } from './ExecPolicyEffectDto.js';
 export type { ExecPolicyHostMatcherDto } from './ExecPolicyHostMatcherDto.js';

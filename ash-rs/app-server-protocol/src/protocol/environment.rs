@@ -153,6 +153,21 @@ pub struct EnvDirsSetResult {
     pub dirs: Vec<EnvDirDto>,
 }
 
+/// Selects one directory as both the working directory and active workspace root.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvWorkspaceSetParams {
+    pub path: PathBuf,
+    pub grant: DirGrantDto,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvWorkspaceSetResult {
+    pub cwd: PathBuf,
+    pub dirs: Vec<EnvDirDto>,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionDirDto {

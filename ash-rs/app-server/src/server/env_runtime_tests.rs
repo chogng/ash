@@ -1,4 +1,5 @@
 use super::*;
+use crate::ConnectionState;
 use crate::local::ProviderModelService;
 use crate::local_tools::LocalToolComposition;
 use ash_action_policy::ActionReviewRequest;
@@ -237,7 +238,13 @@ fn env_runtime_replaces_directory_services_and_retains_connection_terminals() {
     let host = server.local_env_host.as_ref().unwrap();
 
     server
-        .commit_full_env_runtime(first.authorization(), test_local_tools(), test_grep(), host)
+        .commit_full_env_runtime(
+            first.authorization(),
+            test_local_tools(),
+            test_grep(),
+            host,
+            CwdUpdate::Preserve,
+        )
         .unwrap();
     let tool_names = host
         .tools
@@ -283,6 +290,7 @@ fn env_runtime_replaces_directory_services_and_retains_connection_terminals() {
             test_local_tools(),
             test_grep(),
             host,
+            CwdUpdate::Preserve,
         )
         .unwrap();
     let Ok(second_file_system) = server.file_system_service_for(None) else {
@@ -363,6 +371,109 @@ fn env_cwd_set_rpc_requires_a_local_env_host() {
 }
 
 #[test]
+fn env_workspace_set_commits_cwd_and_root_together() {
+    let first = TestDir::new("workspace-first", "first.txt");
+    let second = TestDir::new("workspace-second", "second.txt");
+    let server = server().with_local_env_host(None, host_policy()).unwrap();
+    let mut connection = server.product_host_connection();
+    server.handle_json(
+        &mut connection,
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "clientInfo": {"name": "desktop", "version": "1"},
+                "capabilities": {"dirPermissionsHost": {"version": 1}}
+            }
+        })
+        .to_string(),
+    );
+
+    let set_workspace =
+        |connection: &mut ConnectionState, id, path: &Path, permissions: &[&str]| {
+            serde_json::from_str::<serde_json::Value>(
+                &server.handle_json(
+                    connection,
+                    &serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": id,
+                        "method": "env/workspace/set",
+                        "params": {
+                            "path": path,
+                            "grant": {"type": "host", "permissions": permissions}
+                        }
+                    })
+                    .to_string(),
+                ),
+            )
+            .unwrap()
+        };
+    let permissions = ["readFiles", "inspectRepository"];
+    let response = set_workspace(&mut connection, 2, &first.path, &permissions);
+    let first_root = first.root();
+    assert_eq!(
+        response["result"]["cwd"],
+        first_root.canonical_path().to_str().unwrap()
+    );
+    assert_eq!(response["result"]["dirs"][0]["id"], "root");
+    assert_eq!(
+        response["result"]["dirs"][0]["path"],
+        first_root.canonical_path().to_str().unwrap()
+    );
+
+    let rejected = set_workspace(&mut connection, 3, &second.path, &[]);
+    assert_eq!(rejected["error"]["message"], "PermissionRequired");
+    {
+        let runtime = server.env_runtime.read().unwrap();
+        assert_eq!(runtime.cwd.as_deref(), Some(first_root.canonical_path()));
+        assert_eq!(
+            runtime.dirs["root"].dir().canonical_path(),
+            first_root.canonical_path()
+        );
+    }
+    let files = server.file_system_service_for(Some("root")).unwrap();
+    assert_eq!(
+        files.read_file(Path::new("first.txt"), 1024).unwrap(),
+        b"workspace-first"
+    );
+
+    let development_permissions = [
+        "readFiles",
+        "writeFiles",
+        "executeCommands",
+        "watchFiles",
+        "browseFiles",
+        "searchFiles",
+        "loadInstructions",
+        "loadConfig",
+        "discoverSkills",
+        "discoverMcp",
+        "useLanguageServices",
+        "discoverHooks",
+        "discoverPlugins",
+        "inspectRepository",
+        "mutateRepository",
+    ];
+    let response = set_workspace(&mut connection, 4, &second.path, &development_permissions);
+    let second_root = second.root();
+    assert_eq!(
+        response["result"]["cwd"],
+        second_root.canonical_path().to_str().unwrap()
+    );
+    assert_eq!(
+        response["result"]["dirs"][0]["path"],
+        second_root.canonical_path().to_str().unwrap()
+    );
+    let runtime = server.env_runtime.read().unwrap();
+    assert_eq!(runtime.cwd.as_deref(), Some(second_root.canonical_path()));
+    assert_eq!(
+        runtime.dirs["root"].dir().canonical_path(),
+        second_root.canonical_path()
+    );
+}
+
+#[test]
 fn env_dirs_set_routes_services_by_stable_folder_id() {
     let first = TestDir::new("multi-root-first", "first.txt");
     let second = TestDir::new("multi-root-second", "second.txt");
@@ -439,6 +550,7 @@ fn dirs_are_session_scoped_and_removable() {
             test_local_tools(),
             test_grep(),
             host,
+            CwdUpdate::Preserve,
         )
         .unwrap();
     let first = server
@@ -502,6 +614,7 @@ fn cwd_directory_can_be_added_explicitly() {
             test_local_tools(),
             test_grep(),
             host,
+            CwdUpdate::Preserve,
         )
         .unwrap();
     let session = server
@@ -539,6 +652,7 @@ fn dir_mutation_requires_a_dir_permissions_host_connection() {
             test_local_tools(),
             test_grep(),
             host,
+            CwdUpdate::Preserve,
         )
         .unwrap();
     let session = server
@@ -597,6 +711,7 @@ fn dir_permissions_are_revision_bound_and_filter_capability_snapshots() {
             test_local_tools(),
             test_grep(),
             host,
+            CwdUpdate::Preserve,
         )
         .unwrap();
     let session = server
@@ -1367,7 +1482,13 @@ fn active_turn_blocks_env_cwd_set_without_changing_authority() {
     let server = server().with_local_env_host(None, host_policy()).unwrap();
     let host = server.local_env_host.as_ref().unwrap();
     server
-        .commit_full_env_runtime(first.authorization(), test_local_tools(), test_grep(), host)
+        .commit_full_env_runtime(
+            first.authorization(),
+            test_local_tools(),
+            test_grep(),
+            host,
+            CwdUpdate::Preserve,
+        )
         .unwrap();
     let thread = server
         .start_thread(StartThreadRequest {
@@ -1431,6 +1552,7 @@ fn active_turn_accepts_session_access_changes_and_revokes_old_snapshots() {
             test_local_tools(),
             test_grep(),
             host,
+            CwdUpdate::Preserve,
         )
         .unwrap();
     let thread = server
@@ -1673,7 +1795,11 @@ fn directory_search_and_backend_configuration_do_not_require_agent_execution() {
         ]),
     );
     server
-        .commit_limited_dir_runtime(grant, server.local_env_host.as_ref().unwrap())
+        .commit_limited_dir_runtime(
+            grant,
+            server.local_env_host.as_ref().unwrap(),
+            CwdUpdate::Preserve,
+        )
         .unwrap();
     let (grep, root) = server.grep_index_context().unwrap();
     let token = ash_async_utils::CancellationSource::new().token();

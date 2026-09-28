@@ -4494,6 +4494,22 @@
         {
           "properties": {
             "method": {
+              "const": "env/workspace/set",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/EnvWorkspaceSetParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "session/dirs/list",
               "type": "string"
             },
@@ -9239,6 +9255,22 @@
             },
             "result": {
               "$ref": "#/$defs/EnvDirsSetResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "env/workspace/set",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/EnvWorkspaceSetResult"
             }
           },
           "required": [
@@ -17172,6 +17204,40 @@
     "EnvId": {
       "description": "Stable host-selected identity for one execution and filesystem environment.",
       "type": "string"
+    },
+    "EnvWorkspaceSetParams": {
+      "description": "Selects one directory as both the working directory and active workspace root.",
+      "properties": {
+        "grant": {
+          "$ref": "#/$defs/DirGrantDto"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "grant"
+      ],
+      "type": "object"
+    },
+    "EnvWorkspaceSetResult": {
+      "properties": {
+        "cwd": {
+          "type": "string"
+        },
+        "dirs": {
+          "items": {
+            "$ref": "#/$defs/EnvDirDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "cwd",
+        "dirs"
+      ],
+      "type": "object"
     },
     "ExecPolicyActionKindDto": {
       "description": "Coarse action category available to deterministic execution-policy selectors.",

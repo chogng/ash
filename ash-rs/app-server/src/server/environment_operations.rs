@@ -19,6 +19,8 @@ use ash_app_server_protocol::protocol::environment::EnvCwdSetResult;
 use ash_app_server_protocol::protocol::environment::EnvDirDto;
 use ash_app_server_protocol::protocol::environment::EnvDirsSetParams;
 use ash_app_server_protocol::protocol::environment::EnvDirsSetResult;
+use ash_app_server_protocol::protocol::environment::EnvWorkspaceSetParams;
+use ash_app_server_protocol::protocol::environment::EnvWorkspaceSetResult;
 use ash_app_server_protocol::protocol::environment::PermissionDto;
 use ash_app_server_protocol::protocol::environment::SessionDirAddParams;
 use ash_app_server_protocol::protocol::environment::SessionDirAddResult;
@@ -262,6 +264,31 @@ impl AppServer {
             })
             .collect();
         result(&EnvDirsSetResult { dirs })
+    }
+
+    pub(super) fn env_workspace_set(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: EnvWorkspaceSetParams = decode(params)?;
+        validate_path(&params.path, true)?;
+        let grant = self.resolve_dir_grant(connection, &params.path, params.grant)?;
+        let grant = self
+            .authorize_local_dir_root(params.path, grant)
+            .map_err(environment_runtime_error)?;
+        let cwd = grant.dir().canonical_path().to_path_buf();
+        let dirs = self
+            .activate_local_workspace(grant)
+            .map_err(environment_runtime_error)?
+            .into_iter()
+            .map(|(id, path, permissions)| EnvDirDto {
+                id,
+                path,
+                permissions: permission_dtos(&permissions),
+            })
+            .collect();
+        result(&EnvWorkspaceSetResult { cwd, dirs })
     }
 
     fn resolve_dir_grant(
