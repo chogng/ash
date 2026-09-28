@@ -48,7 +48,10 @@ use ash_app_server_protocol::protocol::connectors::ConnectorOAuthCancelParams;
 use ash_app_server_protocol::protocol::connectors::ConnectorOAuthRefreshParams;
 use ash_app_server_protocol::protocol::connectors::ConnectorOAuthStartParams;
 use ash_app_server_protocol::protocol::connectors::ConnectorOAuthStartResult;
+use ash_app_server_protocol::protocol::dictation::DictationBackend;
 use ash_app_server_protocol::protocol::dictation::DictationResourceParams;
+use ash_app_server_protocol::protocol::dictation::DictationStartParams;
+use ash_app_server_protocol::protocol::dictation::DictationStopResult;
 use ash_app_server_protocol::protocol::diff::DiffComputeParams;
 use ash_app_server_protocol::protocol::diff::DiffComputeResult;
 use ash_app_server_protocol::protocol::document::{TypstCompileParams, TypstCompileResult};
@@ -1383,14 +1386,24 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
             .collect()
     }
 
-    pub fn start_dictation(&mut self, resource_id: String) -> Result<(), ClientError> {
+    pub fn start_dictation(
+        &mut self,
+        resource_id: String,
+        backend: DictationBackend,
+    ) -> Result<(), ClientError> {
         self.call(
             ClientMethod::DictationStart,
-            DictationResourceParams { resource_id },
+            DictationStartParams {
+                resource_id,
+                backend,
+            },
         )
     }
 
-    pub fn stop_dictation(&mut self, resource_id: String) -> Result<(), ClientError> {
+    pub fn stop_dictation(
+        &mut self,
+        resource_id: String,
+    ) -> Result<DictationStopResult, ClientError> {
         self.call(
             ClientMethod::DictationStop,
             DictationResourceParams { resource_id },

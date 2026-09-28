@@ -94,9 +94,22 @@ test('Chat input shows a round voice action when empty and a send arrow for text
 	await expect(toolbar.locator('[data-action-id="ash.chat.input.voice"] button')).toBeVisible();
 });
 
-test('Windows desktop Chat exposes system dictation on its microphone button', async ({ target, workbench }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code' || process.platform !== 'win32', 'Requires the connected Windows desktop');
+test('Desktop Chat sends the selected local dictation package through its microphone button', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the connected desktop');
 	const page = workbench.page;
+	const original = await page.evaluate(async () => {
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
+		return (await ipc.invoke('ash:configuration:read') as { document: { source: string } }).document.source;
+	});
+	await page.evaluate(async () => {
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+		const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { source: string } };
+		const settings = JSON.parse(snapshot.document.source) as Record<string, unknown>;
+		settings['dictation.backend'] = 'local';
+		settings['dictation.localModel'] = 'ash-playwright-missing-model';
+		await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });
+	});
+	try {
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
@@ -104,12 +117,14 @@ test('Windows desktop Chat exposes system dictation on its microphone button', a
 	await expect(button).toBeEnabled();
 	await expect(button).toHaveAttribute('aria-label', 'Dictate message');
 	await button.click();
-	await expect(button).toBeEnabled({ timeout: 10_000 });
-	if (await button.getAttribute('aria-pressed') === 'true') {
-		await button.click();
-		await expect(button).not.toHaveAttribute('aria-pressed', 'true');
-	} else {
-		await expect(page.locator('.ash-chat-view-pane .ash-chat:visible .ash-chat-status')).toContainText('Dictation failed');
+		await expect(page.locator('.ash-chat-view-pane .ash-chat:visible .ash-chat-status')).toContainText('Could not read dictation model package');
+	await expect(button).not.toHaveAttribute('aria-pressed', 'true');
+	} finally {
+		await page.evaluate(async source => {
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number };
+			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source } });
+		}, original);
 	}
 });
 

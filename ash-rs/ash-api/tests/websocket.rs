@@ -19,6 +19,78 @@ use tokio_tungstenite::tungstenite::Message as WireMessage;
 type Server = WebSocketStream<TcpStream>;
 
 #[tokio::test]
+async fn transcription_uses_dedicated_session_and_commits_one_audio_turn() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let target = ResolvedApiTarget::new(
+        format!("http://{}/v1", listener.local_addr().unwrap()),
+        vec![HttpHeader::new("Authorization", "Bearer fixture")],
+    );
+    let server = tokio::spawn(async move {
+        let (tcp, _) = listener.accept().await.unwrap();
+        let mut socket = tokio_tungstenite::accept_hdr_async(
+            tcp,
+            |request: &tokio_tungstenite::tungstenite::handshake::server::Request, response| {
+                assert_eq!(
+                    request.uri().path_and_query().unwrap().as_str(),
+                    "/v1/realtime?model=gpt-live-transcribe"
+                );
+                assert_eq!(request.headers()["authorization"], "Bearer fixture");
+                Ok(response)
+            },
+        )
+        .await
+        .unwrap();
+        send(&mut socket, json!({"type":"session.created","session":{"id":"transcription-1","type":"transcription"}})).await;
+        let update = read(&mut socket).await;
+        assert_eq!(update["session"]["type"], "transcription");
+        assert_eq!(
+            update["session"]["audio"]["input"]["transcription"]["model"],
+            "gpt-live-transcribe"
+        );
+        assert_eq!(update["session"]["audio"]["input"]["format"]["rate"], 24000);
+        assert!(update["session"]["audio"]["input"]["turn_detection"].is_null());
+        send(&mut socket, json!({"type":"session.updated","session":{"id":"transcription-1","type":"transcription"}})).await;
+        assert_eq!(
+            read(&mut socket).await,
+            json!({"type":"input_audio_buffer.append","audio":"AQACAA=="})
+        );
+        send(&mut socket, json!({"type":"conversation.item.input_audio_transcription.delta","item_id":"speech-1","delta":"hello"})).await;
+        assert_eq!(read(&mut socket).await["type"], "input_audio_buffer.commit");
+        send(&mut socket, json!({"type":"conversation.item.input_audio_transcription.completed","item_id":"speech-1","transcript":"hello"})).await;
+        assert!(socket.next().await.unwrap().unwrap().is_close());
+    });
+    let token = CancellationSource::new().token();
+    let mut session = TranscriptionSession::connect(
+        &connector(),
+        &target,
+        "gpt-live-transcribe",
+        limits(),
+        &token,
+    )
+    .await
+    .unwrap();
+    assert_eq!(session.session_id(), "transcription-1");
+    session.append_audio(&[1, 0, 2, 0], &token).await.unwrap();
+    assert_eq!(
+        session.receive(&token).await.unwrap(),
+        TranscriptionEvent::Delta {
+            item_id: "speech-1".into(),
+            text: "hello".into()
+        }
+    );
+    session.commit(&token).await.unwrap();
+    assert_eq!(
+        session.receive(&token).await.unwrap(),
+        TranscriptionEvent::Completed {
+            item_id: "speech-1".into(),
+            text: "hello".into()
+        }
+    );
+    session.close(&token).await.unwrap();
+    server.await.unwrap();
+}
+
+#[tokio::test]
 async fn live_uses_its_own_start_audio_delegation_and_finalization_contract() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let target = ResolvedApiTarget::new(

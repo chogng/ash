@@ -1,6 +1,7 @@
 import "./chatInputPart.css";
 import { addDisposableListener, h } from "../../../../../../base/browser/dom.js";
 import { ButtonActionViewItem, type ActionViewItem } from "../../../../../../base/browser/ui/actionbar/actionViewItems.js";
+import { status as announceStatus } from "../../../../../../base/browser/ui/aria/aria.js";
 import { appendIcon } from "../../../../../../base/browser/ui/lxicons/lxicon.js";
 import type { IAction } from "../../../../../../base/common/actions.js";
 import type { Icon } from "../../../../../../base/common/icon.js";
@@ -53,6 +54,7 @@ export class ChatInputPart extends Disposable {
 	private readonly attachmentListeners = this._register(new DisposableStore());
 	private readonly attachments = new Map<string, ChatContextAttachment>();
 	private readonly status: HTMLDivElement;
+	private readonly dictationPreview: HTMLDivElement;
 	private readonly interaction: HTMLDivElement;
 	private readonly attachmentList: HTMLDivElement;
 	private readonly inputContainer: HTMLFormElement;
@@ -82,6 +84,10 @@ export class ChatInputPart extends Disposable {
 		this.status = h(ownerDocument, "div");
 		this.status.className = "ash-chat-status";
 		this.status.setAttribute("role", "status");
+		this.dictationPreview = h(ownerDocument, "div");
+		this.dictationPreview.className = "ash-chat-dictation-preview";
+		this.dictationPreview.setAttribute("aria-hidden", "true");
+		this.dictationPreview.hidden = true;
 		this.interaction = h(ownerDocument, "div");
 		this.interaction.className = "ash-chat-interaction";
 		this.interaction.setAttribute("aria-live", "polite");
@@ -105,7 +111,7 @@ export class ChatInputPart extends Disposable {
 		}));
 		this.inputToolbar.element.classList.add("ash-chat-input-toolbars");
 		this.inputContainer.append(this.attachmentList, editorHost, this.inputToolbar.element);
-		this.element.append(this.status, this.interaction, this.inputContainer);
+		this.element.append(this.status, this.dictationPreview, this.interaction, this.inputContainer);
 		this._register(addDisposableListener(this.inputContainer, "focusin", () => this.inputContainer.classList.add("focused")));
 		this._register(addDisposableListener(this.inputContainer, "focusout", event => {
 			if (this.inputContainer.contains(event.relatedTarget as Node | null)) return;
@@ -336,15 +342,26 @@ export class ChatInputPart extends Disposable {
 		this.renderToolbarActions();
 		let ended = false;
 		try {
-			const session = await this.dictation.start(text => {
-				if (this.isDisposed || this.dictationCancelStart || !this.visible) return;
+			const session = await this.dictation.start((text, isFinal) => {
+				if (this.isDisposed || !this.visible) return;
+				if (!isFinal) {
+					this.dictationPreview.textContent = text;
+					this.dictationPreview.hidden = !text;
+					return;
+				}
+				this.dictationPreview.textContent = '';
+				this.dictationPreview.hidden = true;
+				if (!text) return;
 				const existing = this.input.value;
 				const separator = /[A-Za-z0-9]$/u.test(existing) && /^[A-Za-z0-9]/u.test(text) ? ' ' : '';
 				this.input.value = `${existing}${separator}${text}`;
 				this.input.focus();
+				announceStatus(localize('chat.input.dictationInserted', 'Dictation added to message'));
 			}, error => {
 				ended = true;
 				this.dictationSession = undefined;
+				this.dictationPreview.textContent = '';
+				this.dictationPreview.hidden = true;
 				if (this.isDisposed) return;
 				this.dictationError = error;
 				this.status.textContent = this.statusText(this.state);

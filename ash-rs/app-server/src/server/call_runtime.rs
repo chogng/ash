@@ -55,8 +55,20 @@ pub(super) struct Calls {
 }
 
 impl Calls {
+    pub fn has_active_audio(&self) -> bool {
+        self.sessions.lock().is_ok_and(|sessions| {
+            sessions
+                .values()
+                .any(|session| !session.worker.is_finished())
+        })
+    }
+
     pub fn set_network_policy(&mut self, policy: OutboundNetworkPolicy) {
         self.network_policy = policy;
+    }
+
+    pub fn network_policy(&self) -> OutboundNetworkPolicy {
+        self.network_policy.clone()
     }
 
     fn executor(&self) -> Result<&tokio::runtime::Runtime, Failure> {
@@ -385,7 +397,7 @@ impl Drop for Calls {
     }
 }
 
-fn executable(variable: &str, name: &str) -> Result<PathBuf, Failure> {
+pub(super) fn executable(variable: &str, name: &str) -> Result<PathBuf, Failure> {
     let path = if let Some(path) = std::env::var_os(variable) {
         PathBuf::from(path)
     } else {
@@ -396,7 +408,7 @@ fn executable(variable: &str, name: &str) -> Result<PathBuf, Failure> {
             .join(format!("{name}{}", std::env::consts::EXE_SUFFIX))
     };
     path.canonicalize()
-        .map_err(|_| format!("Required call executable is missing: {name}"))
+        .map_err(|_| format!("Required executable is missing: {name}"))
 }
 
 fn audio_config(direction: Direction) -> AudioConfig {

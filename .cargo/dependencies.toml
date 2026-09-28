@@ -38,6 +38,11 @@ versions = ["0.5.1", "0.6.2"]
 reason = "Current upstream API families: 0.5.1 via objc2-app-kit, objc2-cloud-kit, objc2-contacts and other importers; 0.6.2 via dispatch2, objc2-app-kit, objc2-foundation and other importers. Review the introducing packages together before changing this set."
 
 [[multiple_versions]]
+name = "bzip2"
+versions = ["0.4.4", "0.5.2"]
+reason = "sherpa-onnx-sys 1.13.8 uses bzip2 0.4 directly and zip 2.4 uses bzip2 0.5 while unpacking its prebuilt ONNX library at build time."
+
+[[multiple_versions]]
 name = "cfg_aliases"
 versions = ["0.1.1", "0.2.2"]
 reason = "Current upstream API families: 0.1.1 via nix; 0.2.2 via naga, nix, quinn and other importers. Review the introducing packages together before changing this set."
@@ -454,8 +459,8 @@ reason = "Current upstream API families: 3.0.0 via zbus; 4.3.4 via atspi-common,
 
 [[multiple_versions]]
 name = "zip"
-versions = ["4.6.1", "7.2.0"]
-reason = "4.6 serves Ash CLI/plugins; 7.2 serves candle-core model artifacts."
+versions = ["2.4.2", "4.6.1", "7.2.0"]
+reason = "2.4 is a sherpa-onnx-sys build dependency for its prebuilt ONNX library; 4.6 serves Ash CLI/plugins; 7.2 serves candle-core model artifacts."
 
 [[multiple_versions]]
 name = "zvariant"

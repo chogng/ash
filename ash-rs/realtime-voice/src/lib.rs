@@ -1,17 +1,49 @@
 //! Device-local dictation sessions. The product host owns connection identity and delivery;
 //! this crate owns microphone exclusivity, recognition, and session teardown.
 
-use std::cell::RefCell;
+mod cloud;
+mod local;
+mod model_package;
+
+use http_client::OutboundNetworkSnapshot;
+use model_provider::ModelProviderRuntime;
+use model_provider_config::ModelProviderConfig;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
+use std::thread;
+use tokio::sync::oneshot;
+use websocket_client::WebSocketConnector;
 
-use system_dictation::DictationSession;
+pub use model_package::DEFAULT_MODEL_ID;
+
+/// Selects the installed local model package and the audio helper for one session.
+pub struct LocalDictationRequest {
+    pub model_id: String,
+    pub model_root: PathBuf,
+    pub audio_host: PathBuf,
+    pub network: OutboundNetworkSnapshot,
+}
+
+/// Cloud dictation uses a separate transcription session and direct model credentials.
+pub struct CloudDictationRequest {
+    pub model_id: String,
+    pub audio_host: PathBuf,
+    pub provider_runtime: Arc<ModelProviderRuntime>,
+    pub provider_config: ModelProviderConfig,
+    pub connector: WebSocketConnector,
+}
+
+pub enum DictationRequest {
+    Local(LocalDictationRequest),
+    Cloud(CloudDictationRequest),
+}
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum DictationEvent {
-    Transcript(String),
+    Transcript { text: String, is_final: bool },
     Ended { error: Option<String> },
 }
 
@@ -20,6 +52,7 @@ pub enum DictationEvent {
 trait Recognizer: Send + Sync {
     fn start(
         &self,
+        request: DictationRequest,
         on_event: Box<dyn Fn(DictationEvent) + Send>,
     ) -> Result<Box<dyn RecognitionSession>, String>;
 }
@@ -29,33 +62,59 @@ trait RecognitionSession: Send {
     fn stop(&mut self);
 }
 
-struct SystemRecognizer;
+struct SessionRecognizer;
 
-struct SystemSession(DictationSession);
+struct WorkerSession {
+    stop: Option<oneshot::Sender<()>>,
+    worker: Option<thread::JoinHandle<()>>,
+}
 
-impl Recognizer for SystemRecognizer {
+impl Recognizer for SessionRecognizer {
     fn start(
         &self,
+        request: DictationRequest,
         on_event: Box<dyn Fn(DictationEvent) + Send>,
     ) -> Result<Box<dyn RecognitionSession>, String> {
-        let failure = RefCell::new(None);
-        let session = DictationSession::start(move |event| match event {
-            system_dictation::DictationEvent::Transcript(text) => {
-                on_event(DictationEvent::Transcript(text));
-            }
-            system_dictation::DictationEvent::Failed(error) => *failure.borrow_mut() = Some(error),
-            system_dictation::DictationEvent::Ended => on_event(DictationEvent::Ended {
-                error: failure.borrow_mut().take(),
-            }),
-        })
-        .map_err(|error| error.to_string())?;
-        Ok(Box::new(SystemSession(session)))
+        let (stop, mut stopped) = oneshot::channel();
+        let worker = thread::Builder::new()
+            .name("ash-dictation".into())
+            .spawn(move || {
+                let result = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .map_err(|error| error.to_string())
+                    .and_then(|runtime| {
+                        runtime.block_on(async {
+                            match request {
+                                DictationRequest::Local(request) => {
+                                    local::run(request, &mut stopped, &on_event).await
+                                }
+                                DictationRequest::Cloud(request) => {
+                                    cloud::run(request, &mut stopped, &on_event).await
+                                }
+                            }
+                        })
+                    });
+                on_event(DictationEvent::Ended {
+                    error: result.err(),
+                });
+            })
+            .map_err(|error| error.to_string())?;
+        Ok(Box::new(WorkerSession {
+            stop: Some(stop),
+            worker: Some(worker),
+        }))
     }
 }
 
-impl RecognitionSession for SystemSession {
+impl RecognitionSession for WorkerSession {
     fn stop(&mut self) {
-        self.0.stop();
+        if let Some(stop) = self.stop.take() {
+            let _ = stop.send(());
+        }
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
     }
 }
 
@@ -64,6 +123,7 @@ struct ActiveDictation {
     resource_id: String,
     session: Box<dyn RecognitionSession>,
     ended: Arc<AtomicBool>,
+    final_text: Arc<Mutex<Option<String>>>,
 }
 
 /// One device-local dictation manager shared by all product connections in a process.
@@ -76,19 +136,22 @@ pub struct DictationManager {
 impl Default for DictationManager {
     fn default() -> Self {
         Self {
-            recognizer: Box::new(SystemRecognizer),
+            recognizer: Box::new(SessionRecognizer),
             active: Mutex::new(None),
         }
     }
 }
 
 impl DictationManager {
-    pub fn start(
-        &self,
-        owner: u64,
-        resource_id: String,
-        on_event: impl Fn(DictationEvent) + Send + 'static,
-    ) -> Result<(), String> {
+    pub fn is_active(&self) -> bool {
+        self.active.lock().is_ok_and(|active| {
+            active
+                .as_ref()
+                .is_some_and(|session| !session.ended.load(Ordering::Acquire))
+        })
+    }
+
+    pub fn validate_resource_id(resource_id: &str) -> Result<(), String> {
         if resource_id.is_empty()
             || resource_id.len() > 128
             || !resource_id
@@ -97,6 +160,17 @@ impl DictationManager {
         {
             return Err("Invalid dictation resource ID".into());
         }
+        Ok(())
+    }
+
+    pub fn start(
+        &self,
+        owner: u64,
+        resource_id: String,
+        request: DictationRequest,
+        on_event: impl Fn(DictationEvent) + Send + 'static,
+    ) -> Result<(), String> {
+        Self::validate_resource_id(&resource_id)?;
         let mut active = self
             .active
             .lock()
@@ -113,22 +187,36 @@ impl DictationManager {
         }
         let ended = Arc::new(AtomicBool::new(false));
         let event_ended = Arc::clone(&ended);
-        let session = self.recognizer.start(Box::new(move |event| {
-            if matches!(event, DictationEvent::Ended { .. }) {
-                event_ended.store(true, Ordering::Release);
-            }
-            on_event(event);
-        }))?;
+        let final_text = Arc::new(Mutex::new(None));
+        let event_final_text = Arc::clone(&final_text);
+        let session = self.recognizer.start(
+            request,
+            Box::new(move |event| {
+                if let DictationEvent::Transcript {
+                    text,
+                    is_final: true,
+                } = &event
+                    && let Ok(mut final_text) = event_final_text.lock()
+                {
+                    *final_text = Some(text.clone());
+                }
+                if matches!(event, DictationEvent::Ended { .. }) {
+                    event_ended.store(true, Ordering::Release);
+                }
+                on_event(event);
+            }),
+        )?;
         *active = Some(ActiveDictation {
             owner,
             resource_id,
             session,
             ended,
+            final_text,
         });
         Ok(())
     }
 
-    pub fn stop(&self, owner: u64, resource_id: &str) -> Result<(), String> {
+    pub fn stop(&self, owner: u64, resource_id: &str) -> Result<Option<String>, String> {
         let mut active = self
             .active
             .lock()
@@ -141,7 +229,11 @@ impl DictationManager {
         }
         let mut session = active.take().expect("validated active dictation");
         session.session.stop();
-        Ok(())
+        session
+            .final_text
+            .lock()
+            .map(|text| text.clone())
+            .map_err(|_| "Dictation state unavailable".into())
     }
 
     pub fn close(&self, owner: u64) {

@@ -47,6 +47,8 @@ pub use endpoint::responses_websocket::ResponsesWarmup;
 pub use endpoint::responses_websocket::ResponsesWebSocketSession;
 pub use endpoint::semantic::SemanticApiEndpoint;
 pub use endpoint::token_count::InputTokenCountEndpoint;
+pub use endpoint::transcription::TranscriptionEvent;
+pub use endpoint::transcription::TranscriptionSession;
 pub use error::ApiError;
 pub use sse::AnthropicMessagesSseDecoder;
 pub use sse::OpenAiChatCompletionsSseDecoder;

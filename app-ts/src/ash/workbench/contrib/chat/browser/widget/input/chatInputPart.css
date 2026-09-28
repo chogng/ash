@@ -15,6 +15,19 @@
   display: none;
 }
 
+.ash-chat-dictation-preview {
+  overflow: hidden;
+  padding: 0 12px 4px;
+  color: var(--ash-description-foreground);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ash-chat-dictation-preview[hidden] {
+  display: none;
+}
+
 .ash-chat-interaction {
   flex: 0 0 auto;
   margin: 0 10px 8px;

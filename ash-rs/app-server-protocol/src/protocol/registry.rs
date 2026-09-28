@@ -434,9 +434,15 @@ use crate::protocol::debug::DebugAdapterStartResult;
 use crate::protocol::diagnostics::FeedbackPrepareParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::diagnostics::FeedbackUploadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::dictation::DictationBackend;
 use crate::protocol::dictation::DictationEnded;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::dictation::DictationResourceParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::dictation::DictationStartParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::dictation::DictationStopResult;
 use crate::protocol::dictation::DictationTranscript;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::diff::DiffComputeParams;
@@ -3090,13 +3096,13 @@ client_methods! {
         serialization: ConnectionExclusive("attachmentIngress"),
     },
     DictationStart => "dictation/start" {
-        params: DictationResourceParams,
+        params: DictationStartParams,
         response: (),
         serialization: ConnectionExclusive("dictation"),
     },
     DictationStop => "dictation/stop" {
         params: DictationResourceParams,
-        response: (),
+        response: DictationStopResult,
         serialization: ConnectionExclusive("dictation"),
     },
     FsGetMetadata => "fs/getMetadata" {
@@ -4074,8 +4080,11 @@ typescript_bindings! {
     CallRoleParams,
     CallStatus,
     DictationResourceParams,
+    DictationStartParams,
+    DictationBackend,
     DictationTranscript,
     DictationEnded,
+    DictationStopResult,
     CallScreenSource,
     CallScreenSources,
     CallScreenFrame,

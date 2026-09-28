@@ -9,7 +9,20 @@ publish.workspace = true
 name = "realtime_voice"
 
 [dependencies]
-system-dictation = { package = "ash-system-dictation", path = "../system-dictation" }
+model-provider = { package = "ash-model-provider", path = "../model-provider" }
+model-provider-config = { package = "ash-model-provider-config", path = "../model-provider-config" }
+async-utils = { package = "ash-async-utils", path = "../async-utils" }
+protocol = { package = "ash-protocol", path = "../protocol" }
+websocket-client = { package = "ash-websocket-client", path = "../websocket-client" }
+voice-host = { package = "ash-voice-host", path = "../voice-host" }
+http-client = { package = "ash-http-client", path = "../http-client" }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+sherpa-onnx = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util", "macros", "rt", "sync"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

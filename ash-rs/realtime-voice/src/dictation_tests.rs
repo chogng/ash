@@ -13,7 +13,11 @@ struct TestRecognizer {
 struct TestSession(Arc<AtomicUsize>);
 
 impl Recognizer for TestRecognizer {
-    fn start(&self, on_event: EventSink) -> Result<Box<dyn RecognitionSession>, String> {
+    fn start(
+        &self,
+        _request: DictationRequest,
+        on_event: EventSink,
+    ) -> Result<Box<dyn RecognitionSession>, String> {
         *self.sink.lock().unwrap() = Some(on_event);
         Ok(Box::new(TestSession(Arc::clone(&self.stops))))
     }
@@ -46,23 +50,41 @@ fn manager() -> (
     )
 }
 
+fn request() -> DictationRequest {
+    DictationRequest::Local(LocalDictationRequest {
+        model_id: DEFAULT_MODEL_ID.into(),
+        model_root: PathBuf::new(),
+        audio_host: PathBuf::new(),
+        network: http_client::OutboundNetworkSnapshot::new(http_client::HttpClientConfig::new())
+            .unwrap(),
+    })
+}
+
 #[test]
 fn session_events_reach_the_owner_and_stop_releases_the_microphone() {
     let (manager, sink, stops) = manager();
     let received = Arc::new(Mutex::new(Vec::new()));
     let owner_events = Arc::clone(&received);
     manager
-        .start(1, "first".into(), move |event| {
+        .start(1, "first".into(), request(), move |event| {
             owner_events.lock().unwrap().push(event);
         })
         .unwrap();
-    sink.lock().unwrap().as_ref().unwrap()(DictationEvent::Transcript("hello".into()));
+    sink.lock().unwrap().as_ref().unwrap()(DictationEvent::Transcript {
+        text: "hello".into(),
+        is_final: false,
+    });
     assert_eq!(
         *received.lock().unwrap(),
-        vec![DictationEvent::Transcript("hello".into())]
+        vec![DictationEvent::Transcript {
+            text: "hello".into(),
+            is_final: false
+        }]
     );
     assert_eq!(
-        manager.start(2, "second".into(), |_| {}).unwrap_err(),
+        manager
+            .start(2, "second".into(), request(), |_| {})
+            .unwrap_err(),
         "The microphone is already in use for dictation"
     );
     assert_eq!(
@@ -71,25 +93,33 @@ fn session_events_reach_the_owner_and_stop_releases_the_microphone() {
     );
     manager.stop(1, "first").unwrap();
     assert_eq!(stops.load(Ordering::SeqCst), 1);
-    manager.start(2, "second".into(), |_| {}).unwrap();
+    manager
+        .start(2, "second".into(), request(), |_| {})
+        .unwrap();
 }
 
 #[test]
 fn closing_a_connection_releases_only_its_own_session() {
     let (manager, _, stops) = manager();
-    manager.start(1, "recording".into(), |_| {}).unwrap();
+    manager
+        .start(1, "recording".into(), request(), |_| {})
+        .unwrap();
     manager.close(2);
     assert_eq!(stops.load(Ordering::SeqCst), 0);
     manager.close(1);
     assert_eq!(stops.load(Ordering::SeqCst), 1);
-    manager.start(2, "recording".into(), |_| {}).unwrap();
+    manager
+        .start(2, "recording".into(), request(), |_| {})
+        .unwrap();
 }
 
 #[test]
 fn invalid_resource_id_never_starts_a_recognizer() {
     let (manager, sink, _) = manager();
     assert_eq!(
-        manager.start(1, "bad/id".into(), |_| {}).unwrap_err(),
+        manager
+            .start(1, "bad/id".into(), request(), |_| {})
+            .unwrap_err(),
         "Invalid dictation resource ID"
     );
     assert!(sink.lock().unwrap().is_none());
@@ -98,9 +128,11 @@ fn invalid_resource_id_never_starts_a_recognizer() {
 #[test]
 fn ended_recognition_releases_the_device_before_the_next_owner_starts() {
     let (manager, sink, stops) = manager();
-    manager.start(1, "first".into(), |_| {}).unwrap();
+    manager.start(1, "first".into(), request(), |_| {}).unwrap();
     sink.lock().unwrap().as_ref().unwrap()(DictationEvent::Ended { error: None });
-    manager.start(2, "second".into(), |_| {}).unwrap();
+    manager
+        .start(2, "second".into(), request(), |_| {})
+        .unwrap();
     assert_eq!(stops.load(Ordering::SeqCst), 1);
     assert_eq!(
         manager.stop(1, "first").unwrap_err(),

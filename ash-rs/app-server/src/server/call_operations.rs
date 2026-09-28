@@ -107,6 +107,15 @@ impl AppServer {
             }
             ClientMethod::CallStart => {
                 let params: CallStartParams = decode(params)?;
+                let _microphone = self
+                    .microphone_gate
+                    .lock()
+                    .map_err(|_| failure("Microphone state unavailable".into()))?;
+                if self.dictation.is_active() {
+                    return Err(failure(
+                        "The microphone is already in use for dictation".into(),
+                    ));
+                }
                 let home = self
                     .home
                     .as_ref()

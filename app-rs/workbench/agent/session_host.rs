@@ -6,6 +6,8 @@ use crate::PaneBinding;
 use anyhow::Result;
 use anyhow::anyhow;
 use ash_app_server_protocol::protocol::config::ConfigUpdateParams;
+use ash_app_server_protocol::protocol::config::FrontendConfigDto;
+use ash_app_server_protocol::protocol::dictation::DictationBackend;
 use ash_app_server_protocol::protocol::environment::SessionDirListParams;
 use ash_app_server_protocol::protocol::fs::FsChanged;
 use ash_app_server_protocol::protocol::fs::FsGetMetadataParams;
@@ -47,19 +49,36 @@ impl WorkbenchApplication {
             return;
         };
         if let Some(resource_id) = self.dictation_resource_id.take() {
-            if let Err(error) = client.stop_dictation(resource_id) {
-                eprintln!("could not stop dictation: {error}");
+            match client.stop_dictation(resource_id) {
+                Ok(result) => {
+                    if let Some(text) = result.text {
+                        self.session_pane.append_dictation_text(&text);
+                        self.composer_changed();
+                    }
+                }
+                Err(error) => eprintln!("could not stop dictation: {error}"),
             }
             self.rebuild_presentation_on_next_redraw();
             return;
         }
         if self.app_server_host.is_remote() {
-            eprintln!("dictation requires a local Windows microphone");
+            eprintln!("dictation requires a local microphone");
             return;
         }
+        let backend = match client
+            .read_config()
+            .map_err(client_error)
+            .and_then(|config| dictation_backend(&config.gui).map_err(anyhow::Error::msg))
+        {
+            Ok(backend) => backend,
+            Err(error) => {
+                eprintln!("could not read dictation configuration: {error}");
+                return;
+            }
+        };
         self.dictation_next_id += 1;
         let resource_id = format!("desktop-dictation-{}", self.dictation_next_id);
-        match client.start_dictation(resource_id.clone()) {
+        match client.start_dictation(resource_id.clone(), backend) {
             Ok(()) => self.dictation_resource_id = Some(resource_id),
             Err(error) => eprintln!("could not start dictation: {error}"),
         }
@@ -213,6 +232,7 @@ impl WorkbenchApplication {
                 ServerNotification::DictationTranscript(transcript) => {
                     if self.dictation_resource_id.as_deref()
                         == Some(transcript.resource_id.as_str())
+                        && transcript.is_final
                     {
                         self.session_pane.append_dictation_text(&transcript.text);
                         self.composer_changed();
@@ -262,6 +282,76 @@ impl WorkbenchApplication {
         }
         self.rebuild_presentation_on_next_redraw();
     }
+}
+
+fn dictation_backend(gui: &FrontendConfigDto) -> Result<DictationBackend, String> {
+    let backend = gui
+        .0
+        .get("dictationBackend")
+        .map(|value| {
+            value
+                .as_str()
+                .ok_or("gui.dictationBackend must be local or cloud")
+        })
+        .transpose()?
+        .unwrap_or("local");
+    match backend {
+        "local" => {
+            let model_id = gui
+                .0
+                .get("dictationLocalModel")
+                .map(|value| {
+                    value
+                        .as_str()
+                        .ok_or("gui.dictationLocalModel must be a model package ID")
+                })
+                .transpose()?
+                .unwrap_or("paraformer-large-online-ec6a3c64");
+            if model_id.is_empty()
+                || model_id.len() > 128
+                || !model_id
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+            {
+                return Err("gui.dictationLocalModel must be a model package ID".into());
+            }
+            Ok(DictationBackend::Local {
+                model_id: model_id.into(),
+            })
+        }
+        "cloud" => Ok(DictationBackend::Cloud {
+            model_id: "gpt-live-transcribe".into(),
+        }),
+        _ => Err("gui.dictationBackend must be local or cloud".into()),
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn dictation_model_selection_uses_gui_configuration() {
+    let gui = FrontendConfigDto(std::collections::BTreeMap::from([
+        ("dictationBackend".into(), serde_json::json!("local")),
+        (
+            "dictationLocalModel".into(),
+            serde_json::json!("custom-online"),
+        ),
+    ]));
+    assert_eq!(
+        dictation_backend(&gui).unwrap(),
+        DictationBackend::Local {
+            model_id: "custom-online".into()
+        }
+    );
+    let cloud = FrontendConfigDto(std::collections::BTreeMap::from([(
+        "dictationBackend".into(),
+        serde_json::json!("cloud"),
+    )]));
+    assert_eq!(
+        dictation_backend(&cloud).unwrap(),
+        DictationBackend::Cloud {
+            model_id: "gpt-live-transcribe".into()
+        }
+    );
 }
 
 fn shell_completion_sources_changed(changed: &FsChanged) -> bool {

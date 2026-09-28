@@ -365,6 +365,7 @@ pkg-config = "0.3"
 p256 = { version = "0.13", default-features = false, features = ["arithmetic", "pkcs8", "std"] }
 pretty_assertions = "1"
 prost = "0.14.3"
+sherpa-onnx = "1.13.8"
 crossterm = "0.28.1"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 pulldown-cmark = { version = "0.13.4", default-features = false }

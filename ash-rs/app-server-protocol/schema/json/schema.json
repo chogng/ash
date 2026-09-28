@@ -6866,7 +6866,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/DictationResourceParams"
+              "$ref": "#/$defs/DictationStartParams"
             }
           },
           "required": [
@@ -11446,7 +11446,7 @@
               "type": "string"
             },
             "result": {
-              "type": "null"
+              "$ref": "#/$defs/DictationStopResult"
             }
           },
           "required": [
@@ -15716,6 +15716,44 @@
       ],
       "type": "object"
     },
+    "DictationBackend": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "modelId": {
+              "type": "string"
+            },
+            "type": {
+              "const": "local",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "modelId"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "modelId": {
+              "type": "string"
+            },
+            "type": {
+              "const": "cloud",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "modelId"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "DictationEnded": {
       "properties": {
         "error": {
@@ -15747,8 +15785,40 @@
       ],
       "type": "object"
     },
+    "DictationStartParams": {
+      "additionalProperties": false,
+      "properties": {
+        "backend": {
+          "$ref": "#/$defs/DictationBackend"
+        },
+        "resourceId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "resourceId",
+        "backend"
+      ],
+      "type": "object"
+    },
+    "DictationStopResult": {
+      "properties": {
+        "text": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
     "DictationTranscript": {
       "properties": {
+        "isFinal": {
+          "type": "boolean"
+        },
         "resourceId": {
           "type": "string"
         },
@@ -15758,7 +15828,8 @@
       },
       "required": [
         "resourceId",
-        "text"
+        "text",
+        "isFinal"
       ],
       "type": "object"
     },

@@ -87,6 +87,8 @@ import type { DebugAdapterStartParams } from './types/DebugAdapterStartParams.js
 import type { DebugAdapterStartResult } from './types/DebugAdapterStartResult.js';
 import type { DiagnosticSnapshot } from './types/DiagnosticSnapshot.js';
 import type { DictationResourceParams } from './types/DictationResourceParams.js';
+import type { DictationStartParams } from './types/DictationStartParams.js';
+import type { DictationStopResult } from './types/DictationStopResult.js';
 import type { DiffComputeParams } from './types/DiffComputeParams.js';
 import type { DiffComputeResult } from './types/DiffComputeResult.js';
 import type { DirPermissionsForgetParams } from './types/DirPermissionsForgetParams.js';
@@ -586,8 +588,8 @@ export interface AppServerRequestMap {
   "attachment/upload/finish": { params: AttachmentUploadFinishParams; response: AttachmentMaterializeResult };
   "attachment/upload/cancel": { params: AttachmentUploadCancelParams; response: null };
   "attachment/importRemote": { params: AttachmentImportRemoteParams; response: AttachmentMaterializeResult };
-  "dictation/start": { params: DictationResourceParams; response: null };
-  "dictation/stop": { params: DictationResourceParams; response: null };
+  "dictation/start": { params: DictationStartParams; response: null };
+  "dictation/stop": { params: DictationResourceParams; response: DictationStopResult };
   "fs/getMetadata": { params: FsGetMetadataParams; response: FsGetMetadataResult };
   "fs/readDirectory": { params: FsReadDirectoryParams; response: FsReadDirectoryResult };
   "fs/readFile": { params: FsReadFileParams; response: FsReadFileResult };

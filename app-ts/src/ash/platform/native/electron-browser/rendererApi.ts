@@ -110,7 +110,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			if (client.capabilities?.contracts.memoryDiagnostics?.version === 1) { backend = { ...backend, memoryDiagnostics: resources.add(new AppServerMemoryDiagnosticsService(client, 'electron', () => invoke<MemoryObservation[]>('ash:memory:collect'))) }; }
 			if (client.capabilities?.contracts.calls?.version === 1) { backend = { ...backend, calls: resources.add(new AppServerCallService(client)) }; }
 			const remoteConnection = await createRemoteAgentApi().getConnection();
-			if (sandboxProcess.platform === 'win32' && remoteConnection.kind !== 'ssh') { backend = { ...backend, dictation: resources.add(new AppServerDictationService(client)) }; }
+			if (remoteConnection.kind !== 'ssh') { backend = { ...backend, dictation: resources.add(new AppServerDictationService(client, createConfigurationApi())) }; }
 			if (client.capabilities?.contracts.automation?.version === 1) { backend = { ...backend, automation: resources.add(new AppServerAutomationService(client)) }; }
 			if (remoteConnection.kind === 'ssh') {
 				const terminals = resources.add(new ReconnectableTerminalProcessService({ supervisor: client }));

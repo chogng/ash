@@ -4,5 +4,5 @@ export interface IDictationSession {
 }
 
 export interface IDictationService {
-	start(onTranscript: (text: string) => void, onEnded: (error?: string) => void): Promise<IDictationSession>;
+	start(onTranscript: (text: string, isFinal: boolean) => void, onEnded: (error?: string) => void): Promise<IDictationSession>;
 }

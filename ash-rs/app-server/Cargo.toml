@@ -100,6 +100,7 @@ ash-file-watcher = { workspace = true }
 ash-git = { workspace = true }
 github = { workspace = true }
 ash-http-client = { workspace = true }
+ash-websocket-client = { workspace = true }
 ash-hooks = { workspace = true }
 ash-home = { workspace = true }
 ash-install-context = { workspace = true }
