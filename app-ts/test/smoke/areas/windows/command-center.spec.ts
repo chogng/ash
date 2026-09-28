@@ -191,7 +191,7 @@ test('activity bar remains visible and reopens a selected sidebar view', async (
 	expect(accountsBounds!.y).toBeGreaterThan(searchBounds!.y);
 	expect(manageBounds!.y).toBeGreaterThan(accountsBounds!.y);
 	await accounts.click();
-	await expect(page.getByRole('menu').last().getByRole('menuitem', { name: 'Sign in with ChatGPT' })).toBeVisible();
+	await expect(page.getByRole('menu').last().getByRole('menuitem', { name: 'Manage Accounts' })).toBeVisible();
 	await expect(page.getByRole('menu').last().getByRole('menuitem', { name: 'Connect GitHub' })).toBeVisible();
 	await page.keyboard.press('Escape');
 	await expect(activitybar.getByRole('tablist')).toHaveAttribute('aria-orientation', 'vertical');
@@ -598,7 +598,7 @@ test('activity bar context menu changes size and position', async ({ target, wor
 	expect(manageBounds!.y).toBeGreaterThanOrEqual(titlebarBounds!.y);
 	expect(manageBounds!.y + manageBounds!.height).toBeLessThanOrEqual(titlebarBounds!.y + titlebarBounds!.height);
 	await titlebarAccounts.click();
-	await expect(page.getByRole('menu').last().getByRole('menuitem', { name: 'Sign in with ChatGPT' })).toBeVisible();
+	await expect(page.getByRole('menu').last().getByRole('menuitem', { name: 'Manage Accounts' })).toBeVisible();
 	const connectGitHub = page.getByRole('menu').last().getByRole('menuitem', { name: 'Connect GitHub' });
 	await expect(connectGitHub).toBeVisible();
 	if (target.kind === 'browser' && target.appServerMode === 'disabled') {

@@ -20,14 +20,14 @@ test('Manage Accounts command opens account actions and signs out only after a s
 	const quickInput = new TestQuickInputService();
 	const accountService = accountFixture({
 		revision: 1n,
-		accounts: [{ provider: 'openai', accountId: 'one', displayName: 'Ash User', status: 'ready', credentialRevision: 1n }],
+		accounts: [{ provider: 'chatgpt-subscription', accountId: 'one', displayName: 'Ash User', status: 'ready', credentialRevision: 1n }],
 	}, operations);
 	using environment = new AccountActionEnvironment(accountService, quickInput, operations);
 	using registration = registerAction2(ManageAccountsAction);
 
 	await environment.commands.executeCommand(ManageAccountsAction.ID);
 	const accountPicker = quickInput.pickers[0]!;
-	assert.deepEqual(accountPicker.items.map(item => item.label), ['Ash User', 'Connect GitHub']);
+	assert.deepEqual(accountPicker.items.map(item => item.label), ['Ash User', 'Add account']);
 	assert.equal(accountPicker.ariaLabel, 'Select an account to manage');
 	accountPicker.accept(accountPicker.items[0]!);
 	assert.deepEqual(operations, ['read']);
@@ -36,7 +36,7 @@ test('Manage Accounts command opens account actions and signs out only after a s
 	assert.equal(actionPicker.ariaLabel, 'Manage Ash User');
 	assert.deepEqual(actionPicker.items.map(item => item.label), ['Sign out of Ash User']);
 	actionPicker.accept(actionPicker.items[0]!);
-	assert.deepEqual(operations, ['read', 'logout:openai']);
+	assert.deepEqual(operations, ['read', 'logout:chatgpt-subscription']);
 });
 
 test('Manage Accounts command offers product login methods when no account is connected', async () => {
@@ -46,10 +46,13 @@ test('Manage Accounts command offers product login methods when no account is co
 	using registration = registerAction2(ManageAccountsAction);
 
 	await environment.commands.executeCommand(ManageAccountsAction.ID);
-	assert.deepEqual(quickInput.pickers[0]!.items.map(item => item.label), ['Sign in with ChatGPT', 'Connect GitHub']);
+	assert.deepEqual(quickInput.pickers[0]!.items.map(item => item.label), ['Add account']);
 	quickInput.pickers[0]!.accept(quickInput.pickers[0]!.items[0]!);
+	assert.deepEqual(quickInput.pickers[1]!.items.map(item => item.label), ['Sign in with ChatGPT', 'Connect GitHub']);
+	quickInput.pickers[1]!.accept(quickInput.pickers[1]!.items[0]!);
 	await environment.commands.executeCommand(ManageAccountsAction.ID);
-	quickInput.pickers[1]!.accept(quickInput.pickers[1]!.items[1]!);
+	quickInput.pickers[2]!.accept(quickInput.pickers[2]!.items[0]!);
+	quickInput.pickers[3]!.accept(quickInput.pickers[3]!.items[1]!);
 	assert.deepEqual(operations, ['read', 'login:openAiChatGptBrowser', 'read', 'github:connect']);
 });
 
@@ -58,15 +61,31 @@ test('Manage Accounts command offers sign in when an account needs reauthenticat
 	const quickInput = new TestQuickInputService();
 	using environment = new AccountActionEnvironment(accountFixture({
 		revision: 1n,
-		accounts: [{ provider: 'openai', accountId: 'one', displayName: 'Ash User', status: 'reauthenticationRequired', credentialRevision: 1n }],
+		accounts: [{ provider: 'chatgpt-subscription', accountId: 'one', displayName: 'Ash User', status: 'reauthenticationRequired', credentialRevision: 1n }],
 	}, operations), quickInput, operations);
 	using registration = registerAction2(ManageAccountsAction);
 
 	await environment.commands.executeCommand(ManageAccountsAction.ID);
 	const picker = quickInput.pickers[0]!;
-	assert.deepEqual(picker.items.map(item => item.label), ['Ash User', 'Sign in with ChatGPT', 'Connect GitHub']);
+	assert.deepEqual(picker.items.map(item => item.label), ['Ash User', 'Add account']);
 	picker.accept(picker.items[1]!);
+	assert.deepEqual(quickInput.pickers[1]!.items.map(item => item.label), ['Sign in with ChatGPT', 'Connect GitHub']);
+	quickInput.pickers[1]!.accept(quickInput.pickers[1]!.items[0]!);
 	assert.deepEqual(operations, ['read', 'login:openAiChatGptBrowser']);
+});
+
+test('Manage Accounts command offers cancellation for a pending GitHub connection', async () => {
+	const operations: string[] = [];
+	const quickInput = new TestQuickInputService();
+	using environment = new AccountActionEnvironment(accountFixture({ revision: 1n, accounts: [] }, operations), quickInput, operations);
+	using registration = registerAction2(ManageAccountsAction);
+	environment.github.isConnecting = true;
+
+	await environment.commands.executeCommand(ManageAccountsAction.ID);
+	quickInput.pickers[0]!.accept(quickInput.pickers[0]!.items[0]!);
+	assert.deepEqual(quickInput.pickers[1]!.items.map(item => item.label), ['Sign in with ChatGPT', 'Cancel GitHub connection']);
+	quickInput.pickers[1]!.accept(quickInput.pickers[1]!.items[1]!);
+	assert.deepEqual(operations, ['read', 'github:cancel']);
 });
 
 test('Manage Accounts command reports a failed sign out', async () => {
@@ -74,7 +93,7 @@ test('Manage Accounts command reports a failed sign out', async () => {
 	const quickInput = new TestQuickInputService();
 	const accounts = accountFixture({
 		revision: 1n,
-		accounts: [{ provider: 'openai', accountId: 'one', displayName: 'Ash User', status: 'ready', credentialRevision: 1n }],
+		accounts: [{ provider: 'chatgpt-subscription', accountId: 'one', displayName: 'Ash User', status: 'ready', credentialRevision: 1n }],
 	}, operations);
 	accounts.logout = async () => { throw new Error('logout failed'); };
 	using environment = new AccountActionEnvironment(accounts, quickInput, operations);
@@ -111,9 +130,10 @@ test('Manage Accounts command and picker use the selected language', async () =>
 		using environment = new AccountActionEnvironment(accountFixture({ revision: 1n, accounts: [] }, operations), quickInput, operations);
 		using registration = registerAction2(ManageAccountsAction);
 		await environment.commands.executeCommand(ManageAccountsAction.ID);
-		assert.deepEqual({ title: commandActionLabel(new ManageAccountsAction().desc.title), picker: quickInput.pickers[0]!.ariaLabel }, {
+		assert.deepEqual({ title: commandActionLabel(new ManageAccountsAction().desc.title), picker: quickInput.pickers[0]!.ariaLabel, addAccount: quickInput.pickers[0]!.items[0]!.label }, {
 			title: '管理账户',
 			picker: '选择要管理的账户',
+			addAccount: '添加账户',
 		});
 	} finally {
 		resetNlsResolver();
@@ -134,17 +154,19 @@ function accountFixture(state: AccountState, operations: string[]): IAccountServ
 class AccountActionEnvironment extends Disposable {
 	public readonly errors: string[] = [];
 	public readonly commands: CommandService;
+	public readonly github: { isConnecting: boolean; connect(): Promise<void>; cancel(): Promise<void> };
 
 	constructor(accounts: IAccountService, quickInput: IQuickInputService, operations: string[]) {
 		super();
 		const services = new ServiceContainer();
 		services.registerInstance(IAccountService, accounts);
 		services.registerInstance(IQuickInputService, quickInput);
-		services.registerInstance(IGitHubConnectionService, {
+		this.github = {
 			isConnecting: false,
 			connect: async () => { operations.push('github:connect'); },
-			cancel: async () => {},
-		});
+			cancel: async () => { operations.push('github:cancel'); },
+		};
+		services.registerInstance(IGitHubConnectionService, this.github);
 		services.registerInstance(INotificationService, {
 			error: (message: string) => { this.errors.push(message); return { close() {} }; },
 		} as INotificationService);

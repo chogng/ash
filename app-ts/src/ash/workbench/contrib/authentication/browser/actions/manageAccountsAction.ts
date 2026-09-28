@@ -10,7 +10,9 @@ import { IGitHubConnectionService } from '../../../../services/accounts/common/g
 
 type AccountPickItem =
 	| (IQuickPickItem & { readonly kind: 'account'; readonly account: Account })
-	| (IQuickPickItem & { readonly kind: 'chatgpt' | 'github' });
+	| (IQuickPickItem & { readonly kind: 'add' });
+
+type LoginPickItem = IQuickPickItem & { readonly kind: 'chatgpt' | 'github' };
 
 export class ManageAccountsAction extends Action2 {
 	public static readonly ID = 'workbench.action.manageAccounts';
@@ -41,6 +43,18 @@ export class ManageAccountsAction extends Action2 {
 		resources.add(picker);
 		picker.placeholder = localize({ bundle: 'ash', key: 'workbench.selectAccount' }, 'Select an account to manage');
 		picker.ariaLabel = picker.placeholder;
+		const loginItems: LoginPickItem[] = [
+			...(!state.accounts.some(account => account.provider === 'chatgpt-subscription' && account.status === 'ready') ? [{
+				kind: 'chatgpt' as const,
+				label: localize({ bundle: 'ash', key: 'workbench.signInWithChatGPT' }, 'Sign in with ChatGPT'),
+			}] : []),
+			...(!state.accounts.some(account => account.provider === 'github' && account.status === 'ready') ? [{
+				kind: 'github' as const,
+				label: github.isConnecting
+					? localize({ bundle: 'ash', key: 'workbench.cancelGitHubConnection' }, 'Cancel GitHub connection')
+					: localize({ bundle: 'ash', key: 'workbench.connectGitHub' }, 'Connect GitHub'),
+			}] : []),
+		];
 		picker.items = [
 			...state.accounts.map(account => ({
 				kind: 'account' as const,
@@ -48,14 +62,7 @@ export class ManageAccountsAction extends Action2 {
 				label: account.displayName ?? account.email ?? account.provider,
 				description: account.provider,
 			})),
-			...(!state.accounts.some(account => account.provider === 'openai' && account.status === 'ready') ? [{
-				kind: 'chatgpt' as const,
-				label: localize({ bundle: 'ash', key: 'workbench.signInWithChatGPT' }, 'Sign in with ChatGPT'),
-			}] : []),
-			...(!state.accounts.some(account => account.provider === 'github' && account.status === 'ready') ? [{
-				kind: 'github' as const,
-				label: localize({ bundle: 'ash', key: 'workbench.connectGitHub' }, 'Connect GitHub'),
-			}] : []),
+			...(loginItems.length > 0 ? [{ kind: 'add' as const, label: localize({ bundle: 'ash', key: 'workbench.addAccount' }, 'Add account') }] : []),
 		];
 		resources.add(picker.onDidAccept(item => {
 			picker.hide();
@@ -63,17 +70,32 @@ export class ManageAccountsAction extends Action2 {
 				showAccountActions(quickInput, accounts, notifications, item.account);
 				return;
 			}
-			if (item.kind === 'github') {
-				void github.connect();
-				return;
-			}
-			void accounts.startLogin({ type: 'openAiChatGptBrowser' }).catch(() => {
-				notifications.error(localize({ bundle: 'ash', key: 'workbench.signInFailed' }, 'Could not start ChatGPT sign in.'));
-			});
+			showAddAccountActions(quickInput, accounts, github, notifications, loginItems);
 		}));
 		resources.add(picker.onDidHide(() => resources.dispose()));
 		picker.show();
 	}
+}
+
+function showAddAccountActions(quickInput: IQuickInputService, accounts: IAccountService, github: IGitHubConnectionService, notifications: INotificationService, items: readonly LoginPickItem[]): void {
+	const picker = quickInput.createQuickPick<LoginPickItem>();
+	const resources = new DisposableStore();
+	resources.add(picker);
+	picker.placeholder = localize({ bundle: 'ash', key: 'workbench.addAccount' }, 'Add account');
+	picker.ariaLabel = picker.placeholder;
+	picker.items = items;
+	resources.add(picker.onDidAccept(item => {
+		picker.hide();
+		if (item.kind === 'github') {
+			void (github.isConnecting ? github.cancel() : github.connect());
+			return;
+		}
+		void accounts.startLogin({ type: 'openAiChatGptBrowser' }).catch(() => {
+			notifications.error(localize({ bundle: 'ash', key: 'workbench.signInFailed' }, 'Could not start ChatGPT sign in.'));
+		});
+	}));
+	resources.add(picker.onDidHide(() => resources.dispose()));
+	picker.show();
 }
 
 function showAccountActions(quickInput: IQuickInputService, accounts: IAccountService, notifications: INotificationService, account: Account): void {

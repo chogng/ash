@@ -19,7 +19,7 @@ test('Sessions account menu opens its own settings and account actions', async (
 	const accounts: IAccountService = {
 		onDidChangeAccounts: Event.None,
 		onDidCompleteLogin: Event.None,
-		read: async () => ({ revision: 1n, accounts: [{ provider: 'openai', accountId: 'one', displayName: 'Ash User', plan: 'Pro', status: 'ready', credentialRevision: 1n }] }),
+		read: async () => ({ revision: 1n, accounts: [{ provider: 'chatgpt-subscription', accountId: 'one', displayName: 'Ash User', plan: 'Pro', status: 'ready', credentialRevision: 1n }] }),
 		startLogin: async () => ({ type: 'connected', loginId: 'one' }),
 		cancelLogin: async () => {},
 		logout: async provider => { loggedOut.push(provider); },
@@ -49,7 +49,7 @@ test('Sessions account menu opens its own settings and account actions', async (
 	await actions[2]?.run();
 	await actions[3]?.run();
 	await actions[5]?.run();
-	assert.deepEqual({ settingsOpened, loggedOut, returnedToWorkbench }, { settingsOpened: 1, loggedOut: ['openai'], returnedToWorkbench: 1 });
+	assert.deepEqual({ settingsOpened, loggedOut, returnedToWorkbench }, { settingsOpened: 1, loggedOut: ['chatgpt-subscription'], returnedToWorkbench: 1 });
 	hide?.();
 	assert.equal(anchor.getAttribute('aria-expanded'), 'false');
 	browser.window.close();

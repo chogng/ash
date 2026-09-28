@@ -4,13 +4,14 @@ import { ActionBar } from '../../../base/browser/ui/actionbar/actionbar.js';
 import type { ActionViewItem, ActionViewItemOptions } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import { DropdownMenuActionViewItem } from '../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
 import { AnchorAlignment, AnchorAxisAlignment } from '../../../base/browser/ui/contextview/contextview.js';
-import type { IAction } from '../../../base/common/actions.js';
+import { Separator, SubmenuAction, type IAction } from '../../../base/common/actions.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
 import { getFlatContextMenuActions } from '../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { IMenuService, MenuId } from '../../../platform/actions/common/actions.js';
 import { IAccountService, type Account, type AccountState } from '../../../platform/accounts/common/accountService.js';
+import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import { ILogService } from '../../../platform/log/common/log.js';
@@ -37,6 +38,7 @@ export class GlobalCompositeBar extends Disposable {
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IAccountService private readonly accountService: IAccountService,
+		@ICommandService private readonly commandService: ICommandService,
 		@IGitHubConnectionService private readonly githubConnection: IGitHubConnectionService,
 		@ILocalizationService private readonly localizationService: ILocalizationService,
 		@ILogService private readonly logService: ILogService,
@@ -122,22 +124,36 @@ export class GlobalCompositeBar extends Disposable {
 	}
 
 	private accountActions(): readonly IAction[] {
-		const signInLabel = this.label('workbench.signInWithChatGPT', 'Sign in with ChatGPT');
+		const manageLabel = this.label('workbench.manageAccounts', 'Manage Accounts');
+		const signOutLabel = this.label('workbench.signOut', 'Sign Out');
 		const githubConnected = this.accounts.some(account => account.provider === 'github');
 		const githubLabel = this.githubConnection.isConnecting
 			? this.label('workbench.cancelGitHubConnection', 'Cancel GitHub connection')
 			: this.label('workbench.connectGitHub', 'Connect GitHub');
-		return [
-			...this.accounts.map(account => {
-				const name = account.displayName ?? account.email ?? account.provider;
-				const label = account.provider === 'github'
-					? this.localizationService.translate('ash', 'workbench.signOutGitHub', 'Sign out of GitHub ({0})', { '0': name })
-					: this.localizationService.translate('ash', 'workbench.signOutAccount', 'Sign out of {0}', { '0': name });
-				return { id: `ash.activityBar.signOut.${account.provider}`, label, tooltip: label, enabled: true, run: () => this.accountService.logout(account.provider) };
-			}),
-			{ id: 'ash.activityBar.signIn', label: signInLabel, tooltip: signInLabel, enabled: true, run: () => this.accountService.startLogin({ type: 'openAiChatGptBrowser' }) },
+		const accountActions = this.accounts.map(account => {
+			const name = account.displayName ?? account.email ?? account.provider;
+			const providerName = this.accountProviderName(account.provider);
+			const label = this.localizationService.translate('ash', 'workbench.accountWithProvider', '{0} ({1})', { '0': name, '1': providerName });
+			return new SubmenuAction(`ash.activityBar.account.${account.provider}`, label, [
+				{ id: `ash.activityBar.signOut.${account.provider}`, label: signOutLabel, tooltip: signOutLabel, enabled: true, run: () => this.accountService.logout(account.provider) },
+			]);
+		});
+		return Separator.join(accountActions, [
+			{ id: 'ash.activityBar.manageAccounts', label: manageLabel, tooltip: manageLabel, enabled: true, run: () => this.commandService.executeCommand('workbench.action.manageAccounts') },
 			...(!githubConnected ? [{ id: 'ash.activityBar.connectGitHub', label: githubLabel, tooltip: githubLabel, enabled: true, run: () => this.githubConnection.isConnecting ? this.githubConnection.cancel() : this.githubConnection.connect() }] : []),
-		];
+		]);
+	}
+
+	private accountProviderName(provider: string): string {
+		switch (provider) {
+			case 'github': return 'GitHub';
+			case 'chatgpt-subscription': return 'ChatGPT';
+			case 'kimi-subscription': return 'Kimi';
+			case 'xai-subscription': return 'Super Grok';
+			case 'bigmodel-coding-plan': return 'BigModel';
+			case 'zai-coding-plan': return 'Z.AI';
+			default: return provider;
+		}
 	}
 
 	private label(key: string, fallback: string): string {

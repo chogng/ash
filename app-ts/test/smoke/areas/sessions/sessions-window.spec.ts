@@ -595,7 +595,9 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 		await activityButtons.nth(3).click();
 		await expect(activityButtons.nth(3)).toHaveAttribute('aria-expanded', 'true');
 		if (process.platform !== 'darwin') {
-			await expect(sessionsPage.getByRole('menuitem', { name: 'Sign in with ChatGPT' })).toBeVisible();
+			await expect(sessionsPage.getByRole('menuitem', { name: 'Settings' })).toBeVisible();
+			await expect(sessionsPage.getByRole('menuitem', { name: 'Return to Workbench' })).toBeVisible();
+			await expect(sessionsPage.getByRole('menuitem', { name: 'Sign in with ChatGPT' })).toHaveCount(0);
 		}
 		await sessionsPage.keyboard.press('Escape');
 	}

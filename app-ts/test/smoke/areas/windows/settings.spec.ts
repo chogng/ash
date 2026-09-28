@@ -7,6 +7,7 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 	await page.keyboard.press('Enter');
 	await expect(page.locator('.ash-modal-editor')).toBeVisible();
 	await page.locator('[data-settings-category-id="editor"]').click();
+	await expect(page.locator('.ash-settings-content-tree > .is-settings-root > .ash-settings-tree-group-title')).toHaveCount(0);
 	await expect(page.locator('.ash-settings-card').first()).toHaveCSS('border-radius', '8px');
 	await expect(page.locator('[data-configuration-key="editor.renderWhitespace"]')).toBeVisible();
 	await expect(page.locator('[data-configuration-key="editor.renderControlCharacters"]')).toBeVisible();
@@ -21,6 +22,10 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 	}
 	if (target.kind === 'electron') {
 		await page.locator('[data-settings-category-id="general"]').click();
+		await page.locator('[data-settings-target-id="general.group.dictation"]').click();
+		await expect(page.locator('.ash-settings-page h3')).toHaveText('Voice input');
+		await expect(page.locator('.ash-settings-content-tree > .is-settings-root > .ash-settings-tree-group-title')).toHaveCount(0);
+		await expect(page.locator('.ash-settings-content-tree > .is-settings-root > .ash-settings-tree-group-description')).toHaveCount(0);
 		await expect(page.locator('[data-configuration-key="dictation.backend"]')).toBeVisible();
 		await expect(page.locator('[data-configuration-key="dictation.localModel"]')).toBeVisible();
 	}

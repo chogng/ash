@@ -19,8 +19,8 @@ export interface SettingsTreeOptions<T> {
 interface RenderedSettingsGroup<T> {
 	readonly kind: "group";
 	readonly element: HTMLElement;
-	readonly heading: HTMLHeadingElement;
-	readonly description: HTMLParagraphElement;
+	readonly heading: HTMLHeadingElement | undefined;
+	readonly description: HTMLParagraphElement | undefined;
 	readonly items: HTMLDivElement;
 	group: SettingsTreeGroup;
 }
@@ -126,8 +126,8 @@ export class SettingsTree<T> extends Disposable {
 			rendered = this.createGroup(node, group);
 			this.rendered.set(group.id, rendered);
 		}
-		rendered.heading.textContent = group.title;
-		rendered.description.textContent = group.description;
+		if (rendered.heading) rendered.heading.textContent = group.title;
+		if (rendered.description) rendered.description.textContent = group.description;
 		rendered.element.classList.toggle("collapsed", node.collapsed);
 		rendered.element.classList.toggle("is-navigation-target", this.model.navigationTarget === group.id);
 		rendered.element.dataset.settingsTreeGroupId = group.id;
@@ -142,21 +142,24 @@ export class SettingsTree<T> extends Disposable {
 		const document = this.element.ownerDocument;
 		const element = h(document, "section");
 		element.className = `ash-settings-tree-group ${this.options.groupClassName}`;
-		const heading = h(document, "h4");
-		heading.className = "ash-settings-tree-group-title";
-		const description = h(document, "p");
-		description.className = `ash-settings-tree-group-description ${this.options.groupDescriptionClassName}`;
 		const items = h(document, "div");
 		items.className = this.options.itemsClassName;
 		const rootId = settingsRootId(node);
+		let heading: HTMLHeadingElement | undefined;
+		let description: HTMLParagraphElement | undefined;
 		if (!node.parent || node.parent.element === undefined) {
 			element.classList.add("is-settings-root", `ash-${rootId}-settings`, "ash-configuration-settings");
 		} else {
+			heading = h(document, "h4");
+			heading.className = "ash-settings-tree-group-title";
+			description = h(document, "p");
+			description.className = `ash-settings-tree-group-description ${this.options.groupDescriptionClassName}`;
 			element.classList.add(`ash-${rootId}-settings-group`);
 			description.classList.add(`ash-${rootId}-settings-group-description`);
 			items.classList.add(`ash-${rootId}-settings-list`, 'ash-settings-card');
+			element.append(heading, description);
 		}
-		element.append(heading, description, items);
+		element.append(items);
 		return { kind: "group", element, heading, description, items, group };
 	}
 

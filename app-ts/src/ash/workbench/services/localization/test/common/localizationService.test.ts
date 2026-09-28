@@ -110,9 +110,11 @@ test("localization lookup falls back to English and formats parameters", async (
 		localization.translate('ash', 'workbench.hideActivityBarView', "Hide '{0}'", { '0': '资源管理器' }),
 		localization.translate('ash', 'workbench.keepActivityBarView', "Keep '{0}'", { '0': '资源管理器' }),
 		localization.translate('ash', 'workbench.accounts', 'Accounts'),
+		localization.translate('ash', 'workbench.accountWithProvider', '{0} ({1})', { '0': 'Ada', '1': 'GitHub' }),
+		localization.translate('ash', 'workbench.signOut', 'Sign Out'),
 		localization.translate('ash', 'workbench.signInWithChatGPT', 'Sign in with ChatGPT'),
 		localization.translate('ash', 'workbench.signOutAccount', 'Sign out of {0}', { '0': 'Ada' }),
-	], ['活动栏全局操作', '标题栏全局操作', '活动栏位置', '默认', '顶部', '底部', '隐藏', '活动栏大小', '选择活动栏的显示位置。', '紧凑活动栏', '主侧栏位置', '将主侧栏移到右侧', '隐藏“资源管理器”', '保留“资源管理器”', '账户', '使用 ChatGPT 登录', '退出 Ada']);
+	], ['活动栏全局操作', '标题栏全局操作', '活动栏位置', '默认', '顶部', '底部', '隐藏', '活动栏大小', '选择活动栏的显示位置。', '紧凑活动栏', '主侧栏位置', '将主侧栏移到右侧', '隐藏“资源管理器”', '保留“资源管理器”', '账户', 'Ada（GitHub）', '退出登录', '使用 ChatGPT 登录', '退出 Ada']);
 	assert.deepEqual([
 		localization.translate('ash', 'workbench.manage', 'Manage'),
 		commandActionLabel(localizedString('ash', 'workbench.commandPalette', 'Command Palette...')),

@@ -31,7 +31,6 @@ export class SessionsAccountMenu extends Disposable {
 			return { id: `ash.sessions.account.${account.provider}`, label, tooltip: label, enabled: false, run() {} };
 		});
 		const settingsLabel = localize('workbench.manageSettings', 'Settings');
-		const signInLabel = localize('workbench.signInWithChatGPT', 'Sign in with ChatGPT');
 		if (this.loadFailed) {
 			const label = localize('sessions.account.unavailable', 'Accounts unavailable');
 			accountActions.push({ id: 'ash.sessions.accountsUnavailable', label, tooltip: label, enabled: false, run() {} });
@@ -39,10 +38,6 @@ export class SessionsAccountMenu extends Disposable {
 		const returnLabel = localize('sessions.menu.workbench', 'Return to Workbench');
 		const actions = Separator.join(accountActions, [
 			{ id: 'ash.sessions.settings', label: settingsLabel, tooltip: settingsLabel, enabled: true, run: () => this.preferences.open() },
-			...(this.revision >= 0n && !this.accountsSnapshot.some(account => account.provider === 'openai') ? [{
-				id: 'ash.sessions.signIn', label: signInLabel, tooltip: signInLabel, enabled: true,
-				run: () => this.accounts.startLogin({ type: 'openAiChatGptBrowser' as const }),
-			}] : []),
 			...this.accountsSnapshot.map(account => {
 				const name = account.displayName ?? account.email ?? account.provider;
 				const label = account.provider === 'github'
