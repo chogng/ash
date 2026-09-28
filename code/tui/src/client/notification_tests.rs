@@ -160,7 +160,30 @@ fn account_notifications_reach_the_subscription_owner() {
                 account: account.clone()
             })
         )),
-        Some(ClientEvent::Account(SubscriptionEvent::Updated(account)))
+        Some(ClientEvent::Subscription(SubscriptionEvent::Updated(
+            account
+        )))
+    );
+}
+
+#[test]
+fn model_notifications_reach_the_subscription_owner() {
+    use crate::config::SubscriptionEvent;
+    use ash_app_server_protocol::protocol::provider::ProviderModelsUpdated;
+    let updated = ProviderModelsUpdated {
+        connection: "xai-subscription".into(),
+        account_id: "account-1".into(),
+        organization: None,
+        plan: Some("SuperGrok".into()),
+        result: ash_app_server_protocol::protocol::provider::ProviderModelsListResult::Empty,
+    };
+    assert_eq!(
+        map_event(AppServerEvent::Notification(
+            ServerNotification::ProviderModelsUpdated(updated.clone())
+        )),
+        Some(ClientEvent::Subscription(SubscriptionEvent::ModelsUpdated(
+            updated
+        )))
     );
 }
 

@@ -107,30 +107,8 @@ impl AppServer {
         })
     }
 
-    pub(super) fn account_read(
-        &self,
-        cancellation: &ash_async_utils::CancellationToken,
-    ) -> Result<Value, RpcError> {
+    pub(super) fn account_read(&self) -> Result<Value, RpcError> {
         let login = self.login_service()?;
-        let state = login.refresh().map_err(login_error)?;
-        if let Some(auth) = &self.supergrok {
-            if let Some(account) = state.accounts.iter().find(|account| {
-                account.account.provider == supergrok::SUPERGROK_SUBSCRIPTION_PROVIDER_ID
-                    && account.status == AccountStatus::Ready
-            }) {
-                auth.refresh_account(&account.account.account_id, cancellation)
-                    .map_err(supergrok_error)?;
-            }
-        }
-        if let Some(auth) = &self.kimi {
-            if let Some(account) = state.accounts.iter().find(|account| {
-                account.account.provider == ash_kimi::KIMI_PROVIDER_ID
-                    && account.status == AccountStatus::Ready
-            }) {
-                auth.refresh_account(&account.account.account_id, cancellation)
-                    .map_err(kimi_error)?;
-            }
-        }
         result(&account_state_dto(login.refresh().map_err(login_error)?))
     }
 

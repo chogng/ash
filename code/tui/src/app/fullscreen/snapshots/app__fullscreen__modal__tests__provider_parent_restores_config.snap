@@ -27,6 +27,6 @@ expression: trimmed
             │                                                                         │
             │                                                                         │
             │                                                                         │ Esc return
-  ╭─────────│  Enter/Space change · ←/→ details · Tab tabs · / search · Esc close     │──────────╮
+  ╭─────────│  Enter/Space change · Tab tabs · / search · Esc close                   │──────────╮
   │ > Build └─────────────────────────────────────────────────────────────────────────┘          │
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

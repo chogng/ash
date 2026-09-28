@@ -1,14 +1,13 @@
 ---
 source: code/tui/src/app/state_tests.rs
-assertion_line: 879
 expression: rendered
 ---
   .                                                        [— / —] [Dashboard]  
                                                                                 
         ┌── Config › Advisor ──────────────────────────────────────[✗]─┐        
         │                                                              │        
-        │> Enable Advisor                                          Off │        
-        │> Advisor model                                Choose a model │        
+        │> Enable Advisor                                        Off + │        
+        │  Advisor model                              Choose a model + │        
         │                                                              │        
         │                                                              │        
         │                                                              │        

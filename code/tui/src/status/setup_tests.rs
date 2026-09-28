@@ -114,9 +114,12 @@ fn setup_aligns_items_and_switches_with_expandable_descriptions() {
     assert_eq!(column_of(memory, "Memory"), 2);
     assert_eq!(column_of(cpu, "CPU"), 2);
     assert!(permissions.starts_with("> Permissions"));
-    assert!(model.starts_with("> Model"));
+    assert!(model.starts_with("  Model"));
+    for row in [&permissions, &model, &git_branch, &git_changes] {
+        assert_eq!(row.chars().nth(97), Some('+'));
+    }
 
-    let right_boundary = 98;
+    let right_boundary = 96;
     assert_eq!(
         trailing_column_of(permissions, "on") + "on".len(),
         right_boundary
@@ -173,6 +176,8 @@ fn setup_aligns_items_and_switches_with_expandable_descriptions() {
             .iter()
             .any(|row| row.contains("Current permission mode"))
     );
+    assert!(expanded_rows[0].starts_with("> Permissions"));
+    assert_eq!(expanded_rows[0].chars().nth(97), Some('-'));
 
     state.handle_key(crossterm::event::KeyEvent::new(
         crossterm::event::KeyCode::Left,

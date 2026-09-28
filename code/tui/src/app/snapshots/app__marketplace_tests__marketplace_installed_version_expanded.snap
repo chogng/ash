@@ -14,8 +14,8 @@ expression: screen(&app)
             │  │ Search Marketplace; Enter to search                                │ │             
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
             │  Installed                                                              │             
-            │> web                                                                    │             
-            │v web                                                                    │             
+            │  web                                                                  + │             
+            │> web                                                                  - │             
             │    Source: official                                                     │             
             │    Description: —                                                       │             
             │    Version: 2.0.0                                                       │             

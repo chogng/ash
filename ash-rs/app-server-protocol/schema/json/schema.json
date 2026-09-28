@@ -29398,6 +29398,38 @@
         }
       ]
     },
+    "ProviderModelsUpdated": {
+      "description": "Model observation for one unchanged subscription account.",
+      "properties": {
+        "accountId": {
+          "type": "string"
+        },
+        "connection": {
+          "type": "string"
+        },
+        "organization": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "plan": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "result": {
+          "$ref": "#/$defs/ProviderModelsListResult"
+        }
+      },
+      "required": [
+        "connection",
+        "accountId",
+        "result"
+      ],
+      "type": "object"
+    },
     "ProviderProbeParams": {
       "description": "Tests an unsaved connection without changing configuration or stored credentials.",
       "properties": {
@@ -30522,6 +30554,22 @@
             },
             "params": {
               "$ref": "#/$defs/AccountUpdated"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "provider/models/updated",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProviderModelsUpdated"
             }
           },
           "required": [

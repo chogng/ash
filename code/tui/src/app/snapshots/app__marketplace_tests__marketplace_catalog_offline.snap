@@ -15,7 +15,7 @@ expression: screen(&app)
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
             │  server error -32000: Catalog offline                                   │             
             │  Installed                                                              │             
-            │> web                                                                    │             
+            │> web                                                                  + │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             

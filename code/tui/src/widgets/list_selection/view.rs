@@ -584,10 +584,7 @@ fn draw_item(
     } else {
         row_style
     };
-    let marker = expanded.filter(|_| item.detail().is_some()).map_or_else(
-        || selection_marker(show_marker),
-        |expanded| if expanded { "v " } else { "> " },
-    );
+    let marker = selection_marker(show_marker);
     let marker_style = if selected {
         label_style.add_modifier(Modifier::BOLD)
     } else {
@@ -600,7 +597,7 @@ fn draw_item(
     };
     if expanded.is_some() {
         let value = item.columns().map_or("", |c| c.trailing.as_str());
-        let value_width = (value.width() as u16).min(area.width);
+        let value_width = (value.width() as u16).min(area.width.saturating_sub(2));
         frame.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::styled(marker, marker_style),
@@ -609,14 +606,25 @@ fn draw_item(
             Rect::new(
                 area.x,
                 area.y,
-                area.width.saturating_sub(value_width + 2),
+                area.width.saturating_sub(value_width.saturating_add(2)),
                 1,
             ),
         );
         frame.render_widget(
             Paragraph::new(value).style(detail_style),
-            Rect::new(area.right() - value_width, area.y, value_width, 1),
+            Rect::new(
+                area.right().saturating_sub(value_width + 2),
+                area.y,
+                value_width,
+                1,
+            ),
         );
+        if let Some(expanded) = expanded.filter(|_| item.detail().is_some()) {
+            frame.render_widget(
+                Paragraph::new(if expanded { "-" } else { "+" }).style(marker_style),
+                Rect::new(area.right().saturating_sub(1), area.y, 1, 1),
+            );
+        }
         return;
     }
     let Some(columns) = item.columns() else {

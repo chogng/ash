@@ -12,20 +12,20 @@ expression: frame_text(&app)
             │  ╭────────────────────────────────────────────────────────────────────╮ │             
             │  │ Search configuration                                               │ │             
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
-            │> Vim mode                                                           off │             
-            │> Show tips                                                           on │             
-            │> Memory diagnostics                                                 off │             
-            │> Automatic updates                                               Latest │             
-            │> Show Git changes as diff                                           off │             
-            │> Language                                                       English │             
-            │> Status bar style                                                Simple │             
-            │> Key hint style                                                Contrast │             
-            │> Screen mode                                                 fullscreen │             
-            │> Memories                                                           off │             
-            │> Automatic Git fetch                                                Off │             
-            │> Git fetch interval                                                180s │             
-            │> Git branch marker                                            Powerline │             
-            │> Advisor                                                            Off │             
+            │> Vim mode                                                         off + │             
+            │  Show tips                                                         on + │             
+            │  Memory diagnostics                                               off + │             
+            │  Automatic updates                                             Latest + │             
+            │  Show Git changes as diff                                         off + │             
+            │  Language                                                     English + │             
+            │  Status bar style                                              Simple + │             
+            │  Key hint style                                              Contrast + │             
+            │  Screen mode                                               fullscreen + │             
+            │  Memories                                                         off + │             
+            │  Automatic Git fetch                                              Off + │             
+            │  Git fetch interval                                              180s + │             
+            │  Git branch marker                                          Powerline + │             
+            │  Advisor                                                          Off + │             
             │  2 more below                                                           │             
   ╭─────────│  Enter change · r reset · ←/→ details · Tab tabs · / search · Esc close │──────────╮  
   │ > preser└─────────────────────────────────────────────────────────────────────────┘          │  

@@ -148,6 +148,8 @@ mod runtime_extensions;
 mod search_operations;
 mod semantic_index_job;
 mod session_operations;
+mod subscription_runtime;
+pub(crate) use subscription_runtime::SubscriptionSource;
 mod skill_operations;
 mod symbol_index_operations;
 mod symbol_index_runtime;
@@ -259,6 +261,7 @@ pub struct AppServer {
     pub(super) skills: Option<Arc<SkillRuntime>>,
     _skill_watcher: Option<SkillWatcher>,
     _config_watcher: Option<config_runtime::ConfigWatcher>,
+    _subscription_monitor: Option<subscription_runtime::SubscriptionMonitor>,
     _connector_watcher: Option<connector_runtime::ConnectorWatcher>,
     _plugin_watcher: Option<plugin_runtime::PluginWatcher>,
     _marketplace_watcher: Option<marketplace_runtime::MarketplaceChangeWatcher>,
@@ -611,6 +614,7 @@ impl AppServer {
             skills: None,
             _skill_watcher: None,
             _config_watcher: None,
+            _subscription_monitor: None,
             _connector_watcher: None,
             _plugin_watcher: None,
             _marketplace_watcher: None,
@@ -1027,6 +1031,23 @@ impl AppServer {
             )))
             .expect("a newly composed login service accepts its App Server event sink");
         self.login = Some(login);
+        self
+    }
+
+    pub(crate) fn start_subscription_monitor(
+        mut self,
+        subscriptions: Vec<subscription_runtime::SubscriptionSource>,
+    ) -> Self {
+        let login = self
+            .login
+            .as_ref()
+            .expect("subscription observation requires a login service");
+        self._subscription_monitor = Some(subscription_runtime::SubscriptionMonitor::start(
+            Arc::clone(login),
+            subscriptions,
+            Arc::clone(&self.model_catalog),
+            Arc::clone(&self.updates),
+        ));
         self
     }
 
@@ -2271,7 +2292,7 @@ impl AppServer {
             }
             Some(ClientMethod::TypstCompile) => self.typst_compile(connection, &request.params),
             Some(ClientMethod::ConfigRead) => self.config_read(),
-            Some(ClientMethod::AccountRead) => self.account_read(cancellation),
+            Some(ClientMethod::AccountRead) => self.account_read(),
             Some(ClientMethod::AccountRateLimitsRead) => {
                 self.account_rate_limits_read(&request.params, cancellation)
             }

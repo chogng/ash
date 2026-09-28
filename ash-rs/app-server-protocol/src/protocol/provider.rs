@@ -74,6 +74,17 @@ pub enum ProviderModelsListResult {
     },
 }
 
+/// Model observation for one unchanged subscription account.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderModelsUpdated {
+    pub connection: String,
+    pub account_id: String,
+    pub organization: Option<String>,
+    pub plan: Option<String>,
+    pub result: ProviderModelsListResult,
+}
+
 /// Inbound-only provider API key that redacts diagnostics and clears its allocation on drop.
 #[derive(Deserialize, Eq, JsonSchema, PartialEq, TS)]
 #[serde(transparent)]

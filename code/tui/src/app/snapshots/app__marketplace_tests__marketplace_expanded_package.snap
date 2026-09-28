@@ -14,9 +14,9 @@ expression: screen(&app)
             │  │ 搜 索 扩 展 市 场 ， 按  Enter 搜 索                                         │ │             
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
             │  已 安 装                                                                  │             
-            │> Web tools                                                              │             
+            │  Web tools                                                            + │             
             │  未 安 装                                                                  │             
-            │v Guide                                                                  │             
+            │> Guide                                                                - │             
             │    来 源 ： ash                                                            │             
             │    描 述 ： Search guide                                                   │             
             │    版 本 ： 2.0.0                                                          │             

@@ -755,6 +755,7 @@ export type { ProviderModelsListFailureCodeDto } from './ProviderModelsListFailu
 export type { ProviderModelsListFailureDto } from './ProviderModelsListFailureDto.js';
 export type { ProviderModelsListParams } from './ProviderModelsListParams.js';
 export type { ProviderModelsListResult } from './ProviderModelsListResult.js';
+export type { ProviderModelsUpdated } from './ProviderModelsUpdated.js';
 export type { ProviderProbeParams } from './ProviderProbeParams.js';
 export type { ProviderProbeResult } from './ProviderProbeResult.js';
 export type { ProviderRemoveParams } from './ProviderRemoveParams.js';

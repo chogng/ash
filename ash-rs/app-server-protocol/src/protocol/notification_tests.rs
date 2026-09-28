@@ -2,6 +2,8 @@ use super::ConnectorsChanged;
 use super::ServerNotification;
 use super::decode_server_notification;
 use crate::protocol::memory::MemoryChanged;
+use crate::protocol::provider::ProviderModelsListResult;
+use crate::protocol::provider::ProviderModelsUpdated;
 use crate::protocol::session::SessionDeleted;
 use serde_json::json;
 
@@ -56,6 +58,38 @@ fn registry_decodes_memory_change_without_content() {
             scope: memories::MemoryScope::Profile,
             catalog_revision: 4,
         })
+    );
+}
+
+#[test]
+fn registry_decodes_subscription_model_updates_with_account_identity() {
+    let notification = decode_server_notification(
+        "provider/models/updated".into(),
+        json!({
+            "connection": "xai-subscription",
+            "accountId": "account-1",
+            "organization": null,
+            "plan": "SuperGrok Heavy",
+            "result": {"type": "empty"},
+        }),
+    )
+    .unwrap();
+    assert_eq!(
+        notification,
+        ServerNotification::ProviderModelsUpdated(ProviderModelsUpdated {
+            connection: "xai-subscription".into(),
+            account_id: "account-1".into(),
+            organization: None,
+            plan: Some("SuperGrok Heavy".into()),
+            result: ProviderModelsListResult::Empty,
+        })
+    );
+    assert!(
+        decode_server_notification(
+            "provider/models/updated".into(),
+            json!({"connection":"xai-subscription","result":{"type":"empty"}}),
+        )
+        .is_err()
     );
 }
 

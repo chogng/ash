@@ -24,11 +24,11 @@ BigModel 与 Z.AI 使用[官方 ZCode](https://zcode.z.ai/en/docs/configuration)
 
 | 入口 | 登录资料由谁维护 | 账户页“计划”的来源 | 变化后如何更新 |
 | --- | --- | --- | --- |
-| ChatGPT | 检测到 Codex 时只读使用其认证存储；否则 Ash 创建并维护 Codex 兼容认证记录，不向 profile SecretStore 复制 token | 当前 ID token 的 `chatgpt_plan_type`；`/usage` 另从额度接口读取 `plan_type` | `account/read` 重新观察认证存储；Codex 管理的凭据由 Codex 更新，Ash 管理的凭据由 Ash 续期；每次打开 `/usage` 重新查额度 |
-| Kimi | Ash 的 profile SecretStore；`ash-kimi` 负责续期 | Kimi Coding API `/me` 的 `user_level_name`；未提供时为 `null` | `account/read` 重新查账户；每次打开 `/usage` 重新查套餐与额度 |
-| Super Grok | Ash 设备码登录保存在 profile SecretStore；没有 Ash 登录时，只读使用后端主机的 `~/.grok/auth.json` | Grok Build `/v1/settings` 的 `subscription_tier_display`，其次是该接口的 `subscription_tier` 或 `/v1/user?include=subscription` 的 `subscriptionTier`；显示服务端返回的完整名称，例如 `SuperGrok Heavy` | `account/read` 请求当前账户和设置；复用 Grok 文件时，Ash 只在内存中保存与当前令牌对应的脱敏账户资料，令牌变化后旧资料失效，下次 `account/read` 重新获取；`/usage` 重新查当期数据 |
-| BigModel | 只读使用 ZCode 凭据文件；Ash 自己登录时保存在 profile SecretStore | 当前无法查询实际套餐等级 | 每次读取接入列表或账户时刷新账号；每次模型请求重新读取当前凭据；上游资格由实际请求判定 |
-| Z.AI | 只读使用 ZCode 凭据文件；Ash 自己登录时保存在 profile SecretStore | 当前无法查询实际套餐等级 | 每次读取接入列表或账户时刷新账号；每次模型请求重新读取当前凭据；上游资格由实际请求判定 |
+| ChatGPT | 检测到 Codex 时只读使用其认证存储；否则 Ash 创建并维护 Codex 兼容认证记录，不向 profile SecretStore 复制 token | 当前 ID token 的 `chatgpt_plan_type`；`/usage` 另从额度接口读取 `plan_type` | 后台观察认证存储变化；Codex 管理的凭据由 Codex 更新，Ash 管理的凭据由 Ash 续期；每次打开 `/usage` 重新查额度 |
+| Kimi | Ash 的 profile SecretStore；`ash-kimi` 负责续期 | Kimi Coding API `/me` 的 `user_level_name`；未提供时为 `null` | 后台观察凭据并定期查询账户资料；每次打开 `/usage` 重新查套餐与额度 |
+| Super Grok | Ash 设备码登录保存在 profile SecretStore；没有 Ash 登录时，只读使用后端主机的 `~/.grok/auth.json` | Grok Build `/v1/settings` 的 `subscription_tier_display`，其次是该接口的 `subscription_tier` 或 `/v1/user?include=subscription` 的 `subscriptionTier`；显示服务端返回的完整名称，例如 `SuperGrok Heavy` | 后台观察凭据并定期查询账户和设置；复用 Grok 文件时，Ash 只在内存中保存与当前令牌对应的脱敏账户资料，令牌变化后自动更新；`/usage` 重新查当期数据 |
+| BigModel | 只读使用 ZCode 凭据文件；Ash 自己登录时保存在 profile SecretStore | 当前无法查询实际套餐等级 | 后台观察账户凭据；每次模型请求重新读取当前凭据；上游资格由实际请求判定 |
+| Z.AI | 只读使用 ZCode 凭据文件；Ash 自己登录时保存在 profile SecretStore | 当前无法查询实际套餐等级 | 后台观察账户凭据；每次模型请求重新读取当前凭据；上游资格由实际请求判定 |
 
 读取其他客户端的认证文件，不等于把它导入成 Ash 自己维护的凭据。只读复用时，原客户端仍负责刷新或替换其 token；Ash 每次使用前读取当前凭据，不复制外部 refresh token，也不写回外部认证文件。Ash 自己发起登录时，才由相应供应商适配器保存并维护 Ash 管理的凭据。账户名称、邮箱和等级进入的是脱敏账户状态；认证凭据和额度结果不作为普通 `/config` 配置项保存。Grok Build 的 `/v1/settings` 是服务端 HTTP 接口，不是 Ash 的 `/settings` 命令；用户仍在 `/config` 查看连接，在 `/usage` 主动查询额度。
 

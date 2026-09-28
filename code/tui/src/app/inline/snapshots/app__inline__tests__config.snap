@@ -8,21 +8,21 @@ expression: text(&buffer)
   ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
   │ Search configuration                                                                         │  
   ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  
-> Vim mode                                                                                     off  
-> Show tips                                                                                     on  
-> Memory diagnostics                                                                           off  
-> Automatic updates                                                                         Latest  
-> Show Git changes as diff                                                                     off  
-> Language                                                                                 English  
-> Status bar style                                                                          Simple  
-> Key hint style                                                                          Contrast  
-> Screen mode                                                                               inline  
-> Memories                                                                                     off  
-> Automatic Git fetch                                                                          Off  
-> Git fetch interval                                                                          180s  
-> Git branch marker                                                                      Powerline  
-> Advisor                                                                                      Off  
-> Dictation shortcut                                                                           off  
-> Dictation key                                                                             ctrl+g  
+> Vim mode                                                                                   off +  
+  Show tips                                                                                   on +  
+  Memory diagnostics                                                                         off +  
+  Automatic updates                                                                       Latest +  
+  Show Git changes as diff                                                                   off +  
+  Language                                                                               English +  
+  Status bar style                                                                        Simple +  
+  Key hint style                                                                        Contrast +  
+  Screen mode                                                                             inline +  
+  Memories                                                                                   off +  
+  Automatic Git fetch                                                                        Off +  
+  Git fetch interval                                                                        180s +  
+  Git branch marker                                                                    Powerline +  
+  Advisor                                                                                    Off +  
+  Dictation shortcut                                                                         off +  
+  Dictation key                                                                           ctrl+g +  
                                                                                                     
   Enter change · r reset · ←/→ details · Tab tabs · / search · Esc close

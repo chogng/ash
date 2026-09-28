@@ -18,4 +18,4 @@ Ash Code 的 `/model` 与 Ash Desktop 模型选择器都会读取已就绪的外
 
 ## 套餐与额度
 
-`account/read` 用当前 Ash 登录查询 `/coding/v1/me`，把上游返回的昵称、邮箱和 `user_level_name` 显示在账户页；缺失的套餐保持为空。`account/rateLimits/read` 查询 `/coding/v1/me` 和 `/coding/v1/usages`，`/usage` 显示服务端实际返回的五小时、每周和每月额度窗口及重置时间。某个窗口未返回时不补造数值；月度 Code 用量占月度总量的份额不显示成独立额度。每次运行 `/usage` 都重新查询，登录状态本身不代表套餐或额度已核实。
+后台账户观察用当前 Ash 登录查询 `/coding/v1/me`，把上游返回的昵称、邮箱和 `user_level_name` 更新到账户页；缺失的套餐保持为空。`account/rateLimits/read` 查询 `/coding/v1/me` 和 `/coding/v1/usages`，`/usage` 显示服务端实际返回的五小时、每周和每月额度窗口及重置时间。某个窗口未返回时不补造数值；月度 Code 用量占月度总量的份额不显示成独立额度。每次运行 `/usage` 都重新查询，登录状态本身不代表套餐或额度已核实。

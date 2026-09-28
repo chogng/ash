@@ -12,15 +12,15 @@ expression: render_dictation_frame(&app)
         │  │ Search configuration                                    │ │        
         │  ╰─────────────────────────────────────────────────────────╯ │        
         │  7 more above                                                │        
-        │> Key hint style                                     Contrast │        
-        │> Screen mode                                      fullscreen │        
-        │> Memories                                                off │        
-        │> Automatic Git fetch                                     Off │        
-        │> Git fetch interval                                     180s │        
-        │> Git branch marker                                 Powerline │        
-        │> Advisor                                                 Off │        
-        │> Dictation shortcut                                      off │        
-        │> Dictation key                                        ctrl+g │        
+        │  Key hint style                                   Contrast + │        
+        │  Screen mode                                    fullscreen + │        
+        │  Memories                                              off + │        
+        │  Automatic Git fetch                                   Off + │        
+        │  Git fetch interval                                   180s + │        
+        │  Git branch marker                               Powerline + │        
+        │  Advisor                                               Off + │        
+        │  Dictation shortcut                                    off + │        
+        │> Dictation key                                      ctrl+g + │        
   ╭─────│  Enter/Space change · ←/→ details · Tab tabs · / search      │─────╮  
   │ > Bu└──────────────────────────────────────────────────────────────┘     │  
   ╰──────────────────────────────────────────────────────── Automatic model ─╯

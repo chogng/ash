@@ -1198,6 +1198,7 @@ use crate::protocol::provider::ProviderModelsListFailureDto;
 use crate::protocol::provider::ProviderModelsListParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::provider::ProviderModelsListResult;
+use crate::protocol::provider::ProviderModelsUpdated;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::provider::ProviderProbeParams;
 #[cfg(any(test, feature = "export"))]
@@ -3900,6 +3901,9 @@ server_notifications! {
     AccountUpdated => "account/updated" {
         params: AccountUpdated,
     },
+    ProviderModelsUpdated => "provider/models/updated" {
+        params: ProviderModelsUpdated,
+    },
     AgentRequest => "agent/request" {
         params: AgentRequestEnvelope,
     },
@@ -4466,6 +4470,7 @@ typescript_bindings! {
     ProviderModelsListFailureCodeDto,
     ProviderModelsListFailureDto,
     ProviderModelsListResult,
+    ProviderModelsUpdated,
     ProviderCatalogEntryDto,
     ProviderListResult,
     StableTurnErrorCode,

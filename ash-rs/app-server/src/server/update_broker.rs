@@ -21,6 +21,7 @@ use ash_app_server_protocol::protocol::marketplace::MarketplaceChanged;
 use ash_app_server_protocol::protocol::memory::MemoryChanged;
 use ash_app_server_protocol::protocol::plugins::PluginsChanged;
 use ash_app_server_protocol::protocol::projects::ProjectChanged;
+use ash_app_server_protocol::protocol::provider::ProviderModelsUpdated;
 use ash_app_server_protocol::protocol::registry::ServerNotificationMethod;
 use ash_app_server_protocol::protocol::session::SessionChanged;
 use ash_app_server_protocol::protocol::session::SessionDeleted;
@@ -133,6 +134,10 @@ impl UpdateBroker {
 
     pub(super) fn publish_account_updated(&self, updated: AccountUpdated) {
         self.broadcast_notification(ServerNotificationMethod::AccountUpdated, &updated);
+    }
+
+    pub(super) fn publish_provider_models_updated(&self, updated: ProviderModelsUpdated) {
+        self.broadcast_notification(ServerNotificationMethod::ProviderModelsUpdated, &updated);
     }
 
     pub(super) fn register(

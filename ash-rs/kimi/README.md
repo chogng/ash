@@ -14,6 +14,6 @@
 
 Desktop Models 设置页经窄 account IPC 启动登录；系统浏览器和剪贴板副作用由 Electron main 持有。Renderer 不接收 token，refresh 后的 credential revision 通过 `LoginService` 主动更新脱敏账户状态。
 
-`account/read` 通过当前凭据查询 Kimi Coding API `/me`，只缓存与当前 credential revision 对应的昵称、邮箱和套餐；`account/rateLimits/read` 查询 `/me` 与 `/usages`。后端请求由 `backend-client::kimi` 发送，取消、切换账号或登出后的结果不会作为当前账户资料发布。
+后台账户观察通过当前凭据查询 Kimi Coding API `/me`，只缓存与当前 credential revision 对应的昵称、邮箱和套餐；`account/read` 读取当前脱敏账户状态，`account/rateLimits/read` 查询 `/me` 与 `/usages`。后端请求由 `backend-client::kimi` 发送，取消、切换账号或登出后的结果不会作为当前账户资料发布。
 
 用户看到的两条连接、登录与额度行为见 [Kimi Code 连接](../../docs/models/kimi.md)，套餐名称见[订阅套餐一览](../../docs/models/plans-and-pricing.md)。

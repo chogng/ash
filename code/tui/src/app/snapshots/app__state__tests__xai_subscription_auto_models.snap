@@ -1,0 +1,26 @@
+---
+source: code/tui/src/app/state_tests.rs
+expression: updated
+---
+  .                                                                        [— / —] [Dashboard]
+
+            ┌── Config › Super Grok ───────────────────────────────────────────[✗]─┐
+            │                                                                      │
+            │> Account  ·  ada@example.test                                        │
+            │  Plan  ·  SuperGrok Heavy                                            │
+            │                                                                      │
+            │  Models ──────────────────────────────────────────────────────────── │
+            │  Grok Next                                                           │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+  ╭─────────│  Esc to return  ·  l to sign out                                     │─────────╮
+  │ > Build └──────────────────────────────────────────────────────────────────────┘         │
+  ╰──────────────────────────────────────────────────────────────────────── Automatic model ─╯

@@ -1766,7 +1766,6 @@ fn escape_cancels_key_edit_without_saving_and_returns_to_providers() {
 
 #[test]
 fn chatgpt_subscription_shows_fetched_models_in_chinese() {
-    use crate::config::SubscriptionCommand;
     use crate::config::SubscriptionEvent;
     use crate::config::SubscriptionProvider;
     use ash_app_server_protocol::protocol::account::AccountDto;
@@ -1830,7 +1829,6 @@ fn chatgpt_subscription_shows_fetched_models_in_chinese() {
         let screen = crate::app::usage_tests::render(&app, 96, 24);
         assert!(screen.contains("GPT Ash"));
         assert!(!screen.contains("正在处理"));
-        assert_eq!(app.refresh_subscription(), None);
     }
 
     app.update(ConfigEvent::Subscription(SubscriptionEvent::Updated(
@@ -1845,13 +1843,27 @@ fn chatgpt_subscription_shows_fetched_models_in_chinese() {
     let screen = crate::app::usage_tests::render(&app, 96, 24);
     assert!(screen.contains("正在加载模型"));
     assert!(!screen.contains("GPT Ash"));
-    assert_eq!(
-        app.refresh_subscription(),
-        Some(AppCommand::Config(ConfigCommand::Subscription(
-            SubscriptionProvider::ChatGpt,
-            SubscriptionCommand::Read,
-        )))
+    let next = ModelRef::new(
+        ProviderId::new("openai").unwrap(),
+        ModelId::new("gpt-next").unwrap(),
     );
+    let mut info = ModelInfo::new(next.model.clone(), "GPT Next");
+    info.access = ModelAccess::Subscription;
+    app.update(ConfigEvent::Subscription(SubscriptionEvent::ModelsUpdated(
+        ash_app_server_protocol::protocol::provider::ProviderModelsUpdated {
+            connection: "chatgpt-subscription".into(),
+            account_id: "account-2".into(),
+            organization: None,
+            plan: Some("pro".into()),
+            result: ash_app_server_protocol::protocol::provider::ProviderModelsListResult::Models {
+                models: vec![ModelCatalogEntry::from_info(next, &info)],
+            },
+        },
+    )));
+    let updated = crate::app::usage_tests::render(&app, 96, 24);
+    assert!(updated.contains("GPT Next"));
+    assert!(!updated.contains("正在加载模型"));
+    crate::tui_assert_snapshot!("chatgpt_subscription_auto_models_chinese", updated);
 }
 
 #[test]
@@ -1990,18 +2002,8 @@ fn chatgpt_subscription_keeps_pending_login_across_navigation_and_cancels_by_id(
     );
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        Some(AppCommand::Config(ConfigCommand::Subscription(
-            crate::config::SubscriptionProvider::ChatGpt,
-            SubscriptionCommand::Read
-        )))
+        None
     );
-    app.update(ConfigEvent::Subscription(SubscriptionEvent::Read {
-        account: AccountReadResult {
-            revision: 1.to_string(),
-            accounts: vec![],
-        },
-        models: None,
-    }));
     for _ in 0..3 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
@@ -3661,6 +3663,32 @@ fn xai_subscription_displays_server_plan() {
     assert!(screen.contains("Grok Account Model"));
     assert!(!screen.contains("Grok 4.6"));
     crate::tui_assert_snapshot!("xai_subscription_plan", screen);
+    for _ in 0..2 {
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    }
+    assert_eq!(enter_provider_row(&mut app, "Super Grok"), None);
+    assert_eq!(crate::app::usage_tests::render(&app, 96, 24), screen);
+    let discovered = ModelRef::new(
+        ProviderId::new("xai").unwrap(),
+        ModelId::new("grok-next").unwrap(),
+    );
+    let mut info = ModelInfo::new(discovered.model.clone(), "Grok Next");
+    info.access = ModelAccess::Subscription;
+    app.update(ConfigEvent::Subscription(SubscriptionEvent::ModelsUpdated(
+        ash_app_server_protocol::protocol::provider::ProviderModelsUpdated {
+            connection: "xai-subscription".into(),
+            account_id: "login-a".into(),
+            organization: None,
+            plan: Some("SuperGrok Heavy".into()),
+            result: ash_app_server_protocol::protocol::provider::ProviderModelsListResult::Models {
+                models: vec![ModelCatalogEntry::from_info(discovered, &info)],
+            },
+        },
+    )));
+    let updated = crate::app::usage_tests::render(&app, 96, 24);
+    assert!(updated.contains("Grok Next"));
+    assert!(!updated.contains("Grok Account Model"));
+    crate::tui_assert_snapshot!("xai_subscription_auto_models", updated);
 }
 
 #[test]

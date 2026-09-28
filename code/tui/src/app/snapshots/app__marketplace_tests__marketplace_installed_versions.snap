@@ -14,8 +14,8 @@ expression: screen(&app)
             │  │ Search Marketplace; Enter to search                                │ │             
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
             │  Installed                                                              │             
-            │> web                                                                    │             
-            │> web                                                                    │             
+            │> web                                                                  + │             
+            │  web                                                                  + │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             

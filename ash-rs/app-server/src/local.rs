@@ -1477,6 +1477,30 @@ pub fn open_local_app_server_with_codebase_providers(
             .install_login_service(&login_service)
             .map_err(|error| OpenAppServerError(error.to_string()))?;
     }
+    let subscription_sources = vec![
+        crate::server::SubscriptionSource::local(ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID),
+        crate::server::SubscriptionSource::with_remote_metadata(ash_kimi::KIMI_PROVIDER_ID, {
+            let kimi = Arc::clone(&kimi_oauth);
+            move |account_id, cancellation| {
+                kimi.refresh_account(account_id, cancellation)
+                    .map_err(|error| error.to_string())
+            }
+        }),
+        crate::server::SubscriptionSource::with_remote_metadata(
+            supergrok::SUPERGROK_SUBSCRIPTION_PROVIDER_ID,
+            {
+                let supergrok = Arc::clone(&supergrok_oauth);
+                move |account_id, cancellation| {
+                    supergrok
+                        .refresh_account(account_id, cancellation)
+                        .map(|_| ())
+                        .map_err(|error| error.to_string())
+                }
+            },
+        ),
+        crate::server::SubscriptionSource::local(ash_glm::BIGMODEL_PROVIDER_ID),
+        crate::server::SubscriptionSource::local(ash_glm::ZAI_PROVIDER_ID),
+    ];
     let direct_catalog: Arc<dyn ModelCatalog> = configured_model.clone();
     let agent_model: Arc<dyn ModelService> = options
         .agent_model_service
@@ -1726,7 +1750,7 @@ pub fn open_local_app_server_with_codebase_providers(
         mcp_changes,
         mcp_runtime_intent_changes,
     }));
-    Ok(server)
+    Ok(server.start_subscription_monitor(subscription_sources))
 }
 
 fn default_dir_config(

@@ -327,6 +327,45 @@ fn keyboard_selection_and_a_different_hovered_row_remain_visible_together() {
 }
 
 #[test]
+fn expandable_items_keep_selection_on_the_left_and_show_state_after_the_value() {
+    let mut state = ListSelectionState::new(
+        ListSelectionModel::new(
+            "Config",
+            vec![ListSelectionGroup::new(
+                "General",
+                vec![
+                    ListSelectionItem::new("Mode")
+                        .with_id(ListSelectionItemId::new("mode"))
+                        .with_columns("Mode", "Mode details", "off"),
+                    ListSelectionItem::new("Action").with_id(ListSelectionItemId::new("action")),
+                ],
+            )],
+        )
+        .without_tab_bar()
+        .with_expandable_descriptions(),
+    );
+
+    let collapsed = render(&state);
+    assert_eq!(collapsed[(0, 0)].symbol(), ">");
+    assert_eq!(collapsed[(33, 0)].symbol(), "o");
+    assert_eq!(collapsed[(37, 0)].symbol(), "+");
+    assert_eq!(collapsed[(37, 1)].symbol(), " ");
+
+    state.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    let expanded = render(&state);
+    assert_eq!(expanded[(0, 0)].symbol(), ">");
+    assert_eq!(expanded[(37, 0)].symbol(), "-");
+    assert_eq!(expanded[(4, 1)].symbol(), "M");
+
+    state.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    let next = render(&state);
+    assert_eq!(next[(0, 0)].symbol(), " ");
+    assert_eq!(next[(0, 2)].symbol(), ">");
+    assert_eq!(next[(37, 0)].symbol(), "-");
+    assert_eq!(next[(37, 2)].symbol(), " ");
+}
+
+#[test]
 fn expanded_descriptions_wrap_and_follow_items_after_filtering_and_refresh() {
     use ratatui::layout::Rect;
     let model = ListSelectionModel::new(

@@ -1824,7 +1824,7 @@ fn config_switches_keep_the_selected_language_after_saving() {
             let switch_row = |frame: &str| frame.lines().nth(row_index).unwrap().replace(' ', "");
             let before = frame_text(&app);
             assert!(
-                switch_row(&before).contains(&format!("{label}{off}│")),
+                switch_row(&before).contains(&format!("{label}{off}+│")),
                 "{id}: selected row was {}",
                 switch_row(&before)
             );
@@ -1872,7 +1872,7 @@ fn config_switches_keep_the_selected_language_after_saving() {
                 let frame = frame_text(&app);
                 let row = switch_row(&frame);
                 assert!(
-                    row.contains(&format!("{label}{}│", if enabled { on } else { off })),
+                    row.contains(&format!("{label}{}+│", if enabled { on } else { off })),
                     "{language:?} {id}: {row}"
                 );
                 if !enabled {

@@ -31,6 +31,6 @@ expression: screen(&app)
   │ Search Marketplace; Enter to search                                                          │  
   ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  
   Not installed                                                                                     
-> Guide                                                                                             
+> Guide                                                                                          +  
                                                                                                     
   / search · ←/→ details · i install · r refresh

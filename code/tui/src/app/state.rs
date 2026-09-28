@@ -809,7 +809,10 @@ impl App {
                 let sign_out =
                     self.subscriptions[self.selected_subscription.index()].sign_out_availability();
                 self.panels_mut().open_subscription(choices, sign_out);
-                self.begin_subscription_command(crate::config::SubscriptionCommand::Read)
+                self.subscriptions[self.selected_subscription.index()]
+                    .needs_initial_read()
+                    .then(|| crate::config::SubscriptionCommand::Read)
+                    .and_then(|command| self.begin_subscription_command(command))
             }
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::Subscription(
                 command,
@@ -863,15 +866,6 @@ impl App {
             self.subscriptions[self.selected_subscription.index()].sign_out_availability();
         self.panels_mut().update_subscription(choices, sign_out);
         Some(ConfigCommand::Subscription(self.selected_subscription, command).into())
-    }
-
-    pub(crate) fn refresh_subscription(&mut self) -> Option<AppCommand> {
-        if !self.panels().subscription_open()
-            || !self.subscriptions[self.selected_subscription.index()].needs_model_refresh()
-        {
-            return None;
-        }
-        self.begin_subscription_command(crate::config::SubscriptionCommand::Read)
     }
 
     fn handle_theme_picker_outcome(&mut self, outcome: ThemePickerOutcome) -> Option<AppCommand> {

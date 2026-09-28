@@ -299,7 +299,7 @@ Desktop 当前实现和 Playwright 后续边界见
 | `provider/configure` / `provider/remove` | config | 按 connection ID 保存或移除配置；后续请求按已就绪凭据重新选择连接。 |
 | `provider/apiKey/set` / `provider/list` | model connection | 按 connection ID 保存独立凭据；列表返回所属厂商、接入类型、configured、active 和 ready，不返回密钥。`active` 表示当前自动选中的连接。 |
 | `provider/probe` | model provider | 使用未保存的 `config` 和可选临时 `apiKey`；填写 `model` 时发起一次最小生成请求，省略时获取模型 ID 列表。返回 `passed`、`models` 或 `failed`；不保存配置和密钥，不重试其他路径。成功不证明完整上下文容量；协议 revision 31。 |
-| `provider/models/list` | model observations | 按 connection 刷新观察目录，返回 models、empty 或 failed。缓存隔离接入、账户和配置；不改写内置目录、模型选择或当前接入。 |
+| `provider/models/list` | model observations | 按 connection 刷新观察目录，返回 models、empty 或 failed。缓存隔离接入、账户和配置；不改写内置目录、模型选择或当前接入。订阅账户的后台观察在模型变化时另发 `provider/models/updated`。 |
 | `mcp/server/upsert` / `mcp/server/remove` / `mcp/server/enablement/set` | config | 修改 standalone MCP desired config |
 | `mcp/server/connect` / `mcp/server/disconnect` | runtime | 设置 process-local lifecycle intent，不改变 Config revision |
 | `mcp/server/status` | read | 读取 active Config/Plugin/Connector MCP runtime 的 redacted lifecycle 与 generation projection |
@@ -1057,13 +1057,14 @@ account/logout
 
 account/login/completed
 account/updated
+provider/models/updated
 ```
 
 `account/rateLimits/read` 按 `{ provider, accountId }` 查询指定账号。支持 `provider = "chatgpt-subscription"`、`"kimi-subscription"` 和 `"xai-subscription"`。本地组合复用对应供应商的登录与模型认证对象，通过各自的 `backend-client` 模块读取后台数据，不接触客户端凭据。
 
 - xAI 的 `limits` 为空、`credits` 为 `null`；`xai` 保留独立的信用额度合约：`usedPercent` 为小数，`periodType/periodStart/periodEnd` 为上游周期，`allowed/message` 为访问状态。`prepaidCents/onDemandUsedCents/onDemandCapCents` 为整数 USD 分字符串，避免跨语言精度损失。未提供的数据为 `null`；ChatGPT 不序列化 `xai`。
-- `account/read` 查询已就绪 xAI 账号的 `/user?include=subscription` 与 Grok Build `/settings`，并通过登录服务更新邮箱、姓名、组织及 `plan`。xAI 的 `plan` 优先使用设置接口给出的完整 `subscription_tier_display`，其次使用 `subscription_tier` 或账户接口的 `subscriptionTier`；没有服务端等级时为 `null`。`account/rateLimits/read` 的 xAI `plan` 使用同一优先顺序。
-- Kimi 的 `account/read` 从 `/coding/v1/me` 更新昵称、邮箱与 `user_level_name`。额度查询从 `/coding/v1/usages` 读取实际返回的 `limit_5h`、`limit_7d` 和 `limit_month_total`；每个窗口成为单独的 `limits` 项。缺失的窗口不生成，`limit_month_code` 是月度总量中的 Code 用量份额，不作为独立额度。重置时间缺失时 `resetsAt = null`，客户端显示“未提供”。
+- 后台账户观察查询已就绪 xAI 账号的 `/user?include=subscription` 与 Grok Build `/settings`，并通过登录服务更新邮箱、姓名、组织及 `plan`。xAI 的 `plan` 优先使用设置接口给出的完整 `subscription_tier_display`，其次使用 `subscription_tier` 或账户接口的 `subscriptionTier`；没有服务端等级时为 `null`。`account/rateLimits/read` 的 xAI `plan` 使用同一优先顺序。
+- Kimi 的后台账户观察从 `/coding/v1/me` 更新昵称、邮箱与 `user_level_name`。额度查询从 `/coding/v1/usages` 读取实际返回的 `limit_5h`、`limit_7d` 和 `limit_month_total`；每个窗口成为单独的 `limits` 项。缺失的窗口不生成，`limit_month_code` 是月度总量中的 Code 用量份额，不作为独立额度。重置时间缺失时 `resetsAt = null`，客户端显示“未提供”。
 - 账号资料和额度查询均不持有全局读写锁。请求前后检查登录身份，取消或退出登录后的旧响应不进入账号状态。订阅接入不提供充值、购卡、充值提醒或付款入口。已有重置卡的查询和使用保留在 `backend-client::chatgpt`，尚未暴露为 RPC。
 
 - 结果为 `{ provider, accountId, plan, limits, credits, xai? }`；`plan` 未提供时为 `null`。ChatGPT 的 `limits` 包含 `codex` 主额度和上游提供的附加模型额度，各项含 `id`、`name`、`model`、`allowed`、`limitReached`、`primary`、`secondary`。
@@ -1074,7 +1075,7 @@ account/updated
 - 空账号返回 `InvalidParams`；未安装账户能力返回 `AccountUnavailable`，Kimi 未登录或认证被拒绝返回 `AccountAuthenticationRequired`；不支持的 provider 返回 `AccountRateLimitsUnavailable`；账号变化返回 `AccountChanged`；其他上游失败返回 `AccountOperationFailed`。错误不包含上游正文、地址或凭据。
 - 协议、类型映射和运行时 decoder 由 Rust registry 统一生成；界面展示仍由产品客户端实现。
 
-`account/read` 丢弃被同一供应商后续登录、登出、读取或账户更新取代的旧读取结果，不将旧状态发布为新版本。`account/login/start` 在已有凭据由 Codex 管理且需要重新登录时返回 `AccountExternalLoginRequired`（code `-32030`，`data.kind` 同名）。客户端应提示用户先在 Codex 完成登录，再重新连接；错误不转发供应商原始消息。
+`account/read` 读取各 driver 当前凭据和登录服务中的账户状态，不等待远端资料或模型目录。被同一供应商后续登录、登出、读取或账户更新取代的旧读取结果不会发布为新版本。`account/login/start` 在已有凭据由 Codex 管理且需要重新登录时返回 `AccountExternalLoginRequired`（code `-32030`，`data.kind` 同名）。客户端应提示用户先在 Codex 完成登录，再重新连接；错误不转发供应商原始消息。
 
 当前交互登录 method：
 
@@ -1088,6 +1089,8 @@ pub enum AccountLoginMethod {
 ```
 
 上述 RPC、带版本的 `accounts[]` 和 `account/login/completed` / `account/updated` 主动通知已实现，并通过注入的 multi-driver `LoginService` 工作；未安装服务时返回稳定 `AccountUnavailable`。`account/logout` 必须携带 provider，避免同时登录多个供应商时误删另一账户。
+
+本地 App Server 在后台定期核对可能由其他进程修改的账户凭据，检查间隔为 60 秒；Ash 自己的登录和登出会立即发布账户变化。远端套餐和模型请求只针对已就绪的登录账户；没有已就绪账户时不发起远端请求。已就绪的 Super Grok 与 Kimi 账户以及各订阅的模型目录每 5 分钟检查一次，账户身份或套餐变化时提前刷新模型。`account/updated` 只在账户状态改变时发布。`provider/models/updated` 包含 connection、账户 ID、组织、套餐和模型查询结果（models、empty 或 failed）；客户端只把它应用到身份与套餐仍匹配的账户。订阅页进入时只在缺少账户状态时读取，后续变化由通知更新。
 
 本地默认组合安装 `ash-chatgpt`、`ash-kimi` 与 `ash-supergrok` driver。`account/login/start` 直接向对应 authorization server 请求 device code，并在本机后台轮询。API key 继续属于对应模型凭据领域，不进入 account/login payload。
 

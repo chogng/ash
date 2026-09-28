@@ -6,6 +6,7 @@ use ash_app_server_protocol::protocol::account::AccountLoginFailureDto;
 use ash_app_server_protocol::protocol::provider::ProviderModelsListFailureCodeDto;
 use ash_app_server_protocol::protocol::provider::ProviderModelsListFailureDto;
 use ash_app_server_protocol::protocol::provider::ProviderModelsListResult;
+use ash_app_server_protocol::protocol::provider::ProviderModelsUpdated;
 use ash_protocol::ModelAccess;
 use ash_protocol::ModelId;
 use ash_protocol::ModelInfo;
@@ -112,12 +113,88 @@ fn signed_in_account_shows_only_its_discovered_subscription_models() {
 }
 
 #[test]
+fn model_notifications_replace_models_for_the_current_account() {
+    let mut subscription = Subscription::default();
+    subscription.update(SubscriptionEvent::Read {
+        account: account(1),
+        models: Some(Ok(vec![model(
+            "openai",
+            "old",
+            "Old model",
+            ModelAccess::Subscription,
+        )])),
+    });
+    let updated = ProviderModelsUpdated {
+        connection: SubscriptionProvider::ChatGpt.id().into(),
+        account_id: "account-1".into(),
+        organization: None,
+        plan: Some("pro".into()),
+        result: ProviderModelsListResult::Models {
+            models: vec![model(
+                "openai",
+                "new",
+                "New model",
+                ModelAccess::Subscription,
+            )],
+        },
+    };
+    assert!(subscription.begin(&SubscriptionCommand::Read));
+    subscription.update(SubscriptionEvent::ModelsUpdated(updated.clone()));
+    subscription.update(SubscriptionEvent::Read {
+        account: account(1),
+        models: Some(Ok(vec![model(
+            "openai",
+            "old",
+            "Old model",
+            ModelAccess::Subscription,
+        )])),
+    });
+    assert!(labels(&subscription).contains(&"New model".into()));
+    assert!(!labels(&subscription).contains(&"Old model".into()));
+    assert!(!subscription.needs_initial_read());
+
+    let mut stale = updated;
+    stale.account_id = "previous-account".into();
+    stale.result = ProviderModelsListResult::Models {
+        models: vec![model(
+            "openai",
+            "stale",
+            "Stale model",
+            ModelAccess::Subscription,
+        )],
+    };
+    subscription.update(SubscriptionEvent::ModelsUpdated(stale));
+    assert!(!labels(&subscription).contains(&"Stale model".into()));
+}
+
+#[test]
+fn failed_model_observation_replaces_loading_state() {
+    let mut subscription = Subscription::default();
+    subscription.update(SubscriptionEvent::Updated(account(1)));
+    assert!(labels(&subscription).contains(&"Loading models…".into()));
+
+    subscription.update(SubscriptionEvent::ModelsUpdated(ProviderModelsUpdated {
+        connection: SubscriptionProvider::ChatGpt.id().into(),
+        account_id: "account-1".into(),
+        organization: None,
+        plan: Some("pro".into()),
+        result: ProviderModelsListResult::Failed {
+            failure: ProviderModelsListFailureDto {
+                code: ProviderModelsListFailureCodeDto::Unreachable,
+            },
+        },
+    }));
+    assert!(labels(&subscription).contains(&"Could not load models".into()));
+    assert!(!labels(&subscription).contains(&"Loading models…".into()));
+}
+
+#[test]
 fn credential_rotation_during_model_fetch_does_not_start_another_fetch() {
     let mut subscription = Subscription::default();
     let mut rotated = account(2);
     rotated.accounts[0].credential_revision = 2.to_string();
     subscription.update(SubscriptionEvent::Updated(rotated));
-    assert!(subscription.needs_model_refresh());
+    assert!(labels(&subscription).contains(&"Loading models…".into()));
 
     subscription.update(SubscriptionEvent::Read {
         account: account(1),
@@ -129,13 +206,13 @@ fn credential_rotation_during_model_fetch_does_not_start_another_fetch() {
         )])),
     });
     assert!(labels(&subscription).contains(&"GPT Ash".into()));
-    assert!(!subscription.needs_model_refresh());
+    assert!(!labels(&subscription).contains(&"Loading models…".into()));
 
     let mut rotated_again = account(3);
     rotated_again.accounts[0].credential_revision = 3.to_string();
     subscription.update(SubscriptionEvent::Updated(rotated_again));
     assert!(labels(&subscription).contains(&"GPT Ash".into()));
-    assert!(!subscription.needs_model_refresh());
+    assert!(!labels(&subscription).contains(&"Loading models…".into()));
 }
 
 #[test]
@@ -158,7 +235,7 @@ fn model_catalog_failure_keeps_account_visible_and_reports_error() {
             .iter()
             .any(|item| item.label() == "Account")
     );
-    assert!(!labels(&subscription).contains(&"Could not load models".into()));
+    assert!(labels(&subscription).contains(&"Could not load models".into()));
 }
 
 #[test]

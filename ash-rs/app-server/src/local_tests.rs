@@ -339,8 +339,49 @@ fn local_composition_reads_existing_grok_login_without_importing_it() {
         .expect("xAI account missing");
     assert_eq!(xai["status"], "ready");
     assert_eq!(xai["email"], "person@example.test");
+    if xai["plan"] != "SuperGrok Heavy" {
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let updated = server
+                .drain_notifications(&mut connection)
+                .into_iter()
+                .filter_map(|notification| {
+                    serde_json::from_str::<serde_json::Value>(&notification).ok()
+                })
+                .any(|notification| {
+                    notification["method"] == "account/updated"
+                        && notification["params"]["account"]["accounts"]
+                            .as_array()
+                            .is_some_and(|accounts| {
+                                accounts.iter().any(|account| {
+                                    account["provider"] == "xai-subscription"
+                                        && account["plan"] == "SuperGrok Heavy"
+                                })
+                            })
+                });
+            if updated {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "Grok account update missing"
+            );
+            thread::yield_now();
+        }
+    }
+    let account: serde_json::Value = serde_json::from_str(&server.handle_json(
+        &mut connection,
+        r#"{"jsonrpc":"2.0","id":3,"method":"account/read","params":{}}"#,
+    ))
+    .unwrap();
+    let xai = account["result"]["accounts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|account| account["provider"] == "xai-subscription")
+        .expect("xAI account missing");
     assert_eq!(xai["plan"], "SuperGrok Heavy");
-    assert_eq!(client.requests.lock().unwrap().len(), 2);
+    assert!(client.requests.lock().unwrap().len() >= 2);
     assert_eq!(std::fs::read(&grok_auth).unwrap(), contents);
 }
 

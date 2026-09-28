@@ -19,6 +19,7 @@ use ash_app_server_protocol::protocol::account::AccountReadResult;
 use ash_app_server_protocol::protocol::account::AccountStatusDto;
 use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
 use ash_app_server_protocol::protocol::provider::ProviderModelsListResult;
+use ash_app_server_protocol::protocol::provider::ProviderModelsUpdated;
 use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -110,6 +111,7 @@ pub(crate) enum SubscriptionEvent {
     SignedOut(AccountReadResult),
     Failed(String),
     Updated(AccountReadResult),
+    ModelsUpdated(ProviderModelsUpdated),
     Completed(AccountLoginCompleted),
 }
 
@@ -122,6 +124,8 @@ pub(crate) struct Subscription {
     login: Option<AccountLoginStartResult>,
     browser_error: Option<String>,
     pending: Option<SubscriptionCommand>,
+    // The first page read may complete after the server has published newer models.
+    models_notified_during_read: bool,
     early_completions: BTreeMap<String, AccountLoginCompleted>,
 }
 
@@ -170,7 +174,9 @@ impl Subscription {
                 account,
                 models: Some(Err(error)),
                 ..
-            } if self.accepts_read(account) => Some(("Could not load models", error.clone())),
+            } if self.accepts_read(account) && !self.models_notified_during_read => {
+                Some(("Could not load models", error.clone()))
+            }
             _ => None,
         }
     }
@@ -186,6 +192,9 @@ impl Subscription {
             return false;
         }
         self.pending = Some(command.clone());
+        if matches!(command, SubscriptionCommand::Read) {
+            self.models_notified_during_read = false;
+        }
         true
     }
 
@@ -193,6 +202,31 @@ impl Subscription {
         match event {
             SubscriptionEvent::Updated(account) => {
                 self.update_account(account);
+            }
+            SubscriptionEvent::ModelsUpdated(updated) => {
+                let account = self
+                    .account
+                    .as_ref()
+                    .and_then(|result| account_for(result, self.provider));
+                if updated.connection == self.provider.id()
+                    && account.is_some_and(|account| {
+                        account.status == AccountStatusDto::Ready
+                            && account.account_id == updated.account_id
+                            && account.organization == updated.organization
+                            && account.plan == updated.plan
+                    })
+                {
+                    self.models = Some(match updated.result {
+                        ProviderModelsListResult::Models { models } => Ok(models),
+                        ProviderModelsListResult::Empty => Ok(Vec::new()),
+                        ProviderModelsListResult::Failed { failure } => {
+                            Err(format!("{:?}", failure.code))
+                        }
+                    });
+                    if matches!(self.pending, Some(SubscriptionCommand::Read)) {
+                        self.models_notified_during_read = true;
+                    }
+                }
             }
             SubscriptionEvent::Completed(completed) => {
                 self.update_account(completed.account.clone());
@@ -214,9 +248,10 @@ impl Subscription {
                         self.early_completions.clear();
                         let accepted = self.accepts_read(&account);
                         self.update_account(account);
-                        if accepted {
+                        if accepted && !self.models_notified_during_read {
                             self.models = models;
                         }
+                        self.models_notified_during_read = false;
                     }
                     SubscriptionEvent::Started {
                         login,
@@ -290,13 +325,8 @@ impl Subscription {
         })
     }
 
-    pub(crate) fn needs_model_refresh(&self) -> bool {
-        self.models.is_none()
-            && self
-                .account
-                .as_ref()
-                .and_then(|account| account_for(account, self.provider))
-                .is_some_and(|account| account.status == AccountStatusDto::Ready)
+    pub(crate) fn needs_initial_read(&self) -> bool {
+        self.account.is_none()
     }
 
     fn finish(&mut self) {
@@ -319,9 +349,7 @@ impl Subscription {
             if let Some(plan) = &account.plan {
                 items.push(ListSelectionItem::new("Plan").with_description(plan));
             }
-            if !matches!(self.models, Some(Err(_))) {
-                items.push(ListSelectionItem::new("Models").as_section_divider());
-            }
+            items.push(ListSelectionItem::new("Models").as_section_divider());
             match &self.models {
                 Some(Ok(models)) if models.is_empty() => {
                     items.push(ListSelectionItem::new("No models available"));
@@ -333,7 +361,7 @@ impl Subscription {
                         ))
                     }));
                 }
-                Some(Err(_)) => {}
+                Some(Err(_)) => items.push(ListSelectionItem::new("Could not load models")),
                 None => items.push(ListSelectionItem::new("Loading models…")),
             }
         }

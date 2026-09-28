@@ -1665,7 +1665,7 @@ impl AppServer {
     }
 }
 
-fn provider_models_failure_code(
+pub(super) fn provider_models_failure_code(
     error: crate::model_catalog::ModelCatalogRefreshError,
 ) -> ProviderModelsListFailureCodeDto {
     use crate::model_catalog::ModelCatalogRefreshError;

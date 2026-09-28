@@ -20,6 +20,7 @@ import type { MarketplaceChanged } from './types/MarketplaceChanged.js';
 import type { MemoryChanged } from './types/MemoryChanged.js';
 import type { PluginsChanged } from './types/PluginsChanged.js';
 import type { ProjectChanged } from './types/ProjectChanged.js';
+import type { ProviderModelsUpdated } from './types/ProviderModelsUpdated.js';
 import type { SessionChanged } from './types/SessionChanged.js';
 import type { SessionDeleted } from './types/SessionDeleted.js';
 import type { SkillsChanged } from './types/SkillsChanged.js';
@@ -33,6 +34,7 @@ import type { JsonRpcVersion } from './protocol.js';
 export interface AppServerNotificationMap {
   "account/login/completed": AccountLoginCompleted;
   "account/updated": AccountUpdated;
+  "provider/models/updated": ProviderModelsUpdated;
   "agent/request": AgentRequestEnvelope;
   "session/changed": SessionChanged;
   "session/deleted": SessionDeleted;
@@ -80,6 +82,7 @@ export const APP_SERVER_NOTIFICATIONS: {
 } = {
   "account/login/completed": { method: "account/login/completed" },
   "account/updated": { method: "account/updated" },
+  "provider/models/updated": { method: "provider/models/updated" },
   "agent/request": { method: "agent/request" },
   "session/changed": { method: "session/changed" },
   "session/deleted": { method: "session/deleted" },
