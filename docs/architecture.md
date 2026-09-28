@@ -72,6 +72,7 @@ flowchart TD
 | 系统 | 回答的核心问题 | 应当拥有 | 重点审计边界 | 权威文档 |
 | --- | --- | --- | --- | --- |
 | Project 与工作组织系统 | 哪些本地/远程根和 Session 需要长期组织在一起？ | Project metadata、长期根目录表以及对 Session 的弱关联 | Project、Workspace、Environment 和 Grant 是否被误建成同一对象 | [`domain-model.md`](domain-model.md) |
+| Agent Team 系统 | 哪些 Agent 身份作为成员跨任务协作？ | Team 成员关系、协调者、讨论及任务关联；当前为目标设计 | Team 是否复制 Session 执行状态或把角色定义当成成员身份 | [Agent Team](../ash-rs/docs/agent-teams.md) |
 | 会话系统 | 一次工作如何被识别、恢复和持续保存？ | Session、Thread、Turn、事件顺序与持久化事务 | Session、Thread、Store 与 rollout 是否存在重复权威 | [`core.md`](core.md)、[`protocol.md`](protocol.md) |
 | 上下文系统 | 当前模型究竟能看到什么？ | 上下文选择、预算、压缩、恢复和每个 Thread 的上下文状态 | 持久事实、模型输入和 UI 展示状态是否混为一体 | [`core-context.md`](core-context.md) |
 | Agent 运行时 | 模型输出如何推进一次 Turn？ | Agent 生命周期、模型回合、工具回合、取消与同 Session Agent tree 协调 | 单 Agent 执行、子 Agent tree 和持久化是否混为一个协调器 | [`agent-harness-design.md`](agent-harness-design.md)、[`core-multi-agent.md`](core-multi-agent.md)、[`ash-agent-runtime-architecture.md`](ash-agent-runtime-architecture.md) |

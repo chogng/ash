@@ -9,7 +9,7 @@ Agent 能力由 `ext/` 中的 crate 拥有；Core 提交 Thread/Turn 事实并�
 | `ext/extension-api` | 按身份注册贡献、提示与上下文、续跑、工具与 MCP 生命周期、审核接口、Session/Thread/Turn 临时状态 |
 | `ext/agent` | 根 Agent 与子 Agent 的角色选择、能力范围、工具定义、启动和等待编排 |
 | `ext/agent-message-board` | 同一 Agent 树共享的频道、讨论、回复、订阅、持久化与当前 Turn 通知 |
-| `ext/workflows` | `/team`、`/develop` 的命令、阶段、版本、接受、失效与恢复；通过 Core 启动专用角色 |
+| `ext/workflows` | 当前一次协作任务的 `/team`、`/develop` 命令、阶段、版本、接受、失效与恢复；通过 Core 启动专用角色 |
 | `ext/goal` | Goal 工具、目标提示、续跑条件与重启恢复；通过 Core 的原子入口创建 Turn |
 | `ext/queue` | 消息持久化、FIFO、领取租约、交付结果、空闲唤醒与队列展示 |
 | `ext/guardian-reviewer` | 严格审核协议、结果绑定、并发上限、异步任务、超时、取消和暂时性失败重试 |
@@ -73,7 +73,7 @@ App Server 默认注册 `board_read` 与 `board_write`。同一 Session 内的�
 - 持久会话使用 profile 的 `state.sqlite3`，临时会话使用内存。归档保留讨论；删除 Session 在事务中清理频道、帖子、订阅、退订状态、未读记录和操作凭据，同时关闭该 Session 的讨论板，旧调用不能重新创建内容。
 - 不存在的频道或消息、无效话题、重复频道、游标不匹配、越界参数和操作冲突均报告错误。数据库故障不重建或清空已有数据。
 
-团队模式可用频道组织工作，用话题共享发现、阻塞、接口决定和验证证据。开发流程可按工作与阶段组织频道，报告中引用相应产物版本。讨论板不负责分工状态、阶段转换、权限授予或验收；模式入口状态见 [Agent 树](../../docs/core-multi-agent.md#31-团队共享讨论) 与 [Develop 设计](../../docs/develop.md#9-team-的位置)。
+一次多 Agent 任务可用频道组织工作，用话题共享发现、阻塞、接口决定和验证证据。开发流程可按工作与阶段组织频道，报告中引用相应产物版本。此讨论板按 Session 隔离，不保存跨任务 Team 消息；后者的目标契约见 [Agent Team](agent-teams.md)。讨论板不负责分工状态、阶段转换、权限授予或验收；任务入口状态见 [Agent 树](../../docs/core-multi-agent.md) 与 [Develop 设计](../../docs/develop.md)。
 
 ## 历史与任务笔记
 

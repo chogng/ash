@@ -6,6 +6,8 @@
 
 Ash 只有一种 Agent 定义。内置 Agent 与 `.ash/agents` 自定义 Agent 的差别是来源、可编辑性和发布周期；“根 Agent”“子 Agent”不是两种定义，只是某次运行在 Agent 树中的相对位置。代码和协议使用“会话入口运行”与“委托运行”表达关系，界面可以在树中把被委托节点简称为“子 Agent”。
 
+Agent 定义也不是持久 Team 成员。Team 成员使用已有 `AgentId` 和成员关系，角色定义只决定某次 Thread 的职责与能力；跨任务成员契约见 [Agent Team](../ash-rs/docs/agent-teams.md)。当前内置 `team/*` 角色供一次协作工作流使用，不表示持久 Team 已实现。
+
 ## 快速理解
 
 Agent 定义回答“使用什么职责、提示词、模型策略、工具和能力工作”；启动关系回答“这次运行从哪里开始、结果交给谁”。同一份定义可以在它允许的范围内作为会话入口、被其他 Agent 委托，或由确定性工作流启动。内置定义由后端打包，自定义定义从 `.ash/agents/*.md` 读取；内置定义不进入设置，但实际运行始终可观察。
@@ -238,7 +240,8 @@ Agent 只声明默认值、覆盖权限、替换范围和能力要求。App Serv
 | 角色 ID、提示词、工具、能力、模型与启动范围 | 本文件和 `ash-agent-roles` |
 | 阶段顺序、接受门、产物版本、上游失效、恢复与用户等待 | [`develop.md`](develop.md) |
 | 委托 Thread、上下文种子、消息、取消、等待和持久结果 | [`core-multi-agent.md`](core-multi-agent.md) |
-| Team 的委托、消息、等待和结果 | [`core-multi-agent.md`](core-multi-agent.md) |
+| 一次任务的委托、消息、等待和结果 | [`core-multi-agent.md`](core-multi-agent.md) |
+| 跨任务 Team 的成员关系和生命周期 | [Agent Team](../ash-rs/docs/agent-teams.md) |
 
 阶段协调必须由确定性工作流完成，不能把 `develop.md` 整篇作为提示词交给会话入口 Agent。工作流创建阶段 Agent 时提交固定阶段身份、已接受上游版本、代码基线、工具范围、预算、时间和停止条件；阶段 Agent 只返回候选或证据，不能自行推进、接受或重写工作流状态。
 

@@ -1,6 +1,6 @@
 # Ash 领域模型与命名
 
-> 本文是 Agent、Project、Session、Thread、Environment、Workspace、目录与授权概念的长期架构契约。
+> 本文是 Agent、Team、Project、Session、Thread、Environment、Workspace、目录与授权概念的长期架构契约。
 >
 > 状态：Session、Thread、Environment、Dir、目录授权以及 Project 的持久实体和长期多根目录表已经进入当前后端协议与实现。Project 的 Desktop/CLI/TUI 产品入口、根选择和跨 Environment 交互仍未完成；多个 Session 保持独立，不再建立第二套跨 Session 工作状态机。
 
@@ -15,6 +15,8 @@
 | 概念 | 回答的问题 | 是否独立持久化 |
 | --- | --- | --- |
 | `Project` | 用户长期保存哪些根目录、Session 和共同工作入口？ | 是；拥有名称、描述、多根目录表、弱关联和生命周期 |
+| `Team` | 哪些长期 Agent 身份作为成员跨任务协作？ | 目标设计；拥有成员关系、协调者和关联任务，当前尚未实现 |
+| `TeamRunId` | 哪次工作使用了哪个 Team 与成员快照？ | 目标设计；持久关联一次工作与所属 Session，不保存执行状态机 |
 | `AgentId` | 哪个长期 Agent 身份执行这些分支？ | 是；一个身份可绑定多个任务的 Thread，删除任务后保留 |
 | `session_id` | 哪些 Thread 属于同一棵会话树？ | 作为 Thread 字段保存，不单独建立事实源 |
 | `Thread` | 当前操作的是哪条具体对话分支？ | 是；拥有自己的事件、顺序、恢复和执行状态 |
@@ -46,6 +48,8 @@ get_session(session_id)
 `session_id`。因此代码只能依赖显式字段，不能靠 ID 相等猜关系。
 
 Agent 身份、任务分组和执行分支分别表达。普通 fork、消息恢复、rewind 和 replacement 延续 AgentId，委托创建独立 AgentId；复用身份不共享上下文、取消域或权限。云端认证身份单独映射，不替代业务 AgentId。绑定、来源和迁移规则见 [`protocol.md`](protocol.md#2-身份)。
+
+目标 Team 为新成员分配持久 `AgentId`，或明确绑定已有 `AgentId`；成员可以先于首次 Thread 存在。每次工作创建独立协调 Thread 和成员 Thread，可关联新 Session 或 `/develop` 的已有 Session。现有普通委托创建新的 AgentId；Team 成员再次执行需要明确绑定原身份的受验证入口，不能根据角色名推断。Team、Project 与任务的关系见 [Agent Team](../ash-rs/docs/agent-teams.md)。
 
 `Project` 与会话树是弱关联。删除 Project、移动 Project 或重新归类 Thread，不得改变 Thread 与 `session_id` 的核心身份。当前关联保存在 Project 的 `session_ids` 集合中，不向 Thread 增加 Project 身份，也不建立 Session store；`ProjectId`、完整 Project 记录和命令回执由独立 Project store 持久化。窗口 Workspace、目录集合或 Session 标题都不能被客户端推断成 Project。
 
