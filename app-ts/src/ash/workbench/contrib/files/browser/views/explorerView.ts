@@ -1,4 +1,3 @@
-import { ScrollableElement } from "../../../../../base/browser/ui/scrollbar/scrollableElement.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { IConfigurationService } from "../../../../../platform/configuration/common/configuration.js";
 import { FileKind, IFileService } from "../../../../../platform/files/common/files.js";
@@ -11,6 +10,8 @@ import { WorkbenchAsyncDataTree, type ResourceOpenEvent } from "../../../../../p
 import { IEditorService } from "../../../../services/editor/common/editorService.js";
 import { ViewPane, type IViewPaneOptions } from "../../../../browser/parts/views/viewPane.js";
 import { h } from "../../../../../base/browser/dom.js";
+import { appendIcon } from "../../../../../base/browser/ui/lxicons/lxicon.js";
+import { Lxicon } from "../../../../../base/common/lxicons.js";
 import { ExplorerItem } from "../../common/explorerModel.js";
 import { ExplorerFileNestingSettingId } from '../../common/explorerFileNestingTrie.js';
 import { ExplorerDataSource, ExplorerFindProvider, FileSorter, FilesRenderer } from "./explorerViewer.js";
@@ -31,12 +32,12 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	private readonly fileService: IFileService;
 	private readonly workspaceContextService: IWorkspaceContextService;
 	private readonly editorService: IEditorService;
-	private readonly scrollable: ScrollableElement;
 	private readonly tree: WorkbenchAsyncDataTree<ExplorerItem, ExplorerItem>;
 	private root: ExplorerItem | undefined;
 	private error: string | undefined;
+	private treeError = false;
+	private treeErrorElement: ExplorerItem | undefined;
 	private workspaceGeneration = 0;
-	private readonly expandedDirectories = new Map<string, ExplorerItem>();
 	private readonly loadedNests = new Set<string>();
 
 	constructor(
@@ -72,15 +73,11 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		this.element.classList.add("ash-explorer-view-pane");
 		this.headerElement.classList.add("ash-explorer-title");
 		this.contentElement.classList.add("ash-explorer");
-		this.scrollable = this._register(new ScrollableElement(this.contentElement, {
+		this.tree = this._register(new WorkbenchAsyncDataTree<ExplorerItem, ExplorerItem>(this.contentElement, new ExplorerDataSource(fileService, new FileSorter(), configurationService), {
 			ariaLabel: localize('accessibility.explorerTreeLabel', 'Workspace files'),
-			direction: "vertical",
-			vertical: "auto",
-		}));
-		this.tree = this._register(new WorkbenchAsyncDataTree<ExplorerItem, ExplorerItem>(this.scrollable.contentElement, new ExplorerDataSource(fileService, new FileSorter(), configurationService), {
-			ariaLabel: localize('accessibility.explorerTreeLabel', 'Workspace files'),
-			scrolling: "external",
+			scrolling: "managed",
 			configurationService,
+			getHeight: () => 22,
 			indentGuides: "always",
 			collapseByDefault: item => item.kind !== FileKind.File,
 			expandOnlyOnTwistieClick: () => configurationService.getValue<TreeExpandMode>(ListConfiguration.treeExpandMode) === "doubleClick",
@@ -90,6 +87,13 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			reuseRows: true,
 			onDidRemoveRow: row => renderer.disposeRow(row),
 			renderElement: (item) => renderer.renderElement(item),
+			renderTwistie: (_item, state, twistie) => {
+				if (state.loading) {
+					const loading = h(twistie.ownerDocument, "span");
+					loading.className = "ash-explorer-tree-loading";
+					twistie.append(loading);
+				} else if (state.collapsible) appendIcon(state.expanded ? Lxicon.chevronDown : Lxicon.chevronRight, twistie);
+			},
 		}));
 		this._register(new ExplorerFindProvider(this.tree, this.headerElement));
 		const scopedContext = this._register(contextKeyService.createScoped(this.element));
@@ -97,7 +101,6 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		const updateAriaLabel = () => {
 			const label = localize('accessibility.explorerTreeLabel', 'Workspace files');
 			const hint = accessibleViewService.getOpenAriaHint(AccessibilityVerbositySettingId.Explorer);
-			this.scrollable.element.setAttribute('aria-label', label);
 			this.tree.element.setAttribute('aria-label', hint ? `${label}. ${hint}` : label);
 		};
 		updateAriaLabel();
@@ -109,22 +112,26 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			}
 		}));
 		this._register(onDidChangeNls(updateAriaLabel));
-		this._register(this.tree.onDidError(({ error }) => {
+		this._register(this.tree.onDidError(({ element, error }) => {
+			this.treeError = true;
+			this.treeErrorElement = element;
 			this.error = error instanceof Error ? error.message : "Unable to read workspace files.";
 			this.render();
 		}));
 		this._register(this.tree.onDidOpen((event) => {
 			if (event.element.kind === FileKind.File) void this.openFile(event);
 		}));
-		this._register(this.tree.onDidChangeCollapseState(({ element, collapsed }) => {
-			if (element.kind !== FileKind.Directory) {
-				return;
-			}
-			if (collapsed) this.expandedDirectories.delete(element.resource.toString());
-			else this.expandedDirectories.set(element.resource.toString(), element);
-		}));
-		this._register(this.tree.onDidChangeLoadState(({ loading }) => {
+		this._register(this.tree.onDidChangeLoadState(({ element, loading, error }) => {
 			if (!loading) {
+				const retriedFailedElement = element === undefined
+					? this.treeErrorElement === undefined
+					: this.treeErrorElement !== undefined && extUriBiasedIgnorePathCase.isEqual(element.resource, this.treeErrorElement.resource);
+				if (error === undefined && this.treeError && retriedFailedElement) {
+					this.treeError = false;
+					this.treeErrorElement = undefined;
+					this.error = undefined;
+					this.render();
+				}
 				this.loadVisibleFileNests();
 			}
 		}));
@@ -170,10 +177,11 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 
 	private async initialize(): Promise<void> {
 		const generation = ++this.workspaceGeneration;
-		this.expandedDirectories.clear();
 		this.loadedNests.clear();
 		this.root = undefined;
 		this.error = undefined;
+		this.treeError = false;
+		this.treeErrorElement = undefined;
 		void this.tree.setInput(undefined);
 		this.render();
 		const workspace = this.workspaceContextService.getWorkspace();
@@ -213,18 +221,18 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	private async refreshRoot(root: ExplorerItem): Promise<void> {
 		const generation = this.workspaceGeneration;
 		this.loadedNests.clear();
-		const expanded = [...this.expandedDirectories.values()]
-			.filter(item => extUriBiasedIgnorePathCase.isEqualOrParent(item.resource, root.resource))
-			.sort((left, right) => left.resource.path.length - right.resource.path.length);
 		try {
-			await this.tree.updateChildren(root);
-			for (const item of expanded) {
-				if (generation !== this.workspaceGeneration || this.isDisposed) return;
-				await this.tree.updateChildren(item);
-			}
+			await this.tree.updateChildren(root, { recursive: true });
+			if (generation !== this.workspaceGeneration || this.isDisposed) return;
+			this.error = undefined;
+			this.treeError = false;
+			this.treeErrorElement = undefined;
+			this.render();
 		} catch (error) {
 			if (generation !== this.workspaceGeneration || this.isDisposed) return;
 			this.error = error instanceof Error ? error.message : "Unable to refresh workspace files.";
+			this.treeError = true;
+			this.treeErrorElement = root;
 			this.render();
 		}
 	}
@@ -266,7 +274,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			status.setAttribute("role", "status");
 			status.textContent = this.error ?? "Loading files…";
 			surface.append(status);
-			this.scrollable.replaceChildren(surface);
+			this.contentElement.replaceChildren(surface);
 			return;
 		}
 		if (this.error) {
@@ -276,8 +284,8 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			error.textContent = this.error;
 			surface.append(error);
 		}
-		surface.append(this.tree.element);
-		this.scrollable.replaceChildren(surface);
+		surface.append(this.tree.domNode);
+		this.contentElement.replaceChildren(surface);
 	}
 
 }

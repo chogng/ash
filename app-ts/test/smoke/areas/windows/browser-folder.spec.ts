@@ -140,6 +140,43 @@ test('browser opens an authorized local folder and saves its files', async ({ ta
 	await expect(page.getByRole('menu').last().getByRole('menuitem', { name: 'Open Folder...' })).toHaveCount(1);
 });
 
+test('browser Explorer expands and collapses a folder without replacing sibling rows', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'browser' || target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');
+	const page = workbench.page;
+	await page.evaluate(async () => {
+		const root = await navigator.storage.getDirectory();
+		const workspace = await root.getDirectoryHandle(`ash-tree-${crypto.randomUUID()}`, { create: true });
+		const folder = await workspace.getDirectoryHandle('expandable', { create: true });
+		await folder.getFileHandle('nested.txt', { create: true });
+		await workspace.getFileHandle('stable.txt', { create: true });
+		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => workspace });
+	});
+	await page.getByRole('button', { name: 'Application menu' }).click();
+	await page.getByRole('menu').first().getByRole('menuitem', { name: 'File' }).click();
+	await page.keyboard.press('Escape');
+	await page.keyboard.press('Escape');
+	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+	if (await showSidebar.isVisible()) await showSidebar.click();
+	await page.getByRole('button', { name: 'Open Folder', exact: true }).click();
+	const explorer = page.locator('.ash-explorer');
+	const sibling = explorer.locator('.ash-tree-row').filter({ hasText: 'stable.txt' });
+	await expect(sibling).toHaveCount(1);
+	const siblingRow = await sibling.elementHandle();
+	const folder = explorer.getByRole('treeitem', { name: 'expandable', exact: true });
+	const nested = explorer.locator('.ash-tree-row').filter({ hasText: 'nested.txt' });
+	await folder.click();
+	await expect(folder).toHaveAttribute('aria-expanded', 'true');
+	await expect(nested).toHaveCount(1);
+	await folder.click();
+	await expect(folder).toHaveAttribute('aria-expanded', 'false');
+	await expect(nested).toHaveCount(0);
+	await folder.click();
+	await expect(folder).toHaveAttribute('aria-expanded', 'true');
+	await expect(nested).toHaveCount(1);
+	await expect(explorer.getByRole('tree')).toHaveAttribute('aria-busy', 'false');
+	expect(await siblingRow?.evaluate(row => row.isConnected)).toBe(true);
+});
+
 test('browser nests related files when Explorer file nesting is enabled', async ({ target, workbench }) => {
 	test.skip(target.kind !== 'browser' || target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');
 	const page = workbench.page;

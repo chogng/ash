@@ -85,9 +85,16 @@ export class List<T> extends Disposable {
 			dnd: options.dnd,
 			getDragElements: (item, index) => this._selectionIndexes.includes(index) ? this.selection : [item],
 			accessibilityProvider: options.accessibilityProvider,
-			renderItem: options.renderItem,
+			renderItem: (item, index, row) => {
+				const contents = options.renderItem(item, index, row);
+				this.updateRowState(row, index);
+				return contents;
+			},
 			reuseRows: options.reuseRows,
-			updateItem: options.updateItem,
+			updateItem: (item, index, row) => {
+				options.updateItem?.(item, index, row);
+				this.updateRowState(row, index);
+			},
 			onDidRemoveRow: options.onDidRemoveRow,
 		}));
 		this.element = this.view.element;
@@ -157,6 +164,7 @@ export class List<T> extends Disposable {
 	getElementTop(index: number): number { return this.view.getElementTop(index); }
 	getElementHeight(index: number): number { return this.view.getElementHeight(index); }
 	indexAt(position: number): number { return this.view.indexAt(position); }
+	get scrollTop(): number { return this.view.scrollTop; }
 
 	private onClick(event: MouseEvent): void {
 		const index = this.view.getRowIndex(event);
@@ -207,20 +215,26 @@ export class List<T> extends Disposable {
 	}
 
 	private syncRows(): void {
+		this.view.reveal(this._activeIndex);
 		const rows = this.element.querySelectorAll<HTMLElement>(":scope > .ash-list-row");
-		rows.forEach((row, index) => {
-			const focused = index === this._activeIndex;
-			const selected = this._selectionIndexes.includes(index);
-			row.classList.toggle("focused", focused);
-			row.classList.toggle("is-active", focused);
-			row.classList.toggle("selected", selected);
-			setAriaAttribute(row, "selected", selected);
+		rows.forEach((row) => {
+			const index = Number(row.dataset.index);
+			this.updateRowState(row, index);
 		});
-		const activeRow = rows[this._activeIndex];
+		const activeRow = this.view.row(this._activeIndex);
 		if (activeRow) {
 			this.element.setAttribute("aria-activedescendant", activeRow.id);
 			activeRow.scrollIntoView?.({ block: "nearest" });
 		} else this.element.removeAttribute("aria-activedescendant");
+	}
+
+	private updateRowState(row: HTMLElement, index: number): void {
+		const focused = index === this._activeIndex;
+		const selected = this._selectionIndexes.includes(index);
+		row.classList.toggle("focused", focused);
+		row.classList.toggle("is-active", focused);
+		row.classList.toggle("selected", selected);
+		setAriaAttribute(row, "selected", selected);
 	}
 
 	private emitFocus(browserEvent?: UIEvent): void {

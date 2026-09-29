@@ -88,13 +88,12 @@ test("DataTree materializes and refreshes a synchronous data source", () => {
 	dom.window.close();
 });
 
-test("AsyncDataTree loads on expansion and rejects stale refresh results", async () => {
+test("AsyncDataTree loads on expansion and coalesces refresh requests", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const root: TestNode = { id: "root", label: "Root", expanded: true };
 	const group: TestNode = { id: "group", label: "Group", expanded: false };
 	const sibling: TestNode = { id: "sibling", label: "Sibling", expanded: false };
-	const stale: TestNode = { id: "stale", label: "Stale", expanded: false };
-	const current: TestNode = { id: "current", label: "Current", expanded: false };
+	const child: TestNode = { id: "child", label: "Child", expanded: false };
 	const pending: Array<(children: readonly TestNode[]) => void> = [];
 	const tree = new AsyncDataTree<TestNode, TestNode>(dom.window.document.body, {
 		hasChildren: (element) => element === root || element === group,
@@ -105,6 +104,7 @@ test("AsyncDataTree loads on expansion and rejects stale refresh results", async
 	}, {
 		identityProvider: { getId: (element) => element.id },
 		reuseRows: true,
+		renderTwistie: (_element, state, container) => { container.dataset.loading = String(state.loading); },
 		renderElement: (element) => {
 			const label = h(dom.window.document, "span");
 			label.textContent = element.label;
@@ -117,14 +117,17 @@ test("AsyncDataTree loads on expansion and rejects stale refresh results", async
 	assert.equal(tree.expand(group), true);
 	assert.equal(tree.element.querySelector('[data-tree-id="sibling"]'), siblingRow);
 	assert.equal(tree.element.querySelector('[data-tree-id="group"]'), groupRow);
+	assert.equal(tree.element.getAttribute("aria-busy"), "true");
+	assert.equal(groupRow?.querySelector<HTMLElement>(".ash-tree-twistie")?.dataset.loading, "true");
+	await Promise.resolve();
 	assert.equal(pending.length, 1);
 	const latest = tree.updateChildren(group);
-	assert.equal(pending.length, 2);
-	pending[1]!([current]);
-	await latest;
-	pending[0]!([stale]);
 	await Promise.resolve();
-	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(".ash-tree-row")].map((row) => row.textContent), ["Group", "Current", "Sibling"]);
+	assert.equal(pending.length, 1);
+	pending[0]!([child]);
+	await latest;
+	assert.equal(tree.element.getAttribute("aria-busy"), "false");
+	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(".ash-tree-row")].map((row) => row.textContent), ["Group", "Child", "Sibling"]);
 	assert.equal(tree.element.querySelector('[data-tree-id="sibling"]'), siblingRow);
 	assert.equal(tree.collapse(group), true);
 	assert.equal(tree.element.querySelector('[data-tree-id="group"]'), groupRow);
@@ -167,11 +170,109 @@ test("AsyncDataTree does not restart a lazy load when a node is collapsed and ex
 	assert.equal(tree.expand(group), true);
 	assert.equal(tree.collapse(group), true);
 	assert.equal(tree.expand(group), true);
+	await Promise.resolve();
 	assert.equal(reads, 1);
 	resolveChildren?.([child]);
 	await loaded;
 	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(".ash-tree-row")].map((row) => row.textContent), ["Group", "Child"]);
 
+	tree.dispose();
+	dom.window.close();
+});
+
+test("AsyncDataTree refreshes expanded descendants while preserving rows", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const root: TestNode = { id: "root", label: "Root", expanded: true };
+	const firstGroup: TestNode = { id: "group", label: "Group", expanded: false };
+	const refreshedGroup: TestNode = { id: "group", label: "Refreshed group", expanded: false };
+	const child: TestNode = { id: "child", label: "Child", expanded: false };
+	let rootChildren: readonly TestNode[] = [firstGroup];
+	let groupReads = 0;
+	const tree = new AsyncDataTree<TestNode, TestNode>(dom.window.document.body, {
+		hasChildren: (element) => element.id === "root" || element.id === "group",
+		getChildren: (element) => {
+			if (element.id === "root") return rootChildren;
+			groupReads += 1;
+			return [child];
+		},
+	}, {
+		identityProvider: { getId: (element) => element.id },
+		reuseRows: true,
+		collapseByDefault: (element) => element.id === "group",
+		renderElement: (element) => {
+			const label = h(dom.window.document, "span");
+			label.textContent = element.label;
+			return label;
+		},
+	});
+	await tree.setInput(root);
+	tree.expand(firstGroup);
+	await new Promise<void>((resolve) => {
+		const listener = tree.onDidChangeLoadState(({ element, loading }) => {
+			if (element?.id !== "group" || loading) return;
+			listener.dispose();
+			resolve();
+		});
+	});
+	const groupRow = tree.element.querySelector('[data-tree-id="group"]');
+	const childRow = tree.element.querySelector('[data-tree-id="child"]');
+	rootChildren = [refreshedGroup];
+	await tree.updateChildren(root);
+	assert.deepEqual(
+		[...tree.element.querySelectorAll<HTMLElement>(".ash-tree-row")].map((row) => row.textContent),
+		["Refreshed group", "Child"],
+	);
+	assert.equal(tree.element.querySelector('[data-tree-id="group"]'), groupRow);
+	assert.equal(tree.element.querySelector('[data-tree-id="child"]'), childRow);
+	assert.equal(groupReads, 2);
+	tree.dispose();
+	dom.window.close();
+});
+
+test("AsyncDataTree collapses a failed expansion and can retry it", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const root: TestNode = { id: "root", label: "Root", expanded: true };
+	const group: TestNode = { id: "group", label: "Group", expanded: false };
+	const child: TestNode = { id: "child", label: "Child", expanded: false };
+	let reads = 0;
+	const tree = new AsyncDataTree<TestNode, TestNode>(dom.window.document.body, {
+		hasChildren: (element) => element === root || element === group,
+		getChildren: (element) => {
+			if (element === root) return [group];
+			reads += 1;
+			if (reads === 1) throw new Error("Directory unavailable");
+			return [child];
+		},
+	}, {
+		identityProvider: { getId: (element) => element.id },
+		collapseByDefault: (element) => element === group,
+		renderElement: (element) => {
+			const label = h(dom.window.document, "span");
+			label.textContent = element.label;
+			return label;
+		},
+	});
+	await tree.setInput(root);
+	const failed = new Promise<void>((resolve) => {
+		const listener = tree.onDidError(() => {
+			listener.dispose();
+			resolve();
+		});
+	});
+	tree.expand(group);
+	await failed;
+	assert.equal(tree.element.querySelector('[data-tree-id="group"]')?.getAttribute("aria-expanded"), "false");
+	const loaded = new Promise<void>((resolve) => {
+		const listener = tree.onDidChangeLoadState(({ element, loading }) => {
+			if (element !== group || loading) return;
+			listener.dispose();
+			resolve();
+		});
+	});
+	tree.expand(group);
+	await loaded;
+	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(".ash-tree-row")].map((row) => row.textContent), ["Group", "Child"]);
+	assert.equal(reads, 2);
 	tree.dispose();
 	dom.window.close();
 });
@@ -274,8 +375,10 @@ test("ObjectTreeModel owns hierarchy, local replacement, and collapse state", ()
 	assert.deepEqual(model.visibleNodes.map((node) => node.id), ["parent", "child"]);
 	assert.equal(model.collapse("parent"), true);
 	assert.deepEqual(model.visibleNodes.map((node) => node.id), ["parent"]);
+	const parentNode = model.getNode("parent");
 	model.setChildren([{ element: { id: "parent", label: "Updated parent", expanded: false }, children: [{ element: child }] }]);
 	assert.equal(model.getNode("parent")?.collapsed, true);
+	assert.equal(model.getNode("parent"), parentNode);
 	model.setNodeChildren("parent", [{ element: { id: "replacement", label: "Replacement", expanded: false } }]);
 	assert.equal(model.getNode("child"), undefined);
 	assert.equal(model.getParent("replacement")?.id, "parent");

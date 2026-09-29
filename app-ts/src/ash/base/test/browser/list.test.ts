@@ -44,6 +44,7 @@ test("ListView owns the managed scrollbar and reports its scroll position", () =
 	assert.ok(viewport);
 	assert.equal(view.domNode.parentElement, dom.window.document.body);
 	assert.equal(view.element.parentElement?.className, "ash-scrollbar-content");
+	assert.equal(view.row(0)?.style.height, "");
 	Object.defineProperties(viewport, {
 		clientWidth: { value: 100 },
 		clientHeight: { value: 100 },
@@ -57,6 +58,66 @@ test("ListView owns the managed scrollbar and reports its scroll position", () =
 	assert.equal(positions.at(-1), 35);
 	view.dispose();
 	assert.equal(view.domNode.isConnected, false);
+	dom.window.close();
+});
+
+test("ListView renders only the managed viewport while preserving logical positions", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const view = new ListView<string>(dom.window.document.body, {
+		scrolling: "managed",
+		getId: item => item,
+		getHeight: () => 22,
+		renderItem: item => {
+			const label = h(dom.window.document, "span");
+			label.textContent = item;
+			return label;
+		},
+	});
+	const viewport = view.domNode.querySelector<HTMLElement>(".ash-scrollbar-viewport");
+	assert.ok(viewport);
+	Object.defineProperties(viewport, {
+		clientWidth: { value: 100 },
+		clientHeight: { value: 44 },
+		scrollHeight: { value: 2_200 },
+	});
+	view.items = Array.from({ length: 100 }, (_, index) => `Item ${index}`);
+	assert.equal(view.getElementTop(50), 1_100);
+	assert.ok(view.element.querySelectorAll(":scope > .ash-list-row").length < 100);
+	viewport.scrollTop = 1_100;
+	viewport.dispatchEvent(new dom.window.Event("scroll"));
+	const indexes = [...view.element.querySelectorAll<HTMLElement>(":scope > .ash-list-row")].map(row => Number(row.dataset.index));
+	assert.ok(indexes.includes(50));
+	assert.equal(view.indexAt(1_100), 50);
+	view.dispose();
+	dom.window.close();
+});
+
+test("List keeps focus state when managed scrolling creates a row", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const list = new List<string>(dom.window.document.body, {
+		scrolling: "managed",
+		getId: item => item,
+		getHeight: () => 22,
+		renderItem: item => {
+			const label = h(dom.window.document, "span");
+			label.textContent = item;
+			return label;
+		},
+	});
+	const viewport = list.domNode.querySelector<HTMLElement>(".ash-scrollbar-viewport");
+	assert.ok(viewport);
+	Object.defineProperties(viewport, {
+		clientWidth: { value: 100 },
+		clientHeight: { value: 44 },
+		scrollHeight: { value: 2_200 },
+	});
+	list.items = Array.from({ length: 100 }, (_, index) => `Item ${index}`);
+	list.setActiveIndex(50);
+	const activeRow = list.row(50);
+	assert.ok(activeRow);
+	assert.equal(activeRow.classList.contains("is-active"), true);
+	assert.equal(list.element.getAttribute("aria-activedescendant"), activeRow.id);
+	list.dispose();
 	dom.window.close();
 });
 

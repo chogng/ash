@@ -66,3 +66,28 @@ test('opening a folder displays its files in Explorer', async ({ target, testWor
 	await expect(page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'nested.txt' })).toHaveCount(0);
 	expect(await fileRow?.evaluate(row => row.isConnected)).toBe(true);
 });
+
+test('Explorer expands and collapses a refreshed folder without replacing sibling rows', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'This scenario requires the Code desktop and App Server');
+	const page = workbench.page;
+	const explorer = page.locator('.ash-explorer');
+	const sibling = explorer.locator('.ash-tree-row').filter({ hasText: 'main.ts' });
+	await expect(sibling).toHaveCount(1);
+	const siblingRow = await sibling.elementHandle();
+	const folderPath = join(testWorkspace.directory, 'expandable');
+	await mkdir(folderPath);
+	await writeFile(join(folderPath, 'nested.txt'), 'nested');
+	const folder = explorer.getByRole('treeitem', { name: 'expandable', exact: true });
+	await expect(folder).toHaveCount(1);
+	await folder.click();
+	const nested = explorer.locator('.ash-tree-row').filter({ hasText: 'nested.txt' });
+	await expect(folder).toHaveAttribute('aria-expanded', 'true');
+	await expect(nested).toHaveCount(1);
+	await folder.click();
+	await expect(folder).toHaveAttribute('aria-expanded', 'false');
+	await expect(nested).toHaveCount(0);
+	await folder.click();
+	await expect(folder).toHaveAttribute('aria-expanded', 'true');
+	await expect(nested).toHaveCount(1);
+	expect(await siblingRow?.evaluate(row => row.isConnected)).toBe(true);
+});

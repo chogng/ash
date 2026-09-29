@@ -52,11 +52,16 @@ export interface CompressibleAsyncDataTreeOptions<T> extends AsyncDataTreeCommon
 export interface AsyncDataTreeLoadStateEvent<T> {
 	readonly element: T | undefined;
 	readonly loading: boolean;
+	readonly error?: unknown;
 }
 
 export interface AsyncDataTreeErrorEvent<T> {
 	readonly element: T | undefined;
 	readonly error: unknown;
+}
+
+export interface AsyncDataTreeUpdateOptions {
+	readonly recursive?: boolean;
 }
 
 interface AsyncTreePointerEvent<T> {
@@ -88,6 +93,7 @@ interface AsyncTreeCollapseEvent<T> {
 
 interface AsyncTreeView<T> extends IDisposable {
 	readonly element: HTMLDivElement;
+	readonly domNode: HTMLDivElement;
 	readonly onPointer: Event<AsyncTreePointerEvent<T>>;
 	readonly onDidDoubleClick: Event<AsyncTreePointerEvent<T>>;
 	readonly onDidAccept: Event<AsyncTreeAcceptEvent<T>>;
@@ -103,6 +109,7 @@ interface AsyncTreeView<T> extends IDisposable {
 	collapse(element: T): boolean;
 	expand(element: T): boolean;
 	expandTo(element: T): boolean;
+	isCollapsed(element: T): boolean | undefined;
 	rerender(element: T): void;
 	setFindPattern(pattern: string): void;
 	findNext(): T | undefined;
@@ -120,19 +127,24 @@ interface AsyncNodeState<T> {
 	readonly children: readonly string[] | undefined;
 }
 
+interface AsyncTreeRequest {
+	readonly generation: number;
+	readonly promise: Promise<void>;
+}
+
 /** Owns lazy data state and delegates its presentation to a factory-created tree. */
 abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCommonOptions<T>> extends Disposable {
 	readonly element: HTMLDivElement;
+	readonly domNode: HTMLDivElement;
 	protected readonly tree: AsyncTreeView<T>;
 	private readonly generatedIds = new Map<T, string>();
-	private readonly requests = new Map<string, number>();
+	private readonly requests = new Map<string | undefined, AsyncTreeRequest>();
 	private readonly _onDidChangeLoadState = this._register(new Emitter<AsyncDataTreeLoadStateEvent<T>>());
 	private readonly _onDidError = this._register(new Emitter<AsyncDataTreeErrorEvent<T>>());
 	private states = new Map<string, AsyncNodeState<T>>();
 	private rootChildren: readonly string[] = [];
 	private input: TInput | undefined;
 	private generatedId = 0;
-	private requestSequence = 0;
 	private generation = 0;
 
 	readonly onDidChangeLoadState: Event<AsyncDataTreeLoadStateEvent<T>> = this._onDidChangeLoadState.event;
@@ -142,6 +154,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		super();
 		this.tree = this._register(this.createTree(container, options));
 		this.element = this.tree.element;
+		this.domNode = this.tree.domNode;
 		this._register(this.tree.onDidChangeCollapseState(({ element, collapsed }) => {
 			const state = this.states.get(this.getId(element));
 			if (!collapsed && state?.hasChildren && state.children === undefined && !this.isLoading(element)) void this.updateChildren(element).catch(() => undefined);
@@ -175,14 +188,15 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		this.states.clear();
 		this.rootChildren = [];
 		this.requests.clear();
+		this.updateAriaBusy();
 		this.render();
 		if (input !== undefined) await this.loadChildren(input, undefined, generation);
 	}
 
-	async updateChildren(element: TInput | T = this.requireInput()): Promise<void> {
+	async updateChildren(element: TInput | T = this.requireInput(), options: AsyncDataTreeUpdateOptions = {}): Promise<void> {
 		const parentId = element === this.input ? undefined : this.getId(element as T);
 		if (parentId !== undefined && !this.states.has(parentId)) throw new RangeError(`Unknown AsyncDataTree element: ${parentId}`);
-		await this.loadChildren(element, parentId, this.generation);
+		await this.loadChildren(element, parentId, this.generation, options.recursive !== false);
 	}
 
 	protected getId(element: T): string {
@@ -196,44 +210,74 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		return id;
 	}
 
-	private async loadChildren(parent: TInput | T, parentId: string | undefined, generation: number): Promise<void> {
-		const requestKey = parentId ?? "__ash_async_tree_root__";
-		const request = ++this.requestSequence;
-		this.requests.set(requestKey, request);
-		this._onDidChangeLoadState.fire({ element: parentId === undefined ? undefined : parent as T, loading: true });
-		if (parentId !== undefined) this.tree.rerender(parent as T);
-		try {
-			const children = [...await this.dataSource.getChildren(parent)];
-			if (!this.isCurrentRequest(requestKey, request, generation)) return;
-			this.replaceChildren(parentId, children);
-			if (parentId === undefined) this.render();
-			else this.tree.setNodeChildren(parent as T, this.states.get(parentId)!.children!.map(id => this.toTreeElement(id)));
-		} catch (error) {
-			if (!this.isCurrentRequest(requestKey, request, generation)) return;
-			this._onDidError.fire({ element: parentId === undefined ? undefined : parent as T, error });
-			throw error;
-		} finally {
-			if (this.isCurrentRequest(requestKey, request, generation)) {
+	private async loadChildren(parent: TInput | T, parentId: string | undefined, generation: number, recursive = false): Promise<void> {
+		const requestKey = parentId;
+		const current = this.requests.get(requestKey);
+		if (current?.generation === generation) return current.promise;
+		let start: (() => void) | undefined;
+		const gate = new Promise<void>(resolve => { start = resolve; });
+		let request: AsyncTreeRequest;
+		const promise = gate
+			.then(() => this.dataSource.getChildren(parent))
+			.then(async children => {
+				if (!this.isCurrentRequest(requestKey, request)) return;
+				this.replaceChildren(parentId, [...children]);
+				if (parentId === undefined) this.render();
+				else this.tree.setNodeChildren(parent as T, this.states.get(parentId)!.children!.map(id => this.toTreeElement(id)));
+				if (!recursive) return;
+				const childIds = parentId === undefined ? this.rootChildren : this.states.get(parentId)?.children ?? [];
+				await Promise.all(childIds.flatMap(id => {
+					const child = this.states.get(id);
+					return child?.children !== undefined && this.tree.isCollapsed(child.element) === false
+						? [this.loadChildren(child.element, id, generation, true)]
+						: [];
+				}));
+			})
+			.catch(error => {
+				if (!this.isCurrentRequest(requestKey, request)) return;
+				if (parentId !== undefined) this.tree.collapse(parent as T);
 				this.requests.delete(requestKey);
+				this.updateAriaBusy();
+				if (parentId !== undefined) this.tree.rerender(parent as T);
+				this._onDidChangeLoadState.fire({ element: parentId === undefined ? undefined : parent as T, loading: false, error });
+				this._onDidError.fire({ element: parentId === undefined ? undefined : parent as T, error });
+				throw error;
+			})
+			.finally(() => {
+				if (!this.isCurrentRequest(requestKey, request)) return;
+				this.requests.delete(requestKey);
+				this.updateAriaBusy();
 				if (parentId !== undefined) this.tree.rerender(parent as T);
 				this._onDidChangeLoadState.fire({ element: parentId === undefined ? undefined : parent as T, loading: false });
-			}
-		}
+			});
+		request = { generation, promise };
+		this.requests.set(requestKey, request);
+		this.updateAriaBusy();
+		this._onDidChangeLoadState.fire({ element: parentId === undefined ? undefined : parent as T, loading: true });
+		if (parentId !== undefined) this.tree.rerender(parent as T);
+		start?.();
+		await promise;
 	}
 
 	private replaceChildren(parentId: string | undefined, elements: readonly T[]): void {
 		const nextStates = new Map(this.states);
 		const oldChildren = parentId === undefined ? this.rootChildren : nextStates.get(parentId)?.children ?? [];
-		for (const id of oldChildren) removeStateSubtree(id, nextStates);
+		const oldChildIds = new Set(oldChildren);
 		const childIds: string[] = [];
 		const seen = new Set<string>();
 		for (const element of elements) {
 			const id = this.getId(element);
-			if (seen.has(id) || nextStates.has(id)) throw new Error(`Duplicate tree node ID: ${id}`);
+			if (seen.has(id) || nextStates.has(id) && !oldChildIds.has(id)) throw new Error(`Duplicate tree node ID: ${id}`);
 			seen.add(id);
 			childIds.push(id);
-			nextStates.set(id, { id, element, parentId, hasChildren: this.dataSource.hasChildren(element), children: undefined });
+			const previous = nextStates.get(id);
+			const hasChildren = this.dataSource.hasChildren(element);
+			if (!hasChildren) {
+				for (const childId of previous?.children ?? []) removeStateSubtree(childId, nextStates);
+			}
+			nextStates.set(id, { id, element, parentId, hasChildren, children: hasChildren ? previous?.children : undefined });
 		}
+		for (const id of oldChildren) if (!seen.has(id)) removeStateSubtree(id, nextStates);
 		if (parentId === undefined) this.rootChildren = childIds;
 		else {
 			const parent = nextStates.get(parentId);
@@ -257,7 +301,8 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		};
 	}
 
-	private isCurrentRequest(key: string, request: number, generation: number): boolean { return !this.isDisposed && generation === this.generation && this.requests.get(key) === request; }
+	private isCurrentRequest(key: string | undefined, request: AsyncTreeRequest): boolean { return !this.isDisposed && request.generation === this.generation && this.requests.get(key) === request; }
+	private updateAriaBusy(): void { this.element.setAttribute("aria-busy", String(this.requests.size > 0)); }
 	private requireInput(): TInput {
 		if (this.input === undefined) throw new Error("AsyncDataTree input is not set");
 		return this.input;
@@ -338,6 +383,7 @@ export class CompressibleAsyncDataTree<TInput, T> extends AbstractAsyncDataTree<
 function objectTreeView<T>(tree: ObjectTree<T>, getId: (element: T) => string): AsyncTreeView<T> {
 	return {
 		element: tree.element,
+		domNode: tree.domNode,
 		onPointer: tree.onPointer,
 		onDidDoubleClick: tree.onDidDoubleClick,
 		onDidAccept: tree.onDidAccept,
@@ -353,6 +399,7 @@ function objectTreeView<T>(tree: ObjectTree<T>, getId: (element: T) => string): 
 		collapse: (element) => tree.collapse(getId(element)),
 		expand: (element) => tree.expand(getId(element)),
 		expandTo: (element) => tree.expandTo(getId(element)),
+		isCollapsed: (element) => tree.model.getNode(getId(element))?.collapsed,
 		rerender: (element) => { if (tree.model.has(getId(element))) tree.rerender(getId(element)); },
 		setFindPattern: (pattern) => tree.setFindPattern(pattern),
 		findNext: () => tree.findNext(),
@@ -367,6 +414,7 @@ function objectTreeView<T>(tree: ObjectTree<T>, getId: (element: T) => string): 
 function compressibleTreeView<T>(tree: CompressibleObjectTree<T>): AsyncTreeView<T> {
 	return {
 		element: tree.element,
+		domNode: tree.domNode,
 		onPointer: tree.onPointer,
 		onDidDoubleClick: tree.onDidDoubleClick,
 		onDidAccept: tree.onDidAccept,
@@ -382,6 +430,7 @@ function compressibleTreeView<T>(tree: CompressibleObjectTree<T>): AsyncTreeView
 		collapse: (element) => tree.collapse(element),
 		expand: (element) => tree.expand(element),
 		expandTo: (element) => tree.expandTo(element),
+		isCollapsed: (element) => tree.model.getNode(element)?.collapsed,
 		rerender: (element) => { if (tree.model.getNode(element)) tree.rerender(element); },
 		setFindPattern: (pattern) => tree.setFindPattern(pattern),
 		findNext: () => tree.findNext(),

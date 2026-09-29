@@ -33,12 +33,12 @@ export interface IndexTreeModelCollapseStateChangeEvent<T> {
 
 interface MutableIndexTreeNode<T> {
 	readonly id: string;
-	readonly element: T;
+	element: T;
 	parent: MutableIndexTreeNode<T> | undefined;
 	children: MutableIndexTreeNode<T>[];
 	depth: number;
 	location: number[];
-	readonly declaredCollapsible: boolean | undefined;
+	declaredCollapsible: boolean | undefined;
 	collapsible: boolean;
 	collapsed: boolean;
 	visible: boolean;
@@ -187,7 +187,7 @@ export class IndexTreeModel<T> extends Disposable {
 			const id = this.identityProvider?.getId(treeElement.element) ?? `index-tree-node-${++this.generatedId}`;
 			validateId(id, usedIds);
 			const oldNode = previous.get(id);
-			const node: MutableIndexTreeNode<T> = {
+			const node: MutableIndexTreeNode<T> = oldNode ?? {
 				id,
 				element: treeElement.element,
 				parent,
@@ -201,6 +201,11 @@ export class IndexTreeModel<T> extends Disposable {
 				visibleChildIndex: 0,
 				visibleChildrenCount: 0,
 			};
+			node.element = treeElement.element;
+			node.parent = parent;
+			node.depth = parent.depth + 1;
+			node.location = [];
+			node.declaredCollapsible = treeElement.collapsible;
 			node.children = this.buildNodes(treeElement.children ?? [], node, previous, usedIds);
 			node.collapsible = treeElement.collapsible ?? node.children.length > 0;
 			node.collapsed = node.collapsible ? oldNode?.collapsed ?? treeElement.collapsed ?? this.defaultCollapseState === "collapsed" : false;

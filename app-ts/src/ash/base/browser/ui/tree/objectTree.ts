@@ -75,6 +75,7 @@ export interface ObjectTreeFindResult<TNode> {
 /** Model-driven accessible tree view for ordinary single-action rows. */
 export class ObjectTree<TNode> extends Disposable {
 	readonly element: HTMLDivElement;
+	readonly domNode: HTMLDivElement;
 	readonly model: ObjectTreeModel<TNode>;
 	private readonly tree: AbstractTree<TNode, ObjectTreeNode<TNode>>;
 	private readonly _onPointer = this._register(new Emitter<ObjectTreePointerEvent<TNode>>());
@@ -125,6 +126,7 @@ export class ObjectTree<TNode> extends Disposable {
 				: undefined,
 		}));
 		this.element = this.tree.element;
+		this.domNode = this.tree.domNode;
 		this._register(this.model.onDidChange(() => this.render()));
 		this._register(this.model.onDidChangeCollapseState(({ node, collapsed }) => {
 			this._onDidChangeCollapseState.fire({ element: node.element, node, collapsed, browserEvent: this.collapseBrowserEvent?.id === node.id ? this.collapseBrowserEvent.event : undefined });
@@ -193,6 +195,7 @@ export class ObjectTree<TNode> extends Disposable {
 	expandTo(id: string): boolean {
 		return this.model.expandTo(id);
 	}
+	isCollapsed(id: string): boolean | undefined { return this.model.getNode(id)?.collapsed; }
 
 	get focus(): TNode | undefined {
 		return this.tree.focus?.element;
@@ -295,6 +298,7 @@ export interface CompressibleTreeSelectionChangeEvent<T> {
 /** Object tree widget whose rows represent maximal compressible single-child chains. */
 export class CompressibleObjectTree<T> extends Disposable {
 	readonly element: HTMLDivElement;
+	readonly domNode: HTMLDivElement;
 	readonly model: CompressibleObjectTreeModel<T>;
 	private readonly tree: AbstractTree<CompressedTreeNode<T>, ObjectTreeNode<CompressedTreeNode<T>>>;
 	private readonly _onPointer = this._register(new Emitter<CompressibleTreePointerEvent<T>>());
@@ -332,6 +336,7 @@ export class CompressibleObjectTree<T> extends Disposable {
 			renderTwistie: options.renderTwistie ? (node, state, container) => options.renderTwistie!(node.element.elements, state, container) : undefined,
 		}));
 		this.element = this.tree.element;
+		this.domNode = this.tree.domNode;
 		this._register(this.model.onDidChange(() => this.render()));
 		this._register(this.model.onDidChangeCollapseState(({ node, collapsed }) => this._onDidChangeCollapseState.fire({ element: lastCompressedElement(node.element.elements), elements: node.element.elements, collapsed, browserEvent: undefined })));
 		this._register(this.tree.onPointer(({ element: node, target, browserEvent }) => this._onPointer.fire({ element: lastCompressedElement(node.element.elements), elements: node.element.elements, node, target, browserEvent })));

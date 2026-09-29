@@ -24,6 +24,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 	using fileChanges = new Emitter<{ readonly resources: readonly URI[] | undefined }>();
 	let addedRootFile = false;
 	let addedNestedFile = false;
+	let failNextRootRead = false;
 	let openedInput: EditorInput | undefined;
 	let openedOptions: EditorOpenOptions | undefined;
 	let openedTarget: EditorOpenTarget | undefined;
@@ -36,6 +37,10 @@ test("ExplorerView opens workspace files on single click", async () => {
 		readDirectory: async (resource) => {
 			directoryReads.push(resource.toString());
 			if (resource.toString() === root.toString()) {
+				if (failNextRootRead) {
+					failNextRootRead = false;
+					throw new Error("Workspace files are temporarily unavailable");
+				}
 				return [
 					{
 						resource: URI.file("C:\\project\\README.md"),
@@ -219,7 +224,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 		assert.match(pane.element.querySelector('.ash-tree')?.getAttribute('aria-label') ?? '', /Alt\+F1/);
 		assert.equal(
 			pane.element.querySelector(
-				".ash-explorer > .ash-scrollable-element",
+				".ash-explorer .ash-scrollable-element",
 			)?.getAttribute("data-scroll-direction"),
 			"vertical",
 		);
@@ -305,6 +310,12 @@ test("ExplorerView opens workspace files on single click", async () => {
 		addedNestedFile = true;
 		fileChanges.fire({ resources: [URI.file('C:\\project\\src\\nested.ts')] });
 		await waitFor(() => rowLabels(pane.element).includes('nested.ts'));
+		assert.deepEqual(rowLabels(pane.element), ['src', 'main.ts', 'nested.ts', 'README.md', 'new.txt']);
+		failNextRootRead = true;
+		fileChanges.fire({ resources: [root] });
+		await waitFor(() => pane.element.querySelector(".ash-explorer-error")?.textContent === "Workspace files are temporarily unavailable");
+		fileChanges.fire({ resources: [root] });
+		await waitFor(() => pane.element.querySelector(".ash-explorer-error") === null);
 		assert.deepEqual(rowLabels(pane.element), ['src', 'main.ts', 'nested.ts', 'README.md', 'new.txt']);
 
 		workspaceContextService.updateWorkspace({

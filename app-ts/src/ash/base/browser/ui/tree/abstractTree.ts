@@ -38,6 +38,7 @@ export interface AbstractTreeOptions<T, TNode extends AbstractTreeNode<T>> {
  */
 export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposable {
 	readonly element: HTMLDivElement;
+	readonly domNode: HTMLDivElement;
 	private readonly list: List<TNode>;
 	private readonly options: AbstractTreeOptions<T, TNode>;
 	private readonly _onPointer = this._register(new Emitter<TreePointerEvent<TNode>>());
@@ -50,6 +51,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	private readonly _onDidChangeFind = this._register(new Emitter<TreeFindResult<TNode>>());
 	private readonly findController: TreeFindController<T, TNode> | undefined;
 	private readonly stickyContainer: HTMLDivElement | undefined;
+	private readonly renderedElements = new WeakMap<HTMLDivElement, T>();
 	private sourceItems: readonly TNode[] = [];
 	private findCandidates: readonly TNode[] = [];
 	private readonly autoExpandTimer = this._register(new MutableDisposable<IDisposable>());
@@ -95,6 +97,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 			onDidRemoveRow: options.onDidRemoveRow,
 		}));
 		this.element = this.list.element;
+		this.domNode = this.list.domNode;
 		this.element.classList.add(
 			"ash-tree",
 			`ash-tree-indent-guides-${options.indentGuides ?? "none"}`,
@@ -198,11 +201,18 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		const contents = h(document, "span");
 		contents.className = "ash-tree-contents";
 		contents.append(this.options.renderElement(node));
+		this.renderedElements.set(row, node.element);
 		inner.append(indent, twistie, contents);
 		return inner;
 	}
 
 	private updateRow(node: TNode, row: HTMLDivElement): void {
+		if (this.renderedElements.get(row) !== node.element) {
+			this.options.onDidRemoveRow?.(row);
+			const contents = row.querySelector<HTMLSpanElement>(":scope > .ash-tree-row-inner > .ash-tree-contents");
+			contents?.replaceChildren(this.options.renderElement(node));
+			this.renderedElements.set(row, node.element);
+		}
 		row.classList.toggle("collapsible", node.collapsible);
 		row.classList.toggle("expanded", node.collapsible && !node.collapsed);
 		row.classList.toggle("collapsed", node.collapsible && node.collapsed);
@@ -377,8 +387,8 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	private updateStickyScroll(): void {
 		const container = this.stickyContainer;
 		if (!container) return;
-		container.style.transform = `translateY(${this.element.scrollTop}px)`;
-		const firstIndex = this.list.indexAt(this.element.scrollTop);
+		container.style.transform = `translateY(${this.list.scrollTop}px)`;
+		const firstIndex = this.list.indexAt(this.list.scrollTop);
 		const first = this.items[firstIndex];
 		const ancestors: TNode[] = [];
 		let parent = first?.parent as TNode | undefined;

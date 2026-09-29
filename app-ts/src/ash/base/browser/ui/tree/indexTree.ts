@@ -58,6 +58,7 @@ export interface IndexTreeCollapseStateChangeEvent<T> {
 /** Index-path tree widget backed directly by `IndexTreeModel.splice`. */
 export class IndexTree<T> extends Disposable {
 	readonly element: HTMLDivElement;
+	readonly domNode: HTMLDivElement;
 	readonly model: IndexTreeModel<T>;
 	private readonly tree: AbstractTree<T, IndexTreeNode<T>>;
 	private readonly _onPointer = this._register(new Emitter<IndexTreePointerEvent<T>>());
@@ -96,6 +97,7 @@ export class IndexTree<T> extends Disposable {
 			renderTwistie: options.renderTwistie ? (node, state, container) => options.renderTwistie!(node.element, state, container) : undefined,
 		}));
 		this.element = this.tree.element;
+		this.domNode = this.tree.domNode;
 		this._register(this.model.onDidChange(() => this.render()));
 		this._register(this.model.onDidChangeCollapseState(({ node, collapsed }) => {
 			this._onDidChangeCollapseState.fire({ element: node.element, node, collapsed, browserEvent: this.collapseBrowserEvent?.id === node.id ? this.collapseBrowserEvent.event : undefined });

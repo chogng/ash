@@ -30,6 +30,7 @@ export interface DataTreeOptions<T> {
 /** Synchronous data-source adapter over `ObjectTree`. */
 export class DataTree<TInput, T> extends Disposable {
 	readonly element: HTMLDivElement;
+	readonly domNode: HTMLDivElement;
 	private readonly tree: ObjectTree<T>;
 	private readonly generatedIds = new Map<T, string>();
 	private generatedId = 0;
@@ -67,6 +68,7 @@ export class DataTree<TInput, T> extends Disposable {
 			renderTwistie: options.renderTwistie,
 		}));
 		this.element = this.tree.element;
+		this.domNode = this.tree.domNode;
 		this.onPointer = this.tree.onPointer;
 		this.onDidDoubleClick = this.tree.onDidDoubleClick;
 		this.onDidAccept = this.tree.onDidAccept;
