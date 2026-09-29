@@ -10,7 +10,8 @@ mod panel;
 pub(super) use layout::layout;
 
 const JUMP_LABEL: &str = "Ctrl+End to jump to bottom ↓";
-pub(super) use output::Output;
+pub(super) use output::draw_terminal;
+pub(super) use output::finish;
 
 use crate::app::App;
 use crate::render::Renderable;
@@ -56,11 +57,6 @@ impl Inline {
     }
 }
 
-enum Transcript<'a> {
-    Full,
-    Tail(Vec<crate::thread::transcript::CellView<'a>>),
-}
-
 fn browsing(app: &App) -> bool {
     app.session_preview().is_some()
         || app.session_manager_view().is_some()
@@ -73,20 +69,6 @@ pub(super) fn draw(
     frame: &mut Frame<'_>,
     app: &App,
     links: &std::cell::RefCell<crate::terminal::hyperlinks::FrameLinks>,
-) {
-    let transcript = if browsing(app) {
-        Transcript::Full
-    } else {
-        Transcript::Tail(output::tail(app))
-    };
-    draw_content(frame, app, links, transcript);
-}
-
-fn draw_content(
-    frame: &mut Frame<'_>,
-    app: &App,
-    links: &std::cell::RefCell<crate::terminal::hyperlinks::FrameLinks>,
-    transcript: Transcript<'_>,
 ) {
     let context = app.render_context().with_hyperlinks(links);
     frame.render_widget(
@@ -148,21 +130,16 @@ fn draw_content(
         header::draw(frame, manager_areas.welcome, app.welcome(), context);
         sessions::draw_manager(frame, manager_areas.sessions, manager, None, None, context);
     } else {
-        let (messages, header) = match transcript {
-            Transcript::Full => (
-                app.visible_transcript_views(),
-                Some(header::history_buffer(
-                    areas.session.transcript.width,
-                    areas.session.transcript.height,
-                    app.welcome(),
-                    context,
-                )),
-            ),
-            Transcript::Tail(messages) => (messages, None),
-        };
+        let messages = app.visible_transcript_views();
+        let header = header::history_buffer(
+            areas.session.transcript.width,
+            areas.session.transcript.height,
+            app.welcome(),
+            context,
+        );
         ChatHistoryView {
             jump_label: JUMP_LABEL,
-            header: header.as_ref(),
+            header: Some(&header),
             messages: &messages,
             scroll: app.transcript_scroll(),
             render_cache: app.transcript_render_cache(),

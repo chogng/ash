@@ -43,7 +43,7 @@ just ash
 | 终端恢复、鼠标捕获协议和历史输出 | [session.rs](src/terminal/session.rs)、[scrollback.rs](src/terminal/scrollback.rs)、[terminal.rs](src/terminal.rs) |
 | 屏幕模式与页面组合 | [frame.rs](src/app/frame.rs)、[fullscreen.rs](src/app/fullscreen.rs)、[inline.rs](src/app/inline.rs) |
 | 全屏布局、鼠标和选区 | [layout.rs](src/app/fullscreen/layout.rs)、[pointer.rs](src/app/fullscreen/pointer.rs)、[selection.rs](src/app/fullscreen/selection.rs) |
-| 行内布局与历史追加 | [layout.rs](src/app/inline/layout.rs)、[output.rs](src/app/inline/output.rs) |
+| inline 固定视口与退出时的历史输出 | [layout.rs](src/app/inline/layout.rs)、[output.rs](src/app/inline/output.rs) |
 | 首页与对话页 | [home.rs](src/app/fullscreen/home.rs)、[conversation.rs](src/app/fullscreen/conversation.rs) |
 | Modal 外框、标题、正文与底部区域 | [modal.rs](src/widgets/modal.rs) |
 | 全屏输入区组合 | [composer.rs](src/app/fullscreen/composer.rs) |
@@ -68,7 +68,7 @@ Skills、Models、Connectors 和 MCP 各自拥有同名模块；目录授权在 
 - 终端模块负责捕获协议、输出与恢复，`terminal/text.rs` 负责缓冲区文字范围和提取，不保存界面手势状态。
 - 命令面板的职责边界、焦点、搜索、返回和鼠标交互见 [TUI 模态交互规范](../../.github/instructions/tui.instructions.md#命令面板与模态交互规范)。
 
-`app/inline.rs` 与全屏入口平级，组合主屏上的正文、输入区和临时面板；`inline/layout.rs` 决定局部绘制高度与区域，`inline/output.rs` 管理已输出记录、定稿正文追加和退出前提交。会话、消息、草稿、队列、模型与设置继续共用现有功能模块的数据和操作。
+`app/inline.rs` 与全屏入口平级，组合正文、输入区和临时面板；`inline/layout.rs` 在固定高度内分配区域，`inline/output.rs` 在退出时把当前对话写入终端历史。会话、消息、草稿、队列、模型与设置继续共用现有功能模块的数据和操作。
 
 共享模型保存会话目录、活动 Session/Thread、消息、配置和按输入目标保存的草稿。`SessionsState` 不保存页面、焦点或浏览选择；[SessionNavigation](src/sessions/navigation.rs) 由 fullscreen 和 inline 分别持有，负责各自的会话管理、分组、选择、预览与详情。
 
@@ -220,11 +220,11 @@ Thread 保存真实消息和独立的显示进度。流式队列保留源码范�
 
 执行输出按调用身份归组，稳定标识取组内第一个 `ToolCallId`。预览、展开和详情共用有界数据；“完整详情”指 TUI 获得的完整保留内容，必须保留上游省略标记。不能从文字猜测协议未提供的最终时长或退出码。
 
-初始快照从最近 50 个 Turn 开始，订阅随后自动读完历史分页。全屏模式始终从同一正文模型绘制历史与当前回复。主屏模式把当前活动 Turn 之前的定稿前缀追加到终端历史，Turn 结束后再提交其正文；可变尾部继续局部重绘。后续加载的更早分页通过 Ctrl+Home 打开的正文浏览区查看，不能追加到较新的终端输出之后。滚动位置用单元身份和行偏移保存，不能依赖屏幕行号。
+初始快照从最近 50 个 Turn 开始，订阅随后自动读完历史分页。两种模式都从同一正文模型绘制历史与当前回复。inline 在独立屏幕上使用固定高度视口，消息、补全和临时面板只改变视口内的内容；退出时回到主屏，把当前对话写入终端历史一次。较早分页通过 Ctrl+Home 在正文中浏览。滚动位置用单元身份和行偏移保存，不能依赖屏幕行号。
 
 ## 产品支持边界
 
-Agent 回复与计划支持 Markdown 标题、列表、引用、强调、代码块、表格和链接；窄屏表格按字段逐项展示。HTTP(S) 链接通过 OSC 8 交给终端打开，本地路径保留可复制目标。用户输入和命令保持字面显示，HTML 标签作为文字显示。全屏模式提供点击、悬停、滚动和文字选择；正文拖选、双击选词或三击选行后自动复制，并显示复制结果。主屏模式由终端处理鼠标选文和滚动，应用内浏览及补全仍可用键盘操作。Vim 只改变输入框编辑。
+Agent 回复与计划支持 Markdown 标题、列表、引用、强调、代码块、表格和链接；窄屏表格按字段逐项展示。HTTP(S) 链接通过 OSC 8 交给终端打开，本地路径保留可复制目标。用户输入和命令保持字面显示，HTML 标签作为文字显示。全屏模式提供点击、悬停、滚动和文字选择；正文拖选、双击选词或三击选行后自动复制，并显示复制结果。inline 由终端处理鼠标选文，正文浏览及补全用键盘操作。Vim 只改变输入框编辑。
 
 `/export [relative-path]` 导出当前已加载正文，路径限制在本机工作目录内，不能覆盖已有文件。Ctrl+O 复制最后一条 Agent 回复。
 
@@ -300,17 +300,17 @@ dictationShortcut = "ctrl+g"
 | 模式 | 终端控制 | 历史与退出 |
 | --- | --- | --- |
 | `fullscreen` | 备用屏幕、整屏绘制、应用处理鼠标滚动、屏幕选文和输入框编辑选区 | 正文内部滚动；退出恢复 shell 画面 |
-| `inline` | 主屏局部绘制；接收原始输入、粘贴和焦点事件，鼠标留给终端 | 定稿内容按顺序追加；退出移除交互区域并保留已显示正文 |
+| `inline` | 备用屏幕固定高度绘制；接收原始输入、粘贴和焦点事件，鼠标留给终端 | 对话在视口内连续排列；退出回到主屏并将当前对话写入终端历史一次 |
 
 全屏按以下顺序获取模式：原始输入 → 备用屏幕并保存、关闭滚轮转方向键 → 粘贴事件 → 焦点上报 → 鼠标捕获。全屏固定启用鼠标捕获和选中复制。点击输入框会移动草稿光标；拖拽、双击或三击分别选择草稿文字、词或行，松开后复制到剪贴板并保留编辑选区，按 Backspace 或 Delete 删除，输入或粘贴替换。输入框之外的只读文字，包括模态框正文，支持拖选、双击选词和三击选行；列表项与按钮保留自身的点击操作。退出备用屏幕前恢复进入时的滚轮模式。
 
-主屏不启用鼠标捕获。终端负责当前内容和已写入历史的鼠标选文、复制与滚动；应用不接收点击和拖拽，也不会在选中后自动复制。草稿编辑、补全、面板和正文浏览使用键盘操作。切入主屏时清除全屏悬停、按下和选区状态。面板、补全和正文浏览可扩展当前交互区域；关闭后缩回输入与当前回复所需的高度。Ctrl+Home/End 打开历史浏览或返回当前回复。切换 Thread 会追加新的会话标题和该 Thread 当前已加载的历史；已写入的终端历史不重写。缩放与重复快照不会重复追加已输出的消息。
+inline 不启用鼠标捕获。终端负责屏幕文字的鼠标选文和复制；应用不接收点击和拖拽，也不会在选中后自动复制。草稿编辑、补全、面板和正文浏览使用键盘操作。切入 inline 时清除全屏悬停、按下和选区状态。视口高度在输入、补全和面板切换时保持不变，输入始终位于底部，消息在上方连续排列。Ctrl+Home/End 浏览较早消息或返回当前回复；切换 Thread 立即绘制目标对话。运行中的对话历史由应用内正文浏览负责；退出后主屏的终端历史保留进入前的输出和本次对话。缩放与重复快照不会重复写入终端历史。
 
 历史输出使用有界分块和普通终端滚动，不依赖局部滚动区域。临时输出缓冲区在最后写出时附加 OSC 8 链接并处理宽字符续列；它不参与后续布局、差分、复制或导出。
 
 `TerminalModeGuard` 记录每一步是否成功。任一步失败或退出时，逆序关闭鼠标、焦点上报、粘贴事件，结束当前屏幕并关闭原始输入模式。显式恢复可重复调用，Drop 再次清理不会重复操作；退出或挂起时还要重置光标颜色并显示光标。
 
-全屏鼠标交互回归见 [pointer_tests.rs](src/app/fullscreen/pointer_tests.rs)，屏幕选区手势与样式见 [selection_tests.rs](src/app/fullscreen/selection_tests.rs)，输入框编辑选区见 [editor_tests.rs](src/thread/composer/input/editor_tests.rs) 和 [view_tests.rs](src/thread/composer/input/view_tests.rs)。尺寸变化时清除全屏选区，并结束输入框拖拽；迟到的释放事件不能触发复制。在窗口至少 40×12 的真实 PTY 中运行 `just test ash-tui --lib real_terminal_mouse_handoff -- --ignored --nocapture --test-threads=1`，由 [event_loop_tests.rs](src/app/event_loop_tests.rs) 验证全屏捕获、补全点击、切换到主屏后释放鼠标，以及退出恢复。该场景不替代各终端自身的选文与复制兼容性验证。
+全屏鼠标交互回归见 [pointer_tests.rs](src/app/fullscreen/pointer_tests.rs)，屏幕选区手势与样式见 [selection_tests.rs](src/app/fullscreen/selection_tests.rs)，输入框编辑选区见 [editor_tests.rs](src/thread/composer/input/editor_tests.rs) 和 [view_tests.rs](src/thread/composer/input/view_tests.rs)。尺寸变化时清除全屏选区，并结束输入框拖拽；迟到的释放事件不能触发复制。在窗口至少 40×12 的真实 PTY 中运行 `just test ash-tui --lib real_terminal_mouse_handoff -- --ignored --nocapture --test-threads=1`，由 [event_loop_tests.rs](src/app/event_loop_tests.rs) 验证全屏捕获、补全点击、切换到 inline 后释放鼠标，以及退出恢复。该场景不替代各终端自身的选文与复制兼容性验证。
 
 Ctrl+Z 在 Unix 上先恢复终端，再发送 SIGTSTP；`fg` 后重新获取模式并重绘。SIGINT/SIGTERM 进入正常事件循环退出路径。新增模式时同时修改获取标记、逆序清理和 [session_tests.rs](src/terminal/session_tests.rs) 中的部分失败测试。
 
@@ -366,7 +366,7 @@ just test-tui
 
 终端模式协议由 [session_tests.rs](src/terminal/session_tests.rs) 检查，正文分页、稳定锚点和长内容由 [正文绘制测试](src/thread/transcript/view/render_tests.rs) 检查。历史完整性不能再用终端回滚行数判断。
 
-主屏模式的真实边界检查使用 `just test-tui actual_tui_inline_preserves_history_across_panels_resize_and_exit -- --nocapture`；两种模式的即时切换和设置保存使用 `just test-tui actual_tui_screen_mode_switches_live_and_persists -- --nocapture`。组件状态与文本基线位于 [frame_tests.rs](src/app/inline/frame_tests.rs)，定稿边界与去重位于 [output_tests.rs](src/app/inline/output_tests.rs)，历史顺序与样式位于 [scrollback_tests.rs](src/terminal/scrollback_tests.rs)。命令列出验证入口，不代表所有终端组合均已验证。
+inline 的真实边界检查使用 `just test-tui inline_repeated_status_keeps_history_compact` 和 `just test-tui actual_tui_inline_preserves_history_across_panels_resize_and_exit`；两种模式的即时切换和设置保存使用 `just test-tui actual_tui_screen_mode_switches_live_and_persists`。组件状态与文本基线位于 [frame_tests.rs](src/app/inline/frame_tests.rs)，连续正文位于 [output_tests.rs](src/app/inline/output_tests.rs)，退出时写入终端历史的顺序与样式位于 [scrollback_tests.rs](src/terminal/scrollback_tests.rs)。命令列出验证入口，不代表所有终端组合均已验证。
 
 输入历史验证：`just test ash-tui history`；跨进程重启验证：`just test-tui actual_tui_recalls_input_history_after_process_restart`。
 
@@ -389,7 +389,7 @@ just test-tui
 - Config 的通用页提供记忆总开关，默认关闭；关闭后保留已有记忆与范围授权，停止模型召回、读取和保存。
 - `/memories` 按个人、项目展示记忆。
 - `/` 搜索当前范围的全部记忆，Enter 提交；滚轮或键盘浏览到末尾时自动加载下一页，保留搜索条件。点击顶部 `+ New Memory` 或按 n 新增，a 打开操作菜单，s 选择具体范围，p 调整范围授权，c 前往 Config。
-- Enter 查看完整正文，e 编辑，Delete 确认删除；Esc 返回原列表。全屏滚轮只滚动指针所在的列表或正文，不改变键盘选择与编辑光标；inline 沿用终端的鼠标选择和滚动行为。
+- Enter 查看完整正文，e 编辑，Delete 确认删除；Esc 返回原列表。全屏滚轮只滚动指针所在的列表或正文，不改变键盘选择与编辑光标；inline 的鼠标选择交给终端，正文用键盘浏览。
 - 标题与正文在同一表单编辑，Tab 切字段，Ctrl+S 保存；保留换行与空格，离开有修改的表单需选择继续编辑或放弃修改。
 - 保存失败保留草稿，相同请求重试复用命令身份；版本冲突时 Ctrl+R 查看最新内容，u 明确采用其版本后返回草稿继续修订。
 - `/memories memory:…` 或操作菜单中的打开引用读取精确版本；过期或已删除引用明确报错。

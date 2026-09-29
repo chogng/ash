@@ -19,7 +19,6 @@ use crossterm::event::MouseEventKind;
 #[test]
 #[ignore = "requires a PTY with a nonzero window size"]
 fn real_terminal_mouse_handoff() {
-    let mut output = crate::app::inline::Output::default();
     let mut terminal =
         crate::terminal::TerminalSession::open(crate::terminal::ScreenMode::Fullscreen).unwrap();
     let area = terminal.area().unwrap();
@@ -32,12 +31,12 @@ fn real_terminal_mouse_handoff() {
             vec![ListSelectionItem::new("Help")],
         )],
     )));
-    super::draw_terminal(&mut terminal, &mut app, &mut output).unwrap();
+    super::draw_terminal(&mut terminal, &mut app).unwrap();
     assert_eq!(app.mouse_mode(), crate::terminal::MouseMode::TuiCapture);
     assert!(app.command_panel().is_some());
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     app.insert_text("/q");
-    super::draw_terminal(&mut terminal, &mut app, &mut output).unwrap();
+    super::draw_terminal(&mut terminal, &mut app).unwrap();
     let area = terminal.area().unwrap();
     let (column, row) = (area.y..area.bottom())
         .flat_map(|row| (0..area.width).map(move |column| (column, row)))
@@ -70,13 +69,13 @@ fn real_terminal_mouse_handoff() {
         super::finish_pointer_gesture(&mut app, &terminal, outcome).unwrap(),
         Some(AppCommand::Quit)
     );
-    super::draw_terminal(&mut terminal, &mut app, &mut output).unwrap();
+    super::draw_terminal(&mut terminal, &mut app).unwrap();
     app.insert_text("/q");
-    super::draw_terminal(&mut terminal, &mut app, &mut output).unwrap();
+    super::draw_terminal(&mut terminal, &mut app).unwrap();
     let mut settings = crate::config::TerminalSettings::default();
     settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
     app.update(crate::config::Event::SettingsReceived(settings));
-    super::draw_terminal(&mut terminal, &mut app, &mut output).unwrap();
+    super::draw_terminal(&mut terminal, &mut app).unwrap();
     assert_eq!(
         app.mouse_mode(),
         crate::terminal::MouseMode::TerminalSelection
@@ -89,7 +88,7 @@ fn real_terminal_mouse_handoff() {
 
     settings.set_screen_mode(crate::terminal::ScreenMode::Fullscreen);
     app.update(crate::config::Event::SettingsReceived(settings));
-    super::draw_terminal(&mut terminal, &mut app, &mut output).unwrap();
+    super::draw_terminal(&mut terminal, &mut app).unwrap();
     assert_eq!(app.mouse_mode(), crate::terminal::MouseMode::TuiCapture);
     assert_eq!(app.input(), "/q");
 }

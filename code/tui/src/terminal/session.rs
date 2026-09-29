@@ -18,10 +18,10 @@ use crossterm::terminal::EnterAlternateScreen;
 use crossterm::terminal::LeaveAlternateScreen;
 use crossterm::terminal::disable_raw_mode;
 use crossterm::terminal::enable_raw_mode;
+use crossterm::terminal::size;
 use ratatui::Terminal;
 use ratatui::TerminalOptions;
 use ratatui::Viewport;
-use ratatui::backend::Backend;
 use ratatui::backend::CrosstermBackend;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Position;
@@ -52,7 +52,14 @@ impl TerminalSession {
         let modes = TerminalModeGuard::acquire(CrosstermModeOperations, mode)
             .map_err(|source| startup_error(&host_terminal, "set terminal modes", source))?;
         let background_color = super::terminal_probe::query_background(&host_terminal);
-        let terminal = new_terminal(mode, 1)
+        let inline_height = if mode == ScreenMode::Inline {
+            size()
+                .map(|(_, height)| height)
+                .map_err(|source| startup_error(&host_terminal, "read terminal size", source))?
+        } else {
+            1
+        };
+        let terminal = new_terminal(mode, inline_height)
             .map_err(|source| startup_error(&host_terminal, "create terminal", source))?;
         let mut session = Self {
             background_color,
@@ -61,7 +68,7 @@ impl TerminalSession {
             rendered_frame: None,
             hyperlinks: Default::default(),
             cursor_color: CursorColor::default(),
-            inline_height: 1,
+            inline_height,
             inline_active: mode == ScreenMode::Inline,
         };
         session
@@ -85,6 +92,9 @@ impl TerminalSession {
         self.modes.mode = mode;
         self.modes.mouse_mode = MouseMode::TerminalSelection;
         self.modes.reacquire()?;
+        if mode == ScreenMode::Inline {
+            self.inline_height = size()?.1;
+        }
         self.terminal = new_terminal(mode, self.inline_height)?;
         self.inline_active = mode == ScreenMode::Inline;
         self.terminal.clear()?;
@@ -102,14 +112,6 @@ impl TerminalSession {
             return Ok(());
         }
         self.terminal.clear()?;
-        if current_y > target_y {
-            // Scroll completed output into terminal history before a growing panel takes its rows.
-            self.terminal
-                .set_cursor_position(Position::new(0, screen.height.saturating_sub(1)))?;
-            self.terminal
-                .backend_mut()
-                .append_lines(current_y - target_y)?;
-        }
         self.terminal
             .set_cursor_position(Position::new(0, target_y))?;
         self.terminal = new_terminal(ScreenMode::Inline, height)?;
@@ -128,6 +130,14 @@ impl TerminalSession {
             render(buffer, offset, &links);
             links.into_inner().encode_history(buffer);
         })?;
+        self.invalidate();
+        Ok(())
+    }
+
+    pub(crate) fn prepare_inline_history(&mut self) -> io::Result<()> {
+        self.modes.leave_screen()?;
+        self.terminal = new_terminal(ScreenMode::Inline, 1)?;
+        self.inline_height = 1;
         self.invalidate();
         Ok(())
     }
@@ -310,10 +320,8 @@ impl<O: TerminalModeOperations> TerminalModeGuard<O> {
         let result = (|| {
             self.operations.enable_raw_mode()?;
             self.raw_mode = true;
-            if self.mode == ScreenMode::Fullscreen {
-                self.operations.begin_screen()?;
-                self.screen_active = true;
-            }
+            self.operations.begin_screen()?;
+            self.screen_active = true;
             self.operations.enable_bracketed_paste()?;
             self.bracketed_paste = true;
             self.operations.enable_focus_change()?;
@@ -349,6 +357,14 @@ impl<O: TerminalModeOperations> TerminalModeGuard<O> {
             }
         }
         self.mouse_mode = mode;
+        Ok(())
+    }
+
+    fn leave_screen(&mut self) -> io::Result<()> {
+        if self.screen_active {
+            self.operations.finish_screen()?;
+            self.screen_active = false;
+        }
         Ok(())
     }
 

@@ -1,5 +1,4 @@
 use super::draw;
-use super::layout::height;
 use crate::app::App;
 use crate::app::AppCommand;
 use crate::app::AppEvent;
@@ -14,6 +13,7 @@ use crossterm::event::KeyModifiers;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
+use ratatui::layout::Position;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
 
@@ -26,7 +26,6 @@ pub(super) fn app() -> App {
 }
 
 pub(super) fn render(app: &App, width: u16, rows: u16) -> Buffer {
-    let rows = height(app, Rect::new(0, 0, width, rows));
     let mut terminal = Terminal::new(TestBackend::new(width, rows)).unwrap();
     terminal
         .draw(|frame| draw(frame, app, &Default::default()))
@@ -49,27 +48,19 @@ fn hooks_panel_opens_inline_and_restores_draft_after_close() {
 }
 
 #[test]
-fn slash_completion_uses_only_its_visible_rows_in_inline_mode() {
+fn slash_completion_keeps_the_inline_input_at_the_bottom() {
     let mut app = app();
     let screen = Rect::new(0, 0, 80, 60);
-    let resting_height = height(&app, screen);
+    let resting_input_row = super::layout(&app, screen).input.y;
 
     app.insert_text("/status");
     assert!(app.completion_visible());
-    let completion_height = height(&app, screen);
-    assert!(completion_height > resting_height);
-    assert!(
-        completion_height < 20,
-        "completion grew to {completion_height} rows"
-    );
-    crate::tui_assert_snapshot!(
-        "inline_status_completion_compact",
-        text(&render(&app, 80, 60))
-    );
+    let completion = render(&app, screen.width, screen.height);
+    assert_eq!(super::layout(&app, screen).input.y, resting_input_row);
+    crate::tui_assert_snapshot!("inline_status_completion_compact", text(&completion));
 
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(!app.completion_visible());
-    assert!(height(&app, screen) < 20);
 }
 
 pub(super) fn text(buffer: &Buffer) -> String {
@@ -143,14 +134,14 @@ fn running_tip_appears_below_the_inline_spinner() {
 }
 
 #[test]
-fn input_uses_a_bounded_area_with_terminal_mouse_selection() {
+fn input_stays_at_bottom_with_terminal_mouse_selection() {
     let mut app = app();
     assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
     app.insert_text("继续检查终端历史");
     let buffer = render(&app, 80, 32);
-    assert!(buffer.area.height < 32);
+    assert_eq!(buffer.area.height, 32);
     assert!(text(&buffer).contains("继续检查终端历史"));
-    assert!(!text(&buffer).contains("Ash Code v"));
+    assert!(text(&buffer).contains("Ash Code v"));
     crate::tui_assert_snapshot!("input", text(&buffer));
     let layout = super::layout(&app, buffer.area);
     assert!(layout.input.height > 0);
@@ -271,10 +262,19 @@ fn model_list_opens_inline_and_restores_input_after_close() {
     let buffer = render(&app, 100, 32);
     assert!(text(&buffer).contains("GPT Test"));
     assert!(text(&buffer).contains("██ ██ ██"));
+    let panel_area = super::layout(&app, buffer.area).session.composer;
     let blocks = buffer
         .content
         .iter()
-        .filter(|cell| cell.symbol() == "█")
+        .enumerate()
+        .filter(|(index, cell)| {
+            cell.symbol() == "█"
+                && panel_area.contains(Position::new(
+                    (index % usize::from(buffer.area.width)) as u16,
+                    (index / usize::from(buffer.area.width)) as u16,
+                ))
+        })
+        .map(|(_, cell)| cell)
         .collect::<Vec<_>>();
     let context = app.render_context();
     assert_eq!(

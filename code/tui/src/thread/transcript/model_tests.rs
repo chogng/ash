@@ -9,8 +9,10 @@ use crate::thread::transcript::ChatHistoryView;
 use crate::thread::transcript::CommandStatus;
 use crate::thread::transcript::LocalCommandCompletion;
 use crate::thread::transcript::MessageRole;
+use ash_app_server_protocol::protocol::transcript::ThreadTranscriptChange;
 use ash_app_server_protocol::protocol::transcript::ThreadTranscriptEntry;
 use ash_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
+use ash_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
 use ash_protocol::ItemId;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
@@ -164,28 +166,6 @@ fn grouped_history_failure_names_the_failed_call_and_command_completion_stays_ne
 }
 
 #[test]
-fn history_prefix_stops_at_live_cells_and_active_turns() {
-    let old = turn_id("old");
-    let active = turn_id("active");
-    let mut model = TranscriptModel::default();
-    let old_message = message("old", &old, MessageRole::Agent, "old");
-    let final_message = message("current", &active, MessageRole::Agent, "current");
-    model.replace(snapshot(vec![old_message.clone(), final_message.clone()]));
-    assert_eq!(model.history_prefix(Some(&active)).len(), 1);
-    assert_eq!(model.history_prefix(None).len(), 2);
-    let mut live_message = final_message;
-    if let ThreadTranscriptEntry::Item { transient, .. } = &mut live_message {
-        *transient = true;
-    }
-    model.replace(snapshot(vec![
-        old_message,
-        live_message,
-        message("later", &old, MessageRole::Agent, "later"),
-    ]));
-    assert_eq!(model.history_prefix(None).len(), 1);
-}
-
-#[test]
 fn expansion_is_derived_without_changing_cell_lifecycle() {
     let turn_id = turn_id("turn");
     let tool_call_id = call_id("call");
@@ -299,6 +279,32 @@ fn execution_groups_never_merge_across_turns() {
         model.cells()[1].cell_id(),
         &TranscriptCellId::for_tool_call(&call_id("two"))
     );
+}
+
+#[test]
+fn streamed_user_confirmation_replaces_the_optimistic_message() {
+    let turn = turn_id("turn");
+    let mut model = TranscriptModel::default();
+    model.push_message(MessageRole::User, "same prompt".into());
+    model.apply(ThreadTranscriptUpdateEnvelope {
+        session_id: session_id("session"),
+        thread_id: thread_id("thread"),
+        durable_sequence: 1,
+        revision: 1,
+        stream_cursor: None,
+        changes: vec![
+            ThreadTranscriptChange::Upsert {
+                entry: message("user", &turn, MessageRole::User, "same prompt"),
+            },
+            ThreadTranscriptChange::Upsert {
+                entry: message("agent", &turn, MessageRole::Agent, "reply"),
+            },
+        ],
+    });
+    let views = model.views(&BTreeSet::new(), None);
+    assert_eq!(views.len(), 2);
+    assert_eq!(views[0].text(), "same prompt");
+    assert_eq!(views[1].text(), "reply");
 }
 
 #[test]

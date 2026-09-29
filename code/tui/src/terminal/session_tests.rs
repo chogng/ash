@@ -49,7 +49,7 @@ fn startup_error_preserves_failure_kind_and_reports_terminal_facts() {
 }
 
 #[test]
-fn main_screen_leaves_mouse_selection_to_the_terminal_across_resume() {
+fn inline_screen_leaves_mouse_selection_to_the_terminal_across_resume() {
     let calls = Rc::new(RefCell::new(Vec::new()));
     let mut guard =
         TerminalModeGuard::acquire(FakeOperations::new(calls.clone(), None), ScreenMode::Inline)
@@ -59,30 +59,44 @@ fn main_screen_leaves_mouse_selection_to_the_terminal_across_resume() {
     drop(guard);
     let lifecycle = [
         ENABLE_RAW_MODE,
+        BEGIN_SCREEN,
         ENABLE_BRACKETED_PASTE,
         ENABLE_FOCUS_CHANGE,
         DISABLE_FOCUS_CHANGE,
         DISABLE_BRACKETED_PASTE,
+        FINISH_SCREEN,
         DISABLE_RAW_MODE,
     ];
     assert_eq!(calls.borrow().as_slice(), lifecycle.repeat(2));
 }
 
 #[test]
-fn main_screen_failure_restores_only_acquired_input_modes() {
+fn inline_screen_failure_restores_only_acquired_modes() {
     for (failure, expected) in [
         (ENABLE_RAW_MODE, vec![ENABLE_RAW_MODE]),
         (
+            BEGIN_SCREEN,
+            vec![ENABLE_RAW_MODE, BEGIN_SCREEN, DISABLE_RAW_MODE],
+        ),
+        (
             ENABLE_BRACKETED_PASTE,
-            vec![ENABLE_RAW_MODE, ENABLE_BRACKETED_PASTE, DISABLE_RAW_MODE],
+            vec![
+                ENABLE_RAW_MODE,
+                BEGIN_SCREEN,
+                ENABLE_BRACKETED_PASTE,
+                FINISH_SCREEN,
+                DISABLE_RAW_MODE,
+            ],
         ),
         (
             ENABLE_FOCUS_CHANGE,
             vec![
                 ENABLE_RAW_MODE,
+                BEGIN_SCREEN,
                 ENABLE_BRACKETED_PASTE,
                 ENABLE_FOCUS_CHANGE,
                 DISABLE_BRACKETED_PASTE,
+                FINISH_SCREEN,
                 DISABLE_RAW_MODE,
             ],
         ),
@@ -97,6 +111,29 @@ fn main_screen_failure_restores_only_acquired_input_modes() {
         );
         assert_eq!(*calls.borrow(), expected);
     }
+}
+
+#[test]
+fn inline_history_handoff_leaves_the_screen_once() {
+    let calls = Rc::new(RefCell::new(Vec::new()));
+    let mut guard =
+        TerminalModeGuard::acquire(FakeOperations::new(calls.clone(), None), ScreenMode::Inline)
+            .unwrap();
+    guard.leave_screen().unwrap();
+    drop(guard);
+    assert_eq!(
+        calls.borrow().as_slice(),
+        [
+            ENABLE_RAW_MODE,
+            BEGIN_SCREEN,
+            ENABLE_BRACKETED_PASTE,
+            ENABLE_FOCUS_CHANGE,
+            FINISH_SCREEN,
+            DISABLE_FOCUS_CHANGE,
+            DISABLE_BRACKETED_PASTE,
+            DISABLE_RAW_MODE,
+        ]
+    );
 }
 
 #[test]

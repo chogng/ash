@@ -1,9 +1,6 @@
-use super::super::browsing;
 use super::super::tests::app;
 use super::super::tests::render;
 use super::super::tests::text;
-use super::Output;
-use super::tail;
 use crate::thread::Event as ThreadEvent;
 use ash_app_server_protocol::protocol::transcript::ThreadTranscriptEntry;
 use ash_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
@@ -19,7 +16,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 #[test]
-fn unknown_slash_command_is_emitted_to_inline_terminal_history() {
+fn unknown_slash_command_is_visible_in_inline_conversation() {
     let mut app = app();
     app.insert_text("/confg");
     assert_eq!(
@@ -27,9 +24,7 @@ fn unknown_slash_command_is_emitted_to_inline_terminal_history() {
         None
     );
 
-    let mut output = Output::default();
-    output.select_thread(app.screen_thread_id());
-    let pending = output.pending(&app);
+    let pending = app.visible_transcript_views();
     assert_eq!(pending.len(), 1);
     assert_eq!(
         pending[0].text(),
@@ -70,7 +65,7 @@ fn snapshot(entries: Vec<ThreadTranscriptEntry>) -> ThreadTranscriptSnapshot {
 }
 
 #[test]
-fn transcript_retains_active_turn_until_completion_and_emits_once() {
+fn inline_transcript_keeps_completed_and_active_turns_together() {
     let mut app = app();
     let old = entry("old", "Earlier completed answer", false);
     let current = entry("current", "当前回复\n\n- 第一项\n- 第二项", false);
@@ -79,45 +74,29 @@ fn transcript_retains_active_turn_until_completion_and_emits_once() {
         current.clone(),
     ])));
     app.set_active_turn(TurnId::new("current").unwrap());
-    let mut output = Output::default();
-    output.select_thread(app.screen_thread_id());
-    let pending = output.pending(&app);
-    assert_eq!(pending.len(), 1);
-    assert_eq!(pending[0].text(), "Earlier completed answer");
-    output.record(&pending[0]);
-    assert!(output.pending(&app).is_empty());
-    assert_eq!(tail(&app).len(), 1);
-    crate::tui_assert_snapshot!("current_reply", text(&render(&app, 60, 24)));
+    let rendered = text(&render(&app, 60, 24));
+    let earlier_row = rendered
+        .lines()
+        .position(|line| line.contains("Earlier completed answer"))
+        .unwrap();
+    let current_row = rendered
+        .lines()
+        .position(|line| line.contains("当前回复"))
+        .unwrap();
+    assert!(current_row - earlier_row <= 4, "{rendered}");
+    crate::tui_assert_snapshot!("current_reply", rendered);
     app.clear_active_turn();
-    let pending = output.pending(&app);
-    assert_eq!(pending.len(), 1);
-    assert!(pending[0].text().starts_with("当前回复"));
-    output.record(&pending[0]);
     app.update(ThreadEvent::TranscriptSnapshotReceived(snapshot(vec![
         old, current,
     ])));
-    assert!(
-        output.pending(&app).is_empty(),
-        "resynchronization must not duplicate history"
+    let resynchronized = text(&render(&app, 60, 24));
+    assert_eq!(
+        resynchronized.matches("Earlier completed answer").count(),
+        1
     );
-    assert!(tail(&app).is_empty());
+    assert_eq!(resynchronized.matches("当前回复").count(), 1);
     app.update(ThreadEvent::TranscriptHistoryPageReceived(snapshot(vec![
         entry("older", "Older page", false),
     ])));
-    assert!(
-        output.pending(&app).is_empty(),
-        "older pages must not be appended out of order"
-    );
-    assert!(tail(&app).is_empty());
-    app.handle_key_in_area(
-        KeyEvent::new(KeyCode::Home, KeyModifiers::CONTROL),
-        Rect::new(0, 0, 60, 24),
-    );
-    assert!(browsing(&app));
     assert!(text(&render(&app, 60, 24)).contains("Older page"));
-    app.handle_key_in_area(
-        KeyEvent::new(KeyCode::End, KeyModifiers::CONTROL),
-        Rect::new(0, 0, 60, 24),
-    );
-    assert!(!browsing(&app));
 }

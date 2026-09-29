@@ -1,0 +1,22 @@
+---
+source: code/tui/src/app/fullscreen/frame_tests.rs
+expression: "render(&app, 80, 20)"
+---
+  .                                                        [— / —] [Dashboard]  
+                                                                                
+        ┌── Hooks › Hook events ───────────────────────────────────[✗]─┐        
+        │                                                              │        
+        │  ╭─────────────────────────────────────────────────────────╮ │        
+        │  │ Search Hook events                                      │ │        
+        │  ╰─────────────────────────────────────────────────────────╯ │        
+        │> PreToolUse  ·  Before tool execution                        │        
+        │  PostToolUse  ·  After successful tool execution             │        
+        │  PostToolUseFailure  ·  After tool execution fails           │        
+        │  PostToolBatch  ·  After a batch of tool calls resolves      │        
+        │  PermissionDenied  ·  After tool permission is denied        │        
+        │  Notification  ·  When a user notification is sent           │        
+        │  UserPromptSubmit  ·  When the user submits a prompt         │        
+        │  UserPromptExpansion  ·  When a slash command expands        │        
+  ──────│  25 more below                                               │──────  
+  > Buil│  Enter to confirm  ·  / to search  ·  Esc to return          │        
+  ──────└──────────────────────────────────────────────────────────────┘model

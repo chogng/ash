@@ -3,6 +3,12 @@ source: code/tui/src/app/fullscreen/modal_tests.rs
 expression: frame_text(&app)
 ---
                                                                                                     
+    ▄  ▄     Ash Code v0.1.0                                                                        
+  ▗█▛██▜█▖   Automatic model                                                                        
+  ▝▜████▛▘   .                                                                                      
+    ▝  ▘                                                                                            
+                                                                                                    
+                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     
@@ -22,12 +28,6 @@ expression: frame_text(&app)
 > Content                                                                                           
   Use Rust                                                                                          
   保 留   两 个 空 格                                                                                     
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     

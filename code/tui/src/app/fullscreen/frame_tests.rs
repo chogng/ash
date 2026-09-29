@@ -1682,6 +1682,10 @@ fn hooks_detail_and_editor_render_fullscreen() {
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert_eq!(app.list_selection().unwrap().title(), "Edit Hook");
     crate::tui_assert_snapshot!("hooks_editor", render(&app, 80, 20));
+
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(app.list_selection().unwrap().title(), "Hook events");
+    crate::tui_assert_snapshot!("hooks_event_picker", render(&app, 80, 20));
 }
 
 #[test]

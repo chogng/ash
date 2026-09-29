@@ -26,6 +26,22 @@ fn actual_tui_inline_preserves_history_across_panels_resize_and_exit() {
         process.submit(&format!("INLINE-MESSAGE-{index}"));
         process.wait_for_screen(reply);
         process.wait_for_stable_screen("ask permissions on");
+        assert_eq!(
+            process
+                .screen()
+                .matches(&format!("> INLINE-MESSAGE-{index}"))
+                .count(),
+            1,
+            "{}",
+            process.screen()
+        );
+        let prompt_row = row_containing(&process, &format!("INLINE-MESSAGE-{index}"));
+        let reply_row = row_containing(&process, reply);
+        assert!(reply_row - prompt_row <= 6, "{}", process.screen());
+        if index > 0 {
+            let previous_reply_row = row_containing(&process, replies[index - 1]);
+            assert!(prompt_row - previous_reply_row <= 6, "{}", process.screen());
+        }
         process.submit("/status");
         process.wait_for_stable_screen("Full context window");
         process.escape();
@@ -36,7 +52,8 @@ fn actual_tui_inline_preserves_history_across_panels_resize_and_exit() {
     process.wait_for_stable_screen("ask permissions on");
     process.type_text("DRAFT-AFTER-RESIZE");
     process.wait_for_stable_screen("DRAFT-AFTER-RESIZE");
-    assert!(!process.raw_text().contains("\x1b[?1049h"));
+    #[cfg(unix)]
+    assert!(process.raw_text().contains("\x1b[?1049h"));
     assert!(!process.raw_text().contains("\x1b[?1000h"));
     assert!(!process.raw_text().contains("\x1b[?1003h"));
     process.quit();
@@ -44,17 +61,27 @@ fn actual_tui_inline_preserves_history_across_panels_resize_and_exit() {
     for reply in replies {
         assert_eq!(history.matches(reply).count(), 1, "{history}");
     }
+    for index in 0..replies.len() {
+        assert_eq!(
+            history
+                .matches(&format!("> INLINE-MESSAGE-{index}"))
+                .count(),
+            1,
+            "{history}"
+        );
+    }
     assert!(
         !history.contains("Full context window"),
         "temporary panels must not enter history:\n{history}"
     );
     assert!(process.raw_text().contains("\x1b[?2004l"));
-    assert!(!process.raw_text().contains("\x1b[?1049l"));
+    #[cfg(unix)]
+    assert!(process.raw_text().contains("\x1b[?1049l"));
     assert_eq!(server.request_count(), replies.len());
 }
 
 #[test]
-fn inline_slash_completion_does_not_append_a_blank_terminal_page() {
+fn inline_repeated_status_keeps_history_compact() {
     let fixture = Fixture::new();
     let server = ScenarioServer::start([HttpResponse::streaming(["UNUSED"], None)]);
     fixture.write_config(&server.base_url());
@@ -62,13 +89,18 @@ fn inline_slash_completion_does_not_append_a_blank_terminal_page() {
     let mut process = TuiProcess::start_in_vscode(&fixture, &[], LARGE_SIZE);
     process.wait_for_stable_screen("ask permissions on");
 
-    process.submit("/status");
-    process.wait_for_stable_screen("Full context window");
-    process.escape();
-    process.wait_for_stable_screen("ask permissions on");
+    for _ in 0..2 {
+        process.submit("/status");
+        process.wait_for_stable_screen("Full context window");
+        process.escape();
+        process.wait_for_stable_screen("ask permissions on");
+    }
     let deadline = Instant::now() + Duration::from_secs(10);
     while process.screen().contains("image in clipboard") {
-        assert!(Instant::now() < deadline, "temporary input tip did not expire");
+        assert!(
+            Instant::now() < deadline,
+            "temporary input tip did not expire"
+        );
         std::thread::sleep(Duration::from_millis(20));
     }
     process.wait_for_stable_screen("← Dashboard");
@@ -76,9 +108,7 @@ fn inline_slash_completion_does_not_append_a_blank_terminal_page() {
     let header = history
         .find("Ash Code")
         .expect("welcome header in terminal history");
-    let command = history
-        .find("> /status")
-        .expect("command in terminal history");
+    let command = history.find("> /status").expect("first command is visible");
     let gap = &history[header..command];
     let longest_blank_run = gap
         .lines()
@@ -92,18 +122,19 @@ fn inline_slash_completion_does_not_append_a_blank_terminal_page() {
         })
         .0;
     assert!(
-        longest_blank_run < 20,
+        longest_blank_run <= 4,
         "slash completion appended {longest_blank_run} empty rows:\n{history}"
     );
     let screen = process.screen();
-    let command_row = screen
+    let command_rows = screen
         .lines()
-        .position(|line| line.contains("> /status"))
-        .expect("submitted command is visible");
-    let input_row = input_top_row(&process);
+        .enumerate()
+        .filter_map(|(row, line)| line.contains("> /status").then_some(row))
+        .collect::<Vec<_>>();
+    assert_eq!(command_rows.len(), 2, "{screen}");
     assert!(
-        input_row - command_row < 16,
-        "closing the status panel left a blank page:\n{screen}"
+        command_rows[1] - command_rows[0] <= 4,
+        "repeating the status command left empty rows between submissions:\n{screen}"
     );
     process.assert_snapshot("inline/status_after_compact_slash_completion");
     process.quit();
@@ -171,16 +202,17 @@ fn actual_tui_screen_mode_switches_live_and_persists() {
     let server = ScenarioServer::start([HttpResponse::streaming(["MODE-SWITCH-REPLY"], None)]);
     fixture.write_config(&server.base_url());
     let mut process = TuiProcess::start_in_vscode(&fixture, &[], LARGE_SIZE);
-    process.wait_for_stable_screen("ask permissions on");
+    process.wait_for_stable_screen("Enter send");
     let fullscreen_input = input_top_row(&process);
     // ConPTY can implement the screen switch through console APIs instead of forwarding CSI.
     #[cfg(unix)]
     assert!(process.raw_text().contains("\x1b[?1049h"));
     process.submit("/config");
-    process.wait_for_stable_screen("Screen mode");
+    process.wait_for_stable_screen("Config");
     for _ in 0..8 {
         process.down();
     }
+    process.wait_for_screen("Screen mode");
     process.enter();
     process.wait_for_stable_screen("inline");
     assert!(fixture.config_source().contains("screenMode = \"inline\""));
@@ -195,10 +227,11 @@ fn actual_tui_screen_mode_switches_live_and_persists() {
         process.screen()
     );
     process.submit("/config");
-    process.wait_for_stable_screen("Screen mode");
+    process.wait_for_stable_screen("Config");
     for _ in 0..8 {
         process.down();
     }
+    process.wait_for_screen("Screen mode");
     process.enter();
     process.wait_for_stable_screen("fullscreen");
     assert!(

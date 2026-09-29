@@ -116,11 +116,6 @@ mod mention {
             visible_rows,
         })
     }
-
-    pub(super) fn height(area: Rect, popup: MentionPopupView<'_>) -> u16 {
-        popup_layout(area, popup.matches.len(), popup.selected)
-            .map_or(0, |layout| layout.area.height.saturating_add(1))
-    }
 }
 
 mod skill {
@@ -155,12 +150,6 @@ mod skill {
             .collect()
     }
 
-    pub(super) fn height(area: Rect, popup: SkillCompletionView<'_>) -> u16 {
-        let popup_width = horizontal_margin(area, 2).width;
-        let item_heights = item_heights(popup, popup_width);
-        description_popup_layout(area, popup.selected, &item_heights)
-            .map_or(0, |layout| layout.area.height.saturating_add(1))
-    }
     pub(crate) fn draw(
         frame: &mut Frame<'_>,
         area: Rect,
@@ -438,15 +427,6 @@ mod slash {
         })
     }
 
-    pub(super) fn height(
-        area: Rect,
-        popup: SlashCommandsView<'_>,
-        language: crate::nls::Language,
-    ) -> u16 {
-        popup_layout(area, popup, language)
-            .map_or(0, |layout| layout.list.area.height.saturating_add(1))
-    }
-
     fn draw_scrollbar(
         frame: &mut Frame<'_>,
         command_count: usize,
@@ -685,19 +665,6 @@ pub(crate) fn draw(
             skill::draw(frame, area, Some(view), hovered, pressed, context)
         }
         None => {}
-    }
-}
-
-pub(crate) fn desired_height(
-    area: Rect,
-    completion: Option<CompletionView<'_>>,
-    language: crate::nls::Language,
-) -> u16 {
-    match completion {
-        Some(CompletionView::Slash(view)) => slash::height(area, view, language),
-        Some(CompletionView::Mention(view)) => mention::height(area, view),
-        Some(CompletionView::Skill(view)) => skill::height(area, view),
-        None => 0,
     }
 }
 

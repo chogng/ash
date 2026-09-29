@@ -1,12 +1,24 @@
 ---
 source: code/tui/src/app/inline/output_tests.rs
-assertion_line: 122
-expression: "text(&render(&app, 60, 24))"
+expression: rendered
 ---
+                                                            
+    ▄  ▄     Ash Code v0.1.0                                
+  ▗█▛██▜█▖   Automatic model                                
+  ▝▜████▛▘   .                                              
+    ▝  ▘                                                    
+                                                            
+● Earlier completed answer                                  
+                                                            
 ● 当前回复                                                  
                                                             
   • 第一项                                                  
   • 第二项                                                  
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
                                                             
                                                             
 ────────────────────────────────────────────────────────────

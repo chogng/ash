@@ -1,5 +1,4 @@
 use super::browsing;
-use super::output::tail;
 use crate::app::App;
 use crate::render::Renderable;
 use crate::thread::composer as chat_input;
@@ -20,34 +19,6 @@ pub(in crate::app) fn layout(app: &App, area: Rect) -> Layout {
         0
     };
     layout_with_minimum(app, area, minimum)
-}
-
-pub(super) fn height(app: &App, screen: Rect) -> u16 {
-    if browsing(app) || app.overlay().is_some() {
-        return screen.height;
-    }
-    let areas = layout(app, screen);
-    let controls = screen
-        .height
-        .saturating_sub(areas.session.transcript.height);
-    let rows = tail(app).iter().fold(0usize, |rows, cell| {
-        rows.saturating_add(cell.height(
-            screen.width,
-            app.render_context(),
-            app.transcript_render_cache(),
-        ))
-    });
-    let completion_rows = if app.completion_visible() {
-        let view = app.chat_composer_view();
-        chat_input::completion_desired_height(screen, &view, app.language())
-    } else {
-        0
-    };
-    controls
-        .saturating_add(rows.min(u16::MAX as usize) as u16)
-        .saturating_add(completion_rows)
-        .min(screen.height)
-        .max(1)
 }
 
 fn layout_with_minimum(app: &App, terminal_area: Rect, min_transcript_rows: u16) -> Layout {

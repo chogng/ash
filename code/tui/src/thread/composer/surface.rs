@@ -88,14 +88,6 @@ pub(crate) fn draw_completion_layer(
     );
 }
 
-pub(crate) fn completion_desired_height(
-    area: Rect,
-    view: &ChatComposerView<'_>,
-    language: crate::nls::Language,
-) -> u16 {
-    input::completion_desired_height(area, view.input_completion(), language)
-}
-
 pub(crate) fn pointer_target_at(
     overlay_area: Rect,
     view: &ChatComposerView<'_>,

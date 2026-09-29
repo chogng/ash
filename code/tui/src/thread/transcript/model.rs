@@ -159,20 +159,6 @@ pub(crate) struct TranscriptModel {
 }
 
 impl TranscriptModel {
-    /// Only a final prefix outside the active turn can leave the editable viewport.
-    pub(in crate::thread) fn history_prefix(&self, active: Option<&TurnId>) -> &[TranscriptCell] {
-        let length = self
-            .cells
-            .iter()
-            .take_while(|cell| {
-                cell.lifecycle() == CellLifecycle::Final
-                    && !active.is_some_and(|turn| cell.turn_id() == Some(turn))
-                    && cell.local_user_text().is_none()
-            })
-            .count();
-        &self.cells[..length]
-    }
-
     pub(in crate::thread) fn replace(&mut self, snapshot: ThreadTranscriptSnapshot) {
         let existing_source_ids = self
             .cells
@@ -546,7 +532,24 @@ impl TranscriptModel {
         {
             *existing = cell;
         } else {
-            self.cells.push(cell);
+            // A streamed server echo can arrive before the next snapshot reconciles
+            // the optimistic user cell. Replace it in place to keep one message.
+            let confirmed_user = match &cell.body {
+                TranscriptCellBody::Content(ContentCell {
+                    role: MessageRole::User,
+                    text,
+                }) => Some(text.as_str()),
+                _ => None,
+            };
+            if let Some(index) = confirmed_user.and_then(|text| {
+                self.cells
+                    .iter()
+                    .position(|existing| existing.local_user_text() == Some(text))
+            }) {
+                self.cells[index] = cell;
+            } else {
+                self.cells.push(cell);
+            }
         }
     }
 
