@@ -46,6 +46,7 @@ use ash_async_utils::Cancellation;
 use ash_async_utils::CancellationReason;
 use ash_async_utils::CancellationToken;
 use ash_context_engine::ContextTokenMeasurementOutcome;
+use ash_protocol::HookEvent;
 use ash_protocol::ItemId;
 use ash_protocol::ModelInputEstimate;
 use ash_protocol::ModelResponse;
@@ -66,6 +67,9 @@ use ash_protocol::TurnStatus;
 use ash_utils_stream_parser::AssistantTextMode;
 use ash_utils_stream_parser::AssistantTextStreamParser;
 use ash_utils_stream_parser::strip_citations;
+use core_api::HookEventDecision;
+use core_api::HookEventRequest;
+use core_api::HookEventScope;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -595,6 +599,27 @@ impl TurnExecutor {
         Ok(resumed)
     }
 
+    fn notify_failed_turn(
+        &self,
+        execution: &TurnExecutionStarted,
+        cancellation: &CancellationToken,
+    ) {
+        // A failed Turn is already durable; a Hook failure cannot rewrite its terminal fact.
+        let _ = self.hooks.event(
+            &HookEventRequest {
+                event: HookEvent::StopFailure,
+                scope: HookEventScope::Turn {
+                    session_id: execution.session_id.clone(),
+                    thread_id: execution.thread_id.clone(),
+                    turn_id: execution.turn_id.clone(),
+                },
+                subject: None,
+                tool_name: None,
+            },
+            cancellation,
+        );
+    }
+
     fn execute_shell(
         &self,
         thread_id: &ThreadId,
@@ -611,6 +636,7 @@ impl TurnExecutor {
         if let Err(error) = self.execution_observer.will_execute(&execution) {
             self.threads
                 .fail_turn(thread_id, turn_id, StableTurnError::change_capture_failed())?;
+            self.notify_failed_turn(&execution, cancellation);
             self.publish_committed_after(thread_id, sequence_before_execution);
             self.execution_observer.did_finish(&TurnExecutionFinished {
                 session_id: execution.session_id,
@@ -634,6 +660,7 @@ impl TurnExecutor {
                 }
                 Err(ExecutionFailure::Failed { error, stable }) => {
                     self.threads.fail_turn(thread_id, turn_id, stable)?;
+                    self.notify_failed_turn(&execution, cancellation);
                     (Err(error), Some(TurnExecutionTerminalState::Failed))
                 }
             };
@@ -748,6 +775,7 @@ impl TurnExecutor {
         if let Err(error) = self.execution_observer.will_execute(&execution) {
             self.threads
                 .fail_turn(thread_id, turn_id, StableTurnError::change_capture_failed())?;
+            self.notify_failed_turn(&execution, cancellation);
             self.publish_committed_after(thread_id, sequence_before_execution);
             self.execution_observer.did_finish(&TurnExecutionFinished {
                 session_id: execution.session_id,
@@ -771,6 +799,7 @@ impl TurnExecutor {
             }
             Err(ExecutionFailure::Failed { error, stable }) => {
                 self.threads.fail_turn(thread_id, turn_id, stable)?;
+                self.notify_failed_turn(&execution, cancellation);
                 (Err(error), Some(TurnExecutionTerminalState::Failed))
             }
         };
@@ -1383,6 +1412,7 @@ impl TurnExecutor {
                     },
                 )
                 .map_err(ExecutionFailure::persistence)?;
+            let _ = self.compaction_hook(HookEvent::PostCompact, thread_id, turn_id, cancellation);
         }
     }
 
@@ -1423,7 +1453,37 @@ impl TurnExecutor {
                 },
             )
             .map_err(ExecutionFailure::persistence)?;
+        let _ = self.compaction_hook(HookEvent::PostCompact, thread_id, turn_id, cancellation);
         Ok(())
+    }
+
+    fn compaction_hook(
+        &self,
+        event: HookEvent,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        cancellation: &CancellationToken,
+    ) -> Result<HookEventDecision, ExecutionFailure> {
+        let session_id = self
+            .threads
+            .read_thread(thread_id)
+            .map_err(ExecutionFailure::persistence)?
+            .session_id;
+        self.hooks
+            .event(
+                &HookEventRequest {
+                    event,
+                    scope: HookEventScope::Turn {
+                        session_id,
+                        thread_id: thread_id.clone(),
+                        turn_id: turn_id.clone(),
+                    },
+                    subject: None,
+                    tool_name: None,
+                },
+                cancellation,
+            )
+            .map_err(ExecutionFailure::service)
     }
 
     fn compact_context(
@@ -1433,6 +1493,11 @@ impl TurnExecutor {
         request: &ContextCompactionRequest,
         cancellation: &CancellationToken,
     ) -> Result<(ContextCompactionResult, u64), ExecutionFailure> {
+        if let HookEventDecision::Deny { reason } =
+            self.compaction_hook(HookEvent::PreCompact, thread_id, turn_id, cancellation)?
+        {
+            return Err(ExecutionFailure::service(CoreError::Policy(reason)));
+        }
         let mut usage_sequence = None;
         let mut usage_recording_error = None;
         let input_estimate = request

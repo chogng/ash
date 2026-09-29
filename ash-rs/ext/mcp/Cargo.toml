@@ -17,6 +17,7 @@ file-system = { package = "ash-file-system", path = "../../file-system" }
 file-access = { package = "ash-file-access", path = "../../file-access" }
 base64 = { workspace = true }
 getrandom = { workspace = true }
+log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

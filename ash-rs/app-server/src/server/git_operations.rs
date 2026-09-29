@@ -1,6 +1,7 @@
 use super::AppServer;
 use super::ConnectionState;
 use super::RpcError;
+use super::core_error;
 use super::decode;
 use super::result;
 use crate::git_service::GitServiceError;
@@ -37,6 +38,10 @@ use ash_app_server_protocol::protocol::git::GitWorktreeResolveResult;
 use ash_app_server_protocol::protocol::git::GitWorktreeStateDto;
 use ash_git::GitClient;
 use ash_git::GitError;
+use ash_protocol::HookEvent;
+use core_api::HookEventDecision;
+use core_api::HookEventRequest;
+use core_api::HookEventScope;
 use serde_json::Value;
 use std::num::NonZeroUsize;
 use std::path::Path;
@@ -250,6 +255,14 @@ impl AppServer {
 
     pub(super) fn git_worktree_create(&self, value: &Value) -> Result<Value, RpcError> {
         let params: GitWorktreeCreateParams = decode(value)?;
+        if let HookEventDecision::Deny { reason } = self.emit_hook_event(&HookEventRequest {
+            event: HookEvent::WorktreeCreate,
+            scope: HookEventScope::User,
+            subject: Some(params.name.clone()),
+            tool_name: None,
+        })? {
+            return Err(core_error(core_api::CoreError::Policy(reason)));
+        }
         let source = self
             .git_runtime_service()?
             .mutable_source_for(params.repository_id.as_deref())
@@ -279,6 +292,14 @@ impl AppServer {
         let params: GitWorktreeDeleteParams = decode(value)?;
         if params.checkout_root.is_empty() || params.checkout_root.len() > 32_768 {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        if let HookEventDecision::Deny { reason } = self.emit_hook_event(&HookEventRequest {
+            event: HookEvent::WorktreeRemove,
+            scope: HookEventScope::User,
+            subject: Some(params.checkout_root.clone()),
+            tool_name: None,
+        })? {
+            return Err(core_error(core_api::CoreError::Policy(reason)));
         }
         let source = self
             .git_runtime_service()?

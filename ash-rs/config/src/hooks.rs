@@ -58,15 +58,7 @@ impl<'de> Deserialize<'de> for HookId {
     }
 }
 
-/// Safe-point event that may request a Hook execution.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(rename_all = "camelCase")]
-pub enum HookEvent {
-    BeforeTool,
-    AfterTool,
-    TurnCompleted,
-}
+pub use ash_protocol::HookEvent;
 
 /// Desired enablement of one Hook declaration.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -118,9 +110,9 @@ pub struct HookConfig {
 
 impl HookConfig {
     fn validate(&self) -> Result<(), ConfigError> {
-        if self.event == HookEvent::TurnCompleted && !self.matcher.tool_names.is_empty() {
+        if !self.event.accepts_tool_matcher() && !self.matcher.tool_names.is_empty() {
             return Err(ConfigError(
-                "turnCompleted Hook matcher cannot contain tool names".into(),
+                "this Hook event cannot match tool names".into(),
             ));
         }
         for tool_name in &self.matcher.tool_names {

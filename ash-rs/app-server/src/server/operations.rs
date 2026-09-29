@@ -53,6 +53,7 @@ use ash_app_server_protocol::protocol::turn::TurnSteerResult;
 use ash_app_server_protocol::schema_hash;
 use ash_protocol::AgentRequest;
 use ash_protocol::AgentRequestEnvelope;
+use ash_protocol::HookEvent;
 use ash_protocol::ModelAccess;
 use ash_protocol::Session;
 use ash_protocol::SessionManagerActivity;
@@ -73,6 +74,9 @@ use base64::Engine;
 use core_api::AgentRuntime;
 use core_api::CreateBranchRequest;
 use core_api::ForkThreadRequest;
+use core_api::HookEventDecision;
+use core_api::HookEventRequest;
+use core_api::HookEventScope;
 use core_api::InterruptTurnRequest;
 use core_api::ResolveTurnInteractionRequest;
 use core_api::RewindThreadRequest;
@@ -86,6 +90,7 @@ use std::time::Duration;
 pub(super) enum TurnInstructionSelection {
     Agent,
     Product(ash_protocol::TurnInstructions),
+    Setup(ash_protocol::TurnInstructions),
     Workflow(workflows::Command),
 }
 
@@ -1068,7 +1073,7 @@ impl AppServer {
         input: &mut Vec<UserInput>,
     ) -> TurnInstructionSelection {
         let selection = match product_command(input) {
-            Some("/init") => TurnInstructionSelection::Product(init_prompt()),
+            Some("/init") => TurnInstructionSelection::Setup(init_prompt()),
             _ => return TurnInstructionSelection::Agent,
         };
         if let Some(home) = &self.home {
@@ -1167,6 +1172,52 @@ impl AppServer {
         {
             return Ok(turn_start_result(replayed));
         }
+        if kind == ash_protocol::TurnKind::Coding
+            && let Some(text) = input.iter().find_map(|item| match item {
+                UserInput::Text { text } => Some(text),
+                _ => None,
+            })
+            && let HookEventDecision::Deny { reason } = self.emit_hook_event(&HookEventRequest {
+                event: HookEvent::UserPromptSubmit,
+                scope: HookEventScope::Session {
+                    session_id: mutation.session_id.clone(),
+                },
+                subject: Some(text.clone()),
+                tool_name: None,
+            })?
+        {
+            return Err(core_error(core_api::CoreError::Policy(reason)));
+        }
+        if matches!(&selection, TurnInstructionSelection::Setup(_))
+            && let HookEventDecision::Deny { reason } = self.emit_hook_event(&HookEventRequest {
+                event: HookEvent::Setup,
+                scope: HookEventScope::Session {
+                    session_id: mutation.session_id.clone(),
+                },
+                subject: None,
+                tool_name: None,
+            })?
+        {
+            return Err(core_error(core_api::CoreError::Policy(reason)));
+        }
+        if matches!(
+            &selection,
+            TurnInstructionSelection::Workflow(_) | TurnInstructionSelection::Setup(_)
+        ) && let HookEventDecision::Deny { reason } =
+            self.emit_hook_event(&HookEventRequest {
+                event: HookEvent::UserPromptExpansion,
+                scope: HookEventScope::Session {
+                    session_id: mutation.session_id.clone(),
+                },
+                subject: input.iter().find_map(|item| match item {
+                    UserInput::Text { text } => Some(text.clone()),
+                    _ => None,
+                }),
+                tool_name: None,
+            })?
+        {
+            return Err(core_error(core_api::CoreError::Policy(reason)));
+        }
         if tool_mode != ash_protocol::ToolMode::Direct
             && let Some(config) = &self.config
             && !features::Feature::CodeMode.enabled(
@@ -1205,6 +1256,7 @@ impl AppServer {
         let (workflow, instructions) = match selection {
             TurnInstructionSelection::Agent => (None, base),
             TurnInstructionSelection::Product(prompt) => (None, prompt.with_shared(&base)),
+            TurnInstructionSelection::Setup(prompt) => (None, prompt.with_shared(&base)),
             TurnInstructionSelection::Workflow(command) => (Some(command), base),
         };
         let instructions = instructions.with_model_guidance(guidance);

@@ -105,6 +105,7 @@ mod git_turn_changes_observer;
 mod git_turn_changes_operations;
 mod git_turn_changes_runtime;
 mod home_context;
+mod hook_events;
 mod instruction_import;
 mod instruction_operations;
 mod interaction_runtime;
@@ -1013,6 +1014,7 @@ impl AppServer {
             &config,
             Arc::clone(&self.updates),
             Arc::clone(&self.agent_extensions),
+            self.local_hook_runtime(),
         ));
         self.config = Some(config);
         if let Some(login) = &self.login {

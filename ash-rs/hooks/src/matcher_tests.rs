@@ -91,3 +91,25 @@ fn empty_matcher_matches_tool_events_but_not_another_event() {
         &HookInvocation::TurnCompleted(&completed)
     ));
 }
+
+#[test]
+fn tool_result_events_are_separated_by_outcome() {
+    let success = after_request("shell-command", ToolExecutionOutcome::Succeeded);
+    let failure = after_request("shell-command", ToolExecutionOutcome::Failed);
+    assert!(matches_event(
+        &hook(ConfigHookEvent::PostToolUse, &[]),
+        &HookInvocation::AfterTool(&success)
+    ));
+    assert!(!matches_event(
+        &hook(ConfigHookEvent::PostToolUse, &[]),
+        &HookInvocation::AfterTool(&failure)
+    ));
+    assert!(matches_event(
+        &hook(ConfigHookEvent::PostToolUseFailure, &[]),
+        &HookInvocation::AfterTool(&failure)
+    ));
+    assert!(matches_event(
+        &hook(ConfigHookEvent::AfterTool, &[]),
+        &HookInvocation::AfterTool(&failure)
+    ));
+}

@@ -18,6 +18,9 @@ use ash_instructions::InstructionCatalog;
 use ash_instructions::InstructionCatalogSnapshot;
 use ash_protocol::SessionId;
 use core_api::CoreError;
+use core_api::HookEventRequest;
+use core_api::HookEventScope;
+use core_api::HookService;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -25,6 +28,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
+use std::sync::mpsc;
 
 struct DirContributionCatalog {
     authorization: Authorization,
@@ -41,7 +45,8 @@ pub(super) struct DirContributions {
     dirs: Mutex<BTreeMap<SessionId, BTreeMap<PathBuf, DirContributionCatalog>>>,
     session_environments: Mutex<BTreeMap<SessionId, AgentEnvironmentSource>>,
     nested_warnings: Mutex<BTreeMap<SessionId, BTreeSet<String>>>,
-    hooks: RwLock<Option<Arc<ash_hooks::DeclarativeHookRuntime>>>,
+    hooks: Arc<RwLock<Option<Arc<ash_hooks::DeclarativeHookRuntime>>>>,
+    file_hook_events: Mutex<Option<mpsc::SyncSender<HookEventRequest>>>,
 }
 
 impl DirContributions {
@@ -73,6 +78,8 @@ impl DirContributions {
                 }
             });
         let environment = AgentEnvironmentSource::capture(&dir_root)?;
+        let hooks: Arc<RwLock<Option<Arc<ash_hooks::DeclarativeHookRuntime>>>> =
+            Arc::new(RwLock::new(None));
         Ok(Arc::new(Self {
             environment,
             dir_root,
@@ -82,7 +89,8 @@ impl DirContributions {
             dirs: Mutex::new(BTreeMap::new()),
             session_environments: Mutex::new(BTreeMap::new()),
             nested_warnings: Mutex::new(BTreeMap::new()),
-            hooks: RwLock::new(None),
+            hooks,
+            file_hook_events: Mutex::new(None),
         }))
     }
 
@@ -148,42 +156,71 @@ impl DirContributions {
     }
 
     pub(super) fn read_instruction(&self, session: &SessionId, path: &Path) -> Option<String> {
-        if let Some(home) = &self.home
+        let home_body = if let Some(home) = &self.home
             && let Some(body) =
                 home.instructions()
                     .body_at(path, home.root(), &home.root().join("instructions"))
         {
-            return Some(body.to_owned());
-        }
-        if let Some(catalog) = self
-            .env_dir
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_mut()
-            .filter(|catalog| catalog.authorization.is_active())
-        {
-            catalog.instructions.refresh();
-            if let Some(body) = catalog.instructions.read(path) {
-                return Some(body);
-            }
-        }
-        if let Some(catalogs) = self
-            .dirs
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get_mut(session)
-        {
-            for catalog in catalogs
-                .values_mut()
-                .filter(|catalog| catalog.authorization.is_active())
+            Some(body.to_owned())
+        } else {
+            None
+        };
+        let project_body = home_body
+            .is_none()
+            .then(|| {
+                self.env_dir
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .as_mut()
+                    .filter(|catalog| catalog.authorization.is_active())
+                    .and_then(|catalog| {
+                        catalog.instructions.refresh();
+                        catalog.instructions.read(path)
+                    })
+            })
+            .flatten();
+        let directory_body = (home_body.is_none() && project_body.is_none())
+            .then(|| {
+                self.dirs
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .get_mut(session)
+                    .and_then(|catalogs| {
+                        catalogs
+                            .values_mut()
+                            .filter(|catalog| catalog.authorization.is_active())
+                            .find_map(|catalog| {
+                                catalog.instructions.refresh();
+                                catalog.instructions.read(path)
+                            })
+                    })
+            })
+            .flatten();
+        let body = home_body.or(project_body).or(directory_body);
+        if body.is_some() {
+            if let Some(hooks) = self
+                .hooks
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone()
             {
-                catalog.instructions.refresh();
-                if let Some(body) = catalog.instructions.read(path) {
-                    return Some(body);
+                let cancellation = ash_async_utils::CancellationSource::new();
+                if let Err(error) = hooks.event(
+                    &HookEventRequest {
+                        event: ash_protocol::HookEvent::InstructionsLoaded,
+                        scope: HookEventScope::Session {
+                            session_id: session.clone(),
+                        },
+                        subject: Some(path.display().to_string()),
+                        tool_name: None,
+                    },
+                    &cancellation.token(),
+                ) {
+                    log::warn!("InstructionsLoaded Hook failed: {error}");
                 }
             }
         }
-        None
+        body
     }
 
     pub(super) fn directory_instruction_sources(
@@ -345,6 +382,12 @@ impl DirContributions {
         root: &Path,
         changed: &FsChanged,
     ) {
+        self.queue_file_events(
+            changed,
+            HookEventScope::Session {
+                session_id: session_id.clone(),
+            },
+        );
         let refresh_hooks = matches!(changed, FsChanged::RescanRequired { .. })
             || matches!(changed, FsChanged::PathsChanged { paths, .. } if paths.iter().any(|path| affects(path, ".ash/config.toml")));
         let mut dirs = self
@@ -381,6 +424,56 @@ impl DirContributions {
         drop(dirs);
         if refresh_hooks {
             self.refresh_session_hooks(session_id);
+        }
+    }
+
+    fn queue_file_events(&self, changed: &FsChanged, scope: HookEventScope) {
+        if let FsChanged::PathsChanged { paths, .. } = changed {
+            let runtime = self
+                .hooks
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            let Some(runtime) = runtime else {
+                return;
+            };
+            if !runtime.has_enabled_event(ash_protocol::HookEvent::FileChanged) {
+                return;
+            }
+            let mut sender = self
+                .file_hook_events
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let sender = sender.get_or_insert_with(|| {
+                let (sender, pending) = mpsc::sync_channel(256);
+                let worker_hooks = Arc::clone(&self.hooks);
+                std::thread::spawn(move || {
+                    while let Ok(request) = pending.recv() {
+                        let runtime = worker_hooks
+                            .read()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .clone();
+                        if let Some(runtime) = runtime {
+                            let cancellation = ash_async_utils::CancellationSource::new();
+                            if let Err(error) = runtime.event(&request, &cancellation.token()) {
+                                log::warn!("FileChanged Hook failed: {error}");
+                            }
+                        }
+                    }
+                });
+                sender
+            });
+            for path in paths {
+                if let Err(error) = sender.try_send(HookEventRequest {
+                    event: ash_protocol::HookEvent::FileChanged,
+                    scope: scope.clone(),
+                    subject: Some(path.display().to_string()),
+                    tool_name: None,
+                }) {
+                    log::warn!("FileChanged Hook queue is unavailable: {error}");
+                    break;
+                }
+            }
         }
     }
 
@@ -702,6 +795,7 @@ impl DirFileChangeSink for DirContributions {
                 }
             }
         }
+        self.queue_file_events(changed, HookEventScope::User);
     }
 }
 

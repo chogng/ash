@@ -22,6 +22,78 @@ use ash_protocol::ThreadUpdateEnvelope;
 use ash_protocol::ToolCallId;
 use ash_protocol::ToolName;
 use ash_protocol::TurnId;
+use core_api::HookEventDecision;
+
+struct RecordingHooks(std::sync::mpsc::Sender<HookEventRequest>);
+
+impl HookService for RecordingHooks {
+    fn has_enabled_event(&self, _: HookEvent) -> bool {
+        true
+    }
+
+    fn event(
+        &self,
+        request: &HookEventRequest,
+        _: &ash_async_utils::CancellationToken,
+    ) -> Result<HookEventDecision, core_api::CoreError> {
+        self.0.send(request.clone()).unwrap();
+        Ok(HookEventDecision::Continue)
+    }
+
+    fn before_tool(
+        &self,
+        _: &core_api::BeforeToolHookRequest,
+        _: &ash_async_utils::CancellationToken,
+    ) -> Result<core_api::BeforeToolHookDecision, core_api::CoreError> {
+        Ok(core_api::BeforeToolHookDecision::Continue)
+    }
+
+    fn after_tool(
+        &self,
+        _: &core_api::AfterToolHookRequest,
+        _: &ash_async_utils::CancellationToken,
+    ) -> Result<(), core_api::CoreError> {
+        Ok(())
+    }
+
+    fn turn_completed(
+        &self,
+        _: &core_api::TurnCompletedHookRequest,
+        _: &ash_async_utils::CancellationToken,
+    ) -> Result<(), core_api::CoreError> {
+        Ok(())
+    }
+}
+
+#[test]
+fn delivered_request_and_assistant_text_emit_ui_hook_events() {
+    let broker = UpdateBroker::default();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    broker.bind_hooks(Arc::new(RecordingHooks(sender)));
+    let queue = NotificationQueue::default();
+    let session_id = SessionId::new("session_1").unwrap();
+    let thread_id = ThreadId::new("thread_1").unwrap();
+    broker.bind_session_scope(session_id.clone());
+    broker.register(1, false, &queue);
+    broker.set_agent_interaction_capability(1, Some(approval_capability()));
+    broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
+
+    broker.offer_agent_request(approval_request(&session_id, &thread_id));
+    broker.publish_thread_update(transient_thread_update(&session_id, &thread_id, 1, "Hello"));
+
+    assert_eq!(
+        receiver
+            .recv_timeout(std::time::Duration::from_secs(1))
+            .unwrap()
+            .event,
+        HookEvent::Notification
+    );
+    let displayed = receiver
+        .recv_timeout(std::time::Duration::from_secs(1))
+        .unwrap();
+    assert_eq!(displayed.event, HookEvent::MessageDisplay);
+    assert_eq!(displayed.subject.as_deref(), Some("Hello"));
+}
 
 #[test]
 fn broker_fans_out_filesystem_invalidation_without_a_subscription() {

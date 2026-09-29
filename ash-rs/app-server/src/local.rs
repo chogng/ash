@@ -1706,6 +1706,9 @@ pub fn open_local_app_server_with_codebase_providers(
         .with_env_config(&runtime_config)
         .with_local_env_host(mcp, DirGrantPolicy::UserConfig(Arc::clone(&config)))
         .map_err(|error| OpenAppServerError(error.to_string()))?;
+    if let Some(hooks) = server.local_hook_runtime() {
+        mcp_updates.bind_hooks(hooks);
+    }
     let local_dir_root = options.dir_root.clone();
     if let Some(dir_root) = options.dir_root {
         match options.initial_dir_permissions {

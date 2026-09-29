@@ -559,7 +559,9 @@ fn manual_context_compaction_commits_a_checkpoint_and_usage_before_completing() 
         billing: None,
         stop_reason: StopReason::Completed,
     })]));
-    let executor = TurnExecutor::without_tools(threads.clone(), model.clone());
+    let hooks = Arc::new(CompactionHooks::default());
+    let executor =
+        TurnExecutor::without_tools(threads.clone(), model.clone()).with_hooks(hooks.clone());
 
     let outcome = executor
         .execute(
@@ -608,6 +610,57 @@ fn manual_context_compaction_commits_a_checkpoint_and_usage_before_completing() 
         "preserve the deployment decision"
     ));
     assert!(requests[0].tools.is_empty());
+    assert_eq!(
+        *hooks.events.lock().unwrap(),
+        vec![
+            ash_protocol::HookEvent::PreCompact,
+            ash_protocol::HookEvent::PostCompact
+        ]
+    );
+}
+
+#[derive(Default)]
+struct CompactionHooks {
+    events: std::sync::Mutex<Vec<ash_protocol::HookEvent>>,
+}
+
+impl core_api::HookService for CompactionHooks {
+    fn has_enabled_event(&self, _: ash_protocol::HookEvent) -> bool {
+        true
+    }
+
+    fn event(
+        &self,
+        request: &core_api::HookEventRequest,
+        _: &ash_async_utils::CancellationToken,
+    ) -> Result<core_api::HookEventDecision, core_api::CoreError> {
+        self.events.lock().unwrap().push(request.event);
+        Ok(core_api::HookEventDecision::Continue)
+    }
+
+    fn before_tool(
+        &self,
+        _: &core_api::BeforeToolHookRequest,
+        _: &ash_async_utils::CancellationToken,
+    ) -> Result<core_api::BeforeToolHookDecision, core_api::CoreError> {
+        Ok(core_api::BeforeToolHookDecision::Continue)
+    }
+
+    fn after_tool(
+        &self,
+        _: &core_api::AfterToolHookRequest,
+        _: &ash_async_utils::CancellationToken,
+    ) -> Result<(), core_api::CoreError> {
+        Ok(())
+    }
+
+    fn turn_completed(
+        &self,
+        _: &core_api::TurnCompletedHookRequest,
+        _: &ash_async_utils::CancellationToken,
+    ) -> Result<(), core_api::CoreError> {
+        Ok(())
+    }
 }
 
 #[test]

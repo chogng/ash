@@ -15,6 +15,7 @@ use ash_core::ToolExecutionFacts;
 use ash_core::ToolOutputSink;
 use ash_core::ToolService;
 use ash_core::UpdatePlanDisposition;
+use ash_protocol::HookEvent;
 use ash_protocol::PlanStep;
 use ash_protocol::PlanStepStatus;
 use ash_protocol::PlanUpdate;
@@ -23,6 +24,9 @@ use ash_protocol::ToolDefinition;
 use ash_protocol::ToolExecutionOutput;
 use ash_protocol::ToolName;
 use core_api::CoreError;
+use core_api::HookEventRequest;
+use core_api::HookEventScope;
+use core_api::HookService;
 use serde::Deserialize;
 use serde_json::Value;
 use serde_json::json;
@@ -32,14 +36,16 @@ pub(crate) const UPDATE_PLAN_TOOL_NAME: &str = "update_plan";
 
 pub(super) struct UpdatePlanToolService {
     threads: Arc<ThreadController>,
+    hooks: Arc<dyn HookService>,
     definition: ToolDefinition,
     action_policy_revision: ActionPolicyRevision,
 }
 
 impl UpdatePlanToolService {
-    pub(super) fn new(threads: Arc<ThreadController>) -> Self {
+    pub(super) fn new(threads: Arc<ThreadController>, hooks: Arc<dyn HookService>) -> Self {
         Self {
             threads,
+            hooks,
             definition: definition(),
             action_policy_revision: local_policy_revision(),
         }
@@ -75,9 +81,49 @@ impl UpdatePlanToolService {
                 })
                 .collect(),
         };
+        let previous = self
+            .threads
+            .read_thread(identity.thread_id())?
+            .turns
+            .into_iter()
+            .find(|turn| &turn.turn_id == identity.turn_id())
+            .and_then(|turn| turn.plan)
+            .map(|plan| plan.steps)
+            .unwrap_or_default();
         let result =
             self.threads
                 .update_plan(identity.thread_id(), identity.turn_id(), plan.clone())?;
+        if result.disposition == UpdatePlanDisposition::Changed {
+            for step in &plan.steps {
+                let old = previous.iter().find(|old| old.step == step.step);
+                let mut events = Vec::new();
+                if old.is_none() {
+                    events.push(HookEvent::TaskCreated);
+                }
+                if step.status == PlanStepStatus::Completed
+                    && old.is_none_or(|old| old.status != PlanStepStatus::Completed)
+                {
+                    events.push(HookEvent::TaskCompleted);
+                }
+                for event in events {
+                    if let Err(error) = self.hooks.event(
+                        &HookEventRequest {
+                            event,
+                            scope: HookEventScope::Turn {
+                                session_id: identity.session_id().clone(),
+                                thread_id: identity.thread_id().clone(),
+                                turn_id: identity.turn_id().clone(),
+                            },
+                            subject: Some(step.step.clone()),
+                            tool_name: None,
+                        },
+                        cancellation,
+                    ) {
+                        log::warn!("Task Hook failed after the plan update: {error}");
+                    }
+                }
+            }
+        }
         success(json!({
             "updated": result.disposition == UpdatePlanDisposition::Changed,
             "sequence": result.sequence,

@@ -88,7 +88,7 @@ fn bridges_sync_calls_to_continuously_running_async_runtime() {
         .expect("prepare call");
     assert_eq!(prepared.binding().exposed_name(), &tool_name);
     let output = owner
-        .call(prepared, CancellationSource::new().token(), None)
+        .call(prepared, CancellationSource::new().token(), None, None)
         .expect("call tool");
 
     assert_eq!(output.status(), ToolOutputStatus::Success);

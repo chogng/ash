@@ -8,6 +8,8 @@ use ash_protocol::ThreadId;
 use ash_protocol::ToolCallId;
 use ash_protocol::TurnId;
 use core_api::BeforeToolHookRequest;
+use core_api::HookEventRequest;
+use core_api::HookEventScope;
 
 #[test]
 fn input_uses_the_ash_protocol_and_canonical_safe_point_identity() {
@@ -45,4 +47,29 @@ fn input_uses_the_ash_protocol_and_canonical_safe_point_identity() {
     assert_eq!(value["event"]["turnId"], "turn-3");
     assert_eq!(value["event"]["toolCallId"], "tool-9");
     assert_eq!(value["event"]["toolName"], "shell-command");
+}
+
+#[test]
+fn sessionless_event_input_has_its_declared_name_and_subject() {
+    let hook = HookConfig {
+        id: HookId::new("user:hook:config").unwrap(),
+        event: HookEvent::ConfigChange,
+        matcher: HookMatcher::default(),
+        action: HookAction::Process {
+            program: "audit-hook".into(),
+            args: Vec::new(),
+        },
+        enablement: HookEnablement::Enabled,
+    };
+    let request = HookEventRequest {
+        event: HookEvent::ConfigChange,
+        scope: HookEventScope::User,
+        subject: Some("config".into()),
+        tool_name: None,
+    };
+    let bytes = encode_input(&hook, &HookInvocation::Event(&request), Path::new("/dir")).unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(value["event"]["name"], "configChange");
+    assert_eq!(value["event"]["subject"], "config");
+    assert!(value["event"].get("turnId").is_none());
 }

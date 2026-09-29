@@ -19,6 +19,8 @@ use core_api::AfterToolHookRequest;
 use core_api::BeforeToolHookDecision;
 use core_api::BeforeToolHookRequest;
 use core_api::CoreError;
+use core_api::HookEventDecision;
+use core_api::HookEventRequest;
 use core_api::HookExecutionEvent;
 use core_api::HookExecutionObserver;
 use core_api::HookService;
@@ -231,7 +233,6 @@ impl DeclarativeHookRuntime {
 
     fn run_event(
         &self,
-        session_id: &SessionId,
         invocation: &HookInvocation<'_>,
         cancellation: &CancellationToken,
     ) -> Result<HookDecision, CoreError> {
@@ -243,8 +244,11 @@ impl DeclarativeHookRuntime {
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
-        let process = self
-            .thread_process(invocation.thread_id(), &config)?
+        let process = invocation
+            .thread_id()
+            .map(|thread_id| self.thread_process(thread_id, &config))
+            .transpose()?
+            .flatten()
             .or_else(|| {
                 self.process
                     .read()
@@ -261,7 +265,7 @@ impl DeclarativeHookRuntime {
             .session_bindings
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(bindings) = sessions.get(session_id) {
+        if let Some(bindings) = invocation.session_id().and_then(|id| sessions.get(id)) {
             for binding in bindings {
                 if binding.discovery.ensure_active().is_err()
                     || binding.execution.ensure_active().is_err()
@@ -296,26 +300,39 @@ impl DeclarativeHookRuntime {
             if hook.enablement != HookEnablement::Enabled || !matches_event(hook, invocation) {
                 continue;
             }
-            let started = self.runs.start(hook, invocation);
+            let started = self.runs.start(hook);
             let result = (|| {
                 let authority =
                     execution_authority(hook, process.dir(), self.policy.as_ref(), cancellation)?;
                 let input = encode_input(hook, invocation, process.dir().canonical_path())?;
-                let event = HookExecutionEvent {
-                    session_id: invocation.session_id().clone(),
-                    thread_id: invocation.thread_id().clone(),
-                    turn_id: invocation.turn_id().clone(),
-                    hook_id: hook.id.to_string(),
-                    dir: process.dir().canonical_path().to_path_buf(),
-                };
                 let observer = self
                     .execution_observer
                     .read()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .clone();
-                observer.will_execute(&event)?;
+                let event = match (
+                    invocation.session_id(),
+                    invocation.thread_id(),
+                    invocation.turn_id(),
+                ) {
+                    (Some(session_id), Some(thread_id), Some(turn_id)) => {
+                        Some(HookExecutionEvent {
+                            session_id: session_id.clone(),
+                            thread_id: thread_id.clone(),
+                            turn_id: turn_id.clone(),
+                            hook_id: hook.id.to_string(),
+                            dir: process.dir().canonical_path().to_path_buf(),
+                        })
+                    }
+                    _ => None,
+                };
+                if let Some(event) = &event {
+                    observer.will_execute(event)?;
+                }
                 let result = process.execute(hook, input, authority, cancellation);
-                observer.did_finish(&event);
+                if let Some(event) = &event {
+                    observer.did_finish(event);
+                }
                 result
             })();
             self.runs.finish(started, &result);
@@ -354,16 +371,49 @@ fn has_enabled_hooks(config: &HooksConfig) -> bool {
 }
 
 impl HookService for DeclarativeHookRuntime {
+    fn has_enabled_event(&self, event: ash_protocol::HookEvent) -> bool {
+        let config = self
+            .config
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if config
+            .hooks
+            .values()
+            .any(|hook| hook.enablement == HookEnablement::Enabled && hook.event == event)
+        {
+            return true;
+        }
+        self.session_bindings
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .values()
+            .flatten()
+            .any(|binding| {
+                binding
+                    .config
+                    .hooks
+                    .values()
+                    .any(|hook| hook.enablement == HookEnablement::Enabled && hook.event == event)
+            })
+    }
+
+    fn event(
+        &self,
+        request: &HookEventRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<HookEventDecision, CoreError> {
+        match self.run_event(&HookInvocation::Event(request), cancellation)? {
+            HookDecision::Continue => Ok(HookEventDecision::Continue),
+            HookDecision::Deny { reason } => Ok(HookEventDecision::Deny { reason }),
+        }
+    }
+
     fn before_tool(
         &self,
         request: &BeforeToolHookRequest,
         cancellation: &CancellationToken,
     ) -> Result<BeforeToolHookDecision, CoreError> {
-        match self.run_event(
-            &request.session_id,
-            &HookInvocation::BeforeTool(request),
-            cancellation,
-        )? {
+        match self.run_event(&HookInvocation::BeforeTool(request), cancellation)? {
             HookDecision::Continue => Ok(BeforeToolHookDecision::Continue),
             HookDecision::Deny { reason } => Ok(BeforeToolHookDecision::Deny { reason }),
         }
@@ -375,11 +425,7 @@ impl HookService for DeclarativeHookRuntime {
         cancellation: &CancellationToken,
     ) -> Result<(), CoreError> {
         require_observational_result(
-            self.run_event(
-                &request.session_id,
-                &HookInvocation::AfterTool(request),
-                cancellation,
-            )?,
+            self.run_event(&HookInvocation::AfterTool(request), cancellation)?,
             "afterTool",
         )
     }
@@ -390,11 +436,7 @@ impl HookService for DeclarativeHookRuntime {
         cancellation: &CancellationToken,
     ) -> Result<(), CoreError> {
         require_observational_result(
-            self.run_event(
-                &request.session_id,
-                &HookInvocation::TurnCompleted(request),
-                cancellation,
-            )?,
+            self.run_event(&HookInvocation::TurnCompleted(request), cancellation)?,
             "turnCompleted",
         )
     }

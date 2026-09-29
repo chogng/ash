@@ -2,13 +2,16 @@ use super::AgentTreeLimits;
 use super::budget::validate_spawn_capacity;
 use crate::CoreError;
 use crate::CreateAgentThreadRequest;
+use crate::HookService;
 use crate::InterruptTurnRequest;
+use crate::NoHooks;
 use crate::SequenceExpectation;
 use crate::StartTurnDisposition;
 use crate::StartTurnRequest;
 use crate::ThreadController;
 use crate::ThreadSnapshot;
 use crate::thread_reducer::satisfied_agent_join;
+use ash_async_utils::CancellationSource;
 use ash_protocol::AgentCapabilityScope;
 use ash_protocol::AgentContextContent;
 use ash_protocol::AgentContextMode;
@@ -34,12 +37,15 @@ use ash_protocol::DelegationId;
 use ash_protocol::DelegationResult;
 use ash_protocol::DelegationResultDigest;
 use ash_protocol::DelegationResultStatus;
+use ash_protocol::HookEvent;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadSequenceRange;
 use ash_protocol::TurnId;
 use ash_protocol::TurnStatus;
 use ash_protocol::UserInput;
+use core_api::HookEventRequest;
+use core_api::HookEventScope;
 use serde::Serialize;
 use sha2::Digest;
 use sha2::Sha256;
@@ -129,6 +135,7 @@ pub struct MultiAgentCoordinator {
     threads: Arc<ThreadController>,
     limits: AgentTreeLimits,
     thread_worktree_binder: RwLock<Arc<dyn crate::ThreadWorktreeBinder>>,
+    hooks: RwLock<Arc<dyn HookService>>,
 }
 
 impl MultiAgentCoordinator {
@@ -137,7 +144,45 @@ impl MultiAgentCoordinator {
             threads,
             limits,
             thread_worktree_binder: RwLock::new(Arc::new(crate::NoThreadWorktreeBinder)),
+            hooks: RwLock::new(Arc::new(NoHooks)),
         }
+    }
+
+    pub fn install_hooks(&self, hooks: Arc<dyn HookService>) -> Result<(), CoreError> {
+        *self
+            .hooks
+            .write()
+            .map_err(|_| CoreError::Journal("Agent Hook port lock poisoned".into()))? = hooks;
+        Ok(())
+    }
+
+    fn notify_agent_event(
+        &self,
+        event: HookEvent,
+        session_id: &SessionId,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        delegation_id: &DelegationId,
+    ) {
+        let hooks = self
+            .hooks
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let cancellation = CancellationSource::new();
+        let _ = hooks.event(
+            &HookEventRequest {
+                event,
+                scope: HookEventScope::Turn {
+                    session_id: session_id.clone(),
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                },
+                subject: Some(delegation_id.to_string()),
+                tool_name: None,
+            },
+            &cancellation.token(),
+        );
     }
 
     /// Installs this coordinator's environment authority before accepting Agent spawns.
@@ -304,6 +349,24 @@ impl MultiAgentCoordinator {
         result.digest = delegation_result_digest(&result)?;
         self.threads
             .record_delegation_result_produced(&child_thread_id, result.clone())?;
+        let last_turn = child
+            .turns
+            .last()
+            .expect("a started Agent has an initial Turn");
+        self.notify_agent_event(
+            HookEvent::TeammateIdle,
+            &child.session_id,
+            &child_thread_id,
+            &last_turn.turn_id,
+            &result.delegation_id,
+        );
+        self.notify_agent_event(
+            HookEvent::SubagentStop,
+            &child.session_id,
+            &child_thread_id,
+            &last_turn.turn_id,
+            &result.delegation_id,
+        );
         self.deliver_result(&request.parent_thread_id, result.clone())?;
         Ok(result)
     }
@@ -601,6 +664,15 @@ impl MultiAgentCoordinator {
                 }],
             },
         )?;
+        if initial_turn.disposition != StartTurnDisposition::Replayed {
+            self.notify_agent_event(
+                HookEvent::SubagentStart,
+                &parent.session_id,
+                &spawned.thread_id,
+                &initial_turn.turn_id,
+                &seed.delegation_id,
+            );
+        }
         Ok(SpawnedAgent {
             delegation_id: seed.delegation_id.clone(),
             child_thread_id: spawned.thread_id,

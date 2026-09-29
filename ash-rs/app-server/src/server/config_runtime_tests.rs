@@ -44,6 +44,7 @@ fn config_changes_reach_each_current_extension_registry_once() {
         &config,
         Arc::new(UpdateBroker::default()),
         registry(first_sender),
+        None,
     );
     update_gui(&config, 0);
     assert_eq!(

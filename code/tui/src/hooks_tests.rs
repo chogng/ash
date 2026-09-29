@@ -72,6 +72,16 @@ fn hooks_panel_opens_details_toggles_and_edits() {
     };
     assert_eq!(editor.title(), "Edit Hook");
     panel.handle_key(key(KeyCode::Enter));
+    let PageView::Selection(events) = panel.page() else {
+        panic!("expected Hook event picker")
+    };
+    assert_eq!(events.title(), "Hook events");
+    assert_eq!(events.visible_items().len(), 33);
+    panel
+        .selection_mut()
+        .unwrap()
+        .focus_item(&ListSelectionItemId::new("hook-event-5"));
+    panel.handle_key(key(KeyCode::Enter));
     panel
         .selection_mut()
         .unwrap()
@@ -79,7 +89,7 @@ fn hooks_panel_opens_details_toggles_and_edits() {
     assert!(matches!(
         panel.handle_key(key(KeyCode::Enter)),
         Outcome::Command(Command::Upsert(hook))
-            if hook.event == HookEventDto::TurnCompleted && hook.matcher.tool_names.is_empty()
+            if hook.event == HookEventDto::Notification && hook.matcher.tool_names.is_empty()
     ));
 }
 

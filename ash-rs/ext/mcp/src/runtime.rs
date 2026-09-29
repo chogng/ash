@@ -18,6 +18,7 @@ use ash_mcp::RmcpSessionFactory;
 use ash_protocol::ToolDefinition;
 use ash_protocol::ToolName;
 use ash_tools::ToolOutput;
+use core_api::HookEventScope;
 
 use crate::status::McpRuntimeStatusSnapshot;
 use crate::status::McpServerRuntimeState;
@@ -30,6 +31,7 @@ enum RuntimeCommand {
         prepared: Box<McpPreparedCall>,
         cancellation: CancellationToken,
         interactions: Option<Arc<dyn ToolInteractionService>>,
+        hook_scope: Option<HookEventScope>,
         response: mpsc::Sender<Result<ToolOutput, McpCallError>>,
     },
     Shutdown,
@@ -144,6 +146,7 @@ impl McpRuntimeOwner {
         prepared: McpPreparedCall,
         cancellation: CancellationToken,
         interactions: Option<Arc<dyn ToolInteractionService>>,
+        hook_scope: Option<HookEventScope>,
     ) -> Result<ToolOutput, McpCallError> {
         let (response, receiver) = mpsc::channel();
         self.commands
@@ -153,6 +156,7 @@ impl McpRuntimeOwner {
                 prepared: Box::new(prepared),
                 cancellation,
                 interactions,
+                hook_scope,
                 response,
             })
             .map_err(|error| match error {
@@ -269,6 +273,7 @@ fn run_worker(
                             prepared,
                             cancellation,
                             interactions,
+                            hook_scope,
                             response,
                         }) => {
                             let mcp = Arc::clone(&mcp);
@@ -282,6 +287,7 @@ fn run_worker(
                                     Some(interactions) => {
                                         crate::updates::with_active_tool_interactions(
                                             interactions,
+                                            hook_scope,
                                             call,
                                         )
                                         .await

@@ -19,9 +19,12 @@ use ash_app_server_protocol::protocol::session::SessionThreadProjection;
 use ash_app_server_protocol::protocol::session::SessionUnsubscribeParams;
 use ash_app_server_protocol::protocol::session::SessionWorkspaceSelection;
 use ash_protocol::CommandId;
+use ash_protocol::HookEvent;
 use ash_protocol::SessionId;
 use ash_protocol::SessionWorkspace;
 use ash_protocol::ThreadId;
+use core_api::HookEventRequest;
+use core_api::HookEventScope;
 use core_api::StartThreadRequest;
 use serde_json::Value;
 
@@ -179,7 +182,7 @@ impl AppServer {
                 "creating a named worktree requires a Git worktree runtime".into(),
             )));
         }
-        let created = if let Some(existing) = self
+        let (created, is_new) = if let Some(existing) = self
             .agent_runtime()
             .read_started_thread(&params.command_id)
             .map_err(core_error)?
@@ -221,7 +224,7 @@ impl AppServer {
             {
                 return Err(core_error(core_api::CoreError::CommandConflict));
             }
-            existing
+            (existing, false)
         } else {
             let agent = self.resolve_root_agent(&params.agent).map_err(|error| {
                 let mut response = core_error(error.clone());
@@ -230,7 +233,8 @@ impl AppServer {
                 }
                 response
             })?;
-            self.agent_runtime()
+            let created = self
+                .agent_runtime()
                 .start_thread(StartThreadRequest {
                     agent_id: params.agent_id,
                     command_id: params.command_id,
@@ -239,10 +243,21 @@ impl AppServer {
                     branch_name: params.branch_name,
                     workspace,
                 })
-                .map_err(core_error)?
+                .map_err(core_error)?;
+            (created, true)
         };
         self.bind_session_runtime(&created.session_id)
             .map_err(core_error)?;
+        if is_new {
+            let _ = self.emit_hook_event(&HookEventRequest {
+                event: HookEvent::SessionStart,
+                scope: HookEventScope::Session {
+                    session_id: created.session_id.clone(),
+                },
+                subject: None,
+                tool_name: None,
+            });
+        }
         self.updates.publish_session_changed(&created.session_id);
         self.updates
             .subscribe_session(connection.connection_id, created.session_id.clone());
@@ -266,6 +281,14 @@ impl AppServer {
             .map_err(core_error)?;
         self.bind_session_runtime(&forked.session_id)
             .map_err(core_error)?;
+        let _ = self.emit_hook_event(&HookEventRequest {
+            event: HookEvent::SessionStart,
+            scope: HookEventScope::Session {
+                session_id: forked.session_id.clone(),
+            },
+            subject: Some("fork".into()),
+            tool_name: None,
+        });
         self.updates.publish_session_changed(&forked.session_id);
         Ok(
             ash_app_server_protocol::protocol::session::SessionThreadResult {
@@ -403,6 +426,7 @@ impl AppServer {
                 ash_protocol::ThreadArchiveReason::Stopped,
             )
             .map_err(core_error)?;
+        self.notify_session_end(&mutation.session_id);
         self.clear_session_dirs(&mutation.session_id);
         self.updates.publish_session_changed(&mutation.session_id);
         self.enforce_turn_changes_cleanup();
@@ -421,6 +445,7 @@ impl AppServer {
                 ash_protocol::ThreadArchiveReason::Stopped,
             )
             .map_err(core_error)?;
+        self.notify_session_end(&session_id);
         if let Some(queue) = &self.queue {
             queue.delete_session(&session_id).map_err(|_| {
                 RpcError::new(
@@ -471,6 +496,7 @@ impl AppServer {
                 ash_protocol::ThreadArchiveReason::Completed,
             )
             .map_err(core_error)?;
+        self.notify_session_end(&mutation.session_id);
         self.updates.publish_session_changed(&mutation.session_id);
         self.enforce_turn_changes_cleanup();
         self.session_result(&mutation.session_id)
@@ -482,5 +508,16 @@ impl AppServer {
         {
             log::warn!("Thread worktree cleanup policy failed: {error}");
         }
+    }
+
+    fn notify_session_end(&self, session_id: &SessionId) {
+        let _ = self.emit_hook_event(&HookEventRequest {
+            event: HookEvent::SessionEnd,
+            scope: HookEventScope::Session {
+                session_id: session_id.clone(),
+            },
+            subject: None,
+            tool_name: None,
+        });
     }
 }

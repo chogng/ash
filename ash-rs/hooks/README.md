@@ -12,7 +12,9 @@
 
 | 责任 | Owner | 本 crate 的边界 |
 | --- | --- | --- |
-| `beforeTool`、`afterTool`、`turnCompleted` 安全点 | `ash-core` | 不决定调用时机 |
+| 工具、轮次和压缩安全点 | `ash-core` | 不决定调用时机 |
+| 会话、配置、目录、工作树和客户端通知事件 | App Server | 不决定调用时机 |
+| MCP 用户输入事件 | MCP extension | 不决定调用时机 |
 | Hooks 类型化请求和服务接口 | `ash-core-api` | 实现 `HookService` |
 | `beforeTool` 拒绝后的模型可见工具失败 | `ash-core` | 返回 `BeforeToolHookDecision`，不直接写 Thread |
 | `HookId`、matcher、action 与 desired enablement | `ash-config` | 消费完整 `HooksConfig` 快照，不读写配置文件 |
@@ -48,7 +50,8 @@ binding。没有目录 binding 时，事件成功执行为空操作；缺少执�
   "hookId": "user:hook:audit",
   "dir": "/canonical/dir",
   "event": {
-    "name": "beforeTool",
+    "name": "preToolUse",
+    "sessionId": "session-2",
     "threadId": "thread-7",
     "turnId": "turn-3",
     "toolCallId": "tool-9",
@@ -57,8 +60,11 @@ binding。没有目录 binding 时，事件成功执行为空操作；缺少执�
 }
 ```
 
-`afterTool` 额外携带 `outcome: "succeeded" | "failed"`，但不暴露原始工具输出；`turnCompleted`
-只携带 Thread 和 Turn identity。完整 stdin 最大 64 KiB，超过限制时不启动进程。
+33 种事件的名称由 `ash_protocol::HookEvent::ALL` 定义。`postToolUse` 和
+`postToolUseFailure` 携带 `outcome: "succeeded" | "failed"`，但不暴露原始工具输出。
+通用事件按发生位置携带 `sessionId`、`threadId`、`turnId`、`subject` 和 `toolName`；
+这些字段均可缺省。完整 stdin 最大 64 KiB，超过限制时不启动进程。
+旧配置中的 `beforeTool`、`afterTool` 和 `turnCompleted` 继续读取和执行。
 
 空 stdout 表示继续，用于兼容既有 Ash Hook。非空 stdout 必须严格匹配以下一种对象：
 
@@ -67,9 +73,10 @@ binding。没有目录 binding 时，事件成功执行为空操作；缺少执�
 {"decision":"deny","reason":"blocked by repository policy"}
 ```
 
-只有 `beforeTool` 可以返回 `deny`。Core 将拒绝原因保存为对应 Tool Call 的错误结果，模型可以在同一
-Turn 的下一步看到该反馈。`afterTool` 和 `turnCompleted` 已处于提交后的观察点，返回 `deny` 是协议
-错误，不能倒转已经发生的结果。
+`preToolUse` 与旧 `beforeTool` 的 `deny` 会成为模型可见的工具失败。
+`preCompact`、`preModelSwitch`、`permissionRequest`、`worktreeCreate`、`worktreeRemove`
+以及 MCP `elicitation` 在操作前读取 `deny`。已经发生的事件只用于观察；它们的 `deny`
+不能撤销已提交的事实。
 
 ## 内部接口与调用关系
 
@@ -87,7 +94,7 @@ Turn 的下一步看到该反馈。`afterTool` 和 `turnCompleted` 已处于提�
 
 ```text
 Core typed Hook safe point
-└─ HookService::{before_tool,after_tool,turn_completed}
+└─ HookService::{before_tool,after_tool,turn_completed,event}
    └─ DeclarativeHookRuntime::run_event
       ├─ matcher::matches_event
       ├─ records::HookRunLog::start
@@ -107,6 +114,8 @@ Core typed Hook safe point
 - Windows 按 MXC、账户沙箱顺序选择后端，原样保留动作策略返回的隔离和 ACL 要求；默认严格隔离不能由账户沙箱满足。启动错误不会换后端重跑。
 - stdin、stdout 与 stderr 均有 byte 上限；单个进程最长运行 30 秒，captured output 总上限为
   64 KiB。
+- 文件变化、客户端通知和助手文本展示从各自的分发线程送入有界队列；每类分发最多暂存 256 个事件，
+  队列满时记录警告并跳过新的观察事件，不阻塞文件监视或客户端消息。
 - 非零退出、截断、非空但无效的 JSON 和空拒绝原因都是执行失败，不会被解释成继续。
 - `AskUser` 不会从后台 Hook 打开交互式批准，而是失败关闭；block、revision mismatch 与错误 grant
   同样不能执行。

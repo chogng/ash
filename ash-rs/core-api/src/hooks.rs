@@ -1,5 +1,6 @@
 use crate::CoreError;
 use ash_async_utils::CancellationToken;
+use ash_protocol::HookEvent;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::ToolCallId;
@@ -45,6 +46,36 @@ pub enum BeforeToolHookDecision {
     Deny { reason: String },
 }
 
+/// Identity available when a lifecycle event is emitted.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum HookEventScope {
+    User,
+    Session {
+        session_id: SessionId,
+    },
+    Turn {
+        session_id: SessionId,
+        thread_id: ThreadId,
+        turn_id: TurnId,
+    },
+}
+
+/// One Ash lifecycle event emitted by the owner of the corresponding state transition.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HookEventRequest {
+    pub event: HookEvent,
+    pub scope: HookEventScope,
+    pub subject: Option<String>,
+    pub tool_name: Option<String>,
+}
+
+/// Decision from a Hook that runs before its event's operation completes.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum HookEventDecision {
+    Continue,
+    Deny { reason: String },
+}
+
 /// Canonical request observed after a Tool result has been committed.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AfterToolHookRequest {
@@ -78,6 +109,15 @@ pub struct TurnCompletedHookRequest {
 /// observe the supplied cancellation token. A `before_tool` denial is returned as a typed decision
 /// so Core can persist model-visible Tool feedback without turning it into a failed Turn.
 pub trait HookService: Send + Sync {
+    /// Whether an event currently has any enabled declaration.
+    fn has_enabled_event(&self, event: HookEvent) -> bool;
+
+    fn event(
+        &self,
+        request: &HookEventRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<HookEventDecision, CoreError>;
+
     fn before_tool(
         &self,
         request: &BeforeToolHookRequest,

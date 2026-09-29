@@ -7,6 +7,7 @@ mod config;
 mod error;
 #[path = "thread/history.rs"]
 mod history;
+mod hook;
 mod ids;
 mod interaction;
 mod item;
@@ -30,6 +31,7 @@ pub use history::MessageBoundary;
 pub use history::MessageCheckpoint;
 pub use history::RepositoryCheckpoint;
 pub use history::WorkspaceCheckpoint;
+pub use hook::HookEvent;
 mod tool_binding;
 mod tool_execution;
 mod tool_mode;

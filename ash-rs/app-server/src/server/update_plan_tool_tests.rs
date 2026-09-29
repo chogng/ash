@@ -21,6 +21,7 @@ use core_api::ActionPolicyService;
 use core_api::ModelSelection;
 use core_api::ModelService;
 use core_api::SequenceExpectation;
+use std::sync::Mutex;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -120,10 +121,14 @@ fn tool_call_durably_updates_the_running_turn_plan() {
         .unwrap()
         .turn_id;
     let model = Arc::new(PlanModel::default());
+    let hooks = Arc::new(PlanHooks::default());
     let executor = TurnExecutor::new(
         threads.clone(),
         model,
-        Arc::new(UpdatePlanToolService::new(Arc::clone(&threads))),
+        Arc::new(UpdatePlanToolService::new(
+            Arc::clone(&threads),
+            hooks.clone(),
+        )),
         Arc::new(PlanPolicy),
     );
 
@@ -152,6 +157,58 @@ fn tool_call_durably_updates_the_running_turn_plan() {
             },
         ]
     );
+    assert_eq!(
+        *hooks.events.lock().unwrap(),
+        vec![
+            HookEvent::TaskCreated,
+            HookEvent::TaskCompleted,
+            HookEvent::TaskCreated,
+        ]
+    );
+}
+
+#[derive(Default)]
+struct PlanHooks {
+    events: Mutex<Vec<HookEvent>>,
+}
+
+impl HookService for PlanHooks {
+    fn has_enabled_event(&self, _: HookEvent) -> bool {
+        true
+    }
+
+    fn event(
+        &self,
+        request: &HookEventRequest,
+        _: &CancellationToken,
+    ) -> Result<core_api::HookEventDecision, CoreError> {
+        self.events.lock().unwrap().push(request.event);
+        Ok(core_api::HookEventDecision::Continue)
+    }
+
+    fn before_tool(
+        &self,
+        _: &core_api::BeforeToolHookRequest,
+        _: &CancellationToken,
+    ) -> Result<core_api::BeforeToolHookDecision, CoreError> {
+        Ok(core_api::BeforeToolHookDecision::Continue)
+    }
+
+    fn after_tool(
+        &self,
+        _: &core_api::AfterToolHookRequest,
+        _: &CancellationToken,
+    ) -> Result<(), CoreError> {
+        Ok(())
+    }
+
+    fn turn_completed(
+        &self,
+        _: &core_api::TurnCompletedHookRequest,
+        _: &CancellationToken,
+    ) -> Result<(), CoreError> {
+        Ok(())
+    }
 }
 
 #[derive(Default)]

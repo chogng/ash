@@ -68,6 +68,7 @@ use ash_protocol::ProviderId;
 use ash_protocol::SessionId;
 use ash_protocol::TurnStatus;
 use ash_tools::ToolRegistryGeneration;
+use core_api::HookService;
 use core_api::InterruptTurnRequest;
 use core_api::SequenceExpectation;
 use goal::GoalToolService;
@@ -306,6 +307,7 @@ impl EnvRuntimeControl {
             &self.team_memberships,
             &self.model_instructions,
             &self.threads,
+            self.hooks.clone(),
             &self.turn_backend,
             customizations.as_ref(),
         )?;
@@ -478,6 +480,7 @@ impl EnvRuntimeControl {
             &self.team_memberships,
             &self.model_instructions,
             &self.threads,
+            self.hooks.clone(),
             &turn_backend,
             Some(&customizations),
         )?;
@@ -1206,6 +1209,13 @@ impl AppServer {
             hook_config,
             tools.reloadable.policy(),
         ));
+        self.multi_agent
+            .install_hooks(hooks.clone())
+            .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
+        self.updates.bind_hooks(hooks.clone());
+        if let Some(watcher) = &self._config_watcher {
+            watcher.bind_hooks(hooks.clone());
+        }
         let mut executor = self
             .env_runtime_mut()
             .turn_executor
@@ -1684,6 +1694,24 @@ impl AppServer {
             .add_dir(session_id.clone(), authorization)
             .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
         self.reconcile_session_dir_consumers(session_id)?;
+        if matches!(mutation, Mutation::AddedDir | Mutation::AddedSource)
+            && let Some(hooks) = self.local_hook_runtime()
+        {
+            let cancellation = ash_async_utils::CancellationSource::new();
+            if let Err(error) = hooks.event(
+                &core_api::HookEventRequest {
+                    event: ash_protocol::HookEvent::DirectoryAdded,
+                    scope: core_api::HookEventScope::Session {
+                        session_id: session_id.clone(),
+                    },
+                    subject: Some(path.display().to_string()),
+                    tool_name: None,
+                },
+                &cancellation.token(),
+            ) {
+                log::warn!("DirectoryAdded Hook failed: {error}");
+            }
+        }
         let snapshots = session_dir_snapshots(&dir_grants, session_id);
         Ok((path, mutation, snapshots))
     }
@@ -1729,6 +1757,24 @@ impl AppServer {
         let (path, _, snapshots) = self.add_session_dir(session_id, path, permissions)?;
         // Turn context is immutable once assembled; only later snapshots see this selection.
         contributions.move_session(session_id.clone(), environment);
+        if primary != path
+            && let Some(hooks) = self.local_hook_runtime()
+        {
+            let cancellation = ash_async_utils::CancellationSource::new();
+            if let Err(error) = hooks.event(
+                &core_api::HookEventRequest {
+                    event: ash_protocol::HookEvent::CwdChanged,
+                    scope: core_api::HookEventScope::Session {
+                        session_id: session_id.clone(),
+                    },
+                    subject: Some(path.display().to_string()),
+                    tool_name: None,
+                },
+                &cancellation.token(),
+            ) {
+                log::warn!("CwdChanged Hook failed: {error}");
+            }
+        }
         Ok((path, snapshots))
     }
 
@@ -2199,6 +2245,7 @@ impl AppServer {
             &self.team_memberships,
             &self.model_instructions,
             &self.threads,
+            host.hooks.clone(),
             &turn_backend,
             Some(&customizations),
         )?;
@@ -2937,6 +2984,7 @@ fn append_multi_agent_tools(
     teams: &Arc<std::sync::OnceLock<Arc<ash_teams::TeamCoordinator>>>,
     model_instructions: &Arc<ash_models_manager::ModelInstructionCatalog>,
     threads: &Arc<ThreadController>,
+    hooks: Arc<dyn core_api::HookService>,
     turn_backend: &Arc<dyn ash_core::TurnExecutionBackend>,
     customizations: Option<&Arc<DirContributions>>,
 ) -> Result<crate::local_tools::LocalToolComposition, EnvRuntimeError> {
@@ -2944,7 +2992,7 @@ fn append_multi_agent_tools(
     let local = append_local_tool(
         local,
         Arc::new(
-            UpdatePlanToolService::new(Arc::clone(threads))
+            UpdatePlanToolService::new(Arc::clone(threads), hooks)
                 .with_action_policy_revision(action_policy_revision.clone()),
         ),
     );

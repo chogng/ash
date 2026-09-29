@@ -18,6 +18,8 @@ use ash_sandboxing::SandboxPolicy;
 use ash_tool_executor::CommandExecutionAuthority;
 use core_api::AfterToolHookRequest;
 use core_api::BeforeToolHookRequest;
+use core_api::HookEventRequest;
+use core_api::HookEventScope;
 use core_api::HookExecutionEvent;
 use core_api::HookExecutionObserver;
 use core_api::ToolExecutionOutcome;
@@ -214,6 +216,64 @@ fn runtime_matches_events_and_tool_filters_in_stable_order() {
             .as_slice(),
         ["user:hook:before-all", "user:hook:before-shell"]
     );
+}
+
+#[test]
+fn lifecycle_events_run_in_their_scope_and_record_the_declared_event() {
+    let (runtime, process) = runtime([
+        hook(
+            "user:hook:config",
+            ConfigHookEvent::ConfigChange,
+            &[],
+            HookEnablement::Enabled,
+        ),
+        hook(
+            "user:hook:failure",
+            ConfigHookEvent::StopFailure,
+            &[],
+            HookEnablement::Enabled,
+        ),
+    ]);
+    let observer = Arc::new(RecordingObserver::default());
+    runtime.set_execution_observer(observer.clone());
+    assert!(runtime.has_enabled_event(ConfigHookEvent::ConfigChange));
+    assert!(runtime.has_enabled_event(ConfigHookEvent::StopFailure));
+    assert!(!runtime.has_enabled_event(ConfigHookEvent::FileChanged));
+    let cancellation = CancellationSource::new();
+    runtime
+        .event(
+            &HookEventRequest {
+                event: ConfigHookEvent::ConfigChange,
+                scope: HookEventScope::User,
+                subject: None,
+                tool_name: None,
+            },
+            &cancellation.token(),
+        )
+        .unwrap();
+    runtime
+        .event(
+            &HookEventRequest {
+                event: ConfigHookEvent::StopFailure,
+                scope: HookEventScope::Turn {
+                    session_id: ash_protocol::SessionId::new("session").unwrap(),
+                    thread_id: ThreadId::new("thread-test").unwrap(),
+                    turn_id: TurnId::new("turn-test").unwrap(),
+                },
+                subject: None,
+                tool_name: None,
+            },
+            &cancellation.token(),
+        )
+        .unwrap();
+    assert_eq!(process.calls.load(Ordering::SeqCst), 2);
+    assert_eq!(observer.started.lock().unwrap().len(), 1);
+    assert_eq!(observer.finished.lock().unwrap().len(), 1);
+    assert_eq!(
+        runtime.recent_runs()[0].event,
+        ConfigHookEvent::ConfigChange
+    );
+    assert_eq!(runtime.recent_runs()[1].event, ConfigHookEvent::StopFailure);
 }
 
 #[test]

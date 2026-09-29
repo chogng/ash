@@ -92,7 +92,8 @@ enum Action {
     ConfirmDelete,
     CancelDelete,
     Field(Field),
-    CycleEvent,
+    ChooseEvent,
+    SelectEvent(HookEventDto),
     Save,
 }
 
@@ -108,6 +109,11 @@ enum Page {
     Root(ListSelection<Action>),
     Detail(String, ListSelection<Action>),
     Editor {
+        original_id: Option<String>,
+        draft: HookConfigDto,
+        selection: ListSelection<Action>,
+    },
+    EventPicker {
         original_id: Option<String>,
         draft: HookConfigDto,
         selection: ListSelection<Action>,
@@ -192,6 +198,7 @@ impl Panel {
             Page::Root(selection)
             | Page::Detail(_, selection)
             | Page::Editor { selection, .. }
+            | Page::EventPicker { selection, .. }
             | Page::ConfirmDelete(_, selection) => PageView::Selection(selection.state()),
             Page::Prompt { prompt, .. } => PageView::Prompt(prompt),
         }
@@ -202,6 +209,7 @@ impl Panel {
             Page::Root(selection)
             | Page::Detail(_, selection)
             | Page::Editor { selection, .. }
+            | Page::EventPicker { selection, .. }
             | Page::ConfirmDelete(_, selection) => Some(selection.state_mut()),
             Page::Prompt { .. } => None,
         }
@@ -212,6 +220,7 @@ impl Panel {
             Page::Root(selection)
             | Page::Detail(_, selection)
             | Page::Editor { selection, .. }
+            | Page::EventPicker { selection, .. }
             | Page::ConfirmDelete(_, selection) => selection.key_hints(),
             Page::Prompt { .. } => &self.prompt_hints,
         }
@@ -228,6 +237,9 @@ impl Panel {
         self.pending_saved_id = None;
         self.page = Some(match self.page.take().expect("Hooks panel page exists") {
             Page::Prompt {
+                original_id, draft, ..
+            } => editor_page(original_id, draft),
+            Page::EventPicker {
                 original_id, draft, ..
             } => editor_page(original_id, draft),
             Page::ConfirmDelete(id, _) => {
@@ -263,6 +275,7 @@ impl Panel {
             Page::Root(selection)
             | Page::Detail(_, selection)
             | Page::Editor { selection, .. }
+            | Page::EventPicker { selection, .. }
             | Page::ConfirmDelete(_, selection) => selection.handle_paste(pasted),
             Page::Prompt { prompt, .. } => prompt.handle_paste(pasted),
         }
@@ -339,19 +352,14 @@ impl Panel {
                         Outcome::Consumed,
                     )
                 }
-                ListSelectionOutcome::Activate(Action::CycleEvent) => {
-                    let mut draft = draft;
-                    draft.event = match draft.event {
-                        HookEventDto::BeforeTool => HookEventDto::AfterTool,
-                        HookEventDto::AfterTool => HookEventDto::TurnCompleted,
-                        HookEventDto::TurnCompleted => HookEventDto::BeforeTool,
-                    };
-                    // A completed Turn has no tool subject, so the server rejects tool matchers.
-                    if draft.event == HookEventDto::TurnCompleted {
-                        draft.matcher.tool_names.clear();
-                    }
-                    (editor_page(original_id, draft), Outcome::Consumed)
-                }
+                ListSelectionOutcome::Activate(Action::ChooseEvent) => (
+                    Page::EventPicker {
+                        original_id,
+                        selection: event_selection(),
+                        draft,
+                    },
+                    Outcome::Consumed,
+                ),
                 ListSelectionOutcome::Activate(Action::Save)
                     if !draft.id.is_empty() && !process_program(&draft).is_empty() =>
                 {
@@ -387,6 +395,30 @@ impl Panel {
                 }
                 _ => (
                     Page::Editor {
+                        original_id,
+                        draft,
+                        selection,
+                    },
+                    Outcome::Consumed,
+                ),
+            },
+            Page::EventPicker {
+                original_id,
+                mut draft,
+                mut selection,
+            } => match selection.handle_key(key) {
+                ListSelectionOutcome::Activate(Action::SelectEvent(event)) => {
+                    draft.event = event;
+                    if !event.accepts_tool_matcher() {
+                        draft.matcher.tool_names.clear();
+                    }
+                    (editor_page(original_id, draft), Outcome::Consumed)
+                }
+                ListSelectionOutcome::Dismiss => {
+                    (editor_page(original_id, draft), Outcome::Consumed)
+                }
+                _ => (
+                    Page::EventPicker {
                         original_id,
                         draft,
                         selection,
@@ -442,7 +474,7 @@ impl Panel {
 fn empty_hook() -> HookConfigDto {
     HookConfigDto {
         id: String::new(),
-        event: HookEventDto::BeforeTool,
+        event: HookEventDto::PreToolUse,
         matcher: HookMatcherDto {
             tool_names: Vec::new(),
         },
@@ -494,6 +526,30 @@ fn root_selection(hooks: &BTreeMap<String, HookConfigDto>) -> ListSelection<Acti
     selection
 }
 
+fn event_selection() -> ListSelection<Action> {
+    let mut actions = BTreeMap::new();
+    let items = HookEventDto::ALL
+        .into_iter()
+        .enumerate()
+        .map(|(index, event)| {
+            let id = ListSelectionItemId::new(format!("hook-event-{index}"));
+            actions.insert(id.clone(), Action::SelectEvent(event));
+            ListSelectionItem::new(Text::literal(event_label(event)))
+                .with_id(id)
+                .with_description(Text::template(event_description(event), vec![]))
+        })
+        .collect();
+    ListSelection::new(
+        ListSelectionModel::new("Hook events", vec![ListSelectionGroup::new("", items)])
+            .without_tab_bar()
+            .with_activation(bindings::ACCEPT)
+            .with_dismiss(bindings::RETURN_LIST)
+            .with_search(SearchBoxModel::new("Search Hook events"))
+            .with_empty_message("No Hook events found"),
+        actions,
+    )
+}
+
 fn detail_selection(hook: &HookConfigDto) -> ListSelection<Action> {
     let items = vec![
         (
@@ -535,7 +591,11 @@ fn editor_page(original_id: Option<String>, draft: HookConfigDto) -> Page {
         fields.push(("ID", Text::literal(&draft.id), Action::Field(Field::Id)));
     }
     fields.extend([
-        ("Event", event_label(draft.event).into(), Action::CycleEvent),
+        (
+            "Event",
+            event_label(draft.event).into(),
+            Action::ChooseEvent,
+        ),
         (
             "Tool names",
             Text::literal(draft.matcher.tool_names.join(", ")),
@@ -651,8 +711,8 @@ fn apply_field(draft: &mut HookConfigDto, field: Field, value: &str) -> Result<(
             draft.id = format!("user:hook:{value}");
         }
         Field::ToolNames => {
-            if draft.event == HookEventDto::TurnCompleted && value != "-" {
-                return Err("Turn-completed Hooks cannot match tools");
+            if !draft.event.accepts_tool_matcher() && value != "-" {
+                return Err("This Hook event cannot match tools");
             }
             draft.matcher.tool_names = if value == "-" {
                 Vec::new()
@@ -693,9 +753,83 @@ fn process_args(hook: &HookConfigDto) -> &[String] {
 
 fn event_label(event: HookEventDto) -> &'static str {
     match event {
+        HookEventDto::PreToolUse => "PreToolUse",
+        HookEventDto::PostToolUse => "PostToolUse",
+        HookEventDto::PostToolUseFailure => "PostToolUseFailure",
+        HookEventDto::PostToolBatch => "PostToolBatch",
+        HookEventDto::PermissionDenied => "PermissionDenied",
+        HookEventDto::Notification => "Notification",
+        HookEventDto::UserPromptSubmit => "UserPromptSubmit",
+        HookEventDto::UserPromptExpansion => "UserPromptExpansion",
+        HookEventDto::SessionStart => "SessionStart",
+        HookEventDto::Stop => "Stop",
+        HookEventDto::StopFailure => "StopFailure",
+        HookEventDto::SubagentStart => "SubagentStart",
+        HookEventDto::SubagentStop => "SubagentStop",
+        HookEventDto::PreCompact => "PreCompact",
+        HookEventDto::PostCompact => "PostCompact",
+        HookEventDto::PreModelSwitch => "PreModelSwitch",
+        HookEventDto::PostModelSwitch => "PostModelSwitch",
+        HookEventDto::SessionEnd => "SessionEnd",
+        HookEventDto::PermissionRequest => "PermissionRequest",
+        HookEventDto::Setup => "Setup",
+        HookEventDto::TeammateIdle => "TeammateIdle",
+        HookEventDto::TaskCreated => "TaskCreated",
+        HookEventDto::TaskCompleted => "TaskCompleted",
+        HookEventDto::Elicitation => "Elicitation",
+        HookEventDto::ElicitationResult => "ElicitationResult",
+        HookEventDto::ConfigChange => "ConfigChange",
+        HookEventDto::InstructionsLoaded => "InstructionsLoaded",
+        HookEventDto::WorktreeCreate => "WorktreeCreate",
+        HookEventDto::WorktreeRemove => "WorktreeRemove",
+        HookEventDto::CwdChanged => "CwdChanged",
+        HookEventDto::FileChanged => "FileChanged",
+        HookEventDto::DirectoryAdded => "DirectoryAdded",
+        HookEventDto::MessageDisplay => "MessageDisplay",
         HookEventDto::BeforeTool => "Before tool",
         HookEventDto::AfterTool => "After tool",
         HookEventDto::TurnCompleted => "Turn completed",
+    }
+}
+
+fn event_description(event: HookEventDto) -> &'static str {
+    match event {
+        HookEventDto::PreToolUse => "Before tool execution",
+        HookEventDto::PostToolUse => "After successful tool execution",
+        HookEventDto::PostToolUseFailure => "After tool execution fails",
+        HookEventDto::PostToolBatch => "After a batch of tool calls resolves",
+        HookEventDto::PermissionDenied => "After tool permission is denied",
+        HookEventDto::Notification => "When a user notification is sent",
+        HookEventDto::UserPromptSubmit => "When the user submits a prompt",
+        HookEventDto::UserPromptExpansion => "When a slash command expands",
+        HookEventDto::SessionStart => "When a session starts",
+        HookEventDto::Stop => "Before the assistant concludes its response",
+        HookEventDto::StopFailure => "When a turn ends in failure",
+        HookEventDto::SubagentStart => "When a subagent starts",
+        HookEventDto::SubagentStop => "Before a subagent concludes its response",
+        HookEventDto::PreCompact => "Before conversation compaction",
+        HookEventDto::PostCompact => "After conversation compaction",
+        HookEventDto::PreModelSwitch => "Before a requested model switch",
+        HookEventDto::PostModelSwitch => "After the session model changes",
+        HookEventDto::SessionEnd => "When a session ends",
+        HookEventDto::PermissionRequest => "Before a permission request is shown",
+        HookEventDto::Setup => "When repository setup starts",
+        HookEventDto::TeammateIdle => "When a teammate finishes assigned work",
+        HookEventDto::TaskCreated => "When a plan step is created",
+        HookEventDto::TaskCompleted => "When a plan step is completed",
+        HookEventDto::Elicitation => "Before an MCP server requests user input",
+        HookEventDto::ElicitationResult => "After the user responds to an MCP request",
+        HookEventDto::ConfigChange => "When configuration changes",
+        HookEventDto::InstructionsLoaded => "When an instruction file is read",
+        HookEventDto::WorktreeCreate => "Before a worktree is created",
+        HookEventDto::WorktreeRemove => "Before a worktree is removed",
+        HookEventDto::CwdChanged => "After the active directory changes",
+        HookEventDto::FileChanged => "When a watched file changes",
+        HookEventDto::DirectoryAdded => "After a directory is added to a session",
+        HookEventDto::MessageDisplay => "When assistant text is sent to a client",
+        HookEventDto::BeforeTool => "Before tool execution",
+        HookEventDto::AfterTool => "After tool execution",
+        HookEventDto::TurnCompleted => "After a turn completes",
     }
 }
 

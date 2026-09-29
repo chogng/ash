@@ -20964,12 +20964,61 @@
     },
     "HookEventDto": {
       "description": "Safe-point event that may request a Hook execution.",
-      "enum": [
-        "beforeTool",
-        "afterTool",
-        "turnCompleted"
-      ],
-      "type": "string"
+      "oneOf": [
+        {
+          "enum": [
+            "preToolUse",
+            "postToolUse",
+            "postToolUseFailure",
+            "postToolBatch",
+            "permissionDenied",
+            "notification",
+            "userPromptSubmit",
+            "userPromptExpansion",
+            "sessionStart",
+            "stop",
+            "stopFailure",
+            "subagentStart",
+            "subagentStop",
+            "preCompact",
+            "postCompact",
+            "preModelSwitch",
+            "postModelSwitch",
+            "sessionEnd",
+            "permissionRequest",
+            "setup",
+            "teammateIdle",
+            "taskCreated",
+            "taskCompleted",
+            "elicitation",
+            "elicitationResult",
+            "configChange",
+            "instructionsLoaded",
+            "worktreeCreate",
+            "worktreeRemove",
+            "cwdChanged",
+            "fileChanged",
+            "directoryAdded",
+            "messageDisplay"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "beforeTool",
+          "description": "Read compatibility for configurations written before the event catalog expanded.",
+          "type": "string"
+        },
+        {
+          "const": "afterTool",
+          "description": "Read compatibility for configurations written before the event catalog expanded.",
+          "type": "string"
+        },
+        {
+          "const": "turnCompleted",
+          "description": "Read compatibility for configurations written before the event catalog expanded.",
+          "type": "string"
+        }
+      ]
     },
     "HookMatcherDto": {
       "description": "Optional exact tool-name matcher for tool-related Hook events.",

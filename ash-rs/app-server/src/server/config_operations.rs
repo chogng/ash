@@ -1,5 +1,6 @@
 use super::AppServer;
 use super::RpcError;
+use super::core_error;
 use super::decode;
 use super::extension_config_operations::hook_config_dto;
 use super::extension_config_operations::plugin_request_dto;
@@ -79,9 +80,13 @@ use ash_model_provider::ModelRef;
 use ash_model_provider::ProviderId;
 use ash_model_provider_config::ModelContextConfig;
 use ash_model_provider_config::ModelProviderConfig;
+use ash_protocol::HookEvent;
 use ash_protocol::Patch;
 use ash_state::ClearOutcome;
 use ash_state::DirIndexKind;
+use core_api::HookEventDecision;
+use core_api::HookEventRequest;
+use core_api::HookEventScope;
 use serde_json::Value;
 
 use crate::tool_search_models::ToolSearchEmbeddingStatus;
@@ -187,6 +192,27 @@ impl AppServer {
             .config
             .clone()
             .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let model_switch_requested = !matches!(&params.model, Patch::Missing);
+        let model_target = match &params.model {
+            Patch::Value(model) => Some(format!("{}/{}", model.provider, model.model)),
+            Patch::Null => Some("default".into()),
+            Patch::Missing => None,
+        };
+        let model_before = if model_switch_requested {
+            Some(store.read_snapshot().map_err(config_error)?.values.model)
+        } else {
+            None
+        };
+        if model_switch_requested
+            && let HookEventDecision::Deny { reason } = self.emit_hook_event(&HookEventRequest {
+                event: HookEvent::PreModelSwitch,
+                scope: HookEventScope::User,
+                subject: model_target.clone(),
+                tool_name: None,
+            })?
+        {
+            return Err(core_error(core_api::CoreError::Policy(reason)));
+        }
         let outcome = store
             .apply(ConfigCommandRequest {
                 command_id: params.command_id,
@@ -214,6 +240,17 @@ impl AppServer {
                 }),
             })
             .map_err(config_operation_error)?;
+        if let Some(model_before) = model_before
+            && outcome.disposition == ConfigCommandDisposition::Updated
+            && model_before != store.read_snapshot().map_err(config_error)?.values.model
+        {
+            let _ = self.emit_hook_event(&HookEventRequest {
+                event: HookEvent::PostModelSwitch,
+                scope: HookEventScope::User,
+                subject: model_target,
+                tool_name: None,
+            });
+        }
         result(&config_command_result(outcome))
     }
 

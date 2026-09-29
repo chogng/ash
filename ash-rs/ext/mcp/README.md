@@ -106,6 +106,8 @@ Config server。`McpOAuthTarget` 绑定 server ID、endpoint 和 SecretKey 的�
 只有在 App Server 为当前 Tool call 提供 `ToolInteractionService` 时，RMCP client 才声明 form
 elicitation。`McpCatalogUpdates` 使用 task-local binding 把并发 MCP call 隔离到各自的
 Thread/Turn/ToolCall；不得改成进程级“当前请求”槽位。
+同一绑定把 Turn 身份交给 `Elicitation` 与 `ElicitationResult` Hook。Hook 进程在阻塞线程运行，
+不占用驱动 MCP 连接的 Tokio 线程；前置拒绝会取消该次表单请求。
 
 `handle_elicitation` 当前接受 string、number、integer、boolean 和单选 enum/oneOf，并保留 exact
 field ID、required、长度/数值范围。它最多接受 32 个字段、100 个选项和每段 4096 个字符；数组、

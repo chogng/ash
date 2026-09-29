@@ -1,6 +1,6 @@
 use crate::outcome::HookDecision;
-use crate::protocol::HookInvocation;
 use ash_config::HookConfig;
+use ash_config::HookEvent;
 use core_api::CoreError;
 use std::collections::VecDeque;
 use std::sync::RwLock;
@@ -14,12 +14,7 @@ use std::time::UNIX_EPOCH;
 const MAX_RECENT_RUNS: usize = 128;
 
 /// Canonical Ash Hook point attached to a runtime record.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum HookRunEvent {
-    BeforeTool,
-    AfterTool,
-    TurnCompleted,
-}
+pub type HookRunEvent = HookEvent;
 
 /// Current or terminal state of one Hook invocation.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -59,17 +54,13 @@ impl HookRunLog {
         }
     }
 
-    pub(crate) fn start(
-        &self,
-        hook: &HookConfig,
-        invocation: &HookInvocation<'_>,
-    ) -> StartedHookRun {
+    pub(crate) fn start(&self, hook: &HookConfig) -> StartedHookRun {
         let ordinal = self.next_id.fetch_add(1, Ordering::Relaxed);
         let run_id = format!("hook-run-{ordinal}");
         let record = HookRunRecord {
             run_id: run_id.clone(),
             hook_id: hook.id.to_string(),
-            event: event_of(invocation),
+            event: hook.event,
             status: HookRunStatus::Running,
             started_at_unix_ms: unix_millis(SystemTime::now()),
             duration_ms: 0,
@@ -118,14 +109,6 @@ impl HookRunLog {
             .iter()
             .cloned()
             .collect()
-    }
-}
-
-fn event_of(invocation: &HookInvocation<'_>) -> HookRunEvent {
-    match invocation {
-        HookInvocation::BeforeTool(_) => HookRunEvent::BeforeTool,
-        HookInvocation::AfterTool(_) => HookRunEvent::AfterTool,
-        HookInvocation::TurnCompleted(_) => HookRunEvent::TurnCompleted,
     }
 }
 

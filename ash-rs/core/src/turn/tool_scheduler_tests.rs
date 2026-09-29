@@ -64,6 +64,8 @@ use ash_protocol::UserInput;
 use ash_sandboxing::FileSystemAccess;
 use ash_sandboxing::NetworkAccess;
 use ash_sandboxing::SandboxPolicy;
+use core_api::HookEventDecision;
+use core_api::HookEventRequest;
 use serde_json::json;
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -71,7 +73,57 @@ use std::sync::Mutex;
 
 struct DenyBeforeToolHooks;
 
+#[derive(Default)]
+struct PermissionHooks(Mutex<Vec<ash_protocol::HookEvent>>);
+
+impl HookService for PermissionHooks {
+    fn has_enabled_event(&self, _: ash_protocol::HookEvent) -> bool {
+        true
+    }
+
+    fn event(
+        &self,
+        request: &HookEventRequest,
+        _: &CancellationToken,
+    ) -> Result<HookEventDecision, CoreError> {
+        self.0.lock().unwrap().push(request.event);
+        Ok(HookEventDecision::Continue)
+    }
+
+    fn before_tool(
+        &self,
+        _: &BeforeToolHookRequest,
+        _: &CancellationToken,
+    ) -> Result<BeforeToolHookDecision, CoreError> {
+        Ok(BeforeToolHookDecision::Continue)
+    }
+
+    fn after_tool(&self, _: &AfterToolHookRequest, _: &CancellationToken) -> Result<(), CoreError> {
+        Ok(())
+    }
+
+    fn turn_completed(
+        &self,
+        _: &crate::TurnCompletedHookRequest,
+        _: &CancellationToken,
+    ) -> Result<(), CoreError> {
+        Ok(())
+    }
+}
+
 impl HookService for DenyBeforeToolHooks {
+    fn has_enabled_event(&self, _: ash_protocol::HookEvent) -> bool {
+        true
+    }
+
+    fn event(
+        &self,
+        _: &HookEventRequest,
+        _: &CancellationToken,
+    ) -> Result<HookEventDecision, CoreError> {
+        Ok(HookEventDecision::Continue)
+    }
+
     fn before_tool(
         &self,
         _: &BeforeToolHookRequest,
@@ -771,6 +823,18 @@ struct SteerBeforeToolHook {
 }
 
 impl HookService for SteerBeforeToolHook {
+    fn has_enabled_event(&self, _: ash_protocol::HookEvent) -> bool {
+        true
+    }
+
+    fn event(
+        &self,
+        _: &HookEventRequest,
+        _: &CancellationToken,
+    ) -> Result<HookEventDecision, CoreError> {
+        Ok(HookEventDecision::Continue)
+    }
+
     fn before_tool(
         &self,
         _: &BeforeToolHookRequest,
@@ -892,7 +956,14 @@ fn exec_policy_grant_is_exactly_bound_and_recorded_before_execution() {
 
 #[test]
 fn decline_records_a_tool_failure_without_execution() {
-    let fixture = fixture();
+    let mut fixture = fixture();
+    let hooks = Arc::new(PermissionHooks::default());
+    fixture.scheduler = ToolScheduler::new(
+        fixture.threads.clone(),
+        fixture.tools.clone(),
+        Arc::new(AskPolicy),
+    )
+    .with_hooks(hooks.clone());
     fixture
         .scheduler
         .run_pending(
@@ -929,6 +1000,14 @@ fn decline_records_a_tool_failure_without_execution() {
                     ..
                 } if tool_call_id == &fixture.call_id && text.contains("declined")
             ))
+    );
+    assert_eq!(
+        *hooks.0.lock().unwrap(),
+        vec![
+            ash_protocol::HookEvent::PermissionRequest,
+            ash_protocol::HookEvent::PermissionDenied,
+            ash_protocol::HookEvent::PostToolBatch,
+        ]
     );
 }
 

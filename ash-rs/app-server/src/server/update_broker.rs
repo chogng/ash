@@ -30,23 +30,31 @@ use ash_app_server_protocol::protocol::turn_changes::TurnChangesChanged;
 use ash_app_server_protocol::rpc::JsonRpcNotification;
 use ash_config::ConfigChange;
 use ash_protocol::AgentRequestEnvelope;
+use ash_protocol::HookEvent;
 use ash_protocol::RequestId;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadEvent;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadUpdate;
 use ash_protocol::ThreadUpdateEnvelope;
+use ash_thread_transcript::ThreadTranscriptChange;
+use ash_thread_transcript::ThreadTranscriptEntry;
 use ash_thread_transcript::ThreadTranscriptUpdateEnvelope;
 use ash_thread_transcript::TranscriptAccumulator;
 use ash_thread_transcript::TranscriptApplyResult;
+use core_api::HookEventRequest;
+use core_api::HookEventScope;
+use core_api::HookService;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::RwLock;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
+use std::sync::mpsc;
 
 pub(super) fn unix_time_millis() -> u64 {
     std::time::SystemTime::now()
@@ -57,6 +65,8 @@ pub(super) fn unix_time_millis() -> u64 {
 }
 
 pub(crate) struct UpdateBroker {
+    hooks: Arc<RwLock<Option<Arc<dyn HookService>>>>,
+    hook_events: Arc<Mutex<Option<mpsc::SyncSender<HookEventRequest>>>>,
     state: Arc<Mutex<BrokerState>>,
     transcripts: Arc<Mutex<BTreeMap<(SessionId, ThreadId), TranscriptAccumulator>>>,
     next_connection_id: Arc<AtomicU64>,
@@ -96,6 +106,8 @@ struct ThreadSubscription {
 impl Default for UpdateBroker {
     fn default() -> Self {
         Self {
+            hooks: Arc::new(RwLock::new(None)),
+            hook_events: Arc::new(Mutex::new(None)),
             state: Arc::new(Mutex::new(BrokerState::default())),
             transcripts: Arc::new(Mutex::new(BTreeMap::new())),
             next_connection_id: Arc::new(AtomicU64::new(1)),
@@ -110,8 +122,21 @@ impl Default for UpdateBroker {
 }
 
 impl UpdateBroker {
+    pub(super) fn bind_hooks(&self, hooks: Arc<dyn HookService>) {
+        *self
+            .hooks
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(hooks);
+    }
+
+    fn emit_ui_event(&self, request: HookEventRequest) {
+        enqueue_hook_event(&self.hooks, &self.hook_events, request);
+    }
+
     pub(crate) fn fork_scope(&self) -> Self {
         Self {
+            hooks: Arc::clone(&self.hooks),
+            hook_events: Arc::clone(&self.hook_events),
             state: Arc::clone(&self.state),
             transcripts: Arc::clone(&self.transcripts),
             next_connection_id: Arc::clone(&self.next_connection_id),
@@ -170,7 +195,7 @@ impl UpdateBroker {
             state
                 .interaction_assignments
                 .retain(|_, owner| *owner != connection_id);
-            reconcile_interaction_assignments(&mut state);
+            reconcile_interaction_assignments(&mut state, &self.hooks, &self.hook_events);
             return lost;
         }
         Vec::new()
@@ -185,7 +210,7 @@ impl UpdateBroker {
             && let Some(subscriber) = state.subscribers.get_mut(&connection_id)
         {
             subscriber.agent_interactions = capability;
-            reconcile_interaction_assignments(&mut state);
+            reconcile_interaction_assignments(&mut state, &self.hooks, &self.hook_events);
         }
     }
 
@@ -194,7 +219,7 @@ impl UpdateBroker {
             state
                 .pending_interactions
                 .insert(request.interaction.request_id.clone(), request);
-            reconcile_interaction_assignments(&mut state);
+            reconcile_interaction_assignments(&mut state, &self.hooks, &self.hook_events);
         }
     }
 
@@ -270,14 +295,14 @@ impl UpdateBroker {
             && let Some(subscriber) = state.subscribers.get_mut(&connection_id)
         {
             subscriber.sessions.insert(session_id);
-            reconcile_interaction_assignments(&mut state);
+            reconcile_interaction_assignments(&mut state, &self.hooks, &self.hook_events);
         }
     }
 
     pub(super) fn bind_session_scope(&self, session_id: SessionId) {
         if let Ok(mut state) = self.state.lock() {
             state.session_scopes.insert(session_id, self.scope_id);
-            reconcile_interaction_assignments(&mut state);
+            reconcile_interaction_assignments(&mut state, &self.hooks, &self.hook_events);
         }
     }
 
@@ -338,7 +363,7 @@ impl UpdateBroker {
             let lost = take_owned_dynamic_interactions(&mut state, connection_id, |request| {
                 &request.session_id == session_id
             });
-            reconcile_interaction_assignments(&mut state);
+            reconcile_interaction_assignments(&mut state, &self.hooks, &self.hook_events);
             return lost;
         }
         Vec::new()
@@ -364,7 +389,7 @@ impl UpdateBroker {
                     !subscription.session_owners.is_empty()
                 });
             }
-            reconcile_interaction_assignments(&mut state);
+            reconcile_interaction_assignments(&mut state, &self.hooks, &self.hook_events);
         }
         if let Ok(mut transcripts) = self.transcripts.lock() {
             transcripts.retain(|(transcript_session_id, _), _| transcript_session_id != session_id);
@@ -435,7 +460,7 @@ impl UpdateBroker {
             let subscription = subscriber.threads.entry(thread_id).or_default();
             subscription.sequence = subscription.sequence.max(sequence);
             let inserted = subscription.session_owners.insert(session_id);
-            reconcile_interaction_assignments(&mut state);
+            reconcile_interaction_assignments(&mut state, &self.hooks, &self.hook_events);
             return inserted;
         }
         false
@@ -459,7 +484,7 @@ impl UpdateBroker {
             let lost = take_owned_dynamic_interactions(&mut state, connection_id, |request| {
                 &request.session_id == session_id && &request.thread_id == thread_id
             });
-            reconcile_interaction_assignments(&mut state);
+            reconcile_interaction_assignments(&mut state, &self.hooks, &self.hook_events);
             return lost;
         }
         Vec::new()
@@ -571,7 +596,7 @@ impl UpdateBroker {
             }
             true
         });
-        reconcile_interaction_assignments(&mut state);
+        reconcile_interaction_assignments(&mut state, &self.hooks, &self.hook_events);
     }
 
     pub(super) fn publish_thread_update(&self, update: ThreadUpdateEnvelope) {
@@ -628,6 +653,7 @@ impl UpdateBroker {
         let Ok(mut state) = self.state.lock() else {
             return;
         };
+        let mut delivered = false;
         state.subscribers.retain(|_, subscriber| {
             let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
@@ -640,9 +666,37 @@ impl UpdateBroker {
                     ServerNotificationMethod::SessionThreadTranscriptUpdate,
                     update,
                 ));
+                delivered = true;
             }
             true
         });
+        drop(state);
+        if delivered {
+            for change in &update.changes {
+                if let ThreadTranscriptChange::Upsert {
+                    entry:
+                        ThreadTranscriptEntry::Item {
+                            entry_id: _,
+                            turn_id,
+                            item: ash_protocol::ThreadItem::AgentMessage { text, .. },
+                            ..
+                        },
+                } = change
+                    && !text.is_empty()
+                {
+                    self.emit_ui_event(HookEventRequest {
+                        event: HookEvent::MessageDisplay,
+                        scope: HookEventScope::Turn {
+                            session_id: update.session_id.clone(),
+                            thread_id: update.thread_id.clone(),
+                            turn_id: turn_id.clone(),
+                        },
+                        subject: Some(text.clone()),
+                        tool_name: None,
+                    });
+                }
+            }
+        }
     }
 
     pub(super) fn publish_thread_goal_updated(&self, updated: ThreadGoalUpdatedNotification) {
@@ -1095,7 +1149,53 @@ impl ash_skills_extension::SkillRuntimeEventSink for UpdateBroker {
     }
 }
 
-fn reconcile_interaction_assignments(state: &mut BrokerState) {
+fn enqueue_hook_event(
+    hooks: &Arc<RwLock<Option<Arc<dyn HookService>>>>,
+    hook_events: &Arc<Mutex<Option<mpsc::SyncSender<HookEventRequest>>>>,
+    request: HookEventRequest,
+) {
+    let runtime = hooks
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone();
+    let Some(runtime) = runtime else {
+        return;
+    };
+    if !runtime.has_enabled_event(request.event) {
+        return;
+    }
+    let mut sender = hook_events
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let sender = sender.get_or_insert_with(|| {
+        let (sender, pending) = mpsc::sync_channel(256);
+        let worker_hooks = Arc::clone(hooks);
+        std::thread::spawn(move || {
+            while let Ok(request) = pending.recv() {
+                let runtime = worker_hooks
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone();
+                if let Some(runtime) = runtime {
+                    let cancellation = ash_async_utils::CancellationSource::new();
+                    if let Err(error) = runtime.event(&request, &cancellation.token()) {
+                        log::warn!("UI Hook event failed: {error}");
+                    }
+                }
+            }
+        });
+        sender
+    });
+    if let Err(error) = sender.try_send(request) {
+        log::warn!("UI Hook queue is unavailable: {error}");
+    }
+}
+
+fn reconcile_interaction_assignments(
+    state: &mut BrokerState,
+    hooks: &Arc<RwLock<Option<Arc<dyn HookService>>>>,
+    hook_events: &Arc<Mutex<Option<mpsc::SyncSender<HookEventRequest>>>>,
+) {
     let invalid_assignments = state
         .interaction_assignments
         .iter()
@@ -1140,6 +1240,20 @@ fn reconcile_interaction_assignments(state: &mut BrokerState) {
                 ServerNotificationMethod::AgentRequest,
                 request,
             ));
+            enqueue_hook_event(
+                hooks,
+                hook_events,
+                HookEventRequest {
+                    event: HookEvent::Notification,
+                    scope: HookEventScope::Turn {
+                        session_id: request.session_id.clone(),
+                        thread_id: request.thread_id.clone(),
+                        turn_id: request.turn_id.clone(),
+                    },
+                    subject: Some(request.interaction.request_id.to_string()),
+                    tool_name: None,
+                },
+            );
             state
                 .interaction_assignments
                 .insert(request_id, connection_id);

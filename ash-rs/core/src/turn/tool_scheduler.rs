@@ -42,6 +42,9 @@ use ash_protocol::ThreadItem;
 use ash_protocol::ToolCall;
 use ash_protocol::ToolCallId;
 use ash_protocol::TurnId;
+use core_api::HookEventDecision;
+use core_api::HookEventRequest;
+use core_api::HookEventScope;
 use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -144,6 +147,7 @@ impl ToolScheduler {
     ) -> Result<ToolSchedulingProgress, CoreError> {
         let mut refreshed_call = None;
         let mut refreshes = 0;
+        let mut resolved_any = false;
         loop {
             cancellation
                 .check()
@@ -160,8 +164,24 @@ impl ToolScheduler {
             }
             let Some(pending) = next_pending_call(&snapshot.items, turn_id, target_tool_call_id)?
             else {
+                if resolved_any && target_tool_call_id.is_none() {
+                    let _ = self.hooks.event(
+                        &HookEventRequest {
+                            event: ash_protocol::HookEvent::PostToolBatch,
+                            scope: HookEventScope::Turn {
+                                session_id: snapshot.session_id,
+                                thread_id: thread_id.clone(),
+                                turn_id: turn_id.clone(),
+                            },
+                            subject: None,
+                            tool_name: None,
+                        },
+                        cancellation,
+                    );
+                }
                 return Ok(ToolSchedulingProgress::Complete);
             };
+            resolved_any = true;
             if refreshed_call.as_ref() != Some(&pending.call.id) {
                 refreshed_call = Some(pending.call.id.clone());
                 refreshes = 0;
@@ -278,6 +298,19 @@ impl ToolScheduler {
                             pending.call.id,
                             "user declined the requested one-time tool authorization",
                         )?;
+                        let _ = self.hooks.event(
+                            &HookEventRequest {
+                                event: ash_protocol::HookEvent::PermissionDenied,
+                                scope: HookEventScope::Turn {
+                                    session_id: snapshot.session_id.clone(),
+                                    thread_id: thread_id.clone(),
+                                    turn_id: turn_id.clone(),
+                                },
+                                subject: Some("user declined".into()),
+                                tool_name: Some(pending.call.name.to_string()),
+                            },
+                            cancellation,
+                        );
                     }
                     ActionApprovalDecision::ApproveOnce => {
                         let Some(reviewed) = self.prepare_review_or_record_failure(
@@ -509,6 +542,36 @@ impl ToolScheduler {
                     self.enforce_rejection_circuit_breaker(thread_id, turn_id)?;
                 }
                 ExecutionDecision::AskUser(approval) => {
+                    let permission_decision = self.hooks.event(
+                        &HookEventRequest {
+                            event: ash_protocol::HookEvent::PermissionRequest,
+                            scope: HookEventScope::Turn {
+                                session_id: snapshot.session_id.clone(),
+                                thread_id: thread_id.clone(),
+                                turn_id: turn_id.clone(),
+                            },
+                            subject: None,
+                            tool_name: Some(pending.call.name.to_string()),
+                        },
+                        cancellation,
+                    )?;
+                    if let HookEventDecision::Deny { reason } = permission_decision {
+                        self.record_failure(thread_id, turn_id, pending.call.id, &reason)?;
+                        let _ = self.hooks.event(
+                            &HookEventRequest {
+                                event: ash_protocol::HookEvent::PermissionDenied,
+                                scope: HookEventScope::Turn {
+                                    session_id: snapshot.session_id.clone(),
+                                    thread_id: thread_id.clone(),
+                                    turn_id: turn_id.clone(),
+                                },
+                                subject: Some(reason),
+                                tool_name: Some(pending.call.name.to_string()),
+                            },
+                            cancellation,
+                        );
+                        continue;
+                    }
                     let request = durable_approval_request(&reviewed, &approval)?;
                     self.threads.request_turn_interaction(
                         thread_id,
@@ -535,6 +598,19 @@ impl ToolScheduler {
                     if feedback.is_some() {
                         self.enforce_rejection_circuit_breaker(thread_id, turn_id)?;
                     }
+                    let _ = self.hooks.event(
+                        &HookEventRequest {
+                            event: ash_protocol::HookEvent::PermissionDenied,
+                            scope: HookEventScope::Turn {
+                                session_id: snapshot.session_id.clone(),
+                                thread_id: thread_id.clone(),
+                                turn_id: turn_id.clone(),
+                            },
+                            subject: Some(format!("{reason:?}")),
+                            tool_name: Some(pending.call.name.to_string()),
+                        },
+                        cancellation,
+                    );
                 }
             }
         }

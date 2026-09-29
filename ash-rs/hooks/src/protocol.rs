@@ -3,6 +3,8 @@ use ash_config::HookEvent as ConfigHookEvent;
 use core_api::AfterToolHookRequest;
 use core_api::BeforeToolHookRequest;
 use core_api::CoreError;
+use core_api::HookEventRequest;
+use core_api::HookEventScope;
 use core_api::ToolExecutionOutcome;
 use core_api::TurnCompletedHookRequest;
 use serde::Serialize;
@@ -15,38 +17,44 @@ pub(crate) enum HookInvocation<'a> {
     BeforeTool(&'a BeforeToolHookRequest),
     AfterTool(&'a AfterToolHookRequest),
     TurnCompleted(&'a TurnCompletedHookRequest),
+    Event(&'a HookEventRequest),
 }
 
 impl HookInvocation<'_> {
-    pub(crate) fn session_id(&self) -> &ash_protocol::SessionId {
+    pub(crate) fn session_id(&self) -> Option<&ash_protocol::SessionId> {
         match self {
-            Self::BeforeTool(request) => &request.session_id,
-            Self::AfterTool(request) => &request.session_id,
-            Self::TurnCompleted(request) => &request.session_id,
+            Self::BeforeTool(request) => Some(&request.session_id),
+            Self::AfterTool(request) => Some(&request.session_id),
+            Self::TurnCompleted(request) => Some(&request.session_id),
+            Self::Event(request) => match &request.scope {
+                HookEventScope::User => None,
+                HookEventScope::Session { session_id }
+                | HookEventScope::Turn { session_id, .. } => Some(session_id),
+            },
         }
     }
 
-    pub(crate) fn thread_id(&self) -> &ash_protocol::ThreadId {
+    pub(crate) fn thread_id(&self) -> Option<&ash_protocol::ThreadId> {
         match self {
-            Self::BeforeTool(request) => &request.thread_id,
-            Self::AfterTool(request) => &request.thread_id,
-            Self::TurnCompleted(request) => &request.thread_id,
+            Self::BeforeTool(request) => Some(&request.thread_id),
+            Self::AfterTool(request) => Some(&request.thread_id),
+            Self::TurnCompleted(request) => Some(&request.thread_id),
+            Self::Event(request) => match &request.scope {
+                HookEventScope::Turn { thread_id, .. } => Some(thread_id),
+                HookEventScope::User | HookEventScope::Session { .. } => None,
+            },
         }
     }
 
-    pub(crate) fn turn_id(&self) -> &ash_protocol::TurnId {
+    pub(crate) fn turn_id(&self) -> Option<&ash_protocol::TurnId> {
         match self {
-            Self::BeforeTool(request) => &request.turn_id,
-            Self::AfterTool(request) => &request.turn_id,
-            Self::TurnCompleted(request) => &request.turn_id,
-        }
-    }
-
-    pub(crate) fn config_event(&self) -> ConfigHookEvent {
-        match self {
-            Self::BeforeTool(_) => ConfigHookEvent::BeforeTool,
-            Self::AfterTool(_) => ConfigHookEvent::AfterTool,
-            Self::TurnCompleted(_) => ConfigHookEvent::TurnCompleted,
+            Self::BeforeTool(request) => Some(&request.turn_id),
+            Self::AfterTool(request) => Some(&request.turn_id),
+            Self::TurnCompleted(request) => Some(&request.turn_id),
+            Self::Event(request) => match &request.scope {
+                HookEventScope::Turn { turn_id, .. } => Some(turn_id),
+                HookEventScope::User | HookEventScope::Session { .. } => None,
+            },
         }
     }
 
@@ -55,6 +63,14 @@ impl HookInvocation<'_> {
             Self::BeforeTool(request) => Some(&request.tool_name),
             Self::AfterTool(request) => Some(&request.tool_name),
             Self::TurnCompleted(_) => None,
+            Self::Event(request) => request.tool_name.as_deref(),
+        }
+    }
+
+    pub(crate) fn subject(&self) -> Option<&str> {
+        match self {
+            Self::Event(request) => request.subject.as_deref(),
+            _ => None,
         }
     }
 }
@@ -69,29 +85,23 @@ struct HookInput<'a> {
 }
 
 #[derive(Serialize)]
-#[serde(
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase",
-    tag = "name"
-)]
-enum HookInputEvent<'a> {
-    BeforeTool {
-        thread_id: &'a str,
-        turn_id: &'a str,
-        tool_call_id: &'a str,
-        tool_name: &'a str,
-    },
-    AfterTool {
-        thread_id: &'a str,
-        turn_id: &'a str,
-        tool_call_id: &'a str,
-        tool_name: &'a str,
-        outcome: HookInputOutcome,
-    },
-    TurnCompleted {
-        thread_id: &'a str,
-        turn_id: &'a str,
-    },
+#[serde(rename_all = "camelCase")]
+struct HookInputEvent<'a> {
+    name: ConfigHookEvent,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    session_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    thread_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    turn_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_call_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_name: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    outcome: Option<HookInputOutcome>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    subject: Option<&'a str>,
 }
 
 #[derive(Clone, Copy, Serialize)]
@@ -106,27 +116,28 @@ pub(crate) fn encode_input(
     invocation: &HookInvocation<'_>,
     dir: &Path,
 ) -> Result<Vec<u8>, CoreError> {
-    let event = match invocation {
-        HookInvocation::BeforeTool(request) => HookInputEvent::BeforeTool {
-            thread_id: request.thread_id.as_str(),
-            turn_id: request.turn_id.as_str(),
-            tool_call_id: request.tool_call_id.as_str(),
-            tool_name: &request.tool_name,
+    let event = HookInputEvent {
+        name: hook.event,
+        session_id: match invocation {
+            HookInvocation::Event(_) => invocation.session_id().map(|id| id.as_str()),
+            _ => None,
         },
-        HookInvocation::AfterTool(request) => HookInputEvent::AfterTool {
-            thread_id: request.thread_id.as_str(),
-            turn_id: request.turn_id.as_str(),
-            tool_call_id: request.tool_call_id.as_str(),
-            tool_name: &request.tool_name,
-            outcome: match request.outcome {
+        thread_id: invocation.thread_id().map(|id| id.as_str()),
+        turn_id: invocation.turn_id().map(|id| id.as_str()),
+        tool_call_id: match invocation {
+            HookInvocation::BeforeTool(request) => Some(request.tool_call_id.as_str()),
+            HookInvocation::AfterTool(request) => Some(request.tool_call_id.as_str()),
+            HookInvocation::TurnCompleted(_) | HookInvocation::Event(_) => None,
+        },
+        tool_name: invocation.tool_name(),
+        outcome: match invocation {
+            HookInvocation::AfterTool(request) => Some(match request.outcome {
                 ToolExecutionOutcome::Succeeded => HookInputOutcome::Succeeded,
                 ToolExecutionOutcome::Failed => HookInputOutcome::Failed,
-            },
+            }),
+            _ => None,
         },
-        HookInvocation::TurnCompleted(request) => HookInputEvent::TurnCompleted {
-            thread_id: request.thread_id.as_str(),
-            turn_id: request.turn_id.as_str(),
-        },
+        subject: invocation.subject(),
     };
     let bytes = serde_json::to_vec(&HookInput {
         protocol_version: HOOK_PROTOCOL_VERSION,

@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 pub const APP_SERVER_PROTOCOL_MAJOR: u32 = 7;
-pub const APP_SERVER_PROTOCOL_REVISION: u32 = 5;
+pub const APP_SERVER_PROTOCOL_REVISION: u32 = 6;
 // Version 9 requires an execution workspace in session/create. Older servers would ignore the
 // selector and bind the Session to the connection directory, so clients must reject them before
 // sending a root creation request.

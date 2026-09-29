@@ -657,7 +657,7 @@ impl ToolService for McpToolService {
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        self.execute_with_optional_interactions(call, authorization, cancellation, None)
+        self.execute_with_optional_interactions(call, authorization, cancellation, None, None)
     }
 
     fn execute_streaming_with_facts_and_interactions(
@@ -665,7 +665,7 @@ impl ToolService for McpToolService {
         call: &ToolCall,
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
-        _: &ash_core::ToolExecutionFacts,
+        facts: &ash_core::ToolExecutionFacts,
         interactions: Arc<dyn ash_core::ToolInteractionService>,
         _: &mut dyn ash_core::ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
@@ -674,6 +674,13 @@ impl ToolService for McpToolService {
             authorization,
             cancellation,
             Some(interactions),
+            facts
+                .execution_identity()
+                .map(|identity| core_api::HookEventScope::Turn {
+                    session_id: identity.session_id().clone(),
+                    thread_id: identity.thread_id().clone(),
+                    turn_id: identity.turn_id().clone(),
+                }),
         )
     }
 }
@@ -685,6 +692,7 @@ impl McpToolService {
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
         interactions: Option<Arc<dyn ash_core::ToolInteractionService>>,
+        hook_scope: Option<core_api::HookEventScope>,
     ) -> Result<ToolExecutionOutput, CoreError> {
         cancellation
             .check()
@@ -708,7 +716,7 @@ impl McpToolService {
         };
         let invoke = || {
             self.owner
-                .call(prepared, cancellation.clone(), interactions)
+                .call(prepared, cancellation.clone(), interactions, hook_scope)
         };
         let invocation = match authority.connector_fence {
             Some(fence) => fence
