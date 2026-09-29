@@ -28,6 +28,7 @@ use ash_app_server_protocol::protocol::git::GitPathsParams;
 use ash_app_server_protocol::protocol::git::GitRepositoryParams;
 use ash_app_server_protocol::protocol::git::GitWorktreeCreateParams;
 use ash_app_server_protocol::protocol::git::GitWorktreeCreateResult;
+use ash_app_server_protocol::protocol::git::GitWorktreeDeleteMode;
 use ash_app_server_protocol::protocol::git::GitWorktreeDeleteParams;
 use ash_app_server_protocol::protocol::git::GitWorktreeDto;
 use ash_app_server_protocol::protocol::git::GitWorktreeListResult;
@@ -287,12 +288,37 @@ impl AppServer {
             .dir_services
             .as_ref()
             .ok_or_else(|| RpcError::new(-32060, AppServerErrorName::GitUnavailable))?;
-        dirs.runtime
-            .block_on(
-                dirs.worktrees
-                    .remove_unbound(&source, Path::new(&params.checkout_root)),
-            )
-            .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?;
+        match params.mode {
+            GitWorktreeDeleteMode::Unbound => dirs
+                .runtime
+                .block_on(
+                    dirs.worktrees
+                        .remove_unbound(&source, Path::new(&params.checkout_root)),
+                )
+                .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?,
+            GitWorktreeDeleteMode::SessionAndWorktrees => {
+                let checkout_root = dunce::canonicalize(&params.checkout_root)
+                    .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?;
+                let worktree = dirs
+                    .runtime
+                    .block_on(dirs.worktrees.list(&source))
+                    .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?
+                    .into_iter()
+                    .find(|worktree| worktree.checkout_root() == checkout_root)
+                    .ok_or_else(|| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?;
+                if worktree.is_current() {
+                    return Err(RpcError::new(
+                        -32061,
+                        AppServerErrorName::GitOperationFailed,
+                    ));
+                }
+                let thread_id = worktree
+                    .owner_thread_id()
+                    .ok_or_else(|| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?
+                    .to_owned();
+                self.delete_worktree_session(&thread_id, &params.command_id)?;
+            }
+        }
         result(&self.git_worktree_list_result(params.repository_id.as_deref())?)
     }
 
@@ -314,17 +340,15 @@ impl AppServer {
             .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?
             .into_iter()
             .map(|worktree| {
-                let state = match worktree.availability() {
-                    WorktreeAvailability::Prunable { .. } => GitWorktreeStateDto::Prunable,
-                    WorktreeAvailability::Locked { .. } => GitWorktreeStateDto::Locked,
-                    WorktreeAvailability::Ready => match worktree.owner() {
-                        WorktreeOwner::Thread(_) => GitWorktreeStateDto::ThreadOwned,
-                        WorktreeOwner::Invalid => GitWorktreeStateDto::Invalid,
-                        WorktreeOwner::Unbound if !worktree.dir().is_dir() => {
-                            GitWorktreeStateDto::MissingDirectory
-                        }
-                        WorktreeOwner::Unbound => GitWorktreeStateDto::Ready,
-                    },
+                let state = match (worktree.availability(), worktree.owner()) {
+                    (WorktreeAvailability::Prunable { .. }, _) => GitWorktreeStateDto::Prunable,
+                    (_, WorktreeOwner::Thread(_)) => GitWorktreeStateDto::ThreadOwned,
+                    (WorktreeAvailability::Locked { .. }, _) => GitWorktreeStateDto::Locked,
+                    (_, WorktreeOwner::Invalid) => GitWorktreeStateDto::Invalid,
+                    (_, WorktreeOwner::Unbound) if !worktree.dir().is_dir() => {
+                        GitWorktreeStateDto::MissingDirectory
+                    }
+                    (_, WorktreeOwner::Unbound) => GitWorktreeStateDto::Ready,
                 };
                 let (checkout_root, path) = if state == GitWorktreeStateDto::Ready {
                     let checkout_root =

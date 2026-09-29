@@ -1332,6 +1332,18 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Supprimer l'arbre de travail",
     ),
     translation(
+        "Delete session and worktrees",
+        "セッションとワークツリーを削除",
+        "删除会话及工作树",
+        "Supprimer la session et ses arbres de travail",
+    ),
+    translation(
+        "Deletes this session, its worktrees, and uncommitted changes.",
+        "このセッション、そのワークツリー、未コミットの変更を削除します。",
+        "删除此会话、其工作树及未提交的改动。",
+        "Supprime cette session, ses arbres de travail et les modifications non validées.",
+    ),
+    translation(
         "Requires a clean linked worktree with no task.",
         "変更がなくタスクに紐付いていないリンク済みワークツリーだけを削除できます。",
         "只能删除没有改动且未绑定任务的关联工作树。",
@@ -1348,6 +1360,12 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "ワークツリーを削除しました。",
         "工作树已删除。",
         "Arbre de travail supprimé.",
+    ),
+    translation(
+        "Session and worktrees deleted.",
+        "セッションとワークツリーを削除しました。",
+        "会话及工作树已删除。",
+        "Session et arbres de travail supprimés.",
     ),
     translation(
         "Could not delete worktree. It may have changes or be in use.",

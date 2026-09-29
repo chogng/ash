@@ -10,6 +10,7 @@ use crate::widgets::list_selection::ListSelectionOutcome;
 use crate::widgets::list_selection::ListSelectionSpec;
 use crate::widgets::list_selection::ListSelectionState;
 use crate::widgets::search_box::SearchBoxModel;
+use ash_app_server_protocol::protocol::git::GitWorktreeDeleteMode;
 use ash_app_server_protocol::protocol::git::GitWorktreeListResult;
 use ash_app_server_protocol::protocol::git::GitWorktreeStateDto;
 use crossterm::event::KeyCode;
@@ -28,6 +29,11 @@ pub(crate) enum WorktreeSelectionAction {
     },
     Delete {
         checkout_root: String,
+        mode: GitWorktreeDeleteMode,
+    },
+    Managed {
+        checkout_root: String,
+        current: bool,
     },
     Open {
         checkout_root: String,
@@ -149,8 +155,28 @@ impl WorktreePanel {
                 Some(WorktreeSelectionAction::Open {
                     checkout_root,
                     current: false,
-                }) => self.delete = Some(worktree_delete_prompt(self.language, checkout_root)),
+                }) => {
+                    self.delete = Some(worktree_delete_prompt(
+                        self.language,
+                        checkout_root,
+                        GitWorktreeDeleteMode::Unbound,
+                    ))
+                }
+                Some(WorktreeSelectionAction::Managed {
+                    checkout_root,
+                    current: false,
+                }) => {
+                    self.delete = Some(worktree_delete_prompt(
+                        self.language,
+                        checkout_root,
+                        GitWorktreeDeleteMode::SessionAndWorktrees,
+                    ))
+                }
                 Some(WorktreeSelectionAction::Open { current: true, .. }) => self
+                    .picker
+                    .state_mut()
+                    .set_message(Some("Cannot delete the current worktree.".into())),
+                Some(WorktreeSelectionAction::Managed { current: true, .. }) => self
                     .picker
                     .state_mut()
                     .set_message(Some("Cannot delete the current worktree.".into())),
@@ -179,6 +205,12 @@ impl WorktreePanel {
                 self.picker.state_mut().set_message(Some(message.into()));
                 ListSelectionOutcome::Consumed
             }
+            ListSelectionOutcome::Activate(WorktreeSelectionAction::Managed { .. }) => {
+                self.picker
+                    .state_mut()
+                    .set_message(Some("Used by another session".into()));
+                ListSelectionOutcome::Consumed
+            }
             outcome => outcome,
         }
     }
@@ -199,25 +231,43 @@ impl WorktreePanel {
 fn worktree_delete_prompt(
     language: Language,
     checkout_root: String,
+    mode: GitWorktreeDeleteMode,
 ) -> ListSelection<WorktreeSelectionAction> {
     let id = ListSelectionItemId::new("worktree:delete-confirm");
-    let mut model = ListSelectionModel::new(
-        "Delete worktree",
-        vec![ListSelectionGroup::new(
-            "",
-            vec![
-                ListSelectionItem::new(Text::literal(&checkout_root))
-                    .with_id(id.clone())
-                    .with_description("Requires a clean linked worktree with no task."),
-            ],
-        )],
-    )
-    .without_tab_bar();
+    let (title, description) = match mode {
+        GitWorktreeDeleteMode::Unbound => (
+            "Delete worktree",
+            Some("Requires a clean linked worktree with no task."),
+        ),
+        GitWorktreeDeleteMode::SessionAndWorktrees => ("Delete session and worktrees", None),
+    };
+    let mut item = ListSelectionItem::new(Text::literal(&checkout_root)).with_id(id.clone());
+    if let Some(description) = description {
+        item = item.with_description(description);
+    }
+    let mut model = ListSelectionModel::new(title, vec![ListSelectionGroup::new("", vec![item])])
+        .without_tab_bar();
     model.localize(language);
-    ListSelection::new(
+    let mut prompt = ListSelection::new(
         model,
-        BTreeMap::from([(id, WorktreeSelectionAction::Delete { checkout_root })]),
-    )
+        BTreeMap::from([(
+            id,
+            WorktreeSelectionAction::Delete {
+                checkout_root,
+                mode,
+            },
+        )]),
+    );
+    if mode == GitWorktreeDeleteMode::SessionAndWorktrees {
+        prompt.state_mut().set_message(Some(
+            crate::nls::localize(
+                language,
+                "Deletes this session, its worktrees, and uncommitted changes.",
+            )
+            .into_owned(),
+        ));
+    }
+    prompt
 }
 
 fn name_prompt(language: Language) -> ListSelection<WorktreeSelectionAction> {
@@ -291,13 +341,16 @@ pub(crate) fn worktree_choices(
         }
         let id = ListSelectionItemId::new(format!("worktree:{}", worktree.checkout_root));
         let message = state_message(worktree.state);
-        let action = if worktree.state == GitWorktreeStateDto::Ready {
-            WorktreeSelectionAction::Open {
+        let action = match worktree.state {
+            GitWorktreeStateDto::Ready => WorktreeSelectionAction::Open {
                 checkout_root: worktree.checkout_root.clone(),
                 current: worktree.current,
-            }
-        } else {
-            WorktreeSelectionAction::Unavailable { message }
+            },
+            GitWorktreeStateDto::ThreadOwned => WorktreeSelectionAction::Managed {
+                checkout_root: worktree.checkout_root.clone(),
+                current: worktree.current,
+            },
+            _ => WorktreeSelectionAction::Unavailable { message },
         };
         actions.insert(id.clone(), action);
         let reference = match worktree.branch {

@@ -402,6 +402,7 @@ export type { GitTextDiffResult } from './GitTextDiffResult.js';
 export type { GitUpstreamDto } from './GitUpstreamDto.js';
 export type { GitWorktreeCreateParams } from './GitWorktreeCreateParams.js';
 export type { GitWorktreeCreateResult } from './GitWorktreeCreateResult.js';
+export type { GitWorktreeDeleteMode } from './GitWorktreeDeleteMode.js';
 export type { GitWorktreeDeleteParams } from './GitWorktreeDeleteParams.js';
 export type { GitWorktreeDto } from './GitWorktreeDto.js';
 export type { GitWorktreeListResult } from './GitWorktreeListResult.js';

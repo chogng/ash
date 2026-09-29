@@ -329,7 +329,7 @@ Desktop 当前实现和 Playwright 后续边界见
 | `git/branch/create` | repository | 基于 HEAD 新建本地分支，不切换目录 |
 | `git/branch/delete` | repository | 只删除已合并且未被检出的本地分支 |
 | `git/worktree/create` | repository | 在 HEAD 建立独立的 detached 工作树，不创建 Session |
-| `git/worktree/delete` | repository | 只删除干净、未绑定 Thread 的关联工作树 |
+| `git/worktree/delete` | repository | 按明确的 `mode` 删除干净的独立工作树，或删除受管工作树所属 Session 及其工作目录 |
 | `git/worktree/list` | repository | 列出同仓库工作树、对应目录及可打开状态 |
 | `git/worktree/resolve` | repository | 按 checkout root 重新确认工作树可打开，返回对应目录 |
 | `git/stage` | repository | stage 一组 repository-relative path |
@@ -582,7 +582,7 @@ Git 拒绝，server 不重试或丢弃用户内容。
 repository 内的相对路径，并标出当前、锁定、失效以及已有 Thread 归属的 checkout。客户端选择后必须
 调用 `git/worktree/resolve`；服务端重新核对该 checkout 属于同一 repository、目录仍存在、未锁定且
 未绑定 Thread。返回的目录供产品 host 建立以该目录为根的新连接；这一步不创建或迁移 Session。
-`git/worktree/delete` 重新核对 checkout 属于同一仓库、不是当前或 primary 工作树、未绑定 Thread，再由 Git 非强制删除；有本地改动或锁定时拒绝。成功后返回新的工作树列表。
+`git/worktree/delete` 接受 `commandId`、`checkoutRoot` 和必填 `mode`。`unbound` 模式重新核对 checkout 属于同一仓库、不是当前或 primary 工作树、未绑定 Thread，再由 Git 非强制删除；有本地改动或锁定时拒绝。`sessionAndWorktrees` 模式要求选中的非当前工作树属于受管 Thread；服务端删除该 Thread 所属 Session，再清理该 Session 的所有受管工作目录，包括未提交的改动。清理失败时保留目录绑定，调用方可从仍存在的工作树重试。成功后返回新的工作树列表。
 
 Mutation contract 提供 `git/stage`、`git/unstage`、`git/discardWorktree`、`git/commit`、
 `git/branch/create`、`git/branch/switch`、`git/branch/delete`、`git/worktree/create`、`git/worktree/delete`、

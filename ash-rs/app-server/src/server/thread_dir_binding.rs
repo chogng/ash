@@ -12,6 +12,32 @@ use worktree::{
 };
 
 impl GitTurnChangesRuntime {
+    /// Cleans a binding after its Session history has been deleted by an explicit user action.
+    pub(super) fn cleanup_deleted_thread(
+        &self,
+        thread_id: &ash_protocol::ThreadId,
+    ) -> Result<(), String> {
+        let Some(binding) = self.binding(thread_id) else {
+            return Ok(());
+        };
+        self.dirs
+            .runtime
+            .block_on(self.dirs.worktrees.cleanup(
+                &binding,
+                worktree::ManagedDirCleanupEligibility::SessionDeletedByUser,
+            ))
+            .map_err(|error| error.to_string())?;
+        self.dirs
+            .bindings
+            .write()
+            .map_err(|_| "Thread dir binding lock poisoned".to_string())?
+            .remove(thread_id);
+        self.dirs.file_access.unbind_thread_dir(thread_id);
+        self.dirs.hooks.unbind_thread_dir(thread_id);
+        self.stop_watcher(thread_id);
+        Ok(())
+    }
+
     pub(super) fn enforce_cleanup_policy(&self) -> Result<(), String> {
         let settings = self.dirs.worktrees.settings();
         if !settings.auto_cleanup_enabled {

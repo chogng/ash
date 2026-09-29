@@ -660,9 +660,17 @@ impl App {
                 crate::git::WorktreeSelectionAction::Create { name } => {
                     Some(GitCommand::CreateWorktree { name }.into())
                 }
-                crate::git::WorktreeSelectionAction::Delete { checkout_root } => {
-                    Some(GitCommand::DeleteWorktree { checkout_root }.into())
-                }
+                crate::git::WorktreeSelectionAction::Delete {
+                    checkout_root,
+                    mode,
+                } => Some(
+                    GitCommand::DeleteWorktree {
+                        checkout_root,
+                        mode,
+                    }
+                    .into(),
+                ),
+                crate::git::WorktreeSelectionAction::Managed { .. } => None,
                 crate::git::WorktreeSelectionAction::Open {
                     checkout_root,
                     current,
@@ -2561,14 +2569,23 @@ impl App {
                 GitEvent::WorktreeCreateFailed(error) => {
                     self.panels_mut().set_command_message(error)
                 }
-                GitEvent::WorktreeDeleted(Ok(choices)) => {
+                GitEvent::WorktreeDeleted {
+                    result: Ok(choices),
+                    mode,
+                } => {
                     self.open_command_panel(CommandPanel::git_worktrees(choices));
-                    let message = crate::nls::localize(self.language(), "Worktree deleted.");
+                    let message = crate::nls::localize(
+                        self.language(),
+                        match mode {
+                            ash_app_server_protocol::protocol::git::GitWorktreeDeleteMode::Unbound => "Worktree deleted.",
+                            ash_app_server_protocol::protocol::git::GitWorktreeDeleteMode::SessionAndWorktrees => "Session and worktrees deleted.",
+                        },
+                    );
                     self.panels_mut().set_command_message(message.into());
                 }
-                GitEvent::WorktreeDeleted(Err(error)) => {
-                    self.panels_mut().set_command_message(error)
-                }
+                GitEvent::WorktreeDeleted {
+                    result: Err(error), ..
+                } => self.panels_mut().set_command_message(error),
                 GitEvent::WorktreeResolved(Ok(path)) => {
                     self.close_command_panel();
                     self.pending_workspace_open = Some(PathBuf::from(path));

@@ -17,6 +17,7 @@ use ash_app_server_protocol::protocol::git::GitBranchListResult;
 use ash_app_server_protocol::protocol::git::GitBranchSwitchParams;
 use ash_app_server_protocol::protocol::git::GitStatusResult;
 use ash_app_server_protocol::protocol::git::GitWorktreeCreateParams;
+use ash_app_server_protocol::protocol::git::GitWorktreeDeleteMode;
 use ash_app_server_protocol::protocol::git::GitWorktreeDeleteParams;
 use ash_app_server_protocol::protocol::git::GitWorktreeResolveParams;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -44,20 +45,36 @@ pub(crate) enum Event {
         choices: Result<WorktreeChoices, String>,
     },
     WorktreeCreateFailed(String),
-    WorktreeDeleted(Result<WorktreeChoices, String>),
+    WorktreeDeleted {
+        result: Result<WorktreeChoices, String>,
+        mode: GitWorktreeDeleteMode,
+    },
     WorktreeResolved(Result<String, String>),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
     OpenPicker,
-    Switch { name: String },
-    Create { name: String },
-    DeleteBranch { name: String },
+    Switch {
+        name: String,
+    },
+    Create {
+        name: String,
+    },
+    DeleteBranch {
+        name: String,
+    },
     OpenWorktrees,
-    CreateWorktree { name: String },
-    DeleteWorktree { checkout_root: String },
-    ResolveWorktree { checkout_root: String },
+    CreateWorktree {
+        name: String,
+    },
+    DeleteWorktree {
+        checkout_root: String,
+        mode: GitWorktreeDeleteMode,
+    },
+    ResolveWorktree {
+        checkout_root: String,
+    },
 }
 
 impl Command {
@@ -379,15 +396,21 @@ where
                 choices,
             })
         }
-        Command::DeleteWorktree { checkout_root } => Ok(Event::WorktreeDeleted(
-            client
+        Command::DeleteWorktree {
+            checkout_root,
+            mode,
+        } => Ok(Event::WorktreeDeleted {
+            result: client
                 .delete_git_worktree(GitWorktreeDeleteParams {
+                    command_id: crate::client::new_command_id("delete-worktree"),
                     repository_id: None,
                     checkout_root,
+                    mode,
                 })
                 .map(|result| worktree_choices(result, None))
                 .map_err(|error| git_error_message(error, GitAction::DeleteWorktree)),
-        )),
+            mode,
+        }),
         Command::ResolveWorktree { checkout_root } => Ok(Event::WorktreeResolved(
             client
                 .resolve_git_worktree(GitWorktreeResolveParams {

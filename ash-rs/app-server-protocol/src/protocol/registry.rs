@@ -728,6 +728,8 @@ use crate::protocol::git::GitWorktreeCreateParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitWorktreeCreateResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitWorktreeDeleteMode;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitWorktreeDeleteParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitWorktreeDto;
@@ -4912,6 +4914,7 @@ typescript_bindings! {
     GitBranchDeleteParams,
     GitWorktreeCreateParams,
     GitWorktreeDeleteParams,
+    GitWorktreeDeleteMode,
     GitWorktreeCreateResult,
     GitWorktreeDto,
     GitWorktreeStateDto,

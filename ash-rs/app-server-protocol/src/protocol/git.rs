@@ -466,15 +466,26 @@ pub struct GitWorktreeCreateParams {
     pub name: String,
 }
 
-/// Removes one clean, unbound linked checkout from a selected repository.
+/// Removes one linked checkout, or its owning Session and managed worktrees.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitWorktreeDeleteParams {
+    pub command_id: ash_protocol::CommandId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub repository_id: Option<String>,
     #[schemars(length(min = 1, max = 32768))]
     pub checkout_root: String,
+    pub mode: GitWorktreeDeleteMode,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitWorktreeDeleteMode {
+    /// Remove a clean linked checkout with no Session owner.
+    Unbound,
+    /// Delete the owning Session and discard every managed directory it owns.
+    SessionAndWorktrees,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

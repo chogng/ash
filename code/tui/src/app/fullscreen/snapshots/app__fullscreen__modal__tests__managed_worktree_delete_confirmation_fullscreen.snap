@@ -1,0 +1,32 @@
+---
+source: code/tui/src/app/fullscreen/modal_tests.rs
+expression: frame_text(&app)
+---
+  .                                                                            [— / —] [Dashboard]  
+                                                                                                    
+                                                                                                    
+            ┌── Project worktrees › Delete session and worktrees ─────────────────[✗]─┐             
+            │                                                                         │             
+            │  Deletes this session, its worktrees, and uncommitted changes.          │             
+            │> /worktrees/managed                                                     │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+  ──────────│  Enter to delete  ·  Esc to back                                        │───────────  
+  > Build an└─────────────────────────────────────────────────────────────────────────┘             
+  ─────────────────────────────────────────────────────────────────────────────── Automatic model

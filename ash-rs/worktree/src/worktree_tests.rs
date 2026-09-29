@@ -612,6 +612,42 @@ async fn thread_provision_freezes_dirty_source_and_recovers_the_binding() {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn confirmed_session_cleanup_resumes_after_worktree_unlock() {
+    let fixture = RepositoryFixture::new();
+    let manager = fixture.manager();
+    let binding = manager
+        .provision(&ManagedDirProvisionRequest {
+            source: ManagedDirSource::CurrentDirectory {
+                source_directory: fixture.repository.clone(),
+            },
+            target: ManagedDirTarget::SourceHead,
+            repository_targets: BTreeMap::new(),
+            source_dir_id: "dir-1".into(),
+            owner: thread_owner("thread-1"),
+        })
+        .await
+        .unwrap();
+    run_git(
+        &fixture.repository,
+        &[
+            "worktree",
+            "unlock",
+            binding.checkout_root().to_str().unwrap(),
+        ],
+    );
+    fs::write(
+        binding.checkout_root().join("uncommitted.txt"),
+        "discard me",
+    )
+    .unwrap();
+    manager
+        .cleanup(&binding, ManagedDirCleanupEligibility::SessionDeletedByUser)
+        .await
+        .unwrap();
+    assert!(!binding.checkout_root().exists());
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn thread_provision_supports_an_unborn_target_without_creating_its_branch() {
     let temporary = tempfile::tempdir().unwrap();
     let repository = temporary.path().join("unborn");

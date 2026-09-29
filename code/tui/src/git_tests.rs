@@ -177,7 +177,8 @@ fn worktree_delete_requires_a_noncurrent_selection_and_confirmation() {
     assert_eq!(
         panel.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         ListSelectionOutcome::Activate(super::WorktreeSelectionAction::Delete {
-            checkout_root: "/worktrees/topic".into()
+            checkout_root: "/worktrees/topic".into(),
+            mode: ash_app_server_protocol::protocol::git::GitWorktreeDeleteMode::Unbound,
         })
     );
     assert_eq!(
@@ -185,6 +186,32 @@ fn worktree_delete_requires_a_noncurrent_selection_and_confirmation() {
         ListSelectionOutcome::Consumed
     );
     assert_eq!(panel.state().title(), "Project worktrees");
+}
+
+#[test]
+fn managed_worktree_delete_confirms_session_and_all_worktrees() {
+    let mut managed = worktree("/worktrees/managed", false);
+    managed.state = ash_app_server_protocol::protocol::git::GitWorktreeStateDto::ThreadOwned;
+    let mut panel = super::WorktreePanel::new(super::worktree_choices(
+        ash_app_server_protocol::protocol::git::GitWorktreeListResult {
+            worktrees: vec![worktree("/repo", true), managed],
+        },
+        None,
+    ));
+    panel.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(
+        panel.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE)),
+        ListSelectionOutcome::Consumed
+    );
+    assert_eq!(panel.state().title(), "Delete session and worktrees");
+    assert_eq!(
+        panel.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        ListSelectionOutcome::Activate(super::WorktreeSelectionAction::Delete {
+            checkout_root: "/worktrees/managed".into(),
+            mode:
+                ash_app_server_protocol::protocol::git::GitWorktreeDeleteMode::SessionAndWorktrees,
+        })
+    );
 }
 
 #[test]
@@ -340,21 +367,27 @@ fn creating_a_worktree_through_app_server_leaves_session_catalog_unchanged() {
         super::execute(
             &mut client,
             super::Command::DeleteWorktree {
-                checkout_root: path.clone()
+                checkout_root: path.clone(),
+                mode: ash_app_server_protocol::protocol::git::GitWorktreeDeleteMode::Unbound,
             }
         )
         .unwrap(),
-        super::Event::WorktreeDeleted(Err(_))
+        super::Event::WorktreeDeleted { result: Err(_), .. }
     ));
     assert!(checkout.exists());
     std::fs::remove_file(checkout.join("draft")).unwrap();
-    let super::Event::WorktreeDeleted(Ok(remaining)) = super::execute(
+    let super::Event::WorktreeDeleted {
+        result: Ok(remaining),
+        mode: ash_app_server_protocol::protocol::git::GitWorktreeDeleteMode::Unbound,
+    } = super::execute(
         &mut client,
         super::Command::DeleteWorktree {
             checkout_root: path,
+            mode: ash_app_server_protocol::protocol::git::GitWorktreeDeleteMode::Unbound,
         },
     )
-    .unwrap() else {
+    .unwrap()
+    else {
         panic!("clean unbound worktree should be removed")
     };
     assert!(!checkout.exists());

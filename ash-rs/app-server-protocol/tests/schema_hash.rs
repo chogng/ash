@@ -1,3 +1,4 @@
+use ash_app_server_protocol::protocol::initialize::APP_SERVER_CAPABILITY_VERSION;
 use ash_app_server_protocol::protocol::initialize::ProtocolVersion;
 use ash_app_server_protocol::schema_hash;
 
@@ -9,6 +10,7 @@ fn compiled_protocol_matches_the_committed_metadata_and_client() {
     assert_eq!(
         metadata,
         serde_json::json!({
+            "capabilityVersion": APP_SERVER_CAPABILITY_VERSION,
             "major": version.major,
             "revision": version.revision,
             "schemaHash": schema_hash(),

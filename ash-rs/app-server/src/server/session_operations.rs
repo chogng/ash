@@ -17,11 +17,62 @@ use ash_app_server_protocol::protocol::session::SessionSubscribeParams;
 use ash_app_server_protocol::protocol::session::SessionSubscribeResult;
 use ash_app_server_protocol::protocol::session::SessionThreadProjection;
 use ash_app_server_protocol::protocol::session::SessionUnsubscribeParams;
+use ash_protocol::CommandId;
 use ash_protocol::SessionId;
+use ash_protocol::ThreadId;
 use core_api::StartThreadRequest;
 use serde_json::Value;
 
 impl AppServer {
+    pub(super) fn delete_worktree_session(
+        &self,
+        owner_thread_id: &str,
+        command_id: &CommandId,
+    ) -> Result<(), RpcError> {
+        let thread_id = ThreadId::new(owner_thread_id.to_owned()).map_err(|_| {
+            RpcError::new(
+                -32061,
+                ash_app_server_protocol::protocol::error::AppServerErrorName::GitOperationFailed,
+            )
+        })?;
+        let runtime = self.git_turn_changes_runtime()?;
+        if runtime.binding(&thread_id).is_none() {
+            return Err(RpcError::new(
+                -32061,
+                ash_app_server_protocol::protocol::error::AppServerErrorName::GitOperationFailed,
+            ));
+        }
+        match self.threads.read_thread(&thread_id) {
+            Ok(thread) => {
+                let session_id = thread.session_id;
+                let thread_ids = self
+                    .threads
+                    .list_session_threads(&session_id)
+                    .map_err(core_error)?
+                    .into_iter()
+                    .map(|thread| thread.thread_id)
+                    .filter(|thread_id| runtime.binding(thread_id).is_some())
+                    .collect::<Vec<_>>();
+                // Keep bindings until filesystem cleanup succeeds so a failed removal can be retried
+                // from the remaining worktree after the Session history is gone.
+                self.delete_session_request(SessionMutation {
+                    command_id: command_id.clone(),
+                    session_id,
+                })?;
+                for thread_id in thread_ids {
+                    runtime
+                        .cleanup_deleted_thread(&thread_id)
+                        .map_err(|_| RpcError::new(-32061, ash_app_server_protocol::protocol::error::AppServerErrorName::GitOperationFailed))?;
+                }
+            }
+            Err(core_api::CoreError::NotFound(_)) => runtime
+                .cleanup_deleted_thread(&thread_id)
+                .map_err(|_| RpcError::new(-32061, ash_app_server_protocol::protocol::error::AppServerErrorName::GitOperationFailed))?,
+            Err(error) => return Err(core_error(error)),
+        }
+        Ok(())
+    }
+
     pub(super) fn agent_roles_list(&self) -> Result<Value, RpcError> {
         use ash_app_server_protocol::protocol::agent::AgentRoleEntry;
         use ash_app_server_protocol::protocol::agent::AgentRoleListResult;

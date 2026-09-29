@@ -513,23 +513,121 @@ fn project_worktree_delete_confirms_and_restores_the_picker_in_both_modes() {
             app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
             Some(AppCommand::Git(GitCommand::DeleteWorktree {
                 checkout_root: "/worktrees/topic".into(),
+                mode: ash_app_server_protocol::protocol::git::GitWorktreeDeleteMode::Unbound,
             }))
         );
-        app.update(Event::WorktreeDeleted(Err("worktree has changes".into())));
+        app.update(Event::WorktreeDeleted {
+            result: Err("worktree has changes".into()),
+            mode: ash_app_server_protocol::protocol::git::GitWorktreeDeleteMode::Unbound,
+        });
         assert_eq!(
             app.list_selection().unwrap().message(),
             Some("worktree has changes")
         );
-        app.update(Event::WorktreeDeleted(Ok(crate::git::worktree_choices(
-            GitWorktreeListResult {
-                worktrees: vec![current],
-            },
-            None,
-        ))));
+        app.update(Event::WorktreeDeleted {
+            result: Ok(crate::git::worktree_choices(
+                GitWorktreeListResult {
+                    worktrees: vec![current],
+                },
+                None,
+            )),
+            mode: ash_app_server_protocol::protocol::git::GitWorktreeDeleteMode::Unbound,
+        });
         assert_eq!(app.command_panel().unwrap().parent_title(), None);
         assert_eq!(
             app.list_selection().unwrap().message(),
             Some(crate::nls::localize(language, "Worktree deleted.")).as_deref()
+        );
+        crate::tui_assert_snapshot!(deleted_snapshot, frame_text(&app));
+    }
+}
+
+#[test]
+fn managed_worktree_delete_confirms_session_removal_in_both_modes() {
+    use crate::app::AppCommand;
+    use crate::git::Command as GitCommand;
+    use ash_app_server_protocol::protocol::git::GitWorktreeDto;
+    use ash_app_server_protocol::protocol::git::GitWorktreeListResult;
+    use ash_app_server_protocol::protocol::git::GitWorktreeStateDto;
+
+    for (mode, language, confirm_snapshot, deleted_snapshot) in [
+        (
+            crate::terminal::ScreenMode::Fullscreen,
+            crate::nls::Language::English,
+            "managed_worktree_delete_confirmation_fullscreen",
+            "managed_worktree_deleted_fullscreen",
+        ),
+        (
+            crate::terminal::ScreenMode::Inline,
+            crate::nls::Language::Chinese,
+            "managed_worktree_delete_confirmation_inline_chinese",
+            "managed_worktree_deleted_inline_chinese",
+        ),
+    ] {
+        let mut app = crate::app::App::new();
+        let mut settings = crate::config::TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        settings.set_language(language);
+        app.update(crate::config::Event::SettingsReceived(settings));
+        let current = GitWorktreeDto {
+            checkout_root: "/repo".into(),
+            path: "/repo".into(),
+            branch: Some("main".into()),
+            head: "0123456789abcdef0123456789abcdef01234567".into(),
+            current: true,
+            state: GitWorktreeStateDto::Ready,
+        };
+        let managed = GitWorktreeDto {
+            checkout_root: "/worktrees/managed".into(),
+            path: "/worktrees/managed".into(),
+            branch: None,
+            head: current.head.clone(),
+            current: false,
+            state: GitWorktreeStateDto::ThreadOwned,
+        };
+        app.update(crate::git::Event::WorktreePickerOpened(
+            crate::git::worktree_choices(
+                GitWorktreeListResult {
+                    worktrees: vec![current.clone(), managed],
+                },
+                None,
+            ),
+        ));
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE));
+        assert_eq!(
+            app.list_selection().unwrap().title(),
+            if language == crate::nls::Language::Chinese {
+                "删除会话及工作树"
+            } else {
+                "Delete session and worktrees"
+            }
+        );
+        crate::tui_assert_snapshot!(confirm_snapshot, frame_text(&app));
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            Some(AppCommand::Git(GitCommand::DeleteWorktree {
+                checkout_root: "/worktrees/managed".into(),
+                mode: ash_app_server_protocol::protocol::git::GitWorktreeDeleteMode::SessionAndWorktrees,
+            }))
+        );
+        app.update(crate::git::Event::WorktreeDeleted {
+            result: Ok(crate::git::worktree_choices(
+                GitWorktreeListResult {
+                    worktrees: vec![current],
+                },
+                None,
+            )),
+            mode:
+                ash_app_server_protocol::protocol::git::GitWorktreeDeleteMode::SessionAndWorktrees,
+        });
+        assert_eq!(
+            app.list_selection().unwrap().message(),
+            Some(crate::nls::localize(
+                language,
+                "Session and worktrees deleted."
+            ))
+            .as_deref()
         );
         crate::tui_assert_snapshot!(deleted_snapshot, frame_text(&app));
     }

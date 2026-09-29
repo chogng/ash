@@ -1,0 +1,32 @@
+---
+source: code/tui/src/app/fullscreen/modal_tests.rs
+expression: frame_text(&app)
+---
+  .                                                                            [— / —] [Dashboard]  
+                                                                                                    
+                                                                                                    
+            ┌── Project worktrees ────────────────────────────────────────────────[✗]─┐             
+            │                                                                         │             
+            │  ╭────────────────────────────────────────────────────────────────────╮ │             
+            │  │ Search worktrees                                                   │ │             
+            │  ╰────────────────────────────────────────────────────────────────────╯ │             
+            │  Session and worktrees deleted.                                         │             
+            │  New worktree  ·  Create at HEAD · no session                           │             
+            │> repo  ·  Current · main · /repo                                        │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+  ──────────│  n New worktree · d delete · / search · Esc close                       │───────────  
+  > Build an└─────────────────────────────────────────────────────────────────────────┘             
+  ─────────────────────────────────────────────────────────────────────────────── Automatic model

@@ -20489,13 +20489,33 @@
       ],
       "type": "object"
     },
+    "GitWorktreeDeleteMode": {
+      "oneOf": [
+        {
+          "const": "unbound",
+          "description": "Remove a clean linked checkout with no Session owner.",
+          "type": "string"
+        },
+        {
+          "const": "sessionAndWorktrees",
+          "description": "Delete the owning Session and discard every managed directory it owns.",
+          "type": "string"
+        }
+      ]
+    },
     "GitWorktreeDeleteParams": {
-      "description": "Removes one clean, unbound linked checkout from a selected repository.",
+      "description": "Removes one linked checkout, or its owning Session and managed worktrees.",
       "properties": {
         "checkoutRoot": {
           "maxLength": 32768,
           "minLength": 1,
           "type": "string"
+        },
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "mode": {
+          "$ref": "#/$defs/GitWorktreeDeleteMode"
         },
         "repositoryId": {
           "type": [
@@ -20505,7 +20525,9 @@
         }
       },
       "required": [
-        "checkoutRoot"
+        "commandId",
+        "checkoutRoot",
+        "mode"
       ],
       "type": "object"
     },

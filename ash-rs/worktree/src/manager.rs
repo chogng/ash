@@ -307,10 +307,11 @@ impl ManagedRepositoryBinding {
     }
 }
 
-/// Proof supplied by the ledger owner before destructive managed-directory cleanup.
+/// Proof supplied by the ledger owner or explicit Session deletion before cleanup.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ManagedDirCleanupEligibility {
     AllChangeSetsSettled,
+    SessionDeletedByUser,
 }
 
 impl Worktree {
@@ -1022,16 +1023,26 @@ impl WorktreeManager {
             .git
             .open_repository(binding.source_repository_root())
             .await?;
-        self.git
-            .unlock_worktree(&source, binding.worktree_root())
-            .await?;
-        self.git
-            .remove_linked_worktree(
-                &source,
-                binding.worktree_root(),
-                GitWorktreeRemovalMode::DiscardVerifiedContents,
-            )
-            .await?;
+        if let Some(worktree) = self
+            .git
+            .worktrees(&source)
+            .await?
+            .into_iter()
+            .find(|worktree| worktree.checkout_root() == binding.worktree_root())
+        {
+            if matches!(worktree.availability(), WorktreeAvailability::Locked { .. }) {
+                self.git
+                    .unlock_worktree(&source, binding.worktree_root())
+                    .await?;
+            }
+            self.git
+                .remove_linked_worktree(
+                    &source,
+                    binding.worktree_root(),
+                    GitWorktreeRemovalMode::DiscardVerifiedContents,
+                )
+                .await?;
+        }
         self.git
             .delete_private_ref(
                 &source,
@@ -1402,7 +1413,7 @@ impl WorktreeManager {
         Ok(recovered)
     }
 
-    /// Removes a managed checkout only after every ChangeSet is settled.
+    /// Removes a managed checkout after the ledger settles its changes or its Session is deleted.
     pub async fn cleanup(
         &self,
         binding: &ManagedDirBinding,
@@ -1423,26 +1434,13 @@ impl WorktreeManager {
         for repository in binding.repositories.iter().skip(1).rev() {
             self.cleanup_repository(repository).await?;
         }
-        let source_repository = self
-            .git
-            .open_repository(&binding.source_repository_root)
-            .await?;
-        self.git
-            .unlock_worktree(&source_repository, &binding.checkout_root)
-            .await?;
-        self.git
-            .remove_linked_worktree(
-                &source_repository,
-                &binding.checkout_root,
-                GitWorktreeRemovalMode::DiscardVerifiedContents,
-            )
-            .await?;
-        self.git
-            .delete_private_ref(
-                &source_repository,
-                &GitPrivateRef::new(binding.baseline_ref.clone())?,
-            )
-            .await?;
+        self.cleanup_repository(
+            binding
+                .repositories
+                .first()
+                .context("managed Git directory omitted its source repository")?,
+        )
+        .await?;
         Ok(())
     }
 
