@@ -925,7 +925,8 @@ impl<'a> PreparedWrite<'a> {
             }
         }
         #[cfg(unix)]
-        self.parent.try_clone()?.into_std_file().sync_all()?;
+        // cap-std may hold directories with O_PATH on Linux; reopen for a syncable descriptor.
+        self.parent.open(".")?.sync_all()?;
         Ok(())
     }
 }
