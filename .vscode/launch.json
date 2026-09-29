@@ -17,6 +17,9 @@
 			"type": "node-terminal",
 			"request": "launch",
 			"command": "just ash-desktop",
+			"osx": {
+				"command": "uv run --python 3.12 just ash-desktop"
+			},
 			"cwd": "${workspaceFolder}",
 			"presentation": {
 				"group": "1_ash_desktop",
@@ -28,6 +31,9 @@
 			"type": "node-terminal",
 			"request": "launch",
 			"command": "pnpm --dir app-ts dev:ui:connected",
+			"osx": {
+				"command": "uv run --python 3.12 pnpm --dir app-ts dev:ui:connected"
+			},
 			"cwd": "${workspaceFolder}",
 			"presentation": {
 				"group": "1_ash_desktop",
