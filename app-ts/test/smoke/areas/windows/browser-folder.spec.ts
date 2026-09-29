@@ -65,7 +65,7 @@ test('browser opens an authorized local folder and saves its files', async ({ ta
 	if (await showSidebar.isVisible()) await showSidebar.click();
 	await page.getByRole('button', { name: 'Open Folder', exact: true }).click();
 	const explorer = page.locator('.ash-explorer');
-	const fileRow = explorer.locator('.ash-tree-row').filter({ hasText: 'hello %中.txt' });
+	const fileRow = explorer.getByRole('treeitem', { name: 'hello %中.txt', exact: true });
 	await expect(fileRow).toHaveCount(1);
 	if (await showSidebar.isVisible()) await showSidebar.click();
 	await expect(explorer).toBeVisible();
@@ -94,6 +94,21 @@ test('browser opens an authorized local folder and saves its files', async ({ ta
 	await expect(fileTree).toBeFocused();
 	await fileRow.click();
 	await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+	await page.keyboard.press('Control+c');
+	await expect.poll(() => page.evaluate(async () => (await navigator.clipboard.read())[0]?.types.includes('web application/x-ash-resources'))).toBe(true);
+	await explorer.getByRole('treeitem', { name: 'src', exact: true }).click();
+	await page.keyboard.press('Control+v');
+	await expect.poll(() => page.evaluate(async name => {
+		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+		const source = await folder.getDirectoryHandle('src');
+		try {
+			return (await (await source.getFileHandle('hello %中.txt')).getFile()).text();
+		} catch (error) {
+			if (error instanceof DOMException && error.name === 'NotFoundError') return undefined;
+			throw error;
+		}
+	}, folderName)).toBe('first value');
+	await fileRow.click();
 	await page.keyboard.press('F1');
 	const commandQuery = page.locator('.ash-quick-pick').getByRole('combobox');
 	await commandQuery.fill('Copy Relative Path');
@@ -128,12 +143,12 @@ test('browser opens an authorized local folder and saves its files', async ({ ta
 	await expect(page.getByRole('dialog', { name: 'Accessible View' }).getByRole('textbox', { name: 'Accessible View' })).toHaveValue(/hello %中\.txt/);
 	await page.keyboard.press('Escape');
 	await expect(openEditorsTree).toBeFocused();
-	await page.keyboard.press('F1');
-	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Download File...');
-	await expect(page.locator('.ash-quick-pick-row-label', { hasText: 'Download File...' })).toBeVisible();
+	await fileRow.click({ button: 'right' });
+	const downloadFile = page.getByRole('menuitem', { name: 'Download File...' });
+	await expect(downloadFile).toBeVisible();
 	const [download] = await Promise.all([
 		page.waitForEvent('download'),
-		page.keyboard.press('Enter'),
+		downloadFile.click(),
 	]);
 	expect(download.suggestedFilename()).toBe('hello %中.txt');
 	expect(await readFile(await download.path(), 'utf8')).toBe('second value');
@@ -149,8 +164,9 @@ test('browser opens an authorized local folder and saves its files', async ({ ta
 		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
 		return (await (await folder.getFileHandle('created.txt')).getFile()).text();
 	}, folderName)).toBe('');
-	const sourceFolderRow = explorer.locator('.ash-tree-row').filter({ hasText: 'src' });
+	const sourceFolderRow = explorer.getByRole('treeitem', { name: 'src', exact: true });
 	await sourceFolderRow.click();
+	if (await sourceFolderRow.getAttribute('aria-expanded') === 'false') await sourceFolderRow.click();
 	await page.keyboard.press('F1');
 	await page.locator('.ash-quick-pick').getByRole('combobox').fill('New File...');
 	await page.keyboard.press('Enter');

@@ -1,3 +1,4 @@
+import { basename } from '../../../../../base/common/resources.js';
 import { type URI } from '../../../../../base/common/uri.js';
 import { localize } from '../../../../../nls.js';
 import { DialogSeverity, type IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
@@ -15,7 +16,7 @@ export class TextFileSaveErrorHandler {
 				message: localize(
 					'files.saveConflictMessage',
 					"Could not save '{0}' because the file changed on disk. Your unsaved changes are still open in the editor.",
-					fileName(error.resource),
+					basename(error.resource),
 				),
 			});
 			return;
@@ -26,16 +27,11 @@ export class TextFileSaveErrorHandler {
 			message: localize(
 				'files.saveFailedMessage',
 				"Could not save '{0}': {1}. Your unsaved changes are still open in the editor.",
-				resource ? fileName(resource) : localize('files.untitledFile', 'Untitled'),
+				resource ? basename(resource) : localize('files.untitledFile', 'Untitled'),
 				errorMessage(error),
 			),
 		});
 	}
-}
-
-function fileName(resource: URI): string {
-	const encodedPath = resource.toEncodedComponents().path;
-	return decodeURIComponent(encodedPath.split('/').pop() || encodedPath);
 }
 
 function errorMessage(error: unknown): string {

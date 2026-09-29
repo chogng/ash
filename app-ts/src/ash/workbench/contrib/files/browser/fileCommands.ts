@@ -1,11 +1,9 @@
-import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
-import { workspaceRelativePath } from '../../../../platform/files/browser/fileService.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { getRemoteWorkspacePath, isRemoteResource } from '../../../../platform/remote/common/remote.js';
-import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IWorkspaceContextService, workspaceRelativePath } from '../../../../platform/workspace/common/workspace.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 
 export async function copyFilePath(accessor: ServicesAccessor, resourceArgument?: unknown): Promise<void> {
@@ -16,10 +14,7 @@ export async function copyFilePath(accessor: ServicesAccessor, resourceArgument?
 
 export async function copyRelativeFilePath(accessor: ServicesAccessor, resourceArgument?: unknown): Promise<void> {
 	const resource = resolveFileResource(accessor, resourceArgument);
-	const folders = accessor.get(IWorkspaceContextService).getWorkspace().folders;
-	const folder = folders
-		.filter(candidate => extUriBiasedIgnorePathCase.isEqualOrParent(resource, candidate.uri))
-		.sort((left, right) => right.uri.toEncodedComponents().path.length - left.uri.toEncodedComponents().path.length)[0];
+	const folder = accessor.get(IWorkspaceContextService).getWorkspaceFolder(resource);
 	if (!folder) {
 		throw new Error(localize({ bundle: 'ash', key: 'workbench.copyRelativePathOutsideWorkspace' }, 'The file is outside the current workspace.'));
 	}

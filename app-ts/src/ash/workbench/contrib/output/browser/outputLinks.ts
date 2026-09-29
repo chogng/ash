@@ -1,8 +1,7 @@
 import { URI } from "../../../../base/common/uri.js";
 import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
-import { workspaceRelativePath } from "../../../../platform/files/browser/fileService.js";
-import type { IWorkspaceFolder } from "../../../../platform/workspace/common/workspace.js";
+import { workspaceRelativePath, type IWorkspaceFolder } from "../../../../platform/workspace/common/workspace.js";
 
 export interface OutputLink {
 	readonly startIndex: number;

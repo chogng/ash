@@ -1,3 +1,4 @@
+import { basename } from '../../../../../base/common/resources.js';
 import { type URI } from '../../../../../base/common/uri.js';
 import { isRemoteResource } from '../../../../../platform/remote/common/remote.js';
 import { type EditorInput } from '../../../../services/editor/common/editorService.js';
@@ -22,8 +23,7 @@ export class FileEditorInput implements EditorInput {
 
 	constructor(readonly resource: URI, options: FileEditorInputOptions = {}) {
 		if (resource.scheme !== 'file' && !isRemoteResource(resource)) throw new TypeError('File editor input requires a file resource');
-		const encodedPath = resource.toEncodedComponents().path;
-		this.label = options.label ?? decodeURIComponent(encodedPath.split('/').pop() || encodedPath);
+		this.label = options.label ?? basename(resource);
 		this.contentType = options.contentType;
 		this.languageId = options.languageId;
 		this.readOnly = options.readOnly;

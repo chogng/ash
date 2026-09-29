@@ -25,6 +25,9 @@ export interface IExplorerClipboard {
 
 export interface IExplorerService {
 	readonly _serviceBrand: undefined;
+	readonly onDidChangeRoot: Event<void>;
+	readonly onDidChangeResources: Event<readonly URI[] | undefined>;
+	getRoot(): ExplorerItem | undefined;
 	getContext(): readonly ExplorerItem[];
 	getAccessibleContent(): string | undefined;
 	focus(): void;

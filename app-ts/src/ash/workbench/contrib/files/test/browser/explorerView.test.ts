@@ -152,7 +152,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 			"../../../../../workbench/contrib/files/browser/views/explorerView.js"
 		);
 		const { ExplorerService } = await import('../../browser/explorerService.js');
-		const explorerService = new ExplorerService();
+		using explorerService = new ExplorerService(workspaceContextService, fileService);
 		using contextKeyService = new ContextKeyService();
 		const accessibleViewService: IAccessibleViewService = {
 			show: () => false,

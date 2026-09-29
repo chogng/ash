@@ -7,7 +7,7 @@ import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
 import { FileKind, FileNotFoundError, FileRevisionConflictError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileContent, type IFileEntry, type IFileService, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from "../common/files.js";
-import type { IWorkspaceContextService } from "../../workspace/common/workspace.js";
+import { workspaceRelativePath, type IWorkspaceContextService } from "../../workspace/common/workspace.js";
 import { isRemoteResource } from "../../remote/common/remote.js";
 
 /** Narrow App Server surface consumed by the browser file-service adapter. */
@@ -160,21 +160,9 @@ export class BrowserFileService extends Disposable implements IFileService {
 	}
 
 	private fileTarget(resource: URI): { readonly dirId: string; readonly path: string } {
-		const folders = this.workspaceContextService.getWorkspace().folders;
-		let match: { readonly dirId: string; readonly path: string; readonly rootLength: number } | undefined;
-		for (const folder of folders) {
-			try {
-				const path = workspaceRelativePath(folder.uri, resource);
-				const rootLength = folder.uri.toEncodedComponents().path.length;
-				if (!match || rootLength > match.rootLength) {
-					match = { dirId: folder.id, path, rootLength };
-				}
-			} catch {
-				// A resource may only belong to one of the workspace's independent roots.
-			}
-		}
-		if (!match) throw new Error("Resource must belong to a current workspace folder");
-		return { dirId: match.dirId, path: match.path };
+		const folder = this.workspaceContextService.getWorkspaceFolder(resource);
+		if (!folder) throw new Error("Resource must belong to a current workspace folder");
+		return { dirId: folder.id, path: workspaceRelativePath(folder.uri, resource) };
 	}
 
 	private async readResourceBytes(resource: ResourceMetadataResult): Promise<Uint8Array> {
@@ -248,40 +236,6 @@ function decodeResourceChunk(chunk: ResourceReadResult, resourceId: string, expe
 		throw new Error("Workspace binary resource response is inconsistent");
 	}
 	return bytes;
-}
-
-/** Resolves a resource to a slash-separated path beneath one workspace root. */
-export function workspaceRelativePath(root: URI, resource: URI): string {
-	if (
-		!isWorkspaceFileSystemResource(root) ||
-		resource.scheme !== root.scheme ||
-		root.authority.toLowerCase() !== resource.authority.toLowerCase()
-	) {
-		throw new Error("Resource must belong to the current workspace filesystem");
-	}
-	const rootPath = decodedPath(root).replace(/\/+$/, "");
-	const resourcePath = decodedPath(resource).replace(/\/+$/, "");
-	const ignoreCase = root.scheme === "file" && isCaseInsensitiveFileSystemPath(rootPath);
-	const comparedRoot = ignoreCase ? rootPath.toLowerCase() : rootPath;
-	const comparedResource = ignoreCase
-		? resourcePath.toLowerCase()
-		: resourcePath;
-	if (comparedResource === comparedRoot) return ".";
-	const prefix = `${comparedRoot}/`;
-	if (!comparedResource.startsWith(prefix)) {
-		throw new Error("Resource is outside the current workspace folder");
-	}
-	return resourcePath.slice(rootPath.length + 1);
-}
-
-function decodedPath(resource: URI): string {
-	const path = resource.path;
-	return resource.scheme === "file" ? path.replaceAll("\\", "/") : path;
-}
-
-function isCaseInsensitiveFileSystemPath(path: string): boolean {
-	return /^\/[A-Za-z]:\//.test(`${path}/`) ||
-		globalThis.navigator?.platform?.startsWith("Mac") === true;
 }
 
 /** Resolves one slash-separated protocol path beneath a workspace root. */

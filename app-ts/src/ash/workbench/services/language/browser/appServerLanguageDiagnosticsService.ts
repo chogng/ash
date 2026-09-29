@@ -8,9 +8,9 @@ import { LanguageDiagnosticSeverity, type LanguageDiagnostic, type LanguageDiagn
 import { type TextModel } from "../../../../editor/common/model/textModel.js";
 import { type IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
-import { workspaceRelativePath, workspaceResourceFromPath } from "../../../../platform/files/browser/fileService.js";
+import { workspaceResourceFromPath } from "../../../../platform/files/browser/fileService.js";
 import { type ILanguageApi } from "../../../../platform/language/common/languageApi.js";
-import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
+import { workspaceRelativePath, type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { type IDirPermissionsService } from "../../../../platform/dirPermissions/common/dirPermissionsService.js";
 import { type AppServerErrorName, type LanguageCodeActionDiagnosticDto, type LanguageDiagnosticsNotification } from "../../../../platform/app-server/common/generated/index.js";
 import { type ICodeIntelligenceDocumentService } from "../../codeIntelligence/common/codeIntelligenceDocumentService.js";

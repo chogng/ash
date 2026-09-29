@@ -1,4 +1,3 @@
-import { URI } from "../../../../../base/common/uri.js";
 import { IConfigurationService } from "../../../../../platform/configuration/common/configuration.js";
 import { FileKind, IFileService } from "../../../../../platform/files/common/files.js";
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
@@ -29,7 +28,6 @@ import { explorerFileContribRegistry } from '../explorerFileContrib.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { localize, onDidChangeNls } from '../../../../../nls.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
-import { WorkspaceWatcher } from '../workspaceWatcher.js';
 import { FileEditorInput } from '../editors/fileEditorInput.js';
 import { ListConfiguration, type TreeExpandMode } from '../../../../../platform/list/common/listConfiguration.js';
 import { ResourceSchemeContext } from '../../../../common/contextkeys.js';
@@ -40,6 +38,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	private readonly fileService: IFileService;
 	private readonly workspaceContextService: IWorkspaceContextService;
 	private readonly editorService: IEditorService;
+	private readonly explorerService: IExplorerService;
 	private readonly tree: WorkbenchAsyncDataTree<ExplorerItem, ExplorerItem>;
 	private readonly scrollContent: HTMLDivElement;
 	private statusDomNode: HTMLDivElement | undefined;
@@ -79,6 +78,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		this.fileService = fileService;
 		this.workspaceContextService = workspaceContextService;
 		this.editorService = editorService;
+		this.explorerService = explorerService;
 		const renderer = this._register(new FilesRenderer(
 			container.ownerDocument,
 			workspaceContextService,
@@ -200,12 +200,8 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			const roots = this.root?.children ?? (this.root ? [this.root] : []);
 			for (const root of roots) void this.refreshRoot(root);
 		}));
-		this._register(workspaceContextService.onDidChangeWorkspace(() => {
-			explorerService.setToCopy([], false);
-			void this.initialize();
-		}));
-		const watcher = this._register(new WorkspaceWatcher(fileService, workspaceContextService));
-		this._register(watcher.onDidChange(resources => {
+		this._register(explorerService.onDidChangeRoot(() => { void this.initialize(); }));
+		this._register(explorerService.onDidChangeResources(resources => {
 			const roots = this.root?.children ?? (this.root ? [this.root] : []);
 			for (const root of roots) {
 				const changed = resources?.filter(resource => extUriBiasedIgnorePathCase.isEqualOrParent(resource, root.resource));
@@ -277,11 +273,14 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	}
 
 	private updateExplorerContextKeys(item: ExplorerItem | undefined): void {
-		const isRoot = item ? item.resource.scheme === 'ash-workspace' || this.workspaceContextService.getWorkspace().folders.some(folder => extUriBiasedIgnorePathCase.isEqual(folder.uri, item.resource)) : false;
+		const folder = item && this.workspaceContextService.getWorkspaceFolder(item.resource);
+		const isRoot = item ? item.resource.scheme === 'ash-workspace' || !!folder && extUriBiasedIgnorePathCase.isEqual(folder.uri, item.resource) : false;
 		this.hasContextResource.set(!!item);
 		this.contextIsFile.set(item?.kind === FileKind.File);
 		this.contextCanModify.set(!!item && !isRoot);
-		this.contextCanCreate.set((!!item && item.resource.scheme !== 'ash-workspace') || (!item && this.workspaceContextService.getWorkspace().folders.length > 0));
+		this.contextCanCreate.set(item
+			? item.kind === FileKind.Directory && item.resource.scheme !== 'ash-workspace'
+			: this.workspaceContextService.getWorkspace().folders.length > 0);
 		this.scopedContext.setContext(ResourceSchemeContext.key, item?.resource.scheme);
 	}
 
@@ -302,20 +301,8 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		}
 		try {
 			// Workspace folders are validated at the host boundary; the first directory read reports an invalid root.
-			const roots = workspace.folders.map(folder => new ExplorerItem(folder.uri, folder.name, FileKind.Directory));
-			if (this.isDisposed || generation !== this.workspaceGeneration) return;
-			if (roots.length === 1) {
-				this.setTitle(roots[0]!.name);
-				this.root = roots[0];
-			} else {
-				this.setTitle(workspace.name ?? "Explorer");
-				this.root = new ExplorerItem(
-					URI.parse(`ash-workspace:/${encodeURIComponent(workspace.id)}`),
-					workspace.name ?? "Workspace",
-					FileKind.Directory,
-					Object.freeze(roots),
-				);
-			}
+			this.root = this.explorerService.getRoot();
+			this.setTitle(workspace.folders.length === 1 ? this.root!.name : workspace.name ?? 'Explorer');
 			await this.tree.setInput(this.root);
 			if (this.isDisposed || generation !== this.workspaceGeneration) return;
 			this.render();

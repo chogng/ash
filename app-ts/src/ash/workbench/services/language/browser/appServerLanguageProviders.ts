@@ -9,8 +9,8 @@ import type { ILanguageFeaturesService } from '../../../../editor/common/service
 import * as languages from '../../../../editor/common/languages.js';
 import { type LanguageCompletionItemKindDto, type LanguageHierarchyItemDto, type LanguageCodeActionDto, type LanguageCodeLensDto, type LanguageDirectoryEditDto, type LanguageDocumentLinkDto, type LanguageDocumentSymbolDto } from '../../../../platform/app-server/common/generated/index.js';
 import { type ILanguageApi } from "../../../../platform/language/common/languageApi.js";
-import { workspaceRelativePath, workspaceResourceFromPath } from "../../../../platform/files/browser/fileService.js";
-import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
+import { workspaceResourceFromPath } from "../../../../platform/files/browser/fileService.js";
+import { workspaceRelativePath, type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { type IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import { type IDirPermissionsService } from "../../../../platform/dirPermissions/common/dirPermissionsService.js";
 import { AppServerLanguageSupport } from "./appServerLanguageSupport.js";

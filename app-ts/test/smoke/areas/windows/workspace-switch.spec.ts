@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ElectronApplication } from '@playwright/test';
@@ -107,7 +108,7 @@ test('Explorer file context menu includes file actions for the clicked row', asy
 	}
 });
 
-test('Explorer shortcuts copy and move binary files into folders', async ({ target, testWorkspace, workbench }) => {
+test('Explorer shortcuts copy and move binary files into folders', async ({ target, testWorkspace, workbench, application }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'This scenario requires the Code desktop and App Server');
 	const directory = testWorkspace.directory;
 	await mkdir(join(directory, 'paste-target'));
@@ -121,6 +122,20 @@ test('Explorer shortcuts copy and move binary files into folders', async ({ targ
 	await expect(source).toHaveCount(1);
 	await source.click();
 	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+c' : 'Control+c');
+	const copiedFiles = await (application as ElectronApplication).evaluate(async ({ clipboard }) => {
+		const item = (await clipboard.read())[0];
+		if (!item?.types.includes('text/uri-list')) return undefined;
+		const data = await item.getType('text/uri-list');
+		return data instanceof Blob ? data.text() : undefined;
+	});
+	expect(copiedFiles).toContain('clipboard.bin');
+	if (process.platform === 'win32') {
+		const fileDropList = execFileSync('powershell.exe', [
+			'-NoProfile', '-STA', '-Command',
+			'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::GetFileDropList()',
+		], { encoding: 'utf8' }).trim().split(/\r?\n/);
+		expect(fileDropList).toContain(join(directory, 'clipboard.bin'));
+	}
 	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'paste-target', exact: true }).click();
 	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+v' : 'Control+v');
 	await expect.poll(async () => readFile(join(directory, 'paste-target', 'clipboard.bin')).then(value => [...value], () => [])).toEqual([...bytes]);

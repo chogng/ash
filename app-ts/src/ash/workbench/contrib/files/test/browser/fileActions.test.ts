@@ -92,7 +92,7 @@ test('New File command creates and opens a file in the active workspace folder',
 		const opened: URI[] = [];
 		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
 		const services = new ServiceContainer();
-		const explorerService = new ExplorerService();
+		using explorerService = createExplorerService(workspace);
 		services.registerInstance(IWorkspaceContextService, workspace);
 		services.registerInstance(IExplorerService, explorerService);
 		services.registerInstance(IQuickInputService, {
@@ -142,7 +142,7 @@ test('New Folder command creates a directory under the selected folder', async (
 	const folder = URI.file('/project/src');
 	const created: URI[] = [];
 	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
-	const explorer = new ExplorerService();
+	using explorer = createExplorerService(workspace);
 	using registration = explorer.registerView({
 		getContext: () => [new ExplorerItem(folder, 'src', FileKind.Directory)],
 		getAccessibleContent: () => '',
@@ -179,7 +179,7 @@ test('Explorer copy and cut paste selected files with conflict names', async () 
 	const folder = new ExplorerItem(URI.file('/project/dest'), 'dest', FileKind.Directory);
 	let selected: readonly ExplorerItem[] = [first, second];
 	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
-	const explorer = new ExplorerService();
+	using explorer = createExplorerService(workspace);
 	using registration = explorer.registerView({ getContext: () => selected, getAccessibleContent: () => '', focus() {} });
 	const existing = new Set(['/project/one.txt', '/project/two.txt', '/project/dest', '/project/dest/one.txt']);
 	const copied: string[] = [];
@@ -223,7 +223,7 @@ test('Explorer copy and cut paste selected files with conflict names', async () 
 test('Explorer paste reads resources copied in another window', async () => {
 	await import('../../browser/fileActions.contribution.js');
 	const root = URI.file('/project');
-	const source = URI.file('/project/source.bin');
+	const source = URI.file('/project/100% ready.bin');
 	const destination = URI.file('/project/destination');
 	let resources: readonly URI[] = [];
 	const clipboard = {
@@ -234,9 +234,9 @@ test('Explorer paste reads resources copied in another window', async () => {
 		hasResources: async () => resources.length > 0,
 	};
 	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
-	const first = new ExplorerService();
-	const second = new ExplorerService();
-	using firstView = first.registerView({ getContext: () => [new ExplorerItem(source, 'source.bin', FileKind.File)], getAccessibleContent: () => '', focus() {} });
+	using first = createExplorerService(workspace);
+	using second = createExplorerService(workspace);
+	using firstView = first.registerView({ getContext: () => [new ExplorerItem(source, '100% ready.bin', FileKind.File)], getAccessibleContent: () => '', focus() {} });
 	using secondView = second.registerView({ getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', focus() {} });
 	using firstServices = new ServiceContainer();
 	firstServices.registerInstance(IWorkspaceContextService, workspace);
@@ -259,7 +259,45 @@ test('Explorer paste reads resources copied in another window', async () => {
 	} as FileServiceContract);
 	using secondCommands = new CommandService(secondServices);
 	await secondCommands.executeCommand(PASTE_FILE_COMMAND_ID);
-	assert.deepEqual(copied, ['/project/source.bin -> /project/destination/source.bin']);
+	assert.deepEqual(copied, ['/project/100% ready.bin -> /project/destination/100% ready.bin']);
+});
+
+test('Explorer cut across nested workspace roots copies before deleting the source', async () => {
+	await import('../../browser/fileActions.contribution.js');
+	const source = URI.file('/project/nested/main.ts');
+	const destination = URI.file('/project/destination');
+	let selected = new ExplorerItem(source, 'main.ts', FileKind.File);
+	using workspace = new WorkspaceContextService({
+		id: 'project',
+		folders: [
+			{ id: 'outer', uri: URI.file('/project'), name: 'project', index: 0 },
+			{ id: 'nested', uri: URI.file('/project/nested'), name: 'nested', index: 1 },
+		],
+	});
+	using explorer = createExplorerService(workspace);
+	using view = explorer.registerView({ getContext: () => [selected], getAccessibleContent: () => '', focus() {} });
+	let resources: readonly URI[] = [];
+	const operations: string[] = [];
+	using services = new ServiceContainer();
+	services.registerInstance(IWorkspaceContextService, workspace);
+	services.registerInstance(IExplorerService, explorer);
+	services.registerInstance(IClipboardService, {
+		readResources: async () => resources,
+		writeResources: async value => { resources = value; },
+	} as IClipboardService);
+	services.registerInstance(IFileService, {
+		stat: async (resource: URI) => { throw new FileNotFoundError(resource); },
+		copy: async () => { operations.push('copy'); },
+		delete: async () => { operations.push('delete'); },
+		rename: async () => { operations.push('rename'); },
+	} as unknown as FileServiceContract);
+	using commands = new CommandService(services);
+
+	await commands.executeCommand(CUT_FILE_COMMAND_ID);
+	selected = new ExplorerItem(destination, 'destination', FileKind.Directory);
+	await commands.executeCommand(PASTE_FILE_COMMAND_ID);
+
+	assert.deepEqual(operations, ['copy', 'delete']);
 });
 
 test('Explorer paste imports exact bytes from the system file list', async () => {
@@ -279,12 +317,15 @@ test('Explorer paste imports exact bytes from the system file list', async () =>
 			[Symbol.iterator]: { value: function* () { yield file; } },
 		});
 		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
-		const explorer = new ExplorerService();
+		using explorer = createExplorerService(workspace);
 		using view = explorer.registerView({ getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', focus() {} });
 		const writes: { resource: string; bytes: number[] }[] = [];
 		using services = new ServiceContainer();
 		services.registerInstance(IWorkspaceContextService, workspace);
 		services.registerInstance(IExplorerService, explorer);
+		services.registerInstance(IClipboardService, {
+			readResources: async () => [],
+		} as unknown as IClipboardService);
 		services.registerInstance(IFileService, {
 			stat: async (resource: URI) => { throw new FileNotFoundError(resource); },
 			writeFileBytes: async (resource: URI, content: Uint8Array) => {
@@ -348,7 +389,7 @@ test('Download File command preserves the active file bytes and filename', async
 	Object.defineProperty(globalThis, 'document', { configurable: true, value: browser.window.document });
 	try {
 		await import('../../browser/fileActions.contribution.js');
-		const resource = URI.file('C:\\project\\payload.bin');
+		const resource = URI.file('C:\\project\\100% payload.bin');
 		const reads: URI[] = [];
 		let downloadedName: string | undefined;
 		let downloadedBlob: Blob | undefined;
@@ -372,7 +413,7 @@ test('Download File command preserves the active file bytes and filename', async
 
 		await commands.executeCommand(DOWNLOAD_COMMAND_ID);
 
-		assert.equal(downloadedName, 'payload.bin');
+		assert.equal(downloadedName, '100% payload.bin');
 		assert.deepEqual(reads, [resource]);
 		assert.deepEqual([...new Uint8Array(await downloadedBlob!.arrayBuffer())], [0, 255, 42]);
 	} finally {
@@ -390,7 +431,7 @@ test('Explorer menu commands rename, open beside the editor, and delete the sele
 	const deleted: string[] = [];
 	const opened: string[] = [];
 	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
-	const explorer = new ExplorerService();
+	using explorer = createExplorerService(workspace);
 	using registration = explorer.registerView({
 		getContext: () => [new ExplorerItem(selected, 'old.ts', FileKind.File)],
 		getAccessibleContent: () => '',
@@ -446,7 +487,7 @@ test('Reveal in OS command sends the selected local file to the desktop host', a
 	const selected = URI.file('C:\\project\\src\\main.ts');
 	const revealed: string[] = [];
 	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
-	const explorer = new ExplorerService();
+	using explorer = createExplorerService(workspace);
 	using registration = explorer.registerView({
 		getContext: () => [new ExplorerItem(selected, 'main.ts', FileKind.File)],
 		getAccessibleContent: () => '',
@@ -476,3 +517,7 @@ test('Reveal file IPC validates the requested path before calling the desktop ho
 	await route.invoke(route.validate('C:\\project\\main.ts'));
 	assert.deepEqual(revealed, ['C:\\project\\main.ts']);
 });
+
+function createExplorerService(workspace: WorkspaceContextService): ExplorerService {
+	return new ExplorerService(workspace, { onDidChangeFiles: Event.None } as FileServiceContract);
+}

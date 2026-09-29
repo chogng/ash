@@ -1,5 +1,5 @@
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
-import { dirname, extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
+import { basename, dirname, extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
@@ -45,17 +45,17 @@ export async function cancelExplorerCut(accessor: ServicesAccessor): Promise<voi
 	explorer.setToCopy([], false);
 }
 
-/** Handles {@link PASTE_FILE_COMMAND_ID}; files from a paste event take precedence over stored resource URIs. */
+/** Handles {@link PASTE_FILE_COMMAND_ID}; Ash resources retain cut semantics when the OS also supplies files. */
 export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: unknown): Promise<void> {
 	if (fileList !== undefined && !(fileList instanceof FileList)) throw new TypeError('Invalid files to paste');
 	const explorer = accessor.get(IExplorerService);
-	const nativeFiles = fileList && fileList.length > 0 ? [...fileList] : [];
-	const resources = nativeFiles.length ? [] : await accessor.get(IClipboardService).readResources();
+	const resources = await accessor.get(IClipboardService).readResources();
+	const nativeFiles = resources.length === 0 && fileList && fileList.length > 0 ? [...fileList] : [];
 	if (!nativeFiles.length && !resources.length) return;
 	const localClipboard = explorer.getToCopy();
 	const cut = nativeFiles.length === 0 && localClipboard.cut && sameResources(resources, localClipboard.items.map(item => item.resource));
 	const selection = explorer.getContext()[0];
-	const folders = accessor.get(IWorkspaceContextService).getWorkspace().folders;
+	const workspaceContext = accessor.get(IWorkspaceContextService);
 	const directory = selection && selection.resource.scheme !== 'ash-workspace'
 		? selection.kind === FileKind.Directory ? selection.resource : dirname(selection.resource)
 		: await resolveCreationDirectory(accessor, 'folder');
@@ -69,7 +69,7 @@ export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: 
 	for (const resource of resources) {
 		const local = localClipboard.items.find(item => extUriBiasedIgnorePathCase.isEqual(item.resource, resource));
 		const kind = local?.kind ?? (await files.stat(resource)).kind;
-		const name = local?.name ?? decodeURIComponent(resource.path.slice(resource.path.lastIndexOf('/') + 1));
+		const name = local?.name ?? basename(resource);
 		if (!validFileName(name)) continue;
 		if (kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqualOrParent(directory, resource)) {
 			throw new Error(localize({ bundle: 'ash', key: 'files.pasteIntoSelf' }, 'Cannot paste a folder into itself.'));
@@ -77,7 +77,8 @@ export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: 
 		const desired = URI.joinPath(directory, name);
 		if (cut && extUriBiasedIgnorePathCase.isEqual(desired, resource)) continue;
 		const target = await availablePasteTarget(files, directory, name);
-		if (cut && folders.some(folder => extUriBiasedIgnorePathCase.isEqualOrParent(resource, folder.uri) && extUriBiasedIgnorePathCase.isEqualOrParent(target, folder.uri))) {
+		const sourceFolder = workspaceContext.getWorkspaceFolder(resource);
+		if (cut && sourceFolder && sourceFolder.id === workspaceContext.getWorkspaceFolder(target)?.id) {
 			await files.rename(resource, target, 'error');
 		} else {
 			await files.copy(resource, target);
@@ -145,7 +146,9 @@ export async function openExplorerItemToSide(accessor: ServicesAccessor): Promis
 }
 
 function isWorkspaceRoot(accessor: ServicesAccessor, resource: URI): boolean {
-	return resource.scheme === 'ash-workspace' || accessor.get(IWorkspaceContextService).getWorkspace().folders.some(folder => extUriBiasedIgnorePathCase.isEqual(folder.uri, resource));
+	if (resource.scheme === 'ash-workspace') return true;
+	const folder = accessor.get(IWorkspaceContextService).getWorkspaceFolder(resource);
+	return !!folder && extUriBiasedIgnorePathCase.isEqual(folder.uri, resource);
 }
 
 /** Handles {@link NEW_FILE_COMMAND_ID}; creates a file in the chosen folder and opens it in the editor. */
@@ -197,13 +200,11 @@ async function resolveCreationDirectory(accessor: ServicesAccessor, kind: 'file'
 	const selectionDirectory = selection?.kind === FileKind.Directory
 		? selection.resource
 		: selection ? dirname(selection.resource) : undefined;
-	const selectedDirectory = selectionDirectory && workspace.folders.some(folder => extUriBiasedIgnorePathCase.isEqualOrParent(selectionDirectory, folder.uri))
+	const selectedDirectory = selectionDirectory && accessor.get(IWorkspaceContextService).getWorkspaceFolder(selectionDirectory)
 		? selectionDirectory
 		: undefined;
 	const activeResource = accessor.get(IEditorService).activeEditor?.resource;
-	const activeFolder = workspace.folders
-		.filter(folder => activeResource && extUriBiasedIgnorePathCase.isEqualOrParent(activeResource, folder.uri))
-		.sort((left, right) => right.uri.toEncodedComponents().path.length - left.uri.toEncodedComponents().path.length)[0];
+	const activeFolder = activeResource ? accessor.get(IWorkspaceContextService).getWorkspaceFolder(activeResource) : null;
 	const folder = selectedDirectory ? undefined : activeFolder ?? (workspace.folders.length === 1
 		? workspace.folders[0]
 		: await pickWorkspaceFolder(quickInput, workspace.folders, kind));

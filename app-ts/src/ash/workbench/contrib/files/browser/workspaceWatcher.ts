@@ -1,6 +1,5 @@
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { type IFileService } from '../../../../platform/files/common/files.js';
 import { type IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
@@ -17,9 +16,7 @@ export class WorkspaceWatcher extends Disposable {
 				this.changeEmitter.fire(undefined);
 				return;
 			}
-			const folders = workspace.getWorkspace().folders;
-			const affected = event.resources.filter(resource => folders.some(folder =>
-				extUriBiasedIgnorePathCase.isEqualOrParent(resource, folder.uri)));
+			const affected = event.resources.filter(resource => workspace.getWorkspaceFolder(resource) !== null);
 			if (affected.length > 0) this.changeEmitter.fire(affected);
 		}));
 	}

@@ -18,6 +18,7 @@
     "src/ash/platform/app-server/electron-main/**/*.ts",
     "src/ash/platform/browser/common/**/*.ts",
     "src/ash/platform/browser/electron-main/**/*.ts",
+    "src/ash/platform/clipboard/electron-main/**/*.ts",
     "src/ash/platform/configuration/common/**/*.ts",
     "src/ash/platform/configuration/electron-main/**/*.ts",
     "src/ash/platform/contextkey/common/**/*.ts",

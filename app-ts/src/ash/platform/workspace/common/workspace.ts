@@ -1,5 +1,6 @@
 import { URI } from "../../../base/common/uri.js";
 import { basename } from "../../../base/common/resources.js";
+import { isMacintosh } from "../../../base/common/platform.js";
 import type { Event } from "../../../base/common/event.js";
 import { isNonEmptyString } from "../../../base/common/types.js";
 import {
@@ -106,6 +107,27 @@ export interface IWorkspaceContextService {
 	getWorkspace(): IWorkspace;
 	getWorkbenchState(): WorkbenchState;
 	getWorkspaceFolder(resource: URI): IWorkspaceFolder | null;
+}
+
+/** Resolves a resource to a slash-separated path beneath one workspace root. */
+export function workspaceRelativePath(root: URI, resource: URI): string {
+	if (
+		(root.scheme !== 'file' && !isRemoteResource(root)) ||
+		resource.scheme !== root.scheme ||
+		root.authority.toLowerCase() !== resource.authority.toLowerCase()
+	) {
+		throw new Error('Resource must belong to the current workspace filesystem');
+	}
+	const rootPath = (root.scheme === 'file' ? root.path.replaceAll('\\', '/') : root.path).replace(/\/+$/, '');
+	const resourcePath = (resource.scheme === 'file' ? resource.path.replaceAll('\\', '/') : resource.path).replace(/\/+$/, '');
+	const ignoreCase = root.scheme === 'file' && (/^\/[A-Za-z]:\//.test(`${rootPath}/`) || isMacintosh);
+	const comparedRoot = ignoreCase ? rootPath.toLowerCase() : rootPath;
+	const comparedResource = ignoreCase ? resourcePath.toLowerCase() : resourcePath;
+	if (comparedResource === comparedRoot) return '.';
+	if (!comparedResource.startsWith(`${comparedRoot}/`)) {
+		throw new Error('Resource is outside the current workspace folder');
+	}
+	return resourcePath.slice(rootPath.length + 1);
 }
 
 /** Returns the durable path that reopens the current folder or workspace file. */

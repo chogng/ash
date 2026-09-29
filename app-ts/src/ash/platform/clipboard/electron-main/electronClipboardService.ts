@@ -1,24 +1,26 @@
-import { clipboard } from "electron";
+import { clipboard, ClipboardItem } from "electron";
 import { URI } from '../../../base/common/uri.js';
 import type { IClipboardService } from '../common/clipboardService.js';
 
 /** Electron main-process adapter for the system clipboard. */
 export class ElectronClipboardService implements IClipboardService {
-	private static readonly fileFormat = 'ash/file-list';
+	private static readonly fileFormat = 'web application/x-ash-resources';
 
 	async readText(): Promise<string> {
 		return clipboard.readText();
 	}
 
 	async writeText(value: string): Promise<void> {
-		clipboard.writeText(value);
+		await clipboard.writeText(value);
 	}
 
 	async readResources(): Promise<readonly URI[]> {
-		const data = clipboard.readBuffer(ElectronClipboardService.fileFormat).toString('utf8');
-		if (!data) return [];
+		const item = (await clipboard.read())[0];
+		if (!item?.types.includes(ElectronClipboardService.fileFormat)) return [];
 		try {
-			const values: unknown = JSON.parse(data);
+			const blob = await item.getType(ElectronClipboardService.fileFormat);
+			if (!(blob instanceof Blob)) return [];
+			const values: unknown = JSON.parse(await blob.text());
 			if (!Array.isArray(values) || !values.every(value => typeof value === 'string')) return [];
 			return values.map(value => URI.parse(value));
 		} catch {
@@ -31,7 +33,11 @@ export class ElectronClipboardService implements IClipboardService {
 			clipboard.clear();
 			return;
 		}
-		clipboard.writeBuffer(ElectronClipboardService.fileFormat, Buffer.from(JSON.stringify(resources.map(resource => resource.toString()))));
+		const localFiles = resources.filter(resource => resource.scheme === 'file');
+		await clipboard.write([new ClipboardItem({
+			[ElectronClipboardService.fileFormat]: JSON.stringify(resources.map(resource => resource.toString())),
+			...(localFiles.length ? { 'text/uri-list': localFiles.map(resource => resource.toString()).join('\r\n') } : {}),
+		})]);
 	}
 
 	async hasResources(): Promise<boolean> {
