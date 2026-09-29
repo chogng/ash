@@ -2655,9 +2655,7 @@ impl AppServer {
             Some(ClientMethod::FsCreateFile) => self.fs_create_file(&request.params),
             Some(ClientMethod::FsCreateDirectory) => self.fs_create_directory(&request.params),
             Some(ClientMethod::FsCopy) => self.fs_copy(&request.params),
-            Some(ClientMethod::FsPasteSystemCutFiles) => {
-                self.fs_paste_system_cut_files(&request.params)
-            }
+            Some(ClientMethod::FsPasteSystemFiles) => self.fs_paste_system_files(&request.params),
             Some(ClientMethod::FsRename) => self.fs_rename(&request.params),
             Some(ClientMethod::FsDelete) => self.fs_delete(&request.params),
             Some(ClientMethod::GitRepositories) => self.git_repositories(),

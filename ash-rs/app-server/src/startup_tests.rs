@@ -93,15 +93,13 @@ fn websocket_connections_initialize_and_close_independently() {
 
         first.send(Message::Text(initialize.into())).await.unwrap();
         second.send(Message::Text(initialize.into())).await.unwrap();
-        assert_initialize_response(first.next().await.unwrap().unwrap());
-        assert_initialize_response(second.next().await.unwrap().unwrap());
+        assert!(read_response(&mut first, 1).await["result"].is_object());
+        assert!(read_response(&mut second, 1).await["result"].is_object());
 
         first.close(None).await.unwrap();
         let list = r#"{"jsonrpc":"2.0","id":2,"method":"session/list","params":{}}"#;
         second.send(Message::Text(list.into())).await.unwrap();
-        let response = second.next().await.unwrap().unwrap().into_text().unwrap();
-        let response: serde_json::Value = serde_json::from_str(&response).unwrap();
-        assert_eq!(response["id"], 2);
+        let response = read_response(&mut second, 2).await;
         assert!(response["result"].is_object());
 
         listener.shutdown().await.unwrap();
@@ -130,9 +128,18 @@ async fn connect(address: SocketAddr) -> tokio_tungstenite::WebSocketStream<TcpS
     client_async(request, stream).await.unwrap().0
 }
 
-fn assert_initialize_response(message: Message) {
-    let response = message.into_text().unwrap();
-    let response: serde_json::Value = serde_json::from_str(&response).unwrap();
-    assert_eq!(response["id"], 1);
-    assert!(response["result"].is_object());
+async fn read_response(
+    stream: &mut tokio_tungstenite::WebSocketStream<TcpStream>,
+    id: u64,
+) -> serde_json::Value {
+    // Subscription notifications may arrive before the requested response.
+    loop {
+        let message = stream.next().await.unwrap().unwrap().into_text().unwrap();
+        let response: serde_json::Value = serde_json::from_str(&message).unwrap();
+        if response.get("id").is_some() {
+            assert_eq!(response["id"], id, "{response}");
+            return response;
+        }
+        assert!(response["method"].is_string(), "{response}");
+    }
 }

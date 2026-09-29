@@ -86,7 +86,7 @@ AccessibleViewRegistry.register({
 	getProvider: accessor => new AccessibleContentProvider(
 		AccessibleViewProviderId.Explorer,
 		{ type: AccessibleViewType.Help },
-		() => localize('accessibility.explorerHelp', 'Explorer\nUse the arrow keys to move through files and folders. Press Right Arrow to expand a folder and Left Arrow to collapse it. Press Enter to open a file. Press the Context Menu key or Shift+F10 for file actions. Press Ctrl or Command+X to cut selected files, Ctrl or Command+C to copy them, and Ctrl or Command+V to paste into a folder. You can also paste files copied from your system file manager. On Windows desktop, files cut in the system file manager move into the selected local folder. Press Escape to cancel a cut. Press Ctrl+F to find loaded file names. Press Escape to close find. Press Alt+F2 to read the visible files.'),
+		() => localize('accessibility.explorerHelp', 'Explorer\nUse the arrow keys to move through files and folders. Press Right Arrow to expand a folder and Left Arrow to collapse it. Press Enter to open a file. Press the Context Menu key or Shift+F10 for file actions. Press Ctrl or Command+X to cut selected files, Ctrl or Command+C to copy them, and Ctrl or Command+V to paste into a folder. You can also paste files copied from your system file manager. Files cut in Windows or Linux file managers move into the selected local folder. On Mac, press Option+Command+V to move copied files into the selected local folder. Press Escape to cancel a cut. Press Ctrl+F to find loaded file names. Press Escape to close find. Press Alt+F2 to read the visible files.'),
 		() => accessor.get(IExplorerService).focus(),
 		AccessibilityVerbositySettingId.Explorer,
 	),

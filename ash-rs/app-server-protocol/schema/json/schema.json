@@ -7870,11 +7870,11 @@
         {
           "properties": {
             "method": {
-              "const": "fs/pasteSystemCutFiles",
+              "const": "fs/pasteSystemFiles",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/FsPasteSystemCutFilesParams"
+              "$ref": "#/$defs/FsPasteSystemFilesParams"
             }
           },
           "required": [
@@ -12706,7 +12706,7 @@
         {
           "properties": {
             "method": {
-              "const": "fs/pasteSystemCutFiles",
+              "const": "fs/pasteSystemFiles",
               "type": "string"
             },
             "result": {
@@ -19345,11 +19345,14 @@
       ],
       "type": "string"
     },
-    "FsPasteSystemCutFilesParams": {
-      "description": "Pastes files currently cut in the Windows system clipboard into a granted workspace directory.",
+    "FsPasteSystemFilesParams": {
+      "description": "Pastes files from the system clipboard into a granted workspace directory.",
       "properties": {
         "dirId": {
           "type": "string"
+        },
+        "moveRequested": {
+          "type": "boolean"
         },
         "path": {
           "type": "string"
@@ -19357,7 +19360,8 @@
       },
       "required": [
         "dirId",
-        "path"
+        "path",
+        "moveRequested"
       ],
       "type": "object"
     },

@@ -12,6 +12,7 @@ import { ViewPane, type IViewPaneOptions } from "../../../../browser/parts/views
 import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
 import { appendIcon } from "../../../../../base/browser/ui/lxicons/lxicon.js";
 import { Lxicon } from "../../../../../base/common/lxicons.js";
+import { isMacintosh } from '../../../../../base/common/platform.js';
 import { ExplorerItem } from "../../common/explorerModel.js";
 import { ExplorerFileNestingSettingId } from '../../common/explorerFileNestingTrie.js';
 import { ExplorerDataSource, ExplorerFindProvider, FileSorter, FilesRenderer } from "./explorerViewer.js";
@@ -134,9 +135,10 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		this._register(this.tree.onDidChangeSelection(({ elements }) => this.updateExplorerContextKeys(elements[0])));
 		this._register(addDisposableListener(this.tree.domNode, 'contextmenu', event => this.showExplorerContextMenu(event)));
 		let pendingKeyboardPaste: ReturnType<typeof setTimeout> | undefined;
+		let pendingMovePaste = false;
 		this._register(toDisposable(() => clearTimeout(pendingKeyboardPaste)));
-		const paste = (files?: FileList): void => {
-			void this.commandService.executeCommand(PASTE_FILE_COMMAND_ID, files).catch(error => {
+		const paste = (files?: FileList, moveRequested = false): void => {
+			void this.commandService.executeCommand(PASTE_FILE_COMMAND_ID, files, moveRequested).catch(error => {
 				this.error = error instanceof Error ? error.message : String(error);
 				this.render();
 			});
@@ -145,16 +147,22 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			clearTimeout(pendingKeyboardPaste);
 			pendingKeyboardPaste = undefined;
 			event.preventDefault();
-			paste(event.clipboardData?.files);
+			paste(event.clipboardData?.files, pendingMovePaste);
+			pendingMovePaste = false;
 		}));
 		this._register(addDisposableListener(this.tree.domNode, 'keydown', event => {
-			if (event.key.toLowerCase() === 'v' && (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey) {
+			const moveRequested = isMacintosh && event.metaKey && event.altKey && !event.ctrlKey;
+			if (event.key.toLowerCase() === 'v' && !event.shiftKey && (moveRequested || ((event.ctrlKey || event.metaKey) && !event.altKey))) {
 				clearTimeout(pendingKeyboardPaste);
+				pendingMovePaste = moveRequested;
+				// Finder keeps copied files on the clipboard; this shortcut supplies the move intent.
+				if (moveRequested) event.preventDefault();
 				// A browser paste event carries files from the system file manager. If it arrives,
 				// it owns this shortcut; otherwise the command reads Ash resources from the clipboard.
 				pendingKeyboardPaste = setTimeout(() => {
 					pendingKeyboardPaste = undefined;
-					paste();
+					paste(undefined, pendingMovePaste);
+					pendingMovePaste = false;
 				}, 0);
 			}
 			if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) this.showExplorerContextMenu(event);
@@ -370,13 +378,14 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		this.statusDomNode?.remove();
 		this.statusDomNode = undefined;
 		if (!this.root) {
-			this.tree.domNode.remove();
+			// Directory loading measures the virtual viewport, including during workspace switches.
+			if (this.tree.domNode.parentElement !== this.scrollContent) this.scrollContent.append(this.tree.domNode);
 			const status = h(document, "div");
 			status.className = "ash-explorer-status";
 			status.setAttribute("role", "status");
 			status.textContent = this.error ?? "Loading files…";
 			this.statusDomNode = status;
-			this.scrollContent.append(status);
+			this.scrollContent.prepend(status);
 			return;
 		}
 		if (this.error) {

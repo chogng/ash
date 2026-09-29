@@ -9,6 +9,13 @@ use crate::MissingTargetBehavior;
 use std::any::Any;
 use std::path::Path;
 
+/// File operation requested by a paste action or recorded on the system clipboard.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SystemFileTransferOperation {
+    Copy,
+    Move,
+}
+
 /// Directory-scoped filesystem access used by both client adapters and Agent tools.
 ///
 /// Implementations must resolve every relative input beneath their configured authority root and
@@ -23,8 +30,13 @@ pub trait FileSystem: Send + Sync {
         destination: &dyn FileSystem,
         target: &Path,
     ) -> Result<(), FileSystemError>;
-    /// Moves Windows shell-cut files into a granted directory, using the clipboard as source authority.
-    fn paste_system_cut_files(&self, directory: &Path) -> Result<bool, FileSystemError>;
+    /// Copies or moves files named by the system clipboard into a granted directory.
+    /// Finder uses the requested operation; Linux and Windows read it from the clipboard.
+    fn paste_system_files(
+        &self,
+        directory: &Path,
+        requested_operation: SystemFileTransferOperation,
+    ) -> Result<bool, FileSystemError>;
     /// Checks the requested action against this service's subject and directory grant.
     /// Every I/O entry must also validate its exact permission under the revocation lease.
     fn ensure_permission(

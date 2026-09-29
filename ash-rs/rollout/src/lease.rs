@@ -14,7 +14,15 @@ pub(super) struct LeaseDirectory {
 }
 
 struct FileLease {
-    _file: File,
+    file: File,
+}
+
+impl Drop for FileLease {
+    fn drop(&mut self) {
+        // A child can inherit the open file description between fork and exec.
+        // Closing our descriptor alone would leave that child holding the writer lock.
+        let _ = self.file.unlock();
+    }
 }
 
 impl LeaseDirectory {
@@ -38,7 +46,7 @@ impl LeaseDirectory {
         file.try_lock().map_err(|error| {
             CoreError::Journal(format!("{kind} writer lease unavailable: {error}"))
         })?;
-        Ok(Box::new(FileLease { _file: file }))
+        Ok(Box::new(FileLease { file }))
     }
 }
 

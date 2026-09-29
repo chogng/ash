@@ -4,6 +4,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static NEXT_DIR: AtomicU64 = AtomicU64::new(1);
 
+#[cfg(target_os = "linux")]
+#[path = "local_clipboard_tests.rs"]
+mod clipboard_tests;
+
 #[test]
 fn copies_binary_files_and_directories_between_granted_roots() {
     let source = TestDir::new();
@@ -33,6 +37,147 @@ fn copies_binary_files_and_directories_between_granted_roots() {
         ),
         Err(FileSystemError::InvalidPath(_))
     ));
+}
+
+#[cfg(any(windows, target_os = "macos", target_os = "linux"))]
+#[test]
+fn system_clipboard_transfer_copies_directories_and_moves_cut_files() {
+    let source = TestDir::new();
+    let target = TestDir::new();
+    fs::create_dir(source.path.join("folder")).unwrap();
+    fs::write(source.path.join("folder/data.bin"), [0, 255, 42]).unwrap();
+    fs::write(source.path.join("cut.txt"), "move me").unwrap();
+    let files = target.file_system();
+
+    transfer_system_files(
+        &files,
+        Path::new("."),
+        &[source.path.join("folder")],
+        SystemFileTransferOperation::Copy,
+    )
+    .unwrap();
+    assert_eq!(
+        fs::read(target.path.join("folder/data.bin")).unwrap(),
+        [0, 255, 42]
+    );
+    assert!(source.path.join("folder/data.bin").exists());
+
+    transfer_system_files(
+        &files,
+        Path::new("."),
+        &[source.path.join("cut.txt")],
+        SystemFileTransferOperation::Move,
+    )
+    .unwrap();
+    assert_eq!(fs::read(target.path.join("cut.txt")).unwrap(), b"move me");
+    assert!(!source.path.join("cut.txt").exists());
+}
+
+#[cfg(any(windows, target_os = "macos", target_os = "linux"))]
+#[test]
+fn system_clipboard_transfer_rejects_symlinks_and_renames_copy_conflicts() {
+    let source = TestDir::new();
+    let target = TestDir::new();
+    fs::write(source.path.join("item.txt"), "original").unwrap();
+    fs::write(target.path.join("item.txt"), "existing").unwrap();
+    let files = target.file_system();
+    transfer_system_files(
+        &files,
+        Path::new("."),
+        &[source.path.join("item.txt")],
+        SystemFileTransferOperation::Copy,
+    )
+    .unwrap();
+    assert_eq!(
+        fs::read(target.path.join("item copy.txt")).unwrap(),
+        b"original"
+    );
+    assert_eq!(fs::read(target.path.join("item.txt")).unwrap(), b"existing");
+
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(source.path.join("item.txt"), source.path.join("link")).unwrap();
+        assert!(matches!(
+            transfer_system_files(
+                &files,
+                Path::new("."),
+                &[source.path.join("link")],
+                SystemFileTransferOperation::Move,
+            ),
+            Err(FileSystemError::InvalidPath(_))
+        ));
+        assert!(source.path.join("item.txt").exists());
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn system_clipboard_transfer_preserves_private_and_read_only_directory_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+
+    for (operation, mode) in [
+        (SystemFileTransferOperation::Copy, 0o700),
+        (SystemFileTransferOperation::Copy, 0o500),
+        (SystemFileTransferOperation::Move, 0o700),
+    ] {
+        let source = TestDir::new();
+        let target = TestDir::new();
+        let directory = source.path.join("private");
+        fs::create_dir_all(directory.join("nested")).unwrap();
+        fs::write(directory.join("nested/data"), "private data").unwrap();
+        fs::set_permissions(directory.join("nested"), fs::Permissions::from_mode(0o750)).unwrap();
+        fs::set_permissions(&directory, fs::Permissions::from_mode(mode)).unwrap();
+        transfer_system_files(
+            &target.file_system(),
+            Path::new("."),
+            &[directory.clone()],
+            operation,
+        )
+        .unwrap();
+
+        let copied = target.path.join("private");
+        assert_eq!(
+            fs::metadata(&copied).unwrap().permissions().mode() & 0o777,
+            mode
+        );
+        assert_eq!(
+            fs::metadata(copied.join("nested"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o750
+        );
+        assert_eq!(
+            fs::read(copied.join("nested/data")).unwrap(),
+            b"private data"
+        );
+        assert_eq!(
+            directory.exists(),
+            operation == SystemFileTransferOperation::Copy
+        );
+        if directory.exists() {
+            fs::set_permissions(&directory, fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        fs::set_permissions(&copied, fs::Permissions::from_mode(0o700)).unwrap();
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn gnome_clipboard_marker_preserves_cut_and_copy() {
+    let (copy, operation) = parse_gnome_copied_files(b"copy\nfile:///tmp/a%20b\n").unwrap();
+    assert_eq!(copy, vec![PathBuf::from("/tmp/a b")]);
+    assert_eq!(operation, SystemFileTransferOperation::Copy);
+    let (cut, operation) = parse_gnome_copied_files(b"cut\nfile:///tmp/a%20b\n").unwrap();
+    assert_eq!(cut, copy);
+    assert_eq!(operation, SystemFileTransferOperation::Move);
+    assert!(parse_gnome_copied_files(b"cut\nhttps://example.com/file\n").is_err());
+    assert_eq!(
+        parse_file_uri_list(b"# copied files\r\nfile:///tmp/first\r\nfile:///tmp/a%20b\r\n")
+            .unwrap(),
+        vec![PathBuf::from("/tmp/first"), PathBuf::from("/tmp/a b")],
+    );
 }
 
 #[test]

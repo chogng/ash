@@ -16,7 +16,7 @@ use ash_app_server_protocol::protocol::fs::FsFileType;
 use ash_app_server_protocol::protocol::fs::FsGetMetadataParams;
 use ash_app_server_protocol::protocol::fs::FsGetMetadataResult;
 use ash_app_server_protocol::protocol::fs::FsMissingTargetBehavior;
-use ash_app_server_protocol::protocol::fs::FsPasteSystemCutFilesParams;
+use ash_app_server_protocol::protocol::fs::FsPasteSystemFilesParams;
 use ash_app_server_protocol::protocol::fs::FsReadBinaryFileParams;
 use ash_app_server_protocol::protocol::fs::FsReadBinaryFileResult;
 use ash_app_server_protocol::protocol::fs::FsReadDirectoryEntry;
@@ -37,6 +37,7 @@ use ash_file_system::FileSystemError;
 use ash_file_system::FileType;
 use ash_file_system::FileWriteCondition;
 use ash_file_system::MissingTargetBehavior;
+use ash_file_system::SystemFileTransferOperation;
 use ash_file_system::file_revision;
 use base64::Engine;
 use serde_json::Value;
@@ -242,13 +243,20 @@ impl AppServer {
         result(&())
     }
 
-    pub(super) fn fs_paste_system_cut_files(&self, params: &Value) -> Result<Value, RpcError> {
-        let params: FsPasteSystemCutFilesParams = decode(params)?;
+    pub(super) fn fs_paste_system_files(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: FsPasteSystemFilesParams = decode(params)?;
         let files =
             self.file_system_for_request(Some(&params.dir_id), None, Permission::WriteFiles)?;
         result(
             &files
-                .paste_system_cut_files(&params.path)
+                .paste_system_files(
+                    &params.path,
+                    if params.move_requested {
+                        SystemFileTransferOperation::Move
+                    } else {
+                        SystemFileTransferOperation::Copy
+                    },
+                )
                 .map_err(file_system_error)?,
         )
     }

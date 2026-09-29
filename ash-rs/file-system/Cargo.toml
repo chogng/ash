@@ -16,6 +16,14 @@ sha2 = { workspace = true }
 ash-file-access = { workspace = true }
 ash-file-identity = { workspace = true }
 
+[target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
+arboard = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+wl-clipboard-rs = { workspace = true }
+x11rb = { workspace = true }
+url = { workspace = true }
+
 [target.'cfg(windows)'.dependencies]
 clipboard-win = { workspace = true, features = ["std"] }
 

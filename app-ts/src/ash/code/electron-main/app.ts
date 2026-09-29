@@ -19,7 +19,7 @@ import { assertDefined } from "../../base/common/types.js";
 import { AshApplicationName } from '../common/application.js';
 import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry, WorkbenchRendererEntry, withWorkbenchModeId, type WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import { ElectronContextMenu } from "../../base/parts/contextmenu/electron-main/contextmenu.js";
-import { buildAppServerEnvironment } from "../../platform/app-server/common/appServerEnvironment.js";
+import { buildAppServerEnvironment, type AppServerHostPlatform } from "../../platform/app-server/common/appServerEnvironment.js";
 import { AppServerConnectionRelay } from "../../platform/app-server/electron-main/appServerConnectionRelay.js";
 import { appServerExecutablePath, appServerDaemonExecutablePath, developmentAppServerGenerationPath, packagedAppServerDaemonSha256, packagedAppServerSha256, remoteExecutablePath } from "../../platform/app-server/electron-main/appServerPackage.js";
 import { DevelopmentAppServerReloader, readDevelopmentAppServerGenerationSync, selectDevelopmentAppServerExecutable } from "../../platform/app-server/electron-main/developmentAppServerReloader.js";
@@ -1493,7 +1493,14 @@ export class AshApplication extends Disposable {
 			resourcesPath: process.resourcesPath,
 		};
 		const backendSha256 = packagedAppServerSha256(packageLocation);
-		return buildAppServerEnvironment(process.env, process.platform === "win32" ? "windows" : "posix", {
+		let hostPlatform: AppServerHostPlatform;
+		switch (process.platform) {
+			case 'win32': hostPlatform = 'windows'; break;
+			case 'darwin': hostPlatform = 'macos'; break;
+			case 'linux': hostPlatform = 'linux'; break;
+			default: throw new Error(`Unsupported App Server host platform: ${process.platform}`);
+		}
+		return buildAppServerEnvironment(process.env, hostPlatform, {
 			...(process.env.ASH_RG_PATH
 				? { ASH_RG_PATH: process.env.ASH_RG_PATH }
 				: {}),
@@ -1513,7 +1520,7 @@ export class AshApplication extends Disposable {
 					ASH_DIR_GRANT_SOURCE: "userConfig",
 				}
 				: {}),
-		});
+		}, 'desktop');
 	}
 
 	private createWindowsStateHandler(

@@ -42,6 +42,18 @@ export default defineConfig(() => {
       hotReloadPlugin({ desktopRoot }),
       workbenchEntryPlugin(),
       productIconsPlugin(),
+      {
+        name: "ash-electron-file-html",
+        apply: "build",
+        transformIndexHtml: {
+          order: "post",
+          handler(html, context) {
+            if (!context.filename.replaceAll("\\", "/").includes("/electron-browser/")) return;
+            // File-URL module preloads can prevent Linux Electron from loading its stylesheets.
+            return html.replace(/<link rel="modulepreload"[^>]*>\s*/g, "");
+          },
+        },
+      },
       ...(process.env.ASH_DESKTOP_STARTUP_TRACE === '1' ? [desktopStartupTracePlugin(desktopRoot)] : []),
       ...(webAppServerEnabled ? [webAppServerVitePlugin()] : []),
     ],

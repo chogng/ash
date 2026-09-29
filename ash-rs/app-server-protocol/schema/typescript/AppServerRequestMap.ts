@@ -133,7 +133,7 @@ import type { FsCreateFileParams } from './types/FsCreateFileParams.js';
 import type { FsDeleteParams } from './types/FsDeleteParams.js';
 import type { FsGetMetadataParams } from './types/FsGetMetadataParams.js';
 import type { FsGetMetadataResult } from './types/FsGetMetadataResult.js';
-import type { FsPasteSystemCutFilesParams } from './types/FsPasteSystemCutFilesParams.js';
+import type { FsPasteSystemFilesParams } from './types/FsPasteSystemFilesParams.js';
 import type { FsReadBinaryFileParams } from './types/FsReadBinaryFileParams.js';
 import type { FsReadBinaryFileResult } from './types/FsReadBinaryFileResult.js';
 import type { FsReadDirectoryParams } from './types/FsReadDirectoryParams.js';
@@ -673,7 +673,7 @@ export interface AppServerRequestMap {
   "fs/createFile": { params: FsCreateFileParams; response: FsGetMetadataResult };
   "fs/createDirectory": { params: FsCreateDirectoryParams; response: FsGetMetadataResult };
   "fs/copy": { params: FsCopyParams; response: null };
-  "fs/pasteSystemCutFiles": { params: FsPasteSystemCutFilesParams; response: boolean };
+  "fs/pasteSystemFiles": { params: FsPasteSystemFilesParams; response: boolean };
   "fs/rename": { params: FsRenameParams; response: null };
   "fs/delete": { params: FsDeleteParams; response: null };
   "issue/configure": { params: IssueConfigureParams; response: ConfigCommandResult };
@@ -987,7 +987,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "fs/createFile": { method: "fs/createFile" },
   "fs/createDirectory": { method: "fs/createDirectory" },
   "fs/copy": { method: "fs/copy" },
-  "fs/pasteSystemCutFiles": { method: "fs/pasteSystemCutFiles" },
+  "fs/pasteSystemFiles": { method: "fs/pasteSystemFiles" },
   "fs/rename": { method: "fs/rename" },
   "fs/delete": { method: "fs/delete" },
   "issue/configure": { method: "issue/configure" },

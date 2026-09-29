@@ -198,4 +198,7 @@ KeybindingsRegistry.registerKeybindingRule({ command: CUT_FILE_COMMAND_ID, keybi
 KeybindingsRegistry.registerKeybindingRule({ command: COPY_FILE_COMMAND_ID, keybinding: Keybinding.single(logicalKey('c', { primaryKey: true })), when: explorerShortcutWhen, priority: KeybindingWeight.WorkbenchContrib + 10 });
 // Let the tree receive the browser paste event, including files copied in the system file manager.
 KeybindingsRegistry.registerKeybindingPassThrough({ command: PASTE_FILE_COMMAND_ID, keybinding: Keybinding.single(logicalKey('v', { primaryKey: true })), when: ContextKeyExpr.and(ExplorerFocusedContext.isEqualTo(true), canCreateWhen), priority: KeybindingWeight.WorkbenchContrib + 10 });
+if (isMacintosh) {
+	KeybindingsRegistry.registerKeybindingPassThrough({ command: PASTE_FILE_COMMAND_ID, keybinding: Keybinding.single(logicalKey('v', { primaryKey: true, altKey: true })), when: ContextKeyExpr.and(ExplorerFocusedContext.isEqualTo(true), canCreateWhen), priority: KeybindingWeight.WorkbenchContrib + 10 });
+}
 KeybindingsRegistry.registerKeybindingRule({ command: CANCEL_CUT_COMMAND_ID, keybinding: Keybinding.single(logicalKey('Escape')), when: ContextKeyExpr.and(ExplorerFocusedContext.isEqualTo(true), ContextKeyExpr.has('ashExplorerHasCutFiles')), priority: KeybindingWeight.WorkbenchContrib + 10 });

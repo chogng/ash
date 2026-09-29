@@ -186,8 +186,8 @@ test("localization lookup falls back to English and formats parameters", async (
 		localization.translate('ash', 'files.saveConflictTitle', 'File changed on disk'),
 		localization.translate('ash', 'files.openBinaryAsText', 'Open as Read-Only Text'),
 	], ['打开的编辑器', '第 2 组', '未保存的更改', '文件嵌套', '在资源管理器中查找文件', '磁盘上的文件已更改', '以只读文本打开']);
-	assert.match(localization.translate('ash', 'accessibility.explorerHelp', 'Explorer'), /从系统文件管理器剪切的文件会移动到选中的本地文件夹/);
-	assert.equal(localization.translate('ash', 'accessibility.explorerSystemFilesMoved', 'Files moved into the selected folder.'), '文件已移动到选中的文件夹。');
+	assert.match(localization.translate('ash', 'accessibility.explorerHelp', 'Explorer'), /Option\+Command\+V/);
+	assert.equal(localization.translate('ash', 'accessibility.explorerSystemFilesPasted', 'Files pasted into the selected folder.'), '文件已粘贴到选中的文件夹。');
 });
 
 test('minimap menu uses the selected Chinese language catalog', async () => {

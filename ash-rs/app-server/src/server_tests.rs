@@ -169,6 +169,12 @@ fn xai_account_and_usage_rpc_use_the_subscription_backend_and_observe_logout() {
         supergrok::SuperGrokOAuth::with_client(secrets, proxy.clone(), dir.path().join("lock"));
     let login = Arc::new(LoginService::new(auth.clone()).unwrap());
     auth.install_login_service(&login).unwrap();
+    // Production subscription observation refreshes metadata separately from account/read.
+    auth.refresh_account(
+        "login-a",
+        &ash_async_utils::CancellationSource::new().token(),
+    )
+    .unwrap();
     let server = server()
         .with_login_service(login)
         .with_supergrok_account(auth);
@@ -367,6 +373,12 @@ fn kimi_account_and_usage_rpc_read_the_current_subscription_without_exposing_cre
     let auth = ash_kimi::KimiOAuth::with_client(secrets, proxy.clone());
     let login = Arc::new(LoginService::new(auth.clone()).unwrap());
     auth.install_login_service(&login).unwrap();
+    // Production subscription observation refreshes metadata separately from account/read.
+    auth.refresh_account(
+        "current",
+        &ash_async_utils::CancellationSource::new().token(),
+    )
+    .unwrap();
     let server = server().with_login_service(login).with_kimi_account(auth);
     let mut connection = server.connection();
     initialize(&server, &mut connection);

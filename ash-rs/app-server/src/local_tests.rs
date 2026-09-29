@@ -395,7 +395,9 @@ struct AccountUsageClient {
 impl OperationClient for AccountUsageClient {
     fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
         self.requests.lock().unwrap().push(request.clone());
-        if let Some(action) = self.during_request.lock().unwrap().take() {
+        if request.url() == "https://chatgpt.com/backend-api/wham/usage"
+            && let Some(action) = self.during_request.lock().unwrap().take()
+        {
             action();
         }
         let (status, body) = if request.url().ends_with("/settings") {
@@ -406,6 +408,8 @@ impl OperationClient for AccountUsageClient {
                     .expect("unexpected Grok settings request")
                     .clone(),
             )
+        } else if request.url().contains("/codex/models?") {
+            (200, serde_json::json!({"models":[]}))
         } else {
             self.response.lock().unwrap().clone()
         };
@@ -494,7 +498,17 @@ fn local_account_rate_limits_use_the_signed_in_account_and_redact_failures() {
         read(&mut connection, "chatgpt-subscription", "")["error"]["message"],
         "InvalidParams"
     );
-    assert!(client.requests.lock().unwrap().is_empty());
+    let usage_requests = || {
+        client
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|request| request.url() == "https://chatgpt.com/backend-api/wham/usage")
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    assert!(usage_requests().is_empty());
     let result = read(&mut connection, "chatgpt-subscription", "account-1");
     assert_eq!(
         result["result"],
@@ -505,7 +519,7 @@ fn local_account_rate_limits_use_the_signed_in_account_and_redact_failures() {
             "credits":{"hasCredits":false,"unlimited":false,"balance":null}
         })
     );
-    let requests = client.requests.lock().unwrap();
+    let requests = usage_requests();
     assert_eq!(requests.len(), 1);
     assert_eq!(
         requests[0].url(),
@@ -517,7 +531,6 @@ fn local_account_rate_limits_use_the_signed_in_account_and_redact_failures() {
             .iter()
             .any(|header| header.name() == "ChatGPT-Account-ID" && header.value() == "account-1")
     );
-    drop(requests);
     for status in [200, 403, 429, 503] {
         *client.response.lock().unwrap() = (
             status,
@@ -548,7 +561,7 @@ fn local_account_rate_limits_use_the_signed_in_account_and_redact_failures() {
         read(&mut connection, "chatgpt-subscription", "account-1")["error"]["message"],
         "AccountUnavailable"
     );
-    assert_eq!(client.requests.lock().unwrap().len(), 6);
+    assert_eq!(usage_requests().len(), 6);
 }
 
 #[test]
@@ -625,6 +638,19 @@ fn chatgpt_model_catalog_is_shared_by_login_picker_and_disk_cache() {
             .with_session_state_mode(SessionStateMode::Ephemeral),
     )
     .unwrap();
+    // Subscription observation warms the catalog independently of model/list.
+    let cache_path = profile.path().join("cache/models/openai.json");
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        if std::fs::read_to_string(&cache_path).is_ok_and(|cache| cache.contains("gpt-5.6")) {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "Subscription catalog was not cached"
+        );
+        thread::sleep(Duration::from_millis(5));
+    }
     let mut connection = server.connection();
     let mut request_id = 0;
     let mut call = |method: &str, params: serde_json::Value| {
@@ -655,14 +681,14 @@ fn chatgpt_model_catalog_is_shared_by_login_picker_and_disk_cache() {
         config["activeConnections"]["openai"],
         "chatgpt-subscription"
     );
-    assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+    assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 1);
     assert!(config["connections"]["openai"].is_object());
     let remote = call(
         "provider/models/list",
         serde_json::json!({"connection":"chatgpt-subscription"}),
     );
     assert!(remote.get("error").is_none(), "{remote}");
-    assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+    assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 2);
     assert_eq!(call("model/list", serde_json::json!({})), initial);
     for entry in initial["models"].as_array().unwrap() {
         assert!(entry.get("access").is_none());
@@ -853,6 +879,8 @@ fn local_codex_account_reconnects_without_oauth_and_observes_external_logout() {
         call(4, "account/read", serde_json::json!({}))["result"]["accounts"],
         serde_json::json!([])
     );
+    // Reconnect uses a fresh external login regardless of who owns logout on this machine.
+    std::fs::write(home.path().join("auth.json"), &auth).unwrap();
     assert_eq!(
         call(
             5,
@@ -1309,12 +1337,18 @@ fn managed_network_approval_resumes_the_same_shell_process_through_rpc() {
         );
         assert!(request.sandbox_denial.is_none());
         digests.push(request.action_digest.clone());
-        assert!(
-            server
-                .drain_notifications(&mut connection)
-                .iter()
-                .any(|notification| notification.contains("agent/request"))
-        );
+        // The interaction is committed before its subscription notification is delivered.
+        while !server
+            .drain_notifications(&mut connection)
+            .iter()
+            .any(|notification| notification.contains("agent/request"))
+        {
+            assert!(
+                Instant::now() < deadline,
+                "network approval notification missing"
+            );
+            thread::sleep(Duration::from_millis(5));
+        }
         let resolved = local_call(
             &server,
             &mut connection,

@@ -22,7 +22,7 @@ export interface IFileSystemApi {
 	createFile(params: import("../../app-server/common/generated/index.js").FsCreateFileParams): Promise<FsGetMetadataResult>;
 	createDirectory(params: import("../../app-server/common/generated/index.js").FsCreateDirectoryParams): Promise<FsGetMetadataResult>;
 	copy(params: import("../../app-server/common/generated/index.js").FsCopyParams): Promise<void>;
-	pasteSystemCutFiles(params: import("../../app-server/common/generated/index.js").FsPasteSystemCutFilesParams): Promise<boolean>;
+	pasteSystemFiles(params: import("../../app-server/common/generated/index.js").FsPasteSystemFilesParams): Promise<boolean>;
 	rename(params: import("../../app-server/common/generated/index.js").FsRenameParams): Promise<void>;
 	delete(params: import("../../app-server/common/generated/index.js").FsDeleteParams): Promise<void>;
 }
@@ -143,8 +143,8 @@ export class BrowserFileService extends Disposable implements IFileService, ISys
 		return this.api.copy({ sourceDirId: from.dirId, source: from.path, targetDirId: to.dirId, target: to.path });
 	}
 
-	pasteSystemCutFiles(directory: URI): Promise<boolean> {
-		return this.api.pasteSystemCutFiles(this.fileTarget(directory));
+	pasteSystemFiles(directory: URI, moveRequested: boolean): Promise<boolean> {
+		return this.api.pasteSystemFiles({ ...this.fileTarget(directory), moveRequested });
 	}
 
 	rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {

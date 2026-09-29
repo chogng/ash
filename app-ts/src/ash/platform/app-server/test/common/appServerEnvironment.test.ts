@@ -10,7 +10,7 @@ test("App Server environment keeps safe POSIX session variables and excludes cre
 		PATH: "/usr/bin",
 		XDG_CONFIG_HOME: "/home/ash/.config",
 		OPENAI_API_KEY: "secret",
-	}, "posix", {
+	}, "macos", {
 		ASH_APP_SERVER_PATH: "/opt/Ash/ash-app-server-daemon",
 		ASH_ELECTRON_RUN_AS_NODE_PATH: "/opt/Ash/ash",
 		ASH_HOME: "/state",
@@ -18,7 +18,7 @@ test("App Server environment keeps safe POSIX session variables and excludes cre
 		ASH_DIR_GRANT_SOURCE: "userConfig",
 		ASH_APP_SERVER_CONNECTION_ROLE: "agents",
 		ASH_SSH_PATH: "/usr/bin/ssh",
-	});
+	}, "desktop");
 
 	assert.deepEqual(environment, {
 		HOME: "/home/ash",
@@ -43,6 +43,34 @@ test("App Server environment keeps safe POSIX session variables and excludes cre
 	assert.equal(isAllowedAppServerEnvironmentKey("ELECTRON_RUN_AS_NODE"), false);
 });
 
+test("App Server environment preserves the Linux clipboard display session", () => {
+	const source = {
+		HOME: "/home/ash",
+		DISPLAY: ":1",
+		WAYLAND_DISPLAY: "wayland-0",
+		XAUTHORITY: "/home/ash/.Xauthority",
+		XDG_RUNTIME_DIR: "/run/user/1000",
+		DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/1000/bus",
+	};
+	assert.deepEqual(buildAppServerEnvironment(source, "linux", {}, "desktop"), {
+		HOME: "/home/ash",
+		XDG_RUNTIME_DIR: "/run/user/1000",
+		DISPLAY: ":1",
+		WAYLAND_DISPLAY: "wayland-0",
+		XAUTHORITY: "/home/ash/.Xauthority",
+	});
+	assert.deepEqual(buildAppServerEnvironment(source, "linux", {}, "web"), {
+		HOME: "/home/ash",
+		XDG_RUNTIME_DIR: "/run/user/1000",
+	});
+	assert.equal(buildAppServerEnvironment(source, "macos", {}, "desktop").DISPLAY, undefined);
+	assert.equal(buildAppServerEnvironment(source, "windows", {}, "desktop").DISPLAY, undefined);
+	assert.equal(isAllowedAppServerEnvironmentKey("DISPLAY"), true);
+	assert.equal(isAllowedAppServerEnvironmentKey("WAYLAND_DISPLAY"), true);
+	assert.equal(isAllowedAppServerEnvironmentKey("XAUTHORITY"), true);
+	assert.equal(isAllowedAppServerEnvironmentKey("DBUS_SESSION_BUS_ADDRESS"), false);
+});
+
 test("App Server environment canonicalizes Windows keys case-insensitively", () => {
 	const environment = buildAppServerEnvironment({
 		Path: "C:\\Windows\\System32",
@@ -51,7 +79,7 @@ test("App Server environment canonicalizes Windows keys case-insensitively", () 
 		AWS_SECRET_ACCESS_KEY: "secret",
 	}, "windows", {
 		ASH_HOME: "C:\\state",
-	});
+	}, "desktop");
 
 	assert.equal(environment.PATH, "C:\\Windows\\System32");
 	assert.equal(environment.SYSTEMROOT, "C:\\Windows");
@@ -60,6 +88,6 @@ test("App Server environment canonicalizes Windows keys case-insensitively", () 
 });
 
 test("App Server product environment accepts only owned non-NUL variables", () => {
-	assert.throws(() => buildAppServerEnvironment({}, "posix", { OPENAI_API_KEY: "secret" }), /Invalid App Server product environment variable/);
-	assert.throws(() => buildAppServerEnvironment({}, "posix", { ASH_HOME: "bad\0path" }), /Invalid App Server product environment variable/);
+	assert.throws(() => buildAppServerEnvironment({}, "macos", { OPENAI_API_KEY: "secret" }, "desktop"), /Invalid App Server product environment variable/);
+	assert.throws(() => buildAppServerEnvironment({}, "macos", { ASH_HOME: "bad\0path" }, "desktop"), /Invalid App Server product environment variable/);
 });

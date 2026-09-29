@@ -8,6 +8,34 @@ use core_api::WriterLease;
 
 use super::LeaseDirectory;
 
+#[cfg(unix)]
+#[test]
+fn dropping_the_writer_releases_a_lock_with_an_inherited_descriptor() {
+    let directory = lease_directory("inherited-descriptor");
+    let leases = LeaseDirectory::open(&directory).unwrap();
+    let thread_id = ThreadId::new("thread_1").unwrap();
+    let path = directory.join(format!(
+        "thread-{}.lease",
+        super::encode_hex(thread_id.as_str())
+    ));
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(path)
+        .unwrap();
+    file.try_lock().unwrap();
+    let first = super::FileLease { file };
+    // A descriptor inherited during fork shares the open file description, as a clone does.
+    let inherited = first.file.try_clone().unwrap();
+    drop(first);
+    let second = leases.acquire(&thread_id).unwrap();
+    drop(second);
+    drop(inherited);
+    fs::remove_dir_all(directory).unwrap();
+}
+
 fn lease_directory(label: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
         "ash-rollout-{label}-{}-{}",

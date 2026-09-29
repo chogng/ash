@@ -41,10 +41,15 @@ export class ElectronMainClipboardService implements IClipboardService {
 		};
 		const localFiles = resources.filter(resource => resource.scheme === Schemas.file);
 		if (localFiles.length > 0) {
-			formats['text/uri-list'] = localFiles.map(resource => resource.toString()).join('\r\n');
+			const fileUrls = localFiles.map(resource => resource.toString());
+			formats['text/uri-list'] = fileUrls.join('\r\n');
 			if (process.platform === 'win32') {
 				// Explorer reads this DWORD alongside CF_HDROP to distinguish Cut from Copy.
 				formats['electron application/osclipboard;format="Preferred DropEffect"'] = new Blob([Uint8Array.of(operation === 'move' ? 2 : 1, 0, 0, 0)]);
+			} else if (process.platform === 'linux') {
+				// GNOME and KDE use different cut markers alongside text/uri-list.
+				formats['electron application/osclipboard;format="x-special/gnome-copied-files"'] = `${operation === 'move' ? 'cut' : 'copy'}\n${fileUrls.join('\n')}`;
+				formats['electron application/osclipboard;format="application/x-kde-cutselection"'] = operation === 'move' ? '1' : '0';
 			}
 		}
 		await clipboard.write([new ClipboardItem(formats)]);

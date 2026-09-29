@@ -332,6 +332,50 @@ fn agents_gateway_serves_the_catalog_while_another_request_is_running() {
 }
 
 #[test]
+fn ssh_initialize_routes_early_messages_and_keeps_the_buffered_stream() {
+    use ash_app_server_protocol::protocol::initialize::ProtocolVersion;
+    use ash_app_server_protocol::protocol::initialize::ServerCapabilities;
+
+    let mut capabilities = ServerCapabilities {
+        sessions: true,
+        threads: true,
+        turns: true,
+        ..ServerCapabilities::default()
+    };
+    capabilities.advertise_contracts();
+    let notification = serde_json::json!({"jsonrpc":"2.0","method":"queue/changed","params":{}});
+    let host_request =
+        serde_json::json!({"jsonrpc":"2.0","id":"host:1","method":"browser/open","params":{}});
+    let response = serde_json::json!({"jsonrpc":"2.0","id":1,"result":{
+        "serverInfo":{"name":"ash-app-server","version":"test"},
+        "protocolVersion":ProtocolVersion::current(),
+        "schemaHash":"test", "capabilities":capabilities,"slashCommands":[]
+    }});
+    let trailing = serde_json::json!({"jsonrpc":"2.0","id":2,"result":{}});
+    let stream = format!("{notification}\n{host_request}\n{response}\n{trailing}\n");
+    let mut reader = JsonlReader::new(std::io::Cursor::new(stream), DEFAULT_MAX_MESSAGE_BYTES);
+    let (outbound, received) = mpsc::channel();
+    read_remote_initialize(&mut reader, &JsonRpcId::Number(1), 7, &outbound).unwrap();
+    assert_eq!(received.try_recv().unwrap(), notification.to_string());
+    let routed: Value = serde_json::from_str(&received.try_recv().unwrap()).unwrap();
+    assert_eq!(routed["id"], "browser-host:gateway:7:host:1");
+    assert!(received.try_recv().is_err());
+    assert_eq!(
+        reader.read_message().unwrap().unwrap(),
+        trailing.to_string()
+    );
+
+    let mut reader = JsonlReader::new(
+        std::io::Cursor::new(format!("{response}\n")),
+        DEFAULT_MAX_MESSAGE_BYTES,
+    );
+    let error =
+        read_remote_initialize(&mut reader, &JsonRpcId::Number(2), 7, &outbound).unwrap_err();
+    assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    assert!(error.to_string().contains("ID mismatch"));
+}
+
+#[test]
 fn remote_catalog_preserves_each_session_root_and_deduplicates_host_views() {
     let index: RemoteSessionIndex = Arc::new(Mutex::new(BTreeMap::new()));
     let key = ("build-host".to_owned(), "/work/first".to_owned());

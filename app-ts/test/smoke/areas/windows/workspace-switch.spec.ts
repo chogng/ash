@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { ElectronApplication } from '@playwright/test';
 import type { BrowserWindow, MessageBoxOptions } from 'electron';
 import { expect, test } from '../../../automation/test.js';
@@ -225,6 +226,61 @@ test('Explorer shortcuts copy and move binary files into folders', async ({ targ
 			await rm(path, { recursive: true, force: true });
 		}
 	}
+});
+
+test.describe('System clipboard', () => {
+	test.beforeEach(async ({ testWorkspace }) => {
+		await mkdir(join(testWorkspace.directory, 'system-paste-target'));
+	});
+
+	test('Explorer pastes files from the macOS and Linux system clipboard', async ({ target, testWorkspace, workbench, application }) => {
+		test.setTimeout(75_000);
+		test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code' || process.platform === 'win32', 'This scenario requires the macOS or Linux Code desktop and App Server');
+		const externalDirectory = await mkdtemp(join(tmpdir(), 'ash-explorer-system-'));
+		try {
+			const destination = join(testWorkspace.directory, 'system-paste-target');
+			const targetItem = workbench.page.locator('.ash-explorer').getByRole('treeitem', { name: 'system-paste-target', exact: true });
+			await expect(targetItem).toHaveCount(1);
+			await targetItem.click();
+			const electron = application as ElectronApplication;
+			const copySource = join(externalDirectory, 'external-copy.bin');
+			await writeFile(copySource, Buffer.from([0, 255, 42]));
+			await electron.evaluate(async ({ clipboard, ClipboardItem }, url) => {
+				await clipboard.write([new ClipboardItem({ 'text/uri-list': url })]);
+			}, pathToFileURL(copySource).href);
+			await workbench.page.keyboard.press(process.platform === 'darwin' ? 'Meta+v' : 'Control+v');
+			await expect.poll(async () => readFile(join(destination, 'external-copy.bin')).then(value => [...value], () => [])).toEqual([0, 255, 42]);
+			expect(await stat(copySource).then(() => true, () => false)).toBe(true);
+
+			const moveFormats = process.platform === 'darwin' ? ['finder'] : ['gnome', 'kde'];
+			for (const format of moveFormats) {
+				const source = join(externalDirectory, `external-${format}.bin`);
+				await writeFile(source, Buffer.from([0, 254, 43]));
+				await electron.evaluate(async ({ clipboard, ClipboardItem }, { url, format }) => {
+					const formats: Record<string, string> = { 'text/uri-list': url };
+					if (format === 'gnome') formats['electron application/osclipboard;format="x-special/gnome-copied-files"'] = `cut\n${url}`;
+					if (format === 'kde') formats['electron application/osclipboard;format="application/x-kde-cutselection"'] = '1';
+					await clipboard.write([new ClipboardItem(formats)]);
+				}, { url: pathToFileURL(source).href, format });
+				if (format !== 'finder') {
+					const marker = format === 'gnome' ? 'x-special/gnome-copied-files' : 'application/x-kde-cutselection';
+					expect(await electron.evaluate(({ clipboard }, mime) => clipboard.has(`electron application/osclipboard;format="${mime}"`), marker)).toBe(true);
+					if (format === 'kde') {
+						expect(await electron.evaluate(({ clipboard }) => clipboard.has('electron application/osclipboard;format="x-special/gnome-copied-files"'))).toBe(false);
+					}
+				}
+				await workbench.page.keyboard.press(process.platform === 'darwin' ? 'Meta+Alt+v' : 'Control+v');
+				await expect.poll(async () => readFile(join(destination, `external-${format}.bin`)).then(value => [...value], () => [])).toEqual([0, 254, 43]);
+				await expect.poll(async () => stat(source).then(() => true, () => false), { message: `${format} cut should remove the source` }).toBe(false);
+				if (format !== 'finder') {
+					const marker = format === 'gnome' ? 'x-special/gnome-copied-files' : 'application/x-kde-cutselection';
+					await expect.poll(() => electron.evaluate(({ clipboard }, mime) => clipboard.has(`electron application/osclipboard;format="${mime}"`), marker)).toBe(false);
+				}
+			}
+		} finally {
+			await rm(externalDirectory, { recursive: true, force: true });
+		}
+	});
 });
 
 test('Explorer opens the focused file context menu from the keyboard', async ({ target, application, workbench }) => {

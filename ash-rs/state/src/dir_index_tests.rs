@@ -96,6 +96,26 @@ fn clear_all_does_not_remove_an_open_dir() {
     assert!(profile.path().join("cache/dirs").is_dir());
 }
 
+#[cfg(unix)]
+#[test]
+fn releasing_a_lease_unlocks_descriptors_inherited_by_a_child() {
+    let profile = TempDir::new().unwrap();
+    let storage = StateRuntime::open(profile.path()).unwrap();
+    let dir = dir_id('7');
+    let lease = storage.acquire(&dir, DirIndexKind::Grep).unwrap();
+    // A duplicated descriptor shares the lock just as a child does between fork and exec.
+    let inherited_global = lease._global_lock.0.try_clone().unwrap();
+    let inherited_index = lease._index_lock.0.try_clone().unwrap();
+    drop(lease);
+
+    assert_eq!(
+        storage.clear_index(&dir, DirIndexKind::Grep).unwrap(),
+        ClearOutcome::Cleared
+    );
+    assert_eq!(storage.clear_all().unwrap(), ClearOutcome::Cleared);
+    drop((inherited_global, inherited_index));
+}
+
 #[test]
 fn a_cross_process_lease_blocks_explicit_deletion() {
     let profile = TempDir::new().unwrap();

@@ -11,9 +11,24 @@ import { workspaceRelativePath, type IWorkspaceContextService } from "../../../.
 import { WorkspaceContextService } from "../../../../workbench/services/workspaces/browser/workspaceContextService.js";
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
 
-test("disconnected file API declines system cut moves without requiring App Server", async () => {
+test("disconnected file API declines system file paste without requiring App Server", async () => {
 	const api = createDisconnectedFileApi(() => { throw new Error("App Server unavailable"); });
-	assert.equal(await api.pasteSystemCutFiles({ dirId: "root", path: "." }), false);
+	assert.equal(await api.pasteSystemFiles({ dirId: "root", path: ".", moveRequested: false }), false);
+});
+
+test("BrowserFileService passes the paste destination and move request to App Server", async () => {
+	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+	const requests: unknown[] = [];
+	using service = new BrowserFileService({
+		workspaceContextService: workspace,
+		resourceApi: unavailableResourceApi(),
+		api: {
+			...unavailableFileApi(),
+			pasteSystemFiles: async params => { requests.push(params); return true; },
+		},
+	});
+	assert.equal(await service.pasteSystemFiles(URI.file('/project/destination'), true), true);
+	assert.deepEqual(requests, [{ dirId: 'project', path: 'destination', moveRequested: true }]);
 });
 
 test("workspaceRelativePath confines resources to the folder", () => {
@@ -105,7 +120,7 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
 				return { fileType: 'directory', sizeBytes: 0, readonly: false, modifiedAtMillis: null };
 			},
 			copy: async () => { throw new Error('not used'); },
-			pasteSystemCutFiles: async () => false,
+			pasteSystemFiles: async () => false,
 			rename: async () => {},
 			delete: async () => {},
 		},
@@ -179,7 +194,7 @@ test("BrowserFileService maps App Server revision conflicts to the file contract
 			createFile: async () => { throw new Error("unavailable"); },
 			createDirectory: async () => { throw new Error('unavailable'); },
 			copy: async () => { throw new Error('unavailable'); },
-			pasteSystemCutFiles: async () => false,
+			pasteSystemFiles: async () => false,
 			rename: async () => { throw new Error("unavailable"); },
 			delete: async () => { throw new Error("unavailable"); },
 		},
@@ -212,7 +227,7 @@ test("BrowserFileService reads connection-owned binary resources in bounded chun
 			createFile: async () => { throw new Error("not used"); },
 			createDirectory: async () => { throw new Error('not used'); },
 			copy: async () => { throw new Error('not used'); },
-			pasteSystemCutFiles: async () => false,
+			pasteSystemFiles: async () => false,
 			rename: async () => { throw new Error("not used"); },
 			delete: async () => { throw new Error("not used"); },
 		},
@@ -280,7 +295,7 @@ test("BrowserFileService routes nested multi-root resources by Workspace folder 
 				return { content: params.path, revision: "revision" };
 			},
 			copy: async params => { copies.push(params); },
-			pasteSystemCutFiles: async params => { pastes.push(params); return true; },
+			pasteSystemFiles: async params => { pastes.push(params); return true; },
 		},
 	});
 
@@ -293,9 +308,9 @@ test("BrowserFileService routes nested multi-root resources by Workspace folder 
 	]);
 	await service.copy(URI.file("C:\\project\\README.md"), URI.file("C:\\project\\packages\\nested\\README.md"));
 	assert.deepEqual(copies, [{ sourceDirId: 'parent', source: 'README.md', targetDirId: 'nested', target: 'README.md' }]);
-	assert.equal(await service.pasteSystemCutFiles(URI.file('C:\\project\\packages\\nested')), true);
-	assert.deepEqual(pastes, [{ dirId: 'nested', path: '.' }]);
-	assert.throws(() => service.pasteSystemCutFiles(URI.file('C:\\outside')), /current workspace folder/);
+	assert.equal(await service.pasteSystemFiles(URI.file('C:\\project\\packages\\nested'), true), true);
+	assert.deepEqual(pastes, [{ dirId: 'nested', path: '.', moveRequested: true }]);
+	assert.throws(() => service.pasteSystemFiles(URI.file('C:\\outside'), false), /current workspace folder/);
 	assert.throws(() => service.rename(URI.file("C:\\project\\README.md"), URI.file("C:\\project\\packages\\nested\\README.md"), "error"), /across workspace folders/i);
 });
 
@@ -310,7 +325,7 @@ function unavailableFileApi() {
 		createFile: async () => { throw new Error("unavailable"); },
 		createDirectory: async () => { throw new Error('unavailable'); },
 		copy: async () => { throw new Error('unavailable'); },
-		pasteSystemCutFiles: async () => false,
+		pasteSystemFiles: async () => false,
 		rename: async () => { throw new Error("unavailable"); },
 		delete: async () => { throw new Error("unavailable"); },
 	};

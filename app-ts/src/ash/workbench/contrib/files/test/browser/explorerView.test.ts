@@ -22,11 +22,11 @@ test("ExplorerView opens workspace files on single click", async () => {
 	// jsdom has no layout; managed virtualization needs a visible viewport to create rows.
 	Object.defineProperty(browser.window.HTMLElement.prototype, 'clientHeight', {
 		configurable: true,
-		get() { return this.classList.contains('ash-scrollbar-viewport') ? 500 : 0; },
+		get() { return this.isConnected && this.classList.contains('ash-scrollbar-viewport') ? 500 : 0; },
 	});
 	const installedGlobals = installDomGlobals(browser);
-	const root = URI.file("C:\\project");
-	const nextRoot = URI.file("C:\\next-project");
+	const root = URI.file("/project");
+	const nextRoot = URI.file("/next-project");
 	const directoryReads: string[] = [];
 	using fileChanges = new Emitter<{ readonly resources: readonly URI[] | undefined }>();
 	let addedRootFile = false;
@@ -51,17 +51,17 @@ test("ExplorerView opens workspace files on single click", async () => {
 				}
 				return [
 					{
-						resource: URI.file("C:\\project\\README.md"),
+						resource: URI.file("/project/README.md"),
 						name: "README.md",
 						kind: FileKind.File,
 					},
 					{
-						resource: URI.file("C:\\project\\src"),
+						resource: URI.file("/project/src"),
 						name: "src",
 						kind: FileKind.Directory,
 					},
 					...(addedRootFile ? [{
-						resource: URI.file("C:\\project\\new.txt"),
+						resource: URI.file("/project/new.txt"),
 						name: "new.txt",
 						kind: FileKind.File,
 					}] : []),
@@ -70,28 +70,28 @@ test("ExplorerView opens workspace files on single click", async () => {
 			if (resource.toString() === nextRoot.toString()) {
 				return [
 					{
-						resource: URI.file("C:\\next-project\\next.txt"),
+						resource: URI.file("/next-project/next.txt"),
 						name: "next.txt",
 						kind: FileKind.File,
 					},
 					{
-						resource: URI.file("C:\\next-project\\link"),
+						resource: URI.file("/next-project/link"),
 						name: "link",
 						kind: FileKind.SymbolicLink,
 					},
 					{
-						resource: URI.file("C:\\next-project\\unknown"),
+						resource: URI.file("/next-project/unknown"),
 						name: "unknown",
 						kind: FileKind.Other,
 					},
 				];
 			}
 			return [{
-				resource: URI.file("C:\\project\\src\\main.ts"),
+				resource: URI.file("/project/src/main.ts"),
 				name: "main.ts",
 				kind: FileKind.File,
 			}, ...(addedNestedFile ? [{
-				resource: URI.file('C:\\project\\src\\nested.ts'),
+				resource: URI.file('/project/src/nested.ts'),
 				name: 'nested.ts',
 				kind: FileKind.File,
 			}] : [])];
@@ -258,7 +258,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 		)].find((row) => rowLabel(row) === "src");
 		assert.ok(sourceFolder);
 		sourceFolder.click();
-		assert.equal(explorerService.getContext()[0]?.resource.toString(), URI.file('C:\\project\\src').toString());
+		assert.equal(explorerService.getContext()[0]?.resource.toString(), URI.file('/project/src').toString());
 
 		await waitFor(() => rowLabels(pane.element).includes("main.ts"));
 		assert.equal(hoverCreations, 3);
@@ -268,7 +268,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 		assert.ok(readmeRow);
 		mainRow.dispatchEvent(new browser.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 12, clientY: 24 }));
 		assert.equal(contextMenu?.menuId?.id, 'ExplorerContext');
-		assert.equal((contextMenu?.menuActionOptions?.arg as URI).toString(), URI.file('C:\\project\\src\\main.ts').toString());
+		assert.equal((contextMenu?.menuActionOptions?.arg as URI).toString(), URI.file('/project/src/main.ts').toString());
 		assert.equal(contextMenu?.contextKeyService?.getValue('ashExplorerIsFile'), true);
 		assert.equal(contextMenu?.contextKeyService?.getValue('ashExplorerCanModify'), true);
 		assert.equal(contextMenu?.contextKeyService?.getValue('ashExplorerCanCreate'), false);
@@ -302,7 +302,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 		);
 		assert.deepEqual(directoryReads, [
 			root.toString(),
-			URI.file("C:\\project\\src").toString(),
+			URI.file("/project/src").toString(),
 		]);
 		sourceFolder.click();
 		await configurationService.updateValue(ListConfiguration.treeExpandMode, "doubleClick");
@@ -326,7 +326,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 		assert.equal(openedInput?.initialText, undefined);
 		assert.equal(
 			openedInput?.resource.toString(),
-			URI.file("C:\\project\\README.md").toString(),
+			URI.file("/project/README.md").toString(),
 		);
 		assert.deepEqual(openedOptions, { pinned: false, preserveFocus: true });
 		assert.equal(openedTarget, "activeGroup");
@@ -341,25 +341,25 @@ test("ExplorerView opens workspace files on single click", async () => {
 		assert.equal(browser.window.document.activeElement, treeElement);
 		directoryReads.length = 0;
 		addedRootFile = true;
-		fileChanges.fire({ resources: [URI.file("C:\\project\\new.txt")] });
+		fileChanges.fire({ resources: [URI.file("/project/new.txt")] });
 		await waitFor(() => rowLabels(pane.element).includes("new.txt"));
 		assert.deepEqual(directoryReads, [root.toString()]);
 		assert.equal(browser.window.document.activeElement, treeElement);
 		assert.deepEqual(rowLabels(pane.element), ["src", "main.ts", "README.md", "new.txt"]);
 		directoryReads.length = 0;
 		addedNestedFile = true;
-		fileChanges.fire({ resources: [URI.file('C:\\project\\src\\nested.ts')] });
+		fileChanges.fire({ resources: [URI.file('/project/src/nested.ts')] });
 		await waitFor(() => rowLabels(pane.element).includes('nested.ts'));
-		assert.deepEqual(directoryReads, [URI.file('C:\\project\\src').toString()]);
+		assert.deepEqual(directoryReads, [URI.file('/project/src').toString()]);
 		assert.deepEqual(rowLabels(pane.element), ['src', 'main.ts', 'nested.ts', 'README.md', 'new.txt']);
 		directoryReads.length = 0;
-		fileChanges.fire({ resources: [URI.file('C:\\project\\src')] });
+		fileChanges.fire({ resources: [URI.file('/project/src')] });
 		await waitFor(() => directoryReads.length === 2);
-		assert.deepEqual(directoryReads, [root.toString(), URI.file('C:\\project\\src').toString()]);
+		assert.deepEqual(directoryReads, [root.toString(), URI.file('/project/src').toString()]);
 		directoryReads.length = 0;
 		fileChanges.fire({ resources: undefined });
 		await waitFor(() => directoryReads.length === 2);
-		assert.deepEqual(directoryReads, [root.toString(), URI.file('C:\\project\\src').toString()]);
+		assert.deepEqual(directoryReads, [root.toString(), URI.file('/project/src').toString()]);
 		failNextRootRead = true;
 		fileChanges.fire({ resources: [root] });
 		await waitFor(() => pane.element.querySelector(".ash-explorer-error")?.textContent === "Workspace files are temporarily unavailable");

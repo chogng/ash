@@ -344,7 +344,7 @@ export type { FsFileType } from './FsFileType.js';
 export type { FsGetMetadataParams } from './FsGetMetadataParams.js';
 export type { FsGetMetadataResult } from './FsGetMetadataResult.js';
 export type { FsMissingTargetBehavior } from './FsMissingTargetBehavior.js';
-export type { FsPasteSystemCutFilesParams } from './FsPasteSystemCutFilesParams.js';
+export type { FsPasteSystemFilesParams } from './FsPasteSystemFilesParams.js';
 export type { FsReadBinaryFileParams } from './FsReadBinaryFileParams.js';
 export type { FsReadBinaryFileResult } from './FsReadBinaryFileResult.js';
 export type { FsReadDirectoryEntry } from './FsReadDirectoryEntry.js';

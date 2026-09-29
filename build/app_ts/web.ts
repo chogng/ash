@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { developmentAshPackagePath } from './runtimeStore.ts';
-import { buildAppServerEnvironment } from '../../app-ts/src/ash/platform/app-server/common/appServerEnvironment.ts';
+import { buildAppServerEnvironment, type AppServerHostPlatform } from '../../app-ts/src/ash/platform/app-server/common/appServerEnvironment.ts';
 import { decodeWebListenInfo } from '../../app-ts/src/ash/platform/app-server/common/generated/WebProtocolDecoder.ts';
 import type { WebListenInfo } from '../../app-ts/src/ash/platform/app-server/common/generated/WebListenInfo.ts';
 
@@ -17,12 +17,19 @@ export async function startWeb(options: { port: number; assets?: string; origin?
 	const packageRoot = developmentAshPackagePath(root, 'packaged-node');
 	const suffix = process.platform === 'win32' ? '.exe' : '';
 	const executable = process.env.ASH_APP_SERVER_PATH ?? join(packageRoot, 'bin', `ash-app-server${suffix}`);
-	const environment = buildAppServerEnvironment(process.env, process.platform === 'win32' ? 'windows' : 'posix', {
+	let hostPlatform: AppServerHostPlatform;
+	switch (process.platform) {
+		case 'win32': hostPlatform = 'windows'; break;
+		case 'darwin': hostPlatform = 'macos'; break;
+		case 'linux': hostPlatform = 'linux'; break;
+		default: throw new Error(`Unsupported App Server host platform: ${process.platform}`);
+	}
+	const environment = buildAppServerEnvironment(process.env, hostPlatform, {
 		ASH_HOME: resolve(process.env.ASH_WEB_APP_SERVER_PROFILE ?? join(root, '.build/app-ts/dev/web-profile')),
 		ASH_WORKSPACE_ROOT: resolve(process.env.ASH_WORKSPACE_ROOT ?? root),
 		ASH_RG_PATH: resolve(process.env.ASH_RG_PATH ?? join(packageRoot, 'ash-path', `rg${suffix}`)),
 		...(process.env.ASH_PRODUCT_SERVICES_PATH ? { ASH_PRODUCT_SERVICES_PATH: process.env.ASH_PRODUCT_SERVICES_PATH } : {}),
-	});
+	}, 'web');
 	const arguments_ = ['--web', '--port', String(options.port)];
 	if (options.assets) { arguments_.push('--assets', options.assets); }
 	if (options.origin) { arguments_.push('--origin', options.origin); }

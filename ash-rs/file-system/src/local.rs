@@ -8,6 +8,7 @@ use crate::FileSystemError;
 use crate::FileType;
 use crate::FileWriteCondition;
 use crate::MissingTargetBehavior;
+use crate::SystemFileTransferOperation;
 use crate::file_revision;
 use ash_file_access::Authorization;
 use ash_file_access::Dir;
@@ -72,14 +73,28 @@ impl FileSystem for LocalFileSystem {
         self
     }
 
-    fn paste_system_cut_files(&self, directory: &Path) -> Result<bool, FileSystemError> {
+    fn paste_system_files(
+        &self,
+        directory: &Path,
+        requested_operation: SystemFileTransferOperation,
+    ) -> Result<bool, FileSystemError> {
         #[cfg(windows)]
         {
+            let _ = requested_operation;
             return paste_windows_cut_files(self, directory);
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "macos")]
         {
-            let _ = directory;
+            return paste_macos_files(self, directory, requested_operation);
+        }
+        #[cfg(target_os = "linux")]
+        {
+            let _ = requested_operation;
+            return paste_linux_files(self, directory);
+        }
+        #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
+        {
+            let _ = (directory, requested_operation);
             Ok(false)
         }
     }
@@ -231,7 +246,6 @@ fn paste_windows_cut_files(
     directory: &Path,
 ) -> Result<bool, FileSystemError> {
     use clipboard_win::formats::{FileList, RawData};
-    use std::ffi::OsString;
 
     let drop_effect = clipboard_win::register_format("Preferred DropEffect")
         .ok_or_else(|| FileSystemError::Io("Cannot register Windows clipboard format".into()))?;
@@ -253,6 +267,30 @@ fn paste_windows_cut_files(
         clipboard_win::get(FileList).map_err(|error| FileSystemError::Io(error.to_string()))?;
     let clipboard_sequence = clipboard_win::seq_num();
     drop(clipboard);
+    transfer_system_files(
+        filesystem,
+        directory,
+        &sources,
+        SystemFileTransferOperation::Move,
+    )?;
+    if let (Some(before), Ok(_clipboard)) = (
+        clipboard_sequence,
+        clipboard_win::Clipboard::new_attempts(10),
+    ) {
+        if clipboard_win::seq_num() == Some(before) {
+            clipboard_win::empty().map_err(|error| FileSystemError::Io(error.to_string()))?;
+        }
+    }
+    Ok(true)
+}
+
+#[cfg(any(windows, target_os = "macos", target_os = "linux"))]
+fn transfer_system_files(
+    filesystem: &LocalFileSystem,
+    directory: &Path,
+    sources: &[PathBuf],
+    operation: SystemFileTransferOperation,
+) -> Result<(), FileSystemError> {
     if sources.is_empty()
         || sources.len() > 1024
         || sources.iter().any(|source| !source.is_absolute())
@@ -301,7 +339,9 @@ fn paste_windows_cut_files(
         let mut reserved = std::collections::HashSet::new();
         let mut transfers = Vec::new();
         for source in &canonical_sources {
-            if source.parent() == Some(destination.as_path()) {
+            if operation == SystemFileTransferOperation::Move
+                && source.parent() == Some(destination.as_path())
+            {
                 continue;
             }
             let name = source
@@ -367,37 +407,331 @@ fn paste_windows_cut_files(
             }
             return Err(error);
         }
-        for (source, _) in transfers {
-            let parent = source
-                .parent()
-                .ok_or_else(|| FileSystemError::InvalidPath(source.clone()))?;
-            let name = source
-                .file_name()
-                .ok_or_else(|| FileSystemError::InvalidPath(source.clone()))?;
-            let source_directory =
-                Directory::open_ambient_dir(parent, cap_std::ambient_authority())
-                    .map_err(io_error)?;
-            if source_directory
-                .symlink_metadata(name)
-                .map_err(io_error)?
-                .is_dir()
-            {
-                source_directory.remove_dir_all(name).map_err(io_error)?;
-            } else {
-                source_directory.remove_file(name).map_err(io_error)?;
+        if operation == SystemFileTransferOperation::Move {
+            for (source, _) in transfers {
+                let parent = source
+                    .parent()
+                    .ok_or_else(|| FileSystemError::InvalidPath(source.clone()))?;
+                let name = source
+                    .file_name()
+                    .ok_or_else(|| FileSystemError::InvalidPath(source.clone()))?;
+                let source_directory =
+                    Directory::open_ambient_dir(parent, cap_std::ambient_authority())
+                        .map_err(io_error)?;
+                if source_directory
+                    .symlink_metadata(name)
+                    .map_err(io_error)?
+                    .is_dir()
+                {
+                    source_directory.remove_dir_all(name).map_err(io_error)?;
+                } else {
+                    source_directory.remove_file(name).map_err(io_error)?;
+                }
             }
         }
         Ok(())
-    })?;
-    if let (Some(before), Ok(_clipboard)) = (
-        clipboard_sequence,
-        clipboard_win::Clipboard::new_attempts(10),
-    ) {
-        if clipboard_win::seq_num() == Some(before) {
-            clipboard_win::empty().map_err(|error| FileSystemError::Io(error.to_string()))?;
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn paste_macos_files(
+    filesystem: &LocalFileSystem,
+    directory: &Path,
+    requested_operation: SystemFileTransferOperation,
+) -> Result<bool, FileSystemError> {
+    let mut clipboard =
+        arboard::Clipboard::new().map_err(|error| FileSystemError::Io(error.to_string()))?;
+    let sources = match clipboard.get().file_list() {
+        Ok(sources) if !sources.is_empty() => sources,
+        Ok(_) | Err(arboard::Error::ContentNotAvailable) => return Ok(false),
+        Err(error) => return Err(FileSystemError::Io(error.to_string())),
+    };
+    transfer_system_files(filesystem, directory, &sources, requested_operation)?;
+    if requested_operation == SystemFileTransferOperation::Move
+        && clipboard.get().file_list().ok().as_ref() == Some(&sources)
+    {
+        clipboard
+            .clear()
+            .map_err(|error| FileSystemError::Io(error.to_string()))?;
+    }
+    Ok(true)
+}
+
+#[cfg(target_os = "linux")]
+fn paste_linux_files(
+    filesystem: &LocalFileSystem,
+    directory: &Path,
+) -> Result<bool, FileSystemError> {
+    if std::env::var_os("DISPLAY").is_none() && std::env::var_os("WAYLAND_DISPLAY").is_none() {
+        return Ok(false);
+    }
+    let gnome = read_linux_clipboard_format("x-special/gnome-copied-files")?;
+    let mut uri_list = None;
+    let (sources, operation) = if let Some(data) = &gnome {
+        parse_gnome_copied_files(data)?
+    } else {
+        let data = match read_linux_clipboard_format("text/uri-list")? {
+            Some(data) => data,
+            None => return Ok(false),
+        };
+        let sources = parse_file_uri_list(&data)?;
+        uri_list = Some(data);
+        let kde = read_linux_clipboard_format("application/x-kde-cutselection")?;
+        (
+            sources,
+            if kde.as_deref() == Some(b"1") {
+                SystemFileTransferOperation::Move
+            } else {
+                SystemFileTransferOperation::Copy
+            },
+        )
+    };
+    if sources.is_empty() {
+        return Ok(false);
+    }
+    transfer_system_files(filesystem, directory, &sources, operation)?;
+    if operation == SystemFileTransferOperation::Move {
+        let mut clipboard =
+            arboard::Clipboard::new().map_err(|error| FileSystemError::Io(error.to_string()))?;
+        let unchanged = if let Some(data) = &gnome {
+            read_linux_clipboard_format("x-special/gnome-copied-files")?.as_ref() == Some(data)
+        } else {
+            read_linux_clipboard_format("text/uri-list")?.as_ref() == uri_list.as_ref()
+        };
+        if unchanged {
+            clipboard
+                .clear()
+                .map_err(|error| FileSystemError::Io(error.to_string()))?;
         }
     }
     Ok(true)
+}
+
+#[cfg(target_os = "linux")]
+fn parse_gnome_copied_files(
+    data: &[u8],
+) -> Result<(Vec<PathBuf>, SystemFileTransferOperation), FileSystemError> {
+    let content =
+        std::str::from_utf8(data).map_err(|error| FileSystemError::Io(error.to_string()))?;
+    let mut lines = content.lines();
+    let operation = match lines.next().map(|line| line.trim_end_matches('\r')) {
+        Some("cut") => SystemFileTransferOperation::Move,
+        Some("copy") => SystemFileTransferOperation::Copy,
+        _ => {
+            return Err(FileSystemError::Io(
+                "Invalid GNOME clipboard operation".into(),
+            ));
+        }
+    };
+    let sources = parse_file_urls(lines)?;
+    Ok((sources, operation))
+}
+
+#[cfg(target_os = "linux")]
+fn parse_file_uri_list(data: &[u8]) -> Result<Vec<PathBuf>, FileSystemError> {
+    let content =
+        std::str::from_utf8(data).map_err(|error| FileSystemError::Io(error.to_string()))?;
+    parse_file_urls(content.lines().filter(|line| !line.starts_with('#')))
+}
+
+#[cfg(target_os = "linux")]
+fn parse_file_urls<'a>(
+    lines: impl Iterator<Item = &'a str>,
+) -> Result<Vec<PathBuf>, FileSystemError> {
+    lines
+        .map(|line| line.trim_end_matches('\r'))
+        .filter(|line| !line.is_empty())
+        .map(|line| {
+            url::Url::parse(line)
+                .ok()
+                .and_then(|uri| uri.to_file_path().ok())
+                .ok_or_else(|| FileSystemError::Io("Invalid clipboard file URL".into()))
+        })
+        .collect()
+}
+
+#[cfg(target_os = "linux")]
+fn read_linux_clipboard_format(format: &str) -> Result<Option<Vec<u8>>, FileSystemError> {
+    if std::env::var_os("WAYLAND_DISPLAY").is_some()
+        && wl_clipboard_rs::utils::is_primary_selection_supported().is_ok()
+    {
+        use wl_clipboard_rs::paste::{ClipboardType, Error, MimeType, Seat, get_contents};
+        let result = get_contents(
+            ClipboardType::Regular,
+            Seat::Unspecified,
+            MimeType::Specific(format),
+        );
+        return match result {
+            Ok((pipe, _)) => {
+                let mut data = Vec::new();
+                pipe.take(1024 * 1024 + 1)
+                    .read_to_end(&mut data)
+                    .map_err(io_error)?;
+                if data.len() > 1024 * 1024 {
+                    return Err(FileSystemError::Io(
+                        "Clipboard file list is too large".into(),
+                    ));
+                }
+                Ok(Some(data))
+            }
+            Err(Error::ClipboardEmpty | Error::NoMimeType) => Ok(None),
+            Err(error) => Err(FileSystemError::Io(error.to_string())),
+        };
+    }
+    if std::env::var_os("DISPLAY").is_none() {
+        return Ok(None);
+    }
+    read_x11_clipboard_format(format)
+}
+
+#[cfg(target_os = "linux")]
+fn read_x11_clipboard_format(format: &str) -> Result<Option<Vec<u8>>, FileSystemError> {
+    use x11rb::connection::Connection;
+    use x11rb::protocol::Event;
+    use x11rb::protocol::xproto::{
+        AtomEnum, ConnectionExt, CreateWindowAux, EventMask, Property, WindowClass,
+    };
+
+    let (connection, screen_index) =
+        x11rb::connect(None).map_err(|error| FileSystemError::Io(error.to_string()))?;
+    let screen = &connection.setup().roots[screen_index];
+    let clipboard = connection
+        .intern_atom(false, b"CLIPBOARD")
+        .map_err(|error| FileSystemError::Io(error.to_string()))?
+        .reply()
+        .map_err(|error| FileSystemError::Io(error.to_string()))?
+        .atom;
+    if connection
+        .get_selection_owner(clipboard)
+        .map_err(|error| FileSystemError::Io(error.to_string()))?
+        .reply()
+        .map_err(|error| FileSystemError::Io(error.to_string()))?
+        .owner
+        == x11rb::NONE
+    {
+        return Ok(None);
+    }
+    let target = connection
+        .intern_atom(false, format.as_bytes())
+        .map_err(|error| FileSystemError::Io(error.to_string()))?
+        .reply()
+        .map_err(|error| FileSystemError::Io(error.to_string()))?
+        .atom;
+    let property = connection
+        .intern_atom(false, b"ASH_CLIPBOARD_TRANSFER")
+        .map_err(|error| FileSystemError::Io(error.to_string()))?
+        .reply()
+        .map_err(|error| FileSystemError::Io(error.to_string()))?
+        .atom;
+    let incr = connection
+        .intern_atom(false, b"INCR")
+        .map_err(|error| FileSystemError::Io(error.to_string()))?
+        .reply()
+        .map_err(|error| FileSystemError::Io(error.to_string()))?
+        .atom;
+    let window = connection
+        .generate_id()
+        .map_err(|error| FileSystemError::Io(error.to_string()))?;
+    connection
+        .create_window(
+            x11rb::COPY_DEPTH_FROM_PARENT,
+            window,
+            screen.root,
+            0,
+            0,
+            1,
+            1,
+            0,
+            WindowClass::INPUT_ONLY,
+            0,
+            &CreateWindowAux::new().event_mask(EventMask::PROPERTY_CHANGE),
+        )
+        .map_err(|error| FileSystemError::Io(error.to_string()))?;
+    connection
+        .convert_selection(window, clipboard, target, property, x11rb::CURRENT_TIME)
+        .map_err(|error| FileSystemError::Io(error.to_string()))?;
+    connection
+        .flush()
+        .map_err(|error| FileSystemError::Io(error.to_string()))?;
+    let mut incremental = false;
+    let mut data = Vec::new();
+    let mut deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    loop {
+        if std::time::Instant::now() >= deadline {
+            return Err(FileSystemError::Io("Clipboard request timed out".into()));
+        }
+        match connection
+            .poll_for_event()
+            .map_err(|error| FileSystemError::Io(error.to_string()))?
+        {
+            Some(Event::SelectionNotify(event))
+                if !incremental
+                    && event.requestor == window
+                    && event.selection == clipboard
+                    && event.target == target =>
+            {
+                if event.property == x11rb::NONE {
+                    return Ok(None);
+                }
+                let reply = connection
+                    .get_property(true, window, property, AtomEnum::ANY, 0, 262_145)
+                    .map_err(|error| FileSystemError::Io(error.to_string()))?
+                    .reply()
+                    .map_err(|error| FileSystemError::Io(error.to_string()))?;
+                if reply.bytes_after > 0 || reply.value.len() > 1024 * 1024 {
+                    return Err(FileSystemError::Io(
+                        "Clipboard file list is too large".into(),
+                    ));
+                }
+                if reply.type_ == incr {
+                    // Deleting the INCR header acknowledges readiness for PropertyNotify chunks.
+                    incremental = true;
+                    connection
+                        .flush()
+                        .map_err(|error| FileSystemError::Io(error.to_string()))?;
+                    deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+                } else if reply.type_ == target && reply.format == 8 {
+                    return Ok(Some(reply.value));
+                } else {
+                    return Err(FileSystemError::Io(
+                        "Invalid clipboard property type".into(),
+                    ));
+                }
+            }
+            Some(Event::PropertyNotify(event))
+                if incremental
+                    && event.window == window
+                    && event.atom == property
+                    && event.state == Property::NEW_VALUE =>
+            {
+                let reply = connection
+                    .get_property(true, window, property, AtomEnum::ANY, 0, 262_145)
+                    .map_err(|error| FileSystemError::Io(error.to_string()))?
+                    .reply()
+                    .map_err(|error| FileSystemError::Io(error.to_string()))?;
+                if reply.type_ != target || reply.format != 8 {
+                    return Err(FileSystemError::Io(
+                        "Invalid clipboard property type".into(),
+                    ));
+                }
+                if reply.bytes_after > 0 || reply.value.len() > 1024 * 1024 - data.len() {
+                    return Err(FileSystemError::Io(
+                        "Clipboard file list is too large".into(),
+                    ));
+                }
+                if reply.value.is_empty() {
+                    return Ok(Some(data));
+                }
+                data.extend_from_slice(&reply.value);
+                connection
+                    .flush()
+                    .map_err(|error| FileSystemError::Io(error.to_string()))?;
+                deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+            }
+            None => std::thread::sleep(std::time::Duration::from_millis(5)),
+            _ => {}
+        }
+    }
 }
 
 fn copy_resource(
@@ -437,7 +771,18 @@ fn copy_resource(
     if !kind.is_dir() {
         return Err(FileSystemError::NotFile(source.to_path_buf()));
     }
-    target_dir.create_dir(target).map_err(|error| {
+    let permissions = source_dir.metadata(source).map_err(io_error)?.permissions();
+    #[cfg(unix)]
+    let created = {
+        use cap_std::fs::DirBuilderExt;
+        // Keep children private while copying; apply the source's possibly read-only mode last.
+        let mut builder = cap_std::fs::DirBuilder::new();
+        builder.mode(0o700);
+        target_dir.create_dir_with(target, &builder)
+    };
+    #[cfg(not(unix))]
+    let created = target_dir.create_dir(target);
+    created.map_err(|error| {
         if error.kind() == std::io::ErrorKind::AlreadyExists {
             FileSystemError::AlreadyExists(target.to_path_buf())
         } else {
@@ -455,7 +800,9 @@ fn copy_resource(
                 &target.join(&name),
             )?;
         }
-        Ok(())
+        target_dir
+            .set_permissions(target, permissions)
+            .map_err(io_error)
     })();
     if result.is_err() {
         let _ = target_dir.remove_dir_all(target);

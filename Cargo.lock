@@ -1530,12 +1530,16 @@ dependencies = [
 name = "ash-file-system"
 version = "0.1.0"
 dependencies = [
+ "arboard",
  "ash-file-access",
  "ash-file-identity",
  "cap-std",
  "clipboard-win",
  "sha2 0.10.9",
  "tempfile",
+ "url",
+ "wl-clipboard-rs",
+ "x11rb",
 ]
 
 [[package]]

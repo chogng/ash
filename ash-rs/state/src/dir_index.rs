@@ -122,10 +122,10 @@ impl StateRuntime {
 
     pub fn acquire(&self, dir: &DirId, kind: DirIndexKind) -> io::Result<DirIndexLease> {
         let global_lock = self.open_global_lock()?;
-        fs2::FileExt::lock_shared(&global_lock)?;
+        fs2::FileExt::lock_shared(&global_lock.0)?;
 
         let index_lock = self.open_index_lock(dir, kind)?;
-        fs2::FileExt::lock_shared(&index_lock)?;
+        fs2::FileExt::lock_shared(&index_lock.0)?;
 
         let directory = self.index_directory(dir, kind);
         ensure_directory_without_symlinks(&self.cache_boundary, &directory)?;
@@ -138,10 +138,10 @@ impl StateRuntime {
 
     pub fn clear_index(&self, dir: &DirId, kind: DirIndexKind) -> io::Result<ClearOutcome> {
         let global_lock = self.open_global_lock()?;
-        fs2::FileExt::lock_shared(&global_lock)?;
+        fs2::FileExt::lock_shared(&global_lock.0)?;
 
         let index_lock = self.open_index_lock(dir, kind)?;
-        if !try_lock_exclusive(&index_lock)? {
+        if !try_lock_exclusive(&index_lock.0)? {
             return Ok(ClearOutcome::InUse);
         }
         remove_directory(&self.cache_boundary, &self.index_directory(dir, kind))
@@ -149,12 +149,12 @@ impl StateRuntime {
 
     pub fn clear_dir(&self, dir: &DirId) -> io::Result<ClearOutcome> {
         let global_lock = self.open_global_lock()?;
-        fs2::FileExt::lock_shared(&global_lock)?;
+        fs2::FileExt::lock_shared(&global_lock.0)?;
 
         let mut index_locks = Vec::with_capacity(DirIndexKind::ALL.len());
         for kind in DirIndexKind::ALL {
             let lock = self.open_index_lock(dir, kind)?;
-            if !try_lock_exclusive(&lock)? {
+            if !try_lock_exclusive(&lock.0)? {
                 return Ok(ClearOutcome::InUse);
             }
             index_locks.push(lock);
@@ -164,7 +164,7 @@ impl StateRuntime {
 
     pub fn clear_all(&self) -> io::Result<ClearOutcome> {
         let global_lock = self.open_global_lock()?;
-        if !try_lock_exclusive(&global_lock)? {
+        if !try_lock_exclusive(&global_lock.0)? {
             return Ok(ClearOutcome::InUse);
         }
         let outcome = remove_directory(&self.cache_boundary, &self.dirs_root)?;
@@ -182,14 +182,14 @@ impl StateRuntime {
         self.dirs_root.join(dir_digest(dir))
     }
 
-    fn open_global_lock(&self) -> io::Result<File> {
+    fn open_global_lock(&self) -> io::Result<FileLock> {
         open_lock_file(
             &self.cache_boundary,
             &self.locks_root.join(GLOBAL_LOCK_FILE),
         )
     }
 
-    fn open_index_lock(&self, dir: &DirId, kind: DirIndexKind) -> io::Result<File> {
+    fn open_index_lock(&self, dir: &DirId, kind: DirIndexKind) -> io::Result<FileLock> {
         open_lock_file(
             &self.cache_boundary,
             &self
@@ -205,13 +205,24 @@ impl StateRuntime {
 #[derive(Debug)]
 pub struct DirIndexLease {
     directory: PathBuf,
-    _global_lock: File,
-    _index_lock: File,
+    _global_lock: FileLock,
+    _index_lock: FileLock,
 }
 
 impl DirIndexLease {
     pub fn directory(&self) -> &Path {
         &self.directory
+    }
+}
+
+#[derive(Debug)]
+struct FileLock(File);
+
+impl Drop for FileLock {
+    fn drop(&mut self) {
+        // fork shares the open file description until exec closes inherited descriptors.
+        // Release the lock when its owner finishes, even while a child still has a descriptor.
+        let _ = fs2::FileExt::unlock(&self.0);
     }
 }
 
@@ -221,7 +232,7 @@ fn dir_digest(dir: &DirId) -> &str {
         .expect("DirId always contains the sha256 prefix")
 }
 
-fn open_lock_file(boundary: &CanonicalPathRoot, path: &Path) -> io::Result<File> {
+fn open_lock_file(boundary: &CanonicalPathRoot, path: &Path) -> io::Result<FileLock> {
     if let Some(parent) = path.parent() {
         ensure_directory_without_symlinks(boundary, parent)?;
     }
@@ -234,6 +245,7 @@ fn open_lock_file(boundary: &CanonicalPathRoot, path: &Path) -> io::Result<File>
         .read(true)
         .write(true)
         .open(path)
+        .map(FileLock)
 }
 
 fn try_lock_exclusive(file: &File) -> io::Result<bool> {

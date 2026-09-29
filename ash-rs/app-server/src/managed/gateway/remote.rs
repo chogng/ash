@@ -6,9 +6,12 @@ use super::RemoteSessionIndex;
 use super::fail_remote_requests;
 use super::read_remote_messages;
 use super::remote_key;
+use super::tag_host_request;
 use ash_app_server_protocol::protocol::initialize::InitializeResult;
 use ash_app_server_protocol::protocol::initialize::REQUIRED_SESSION_CAPABILITIES;
 use ash_app_server_protocol::protocol::initialize::ensure_protocol_compatible;
+use ash_app_server_protocol::rpc::JsonRpcRequest;
+use ash_app_server_protocol::rpc::JsonRpcResponse;
 use ash_app_server_transport::DEFAULT_MAX_MESSAGE_BYTES;
 use ash_app_server_transport::JsonlReader;
 use ash_app_server_transport::JsonlWriter;
@@ -231,7 +234,7 @@ fn run(
             let mut reader = JsonlReader::new(BufReader::new(stdout), DEFAULT_MAX_MESSAGE_BYTES);
             let result = (|| {
                 writer.write_message(&initialize)?;
-                read_initialize(&mut reader)?;
+                read_initialize(&mut reader, &initialize, route_id, &reader_output)?;
                 Ok::<_, io::Error>(writer)
             })();
             let succeeded = result.is_ok();
@@ -288,22 +291,46 @@ fn run(
     })
 }
 
-fn read_initialize(reader: &mut JsonlReader<impl std::io::BufRead>) -> io::Result<()> {
-    let raw = reader.read_message()?.ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::UnexpectedEof,
-            "SSH App Server closed during initialize",
-        )
-    })?;
-    let response: Value = serde_json::from_str(&raw)
+fn read_initialize(
+    reader: &mut JsonlReader<impl std::io::BufRead>,
+    initialize: &str,
+    route_id: usize,
+    outbound: &mpsc::SyncSender<OutgoingMessage>,
+) -> io::Result<()> {
+    let initialize: JsonRpcRequest<Value> = serde_json::from_str(initialize)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-    let initialized: InitializeResult = serde_json::from_value(
-        response
-            .get("result")
-            .cloned()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, response.to_string()))?,
-    )
-    .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-    ensure_protocol_compatible(&initialized, REQUIRED_SESSION_CAPABILITIES)
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+    while let Some(raw) = reader.read_message()? {
+        let message: Value = serde_json::from_str(&raw)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        if message.get("method").is_some() {
+            outbound
+                .send(tag_host_request(raw, route_id).into())
+                .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))?;
+            continue;
+        }
+        let response: JsonRpcResponse<InitializeResult, Value> =
+            serde_json::from_value(message)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        let response = match response {
+            JsonRpcResponse::Success(response) => response,
+            JsonRpcResponse::Failure(response) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    response.error.to_string(),
+                ));
+            }
+        };
+        if response.id != initialize.id {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "SSH initialize response ID mismatch",
+            ));
+        }
+        return ensure_protocol_compatible(&response.result, REQUIRED_SESSION_CAPABILITIES)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error));
+    }
+    Err(io::Error::new(
+        io::ErrorKind::UnexpectedEof,
+        "SSH App Server closed during initialize",
+    ))
 }

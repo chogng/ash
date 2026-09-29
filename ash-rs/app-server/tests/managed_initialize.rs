@@ -65,11 +65,7 @@ fn daemon_keeps_a_directory_connection_open_after_initialize() {
     stream.flush().unwrap();
 
     let mut reader = BufReader::new(stream.try_clone().unwrap());
-    let mut response = String::new();
-    reader.read_line(&mut response).unwrap();
-    let response: Value = serde_json::from_str(&response).unwrap();
-
-    assert_eq!(response["id"], 1);
+    let response = read_response(&mut reader, 1);
     assert_eq!(response["result"]["serverInfo"]["name"], "ash-app-server");
     assert!(response["result"]["schemaHash"].as_str().is_some());
 
@@ -82,10 +78,7 @@ fn daemon_keeps_a_directory_connection_open_after_initialize() {
     .unwrap();
     stream.flush().unwrap();
 
-    let mut response = String::new();
-    reader.read_line(&mut response).unwrap();
-    let response: Value = serde_json::from_str(&response).unwrap();
-    assert_eq!(response["id"], 2);
+    let response = read_response(&mut reader, 2);
     assert!(response["result"].is_object());
 
     writeln!(
@@ -97,10 +90,7 @@ fn daemon_keeps_a_directory_connection_open_after_initialize() {
     )
     .unwrap();
     stream.flush().unwrap();
-    let mut response = String::new();
-    reader.read_line(&mut response).unwrap();
-    let response: Value = serde_json::from_str(&response).unwrap();
-    assert_eq!(response["id"], 3);
+    let response = read_response(&mut reader, 3);
     assert_eq!(response["result"]["packages"], json!([]));
 }
 
@@ -155,16 +145,7 @@ fn agents_connection_keeps_sessions_in_two_local_directories() {
         )
         .unwrap();
         stream.flush().unwrap();
-        let response = loop {
-            let mut line = String::new();
-            reader
-                .read_line(&mut line)
-                .unwrap_or_else(|error| panic!("Agents {method} response timed out: {error}"));
-            let response: Value = serde_json::from_str(&line).unwrap();
-            if response.get("id") == Some(&json!(id)) {
-                break response;
-            }
-        };
+        let response = read_response(&mut reader, id);
         assert!(response.get("error").is_none(), "{response}");
         if id == 4 {
             let sessions = response["result"]["sessions"].as_array().unwrap();
@@ -210,9 +191,9 @@ fn agents_connection_routes_ssh_sessions_and_merges_the_catalog() {
     });
     let executable = env!("CARGO_BIN_EXE_ash-app-server");
     if cfg!(windows) {
-        fs::write(&ssh_stub, format!("@echo off\r\nset \"ASH_HOME={}\"\r\nset \"ASH_WORKSPACE_ROOT={}\"\r\n\"{}\" --listen stdio://\r\n", remote_home.display(), remote_root, executable)).unwrap();
+        fs::write(&ssh_stub, format!("@echo off\r\nset \"ASH_HOME={}\"\r\nset \"ASH_WORKSPACE_ROOT={}\"\r\necho {{\"jsonrpc\":\"2.0\",\"method\":\"queue/changed\",\"params\":{{}}}}\r\n\"{}\" --listen stdio://\r\n", remote_home.display(), remote_root, executable)).unwrap();
     } else {
-        fs::write(&ssh_stub, format!("#!/bin/sh\nexport ASH_HOME='{}'\nexport ASH_WORKSPACE_ROOT='{}'\nexec '{}' --listen stdio://\n", remote_home.display(), remote_root, executable)).unwrap();
+        fs::write(&ssh_stub, format!("#!/bin/sh\nexport ASH_HOME='{}'\nexport ASH_WORKSPACE_ROOT='{}'\nprintf '%s\\n' '{{\"jsonrpc\":\"2.0\",\"method\":\"queue/changed\",\"params\":{{}}}}'\nexec '{}' --listen stdio://\n", remote_home.display(), remote_root, executable)).unwrap();
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -247,16 +228,7 @@ fn agents_connection_routes_ssh_sessions_and_merges_the_catalog() {
         )
         .unwrap();
         stream.flush().unwrap();
-        loop {
-            let mut line = String::new();
-            reader
-                .read_line(&mut line)
-                .unwrap_or_else(|error| panic!("Agents {method} response timed out: {error}"));
-            let response: Value = serde_json::from_str(&line).unwrap();
-            if response.get("id") == Some(&json!(id)) {
-                return response;
-            }
-        }
+        read_response(&mut reader, id)
     };
     assert!(
         call(
@@ -304,6 +276,23 @@ fn agents_connection_routes_ssh_sessions_and_merges_the_catalog() {
         read["result"]["session"]["threads"][0]["threadId"],
         thread_id
     );
+}
+
+fn read_response(reader: &mut impl BufRead, id: u64) -> Value {
+    // The socket carries subscription notifications as well as request responses.
+    loop {
+        let mut line = String::new();
+        assert!(
+            reader.read_line(&mut line).unwrap() > 0,
+            "connection closed before response {id}"
+        );
+        let response: Value = serde_json::from_str(&line).unwrap();
+        if response.get("id").is_some() {
+            assert_eq!(response["id"], id, "{response}");
+            return response;
+        }
+        assert!(response["method"].is_string(), "{response}");
+    }
 }
 
 fn connect_when_ready(endpoint: &std::path::Path) -> UnixStream {

@@ -102,8 +102,15 @@ fn start_reuses_a_compatible_daemon_from_another_installation() {
     std::fs::create_dir(&dir).unwrap();
     let options = ConnectionOptions::new(&profile, Some(dir), GrantSource::HostConfiguration, None);
     let packaged = Path::new(env!("CARGO_BIN_EXE_ash-app-server"));
-    let first_executable = root.path().join("daemon-first");
-    let second_executable = root.path().join("daemon-second");
+    let executable_name = if cfg!(windows) {
+        "ash-app-server.exe"
+    } else {
+        "ash-app-server"
+    };
+    let first_executable = root.path().join("first/bin").join(executable_name);
+    let second_executable = root.path().join("second/bin").join(executable_name);
+    std::fs::create_dir_all(first_executable.parent().unwrap()).unwrap();
+    std::fs::create_dir_all(second_executable.parent().unwrap()).unwrap();
     std::fs::copy(packaged, &first_executable).unwrap();
     std::fs::copy(packaged, &second_executable).unwrap();
     OpenOptions::new()
@@ -220,11 +227,8 @@ fn changed_source_requires_ensure_selected_to_replace_a_running_daemon() {
     std::fs::create_dir(&dir).unwrap();
     let options = ConnectionOptions::new(&profile, Some(dir), GrantSource::HostConfiguration, None);
     let packaged = Path::new(env!("CARGO_BIN_EXE_ash-app-server"));
-    let source = root.path().join(if cfg!(windows) {
-        "ash-app-server-daemon.exe"
-    } else {
-        "ash-app-server-daemon"
-    });
+    let source = root.path().join("source/bin/ash-app-server");
+    std::fs::create_dir_all(source.parent().unwrap()).unwrap();
     std::fs::copy(packaged, &source).unwrap();
     let cleanup = StopOnDrop {
         options: options.clone(),
@@ -398,7 +402,10 @@ fn failed_initialize_cleans_the_published_backend_before_retry() {
     );
     let executable = Path::new(env!("CARGO_BIN_EXE_ash-app-server"));
     let error = run_lifecycle(LifecycleCommand::Start, options.clone(), executable).unwrap_err();
-    assert!(error.contains("initialize"), "{error}");
+    assert!(
+        error.contains("product services configuration is invalid"),
+        "{error}"
+    );
     let endpoint = daemon_endpoint_path(&profile).unwrap();
     assert!(!endpoint.with_extension("pid.json").exists());
     assert!(!endpoint.exists());

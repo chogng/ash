@@ -48,14 +48,16 @@ export async function cancelExplorerCut(accessor: ServicesAccessor): Promise<voi
 }
 
 /** Handles {@link PASTE_FILE_COMMAND_ID}; Ash resources retain cut semantics when the OS also supplies files. */
-export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: unknown): Promise<void> {
+export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: unknown, moveRequested?: unknown): Promise<void> {
 	if (fileList !== undefined && !(fileList instanceof FileList)) throw new TypeError('Invalid files to paste');
+	if (moveRequested !== undefined && typeof moveRequested !== 'boolean') throw new TypeError('Invalid system paste operation');
+	const move = moveRequested === true;
 	const explorer = accessor.get(IExplorerService);
 	const clipboard = accessor.get(IClipboardService);
 	const { resources, operation } = await clipboard.readResources();
 	const nativeFiles = resources.length === 0 && fileList && fileList.length > 0 ? [...fileList] : [];
 	const localClipboard = explorer.getToCopy();
-	const cut = nativeFiles.length === 0 && operation === 'move';
+	const cut = nativeFiles.length === 0 && (operation === 'move' || move);
 	const selection = explorer.getContext()[0];
 	const workspaceContext = accessor.get(IWorkspaceContextService);
 	const directory = selection && selection.resource.scheme !== 'ash-workspace'
@@ -63,11 +65,12 @@ export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: 
 		: await resolveCreationDirectory(accessor, 'folder');
 	if (!directory) return;
 	const files = accessor.get(IFileService);
-	if (!resources.length && await accessor.get(ISystemFileTransferService).pasteSystemCutFiles(directory)) {
+	if (!resources.length && await accessor.get(ISystemFileTransferService).pasteSystemFiles(directory, move)) {
 		explorer.setToCopy([], false);
-		status(localize('accessibility.explorerSystemFilesMoved', 'Files moved into the selected folder.'));
+		status(localize('accessibility.explorerSystemFilesPasted', 'Files pasted into the selected folder.'));
 		return;
 	}
+	if (move && !resources.length) return;
 	if (!nativeFiles.length && !resources.length) return;
 	for (const file of nativeFiles) {
 		if (!validFileName(file.name)) continue;
