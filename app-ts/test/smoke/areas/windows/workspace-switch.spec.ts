@@ -14,6 +14,13 @@ function windowsPreferredDropEffect(): number {
 	return Number(output.trim());
 }
 
+function pasteInWindowsExplorer(directory: string): void {
+	execFileSync('powershell.exe', [
+		'-NoProfile', '-STA', '-Command',
+		'$folder = (New-Object -ComObject Shell.Application).NameSpace($env:ASH_TEST_PASTE_DIRECTORY); if ($null -eq $folder) { throw "Explorer destination is unavailable" }; $folder.Self.InvokeVerb("paste")',
+	], { env: { ...process.env, ASH_TEST_PASTE_DIRECTORY: directory } });
+}
+
 test('repeated folder opens wait for the permission choice past 30 seconds', async ({ target, testWorkspace, workbench }) => {
 	test.setTimeout(75_000);
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'This scenario requires the Code desktop and App Server');
@@ -122,9 +129,14 @@ test('Explorer shortcuts copy and move binary files into folders', async ({ targ
 	await mkdir(join(directory, 'paste-target'));
 	await mkdir(join(directory, 'move-target'));
 	await mkdir(join(directory, 'folder-to-copy'));
+	if (process.platform === 'win32') {
+		await mkdir(join(directory, 'os-copy-target'));
+		await mkdir(join(directory, 'os-move-target'));
+	}
 	const bytes = Buffer.from([0, 255, 1, 128]);
 	await writeFile(join(directory, 'clipboard.bin'), bytes);
 	await writeFile(join(directory, 'folder-to-copy', 'nested.bin'), bytes);
+	if (process.platform === 'win32') await writeFile(join(directory, 'os-cut.bin'), bytes);
 	const page = workbench.page;
 	const source = page.locator('.ash-explorer').getByRole('treeitem', { name: 'clipboard.bin', exact: true });
 	await expect(source).toHaveCount(1);
@@ -148,6 +160,9 @@ test('Explorer shortcuts copy and move binary files into folders', async ({ targ
 		], { encoding: 'utf8' }).trim().split(/\r?\n/);
 		expect(fileDropList).toContain(join(directory, 'clipboard.bin'));
 		expect(windowsPreferredDropEffect()).toBe(1);
+		pasteInWindowsExplorer(join(directory, 'os-copy-target'));
+		await expect.poll(async () => readFile(join(directory, 'os-copy-target', 'clipboard.bin')).then(value => [...value], () => [])).toEqual([...bytes]);
+		expect(await stat(join(directory, 'clipboard.bin')).then(() => true, () => false)).toBe(true);
 	}
 	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'paste-target', exact: true }).click();
 	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+v' : 'Control+v');
@@ -159,6 +174,14 @@ test('Explorer shortcuts copy and move binary files into folders', async ({ targ
 	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+v' : 'Control+v');
 	await expect.poll(async () => readFile(join(directory, 'move-target', 'clipboard.bin')).then(value => [...value], () => [])).toEqual([...bytes]);
 	await expect.poll(async () => stat(join(directory, 'clipboard.bin')).then(() => true, () => false)).toBe(false);
+	if (process.platform === 'win32') {
+		await page.locator('.ash-explorer').getByRole('treeitem', { name: 'os-cut.bin', exact: true }).click();
+		await page.keyboard.press('Control+x');
+		expect(windowsPreferredDropEffect()).toBe(2);
+		pasteInWindowsExplorer(join(directory, 'os-move-target'));
+		await expect.poll(async () => readFile(join(directory, 'os-move-target', 'os-cut.bin')).then(value => [...value], () => [])).toEqual([...bytes]);
+		await expect.poll(async () => stat(join(directory, 'os-cut.bin')).then(() => true, () => false)).toBe(false);
+	}
 	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'folder-to-copy', exact: true }).click();
 	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+c' : 'Control+c');
 	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'paste-target', exact: true }).click();
