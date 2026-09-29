@@ -43,6 +43,7 @@ test('built-in high contrast themes keep common foreground and background pairs 
 		['button.primaryForeground', 'button.primaryBackground'],
 		['button.primaryForeground', 'button.primaryHoverBackground'],
 		['list.activeSelectionForeground', 'list.activeSelectionBackground'],
+		['foreground', 'list.inactiveSelectionBackground'],
 		['menu.selectionForeground', 'menu.selectionBackground'],
 		['foreground', 'list.hoverBackground'],
 		['foreground', 'toolbar.hoverBackground'],

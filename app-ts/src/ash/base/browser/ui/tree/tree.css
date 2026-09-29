@@ -87,15 +87,19 @@
   border-left-color: var(--ash-tree-indent-guides-stroke);
 }
 
-.ash-tree-row:hover {
+.ash-tree-row:not(.selected):not(.focused):hover {
   background: var(--ash-list-hover-background);
 }
 
-.ash-tree-row.selected {
+.ash-tree-selection-subtle .ash-tree-row.selected {
   background: var(--ash-list-hover-background);
 }
 
-.ash-tree-selection-active:focus-within .ash-tree-row.selected {
+.ash-tree-selection-active .ash-tree-row.selected {
+  background: var(--ash-list-inactive-selection-background);
+}
+
+.ash-tree-selection-active:focus .ash-tree-row.selected {
   color: var(--ash-list-active-selection-foreground);
   background: var(--ash-list-active-selection-background);
 }

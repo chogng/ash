@@ -1606,6 +1606,7 @@ const chinese: LanguagePackCatalog = {
 			"color.list.hoverBackground": "鼠标悬停时列表行的背景色。",
 			"color.list.activeSelectionForeground": "列表中活动选中项的前景色。",
 			"color.list.activeSelectionBackground": "列表中活动选中项的背景色。",
+			"color.list.inactiveSelectionBackground": "列表中失去焦点的选中项的背景色。",
 			"color.tree.indentGuidesStroke": "树形列表缩进引导线的颜色。",
 			"color.menu.foreground": "命令菜单项的前景色。",
 			"color.menu.selectionForeground": "选中菜单项的前景色。",

@@ -38,6 +38,34 @@ test('Workbench follows system color changes without reopening the window', asyn
 	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).colorScheme)).toBe('light');
 });
 
+test('Explorer keeps selection distinct from hover and reflects keyboard focus', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires an App Server workspace');
+	const page = workbench.page;
+	await page.emulateMedia({ colorScheme: 'light' });
+	await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-light');
+	const explorer = page.locator('.ash-explorer');
+	const tree = explorer.getByRole('tree');
+	const selected = explorer.locator('.ash-tree-row').filter({ hasText: 'main.ts' });
+	await selected.click();
+	await tree.focus();
+	await expect(selected).toHaveAttribute('aria-selected', 'true');
+	await expect(selected).toHaveCSS('background-color', 'rgb(232, 232, 232)');
+	await expect(selected).toHaveCSS('color', 'rgb(0, 0, 0)');
+	await selected.hover();
+	await expect(selected).toHaveCSS('background-color', 'rgb(232, 232, 232)');
+
+	await page.keyboard.press('Tab');
+	await expect(tree).not.toBeFocused();
+	await expect(selected).toHaveCSS('background-color', 'rgb(228, 230, 241)');
+	await expect(selected).toHaveAttribute('aria-selected', 'true');
+	await selected.hover();
+	await expect(selected).toHaveCSS('background-color', 'rgb(228, 230, 241)');
+
+	const hovered = explorer.locator('.ash-tree-row:not(.selected):not(.focused)').first();
+	await hovered.hover();
+	await expect(hovered).toHaveCSS('background-color', 'rgb(242, 242, 242)');
+});
+
 test.describe('Workbench shell colors', () => {
 	test.use({ openWorkspace: false });
 
