@@ -173,6 +173,10 @@ impl ThreadState {
         self.transcript.cells()
     }
 
+    pub(crate) fn history_prefix(&self) -> &[TranscriptCell] {
+        self.transcript.history_prefix(self.active_turn.as_ref())
+    }
+
     pub(crate) fn details(&self, cell_id: &TranscriptCellId) -> Option<String> {
         self.transcript.details(cell_id)
     }

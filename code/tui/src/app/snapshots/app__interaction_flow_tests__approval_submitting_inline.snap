@@ -3,10 +3,10 @@ source: code/tui/src/app/interaction_flow_tests.rs
 expression: "render(&app, 80, 20)"
 ---
 
-    ▄  ▄     Ash Code v0.1.0
-  ▗█▛██▜█▖   Automatic model
-  ▝▜████▛▘   .
-    ▝  ▘
+
+
+
+
 
 
 

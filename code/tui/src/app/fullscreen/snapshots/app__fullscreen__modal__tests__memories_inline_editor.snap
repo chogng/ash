@@ -12,12 +12,6 @@ expression: frame_text(&app)
                                                                                                     
                                                                                                     
                                                                                                     
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
 ─ Memories › Edit memory ───────────────────────────────────────────────────────────────────────────
                                                                                                     
   Personal memories · Memories off                                                                  
@@ -28,6 +22,12 @@ expression: frame_text(&app)
 > Content                                                                                           
   Use Rust                                                                                          
   保 留   两 个 空 格                                                                                     
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     

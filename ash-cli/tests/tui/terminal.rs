@@ -22,10 +22,16 @@ fn actual_tui_inline_preserves_history_across_panels_resize_and_exit() {
     fixture.append_config("\n[tui]\nscreenMode = \"inline\"\n");
     let mut process = TuiProcess::start_in_vscode(&fixture, &[], LARGE_SIZE);
     process.wait_for_stable_screen("ask permissions on");
+    #[cfg(unix)]
+    assert!(!process.raw_text().contains("\x1b[?1049h"));
     for (index, reply) in replies.iter().enumerate() {
         process.submit(&format!("INLINE-MESSAGE-{index}"));
         process.wait_for_screen(reply);
         process.wait_for_stable_screen("ask permissions on");
+        assert!(
+            process.terminal_text().contains(reply),
+            "finished reply should enter terminal history while inline remains open"
+        );
         assert_eq!(
             process
                 .screen()

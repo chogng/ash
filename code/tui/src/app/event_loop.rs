@@ -44,9 +44,10 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         mut terminal,
     } = super::start::start(session, options)?;
     let mut redraw = RedrawScheduler::default();
+    let mut output = inline::Output::default();
     let mut process_resource_demand = ProcessResourceDemand::Disabled;
     let mut pending_runtime_event = None;
-    if let Err(error) = draw_terminal(&mut terminal, driver.app_mut()) {
+    if let Err(error) = draw_terminal(&mut terminal, driver.app_mut(), &mut output) {
         let _ = pump.shutdown();
         return Err(error.into());
     }
@@ -54,7 +55,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         loop {
             advance_stream(driver.app_mut(), &mut redraw, Instant::now());
             if redraw.take_due(Instant::now()) {
-                draw_terminal(&mut terminal, driver.app_mut())?;
+                draw_terminal(&mut terminal, driver.app_mut(), &mut output)?;
             }
             sync_process_resource_demand(
                 &mut pump,
@@ -245,14 +246,14 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
             );
             advance_stream(driver.app_mut(), &mut redraw, Instant::now());
             if redraw.take_due(Instant::now()) {
-                draw_terminal(&mut terminal, driver.app_mut())?;
+                draw_terminal(&mut terminal, driver.app_mut(), &mut output)?;
             }
         }
     })();
     let result = result.and_then(|exit| {
         terminal.set_screen_mode(driver.app().screen_mode())?;
         if driver.app().screen_mode() == terminal::ScreenMode::Inline {
-            inline::finish(&mut terminal, driver.app())?;
+            output.finish(&mut terminal, driver.app())?;
         }
         Ok(exit)
     });
@@ -299,6 +300,7 @@ fn sync_process_resource_demand(
 fn draw_terminal(
     terminal: &mut terminal::TerminalSession,
     app: &mut App,
+    output: &mut inline::Output,
 ) -> Result<(), std::io::Error> {
     if app.screen_mode() == terminal::ScreenMode::Inline {
         app.fullscreen.clear();
@@ -309,7 +311,7 @@ fn draw_terminal(
     match app.screen_mode() {
         terminal::ScreenMode::Fullscreen => terminal
             .draw(|terminal_frame, links| frame::draw_with_links(terminal_frame, app, links)),
-        terminal::ScreenMode::Inline => inline::draw_terminal(terminal, app),
+        terminal::ScreenMode::Inline => output.draw(terminal, app),
     }
 }
 

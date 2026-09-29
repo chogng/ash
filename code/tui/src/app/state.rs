@@ -1656,6 +1656,14 @@ impl App {
         }
     }
 
+    pub(crate) fn screen_thread_id(&self) -> &ash_protocol::ThreadId {
+        self.thread_presentations.active_id()
+    }
+
+    pub(crate) fn history_prefix(&self) -> &[crate::thread::transcript::TranscriptCell] {
+        self.thread.history_prefix()
+    }
+
     pub(super) const fn memory_diagnostics_enabled(&self) -> bool {
         self.terminal_settings.memory_diagnostics()
     }

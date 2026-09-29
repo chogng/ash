@@ -3,12 +3,12 @@ source: code/tui/src/app/usage_tests.rs
 expression: "render(&app, 80, 16)"
 ---
 
-    ▄  ▄     Ash Code v0.1.0
-  ▗█▛██▜█▖   Automatic model
-  ▝▜████▛▘   .
-    ▝  ▘
 
-> /usage
+
+
+
+
+
 
 
 

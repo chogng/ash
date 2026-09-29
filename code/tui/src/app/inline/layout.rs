@@ -11,6 +11,7 @@ use crate::thread::queue;
 use ratatui::layout::Rect;
 
 const BOTTOM_ROWS: u16 = 2;
+const ACTIVE_TRANSCRIPT_ROWS: u16 = 8;
 
 pub(in crate::app) fn layout(app: &App, area: Rect) -> Layout {
     let minimum = if browsing(app) {
@@ -19,6 +20,18 @@ pub(in crate::app) fn layout(app: &App, area: Rect) -> Layout {
         0
     };
     layout_with_minimum(app, area, minimum)
+}
+
+pub(super) fn height(app: &App, screen: Rect) -> u16 {
+    let areas = layout(app, screen);
+    let controls = screen
+        .height
+        .saturating_sub(areas.session.transcript.height);
+    // A stable live area keeps completed blocks adjacent in the main-screen history.
+    controls
+        .saturating_add(ACTIVE_TRANSCRIPT_ROWS)
+        .min(screen.height)
+        .max(1)
 }
 
 fn layout_with_minimum(app: &App, terminal_area: Rect, min_transcript_rows: u16) -> Layout {

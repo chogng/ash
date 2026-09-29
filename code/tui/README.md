@@ -43,7 +43,7 @@ just ash
 | 终端恢复、鼠标捕获协议和历史输出 | [session.rs](src/terminal/session.rs)、[scrollback.rs](src/terminal/scrollback.rs)、[terminal.rs](src/terminal.rs) |
 | 屏幕模式与页面组合 | [frame.rs](src/app/frame.rs)、[fullscreen.rs](src/app/fullscreen.rs)、[inline.rs](src/app/inline.rs) |
 | 全屏布局、鼠标和选区 | [layout.rs](src/app/fullscreen/layout.rs)、[pointer.rs](src/app/fullscreen/pointer.rs)、[selection.rs](src/app/fullscreen/selection.rs) |
-| inline 固定视口与退出时的历史输出 | [layout.rs](src/app/inline/layout.rs)、[output.rs](src/app/inline/output.rs) |
+| inline 活动视口与逐块历史输出 | [layout.rs](src/app/inline/layout.rs)、[output.rs](src/app/inline/output.rs) |
 | 首页与对话页 | [home.rs](src/app/fullscreen/home.rs)、[conversation.rs](src/app/fullscreen/conversation.rs) |
 | Modal 外框、标题、正文与底部区域 | [modal.rs](src/widgets/modal.rs) |
 | 全屏输入区组合 | [composer.rs](src/app/fullscreen/composer.rs) |
@@ -68,7 +68,7 @@ Skills、Models、Connectors 和 MCP 各自拥有同名模块；目录授权在 
 - 终端模块负责捕获协议、输出与恢复，`terminal/text.rs` 负责缓冲区文字范围和提取，不保存界面手势状态。
 - 命令面板的职责边界、焦点、搜索、返回和鼠标交互见 [TUI 模态交互规范](../../.github/instructions/tui.instructions.md#命令面板与模态交互规范)。
 
-`app/inline.rs` 与全屏入口平级，组合正文、输入区和临时面板；`inline/layout.rs` 在固定高度内分配区域，`inline/output.rs` 在退出时把当前对话写入终端历史。会话、消息、草稿、队列、模型与设置继续共用现有功能模块的数据和操作。
+`app/inline.rs` 与全屏入口平级，组合正文、输入区和临时面板；`inline/layout.rs` 为活动正文与输入分配主屏区域，`inline/output.rs` 将定稿内容逐块写入终端历史，未定稿内容留在视口内更新。会话、消息、草稿、队列、模型与设置继续共用现有功能模块的数据和操作。
 
 共享模型保存会话目录、活动 Session/Thread、消息、配置和按输入目标保存的草稿。`SessionsState` 不保存页面、焦点或浏览选择；[SessionNavigation](src/sessions/navigation.rs) 由 fullscreen 和 inline 分别持有，负责各自的会话管理、分组、选择、预览与详情。
 
@@ -220,7 +220,7 @@ Thread 保存真实消息和独立的显示进度。流式队列保留源码范�
 
 执行输出按调用身份归组，稳定标识取组内第一个 `ToolCallId`。预览、展开和详情共用有界数据；“完整详情”指 TUI 获得的完整保留内容，必须保留上游省略标记。不能从文字猜测协议未提供的最终时长或退出码。
 
-初始快照从最近 50 个 Turn 开始，订阅随后自动读完历史分页。两种模式都从同一正文模型绘制历史与当前回复。inline 在独立屏幕上使用固定高度视口，消息、补全和临时面板只改变视口内的内容；退出时回到主屏，把当前对话写入终端历史一次。较早分页通过 Ctrl+Home 在正文中浏览。滚动位置用单元身份和行偏移保存，不能依赖屏幕行号。
+初始快照从最近 50 个 Turn 开始，订阅随后自动读完历史分页。两种模式都从同一正文模型绘制历史与当前回复。inline 在主屏逐块写入已定稿内容；输入和流式回复在活动视口内更新。补全、临时面板与较早历史浏览使用临时备用屏幕，关闭后回到主屏。较早分页通过 Ctrl+Home 在正文中浏览。滚动位置用单元身份和行偏移保存，不能依赖屏幕行号。
 
 ## 产品支持边界
 
@@ -300,11 +300,11 @@ dictationShortcut = "ctrl+g"
 | 模式 | 终端控制 | 历史与退出 |
 | --- | --- | --- |
 | `fullscreen` | 备用屏幕、整屏绘制、应用处理鼠标滚动、屏幕选文和输入框编辑选区 | 正文内部滚动；退出恢复 shell 画面 |
-| `inline` | 备用屏幕固定高度绘制；接收原始输入、粘贴和焦点事件，鼠标留给终端 | 对话在视口内连续排列；退出回到主屏并将当前对话写入终端历史一次 |
+| `inline` | 主屏活动视口绘制；补全、面板和历史浏览暂用备用屏幕；接收原始输入、粘贴和焦点事件，鼠标留给终端 | 定稿块进入终端历史，活动内容留在视口；退出时提交剩余内容 |
 
 全屏按以下顺序获取模式：原始输入 → 备用屏幕并保存、关闭滚轮转方向键 → 粘贴事件 → 焦点上报 → 鼠标捕获。全屏固定启用鼠标捕获和选中复制。点击输入框会移动草稿光标；拖拽、双击或三击分别选择草稿文字、词或行，松开后复制到剪贴板并保留编辑选区，按 Backspace 或 Delete 删除，输入或粘贴替换。输入框之外的只读文字，包括模态框正文，支持拖选、双击选词和三击选行；列表项与按钮保留自身的点击操作。退出备用屏幕前恢复进入时的滚轮模式。
 
-inline 不启用鼠标捕获。终端负责屏幕文字的鼠标选文和复制；应用不接收点击和拖拽，也不会在选中后自动复制。草稿编辑、补全、面板和正文浏览使用键盘操作。切入 inline 时清除全屏悬停、按下和选区状态。视口高度在输入、补全和面板切换时保持不变，输入始终位于底部，消息在上方连续排列。Ctrl+Home/End 浏览较早消息或返回当前回复；切换 Thread 立即绘制目标对话。运行中的对话历史由应用内正文浏览负责；退出后主屏的终端历史保留进入前的输出和本次对话。缩放与重复快照不会重复写入终端历史。
+inline 不启用鼠标捕获。终端负责屏幕文字的鼠标选文和复制；应用不接收点击和拖拽，也不会在选中后自动复制。草稿编辑、补全、面板和正文浏览使用键盘操作。切入 inline 时清除全屏悬停、按下和选区状态。输入位于主屏底部，活动正文占用稳定的有界区域；补全和面板进入临时屏幕，关闭后回到原有主屏历史。Ctrl+Home/End 浏览较早消息或返回当前回复；切换 Thread 立即绘制目标对话。缩放与重复快照不会重复写入已定稿块。
 
 历史输出使用有界分块和普通终端滚动，不依赖局部滚动区域。临时输出缓冲区在最后写出时附加 OSC 8 链接并处理宽字符续列；它不参与后续布局、差分、复制或导出。
 

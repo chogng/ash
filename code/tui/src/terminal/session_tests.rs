@@ -59,12 +59,10 @@ fn inline_screen_leaves_mouse_selection_to_the_terminal_across_resume() {
     drop(guard);
     let lifecycle = [
         ENABLE_RAW_MODE,
-        BEGIN_SCREEN,
         ENABLE_BRACKETED_PASTE,
         ENABLE_FOCUS_CHANGE,
         DISABLE_FOCUS_CHANGE,
         DISABLE_BRACKETED_PASTE,
-        FINISH_SCREEN,
         DISABLE_RAW_MODE,
     ];
     assert_eq!(calls.borrow().as_slice(), lifecycle.repeat(2));
@@ -75,28 +73,16 @@ fn inline_screen_failure_restores_only_acquired_modes() {
     for (failure, expected) in [
         (ENABLE_RAW_MODE, vec![ENABLE_RAW_MODE]),
         (
-            BEGIN_SCREEN,
-            vec![ENABLE_RAW_MODE, BEGIN_SCREEN, DISABLE_RAW_MODE],
-        ),
-        (
             ENABLE_BRACKETED_PASTE,
-            vec![
-                ENABLE_RAW_MODE,
-                BEGIN_SCREEN,
-                ENABLE_BRACKETED_PASTE,
-                FINISH_SCREEN,
-                DISABLE_RAW_MODE,
-            ],
+            vec![ENABLE_RAW_MODE, ENABLE_BRACKETED_PASTE, DISABLE_RAW_MODE],
         ),
         (
             ENABLE_FOCUS_CHANGE,
             vec![
                 ENABLE_RAW_MODE,
-                BEGIN_SCREEN,
                 ENABLE_BRACKETED_PASTE,
                 ENABLE_FOCUS_CHANGE,
                 DISABLE_BRACKETED_PASTE,
-                FINISH_SCREEN,
                 DISABLE_RAW_MODE,
             ],
         ),
@@ -114,20 +100,22 @@ fn inline_screen_failure_restores_only_acquired_modes() {
 }
 
 #[test]
-fn inline_history_handoff_leaves_the_screen_once() {
+fn inline_overlay_leaves_the_screen_once() {
     let calls = Rc::new(RefCell::new(Vec::new()));
     let mut guard =
         TerminalModeGuard::acquire(FakeOperations::new(calls.clone(), None), ScreenMode::Inline)
             .unwrap();
+    guard.begin_screen().unwrap();
+    guard.leave_screen().unwrap();
     guard.leave_screen().unwrap();
     drop(guard);
     assert_eq!(
         calls.borrow().as_slice(),
         [
             ENABLE_RAW_MODE,
-            BEGIN_SCREEN,
             ENABLE_BRACKETED_PASTE,
             ENABLE_FOCUS_CHANGE,
+            BEGIN_SCREEN,
             FINISH_SCREEN,
             DISABLE_FOCUS_CHANGE,
             DISABLE_BRACKETED_PASTE,

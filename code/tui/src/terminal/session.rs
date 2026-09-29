@@ -18,10 +18,10 @@ use crossterm::terminal::EnterAlternateScreen;
 use crossterm::terminal::LeaveAlternateScreen;
 use crossterm::terminal::disable_raw_mode;
 use crossterm::terminal::enable_raw_mode;
-use crossterm::terminal::size;
 use ratatui::Terminal;
 use ratatui::TerminalOptions;
 use ratatui::Viewport;
+use ratatui::backend::Backend;
 use ratatui::backend::CrosstermBackend;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Position;
@@ -44,6 +44,7 @@ pub(crate) struct TerminalSession {
     cursor_color: CursorColor,
     inline_height: u16,
     inline_active: bool,
+    inline_overlay_active: bool,
 }
 
 impl TerminalSession {
@@ -52,13 +53,7 @@ impl TerminalSession {
         let modes = TerminalModeGuard::acquire(CrosstermModeOperations, mode)
             .map_err(|source| startup_error(&host_terminal, "set terminal modes", source))?;
         let background_color = super::terminal_probe::query_background(&host_terminal);
-        let inline_height = if mode == ScreenMode::Inline {
-            size()
-                .map(|(_, height)| height)
-                .map_err(|source| startup_error(&host_terminal, "read terminal size", source))?
-        } else {
-            1
-        };
+        let inline_height = 1;
         let terminal = new_terminal(mode, inline_height)
             .map_err(|source| startup_error(&host_terminal, "create terminal", source))?;
         let mut session = Self {
@@ -70,6 +65,7 @@ impl TerminalSession {
             cursor_color: CursorColor::default(),
             inline_height,
             inline_active: mode == ScreenMode::Inline,
+            inline_overlay_active: false,
         };
         session
             .terminal
@@ -88,12 +84,13 @@ impl TerminalSession {
             self.terminal.set_cursor_position(origin)?;
         }
         self.inline_active = false;
+        self.inline_overlay_active = false;
         self.modes.restore();
         self.modes.mode = mode;
         self.modes.mouse_mode = MouseMode::TerminalSelection;
         self.modes.reacquire()?;
         if mode == ScreenMode::Inline {
-            self.inline_height = size()?.1;
+            self.inline_height = 1;
         }
         self.terminal = new_terminal(mode, self.inline_height)?;
         self.inline_active = mode == ScreenMode::Inline;
@@ -112,6 +109,14 @@ impl TerminalSession {
             return Ok(());
         }
         self.terminal.clear()?;
+        if current_y > target_y {
+            // Make room above the composer before enlarging the live viewport.
+            self.terminal
+                .set_cursor_position(Position::new(0, screen.height.saturating_sub(1)))?;
+            self.terminal
+                .backend_mut()
+                .append_lines(current_y - target_y)?;
+        }
         self.terminal
             .set_cursor_position(Position::new(0, target_y))?;
         self.terminal = new_terminal(ScreenMode::Inline, height)?;
@@ -134,10 +139,27 @@ impl TerminalSession {
         Ok(())
     }
 
-    pub(crate) fn prepare_inline_history(&mut self) -> io::Result<()> {
-        self.modes.leave_screen()?;
-        self.terminal = new_terminal(ScreenMode::Inline, 1)?;
-        self.inline_height = 1;
+    pub(crate) fn set_inline_overlay(&mut self, active: bool) -> io::Result<()> {
+        if self.inline_overlay_active == active {
+            return Ok(());
+        }
+        if active {
+            self.terminal.clear()?;
+            let origin = self.terminal.get_frame().area().as_position();
+            self.terminal.set_cursor_position(origin)?;
+            self.modes.begin_screen()?;
+            self.terminal = new_terminal(ScreenMode::Fullscreen, 1)?;
+        } else {
+            self.modes.leave_screen()?;
+            let screen = self.screen_area()?;
+            self.terminal.set_cursor_position(Position::new(
+                0,
+                screen.height.saturating_sub(self.inline_height),
+            ))?;
+            self.terminal = new_terminal(ScreenMode::Inline, self.inline_height)?;
+        }
+        self.inline_overlay_active = active;
+        self.terminal.clear()?;
         self.invalidate();
         Ok(())
     }
@@ -227,6 +249,7 @@ impl TerminalSession {
             self.terminal.set_cursor_position(origin)?;
         }
         self.modes.restore();
+        self.inline_overlay_active = false;
         let _ = self.terminal.show_cursor();
         let suspend_result = suspend_process();
         let reacquire_result = self.modes.reacquire();
@@ -320,8 +343,9 @@ impl<O: TerminalModeOperations> TerminalModeGuard<O> {
         let result = (|| {
             self.operations.enable_raw_mode()?;
             self.raw_mode = true;
-            self.operations.begin_screen()?;
-            self.screen_active = true;
+            if self.mode == ScreenMode::Fullscreen {
+                self.begin_screen()?;
+            }
             self.operations.enable_bracketed_paste()?;
             self.bracketed_paste = true;
             self.operations.enable_focus_change()?;
@@ -357,6 +381,14 @@ impl<O: TerminalModeOperations> TerminalModeGuard<O> {
             }
         }
         self.mouse_mode = mode;
+        Ok(())
+    }
+
+    fn begin_screen(&mut self) -> io::Result<()> {
+        if !self.screen_active {
+            self.operations.begin_screen()?;
+            self.screen_active = true;
+        }
         Ok(())
     }
 

@@ -159,6 +159,20 @@ pub(crate) struct TranscriptModel {
 }
 
 impl TranscriptModel {
+    /// Only a final prefix outside the active turn can leave the editable viewport.
+    pub(in crate::thread) fn history_prefix(&self, active: Option<&TurnId>) -> &[TranscriptCell] {
+        let length = self
+            .cells
+            .iter()
+            .take_while(|cell| {
+                cell.lifecycle() == CellLifecycle::Final
+                    && !active.is_some_and(|turn| cell.turn_id() == Some(turn))
+                    && cell.local_user_text().is_none()
+            })
+            .count();
+        &self.cells[..length]
+    }
+
     pub(in crate::thread) fn replace(&mut self, snapshot: ThreadTranscriptSnapshot) {
         let existing_source_ids = self
             .cells
