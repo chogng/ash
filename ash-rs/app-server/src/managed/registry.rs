@@ -32,6 +32,10 @@ pub(crate) struct ProfileAppServerRegistry {
 
 impl ProfileAppServerRegistry {
     pub(crate) fn open(host: ConnectionOptions) -> Result<Self, String> {
+        if let Some(path) = host.product_services() {
+            LocalProductServicesConfig::load(path, host.profile_root())
+                .map_err(|error| error.to_string())?;
+        }
         let mut profile_runtime =
             LocalProfileRuntime::open(host.profile_root()).map_err(|error| error.to_string())?;
         if let Some(exporter) = crate::trace::from_environment()? {
@@ -212,6 +216,10 @@ fn product_services_identity(
 fn io_error(error: io::Error) -> String {
     error.to_string()
 }
+
+#[cfg(test)]
+#[path = "registry_tests.rs"]
+mod tests;
 
 impl queue::QueueExecutor for ProfileAppServerRegistry {
     fn ready(&self, message: &queue::QueuedMessage) -> Result<bool, String> {

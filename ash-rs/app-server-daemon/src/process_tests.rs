@@ -117,6 +117,51 @@ fn dropping_an_unready_child_terminates_and_reaps_it() {
     assert!(process_start_identity(pid).unwrap().is_none());
 }
 
+#[cfg(unix)]
+#[test]
+fn managed_backend_receives_the_selected_product_services_path() {
+    use super::spawn_backend;
+    use crate::ConnectionOptions;
+    use crate::GrantSource;
+    use crate::endpoint::EndpointPaths;
+    use std::os::unix::fs::PermissionsExt;
+    use std::thread;
+    use std::time::Duration;
+    use std::time::Instant;
+
+    let root = tempfile::tempdir().unwrap();
+    let executable = root.path().join("managed-backend");
+    let output = root.path().join("selected-product-services-path");
+    fs::write(
+        &executable,
+        format!(
+            "#!/bin/sh\nprintf '%s' \"$ASH_PRODUCT_SERVICES_PATH\" > '{}'\nexec sleep 60\n",
+            output.display()
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+    let product_services = root.path().join("selected-product-services.json");
+    let options = ConnectionOptions::new(
+        root.path(),
+        None,
+        GrantSource::HostConfiguration,
+        Some(product_services.clone()),
+    );
+    let endpoint = EndpointPaths::prepare(root.path()).unwrap();
+    let child = spawn_backend(&endpoint, &options, &executable).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while !output.exists() && Instant::now() < deadline {
+        thread::sleep(Duration::from_millis(10));
+    }
+
+    assert_eq!(
+        fs::read_to_string(&output).unwrap(),
+        product_services.display().to_string()
+    );
+    drop(child);
+}
+
 #[test]
 fn an_unverifiable_record_is_not_silently_removed() {
     use super::ProcessRecord;

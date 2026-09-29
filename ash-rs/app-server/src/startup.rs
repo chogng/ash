@@ -24,6 +24,7 @@ pub fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
     if arguments.as_slice() == [ash_app_server_daemon::MANAGED_PROCESS_ARGUMENT] {
         return crate::managed::run(
             ash_utils_home_dir::find_ash_home().map_err(|error| error.to_string())?,
+            discovered_product_services_path(),
         );
     }
     if arguments.as_slice() == ["--version"] {

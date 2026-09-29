@@ -23,12 +23,12 @@ const IDLE_TIMEOUT_ENV: &str = "ASH_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS";
 const STOP_GRACE_TIMEOUT: Duration = Duration::from_secs(5);
 const STOP_CONNECTION_DRAIN_TIMEOUT: Duration = Duration::from_secs(1);
 
-pub(crate) fn run(profile_root: PathBuf) -> Result<(), String> {
+pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> Result<(), String> {
     let registry = Arc::new(ProfileAppServerRegistry::open(ConnectionOptions::new(
         &profile_root,
         None,
         GrantSource::HostConfiguration,
-        None,
+        product_services,
     ))?);
     let idle_timeout = configured_idle_timeout()?;
     let mut endpoint = ManagedEndpoint::bind(&profile_root)?;

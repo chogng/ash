@@ -42,6 +42,7 @@ const PROCESS_EXIT_TIMEOUT: Duration = Duration::from_secs(5);
 const HOME_ENV: &str = "ASH_HOME";
 const DIR_ROOT_ENV: &str = "ASH_WORKSPACE_ROOT";
 const DIR_GRANT_SOURCE_ENV: &str = "ASH_DIR_GRANT_SOURCE";
+const PRODUCT_SERVICES_ENV: &str = "ASH_PRODUCT_SERVICES_PATH";
 const EXECUTABLE_HASH_BUFFER_BYTES: usize = 64 * 1024;
 const MAX_PACKAGE_METADATA_BYTES: u64 = 1024 * 1024;
 
@@ -385,6 +386,11 @@ pub(crate) fn spawn_backend(
         .stdin(Stdio::null())
         .stdout(Stdio::from(log))
         .stderr(Stdio::from(error_log));
+    if let Some(path) = options.product_services() {
+        command.env(PRODUCT_SERVICES_ENV, path);
+    } else {
+        command.env_remove(PRODUCT_SERVICES_ENV);
+    }
     detach_command(&mut command);
     let child = command.spawn().map_err(io_error)?;
     let mut spawned = SpawnedBackend {

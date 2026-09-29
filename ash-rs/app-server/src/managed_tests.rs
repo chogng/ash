@@ -9,7 +9,7 @@ fn invalid_profile_config_is_rejected_before_daemon_socket_is_bound() {
     .unwrap();
     let endpoint = ash_app_server_daemon::daemon_endpoint_path(profile.path()).unwrap();
 
-    let error = super::run(profile.path().to_path_buf()).unwrap_err();
+    let error = super::run(profile.path().to_path_buf(), None).unwrap_err();
 
     assert!(error.contains("unknown field `unknownField`"));
     assert!(!endpoint.exists());
