@@ -129,8 +129,10 @@ export class ObjectTreeModel<TNode> extends Disposable {
 	}
 
 	private prepareElements(elements: readonly ObjectTreeElement<TNode>[]): readonly ObjectTreeElement<TNode>[] {
+		const sorter = this.sorter;
+		if (!sorter) return elements;
 		const ordered = [...elements];
-		if (this.sorter) ordered.sort((left, right) => this.sorter!.compare(left.element, right.element));
+		ordered.sort((left, right) => sorter.compare(left.element, right.element));
 		return ordered.map((treeElement) => ({
 			element: treeElement.element,
 			collapsible: treeElement.collapsible,

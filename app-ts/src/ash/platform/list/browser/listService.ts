@@ -1,5 +1,4 @@
 import { AsyncDataTree, type AsyncDataTreeOptions } from "../../../base/browser/ui/tree/asyncDataTree.js";
-import { StandardMouseEvent } from "../../../base/browser/mouseEvent.js";
 import { ObjectTree, type ObjectTreeAcceptEvent, type ObjectTreeOptions, type ObjectTreePointerEvent, type ObjectTreeSelectionChangeEvent } from "../../../base/browser/ui/tree/objectTree.js";
 import type { AsyncTreeDataSource } from "../../../base/browser/ui/tree/tree.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
@@ -77,11 +76,11 @@ class TreeResourceNavigator<T> extends Disposable {
 
 	private onPointer(event: ObjectTreePointerEvent<T>): void {
 		if (!this.shouldOpenOnSingleClick() || event.browserEvent.detail === 2) return;
-		this.open(event.element, toOpenEditorOptions(new StandardMouseEvent(event.browserEvent)), event.browserEvent);
+		this.open(event.element, toOpenEditorOptions(event.browserEvent), event.browserEvent);
 	}
 
 	private onDoubleClick(event: ObjectTreePointerEvent<T>): void {
-		this.open(event.element, toOpenEditorOptions(new StandardMouseEvent(event.browserEvent), true), event.browserEvent);
+		this.open(event.element, toOpenEditorOptions(event.browserEvent, true), event.browserEvent);
 	}
 
 	private onAccept(event: ObjectTreeAcceptEvent<T>): void {

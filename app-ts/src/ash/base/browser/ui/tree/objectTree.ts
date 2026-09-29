@@ -127,7 +127,14 @@ export class ObjectTree<TNode> extends Disposable {
 		}));
 		this.element = this.tree.element;
 		this.domNode = this.tree.domNode;
-		this._register(this.model.onDidChange(({ kind }) => this.render(kind === "structure" || kind === "sort")));
+		this._register(this.model.onDidChange(({ kind, node }) => {
+			if (kind === "rerender" && node) {
+				this.onWillRender?.();
+				this.tree.rerender(node.id);
+				return;
+			}
+			this.render(kind === "structure" || kind === "sort");
+		}));
 		this._register(this.model.onDidChangeCollapseState(({ node, collapsed }) => {
 			this._onDidChangeCollapseState.fire({ element: node.element, node, collapsed, browserEvent: this.collapseBrowserEvent?.id === node.id ? this.collapseBrowserEvent.event : undefined });
 		}));

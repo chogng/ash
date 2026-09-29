@@ -21,7 +21,7 @@ export interface ListOptions<T> {
 	readonly accessibilityProvider?: ListAccessibilityProvider<T>;
 	readonly renderItem: (item: T, index: number, row: HTMLDivElement) => HTMLElement;
 	readonly reuseRows?: boolean;
-	readonly updateItem?: (item: T, index: number, row: HTMLDivElement) => void;
+	readonly updateItem?: (item: T, index: number, row: HTMLDivElement, rerender: boolean) => void;
 	readonly onDidRemoveRow?: (row: HTMLDivElement) => void;
 }
 
@@ -91,8 +91,8 @@ export class List<T> extends Disposable {
 				return contents;
 			},
 			reuseRows: options.reuseRows,
-			updateItem: (item, index, row) => {
-				options.updateItem?.(item, index, row);
+			updateItem: (item, index, row, rerender) => {
+				options.updateItem?.(item, index, row, rerender);
 				this.updateRowState(row, index);
 			},
 			onDidRemoveRow: options.onDidRemoveRow,
@@ -118,9 +118,13 @@ export class List<T> extends Disposable {
 	layout(height: number): void { this.view.layout(height); }
 
 	set items(items: readonly T[]) {
+		this.splice(0, this.items.length, items);
+	}
+
+	splice(start: number, deleteCount: number, elements: readonly T[] = []): void {
 		const focusedId = this.activeItem === undefined ? undefined : this.itemId(this.activeItem, this._activeIndex);
 		const selectedIds = this._selectionIndexes.map((index) => this.itemId(this.items[index], index));
-		this.view.items = items;
+		this.view.splice(start, deleteCount, elements);
 		const nextActive = focusedId === undefined ? -1 : this.indexOfId(focusedId);
 		this._activeIndex = nextActive >= 0 ? nextActive : this.items.length > 0 ? 0 : -1;
 		this._selectionIndexes = selectedIds.map((id) => this.indexOfId(id)).filter((index) => index >= 0);
@@ -160,6 +164,7 @@ export class List<T> extends Disposable {
 	}
 
 	row(index: number): HTMLElement | undefined { return this.view.row(index); }
+	rerender(index: number): void { this.view.rerender(index); }
 	updateElementHeight(index: number, height: number | undefined): void { this.view.updateElementHeight(index, height); }
 	getElementTop(index: number): number { return this.view.getElementTop(index); }
 	getElementHeight(index: number): number { return this.view.getElementHeight(index); }
@@ -224,7 +229,7 @@ export class List<T> extends Disposable {
 		const activeRow = this.view.row(this._activeIndex);
 		if (activeRow) {
 			this.element.setAttribute("aria-activedescendant", activeRow.id);
-			activeRow.scrollIntoView?.({ block: "nearest" });
+			if (this.options.scrolling !== "managed") activeRow.scrollIntoView?.({ block: "nearest" });
 		} else this.element.removeAttribute("aria-activedescendant");
 	}
 

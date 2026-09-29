@@ -67,6 +67,68 @@ test("ListView keeps unchanged rows attached when tree items are inserted or rem
 	dom.window.close();
 });
 
+test("ListView splice measures changed rows and keeps unchanged rows mounted", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const measured: string[] = [];
+	const view = new ListView<string>(dom.window.document.body, {
+		getId: item => item,
+		getHeight: item => { measured.push(item); return 22; },
+		reuseRows: true,
+		renderItem: item => {
+			const label = h(dom.window.document, "span");
+			label.textContent = item;
+			return label;
+		},
+	});
+	view.items = ["Before", "Folder", "After"];
+	const after = view.row(2);
+	measured.length = 0;
+
+	view.splice(2, 0, ["Child 1", "Child 2"]);
+	assert.deepEqual([...new Set(measured)], ["Child 1", "Child 2"]);
+	assert.equal(view.row(4), after);
+	assert.deepEqual(view.items, ["Before", "Folder", "Child 1", "Child 2", "After"]);
+	assert.throws(() => view.splice(2, 0, ["After"]), /Duplicate List item ID/);
+	assert.deepEqual(view.items, ["Before", "Folder", "Child 1", "Child 2", "After"]);
+	measured.length = 0;
+	view.splice(2, 2);
+	assert.deepEqual(measured, []);
+	assert.equal(view.row(2), after);
+	view.dispose();
+	dom.window.close();
+});
+
+test("List splice preserves focus and selection when rows move", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const list = new List<string>(dom.window.document.body, {
+		getId: item => item,
+		reuseRows: true,
+		renderItem: item => {
+			const label = h(dom.window.document, "span");
+			label.textContent = item;
+			return label;
+		},
+	});
+	list.items = ["Before", "Selected", "After"];
+	list.setActiveIndex(1);
+	list.setSelection([1]);
+	const selectedRow = list.row(1);
+	assert.ok(selectedRow);
+
+	list.splice(1, 0, ["Inserted"]);
+	assert.equal(list.activeItem, "Selected");
+	assert.deepEqual(list.selection, ["Selected"]);
+	assert.equal(list.activeIndex, 2);
+	assert.equal(list.row(2), selectedRow);
+	assert.equal(list.element.getAttribute("aria-activedescendant"), selectedRow.id);
+	assert.equal(selectedRow.getAttribute("aria-selected"), "true");
+	list.splice(1, 1);
+	assert.equal(list.activeIndex, 1);
+	assert.equal(list.row(1), selectedRow);
+	list.dispose();
+	dom.window.close();
+});
+
 test("ListView owns the managed scrollbar and reports its scroll position", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const view = new ListView<string>(dom.window.document.body, {

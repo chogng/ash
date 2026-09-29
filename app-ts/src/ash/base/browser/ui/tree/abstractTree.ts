@@ -93,7 +93,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 			},
 			renderItem: (node, _index, row) => this.renderRow(node, row),
 			reuseRows: options.reuseRows,
-			updateItem: (node, _index, row) => this.updateRow(node, row),
+			updateItem: (node, _index, row, rerender) => this.updateRow(node, row, rerender),
 			onDidRemoveRow: options.onDidRemoveRow,
 		}));
 		this.element = this.list.element;
@@ -124,10 +124,21 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	set items(items: readonly TNode[]) {
 		this.sourceItems = items;
 		const candidates = this.findCandidates.length > 0 ? this.findCandidates : items;
-		this.list.items = this.findController?.update(this.findController.query, candidates, items) ?? items;
+		this.spliceItems(this.findController?.update(this.findController.query, candidates, items) ?? items);
 		this.restoreStickyContainer();
 		this.updateStickyScroll();
 		this.emitFindResult();
+	}
+
+	rerender(id: string): void {
+		if (this.findController?.query) {
+			this.items = this.sourceItems;
+			return;
+		}
+		const index = this.items.findIndex(node => node.id === id);
+		if (index < 0) return;
+		this.list.rerender(index);
+		this.updateStickyScroll();
 	}
 
 	setFindCandidates(nodes: readonly TNode[]): void { this.findCandidates = nodes; }
@@ -147,7 +158,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	setFindPattern(pattern: string): void {
 		if (!this.findController) throw new Error("Tree find requires a keyboardNavigationLabelProvider");
 		const candidates = this.findCandidates.length > 0 ? this.findCandidates : this.sourceItems;
-		this.list.items = this.findController.update(pattern, candidates, this.sourceItems);
+		this.spliceItems(this.findController.update(pattern, candidates, this.sourceItems));
 		this.restoreStickyContainer();
 		const active = this.findController.activeMatch;
 		if (active) this.setFocus(active.id);
@@ -168,6 +179,19 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	getElementTop(id: string): number | undefined {
 		const index = this.items.findIndex((node) => node.id === id);
 		return index < 0 ? undefined : this.list.getElementTop(index);
+	}
+
+	private spliceItems(items: readonly TNode[]): void {
+		const previous = this.list.items;
+		let start = 0;
+		while (start < previous.length && start < items.length && previous[start] === items[start]) start += 1;
+		let previousEnd = previous.length;
+		let nextEnd = items.length;
+		while (previousEnd > start && nextEnd > start && previous[previousEnd - 1] === items[nextEnd - 1]) {
+			previousEnd -= 1;
+			nextEnd -= 1;
+		}
+		this.list.splice(start, previousEnd - start, items.slice(start, nextEnd));
 	}
 
 	private renderRow(node: TNode, row: HTMLDivElement): HTMLElement {
@@ -206,8 +230,9 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		return inner;
 	}
 
-	private updateRow(node: TNode, row: HTMLDivElement): void {
-		if (this.renderedElements.get(row) !== node.element) {
+	private updateRow(node: TNode, row: HTMLDivElement, rerender: boolean): void {
+		const elementChanged = this.renderedElements.get(row) !== node.element;
+		if (elementChanged) {
 			this.options.onDidRemoveRow?.(row);
 			const contents = row.querySelector<HTMLSpanElement>(":scope > .ash-tree-row-inner > .ash-tree-contents");
 			contents?.replaceChildren(this.options.renderElement(node));
@@ -221,7 +246,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		const twistie = row.querySelector<HTMLSpanElement>(":scope > .ash-tree-row-inner > .ash-tree-twistie");
 		if (!twistie) return;
 		const expanded = node.collapsible && !node.collapsed;
-		if (this.options.renderTwistie || row.dataset.treeExpanded !== String(expanded) || row.dataset.treeCollapsible !== String(node.collapsible)) {
+		if (rerender || elementChanged || row.dataset.treeExpanded !== String(expanded) || row.dataset.treeCollapsible !== String(node.collapsible)) {
 			twistie.replaceChildren();
 			const state = { collapsible: node.collapsible, expanded };
 			if (this.options.renderTwistie) this.options.renderTwistie(node, state, twistie);

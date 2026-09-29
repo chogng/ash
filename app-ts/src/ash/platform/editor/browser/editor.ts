@@ -15,11 +15,11 @@ export function registerOpenEditorListeners(element: HTMLElement, onOpenEditor: 
 	listeners.add(addDisposableListener(element, 'click', event => {
 		if (event.detail === 2) return;
 		stopEvent(event);
-		onOpenEditor(toOpenEditorOptions(new StandardMouseEvent(event)));
+		onOpenEditor(toOpenEditorOptions(event));
 	}));
 	listeners.add(addDisposableListener(element, 'dblclick', event => {
 		stopEvent(event);
-		onOpenEditor(toOpenEditorOptions(new StandardMouseEvent(event), true));
+		onOpenEditor(toOpenEditorOptions(event, true));
 	}));
 	listeners.add(addDisposableListener(element, 'keydown', event => {
 		const options = toOpenEditorOptions(new StandardKeyboardEvent(event));
@@ -30,10 +30,10 @@ export function registerOpenEditorListeners(element: HTMLElement, onOpenEditor: 
 	return listeners;
 }
 
-export function toOpenEditorOptions(event: StandardMouseEvent, isDoubleClick?: boolean): IOpenEditorOptions;
+export function toOpenEditorOptions(event: MouseEvent | StandardMouseEvent, isDoubleClick?: boolean): IOpenEditorOptions;
 export function toOpenEditorOptions(event: StandardKeyboardEvent): IOpenEditorOptions | undefined;
-export function toOpenEditorOptions(event: StandardMouseEvent | StandardKeyboardEvent): IOpenEditorOptions | undefined;
-export function toOpenEditorOptions(event: StandardMouseEvent | StandardKeyboardEvent, isDoubleClick?: boolean): IOpenEditorOptions | undefined {
+export function toOpenEditorOptions(event: MouseEvent | StandardMouseEvent | StandardKeyboardEvent): IOpenEditorOptions | undefined;
+export function toOpenEditorOptions(event: MouseEvent | StandardMouseEvent | StandardKeyboardEvent, isDoubleClick?: boolean): IOpenEditorOptions | undefined {
 	if (event instanceof StandardKeyboardEvent) {
 		if (event.isComposing || event.altGraphKey) return undefined;
 		const hasModifier = event.ctrlKey || event.metaKey || event.altKey || event.shiftKey;
@@ -55,7 +55,7 @@ export function toOpenEditorOptions(event: StandardMouseEvent | StandardKeyboard
 	}
 
 	return {
-		editorOptions: { pinned: isDoubleClick === true || event.middleButton, preserveFocus: isDoubleClick !== true },
+		editorOptions: { pinned: isDoubleClick === true || (event instanceof StandardMouseEvent ? event.middleButton : event.button === 1), preserveFocus: isDoubleClick !== true },
 		openToSide: event.ctrlKey || event.metaKey || event.altKey,
 	};
 }

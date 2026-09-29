@@ -122,6 +122,7 @@ test("AsyncDataTree loads on expansion and coalesces refresh requests", async ()
 	const sibling: TestNode = { id: "sibling", label: "Sibling", expanded: false };
 	const child: TestNode = { id: "child", label: "Child", expanded: false };
 	const pending: Array<(children: readonly TestNode[]) => void> = [];
+	const twistieRenders: string[] = [];
 	const tree = new AsyncDataTree<TestNode, TestNode>(dom.window.document.body, {
 		hasChildren: (element) => element === root || element === group,
 		getChildren: (element) => {
@@ -131,7 +132,10 @@ test("AsyncDataTree loads on expansion and coalesces refresh requests", async ()
 	}, {
 		identityProvider: { getId: (element) => element.id },
 		reuseRows: true,
-		renderTwistie: (_element, state, container) => { container.dataset.loading = String(state.loading); },
+		renderTwistie: (element, state, container) => {
+			twistieRenders.push(element.id);
+			container.dataset.loading = String(state.loading);
+		},
 		renderElement: (element) => {
 			const label = h(dom.window.document, "span");
 			label.textContent = element.label;
@@ -139,6 +143,7 @@ test("AsyncDataTree loads on expansion and coalesces refresh requests", async ()
 		},
 	});
 	await tree.setInput(root);
+	twistieRenders.length = 0;
 	const siblingRow = tree.element.querySelector('[data-tree-id="sibling"]');
 	const groupRow = tree.element.querySelector('[data-tree-id="group"]');
 	assert.equal(tree.expand(group), true);
@@ -146,6 +151,7 @@ test("AsyncDataTree loads on expansion and coalesces refresh requests", async ()
 	assert.equal(tree.element.querySelector('[data-tree-id="group"]'), groupRow);
 	assert.equal(tree.element.getAttribute("aria-busy"), "true");
 	assert.equal(groupRow?.querySelector<HTMLElement>(".ash-tree-twistie")?.dataset.loading, "true");
+	assert.equal(twistieRenders.includes("sibling"), false);
 	await Promise.resolve();
 	assert.equal(pending.length, 1);
 	const latest = tree.updateChildren(group);
