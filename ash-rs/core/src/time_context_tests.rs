@@ -50,6 +50,7 @@ fn start(threads: &ThreadController, thread: &ThreadId, command: &str, input: &s
                 command_id: CommandId::new(command).unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
+                reasoning_effort: None,
                 kind: TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                 policy_revision: "time-tests".into(),

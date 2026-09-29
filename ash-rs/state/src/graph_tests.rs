@@ -287,6 +287,7 @@ fn delegation_queries_keep_breadth_first_order_and_exclude_forks() {
                 command_id: CommandId::new("start").unwrap(),
                 expected_sequence: core_api::SequenceExpectation::Any,
                 model: None,
+                reasoning_effort: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: instructions.clone(),
                 policy_revision: "policy".into(),

@@ -160,6 +160,63 @@ fn populates_configured_reasoning_on_model_request() {
     assert_eq!(model.requests()[0].reasoning, Some(reasoning));
 }
 
+#[test]
+fn turn_reasoning_effort_overrides_the_model_default() {
+    let (threads, thread_id, previous_turn_id) = started_turn();
+    threads
+        .complete_turn(&thread_id, &previous_turn_id, "previous answer".into())
+        .unwrap();
+    let turn_id = threads
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                command_id: CommandId::new("override-effort").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                reasoning_effort: Some(ReasoningEffort::Low),
+                advisor: None,
+                kind: ash_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                tool_mode: ash_protocol::ToolMode::Direct,
+                tool_profile: None,
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text {
+                    text: "hello again".into(),
+                }],
+            },
+        )
+        .unwrap()
+        .turn_id;
+    let model = Arc::new(
+        ScriptedModel::new([Ok(text_response("answer"))]).with_reasoning(ReasoningConfig {
+            effort: ReasoningEffort::High,
+            summary: false,
+        }),
+    );
+    let executor = TurnExecutor::without_tools(threads.clone(), model.clone());
+
+    executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+
+    assert_eq!(
+        threads
+            .read_thread(&thread_id)
+            .unwrap()
+            .turns
+            .last()
+            .unwrap()
+            .reasoning_effort,
+        Some(ReasoningEffort::Low)
+    );
+    assert_eq!(
+        model.requests()[0].reasoning.as_ref().unwrap().effort,
+        ReasoningEffort::Low
+    );
+}
+
 #[cfg(feature = "code-mode")]
 #[test]
 fn tool_mode_controls_the_model_facing_catalog() {
@@ -384,6 +441,7 @@ fn frozen_tool_profile_rejects_definition_drift_before_model_invocation() {
                     ProviderId::new("any-provider").unwrap(),
                     ModelId::new("any-model").unwrap(),
                 )),
+                reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
                 tool_mode: ash_protocol::ToolMode::Direct,
@@ -431,6 +489,7 @@ fn frozen_tool_profile_rejects_definition_drift_before_model_invocation() {
                     ProviderId::new("another-provider").unwrap(),
                     ModelId::new("another-model").unwrap(),
                 )),
+                reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
                 tool_mode: ash_protocol::ToolMode::Direct,
@@ -570,6 +629,7 @@ fn manual_context_compaction_batches_a_prefix_that_exceeds_the_model_window() {
                 command_id: CommandId::new("second-history-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
+                reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
                 tool_mode: ash_protocol::ToolMode::Direct,
@@ -1013,6 +1073,7 @@ fn compacts_durable_history_then_replans_with_the_verified_checkpoint() {
                     command_id: CommandId::new(format!("history-{index}")).unwrap(),
                     expected_sequence: SequenceExpectation::Any,
                     model: None,
+                    reasoning_effort: None,
                     policy_revision: "test-policy-v1".into(),
                     approval_mode: ash_protocol::ApprovalMode::AskPermissions,
                     tool_mode: ash_protocol::ToolMode::Direct,
@@ -1039,6 +1100,7 @@ fn compacts_durable_history_then_replans_with_the_verified_checkpoint() {
                 command_id: CommandId::new("start-after-history").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
+                reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
                 tool_mode: ash_protocol::ToolMode::Direct,
@@ -1103,6 +1165,7 @@ fn provider_preflight_tightens_the_budget_and_rechecks_after_compaction() {
                 command_id: CommandId::new("start-measured-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
+                reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
                 tool_mode: ash_protocol::ToolMode::Direct,
@@ -1184,6 +1247,7 @@ fn explicit_skill_selection_uses_frozen_digest_and_layered_body() {
                 command_id: CommandId::new("skill-start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
+                reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
                 tool_mode: ash_protocol::ToolMode::Direct,
@@ -1747,6 +1811,7 @@ fn restart_after_overflow_checkpoint_commit_does_not_replay_the_model_call() {
                 command_id: CommandId::new("overflow-restart-history").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
+                reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
                 tool_mode: ash_protocol::ToolMode::Direct,
@@ -1772,6 +1837,7 @@ fn restart_after_overflow_checkpoint_commit_does_not_replay_the_model_call() {
                 command_id: CommandId::new("overflow-restart-current").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
+                reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
                 tool_mode: ash_protocol::ToolMode::Direct,
@@ -1933,6 +1999,7 @@ fn model_usage_and_goal_projection_are_identical_after_recovery() {
                 command_id: CommandId::new("usage-recovery-start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: Some(model_ref.clone()),
+                reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
                 tool_mode: ash_protocol::ToolMode::Direct,
@@ -2150,6 +2217,7 @@ fn per_thread_mailboxes_run_independently_and_interrupt_the_active_turn() {
                 command_id: CommandId::new("fast-start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
+                reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
                 tool_mode: ash_protocol::ToolMode::Direct,
@@ -3659,6 +3727,7 @@ fn started_turn_with_store(
                 command_id: CommandId::new("start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
+                reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
                 tool_mode,
@@ -3689,6 +3758,7 @@ fn started_turn_with_history() -> (Arc<ThreadController>, ThreadId, TurnId) {
                 command_id: CommandId::new("start-overflow-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
+                reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
                 tool_mode: ash_protocol::ToolMode::Direct,
@@ -4160,6 +4230,7 @@ fn code_mode_thread_values_survive_turn_completion_and_new_turn_authority() {
                 command_id: CommandId::new("second-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
+                reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
                 tool_mode: ash_protocol::ToolMode::CodeModeOnly,
@@ -4247,6 +4318,7 @@ fn encrypted_reasoning_survives_tool_results_and_reloading_thread_history() {
                 command_id: CommandId::new("continue-encrypted").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
+                reasoning_effort: None,
                 advisor: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
@@ -4340,6 +4412,7 @@ fn connection_selection_is_frozen_at_turn_start_and_released_for_the_next_turn()
                 command_id: CommandId::new("after-switch").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
+                reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
                 tool_mode: ash_protocol::ToolMode::Direct,

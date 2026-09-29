@@ -6,6 +6,7 @@ import type { ModelRef } from './ModelRef.js';
 import type { ModelUsageSummary } from './ModelUsageSummary.js';
 import type { PendingInteraction } from './PendingInteraction.js';
 import type { PlanUpdate } from './PlanUpdate.js';
+import type { ReasoningEffort } from './ReasoningEffort.js';
 import type { StableTurnError } from './StableTurnError.js';
 import type { ThreadItem } from './ThreadItem.js';
 import type { ToolMode } from './ToolMode.js';
@@ -21,4 +22,4 @@ export type Turn = { turnId: TurnId, status: TurnStatus, kind: TurnKind,
  *
  * Historical Turns written before instruction snapshots were introduced omit this field.
  */
-instructions?: TurnInstructions | null, model?: ModelRef | null, advisor?: AdvisorConfig | null, toolProfile?: ToolProfileSnapshot | null, toolMode: ToolMode, approvalMode: ApprovalMode, usage: ModelUsageSummary, contextUsage?: ModelContextUsage | null, items: Array<ThreadItem>, plan?: PlanUpdate | null, pendingInteraction?: PendingInteraction | null, error?: StableTurnError | null, };
+instructions?: TurnInstructions | null, model?: ModelRef | null, reasoningEffort?: ReasoningEffort | null, advisor?: AdvisorConfig | null, toolProfile?: ToolProfileSnapshot | null, toolMode: ToolMode, approvalMode: ApprovalMode, usage: ModelUsageSummary, contextUsage?: ModelContextUsage | null, items: Array<ThreadItem>, plan?: PlanUpdate | null, pendingInteraction?: PendingInteraction | null, error?: StableTurnError | null, };

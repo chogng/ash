@@ -154,6 +154,7 @@ impl AgentRuntime for Runtime<'_> {
                 command_id: request.command_id,
                 expected_sequence: request.expected_sequence,
                 model: request.model,
+                reasoning_effort: request.reasoning_effort,
                 advisor: request.advisor,
                 kind: request.kind,
                 instructions: request.instructions,

@@ -38,6 +38,7 @@ pub struct SubmitTurnRequest {
     pub command_id: CommandId,
     pub expected_sequence: SequenceExpectation,
     pub model: Option<ModelRef>,
+    pub reasoning_effort: Option<ash_protocol::ReasoningEffort>,
     pub advisor: Option<ash_protocol::AdvisorConfig>,
     pub kind: TurnKind,
     pub instructions: TurnInstructions,

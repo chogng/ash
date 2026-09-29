@@ -115,6 +115,7 @@ fn run(
                 command_id: CommandId::new(label).unwrap(),
                 expected_sequence: core_api::SequenceExpectation::Any,
                 model: Some(model_ref()),
+                reasoning_effort: None,
                 kind: Default::default(),
                 instructions: ash_protocol::TurnInstructions::new(
                     "live-cache-test",

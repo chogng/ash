@@ -104,6 +104,7 @@ pub struct StartTurnRequest {
     pub command_id: CommandId,
     pub expected_sequence: SequenceExpectation,
     pub model: Option<ModelRef>,
+    pub reasoning_effort: Option<ash_protocol::ReasoningEffort>,
     pub advisor: Option<ash_protocol::AdvisorConfig>,
     pub kind: TurnKind,
     pub instructions: TurnInstructions,
@@ -125,6 +126,7 @@ pub struct StartGoalTurnRequest {
     pub advisor: Option<ash_protocol::AdvisorConfig>,
     pub command_id: CommandId,
     pub model: Option<ModelRef>,
+    pub reasoning_effort: Option<ash_protocol::ReasoningEffort>,
     pub instructions: TurnInstructions,
     pub policy_revision: String,
     pub approval_mode: ApprovalMode,
@@ -945,6 +947,7 @@ impl ThreadController {
                 kind,
                 instructions,
                 model,
+                reasoning_effort,
                 activated_skills,
                 host_activated_skills,
                 approval_mode,
@@ -959,6 +962,7 @@ impl ThreadController {
             if kind != &request.kind
                 || instructions.as_ref() != Some(&request.instructions)
                 || model != &request.model
+                || reasoning_effort != &request.reasoning_effort
                 || replay_host_activations(host_activated_skills.as_deref(), activated_skills)
                     != request.activated_skills
                 || approval_mode != &request.approval_mode
@@ -1034,6 +1038,7 @@ impl ThreadController {
             kind: request.kind,
             instructions: Some(request.instructions.clone()),
             model: request.model.clone(),
+            reasoning_effort: request.reasoning_effort,
             advisor: request.advisor.clone(),
             activated_skills: activated_skills.clone(),
             host_activated_skills: Some(request.activated_skills.clone()),
@@ -1079,6 +1084,7 @@ impl ThreadController {
                 tool_mode: request.tool_mode,
                 activated_skills: activated_skills.clone(),
                 model: request.model.clone(),
+                reasoning_effort: request.reasoning_effort,
                 advisor: request.advisor.clone(),
                 tool_profile: request.tool_profile.clone(),
             });
@@ -1139,6 +1145,7 @@ impl ThreadController {
             kind: TurnKind::Coding,
             instructions: Some(request.instructions.clone()),
             model: request.model.clone(),
+            reasoning_effort: request.reasoning_effort,
             advisor: request.advisor.clone(),
             activated_skills: Vec::new(),
             host_activated_skills: Some(Vec::new()),
@@ -1200,6 +1207,7 @@ impl ThreadController {
                         tool_mode: request.tool_mode,
                         activated_skills: Vec::new(),
                         model: request.model.clone(),
+                        reasoning_effort: request.reasoning_effort,
                         advisor: request.advisor.clone(),
                         tool_profile: request.tool_profile.clone(),
                     },
@@ -1560,6 +1568,7 @@ impl ThreadController {
                     tool_mode: ash_protocol::ToolMode::Direct,
                     activated_skills: Vec::new(),
                     model: request.model.clone(),
+                    reasoning_effort: None,
                     advisor: None,
                     tool_profile: None,
                 },
@@ -1671,6 +1680,7 @@ impl ThreadController {
                     tool_mode: ash_protocol::ToolMode::Direct,
                     activated_skills: Vec::new(),
                     model: None,
+                    reasoning_effort: None,
                     advisor: None,
                     tool_profile: None,
                 },

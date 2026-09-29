@@ -11,6 +11,7 @@ import { ChatInputPart } from "./input/chatInputPart.js";
 import type { ChatTurnErrorAction } from "./chatListItems.js";
 import { ChatListWidget } from "./chatListWidget.js";
 import type { ChatInputState } from "./input/chatInput.js";
+import type { ModelReasoningEffort } from "../../../../services/chat/common/modelCatalog.js";
 import type { IChatListItem } from "./chatListItems.js";
 import type { ResolvedChatContext } from "../../../../services/chat/common/chatContextService.js";
 import { h } from "../../../../../base/browser/dom.js";
@@ -38,6 +39,7 @@ export interface IChatWidgetModel extends IDisposable {
 	executeServerCommand(name: string, argumentsText: string): Promise<void>;
 	interrupt(): Promise<void>;
 	selectModel(model: ModelRef): Promise<void>;
+	selectReasoningEffort(effort: ModelReasoningEffort | undefined): Promise<void>;
 	selectAutomaticModel(): Promise<void>;
 	listAgents(): Promise<readonly ChatAgent[]>;
 	selectAgent(agent: ChatAgent | undefined): void;
@@ -96,6 +98,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 					: this.model.executeServerCommand(invocation.name, invocation.argumentsText),
 			interrupt: () => this.model.interrupt(),
 			selectModel: (model) => this.model.selectModel(model),
+			selectReasoningEffort: effort => this.model.selectReasoningEffort(effort),
 			selectAutomaticModel: () => this.model.selectAutomaticModel(),
 			listAgents: () => this.model.listAgents(),
 			selectAgent: agent => this.model.selectAgent(agent),

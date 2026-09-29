@@ -66,6 +66,7 @@ impl Fixture {
                     command_id: CommandId::new(key).unwrap(),
                     expected_sequence: SequenceExpectation::Any,
                     model: None,
+                    reasoning_effort: None,
                     kind,
                     instructions,
                     policy_revision: "test-policy-v1".into(),

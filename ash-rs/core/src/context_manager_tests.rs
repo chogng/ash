@@ -98,6 +98,7 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
             started_at_unix_ms: None,
             duration_ms: None,
             model: None,
+            reasoning_effort: None,
             policy_revision: "test-policy-v1".into(),
             approval_mode: ash_protocol::ApprovalMode::AskPermissions,
             tool_mode: ash_protocol::ToolMode::Direct,

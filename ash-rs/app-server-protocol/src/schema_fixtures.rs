@@ -10,6 +10,7 @@ use crate::protocol::fs::FsChanged;
 use crate::protocol::registry::CLIENT_METHODS;
 use crate::protocol::registry::HOST_METHODS;
 use crate::protocol::registry::SERVER_NOTIFICATIONS;
+use crate::protocol::session::SessionRequest;
 use crate::protocol::slash_commands::SlashCommandArgumentModeDto;
 use crate::protocol::slash_commands::SlashCommandDefinition;
 use crate::protocol::turn::InputItem;
@@ -53,6 +54,58 @@ fn generated_fixture_paths(root: &Path) -> Vec<PathBuf> {
     }
     paths.sort();
     paths
+}
+
+#[test]
+fn start_turn_reasoning_effort_round_trips_and_legacy_requests_use_default() {
+    let request = serde_json::json!({
+        "type": "startTurn",
+        "threadId": "thread-1",
+        "expectedSequence": 1,
+        "model": { "provider": "openai", "model": "gpt-6-astra" },
+        "reasoningEffort": "high",
+        "input": [{ "type": "text", "text": "hello" }]
+    });
+    let parsed: SessionRequest = serde_json::from_value(request.clone()).unwrap();
+    assert!(matches!(
+        &parsed,
+        SessionRequest::StartTurn {
+            reasoning_effort: Some(ReasoningEffort::High),
+            ..
+        }
+    ));
+    assert_eq!(
+        serde_json::to_value(parsed).unwrap(),
+        serde_json::json!({
+            "type": "startTurn",
+            "threadId": "thread-1",
+            "expectedSequence": 1,
+            "approvalMode": "askPermissions",
+            "model": { "provider": "openai", "model": "gpt-6-astra" },
+            "reasoningEffort": "high",
+            "input": [{ "type": "text", "text": "hello" }]
+        })
+    );
+    let mut legacy = request;
+    legacy.as_object_mut().unwrap().remove("reasoningEffort");
+    let mut no_reasoning = legacy.clone();
+    no_reasoning["reasoningEffort"] = serde_json::json!("none");
+    let parsed: SessionRequest = serde_json::from_value(no_reasoning).unwrap();
+    assert!(matches!(
+        parsed,
+        SessionRequest::StartTurn {
+            reasoning_effort: Some(ReasoningEffort::None),
+            ..
+        }
+    ));
+    let parsed: SessionRequest = serde_json::from_value(legacy).unwrap();
+    assert!(matches!(
+        parsed,
+        SessionRequest::StartTurn {
+            reasoning_effort: None,
+            ..
+        }
+    ));
 }
 
 #[test]

@@ -39,6 +39,7 @@ fn snapshot_preserves_items_and_turn_plans_in_order() {
             kind: ash_protocol::TurnKind::Coding,
             instructions: None,
             model: None,
+            reasoning_effort: None,
             tool_profile: None,
             tool_mode: ash_protocol::ToolMode::Direct,
             approval_mode: ash_protocol::ApprovalMode::AskPermissions,

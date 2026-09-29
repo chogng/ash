@@ -297,6 +297,7 @@ fn memories_are_recollected_after_preflight_compaction_and_revocation() {
                     command_id: CommandId::new(id).unwrap(),
                     expected_sequence: core_api::SequenceExpectation::Any,
                     model: None,
+                    reasoning_effort: None,
                     kind: Default::default(),
                     instructions: ash_protocol::TurnInstructions::new(
                         "memory-test",

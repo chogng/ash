@@ -166,6 +166,7 @@ impl Fixture {
                     command_id: CommandId::new("start").unwrap(),
                     expected_sequence: SequenceExpectation::Any,
                     model: Some(model("worker")),
+                    reasoning_effort: None,
                     advisor,
                     kind,
                     instructions: protocol::TurnInstructions::new(

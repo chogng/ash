@@ -43,7 +43,10 @@ fn executor(threads: Arc<ThreadController>, model: Arc<ScriptedModel>) -> TurnEx
 }
 #[test]
 fn active_goal_starts_a_hidden_follow_up_until_the_budget_stops_it() {
-    let (threads, thread_id, turn_id) = started_turn();
+    let (threads, thread_id, turn_id) = started_turn_with_options(
+        protocol::ToolMode::Direct,
+        Some(protocol::ReasoningEffort::High),
+    );
     threads
         .create_goal(&thread_id, "finish the requested task".into(), Some(15))
         .unwrap();
@@ -82,6 +85,14 @@ fn active_goal_starts_a_hidden_follow_up_until_the_budget_stops_it() {
         let snapshot = threads.read_thread(&thread_id).unwrap();
         if snapshot.turns.len() == 2 && snapshot.turns[1].status == TurnStatus::Completed {
             assert_eq!(model.requests().len(), 2);
+            assert_eq!(
+                snapshot.turns[1].reasoning_effort,
+                Some(protocol::ReasoningEffort::High)
+            );
+            assert_eq!(
+                model.requests()[1].reasoning.as_ref().unwrap().effort,
+                protocol::ReasoningEffort::High
+            );
             assert_eq!(
                 snapshot
                     .items
@@ -150,6 +161,7 @@ fn recovered_active_goal_resumes_a_running_hidden_turn() {
                 instructions: prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("recovered-goal-continuation").unwrap(),
                 model: None,
+                reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: protocol::ApprovalMode::AskPermissions,
                 tool_mode: protocol::ToolMode::Direct,
@@ -221,7 +233,7 @@ impl ModelService for ScriptedModel {
 }
 
 fn started_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
-    started_turn_with_tool_mode(protocol::ToolMode::Direct)
+    started_turn_with_options(protocol::ToolMode::Direct, None)
 }
 
 fn started_review_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
@@ -249,6 +261,7 @@ fn started_review_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
                 command_id: CommandId::new("start-review").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
+                reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: protocol::ApprovalMode::AskPermissions,
                 tool_mode: protocol::ToolMode::Direct,
@@ -264,8 +277,9 @@ fn started_review_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
     (threads, thread_id, turn_id)
 }
 
-fn started_turn_with_tool_mode(
+fn started_turn_with_options(
     tool_mode: protocol::ToolMode,
+    reasoning_effort: Option<protocol::ReasoningEffort>,
 ) -> (Arc<ThreadController>, ThreadId, TurnId) {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
@@ -291,6 +305,7 @@ fn started_turn_with_tool_mode(
                 command_id: CommandId::new("start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
+                reasoning_effort,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: protocol::ApprovalMode::AskPermissions,
                 tool_mode,

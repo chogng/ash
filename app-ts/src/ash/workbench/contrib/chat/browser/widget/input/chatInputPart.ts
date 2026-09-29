@@ -476,9 +476,11 @@ export class ChatInputPart extends Disposable {
 			return new ModelPickerActionItem(action, {
 				getModels: () => this.state.models,
 				getSelectedModel: () => this.state.selectedModel,
+				getSelectedReasoningEffort: () => this.state.selectedReasoningEffort,
 				isAutomaticModel: () => this.state.isAutomaticModel,
 				getModelsError: () => this.state.modelsError,
 				selectModel: model => this.delegate.selectModel(model),
+				selectReasoningEffort: effort => this.delegate.selectReasoningEffort(effort),
 				selectAutomaticModel: () => this.delegate.selectAutomaticModel(),
 				openSettings: () => this.delegate.openModelSettings(),
 			}, contextViewService);

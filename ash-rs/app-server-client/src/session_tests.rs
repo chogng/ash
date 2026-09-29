@@ -86,6 +86,7 @@ fn embedded_session_delivers_idle_notifications_without_a_polling_request() {
                 expected_sequence: 1,
                 approval_mode: ash_protocol::ApprovalMode::default(),
                 model: None,
+                reasoning_effort: None,
                 tool_mode: None,
                 input: vec![InputItem::Text {
                     text: "hello".into(),

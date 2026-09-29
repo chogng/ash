@@ -1,5 +1,6 @@
 import type { AdvisorConfig, AdvisorConfigureResult, AgentRoleListResult, ModelListResult, ModelRef, SessionCatalogReadResult, SessionCreateParams, SessionListResult, SessionReadParams, SessionRequest, SessionRequestParams, SessionRequestResult, SessionResult, SessionSubscribeParams, SessionSubscribeResult, SessionThreadReadParams, SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeParams, SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams, ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult } from "../../app-server/common/generated/index.js";
 import type { ProviderApiKeySetParams, ProviderApiKeySetResult, ProviderListResult } from '../../app-server/common/generated/index.js';
+import type { ReasoningEffort } from '../../app-server/common/generated/index.js';
 
 export type { SessionRequestResult };
 
@@ -60,7 +61,7 @@ interface ProviderModelCatalogEntry {
 	readonly model: ModelRef;
 	readonly displayName: string;
 	readonly contextWindow?: number | null;
-	readonly supportedReasoningEfforts?: readonly string[];
+	readonly supportedReasoningEfforts?: readonly ReasoningEffort[];
 }
 
 export interface IModelApi {

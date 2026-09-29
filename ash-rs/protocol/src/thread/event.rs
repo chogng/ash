@@ -207,6 +207,9 @@ pub enum ThreadEvent {
         model: Option<ModelRef>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
+        reasoning_effort: Option<crate::ReasoningEffort>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
         advisor: Option<crate::AdvisorConfig>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]

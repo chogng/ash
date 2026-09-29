@@ -36,6 +36,9 @@ pub struct Turn {
     pub model: Option<ModelRef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
+    pub reasoning_effort: Option<crate::ReasoningEffort>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
     pub advisor: Option<crate::AdvisorConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]

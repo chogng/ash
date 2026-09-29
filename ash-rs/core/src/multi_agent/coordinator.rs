@@ -581,6 +581,7 @@ impl MultiAgentCoordinator {
                     .as_ref()
                     .and_then(|role| role.model.clone())
                     .or_else(|| parent_turn.model.clone()),
+                reasoning_effort: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: seed
                     .agent

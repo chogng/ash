@@ -217,7 +217,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		model: { provider: "openai", model: "gpt-5.6-sol" },
 		displayName: "GPT-5.6 Sol",
 		contextWindow: 128000,
-		supportedReasoningEfforts: ["low", "medium", "high"],
+		supportedReasoningEfforts: ["low", "medium", "high"] as const,
 	};
 	const fake = fakeApi({
 		sessions: [
@@ -1594,7 +1594,7 @@ interface FakeOptions {
 		readonly model: ModelRef;
 		readonly displayName: string;
 		readonly contextWindow?: number | null;
-		readonly supportedReasoningEfforts?: readonly string[];
+		readonly supportedReasoningEfforts?: readonly ('none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max')[];
 	}[];
 	readonly configuredProviders?: readonly string[];
 	readonly providers?: readonly ModelProviderCredentialStatus[];
@@ -1780,6 +1780,59 @@ test("ChatWidgetModel selects models per chat without changing the global model"
 	assert.deepEqual(fake.turnStartRequests.map(request => request.model), [firstModel, secondModel]);
 	assert.deepEqual(model.selectedModel, firstModel);
 	assert.equal(fake.modelRequests.length, 0);
+});
+
+test('ChatWidgetModel sends the selected model thinking effort with its Turn', async () => {
+	const first = { model: { provider: 'openai', model: 'gpt-first' }, displayName: 'First', supportedReasoningEfforts: ['low', 'high'] as const };
+	const second = { model: { provider: 'openai', model: 'gpt-second' }, displayName: 'Second', supportedReasoningEfforts: ['medium'] as const };
+	const activeSession = session('session-1', 'thread-1');
+	const previous = thread('previous answer');
+	const fake = fakeApi({
+		sessions: [activeSession], models: [first, second],
+		thread: () => ({ ...previous, turns: previous.turns.map(turn => ({ ...turn, model: first.model, reasoningEffort: 'high' as const })) }),
+	});
+	using chat = createChatService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
+	using model = new ChatWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+
+	assert.equal(model.inputState.selectedReasoningEffort, 'high');
+	await model.selectReasoningEffort(undefined);
+	assert.equal(model.inputState.selectedReasoningEffort, undefined);
+	await model.selectModel(first.model);
+	await model.selectReasoningEffort('high');
+	assert.equal(model.inputState.selectedReasoningEffort, 'high');
+	await model.send('Use high effort');
+	assert.equal(fake.turnStartRequests[0]?.reasoningEffort, 'high');
+
+	await model.selectModel(second.model);
+	assert.equal(model.inputState.selectedReasoningEffort, undefined);
+	await assert.rejects(model.selectReasoningEffort('high'), /does not support/);
+	await model.selectAutomaticModel();
+	assert.equal(model.inputState.selectedReasoningEffort, undefined);
+	await assert.rejects(model.selectReasoningEffort('medium'), /Select a model/);
+});
+
+test('New Chat keeps its thinking effort when it creates a Thread', async () => {
+	const entry = { model: { provider: 'openai', model: 'gpt-first' }, displayName: 'First', supportedReasoningEfforts: ['low', 'high'] as const };
+	const fake = fakeApi({
+		models: [entry],
+		createSession: session('session-1', undefined, 'New Chat'),
+		createThread: { session: session('session-1', 'thread-1', 'New Chat'), threadId: 'thread-1' },
+	});
+	using chat = createChatService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
+	const untitled = sessions.createUntitledSession();
+	using model = new ChatWidgetModel(chat, { kind: 'untitled', session: untitled }, sessions);
+	await model.initialize();
+
+	await model.selectModel(entry.model);
+	model.selectUntitledSession(sessions.untitledSessions.find(session => session.untitledSessionId === untitled.untitledSessionId)!);
+	await model.selectReasoningEffort('high');
+	await model.send('Use high effort');
+
+	assert.equal(fake.turnStartRequests[0]?.reasoningEffort, 'high');
+	assert.equal(model.inputState.selectedReasoningEffort, 'high');
 });
 
 test('ChatWidgetModel returns to the session model when Auto is selected', async () => {

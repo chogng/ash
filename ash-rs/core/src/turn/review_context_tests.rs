@@ -42,6 +42,7 @@ fn turn(threads: &ThreadController, thread: &ThreadId, text: &str) -> TurnId {
                 command_id: CommandId::new(text).unwrap(),
                 expected_sequence: crate::SequenceExpectation::Any,
                 model: None,
+                reasoning_effort: None,
                 kind: Default::default(),
                 instructions: crate::test_turn_instructions(),
                 policy_revision: "policy-v1".into(),

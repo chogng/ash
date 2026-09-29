@@ -1022,6 +1022,15 @@ impl TurnExecutor {
                 .model
                 .reasoning_config(model)
                 .map_err(ExecutionFailure::service)?;
+            if let Some(effort) = turn.reasoning_effort {
+                request.reasoning = Some(ash_protocol::ReasoningConfig {
+                    effort,
+                    summary: request
+                        .reasoning
+                        .as_ref()
+                        .is_some_and(|config| config.summary),
+                });
+            }
             let billing_scope = self
                 .model
                 .billing_scope(model)

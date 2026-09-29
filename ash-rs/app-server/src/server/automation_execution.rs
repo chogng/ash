@@ -103,6 +103,7 @@ impl AppServer {
                 ash_protocol::ApprovalMode::default(),
                 TurnModelSelection::Current,
                 None,
+                None,
                 vec![InputItem::Text {
                     text: run.definition.prompt.clone(),
                 }],

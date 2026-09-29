@@ -3,6 +3,8 @@ import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } fr
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import type { ModelRef } from './chatService.js';
 
+export type ModelReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max';
+
 const MaximumHiddenModels = 2_048;
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
@@ -11,7 +13,7 @@ export interface ModelCatalogEntry {
 	readonly model: ModelRef;
 	readonly displayName: string;
 	readonly contextWindow?: number | null;
-	readonly supportedReasoningEfforts?: readonly string[];
+	readonly supportedReasoningEfforts?: readonly ModelReasoningEffort[];
 }
 
 /** User-owned presentation preferences for the shared model catalog. */

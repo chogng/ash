@@ -288,6 +288,7 @@ impl ExecConnection for ServerConnection {
                     expected_sequence,
                     approval_mode,
                     model: None,
+                    reasoning_effort: None,
                     tool_mode: None,
                     input,
                 },

@@ -1,6 +1,7 @@
 import type { AgentResponse, ChatAgent, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction } from "../../../../../services/chat/common/chatService.js";
 import type { SkillReference } from "../../../../../../platform/skills/common/skillApi.js";
 import type { ModelRef } from "../../../../../services/chat/common/chatService.js";
+import type { ModelReasoningEffort } from "../../../../../services/chat/common/modelCatalog.js";
 import type { ChatContextAttachment } from "../../../../../services/chat/common/chatContextService.js";
 
 export type ChatInputPhase = "loading" | "ready" | "submitting" | "error";
@@ -25,6 +26,7 @@ export interface ChatInputState {
 	readonly slashCommands: readonly SlashCommandDefinition[];
 	readonly skillSelectors: readonly SkillSelectorDefinition[];
 	readonly selectedModel?: ModelRef;
+	readonly selectedReasoningEffort?: ModelReasoningEffort;
 	readonly isAutomaticModel: boolean;
 	readonly selectedAgent?: ChatAgent;
 	readonly agentName?: string;
@@ -39,6 +41,7 @@ export interface ChatInputDelegate {
 	executeServerCommand(invocation: ChatInputServerCommandInvocation): Promise<void>;
 	interrupt(): Promise<void>;
 	selectModel(model: ModelRef): Promise<void>;
+	selectReasoningEffort(effort: ModelReasoningEffort | undefined): Promise<void>;
 	selectAutomaticModel(): Promise<void>;
 	listAgents(): Promise<readonly ChatAgent[]>;
 	selectAgent(agent: ChatAgent | undefined): void;

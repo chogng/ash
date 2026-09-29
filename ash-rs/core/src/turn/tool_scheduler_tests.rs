@@ -1706,6 +1706,7 @@ fn fixture_with_approval_mode(
                 command_id: CommandId::new("start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
+                reasoning_effort: None,
                 policy_revision,
                 approval_mode,
                 tool_mode: ash_protocol::ToolMode::Direct,

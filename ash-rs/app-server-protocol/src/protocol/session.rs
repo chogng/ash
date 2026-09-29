@@ -141,6 +141,10 @@ pub enum SessionRequest {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         model: Option<ash_protocol::ModelRef>,
+        /// Applies only to the accepted Turn; it does not update user model configuration.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        reasoning_effort: Option<ash_protocol::ReasoningEffort>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         tool_mode: Option<ToolMode>,

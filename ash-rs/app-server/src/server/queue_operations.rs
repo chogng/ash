@@ -245,6 +245,7 @@ impl AppServer {
             ash_protocol::TurnKind::Coding,
             selection,
             TurnModelSelection::Current,
+            None,
         );
         let current = self
             .agent_runtime()

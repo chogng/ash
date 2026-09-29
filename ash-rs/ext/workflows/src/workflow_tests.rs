@@ -78,6 +78,7 @@ impl Fixture {
                 self.threads.read_thread(&self.root).unwrap().sequence,
             ),
             model: None,
+            reasoning_effort: None,
             advisor: None,
             kind: protocol::TurnKind::Coding,
             instructions: prompts::AGENT_INSTRUCTIONS.freeze(),

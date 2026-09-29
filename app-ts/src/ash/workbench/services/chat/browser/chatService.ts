@@ -185,7 +185,7 @@ export class ChatService extends Disposable implements IChatService {
 			...(options.contexts ?? []).map(context => ({ type: "context" as const, name: context.name, content: context.content })),
 			{ type: "text", text: options.text },
 		];
-		await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, approvalMode: "askPermissions", model: options.model, input });
+		await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, approvalMode: "askPermissions", model: options.model, reasoningEffort: options.reasoningEffort, input });
 	}
 
 	async configureAdvisor(options: ConfigureAdvisorOptions): Promise<void> {
@@ -273,7 +273,7 @@ export class ChatService extends Disposable implements IChatService {
 		readonly model: ModelRef;
 		readonly displayName: string;
 		readonly contextWindow?: number | null;
-		readonly supportedReasoningEfforts?: readonly string[];
+		readonly supportedReasoningEfforts?: ModelCatalogEntry['supportedReasoningEfforts'];
 	}[]): readonly ModelCatalogEntry[] {
 		const identities = new Set<string>();
 		const catalog = entries.map(entry => {
@@ -345,6 +345,7 @@ function toThread(thread: ThreadDto): Thread {
 			status: turn.status,
 			approvalMode: turn.approvalMode,
 			model: turn.model ? { ...turn.model } : turn.model,
+			reasoningEffort: turn.reasoningEffort,
 			plan: turn.plan ? {
 				explanation: turn.plan.explanation,
 				steps: turn.plan.steps.map((step) => ({ ...step })),

@@ -2226,7 +2226,7 @@ fn model_catalog_is_global_and_session_views_do_not_own_model_selection() {
 }
 
 #[test]
-fn start_turn_model_is_scoped_to_its_thread_and_does_not_change_the_default() {
+fn start_turn_model_and_reasoning_effort_are_scoped_to_their_thread() {
     let default = model_ref("gpt-default");
     let alternate = model_ref("gpt-alternate");
     let models = [default.clone(), alternate.clone()]
@@ -2260,7 +2260,7 @@ fn start_turn_model_is_scoped_to_its_thread_and_does_not_change_the_default() {
                 "commandId":"first-turn","sessionId":session_id,
                 "request":{
                     "type":"startTurn","expectedSequence":1,"threadId":first_id,
-                    "model":alternate,"input":[{"type":"text","text":"first"}]
+                    "model":alternate,"reasoningEffort":"high","input":[{"type":"text","text":"first"}]
                 }
             }
         }),
@@ -2272,6 +2272,10 @@ fn start_turn_model_is_scoped_to_its_thread_and_does_not_change_the_default() {
         .read_thread(&ash_protocol::ThreadId::new(first_id).unwrap())
         .unwrap();
     assert_eq!(first_snapshot.turns.last().unwrap().model, Some(alternate));
+    assert_eq!(
+        first_snapshot.turns.last().unwrap().reasoning_effort,
+        Some(ash_protocol::ReasoningEffort::High)
+    );
 
     let second_turn = call(
         &server,
@@ -2294,6 +2298,7 @@ fn start_turn_model_is_scoped_to_its_thread_and_does_not_change_the_default() {
         .read_thread(&ash_protocol::ThreadId::new(second_id).unwrap())
         .unwrap();
     assert_eq!(second_snapshot.turns.last().unwrap().model, Some(default));
+    assert_eq!(second_snapshot.turns.last().unwrap().reasoning_effort, None);
 }
 
 #[test]
@@ -4732,6 +4737,7 @@ fn interaction_resolution_uses_the_durable_identity_and_resumes_the_turn() {
                 command_id: CommandId::new("agent-turn").unwrap(),
                 expected_sequence: core_api::SequenceExpectation::Exact(1),
                 model: None,
+                reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
                 tool_mode: ash_protocol::ToolMode::Direct,
@@ -5093,6 +5099,7 @@ fn expired_interaction_is_cancelled_and_fails_the_turn() {
                 command_id: CommandId::new("deadline-turn").unwrap(),
                 expected_sequence: core_api::SequenceExpectation::Exact(1),
                 model: None,
+                reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
                 tool_mode: ash_protocol::ToolMode::Direct,
@@ -5185,6 +5192,7 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
                 command_id: CommandId::new("approval-turn").unwrap(),
                 expected_sequence: core_api::SequenceExpectation::Exact(1),
                 model: None,
+                reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
                 tool_mode: ash_protocol::ToolMode::Direct,
@@ -5300,6 +5308,7 @@ fn interaction_response_is_rejected_from_a_capable_non_owner_connection() {
                 command_id: CommandId::new("approval-turn-owner-check").unwrap(),
                 expected_sequence: core_api::SequenceExpectation::Exact(1),
                 model: None,
+                reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
                 tool_mode: ash_protocol::ToolMode::Direct,
@@ -6665,6 +6674,7 @@ fn message_restore_interrupts_the_source_and_replays_without_interrupting_later_
                     command_id: ash_protocol::CommandId::new(command).unwrap(),
                     expected_sequence: core_api::SequenceExpectation::Any,
                     model: None,
+                    reasoning_effort: None,
                     kind: Default::default(),
                     instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                     policy_revision: "test".into(),

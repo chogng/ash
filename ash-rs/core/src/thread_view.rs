@@ -33,6 +33,7 @@ impl From<crate::ThreadSnapshot> for core_api::ThreadView {
                     kind: turn.kind,
                     instructions: turn.instructions,
                     model: turn.model,
+                    reasoning_effort: turn.reasoning_effort,
                     advisor: turn.advisor,
                     approval_mode: turn.approval_mode,
                     tool_mode: turn.tool_mode,

@@ -65,6 +65,7 @@ impl GoalExtension {
                 advisor: snapshot.advisor.resolve(completed_turn.advisor.as_ref()),
                 command_id,
                 model: completed_turn.model.clone(),
+                reasoning_effort: completed_turn.reasoning_effort,
                 instructions: completed_turn.instructions.clone().ok_or_else(|| {
                     CoreError::Context(format!(
                         "completed Turn {} has no frozen instructions",

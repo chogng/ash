@@ -3,6 +3,7 @@ import { PRODUCT_SLASH_COMMANDS } from "../../../../platform/app-server/common/g
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { SkillReference } from "../../../../platform/skills/common/skillApi.js";
 import type { ModelCatalogEntry } from "./modelCatalog.js";
+import type { ModelReasoningEffort } from "./modelCatalog.js";
 import type { ResolvedChatContext } from "./chatContextService.js";
 
 export type { ModelCatalogEntry } from "./modelCatalog.js";
@@ -54,7 +55,7 @@ export interface ChatAudioAttachment {
 export interface AdvisorConfig {
 	readonly model: ModelRef;
 	readonly enabled: boolean;
-	readonly reasoningEffort?: "none" | "minimal" | "low" | "medium" | "high" | "extraHigh" | "max" | null;
+	readonly reasoningEffort?: ModelReasoningEffort | null;
 	readonly maxCalls: number;
 	readonly maxOutputTokens: number;
 }
@@ -115,6 +116,7 @@ export interface Turn {
 	readonly status: TurnStatus;
 	readonly approvalMode: ApprovalMode;
 	readonly model?: ModelRef | null;
+	readonly reasoningEffort?: ModelReasoningEffort | null;
 	readonly plan?: PlanUpdate | null;
 	readonly usage: ModelUsageSummary;
 	readonly items: readonly ThreadItem[];
@@ -297,7 +299,17 @@ export interface ThreadSubscription {
 	readonly updates: readonly ThreadUpdateEnvelope[];
 }
 
-export interface StartTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly text: string; readonly model?: ModelRef; readonly contexts?: readonly ResolvedChatContext[]; readonly skills?: readonly SkillReference[] }
+export interface StartTurnOptions {
+	readonly sessionId: SessionId;
+	readonly threadId: ThreadId;
+	readonly expectedSequence: number;
+	readonly text: string;
+	readonly model?: ModelRef;
+	/** Overrides this Turn's model effort without changing the user's model settings. */
+	readonly reasoningEffort?: ModelReasoningEffort;
+	readonly contexts?: readonly ResolvedChatContext[];
+	readonly skills?: readonly SkillReference[];
+}
 export interface ConfigureAdvisorOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly selection: AdvisorSelection }
 export interface ConsultAdvisorOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly question: string }
 export interface CompactContextOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly retentionPrompt?: string }

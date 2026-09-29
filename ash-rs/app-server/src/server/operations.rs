@@ -447,6 +447,7 @@ impl AppServer {
                 expected_sequence,
                 approval_mode,
                 model,
+                reasoning_effort,
                 tool_mode,
                 input,
             } => result(&SessionRequestResult::Turn(self.start_turn_request(
@@ -454,6 +455,7 @@ impl AppServer {
                 thread_id,
                 approval_mode,
                 model.map_or(TurnModelSelection::Current, TurnModelSelection::Explicit),
+                reasoning_effort,
                 tool_mode,
                 input,
             )?)),
@@ -552,6 +554,7 @@ impl AppServer {
                     ash_protocol::TurnKind::Advisor,
                     TurnInstructionSelection::Agent,
                     TurnModelSelection::Current,
+                    None,
                 )?))
             }
             SessionRequest::CompactContext {
@@ -820,6 +823,7 @@ impl AppServer {
                 thread_id.clone(),
                 ash_protocol::ApprovalMode::default(),
                 TurnModelSelection::Current,
+                None,
                 rewrite.tool_mode,
                 rewrite.input,
             )?,
@@ -1024,6 +1028,7 @@ impl AppServer {
         thread_id: ash_protocol::ThreadId,
         approval_mode: ash_protocol::ApprovalMode,
         model_selection: TurnModelSelection,
+        reasoning_effort: Option<ash_protocol::ReasoningEffort>,
         requested_tool_mode: Option<ash_protocol::ToolMode>,
         input: Vec<InputItem>,
     ) -> Result<TurnStartResult, RpcError> {
@@ -1054,6 +1059,7 @@ impl AppServer {
             ash_protocol::TurnKind::Coding,
             selection,
             model_selection,
+            reasoning_effort,
         )
     }
 
@@ -1100,6 +1106,7 @@ impl AppServer {
             ash_protocol::TurnKind::Review,
             TurnInstructionSelection::Product(instructions),
             TurnModelSelection::Current,
+            None,
         )
     }
 
@@ -1113,6 +1120,7 @@ impl AppServer {
         kind: ash_protocol::TurnKind,
         selection: TurnInstructionSelection,
         model_selection: TurnModelSelection,
+        reasoning_effort: Option<ash_protocol::ReasoningEffort>,
     ) -> Result<TurnStartResult, RpcError> {
         let thread_before = self
             .agent_runtime()
@@ -1237,6 +1245,7 @@ impl AppServer {
                     command_id: mutation.command_id,
                     expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
                     model,
+                    reasoning_effort,
                     advisor,
                     kind,
                     instructions,

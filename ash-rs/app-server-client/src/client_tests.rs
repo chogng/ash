@@ -485,6 +485,7 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
                 expected_sequence: 1,
                 approval_mode: ash_protocol::ApprovalMode::default(),
                 model: None,
+                reasoning_effort: None,
                 tool_mode: None,
                 input: vec![
                     InputItem::Text {

@@ -35,6 +35,10 @@ pub enum ThreadCommand {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         model: Option<ModelRef>,
+        /// Frozen with the Turn so retries and restored executions use the same effort.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        reasoning_effort: Option<crate::ReasoningEffort>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         advisor: Option<crate::AdvisorConfig>,

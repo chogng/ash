@@ -276,6 +276,7 @@ fn start(threads: &ThreadController, thread: &ThreadId, key: &str) -> TurnId {
                 command_id: protocol::CommandId::new(key).unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
+                reasoning_effort: None,
                 advisor: None,
                 kind: protocol::TurnKind::Coding,
                 instructions: prompts::AGENT_INSTRUCTIONS.freeze(),

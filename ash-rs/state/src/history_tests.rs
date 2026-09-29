@@ -98,6 +98,7 @@ fn start(
             command_id: CommandId::new("turn").unwrap(),
             expected_sequence: core_api::SequenceExpectation::Any,
             model: None,
+            reasoning_effort: None,
             kind: Default::default(),
             instructions: ash_protocol::TurnInstructions::new(
                 "test",

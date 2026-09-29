@@ -8,6 +8,7 @@ import type { IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, Se
 import type { ISessionsManagementService } from "../services/sessions/common/sessionsManagement.js";
 import { chatTranscriptListItems, type IChatListItem } from "../../workbench/contrib/chat/browser/widget/chatListItems.js";
 import type { ChatInputState } from '../../workbench/contrib/chat/browser/widget/input/chatInput.js';
+import { modelRefIdentity, type ModelReasoningEffort } from '../../workbench/services/chat/common/modelCatalog.js';
 
 export type ChatWidgetState =
 	| "loading"
@@ -46,6 +47,8 @@ export class ChatWidgetModel extends Disposable {
 	private modelsError: string | undefined;
 	private readonly selectedModels = new Map<ThreadId, ModelRef>();
 	private readonly automaticModels = new Set<ThreadId>();
+	// A New Chat's key is replaced with its Thread ID when the first message materializes it.
+	private readonly selectedReasoningEfforts = new Map<string, { model: string; effort: ModelReasoningEffort | undefined }>();
 	private _slashCommands: readonly SlashCommandDefinition[] = [];
 	private _skillSelectors: readonly SkillSelectorDefinition[] = [];
 	private _changeSets: readonly TurnChangeSetSummary[] = [];
@@ -97,6 +100,7 @@ export class ChatWidgetModel extends Disposable {
 			slashCommands: this._slashCommands,
 			skillSelectors: this._skillSelectors,
 			selectedModel: this.selectedModel,
+			selectedReasoningEffort: this.selectedReasoningEffort,
 			isAutomaticModel: this.isAutomaticModel,
 			selectedAgent: this.selection.kind === 'untitled' ? this.selection.session.agent : undefined,
 			agentName: this.selection.kind === 'session' ? this.selection.active.session.agentTree?.find(node => node.threadId === this.threadId)?.role?.name : undefined,
@@ -157,6 +161,21 @@ export class ChatWidgetModel extends Disposable {
 		return this.selection.kind === 'untitled'
 			? this.selection.session.model === undefined
 			: this.automaticModels.has(this.selection.active.threadId);
+	}
+
+	get selectedReasoningEffort(): ModelReasoningEffort | undefined {
+		const model = this.selectedModel;
+		const key = this.selection.kind === 'untitled' ? this.selection.session.untitledSessionId : this.selection.active.threadId;
+		if (this.isAutomaticModel || !model) return undefined;
+		const identity = modelRefIdentity(model);
+		const selection = this.selectedReasoningEfforts.get(key);
+		const lastTurn = this._thread?.turns.at(-1);
+		// A local "Default" choice must override the last durable Turn's explicit effort.
+		const effort = selection
+			? selection.model === identity ? selection.effort : undefined
+			: lastTurn?.model && modelRefIdentity(lastTurn.model) === identity ? lastTurn.reasoningEffort ?? undefined : undefined;
+		const entry = this._models.find(candidate => modelRefIdentity(candidate.model) === identity);
+		return effort && entry?.supportedReasoningEfforts?.includes(effort) ? effort : undefined;
 	}
 
 	get items(): readonly IChatListItem[] {
@@ -256,6 +275,18 @@ export class ChatWidgetModel extends Disposable {
 		this._onDidChange.fire();
 	}
 
+	async selectReasoningEffort(effort: ModelReasoningEffort | undefined): Promise<void> {
+		const model = this.selectedModel;
+		if (!model || this.isAutomaticModel) throw new Error('Select a model before setting its thinking effort');
+		const entry = this._models.find(candidate => modelRefIdentity(candidate.model) === modelRefIdentity(model));
+		if (!entry || (effort !== undefined && !entry.supportedReasoningEfforts?.includes(effort))) {
+			throw new Error('The selected model does not support this thinking effort');
+		}
+		const key = this.selection.kind === 'untitled' ? this.selection.session.untitledSessionId : this.selection.active.threadId;
+		this.selectedReasoningEfforts.set(key, { model: modelRefIdentity(model), effort });
+		this._onDidChange.fire();
+	}
+
 	async listAgents(): Promise<readonly ChatAgent[]> {
 		return this.sessionService.listAgents();
 	}
@@ -307,6 +338,7 @@ export class ChatWidgetModel extends Disposable {
 					expectedSequence: thread.sequence,
 					text: input,
 					model: this.isAutomaticModel ? undefined : this.selectedModel,
+					reasoningEffort: this.selectedReasoningEffort,
 					contexts,
 					skills,
 				});
@@ -721,6 +753,9 @@ export class ChatWidgetModel extends Disposable {
 			throw new Error("Untitled Chat Session was closed while its durable Session was being created");
 		}
 		this.selection = { kind: "session", active: created };
+		const effort = this.selectedReasoningEfforts.get(untitledSession.untitledSessionId);
+		if (effort) this.selectedReasoningEfforts.set(created.threadId, effort);
+		this.selectedReasoningEfforts.delete(untitledSession.untitledSessionId);
 		if (untitledSession.model) this.selectedModels.set(created.threadId, untitledSession.model);
 		else this.automaticModels.add(created.threadId);
 		this.sessionService.promoteUntitledSession(untitledSession.untitledSessionId, created);

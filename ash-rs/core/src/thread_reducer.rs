@@ -217,6 +217,7 @@ impl ThreadSnapshot {
                     kind: turn.kind,
                     instructions: turn.instructions.clone(),
                     model: turn.model.clone(),
+                    reasoning_effort: turn.reasoning_effort,
                     advisor: turn.advisor.clone(),
                     tool_profile: turn.tool_profile.clone(),
                     tool_mode: turn.tool_mode,
@@ -305,6 +306,7 @@ pub struct TurnSnapshot {
     pub kind: TurnKind,
     pub instructions: Option<TurnInstructions>,
     pub model: Option<ModelRef>,
+    pub reasoning_effort: Option<ash_protocol::ReasoningEffort>,
     pub advisor: Option<ash_protocol::AdvisorConfig>,
     pub policy_revision: String,
     pub approval_mode: ApprovalMode,
@@ -1055,6 +1057,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
             kind,
             instructions,
             model,
+            reasoning_effort,
             policy_revision,
             approval_mode,
             tool_mode,
@@ -1097,6 +1100,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     kind: *kind,
                     instructions: instructions.clone(),
                     model: model.clone(),
+                    reasoning_effort: *reasoning_effort,
                     advisor: advisor.clone(),
                     policy_revision: policy_revision.clone(),
                     approval_mode: *approval_mode,
@@ -1119,6 +1123,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     kind: command_kind,
                     instructions: command_instructions,
                     model: command_model,
+                    reasoning_effort: command_reasoning_effort,
                     advisor: command_advisor,
                     activated_skills: command_skills,
                     approval_mode: command_approval_mode,
@@ -1130,6 +1135,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     command_kind == kind
                         && command_instructions == instructions
                         && command_model == model
+                        && command_reasoning_effort == reasoning_effort
                         && command_advisor == advisor
                         && command_skills == activated_skills
                         && command_approval_mode == approval_mode
@@ -2405,6 +2411,7 @@ fn import_history(
             kind: turn.kind,
             instructions: turn.instructions.clone(),
             model: turn.model.clone(),
+            reasoning_effort: turn.reasoning_effort,
             advisor: turn.advisor.clone(),
             policy_revision: "imported-history-policy".into(),
             approval_mode: ApprovalMode::AskPermissions,
@@ -2511,6 +2518,7 @@ fn append_imported_turn(
         kind: turn.kind,
         instructions: turn.instructions.clone(),
         model: turn.model.clone(),
+        reasoning_effort: turn.reasoning_effort,
         advisor: turn.advisor.clone(),
         policy_revision: "imported-history-policy".into(),
         approval_mode: ApprovalMode::AskPermissions,

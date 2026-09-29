@@ -31798,6 +31798,17 @@
                 }
               ]
             },
+            "reasoningEffort": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ReasoningEffort"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Applies only to the accepted Turn; it does not update user model configuration."
+            },
             "threadId": {
               "$ref": "#/$defs/ThreadId"
             },
@@ -35335,6 +35346,16 @@
               "default": "legacy-unversioned-policy",
               "type": "string"
             },
+            "reasoningEffort": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ReasoningEffort"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "threadId": {
               "$ref": "#/$defs/ThreadId"
             },
@@ -37898,6 +37919,16 @@
           "anyOf": [
             {
               "$ref": "#/$defs/PlanUpdate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasoningEffort": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReasoningEffort"
             },
             {
               "type": "null"

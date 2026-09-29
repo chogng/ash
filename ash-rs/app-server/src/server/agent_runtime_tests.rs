@@ -141,6 +141,7 @@ fn recovered_spawn_starts_a_new_child_turn_once() {
                 command_id: CommandId::new("start-parent").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,
+                reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
                 tool_mode: ash_protocol::ToolMode::Direct,

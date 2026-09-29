@@ -63,6 +63,7 @@ fn runtime_wait_resumes_model_once_and_cancelled_wait_never_resumes_it() {
                     command_id: CommandId::new("turn").unwrap(),
                     expected_sequence: SequenceExpectation::Any,
                     model: None,
+                    reasoning_effort: None,
                     kind: ash_protocol::TurnKind::Coding,
                     instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                     policy_revision: port.policy.revision(),

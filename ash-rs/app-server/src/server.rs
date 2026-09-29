@@ -1676,6 +1676,7 @@ impl AppServer {
                 command_id: request.command_id,
                 expected_sequence: request.expected_sequence,
                 model: request.model,
+                reasoning_effort: None,
                 advisor: request.advisor,
                 kind: request.kind,
                 instructions: request.instructions,

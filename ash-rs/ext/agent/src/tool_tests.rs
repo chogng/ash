@@ -61,10 +61,7 @@ fn spawn_agent_uses_a_flat_strict_role_schema() {
 
     assert_eq!(agent["type"], "object");
     assert!(agent.get("anyOf").is_none());
-    assert_eq!(
-        agent["required"],
-        json!(["type", "name", "source"])
-    );
+    assert_eq!(agent["required"], json!(["type", "name", "source"]));
     assert_eq!(
         agent["properties"]["source"]["required"],
         json!(["type", "id"])
@@ -228,6 +225,7 @@ fn spawn_tool_uses_frozen_intent_parent_to_launch_private_investigator() {
                 command_id: CommandId::new("intent-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,
+                reasoning_effort: None,
                 advisor: None,
                 kind: protocol::TurnKind::Coding,
                 instructions: prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -404,6 +402,7 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
                 command_id: CommandId::new("timeout-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,
+                reasoning_effort: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: protocol::ApprovalMode::AskPermissions,
                 tool_mode: protocol::ToolMode::Direct,

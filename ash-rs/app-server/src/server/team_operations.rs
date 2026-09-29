@@ -256,6 +256,7 @@ impl AppServer {
             ash_protocol::TurnKind::Coding,
             TurnInstructionSelection::Agent,
             TurnModelSelection::Current,
+            None,
         )?;
         Ok(())
     }

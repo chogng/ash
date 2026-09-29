@@ -7,14 +7,17 @@ import { Lxicon } from '../../../../../../../base/common/lxicons.js';
 import type { IContextViewService } from '../../../../../../../platform/contextview/browser/contextView.js';
 import type { ModelRef } from '../../../../../../services/chat/common/chatService.js';
 import type { ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
+import type { ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
 import { ModelPickerWidget } from './modelPickerWidget.js';
 
 export interface IModelPickerDelegate {
 	getModels(): readonly ModelCatalogEntry[];
 	getSelectedModel(): ModelRef | undefined;
+	getSelectedReasoningEffort(): ModelReasoningEffort | undefined;
 	isAutomaticModel(): boolean;
 	getModelsError(): string | undefined;
 	selectModel(model: ModelRef): Promise<void>;
+	selectReasoningEffort(effort: ModelReasoningEffort | undefined): Promise<void>;
 	selectAutomaticModel(): Promise<void>;
 	openSettings(): Promise<void>;
 }

@@ -53,6 +53,7 @@ impl Fixture {
                     command_id: CommandId::new("benchmark-turn").unwrap(),
                     expected_sequence: SequenceExpectation::Exact(1),
                     model: None,
+                    reasoning_effort: None,
                     kind: ash_protocol::TurnKind::Coding,
                     instructions,
                     policy_revision: "benchmark-v1".into(),

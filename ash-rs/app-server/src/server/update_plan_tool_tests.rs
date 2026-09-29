@@ -105,6 +105,7 @@ fn tool_call_durably_updates_the_running_turn_plan() {
                 command_id: CommandId::new("plan-start").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,
+                reasoning_effort: None,
                 policy_revision: "plan-policy-v1".into(),
                 approval_mode: ApprovalMode::AskPermissions,
                 tool_mode: ash_protocol::ToolMode::Direct,
