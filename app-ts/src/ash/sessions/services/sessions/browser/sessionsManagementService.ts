@@ -106,7 +106,14 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	setUntitledSessionModel(untitledSessionId: string, model: ModelRef | undefined): void {
 		const current = this._untitledSessions.find(session => session.untitledSessionId === untitledSessionId);
 		if (!current) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
-		if (sameModel(current.model, model)) return;
+		if (current.modelSelectionKind === 'manual' && sameModel(current.model, model)) return;
+		this._untitledSessions = this._untitledSessions.map(session => session.untitledSessionId === untitledSessionId ? { ...session, model, modelSelectionKind: 'manual' as const } : session);
+		this._onDidChange.fire();
+	}
+
+	setUntitledSessionDefaultModel(untitledSessionId: string, model: ModelRef | undefined): void {
+		const current = this._untitledSessions.find(session => session.untitledSessionId === untitledSessionId);
+		if (!current || current.modelSelectionKind === 'manual' || sameModel(current.model, model)) return;
 		this._untitledSessions = this._untitledSessions.map(session => session.untitledSessionId === untitledSessionId ? { ...session, model } : session);
 		this._onDidChange.fire();
 	}

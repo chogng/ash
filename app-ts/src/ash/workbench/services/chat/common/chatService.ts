@@ -381,6 +381,8 @@ export interface IChatService {
 	readonly onDidChangeSkills: Event<void>;
 	readonly onDidUpdateTurnChanges: Event<TurnChangesUpdate>;
 	listModels(): Promise<readonly ModelCatalogEntry[]>;
+	getDefaultNewChatModel(models: readonly ModelCatalogEntry[]): ModelRef | undefined;
+	rememberSelectedModel(model: ModelRef | undefined): void;
 	listModelCatalog(): Promise<readonly ModelCatalogEntry[]>;
 	listModelProviders(): Promise<readonly ModelProviderCredentialStatus[]>;
 	setModelProviderApiKey(connection: string, apiKey: string): Promise<void>;

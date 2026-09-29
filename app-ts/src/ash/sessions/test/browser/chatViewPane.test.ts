@@ -83,11 +83,17 @@ const { ChatViewPane } = await import(
 const { ChatListWidget } = await import(
 	"../../../workbench/contrib/chat/browser/widget/chatListWidget.js"
 );
+const { BrowserStorageService } = await import('../../../workbench/services/storage/browser/storageService.js');
+const testStorageEnvironment = new JSDOM('', { url: 'https://ash.test/' });
+const testStorages: InstanceType<typeof BrowserStorageService>[] = [];
+let testStorageSequence = 0;
 const { openChatMarkdownLink } = await import("../../../workbench/contrib/chat/browser/widget/chatWidget.js");
 await import(
 	"../../../workbench/contrib/preferences/browser/preferences.contribution.js"
 );
 suiteTeardown(() => {
+	for (const storage of testStorages) storage.dispose();
+	testStorageEnvironment.window.close();
 	browserEnvironment.window.close();
 	for (const name of [
 		"window",
@@ -1635,8 +1641,14 @@ interface FakeOptions {
 	readonly advisorDefault?: { readonly model: ModelRef; readonly enabled: boolean; readonly maxCalls: number; readonly maxOutputTokens: number };
 }
 
-function createChatService(api: IRendererHost, configurationService?: WorkbenchConfigurationService): ChatService {
-	return new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, turnChangesApi: api.turnChanges, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, ...(configurationService ? { configurationService } : {}) });
+function createTestStorage(): InstanceType<typeof BrowserStorageService> {
+	return new BrowserStorageService({ ownerWindow: testStorageEnvironment.window as unknown as Window, applicationId: `chat-test-${++testStorageSequence}`, workspaceId: 'test', flushInterval: 0 });
+}
+
+function createChatService(api: IRendererHost, configurationService?: WorkbenchConfigurationService, storageService?: InstanceType<typeof BrowserStorageService>): ChatService {
+	const storage = storageService ?? createTestStorage();
+	if (!storageService) testStorages.push(storage);
+	return new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, turnChangesApi: api.turnChanges, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, ...(configurationService ? { configurationService } : {}), storageService: storage });
 }
 
 test("Chat service retains Agent identity and branch origin when reading a Thread", async () => {
@@ -1743,6 +1755,74 @@ test("Chat service caches the static catalog and filters picker entries by user 
 	assert.deepEqual(configuration.getValue(ModelCatalogConfiguration.hiddenModels), [first.model]);
 	await chat.refreshModels();
 	assert.equal(fake.modelListRequests.length, 2);
+});
+
+test('New chats use the configured model before the remembered picker choice', async () => {
+	const first = { model: { provider: 'openai', model: 'gpt-first' }, displayName: 'First' };
+	const second = { model: { provider: 'anthropic', model: 'claude-second' }, displayName: 'Second' };
+	const fake = fakeApi({
+		models: [first, second],
+		createSession: session('created', 'created-thread'),
+		thread: () => ({ ...thread(), threadId: 'created-thread' }),
+	});
+	using configuration = new WorkbenchConfigurationService();
+	using storage = createTestStorage();
+	using chat = createChatService(fake.api, configuration, storage);
+	using sessions = new SessionsManagementService(fake.api);
+	chat.rememberSelectedModel(first.model);
+	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'anthropic/claude-second');
+	const configuredDraft = sessions.createUntitledSession();
+	using configured = new ChatWidgetModel(chat, { kind: 'untitled', session: configuredDraft }, sessions);
+	await configured.initialize();
+	assert.deepEqual(configured.selectedModel, second.model);
+	await configured.send('Use the configured model');
+	assert.deepEqual(fake.turnStartRequests.at(-1)?.model, second.model);
+
+	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, '');
+	const rememberedDraft = sessions.createUntitledSession();
+	using remembered = new ChatWidgetModel(chat, { kind: 'untitled', session: rememberedDraft }, sessions);
+	await remembered.initialize();
+	assert.deepEqual(remembered.selectedModel, first.model);
+	await remembered.send('Use the remembered model');
+	assert.deepEqual(fake.turnStartRequests.at(-1)?.model, first.model);
+	using restoredChatService = createChatService(fake.api, configuration, storage);
+	assert.deepEqual(restoredChatService.getDefaultNewChatModel(await restoredChatService.listModels()), first.model);
+	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'missing/model');
+	assert.deepEqual(chat.getDefaultNewChatModel(await chat.listModels()), first.model);
+	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'auto');
+	const automaticDraft = sessions.createUntitledSession();
+	using automatic = new ChatWidgetModel(chat, { kind: 'untitled', session: automaticDraft }, sessions);
+	await automatic.initialize();
+	assert.equal(automatic.isAutomaticModel, true);
+});
+
+test('A manual model choice stays with its chat while later new chats use the new default', async () => {
+	const first = { model: { provider: 'openai', model: 'gpt-first' }, displayName: 'First' };
+	const second = { model: { provider: 'anthropic', model: 'claude-second' }, displayName: 'Second' };
+	const fake = fakeApi({ models: [first, second] });
+	using configuration = new WorkbenchConfigurationService();
+	using storage = createTestStorage();
+	using chat = createChatService(fake.api, configuration, storage);
+	using sessions = new SessionsManagementService(fake.api);
+	const firstDraft = sessions.createUntitledSession();
+	using firstChat = new ChatWidgetModel(chat, { kind: 'untitled', session: firstDraft }, sessions);
+	await firstChat.initialize();
+	await firstChat.selectModel(first.model);
+	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'anthropic/claude-second');
+	await waitFor(() => firstChat.models.length === 2);
+	assert.deepEqual(firstChat.selectedModel, first.model);
+	const secondDraft = sessions.createUntitledSession();
+	using secondChat = new ChatWidgetModel(chat, { kind: 'untitled', session: secondDraft }, sessions);
+	await secondChat.initialize();
+	assert.deepEqual(secondChat.selectedModel, second.model);
+
+	await secondChat.selectAutomaticModel();
+	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'openai/gpt-first');
+	assert.equal(secondChat.isAutomaticModel, true);
+	const thirdDraft = sessions.createUntitledSession();
+	using thirdChat = new ChatWidgetModel(chat, { kind: 'untitled', session: thirdDraft }, sessions);
+	await thirdChat.initialize();
+	assert.deepEqual(thirdChat.selectedModel, first.model);
 });
 
 test("Chat service includes ready Kimi connections in the desktop model picker", async () => {

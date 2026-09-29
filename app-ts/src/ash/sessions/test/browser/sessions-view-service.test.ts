@@ -146,6 +146,7 @@ class FakeSessionService implements ISessionsManagementService {
 	}
 
 	setUntitledSessionModel(_untitledSessionId: string, _model: ModelRef): void {}
+	setUntitledSessionDefaultModel(_untitledSessionId: string, _model: ModelRef | undefined): void {}
 	setUntitledSessionAgent(_untitledSessionId: string, _agent: import('../../../workbench/services/chat/common/chatService.js').ChatAgent | undefined): void {}
 	async materializeUntitledSession(_untitledSessionId: string): Promise<IActiveSessionThread> {
 		const id = this.nextMaterializedId++;

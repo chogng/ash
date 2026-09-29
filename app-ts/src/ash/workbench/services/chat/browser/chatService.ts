@@ -3,6 +3,7 @@ import { Emitter } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
+import { StorageScope, StorageTarget, type IStorageService } from '../../../../platform/storage/common/storage.js';
 import type { IAppServerApi, IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { IModelApi, IThreadApi, ITurnApi } from "../../../../platform/sessions/common/sessionApi.js";
 import type { ISkillApi } from "../../../../platform/skills/common/skillApi.js";
@@ -21,7 +22,10 @@ export interface ChatServiceOptions {
 	readonly appServerApi: IAppServerApi;
 	readonly eventApi: IServerEventApi;
 	readonly configurationService?: IConfigurationService;
+	readonly storageService: IStorageService;
 }
+
+const SelectedChatModelStorageKey = 'chat.currentLanguageModel.chat';
 
 /** App Server-backed implementation of the frontend Chat service. */
 export class ChatService extends Disposable implements IChatService {
@@ -68,10 +72,15 @@ export class ChatService extends Disposable implements IChatService {
 		});
 		this._register(toDisposable(() => connection.dispose()));
 		this.acceptHiddenModels(options.configurationService?.getValue(ModelCatalogConfiguration.hiddenModels) ?? []);
+		this._register(options.storageService.onDidChangeValue(event => {
+			if (event.scope === StorageScope.PROFILE && event.key === SelectedChatModelStorageKey) this._onDidChangeModels.fire();
+		}));
 		if (options.configurationService) {
 			this._register(options.configurationService.onDidChangeConfiguration((event) => {
-				if (!event.affectsConfiguration(ModelCatalogConfiguration.hiddenModels)) return;
-				this.acceptHiddenModels(options.configurationService!.getValue(ModelCatalogConfiguration.hiddenModels));
+				if (event.affectsConfiguration(ModelCatalogConfiguration.hiddenModels)) {
+					this.acceptHiddenModels(options.configurationService!.getValue(ModelCatalogConfiguration.hiddenModels));
+				}
+				if (event.affectsConfiguration(ModelCatalogConfiguration.defaultModel)) this._onDidChangeModels.fire();
 			}));
 		}
 	}
@@ -79,6 +88,25 @@ export class ChatService extends Disposable implements IChatService {
 	async listModels(): Promise<readonly ModelCatalogEntry[]> {
 		const catalog = await this.listModelCatalog();
 		return catalog.filter(entry => this.isModelVisible(entry.model));
+	}
+
+	getDefaultNewChatModel(models: readonly ModelCatalogEntry[]): ModelRef | undefined {
+		const configured = this.options.configurationService?.getValue<string>(ModelCatalogConfiguration.defaultModel).trim();
+		const remembered = this.options.storageService.get(SelectedChatModelStorageKey, StorageScope.PROFILE);
+		for (const requested of [configured, remembered]) {
+			if (!requested) continue;
+			if (requested.toLowerCase() === 'auto') return undefined;
+			const match = models.find(entry => `${entry.model.provider}/${entry.model.model}`.toLowerCase() === requested.toLowerCase());
+			if (match) return match.model;
+			const unqualified = models.filter(entry => entry.model.model.toLowerCase() === requested.toLowerCase());
+			if (unqualified.length === 1) return unqualified[0].model;
+		}
+		return undefined;
+	}
+
+	rememberSelectedModel(model: ModelRef | undefined): void {
+		const value = model ? `${model.provider}/${model.model}` : 'auto';
+		this.options.storageService.store(SelectedChatModelStorageKey, value, StorageScope.PROFILE, StorageTarget.USER);
 	}
 
 	async listModelCatalog(): Promise<readonly ModelCatalogEntry[]> {

@@ -234,7 +234,12 @@ export const SettingsNavigation = [
 				description: 'Choose models and configure model-specific behavior.',
 				keywords: ['model providers', 'inference'],
 				presentation: 'general',
-				groups: [],
+				groups: [{
+					id: 'chat-default',
+					get label() { return localize('settings.models.chatDefault.label', 'Chat'); },
+					get description() { return localize('settings.models.chatDefault.description', 'Choose the model used for new chats.'); },
+					settings: ['chat.defaultModel'],
+				}],
 			},
 			{
 				id: 'rules',

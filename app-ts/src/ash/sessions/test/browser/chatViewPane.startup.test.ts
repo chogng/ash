@@ -94,6 +94,7 @@ class PendingSessionService implements ISessionsManagementService {
 	selectUntitledSession(untitledSessionId: string): void { this._activeUntitledSessionId = untitledSessionId; }
 	discardUntitledSession(_untitledSessionId: string): void {}
 	setUntitledSessionModel(_untitledSessionId: string, _model: ModelRef): void {}
+	setUntitledSessionDefaultModel(_untitledSessionId: string, _model: ModelRef | undefined): void {}
 	setUntitledSessionAgent(_untitledSessionId: string, _agent: import('../../../workbench/services/chat/common/chatService.js').ChatAgent | undefined): void {}
 	materializeUntitledSession(_untitledSessionId: string): Promise<IActiveSessionThread> { return Promise.reject(new Error("Backend is unavailable")); }
 	promoteUntitledSession(_untitledSessionId: string, _active: IActiveSessionThread): void {}
@@ -136,6 +137,8 @@ function unavailableChatService(): IChatService {
 		onDidChangeSkills: neverEvent<void>(),
 		onDidUpdateTurnChanges: neverEvent<import("../../../workbench/services/chat/common/chatService.js").TurnChangesUpdate>(),
 		listModels: () => pending as Promise<readonly ModelCatalogEntry[]>,
+		getDefaultNewChatModel: () => undefined,
+		rememberSelectedModel: () => {},
 		listModelCatalog: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		listModelProviders: () => pending,
 		setModelProviderApiKey: () => pending as Promise<void>,

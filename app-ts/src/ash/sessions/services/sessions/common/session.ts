@@ -81,5 +81,7 @@ export interface IUntitledChatSession {
 	readonly untitledSessionId: string;
 	readonly title: string;
 	readonly model: ModelRef | undefined;
+	/** Distinguishes an explicit Auto choice from a draft awaiting its default. */
+	readonly modelSelectionKind?: 'manual';
 	readonly agent: ChatAgent | undefined;
 }

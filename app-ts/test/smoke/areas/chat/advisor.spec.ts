@@ -147,6 +147,23 @@ test('Desktop model picker searches fixed models before account setup', async ({
 	await expect(page.locator('[data-settings-container]')).toHaveAttribute('data-active-settings-category', 'models');
 });
 
+test('New Chat starts with the last model chosen in the picker', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'The model catalog requires the product backend.');
+	const page = workbench.page;
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	const selector = page.locator('.ash-chat-pane-host > .ash-chat:not([hidden]) [data-action-id="ash.chat.input.model"] button');
+	await expect(selector).toBeEnabled();
+	await selector.click();
+	const search = page.getByRole('dialog', { name: 'Choose a chat model' }).getByRole('combobox', { name: 'Choose a chat model' });
+	await search.fill('GPT-5.4');
+	await search.press('Enter');
+	await expect(selector).toHaveText('GPT-5.4');
+	await page.locator('.ash-chat-title-actions').getByRole('button', { name: 'New Chat' }).click();
+	await expect(selector).toHaveText('GPT-5.4');
+});
+
 async function expectModelPickerAnchored(picker: import('@playwright/test').Locator, selector: import('@playwright/test').Locator): Promise<void> {
 	const button = await selector.boundingBox();
 	const popup = await picker.boundingBox();

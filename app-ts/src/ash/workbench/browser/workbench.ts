@@ -602,8 +602,6 @@ export class Workbench extends Disposable {
 		}));
 		services.registerInstance(ILayoutService, layoutService);
 
-		const chatService = this._register(new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, turnChangesApi: api.turnChanges, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, configurationService: configuration }));
-		services.registerInstance(IChatService, chatService);
 		const languagePackService = this._register(new MarketplaceLanguagePackService(marketplaceService, builtinLanguagePackCatalogs));
 		services.registerInstance(ILanguagePackService, languagePackService);
 		const localeService = this._register(new WorkbenchLocaleService(configuration, languagePackService));
@@ -643,6 +641,8 @@ export class Workbench extends Disposable {
 		this.workbenchWindow = workbenchWindow;
 		this.storage = storage;
 		services.registerInstance(IStorageService, storage);
+		const chatService = this._register(new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, turnChangesApi: api.turnChanges, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, configurationService: configuration, storageService: storage }));
+		services.registerInstance(IChatService, chatService);
 		const savedFontInfo = storage.get('editorFontInfo', StorageScope.APPLICATION);
 		if (savedFontInfo !== undefined) {
 			try {

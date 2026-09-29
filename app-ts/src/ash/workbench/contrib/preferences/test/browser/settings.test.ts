@@ -159,6 +159,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, SashConfiguration.size), 'general');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'general');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'general');
+	assert.equal(findSettingCategory(layout, 'chat.defaultModel'), 'models');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.colorTheme), 'appearance');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.layoutStyle), 'layout');
 	assert.equal(findSettingCategory(layout, StartupEditorConfigurationKey), 'startup');

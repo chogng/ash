@@ -68,6 +68,7 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 			onDidChange.fire();
 		},
 		setUntitledSessionModel() {},
+		setUntitledSessionDefaultModel() {},
 		setUntitledSessionAgent() {},
 		async materializeUntitledSession() {
 			throw new Error("Session creation is unavailable");
@@ -105,6 +106,8 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 		onDidChangeSkills: ready.event,
 		onDidUpdateTurnChanges: () => toDisposable(() => {}),
 		async listModels() { return []; },
+		getDefaultNewChatModel() { return undefined; },
+		rememberSelectedModel() {},
 		async listModelCatalog() { return []; },
 		async listModelProviders() { return []; },
 		async setModelProviderApiKey() {},

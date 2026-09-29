@@ -23,6 +23,7 @@ export interface ISessionsManagementService {
 	selectUntitledSession(untitledSessionId: string): void;
 	discardUntitledSession(untitledSessionId: string): void;
 	setUntitledSessionModel(untitledSessionId: string, model: ModelRef | undefined): void;
+	setUntitledSessionDefaultModel(untitledSessionId: string, model: ModelRef | undefined): void;
 	setUntitledSessionAgent(untitledSessionId: string, agent: ChatAgent | undefined): void;
 	materializeUntitledSession(untitledSessionId: string): Promise<IActiveSessionThread>;
 	promoteUntitledSession(untitledSessionId: string, active: IActiveSessionThread): void;

@@ -258,20 +258,26 @@ export class ChatWidgetModel extends Disposable {
 	async selectModel(model: ModelRef): Promise<void> {
 		if (this.selection.kind === "untitled") {
 			this.sessionService.setUntitledSessionModel(this.selection.session.untitledSessionId, model);
+			this.refreshUntitledSelection();
+			this.chatService.rememberSelectedModel(model);
 			return;
 		}
 		this.selectedModels.set(this.selection.active.threadId, model);
 		this.automaticModels.delete(this.selection.active.threadId);
+		this.chatService.rememberSelectedModel(model);
 		this._onDidChange.fire();
 	}
 
 	async selectAutomaticModel(): Promise<void> {
 		if (this.selection.kind === 'untitled') {
 			this.sessionService.setUntitledSessionModel(this.selection.session.untitledSessionId, undefined);
+			this.refreshUntitledSelection();
+			this.chatService.rememberSelectedModel(undefined);
 			return;
 		}
 		this.selectedModels.delete(this.selection.active.threadId);
 		this.automaticModels.add(this.selection.active.threadId);
+		this.chatService.rememberSelectedModel(undefined);
 		this._onDidChange.fire();
 	}
 
@@ -305,6 +311,7 @@ export class ChatWidgetModel extends Disposable {
 		const input = text.trim();
 		if (!input) return;
 		try {
+			await this.initialize();
 			this.setState("submitting");
 			const active = await this.ensureActiveSession();
 			if (this._thread?.threadId !== active.threadId) {
@@ -490,6 +497,7 @@ export class ChatWidgetModel extends Disposable {
 		if (models.status === "fulfilled") {
 			this._models = models.value;
 			this.modelsError = undefined;
+			this.applyDefaultNewChatModel();
 		} else {
 			this.modelsError = String(models.reason);
 		}
@@ -502,6 +510,7 @@ export class ChatWidgetModel extends Disposable {
 		try {
 			this._models = await this.modelEntries();
 			this.modelsError = undefined;
+			this.applyDefaultNewChatModel();
 			this._onDidChange.fire();
 		} catch (error) {
 			this.modelsError = String(error);
@@ -511,6 +520,22 @@ export class ChatWidgetModel extends Disposable {
 
 	private async modelEntries(): Promise<readonly ModelCatalogEntry[]> {
 		return this.chatService.listModels();
+	}
+
+	private applyDefaultNewChatModel(): void {
+		if (this.selection.kind !== 'untitled' || this.selection.session.modelSelectionKind === 'manual') return;
+		const model = this.chatService.getDefaultNewChatModel(this._models);
+		this.sessionService.setUntitledSessionDefaultModel(this.selection.session.untitledSessionId, model);
+		this.refreshUntitledSelection();
+	}
+
+	private refreshUntitledSelection(): void {
+		if (this.selection.kind !== 'untitled') return;
+		const previous = this.selection.session;
+		const session = this.sessionService.untitledSessions.find(candidate => candidate.untitledSessionId === previous.untitledSessionId);
+		if (!session || session === previous) return;
+		this.selection = { kind: 'untitled', session };
+		this._onDidChange.fire();
 	}
 
 	private async loadSkillSelectors(): Promise<void> {

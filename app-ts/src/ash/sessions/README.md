@@ -77,6 +77,12 @@ model supplied by Sessions and does not create or select Sessions itself.
 5. The window Sessions service initializes the catalog. If none is
    active, the Workbench opens a window-local untitled Session; it becomes
    durable only when the first message is sent.
+   After the model catalog loads, an untitled Chat uses `chat.defaultModel`
+   when it names an available model, then the user's last manual model choice.
+   `auto` selects the App Server's default. A manual choice, including Auto,
+   stays with that Chat; existing Threads keep their own model. The last manual
+   choice is stored in the TypeScript UI profile state, while
+   `chat.defaultModel` is a registered setting.
 6. `SessionsChatView` reconciles every visible selection with a retained
    `ChatWidget` leaf in an internal, resizable `Grid`. Focus projects the leaf
    back to the active selection; closing a leaf does not archive its durable

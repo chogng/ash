@@ -157,6 +157,12 @@ export class Workbench extends Disposable {
 		const teams = new TeamsManagementService(new AppServerTeamsProvider(options.api.teams));
 		services.registerInstance(ITeamsManagementService, teams);
 		const view = this.sessionsView = this._register(new SessionsService(sessions));
+		const storage = this._register(new BrowserStorageService({
+			ownerWindow,
+			applicationId: WorkbenchModeRegistry.get(options.modeId).storageNamespace,
+			workspaceId: "sessions",
+			profileId: options.profile.id,
+		}));
 		const chat = this._register(new ChatService({
 			modelApi: options.api.model,
 			threadApi: options.api.thread,
@@ -166,12 +172,7 @@ export class Workbench extends Disposable {
 			appServerApi: options.api.appServer,
 			eventApi: options.api.events,
 			configurationService,
-		}));
-		const storage = this._register(new BrowserStorageService({
-			ownerWindow,
-			applicationId: WorkbenchModeRegistry.get(options.modeId).storageNamespace,
-			workspaceId: "sessions",
-			profileId: options.profile.id,
+			storageService: storage,
 		}));
 		services.registerInstance(ISessionsManagementService, sessions);
 		services.registerInstance(ISessionsService, view);
