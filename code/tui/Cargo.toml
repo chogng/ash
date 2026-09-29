@@ -10,6 +10,9 @@ doctest = false
 name = "ash_tui"
 path = "src/lib.rs"
 
+[features]
+in-process-tests = ["ash-app-server-client/in-process", "dep:ash-client"]
+
 [dependencies]
 features = { workspace = true }
 ash-utils-home-dir = { workspace = true }
@@ -43,6 +46,7 @@ url = { workspace = true }
 zeroize = { workspace = true }
 ash-ansi-escape = { workspace = true }
 ash-app-server-client = { workspace = true }
+ash-client = { workspace = true, optional = true }
 ash-app-server-protocol = { workspace = true }
 ash-http-client = { workspace = true }
 realtime-voice = { package = "ash-realtime-voice", path = "../../ash-rs/realtime-voice" }
@@ -75,10 +79,8 @@ arboard = { workspace = true }
 image = { workspace = true, features = ["gif", "jpeg", "png", "webp"] }
 
 [dev-dependencies]
-ash-app-server-client = { workspace = true, features = ["in-process"] }
 insta = { workspace = true }
 tempfile = { workspace = true }
-ash-client = { workspace = true }
 
 [build-dependencies]
 ash-sprite = { workspace = true, features = ["rust-source", "sheet"] }

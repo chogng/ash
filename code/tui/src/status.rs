@@ -62,6 +62,7 @@ pub(crate) use settings_request::StatusLineEdit;
 pub(crate) use settings_request::StatusLineEditorUpdate;
 pub(crate) use settings_request::execute;
 #[cfg(test)]
+#[cfg(all(test, feature = "in-process-tests"))]
 pub(crate) use settings_request::set_status_line;
 pub(crate) use setup::StatusLineChoices;
 pub(crate) use setup::StatusLineSelectionAction;

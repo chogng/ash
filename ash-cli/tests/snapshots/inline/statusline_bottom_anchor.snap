@@ -1,0 +1,36 @@
+---
+source: ash-cli/tests/support/tui_process.rs
+expression: screen
+---
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+> /statusline
+
+─ Status line ──────────────────────────────────────────────────────────────────────────────────────
+
+> Permissions                                                                                 on
+  Model                                                                                       on
+  Cache hit rate                                                                             off
+  Reference cost                                                                             off
+  Memory                                                                                     off
+  CPU                                                                                        off
+  Git branch                                                                                  on
+  Git changes                                                                                 on
+  Context                                                                                    off
+
+  Enter/Space toggle · Esc close

@@ -150,6 +150,7 @@ where
             expected_sequence: scope.expected_sequence,
             approval_mode,
             model: None,
+            reasoning_effort: None,
             tool_mode: None,
             input: materialize_submission(client, submission)?,
         },
@@ -303,7 +304,7 @@ fn decode_image_data_url(url: &str) -> Result<(ImageMediaType, Vec<u8>), ClientE
     Ok((media_type, bytes))
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "in-process-tests"))]
 pub(crate) fn read_thread<T>(
     client: &mut AppServerClient<T>,
     session_id: &SessionId,

@@ -67,6 +67,7 @@ fn thread(messages: &[&str]) -> Thread {
                     kind: Default::default(),
                     instructions: None,
                     model: None,
+                    reasoning_effort: None,
                     tool_profile: None,
                     tool_mode: ash_protocol::ToolMode::Direct,
                     approval_mode: ash_protocol::ApprovalMode::AskPermissions,

@@ -78,6 +78,7 @@ fn thread(model: ModelRef) -> Thread {
             kind: Default::default(),
             instructions: None,
             model: Some(model),
+            reasoning_effort: None,
             tool_profile: None,
             tool_mode: ToolMode::Direct,
             approval_mode: ApprovalMode::AskPermissions,

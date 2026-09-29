@@ -40,6 +40,7 @@ pub(crate) use request::ThreadRequestScope;
 pub(crate) use request::interrupt_turn;
 pub(crate) use request::read_older_thread_history;
 #[cfg(test)]
+#[cfg(all(test, feature = "in-process-tests"))]
 pub(crate) use request::read_thread;
 pub(crate) use request::read_thread_history;
 pub(crate) use request::resolve_interaction;

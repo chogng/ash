@@ -5,7 +5,7 @@ mod chat_panel_tests;
 mod command;
 mod command_panel;
 mod completion;
-#[cfg(test)]
+#[cfg(all(test, feature = "in-process-tests"))]
 #[path = "app/conversation_flow_tests.rs"]
 mod conversation_flow_tests;
 mod dispatch;
@@ -22,11 +22,11 @@ mod inline;
 #[path = "app/interaction_flow_tests.rs"]
 mod interaction_flow_tests;
 #[cfg(test)]
-#[path = "app/mode_tests.rs"]
-mod mode_tests;
-#[cfg(test)]
 #[path = "app/mermaid_preview_tests.rs"]
 mod mermaid_preview_tests;
+#[cfg(test)]
+#[path = "app/mode_tests.rs"]
+mod mode_tests;
 mod recovery;
 mod redraw;
 mod requests;

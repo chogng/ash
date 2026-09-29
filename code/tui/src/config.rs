@@ -26,6 +26,7 @@ pub(crate) use editor::config_choices;
 pub(crate) use editor::with_dictation_shortcut;
 pub(crate) use request::execute;
 #[cfg(test)]
+#[cfg(all(test, feature = "in-process-tests"))]
 pub(crate) use request::set_settings;
 pub(crate) use settings::GlyphSet;
 pub(crate) use settings::KeyHintStyle;

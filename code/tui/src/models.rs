@@ -26,6 +26,7 @@ pub(crate) use request::ModelUpdate;
 pub(crate) use request::execute;
 pub(crate) use request::remove_provider_pins;
 #[cfg(test)]
+#[cfg(all(test, feature = "in-process-tests"))]
 pub(crate) use request::set_model;
 
 #[derive(Clone, Debug, Eq, PartialEq)]

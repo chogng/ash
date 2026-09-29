@@ -620,6 +620,10 @@ opt-level = "s"
 # Large integration-test dependency graphs otherwise exceed macOS compact-unwind limits.
 opt-level = 1
 
+[profile.test.package.ash-tui]
+# Keep TUI recompilation short in its unit tests and dependent CLI tests.
+opt-level = 0
+
 [profile.test.package.ash-app-server]
 # Large App Server test binaries otherwise exceed macOS compact-unwind encoding limits.
 opt-level = "s"

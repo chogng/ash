@@ -170,7 +170,7 @@ jobs:
           tool: just@1.46.0
 
       - name: Test TUI interactions
-        run: just test ash-tui --profile ci-test
+        run: just test ash-tui --features in-process-tests --profile ci-test
 
       - name: Test real TUI terminal scenarios
         timeout-minutes: 20

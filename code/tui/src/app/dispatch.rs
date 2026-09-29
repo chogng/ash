@@ -391,6 +391,6 @@ impl From<ClientError> for CommandExecutionError {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "in-process-tests"))]
 #[path = "dispatch_tests.rs"]
 mod tests;

@@ -24,6 +24,7 @@ pub(crate) use completion::refresh;
 pub(crate) use request::execute;
 pub(crate) use request::load_selection;
 #[cfg(test)]
+#[cfg(all(test, feature = "in-process-tests"))]
 pub(crate) use request::set_enablement;
 pub(crate) use settings::SkillChoices;
 pub(crate) use settings::SkillSelectionAction;

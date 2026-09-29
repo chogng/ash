@@ -9,9 +9,12 @@ use ash_app_server_protocol::protocol::config::ToolSearchEmbeddingStatusDto;
 use ash_app_server_protocol::protocol::config::ToolSearchModeDto;
 use std::collections::BTreeMap;
 use std::fmt::Display;
+#[cfg(feature = "in-process-tests")]
 use std::sync::Mutex;
+#[cfg(feature = "in-process-tests")]
 use std::sync::MutexGuard;
 
+#[cfg(feature = "in-process-tests")]
 static IN_PROCESS_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 pub(crate) fn snapshot_name(name: impl Display, module_path: &str) -> String {
@@ -29,6 +32,7 @@ pub(crate) fn snapshot_name_for_function(function_path: &str, module_path: &str)
     snapshot_name(function_name, module_path)
 }
 
+#[cfg(feature = "in-process-tests")]
 pub(crate) fn in_process_test_guard() -> MutexGuard<'static, ()> {
     IN_PROCESS_TEST_LOCK
         .lock()

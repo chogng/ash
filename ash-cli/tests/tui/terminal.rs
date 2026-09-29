@@ -54,6 +54,62 @@ fn actual_tui_inline_preserves_history_across_panels_resize_and_exit() {
 }
 
 #[test]
+fn actual_tui_inline_statusline_stays_at_terminal_bottom() {
+    let fixture = Fixture::new();
+    let server = ScenarioServer::start([HttpResponse::streaming(["BOTTOM-ANCHORED-REPLY"], None)]);
+    fixture.write_config(&server.base_url());
+    fixture.append_config("\n[tui]\nscreenMode = \"inline\"\n");
+    let mut process = TuiProcess::start_in_vscode(&fixture, &[], LARGE_SIZE);
+    process.wait_for_stable_screen("ask permissions on");
+    process.submit("keep this in history");
+    process.wait_for_stable_screen("BOTTOM-ANCHORED-REPLY");
+
+    process.submit("/statusline");
+    process.wait_for_stable_screen("Git changes");
+    assert_eq!(
+        row_containing(&process, "Enter/Space toggle"),
+        usize::from(LARGE_SIZE.rows - 1),
+        "{}",
+        process.screen()
+    );
+    process.assert_snapshot("inline/statusline_bottom_anchor");
+
+    process.resize(SMALL_SIZE);
+    process.wait_for_stable_screen("Git changes");
+    assert_eq!(
+        row_containing(&process, "Enter/Space toggle"),
+        usize::from(SMALL_SIZE.rows - 1),
+        "{}",
+        process.screen()
+    );
+    process.escape();
+    process.wait_for_stable_screen("ask permissions on");
+    assert_eq!(
+        row_containing(&process, "ask permissions on"),
+        usize::from(SMALL_SIZE.rows - 1),
+        "{}",
+        process.screen()
+    );
+    process.quit();
+    assert_eq!(
+        process
+            .terminal_text()
+            .matches("BOTTOM-ANCHORED-REPLY")
+            .count(),
+        1
+    );
+    assert_eq!(server.request_count(), 1);
+}
+
+fn row_containing(process: &TuiProcess, marker: &str) -> usize {
+    process
+        .screen()
+        .lines()
+        .position(|line| line.contains(marker))
+        .unwrap_or_else(|| panic!("missing {marker:?}:\n{}", process.screen()))
+}
+
+#[test]
 fn actual_tui_screen_mode_switches_live_and_persists() {
     let fixture = Fixture::new();
     let server = ScenarioServer::start([HttpResponse::streaming(["MODE-SWITCH-REPLY"], None)]);
@@ -66,7 +122,7 @@ fn actual_tui_screen_mode_switches_live_and_persists() {
     assert!(process.raw_text().contains("\x1b[?1049h"));
     process.submit("/config");
     process.wait_for_stable_screen("Screen mode");
-    for _ in 0..7 {
+    for _ in 0..8 {
         process.down();
     }
     process.enter();
@@ -76,14 +132,15 @@ fn actual_tui_screen_mode_switches_live_and_persists() {
     assert!(process.raw_text().contains("\x1b[?1049l"));
     process.escape();
     process.wait_for_stable_screen("ask permissions on");
-    assert!(
-        input_top_row(&process) < fullscreen_input,
+    assert_eq!(
+        row_containing(&process, "ask permissions on"),
+        usize::from(LARGE_SIZE.rows - 1),
         "{}",
         process.screen()
     );
     process.submit("/config");
     process.wait_for_stable_screen("Screen mode");
-    for _ in 0..7 {
+    for _ in 0..8 {
         process.down();
     }
     process.enter();
@@ -212,14 +269,14 @@ fn assert_input_surface_visible(process: &TuiProcess) {
         screen
             .lines()
             .skip(top + 1)
-            .any(|line| line.starts_with('>') || line.contains("│ > ")),
+            .any(|line| line.trim_start().starts_with('>') || line.contains("│ > ")),
         "input prompt remains visible:\n{screen}"
     );
     assert!(
         screen
             .lines()
             .skip(top + 2)
-            .any(|line| line.starts_with("──") || line.trim_start().starts_with('╰')),
+            .any(|line| line.trim_start().starts_with("──") || line.trim_start().starts_with('╰')),
         "input bottom border remains visible:\n{screen}"
     );
 }
@@ -229,11 +286,11 @@ fn input_top_row(process: &TuiProcess) -> usize {
     let rows = screen.lines().collect::<Vec<_>>();
     let prompt = rows
         .iter()
-        .rposition(|line| line.starts_with('>') || line.contains("│ > "))
-        .expect("chat input prompt remains visible");
+        .rposition(|line| line.trim_start().starts_with('>') || line.contains("│ > "))
+        .unwrap_or_else(|| panic!("chat input prompt remains visible:\n{screen}"));
     let top = prompt.checked_sub(1).expect("the input has a top border");
     assert!(
-        rows[top].starts_with("──") || rows[top].trim_start().starts_with('╭'),
+        rows[top].trim_start().starts_with("──") || rows[top].trim_start().starts_with('╭'),
         "{screen}"
     );
     top

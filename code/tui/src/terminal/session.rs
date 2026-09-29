@@ -21,6 +21,7 @@ use crossterm::terminal::enable_raw_mode;
 use ratatui::Terminal;
 use ratatui::TerminalOptions;
 use ratatui::Viewport;
+use ratatui::backend::Backend;
 use ratatui::backend::CrosstermBackend;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Position;
@@ -93,13 +94,24 @@ impl TerminalSession {
 
     pub(crate) fn set_inline_height(&mut self, height: u16) -> io::Result<()> {
         self.terminal.autoresize()?;
-        let height = height.max(1).min(self.screen_area()?.height.max(1));
-        if self.inline_height == height {
+        let screen = self.screen_area()?;
+        let height = height.max(1).min(screen.height.max(1));
+        let target_y = screen.height.saturating_sub(height);
+        let current_y = self.terminal.get_frame().area().y;
+        if self.inline_height == height && current_y == target_y {
             return Ok(());
         }
-        let origin = self.terminal.get_frame().area().as_position();
         self.terminal.clear()?;
-        self.terminal.set_cursor_position(origin)?;
+        if current_y > target_y {
+            // Scroll completed output into terminal history before a growing panel takes its rows.
+            self.terminal
+                .set_cursor_position(Position::new(0, screen.height.saturating_sub(1)))?;
+            self.terminal
+                .backend_mut()
+                .append_lines(current_y - target_y)?;
+        }
+        self.terminal
+            .set_cursor_position(Position::new(0, target_y))?;
         self.terminal = new_terminal(ScreenMode::Inline, height)?;
         self.inline_height = height;
         self.invalidate();

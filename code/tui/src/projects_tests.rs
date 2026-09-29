@@ -69,6 +69,7 @@ fn root(seed: &str, path: &Path) -> ProjectRootDto {
 }
 
 #[test]
+#[cfg(feature = "in-process-tests")]
 fn adding_a_project_root_persists_project_identity_and_keeps_permissions_explicit() {
     use ash_app_server_client::InProcessClientOptions;
     use ash_app_server_client::start_in_process_client;

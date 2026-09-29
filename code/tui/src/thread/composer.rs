@@ -25,7 +25,7 @@ pub(crate) use input::SlashCommandCatalog;
 pub(crate) use input::SlashCommandInvocation;
 pub(crate) use input::TuiSlashCommandAction;
 pub(crate) use input::UnknownSlashCommand;
-#[cfg(test)]
+#[cfg(all(test, feature = "in-process-tests"))]
 pub(crate) use input::built_in_catalog_command;
 pub(crate) use input::built_in_slash_command_definitions;
 pub(crate) use input::completion_index_at;

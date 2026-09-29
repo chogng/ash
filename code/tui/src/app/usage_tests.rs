@@ -271,6 +271,7 @@ fn usage_loading_failure_and_late_results_preserve_the_current_panel() {
 }
 
 #[test]
+#[cfg(feature = "in-process-tests")]
 #[ignore = "Queries real ChatGPT usage through the local App Server using the installed Codex login"]
 fn live_usage_command_through_local_app_server() {
     let _guard = crate::test_support::in_process_test_guard();

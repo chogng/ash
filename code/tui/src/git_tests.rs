@@ -259,6 +259,7 @@ fn worktree_picker_keeps_directory_names_visible_for_long_paths() {
 }
 
 #[test]
+#[cfg(feature = "in-process-tests")]
 fn creating_a_worktree_through_app_server_leaves_session_catalog_unchanged() {
     use ash_app_server_client::{AppServerSession, InProcessClientOptions};
     use ash_app_server_protocol::protocol::common::ClientInfo;
@@ -526,6 +527,7 @@ fn branch(name: &str, current: bool) -> GitBranchDto {
 }
 
 #[test]
+#[cfg(feature = "in-process-tests")]
 fn branch_commands_list_and_switch_the_real_workspace_repository() {
     use ash_app_server_client::InProcessClientOptions;
     use ash_app_server_client::start_in_process_client;
@@ -637,6 +639,7 @@ fn branch_commands_list_and_switch_the_real_workspace_repository() {
         BranchSelectionAction::Occupied { name } if name == "linked-topic")));
 }
 
+#[cfg(feature = "in-process-tests")]
 fn run_git(root: &std::path::Path, arguments: &[&str]) {
     let output = std::process::Command::new("git")
         .args(arguments)

@@ -458,6 +458,6 @@ impl From<ClientError> for SessionsError {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "in-process-tests"))]
 #[path = "active_tests.rs"]
 mod tests;

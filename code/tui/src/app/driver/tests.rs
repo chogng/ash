@@ -1,4 +1,6 @@
+#[cfg(feature = "in-process-tests")]
 use super::AppDriver;
+#[cfg(feature = "in-process-tests")]
 use super::AppDriverResources;
 use super::ScheduledCommand;
 use super::schedule_command as schedule;
@@ -28,6 +30,7 @@ fn schedule_command(
 }
 use crate::app::App;
 use crate::app::AppCommand;
+#[cfg(feature = "in-process-tests")]
 use crate::app::AppEvent;
 use crate::app::completion::Completion;
 use crate::app::requests::RequestKey;
@@ -36,19 +39,30 @@ use crate::host::Command as HostCommand;
 use crate::keymap_setup::Command as KeymapCommand;
 use crate::theme::Command as ThemeCommand;
 use crate::thread::Command as ThreadCommand;
+#[cfg(feature = "in-process-tests")]
 use crate::thread::composer::SlashCommandInvocation;
+#[cfg(feature = "in-process-tests")]
 use crate::thread::composer::TuiSlashCommandAction;
+#[cfg(feature = "in-process-tests")]
 use crate::thread::composer::built_in_catalog_command;
+#[cfg(feature = "in-process-tests")]
 use ash_app_server_client::AppServerSession;
+#[cfg(feature = "in-process-tests")]
 use ash_app_server_client::InProcessClientOptions;
+#[cfg(feature = "in-process-tests")]
 use ash_app_server_protocol::protocol::common::ClientInfo;
+#[cfg(feature = "in-process-tests")]
 use ash_slash_commands::SlashCommandOrigin;
+#[cfg(feature = "in-process-tests")]
 use ratatui::Terminal;
+#[cfg(feature = "in-process-tests")]
 use ratatui::backend::TestBackend;
 use std::collections::VecDeque;
+#[cfg(feature = "in-process-tests")]
 use std::sync::Arc;
 
 #[test]
+#[cfg(feature = "in-process-tests")]
 fn repeated_model_command_opens_the_fixed_catalog_without_loading() {
     let _guard = crate::test_support::in_process_test_guard();
     let root = tempfile::tempdir().unwrap();

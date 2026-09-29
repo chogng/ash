@@ -276,6 +276,7 @@ fn directory_add_feedback_is_visible_below_the_input() {
 }
 
 #[test]
+#[cfg(feature = "in-process-tests")]
 fn panel_add_uses_server_paths_preserves_permissions_and_reports_missing_directories() {
     use ash_app_server_client::InProcessClientOptions;
     use ash_app_server_client::start_in_process_client;
@@ -479,6 +480,7 @@ fn dir_view_maps_exact_paths_to_remove_actions() {
 }
 
 #[test]
+#[cfg(feature = "in-process-tests")]
 fn move_session_adds_directory_and_selects_its_cwd() {
     use ash_app_server_client::InProcessClientOptions;
     use ash_app_server_client::start_in_process_client;

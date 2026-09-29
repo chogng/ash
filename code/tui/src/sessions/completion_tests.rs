@@ -84,6 +84,7 @@ fn switch_request_preserves_the_selected_thread() {
 }
 
 #[test]
+#[cfg(feature = "in-process-tests")]
 fn fork_command_preserves_selection_and_starts_only_when_prompted() {
     use super::ForkStatus;
     use super::SessionCompletion;
@@ -188,7 +189,9 @@ fn fork_command_preserves_selection_and_starts_only_when_prompted() {
     }
 }
 
+#[cfg(feature = "in-process-tests")]
 struct OfflineModel;
+#[cfg(feature = "in-process-tests")]
 impl ash_client::OperationClient for OfflineModel {
     fn execute(
         &self,

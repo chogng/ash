@@ -332,10 +332,11 @@ just pet click
 ```sh
 just check ash-tui
 just test ash-tui
+just test ash-tui --features in-process-tests
 just test-tui
 ```
 
-功能模块的测试检查状态、请求和完成结果；App 测试检查跨功能路由、优先级和退出；真实 PTY 场景检查完整 CLI/TUI 操作。`just test-tui` 先构建配套 daemon，Windows 与 Unix 使用同一宿主；可追加场景过滤器。上述命令是执行入口，不是本次通过记录。
+日常 `just test ash-tui` 运行不需要嵌入 App Server 的测试。`in-process-tests` 包含保留在功能所属模块中的服务器联动测试；CI 运行这组测试，修改请求、状态更新或流式响应联动时也要在本地运行。功能模块的测试检查状态、请求和完成结果；App 测试检查跨功能路由、优先级和退出；真实 PTY 场景检查完整 CLI/TUI 操作。`just test-tui` 先构建配套 daemon，Windows 与 Unix 使用同一宿主；可追加场景过滤器。上述命令是执行入口，不是本次通过记录。
 
 真实场景入口为 `ash-cli/tests/tui_real_scenarios.rs`，只加载共享支持代码和以下四个模块；仍只生成一个集成测试程序。原测试函数名过滤器继续可用，也可用 `just test-tui config::` 按组运行。
 
