@@ -34,6 +34,44 @@ pub(super) fn render(app: &App, width: u16, rows: u16) -> Buffer {
     terminal.backend().buffer().clone()
 }
 
+#[test]
+fn hooks_panel_opens_inline_and_restores_draft_after_close() {
+    let mut app = app();
+    app.insert_text("keep this draft");
+    app.update(crate::hooks::Event::Opened(
+        std::collections::BTreeMap::new(),
+    ));
+    assert_eq!(app.list_selection().unwrap().title(), "Hooks");
+    crate::tui_assert_snapshot!("hooks_inline", text(&render(&app, 80, 24)));
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.command_panel().is_none());
+    assert!(app.input().contains("keep this draft"));
+}
+
+#[test]
+fn slash_completion_uses_only_its_visible_rows_in_inline_mode() {
+    let mut app = app();
+    let screen = Rect::new(0, 0, 80, 60);
+    let resting_height = height(&app, screen);
+
+    app.insert_text("/status");
+    assert!(app.completion_visible());
+    let completion_height = height(&app, screen);
+    assert!(completion_height > resting_height);
+    assert!(
+        completion_height < 20,
+        "completion grew to {completion_height} rows"
+    );
+    crate::tui_assert_snapshot!(
+        "inline_status_completion_compact",
+        text(&render(&app, 80, 60))
+    );
+
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(!app.completion_visible());
+    assert!(height(&app, screen) < 20);
+}
+
 pub(super) fn text(buffer: &Buffer) -> String {
     buffer
         .content
@@ -164,9 +202,15 @@ fn config_opens_and_closes_without_reprinting_history() {
     app.update(ConfigEvent::EditorOpened(choices));
     assert!(app.command_panel().is_some());
     let buffer = render(&app, 100, 32);
-    assert!(text(&buffer).contains("Screen mode"));
-    assert!(text(&buffer).contains("inline"));
+    assert!(text(&buffer).contains("Vim mode"));
     crate::tui_assert_snapshot!("config", text(&buffer));
+    for _ in 0..8 {
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    }
+    let scrolled = render(&app, 100, 32);
+    assert!(text(&scrolled).contains("Screen mode"));
+    assert!(text(&scrolled).contains("inline"));
+    crate::tui_assert_snapshot!("config_scrolled_to_screen_mode", text(&scrolled));
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_none());
     crate::tui_assert_snapshot!("config_closed", text(&render(&app, 100, 32)));

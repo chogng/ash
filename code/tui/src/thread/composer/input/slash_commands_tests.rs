@@ -108,6 +108,26 @@ fn builtins_follow_enum_presentation_order() {
 }
 
 #[test]
+fn hooks_is_a_local_command_without_inline_arguments() {
+    let catalog =
+        SlashCommandCatalog::with_local_and_server(built_in_slash_command_definitions(), [])
+            .unwrap();
+    let invocation = SlashCommandInput::for_submission("/hooks", &catalog)
+        .invocation()
+        .unwrap();
+    assert_eq!(invocation.origin, SlashCommandOrigin::Local);
+    assert_eq!(
+        invocation.command.name.parse(),
+        Ok(TuiSlashCommandAction::Hooks)
+    );
+    assert!(
+        SlashCommandInput::for_submission("/hooks extra", &catalog)
+            .invocation()
+            .is_none()
+    );
+}
+
+#[test]
 fn builtins_declare_argument_support() {
     assert_eq!(
         TuiSlashCommandAction::Branch.definition().argument_mode,

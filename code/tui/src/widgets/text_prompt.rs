@@ -4,8 +4,10 @@ use crate::widgets::search_box;
 use crate::widgets::search_box::SearchBoxInputOutcome;
 use crate::widgets::search_box::SearchBoxModel;
 use crate::widgets::search_box::SearchBoxState;
+use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
+use crossterm::event::KeyModifiers;
 use ratatui::Frame;
 use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
@@ -46,12 +48,21 @@ impl TextPrompt {
         }
     }
 
+    pub(crate) fn with_initial_value(mut self, value: String) -> Self {
+        self.input.set_query(value);
+        self
+    }
+
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> TextPromptOutcome {
         if key.kind != KeyEventKind::Press {
             return TextPromptOutcome::Consumed;
         }
         if bindings::CANCEL.matches(key) {
             return TextPromptOutcome::Dismiss;
+        }
+        if key.code == KeyCode::Char('u') && key.modifiers.contains(KeyModifiers::CONTROL) {
+            self.input.set_query(String::new());
+            return TextPromptOutcome::Consumed;
         }
         if bindings::SAVE.matches(key) {
             let value = self.input.query().trim();
@@ -69,6 +80,10 @@ impl TextPrompt {
 
     pub(crate) fn handle_paste(&mut self, value: String) {
         self.input.handle_paste(value);
+    }
+
+    pub(crate) fn localize(&mut self, language: crate::nls::Language) {
+        self.input.localize(language);
     }
 
     pub(crate) fn title(&self) -> &str {

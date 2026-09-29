@@ -25,6 +25,7 @@ use skill::SkillCompletionState;
 pub(crate) use skill::SkillCompletionView;
 use std::ops::Range;
 pub(crate) use view::contains;
+pub(crate) use view::desired_height;
 pub(crate) use view::draw;
 pub(crate) use view::index_at;
 

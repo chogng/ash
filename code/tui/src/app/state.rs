@@ -25,6 +25,8 @@ use crate::dirs::DirSelectionAction;
 use crate::dirs::Event as DirEvent;
 use crate::git::Command as GitCommand;
 use crate::git::Event as GitEvent;
+use crate::hooks::Event as HooksEvent;
+use crate::hooks::Outcome as HooksOutcome;
 use crate::host::Command as HostCommand;
 use crate::host::Event as HostEvent;
 use crate::host::clipboard::ClipboardImage;
@@ -623,6 +625,12 @@ impl App {
                 }
                 .into(),
             ),
+            CommandPanelOutcome::Hooks(HooksOutcome::Command(command)) => Some(command.into()),
+            CommandPanelOutcome::Hooks(HooksOutcome::Consumed) => None,
+            CommandPanelOutcome::Hooks(HooksOutcome::Dismiss) => {
+                self.close_command_panel();
+                None
+            }
             CommandPanelOutcome::Model(ModelSelectionAction::Select {
                 preference, effort, ..
             }) => Some(
@@ -1856,11 +1864,6 @@ impl App {
         self.open_command_panel(CommandPanel::status(panel));
     }
 
-    fn show_startup_panel(&mut self) {
-        let context = self.startup_context.clone();
-        self.open_command_panel(CommandPanel::startup(&context));
-    }
-
     fn update_status_line_editor(&mut self, mut spec: StatusLineChoices) {
         self.localize_selection(&mut spec);
         self.panels_mut().replace_status_line(spec);
@@ -2662,6 +2665,16 @@ impl App {
                 self.open_command_panel(CommandPanel::Lsp(crate::lsp::Panel::new(event.0)))
             }
             AppEvent::Mcp(event) => self.apply_mcp_event(event),
+            AppEvent::Hooks(event) => match event {
+                HooksEvent::Opened(hooks) => {
+                    self.open_command_panel(CommandPanel::Hooks(crate::hooks::Panel::new(hooks)))
+                }
+                HooksEvent::Updated(hooks) => {
+                    if let Some(CommandPanel::Hooks(panel)) = self.panels_mut().command_mut() {
+                        panel.update(hooks);
+                    }
+                }
+            },
             AppEvent::Sessions(event) => self.apply_session_event(event),
             AppEvent::CommandPanelClosed => self.close_command_panel(),
             #[cfg(test)]
@@ -2789,6 +2802,7 @@ impl App {
             | AppEvent::Lsp(_)
             | AppEvent::Memories(_)
             | AppEvent::Mcp(McpEvent::SettingsOpened(_) | McpEvent::SettingsUpdated(_))
+            | AppEvent::Hooks(HooksEvent::Opened(_) | HooksEvent::Updated(_))
             | AppEvent::Theme(ThemeEvent::PickerOpened(_))
             | AppEvent::Thread(ThreadEvent::RewindPickerOpened(_))
             | AppEvent::CommandPanelClosed => {}
@@ -3572,12 +3586,6 @@ impl App {
                 if invocation.arguments.is_empty() =>
             {
                 Some(ConfigCommand::OpenEditor.into())
-            }
-            (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Startup))
-                if invocation.arguments.is_empty() =>
-            {
-                self.show_startup_panel();
-                None
             }
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::StatusLine))
                 if invocation.arguments.is_empty() =>

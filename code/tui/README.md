@@ -35,6 +35,7 @@ just ash
 | 链接范围、换行与 OSC 8 输出 | [hyperlinks.rs](src/terminal/hyperlinks.rs) |
 | 会话列表、预览、切换和详情 | [sessions](src/sessions) |
 | 设置、主题、快捷键 | [config](src/config)、[theme](src/theme)、[keymap](src/keymap) |
+| 用户 Hook 配置 | [hooks.rs](src/hooks.rs)；App Server 保存并执行 Hook |
 | 持续内存诊断 | [memory.rs](src/memory.rs)；Config 提供开关，Status 只读展示 |
 | 界面语言与类型化文案 | [nls.rs](src/nls.rs)；持久化由 [config/settings.rs](src/config/settings.rs) 负责 |
 | 状态信息和本机资源 | [status](src/status)、[process_resources.rs](../../ash-rs/memory-diagnostics/src/process_resources.rs) |
@@ -378,6 +379,10 @@ just test-tui
 - 分类页签共用已配置的 Marketplace 来源；发行配置已提供 `ash`，增加独立来源才需要配置新的 metadata/targets 地址与信任根。
 - `marketplace.rs` 和 `lsp.rs` 拥有终端状态与交互，后端继续拥有安装、解析和配置。共享契约见 [Slash Commands](../../docs/slash-commands.md#marketplace-与领域管理入口)。
 - 定向验证：`just test ash-tui marketplace`；真实终端流程：`just test-tui actual_tui_marketplace_and_lsp_commands`。
+
+## Hooks
+
+`/hooks` 打开用户 Hook 列表，可搜索、查看详情、新增、编辑、启停和确认删除。新增时输入简短名称，TUI 保存为 `user:hook:<名称>`，初始为停用。编辑页可轮换事件、设置准确工具名、程序和 JSON 字符串数组形式的参数。`turnCompleted` 事件不接受工具名。配置读写由 App Server 负责，交互由 [hooks.rs](src/hooks.rs) 负责。
 
 ## Memories
 

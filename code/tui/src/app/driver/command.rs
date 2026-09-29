@@ -11,6 +11,7 @@ use crate::app::requests::request_key;
 use crate::config;
 use crate::connectors;
 use crate::dirs;
+use crate::hooks;
 use crate::host::Command as HostCommand;
 use crate::host::Operation as HostOperation;
 use crate::keymap_setup;
@@ -238,6 +239,16 @@ impl AppDriver {
                     request_key,
                     name,
                     move || mcp::execute(&mut client, command),
+                    &mut self.app,
+                    origin,
+                );
+            }
+            AppCommand::Hooks(command) => {
+                let mut client = self.client.clone();
+                self.requests.spawn_presentation(
+                    request_key,
+                    "ash-tui-hooks",
+                    move || hooks::execute(&mut client, command),
                     &mut self.app,
                     origin,
                 );

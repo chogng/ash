@@ -1607,7 +1607,6 @@ fn bare_slash_renders_the_first_command_window() {
     assert!(rendered.contains("/skills"));
     assert!(rendered.contains("/memories"));
     assert!(rendered.contains("/mcp"));
-    assert!(rendered.contains("/hooks"));
     assert!(rendered.contains("/usage"));
     assert!(!rendered.contains("/resume"));
     assert!(!rendered.contains("/archive-thread"));
@@ -1615,6 +1614,15 @@ fn bare_slash_renders_the_first_command_window() {
     assert!(!rendered.contains("/thread "));
     assert!(!rendered.contains("/login"));
     assert!(!rendered.contains("/plugins"));
+}
+
+#[test]
+fn hooks_slash_completion_is_visible() {
+    let mut app = App::new();
+    app.insert_text("/hooks");
+    let rendered = render(&app, 80, 20);
+    assert!(rendered.contains("/hooks"));
+    crate::tui_assert_snapshot!("hooks_slash_completion", rendered);
 }
 
 #[test]
@@ -1629,6 +1637,51 @@ fn hooks_panel_opens_fullscreen_and_restores_input_after_close() {
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_none());
     assert!(app.input().contains("keep this draft"));
+}
+
+#[test]
+fn hooks_detail_and_editor_render_fullscreen() {
+    use ash_app_server_protocol::protocol::config::HookActionDto;
+    use ash_app_server_protocol::protocol::config::HookConfigDto;
+    use ash_app_server_protocol::protocol::config::HookEnablementDto;
+    use ash_app_server_protocol::protocol::config::HookEventDto;
+    use ash_app_server_protocol::protocol::config::HookMatcherDto;
+
+    let hook = HookConfigDto {
+        id: "user:hook:review".into(),
+        event: HookEventDto::BeforeTool,
+        matcher: HookMatcherDto {
+            tool_names: vec!["exec_command".into()],
+        },
+        action: HookActionDto::Process {
+            program: "review-hook".into(),
+            args: vec!["--check".into()],
+        },
+        enablement: HookEnablementDto::Disabled,
+    };
+    let mut app = App::new();
+    app.update(crate::hooks::Event::Opened(
+        std::collections::BTreeMap::from([(hook.id.clone(), hook)]),
+    ));
+    let Some(CommandPanel::Hooks(panel)) = app.fullscreen.panels.command_mut() else {
+        panic!("expected Hooks panel");
+    };
+    panel.selection_mut().unwrap().focus_item(
+        &crate::widgets::list_selection::ListSelectionItemId::new("user:hook:review"),
+    );
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(app.list_selection().unwrap().title(), "user:hook:review");
+    crate::tui_assert_snapshot!("hooks_detail", render(&app, 80, 20));
+
+    let Some(CommandPanel::Hooks(panel)) = app.fullscreen.panels.command_mut() else {
+        panic!("expected Hooks panel");
+    };
+    panel.selection_mut().unwrap().focus_item(
+        &crate::widgets::list_selection::ListSelectionItemId::new("hook-action-1"),
+    );
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(app.list_selection().unwrap().title(), "Edit Hook");
+    crate::tui_assert_snapshot!("hooks_editor", render(&app, 80, 20));
 }
 
 #[test]
