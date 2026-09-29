@@ -6,6 +6,9 @@
 			"type": "node-terminal",
 			"request": "launch",
 			"command": "just ash",
+			"osx": {
+				"command": "uv run --python 3.12 just ash"
+			},
 			"cwd": "${workspaceFolder}",
 			"presentation": {
 				"group": "0_ash_code",
@@ -44,7 +47,7 @@
 			"name": "Ash Browser UI (TypeScript only)",
 			"type": "chrome",
 			"request": "launch",
-			"url": "http://127.0.0.1:5173/browser/workbench/workbench.html",
+			"url": "http://127.0.0.1:5173/",
 			"webRoot": "${workspaceFolder}/app-ts/src/ash/code",
 			"preLaunchTask": "Launch Ash Browser Vite",
 			"presentation": {
@@ -57,6 +60,9 @@
 			"type": "node-terminal",
 			"request": "launch",
 			"command": "just app",
+			"osx": {
+				"command": "uv run --python 3.12 just app"
+			},
 			"cwd": "${workspaceFolder}",
 			"presentation": {
 				"group": "2_app",
