@@ -12,6 +12,7 @@ import { IEditorService } from '../../../services/editor/common/editorService.js
 import { IExplorerService } from './files.js';
 import { FileEditorInput } from './editors/fileEditorInput.js';
 
+// Command registration lives in fileActions.contribution.ts. Download is implemented there by FileDownload.
 export const NEW_FILE_COMMAND_ID = 'explorer.newFile';
 export const NEW_FOLDER_COMMAND_ID = 'explorer.newFolder';
 export const DOWNLOAD_COMMAND_ID = 'explorer.download';
@@ -23,6 +24,7 @@ export const COPY_FILE_COMMAND_ID = 'filesExplorer.copy';
 export const PASTE_FILE_COMMAND_ID = 'filesExplorer.paste';
 export const CANCEL_CUT_COMMAND_ID = 'filesExplorer.cancelCut';
 
+/** Handles {@link COPY_FILE_COMMAND_ID} and {@link CUT_FILE_COMMAND_ID}; roots and nested selections are omitted. */
 export async function copyExplorerItems(accessor: ServicesAccessor, cut: boolean): Promise<void> {
 	const selection = accessor.get(IExplorerService).getContext();
 	const items = selection.filter(item => !isWorkspaceRoot(accessor, item.resource) && !selection.some(parent =>
@@ -32,6 +34,7 @@ export async function copyExplorerItems(accessor: ServicesAccessor, cut: boolean
 	accessor.get(IExplorerService).setToCopy(items, cut);
 }
 
+/** Handles {@link CANCEL_CUT_COMMAND_ID} without clearing clipboard content written after the cut. */
 export async function cancelExplorerCut(accessor: ServicesAccessor): Promise<void> {
 	const explorer = accessor.get(IExplorerService);
 	if (!explorer.getToCopy().cut) return;
@@ -42,6 +45,7 @@ export async function cancelExplorerCut(accessor: ServicesAccessor): Promise<voi
 	explorer.setToCopy([], false);
 }
 
+/** Handles {@link PASTE_FILE_COMMAND_ID}; files from a paste event take precedence over stored resource URIs. */
 export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: unknown): Promise<void> {
 	if (fileList !== undefined && !(fileList instanceof FileList)) throw new TypeError('Invalid files to paste');
 	const explorer = accessor.get(IExplorerService);
@@ -86,10 +90,12 @@ export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: 
 	}
 }
 
+/** Matches the ordered clipboard resources so a later write cannot inherit an earlier cut. */
 function sameResources(left: readonly URI[], right: readonly URI[]): boolean {
 	return left.length === right.length && left.every((resource, index) => extUriBiasedIgnorePathCase.isEqual(resource, right[index]));
 }
 
+/** Never overwrites a paste target; name conflicts receive ` copy`, then ` copy 2`, and so on. */
 async function availablePasteTarget(files: IFileService, directory: URI, name: string): Promise<URI> {
 	const dot = name.lastIndexOf('.');
 	const stem = dot > 0 ? name.slice(0, dot) : name;
@@ -102,6 +108,7 @@ async function availablePasteTarget(files: IFileService, directory: URI, name: s
 	throw new Error(localize({ bundle: 'ash', key: 'files.pasteNoName' }, 'Could not find an available file name.'));
 }
 
+/** Handles {@link RENAME_FILE_COMMAND_ID} for the selected non-root item. */
 export async function renameExplorerItem(accessor: ServicesAccessor): Promise<void> {
 	const item = accessor.get(IExplorerService).getContext()[0];
 	if (!item || isWorkspaceRoot(accessor, item.resource)) return;
@@ -117,6 +124,7 @@ export async function renameExplorerItem(accessor: ServicesAccessor): Promise<vo
 	await accessor.get(IFileService).rename(item.resource, URI.joinPath(dirname(item.resource), name), 'error');
 }
 
+/** Handles {@link DELETE_FILE_COMMAND_ID} with confirmation before permanent deletion. */
 export async function deleteExplorerItem(accessor: ServicesAccessor): Promise<void> {
 	const item = accessor.get(IExplorerService).getContext()[0];
 	if (!item || isWorkspaceRoot(accessor, item.resource)) return;
@@ -128,6 +136,7 @@ export async function deleteExplorerItem(accessor: ServicesAccessor): Promise<vo
 	if (result.confirmed) await accessor.get(IFileService).delete(item.resource, 'error', 'recursive');
 }
 
+/** Handles {@link OPEN_TO_SIDE_COMMAND_ID} for a selected file. */
 export async function openExplorerItemToSide(accessor: ServicesAccessor): Promise<void> {
 	const item = accessor.get(IExplorerService).getContext()[0];
 	if (item?.kind === FileKind.File) {
@@ -139,7 +148,7 @@ function isWorkspaceRoot(accessor: ServicesAccessor, resource: URI): boolean {
 	return resource.scheme === 'ash-workspace' || accessor.get(IWorkspaceContextService).getWorkspace().folders.some(folder => extUriBiasedIgnorePathCase.isEqual(folder.uri, resource));
 }
 
-/** Creates a file in the selected Explorer folder and opens it in the editor. */
+/** Handles {@link NEW_FILE_COMMAND_ID}; creates a file in the chosen folder and opens it in the editor. */
 export async function createNewFile(accessor: ServicesAccessor): Promise<void> {
 	const directory = await resolveCreationDirectory(accessor, 'file');
 	if (!directory) return;
@@ -159,6 +168,7 @@ export async function createNewFile(accessor: ServicesAccessor): Promise<void> {
 	await accessor.get(IEditorService).openEditor(new FileEditorInput(resource, { label: name }));
 }
 
+/** Handles {@link NEW_FOLDER_COMMAND_ID} in the selected or active workspace folder. */
 export async function createNewFolder(accessor: ServicesAccessor): Promise<void> {
 	const directory = await resolveCreationDirectory(accessor, 'folder');
 	if (!directory) return;
@@ -174,6 +184,7 @@ export async function createNewFolder(accessor: ServicesAccessor): Promise<void>
 	await accessor.get(IFileService).createDirectory(URI.joinPath(directory, name));
 }
 
+/** Uses the selected item's directory, then the active editor's workspace root; prompts if roots are ambiguous. */
 async function resolveCreationDirectory(accessor: ServicesAccessor, kind: 'file' | 'folder'): Promise<URI | undefined> {
 	const workspace = accessor.get(IWorkspaceContextService).getWorkspace();
 	if (workspace.folders.length === 0) {
