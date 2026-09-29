@@ -456,6 +456,7 @@ mod tests {
                 catalog_generation: 3,
                 connection_generation: 4,
             }],
+            activity: None,
             caller: ToolCallCaller::Direct,
         };
         let image = ContentPart::ImageUrl {

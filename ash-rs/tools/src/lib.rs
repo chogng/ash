@@ -20,7 +20,7 @@ mod registry;
 mod schema;
 
 pub use ash_environment::EnvId;
-pub use ash_protocol::{ImageDetail, ToolCallId, ToolName};
+pub use ash_protocol::{ImageDetail, ToolActivity, ToolCall, ToolCallId, ToolName};
 pub use ash_protocol::{
     ProcessExecutionOutput, ProcessExitStatus, SandboxDenialOutput, ToolReplaySafety,
 };

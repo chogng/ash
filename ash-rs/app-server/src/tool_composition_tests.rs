@@ -30,6 +30,7 @@ use ash_model_provider::EmbeddingRequest;
 use ash_model_provider::EmbeddingResponse;
 use ash_model_provider::EmbeddingVector;
 use ash_model_provider::ModelProviderError;
+use ash_protocol::ToolActivity;
 use ash_protocol::ToolCall;
 use ash_protocol::ToolDefinition;
 use ash_protocol::ToolExecutionOutput;
@@ -49,6 +50,7 @@ use super::combine_tool_ports_at_generation_with_search;
 
 struct FakeTools {
     definitions: Vec<ToolDefinition>,
+    activity: Option<ToolActivity>,
     source: ActionSource,
     source_id: &'static str,
 }
@@ -62,6 +64,7 @@ impl FakeTools {
                 parameters: serde_json::json!({"type": "object"}),
                 strict: false,
             }],
+            activity: None,
             source,
             source_id,
         }
@@ -80,15 +83,25 @@ impl FakeTools {
                     strict: false,
                 })
                 .collect(),
+            activity: None,
             source,
             source_id,
         }
+    }
+
+    fn with_activity(mut self, activity: ToolActivity) -> Self {
+        self.activity = Some(activity);
+        self
     }
 }
 
 impl ToolService for FakeTools {
     fn definitions(&self) -> Vec<ToolDefinition> {
         self.definitions.clone()
+    }
+
+    fn activity(&self, _call: &ToolCall) -> Option<ToolActivity> {
+        self.activity.clone()
     }
 
     fn prepare(&self, _: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
@@ -155,6 +168,44 @@ fn small_mcp_catalog_is_exposed_directly() {
             .collect::<Vec<_>>(),
         vec!["external_status", "read_file"]
     );
+}
+
+#[test]
+fn binding_carries_declared_activity_for_an_opaque_tool_name() {
+    let combined = combine_tool_ports(vec![ToolPort::local(
+        Arc::new(
+            FakeTools::new("opaque_tool", ActionSource::BuiltInTool, "activity").with_activity(
+                ToolActivity::Read {
+                    target: "history".into(),
+                },
+            ),
+        ),
+        Arc::new(AskPolicy),
+    )])
+    .unwrap()
+    .unwrap();
+    let call = ToolCall {
+        id: ash_protocol::ToolCallId::new("activity-call").unwrap(),
+        name: ToolName::new("opaque_tool").unwrap(),
+        arguments: serde_json::json!({}),
+    };
+    let binding = combined
+        .tools
+        .bind_call(&call, ash_protocol::ToolCallCaller::Direct)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        binding.activity,
+        Some(ToolActivity::Read {
+            target: "history".into(),
+        })
+    );
+    let mut legacy_binding = binding;
+    legacy_binding.activity = None;
+    combined
+        .tools
+        .validate_call_binding(&call, Some(&legacy_binding))
+        .unwrap();
 }
 
 #[test]

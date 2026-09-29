@@ -958,6 +958,7 @@ export type { TimeContext } from './TimeContext.js';
 export type { TimeContextConfigDto } from './TimeContextConfigDto.js';
 export type { TimeContextMode } from './TimeContextMode.js';
 export type { TimeZoneOrigin } from './TimeZoneOrigin.js';
+export type { ToolActivity } from './ToolActivity.js';
 export type { ToolCallBinding } from './ToolCallBinding.js';
 export type { ToolCallCaller } from './ToolCallCaller.js';
 export type { ToolCallId } from './ToolCallId.js';

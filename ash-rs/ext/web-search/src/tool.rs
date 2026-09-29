@@ -42,6 +42,12 @@ impl WebSearchTool {
 }
 
 impl ToolExecutor for WebSearchTool {
+    fn activity(&self, _call: &ash_tools::ToolCall) -> Option<ash_tools::ToolActivity> {
+        Some(ash_tools::ToolActivity::Search {
+            target: "web".into(),
+        })
+    }
+
     fn definition(&self) -> ToolDefinition {
         self.definition.clone()
     }

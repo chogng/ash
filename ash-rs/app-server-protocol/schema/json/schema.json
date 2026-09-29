@@ -37230,9 +37230,100 @@
       ],
       "type": "string"
     },
+    "ToolActivity": {
+      "description": "The user-facing operation declared by the tool owner when a call is bound.\n\nThis describes transcript presentation. Authorization and side-effect policy remain owned by\nthe action review path; a command may still change files.",
+      "oneOf": [
+        {
+          "properties": {
+            "target": {
+              "type": "string"
+            },
+            "type": {
+              "const": "read",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "target"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "target": {
+              "type": "string"
+            },
+            "type": {
+              "const": "search",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "target"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "target": {
+              "type": "string"
+            },
+            "type": {
+              "const": "list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "target"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "target": {
+              "type": "string"
+            },
+            "type": {
+              "const": "edit",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "target"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "run",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "ToolCallBinding": {
       "description": "Durable binding between one Tool Call and the exact definition/source generation it selected.\n\nRuntime keys are intentionally absent. Recovery must compare this value with an available\nimmutable source snapshot and fail closed when the exact binding can no longer be restored.",
       "properties": {
+        "activity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolActivity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "caller": {
           "$ref": "#/$defs/ToolCallCaller"
         },

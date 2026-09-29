@@ -282,6 +282,12 @@ impl ApplyPatchTool {
 }
 
 impl ToolExecutor for ApplyPatchTool {
+    fn activity(&self, _call: &ash_tools::ToolCall) -> Option<ash_tools::ToolActivity> {
+        Some(ash_tools::ToolActivity::Edit {
+            target: "files".into(),
+        })
+    }
+
     fn definition(&self) -> ToolDefinition {
         self.definition.clone()
     }

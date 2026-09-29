@@ -59,6 +59,20 @@ pub enum ToolCallCaller {
     },
 }
 
+/// The user-facing operation declared by the tool owner when a call is bound.
+///
+/// This describes transcript presentation. Authorization and side-effect policy remain owned by
+/// the action review path; a command may still change files.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum ToolActivity {
+    Read { target: String },
+    Search { target: String },
+    List { target: String },
+    Edit { target: String },
+    Run,
+}
+
 /// Durable binding between one Tool Call and the exact definition/source generation it selected.
 ///
 /// Runtime keys are intentionally absent. Recovery must compare this value with an available
@@ -72,5 +86,18 @@ pub struct ToolCallBinding {
     pub registry_generation: u64,
     pub definition_digest: String,
     pub source_chain: Vec<ToolSourceProvenance>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activity: Option<ToolActivity>,
     pub caller: ToolCallCaller,
+}
+
+impl ToolCallBinding {
+    /// Presentation metadata can be absent in older calls without changing their execution source.
+    pub fn matches_execution_source(&self, other: &Self) -> bool {
+        self.registry_incarnation == other.registry_incarnation
+            && self.registry_generation == other.registry_generation
+            && self.definition_digest == other.definition_digest
+            && self.source_chain == other.source_chain
+            && self.caller == other.caller
+    }
 }

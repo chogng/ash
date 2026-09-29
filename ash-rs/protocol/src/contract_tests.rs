@@ -950,6 +950,9 @@ fn durable_tool_call_binding_preserves_source_generation_and_caller() {
                 catalog_generation: 4,
                 connection_generation: 2,
             }],
+            activity: Some(crate::ToolActivity::Search {
+                target: "issues".into(),
+            }),
             caller: crate::ToolCallCaller::CodeMode {
                 parent_tool_call_id: ToolCallId::new("outer_1").unwrap(),
                 cell_id: "cell_1".into(),
@@ -961,7 +964,32 @@ fn durable_tool_call_binding_preserves_source_generation_and_caller() {
 
     assert_eq!(value["binding"]["registryGeneration"], 9);
     assert_eq!(value["binding"]["sourceChain"][0]["type"], "mcp");
+    assert_eq!(value["binding"]["activity"]["type"], "search");
+    assert_eq!(value["binding"]["activity"]["target"], "issues");
     assert_eq!(value["binding"]["caller"]["type"], "codeMode");
+
+    let current: ThreadItem = serde_json::from_value(value.clone()).unwrap();
+    let mut legacy = value;
+    legacy["binding"]
+        .as_object_mut()
+        .unwrap()
+        .remove("activity");
+    let restored: ThreadItem = serde_json::from_value(legacy).unwrap();
+    let (
+        ThreadItem::ToolCall {
+            binding: Some(current_binding),
+            ..
+        },
+        ThreadItem::ToolCall {
+            binding: Some(legacy_binding),
+            ..
+        },
+    ) = (current, restored)
+    else {
+        panic!("expected tool calls with bindings");
+    };
+    assert!(legacy_binding.activity.is_none());
+    assert!(current_binding.matches_execution_source(&legacy_binding));
 }
 
 #[test]

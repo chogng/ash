@@ -955,6 +955,26 @@ impl<B: ash_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
         self.definitions.clone()
     }
 
+    fn activity(&self, call: &ToolCall) -> Option<ash_protocol::ToolActivity> {
+        use ash_protocol::ToolActivity;
+        match call.name.as_str() {
+            "read_file" => Some(ToolActivity::Read {
+                target: "file".into(),
+            }),
+            "grep" => Some(ToolActivity::Search {
+                target: "files".into(),
+            }),
+            "glob" => Some(ToolActivity::List {
+                target: "files".into(),
+            }),
+            "write_file" | "edit" => Some(ToolActivity::Edit {
+                target: "file".into(),
+            }),
+            "shell-command" | "shell-session" => Some(ToolActivity::Run),
+            _ => None,
+        }
+    }
+
     fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
         if call.name.as_str() == "shell-command" {
             return self.shell.prepare(call);

@@ -292,6 +292,11 @@ impl OneTimeToolGrant {
 pub trait ToolService: Send + Sync {
     fn definitions(&self) -> Vec<ToolDefinition>;
 
+    /// Declares a call's transcript activity independently of execution authorization.
+    fn activity(&self, _call: &ToolCall) -> Option<ash_protocol::ToolActivity> {
+        None
+    }
+
     /// Freezes the exact host definition and stable source chain selected for a model Tool Call.
     ///
     /// The default bridge hashes the canonical protocol definition at generation zero. A
@@ -323,6 +328,7 @@ pub trait ToolService: Send + Sync {
             } else {
                 source_chain
             },
+            activity: self.activity(call),
             caller,
         }))
     }
@@ -341,7 +347,7 @@ pub trait ToolService: Send + Sync {
         let expected = self
             .bind_call(call, binding.caller.clone())?
             .ok_or_else(|| CoreError::Execution("tool binding is unavailable".into()))?;
-        if &expected != binding {
+        if !expected.matches_execution_source(binding) {
             return Err(CoreError::Execution(format!(
                 "tool {} no longer matches its durable definition and source binding",
                 call.name

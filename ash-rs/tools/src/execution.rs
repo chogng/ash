@@ -274,6 +274,11 @@ pub trait ToolExecutor: Send + Sync {
     /// Returns immutable metadata captured when the host builds a registry snapshot.
     fn definition(&self) -> ToolDefinition;
 
+    /// Declares how a call appears in a transcript, independently of authorization policy.
+    fn activity(&self, _call: &ash_protocol::ToolCall) -> Option<ash_protocol::ToolActivity> {
+        None
+    }
+
     /// Declares how the host initially exposes this executor to a model.
     fn exposure(&self) -> crate::ToolExposure {
         crate::ToolExposure::Direct

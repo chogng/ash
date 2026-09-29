@@ -186,6 +186,23 @@ impl FileSystemTool {
 }
 
 impl ToolExecutor for FileSystemTool {
+    fn activity(&self, call: &ash_tools::ToolCall) -> Option<ash_tools::ToolActivity> {
+        use ash_tools::ToolActivity;
+        match call
+            .arguments
+            .get("operation")
+            .and_then(serde_json::Value::as_str)
+        {
+            Some("read" | "metadata") => Some(ToolActivity::Read {
+                target: "file".into(),
+            }),
+            Some("list") => Some(ToolActivity::List {
+                target: "files".into(),
+            }),
+            _ => None,
+        }
+    }
+
     fn definition(&self) -> ToolDefinition {
         self.definition.clone()
     }

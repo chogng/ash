@@ -15,6 +15,7 @@ use ash_protocol::ItemId;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadItem;
+use ash_protocol::ToolActivity;
 use ash_protocol::ToolCallId;
 use ash_protocol::ToolName;
 use ash_protocol::ToolOutputStream;
@@ -39,7 +40,7 @@ fn tool_call_output_and_result_form_one_exec_cell() {
                 tool_call_id: tool_call_id.clone(),
                 name: ToolName::new("exec").unwrap(),
                 arguments_json: "{\"cmd\":\"test\"}".into(),
-                binding: None,
+                binding: Some(activity_binding(ToolActivity::Run)),
             },
             transient: false,
         },
@@ -75,7 +76,7 @@ fn tool_call_output_and_result_form_one_exec_cell() {
 #[test]
 fn grouped_history_failure_names_the_failed_call_and_command_completion_stays_neutral() {
     let turn = turn_id("turn");
-    let call = |name: &str| ThreadTranscriptEntry::Item {
+    let call = |name: &str, activity: ToolActivity| ThreadTranscriptEntry::Item {
         entry_id: format!("call-{name}"),
         turn_id: turn.clone(),
         item: ThreadItem::ToolCall {
@@ -84,7 +85,7 @@ fn grouped_history_failure_names_the_failed_call_and_command_completion_stays_ne
             tool_call_id: call_id(name),
             name: ToolName::new(name).unwrap(),
             arguments_json: "{}".into(),
-            binding: None,
+            binding: Some(activity_binding(activity)),
         },
         transient: false,
     };
@@ -103,11 +104,21 @@ fn grouped_history_failure_names_the_failed_call_and_command_completion_stays_ne
     };
     let mut model = TranscriptModel::default();
     model.replace(snapshot(vec![
-        call("history_list"),
+        call(
+            "history_list",
+            ToolActivity::List {
+                target: "history".into(),
+            },
+        ),
         result("history_list", "2 entries", false),
-        call("history_read"),
+        call(
+            "history_read",
+            ToolActivity::Read {
+                target: "history".into(),
+            },
+        ),
         result("history_read", "record missing", true),
-        call("shell-command"),
+        call("shell-command", ToolActivity::Run),
         result("shell-command", "exit 0", false),
     ]));
 
@@ -351,7 +362,9 @@ fn tool_call(name: &str, turn: &TurnId) -> ThreadTranscriptEntry {
             tool_call_id: call_id(name),
             name: ToolName::new("read_file").unwrap(),
             arguments_json: "{}".into(),
-            binding: None,
+            binding: Some(activity_binding(ToolActivity::Read {
+                target: "file".into(),
+            })),
         },
     }
 }
@@ -415,6 +428,19 @@ fn tool_result(name: &str, turn: &TurnId) -> ThreadTranscriptEntry {
             content: None,
             is_error: false,
         },
+    }
+}
+
+fn activity_binding(activity: ToolActivity) -> ash_protocol::ToolCallBinding {
+    ash_protocol::ToolCallBinding {
+        registry_incarnation: None,
+        registry_generation: 1,
+        definition_digest: "test-definition".into(),
+        source_chain: vec![ash_protocol::ToolSourceProvenance::Product {
+            component: "test".into(),
+        }],
+        activity: Some(activity),
+        caller: ash_protocol::ToolCallCaller::Direct,
     }
 }
 

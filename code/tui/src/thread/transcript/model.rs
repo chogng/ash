@@ -487,6 +487,7 @@ impl TranscriptModel {
                         tool_call_id,
                         name,
                         arguments_json,
+                        binding,
                         ..
                     },
                 ..
@@ -496,6 +497,7 @@ impl TranscriptModel {
                 tool_call_id,
                 name,
                 pretty_json(&arguments_json),
+                binding.and_then(|binding| binding.activity),
                 render_revision,
             ),
             ThreadTranscriptEntry::Item {
@@ -555,13 +557,14 @@ impl TranscriptModel {
         tool_call_id: ToolCallId,
         name: ash_protocol::ToolName,
         arguments: String,
+        activity: Option<ash_protocol::ToolActivity>,
         render_revision: u64,
     ) {
         if let Some(cell) = self.cell_for_call_mut(&tool_call_id) {
             let TranscriptCellBody::Exec(exec) = &mut cell.body else {
                 unreachable!("a matched ToolCall is owned by an ExecCell")
             };
-            exec.update_call(entry_id, &tool_call_id, &name, arguments);
+            exec.update_call(entry_id, &tool_call_id, &name, arguments, activity);
             cell.render_revision = render_revision;
             return;
         }
@@ -571,9 +574,9 @@ impl TranscriptModel {
             ..
         }) = self.cells.last_mut()
             && group_turn.as_ref() == Some(&turn_id)
-            && exec.can_accept(&name)
+            && exec.can_accept(activity.as_ref())
         {
-            exec.push_call(entry_id, tool_call_id, &name, arguments);
+            exec.push_call(entry_id, tool_call_id, &name, arguments, activity);
             let last = self
                 .cells
                 .last_mut()
@@ -592,6 +595,7 @@ impl TranscriptModel {
                 tool_call_id,
                 &name,
                 arguments,
+                activity,
             )),
         });
     }

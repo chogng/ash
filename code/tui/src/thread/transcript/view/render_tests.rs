@@ -86,19 +86,39 @@ fn execution_output_uses_a_solid_circle_with_semantic_color() {
             test_context().muted(),
         ),
         (
-            CellView::exec("shell", CommandStatus::Succeeded),
+            CellView::exec(
+                "shell",
+                CommandStatus::Succeeded,
+                Some(ash_protocol::ToolActivity::Run),
+            ),
             test_context().muted(),
         ),
         (
-            CellView::exec("write_file", CommandStatus::Failed),
+            CellView::exec(
+                "write_file",
+                CommandStatus::Failed,
+                Some(ash_protocol::ToolActivity::Edit {
+                    target: "file".into(),
+                }),
+            ),
             test_context().danger(),
         ),
         (
-            CellView::exec("write_file", CommandStatus::Succeeded),
+            CellView::exec(
+                "write_file",
+                CommandStatus::Succeeded,
+                Some(ash_protocol::ToolActivity::Edit {
+                    target: "file".into(),
+                }),
+            ),
             test_context().muted(),
         ),
         (
-            CellView::exec("shell", CommandStatus::Running),
+            CellView::exec(
+                "shell",
+                CommandStatus::Running,
+                Some(ash_protocol::ToolActivity::Run),
+            ),
             test_context().warning(),
         ),
     ];

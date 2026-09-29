@@ -1797,6 +1797,8 @@ use ash_protocol::TimeContextMode;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::TimeZoneOrigin;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolActivity;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolCallBinding;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolCallCaller;
@@ -4502,6 +4504,7 @@ typescript_bindings! {
     DynamicToolResponse,
     DynamicToolOutput,
     ThreadItem,
+    ToolActivity,
     ToolCallBinding,
     ToolSourceProvenance,
     ToolCallCaller,

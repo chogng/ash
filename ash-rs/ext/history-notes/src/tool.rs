@@ -188,6 +188,34 @@ impl HistoryTool {
     }
 }
 impl ToolExecutor for HistoryTool {
+    fn activity(&self, _call: &tools::ToolCall) -> Option<tools::ToolActivity> {
+        use tools::ToolActivity;
+        match self.name {
+            "history_list" => Some(ToolActivity::List {
+                target: "history".into(),
+            }),
+            "history_read" => Some(ToolActivity::Read {
+                target: "history".into(),
+            }),
+            "history_search" => Some(ToolActivity::Search {
+                target: "history".into(),
+            }),
+            "notes_read" => Some(ToolActivity::Read {
+                target: "notes".into(),
+            }),
+            "notes_list" => Some(ToolActivity::List {
+                target: "notes".into(),
+            }),
+            "notes_search" => Some(ToolActivity::Search {
+                target: "notes".into(),
+            }),
+            "notes_write" => Some(ToolActivity::Edit {
+                target: "notes".into(),
+            }),
+            _ => None,
+        }
+    }
+
     fn definition(&self) -> ToolDefinition {
         let properties = match self.name {
             "history_list" => json!({"offset":{"type":"integer","minimum":0}}),

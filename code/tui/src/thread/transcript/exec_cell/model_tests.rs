@@ -2,28 +2,61 @@ use super::ExecCell;
 use super::ExecGroup;
 use crate::nls::Language;
 use crate::thread::transcript::CommandStatus;
+use ash_protocol::ToolActivity;
 use ash_protocol::ToolCallId;
 use ash_protocol::ToolName;
 use ash_protocol::ToolOutputStream;
 
 #[test]
-fn exploration_calls_group_by_stable_tool_classification() {
+fn exploration_calls_group_by_declared_activity_instead_of_name() {
     let mut cell = ExecCell::start(
         "read-entry".into(),
         call_id("read"),
-        &tool_name("read_file"),
+        &tool_name("opaque_one"),
         "{}".into(),
+        Some(ToolActivity::Read {
+            target: "file".into(),
+        }),
     );
-    assert!(cell.can_accept(&tool_name("search")));
+    assert!(cell.can_accept(Some(&ToolActivity::Search {
+        target: "files".into()
+    })));
     cell.push_call(
         "search-entry".into(),
         call_id("search"),
-        &tool_name("search"),
+        &tool_name("opaque_two"),
         "{}".into(),
+        Some(ToolActivity::Search {
+            target: "files".into(),
+        }),
     );
 
     assert_eq!(cell.group, ExecGroup::ExploreGroup);
     assert_eq!(cell.summary(Language::English), "Exploring 2 operations");
+
+    let unclassified = ExecCell::start(
+        "unclassified".into(),
+        call_id("unclassified"),
+        &tool_name("read_file"),
+        "{}".into(),
+        None,
+    );
+    assert_eq!(unclassified.group, ExecGroup::SingleExec);
+    assert!(!unclassified.can_accept(Some(&ToolActivity::Read {
+        target: "file".into()
+    })));
+
+    let named_like_target = ExecCell::start(
+        "literal-name".into(),
+        call_id("literal-name"),
+        &tool_name("file"),
+        "{}".into(),
+        None,
+    );
+    assert_eq!(
+        named_like_target.summary(Language::Chinese),
+        "正在运行 file"
+    );
 }
 
 #[test]
@@ -35,12 +68,18 @@ fn output_and_result_route_to_the_exact_tool_call() {
         first.clone(),
         &tool_name("read"),
         "{}".into(),
+        Some(ToolActivity::Read {
+            target: "file".into(),
+        }),
     );
     cell.push_call(
         "second-entry".into(),
         second.clone(),
         &tool_name("search"),
         "{}".into(),
+        Some(ToolActivity::Search {
+            target: "files".into(),
+        }),
     );
     cell.apply_output(
         "second-output".into(),
@@ -70,6 +109,7 @@ fn live_output_is_bounded_with_an_omission_marker() {
         call.clone(),
         &tool_name("exec"),
         "{}".into(),
+        Some(ToolActivity::Run),
     );
     let output = (0..500)
         .map(|index| format!("line {index} {}", "x".repeat(500)))
@@ -89,13 +129,21 @@ fn history_tools_are_grouped_with_read_operations() {
         call_id("history-list"),
         &tool_name("history_list"),
         "{}".into(),
+        Some(ToolActivity::List {
+            target: "history".into(),
+        }),
     );
-    assert!(cell.can_accept(&tool_name("history_read")));
+    assert!(cell.can_accept(Some(&ToolActivity::Read {
+        target: "history".into()
+    })));
     cell.push_call(
         "read-entry".into(),
         call_id("history-read"),
         &tool_name("history_read"),
         "{}".into(),
+        Some(ToolActivity::Read {
+            target: "history".into(),
+        }),
     );
     assert_eq!(cell.summary(Language::Chinese), "正在探查 2 项操作");
 }

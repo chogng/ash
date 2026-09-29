@@ -1636,6 +1636,7 @@ fn shell_turn_atomically_persists_its_exact_command_and_tool_call() {
             source_chain: vec![ash_protocol::ToolSourceProvenance::Product {
                 component: "test".into(),
             }],
+            activity: Some(ash_protocol::ToolActivity::Run),
             caller: ash_protocol::ToolCallCaller::Direct,
         },
         invocation: ShellTurnInvocation {

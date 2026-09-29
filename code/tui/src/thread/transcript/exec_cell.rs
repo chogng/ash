@@ -4,6 +4,7 @@ use crate::nls::Language;
 use crate::nls::Text;
 use crate::thread::transcript::CommandStatus;
 use crate::thread::transcript::TranscriptCellId;
+use ash_protocol::ToolActivity;
 use ash_protocol::ToolCallId;
 use ash_protocol::ToolName;
 use ash_protocol::ToolOutputStream;
@@ -22,22 +23,12 @@ pub(super) enum ExecGroup {
     CompactCommandGroup,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum ExecClass {
-    Read,
-    Search,
-    List,
-    Command,
-    Mutation,
-    Other,
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ExecCall {
     tool_call_id: ToolCallId,
     name: String,
     arguments: String,
-    class: ExecClass,
+    activity: Option<ToolActivity>,
     call_entry_id: Option<String>,
     stdout_entry_ids: BTreeSet<String>,
     stderr_entry_ids: BTreeSet<String>,
@@ -50,14 +41,19 @@ struct ExecCall {
 
 impl ExecCall {
     fn failure_label(&self, language: Language) -> String {
-        let template = match self.name.as_str() {
-            "history_list" => "Failed to list history",
-            "history_read" => "Failed to read history",
-            "history_search" => "Failed to search history",
-            _ if self.class == ExecClass::Command => "Command failed",
-            _ => "{0} failed",
+        let (template, target) = match self.activity.as_ref() {
+            Some(ToolActivity::Read { target }) => ("Failed to read {0}", target.as_str()),
+            Some(ToolActivity::Search { target }) => ("Failed to search {0}", target.as_str()),
+            Some(ToolActivity::List { target }) => ("Failed to list {0}", target.as_str()),
+            Some(ToolActivity::Edit { target }) => ("Failed to update {0}", target.as_str()),
+            Some(ToolActivity::Run) => ("Command failed", ""),
+            None => ("{0} failed", self.name.as_str()),
         };
-        localized(language, template, &[&self.name])
+        if self.activity.is_some() {
+            localized_activity(language, template, target)
+        } else {
+            localized(language, template, &[target])
+        }
     }
 
     fn new(
@@ -65,13 +61,13 @@ impl ExecCall {
         tool_call_id: ToolCallId,
         name: String,
         arguments: String,
+        activity: Option<ToolActivity>,
     ) -> Self {
-        let class = classify(&name);
         Self {
             tool_call_id,
             name,
             arguments,
-            class,
+            activity,
             call_entry_id: entry_id,
             stdout_entry_ids: BTreeSet::new(),
             stderr_entry_ids: BTreeSet::new(),
@@ -134,6 +130,7 @@ impl ExecCell {
         tool_call_id: ToolCallId,
         name: &ToolName,
         arguments: String,
+        activity: Option<ToolActivity>,
     ) -> Self {
         let cell_id = TranscriptCellId::for_tool_call(&tool_call_id);
         let call = ExecCall::new(
@@ -141,8 +138,9 @@ impl ExecCell {
             tool_call_id,
             name.as_str().to_owned(),
             arguments,
+            activity,
         );
-        let group = group_for(call.class);
+        let group = group_for(call.activity.as_ref());
         Self {
             cell_id,
             group,
@@ -159,6 +157,7 @@ impl ExecCell {
                 tool_call_id,
                 "tool".into(),
                 String::new(),
+                None,
             )],
         }
     }
@@ -179,17 +178,23 @@ impl ExecCell {
             .any(|call| &call.tool_call_id == tool_call_id)
     }
 
-    pub(super) fn can_accept(&self, name: &ToolName) -> bool {
+    pub(super) fn can_accept(&self, activity: Option<&ToolActivity>) -> bool {
         if self.calls.len() >= MAX_GROUP_CALLS {
             return false;
         }
-        let class = classify(name.as_str());
         match self.group {
             ExecGroup::ExploreGroup => {
-                matches!(class, ExecClass::Read | ExecClass::Search | ExecClass::List)
+                matches!(
+                    activity,
+                    Some(
+                        ToolActivity::Read { .. }
+                            | ToolActivity::Search { .. }
+                            | ToolActivity::List { .. }
+                    )
+                )
             }
             ExecGroup::CompactCommandGroup => {
-                class == ExecClass::Command
+                matches!(activity, Some(ToolActivity::Run))
                     && self
                         .calls
                         .iter()
@@ -205,12 +210,14 @@ impl ExecCell {
         tool_call_id: ToolCallId,
         name: &ToolName,
         arguments: String,
+        activity: Option<ToolActivity>,
     ) {
         self.calls.push(ExecCall::new(
             Some(entry_id),
             tool_call_id,
             name.as_str().to_owned(),
             arguments,
+            activity,
         ));
     }
 
@@ -220,12 +227,13 @@ impl ExecCell {
         tool_call_id: &ToolCallId,
         name: &ToolName,
         arguments: String,
+        activity: Option<ToolActivity>,
     ) {
         if let Some(call) = self.call_mut(tool_call_id) {
             call.call_entry_id = Some(entry_id);
             call.name = name.as_str().to_owned();
             call.arguments = arguments;
-            call.class = classify(&call.name);
+            call.activity = activity;
         }
     }
 
@@ -348,25 +356,31 @@ impl ExecCell {
                 if !running && call.failed {
                     return call.failure_label(language);
                 }
-                let history = match (call.name.as_str(), running) {
-                    ("history_list", true) => Some("Listing history"),
-                    ("history_list", false) => Some("Listed history"),
-                    ("history_read", true) => Some("Reading history"),
-                    ("history_read", false) => Some("Read history"),
-                    ("history_search", true) => Some("Searching history"),
-                    ("history_search", false) => Some("Searched history"),
-                    _ => None,
+                let (template, target) = match (running, call.activity.as_ref()) {
+                    (true, Some(ToolActivity::Read { target })) => ("Reading {0}", target.as_str()),
+                    (false, Some(ToolActivity::Read { target })) => ("Read {0}", target.as_str()),
+                    (true, Some(ToolActivity::Search { target })) => {
+                        ("Searching {0}", target.as_str())
+                    }
+                    (false, Some(ToolActivity::Search { target })) => {
+                        ("Searched {0}", target.as_str())
+                    }
+                    (true, Some(ToolActivity::List { target })) => ("Listing {0}", target.as_str()),
+                    (false, Some(ToolActivity::List { target })) => ("Listed {0}", target.as_str()),
+                    (true, Some(ToolActivity::Edit { target })) => ("Editing {0}", target.as_str()),
+                    (false, Some(ToolActivity::Edit { target })) => {
+                        ("Updated {0}", target.as_str())
+                    }
+                    (true, Some(ToolActivity::Run)) => ("Running command", ""),
+                    (false, Some(ToolActivity::Run)) => ("Command finished", ""),
+                    (true, None) => ("Running {0}", call.name.as_str()),
+                    (false, None) => ("Completed {0}", call.name.as_str()),
                 };
-                if let Some(template) = history {
-                    return localized(language, template, &[]);
+                if call.activity.is_some() {
+                    localized_activity(language, template, target)
+                } else {
+                    localized(language, template, &[target])
                 }
-                let template = match (running, call.class) {
-                    (true, ExecClass::Command) => "Running command",
-                    (false, ExecClass::Command) => "Command finished",
-                    (true, _) => "Running {0}",
-                    (false, _) => "Completed {0}",
-                };
-                localized(language, template, &[&call.name])
             }
             (ExecGroup::ExploreGroup, calls) => {
                 let count = calls.len().to_string();
@@ -402,25 +416,13 @@ impl ExecCell {
     }
 }
 
-fn group_for(class: ExecClass) -> ExecGroup {
-    match class {
-        ExecClass::Read | ExecClass::Search | ExecClass::List => ExecGroup::ExploreGroup,
-        ExecClass::Command => ExecGroup::CompactCommandGroup,
-        ExecClass::Mutation | ExecClass::Other => ExecGroup::SingleExec,
-    }
-}
-
-fn classify(name: &str) -> ExecClass {
-    match name {
-        "read" | "read_file" | "read_text_file" | "history_read" => ExecClass::Read,
-        "search" | "search_files" | "grep" | "glob" | "rg" | "find" | "history_search" => {
-            ExecClass::Search
-        }
-        "list" | "list_dir" | "list_directory" | "history_list" => ExecClass::List,
-        "command" | "exec" | "exec_command" | "shell" | "shell-command" | "shell_command"
-        | "terminal" => ExecClass::Command,
-        "apply_patch" | "edit" | "write_file" => ExecClass::Mutation,
-        _ => ExecClass::Other,
+fn group_for(activity: Option<&ToolActivity>) -> ExecGroup {
+    match activity {
+        Some(
+            ToolActivity::Read { .. } | ToolActivity::Search { .. } | ToolActivity::List { .. },
+        ) => ExecGroup::ExploreGroup,
+        Some(ToolActivity::Run) => ExecGroup::CompactCommandGroup,
+        Some(ToolActivity::Edit { .. }) | None => ExecGroup::SingleExec,
     }
 }
 
@@ -432,6 +434,12 @@ fn localized(language: Language, template: &str, arguments: &[&str]) -> String {
             .map(|value| Text::literal(*value))
             .collect(),
     );
+    text.localize(language);
+    text.to_string()
+}
+
+fn localized_activity(language: Language, template: &str, target: &str) -> String {
+    let mut text = Text::template(template, vec![Text::from(target.to_owned())]);
     text.localize(language);
     text.to_string()
 }

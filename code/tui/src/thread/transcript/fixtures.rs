@@ -51,13 +51,18 @@ impl CellView<'static> {
         }))
     }
 
-    pub(crate) fn exec(name: &str, status: CommandStatus) -> Self {
+    pub(crate) fn exec(
+        name: &str,
+        status: CommandStatus,
+        activity: Option<ash_protocol::ToolActivity>,
+    ) -> Self {
         let id = ash_protocol::ToolCallId::new("call").unwrap();
         let mut cell = ExecCell::start(
             "entry".into(),
             id.clone(),
             &ash_protocol::ToolName::new(name).unwrap(),
             String::new(),
+            activity,
         );
         if matches!(status, CommandStatus::Succeeded | CommandStatus::Failed) {
             cell.complete(

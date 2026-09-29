@@ -34,6 +34,12 @@ Agent 能力由 `ext/` 中的 crate 拥有；Core 提交 Thread/Turn 事实并�
 
 时间、等待的工具参数、成本边界及 Codex 对照统一维护在 [Agent 时间与等待](agent-wait.md)。
 
+## 工具活动展示
+
+工具所属服务通过 `ToolService::activity` 或 `ToolExecutor::activity` 为每次调用声明 `Read`、`Search`、`List`、`Edit` 或 `Run`，并为前四种声明展示对象。同一个工具可以根据本次参数声明不同动作。App Server 在绑定调用时将声明写入 `ToolCallBinding.activity`，供会话记录和界面使用；工具名不决定展示类别。
+
+TUI 将连续的读取、搜索、列出合并展示为 Explore，单次调用仍显示具体动作；编辑与运行分别展示。活动声明只描述界面文案，不授予权限，也不代替 action 审核。旧记录缺少声明时仍按原工具名显示，恢复调用时的来源校验不依赖此展示字段。
+
 ## 已收回的实现
 
 | 旧路径 | 当前归属 |

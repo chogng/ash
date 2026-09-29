@@ -291,6 +291,19 @@ impl ToolService for ExtendedLocalTools {
         definitions
     }
 
+    fn activity(&self, call: &ToolCall) -> Option<ash_protocol::ToolActivity> {
+        if self
+            .extension
+            .definitions()
+            .iter()
+            .any(|definition| definition.name == call.name)
+        {
+            self.extension.activity(call)
+        } else {
+            self.primary.activity(call)
+        }
+    }
+
     fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
         if self
             .extension
@@ -797,6 +810,10 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
 impl<B: SandboxBackend> ToolService for LocalShellToolService<B> {
     fn definitions(&self) -> Vec<ToolDefinition> {
         vec![self.definition.clone()]
+    }
+
+    fn activity(&self, _call: &ToolCall) -> Option<ash_protocol::ToolActivity> {
+        Some(ash_protocol::ToolActivity::Run)
     }
 
     fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {

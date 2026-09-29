@@ -25,6 +25,7 @@ use ash_core::ToolOutputSink;
 use ash_core::ToolService;
 use ash_model_provider::EmbeddingInvoker;
 use ash_model_provider::EmbeddingRequest;
+use ash_protocol::ToolActivity;
 use ash_protocol::ToolCall;
 use ash_protocol::ToolCallBinding;
 use ash_protocol::ToolCallCaller;
@@ -1257,15 +1258,23 @@ impl ToolService for CompositeToolService {
                 source_chain: vec![ToolSourceProvenance::System {
                     id: TOOL_SEARCH_TOOL_NAME.into(),
                 }],
+                activity: Some(ToolActivity::Search {
+                    target: "tools".into(),
+                }),
                 caller,
             }));
         }
-        let (binding, _) = self.runtime(call)?;
+        let (binding, runtime) = self.runtime(call)?;
+        let activity = match runtime {
+            ToolContributionRuntime::Service(service) => service.activity(call),
+            ToolContributionRuntime::Executor(executor) => executor.executor().activity(call),
+        };
         Ok(Some(ToolCallBinding {
             registry_incarnation: None,
             registry_generation: binding.registry_generation().get(),
             definition_digest: binding.definition_digest().to_string(),
             source_chain: binding.source_chain().to_vec(),
+            activity,
             caller,
         }))
     }
@@ -1284,7 +1293,7 @@ impl ToolService for CompositeToolService {
         let expected = self
             .bind_call(call, binding.caller.clone())?
             .ok_or_else(|| CoreError::Execution("tool binding is unavailable".into()))?;
-        if &expected != binding {
+        if !expected.matches_execution_source(binding) {
             return Err(CoreError::Execution(format!(
                 "tool {} no longer matches registry generation {}, definition {}, and source chain",
                 call.name, binding.registry_generation, binding.definition_digest

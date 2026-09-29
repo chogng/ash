@@ -254,6 +254,7 @@ impl CodeModeBroker {
             source_chain: vec![ash_protocol::ToolSourceProvenance::System {
                 id: "code-mode".into(),
             }],
+            activity: None,
             caller,
         }))
     }

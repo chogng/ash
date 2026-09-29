@@ -313,6 +313,10 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
 }
 
 impl<P: ApprovalPolicy, B: SandboxBackend> ToolExecutor for ShellCommandTool<P, B> {
+    fn activity(&self, _call: &ash_tools::ToolCall) -> Option<ash_tools::ToolActivity> {
+        Some(ash_tools::ToolActivity::Run)
+    }
+
     fn definition(&self) -> ToolDefinition {
         self.definition.clone()
     }
