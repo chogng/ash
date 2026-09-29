@@ -33,6 +33,7 @@ interface ChatInputToolbarState {
 	readonly inputKind: "message" | "command";
 	readonly models: readonly ModelCatalogEntry[];
 	readonly selectedModel?: ModelRef;
+	readonly isAutomaticModel: boolean;
 	readonly selectedAgent?: ChatAgent;
 	readonly agentName?: string;
 	readonly canSelectAgent: boolean;
@@ -62,8 +63,8 @@ export class ChatInputPart extends Disposable {
 	private readonly inputToolbar: WorkbenchToolBar;
 	private readonly slashCommands = new SlashCommandCatalog(DesktopSlashCommands, []);
 	private readonly skills = new SkillSelectorCatalog();
-	private state: ChatInputState = { phase: "loading", canInterrupt: false, models: [], slashCommands: [], skillSelectors: [], canSelectAgent: false };
-	private toolbarState: ChatInputToolbarState = { canSubmit: false, hasInput: false, canInterrupt: false, inputKind: "message", models: [], canSelectAgent: false };
+	private state: ChatInputState = { phase: "loading", canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
+	private toolbarState: ChatInputToolbarState = { canSubmit: false, hasInput: false, canInterrupt: false, inputKind: "message", models: [], isAutomaticModel: false, canSelectAgent: false };
 	private serverSlashCommands: ChatInputState["slashCommands"] = [];
 	private skillSelectors: ChatInputState["skillSelectors"] = [];
 	private mode: ChatInputMode = "agent";
@@ -265,6 +266,7 @@ export class ChatInputPart extends Disposable {
 			inputKind: input.kind === "message" ? "message" : "command",
 			models: this.state.models,
 			selectedModel: this.state.selectedModel,
+			isAutomaticModel: this.state.isAutomaticModel,
 			selectedAgent: this.state.selectedAgent,
 			agentName: this.state.agentName,
 			canSelectAgent: this.state.canSelectAgent,
@@ -276,6 +278,7 @@ export class ChatInputPart extends Disposable {
 			state.inputKind === this.toolbarState.inputKind &&
 			state.models === this.toolbarState.models &&
 			sameModel(state.selectedModel, this.toolbarState.selectedModel) &&
+			state.isAutomaticModel === this.toolbarState.isAutomaticModel &&
 			state.selectedAgent?.name === this.toolbarState.selectedAgent?.name &&
 			state.selectedAgent?.sourceId === this.toolbarState.selectedAgent?.sourceId &&
 			state.agentName === this.toolbarState.agentName &&
@@ -337,8 +340,8 @@ export class ChatInputPart extends Disposable {
 		const selectedModel = this.toolbarState.models.find(entry => sameModel(entry.model, this.toolbarState.selectedModel));
 		const modelAction = new ChatInputAction(
 			"ash.chat.input.model",
-			selectedModel?.displayName ?? "Model",
-			selectedModel ? `Model: ${selectedModel.displayName}` : "Select model",
+			this.toolbarState.isAutomaticModel ? localize('chat.modelPicker.auto', 'Auto') : selectedModel?.displayName ?? "Model",
+			this.toolbarState.isAutomaticModel ? localize('chat.modelPicker.auto', 'Auto') : selectedModel ? `Model: ${selectedModel.displayName}` : "Select model",
 			undefined,
 			true,
 			"model",
@@ -473,8 +476,10 @@ export class ChatInputPart extends Disposable {
 			return new ModelPickerActionItem(action, {
 				getModels: () => this.state.models,
 				getSelectedModel: () => this.state.selectedModel,
+				isAutomaticModel: () => this.state.isAutomaticModel,
 				getModelsError: () => this.state.modelsError,
 				selectModel: model => this.delegate.selectModel(model),
+				selectAutomaticModel: () => this.delegate.selectAutomaticModel(),
 				openSettings: () => this.delegate.openModelSettings(),
 			}, contextViewService);
 		}

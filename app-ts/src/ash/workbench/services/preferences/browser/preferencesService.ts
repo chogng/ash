@@ -10,9 +10,9 @@ export class PreferencesService extends Disposable implements IPreferencesServic
 		super();
 	}
 
-	public async openSettings(): Promise<void> {
+	public async openSettings(category?: string): Promise<void> {
 		if (!this.resolveEditorService) throw new Error('Settings editor is unavailable.');
-		await this.resolveEditorService().openEditor(createSettingsEditorInput(), { pinned: true }, 'modalGroup');
+		await this.resolveEditorService().openEditor(createSettingsEditorInput(category), { pinned: true }, 'modalGroup');
 	}
 
 	public async openUserSettingsJson(): Promise<void> {

@@ -98,7 +98,7 @@ export interface ISettingsEditorModel extends IDisposable {
 
 /** Workbench-level entry point for opening Preferences surfaces. */
 export interface IPreferencesService {
-	openSettings(): Promise<void>;
+	openSettings(category?: string): Promise<void>;
 	openUserSettingsJson(): Promise<void>;
 	openKeybindings(): Promise<void>;
 }

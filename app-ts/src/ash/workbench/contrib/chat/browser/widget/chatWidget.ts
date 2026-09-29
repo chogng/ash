@@ -38,6 +38,7 @@ export interface IChatWidgetModel extends IDisposable {
 	executeServerCommand(name: string, argumentsText: string): Promise<void>;
 	interrupt(): Promise<void>;
 	selectModel(model: ModelRef): Promise<void>;
+	selectAutomaticModel(): Promise<void>;
 	listAgents(): Promise<readonly ChatAgent[]>;
 	selectAgent(agent: ChatAgent | undefined): void;
 	resolveInteraction(response: AgentResponse): Promise<void>;
@@ -95,9 +96,10 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 					: this.model.executeServerCommand(invocation.name, invocation.argumentsText),
 			interrupt: () => this.model.interrupt(),
 			selectModel: (model) => this.model.selectModel(model),
+			selectAutomaticModel: () => this.model.selectAutomaticModel(),
 			listAgents: () => this.model.listAgents(),
 			selectAgent: agent => this.model.selectAgent(agent),
-			openModelSettings: () => commandService.executeCommand(OpenSettingsCommandId),
+			openModelSettings: () => commandService.executeCommand(OpenSettingsCommandId, 'models'),
 			resolveInteraction: (response) => this.model.resolveInteraction(response),
 		};
 		this.inputPart = this._register(new ChatInputPart(this.element, inputDelegate, contextMenuService, contextViewService, dictation));

@@ -7,9 +7,9 @@ export const SettingsFileSystemScheme = 'ash-settings';
 export const UserSettingsResource = URI.parse(`${SettingsFileSystemScheme}:/user/settings.json`);
 
 /** Creates the singleton input routed to the Workbench Settings editor. */
-export function createSettingsEditorInput(): EditorInput {
+export function createSettingsEditorInput(category?: string): EditorInput {
 	return {
-		resource: SettingsEditorResource,
+		resource: category ? SettingsEditorResource.withQuery(`category=${encodeURIComponent(category)}`) : SettingsEditorResource,
 		contentType: SettingsEditorContentType,
 		label: 'Ash Settings',
 		readOnly: true,

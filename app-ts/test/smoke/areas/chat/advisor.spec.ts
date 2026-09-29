@@ -49,15 +49,25 @@ test('Desktop model picker searches fixed models before account setup', async ({
 		row.append(probe);
 		const colors = {
 			foreground: getComputedStyle(row).color,
-			description: getComputedStyle(row.querySelector('.ash-quick-pick-row-description')!).color,
+			label: getComputedStyle(row.querySelector('.ash-quick-pick-row-label')!).color,
 			background: getComputedStyle(row).backgroundColor,
 			menuBackground: getComputedStyle(probe).backgroundColor,
 		};
 		probe.remove();
 		return colors;
 	});
-	expect(activeColors.description).toBe(activeColors.foreground);
+	expect(activeColors.label).toBe(activeColors.foreground);
 	expect(activeColors.background).toBe(activeColors.menuBackground);
+	await picker.getByRole('option', { name: /GPT-6 Astra/ }).hover();
+	const hover = picker.locator('.ash-chat-model-picker-hover');
+	await expect(hover).toBeVisible();
+	await expect(hover).toContainText('GPT-6 Astra');
+	const hoverBounds = await hover.boundingBox();
+	const pickerBounds = await picker.boundingBox();
+	expect(hoverBounds).not.toBeNull();
+	expect(pickerBounds).not.toBeNull();
+	expect(hoverBounds!.x + hoverBounds!.width <= pickerBounds!.x || hoverBounds!.x >= pickerBounds!.x + pickerBounds!.width).toBe(true);
+	await expect(picker.getByRole('switch', { name: 'Auto' })).toBeVisible();
 	await picker.getByRole('combobox').fill('GPT-6 Astra');
 	await expect(picker.getByRole('option', { name: /GPT-6 Astra/ })).toBeVisible();
 	await picker.getByRole('option', { name: /GPT-6 Astra/ }).click();
@@ -71,6 +81,15 @@ test('Desktop model picker searches fixed models before account setup', async ({
 	await selector.click();
 	await page.getByRole('dialog', { name: 'Choose a chat model' }).getByRole('combobox').press('Escape');
 	await expect(selector).toHaveAttribute('aria-expanded', 'false');
+	await selector.click();
+	const finalPicker = page.getByRole('dialog', { name: 'Choose a chat model' });
+	await expect(finalPicker.getByRole('switch', { name: 'Auto' })).not.toBeChecked();
+	await expect(finalPicker.locator('.ash-chat-model-picker-current')).toHaveCount(1);
+	await finalPicker.getByRole('switch', { name: 'Auto' }).click();
+	await expect(selector).toHaveText('Auto');
+	await selector.click();
+	await page.getByRole('dialog', { name: 'Choose a chat model' }).getByRole('button', { name: 'Add Models' }).click();
+	await expect(page.locator('[data-settings-container]')).toHaveAttribute('data-active-settings-category', 'models');
 });
 
 async function expectModelPickerAnchored(picker: import('@playwright/test').Locator, selector: import('@playwright/test').Locator): Promise<void> {

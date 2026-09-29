@@ -45,6 +45,7 @@ export class ChatWidgetModel extends Disposable {
 	private _models: readonly ModelCatalogEntry[] = [];
 	private modelsError: string | undefined;
 	private readonly selectedModels = new Map<ThreadId, ModelRef>();
+	private readonly automaticModels = new Set<ThreadId>();
 	private _slashCommands: readonly SlashCommandDefinition[] = [];
 	private _skillSelectors: readonly SkillSelectorDefinition[] = [];
 	private _changeSets: readonly TurnChangeSetSummary[] = [];
@@ -96,6 +97,7 @@ export class ChatWidgetModel extends Disposable {
 			slashCommands: this._slashCommands,
 			skillSelectors: this._skillSelectors,
 			selectedModel: this.selectedModel,
+			isAutomaticModel: this.isAutomaticModel,
 			selectedAgent: this.selection.kind === 'untitled' ? this.selection.session.agent : undefined,
 			agentName: this.selection.kind === 'session' ? this.selection.active.session.agentTree?.find(node => node.threadId === this.threadId)?.role?.name : undefined,
 			canSelectAgent: this.selection.kind === 'untitled',
@@ -149,6 +151,12 @@ export class ChatWidgetModel extends Disposable {
 			: this.selectedModels.get(this.selection.active.threadId)
 				?? (this._thread?.threadId === this.selection.active.threadId ? this._thread.turns.at(-1)?.model ?? undefined : undefined)
 				?? this.selection.active.session.model ?? undefined;
+	}
+
+	get isAutomaticModel(): boolean {
+		return this.selection.kind === 'untitled'
+			? this.selection.session.model === undefined
+			: this.automaticModels.has(this.selection.active.threadId);
 	}
 
 	get items(): readonly IChatListItem[] {
@@ -234,6 +242,17 @@ export class ChatWidgetModel extends Disposable {
 			return;
 		}
 		this.selectedModels.set(this.selection.active.threadId, model);
+		this.automaticModels.delete(this.selection.active.threadId);
+		this._onDidChange.fire();
+	}
+
+	async selectAutomaticModel(): Promise<void> {
+		if (this.selection.kind === 'untitled') {
+			this.sessionService.setUntitledSessionModel(this.selection.session.untitledSessionId, undefined);
+			return;
+		}
+		this.selectedModels.delete(this.selection.active.threadId);
+		this.automaticModels.add(this.selection.active.threadId);
 		this._onDidChange.fire();
 	}
 
@@ -281,12 +300,13 @@ export class ChatWidgetModel extends Disposable {
 					contexts,
 				});
 			} else {
+				// Omitting the override lets App Server use the Thread's current model or its configured default.
 				await this.chatService.startTurn({
 					sessionId: active.session.sessionId,
 					threadId: active.threadId,
 					expectedSequence: thread.sequence,
 					text: input,
-					model: this.selectedModel,
+					model: this.isAutomaticModel ? undefined : this.selectedModel,
 					contexts,
 					skills,
 				});
@@ -702,6 +722,7 @@ export class ChatWidgetModel extends Disposable {
 		}
 		this.selection = { kind: "session", active: created };
 		if (untitledSession.model) this.selectedModels.set(created.threadId, untitledSession.model);
+		else this.automaticModels.add(created.threadId);
 		this.sessionService.promoteUntitledSession(untitledSession.untitledSessionId, created);
 		await this.subscribe(created);
 		return created;

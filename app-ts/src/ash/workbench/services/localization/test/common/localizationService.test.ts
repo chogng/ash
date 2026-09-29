@@ -100,6 +100,11 @@ test("localization lookup falls back to English and formats parameters", async (
 	], ['会话窗口操作', '会话菜单', '显示侧边栏', '隐藏侧边栏', '聊天与代码', '聊天', '代码']);
 	assert.equal(localization.translate('ash', 'chat.modelPicker.context', '{0} context tokens', { '0': '128,000' }), '上下文：128,000 个词元');
 	assert.deepEqual([
+		localization.translate('ash', 'chat.modelPicker.auto', 'Auto'),
+		localization.translate('ash', 'chat.modelPicker.addModels', 'Add Models'),
+		localization.translate('ash', 'chat.modelPicker.contextWindow', '{0} context window', { '0': '200,000' }),
+	], ['自动', '添加模型', '上下文窗口：200,000 个词元']);
+	assert.deepEqual([
 		localization.translate('ash', 'sessions.activity.chat', 'Chat'),
 		localization.translate('ash', 'sessions.activity.colab', 'Collaboration'),
 		localization.translate('ash', 'sessions.activity.library', 'Library'),

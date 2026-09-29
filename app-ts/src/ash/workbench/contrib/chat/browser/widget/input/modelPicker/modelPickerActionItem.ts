@@ -12,8 +12,10 @@ import { ModelPickerWidget } from './modelPickerWidget.js';
 export interface IModelPickerDelegate {
 	getModels(): readonly ModelCatalogEntry[];
 	getSelectedModel(): ModelRef | undefined;
+	isAutomaticModel(): boolean;
 	getModelsError(): string | undefined;
 	selectModel(model: ModelRef): Promise<void>;
+	selectAutomaticModel(): Promise<void>;
 	openSettings(): Promise<void>;
 }
 

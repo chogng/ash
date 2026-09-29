@@ -1782,6 +1782,26 @@ test("ChatWidgetModel selects models per chat without changing the global model"
 	assert.equal(fake.modelRequests.length, 0);
 });
 
+test('ChatWidgetModel returns to the session model when Auto is selected', async () => {
+	const sessionModel: ModelRef = { provider: 'openai', model: 'gpt-default' };
+	const manualModel: ModelRef = { provider: 'openai', model: 'gpt-manual' };
+	const activeSession = { ...session('session-1', 'thread-1'), model: sessionModel };
+	const fake = fakeApi({ sessions: [activeSession] });
+	using chat = createChatService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
+	using model = new ChatWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+
+	await model.selectModel(manualModel);
+	assert.equal(model.inputState.isAutomaticModel, false);
+	await model.selectAutomaticModel();
+	assert.equal(model.inputState.isAutomaticModel, true);
+	assert.deepEqual(model.selectedModel, sessionModel);
+	await model.send('Use the session model');
+
+	assert.equal(fake.turnStartRequests[0]?.model, undefined);
+});
+
 test("ChatWidgetModel steers an active Turn instead of starting another Turn", async () => {
 	const activeSession = session("session-1", "thread-1");
 	const activeThread: Thread = {

@@ -103,7 +103,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this._onDidChange.fire();
 	}
 
-	setUntitledSessionModel(untitledSessionId: string, model: ModelRef): void {
+	setUntitledSessionModel(untitledSessionId: string, model: ModelRef | undefined): void {
 		const current = this._untitledSessions.find(session => session.untitledSessionId === untitledSessionId);
 		if (!current) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
 		if (sameModel(current.model, model)) return;

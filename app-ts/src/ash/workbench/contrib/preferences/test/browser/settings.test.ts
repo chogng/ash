@@ -599,6 +599,8 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	search.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }));
 	assert.equal(search.value, '');
 	assert.ok(root.querySelectorAll('.ash-settings-content-tree [data-settings-item-id]').length > 1);
+	await preferences.openSettings('models');
+	assert.equal(root.querySelector<HTMLElement>('[data-settings-container]')?.dataset.activeSettingsCategory, 'models');
 
 	root.querySelector<HTMLButtonElement>('.ash-modal-editor-close')?.click();
 	await nextTurn();

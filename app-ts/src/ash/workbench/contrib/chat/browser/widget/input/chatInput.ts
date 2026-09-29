@@ -25,6 +25,7 @@ export interface ChatInputState {
 	readonly slashCommands: readonly SlashCommandDefinition[];
 	readonly skillSelectors: readonly SkillSelectorDefinition[];
 	readonly selectedModel?: ModelRef;
+	readonly isAutomaticModel: boolean;
 	readonly selectedAgent?: ChatAgent;
 	readonly agentName?: string;
 	readonly canSelectAgent: boolean;
@@ -38,6 +39,7 @@ export interface ChatInputDelegate {
 	executeServerCommand(invocation: ChatInputServerCommandInvocation): Promise<void>;
 	interrupt(): Promise<void>;
 	selectModel(model: ModelRef): Promise<void>;
+	selectAutomaticModel(): Promise<void>;
 	listAgents(): Promise<readonly ChatAgent[]>;
 	selectAgent(agent: ChatAgent | undefined): void;
 	openModelSettings(): Promise<void>;

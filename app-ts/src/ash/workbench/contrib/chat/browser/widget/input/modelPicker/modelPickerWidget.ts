@@ -6,14 +6,9 @@ import { Disposable, DisposableStore, MutableDisposable } from '../../../../../.
 import { localize } from '../../../../../../../nls.js';
 import type { IContextViewService } from '../../../../../../../platform/contextview/browser/contextView.js';
 import { QuickInputList } from '../../../../../../../platform/quickinput/browser/quickInputList.js';
-import type { IQuickPickItem } from '../../../../../../../platform/quickinput/common/quickInput.js';
-import type { ModelRef } from '../../../../../../services/chat/common/chatService.js';
-import type { ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
 import type { IModelPickerDelegate } from './modelPickerActionItem.js';
-
-interface ModelPickerItem extends IQuickPickItem {
-	readonly model: ModelRef;
-}
+import { ModelPickerHover } from './modelPickerHover.js';
+import { buildModelPickerItems, type ModelPickerItem } from './modelPickerItems.js';
 
 /** Owns the model picker popup, its search state, and transient listeners. */
 export class ModelPickerWidget extends Disposable {
@@ -78,25 +73,70 @@ export class ModelPickerWidget extends Disposable {
 		search.setAttribute('aria-expanded', 'true');
 		search.placeholder = localize('chat.modelPicker.search', 'Search models');
 		searchContainer.append(search);
+		const autoRow = h(ownerDocument, 'label');
+		autoRow.className = 'ash-chat-model-picker-auto';
+		const autoLabel = h(ownerDocument, 'span');
+		autoLabel.textContent = localize('chat.modelPicker.auto', 'Auto');
+		const autoSwitch = h(ownerDocument, 'input');
+		autoSwitch.type = 'checkbox';
+		autoSwitch.setAttribute('role', 'switch');
+		autoSwitch.checked = this.delegate.isAutomaticModel();
+		autoRow.append(autoLabel, autoSwitch);
 		const listContainer = h(ownerDocument, 'div');
 		listContainer.className = 'ash-chat-model-picker-list';
+		const footer = h(ownerDocument, 'div');
+		footer.className = 'ash-chat-model-picker-footer';
+		const addModels = h(ownerDocument, 'button');
+		addModels.type = 'button';
+		addModels.textContent = localize('chat.modelPicker.addModels', 'Add Models');
+		footer.append(addModels);
 		const error = h(ownerDocument, 'div');
 		error.className = 'ash-chat-model-picker-error';
 		error.setAttribute('role', 'status');
 		error.hidden = true;
-		content.append(searchContainer, listContainer, error);
+		content.append(searchContainer, autoRow, listContainer, footer, error);
 
 		if (!this.showContextView(anchor, content, session)) return;
 		const list = session.add(new QuickInputList<ModelPickerItem>(listContainer, 'menu'));
+		const hover = new ModelPickerHover(content);
+		let hasNavigated = false;
 		search.setAttribute('aria-controls', list.listId);
-		session.add(list.onDidChangeActive(({ rowId }) => {
+		session.add(list.onDidChangeActive(({ item, rowId }) => {
 			if (rowId) search.setAttribute('aria-activedescendant', rowId);
 			else search.removeAttribute('aria-activedescendant');
+			if (hasNavigated && item && rowId) {
+				const row = ownerDocument.getElementById(rowId);
+				if (row) hover.show(item.entry, row);
+			} else hover.hide();
 		}));
-		list.items = models.map(entry => this.modelItem(entry));
-		list.layout(360);
+		list.items = buildModelPickerItems(models, autoSwitch.checked ? undefined : this.delegate.getSelectedModel());
+		list.layout(300);
 		this.contextView.layout();
+		session.add(addDisposableListener(listContainer, 'mousemove', event => {
+			hasNavigated = true;
+			const row = event.target instanceof Element ? event.target.closest<HTMLElement>('.ash-list-row') : null;
+			const item = list.activeItem;
+			if (row && item) hover.show(item.entry, row);
+		}));
+		session.add(addDisposableListener(listContainer, 'mouseleave', () => hover.hide()));
+		session.add(addDisposableListener(autoSwitch, 'change', () => {
+			const isAutomatic = autoSwitch.checked;
+			const selection = isAutomatic
+				? this.delegate.selectAutomaticModel()
+				: this.delegate.selectModel(this.delegate.getSelectedModel() ?? models[0].model);
+			void selection.then(() => this.contextView.hide(), () => {
+				autoSwitch.checked = !isAutomatic;
+				error.textContent = localize('chat.modelPicker.selectionFailed', 'Could not select model');
+				error.hidden = false;
+			});
+		}));
+		session.add(addDisposableListener(addModels, 'click', () => {
+			this.contextView.hide();
+			void this.delegate.openSettings();
+		}));
 		session.add(addDisposableListener(search, 'input', () => {
+			hasNavigated = false;
+			hover.hide();
 			list.filter(search.value);
 			this.contextView.layout();
 		}));
@@ -104,10 +144,12 @@ export class ModelPickerWidget extends Disposable {
 			switch (event.key) {
 				case 'ArrowDown':
 					stopEvent(event);
+					hasNavigated = true;
 					list.focusNext();
 					break;
 				case 'ArrowUp':
 					stopEvent(event);
+					hasNavigated = true;
 					list.focusPrevious();
 					break;
 				case 'Enter':
@@ -117,7 +159,7 @@ export class ModelPickerWidget extends Disposable {
 			}
 		}));
 		session.add(list.onDidAccept(item => {
-			void this.delegate.selectModel(item.model).then(
+			void this.delegate.selectModel(item.entry.model).then(
 				() => this.contextView.hide(),
 				() => {
 					if (!this.contextView.visible) return;
@@ -151,18 +193,5 @@ export class ModelPickerWidget extends Disposable {
 		this.popup.value = session;
 		this.contextView.layout();
 		return true;
-	}
-
-	private modelItem(entry: ModelCatalogEntry): ModelPickerItem {
-		const details: string[] = [];
-		if (entry.contextWindow) details.push(localize('chat.modelPicker.context', '{0} context tokens', entry.contextWindow.toLocaleString()));
-		if (entry.supportedReasoningEfforts?.length) details.push(localize('chat.modelPicker.efforts', 'Thinking: {0}', entry.supportedReasoningEfforts.join(', ')));
-		const selected = this.delegate.getSelectedModel();
-		return {
-			label: entry.displayName,
-			description: `${entry.model.provider}/${entry.model.model}${selected?.provider === entry.model.provider && selected.model === entry.model.model ? ` · ${localize('chat.modelPicker.current', 'Current')}` : ''}`,
-			detail: details.join(' · '),
-			model: entry.model,
-		};
 	}
 }
