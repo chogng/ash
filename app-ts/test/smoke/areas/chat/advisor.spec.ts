@@ -59,14 +59,28 @@ test('Desktop model picker searches fixed models before account setup', async ({
 	expect(activeColors.label).toBe(activeColors.foreground);
 	expect(activeColors.background).toBe(activeColors.menuBackground);
 	await picker.getByRole('option', { name: /GPT-6 Astra/ }).hover();
-	const hover = picker.locator('.ash-chat-model-picker-hover');
-	await expect(hover).toBeVisible();
-	await expect(hover).toContainText('GPT-6 Astra');
-	const hoverBounds = await hover.boundingBox();
+	const detailsMenu = picker.getByRole('region', { name: 'GPT-6 Astra' });
+	await expect(detailsMenu).toBeVisible();
+	await expect(detailsMenu).toContainText('GPT-6 Astra');
+	const menuStyles = await detailsMenu.evaluate(element => {
+		const menu = element.closest('.ash-context-view-menu')!;
+		const detailsStyle = getComputedStyle(element);
+		const menuStyle = getComputedStyle(menu);
+		return {
+			background: detailsStyle.backgroundColor === menuStyle.backgroundColor,
+			foreground: detailsStyle.color === menuStyle.color,
+			borderWidth: detailsStyle.borderTopWidth,
+			pointerEvents: detailsStyle.pointerEvents,
+		};
+	});
+	expect(menuStyles).toEqual({ background: true, foreground: true, borderWidth: '1px', pointerEvents: 'auto' });
+	const detailsBounds = await detailsMenu.boundingBox();
 	const pickerBounds = await picker.boundingBox();
-	expect(hoverBounds).not.toBeNull();
+	expect(detailsBounds).not.toBeNull();
 	expect(pickerBounds).not.toBeNull();
-	expect(hoverBounds!.x + hoverBounds!.width <= pickerBounds!.x || hoverBounds!.x >= pickerBounds!.x + pickerBounds!.width).toBe(true);
+	expect(detailsBounds!.x + detailsBounds!.width <= pickerBounds!.x || detailsBounds!.x >= pickerBounds!.x + pickerBounds!.width).toBe(true);
+	await detailsMenu.hover();
+	await expect(detailsMenu).toBeVisible();
 	await expect(picker.getByRole('switch', { name: 'Auto' })).toBeVisible();
 	await picker.getByRole('combobox').fill('GPT-6 Astra');
 	await expect(picker.getByRole('option', { name: /GPT-6 Astra/ })).toBeVisible();

@@ -7,7 +7,7 @@ import { localize } from '../../../../../../../nls.js';
 import type { IContextViewService } from '../../../../../../../platform/contextview/browser/contextView.js';
 import { QuickInputList } from '../../../../../../../platform/quickinput/browser/quickInputList.js';
 import type { IModelPickerDelegate } from './modelPickerActionItem.js';
-import { ModelPickerHover } from './modelPickerHover.js';
+import { ModelPickerDetailsMenu } from './modelPickerHover.js';
 import { buildModelPickerItems, type ModelPickerItem } from './modelPickerItems.js';
 
 /** Owns the model picker popup, its search state, and transient listeners. */
@@ -98,7 +98,7 @@ export class ModelPickerWidget extends Disposable {
 
 		if (!this.showContextView(anchor, content, session)) return;
 		const list = session.add(new QuickInputList<ModelPickerItem>(listContainer, 'menu'));
-		const hover = new ModelPickerHover(content);
+		const detailsMenu = new ModelPickerDetailsMenu(content);
 		let hasNavigated = false;
 		search.setAttribute('aria-controls', list.listId);
 		session.add(list.onDidChangeActive(({ item, rowId }) => {
@@ -106,8 +106,8 @@ export class ModelPickerWidget extends Disposable {
 			else search.removeAttribute('aria-activedescendant');
 			if (hasNavigated && item && rowId) {
 				const row = ownerDocument.getElementById(rowId);
-				if (row) hover.show(item.entry, row);
-			} else hover.hide();
+				if (row) detailsMenu.show(item.entry, row);
+			} else detailsMenu.hide();
 		}));
 		list.items = buildModelPickerItems(models, autoSwitch.checked ? undefined : this.delegate.getSelectedModel());
 		list.layout(300);
@@ -116,9 +116,8 @@ export class ModelPickerWidget extends Disposable {
 			hasNavigated = true;
 			const row = event.target instanceof Element ? event.target.closest<HTMLElement>('.ash-list-row') : null;
 			const item = list.activeItem;
-			if (row && item) hover.show(item.entry, row);
+			if (row && item) detailsMenu.show(item.entry, row);
 		}));
-		session.add(addDisposableListener(listContainer, 'mouseleave', () => hover.hide()));
 		session.add(addDisposableListener(autoSwitch, 'change', () => {
 			const isAutomatic = autoSwitch.checked;
 			const selection = isAutomatic
@@ -136,7 +135,7 @@ export class ModelPickerWidget extends Disposable {
 		}));
 		session.add(addDisposableListener(search, 'input', () => {
 			hasNavigated = false;
-			hover.hide();
+			detailsMenu.hide();
 			list.filter(search.value);
 			this.contextView.layout();
 		}));

@@ -2,8 +2,8 @@ import { h } from '../../../../../../../base/browser/dom.js';
 import { localize } from '../../../../../../../nls.js';
 import type { ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
 
-/** The model description follows the active row without taking keyboard focus. */
-export class ModelPickerHover {
+/** Shows details for the active model beside the picker menu. */
+export class ModelPickerDetailsMenu {
 	private readonly element: HTMLElement;
 	private readonly title: HTMLElement;
 	private readonly identity: HTMLElement;
@@ -12,9 +12,8 @@ export class ModelPickerHover {
 
 	constructor(private readonly picker: HTMLElement) {
 		const document = picker.ownerDocument;
-		this.element = h(document, 'aside');
-		this.element.className = 'ash-chat-model-picker-hover';
-		this.element.setAttribute('aria-hidden', 'true');
+		this.element = h(document, 'section');
+		this.element.className = 'ash-chat-model-picker-details-menu';
 		this.title = h(document, 'strong');
 		this.identity = h(document, 'p');
 		this.context = h(document, 'p');
@@ -25,6 +24,7 @@ export class ModelPickerHover {
 	}
 
 	public show(entry: ModelCatalogEntry, row: HTMLElement): void {
+		this.element.setAttribute('aria-label', entry.displayName);
 		this.title.textContent = entry.displayName;
 		this.identity.textContent = `${entry.model.provider}/${entry.model.model}`;
 		this.context.textContent = entry.contextWindow
@@ -38,11 +38,11 @@ export class ModelPickerHover {
 		this.element.hidden = false;
 		const pickerBounds = this.picker.getBoundingClientRect();
 		const rowBounds = row.getBoundingClientRect();
-		const hoverBounds = this.element.getBoundingClientRect();
+		const detailsBounds = this.element.getBoundingClientRect();
 		const viewport = this.picker.ownerDocument.defaultView!;
 		const rightSpace = viewport.innerWidth - pickerBounds.right;
-		this.element.classList.toggle('is-left', pickerBounds.left >= hoverBounds.width + 8 || pickerBounds.left > rightSpace);
-		const bottom = viewport.innerHeight - pickerBounds.top - hoverBounds.height - 8;
+		this.element.classList.toggle('is-left', pickerBounds.left >= detailsBounds.width + 8 || pickerBounds.left > rightSpace);
+		const bottom = viewport.innerHeight - pickerBounds.top - detailsBounds.height - 8;
 		this.element.style.top = `${Math.max(-pickerBounds.top + 8, Math.min(rowBounds.top - pickerBounds.top, bottom))}px`;
 	}
 
