@@ -3,6 +3,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use ash_app_server_client::AppServerEvent;
+use ash_app_server_client::AppServerEvents;
 use ash_app_server_client::AppServerSession;
 use ash_app_server_client::ConnectionCloseReason;
 use ash_app_server_client::StdioAppServerCommand;
@@ -47,10 +48,7 @@ fn remote_server_serves_a_schema_checked_stdio_session() {
     assert!(client.list_sessions().unwrap().sessions.is_empty());
 
     session.shutdown().unwrap();
-    assert_eq!(
-        events.recv_timeout(Duration::from_secs(2)).unwrap(),
-        AppServerEvent::ConnectionClosed(ConnectionCloseReason::Shutdown)
-    );
+    assert_shutdown_event(&events);
 }
 
 #[test]
@@ -139,10 +137,24 @@ fn remote_server_forwards_the_terminal_lifecycle_over_stdio() {
         .unwrap();
 
     session.shutdown().unwrap();
-    assert_eq!(
-        events.recv_timeout(Duration::from_secs(2)).unwrap(),
-        AppServerEvent::ConnectionClosed(ConnectionCloseReason::Shutdown)
-    );
+    assert_shutdown_event(&events);
+}
+
+fn assert_shutdown_event(events: &AppServerEvents) {
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        let remaining = deadline
+            .checked_duration_since(Instant::now())
+            .expect("connection must close within two seconds");
+        match events.recv_timeout(remaining).unwrap() {
+            // Notifications queued before shutdown remain ahead of the terminal event.
+            AppServerEvent::Notification(_) => {}
+            AppServerEvent::ConnectionClosed(reason) => {
+                assert_eq!(reason, ConnectionCloseReason::Shutdown);
+                return;
+            }
+        }
+    }
 }
 
 #[cfg(unix)]

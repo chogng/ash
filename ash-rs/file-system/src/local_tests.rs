@@ -5,8 +5,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 static NEXT_DIR: AtomicU64 = AtomicU64::new(1);
 
 #[cfg(target_os = "linux")]
-#[path = "local_clipboard_tests.rs"]
-mod clipboard_tests;
+#[path = "local_x11_clipboard_tests.rs"]
+mod x11_clipboard_tests;
 
 #[test]
 fn copies_binary_files_and_directories_between_granted_roots() {

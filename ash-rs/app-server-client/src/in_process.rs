@@ -2,13 +2,13 @@ use crate::AppServerClient;
 use crate::ClientError;
 use crate::JsonRpcTransport;
 use ash_app_server::AppServer;
+use ash_app_server::AppServerOptions;
 use ash_app_server::BuiltInSkillRoot;
 use ash_app_server::ConnectionState;
-use ash_app_server::LocalAppServerOptions;
 use ash_app_server::LocalProductServicesConfig;
 use ash_app_server::SessionStateMode;
 use ash_app_server::SlashCommandCatalog;
-use ash_app_server::open_local_app_server;
+use ash_app_server::open_app_server;
 use ash_app_server_protocol::protocol::common::{ClientCapabilities, ClientInfo};
 use ash_app_server_protocol::protocol::initialize::InitializeParams;
 use ash_app_server_protocol::protocol::initialize::REQUIRED_SESSION_CAPABILITIES;
@@ -277,7 +277,7 @@ pub fn start_in_process_client(
 pub fn open_in_process_app_server(
     options: InProcessClientOptions,
 ) -> Result<InProcessAppServer, ClientError> {
-    let mut server_options = LocalAppServerOptions::new(options.profile_root)
+    let mut server_options = AppServerOptions::new(options.profile_root)
         .with_session_state_mode(options.session_state_mode)
         .with_slash_command_catalog(options.slash_commands);
     if let Some(home) = options.codex_home {
@@ -296,7 +296,7 @@ pub fn open_in_process_app_server(
     if let Some(services) = options.product_services {
         server_options = server_options.with_product_services(services);
     }
-    let server = open_local_app_server(server_options)
+    let server = open_app_server(server_options)
         .map_err(|error| ClientError::Transport(error.to_string()))?;
     let server = Arc::new(server);
     let background = Arc::new(server.start_queue().map_err(ClientError::Transport)?);

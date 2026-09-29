@@ -92,7 +92,7 @@ App Server 默认注册 `board_read` 与 `board_write`。同一 Session 内的�
 
 ## 图片服务与署名策略
 
-宿主可使用 `LocalAppServerOptions::with_image_generation_backend` 和 `with_git_attribution` 注入实现，也可通过现有 `--product-services` 文件配置：
+宿主可使用 `AppServerOptions::with_image_generation_backend` 和 `with_git_attribution` 注入实现，也可通过现有 `--product-services` 文件配置：
 
 ```json
 {

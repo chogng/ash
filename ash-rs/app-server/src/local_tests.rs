@@ -201,8 +201,8 @@ fn run_local_git(root: &Path, arguments: &[&str]) -> String {
 #[test]
 fn local_composition_reads_empty_subscription_accounts_before_sign_in() {
     let profile = tempfile::tempdir().unwrap();
-    let server = open_local_app_server(
-        LocalAppServerOptions::new(profile.path())
+    let server = open_app_server(
+        AppServerOptions::new(profile.path())
             .with_codex_home(profile.path().join("codex"))
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral),
@@ -238,8 +238,8 @@ fn local_composition_starts_with_an_unreadable_glm_subscription() {
             &SecretValue::new(b"invalid credential".to_vec()),
         )
         .unwrap();
-    let server = open_local_app_server(
-        LocalAppServerOptions::new(profile.path())
+    let server = open_app_server(
+        AppServerOptions::new(profile.path())
             .with_codex_home(profile.path().join("codex"))
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral),
@@ -312,8 +312,8 @@ fn local_composition_reads_existing_grok_login_without_importing_it() {
         requests: Mutex::new(Vec::new()),
         during_request: Mutex::new(None),
     });
-    let server = open_local_app_server(
-        LocalAppServerOptions::new(profile.path())
+    let server = open_app_server(
+        AppServerOptions::new(profile.path())
             .with_grok_auth_file(&grok_auth)
             .with_codex_home(profile.path().join("codex"))
             .with_model_operation_client(client.clone())
@@ -455,8 +455,8 @@ fn local_account_rate_limits_use_the_signed_in_account_and_redact_failures() {
         during_request: Mutex::new(None),
     });
     let server = Arc::new(
-        open_local_app_server(
-            LocalAppServerOptions::new(profile.path())
+        open_app_server(
+            AppServerOptions::new(profile.path())
                 .with_codex_home(home.path())
                 .with_model_operation_client(client.clone())
                 .without_built_in_skills()
@@ -630,8 +630,8 @@ fn chatgpt_model_catalog_is_shared_by_login_picker_and_disk_cache() {
     let client = Arc::new(CatalogClient {
         calls: std::sync::atomic::AtomicUsize::new(0),
     });
-    let server = open_local_app_server(
-        LocalAppServerOptions::new(profile.path())
+    let server = open_app_server(
+        AppServerOptions::new(profile.path())
             .with_codex_home(home.path())
             .with_model_operation_client(client.clone())
             .without_built_in_skills()
@@ -840,8 +840,8 @@ fn local_codex_account_reconnects_without_oauth_and_observes_external_logout() {
         "last_refresh":"2026-09-07T00:00:00Z"
     })).unwrap();
     std::fs::write(home.path().join("auth.json"), &auth).unwrap();
-    let server = open_local_app_server(
-        LocalAppServerOptions::new(profile.path())
+    let server = open_app_server(
+        AppServerOptions::new(profile.path())
             .with_codex_home(home.path())
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral),
@@ -935,8 +935,8 @@ fn local_codex_expiration_reports_external_login_and_reconnects_after_renewal() 
     );
     let login = Arc::new(ash_login::LoginService::new(auth.clone()).unwrap());
     auth.install_login_service(&login).unwrap();
-    let server = open_local_app_server(
-        LocalAppServerOptions::new(profile.path())
+    let server = open_app_server(
+        AppServerOptions::new(profile.path())
             .with_codex_home(home.path())
             .with_model_operation_client(client.clone())
             .without_built_in_skills()
@@ -986,8 +986,8 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
     run_local_git(dir.path(), &["add", "."]);
     run_local_git(dir.path(), &["commit", "--quiet", "-m", "initial"]);
     let initial_head = run_local_git(dir.path(), &["rev-parse", "HEAD"]);
-    let server = open_local_app_server(
-        LocalAppServerOptions::new(profile.path())
+    let server = open_app_server(
+        AppServerOptions::new(profile.path())
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral)
             .with_dir_root(dir.path()),
@@ -1217,8 +1217,8 @@ fn managed_network_approval_resumes_the_same_shell_process_through_rpc() {
     });
     let profile = tempfile::tempdir().unwrap();
     let dir = tempfile::tempdir().unwrap();
-    let server = open_local_app_server(
-        LocalAppServerOptions::new(profile.path())
+    let server = open_app_server(
+        AppServerOptions::new(profile.path())
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral)
             .with_dir_root(dir.path()),
@@ -1385,8 +1385,8 @@ fn non_git_turns_keep_their_isolated_dir_without_creating_change_sets() {
     let profile = tempfile::tempdir().unwrap();
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("README.md"), "plain directory\n").unwrap();
-    let server = open_local_app_server(
-        LocalAppServerOptions::new(profile.path())
+    let server = open_app_server(
+        AppServerOptions::new(profile.path())
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral)
             .with_dir_root(dir.path()),
@@ -1503,8 +1503,8 @@ fn shared_profile_runtime_shares_sessions_across_env_hosts() {
     let second_dir = tempfile::tempdir().unwrap();
     let runtime = Arc::new(LocalProfileRuntime::open(profile.path()).unwrap());
     let open = |dir: &Path| {
-        open_local_app_server(
-            LocalAppServerOptions::new(profile.path())
+        open_app_server(
+            AppServerOptions::new(profile.path())
                 .with_profile_runtime(Arc::clone(&runtime))
                 .with_dir_root(dir)
                 .without_built_in_skills(),
@@ -1629,8 +1629,8 @@ fn user_network_config_is_loaded_before_start_and_reconciled_on_edit() {
             .check_url("https://other.example.com/v1")
             .is_err()
     );
-    let _server = open_local_app_server(
-        LocalAppServerOptions::new(profile.path())
+    let _server = open_app_server(
+        AppServerOptions::new(profile.path())
             .with_profile_runtime(Arc::clone(&runtime))
             .without_built_in_skills(),
     )
@@ -1664,8 +1664,8 @@ fn shared_profile_runtime_reuses_one_durable_secret_store_across_env_hosts() {
     let second_dir = tempfile::tempdir().unwrap();
     let runtime = Arc::new(LocalProfileRuntime::open(profile.path()).unwrap());
     let open = |dir: &Path| {
-        open_local_app_server(
-            LocalAppServerOptions::new(profile.path())
+        open_app_server(
+            AppServerOptions::new(profile.path())
                 .with_profile_runtime(Arc::clone(&runtime))
                 .with_dir_root(dir)
                 .without_built_in_skills(),
@@ -1722,13 +1722,13 @@ fn shared_profile_runtime_rejects_a_second_secret_store_authority() {
     let profile = tempfile::tempdir().unwrap();
     let runtime = Arc::new(LocalProfileRuntime::open(profile.path()).unwrap());
     let authority = PluginActivationAuthority::open(profile.path().join("plugins")).unwrap();
-    let options = LocalAppServerOptions::new(profile.path())
+    let options = AppServerOptions::new(profile.path())
         .with_profile_runtime(runtime)
         .without_built_in_skills()
         .with_plugin_authority(authority, Arc::new(MemorySecretStore::default()))
         .unwrap();
 
-    let error = match open_local_app_server(options) {
+    let error = match open_app_server(options) {
         Ok(_) => panic!("a second profile SecretStore authority must be rejected"),
         Err(error) => error,
     };
@@ -1808,12 +1808,12 @@ fn live_plugin_authority_reconciles_connector_projection() {
             },
         ))
         .unwrap();
-    let options = LocalAppServerOptions::new(profile.path())
+    let options = AppServerOptions::new(profile.path())
         .without_built_in_skills()
         .with_session_state_mode(SessionStateMode::Ephemeral)
         .with_plugin_authority(authority.clone(), Arc::new(MemorySecretStore::default()))
         .unwrap();
-    let server = open_local_app_server(options).unwrap();
+    let server = open_app_server(options).unwrap();
     let mut connection = server.connection();
     let initialize = server.handle_json(
         &mut connection,
@@ -1877,14 +1877,14 @@ fn local_composition_installs_models_before_dir_activation() {
         ash_codebase::EmbeddingIndexKey::new("local-test-v1").unwrap(),
         Arc::new(LocalSemanticEmbedding),
     );
-    let options = LocalAppServerOptions::new(profile.path())
+    let options = AppServerOptions::new(profile.path())
         .with_dir_root(dir.path())
         .without_built_in_skills()
         .with_session_state_mode(SessionStateMode::Ephemeral);
 
-    let server = open_local_app_server_with_codebase_providers(
+    let server = open_app_server_with_codebase_providers(
         options,
-        LocalCodebaseProviders::new().with_models(models),
+        CodebaseProviders::new().with_models(models),
     )
     .unwrap();
 
@@ -1902,8 +1902,8 @@ fn local_composition_restores_codebase_generation_after_reopen() {
     )
     .unwrap();
     let open = || {
-        open_local_app_server(
-            LocalAppServerOptions::new(profile.path())
+        open_app_server(
+            AppServerOptions::new(profile.path())
                 .with_dir_root(dir.path())
                 .without_built_in_skills()
                 .with_session_state_mode(SessionStateMode::Ephemeral),
@@ -1992,12 +1992,12 @@ fn initial_dir_without_permissions_remains_restricted() {
     let profile = tempfile::tempdir().unwrap();
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("readable.txt"), "restricted\n").unwrap();
-    let options = LocalAppServerOptions::new(profile.path())
+    let options = AppServerOptions::new(profile.path())
         .with_user_config_dir_root(dir.path())
         .without_built_in_skills()
         .with_session_state_mode(SessionStateMode::Ephemeral);
 
-    let server = open_local_app_server(options).unwrap();
+    let server = open_app_server(options).unwrap();
 
     assert!(!server.selected_dir_allows(ash_file_access::Permission::ExecuteCommands));
 }
@@ -2029,8 +2029,8 @@ impl WebSearchBackend for UnusedSearchBackend {
 #[test]
 fn local_web_search_is_absent_by_default_and_registered_when_injected() {
     let profile = tempfile::tempdir().unwrap();
-    let default_server = open_local_app_server(
-        LocalAppServerOptions::new(profile.path())
+    let default_server = open_app_server(
+        AppServerOptions::new(profile.path())
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral),
     )
@@ -2045,8 +2045,8 @@ fn local_web_search_is_absent_by_default_and_registered_when_injected() {
     );
 
     let injected_profile = tempfile::tempdir().unwrap();
-    let injected_server = open_local_app_server(
-        LocalAppServerOptions::new(injected_profile.path())
+    let injected_server = open_app_server(
+        AppServerOptions::new(injected_profile.path())
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral)
             .with_web_search_backend(Arc::new(UnusedSearchBackend)),
@@ -2906,11 +2906,11 @@ fn message_restore_points_preserve_git_versions_after_restart() {
     run_local_git(repo.path(), &["add", "."]);
     run_local_git(repo.path(), &["commit", "--quiet", "-m", "initial"]);
     let options = || {
-        LocalAppServerOptions::new(profile.path())
+        AppServerOptions::new(profile.path())
             .without_built_in_skills()
             .with_dir_root(repo.path())
     };
-    let server = open_local_app_server(options()).unwrap();
+    let server = open_app_server(options()).unwrap();
     let mut connection = server.connection();
     let initialize_request = || serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"message-checkpoints","version":"1"},"capabilities":{}}});
     local_call(&server, &mut connection, initialize_request());
@@ -3040,7 +3040,7 @@ fn message_restore_points_preserve_git_versions_after_restart() {
         run_local_git(repo.path(), &["worktree", "remove", "--force", path]);
     }
     run_local_git(repo.path(), &["gc", "--prune=now"]);
-    let reopened = open_local_app_server(options()).unwrap();
+    let reopened = open_app_server(options()).unwrap();
     let mut connection = reopened.connection();
     local_call(&reopened, &mut connection, initialize_request());
     let restored = local_call(
@@ -3082,8 +3082,8 @@ fn deleting_a_managed_worktree_deletes_its_session_and_discards_checkout_content
     std::fs::write(repo.path().join("tracked.txt"), "initial\n").unwrap();
     run_local_git(repo.path(), &["add", "."]);
     run_local_git(repo.path(), &["commit", "--quiet", "-m", "initial"]);
-    let server = open_local_app_server(
-        LocalAppServerOptions::new(profile.path())
+    let server = open_app_server(
+        AppServerOptions::new(profile.path())
             .without_built_in_skills()
             .with_dir_root(repo.path()),
     )

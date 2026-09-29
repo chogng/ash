@@ -101,9 +101,9 @@ use std::time::Duration;
 const DEFAULT_MODEL_OUTPUT_RESERVATION_TOKENS: u32 = 4_096;
 const MODEL_CONTEXT_SAFETY_MARGIN_TOKENS: u32 = 1_024;
 
-/// Filesystem and runtime inputs needed to open one local App Server.
+/// Inputs for opening an App Server with its profile and execution environments.
 #[derive(Clone)]
-pub struct LocalAppServerOptions {
+pub struct AppServerOptions {
     execution_environments: Vec<exec_server::ExecutionEnvironment>,
     pub profile_root: PathBuf,
     codex_home: Option<PathBuf>,
@@ -138,7 +138,7 @@ enum InitialDirPermissions {
     UserConfig,
 }
 
-impl LocalAppServerOptions {
+impl AppServerOptions {
     pub fn with_execution_environments(
         mut self,
         environments: Vec<exec_server::ExecutionEnvironment>,
@@ -390,10 +390,10 @@ impl LocalAppServerOptions {
     }
 }
 
-impl fmt::Debug for LocalAppServerOptions {
+impl fmt::Debug for AppServerOptions {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("LocalAppServerOptions")
+            .debug_struct("AppServerOptions")
             .field(
                 "execution_environments",
                 &self
@@ -450,7 +450,7 @@ impl fmt::Debug for LocalAppServerOptions {
     }
 }
 
-impl PartialEq for LocalAppServerOptions {
+impl PartialEq for AppServerOptions {
     fn eq(&self, other: &Self) -> bool {
         self.execution_environments
             .iter()
@@ -524,7 +524,7 @@ impl PartialEq for LocalAppServerOptions {
     }
 }
 
-impl Eq for LocalAppServerOptions {}
+impl Eq for AppServerOptions {}
 
 /// Host-provided Connector runtime ports used by the local App Server composition root.
 #[derive(Clone)]
@@ -996,14 +996,14 @@ impl LocalProfileRuntime {
     }
 }
 
-/// Optional codebase adapters installed before the local Directory runtime is activated.
+/// Device-side model and remote codebase adapters installed before directory activation.
 #[derive(Default)]
-pub struct LocalCodebaseProviders {
+pub struct CodebaseProviders {
     models: Option<CodebaseModels>,
     cloud: CloudCodebaseProviderRegistry,
 }
 
-impl LocalCodebaseProviders {
+impl CodebaseProviders {
     pub fn new() -> Self {
         Self::default()
     }
@@ -1021,28 +1021,26 @@ impl LocalCodebaseProviders {
     }
 }
 
-/// Opens the authoritative local composition root used by in-process and stdio clients.
-pub fn open_local_app_server(
-    options: LocalAppServerOptions,
-) -> Result<AppServer, OpenAppServerError> {
-    open_local_app_server_with_codebase_providers(options, LocalCodebaseProviders::default())
+/// Opens the App Server used by embedded clients and server process hosts.
+pub fn open_app_server(options: AppServerOptions) -> Result<AppServer, OpenAppServerError> {
+    open_app_server_with_codebase_providers(options, CodebaseProviders::default())
 }
 
-/// Opens a local composition with explicit cloud codebase provider adapters.
-pub fn open_local_app_server_with_cloud_providers(
-    options: LocalAppServerOptions,
+/// Opens an App Server with explicit cloud codebase provider adapters.
+pub fn open_app_server_with_cloud_providers(
+    options: AppServerOptions,
     cloud_codebase_providers: CloudCodebaseProviderRegistry,
 ) -> Result<AppServer, OpenAppServerError> {
-    open_local_app_server_with_codebase_providers(
+    open_app_server_with_codebase_providers(
         options,
-        LocalCodebaseProviders::new().with_cloud(cloud_codebase_providers),
+        CodebaseProviders::new().with_cloud(cloud_codebase_providers),
     )
 }
 
-/// Opens a local composition with semantic model and/or remote index provider adapters.
-pub fn open_local_app_server_with_codebase_providers(
-    mut options: LocalAppServerOptions,
-    providers: LocalCodebaseProviders,
+/// Opens an App Server with semantic model and/or remote index provider adapters.
+pub fn open_app_server_with_codebase_providers(
+    mut options: AppServerOptions,
+    providers: CodebaseProviders,
 ) -> Result<AppServer, OpenAppServerError> {
     let product_services = options.product_services.take();
     let github_account = product_services

@@ -165,8 +165,8 @@ fn trace_websocket_and_diagnostics_observe_the_same_local_rpc_without_content() 
     )
     .unwrap();
     let address = exporter.local_addr();
-    let server = crate::open_local_app_server(
-        crate::LocalAppServerOptions::new(profile.path())
+    let server = crate::open_app_server(
+        crate::AppServerOptions::new(profile.path())
             .with_codex_home(profile.path().join("codex"))
             .without_built_in_skills()
             .with_trace_exporter(exporter),
@@ -192,12 +192,12 @@ fn trace_websocket_is_owned_once_by_the_shared_profile() {
             .unwrap()
             .with_trace_exporter(exporter),
     );
-    let options = crate::LocalAppServerOptions::new(profile.path())
+    let options = crate::AppServerOptions::new(profile.path())
         .with_codex_home(profile.path().join("codex"))
         .without_built_in_skills()
         .with_profile_runtime(runtime.clone());
-    let first = crate::open_local_app_server(options.clone()).unwrap();
-    let second = crate::open_local_app_server(options).unwrap();
+    let first = crate::open_app_server(options.clone()).unwrap();
+    let second = crate::open_app_server(options).unwrap();
     assert_trace_rpc(&first, address, &token);
     drop(first);
     assert_trace_rpc(&second, address, &token);
@@ -273,8 +273,8 @@ fn local_provider_diagnostics_reach_the_reviewed_feedback_bundle() {
         }
     }
     let profile = tempfile::tempdir().unwrap();
-    let server = crate::open_local_app_server(
-        crate::LocalAppServerOptions::new(profile.path())
+    let server = crate::open_app_server(
+        crate::AppServerOptions::new(profile.path())
             .with_codex_home(profile.path().join("codex"))
             .without_built_in_skills()
             .with_model_operation_client(Arc::new(Rejected)),
@@ -335,8 +335,8 @@ fn persistent_queue_recovers_after_backend_restart_without_duplicate_turns() {
     let profile = tempfile::tempdir().unwrap();
     let directory = tempfile::tempdir().unwrap();
     let open = || {
-        crate::open_local_app_server(
-            crate::LocalAppServerOptions::new(profile.path())
+        crate::open_app_server(
+            crate::AppServerOptions::new(profile.path())
                 .with_dir_root(directory.path())
                 .with_agent_model_service(Arc::new(crate::local::ProviderModelService::new(
                     Arc::new(super::EchoModel),

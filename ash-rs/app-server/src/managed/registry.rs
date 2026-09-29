@@ -8,10 +8,10 @@ use std::sync::Mutex;
 use std::sync::OnceLock;
 
 use crate::AppServer;
-use crate::LocalAppServerOptions;
+use crate::AppServerOptions;
 use crate::LocalProductServicesConfig;
 use crate::LocalProfileRuntime;
-use crate::open_local_app_server;
+use crate::open_app_server;
 
 use ash_app_server_daemon::ConnectionOptions;
 use ash_app_server_daemon::GrantSource;
@@ -249,7 +249,7 @@ fn open_server_with_profile_runtime(
     host: &ConnectionOptions,
     profile_runtime: Arc<LocalProfileRuntime>,
 ) -> Result<AppServer, String> {
-    let mut options = LocalAppServerOptions::new(host.profile_root())
+    let mut options = AppServerOptions::new(host.profile_root())
         .with_host_grok_auth()
         .with_host_zcode_credentials()
         .with_profile_runtime(profile_runtime);
@@ -266,7 +266,7 @@ fn open_server_with_profile_runtime(
                 .map_err(|error| error.to_string())?,
         );
     }
-    open_local_app_server(options).map_err(|error| error.to_string())
+    open_app_server(options).map_err(|error| error.to_string())
 }
 
 fn product_services_identity(

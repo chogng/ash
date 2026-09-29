@@ -249,11 +249,11 @@ fn standard_local_composition_can_install_cloud_provider_registry_before_activat
     std::fs::write(dir.path().join("lib.rs"), "pub fn indexed() {}\n").expect("source");
     let provider: Arc<dyn CloudCodebaseProvider> = Arc::new(RecordingProvider::new());
     let providers = CloudCodebaseProviderRegistry::new([provider]).expect("providers");
-    let options = crate::LocalAppServerOptions::new(profile.path())
+    let options = crate::AppServerOptions::new(profile.path())
         .with_dir_root(dir.path())
         .without_built_in_skills();
-    let server = crate::open_local_app_server_with_cloud_providers(options, providers)
-        .expect("local server");
+    let server =
+        crate::open_app_server_with_cloud_providers(options, providers).expect("local server");
     let mut connection = server.connection();
 
     let initialize = call(

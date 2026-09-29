@@ -14,7 +14,7 @@
 - 将 exporter 交给 SDK，或通过 `ash_otel::Telemetry::with_exporter` 保留 Ash 本地诊断并同时推送。
 - App Server 普通入口与 managed profile 入口读取 `ASH_TRACE_WEBSOCKET_ADDR` 和 `ASH_TRACE_WEBSOCKET_TOKEN`；两个变量必须同时提供，默认关闭。
 - 地址格式为 `127.0.0.1:4319` 或 `[::1]:4319`，端口为 `0` 时由系统分配；实际地址写入 stderr，不输出令牌。
-- 嵌入宿主使用 `LocalAppServerOptions::with_trace_exporter`；多个目录共享 profile 时使用 `LocalProfileRuntime::with_trace_exporter`，只装配一次。
+- 嵌入宿主使用 `AppServerOptions::with_trace_exporter`；多个目录共享 profile 时使用 `LocalProfileRuntime::with_trace_exporter`，只装配一次。
 
 ## 连接与帧
 

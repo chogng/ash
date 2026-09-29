@@ -3,9 +3,9 @@ use std::fmt;
 use std::path::PathBuf;
 
 use ash_app_server::AppServer;
-use ash_app_server::LocalAppServerOptions;
+use ash_app_server::AppServerOptions;
 use ash_app_server::LocalProductServicesConfig;
-use ash_app_server::open_local_app_server;
+use ash_app_server::open_app_server;
 
 const DIR_ROOT_ENV: &str = "ASH_WORKSPACE_ROOT";
 pub(crate) const PRODUCT_SERVICES_PATH_ENV: &str = "ASH_REMOTE_SERVER_PRODUCT_SERVICES_PATH";
@@ -99,16 +99,16 @@ pub fn serve_stdio(options: RemoteServerOptions) -> Result<(), RemoteServerError
 }
 
 pub(crate) fn open_server(options: &RemoteServerOptions) -> Result<AppServer, RemoteServerError> {
-    let mut local_options = LocalAppServerOptions::new(options.profile_root.clone())
+    let mut server_options = AppServerOptions::new(options.profile_root.clone())
         .with_host_grok_auth()
         .with_host_zcode_credentials()
         .with_dir_root(&options.dir_root);
     if let Some(path) = &options.product_services_path {
         let services = LocalProductServicesConfig::load(path, &options.profile_root)
             .map_err(|error| RemoteServerError::new(error.to_string()))?;
-        local_options = local_options.with_product_services(services);
+        server_options = server_options.with_product_services(services);
     }
-    open_local_app_server(local_options).map_err(|error| RemoteServerError::new(error.to_string()))
+    open_app_server(server_options).map_err(|error| RemoteServerError::new(error.to_string()))
 }
 
 fn options_from_environment() -> Result<RemoteServerOptions, RemoteServerError> {

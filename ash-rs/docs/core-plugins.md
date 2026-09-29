@@ -191,7 +191,7 @@ repository 链接用于展示与审计，但不会让 Renderer 绕过 Core Plugi
 
 `PluginProvider` 只提供发现、详情和经过来源校验的 `PluginPackagePayload`。payload 保留私有来源资源，
 只能复制到 Manager 提供的空 staging 目录。Manager 重新核验摘要和文件统计，统一拥有安装、lease 和
-资源读取；接入 provider 不等于安装、授权或执行插件。宿主通过 `LocalAppServerOptions::with_plugin_providers`
+资源读取；接入 provider 不等于安装、授权或执行插件。宿主通过 `AppServerOptions::with_plugin_providers`
 注入自有实现，产品配置中的 `marketplaces` 列表则创建多个独立的 HTTPS/TUF provider。
 
 注册时拒绝重复来源名。聚合搜索按完整 ID、版本排序，再应用全局数量限制；任一来源失败时返回错误。

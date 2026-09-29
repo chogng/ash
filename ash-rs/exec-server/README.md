@@ -54,7 +54,7 @@ App Server 设置 `ASH_EXEC_ENVIRONMENTS` 指向配置文件：
 
 `address` 是本机隧道入口；token 文件属于宿主配置。Core 的 `environment` 工具显式选择环境，
 经过原有审批后执行命令或文件操作，结果写回原 Thread。进程 ID 包含 Session/Thread/Turn/工具调用身份。
-Rust 宿主也可以通过 `LocalAppServerOptions::with_execution_environments` 装配本地或远程环境。
+Rust 宿主也可以通过 `AppServerOptions::with_execution_environments` 装配本地或远程环境。
 
 App Server 每次观察最多等待 500 毫秒，输出变化或进程结束时提前返回。读取连接失败后，
 允许在五秒恢复窗口内发起新的观察；单次网络调用仍受传输超时限制。恢复保持原实例、操作 ID
@@ -65,7 +65,7 @@ App Server 每次观察最多等待 500 毫秒，输出变化或进程结束时�
 
 - `terminal::TerminalService` 承接原 terminal-service 的完整桌面 PTY 生命周期。
 - TCP 进程接口支持管道与受限 PTY；`processStart.input` 选择 `terminal` 并提供行列数，后续可写入、调整尺寸、中断或取消。
-- 宿主通过 `MxcSandbox::with_pty_helper` 提供内部启动器；App Server 嵌入方使用 `LocalAppServerOptions::with_pty_helper`。未配置时拒绝受限 PTY。
+- 宿主通过 `MxcSandbox::with_pty_helper` 提供内部启动器；App Server 嵌入方使用 `AppServerOptions::with_pty_helper`。未配置时拒绝受限 PTY。
 - PTY 由执行宿主分配，内部启动器继承终端后交给 MXC；目录、网络及文件身份约束保持有效。
 - PTY 标准错误合并到标准输出；半关闭输入不适用于 PTY，调用方应发送终端 EOF 字符或取消进程。
 - 桌面 Terminal API 继续通过目录授权调用；不将桌面交互式终端作为远程沙箱命令的替代执行路径。

@@ -7,9 +7,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::AppServer;
-use crate::LocalAppServerOptions;
+use crate::AppServerOptions;
 use crate::LocalProductServicesConfig;
-use crate::open_local_app_server;
+use crate::open_app_server;
 use ash_app_server_protocol::AppServerListenInfo;
 use ash_app_server_transport::CapabilityTokenSha256;
 use ash_app_server_transport::parse_loopback_websocket_bind;
@@ -288,7 +288,7 @@ pub(super) enum GrantSource {
 }
 
 pub(super) fn open_server(host: &StartupOptions) -> Result<AppServer, String> {
-    let mut options = LocalAppServerOptions::new(host.profile_root())
+    let mut options = AppServerOptions::new(host.profile_root())
         .with_host_grok_auth()
         .with_host_zcode_credentials()
         .with_pty_helper(env::current_exe().map_err(|error| error.to_string())?);
@@ -312,7 +312,7 @@ pub(super) fn open_server(host: &StartupOptions) -> Result<AppServer, String> {
             crate::execution_environments::load_environments(Path::new(&path))?,
         );
     }
-    open_local_app_server(options).map_err(|error| error.to_string())
+    open_app_server(options).map_err(|error| error.to_string())
 }
 
 #[cfg(test)]

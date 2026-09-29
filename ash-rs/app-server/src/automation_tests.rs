@@ -121,8 +121,8 @@ fn automation_uses_its_directory_after_another_profile_environment_opens() {
     let other_directory = tempfile::tempdir().unwrap();
     let runtime = Arc::new(crate::LocalProfileRuntime::open(profile.path()).unwrap());
     let open = |directory: &std::path::Path| {
-        crate::open_local_app_server(
-            crate::LocalAppServerOptions::new(profile.path())
+        crate::open_app_server(
+            crate::AppServerOptions::new(profile.path())
                 .with_profile_runtime(Arc::clone(&runtime))
                 .with_dir_root(directory)
                 .with_agent_model_service(Arc::new(crate::local::ProviderModelService::new(

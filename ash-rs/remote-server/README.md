@@ -33,7 +33,7 @@ Remote connection host
   -> private Unix socket lookup / guarded daemon start
   -> stdio proxy
   -> shared RemoteServerOptions + AppServer daemon
-  -> ash_app_server::open_local_app_server
+  -> ash_app_server::open_app_server
   -> AppServer::serve_jsonl for each connection
 ```
 
