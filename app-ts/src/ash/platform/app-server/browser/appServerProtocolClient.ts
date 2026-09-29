@@ -185,7 +185,6 @@ export class AppServerProtocolClient {
 		const frame = JSON.stringify({ jsonrpc: "2.0", id, method: definition.method, params });
 		try {
 			this.transport.send(WEB_APP_SERVER_FRAME_EVENT, { frame });
-			if (definition.method === 'fs/readDirectory') performance.mark('ash-tree:request-sent');
 		} catch (error) {
 			this.rejectPending(id, toError(error));
 		}
@@ -213,11 +212,8 @@ export class AppServerProtocolClient {
 		}
 		try {
 			const frame = validateFramePayload(payload);
-			performance.mark('ash-tree:frame-in');
 			const message: unknown = JSON.parse(frame);
-			performance.mark('ash-tree:json-parsed');
 			const envelope = decodeAppServerEnvelope(message);
-			performance.mark('ash-tree:envelope-decoded');
 			if (envelope.kind === "notification" || envelope.kind === "serverRequest") {
 				this.handleInboundCall(message as Record<string, unknown>);
 			} else {
@@ -243,7 +239,6 @@ export class AppServerProtocolClient {
 		const pending = this.pending.get(id);
 		if (!pending) return;
 		const response = decodeAppServerResponse(pending.method, message);
-		if (pending.method === 'fs/readDirectory') performance.mark('ash-tree:response-decoded');
 		this.pending.delete(id);
 		clearTimeout(pending.timeout);
 		if ("error" in response) {

@@ -31,6 +31,10 @@ type JsonSchema = boolean | {
 
 const protocolSchema = JSON.parse(__PROTOCOL_SCHEMA__) as JsonSchema;
 const propertyEntries = new WeakMap<Exclude<JsonSchema, boolean>, readonly (readonly [string, JsonSchema])[]>();
+type MethodVariant = Exclude<JsonSchema, boolean> & { readonly properties: { readonly method: { readonly const: string } } };
+// Every generated client result variant has a distinct method, so large results need only validate their own variant.
+const clientResultVariants = ((protocolSchema as Exclude<JsonSchema, boolean>).$defs!.ClientResultSchema as Exclude<JsonSchema, boolean>).oneOf!;
+const clientResultSchemas = new Map(clientResultVariants.map(schema => [(schema as MethodVariant).properties.method.const, schema] as const));
 
 export type DecodedAppServerEnvelope =
 	| { readonly kind: 'response'; readonly id: JsonRpcId; readonly result: unknown }
@@ -90,7 +94,9 @@ export function decodeAppServerRequestParams<M extends AppServerMethod>(method: 
 }
 
 export function decodeAppServerResult<M extends AppServerMethod>(method: M, value: unknown): MethodResult<M> {
-	assertDefinition('ClientResultSchema', { method, result: value }, '$');
+	const schema = clientResultSchemas.get(method);
+	if (!schema) throw failure('$.method', 'unknown method');
+	validate(schema, { method, result: value }, '$');
 	return value as MethodResult<M>;
 }
 

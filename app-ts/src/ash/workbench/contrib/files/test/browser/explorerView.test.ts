@@ -249,18 +249,21 @@ test("ExplorerView opens workspace files on single click", async () => {
 
 		await waitFor(() => rowLabels(pane.element).includes("main.ts"));
 		assert.equal(hoverCreations, 3);
+		const mainRow = [...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => rowLabel(row) === 'main.ts');
+		assert.ok(mainRow);
 		const readmeRow = [...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => rowLabel(row) === 'README.md');
 		assert.ok(readmeRow);
 		assert.equal([...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => rowLabel(row) === 'src'), sourceFolder);
 		sourceFolder.click();
 		assert.deepEqual(rowLabels(pane.element), ['src', 'README.md']);
 		assert.equal(hoverCreations, 3);
-		assert.equal(hoverDisposals, 1);
+		assert.equal(hoverDisposals, 0);
 		assert.equal(pane.element.querySelector('[aria-expanded="false"]'), sourceFolder);
 		assert.equal([...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => rowLabel(row) === 'README.md'), readmeRow);
 		sourceFolder.click();
 		assert.deepEqual(rowLabels(pane.element), ['src', 'main.ts', 'README.md']);
-		assert.equal(hoverCreations, 4);
+		assert.equal(hoverCreations, 3);
+		assert.equal([...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => rowLabel(row) === 'main.ts'), mainRow);
 		assert.equal([...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => rowLabel(row) === 'README.md'), readmeRow);
 		assert.deepEqual(rowLabels(pane.element), [
 			"src",
@@ -303,9 +306,14 @@ test("ExplorerView opens workspace files on single click", async () => {
 		readme.dispatchEvent(new browser.window.MouseEvent("dblclick", { bubbles: true, button: 0, detail: 2 }));
 		await waitFor(() => editorFocusCount === 1);
 		assert.deepEqual(openedOptions, { pinned: true, preserveFocus: false });
+		const treeElement = pane.element.querySelector<HTMLElement>('.ash-tree');
+		assert.ok(treeElement);
+		treeElement.focus();
+		assert.equal(browser.window.document.activeElement, treeElement);
 		addedRootFile = true;
 		fileChanges.fire({ resources: [URI.file("C:\\project\\new.txt")] });
 		await waitFor(() => rowLabels(pane.element).includes("new.txt"));
+		assert.equal(browser.window.document.activeElement, treeElement);
 		assert.deepEqual(rowLabels(pane.element), ["src", "main.ts", "README.md", "new.txt"]);
 		addedNestedFile = true;
 		fileChanges.fire({ resources: [URI.file('C:\\project\\src\\nested.ts')] });

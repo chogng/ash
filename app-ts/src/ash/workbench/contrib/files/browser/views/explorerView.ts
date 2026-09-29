@@ -33,6 +33,8 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	private readonly workspaceContextService: IWorkspaceContextService;
 	private readonly editorService: IEditorService;
 	private readonly tree: WorkbenchAsyncDataTree<ExplorerItem, ExplorerItem>;
+	private readonly scrollContent: HTMLDivElement;
+	private statusDomNode: HTMLDivElement | undefined;
 	private root: ExplorerItem | undefined;
 	private error: string | undefined;
 	private treeError = false;
@@ -73,7 +75,10 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		this.element.classList.add("ash-explorer-view-pane");
 		this.headerElement.classList.add("ash-explorer-title");
 		this.contentElement.classList.add("ash-explorer");
-		this.tree = this._register(new WorkbenchAsyncDataTree<ExplorerItem, ExplorerItem>(this.contentElement, new ExplorerDataSource(fileService, new FileSorter(), configurationService), {
+		this.scrollContent = h(container.ownerDocument, 'div');
+		this.scrollContent.className = 'ash-explorer-scroll-content';
+		this.contentElement.append(this.scrollContent);
+		this.tree = this._register(new WorkbenchAsyncDataTree<ExplorerItem, ExplorerItem>(this.scrollContent, new ExplorerDataSource(fileService, new FileSorter(), configurationService), {
 			ariaLabel: localize('accessibility.explorerTreeLabel', 'Workspace files'),
 			scrolling: "managed",
 			configurationService,
@@ -135,9 +140,6 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 				this.loadVisibleFileNests();
 			}
 		}));
-		this._register(resourceIconRenderer.onDidChangeResourceIcons(
-			() => this.render(),
-		));
 		this._register(explorerFileContribRegistry.onDidRegisterDescriptor(() => {
 			const roots = this.root?.children ?? (this.root ? [this.root] : []);
 			for (const root of roots) void this.refreshRoot(root);
@@ -266,15 +268,16 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 
 	private render(): void {
 		const document = this.element.ownerDocument;
-		const surface = h(document, "div");
-		surface.className = "ash-explorer-scroll-content";
+		this.statusDomNode?.remove();
+		this.statusDomNode = undefined;
 		if (!this.root) {
+			this.tree.domNode.remove();
 			const status = h(document, "div");
 			status.className = "ash-explorer-status";
 			status.setAttribute("role", "status");
 			status.textContent = this.error ?? "Loading files…";
-			surface.append(status);
-			this.contentElement.replaceChildren(surface);
+			this.statusDomNode = status;
+			this.scrollContent.append(status);
 			return;
 		}
 		if (this.error) {
@@ -282,10 +285,11 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			error.className = "ash-explorer-status ash-explorer-error";
 			error.setAttribute("role", "alert");
 			error.textContent = this.error;
-			surface.append(error);
+			this.statusDomNode = error;
+			this.scrollContent.prepend(error);
 		}
-		surface.append(this.tree.domNode);
-		this.contentElement.replaceChildren(surface);
+		// Keep the tree mounted across status updates so focus and scroll state survive refreshes.
+		if (this.tree.domNode.parentElement !== this.scrollContent) this.scrollContent.append(this.tree.domNode);
 	}
 
 }

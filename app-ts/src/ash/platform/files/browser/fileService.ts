@@ -62,9 +62,7 @@ export class BrowserFileService extends Disposable implements IFileService {
 	}
 
 	async readDirectory(resource: URI): Promise<readonly IFileEntry[]> {
-		performance.mark('ash-tree:fs-request');
 		const result = await this.api.readDirectory(this.fileTarget(resource));
-		performance.mark('ash-tree:fs-response');
 		const parentPath = resource.path;
 		const childBasePath = parentPath.endsWith('/') ? parentPath.slice(0, -1) : parentPath;
 		return result.entries.map((entry) => ({
