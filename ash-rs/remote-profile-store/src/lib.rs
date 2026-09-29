@@ -426,3 +426,7 @@ impl fmt::Display for RemoteConnectionProfileStoreError {
 }
 
 impl std::error::Error for RemoteConnectionProfileStoreError {}
+
+#[cfg(test)]
+#[path = "profile_store_tests.rs"]
+mod tests;

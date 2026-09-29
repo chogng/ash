@@ -14,6 +14,11 @@ use crate::open_local_app_server;
 
 use ash_app_server_daemon::ConnectionOptions;
 use ash_app_server_daemon::GrantSource;
+use ash_protocol::SessionId;
+use ash_protocol::SessionWorkspace;
+use ash_protocol::ThreadId;
+use ash_remote::{RemoteDirPath, RemoteProfile, SshHost, SshTarget};
+use ash_remote_profile_store::RemoteConnectionProfileStore;
 
 const MAX_PRODUCT_SERVICES_IDENTITY_BYTES: u64 = 1024 * 1024;
 
@@ -81,6 +86,53 @@ impl ProfileAppServerRegistry {
         )?);
         servers.insert(key, Arc::clone(&server));
         Ok(server)
+    }
+
+    pub(crate) fn server_for_local_session(&self, root: &Path) -> Result<Arc<AppServer>, String> {
+        self.server_for(ConnectionOptions::new(
+            self.host.profile_root(),
+            Some(root.to_path_buf()),
+            GrantSource::UserConfig,
+            self.host.product_services().map(Path::to_path_buf),
+        ))
+    }
+
+    pub(crate) fn workspace_for_session(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Option<SessionWorkspace>, String> {
+        self.profile_runtime.workspace_for_session(session_id)
+    }
+
+    pub(crate) fn workspace_for_thread(
+        &self,
+        thread_id: &ThreadId,
+    ) -> Result<Option<SessionWorkspace>, String> {
+        self.profile_runtime.workspace_for_thread(thread_id)
+    }
+
+    pub(crate) fn remote_profiles(&self) -> Result<Vec<RemoteProfile>, String> {
+        RemoteConnectionProfileStore::from_profile_root(self.host.profile_root())
+            .connections()
+            .map(|records| {
+                records
+                    .into_iter()
+                    .map(|record| record.active_profile())
+                    .collect()
+            })
+            .map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn remote_profile(&self, host: &str, root: &str) -> Result<RemoteProfile, String> {
+        let target = SshTarget::new(
+            SshHost::parse(host).map_err(|error| error.to_string())?,
+            RemoteDirPath::parse(root).map_err(|error| error.to_string())?,
+        );
+        RemoteConnectionProfileStore::from_profile_root(self.host.profile_root())
+            .connection(&target)
+            .map_err(|error| error.to_string())?
+            .map(|record| record.active_profile())
+            .ok_or_else(|| format!("SSH runtime is not configured for {host}:{root}"))
     }
 
     pub(crate) fn active_terminal_count(&self) -> usize {

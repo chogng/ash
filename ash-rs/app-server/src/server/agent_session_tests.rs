@@ -99,14 +99,14 @@ fn workflow_commands_run_dedicated_agents_through_rpc_and_require_user_acceptanc
         &server,
         &mut connection,
         "session/create",
-        serde_json::json!({"commandId":"forbidden-role", "title":"No workflow bypass", "agent":{"type":"exact","source":{"type":"builtIn"},"name":"develop/implementer"}}),
+        serde_json::json!({"commandId":"forbidden-role", "title":"No workflow bypass", "workspace":{"type":"current"}, "agent":{"type":"exact","source":{"type":"builtIn"},"name":"develop/implementer"}}),
     );
     assert!(rejected.get("error").is_some(), "{rejected}");
     let created = call(
         &server,
         &mut connection,
         "session/create",
-        serde_json::json!({"commandId":"workflow-root", "title":"Workflow"}),
+        serde_json::json!({"commandId":"workflow-root", "title":"Workflow", "workspace":{"type":"current"}}),
     );
     let session = created["result"]["session"]["sessionId"].as_str().unwrap();
     let root = ThreadId::new(session).unwrap();
@@ -341,8 +341,7 @@ fn session_role_is_atomic_replayable_and_applied_to_real_model_input() {
         source: AgentRoleSource::BuiltIn,
         name: "issue".into(),
     };
-    let params =
-        serde_json::json!({"commandId":"root-issue", "title":"Selected issues", "agent":agent});
+    let params = serde_json::json!({"commandId":"root-issue", "title":"Selected issues", "workspace":{"type":"current"}, "agent":agent});
     let created = call(&server, &mut connection, "session/create", params.clone());
     assert!(created.get("result").is_some(), "{created}");
     let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();
@@ -408,7 +407,7 @@ fn session_role_is_atomic_replayable_and_applied_to_real_model_input() {
         &server,
         &mut connection,
         "session/create",
-        serde_json::json!({"commandId":"root-issue", "title":"Selected issues", "agent":{"type":"default"}}),
+        serde_json::json!({"commandId":"root-issue", "title":"Selected issues", "workspace":{"type":"current"}, "agent":{"type":"default"}}),
     );
     assert!(conflict.get("error").is_some());
     let restored = ThreadController::with_store(store)
@@ -443,7 +442,7 @@ fn missing_role_fails_before_a_session_is_created_and_default_never_routes_by_ti
         &server,
         &mut connection,
         "session/create",
-        serde_json::json!({"commandId":"missing-role", "title":"Issue work", "agent":{"type":"exact","source":{"type":"builtIn"},"name":"missing"}}),
+        serde_json::json!({"commandId":"missing-role", "title":"Issue work", "workspace":{"type":"current"}, "agent":{"type":"exact","source":{"type":"builtIn"},"name":"missing"}}),
     );
     assert!(rejected.get("error").is_some());
     assert!(
@@ -456,7 +455,7 @@ fn missing_role_fails_before_a_session_is_created_and_default_never_routes_by_ti
         &server,
         &mut connection,
         "session/create",
-        serde_json::json!({"commandId":"default-role", "title":"issue coordinator implementation"}),
+        serde_json::json!({"commandId":"default-role", "title":"issue coordinator implementation", "workspace":{"type":"current"}}),
     );
     assert!(created.get("result").is_some(), "{created}");
     assert!(
@@ -507,7 +506,7 @@ fn fork_session_binds_extensions_and_delivers_approval_after_subscription() {
         &server,
         &mut connection,
         "session/create",
-        serde_json::json!({"commandId":"source", "title":"Source"}),
+        serde_json::json!({"commandId":"source", "title":"Source", "workspace":{"type":"current"}}),
     );
     let source_id = created["result"]["session"]["sessionId"].as_str().unwrap();
     let params = serde_json::json!({"commandId":"copy", "sessionId":source_id,

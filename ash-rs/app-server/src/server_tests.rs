@@ -1111,7 +1111,7 @@ fn create_session(
             "jsonrpc":"2.0",
             "id":request_id,
             "method":"session/create",
-            "params":{"commandId":command_id,"title":"task"}
+            "params":{"commandId":command_id,"title":"task","workspace":{"type":"current"}}
         }),
     )
 }
@@ -2415,7 +2415,7 @@ fn typed_commands_replay_and_reject_payload_conflicts() {
             "jsonrpc":"2.0",
             "id":4,
             "method":"session/create",
-            "params":{"commandId":"same-command","title":"different"}
+            "params":{"commandId":"same-command","title":"different","workspace":{"type":"current"}}
         }),
     );
     assert_eq!(conflict["error"]["message"], "CommandConflict");
@@ -6726,7 +6726,7 @@ fn agent_identity_spans_tasks_forks_and_replacement_through_rpc() {
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0", "id":4, "method":"session/create",
-            "params":{"commandId":"identity-second","title":"another task","agentId":agent_id}
+            "params":{"commandId":"identity-second","title":"another task","workspace":{"type":"current"},"agentId":agent_id}
         }),
     );
     assert!(second.get("error").is_none(), "{second}");
@@ -6781,7 +6781,7 @@ fn agent_identity_spans_tasks_forks_and_replacement_through_rpc() {
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0", "id":9, "method":"session/create",
-            "params":{"commandId":"identity-unknown","title":"unknown","agentId":"missing-agent"}
+            "params":{"commandId":"identity-unknown","title":"unknown","workspace":{"type":"current"},"agentId":"missing-agent"}
         }),
     );
     assert!(unknown.get("error").is_some());

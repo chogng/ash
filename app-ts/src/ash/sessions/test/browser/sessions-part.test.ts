@@ -10,6 +10,7 @@ import type { IAccessibleViewService } from '../../../platform/accessibility/bro
 import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
 import type { IChatService, ThreadUpdateEnvelope } from "../../../workbench/services/chat/common/chatService.js";
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
+import type { IUntitledChatSession } from "../../services/sessions/common/session.js";
 import { SessionsService } from "../../../sessions/services/sessions/browser/sessionsService.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -36,7 +37,7 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 	const dom = browserEnvironment;
 	dom.window.document.body.replaceChildren();
 	const onDidChange = new Emitter<void>();
-	let untitledSessions: readonly { untitledSessionId: string; title: string; model: undefined; agent: undefined }[] = [];
+	let untitledSessions: readonly IUntitledChatSession[] = [];
 	let activeUntitledSessionId: string | undefined;
 	const sessionService: ISessionsManagementService = {
 		onDidChange: onDidChange.event,
@@ -52,7 +53,7 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 		selectThread() {},
 		async interruptThread() {},
 		createUntitledSession() {
-			const untitledSession = { untitledSessionId: `untitled-${untitledSessions.length + 1}`, title: "New code session", model: undefined, agent: undefined };
+			const untitledSession = { untitledSessionId: `untitled-${untitledSessions.length + 1}`, title: "New code session", model: undefined, agent: undefined, workspace: { type: 'current' as const } };
 			untitledSessions = [...untitledSessions, untitledSession];
 			activeUntitledSessionId = untitledSession.untitledSessionId;
 			onDidChange.fire();

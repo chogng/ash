@@ -84,7 +84,7 @@ class PendingSessionService implements ISessionsManagementService {
 	interruptThread(_sessionId: SessionId, _threadId: ThreadId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
 
 	createUntitledSession(title = "New Chat"): IUntitledChatSession {
-		const session = { untitledSessionId: `untitled-${this._untitledSessions.length + 1}`, title, model: undefined, agent: undefined };
+		const session = { untitledSessionId: `untitled-${this._untitledSessions.length + 1}`, title, model: undefined, agent: undefined, workspace: { type: 'current' as const } };
 		this._untitledSessions = [session, ...this._untitledSessions];
 		this._activeUntitledSessionId = session.untitledSessionId;
 		this._onDidChange.fire();

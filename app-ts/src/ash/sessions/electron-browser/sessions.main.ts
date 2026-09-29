@@ -21,6 +21,10 @@ import { ElectronLifecycleService } from '../../workbench/services/lifecycle/ele
 import { showStartupError } from "../../workbench/browser/startupError.js";
 import { invoke, subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL } from '../../platform/window/common/window.js';
+import { createWorkspaceContextApi } from '../../platform/workspace/electron-browser/workspaceContextApi.js';
+import { parseWorkspace, type IWorkspace } from '../../platform/workspace/common/workspace.js';
+import { getRemoteAuthority, getRemoteWorkspacePath, isRemoteResource } from '../../platform/remote/common/remote.js';
+import type { SessionWorkspaceSelection } from '../services/sessions/common/session.js';
 
 /** Starts the Code-specific Electron Sessions page. */
 export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): Promise<IDisposable> {
@@ -82,10 +86,17 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 	sessions.add(toDisposable(() => zoomSubscription.dispose()));
 	const lifecycleService = new ElectronLifecycleService({ ownerWindow: window, onError: onUnexpectedError });
 	const initialConfigurationSnapshot = validateConfigurationSnapshot(await api.configuration.read());
+	const workspaceContext = createWorkspaceContextApi();
+	let workspaceSelection = selectionFromWorkspace(parseWorkspace(await workspaceContext.getWorkspace()));
+	const workspaceSubscription = workspaceContext.onDidChange(value => {
+		workspaceSelection = selectionFromWorkspace(parseWorkspace(value));
+	});
+	sessions.add(toDisposable(() => workspaceSubscription.dispose()));
 	workbench = sessions.add(new Workbench({
 		modeId,
 		profile,
 		api,
+		workspaceSelection: () => workspaceSelection,
 		lifecycleService,
 		nativeHostApi: api.nativeHost,
 		returnToWorkbench: () => { void invoke<void>(RETURN_TO_WORKBENCH_CHANNEL).catch(onUnexpectedError); },
@@ -103,4 +114,13 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 	}, { once: true }));
 	await lifecycleService.initialize();
 	return sessions;
+}
+
+function selectionFromWorkspace(workspace: IWorkspace): SessionWorkspaceSelection {
+	const resource = workspace.folders.length === 1 ? workspace.folders[0]!.uri : undefined;
+	if (!resource) return { type: 'current' };
+	if (!isRemoteResource(resource)) return { type: 'local', root: resource.fsPath };
+	const authority = getRemoteAuthority(resource);
+	if (!authority) throw new Error('Remote workspace has no SSH authority');
+	return { type: 'ssh', host: authority.host, root: getRemoteWorkspacePath(resource) };
 }

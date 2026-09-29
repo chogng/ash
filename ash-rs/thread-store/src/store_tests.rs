@@ -30,6 +30,7 @@ fn batch(expected_sequence: u64, event_sequence: u64) -> ThreadEventBatch {
                     .expect("test ID is non-empty"),
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 title: "test".into(),
+                workspace: None,
             },
         }],
         catalog: ThreadCatalogRecord {
@@ -51,6 +52,7 @@ fn batch(expected_sequence: u64, event_sequence: u64) -> ThreadEventBatch {
                 forked_from_id: None,
                 status: ThreadStatus::Active,
             },
+            workspace: None,
             sequence: event_sequence,
             manager: SessionManagerInfo::default(),
             archived_at_unix_ms: None,

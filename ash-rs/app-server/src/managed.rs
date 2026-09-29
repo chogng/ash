@@ -1,9 +1,11 @@
 //! Profile-wide service runtime executed by `ash-app-server --managed`.
 
+mod gateway;
 mod registry;
 mod web;
 
 use ash_app_server_daemon::ConnectionOptions;
+use ash_app_server_daemon::ConnectionRole;
 use ash_app_server_daemon::GrantSource;
 use ash_app_server_daemon::ManagedEndpoint;
 use ash_app_server_transport::LocalConnections;
@@ -88,8 +90,12 @@ pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> R
                         }
                         return;
                     }
-                    if let Err(error) =
+                    let served = if connection.options.role() == ConnectionRole::Agents {
+                        gateway::serve(web_registry, server, connection.reader, connection.writer)
+                    } else {
                         server.serve_product_host_jsonl(connection.reader, connection.writer)
+                    };
+                    if let Err(error) = served
                         && !is_peer_disconnect(&error)
                     {
                         eprintln!("managed App Server connection failed: {error}");

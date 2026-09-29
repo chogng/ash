@@ -157,7 +157,8 @@ impl ManagedEndpoint {
                     connection.dir_root.clone(),
                     connection.grant_source(),
                     connection.product_services,
-                );
+                )
+                .with_role(connection.role);
                 Ok(Some(ManagedConnection {
                     options,
                     web: connection.web,

@@ -25,8 +25,11 @@ import type { PlanUpdate } from './PlanUpdate.js';
 import type { ReasoningEffort } from './ReasoningEffort.js';
 import type { RequestId } from './RequestId.js';
 import type { SandboxDenialOutput } from './SandboxDenialOutput.js';
+import type { Session } from './Session.js';
 import type { SessionId } from './SessionId.js';
+import type { SessionWorkspace } from './SessionWorkspace.js';
 import type { StableTurnError } from './StableTurnError.js';
+import type { Thread } from './Thread.js';
 import type { ThreadArchiveReason } from './ThreadArchiveReason.js';
 import type { ThreadGoal } from './ThreadGoal.js';
 import type { ThreadId } from './ThreadId.js';
@@ -49,7 +52,11 @@ export type ThreadEvent = { "type": "threadCreated",
 /**
  * Absent only in history written before schema version 16.
  */
-agentId?: AgentId | null, origin?: ThreadOrigin, agent?: AgentConfiguration | null, sessionId: SessionId, threadId: ThreadId, title: string, } | { "type": "modelProvidersMigrated", threadId: ThreadId, providers: Record<string, string>, } | { "type": "advisorConfigured", threadId: ThreadId, selection: AdvisorSelection, } | { "type": "threadArchived", threadId: ThreadId, reason: ThreadArchiveReason, } | { "type": "threadRestored", threadId: ThreadId, } | { "type": "historyPrefixBound", threadId: ThreadId, prefix: HistoryPrefixRef, } | { "type": "goalCreated", threadId: ThreadId, goal: ThreadGoal, } | { "type": "goalUpdated", threadId: ThreadId, goal: ThreadGoal, } | { "type": "goalCleared", threadId: ThreadId, goalId: string, } | { "type": "userGoalChanged", threadId: ThreadId, change: UserGoalChange, } | { "type": "turnExecutionBound", threadId: ThreadId, binding: TurnExecutionBinding, } | { "type": "agentContextSeedCommitted", threadId: ThreadId, seed: AgentContextSeed, } | { "type": "historyImported", threadId: ThreadId, sourceThreadId: ThreadId, beforeTurnId: TurnId, turns: Array<Turn>, } | { "type": "forkHistoryImported", threadId: ThreadId, sourceThreadId: ThreadId, sourceSequence: number, turns: Array<Turn>, } | { "type": "forkTurnImported", threadId: ThreadId, sourceThreadId: ThreadId, sourceSequence: number, turnIndex: number, turn: Turn, } | { "type": "forkHistoryImportCompleted", threadId: ThreadId, sourceThreadId: ThreadId, sourceSequence: number, importedTurnCount: number, contextCheckpoint?: ContextCheckpoint | null, } | { "type": "contextCheckpointCommitted", threadId: ThreadId, checkpoint: ContextCheckpoint, } | { "type": "contextOverflowRecoveryCommitted", threadId: ThreadId, turnId: TurnId, checkpoint: ContextCheckpoint, } | { "type": "turnAccepted", threadId: ThreadId, turnId: TurnId, kind: TurnKind,
+agentId?: AgentId | null, origin?: ThreadOrigin, agent?: AgentConfiguration | null, sessionId: SessionId, threadId: ThreadId, title: string,
+/**
+ * The root Thread records the Session execution authority. Descendants inherit it.
+ */
+workspace?: SessionWorkspace | null, } | { "type": "modelProvidersMigrated", threadId: ThreadId, providers: Record<string, string>, } | { "type": "advisorConfigured", threadId: ThreadId, selection: AdvisorSelection, } | { "type": "threadArchived", threadId: ThreadId, reason: ThreadArchiveReason, } | { "type": "threadRestored", threadId: ThreadId, } | { "type": "historyPrefixBound", threadId: ThreadId, prefix: HistoryPrefixRef, } | { "type": "goalCreated", threadId: ThreadId, goal: ThreadGoal, } | { "type": "goalUpdated", threadId: ThreadId, goal: ThreadGoal, } | { "type": "goalCleared", threadId: ThreadId, goalId: string, } | { "type": "userGoalChanged", threadId: ThreadId, change: UserGoalChange, } | { "type": "turnExecutionBound", threadId: ThreadId, binding: TurnExecutionBinding, } | { "type": "agentContextSeedCommitted", threadId: ThreadId, seed: AgentContextSeed, } | { "type": "historyImported", threadId: ThreadId, sourceThreadId: ThreadId, beforeTurnId: TurnId, turns: Array<Turn>, } | { "type": "forkHistoryImported", threadId: ThreadId, sourceThreadId: ThreadId, sourceSequence: number, turns: Array<Turn>, } | { "type": "forkTurnImported", threadId: ThreadId, sourceThreadId: ThreadId, sourceSequence: number, turnIndex: number, turn: Turn, } | { "type": "forkHistoryImportCompleted", threadId: ThreadId, sourceThreadId: ThreadId, sourceSequence: number, importedTurnCount: number, contextCheckpoint?: ContextCheckpoint | null, } | { "type": "contextCheckpointCommitted", threadId: ThreadId, checkpoint: ContextCheckpoint, } | { "type": "contextOverflowRecoveryCommitted", threadId: ThreadId, turnId: TurnId, checkpoint: ContextCheckpoint, } | { "type": "turnAccepted", threadId: ThreadId, turnId: TurnId, kind: TurnKind,
 /**
  * Exact instructions selected before this Turn was durably accepted.
  *

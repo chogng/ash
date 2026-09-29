@@ -34,12 +34,18 @@ pub fn run_command(
         }
         _ => return Err("ASH_DIR_GRANT_SOURCE must be userConfig or hostConfiguration".into()),
     };
+    let role = match std::env::var("ASH_APP_SERVER_CONNECTION_ROLE").as_deref() {
+        Ok("agents") => crate::ConnectionRole::Agents,
+        Err(std::env::VarError::NotPresent) => crate::ConnectionRole::Workbench,
+        _ => return Err("ASH_APP_SERVER_CONNECTION_ROLE must be agents when set".into()),
+    };
     let options = ConnectionOptions::new(
         ash_utils_home_dir::find_ash_home().map_err(|error| error.to_string())?,
         std::env::var_os("ASH_WORKSPACE_ROOT").map(PathBuf::from),
         grant_source,
         product_services.or_else(discovered_product_services_path),
-    );
+    )
+    .with_role(role);
     match command {
         Command::Connect => crate::connect(options, backend_executable),
         Command::ConnectSelected => crate::client::connect_selected_with_digest(

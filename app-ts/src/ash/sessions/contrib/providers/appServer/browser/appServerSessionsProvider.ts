@@ -4,12 +4,13 @@ import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.j
 import { createUuid } from "../../../../../base/common/uuid.js";
 import type { IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
 import type { IModelApi, ISessionApi, ITurnApi } from "../../../../../platform/sessions/common/sessionApi.js";
-import type { AgentThreadExecutionStatus, AgentTreeNode, IActiveSessionThread, ISession, ModelRef, SessionId, ThreadId } from "../../../../services/sessions/common/session.js";
+import type { AgentThreadExecutionStatus, AgentTreeNode, IActiveSessionThread, ISession, ModelRef, SessionId, SessionWorkspaceSelection, ThreadId } from "../../../../services/sessions/common/session.js";
 import type { ISessionsProvider } from "../../../../services/sessions/common/sessionsProvider.js";
 import type { ChatAgent } from '../../../../../workbench/services/chat/common/chatService.js';
 
 export interface AppServerSessionsProviderHost {
 	readonly session: ISessionApi;
+	readonly workspace: () => SessionWorkspaceSelection;
 	readonly model?: IModelApi;
 	readonly turn?: ITurnApi;
 	readonly events?: IServerEventApi;
@@ -81,8 +82,10 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 		await this.host.session.unsubscribe({ sessionId });
 	}
 
-	async create(title: string, model?: ModelRef, agent?: ChatAgent): Promise<IActiveSessionThread> {
-		const created = await this.host.session.create({ commandId: commandId("session"), title, agent: agent ? { type: 'exact', source: { type: 'directory', id: agent.sourceId }, name: agent.name } : { type: 'default' } });
+	currentWorkspace(): SessionWorkspaceSelection { return this.host.workspace(); }
+
+	async create(title: string, workspace: SessionWorkspaceSelection, model?: ModelRef, agent?: ChatAgent): Promise<IActiveSessionThread> {
+		const created = await this.host.session.create({ commandId: commandId("session"), title, workspace, agent: agent ? { type: 'exact', source: { type: 'directory', id: agent.sourceId }, name: agent.name } : { type: 'default' } });
 		const thread = await this.host.session.createThread({ commandId: commandId("thread"), sessionId: created.session.sessionId, title: "Main" });
 		const selected = model ?? await this.host.model?.readModel();
 		const session = await this.subscribe({ ...toSession(thread.session), model: selected ?? null });
@@ -131,6 +134,10 @@ function toSession(session: SessionDto, threads: readonly ThreadDto[] = [], prev
 		sessionId: session.sessionId,
 		title: session.title,
 		status: session.status,
+		workspace: session.workspace === undefined || session.workspace === null ? null : {
+			authorityId: session.workspace.type === 'local' ? 'local' : session.workspace.host,
+			root: session.workspace.root,
+		},
 		model: previous?.model,
 		nextApprovalMode: previous?.nextApprovalMode ?? "askPermissions",
 		chats: session.threads.map(thread => {

@@ -10,6 +10,8 @@ use std::time::Duration;
 use std::time::Instant;
 
 use ash_app_server_daemon::daemon_endpoint_path;
+use ash_remote::{RemoteDirPath, RemoteProfile, RemoteRuntime, SshHost, SshTarget};
+use ash_remote_profile_store::RemoteConnectionProfileStore;
 use ash_uds::UnixStream;
 use serde_json::Value;
 use serde_json::json;
@@ -100,6 +102,196 @@ fn daemon_keeps_a_directory_connection_open_after_initialize() {
     let response: Value = serde_json::from_str(&response).unwrap();
     assert_eq!(response["id"], 3);
     assert_eq!(response["result"]["packages"], json!([]));
+}
+
+#[test]
+fn agents_connection_keeps_sessions_in_two_local_directories() {
+    let root = tempfile::tempdir().unwrap();
+    let profile = root.path().join("profile");
+    let first = root.path().join("first");
+    let second = root.path().join("second");
+    fs::create_dir(&profile).unwrap();
+    fs::create_dir(&first).unwrap();
+    fs::create_dir(&second).unwrap();
+    let endpoint = daemon_endpoint_path(&profile).unwrap();
+    let daemon = Command::new(env!("CARGO_BIN_EXE_ash-app-server"))
+        .arg(ash_app_server_daemon::MANAGED_PROCESS_ARGUMENT)
+        .env("ASH_HOME", &profile)
+        .env("ASH_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS", "5000")
+        .spawn()
+        .unwrap();
+    let _daemon = Daemon(daemon);
+    let mut stream = connect_when_ready(&endpoint);
+    stream.set_read_timeout(Some(CONNECT_TIMEOUT)).unwrap();
+    writeln!(
+        stream,
+        "{}",
+        json!({"version":1,"role":"agents","dirGrantSource":"hostConfiguration"})
+    )
+    .unwrap();
+    let mut reader = BufReader::new(stream.try_clone().unwrap());
+    for (id, method, params) in [
+        (
+            1,
+            "initialize",
+            json!({"clientInfo":{"name":"agents-test","version":"1"},"capabilities":{}}),
+        ),
+        (
+            2,
+            "session/create",
+            json!({"commandId":"agents-first","title":"First","workspace":{"type":"local","root":first}}),
+        ),
+        (
+            3,
+            "session/create",
+            json!({"commandId":"agents-second","title":"Second","workspace":{"type":"local","root":second}}),
+        ),
+        (4, "session/list", json!({})),
+    ] {
+        writeln!(
+            stream,
+            "{}",
+            json!({"jsonrpc":"2.0","id":id,"method":method,"params":params})
+        )
+        .unwrap();
+        stream.flush().unwrap();
+        let response = loop {
+            let mut line = String::new();
+            reader
+                .read_line(&mut line)
+                .unwrap_or_else(|error| panic!("Agents {method} response timed out: {error}"));
+            let response: Value = serde_json::from_str(&line).unwrap();
+            if response.get("id") == Some(&json!(id)) {
+                break response;
+            }
+        };
+        assert!(response.get("error").is_none(), "{response}");
+        if id == 4 {
+            let sessions = response["result"]["sessions"].as_array().unwrap();
+            assert_eq!(sessions.len(), 2, "{response}");
+            assert!(sessions.iter().any(|session| session["title"] == "First"
+                && session["workspace"]["root"] == first.to_string_lossy().as_ref()));
+            assert!(sessions.iter().any(|session| session["title"] == "Second"
+                && session["workspace"]["root"] == second.to_string_lossy().as_ref()));
+        }
+    }
+}
+
+#[test]
+fn agents_connection_routes_ssh_sessions_and_merges_the_catalog() {
+    let root = tempfile::tempdir().unwrap();
+    let profile = root.path().join("profile");
+    let remote_home = root.path().join("remote-profile");
+    fs::create_dir(&profile).unwrap();
+    fs::create_dir(&remote_home).unwrap();
+    let remote_profile = RemoteProfile::new(
+        SshTarget::new(
+            SshHost::parse("test-host").unwrap(),
+            RemoteDirPath::parse("/workspace/test").unwrap(),
+        ),
+        RemoteRuntime::new("ash-app-server").unwrap(),
+    );
+    RemoteConnectionProfileStore::from_profile_root(&profile)
+        .activate(&remote_profile)
+        .unwrap();
+    let ssh_stub = root.path().join(if cfg!(windows) {
+        "ssh-stub.cmd"
+    } else {
+        "ssh-stub.sh"
+    });
+    let executable = env!("CARGO_BIN_EXE_ash-app-server");
+    if cfg!(windows) {
+        fs::write(&ssh_stub, format!("@echo off\r\nset \"ASH_HOME={}\"\r\nset \"ASH_WORKSPACE_ROOT=\"\r\n\"{}\" --listen stdio://\r\n", remote_home.display(), executable)).unwrap();
+    } else {
+        fs::write(&ssh_stub, format!("#!/bin/sh\nexport ASH_HOME='{}'\nunset ASH_WORKSPACE_ROOT\nexec '{}' --listen stdio://\n", remote_home.display(), executable)).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&ssh_stub, fs::Permissions::from_mode(0o700)).unwrap();
+        }
+    }
+    let endpoint = daemon_endpoint_path(&profile).unwrap();
+    let daemon = Command::new(executable)
+        .arg(ash_app_server_daemon::MANAGED_PROCESS_ARGUMENT)
+        .env("ASH_HOME", &profile)
+        .env("ASH_SSH_PATH", &ssh_stub)
+        .env("ASH_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS", "5000")
+        .spawn()
+        .unwrap();
+    let _daemon = Daemon(daemon);
+    let mut stream = connect_when_ready(&endpoint);
+    stream
+        .set_read_timeout(Some(Duration::from_secs(30)))
+        .unwrap();
+    writeln!(
+        stream,
+        "{}",
+        json!({"version":1,"role":"agents","dirGrantSource":"hostConfiguration"})
+    )
+    .unwrap();
+    let mut reader = BufReader::new(stream.try_clone().unwrap());
+    let mut call = |id: u64, method: &str, params: Value| -> Value {
+        writeln!(
+            stream,
+            "{}",
+            json!({"jsonrpc":"2.0","id":id,"method":method,"params":params})
+        )
+        .unwrap();
+        stream.flush().unwrap();
+        loop {
+            let mut line = String::new();
+            reader
+                .read_line(&mut line)
+                .unwrap_or_else(|error| panic!("Agents {method} response timed out: {error}"));
+            let response: Value = serde_json::from_str(&line).unwrap();
+            if response.get("id") == Some(&json!(id)) {
+                return response;
+            }
+        }
+    };
+    assert!(
+        call(
+            1,
+            "initialize",
+            json!({"clientInfo":{"name":"agents-ssh-test","version":"1"},"capabilities":{}})
+        )
+        .get("result")
+        .is_some()
+    );
+    let created = call(
+        2,
+        "session/create",
+        json!({"commandId":"remote-task","title":"Remote task","workspace":{"type":"ssh","host":"test-host","root":"/workspace/test"}}),
+    );
+    assert!(created.get("error").is_none(), "{created}");
+    assert_eq!(
+        created["result"]["session"]["workspace"],
+        json!({"type":"ssh","host":"test-host","root":"/workspace/test"})
+    );
+    let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = call(
+        3,
+        "session/request",
+        json!({"commandId":"remote-thread","sessionId":session_id,"expectedSequence":1,"request":{"type":"createThread","title":"Main"}}),
+    );
+    assert!(thread.get("error").is_none(), "{thread}");
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+    let listed = call(4, "session/list", json!({}));
+    assert!(listed.get("error").is_none(), "{listed}");
+    assert!(
+        listed["result"]["sessions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|session| session["sessionId"] == session_id)
+    );
+    let read = call(5, "session/read", json!({"sessionId":session_id}));
+    assert!(read.get("error").is_none(), "{read}");
+    assert_eq!(read["result"]["session"]["workspace"]["host"], "test-host");
+    assert_eq!(
+        read["result"]["session"]["threads"][0]["threadId"],
+        thread_id
+    );
 }
 
 fn connect_when_ready(endpoint: &std::path::Path) -> UnixStream {

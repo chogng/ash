@@ -68,7 +68,6 @@ test('Open in Agents reuses one window across Workbench workspaces', async ({ ap
 		await workbench.page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 		const agentsPage = await agentsPagePromise;
 		await expect(agentsPage.locator('.ash-code-sessions-window')).toBeVisible();
-		expect(await canonicalWorkspacePath(agentsPage)).toBe(await realpath(testWorkspace.directory));
 		const initialConnection = await agentsPage.evaluate(async () => {
 			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ generation: number }> } } }).ash.ipcRenderer;
 			return ipc.invoke('ash:remote:connection');
@@ -83,14 +82,14 @@ test('Open in Agents reuses one window across Workbench workspaces', async ({ ap
 		await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.id)).toBe(agentsWindowId);
 		await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().filter(window => window.webContents.getURL().includes('sessions-code.html')).length)).toBe(1);
 		await expect.poll(() => application.windows().length).toBe(3);
+		await expect.poll(() => canonicalWorkspacePath(agentsPage)).toBe(await realpath(secondWorkspace.directory));
 		await expect(agentsPage.locator('.ash-code-sessions-window')).toBeVisible();
-		expect(await canonicalWorkspacePath(agentsPage)).toBe(await realpath(secondWorkspace.directory));
 		if (target.appServerMode === 'required') {
-			const switchedConnection = await agentsPage.evaluate(async () => {
+			const reusedConnection = await agentsPage.evaluate(async () => {
 				const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ generation: number }> } } }).ash.ipcRenderer;
 				return ipc.invoke('ash:remote:connection');
 			});
-			expect(switchedConnection.generation).toBeGreaterThan(initialConnection.generation);
+			expect(reusedConnection.generation).toBe(initialConnection.generation);
 		}
 	} finally {
 		if (secondPage && !secondPage.isClosed()) await secondPage.close().catch(() => undefined);

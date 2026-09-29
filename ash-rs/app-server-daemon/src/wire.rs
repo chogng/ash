@@ -11,6 +11,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::ConnectionOptions;
+use crate::ConnectionRole;
 use crate::GrantSource;
 
 pub(crate) const CONNECTION_PRELUDE_TIMEOUT: std::time::Duration =
@@ -25,6 +26,8 @@ pub(crate) struct ConnectionPrelude {
     pub(crate) dir_root: Option<PathBuf>,
     pub(crate) dir_grant_source: ConnectionGrantSource,
     pub(crate) product_services: Option<PathBuf>,
+    #[serde(default)]
+    pub(crate) role: ConnectionRole,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) web: Option<ash_app_server_protocol::WebLaunchOptions>,
 }
@@ -46,6 +49,7 @@ impl ConnectionPrelude {
                 GrantSource::UserConfig => ConnectionGrantSource::UserConfig,
             },
             product_services: options.product_services().map(Path::to_path_buf),
+            role: options.role(),
             web: None,
         }
     }

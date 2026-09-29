@@ -27,6 +27,7 @@ import type { INativeHostApi, IOpenAgentsWindowOptions } from '../../platform/na
 import { IStorageService, WillSaveStateReason } from "../../platform/storage/common/storage.js";
 import { IThemeService } from "../../platform/theme/common/themeService.js";
 import { WorkbenchState } from "../../platform/workspace/common/workspace.js";
+import type { SessionWorkspaceSelection } from '../services/sessions/common/session.js';
 import type { WorkbenchPart } from "../../workbench/browser/part.js";
 import type { ContextMenuServiceFactory } from "../../platform/contextview/browser/contextMenuService.js";
 import { setHoverDelegate } from "../../base/browser/ui/hover/hoverDelegate.js";
@@ -96,6 +97,7 @@ export interface IWorkbenchOptions {
 	readonly modeId: WorkbenchModeId;
 	readonly profile: SessionsProfile;
 	readonly api: IRendererHost;
+	readonly workspaceSelection: () => SessionWorkspaceSelection;
 	readonly lifecycleService: ILifecycleService & IDisposable;
 	readonly nativeHostApi?: INativeHostApi;
 	readonly returnToWorkbench: () => void;
@@ -117,10 +119,12 @@ export class Workbench extends Disposable {
 	private readonly sessionsView: SessionsService;
 	private readonly sessionsPart: SessionsPart;
 	private readonly showChat: () => void;
+	private readonly workspaceSelection: () => SessionWorkspaceSelection;
 	private readonly initialized: Promise<void>;
 
 	constructor(options: IWorkbenchOptions) {
 		super();
+		this.workspaceSelection = options.workspaceSelection;
 		if (options.profile.modeId !== options.modeId) {
 			throw new TypeError(`Sessions profile '${options.profile.id}' belongs to '${options.profile.modeId}', not '${options.modeId}'`);
 		}
@@ -150,6 +154,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IWorkbenchHostService, workbenchWindow);
 		const sessions = this.sessionsManagement = this._register(new SessionsManagementService(new AppServerSessionsProvider({
 			session: options.api.session,
+			workspace: options.workspaceSelection,
 			model: options.api.model,
 			turn: options.api.turn,
 			events: options.api.events,
@@ -388,7 +393,12 @@ export class Workbench extends Disposable {
 	async acceptHandoff(options: IOpenAgentsWindowOptions): Promise<void> {
 		await this.initialized;
 		if (options.conversation) await this.sessionsManagement.openThread(options.conversation.sessionId, options.conversation.threadId);
-		else if (options.draft && this.sessionsView.activeSelection?.kind !== 'untitled') this.sessionsView.openNewSession('New code session');
+		else if (options.draft) {
+			const selected = this.sessionsView.activeSelection;
+			if (selected?.kind !== 'untitled' || !sameWorkspace(selected.session.workspace, this.workspaceSelection())) {
+				this.sessionsView.openNewSession('New code session');
+			}
+		}
 		this.showChat();
 		if (options.draft) this.sessionsPart.restoreDraft(options.draft);
 	}
@@ -402,4 +412,11 @@ export class Workbench extends Disposable {
 		await view.initialize();
 		if (!view.activeSelection) view.openNewSession("New code session");
 	}
+}
+
+function sameWorkspace(first: SessionWorkspaceSelection, second: SessionWorkspaceSelection): boolean {
+	if (first.type !== second.type) return false;
+	if (first.type === 'current') return true;
+	if (first.type === 'local' && second.type === 'local') return first.root === second.root;
+	return first.type === 'ssh' && second.type === 'ssh' && first.host === second.host && first.root === second.root;
 }

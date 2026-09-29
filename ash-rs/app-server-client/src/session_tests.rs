@@ -57,6 +57,8 @@ fn embedded_session_delivers_idle_notifications_without_a_polling_request() {
             agent: ash_protocol::AgentRoleSelection::Default,
             command_id: command_id("session"),
             title: "session".into(),
+            workspace:
+                ash_app_server_protocol::protocol::session::SessionWorkspaceSelection::Current,
         })
         .unwrap();
     let created_thread = client

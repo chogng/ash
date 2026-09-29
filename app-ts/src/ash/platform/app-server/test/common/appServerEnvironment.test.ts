@@ -16,6 +16,8 @@ test("App Server environment keeps safe POSIX session variables and excludes cre
 		ASH_HOME: "/state",
 		ASH_WORKSPACE_ROOT: "/workspace",
 		ASH_DIR_GRANT_SOURCE: "userConfig",
+		ASH_APP_SERVER_CONNECTION_ROLE: "agents",
+		ASH_SSH_PATH: "/usr/bin/ssh",
 	});
 
 	assert.deepEqual(environment, {
@@ -29,11 +31,15 @@ test("App Server environment keeps safe POSIX session variables and excludes cre
 		ASH_HOME: "/state",
 		ASH_WORKSPACE_ROOT: "/workspace",
 		ASH_DIR_GRANT_SOURCE: "userConfig",
+		ASH_APP_SERVER_CONNECTION_ROLE: "agents",
+		ASH_SSH_PATH: "/usr/bin/ssh",
 	});
 	assert.equal(isAllowedAppServerEnvironmentKey("OPENAI_API_KEY"), false);
 	assert.equal(isAllowedAppServerEnvironmentKey("ASH_APP_SERVER_PATH"), true);
 	assert.equal(isAllowedAppServerEnvironmentKey("ASH_ELECTRON_RUN_AS_NODE_PATH"), true);
 	assert.equal(isAllowedAppServerEnvironmentKey("ASH_DIR_GRANT_SOURCE"), true);
+	assert.equal(isAllowedAppServerEnvironmentKey("ASH_APP_SERVER_CONNECTION_ROLE"), true);
+	assert.equal(isAllowedAppServerEnvironmentKey("ASH_SSH_PATH"), true);
 	assert.equal(isAllowedAppServerEnvironmentKey("ELECTRON_RUN_AS_NODE"), false);
 });
 

@@ -45,6 +45,8 @@ workflows = { workspace = true }
 guardian-v2 = { workspace = true }
 ash-utils-home-dir = { workspace = true }
 ash-app-server-daemon = { workspace = true }
+ash-remote-profile-store = { workspace = true }
+ash-remote = { workspace = true }
 arg0 = { workspace = true }
 ash-package-store = { workspace = true }
 process-hardening = { workspace = true }

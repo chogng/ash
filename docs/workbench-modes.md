@@ -60,7 +60,7 @@ URL 查询参数 `ash-workbench-mode` 把 Main 已选择的窗口模式 ID 交�
 
 Code Sessions 是独立页面，不是给 `workbench/browser/layout*` 增加模式分支。Code 的普通 Workbench 只注册一个 Titlebar action，Electron Main 创建 sibling Sessions 窗口，并把对应 HTML 加入可信 IPC allowlist。
 
-`app-ts/src/ash/platform/windows/electron-main/windowsMainService.ts` 持有窗口创建、重复打开时的复用和窗口资源释放；`platform/lifecycle/electron-main/lifecycleMainService.ts` 在关闭窗口前等待 Renderer 保存完成。打开 Agents 窗口通过窗口宿主能力请求；返回 Workbench 是 Sessions 自己的操作。`code/electron-main/app.ts` 根据当前模式提供 Sessions 入口、连接和可信 IPC 装配；浏览器页面切换直接使用平台导航。Electron 进程只保留一个 Sessions 窗口；从另一个 workspace 打开时会聚焦该窗口，并在会话交接前切换其工作区上下文和连接。关闭 Workbench 或切换模式不会关闭 Sessions。关闭 Sessions 时释放其资源；从 Sessions 返回 Workbench 时，若当前 workspace 的 Workbench 已关闭，就重新打开它。
+`app-ts/src/ash/platform/windows/electron-main/windowsMainService.ts` 持有窗口创建、重复打开时的复用和窗口资源释放；`platform/lifecycle/electron-main/lifecycleMainService.ts` 在关闭窗口前等待 Renderer 保存完成。打开 Agents 窗口通过窗口宿主能力请求；返回 Workbench 是 Sessions 自己的操作。`code/electron-main/app.ts` 根据当前模式提供 Sessions 入口、连接和可信 IPC 装配；浏览器页面切换直接使用平台导航。Electron 进程只保留一个 Sessions 窗口；从另一个 workspace 打开时会聚焦该窗口，并在会话交接前更新其工作区上下文。Agents 的 App Server 连接保持不变，每个 Session 保存自己的本机目录或 SSH 主机与目录，由 profile 网关选择执行连接。关闭 Workbench 或切换模式不会关闭 Sessions。关闭 Sessions 时释放其资源；从 Sessions 返回 Workbench 时，若当前 workspace 的 Workbench 已关闭，就重新打开它。
 
 ```text
 regular Code Workbench titlebar

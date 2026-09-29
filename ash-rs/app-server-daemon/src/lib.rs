@@ -11,6 +11,7 @@ mod wire;
 use std::path::Path;
 use std::path::PathBuf;
 
+use serde::Deserialize;
 use serde::Serialize;
 
 /// Environment variable selecting the managed App Server executable.
@@ -28,6 +29,15 @@ pub enum GrantSource {
     UserConfig,
 }
 
+/// Product surface using one managed App Server connection.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ConnectionRole {
+    #[default]
+    Workbench,
+    Agents,
+}
+
 /// Profile, directory grant, and product-service inputs for one daemon connection.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ConnectionOptions {
@@ -35,6 +45,7 @@ pub struct ConnectionOptions {
     dir_root: Option<PathBuf>,
     dir_grant_source: GrantSource,
     product_services: Option<PathBuf>,
+    role: ConnectionRole,
 }
 
 impl ConnectionOptions {
@@ -50,6 +61,7 @@ impl ConnectionOptions {
             dir_root,
             dir_grant_source,
             product_services,
+            role: ConnectionRole::Workbench,
         }
     }
 
@@ -71,6 +83,15 @@ impl ConnectionOptions {
     /// Returns the optional product-services manifest for this connection.
     pub fn product_services(&self) -> Option<&Path> {
         self.product_services.as_deref()
+    }
+
+    pub fn with_role(mut self, role: ConnectionRole) -> Self {
+        self.role = role;
+        self
+    }
+
+    pub fn role(&self) -> ConnectionRole {
+        self.role
     }
 }
 

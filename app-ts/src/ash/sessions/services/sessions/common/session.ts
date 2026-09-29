@@ -53,6 +53,10 @@ export interface IChat {
 }
 
 export type SessionStatus = "active" | "archived";
+export type SessionWorkspaceSelection =
+	| { readonly type: 'current' }
+	| { readonly type: 'local'; readonly root: string }
+	| { readonly type: 'ssh'; readonly host: string; readonly root: string };
 
 /** Frontend product model for one App Server Session tree. */
 export interface ISession {
@@ -84,4 +88,5 @@ export interface IUntitledChatSession {
 	/** Distinguishes an explicit Auto choice from a draft awaiting its default. */
 	readonly modelSelectionKind?: 'manual';
 	readonly agent: ChatAgent | undefined;
+	readonly workspace: SessionWorkspaceSelection;
 }

@@ -659,6 +659,8 @@ dependencies = [
  "ash-protocol",
  "ash-queue",
  "ash-realtime-voice",
+ "ash-remote",
+ "ash-remote-profile-store",
  "ash-rollout",
  "ash-sandboxing",
  "ash-screen-capture",
@@ -2394,6 +2396,7 @@ dependencies = [
  "ash-package-store",
  "ash-process-hardening",
  "ash-remote",
+ "ash-remote-profile-store",
  "ash-utils-home-dir",
  "ash-utils-path",
  "flate2",
@@ -2411,6 +2414,17 @@ version = "0.1.0"
 dependencies = [
  "ash-remote",
  "ash-remote-connections",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-remote-profile-store"
+version = "0.1.0"
+dependencies = [
+ "ash-remote",
+ "ash-utils-path",
+ "serde",
+ "serde_json",
  "tempfile",
 ]
 

@@ -31247,6 +31247,16 @@
         },
         "title": {
           "type": "string"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionWorkspace"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -31319,11 +31329,15 @@
         },
         "title": {
           "type": "string"
+        },
+        "workspace": {
+          "$ref": "#/$defs/SessionWorkspaceSelection"
         }
       },
       "required": [
         "commandId",
-        "title"
+        "title",
+        "workspace"
       ],
       "type": "object"
     },
@@ -32762,6 +32776,100 @@
         "sessionId"
       ],
       "type": "object"
+    },
+    "SessionWorkspace": {
+      "description": "The execution root selected for a Session, independent of the editor's open Workspace.",
+      "oneOf": [
+        {
+          "properties": {
+            "root": {
+              "type": "string"
+            },
+            "type": {
+              "const": "local",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "root"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "host": {
+              "type": "string"
+            },
+            "root": {
+              "type": "string"
+            },
+            "type": {
+              "const": "ssh",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "host",
+            "root"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "SessionWorkspaceSelection": {
+      "description": "Selects the execution root before the root Thread and its managed directory are created.",
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "current",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "root": {
+              "type": "string"
+            },
+            "type": {
+              "const": "local",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "root"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "host": {
+              "type": "string"
+            },
+            "root": {
+              "type": "string"
+            },
+            "type": {
+              "const": "ssh",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "host",
+            "root"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "SkillActivationReason": {
       "enum": [
@@ -35054,6 +35162,17 @@
             "type": {
               "const": "threadCreated",
               "type": "string"
+            },
+            "workspace": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/SessionWorkspace"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The root Thread records the Session execution authority. Descendants inherit it."
             }
           },
           "required": [

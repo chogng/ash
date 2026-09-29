@@ -2,12 +2,13 @@
 import type { AgentId } from './AgentId.js';
 import type { AgentRoleSelection } from './AgentRoleSelection.js';
 import type { CommandId } from './CommandId.js';
+import type { SessionWorkspaceSelection } from './SessionWorkspaceSelection.js';
 
 export type SessionCreateParams = {
 /**
  * Reuse an existing Agent identity in a new task; omission allocates a new identity.
  */
-agentId?: AgentId | null, agent: AgentRoleSelection, commandId: CommandId, title: string,
+agentId?: AgentId | null, agent: AgentRoleSelection, commandId: CommandId, title: string, workspace: SessionWorkspaceSelection,
 /**
  * Creates the new session's linked worktree on a new local Git branch.
  */

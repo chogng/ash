@@ -4,9 +4,11 @@
 //! process, or owning product UI state. Host products use these values to describe the same
 //! target to their connection manager, while `ash-remote-server` owns the remote runtime.
 
+mod launch;
 mod platform;
 mod target;
 
+pub use launch::remote_app_server_command;
 pub use platform::RemoteArchitecture;
 pub use platform::RemoteLinuxLibc;
 pub use platform::RemotePlatform;

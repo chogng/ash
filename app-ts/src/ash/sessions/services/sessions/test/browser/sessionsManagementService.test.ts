@@ -5,6 +5,7 @@ import type { IServerEventApi } from "../../../../../platform/app-server/common/
 import type { ISessionApi, ITurnApi } from "../../../../../platform/sessions/common/sessionApi.js";
 import { SessionsManagementService } from "../../browser/sessionsManagementService.js";
 import { AppServerSessionsProvider } from "../../../../contrib/providers/appServer/browser/appServerSessionsProvider.js";
+import type { SessionWorkspaceSelection } from "../../common/session.js";
 
 test("management initializes the catalog from provider-owned Session mapping", async () => {
 	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
@@ -19,6 +20,29 @@ test("management initializes the catalog from provider-owned Session mapping", a
 	assert.equal(fake.subscribeCount, 1);
 	assert.equal(fake.catalogSubscriptionCount, 1);
 	assert.equal(service.sessions[1]?.agentTree, undefined);
+});
+
+test("an untitled Session keeps its selected directory when the Agents window changes workspace", async () => {
+	let selected = { type: 'local' as const, root: '/work/first' };
+	const fake = sessionHost([], undefined, () => selected);
+	const created: unknown[] = [];
+	fake.host.session.create = async params => {
+		created.push(params.workspace);
+		const value = session(`session-${created.length}`, `thread-${created.length}`);
+		fake.sessions.push(value);
+		return { session: value, agentTree: { roots: [] } };
+	};
+	fake.host.session.createThread = async params => ({ session: fake.sessions.find(candidate => candidate.sessionId === params.sessionId)!, threadId: `thread-${created.length}` });
+	using service = new SessionsManagementService(new AppServerSessionsProvider(fake.host));
+	const first = service.createUntitledSession();
+	selected = { type: 'local', root: '/work/second' };
+	const second = service.createUntitledSession();
+	await service.materializeUntitledSession(first.untitledSessionId);
+	await service.materializeUntitledSession(second.untitledSessionId);
+	assert.deepEqual(created, [
+		{ type: 'local', root: '/work/first' },
+		{ type: 'local', root: '/work/second' },
+	]);
 });
 
 test("Session list becomes ready while the opened conversation is still loading", async () => {
@@ -263,7 +287,7 @@ function agentNode(): AgentTreeNodeProjection {
 	};
 }
 
-function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection) {
+function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, workspace: () => SessionWorkspaceSelection = () => ({ type: 'current' })) {
 	const listeners = new Set<(event: ServerNotification) => void>();
 	const sessions = [...initial];
 	const agentTree = { roots: tree ? [tree] : [] };
@@ -319,7 +343,7 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection) {
 		},
 	};
 	return {
-		host: { session: api, turn, events },
+		host: { session: api, turn, events, workspace },
 		sessions,
 		archiveRequests,
 		interruptRequests,

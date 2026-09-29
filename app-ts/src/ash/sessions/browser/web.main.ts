@@ -45,6 +45,7 @@ async function mountBrowserSessions(modeId: WorkbenchModeId, profile: SessionsPr
 			modeId,
 			profile,
 			api: host?.api ?? createDisconnectedRendererApi(),
+			workspaceSelection: () => ({ type: 'current' }),
 			configurationApi,
 			initialConfigurationSnapshot,
 			lifecycleService: new BrowserLifecycleService({ ownerWindow, onError: onUnexpectedError }),

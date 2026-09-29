@@ -152,6 +152,7 @@ fn provider_context_overflow_compacts_and_retries_through_the_product_boundary()
     let thread_id = ThreadId::new("provider-overflow-thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
+            workspace: None,
             agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
             origin: Default::default(),
             agent: None,
@@ -311,6 +312,7 @@ fn run_provider_failure(failure: ProviderFailure) -> (StableTurnErrorCode, bool,
     let thread_id = ThreadId::new("provider-error-thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
+            workspace: None,
             agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
             origin: Default::default(),
             agent: None,

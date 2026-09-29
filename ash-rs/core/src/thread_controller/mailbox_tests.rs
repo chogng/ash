@@ -79,6 +79,7 @@ fn idle_lane_evicts_projection_and_a_later_load_gets_a_new_incarnation() {
     let thread_id = ThreadId::new("thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
+            workspace: None,
             agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
             origin: Default::default(),
             agent: None,
@@ -215,6 +216,7 @@ fn install(loaded_threads: &LoadedThreads, snapshot: ThreadSnapshot) {
 
 fn snapshot(thread_id: &ThreadId) -> ThreadSnapshot {
     ThreadSnapshot {
+        workspace: None,
         advisor: Default::default(),
         user_time_contexts: Default::default(),
         history_sources: Default::default(),

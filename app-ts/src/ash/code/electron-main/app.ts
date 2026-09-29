@@ -547,6 +547,7 @@ export class AshApplication extends Disposable {
 		workspace: IAnyWorkspaceIdentifier,
 		resources: DisposableStore,
 		existing?: AppServerConnectionRelay,
+		role: 'workbench' | 'agents' = 'workbench',
 	): AppServerConnectionRelay {
 		if (this.appServerStartupMode === "disabled") {
 			return existing ?? new AppServerConnectionRelay({ enabled: false });
@@ -571,14 +572,18 @@ export class AshApplication extends Disposable {
 				console.error("[app-server] Ignoring invalid development generation", error);
 			}
 		}
-		const processLauncher = isRemoteWorkspaceIdentifier(workspace)
+		const processLauncher = role === 'workbench' && isRemoteWorkspaceIdentifier(workspace)
 			? this.createSshAppServerProcessLauncher(workspace, resources)
 			: new LocalAppServerProcessLauncher({
 				executable: packagedExecutable,
 				expectedSha256: expectedPackagedSha256,
 				// Full development selects its backend generation; UI debugging preserves a compatible shared daemon.
 				args: [app.isPackaged || process.env.ASH_DEV_REUSE_APP_SERVER === "1" ? "connect" : "connect-selected"],
-				environment: { ...this.appServerEnvironment(workspace), ASH_APP_SERVER_PATH: selectDevelopmentAppServerExecutable(appServerExecutablePath(packageLocation), developmentExecutable) },
+				environment: {
+					...this.appServerEnvironment(role === 'agents' ? UNKNOWN_EMPTY_WINDOW_WORKSPACE : workspace),
+					...(role === 'agents' ? { ASH_APP_SERVER_CONNECTION_ROLE: 'agents' } : {}),
+					ASH_APP_SERVER_PATH: selectDevelopmentAppServerExecutable(appServerExecutablePath(packageLocation), developmentExecutable),
+				},
 			});
 		const supervisor = existing ?? new AppServerConnectionRelay({
 			enabled: true,
@@ -1015,7 +1020,7 @@ export class AshApplication extends Disposable {
 					const runtimeResources = new DisposableStore();
 					let sessionsRelay: AppServerConnectionRelay;
 					try {
-						sessionsRelay = windowDisposables.add(this.createAppServerConnectionRelay(session.workspaceContext.getWorkspace(), runtimeResources));
+						sessionsRelay = windowDisposables.add(this.createAppServerConnectionRelay(session.workspaceContext.getWorkspace(), runtimeResources, undefined, 'agents'));
 					} catch (error) {
 						runtimeResources.dispose();
 						throw error;
@@ -1041,7 +1046,7 @@ export class AshApplication extends Disposable {
 						userKeyboardLayout: this.services.userKeyboardLayout,
 					};
 					const ipcRoutes = [
-						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: session.workspaceId, workspaceRoot: session.workspaceContext.getResolvedWorkspace().folders[0]?.uri.fsPath ?? this.profileRoot })),
+						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
 						...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path)),
 						...remoteWindowContext.ipcRoutes,
 						...windowResourceIpcRoutes(windowResources),
@@ -1114,34 +1119,8 @@ export class AshApplication extends Disposable {
 	}
 
 	private async selectSessionsWorkspace(session: SessionsWindowRecord, workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace): Promise<void> {
-		const previousWorkspace = session.workspaceContext.getWorkspace();
-		if (previousWorkspace.id === workspace.id) return;
-		const previousResolvedWorkspace = session.workspaceContext.getResolvedWorkspace();
-		const supervisor = session.supervisor;
-		if (!supervisor) throw new Error('Agents Window connection is unavailable');
-		if (!supervisor.options.enabled) {
+		if (session.workspaceContext.getWorkspace().id !== workspace.id) {
 			session.workspaceContext.updateWorkspace(workspace, resolvedWorkspace);
-			return;
-		}
-		const previousLauncher = supervisor.options.processLauncher;
-		const runtimeResources = new DisposableStore();
-		await supervisor.stop();
-		try {
-			this.createAppServerConnectionRelay(workspace, runtimeResources, supervisor);
-			session.workspaceContext.updateWorkspace(workspace, resolvedWorkspace);
-			await supervisor.start();
-			session.runtimeResources.value = runtimeResources;
-		} catch (error) {
-			await supervisor.stop();
-			supervisor.replaceProcessLauncher(previousLauncher);
-			session.workspaceContext.updateWorkspace(previousWorkspace, previousResolvedWorkspace);
-			runtimeResources.dispose();
-			try {
-				await supervisor.start();
-			} catch (rollbackError) {
-				throw new AggregateError([error, rollbackError], 'Agents workspace switch and rollback both failed');
-			}
-			throw error;
 		}
 	}
 
@@ -1518,6 +1497,9 @@ export class AshApplication extends Disposable {
 		return buildAppServerEnvironment(process.env, process.platform === "win32" ? "windows" : "posix", {
 			...(process.env.ASH_RG_PATH
 				? { ASH_RG_PATH: process.env.ASH_RG_PATH }
+				: {}),
+			...(process.env.ASH_SSH_PATH
+				? { ASH_SSH_PATH: process.env.ASH_SSH_PATH }
 				: {}),
 			...(process.env.ASH_PRODUCT_SERVICES_PATH
 				? { ASH_PRODUCT_SERVICES_PATH: process.env.ASH_PRODUCT_SERVICES_PATH }

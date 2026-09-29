@@ -34,6 +34,8 @@ fn probe_accepts_only_a_credential_free_host_and_local_ssh_path() {
 #[test]
 fn fetch_runtime_requires_a_release_digest_target_and_absolute_cache() {
     let digest = "a".repeat(64);
+    let cache_root = std::env::temp_dir().join("ash-remote-runtime-cache-test");
+    let cache_root_text = cache_root.to_string_lossy().into_owned();
     let command = parse(vec![
         "fetch-runtime".into(),
         "--catalog-url".into(),
@@ -43,7 +45,7 @@ fn fetch_runtime_requires_a_release_digest_target_and_absolute_cache() {
         "--target".into(),
         "aarch64-unknown-linux-gnu".into(),
         "--cache-root".into(),
-        "/cache/ash".into(),
+        cache_root_text.clone(),
         "--progress".into(),
         "json-lines".into(),
     ])
@@ -61,7 +63,7 @@ fn fetch_runtime_requires_a_release_digest_target_and_absolute_cache() {
         options.platform.target_triple(),
         "aarch64-unknown-linux-gnu"
     );
-    assert_eq!(options.cache.root(), Path::new("/cache/ash"));
+    assert_eq!(options.cache.root(), cache_root);
     assert_eq!(options.progress, RemoteFetchProgressFormat::JsonLines);
 
     assert!(
@@ -74,7 +76,7 @@ fn fetch_runtime_requires_a_release_digest_target_and_absolute_cache() {
             "--target",
             "x86_64-unknown-linux-gnu",
             "--cache-root",
-            "/cache/ash",
+            cache_root_text.as_str(),
         ]))
         .is_err()
     );

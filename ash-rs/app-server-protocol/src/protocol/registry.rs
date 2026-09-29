@@ -1308,6 +1308,8 @@ use crate::protocol::session::SessionThreadUnsubscribeParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::SessionUnsubscribeParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::session::SessionWorkspaceSelection;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::session::ThreadHistoryBoundary;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::ThreadSnapshotHistory;
@@ -1754,6 +1756,8 @@ use ash_protocol::SessionManagerStatus;
 use ash_protocol::SessionStatus;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SessionThread;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::SessionWorkspace;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SkillActivationReason;
 #[cfg(any(test, feature = "export"))]
@@ -4426,8 +4430,10 @@ typescript_bindings! {
     ThreadOrigin,
     SessionThread,
     Session,
+    SessionWorkspace,
     ApprovalMode,
     SessionCreateParams,
+    SessionWorkspaceSelection,
     SessionReadParams,
     MessageCheckpointsParams,
     MessageCheckpointsResult,

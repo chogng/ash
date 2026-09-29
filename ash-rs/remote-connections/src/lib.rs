@@ -9,11 +9,14 @@
 mod catalog;
 mod connection_catalog;
 mod install;
-mod profile_store;
 mod runtime_updater;
 mod ssh;
 mod tunnel;
 
+pub use ash_remote_profile_store::RemoteConnectionProfileRecord;
+pub use ash_remote_profile_store::RemoteConnectionProfileStore;
+pub use ash_remote_profile_store::RemoteConnectionProfileStoreError;
+pub use ash_remote_profile_store::RemoteConnectionProfileStoreFailureKind;
 pub use catalog::RemoteRuntimeCatalog;
 pub use catalog::RemoteRuntimeCatalogError;
 pub use connection_catalog::RemoteConnectionCatalog;
@@ -35,10 +38,6 @@ pub use install::RemoteRuntimeInstallProgress;
 pub use install::RemoteRuntimeInstallRoot;
 pub use install::RemoteRuntimeVersion;
 pub use install::SshRemoteRuntimeInstaller;
-pub use profile_store::RemoteConnectionProfileRecord;
-pub use profile_store::RemoteConnectionProfileStore;
-pub use profile_store::RemoteConnectionProfileStoreError;
-pub use profile_store::RemoteConnectionProfileStoreFailureKind;
 pub use runtime_updater::RemoteRuntimeCatalogRelease;
 pub use runtime_updater::RemoteRuntimeCatalogUpdater;
 pub use runtime_updater::RemoteRuntimeDownloadCache;
@@ -77,10 +76,6 @@ mod tunnel_tests;
 #[cfg(test)]
 #[path = "install_tests.rs"]
 mod install_tests;
-
-#[cfg(test)]
-#[path = "profile_store_tests.rs"]
-mod profile_store_tests;
 
 #[cfg(test)]
 #[path = "runtime_updater_tests.rs"]

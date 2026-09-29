@@ -106,9 +106,13 @@ the App Server provider. Sessions views consume `ISessionsManagementService`
 and frontend-owned domain types; Workbench Chat presentation consumes its model
 through a view contract and never imports the Sessions product layer.
 
-The Session workspace is a display summary derived from Environment, `cwd`,
-and dirs. It does not grant access and is not the editor window Workspace from
-`platform/workspace`.
+An untitled Session captures the selected Workbench directory when it opens.
+Materialization sends that directory to App Server, which stores the execution
+root with the root Thread and Session catalog. Existing Sessions keep their
+own root when another Workbench hands off a chat. Local roots select a directory
+runtime; SSH roots select the configured remote App Server. The editor window
+Workspace only selects the root for a new Session. The frontend workspace
+summary displays the Session's stored root and does not grant access.
 
 ## Failure and lifecycle semantics
 
@@ -122,9 +126,10 @@ and dirs. It does not grant access and is not the editor window Workspace from
 - Each runtime, Part, retained Chat pane, App Server event subscription, and
   interaction service is disposed with the Sessions window.
 - An Electron process has one Sessions window. Opening it from another
-  Workbench focuses the existing window and switches its workspace context and
-  App Server connection before handing off a chat. Closing a Workbench leaves
-  the Sessions window open with its most recently selected workspace.
+  Workbench focuses the existing window and updates its workspace context
+  before handing off a chat. Its profile App Server connection remains open;
+  Session requests route to their stored local or SSH roots. Closing a Workbench
+  leaves the Sessions window open with its most recently selected workspace.
 - Returning to Workbench closes the Electron Sessions window and focuses or
   reopens the same workspace, or navigates the browser page to its sibling
   Workbench entry.

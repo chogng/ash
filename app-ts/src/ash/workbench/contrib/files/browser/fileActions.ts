@@ -1,5 +1,4 @@
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
-<<<<<<< HEAD
 import { dirname, extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';

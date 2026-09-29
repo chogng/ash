@@ -11,6 +11,7 @@ use ash_app_server_protocol::protocol::common::ClientInfo;
 use ash_app_server_protocol::protocol::initialize::InitializeResult;
 use ash_remote::RemoteProfile;
 use ash_remote::RemoteRuntime;
+pub use ash_remote::remote_app_server_command;
 
 const DEFAULT_CONNECT_TIMEOUT_SECONDS: NonZeroU16 = NonZeroU16::new(10).expect("non-zero");
 const RUNTIME_FOUND_MARKER: &str = "__ASH_REMOTE_RUNTIME_FOUND__:";
@@ -164,23 +165,6 @@ impl SshAppServerConnectionOptions {
         shutdown?;
         Ok(initialization)
     }
-}
-
-/// Builds the POSIX shell command executed after OpenSSH reaches the selected host.
-///
-/// The command carries only the Remote Directory root and the profile-selected runtime. Local
-/// host environment and credentials stay attached to the local OpenSSH child process.
-pub fn remote_app_server_command(profile: &RemoteProfile) -> String {
-    [
-        "env".to_owned(),
-        format!("ASH_WORKSPACE_ROOT={}", profile.target().dir().as_str()),
-        profile.runtime().executable().to_owned(),
-        "connect".to_owned(),
-    ]
-    .into_iter()
-    .map(|argument| quote_posix_shell_argument(&argument))
-    .collect::<Vec<_>>()
-    .join(" ")
 }
 
 /// Builds a shell command that reports runtime availability without starting the runtime.

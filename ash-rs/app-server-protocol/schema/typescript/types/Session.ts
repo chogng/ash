@@ -3,5 +3,6 @@ import type { SessionId } from './SessionId.js';
 import type { SessionManagerInfo } from './SessionManagerInfo.js';
 import type { SessionStatus } from './SessionStatus.js';
 import type { SessionThread } from './SessionThread.js';
+import type { SessionWorkspace } from './SessionWorkspace.js';
 
-export type Session = { sessionId: SessionId, title: string, status: SessionStatus, manager: SessionManagerInfo, threads: Array<SessionThread>, };
+export type Session = { sessionId: SessionId, title: string, status: SessionStatus, workspace?: SessionWorkspace | null, manager: SessionManagerInfo, threads: Array<SessionThread>, };

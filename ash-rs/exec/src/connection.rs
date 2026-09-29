@@ -189,6 +189,7 @@ impl ExecConnection for ServerConnection {
                 agent: ash_protocol::AgentRoleSelection::Default,
                 command_id,
                 title,
+                workspace: ash_app_server_protocol::protocol::session::SessionWorkspaceSelection::Current,
             })
             .map(|result| result.session)
             .map_err(|error| ConnectionError::new(error.to_string()))

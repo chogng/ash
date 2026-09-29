@@ -18,6 +18,8 @@ pub struct ThreadCatalogRecord {
     pub binding: agent_graph_store::ThreadBinding,
     pub session_id: SessionId,
     pub thread: SessionThread,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<ash_protocol::SessionWorkspace>,
     pub sequence: u64,
     pub manager: SessionManagerInfo,
     pub archived_at_unix_ms: Option<u64>,
@@ -53,6 +55,7 @@ pub fn session_from_catalog(
         session_id,
         title,
         status,
+        workspace: root.workspace.clone(),
         manager,
         threads: records.into_iter().map(|record| record.thread).collect(),
     })

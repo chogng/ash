@@ -198,6 +198,7 @@ pub use session::SessionManagerInfo;
 pub use session::SessionManagerStatus;
 pub use session::SessionStatus;
 pub use session::SessionThread;
+pub use session::SessionWorkspace;
 pub use session::ThreadOrigin;
 pub use skill::ContentDigest;
 pub use skill::FrozenSkillActivation;

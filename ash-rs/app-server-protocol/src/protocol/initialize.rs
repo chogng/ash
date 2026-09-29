@@ -11,11 +11,11 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 pub const APP_SERVER_PROTOCOL_MAJOR: u32 = 7;
-pub const APP_SERVER_PROTOCOL_REVISION: u32 = 4;
-// Version 8 requires model/list callers to choose the fixed or discovered catalog.
-// Keep this version while newer servers preserve the session, thread, and turn contract for
-// older clients; the standalone App Server updater compares it before selecting a release.
-pub const APP_SERVER_CAPABILITY_VERSION: u32 = 8;
+pub const APP_SERVER_PROTOCOL_REVISION: u32 = 5;
+// Version 9 requires an execution workspace in session/create. Older servers would ignore the
+// selector and bind the Session to the connection directory, so clients must reject them before
+// sending a root creation request.
+pub const APP_SERVER_CAPABILITY_VERSION: u32 = 9;
 
 pub const REQUIRED_SESSION_CAPABILITIES: &[CapabilityRequirement] = &[
     CapabilityRequirement::exact("sessions", APP_SERVER_CAPABILITY_VERSION),

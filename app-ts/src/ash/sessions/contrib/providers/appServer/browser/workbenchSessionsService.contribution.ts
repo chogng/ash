@@ -10,7 +10,7 @@ import { AppServerSessionsProvider } from './appServerSessionsProvider.js';
 
 class WorkbenchSessionsManagementService extends SessionsManagementService {
 	constructor(@IRendererHostService api: IRendererHost) {
-		super(new AppServerSessionsProvider({ session: api.session, model: api.model, turn: api.turn, events: api.events }));
+		super(new AppServerSessionsProvider({ session: api.session, model: api.model, turn: api.turn, events: api.events, workspace: () => ({ type: 'current' }) }));
 	}
 }
 

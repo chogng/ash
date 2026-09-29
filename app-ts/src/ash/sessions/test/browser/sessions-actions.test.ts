@@ -25,7 +25,7 @@ test("Sessions owns the local New Chat command without requiring regular Workben
 		openUntitledSession() {},
 		openNewSession() {
 			created += 1;
-			return { untitledSessionId: `untitled-${created}`, title: "New code session", model: undefined, agent: undefined };
+			return { untitledSessionId: `untitled-${created}`, title: "New code session", model: undefined, agent: undefined, workspace: { type: 'current' } };
 		},
 		activateSelection() {},
 		closeVisibleSelection() {},

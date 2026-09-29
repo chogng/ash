@@ -62,6 +62,7 @@ fn reducer_preserves_the_thread_creation_timestamp() {
         &envelope(
             1,
             ThreadEvent::ThreadCreated {
+                workspace: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
                 agent: None,
@@ -85,6 +86,7 @@ fn reducer_preserves_when_and_why_a_thread_was_archived() {
             1,
             100,
             ThreadEvent::ThreadCreated {
+                workspace: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
                 agent: None,
@@ -137,6 +139,7 @@ fn reducer_accumulates_terminal_turn_durations_and_keeps_the_active_turn_start()
             1,
             100,
             ThreadEvent::ThreadCreated {
+                workspace: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
                 agent: None,
@@ -214,6 +217,7 @@ fn reducer_keeps_legacy_external_execution_attempts_readable() {
         &envelope(
             1,
             ThreadEvent::ThreadCreated {
+                workspace: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
                 agent: None,
@@ -283,6 +287,7 @@ fn reducer_rebuilds_a_failed_turn_with_stable_error_details() {
         &envelope(
             1,
             ThreadEvent::ThreadCreated {
+                workspace: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
                 agent: None,
@@ -391,6 +396,7 @@ fn reducer_rebuilds_model_calibration_and_rejects_unknown_algorithm_revisions() 
         envelope(
             1,
             ThreadEvent::ThreadCreated {
+                workspace: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
                 agent: None,
@@ -469,6 +475,7 @@ fn reducer_rebuilds_a_steer_receipt_from_its_immediately_preceding_items() {
         envelope(
             1,
             ThreadEvent::ThreadCreated {
+                workspace: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
                 agent: None,
@@ -580,6 +587,7 @@ fn reducer_rebuilds_a_steer_receipt_from_its_immediately_preceding_items() {
 #[test]
 fn reducer_rejects_history_older_than_minimum_supported_schema() {
     let event = ThreadEvent::ThreadCreated {
+        workspace: None,
         agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
         origin: Default::default(),
         agent: None,
@@ -603,6 +611,7 @@ fn reducer_requires_an_ordered_fork_import_to_complete_before_other_facts() {
         &envelope(
             1,
             ThreadEvent::ThreadCreated {
+                workspace: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
                 agent: None,
@@ -675,6 +684,7 @@ fn reducer_rejects_a_fork_import_with_an_incomplete_tool_exchange() {
         &envelope(
             1,
             ThreadEvent::ThreadCreated {
+                workspace: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
                 agent: None,
@@ -739,6 +749,7 @@ fn empty_fork_completion_preserves_the_source_thread_identity() {
         &envelope(
             1,
             ThreadEvent::ThreadCreated {
+                workspace: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
                 agent: None,
@@ -795,6 +806,7 @@ fn reducer_verifies_and_rebuilds_a_context_checkpoint() {
         envelope(
             1,
             ThreadEvent::ThreadCreated {
+                workspace: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
                 agent: None,
@@ -940,6 +952,7 @@ fn reducer_rejects_sequence_gaps_and_illegal_transitions() {
         &envelope(
             1,
             ThreadEvent::ThreadCreated {
+                workspace: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
                 agent: None,
@@ -1052,6 +1065,7 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
         envelope(
             1,
             ThreadEvent::ThreadCreated {
+                workspace: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
                 agent: None,
@@ -1165,6 +1179,7 @@ fn reducer_rejects_a_tool_result_without_its_tool_call() {
         &envelope(
             1,
             ThreadEvent::ThreadCreated {
+                workspace: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
                 agent: None,
@@ -1289,6 +1304,7 @@ fn started_sandboxed_tool_snapshot() -> ThreadSnapshot {
         envelope(
             1,
             ThreadEvent::ThreadCreated {
+                workspace: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
                 agent: None,

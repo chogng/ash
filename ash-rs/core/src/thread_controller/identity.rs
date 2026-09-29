@@ -84,6 +84,7 @@ impl ThreadController {
             session_id: source.session_id,
             thread_id,
             title: request.title,
+            workspace: source.workspace,
         })
     }
 }

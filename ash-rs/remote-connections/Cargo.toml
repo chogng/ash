@@ -30,6 +30,7 @@ ash-app-server-client = { workspace = true }
 ash-app-server-protocol = { workspace = true }
 ash-http-client = { workspace = true }
 ash-remote = { workspace = true }
+ash-remote-profile-store = { workspace = true }
 ash-utils-path = { workspace = true }
 
 [dev-dependencies]

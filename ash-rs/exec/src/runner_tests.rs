@@ -277,6 +277,7 @@ fn session(ids: &TestIds) -> Session {
         session_id: ids.session_id.clone(),
         title: "test run".into(),
         status: SessionStatus::Active,
+        workspace: None,
         manager: Default::default(),
         threads: vec![],
     }

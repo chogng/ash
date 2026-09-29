@@ -1,7 +1,7 @@
 import { Emitter } from "../../../../base/common/event.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";
-import type { IActiveSessionThread, IUntitledChatSession, ISession, ModelRef, SessionId, ThreadId } from "../common/session.js";
+import type { IActiveSessionThread, IUntitledChatSession, ISession, ModelRef, SessionId, SessionWorkspaceSelection, ThreadId } from "../common/session.js";
 import type { ISessionsManagementService, SessionsManagementState } from "../common/sessionsManagement.js";
 import type { ISessionsProvider } from "../common/sessionsProvider.js";
 import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
@@ -78,7 +78,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	}
 
 	createUntitledSession(title = "New Chat"): IUntitledChatSession {
-		const session = { untitledSessionId: createUuid(), title, model: undefined, agent: undefined };
+		const session = { untitledSessionId: createUuid(), title, model: undefined, agent: undefined, workspace: this.provider.currentWorkspace() };
 		this._untitledSessions = [session, ...this._untitledSessions];
 		this._activeUntitledSessionId = session.untitledSessionId;
 		this._error = undefined;
@@ -129,7 +129,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	async materializeUntitledSession(untitledSessionId: string): Promise<IActiveSessionThread> {
 		const session = this._untitledSessions.find(candidate => candidate.untitledSessionId === untitledSessionId);
 		if (!session) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
-		return this.createSession(session.title, session.model, session.agent);
+		return this.createSession(session.title, session.workspace, session.model, session.agent);
 	}
 
 	promoteUntitledSession(untitledSessionId: string, active: IActiveSessionThread): void {
@@ -147,7 +147,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	}
 
 	async startNewSession(title = "New Chat"): Promise<IActiveSessionThread> {
-		const active = await this.createSession(title);
+		const active = await this.createSession(title, this.provider.currentWorkspace());
 		this._sessions = [active.session, ...this._sessions.filter(session => session.sessionId !== active.session.sessionId)];
 		this._active = active;
 		this._activeUntitledSessionId = undefined;
@@ -171,10 +171,10 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this._onDidChange.fire();
 	}
 
-	private async createSession(title: string, model?: ModelRef, agent?: ChatAgent): Promise<IActiveSessionThread> {
+	private async createSession(title: string, workspace: SessionWorkspaceSelection, model?: ModelRef, agent?: ChatAgent): Promise<IActiveSessionThread> {
 		this.setState("creating");
 		try {
-			return await this.provider.create(title, model, agent);
+			return await this.provider.create(title, workspace, model, agent);
 		} catch (error) {
 			this.setError(error);
 			throw error;

@@ -76,6 +76,7 @@ pub struct ThreadSnapshot {
     pub parent_thread_id: Option<ThreadId>,
     pub forked_from_id: Option<ThreadId>,
     pub title: String,
+    pub workspace: Option<ash_protocol::SessionWorkspace>,
     pub status: ThreadStatus,
     pub archived_at_unix_ms: Option<u64>,
     pub archive_reason: Option<ThreadArchiveReason>,
@@ -422,6 +423,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 agent,
                 session_id,
                 title,
+                workspace,
                 thread_id,
                 ..
             } => {
@@ -448,6 +450,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     parent_thread_id: None,
                     forked_from_id: None,
                     title: title.clone(),
+                    workspace: workspace.clone(),
                     status: ThreadStatus::Active,
                     archived_at_unix_ms: None,
                     archive_reason: None,

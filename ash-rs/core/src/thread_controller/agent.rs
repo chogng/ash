@@ -122,6 +122,9 @@ impl ThreadController {
                 session_id: request.session_id,
                 thread_id: thread_id.clone(),
                 title: request.title,
+                workspace: self
+                    .read_thread(&request.context_seed.parent_thread_id)?
+                    .workspace,
             },
             ThreadEvent::AgentContextSeedCommitted {
                 thread_id: thread_id.clone(),

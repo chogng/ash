@@ -139,6 +139,7 @@ members = [
     "ash-rs/product-update",
     "ash-rs/remote",
     "ash-rs/remote-connections",
+    "ash-rs/remote-profile-store",
     "ash-rs/remote-host",
     "ash-rs/remote-server",
     "ash-rs/rollout",
@@ -543,6 +544,7 @@ ash-projects = { path = "ash-rs/projects" }
 ash-product-update = { path = "ash-rs/product-update" }
 ash-remote = { path = "ash-rs/remote" }
 ash-remote-connections = { path = "ash-rs/remote-connections" }
+ash-remote-profile-store = { path = "ash-rs/remote-profile-store" }
 ash-remote-host = { path = "ash-rs/remote-host" }
 ash-remote-server = { path = "ash-rs/remote-server" }
 ash-rollout = { path = "ash-rs/rollout" }

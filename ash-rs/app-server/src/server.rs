@@ -1949,6 +1949,26 @@ impl AppServer {
         self.serve_jsonl_connection(reader, writer, self.product_host_connection())
     }
 
+    /// Delivers a host response from a profile gateway to the App Server that issued it.
+    pub(crate) fn handle_product_host_response(
+        &self,
+        connection: &ConnectionState,
+        response: Value,
+    ) -> std::io::Result<()> {
+        if self
+            .browser_host
+            .handle_response(connection.connection_id, response)
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?
+        {
+            Ok(())
+        } else {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "App Server received an unknown JSON-RPC response",
+            ))
+        }
+    }
+
     /// The authenticated browser listener creates this authority after validating its ticket.
     pub(crate) fn serve_browser_jsonl<R: BufRead, W: Write + Send>(
         &self,

@@ -103,6 +103,7 @@ fn clearing_directories_keeps_home_instructions_in_model_requests() {
     server.activate_local_dirs(Vec::new()).unwrap();
     let thread = server
         .start_thread(StartThreadRequest {
+            workspace: None,
             branch_name: None,
             agent_id: None,
             agent: None,
@@ -416,6 +417,7 @@ fn dirs_are_session_scoped_and_removable() {
         .unwrap();
     let first = server
         .start_thread(StartThreadRequest {
+            workspace: None,
             branch_name: None,
             agent_id: None,
             agent: None,
@@ -425,6 +427,7 @@ fn dirs_are_session_scoped_and_removable() {
         .unwrap();
     let second = server
         .start_thread(StartThreadRequest {
+            workspace: None,
             branch_name: None,
             agent_id: None,
             agent: None,
@@ -479,6 +482,7 @@ fn cwd_directory_can_be_added_explicitly() {
         .unwrap();
     let session = server
         .start_thread(StartThreadRequest {
+            workspace: None,
             branch_name: None,
             agent_id: None,
             agent: None,
@@ -516,6 +520,7 @@ fn dir_mutation_requires_a_dir_permissions_host_connection() {
         .unwrap();
     let session = server
         .start_thread(StartThreadRequest {
+            workspace: None,
             branch_name: None,
             agent_id: None,
             agent: None,
@@ -574,6 +579,7 @@ fn dir_permissions_are_revision_bound_and_filter_capability_snapshots() {
         .unwrap();
     let session = server
         .start_thread(StartThreadRequest {
+            workspace: None,
             branch_name: None,
             agent_id: None,
             agent: None,
@@ -1035,6 +1041,7 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
     assert!(server.terminal_service().is_ok());
     let thread = server
         .start_thread(StartThreadRequest {
+            workspace: None,
             branch_name: None,
             agent_id: None,
             agent: None,
@@ -1301,6 +1308,7 @@ fn active_turn_blocks_directory_root_switch_without_changing_authority() {
         .unwrap();
     let thread = server
         .start_thread(StartThreadRequest {
+            workspace: None,
             branch_name: None,
             agent_id: None,
             agent: None,
@@ -1366,6 +1374,7 @@ fn active_turn_accepts_session_access_changes_and_revokes_old_snapshots() {
         .unwrap();
     let thread = server
         .start_thread(StartThreadRequest {
+            workspace: None,
             branch_name: None,
             agent_id: None,
             agent: None,
@@ -1443,6 +1452,7 @@ fn session_directory_move_changes_future_context_only_for_that_session() {
     server.switch_local_dir_root(primary.path.clone()).unwrap();
     let first = server
         .start_thread(StartThreadRequest {
+            workspace: None,
             branch_name: None,
             agent_id: None,
             agent: None,
@@ -1452,6 +1462,7 @@ fn session_directory_move_changes_future_context_only_for_that_session() {
         .unwrap();
     let second = server
         .start_thread(StartThreadRequest {
+            workspace: None,
             branch_name: None,
             agent_id: None,
             agent: None,

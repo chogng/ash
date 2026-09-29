@@ -164,6 +164,7 @@ fn spawn_reuses_an_explicit_agent_identity_across_sessions() {
         .start_thread(
             &crate::NoThreadWorktreeBinder,
             StartThreadRequest {
+                workspace: None,
                 branch_name: None,
                 agent_id: None,
                 agent: None,
@@ -1081,6 +1082,7 @@ fn fixture_with_agent(
         .start_thread(
             &crate::NoThreadWorktreeBinder,
             StartThreadRequest {
+                workspace: None,
                 branch_name: None,
                 agent_id: None,
                 agent,

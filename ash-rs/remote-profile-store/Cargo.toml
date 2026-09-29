@@ -1,0 +1,23 @@
+[package]
+name = "ash-remote-profile-store"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "ash_remote_profile_store"
+path = "src/lib.rs"
+
+[dependencies]
+ash-remote = { workspace = true }
+ash-utils-path = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true
