@@ -294,6 +294,8 @@ just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/rep
 
 同日随后把 TUI 的嵌入式 App Server 测试放入显式的 `in-process-tests` feature，保留原测试和所属模块，CI 继续运行完整组。`cargo tree --locked --offline -p ash-tui -e normal,dev` 的去重包数在默认测试配置下为 473，开启该 feature 为 883；默认配置不再编译 `ash-app-server`。本机共享输出目录中，切换到默认配置后的首次 `just test ash-tui --lib` 编译用时 146.71 秒，运行 1137 项、忽略 1 项；开启完整 feature 后运行 1172 项、忽略 2 项。两次编译复用了已有产物且源码期间有其他更新，不能据此计算冷编提速；产品构建也不受这个测试 feature 划分影响。验证日志保存在 `.build/build-health/tui-test-boundary-20260928/`。
 
+同日测量 Code 的实际 `just build-code` 编辑循环：在 `code/tui/src/usage.rs` 的同一条文案中交替修改一个标点，每轮都确认只重编 `ash-tui` 和 `ash-cli`。macOS arm64、Rust 1.98.0、12 个 Cargo 任务、共享增量输出下，原 `dev-small` 配置三轮为 5.79、5.82、5.77 秒；仅将该 profile 的 `ash-tui` 从 `opt-level = 1` 调至 0 后三轮为 3.49、3.54、3.49 秒；回切原配置后又得到 5.84、5.88、5.78 秒。前两组中位数 5.79→3.49 秒，减少 39.7%；回切结果与第一组相近，支持该编辑场景的收益来自配置差异。Cargo 时间线中 `ash-tui` 单元约为 4.1→1.5 秒，其中代码生成约为 2.8→0.3 秒。稳定输出下无改动重跑约 0.7–1.0 秒；`ash` 开发程序从 70.24 增至 88.04 MB，单次编辑重编的最大 RSS 从约 951 降至 924 MB。测量日志在 `.build/build-health/code-edit-20260928*/`。此结果只适用于本机 Code 开发构建的 TUI 编辑；冷编译及运行时性能未作配对测量，发布 profile 不受此改动影响。
+
 ## 构建源码与仓库脚本边界
 
 `build/` 按产品宿主、共享后端和交付物划分。前端 Node 构建逻辑使用 TypeScript；共享后端构建、下载与组包使用 Python。开发与正式发布共用后端包布局和校验实现；发布顺序、凭据注入和上传由 `.github/workflows/` 编排。`just build-code`、`just build-desktop` 和 `just build-app` 分别构建产品宿主；`just build` 聚合这三个入口。完整共享包由 `just ash-package` 单独组装，根 Cargo workspace 的完整构建保留在显式的 `just build-rust`。
