@@ -1,0 +1,22 @@
+---
+source: code/tui/src/app/fullscreen/frame_tests.rs
+expression: "render(&app, 80, 20)"
+---
+  .                                                        [— / —] [Dashboard]  
+                                                                                
+        ┌── Hooks › Edit Hook ─────────────────────────────────────[✗]─┐        
+        │                                                              │        
+        │> Event  ·  Before tool                                       │        
+        │  Tool names  ·  exec_command                                 │        
+        │  Program  ·  review-hook                                     │        
+        │  Arguments  ·  ["--check"]                                   │        
+        │  Save Hook                                                   │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+  ──────│                                                              │──────  
+  > Buil│  Enter to confirm  ·  Esc to return                          │        
+  ──────└──────────────────────────────────────────────────────────────┘model

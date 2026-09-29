@@ -1,0 +1,24 @@
+---
+source: code/tui/src/app/fullscreen/frame_tests.rs
+expression: rendered
+---
+  .                                                        [— / —] [Dashboard]  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+  ─────────────────────────────────────────────────────────────────────── 1/1   
+  /hooks                     browse and manage Hooks                            
+  ────────────────────────────────────────────────────────────────────────────  
+  > /hooks                                                                      
+  ─────────────────────────────────────────────────────────── Automatic model   
+                                                                                
+  Enter send  ·  shift+tab permissions  ·  /home

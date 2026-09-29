@@ -1,0 +1,22 @@
+---
+source: code/tui/src/app/fullscreen/frame_tests.rs
+expression: "render(&app, 80, 20)"
+---
+  .                                                        [— / —] [Dashboard]  
+                                                                                
+        ┌── Hooks › user:hook:review ──────────────────────────────[✗]─┐        
+        │                                                              │        
+        │> Enablement  ·  disabled                                     │        
+        │  Edit Hook  ·  Before tool  ·  review-hook                   │        
+        │  Delete Hook  ·  user:hook:review                            │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+  ──────│                                                              │──────  
+  > Buil│  Enter to confirm  ·  Esc to return                          │        
+  ──────└──────────────────────────────────────────────────────────────┘model

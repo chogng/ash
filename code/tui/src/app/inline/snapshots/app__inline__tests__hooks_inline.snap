@@ -1,0 +1,14 @@
+---
+source: code/tui/src/app/inline/frame_tests.rs
+expression: "text(&render(&app, 80, 24))"
+---
+─ Hooks ────────────────────────────────────────────────────────────────────────
+                                                                                
+> Add Hook                                                                      
+                                                                                
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │ Search Hooks                                                             │  
+  ╰──────────────────────────────────────────────────────────────────────────╯  
+  No Hooks found                                                                
+                                                                                
+  Enter to confirm  ·  / to search  ·  Esc to close

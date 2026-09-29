@@ -19,6 +19,7 @@ pub(crate) enum AppCommand {
     Marketplace(crate::marketplace::Command),
     Lsp(crate::lsp::Command),
     Mcp(crate::mcp::Command),
+    Hooks(crate::hooks::Command),
     Memories(crate::memories::Command),
     Models(crate::models::Command),
     Projects(crate::projects::Command),
@@ -61,6 +62,7 @@ impl AppCommand {
                     TuiSlashCommandAction::Skills => Some("Skills"),
                     TuiSlashCommandAction::Memories => Some("Memories"),
                     TuiSlashCommandAction::Mcp => Some("MCP"),
+                    TuiSlashCommandAction::Hooks => Some("Hooks"),
                     TuiSlashCommandAction::Connectors => Some("Connectors"),
                     TuiSlashCommandAction::Status => Some("Status"),
                     TuiSlashCommandAction::Usage => Some("Usage"),
@@ -93,6 +95,7 @@ app_command_from!(crate::keymap_setup::Command, Keymap);
 app_command_from!(crate::marketplace::Command, Marketplace);
 app_command_from!(crate::lsp::Command, Lsp);
 app_command_from!(crate::mcp::Command, Mcp);
+app_command_from!(crate::hooks::Command, Hooks);
 app_command_from!(crate::models::Command, Models);
 app_command_from!(crate::projects::Command, Projects);
 app_command_from!(crate::sessions::Command, Sessions);

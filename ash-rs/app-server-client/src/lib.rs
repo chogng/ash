@@ -29,7 +29,8 @@ use ash_app_server_protocol::protocol::attachments::AttachmentUploadWriteParams;
 use ash_app_server_protocol::protocol::attachments::AttachmentUploadWriteResult;
 use ash_app_server_protocol::protocol::common::EmptyParams;
 use ash_app_server_protocol::protocol::config::{
-    ConfigCommandResult, ConfigReadResult, ConfigUpdateParams, LanguageServerConfigureParams,
+    ConfigCommandResult, ConfigReadResult, ConfigUpdateParams, HookRemoveParams,
+    HookSetEnablementParams, HookUpsertParams, LanguageServerConfigureParams,
     LanguageServerRemoveParams, McpServerRemoveParams, McpServerSetEnablementParams,
     McpServerUpsertParams, ProviderConfigureParams, ProviderRemoveParams, SkillSourceAddParams,
     SkillSourceRemoveParams, SkillSourceSetEnablementParams,
@@ -1181,6 +1182,27 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: McpServerSetEnablementParams,
     ) -> Result<ConfigCommandResult, ClientError> {
         self.call(ClientMethod::McpServerSetEnablement, params)
+    }
+
+    pub fn upsert_hook(
+        &mut self,
+        params: HookUpsertParams,
+    ) -> Result<ConfigCommandResult, ClientError> {
+        self.call(ClientMethod::HookUpsert, params)
+    }
+
+    pub fn remove_hook(
+        &mut self,
+        params: HookRemoveParams,
+    ) -> Result<ConfigCommandResult, ClientError> {
+        self.call(ClientMethod::HookRemove, params)
+    }
+
+    pub fn set_hook_enablement(
+        &mut self,
+        params: HookSetEnablementParams,
+    ) -> Result<ConfigCommandResult, ClientError> {
+        self.call(ClientMethod::HookSetEnablement, params)
     }
 
     pub fn add_skill_source(
