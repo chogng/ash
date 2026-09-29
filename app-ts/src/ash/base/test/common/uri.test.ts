@@ -64,3 +64,21 @@ test("URI.withPath keeps the other components and validates the new path", () =>
 	assert.equal(parent.toString(), "ash://workspace/root?rev=2#anchor");
 	assert.throws(() => parent.withPath("/root/bad%ZZ.txt"), TypeError);
 });
+
+test("URI.joinPathSegment preserves components and encodes one child name", () => {
+	const parent = URI.parse("ash://workspace/root?rev=2#anchor");
+	const child = parent.joinPathSegment("hello %中?#.txt");
+	assert.equal(child.toString(), "ash://workspace/root/hello%20%25%E4%B8%AD%3F%23.txt?rev=2#anchor");
+	assert.equal(URI.file("/tmp/root/").joinPathSegment("a b").toString(), "file:///tmp/root/a%20b");
+	const directories = [
+		URI.file("C:\\project\\src"),
+		URI.file("\\\\server\\share\\src"),
+		URI.parse("vscode-remote://ssh-remote+host/workspace?rev=1#anchor"),
+	];
+	for (const directory of directories) {
+		for (const name of ["plain.txt", "a % 中.txt", "question?#.txt"]) {
+			const base = directory.path.endsWith("/") ? directory.path.slice(0, -1) : directory.path;
+			assert.equal(directory.joinPathSegment(name).toString(), directory.withPath(`${base}/${encodeURIComponent(name)}`).toString());
+		}
+	}
+});

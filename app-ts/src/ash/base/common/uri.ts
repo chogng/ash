@@ -159,6 +159,14 @@ export class URI {
 		return new URI(url);
 	}
 
+	/** Appends one decoded child name to a hierarchical URI. */
+	joinPathSegment(name: string): URI {
+		const suffix = this.url.search + this.url.hash;
+		const base = this.url.href.slice(0, this.url.href.length - suffix.length);
+		const separator = base.endsWith("/") ? "" : "/";
+		return new URI(new URL(`${base}${separator}${encodeURIComponent(name)}${suffix}`));
+	}
+
 	/** Returns a copy with a different percent-encoded query. */
 	withQuery(query: string): URI {
 		const url = new URL(this.url.href);

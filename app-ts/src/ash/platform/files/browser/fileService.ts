@@ -63,10 +63,8 @@ export class BrowserFileService extends Disposable implements IFileService {
 
 	async readDirectory(resource: URI): Promise<readonly IFileEntry[]> {
 		const result = await this.api.readDirectory(this.fileTarget(resource));
-		const parentPath = resource.path;
-		const childBasePath = parentPath.endsWith('/') ? parentPath.slice(0, -1) : parentPath;
 		return result.entries.map((entry) => ({
-			resource: resource.withPath(`${childBasePath}/${encodeURIComponent(entry.name)}`),
+			resource: resource.joinPathSegment(entry.name),
 			name: entry.name,
 			kind: fileKind(entry.fileType),
 		}));
