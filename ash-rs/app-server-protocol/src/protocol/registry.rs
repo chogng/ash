@@ -1951,6 +1951,11 @@ pub enum SerializationAccess {
 pub enum ClientRequestSerializationScope {
     /// Coordinates App Server-wide state.
     Global { access: SerializationAccess },
+    /// Selects a Git repository; the backend resolves aliases and worktrees to its common directory.
+    Repository {
+        repository_id: Option<String>,
+        access: SerializationAccess,
+    },
     /// Coordinates one durable Session aggregate across connections.
     Session {
         session_id: String,
@@ -1970,6 +1975,7 @@ pub enum SerializationScopeDefinition {
     None,
     GlobalExclusive,
     GlobalSharedRead,
+    RepositoryExclusive,
     SessionExclusive,
     SessionSharedRead,
     ResourceExclusive(&'static str),
@@ -2047,6 +2053,21 @@ impl ClientMethodDefinition {
                     access: SerializationAccess::SharedRead,
                 })
             }
+            SerializationScopeDefinition::RepositoryExclusive => {
+                let params = params
+                    .as_object()
+                    .ok_or(SerializationScopeResolutionError)?;
+                let repository_id = match params.get("repositoryId") {
+                    None | Some(serde_json::Value::Null) => None,
+                    Some(serde_json::Value::String(id)) if !id.is_empty() => Some(id.clone()),
+                    _ => return Err(SerializationScopeResolutionError),
+                };
+                Some(ClientRequestSerializationScope::Repository {
+                    repository_id,
+                    access: SerializationAccess::Exclusive,
+                })
+            }
+
             SerializationScopeDefinition::SessionExclusive => {
                 Some(ClientRequestSerializationScope::Session {
                     session_id: serialization_parameter(params, "sessionId")?,
@@ -2383,7 +2404,8 @@ client_methods! {
     Initialize => "initialize" {
         params: InitializeParams,
         response: InitializeResult,
-        serialization: GlobalExclusive,
+        // Capability negotiation belongs to one connection; domain mutations must not gate it.
+        serialization: ConnectionExclusive("initialize"),
     },
     EnvDirsSet => "env/dirs/set" {
         params: EnvDirsSetParams,
@@ -3268,7 +3290,8 @@ client_methods! {
     LanguageCancel => "language/cancel" {
         params: LanguageCancelParams,
         response: LanguageCancelResult,
-        serialization: GlobalSharedRead,
+        // Cancellation owns only its registry and must reach operations waiting for global state.
+        serialization: None,
     },
     LanguageHover => "language/hover" {
         params: LanguageOperationParams<LanguageHoverParams>,
@@ -3496,125 +3519,127 @@ client_methods! {
         response: GitCloneResult,
         serialization: None,
     },
+    // Reads update status caches and graph cursors and use the Git operation lock too. Admit
+    // every repository operation before execution so workers never queue behind another RPC.
     GitStatus => "git/status" {
         params: GitRepositoryParams,
         response: GitStatusResult,
-        serialization: GlobalSharedRead,
+        serialization: RepositoryExclusive,
     },
     GitTextDiff => "git/textDiff" {
         params: GitRepositoryParams,
         response: GitTextDiffResult,
-        serialization: GlobalSharedRead,
+        serialization: RepositoryExclusive,
     },
     GitBranchList => "git/branch/list" {
         params: GitRepositoryParams,
         response: GitBranchListResult,
-        serialization: GlobalSharedRead,
+        serialization: RepositoryExclusive,
     },
     GitHistory => "git/history" {
         params: GitRepositoryParams,
         response: GitHistoryResult,
-        serialization: GlobalSharedRead,
+        serialization: RepositoryExclusive,
     },
     GitGraph => "git/graph" {
         params: GitGraphParams,
         response: GitGraphResult,
-        serialization: GlobalSharedRead,
+        serialization: RepositoryExclusive,
     },
     GitCommitChanges => "git/commitChanges" {
         params: GitCommitChangesParams,
         response: GitCommitChangesResult,
-        serialization: GlobalSharedRead,
+        serialization: RepositoryExclusive,
     },
     GitCommitFile => "git/commitFile" {
         params: GitCommitFileParams,
         response: GitCommitFileResult,
-        serialization: GlobalSharedRead,
+        serialization: RepositoryExclusive,
     },
     GitChangeFile => "git/changeFile" {
         params: GitChangeFileParams,
         response: GitChangeFileResult,
-        serialization: GlobalSharedRead,
+        serialization: RepositoryExclusive,
     },
     GitConflictFile => "git/conflictFile" {
         params: GitConflictFileParams,
         response: GitConflictFileResult,
-        serialization: GlobalSharedRead,
+        serialization: RepositoryExclusive,
     },
     GitCompleteConflict => "git/completeConflict" {
         params: GitCompleteConflictParams,
         response: GitOperationResult,
-        serialization: GlobalExclusive,
+        serialization: RepositoryExclusive,
     },
     GitBranchSwitch => "git/branch/switch" {
         params: GitBranchSwitchParams,
         response: GitOperationResult,
-        serialization: GlobalExclusive,
+        serialization: RepositoryExclusive,
     },
     GitBranchCreate => "git/branch/create" {
         params: GitBranchCreateParams,
         response: GitBranchListResult,
-        serialization: GlobalExclusive,
+        serialization: RepositoryExclusive,
     },
     GitBranchDelete => "git/branch/delete" {
         params: GitBranchDeleteParams,
         response: GitBranchListResult,
-        serialization: GlobalExclusive,
+        serialization: RepositoryExclusive,
     },
     GitWorktreeCreate => "git/worktree/create" {
         params: GitWorktreeCreateParams,
         response: GitWorktreeCreateResult,
-        serialization: GlobalExclusive,
+        serialization: RepositoryExclusive,
     },
     GitWorktreeDelete => "git/worktree/delete" {
         params: GitWorktreeDeleteParams,
         response: GitWorktreeListResult,
-        serialization: GlobalExclusive,
+        serialization: RepositoryExclusive,
     },
     GitWorktreeList => "git/worktree/list" {
         params: GitRepositoryParams,
         response: GitWorktreeListResult,
-        serialization: GlobalSharedRead,
+        serialization: RepositoryExclusive,
     },
     GitWorktreeResolve => "git/worktree/resolve" {
         params: GitWorktreeResolveParams,
         response: GitWorktreeResolveResult,
-        serialization: GlobalSharedRead,
+        serialization: RepositoryExclusive,
     },
     GitStage => "git/stage" {
         params: GitPathsParams,
         response: GitOperationResult,
-        serialization: GlobalExclusive,
+        serialization: RepositoryExclusive,
     },
     GitUnstage => "git/unstage" {
         params: GitPathsParams,
         response: GitOperationResult,
-        serialization: GlobalExclusive,
+        serialization: RepositoryExclusive,
     },
     GitDiscardWorktree => "git/discardWorktree" {
         params: GitPathsParams,
         response: GitOperationResult,
-        serialization: GlobalExclusive,
+        serialization: RepositoryExclusive,
     },
     GitCommit => "git/commit" {
         params: GitCommitParams,
         response: GitCommitResult,
-        serialization: GlobalExclusive,
+        serialization: RepositoryExclusive,
     },
     GitFetch => "git/fetch" {
         params: GitFetchParams,
         response: GitOperationResult,
-        serialization: GlobalExclusive,
+        serialization: RepositoryExclusive,
     },
     GitPull => "git/pull" {
         params: GitRepositoryParams,
         response: GitOperationResult,
-        serialization: GlobalExclusive,
+        serialization: RepositoryExclusive,
     },
     GitPush => "git/push" {
         params: GitRepositoryParams,
         response: GitOperationResult,
-        serialization: GlobalExclusive,
+        serialization: RepositoryExclusive,
     },
     ContentSearchStart => "grep/search/start" {
         params: ContentSearchStartParams,

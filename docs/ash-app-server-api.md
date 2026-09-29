@@ -592,7 +592,9 @@ Rust service 负责最终边界校验和 repository-relative 映射。Commit mes
 且不超过 64 KiB UTF-8。每个成功 mutation 都返回新的 status；commit 另外返回 object ID。
 
 Remote operation 禁用 terminal/credential prompt，pull 固定使用 fast-forward only。Discard 只恢复
-tracked working tree，不删除 untracked 文件。Operation 在单 directory runtime 内串行执行；当前
+tracked working tree，不删除 untracked 文件。Git operation 按实际仓库公共目录在进程内排队，
+默认选择、显式 `repositoryId` 和 linked worktree 共享排队身份。相同仓库的读写按接收顺序串行，读取也更新状态缓存或游标并取得仓库操作锁；
+不同仓库及其他领域的查询不等待这个许可。后台提交继续使用同一仓库的领域操作锁。当前
 没有可观测 queue、progress 或 caller cancellation。跨层 ownership、当前 UI 和演进顺序见
 [`git.md`](git.md)。
 

@@ -91,6 +91,67 @@ async fn clone_repository_rejects_a_url_without_a_repository_name() {
     assert_eq!(destination.path().read_dir().unwrap().count(), 0);
 }
 
+#[cfg(unix)]
+#[tokio::test(flavor = "current_thread")]
+async fn concurrent_clones_reserve_distinct_destinations_before_git_starts() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = tempfile::tempdir().unwrap();
+    let destination = root.path().join("clones");
+    let alias = root.path().join("alias");
+    let started = root.path().join("started");
+    let release = root.path().join("release");
+    std::fs::create_dir(&destination).unwrap();
+    std::fs::create_dir(&started).unwrap();
+    std::os::unix::fs::symlink(&destination, &alias).unwrap();
+    let executable = root.path().join("git");
+    std::fs::write(&executable, format!(
+        "#!/bin/sh\nfor arg do target=\"$arg\"; done\nprintf '%s' \"$target\" > '{}/'$$\nwhile [ ! -f '{}' ]; do sleep 0.01; done\nmkdir -p \"$target/.git\"\n",
+        started.display(), release.display(),
+    )).unwrap();
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let client = GitClient::with_executable(executable, GitExecutionLimits::default()).unwrap();
+    let unblock = std::thread::spawn(move || {
+        let deadline = std::time::Instant::now() + Duration::from_secs(3);
+        while started.read_dir().unwrap().count() < 2 && std::time::Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let targets: Vec<_> = started
+            .read_dir()
+            .unwrap()
+            .map(|entry| std::fs::read_to_string(entry.unwrap().path()).unwrap())
+            .collect();
+        std::fs::write(release, "").unwrap();
+        targets
+    });
+    let (first, second) = tokio::join!(
+        client.clone_repository("https://example.com/repo.git", &destination),
+        client.clone_repository("https://example.com/repo.git", &alias),
+    );
+    let first = first.unwrap();
+    let second = second.unwrap();
+    let targets = unblock.join().unwrap();
+    assert_eq!(targets.len(), 2);
+    assert_ne!(targets[0], targets[1]);
+    assert_ne!(first, second);
+    assert!(first.join(".git").exists());
+    assert!(second.join(".git").exists());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn failed_clone_releases_its_empty_destination_reservation() {
+    let root = tempfile::tempdir().unwrap();
+    let source = root.path().join("missing.git");
+    let destination = root.path().join("clones");
+    std::fs::create_dir(&destination).unwrap();
+    assert!(
+        GitClient::system()
+            .clone_repository(source.to_str().unwrap(), &destination)
+            .await
+            .is_err()
+    );
+    assert_eq!(destination.read_dir().unwrap().count(), 0);
+}
+
 #[test]
 fn git_commands_remove_inherited_repository_selectors() {
     let client = GitClient::system();

@@ -1,12 +1,8 @@
 use std::io;
-use std::io::BufRead;
-use std::io::BufReader;
-use std::io::Read;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
-use ash_app_server_transport::DeadlineStream;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -16,7 +12,7 @@ use crate::GrantSource;
 
 pub(crate) const CONNECTION_PRELUDE_TIMEOUT: std::time::Duration =
     std::time::Duration::from_secs(5);
-const MAX_PRELUDE_BYTES: usize = 16 * 1024;
+pub(crate) const MAX_PRELUDE_BYTES: usize = 16 * 1024;
 const PRELUDE_VERSION: u32 = 1;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -166,20 +162,12 @@ impl ControlResponse {
     }
 }
 
-pub(crate) fn read_prelude(
-    reader: &mut BufReader<DeadlineStream>,
-) -> Result<IncomingPrelude, String> {
-    let mut line = String::new();
-    let read = reader
-        .by_ref()
-        .take((MAX_PRELUDE_BYTES + 1) as u64)
-        .read_line(&mut line)
-        .map_err(io_error)?;
-    if read == 0 || read > MAX_PRELUDE_BYTES || !line.ends_with('\n') {
+pub(crate) fn decode_prelude(line: &[u8]) -> Result<IncomingPrelude, String> {
+    if line.is_empty() || line.len() > MAX_PRELUDE_BYTES || !line.ends_with(b"\n") {
         return Err("local App Server connection prelude is missing or too large".into());
     }
     let prelude: IncomingPrelude =
-        serde_json::from_str(&line).map_err(|error| error.to_string())?;
+        serde_json::from_slice(line).map_err(|error| error.to_string())?;
     prelude.validate()?;
     Ok(prelude)
 }
@@ -188,8 +176,4 @@ pub(crate) fn write_json_line(writer: &mut impl Write, value: &impl Serialize) -
     serde_json::to_writer(&mut *writer, value)?;
     writer.write_all(b"\n")?;
     writer.flush()
-}
-
-fn io_error(error: io::Error) -> String {
-    error.to_string()
 }

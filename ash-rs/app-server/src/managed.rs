@@ -65,13 +65,6 @@ pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> R
         }
         if let Some(mut connection) = endpoint.poll_connection()? {
             idle_since = None;
-            let server = match registry.server_for(connection.options.clone()) {
-                Ok(server) => server,
-                Err(error) => {
-                    eprintln!("managed App Server directory runtime failed: {error}");
-                    continue;
-                }
-            };
             let shutdown_stream = connection
                 .writer
                 .try_clone()
@@ -84,6 +77,13 @@ pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> R
                 .name("ash-local-app-server-connection".into())
                 .spawn(move || {
                     let _registration = registration;
+                    let server = match web_registry.server_for(connection.options.clone()) {
+                        Ok(server) => server,
+                        Err(error) => {
+                            eprintln!("managed App Server directory runtime failed: {error}");
+                            return;
+                        }
+                    };
                     if let Some(options) = connection.web.take() {
                         if let Err(error) = web::serve(server, web_registry, connection, options) {
                             eprintln!("Managed Web listener failed: {error}");
@@ -91,9 +91,15 @@ pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> R
                         return;
                     }
                     let served = if connection.options.role() == ConnectionRole::Agents {
-                        gateway::serve(web_registry, server, connection.reader, connection.writer)
+                        gateway::serve(
+                            web_registry,
+                            server,
+                            connection.reader,
+                            connection.writer,
+                            gateway::RemoteLaunch::from_environment(),
+                        )
                     } else {
-                        server.serve_product_host_jsonl(connection.reader, connection.writer)
+                        server.serve_product_host_stream(connection.reader, connection.writer)
                     };
                     if let Err(error) = served
                         && !is_peer_disconnect(&error)
@@ -107,6 +113,7 @@ pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> R
                 continue;
             }
             if active_connections.is_empty()
+                && !endpoint.has_pending_connections()
                 && registry.active_terminal_count() == 0
                 && !registry.automation_needs_host()?
                 && !registry.queue_needs_host()?

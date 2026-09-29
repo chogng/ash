@@ -287,6 +287,15 @@ fn runtime_discovers_nested_repositories_and_routes_operations_by_repository_id(
         .id
         .clone();
 
+    assert_eq!(
+        runtime.common_dir_for(None).unwrap(),
+        runtime.common_dir_for(Some(&root_id)).unwrap()
+    );
+    assert_ne!(
+        runtime.common_dir_for(Some(&root_id)).unwrap(),
+        runtime.common_dir_for(Some(&nested_id)).unwrap()
+    );
+
     let root_status = runtime.status_for(Some(&root_id)).unwrap();
     let nested_status = runtime.status_for(Some(&nested_id)).unwrap();
     assert_eq!(root_status.repository_id, root_id);
@@ -308,6 +317,35 @@ fn runtime_discovers_nested_repositories_and_routes_operations_by_repository_id(
         runtime.status_for(Some("repo_missing")),
         Err(super::GitRuntimeError::RepositoryNotFound)
     ));
+}
+
+#[test]
+fn worktrees_share_the_repository_admission_identity() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "initial\n");
+    repository.git(&["add", "tracked.txt"]);
+    repository.git(&["commit", "-m", "initial"]);
+    let worktree = tempfile::tempdir().unwrap();
+    repository.git(&[
+        "worktree",
+        "add",
+        "--detach",
+        worktree.path().to_str().unwrap(),
+    ]);
+    let main = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    let linked = GitRuntime::new(
+        mutation_authorization(worktree.path()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    assert_eq!(
+        main.common_dir_for(None).unwrap(),
+        linked.common_dir_for(None).unwrap()
+    );
 }
 
 #[test]

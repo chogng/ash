@@ -121,6 +121,18 @@ enum ExecutableSource {
     Explicit(PathBuf),
 }
 
+struct CloneDestination(Option<PathBuf>);
+
+impl Drop for CloneDestination {
+    fn drop(&mut self) {
+        if let Some(path) = &self.0 {
+            // Only the empty reservation belongs to us. Git owns cleanup of its checkout;
+            // partial data remains available after failure or future cancellation.
+            let _ = std::fs::remove_dir(path);
+        }
+    }
+}
+
 impl GitClient {
     /// Uses conventional installation directories, reporting missing Git when an operation starts.
     pub fn system() -> Self {
@@ -158,7 +170,8 @@ impl GitClient {
         self.limits
     }
 
-    /// Clones into a new child of an existing destination directory.
+    /// Clones into a new child of an existing destination directory. Concurrent callers reserve
+    /// distinct children before launching Git, including callers using aliases of the parent.
     pub async fn clone_repository(&self, url: &str, parent: &Path) -> GitResult<PathBuf> {
         let url = url.trim();
         if url.is_empty() || url.len() > 4096 || url.chars().any(char::is_control) {
@@ -193,33 +206,48 @@ impl GitClient {
                 requirement: "must be an existing directory",
             });
         }
-        let target = (0..20)
-            .map(|index| {
-                parent.join(if index == 0 {
-                    name.to_string()
-                } else {
-                    format!("{name}-{index}")
-                })
-            })
-            .find(|path| !path.exists())
-            .ok_or_else(|| {
-                GitError::runtime(
-                    "choose clone destination",
-                    "no unused repository folder name",
-                )
-            })?;
-        self.run(GitInvocation::clone(
-            &parent,
-            [
-                OsStr::new("clone"),
-                OsStr::new("--"),
-                OsStr::new(url),
-                target.as_os_str(),
-            ],
-        ))
-        .await?
-        .require_success()?;
-        Ok(target)
+        let mut target = None;
+        for index in 0..20 {
+            let candidate = parent.join(if index == 0 {
+                name.to_string()
+            } else {
+                format!("{name}-{index}")
+            });
+            // Creating the empty destination is the filesystem's ownership decision. An exists
+            // check would allow two concurrent clones to write into the same empty directory.
+            match std::fs::create_dir(&candidate) {
+                Ok(()) => {
+                    target = Some(candidate);
+                    break;
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(error) => return Err(GitError::io("reserve clone destination", error)),
+            }
+        }
+        let mut destination = CloneDestination(Some(target.ok_or_else(|| {
+            GitError::runtime(
+                "choose clone destination",
+                "no unused repository folder name",
+            )
+        })?));
+        let target = destination.0.as_ref().expect("reserved clone destination");
+        let cloned = self
+            .run(GitInvocation::clone(
+                &parent,
+                [
+                    OsStr::new("clone"),
+                    OsStr::new("--"),
+                    OsStr::new(url),
+                    target.as_os_str(),
+                ],
+            ))
+            .await
+            .and_then(|output| output.require_success());
+        cloned?;
+        Ok(destination
+            .0
+            .take()
+            .expect("successful clone retains destination"))
     }
 
     pub(crate) async fn discover_repository(&self, cwd: PathBuf) -> GitResult<GitCommandOutput> {

@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::io;
+use std::io::Read;
 use std::net::Shutdown;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -9,6 +10,133 @@ use std::sync::atomic::Ordering;
 
 use ash_uds::UnixListener;
 use ash_uds::UnixStream;
+
+/// One half of an established local RPC connection, sharing its input-end lifetime.
+///
+/// IO waits remain interruptible: EOF on the reader ends queued output even when the peer keeps
+/// its read half open without consuming data. Finite stdio transports do not use this contract.
+pub struct LocalStream {
+    stream: UnixStream,
+    closed: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl LocalStream {
+    /// Splits a validated socket into reader and writer with one connection-close signal.
+    pub fn pair(stream: UnixStream) -> io::Result<(Self, Self)> {
+        #[cfg(unix)]
+        stream.set_nonblocking(true)?;
+        #[cfg(windows)]
+        {
+            stream.set_nonblocking(false)?;
+            stream.set_read_timeout(Some(std::time::Duration::from_millis(25)))?;
+            stream.set_write_timeout(Some(std::time::Duration::from_millis(25)))?;
+        }
+        let writer = stream.try_clone()?;
+        let closed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        Ok((
+            Self {
+                stream,
+                closed: Arc::clone(&closed),
+            },
+            Self {
+                stream: writer,
+                closed,
+            },
+        ))
+    }
+
+    /// Clones the socket solely for the process owner's shutdown registration.
+    pub fn try_clone(&self) -> io::Result<UnixStream> {
+        self.stream.try_clone()
+    }
+
+    fn close(&self) {
+        self.closed.store(true, Ordering::Release);
+        let _ = self.stream.shutdown(Shutdown::Both);
+    }
+
+    fn ensure_open(&self) -> io::Result<()> {
+        if self.closed.load(Ordering::Acquire) {
+            Err(io::Error::from(io::ErrorKind::ConnectionAborted))
+        } else {
+            Ok(())
+        }
+    }
+
+    #[cfg(unix)]
+    fn wait(&self, events: rustix::event::PollFlags) -> io::Result<()> {
+        let mut descriptor = rustix::event::PollFd::new(&self.stream, events);
+        let timeout = rustix::event::Timespec::try_from(std::time::Duration::from_millis(25))
+            .expect("fixed poll duration");
+        match rustix::event::poll(std::slice::from_mut(&mut descriptor), Some(&timeout)) {
+            Ok(_) | Err(rustix::io::Errno::INTR) => Ok(()),
+            Err(error) => Err(io::Error::from(error)),
+        }
+    }
+}
+
+impl Read for LocalStream {
+    fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
+        if output.is_empty() {
+            return Ok(0);
+        }
+        loop {
+            self.ensure_open()?;
+            match self.stream.read(output) {
+                Ok(0) => {
+                    self.close();
+                    return Ok(0);
+                }
+                Err(error)
+                    if matches!(
+                        error.kind(),
+                        io::ErrorKind::WouldBlock
+                            | io::ErrorKind::TimedOut
+                            | io::ErrorKind::Interrupted
+                    ) =>
+                {
+                    #[cfg(unix)]
+                    self.wait(rustix::event::PollFlags::IN)?;
+                }
+                Err(error) => {
+                    self.close();
+                    return Err(error);
+                }
+                result => return result,
+            }
+        }
+    }
+}
+
+impl std::io::Write for LocalStream {
+    fn write(&mut self, input: &[u8]) -> io::Result<usize> {
+        loop {
+            self.ensure_open()?;
+            match self.stream.write(input) {
+                Err(error)
+                    if matches!(
+                        error.kind(),
+                        io::ErrorKind::WouldBlock
+                            | io::ErrorKind::TimedOut
+                            | io::ErrorKind::Interrupted
+                    ) =>
+                {
+                    #[cfg(unix)]
+                    self.wait(rustix::event::PollFlags::OUT)?;
+                }
+                Err(error) => {
+                    self.close();
+                    return Err(error);
+                }
+                result => return result,
+            }
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.ensure_open()
+    }
+}
 
 /// One result from polling a local App Server listener.
 pub enum LocalSocketAccept {

@@ -1,0 +1,389 @@
+use super::request_serialization::ConnectionClosed;
+use super::request_serialization::RequestPermit;
+use super::request_serialization::RequestScheduler;
+use super::request_serialization::RequestSerializationScope;
+use ash_app_server_protocol::protocol::registry::ClientMethod;
+use ash_app_server_transport::JsonlWriter;
+use ash_async_utils::CancellationToken;
+use std::collections::HashMap;
+use std::io;
+use std::io::Write;
+use std::ops::Deref;
+use std::sync::Arc;
+use std::sync::Condvar;
+use std::sync::Mutex;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Instant;
+use std::time::SystemTime;
+
+const REQUEST_CAPACITY: usize = 64;
+const CONTROL_CAPACITY: usize = 16;
+
+#[derive(Clone)]
+pub(crate) struct IncomingRequest {
+    pub(crate) raw: String,
+    received_at: Instant,
+    received_time: SystemTime,
+}
+
+impl From<String> for IncomingRequest {
+    fn from(raw: String) -> Self {
+        Self {
+            raw,
+            received_at: Instant::now(),
+            received_time: SystemTime::now(),
+        }
+    }
+}
+
+impl Deref for IncomingRequest {
+    type Target = str;
+    fn deref(&self) -> &str {
+        &self.raw
+    }
+}
+
+pub(crate) struct OutgoingMessage {
+    pub(crate) raw: String,
+    trace: ash_otel::OutboundTrace,
+}
+
+impl From<String> for OutgoingMessage {
+    fn from(raw: String) -> Self {
+        Self {
+            raw,
+            trace: ash_otel::OutboundTrace::capture(),
+        }
+    }
+}
+
+impl OutgoingMessage {
+    pub(crate) fn write_to<W: Write>(
+        self,
+        writer: &mut JsonlWriter<W>,
+        telemetry: &ash_otel::Telemetry,
+    ) -> io::Result<()> {
+        let span = telemetry.start_outbound(self.trace);
+        let started = Instant::now();
+        let result = writer.write_message(&self.raw);
+        span.record_duration("rpc.write_ms", started.elapsed());
+        span.finish(if result.is_ok() {
+            diagnostics::Outcome::Succeeded
+        } else {
+            diagnostics::Outcome::Failed
+        });
+        result
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum RequestLane {
+    Interactive,
+    Background,
+    Control,
+}
+
+impl RequestLane {
+    fn for_method(method: Option<ClientMethod>) -> Self {
+        match method {
+            Some(
+                ClientMethod::LanguageCancel
+                | ClientMethod::ContentSearchCancel
+                | ClientMethod::ExtensionHostInvokeCancel
+                | ClientMethod::AccountLoginCancel
+                | ClientMethod::AutomationStop
+                | ClientMethod::QueueCancel
+                | ClientMethod::TerminalClose
+                | ClientMethod::DebugAdapterClose
+                | ClientMethod::AttachmentUploadCancel
+                | ClientMethod::DictationStop
+                | ClientMethod::ConnectorOAuthCancel
+                | ClientMethod::ConnectorDeviceOAuthCancel,
+            ) => Self::Control,
+            Some(
+                ClientMethod::GitClone
+                | ClientMethod::GitFetch
+                | ClientMethod::GitPull
+                | ClientMethod::GitPush
+                | ClientMethod::GitWorktreeCreate
+                | ClientMethod::GitWorktreeDelete
+                | ClientMethod::ProviderProbe
+                | ClientMethod::ProviderModelsList
+                | ClientMethod::FsCopy
+                | ClientMethod::FsPasteSystemCutFiles
+                | ClientMethod::GrepIndexRebuild,
+            ) => Self::Background,
+            _ => Self::Interactive,
+        }
+    }
+
+    fn index(self) -> usize {
+        match self {
+            Self::Interactive => 0,
+            Self::Background => 1,
+            Self::Control => 2,
+        }
+    }
+
+    pub(crate) fn for_message(method: &str, params: &serde_json::Value) -> Self {
+        let method = super::client_method(method);
+        // Inspect only the routing tag; the domain processor remains the typed params owner.
+        if method == Some(ClientMethod::SessionRequest)
+            && matches!(
+                params
+                    .pointer("/request/type")
+                    .and_then(serde_json::Value::as_str),
+                Some("interruptTurn" | "resolveInteraction")
+            )
+        {
+            return Self::Control;
+        }
+        Self::for_method(method)
+    }
+}
+
+pub(crate) struct RequestAdmission {
+    pub(crate) permit: Result<Option<RequestPermit>, ConnectionClosed>,
+    pub(crate) ready_at: Instant,
+}
+
+type Job<'env> = Box<dyn FnOnce(RequestAdmission) -> io::Result<()> + Send + 'env>;
+
+struct Pending<'env> {
+    next_ticket: u64,
+    ordinary: usize,
+    control: usize,
+    jobs: HashMap<u64, Job<'env>>,
+    failure: Option<io::Error>,
+}
+
+struct Ready {
+    ticket: u64,
+    admission: RequestAdmission,
+}
+
+/// One connection's bounded execution capacity, shared by direct and routed transports.
+/// Resource waiters live in the scheduler; only admitted work enters a worker queue. Control
+/// commands have separate admission and execution capacity so saturation cannot prevent cancel.
+pub(crate) struct RequestDispatcher<'scope, 'env> {
+    handle: RequestDispatchHandle<'env>,
+    workers: Vec<thread::ScopedJoinHandle<'scope, ()>>,
+}
+
+#[derive(Clone)]
+pub(crate) struct RequestDispatchHandle<'env> {
+    pending: Arc<(Mutex<Pending<'env>>, Condvar)>,
+    ready: Vec<mpsc::Sender<Ready>>,
+}
+
+impl<'env> Deref for RequestDispatcher<'_, 'env> {
+    type Target = RequestDispatchHandle<'env>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.handle
+    }
+}
+
+impl<'scope, 'env: 'scope> RequestDispatcher<'scope, 'env> {
+    pub(crate) fn start(scope: &'scope thread::Scope<'scope, 'env>) -> io::Result<Self> {
+        let pending = Arc::new((
+            Mutex::new(Pending {
+                next_ticket: 0,
+                ordinary: 0,
+                control: 0,
+                jobs: HashMap::new(),
+                failure: None,
+            }),
+            Condvar::new(),
+        ));
+        let mut ready = Vec::new();
+        let mut workers = Vec::new();
+        for (lane, capacity) in [
+            (RequestLane::Interactive, 2),
+            (RequestLane::Background, 1),
+            (RequestLane::Control, 1),
+        ] {
+            let (sender, receiver) = mpsc::channel::<Ready>();
+            ready.push(sender);
+            let receiver = Arc::new(Mutex::new(receiver));
+            for index in 0..capacity {
+                let receiver = Arc::clone(&receiver);
+                let pending = Arc::clone(&pending);
+                workers.push(
+                    thread::Builder::new()
+                        .name(format!("ash-request-{}-{index}", lane.index()))
+                        .spawn_scoped(scope, move || {
+                            loop {
+                                let Ok(ready) = receiver.lock().unwrap().recv() else {
+                                    break;
+                                };
+                                let job = pending
+                                    .0
+                                    .lock()
+                                    .unwrap()
+                                    .jobs
+                                    .remove(&ready.ticket)
+                                    .expect("admitted work retains its job");
+                                let _completion = Completion {
+                                    pending: Arc::clone(&pending),
+                                    lane,
+                                };
+                                if let Err(error) = job(ready.admission) {
+                                    pending.0.lock().unwrap().failure.get_or_insert(error);
+                                }
+                            }
+                        })?,
+                );
+            }
+        }
+        Ok(Self {
+            handle: RequestDispatchHandle { pending, ready },
+            workers,
+        })
+    }
+
+    pub(crate) fn handle(&self) -> RequestDispatchHandle<'env> {
+        self.handle.clone()
+    }
+
+    /// Route owners must stop and join before this call, releasing their dispatch handles.
+    pub(crate) fn finish(self) -> io::Result<()> {
+        let failure = {
+            let mut pending = self.pending.0.lock().unwrap();
+            while pending.ordinary + pending.control != 0 {
+                pending = self.pending.1.wait(pending).unwrap();
+            }
+            pending.failure.take()
+        };
+        drop(self.handle);
+        for worker in self.workers {
+            worker
+                .join()
+                .map_err(|_| io::Error::other("App Server request worker panicked"))?;
+        }
+        match failure {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
+    }
+}
+
+impl<'env> RequestDispatchHandle<'env> {
+    fn reserve(&self, lane: RequestLane) -> Result<u64, ()> {
+        let mut pending = self.pending.0.lock().unwrap();
+        let (count, capacity) = match lane {
+            RequestLane::Control => (&mut pending.control, CONTROL_CAPACITY),
+            _ => (&mut pending.ordinary, REQUEST_CAPACITY),
+        };
+        if *count == capacity {
+            return Err(());
+        }
+        *count += 1;
+        pending.next_ticket += 1;
+        Ok(pending.next_ticket)
+    }
+
+    fn enqueue(
+        &self,
+        ticket: u64,
+        scheduler: &RequestScheduler,
+        connection_id: u64,
+        resource: Option<RequestSerializationScope>,
+        cancellation: CancellationToken,
+        lane: RequestLane,
+        job: Job<'env>,
+    ) {
+        self.pending.0.lock().unwrap().jobs.insert(ticket, job);
+        let sender = self.ready[lane.index()].clone();
+        let ready = move |permit| {
+            let _ = sender.send(Ready {
+                ticket,
+                admission: RequestAdmission {
+                    permit,
+                    ready_at: Instant::now(),
+                },
+            });
+        };
+        match resource {
+            Some(resource) => {
+                scheduler.schedule(connection_id, resource, cancellation, move |permit| {
+                    ready(permit.map(Some))
+                })
+            }
+            None => ready(Ok(None)),
+        }
+    }
+
+    pub(crate) fn dispatch(
+        &self,
+        server: impl Deref<Target = super::AppServer> + Send + 'env,
+        connection: &super::ConnectionState,
+        raw: impl Into<IncomingRequest>,
+        deliver: impl FnOnce(String) -> io::Result<()> + Send + 'env,
+    ) -> io::Result<()> {
+        use zeroize::Zeroize;
+        let mut raw = raw.into();
+        let prepared = server.prepare_request(connection, &raw);
+        raw.raw.zeroize();
+        let mut prepared = match prepared {
+            Ok(prepared) => prepared,
+            Err(response) => return deliver(response),
+        };
+        prepared.received_at = raw.received_at;
+        prepared.received_time = raw.received_time;
+        let lane = RequestLane::for_message(&prepared.request.method, &prepared.request.params);
+        let request_id = prepared.request.id.clone();
+        let request_number = request_id.as_u64().expect("validated request ID");
+        let scheduler = server.request_scheduler.clone();
+        let cancellations = server.request_cancellations.clone();
+        let connection_id = connection.connection_id;
+        let resource = prepared.scope.clone();
+        let cancellation = prepared.cancellation.clone();
+        let mut connection = connection.clone();
+        let ticket = match self.reserve(lane) {
+            Ok(ticket) => ticket,
+            Err(()) => {
+                cancellations.finish(connection_id, request_number);
+                return deliver(super::serialize_response(super::error_response(
+                    request_id,
+                    -32000,
+                    super::AppServerErrorName::ServerOverloaded,
+                )));
+            }
+        };
+        self.enqueue(
+            ticket,
+            &scheduler,
+            connection_id,
+            resource,
+            cancellation,
+            lane,
+            Box::new(move |admission| {
+                server.execute_request(&mut connection, prepared, admission, deliver)
+            }),
+        );
+
+        Ok(())
+    }
+}
+
+struct Completion<'env> {
+    pending: Arc<(Mutex<Pending<'env>>, Condvar)>,
+    lane: RequestLane,
+}
+
+impl Drop for Completion<'_> {
+    fn drop(&mut self) {
+        let mut pending = self.pending.0.lock().unwrap();
+        match self.lane {
+            RequestLane::Control => pending.control -= 1,
+            _ => pending.ordinary -= 1,
+        }
+        self.pending.1.notify_all();
+    }
+}
+
+#[cfg(test)]
+#[path = "request_dispatch_tests.rs"]
+pub(crate) mod tests;

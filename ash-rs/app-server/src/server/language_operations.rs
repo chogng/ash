@@ -148,11 +148,11 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: LanguageCancelParams = decode(params)?;
         validate_operation_id(&params.operation_id)?;
-        result(&LanguageCancelResult {
-            status: self
-                .request_cancellations
-                .cancel_operation(connection.connection_id, params.operation_id),
-        })
+        let status = self
+            .request_cancellations
+            .cancel_operation(connection.connection_id, params.operation_id);
+        self.request_scheduler.cancel_waiting_requests();
+        result(&LanguageCancelResult { status })
     }
 
     pub(super) fn language_servers(&self, params: &Value) -> Result<Value, RpcError> {

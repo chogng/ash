@@ -1,12 +1,15 @@
 import { expect, test } from '../../../automation/test.js';
 import type { IWebWorkbenchHost } from '../../../../src/ash/workbench/browser/web.api.js';
-import { basename, join, relative } from 'node:path';
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { basename, join, relative, resolve } from 'node:path';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
 import { launchElectron } from '../../../automation/playwrightElectron.js';
 import type { ISandboxGlobals } from "../../../../src/ash/base/parts/sandbox/electron-browser/sandboxTypes.js";
 import { decodeAppServerServerRequestResult } from '../../../../src/ash/platform/app-server/common/generated/AppServerProtocolDecoder.js';
 import type { Page } from '@playwright/test';
+import { appServerDaemonExecutablePath } from '../../../../src/ash/platform/app-server/electron-main/appServerPackage.js';
 
 test('two desktops isolate browser targets and closing one preserves the other', async ({ target, testWorkspace }) => {
 	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required', 'Requires the shared managed backend');
@@ -140,14 +143,23 @@ test('Web and Electron share a managed backend and closing Electron preserves We
 	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required', 'Requires the full Web product');
 	const profile = process.env.ASH_PLAYWRIGHT_PROFILE;
 	if (!profile) { throw new Error('The full Web test runner must provide its profile'); }
-	const records = (await readdir(join(profile, 'run'))).filter(name => name.endsWith('.pid.json'));
-	expect(records).toHaveLength(1);
-	const record = join(profile, 'run', records[0]!);
-	const before = JSON.parse(await readFile(record, 'utf8')) as { pid: number; instanceId: string };
+	const daemon = appServerDaemonExecutablePath({ appPath: resolve(import.meta.dirname, '../../../..'), isPackaged: false, platform: process.platform, resourcesPath: '' });
+	const readIdentity = async () => {
+		// The daemon owns platform-specific state paths; its public status identifies the shared process.
+		const { stdout } = await promisify(execFile)(daemon, ['version'], { env: { ...process.env, ASH_HOME: profile }, windowsHide: true, timeout: 30_000 });
+		const state = JSON.parse(stdout) as { status: string; pid: number; instanceId: string };
+		expect(state.status).toBe('running');
+		expect(state.pid).toBeGreaterThan(0);
+		expect(state.instanceId).toEqual(expect.any(String));
+		expect(state.instanceId).not.toBe('');
+		return { pid: state.pid, instanceId: state.instanceId };
+	};
+	const before = await readIdentity();
 	const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-shared-'));
 	let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
 	try {
-		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory, profileDirectory: profile, workspaceDirectory: testWorkspace.directory, workspacePermissions: 'development' });
+		// Web owns this profile's backend package; Desktop connects without selecting another generation.
+		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory, profileDirectory: profile, reuseAppServer: true, workspaceDirectory: testWorkspace.directory, workspacePermissions: 'development' });
 		const page = desktop.driver.workbench.page;
 		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
 		if (await showSidebar.isVisible()) { await showSidebar.click(); }
@@ -155,7 +167,7 @@ test('Web and Electron share a managed backend and closing Electron preserves We
 		await expect(file).toHaveCount(1);
 		await file.dblclick();
 		await expect(page.locator('.stanza-editor')).toBeVisible();
-		expect(JSON.parse(await readFile(record, 'utf8'))).toEqual(before);
+		expect(await readIdentity()).toEqual(before);
 	} finally {
 		await desktop?.application.close();
 		await rm(userDataDirectory, { recursive: true, force: true });
@@ -165,5 +177,5 @@ test('Web and Electron share a managed backend and closing Electron preserves We
 		return host.api.fs.readFile({ dirId: host.workspace!.id, path: 'main.ts' });
 	});
 	expect(content.content).toBe('const value = 1;\n');
-	expect(JSON.parse(await readFile(record, 'utf8'))).toEqual(before);
+	expect(await readIdentity()).toEqual(before);
 });

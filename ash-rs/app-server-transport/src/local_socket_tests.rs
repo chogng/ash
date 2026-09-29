@@ -14,6 +14,41 @@ use crate::LocalSocketAccept;
 use crate::PollingLocalListener;
 
 #[test]
+fn input_eof_wakes_a_writer_when_the_peer_retains_its_read_half() -> io::Result<()> {
+    let (mut server, peer) = UnixStream::pair()?;
+    server.set_nonblocking(true)?;
+    let payload = [0u8; 4096];
+    loop {
+        match server.write(&payload) {
+            Ok(_) => continue,
+            Err(error) if error.kind() == io::ErrorKind::WouldBlock => break,
+            Err(error) => return Err(error),
+        }
+    }
+    let (reader, mut server) = crate::LocalStream::pair(server)?;
+    let mut reader = std::io::BufReader::new(reader);
+    let (ended, completion) = std::sync::mpsc::channel();
+    let writer = thread::spawn(move || {
+        ended.send(server.write_all(b"pending response")).unwrap();
+    });
+    peer.shutdown(std::net::Shutdown::Write)?;
+    assert!(std::io::BufRead::fill_buf(&mut reader)?.is_empty());
+    let error = completion
+        .recv_timeout(Duration::from_secs(1))
+        .unwrap()
+        .unwrap_err();
+    assert!(matches!(
+        error.kind(),
+        io::ErrorKind::BrokenPipe
+            | io::ErrorKind::ConnectionAborted
+            | io::ErrorKind::NotConnected
+            | io::ErrorKind::ConnectionReset
+    ));
+    writer.join().unwrap();
+    Ok(())
+}
+
+#[test]
 fn local_endpoint_rejects_other_users_and_elevation_contexts() {
     for peer in [
         ash_uds::PeerIdentity {

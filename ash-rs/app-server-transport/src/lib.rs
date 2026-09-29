@@ -6,15 +6,16 @@ mod local_socket;
 mod websocket;
 pub use browser::BrowserListener;
 pub use browser::BrowserOptions;
+pub use browser::BrowserWorkspaceFuture;
+pub use browser::BrowserWorkspaceOperations;
 pub use browser::browser_session_directory;
 pub use browser::start_browser_listener;
-pub use browser::BrowserWorkspaceOperations;
-pub use browser::BrowserWorkspaceFuture;
 
 pub use deadline_stream::DeadlineStream;
 pub use local_socket::LocalConnectionGuard;
 pub use local_socket::LocalConnections;
 pub use local_socket::LocalSocketAccept;
+pub use local_socket::LocalStream;
 pub use local_socket::PollingLocalListener;
 pub use local_socket::validate_local_peer;
 pub use websocket::CapabilityTokenSha256;

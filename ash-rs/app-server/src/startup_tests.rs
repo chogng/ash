@@ -81,7 +81,7 @@ fn websocket_connections_initialize_and_close_independently() {
             token_digest(),
             move |reader, writer| {
                 let _ = connection_server
-                    .serve_product_host_jsonl(std::io::BufReader::new(reader), writer);
+                    .serve_product_host_stream(std::io::BufReader::new(reader), writer);
             },
         )
         .await

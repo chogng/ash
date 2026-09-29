@@ -5,6 +5,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::OnceLock;
 
 use crate::AppServer;
 use crate::LocalAppServerOptions;
@@ -29,10 +30,16 @@ struct DirRuntimeKey {
     product_services_identity: Option<[u8; 32]>,
 }
 
+#[derive(Default)]
+struct DirRuntime {
+    server: OnceLock<Arc<AppServer>>,
+    opening: Mutex<()>,
+}
+
 pub(crate) struct ProfileAppServerRegistry {
     host: ConnectionOptions,
     profile_runtime: Arc<LocalProfileRuntime>,
-    servers: Mutex<BTreeMap<DirRuntimeKey, Arc<AppServer>>>,
+    servers: Mutex<BTreeMap<DirRuntimeKey, Arc<DirRuntime>>>,
 }
 
 impl ProfileAppServerRegistry {
@@ -67,11 +74,23 @@ impl ProfileAppServerRegistry {
             dir_grant_source: prelude.dir_grant_source(),
             product_services_identity,
         };
-        let mut servers = self
-            .servers
+        // Directory startup can perform disk and provider work. Only the same directory waits
+        // for it; the profile registry and already-open directories remain available.
+        let runtime = Arc::clone(
+            self.servers
+                .lock()
+                .map_err(|_| "local App Server dir registry lock poisoned".to_string())?
+                .entry(key)
+                .or_default(),
+        );
+        if let Some(server) = runtime.server.get() {
+            return Ok(Arc::clone(server));
+        }
+        let _opening = runtime
+            .opening
             .lock()
-            .map_err(|_| "local App Server dir registry lock poisoned".to_string())?;
-        if let Some(server) = servers.get(&key) {
+            .map_err(|_| "local App Server dir startup lock poisoned".to_string())?;
+        if let Some(server) = runtime.server.get() {
             return Ok(Arc::clone(server));
         }
         let host = ConnectionOptions::new(
@@ -84,8 +103,7 @@ impl ProfileAppServerRegistry {
             &host,
             Arc::clone(&self.profile_runtime),
         )?);
-        servers.insert(key, Arc::clone(&server));
-        Ok(server)
+        Ok(Arc::clone(runtime.server.get_or_init(|| server)))
     }
 
     pub(crate) fn server_for_local_session(&self, root: &Path) -> Result<Arc<AppServer>, String> {
@@ -137,11 +155,10 @@ impl ProfileAppServerRegistry {
     }
 
     pub(crate) fn active_terminal_count(&self) -> usize {
-        self.servers
-            .lock()
+        self.ready_servers()
             .map(|servers| {
                 servers
-                    .values()
+                    .iter()
                     .map(|server| server.active_terminal_count())
                     .sum()
             })
@@ -168,17 +185,22 @@ impl ProfileAppServerRegistry {
         {
             return Ok(true);
         }
-        for server in self
-            .servers
-            .lock()
-            .map_err(|_| "queue server registry lock poisoned")?
-            .values()
-        {
+        for server in self.ready_servers()? {
             if server.queue_needs_host()? {
                 return Ok(true);
             }
         }
         Ok(false)
+    }
+
+    fn ready_servers(&self) -> Result<Vec<Arc<AppServer>>, String> {
+        Ok(self
+            .servers
+            .lock()
+            .map_err(|_| "local App Server dir registry lock poisoned".to_string())?
+            .values()
+            .filter_map(|runtime| runtime.server.get().map(Arc::clone))
+            .collect())
     }
 
     pub(crate) fn start_automation(

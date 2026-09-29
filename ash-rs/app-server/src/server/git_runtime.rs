@@ -77,6 +77,7 @@ struct GitRepositoryRuntime {
     service: GitService,
     stream_instance_id: StreamInstanceId,
     operation: Arc<Mutex<()>>,
+    common_dir: PathBuf,
     state: Mutex<GitRuntimeState>,
     graph_sessions: Mutex<HashMap<u64, GraphSession>>,
     next_graph_token: AtomicU64,
@@ -533,6 +534,13 @@ impl GitRuntime {
             .unwrap_or_default()
     }
 
+    pub(super) fn common_dir_for(
+        &self,
+        repository_id: Option<&str>,
+    ) -> Result<PathBuf, GitRuntimeError> {
+        Ok(self.repository(repository_id)?.common_dir.clone())
+    }
+
     fn repository(
         &self,
         repository_id: Option<&str>,
@@ -564,6 +572,7 @@ impl GitRepositoryRuntime {
         };
         Ok(Some(Self {
             operation: ash_git::repository_operation_lock(&repository),
+            common_dir: dunce::simplified(repository.common_dir()).to_path_buf(),
             service,
             descriptor,
             stream_instance_id: new_stream_instance_id()?,

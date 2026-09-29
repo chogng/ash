@@ -188,7 +188,7 @@ fn serve_websocket(server: AppServer, options: WebSocketOptions) -> Result<(), S
             options.token_sha256,
             move |reader, writer| {
                 if let Err(error) =
-                    connection_server.serve_product_host_jsonl(BufReader::new(reader), writer)
+                    connection_server.serve_product_host_stream(BufReader::new(reader), writer)
                     && !is_peer_disconnect(&error)
                 {
                     eprintln!("App Server WebSocket connection failed: {error}");

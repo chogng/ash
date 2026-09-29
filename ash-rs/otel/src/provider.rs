@@ -14,6 +14,27 @@ use opentelemetry_sdk::trace::SdkTracerProvider;
 use opentelemetry_sdk::trace::SpanData;
 use opentelemetry_sdk::trace::SpanExporter;
 use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
+use std::time::SystemTime;
+
+/// Captures a message's parent trace and queue timestamp without attaching a thread-local guard.
+/// It travels with the message until the transport writer starts synchronous execution.
+pub struct OutboundTrace {
+    context: Context,
+    queued_at: SystemTime,
+    queued: Instant,
+}
+
+impl OutboundTrace {
+    pub fn capture() -> Self {
+        Self {
+            context: Context::current(),
+            queued_at: SystemTime::now(),
+            queued: Instant::now(),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct Telemetry {
@@ -21,6 +42,26 @@ pub struct Telemetry {
 }
 
 impl Telemetry {
+    /// Measures transport queueing and writing separately from domain RPC execution.
+    pub fn start_outbound(&self, trace: OutboundTrace) -> TelemetrySpan {
+        let span = self
+            .provider
+            .tracer("ash")
+            .span_builder("rpc.outbound")
+            .with_kind(SpanKind::Internal)
+            .with_start_time(trace.queued_at)
+            .start_with_context(&self.provider.tracer("ash"), &trace.context);
+        let context = Context::current_with_span(span);
+        let guard = context.clone().attach();
+        let span = TelemetrySpan {
+            context,
+            _guard: guard,
+            outcome: Outcome::Failed,
+        };
+        span.record_duration("rpc.outbound_wait_ms", trace.queued.elapsed());
+        span
+    }
+
     pub fn new(diagnostics: Diagnostics) -> Self {
         Self {
             provider: SdkTracerProvider::builder()
@@ -41,6 +82,12 @@ impl Telemetry {
 
     /// Starts a span on this thread. The guard must remain within synchronous execution.
     pub fn start(&self, activity: Activity) -> TelemetrySpan {
+        self.start_at(activity, SystemTime::now())
+    }
+
+    /// Starts synchronous execution with an earlier admission timestamp. The context is attached
+    /// only on the executing thread, while the span duration also includes queued work.
+    pub fn start_at(&self, activity: Activity, started_at: SystemTime) -> TelemetrySpan {
         let span = self
             .provider
             .tracer("ash")
@@ -53,6 +100,7 @@ impl Telemetry {
                 Activity::Rpc => SpanKind::Server,
                 Activity::Model | Activity::Http => SpanKind::Client,
             })
+            .with_start_time(started_at)
             .start(&self.provider.tracer("ash"));
         let context = Context::current_with_span(span);
         let guard = context.clone().attach();
@@ -99,6 +147,14 @@ pub struct TelemetrySpan {
 }
 
 impl TelemetrySpan {
+    /// Records a duration in milliseconds without changing the span's execution context.
+    pub fn record_duration(&self, name: &'static str, duration: Duration) {
+        self.context.span().set_attribute(KeyValue::new(
+            name,
+            duration.as_millis().min(i64::MAX as u128) as i64,
+        ));
+    }
+
     pub fn finish(mut self, outcome: Outcome) {
         self.outcome = outcome;
     }

@@ -60,6 +60,7 @@ watch subscription、operation queue 或 wire DTO 放进上述 module，意味�
 - `GitClient::system()` 捕获系统安装目录，每次操作通过 `install-context::SystemExecutables` 定位 Git；不从工作目录或环境 PATH 选择主程序。查询与配置探测使用相同安装目录生成的子进程 PATH。
 - `GitClient::with_executable` 只接受调用方明确选择的绝对路径；相对路径直接返回配置错误。此入口保留调用方的子进程环境。
 - `GitClient::executable()` 返回 `GitResult<PathBuf>`；系统程序不存在、不可访问或越出安装根时返回错误。
+- `GitClient::clone_repository` 解析父目录后，通过原子创建空目录领取 repository name 或其 `-1` 至 `-19` 后缀，再启动 Git。并发调用和父目录别名不会领取同一目录，也不需要全局网络操作锁。失败或 future 取消仅移除空的目录预留，保留部分克隆数据。
 - 普通命令的超时覆盖等待退出、写入 stdin 和读取 stdout/stderr。输出采集直接属于当前 future，取消时同步释放，避免读写任务脱离操作生命周期。
 - 仓库探测按规范化目录、Git 程序、查询 PATH 策略和执行限制合并；不同程序或限制不会混用结果。
 - 探测完成或全部调用方取消后立即移除记录，不缓存成功或失败结果。单个调用方取消不会中断其他调用方；排队等待不占用进程执行超时。

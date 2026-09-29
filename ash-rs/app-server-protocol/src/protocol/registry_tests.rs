@@ -105,6 +105,50 @@ fn session_scope_uses_the_declared_session_identity() {
 }
 
 #[test]
+fn git_operations_declare_repository_access_and_validate_selectors() {
+    for method in [
+        "git/fetch",
+        "git/pull",
+        "git/push",
+        "git/stage",
+        "git/worktree/create",
+    ] {
+        assert_eq!(
+            definition(method)
+                .serialization_scope(&serde_json::json!({}))
+                .unwrap(),
+            Some(ClientRequestSerializationScope::Repository {
+                repository_id: None,
+                access: SerializationAccess::Exclusive
+            })
+        );
+        assert_eq!(
+            definition(method)
+                .serialization_scope(&serde_json::json!({"repositoryId":"repo-1"}))
+                .unwrap(),
+            Some(ClientRequestSerializationScope::Repository {
+                repository_id: Some("repo-1".into()),
+                access: SerializationAccess::Exclusive
+            })
+        );
+        assert!(
+            definition(method)
+                .serialization_scope(&serde_json::json!({"repositoryId":12}))
+                .is_err()
+        );
+    }
+    assert_eq!(
+        definition("git/status")
+            .serialization_scope(&serde_json::json!({"repositoryId":null}))
+            .unwrap(),
+        Some(ClientRequestSerializationScope::Repository {
+            repository_id: None,
+            access: SerializationAccess::Exclusive
+        })
+    );
+}
+
+#[test]
 fn session_directory_move_is_session_exclusive() {
     let scope = definition("session/dirs/move")
         .serialization_scope(&serde_json::json!({ "sessionId": "session-1", "path": "/workspace", "permissions": [] }))

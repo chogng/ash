@@ -1,12 +1,54 @@
 use serde_json::Value;
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::collections::VecDeque;
+use std::marker::PhantomData;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
 use std::sync::Weak;
 
 const MAX_NOTIFICATION_QUEUE_LEN: usize = 4_096;
+
+thread_local! {
+    // Only synchronous notifications caused by this request on its issuing connection are held.
+    // Background producers and server requests must continue while the request is running.
+    static DEFERRED: RefCell<Vec<DeferredNotifications>> = const { RefCell::new(Vec::new()) };
+}
+
+struct DeferredNotifications {
+    owner: Arc<NotificationQueueInner>,
+    state: NotificationQueueState,
+}
+
+pub(super) struct NotificationDeferral {
+    queue: NotificationQueue,
+    session_id: Option<String>,
+    _thread: PhantomData<Rc<()>>,
+}
+
+impl Drop for NotificationDeferral {
+    fn drop(&mut self) {
+        let deferred = DEFERRED.with(|pending| {
+            pending
+                .borrow_mut()
+                .pop()
+                .expect("request notification scope exists")
+        });
+        assert!(
+            Arc::ptr_eq(&self.queue.inner, &deferred.owner),
+            "request notification scopes close in stack order"
+        );
+        self.queue.extend(deferred.state.values);
+        if deferred.state.closed {
+            self.queue.close();
+        }
+        if let Some(session_id) = &self.session_id {
+            self.queue.release_session_notifications(session_id);
+        }
+    }
+}
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct NotificationQueue {
@@ -19,10 +61,62 @@ struct NotificationQueueInner {
     changed: Condvar,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct NotificationQueueState {
     values: VecDeque<Value>,
     closed: bool,
+    sessions: BTreeMap<String, SessionNotifications>,
+    initialized: bool,
+}
+
+impl Default for NotificationQueueState {
+    fn default() -> Self {
+        Self {
+            values: VecDeque::new(),
+            closed: false,
+            sessions: BTreeMap::new(),
+            initialized: true,
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+struct SessionNotifications {
+    active: usize,
+    pending: NotificationQueueState,
+}
+
+impl NotificationQueueState {
+    fn extend(&mut self, values: impl IntoIterator<Item = Value>) {
+        for value in values {
+            if self.closed {
+                break;
+            }
+            if let Some(session_id) = value.pointer("/params/sessionId").and_then(Value::as_str)
+                && value.get("id").is_none()
+                && let Some(session) = self.sessions.get_mut(session_id)
+            {
+                session.pending.extend([value]);
+                continue;
+            }
+            if self.values.len() >= MAX_NOTIFICATION_QUEUE_LEN {
+                let resets = transcript_resets_for_dropped_notifications(&self.values);
+                self.values
+                    .retain(|queued| !is_transient_notification(queued));
+                for reset in resets {
+                    if self.values.len() >= MAX_NOTIFICATION_QUEUE_LEN {
+                        break;
+                    }
+                    self.values.push_back(reset);
+                }
+            }
+            if self.values.len() >= MAX_NOTIFICATION_QUEUE_LEN {
+                self.closed = true;
+                break;
+            }
+            self.values.push_back(value);
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -35,6 +129,69 @@ pub(crate) struct NotificationListener {
 }
 
 impl NotificationQueue {
+    pub(super) fn before_initialize() -> Self {
+        Self {
+            inner: Arc::new(NotificationQueueInner {
+                state: Mutex::new(NotificationQueueState {
+                    initialized: false,
+                    ..NotificationQueueState::default()
+                }),
+                changed: Condvar::new(),
+            }),
+        }
+    }
+
+    pub(super) fn initialized(&self) {
+        self.inner.state.lock().unwrap().initialized = true;
+        self.inner.changed.notify_all();
+    }
+
+    pub(super) fn defer_causal_notifications(
+        &self,
+        session_id: Option<&str>,
+    ) -> NotificationDeferral {
+        if let Some(session_id) = session_id {
+            self.inner
+                .state
+                .lock()
+                .unwrap()
+                .sessions
+                .entry(session_id.to_owned())
+                .or_default()
+                .active += 1;
+        }
+        DEFERRED.with(|pending| {
+            pending.borrow_mut().push(DeferredNotifications {
+                owner: Arc::clone(&self.inner),
+                state: NotificationQueueState::default(),
+            })
+        });
+        NotificationDeferral {
+            queue: self.clone(),
+            session_id: session_id.map(str::to_owned),
+            _thread: PhantomData,
+        }
+    }
+
+    fn release_session_notifications(&self, session_id: &str) {
+        let mut state = self.inner.state.lock().unwrap();
+        let session = state
+            .sessions
+            .get_mut(session_id)
+            .expect("request owns its Session notification scope");
+        session.active -= 1;
+        if session.active == 0 {
+            let pending = state
+                .sessions
+                .remove(session_id)
+                .expect("completed Session notification scope exists")
+                .pending;
+            state.extend(pending.values);
+            state.closed |= pending.closed;
+            self.inner.changed.notify_all();
+        }
+    }
+
     pub(super) fn downgrade(&self) -> NotificationQueueHandle {
         NotificationQueueHandle {
             inner: Arc::downgrade(&self.inner),
@@ -52,30 +209,28 @@ impl NotificationQueue {
     }
 
     pub(crate) fn extend(&self, values: impl IntoIterator<Item = Value>) {
+        let immediate = DEFERRED.with(|pending| {
+            let mut pending = pending.borrow_mut();
+            let deferred = pending
+                .iter_mut()
+                .rev()
+                .find(|pending| Arc::ptr_eq(&pending.owner, &self.inner));
+            let Some(deferred) = deferred else {
+                return values.into_iter().collect::<Vec<_>>();
+            };
+            let mut immediate = Vec::new();
+            for value in values {
+                if value.get("id").is_some() {
+                    immediate.push(value);
+                } else {
+                    deferred.state.extend([value]);
+                }
+            }
+            immediate
+        });
         if let Ok(mut state) = self.inner.state.lock() {
             let was_empty = state.values.is_empty();
-            for value in values {
-                if state.closed {
-                    break;
-                }
-                if state.values.len() >= MAX_NOTIFICATION_QUEUE_LEN {
-                    let resets = transcript_resets_for_dropped_notifications(&state.values);
-                    state
-                        .values
-                        .retain(|queued| !is_transient_notification(queued));
-                    for reset in resets {
-                        if state.values.len() >= MAX_NOTIFICATION_QUEUE_LEN {
-                            break;
-                        }
-                        state.values.push_back(reset);
-                    }
-                }
-                if state.values.len() >= MAX_NOTIFICATION_QUEUE_LEN {
-                    state.closed = true;
-                    break;
-                }
-                state.values.push_back(value);
-            }
+            state.extend(immediate);
             if (was_empty && !state.values.is_empty()) || state.closed {
                 self.inner.changed.notify_all();
             }
@@ -120,13 +275,13 @@ impl NotificationListener {
         let Ok(mut state) = self.queue.inner.state.lock() else {
             return false;
         };
-        while state.values.is_empty() && !state.closed {
+        while (!state.initialized || state.values.is_empty()) && !state.closed {
             let Ok(next) = self.queue.inner.changed.wait(state) else {
                 return false;
             };
             state = next;
         }
-        !state.values.is_empty()
+        state.initialized && !state.values.is_empty()
     }
 
     pub(crate) fn drain(&self) -> Vec<Value> {

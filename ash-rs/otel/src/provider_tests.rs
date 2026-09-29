@@ -28,6 +28,72 @@ fn production_sdk_exports_to_bounded_diagnostics() {
     assert_eq!(snapshot.recent[0].outcome, Outcome::Failed);
 }
 
+#[test]
+fn rpc_span_includes_admission_time_and_exports_wait_durations() {
+    let diagnostics = Diagnostics::default();
+    let captured = Captured::default();
+    let telemetry = Telemetry::with_exporter(diagnostics.clone(), captured.clone());
+    let admitted = std::time::SystemTime::now() - std::time::Duration::from_millis(75);
+    let span = telemetry.start_at(Activity::Rpc, admitted);
+    span.record_duration("rpc.resource_wait_ms", std::time::Duration::from_millis(50));
+    span.record_duration(
+        "rpc.execution_queue_wait_ms",
+        std::time::Duration::from_millis(25),
+    );
+    span.finish(Outcome::Succeeded);
+    telemetry.flush().unwrap();
+    let spans = captured.0.lock().unwrap();
+    assert_eq!(spans[0].start_time, admitted);
+    assert!(
+        spans[0]
+            .attributes
+            .contains(&KeyValue::new("rpc.resource_wait_ms", 50_i64))
+    );
+    assert!(
+        spans[0]
+            .attributes
+            .contains(&KeyValue::new("rpc.execution_queue_wait_ms", 25_i64))
+    );
+    assert!(diagnostics.snapshot(Default::default()).recent[0].elapsed_ms >= 75);
+    assert!(!Context::current().span().span_context().is_valid());
+}
+
+#[test]
+fn outbound_trace_preserves_the_request_parent_on_the_writer_thread() {
+    let captured = Captured::default();
+    let telemetry = Telemetry::with_exporter(Diagnostics::default(), captured.clone());
+    let request = telemetry.start(Activity::Rpc);
+    let queued = OutboundTrace::capture();
+    let writer_telemetry = telemetry.clone();
+    std::thread::spawn(move || {
+        assert!(!Context::current().span().span_context().is_valid());
+        let outbound = writer_telemetry.start_outbound(queued);
+        outbound.record_duration("rpc.write_ms", Duration::from_millis(3));
+        outbound.finish(Outcome::Succeeded);
+        assert!(!Context::current().span().span_context().is_valid());
+    })
+    .join()
+    .unwrap();
+    request.finish(Outcome::Succeeded);
+    telemetry.flush().unwrap();
+    let spans = captured.0.lock().unwrap();
+    let rpc = spans.iter().find(|span| span.name == "rpc").unwrap();
+    let outbound = spans
+        .iter()
+        .find(|span| span.name == "rpc.outbound")
+        .unwrap();
+    assert_eq!(outbound.parent_span_id, rpc.span_context.span_id());
+    assert_eq!(
+        outbound.span_context.trace_id(),
+        rpc.span_context.trace_id()
+    );
+    assert!(
+        outbound
+            .attributes
+            .contains(&KeyValue::new("rpc.write_ms", 3_i64))
+    );
+}
+
 struct Transport;
 
 impl HttpClient for Transport {

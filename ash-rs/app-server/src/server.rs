@@ -53,13 +53,14 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Write;
 use std::sync::Arc;
-use std::sync::Condvar;
 use std::sync::Mutex;
 use std::sync::OnceLock;
 use std::sync::RwLock;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
+use std::time::Instant;
+use std::time::SystemTime;
 use zeroize::Zeroize;
 
 mod account_operations;
@@ -144,6 +145,7 @@ mod project_operations_tests;
 mod project_projection;
 mod provider_operations;
 mod queue_operations;
+pub(crate) mod request_dispatch;
 mod request_serialization;
 mod runtime_extensions;
 mod search_operations;
@@ -166,8 +168,6 @@ pub(crate) mod update_broker;
 pub(crate) mod update_plan_tool;
 
 const OUTBOUND_MESSAGE_QUEUE_CAPACITY: usize = 256;
-const INBOUND_REQUEST_QUEUE_CAPACITY: usize = 64;
-const CONNECTION_REQUEST_WORKERS: usize = 4;
 
 use crate::mcp_runtime::McpRuntimeIntents;
 pub(crate) use environment_runtime::DirGrantPolicy;
@@ -187,7 +187,7 @@ pub struct AppServer {
     queue: Option<Arc<queue::QueueStore>>,
     queue_directory: Option<String>,
     diagnostics: diagnostics::Diagnostics,
-    telemetry: ash_otel::Telemetry,
+    pub(crate) telemetry: ash_otel::Telemetry,
     analytics: Arc<analytics::Analytics>,
     feedback: feedback::Feedback,
     pub(super) threads: Arc<ThreadController>,
@@ -395,62 +395,25 @@ fn connection_state(
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+struct PreparedRequest {
+    request: JsonRpcRequest<Value>,
+    cancellation: CancellationToken,
+    scope: Option<request_serialization::RequestSerializationScope>,
+    received_at: Instant,
+    received_time: SystemTime,
+}
+
+enum InputEnd {
+    Drain,
+    Disconnect,
+}
+
 /// A wakeable source for outbound notifications owned by one App Server connection.
 ///
 /// Connection hosts wait on this source independently from request dispatch, then drain the
 /// pending protocol notifications. Closing the connection wakes any blocked listener.
 pub struct ConnectionNotifications {
     listener: NotificationListener,
-}
-
-#[derive(Default)]
-struct ConnectionDispatchActivity {
-    active: Mutex<usize>,
-    idle: Condvar,
-}
-
-impl ConnectionDispatchActivity {
-    fn enter(self: &Arc<Self>) -> ConnectionDispatchGuard {
-        *self
-            .active
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
-        ConnectionDispatchGuard {
-            activity: Arc::clone(self),
-        }
-    }
-
-    fn while_idle<T>(&self, operation: impl FnOnce() -> T) -> T {
-        let mut active = self
-            .active
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        while *active != 0 {
-            active = self
-                .idle
-                .wait(active)
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-        }
-        operation()
-    }
-}
-
-struct ConnectionDispatchGuard {
-    activity: Arc<ConnectionDispatchActivity>,
-}
-
-impl Drop for ConnectionDispatchGuard {
-    fn drop(&mut self) {
-        let mut active = self
-            .activity
-            .active
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        *active -= 1;
-        if *active == 0 {
-            self.activity.idle.notify_all();
-        }
-    }
 }
 
 impl ConnectionNotifications {
@@ -785,6 +748,7 @@ impl AppServer {
 
     fn open_connection(&self, authority: ConnectionAuthority) -> ConnectionState {
         let connection = ConnectionState {
+            outbound_notifications: NotificationQueue::before_initialize(),
             connection_id: self.updates.allocate_connection_id(),
             authority,
             ..ConnectionState::default()
@@ -880,6 +844,15 @@ impl AppServer {
         ConnectionNotifications {
             listener: connection.outbound_notifications.listener(),
         }
+    }
+
+    pub(crate) fn cancel_connection_requests(&self, connection: &ConnectionState) {
+        self.request_cancellations
+            .cancel_connection(connection.connection_id);
+        self.request_scheduler
+            .cancel_connection(connection.connection_id);
+        // Pending host calls must be woken before joining their request workers.
+        self.browser_host.unregister(connection.connection_id);
     }
 
     /// Releases connection-scoped subscriptions and runtime resources.
@@ -1775,17 +1748,55 @@ impl AppServer {
     }
 
     pub fn handle_json(&self, connection: &mut ConnectionState, raw: &str) -> String {
+        self.handle_json_with_delivery(connection, raw, |response| response)
+    }
+
+    pub(crate) fn handle_json_with_delivery<R>(
+        &self,
+        connection: &mut ConnectionState,
+        raw: &str,
+        deliver: impl FnOnce(String) -> R,
+    ) -> R {
+        let prepared = match self.prepare_request(connection, raw) {
+            Ok(prepared) => prepared,
+            Err(response) => return deliver(response),
+        };
+        let permit = match prepared.scope.clone() {
+            Some(scope) => self
+                .request_scheduler
+                .acquire_with_cancellation(connection.connection_id, scope, &prepared.cancellation)
+                .map(Some),
+            None => Ok(None),
+        };
+        self.execute_request(
+            connection,
+            prepared,
+            request_dispatch::RequestAdmission {
+                permit,
+                ready_at: Instant::now(),
+            },
+            deliver,
+        )
+    }
+
+    fn prepare_request(
+        &self,
+        connection: &ConnectionState,
+        raw: &str,
+    ) -> Result<PreparedRequest, String> {
+        let received_at = Instant::now();
+        let received_time = SystemTime::now();
         let raw_request: Value = match serde_json::from_str(raw) {
             Ok(request) => request,
             Err(_) => {
-                return serialize_response(error_response(
+                return Err(serialize_response(error_response(
                     JsonRpcId::Null(()),
                     -32700,
                     AppServerErrorName::ParseError,
-                ));
+                )));
             }
         };
-        let mut request = match serde_json::from_value::<JsonRpcRequest<Value>>(raw_request) {
+        let request = match serde_json::from_value::<JsonRpcRequest<Value>>(raw_request) {
             Ok(request)
                 if request.jsonrpc == JsonRpcVersion::V2
                     && request.id.as_u64().is_some_and(|request_id| request_id > 0) =>
@@ -1793,11 +1804,11 @@ impl AppServer {
                 request
             }
             _ => {
-                return serialize_response(error_response(
+                return Err(serialize_response(error_response(
                     JsonRpcId::Null(()),
                     -32600,
                     AppServerErrorName::InvalidRequest,
-                ));
+                )));
             }
         };
         let request_id = request.id.as_u64().expect("validated request ID");
@@ -1806,18 +1817,18 @@ impl AppServer {
                 .request_scheduler
                 .is_connection_cancelled(connection.connection_id)
         {
-            return serialize_response(error_response(
+            return Err(serialize_response(error_response(
                 request.id,
                 -32800,
                 AppServerErrorName::RequestCancelled,
-            ));
+            )));
         }
         if !connection.record_request_id(request_id) {
-            return serialize_response(error_response(
+            return Err(serialize_response(error_response(
                 request.id,
                 -32600,
                 AppServerErrorName::InvalidRequest,
-            ));
+            )));
         }
         let operation_id = match client_method_definition(&request.method)
             .map(|definition| definition.cancellation_operation_id(&request.params))
@@ -1825,11 +1836,11 @@ impl AppServer {
         {
             Ok(operation_id) => operation_id.flatten(),
             Err(_) => {
-                return serialize_response(error_response(
+                return Err(serialize_response(error_response(
                     request.id,
                     -32602,
                     AppServerErrorName::InvalidParams,
-                ));
+                )));
             }
         };
         let serialization_scope = if client_method(&request.method)
@@ -1844,14 +1855,27 @@ impl AppServer {
             {
                 Ok(scope) => scope.flatten(),
                 Err(_) => {
-                    return serialize_response(error_response(
+                    return Err(serialize_response(error_response(
                         request.id,
                         -32602,
                         AppServerErrorName::InvalidParams,
-                    ));
+                    )));
                 }
             }
         };
+        let serialization_scope = serialization_scope.map(|scope| {
+            use ash_app_server_protocol::protocol::registry::ClientRequestSerializationScope as Declared;
+            use request_serialization::RequestSerializationScope as Resolved;
+            Ok(match scope {
+                Declared::Global { access } => Resolved::Global { access },
+                Declared::Session { session_id, access } => Resolved::Session { session_id, access },
+                Declared::ConnectionResource { namespace, resource_id, access } => Resolved::ConnectionResource { namespace, resource_id, access },
+                Declared::Repository { repository_id, access } => Resolved::Repository {
+                    common_dir: self.git_runtime_service()?.common_dir_for(repository_id.as_deref()).map_err(git_operations::git_error)?,
+                    access,
+                },
+            })
+        }).transpose().map_err(|error: RpcError| serialize_response(error_response(request.id.clone(), error.code, error.message)))?;
         let cancellation = match self.request_cancellations.start(
             connection.connection_id,
             request_id,
@@ -1859,33 +1883,73 @@ impl AppServer {
         ) {
             Ok(cancellation) => cancellation,
             Err(_) => {
-                return serialize_response(error_response(
+                return Err(serialize_response(error_response(
                     request.id,
                     -32602,
                     AppServerErrorName::InvalidParams,
-                ));
+                )));
             }
         };
-        let _permit = match serialization_scope {
-            Some(scope) => match self.request_scheduler.acquire_with_cancellation(
-                connection.connection_id,
-                scope,
-                &cancellation,
-            ) {
-                Ok(authorization) => Some(authorization),
-                Err(_) => {
-                    self.request_cancellations
-                        .finish(connection.connection_id, request_id);
-                    return serialize_response(error_response(
-                        request.id,
-                        -32800,
-                        AppServerErrorName::RequestCancelled,
-                    ));
-                }
-            },
-            None => None,
+        Ok(PreparedRequest {
+            request,
+            cancellation,
+            scope: serialization_scope,
+            received_at,
+            received_time,
+        })
+    }
+
+    fn execute_request<R>(
+        &self,
+        connection: &mut ConnectionState,
+        prepared: PreparedRequest,
+        admission: request_dispatch::RequestAdmission,
+        deliver: impl FnOnce(String) -> R,
+    ) -> R {
+        let PreparedRequest {
+            mut request,
+            cancellation,
+            received_at,
+            received_time,
+            scope,
+        } = prepared;
+        let request_id = request.id.as_u64().expect("validated request ID");
+        let initializing = client_method(&request.method) == Some(ClientMethod::Initialize);
+        let request_span = self
+            .telemetry
+            .start_at(diagnostics::Activity::Rpc, received_time);
+        request_span.record_duration(
+            "rpc.resource_wait_ms",
+            admission.ready_at.duration_since(received_at),
+        );
+        request_span.record_duration("rpc.execution_queue_wait_ms", admission.ready_at.elapsed());
+        let _permit = match admission.permit {
+            Ok(permit) => permit,
+            Err(_) => {
+                self.request_cancellations
+                    .finish(connection.connection_id, request_id);
+                let delivered = deliver(serialize_response(error_response(
+                    request.id,
+                    -32800,
+                    AppServerErrorName::RequestCancelled,
+                )));
+                request_span.finish(diagnostics::Outcome::Cancelled);
+                return delivered;
+            }
         };
-        let request_span = self.telemetry.start(diagnostics::Activity::Rpc);
+        let execution_started = Instant::now();
+        let session_id = match &scope {
+            Some(request_serialization::RequestSerializationScope::Session {
+                session_id,
+                access: ash_app_server_protocol::protocol::registry::SerializationAccess::Exclusive,
+            }) => Some(session_id.as_str()),
+            _ => None,
+        };
+        // Turn producers can publish from another thread before their start response. Delay only
+        // that Session's events, while unrelated background events and host calls keep flowing.
+        let notifications = connection
+            .outbound_notifications
+            .defer_causal_notifications(session_id);
         let dispatch_result = if cancellation.is_cancelled() {
             None
         } else {
@@ -1923,8 +1987,19 @@ impl AppServer {
         };
         self.request_cancellations
             .finish(connection.connection_id, request_id);
+        // State is committed before delivery. A slow connection's output queue must not retain
+        // resource admission shared with other connections.
+        drop(_permit);
+        request_span.record_duration("rpc.execution_ms", execution_started.elapsed());
+        let outbound_started = Instant::now();
+        let delivered = deliver(response);
+        if initializing && outcome == diagnostics::Outcome::Succeeded {
+            connection.outbound_notifications.initialized();
+        }
+        drop(notifications);
+        request_span.record_duration("rpc.outbound_queue_wait_ms", outbound_started.elapsed());
         request_span.finish(outcome);
-        response
+        delivered
     }
 
     pub fn serve_stdio(&self) -> Result<(), std::io::Error> {
@@ -1936,7 +2011,7 @@ impl AppServer {
         reader: R,
         writer: W,
     ) -> Result<(), std::io::Error> {
-        self.serve_jsonl_connection(reader, writer, self.connection())
+        self.serve_jsonl_connection(reader, writer, self.connection(), InputEnd::Drain)
     }
 
     /// Serves a product-owned transport that may negotiate host-only capabilities.
@@ -1948,7 +2023,26 @@ impl AppServer {
         reader: R,
         writer: W,
     ) -> Result<(), std::io::Error> {
-        self.serve_jsonl_connection(reader, writer, self.product_host_connection())
+        self.serve_jsonl_connection(
+            reader,
+            writer,
+            self.product_host_connection(),
+            InputEnd::Drain,
+        )
+    }
+
+    /// Unlike finite stdio input, a socket EOF ends its renderer's request and host lifetimes.
+    pub(crate) fn serve_product_host_stream<R: BufRead, W: Write + Send>(
+        &self,
+        reader: R,
+        writer: W,
+    ) -> Result<(), std::io::Error> {
+        self.serve_jsonl_connection(
+            reader,
+            writer,
+            self.product_host_connection(),
+            InputEnd::Disconnect,
+        )
     }
 
     /// Delivers a host response from a profile gateway to the App Server that issued it.
@@ -1977,7 +2071,12 @@ impl AppServer {
         reader: R,
         writer: W,
     ) -> Result<(), std::io::Error> {
-        self.serve_jsonl_connection(reader, writer, self.browser_connection())
+        self.serve_jsonl_connection(
+            reader,
+            writer,
+            self.browser_connection(),
+            InputEnd::Disconnect,
+        )
     }
 
     fn serve_jsonl_connection<R: BufRead, W: Write + Send>(
@@ -1985,75 +2084,36 @@ impl AppServer {
         reader: R,
         writer: W,
         mut connection: ConnectionState,
+        input_end: InputEnd,
     ) -> Result<(), std::io::Error> {
         let mut reader = JsonlReader::new(reader, DEFAULT_MAX_MESSAGE_BYTES);
         let notifications = self.connection_notifications(&connection);
-        let activity = Arc::new(ConnectionDispatchActivity::default());
-        let (inbound_tx, inbound_rx) = mpsc::sync_channel::<String>(INBOUND_REQUEST_QUEUE_CAPACITY);
-        let inbound_rx = Arc::new(Mutex::new(inbound_rx));
-        let (outbound_tx, outbound_rx) =
-            mpsc::sync_channel::<String>(OUTBOUND_MESSAGE_QUEUE_CAPACITY);
+        let (outbound_tx, outbound_rx) = mpsc::sync_channel::<request_dispatch::OutgoingMessage>(
+            OUTBOUND_MESSAGE_QUEUE_CAPACITY,
+        );
         thread::scope(|scope| {
             let writer_handle = scope.spawn(move || {
                 let mut writer = JsonlWriter::new(writer, DEFAULT_MAX_MESSAGE_BYTES);
                 while let Ok(message) = outbound_rx.recv() {
-                    writer.write_message(&message)?;
+                    message.write_to(&mut writer, &self.telemetry)?;
                 }
                 Ok::<(), std::io::Error>(())
             });
             let notification_tx = outbound_tx.clone();
-            let notification_activity = Arc::clone(&activity);
             let notification_handle = scope.spawn(move || {
                 while notifications.wait() {
-                    let delivered = notification_activity.while_idle(|| {
-                        for notification in notifications.drain() {
-                            if notification_tx.send(notification).is_err() {
-                                return false;
-                            }
+                    for notification in notifications.drain() {
+                        if notification_tx.send(notification.into()).is_err() {
+                            return Ok(());
                         }
-                        true
-                    });
-                    if !delivered {
-                        return Ok(());
                     }
                 }
                 Ok::<(), std::io::Error>(())
             });
-            let mut request_handles = Vec::with_capacity(CONNECTION_REQUEST_WORKERS);
-            for worker_index in 0..CONNECTION_REQUEST_WORKERS {
-                let worker_rx = Arc::clone(&inbound_rx);
-                let worker_tx = outbound_tx.clone();
-                let worker_activity = Arc::clone(&activity);
-                let mut worker_connection = connection.clone();
-                request_handles.push(
-                    thread::Builder::new()
-                        .name(format!("ash-app-server-request-{worker_index}"))
-                        .spawn_scoped(scope, move || {
-                            loop {
-                                let line = worker_rx
-                                    .lock()
-                                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                                    .recv();
-                                let Ok(mut line) = line else {
-                                    return Ok::<(), std::io::Error>(());
-                                };
-                                let _dispatch = worker_activity.enter();
-                                let response = self.handle_json(&mut worker_connection, &line);
-                                line.zeroize();
-                                if !response.is_empty() {
-                                    worker_tx.send(response).map_err(|_| {
-                                        std::io::Error::new(
-                                            std::io::ErrorKind::BrokenPipe,
-                                            "App Server outbound writer closed",
-                                        )
-                                    })?;
-                                }
-                            }
-                        })?,
-                );
-            }
+            let requests = request_dispatch::RequestDispatcher::start(scope)?;
             let read_result = (|| {
-                while let Some(mut line) = reader.read_message()? {
+                while let Some(line) = reader.read_message()? {
+                    let mut line = request_dispatch::IncomingRequest::from(line);
                     let envelope = serde_json::from_str::<Value>(&line).map_err(|error| {
                         std::io::Error::new(
                             std::io::ErrorKind::InvalidData,
@@ -2067,7 +2127,7 @@ impl AppServer {
                             .map_err(|error| {
                                 std::io::Error::new(std::io::ErrorKind::InvalidData, error)
                             })?;
-                        line.zeroize();
+                        line.raw.zeroize();
                         if handled {
                             continue;
                         }
@@ -2077,46 +2137,36 @@ impl AppServer {
                         ));
                     }
                     if connection.is_initialized() {
-                        inbound_tx.send(line).map_err(|_| {
-                            std::io::Error::new(
-                                std::io::ErrorKind::BrokenPipe,
-                                "App Server request workers closed",
-                            )
-                        })?;
-                    } else {
-                        let _dispatch = activity.enter();
-                        let response = self.handle_json(&mut connection, &line);
-                        line.zeroize();
-                        if !response.is_empty() {
-                            outbound_tx.send(response).map_err(|_| {
+                        let output = outbound_tx.clone();
+                        requests.dispatch(self, &connection, line, move |response| {
+                            output.send(response.into()).map_err(|_| {
                                 std::io::Error::new(
                                     std::io::ErrorKind::BrokenPipe,
                                     "App Server outbound writer closed",
                                 )
-                            })?;
-                        }
+                            })
+                        })?;
+                    } else {
+                        self.handle_json_with_delivery(&mut connection, &line, |response| {
+                            outbound_tx.send(response.into()).map_err(|_| {
+                                std::io::Error::new(
+                                    std::io::ErrorKind::BrokenPipe,
+                                    "App Server outbound writer closed",
+                                )
+                            })
+                        })?;
+                        line.raw.zeroize();
                     }
                 }
                 Ok::<(), std::io::Error>(())
             })();
-            if read_result.is_err() {
-                self.request_scheduler
-                    .cancel_connection(connection.connection_id);
+            if read_result.is_err() || matches!(input_end, InputEnd::Disconnect) {
+                self.cancel_connection_requests(&connection);
+            } else {
+                // EOF cannot provide another host reply, even when accepted stdio requests drain.
+                self.browser_host.unregister(connection.connection_id);
             }
-            drop(inbound_tx);
-            let mut request_result = Ok(());
-            for request_handle in request_handles {
-                match request_handle.join() {
-                    Ok(Ok(())) => {}
-                    Ok(Err(error)) if request_result.is_ok() => request_result = Err(error),
-                    Ok(Err(_)) => {}
-                    Err(_) if request_result.is_ok() => {
-                        request_result =
-                            Err(std::io::Error::other("App Server request worker panicked"));
-                    }
-                    Err(_) => {}
-                }
-            }
+            let request_result = requests.finish();
             self.close_connection(connection);
             drop(outbound_tx);
             let notification_result = notification_handle

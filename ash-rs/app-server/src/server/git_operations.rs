@@ -544,7 +544,7 @@ fn validate_object_id(object_id: &str) -> Result<(), RpcError> {
     Ok(())
 }
 
-fn git_error(error: GitRuntimeError) -> RpcError {
+pub(super) fn git_error(error: GitRuntimeError) -> RpcError {
     match error {
         GitRuntimeError::InvalidGraphCursor => {
             RpcError::new(-32602, AppServerErrorName::InvalidParams)

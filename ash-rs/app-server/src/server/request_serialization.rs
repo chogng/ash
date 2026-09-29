@@ -2,20 +2,45 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::sync::Condvar;
 use std::sync::Mutex;
+use std::sync::OnceLock;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 use ash_app_server_protocol::protocol::language::LanguageCancelStatusDto;
-use ash_app_server_protocol::protocol::registry::ClientRequestSerializationScope;
 use ash_app_server_protocol::protocol::registry::SerializationAccess;
 use ash_async_utils::CancellationSource;
 use ash_async_utils::CancellationToken;
+use std::path::PathBuf;
+
+/// Backend admission keys contain resolved domain identities, never caller-selected aliases.
+#[derive(Clone, Debug)]
+pub(crate) enum RequestSerializationScope {
+    Global {
+        access: SerializationAccess,
+    },
+    Session {
+        session_id: String,
+        access: SerializationAccess,
+    },
+    ConnectionResource {
+        namespace: &'static str,
+        resource_id: String,
+        access: SerializationAccess,
+    },
+    Repository {
+        common_dir: PathBuf,
+        access: SerializationAccess,
+    },
+}
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 enum RequestSerializationKey {
-    Global,
-    Session(String),
+    Global(u64),
+    Repository(PathBuf),
+    Session(u64, String),
     ConnectionResource {
+        owner_id: u64,
         connection_id: u64,
         namespace: &'static str,
         resource_id: String,
@@ -23,20 +48,28 @@ enum RequestSerializationKey {
 }
 
 impl RequestSerializationKey {
-    fn from_scope(connection_id: u64, scope: ClientRequestSerializationScope) -> (Self, Access) {
+    fn from_scope(
+        owner_id: u64,
+        connection_id: u64,
+        scope: RequestSerializationScope,
+    ) -> (Self, Access) {
         match scope {
-            ClientRequestSerializationScope::Global { access } => {
-                (Self::Global, Access::from(access))
+            RequestSerializationScope::Global { access } => {
+                (Self::Global(owner_id), Access::from(access))
             }
-            ClientRequestSerializationScope::Session { session_id, access } => {
-                (Self::Session(session_id), Access::from(access))
+            RequestSerializationScope::Repository { common_dir, access } => {
+                (Self::Repository(common_dir), Access::from(access))
             }
-            ClientRequestSerializationScope::ConnectionResource {
+            RequestSerializationScope::Session { session_id, access } => {
+                (Self::Session(owner_id, session_id), Access::from(access))
+            }
+            RequestSerializationScope::ConnectionResource {
                 namespace,
                 resource_id,
                 access,
             } => (
                 Self::ConnectionResource {
+                    owner_id,
                     connection_id,
                     namespace,
                     resource_id,
@@ -77,67 +110,156 @@ enum Active {
 }
 
 struct Waiter {
+    owner_id: u64,
     connection_id: u64,
     access: Access,
-    state: Mutex<WaiterState>,
-    ready: Condvar,
+    cancellation: CancellationToken,
+    completion: Mutex<Option<Box<dyn FnOnce(WaiterState) + Send>>>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum WaiterState {
-    Pending,
     Acquired,
     Cancelled,
 }
 
 impl Waiter {
-    fn new(connection_id: u64, access: Access) -> Self {
+    fn new(
+        owner_id: u64,
+        connection_id: u64,
+        access: Access,
+        cancellation: CancellationToken,
+    ) -> Self {
         Self {
+            owner_id,
             connection_id,
             access,
-            state: Mutex::new(WaiterState::Pending),
-            ready: Condvar::new(),
+            cancellation,
+            completion: Mutex::new(None),
         }
     }
 
     fn complete(&self, state: WaiterState) {
-        *lock(&self.state) = state;
-        self.ready.notify_one();
-    }
-
-    fn wait(&self, cancellation: &CancellationToken) -> WaiterState {
-        let mut state = lock(&self.state);
-        while *state == WaiterState::Pending {
-            if cancellation.is_cancelled() {
-                return WaiterState::Cancelled;
-            }
-            state = self
-                .ready
-                .wait_timeout(state, std::time::Duration::from_millis(25))
-                .map(|(state, _)| state)
-                .unwrap_or_else(|error| error.into_inner().0);
+        let completion = lock(&self.completion).take();
+        if let Some(completion) = completion {
+            completion(state);
         }
-        *state
     }
 }
 
 #[derive(Default)]
 struct SchedulerState {
     queues: HashMap<RequestSerializationKey, Queue>,
-    cancelled_connections: std::collections::BTreeSet<u64>,
+    cancelled_connections: std::collections::BTreeSet<(u64, u64)>,
 }
 
-#[derive(Clone, Default)]
-pub(super) struct RequestScheduler {
+#[derive(Clone)]
+pub(crate) struct RequestScheduler {
+    owner_id: u64,
     state: Arc<Mutex<SchedulerState>>,
 }
 
+impl Default for RequestScheduler {
+    fn default() -> Self {
+        static NEXT_OWNER: AtomicU64 = AtomicU64::new(1);
+        static STATE: OnceLock<Arc<Mutex<SchedulerState>>> = OnceLock::new();
+        Self {
+            owner_id: NEXT_OWNER.fetch_add(1, Ordering::Relaxed),
+            // Repository admission spans directory runtimes, including separate worktrees.
+            // Other keys retain their runtime identity so unrelated directory state stays independent.
+            state: Arc::clone(
+                STATE.get_or_init(|| Arc::new(Mutex::new(SchedulerState::default()))),
+            ),
+        }
+    }
+}
+
 impl RequestScheduler {
+    /// Enqueues resource admission without retaining an execution thread while it waits.
+    pub(super) fn schedule(
+        &self,
+        connection_id: u64,
+        scope: RequestSerializationScope,
+        cancellation: CancellationToken,
+        ready: impl FnOnce(Result<RequestPermit, ConnectionClosed>) + Send + 'static,
+    ) {
+        let (key, access) =
+            RequestSerializationKey::from_scope(self.owner_id, connection_id, scope);
+        let scheduler = self.clone();
+        let permit_key = key.clone();
+        let waiter = Arc::new(Waiter::new(
+            self.owner_id,
+            connection_id,
+            access,
+            cancellation,
+        ));
+        *lock(&waiter.completion) = Some(Box::new(move |state| {
+            ready(match state {
+                WaiterState::Acquired => Ok(RequestPermit {
+                    scheduler,
+                    key: Some(permit_key),
+                    access,
+                }),
+                WaiterState::Cancelled => Err(ConnectionClosed),
+            });
+        }));
+        let completed = {
+            let mut state = lock(&self.state);
+            if state
+                .cancelled_connections
+                .contains(&(self.owner_id, connection_id))
+                || waiter.cancellation.is_cancelled()
+            {
+                Some(WaiterState::Cancelled)
+            } else {
+                let queue = state.queues.entry(key).or_default();
+                if can_acquire_immediately(queue, access) {
+                    activate(queue, access);
+                    Some(WaiterState::Acquired)
+                } else {
+                    queue.waiting.push_back(Arc::clone(&waiter));
+                    None
+                }
+            }
+        };
+        if let Some(completed) = completed {
+            waiter.complete(completed);
+        }
+    }
+
+    /// A cancellation command removes waiting work before the owning resource becomes free.
+    pub(super) fn cancel_waiting_requests(&self) {
+        let mut cancelled = Vec::new();
+        let mut acquired = Vec::new();
+        {
+            let mut state = lock(&self.state);
+            state.queues.retain(|_, queue| {
+                queue.waiting.retain(|waiter| {
+                    if waiter.cancellation.is_cancelled() {
+                        cancelled.push(Arc::clone(waiter));
+                        false
+                    } else {
+                        true
+                    }
+                });
+                if queue.active == Active::None {
+                    acquired.extend(promote(queue));
+                }
+                queue.active != Active::None || !queue.waiting.is_empty()
+            });
+        }
+        for waiter in cancelled {
+            waiter.complete(WaiterState::Cancelled);
+        }
+        for waiter in acquired {
+            waiter.complete(WaiterState::Acquired);
+        }
+    }
     #[cfg(test)]
     pub(super) fn acquire(
         &self,
         connection_id: u64,
-        scope: ClientRequestSerializationScope,
+        scope: RequestSerializationScope,
     ) -> Result<RequestPermit, ConnectionClosed> {
         let cancellation = CancellationSource::new();
         self.acquire_with_cancellation(connection_id, scope, &cancellation.token())
@@ -146,59 +268,47 @@ impl RequestScheduler {
     pub(super) fn acquire_with_cancellation(
         &self,
         connection_id: u64,
-        scope: ClientRequestSerializationScope,
+        scope: RequestSerializationScope,
         cancellation: &CancellationToken,
     ) -> Result<RequestPermit, ConnectionClosed> {
-        let (key, access) = RequestSerializationKey::from_scope(connection_id, scope);
-        let waiter = {
-            let mut state = lock(&self.state);
-            if state.cancelled_connections.contains(&connection_id) {
-                return Err(ConnectionClosed);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        self.schedule(connection_id, scope, cancellation.clone(), move |permit| {
+            let _ = sender.send(permit);
+        });
+        loop {
+            if cancellation.is_cancelled() {
+                self.cancel_waiting_requests();
             }
-            let queue = state.queues.entry(key.clone()).or_default();
-            if can_acquire_immediately(queue, access) {
-                activate(queue, access);
-                None
-            } else {
-                let waiter = Arc::new(Waiter::new(connection_id, access));
-                queue.waiting.push_back(Arc::clone(&waiter));
-                Some(waiter)
-            }
-        };
-
-        if let Some(waiter) = waiter {
-            if waiter.wait(cancellation) == WaiterState::Cancelled {
-                let mut state = lock(&self.state);
-                if let Some(queue) = state.queues.get_mut(&key) {
-                    queue
-                        .waiting
-                        .retain(|candidate| !Arc::ptr_eq(candidate, &waiter));
-                    if queue.active == Active::None && queue.waiting.is_empty() {
-                        state.queues.remove(&key);
+            match receiver.recv_timeout(std::time::Duration::from_millis(25)) {
+                Ok(permit) => {
+                    if cancellation.is_cancelled() {
+                        drop(permit);
+                        return Err(ConnectionClosed);
                     }
+                    return permit;
                 }
-                waiter.complete(WaiterState::Cancelled);
-                return Err(ConnectionClosed);
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err(ConnectionClosed);
+                }
             }
         }
-        Ok(RequestPermit {
-            scheduler: self.clone(),
-            key: Some(key),
-            access,
-        })
     }
 
     pub(super) fn cancel_connection(&self, connection_id: u64) {
         let cancelled = {
             let mut state = lock(&self.state);
-            state.cancelled_connections.insert(connection_id);
+            state
+                .cancelled_connections
+                .insert((self.owner_id, connection_id));
             state
                 .queues
                 .values_mut()
                 .flat_map(|queue| {
                     let mut cancelled = Vec::new();
                     queue.waiting.retain(|waiter| {
-                        if waiter.connection_id == connection_id {
+                        if waiter.owner_id == self.owner_id && waiter.connection_id == connection_id
+                        {
                             cancelled.push(Arc::clone(waiter));
                             false
                         } else {
@@ -217,13 +327,13 @@ impl RequestScheduler {
     pub(super) fn is_connection_cancelled(&self, connection_id: u64) -> bool {
         lock(&self.state)
             .cancelled_connections
-            .contains(&connection_id)
+            .contains(&(self.owner_id, connection_id))
     }
 
     pub(super) fn finish_connection(&self, connection_id: u64) {
         lock(&self.state)
             .cancelled_connections
-            .remove(&connection_id);
+            .remove(&(self.owner_id, connection_id));
     }
 
     fn release(&self, key: RequestSerializationKey, access: Access) {
@@ -249,11 +359,17 @@ impl RequestScheduler {
     }
 
     #[cfg(test)]
-    fn waiting_count(&self) -> usize {
+    pub(super) fn waiting_count(&self) -> usize {
         lock(&self.state)
             .queues
             .values()
-            .map(|queue| queue.waiting.len())
+            .map(|queue| {
+                queue
+                    .waiting
+                    .iter()
+                    .filter(|waiter| waiter.owner_id == self.owner_id)
+                    .count()
+            })
             .sum()
     }
 }
@@ -407,7 +523,7 @@ fn remember_bounded(
     }
 }
 
-pub(super) struct RequestPermit {
+pub(crate) struct RequestPermit {
     scheduler: RequestScheduler,
     key: Option<RequestSerializationKey>,
     access: Access,
@@ -422,7 +538,7 @@ impl Drop for RequestPermit {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct ConnectionClosed;
+pub(crate) struct ConnectionClosed;
 
 fn can_acquire_immediately(queue: &Queue, access: Access) -> bool {
     match (queue.active, access) {

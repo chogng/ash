@@ -1,6 +1,43 @@
 use super::*;
 
 #[test]
+fn request_notifications_wait_for_delivery_while_host_requests_keep_flowing() {
+    let queue = NotificationQueue::default();
+    let request = queue.defer_causal_notifications(None);
+    queue.push(serde_json::json!({"method":"config/changed", "params":{"revision":1}}));
+    queue.push(serde_json::json!({"id":"host:1", "method":"browser/open", "params":{}}));
+    assert_eq!(
+        queue.drain(),
+        vec![serde_json::json!({"id":"host:1", "method":"browser/open", "params":{}})]
+    );
+    drop(request);
+    assert_eq!(
+        queue.drain(),
+        vec![serde_json::json!({"method":"config/changed", "params":{"revision":1}})]
+    );
+}
+
+#[test]
+fn starting_a_turn_holds_only_its_session_events_from_background_producers() {
+    let queue = NotificationQueue::default();
+    let request = queue.defer_causal_notifications(Some("session-1"));
+    let producer = queue.clone();
+    std::thread::spawn(move || {
+        producer.push(serde_json::json!({"method":"session/thread/update", "params":{"sessionId":"session-1", "update":{"type":"committed"}}}));
+        producer.push(serde_json::json!({"method":"session/thread/update", "params":{"sessionId":"session-2", "update":{"type":"committed"}}}));
+        producer.push(serde_json::json!({"method":"fs/changed", "params":{}}));
+    }).join().unwrap();
+    let independent = queue.drain();
+    assert_eq!(independent.len(), 2);
+    assert_eq!(independent[0]["params"]["sessionId"], "session-2");
+    assert_eq!(independent[1]["method"], "fs/changed");
+    drop(request);
+    let causal = queue.drain();
+    assert_eq!(causal.len(), 1);
+    assert_eq!(causal[0]["params"]["sessionId"], "session-1");
+}
+
+#[test]
 fn transient_backlog_is_bounded_without_losing_control_messages() {
     let queue = NotificationQueue::default();
     for sequence in 1..=MAX_NOTIFICATION_QUEUE_LEN {

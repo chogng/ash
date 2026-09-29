@@ -6,23 +6,60 @@ use std::time::Instant;
 
 use super::RequestCancellationRegistry;
 use super::RequestScheduler;
+use super::RequestSerializationScope;
 use ash_app_server_protocol::protocol::language::LanguageCancelStatusDto;
-use ash_app_server_protocol::protocol::registry::ClientRequestSerializationScope;
 use ash_app_server_protocol::protocol::registry::SerializationAccess;
 
-fn session(id: &str, access: SerializationAccess) -> ClientRequestSerializationScope {
-    ClientRequestSerializationScope::Session {
+fn session(id: &str, access: SerializationAccess) -> RequestSerializationScope {
+    RequestSerializationScope::Session {
         session_id: id.into(),
         access,
     }
 }
 
-fn connection_resource(id: &str) -> ClientRequestSerializationScope {
-    ClientRequestSerializationScope::ConnectionResource {
+fn connection_resource(id: &str) -> RequestSerializationScope {
+    RequestSerializationScope::ConnectionResource {
         namespace: "resourceId",
         resource_id: id.into(),
         access: SerializationAccess::Exclusive,
     }
+}
+
+#[test]
+fn repository_admission_spans_runtimes_without_merging_connection_lifetimes() {
+    let repository = tempfile::tempdir().unwrap();
+    let first = RequestScheduler::default();
+    let second = RequestScheduler::default();
+    let scope = || RequestSerializationScope::Repository {
+        common_dir: repository.path().to_path_buf(),
+        access: SerializationAccess::Exclusive,
+    };
+    let held = first.acquire(1, scope()).unwrap();
+    let cancellation = ash_async_utils::CancellationSource::new();
+    let (ready, admitted) = mpsc::channel();
+    second.schedule(1, scope(), cancellation.token(), move |permit| {
+        ready.send(permit).unwrap();
+    });
+    assert!(admitted.try_recv().is_err());
+    assert_eq!(second.waiting_count(), 1);
+    let unrelated = second
+        .acquire(
+            2,
+            RequestSerializationScope::Global {
+                access: SerializationAccess::SharedRead,
+            },
+        )
+        .unwrap();
+    first.cancel_connection(1);
+    assert!(admitted.try_recv().is_err());
+    drop(held);
+    let next = admitted
+        .recv_timeout(Duration::from_secs(1))
+        .unwrap()
+        .unwrap();
+    drop(next);
+    drop(unrelated);
+    first.finish_connection(1);
 }
 
 fn wait_until_waiting(scheduler: &RequestScheduler, count: usize) {
