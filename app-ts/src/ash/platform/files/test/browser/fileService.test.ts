@@ -107,9 +107,9 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
 
 	assert.equal((await service.stat(root)).kind, FileKind.Directory);
 	assert.deepEqual(
-		await service.readDirectory(URI.file("C:\\project\\src")),
+		(await service.readDirectory(URI.file("C:\\project\\src"))).map(entry => ({ ...entry, resource: entry.resource.toString() })),
 		[{
-			resource: URI.file("C:\\project\\src\\main.ts"),
+			resource: URI.file("C:\\project\\src\\main.ts").toString(),
 			name: "main.ts",
 			kind: FileKind.File,
 		}],

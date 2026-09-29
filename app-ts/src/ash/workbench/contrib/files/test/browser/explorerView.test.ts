@@ -17,6 +17,11 @@ import type { IInstantiationService } from '../../../../../platform/instantiatio
 
 test("ExplorerView opens workspace files on single click", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
+	// jsdom has no layout; managed virtualization needs a visible viewport to create rows.
+	Object.defineProperty(browser.window.HTMLElement.prototype, 'clientHeight', {
+		configurable: true,
+		get() { return this.classList.contains('ash-scrollbar-viewport') ? 500 : 0; },
+	});
 	const installedGlobals = installDomGlobals(browser);
 	const root = URI.file("C:\\project");
 	const nextRoot = URI.file("C:\\next-project");

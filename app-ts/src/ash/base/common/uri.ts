@@ -65,10 +65,15 @@ function validatePercentEncoding(value: string, component: string): void {
  * required for a `file:` URI.
  */
 export class URI {
-	private readonly url: URL;
+	private value: URL | string;
 
-	private constructor(url: URL) {
-		this.url = url;
+	private constructor(value: URL | string) {
+		this.value = value;
+	}
+
+	private get url(): URL {
+		if (typeof this.value === 'string') this.value = new URL(this.value);
+		return this.value;
 	}
 
 	/** Parses and canonicalizes an absolute URI. */
@@ -162,9 +167,12 @@ export class URI {
 	/** Appends one decoded child name to a hierarchical URI. */
 	joinPathSegment(name: string): URI {
 		const suffix = this.url.search + this.url.hash;
-		const base = this.url.href.slice(0, this.url.href.length - suffix.length);
+		const href = this.url.href;
+		const base = href.slice(0, href.length - suffix.length);
 		const separator = base.endsWith("/") ? "" : "/";
-		return new URI(new URL(`${base}${separator}${encodeURIComponent(name)}${suffix}`));
+		const child = `${base}${separator}${encodeURIComponent(name)}${suffix}`;
+		// The parent is canonical and the segment is encoded; only dot segments need URL path resolution now.
+		return new URI(name === '.' || name === '..' ? new URL(child) : child);
 	}
 
 	/** Returns a copy with a different percent-encoded query. */
@@ -192,7 +200,7 @@ export class URI {
 	}
 
 	toString(): string {
-		return this.url.href;
+		return typeof this.value === 'string' ? this.value : this.value.href;
 	}
 
 	toJSON(): string {
