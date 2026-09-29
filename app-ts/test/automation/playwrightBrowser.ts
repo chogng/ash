@@ -5,17 +5,27 @@ import { PlaywrightDriver } from "./playwrightDriver.js";
 export interface BrowserLaunchOptions {
 	readonly appServerMode: AppServerTestMode;
 	readonly baseURL: string;
+	readonly headless?: boolean;
+	readonly recordVideo?: {
+		readonly directory: string;
+		readonly size: { readonly width: number; readonly height: number };
+	};
 }
 
 export interface BrowserLaunchResult {
 	readonly application: Browser;
 	readonly driver: PlaywrightDriver;
+	readonly videoStartedAt?: number;
 }
 
 /** Launches the browser-hosted Ash Workbench through Playwright. */
 export async function launchBrowser(options: BrowserLaunchOptions): Promise<BrowserLaunchResult> {
-	const browser = await chromium.launch();
-	const context = await browser.newContext();
+	const browser = await chromium.launch({ headless: options.headless });
+	const context = await browser.newContext({
+		recordVideo: options.recordVideo ? { dir: options.recordVideo.directory, size: options.recordVideo.size } : undefined,
+		viewport: options.recordVideo?.size,
+	});
+	const videoStartedAt = options.recordVideo ? Date.now() : undefined;
 	const page = await context.newPage();
 	if (options.appServerMode === 'required') {
 		const serialized = process.env.ASH_PLAYWRIGHT_WEB_SESSION;
@@ -43,5 +53,5 @@ export async function launchBrowser(options: BrowserLaunchOptions): Promise<Brow
 
 	const driver = new PlaywrightDriver(browser, page, consoleErrors);
 	await driver.workbench.waitForReady();
-	return { application: browser, driver };
+	return { application: browser, driver, videoStartedAt };
 }

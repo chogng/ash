@@ -2,9 +2,6 @@ import { resolve } from "node:path";
 import { createRequire } from "node:module";
 import type { AppServerTestMode, DesktopWorkbenchMode } from "./testTarget.js";
 
-const desktopDirectory = resolve(import.meta.dirname, "../..");
-const electronExecutablePath = createRequire(import.meta.url)("electron") as string;
-
 export interface ElectronLaunchOptions {
 	readonly appServerMode: AppServerTestMode;
 	readonly userDataDirectory: string;
@@ -13,6 +10,13 @@ export interface ElectronLaunchOptions {
 	readonly workspacePermissions?: "development";
 	readonly workbenchMode?: DesktopWorkbenchMode;
 	readonly reuseAppServer?: boolean;
+	readonly extraArgs?: readonly string[];
+	readonly recordVideo?: {
+		readonly directory: string;
+		readonly size: { readonly width: number; readonly height: number };
+	};
+	/** Owning app-ts package. Scenario bundles pass this explicitly because their output lives outside app-ts. */
+	readonly desktopDirectory?: string;
 }
 
 export interface ElectronConfiguration {
@@ -24,6 +28,8 @@ export interface ElectronConfiguration {
 
 /** Resolves the Electron executable, arguments, and environment for a test run. */
 export function resolveElectronConfiguration(options: ElectronLaunchOptions): ElectronConfiguration {
+	const desktopDirectory = options.desktopDirectory ?? resolve(import.meta.dirname, "../..");
+	const electronExecutablePath = createRequire(resolve(desktopDirectory, "package.json"))("electron") as string;
 	const environment = Object.fromEntries(
 		Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
 	);
@@ -51,6 +57,7 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 			desktopDirectory,
 			`--user-data-dir=${options.userDataDirectory}`,
 			...(options.workspaceDirectory === undefined ? [] : [`--folder=${options.workspaceDirectory}`]),
+			...(options.extraArgs ?? []),
 		],
 		cwd: desktopDirectory,
 		env: environment,

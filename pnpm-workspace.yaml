@@ -1,6 +1,7 @@
 packages:
   - build
   - app-ts
+  - test/scenario
 engineStrict: true
 allowBuilds:
   electron: true

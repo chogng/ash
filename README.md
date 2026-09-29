@@ -27,9 +27,12 @@ architecture. Use that shell for the product commands
 below so MSVC and Windows SDK environment variables reach the build processes.
 See [Windows environment responsibilities](docs/build.md#windows-开发环境).
 
-On macOS or Linux, install Rust. Cargo supplies the input classifier's
-build-time Protocol Buffers compiler; no system `protoc` installation is
-required.
+On macOS or Linux, install Rust and Python 3.11 or newer; Python 3.12 is
+recommended. Confirm that `python3` resolves to that version before running
+backend preparation or Desktop smoke tests. Cargo supplies the input
+classifier's build-time Protocol Buffers compiler; no system `protoc`
+installation is required. See the [build guide](docs/build.md#macos-与-linux-开发环境)
+for the macOS Homebrew path requirement.
 
 For Electron or Browser Workbench development, install the pnpm version declared
 by `package.json` using the [standalone installer](https://pnpm.io/installation/),

@@ -24,6 +24,18 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 
 ## 构建入口
 
+### macOS 与 Linux 开发环境
+
+源码构建需要 Rust 和 Python 3.11 及以上版本，建议使用 Python 3.12。运行后端准备、完整 Desktop 或 Web 测试前，先确认 `python3 --version` 满足该要求；macOS 自带的 `/usr/bin/python3` 可能仍是 3.9，不能运行使用 `tomllib` 的构建脚本。
+
+Homebrew 的 `python@3.12` 把 `python3` 稳定链接放在 `/opt/homebrew/opt/python@3.12/libexec/bin`。需要让普通 pnpm、Just 和终端命令都使用该版本时，将这个目录放在 PATH 中的 `/usr/bin` 之前；也可以按仓库现有 macOS 启动配置，通过 `uv run --python 3.12` 执行命令。配置后用 `python3 -c 'import tomllib'` 验证构建脚本所需标准库可用。
+
+### UI 场景录屏
+
+`test/scenario` 提供与 VS Code 同职责的 Playwright 场景运行器：启动隔离的 Ash Desktop 或 Web Workbench，保存逐步骤截图、trace、原始录屏、带步骤字幕的 MP4、`manifest.json` 和 HTML 报告。macOS 需要带 `drawtext` 滤镜的 `ffmpeg-full`；安装后将 `/opt/homebrew/opt/ffmpeg-full/bin` 放到 PATH 前部。Windows 使用 `winget install Gyan.FFmpeg`，Linux 使用 `sudo apt install ffmpeg`。
+
+先用 `pnpm run scenario:compile` 编译运行器。已准备好开发构建时，运行 `node test/scenario/out/runScenario.js <scenario.cjs> --dev`；Web 场景增加 `--web --headless`。需要从后端和界面构建开始完整准备时，运行 `pnpm run scenario -- <scenario.cjs> --dev`。证据保存在 `.build/ash-playwright-mcp/evidence/`，场景文件应使用 `.cjs` 扩展名并放在 `.build/ash-playwright-mcp/`，避免把一次性验证脚本提交进仓库。
+
 ### Windows 开发环境
 
 以下工具用于源码开发和仓库维护，安装后的 Ash 产品不依赖 Just 或 Python。

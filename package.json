@@ -42,6 +42,8 @@
     "test:desktop:smoke:ui": "pnpm --dir app-ts test:smoke:ui",
     "test:desktop:smoke:browser": "pnpm --dir app-ts test:smoke:browser",
     "test:desktop:smoke:browser:full": "pnpm --dir app-ts run test:smoke:browser:full",
+    "scenario:compile": "pnpm --dir test/scenario compile",
+    "scenario": "pnpm --dir app-ts prepare:backend && pnpm --dir app-ts build && pnpm run scenario:compile && node test/scenario/out/runScenario.js",
     "typecheck:build": "pnpm --dir build typecheck",
     "typecheck:stanza": "pnpm --dir app-ts typecheck:stanza",
     "dev:desktop": "pnpm --dir app-ts dev",

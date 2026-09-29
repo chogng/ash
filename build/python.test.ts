@@ -1,0 +1,29 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { pythonCommand, type PythonHost } from './python.ts';
+
+const arguments_ = ['-B', 'build/ash_rs/prepare.py'];
+
+test('python command honors the configured interpreter', () => {
+	assert.deepEqual(pythonCommand(arguments_, host('linux', { PYTHON: '/tools/python' })), {
+		command: '/tools/python',
+		args: arguments_,
+	});
+});
+
+test('python command selects Homebrew Python on Apple Silicon', () => {
+	const homebrewPython = '/opt/homebrew/opt/python@3.12/libexec/bin/python3';
+	assert.deepEqual(pythonCommand(arguments_, host('darwin', {}, path => path === homebrewPython)), {
+		command: homebrewPython,
+		args: arguments_,
+	});
+});
+
+test('python command uses the platform command when no interpreter is configured', () => {
+	assert.deepEqual(pythonCommand(arguments_, host('linux')), { command: 'python3', args: arguments_ });
+	assert.deepEqual(pythonCommand(arguments_, host('win32')), { command: 'python', args: arguments_ });
+});
+
+function host(platform: NodeJS.Platform, environment: NodeJS.ProcessEnv = {}, fileExists: (path: string) => boolean = () => false): PythonHost {
+	return { platform, environment, fileExists };
+}

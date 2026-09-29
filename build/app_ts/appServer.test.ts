@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import { relativeWatchedDirectory, shouldRebuildAppServer, shouldRebuildWorkspaceManifest, watchAppServer } from './appServer.ts';
+import { pythonCommand } from '../python.ts';
 
 test('app-server watcher selects Rust sources and Cargo manifests', () => {
   assert.equal(shouldRebuildAppServer('ash-rs/app-server/src/main.rs'), true);
@@ -58,10 +59,7 @@ test('watcher stops before the backend build when protocol generation fails', as
   const stop = await watchAppServer();
   t.after(stop);
   assert.match(await failure.promise, /Protocol generation exited with status 1/);
-  assert.deepEqual(commands, [{
-    command: process.platform === 'win32' ? 'python' : 'python3',
-    args: ['-B', 'build/ash_rs/protocol.py'],
-  }]);
+  assert.deepEqual(commands, [pythonCommand(['-B', 'build/ash_rs/protocol.py'])]);
 });
 
 test('watcher invokes the Python backend builder after protocol synchronization', async (t) => {

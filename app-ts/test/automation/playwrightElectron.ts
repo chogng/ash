@@ -9,6 +9,7 @@ import { resolveElectronConfiguration, type ElectronLaunchOptions } from "./elec
 export interface ElectronLaunchResult {
 	readonly application: ElectronApplication;
 	readonly driver: ElectronPlaywrightDriver;
+	readonly videoStartedAt?: number;
 	close(): Promise<void>;
 }
 
@@ -22,6 +23,7 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 		cwd: configuration.cwd,
 		env: configuration.env,
 		executablePath: configuration.executablePath,
+		recordVideo: options.recordVideo ? { dir: options.recordVideo.directory, size: options.recordVideo.size } : undefined,
 		timeout: 30_000,
 	});
 	onMilestone?.('electron-launch-resolved');
@@ -44,7 +46,13 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 	electronProcess.stderr?.on('data', onProcessError);
 	try {
 		const page = application.windows()[0] ?? await application.waitForEvent("window", { timeout: 30_000 });
+		const videoStartedAt = options.recordVideo ? Date.now() : undefined;
 		onMilestone?.('first-window');
+		if (options.recordVideo) {
+			await application.evaluate(({ BrowserWindow }, size) => {
+				BrowserWindow.getAllWindows()[0]?.setBounds({ x: 0, y: 0, width: size.width, height: size.height });
+			}, options.recordVideo.size);
+		}
 		const driver = new ElectronPlaywrightDriver(application, page);
 		const pageErrors: string[] = [];
 		const pendingRequests = new Set<Request>();
@@ -88,7 +96,7 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 			page.off('requestfailed', onRequestFailed);
 			electronProcess.stderr?.off('data', onProcessError);
 		}
-		return { application, driver, close };
+		return { application, driver, videoStartedAt, close };
 	} catch (error) {
 		const bufferedError = electronProcess.stderr?.read();
 		if (bufferedError) {
