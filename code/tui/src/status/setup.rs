@@ -35,7 +35,6 @@ pub(crate) fn list_selection(settings: &StatusLineSettings, revision: u64) -> St
             );
             ListSelectionItem::new(item.label())
                 .with_id(id)
-                .with_details(item.description())
                 .with_columns(item.label(), item.description(), switch_value(enabled))
         })
         .collect();

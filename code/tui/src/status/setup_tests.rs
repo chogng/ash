@@ -3,21 +3,20 @@ use crate::render::test_context;
 use crate::status::StatusLineItem;
 use crate::status::StatusLineSelectionAction;
 use crate::status::StatusLineSettings;
+use crate::widgets::list_selection::ListSelection;
 use crate::widgets::list_selection::ListSelectionState;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use unicode_width::UnicodeWidthStr;
 
 #[test]
-fn setup_lists_each_item_with_an_expandable_description_switch_and_toggle_action() {
+fn setup_lists_each_item_with_a_searchable_description_and_toggle_action() {
     let mut settings = StatusLineSettings::default();
     settings.set(StatusLineItem::GitChanges, false);
     let view = list_selection(&settings, 7);
-    assert_eq!(
-        view.model.key_hints().text(),
-        "Enter/Space toggle · ←/→ details · Esc close"
-    );
-    let state = ListSelectionState::new(view.model);
+    let list = ListSelection::new(view.model, view.actions.clone());
+    assert_eq!(list.key_hints().text(), "Enter/Space toggle · Esc close");
+    let state = list.state();
 
     assert_eq!(state.title(), "Status line");
     assert!(!state.show_tabs());
@@ -63,7 +62,7 @@ fn setup_lists_each_item_with_an_expandable_description_switch_and_toggle_action
 }
 
 #[test]
-fn setup_aligns_items_and_switches_with_expandable_descriptions() {
+fn setup_aligns_items_and_switches_without_details() {
     let mut settings = StatusLineSettings::default();
     settings.set(StatusLineItem::GitChanges, false);
     let view = list_selection(&settings, 1);
@@ -116,7 +115,7 @@ fn setup_aligns_items_and_switches_with_expandable_descriptions() {
     assert!(permissions.starts_with("> Permissions"));
     assert!(model.starts_with("  Model"));
     for row in [&permissions, &model, &git_branch, &git_changes] {
-        assert_eq!(row.chars().nth(97), Some('+'));
+        assert_eq!(row.chars().nth(97), Some(' '));
     }
 
     let right_boundary = 96;
@@ -147,66 +146,12 @@ fn setup_aligns_items_and_switches_with_expandable_descriptions() {
         right_boundary
     );
 
-    // Verify expandable behavior: pressing Right expands the description
+    let collapsed_rows = state.body_rows(100);
     state.handle_key(crossterm::event::KeyEvent::new(
         crossterm::event::KeyCode::Right,
         crossterm::event::KeyModifiers::NONE,
     ));
-    terminal
-        .draw(|frame| {
-            crate::widgets::list_selection::draw_body_with_pointer(
-                frame,
-                crate::render::horizontal_margin(frame.area(), 2),
-                &state,
-                None,
-                None,
-                test_context(),
-            )
-        })
-        .unwrap();
-    let expanded_rows = (0..10)
-        .map(|row| {
-            (0..100)
-                .map(|column| terminal.backend().buffer()[(column, row)].symbol())
-                .collect::<String>()
-        })
-        .collect::<Vec<_>>();
-    assert!(
-        expanded_rows
-            .iter()
-            .any(|row| row.contains("Current permission mode"))
-    );
-    assert!(expanded_rows[0].starts_with("> Permissions"));
-    assert_eq!(expanded_rows[0].chars().nth(97), Some('-'));
-
-    state.handle_key(crossterm::event::KeyEvent::new(
-        crossterm::event::KeyCode::Left,
-        crossterm::event::KeyModifiers::NONE,
-    ));
-    terminal
-        .draw(|frame| {
-            crate::widgets::list_selection::draw_body_with_pointer(
-                frame,
-                crate::render::horizontal_margin(frame.area(), 2),
-                &state,
-                None,
-                None,
-                test_context(),
-            )
-        })
-        .unwrap();
-    let collapsed_rows = (0..10)
-        .map(|row| {
-            (0..100)
-                .map(|column| terminal.backend().buffer()[(column, row)].symbol())
-                .collect::<String>()
-        })
-        .collect::<Vec<_>>();
-    assert!(
-        !collapsed_rows
-            .iter()
-            .any(|row| row.contains("Current permission mode"))
-    );
+    assert_eq!(state.body_rows(100), collapsed_rows);
 
     crate::tui_assert_snapshot!("status_line_settings_with_accounting", rows.join("\n"));
 }
