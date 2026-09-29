@@ -56,12 +56,10 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::OnceLock;
 use std::sync::RwLock;
-use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
-use zeroize::Zeroize;
 
 mod account_operations;
 mod agent_environment_source;
@@ -132,6 +130,7 @@ mod memories_context;
 mod memories_operations;
 mod memory_operations;
 mod message_checkpoints;
+pub(crate) mod message_queue;
 pub(crate) mod notification_queue;
 mod operations;
 mod plugin_extension_sources;
@@ -2088,9 +2087,8 @@ impl AppServer {
     ) -> Result<(), std::io::Error> {
         let mut reader = JsonlReader::new(reader, DEFAULT_MAX_MESSAGE_BYTES);
         let notifications = self.connection_notifications(&connection);
-        let (outbound_tx, outbound_rx) = mpsc::sync_channel::<request_dispatch::OutgoingMessage>(
-            OUTBOUND_MESSAGE_QUEUE_CAPACITY,
-        );
+        let (outbound_tx, outbound_rx) =
+            message_queue::outbound_queue(OUTBOUND_MESSAGE_QUEUE_CAPACITY);
         thread::scope(|scope| {
             let writer_handle = scope.spawn(move || {
                 let mut writer = JsonlWriter::new(writer, DEFAULT_MAX_MESSAGE_BYTES);
@@ -2127,7 +2125,7 @@ impl AppServer {
                             .map_err(|error| {
                                 std::io::Error::new(std::io::ErrorKind::InvalidData, error)
                             })?;
-                        line.raw.zeroize();
+                        line.clear();
                         if handled {
                             continue;
                         }
@@ -2155,7 +2153,7 @@ impl AppServer {
                                 )
                             })
                         })?;
-                        line.raw.zeroize();
+                        line.clear();
                     }
                 }
                 Ok::<(), std::io::Error>(())

@@ -1,9 +1,10 @@
 use super::registry::ProfileAppServerRegistry;
 use crate::AppServer;
 use crate::ConnectionState;
+use crate::server::message_queue::OutboundSender;
 use crate::server::request_dispatch::IncomingRequest;
-use crate::server::request_dispatch::OutgoingMessage;
 use crate::server::request_dispatch::RequestDispatcher;
+use crate::server::request_dispatch::RequestLane;
 use ash_app_server_protocol::protocol::error::AppServerError;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::rpc::JsonRpcFailure;
@@ -25,7 +26,6 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::mpsc;
 use std::thread;
 
 struct Target {
@@ -55,7 +55,7 @@ type Catalogs = Arc<Mutex<BTreeMap<usize, PendingCatalog>>>;
 #[derive(Default)]
 struct PendingRemoteRequests {
     closed: bool,
-    ids: Vec<Value>,
+    ids: Vec<(Value, RequestLane)>,
 }
 type RemotePending = Arc<Mutex<BTreeMap<usize, PendingRemoteRequests>>>;
 
@@ -68,7 +68,7 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
     remote_launch: RemoteLaunch,
 ) -> io::Result<()> {
     let mut reader = JsonlReader::new(reader, DEFAULT_MAX_MESSAGE_BYTES);
-    let (outbound, incoming) = mpsc::sync_channel::<OutgoingMessage>(256);
+    let (outbound, incoming) = crate::server::message_queue::outbound_queue(256);
     thread::scope(|scope| {
         let requests = RequestDispatcher::start(scope)?;
         let writer_telemetry = profile_server.telemetry.clone();
@@ -149,7 +149,11 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                         .values_mut()
                         .find(|target| target.route_id == route_id)
                     {
-                        target.send(response)?;
+                        if let Err(error) = target.send(response) {
+                            // Host replies cannot be dropped. End their owning route and its
+                            // pending requests, keeping this renderer's other routes available.
+                            target.fail(&error, &catalogs, &outbound);
+                        }
                     } else {
                         if route_id == 0 {
                             profile
@@ -267,7 +271,7 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                                 );
                                 continue;
                             }
-                            let initialize = initialize_request.as_deref().ok_or_else(|| {
+                            let initialize = initialize_request.as_ref().ok_or_else(|| {
                                 io::Error::new(
                                     io::ErrorKind::InvalidData,
                                     "Catalog request before initialize",
@@ -276,9 +280,10 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                             let target = RemoteTarget::start(
                                 scope,
                                 remote_profile,
-                                initialize.to_owned(),
+                                initialize.clone(),
                                 next_route_id,
                                 remote_launch.clone(),
+                                requests.budgets(),
                                 outbound.clone(),
                                 Arc::clone(&remote_sessions),
                                 Arc::clone(&catalogs),
@@ -303,7 +308,9 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                         let mut forwarded = request.clone();
                         forwarded["id"] = serde_json::json!(ignored_request_id(next_ignored_id));
                         next_ignored_id += 1;
-                        target.send(forwarded)?;
+                        if let Err(error) = target.send(forwarded) {
+                            target.fail(&error, &catalogs, &outbound);
+                        }
                     }
                     let output = outbound.clone();
                     requests.dispatch(
@@ -411,7 +418,7 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                                     continue;
                                 }
                             };
-                            let initialize = initialize_request.as_deref().ok_or_else(|| {
+                            let initialize = initialize_request.as_ref().ok_or_else(|| {
                                 io::Error::new(
                                     io::ErrorKind::InvalidData,
                                     "Session request before initialize",
@@ -420,9 +427,10 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                             let target = RemoteTarget::start(
                                 scope,
                                 remote_profile,
-                                initialize.to_owned(),
+                                initialize.clone(),
                                 next_route_id,
                                 remote_launch.clone(),
+                                requests.budgets(),
                                 outbound.clone(),
                                 Arc::clone(&remote_sessions),
                                 Arc::clone(&catalogs),
@@ -432,7 +440,9 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                             if catalog_subscribed {
                                 let subscription = serde_json::json!({ "jsonrpc": "2.0", "id": ignored_request_id(next_ignored_id), "method": "session/catalog/subscribe", "params": {} });
                                 next_ignored_id += 1;
-                                target.send(subscription)?;
+                                if let Err(error) = target.send(subscription) {
+                                    target.fail(&error, &catalogs, &outbound);
+                                }
                             }
                             remote.insert(key.clone(), target);
                         }
@@ -508,7 +518,7 @@ fn read_remote_messages(
     key: RemoteKey,
     route_id: usize,
     alive: Arc<std::sync::atomic::AtomicBool>,
-    outbound: mpsc::SyncSender<OutgoingMessage>,
+    outbound: OutboundSender,
     sessions: RemoteSessionIndex,
     catalogs: Catalogs,
     pending: RemotePending,
@@ -517,6 +527,22 @@ fn read_remote_messages(
         let Ok(mut message) = serde_json::from_str::<Value>(&raw) else {
             break;
         };
+        if message.get("method").is_none() {
+            let mut routes = pending.lock().unwrap();
+            let accepted = message.get("id").and_then(|id| {
+                let route = routes.get_mut(&route_id)?;
+                let position = route
+                    .ids
+                    .iter()
+                    .position(|(candidate, _)| candidate == id)?;
+                Some(route.ids.remove(position))
+            });
+            // Failure and response delivery compete for the same pending ID. Once failure has
+            // completed it, a buffered remote response must not produce a second terminal reply.
+            if accepted.is_none() {
+                continue;
+            }
+        }
         annotate_remote_sessions(&mut message, &key, &sessions);
         if message.get("method").and_then(Value::as_str) == Some("session/changed") {
             if let Some(session_id) = message.pointer("/params/sessionId").and_then(Value::as_str) {
@@ -524,16 +550,6 @@ fn read_remote_messages(
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .insert(session_id.to_owned(), key.clone());
-            }
-        }
-        if message.get("method").is_none() {
-            if let Some(id) = message.get("id") {
-                let mut pending = pending
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if let Some(ids) = pending.get_mut(&route_id) {
-                    ids.ids.retain(|candidate| candidate != id);
-                }
             }
         }
         if let Some(id) = message.get("id").and_then(Value::as_u64) {
@@ -568,7 +584,7 @@ fn reject_remote_request(
     request: &Value,
     failure: &io::Error,
     catalogs: &Catalogs,
-    outbound: &mpsc::SyncSender<OutgoingMessage>,
+    outbound: &OutboundSender,
 ) {
     let Some(id) = request.get("id").cloned() else {
         return;
@@ -615,7 +631,7 @@ fn fail_remote_requests(
     failure: &io::Error,
     pending: &RemotePending,
     catalogs: &Catalogs,
-    outbound: &mpsc::SyncSender<OutgoingMessage>,
+    outbound: &OutboundSender,
 ) {
     let outstanding = {
         let mut pending = pending.lock().unwrap();
@@ -625,7 +641,7 @@ fn fail_remote_requests(
         route.closed = true;
         std::mem::take(&mut route.ids)
     };
-    for id in outstanding {
+    for (id, _) in outstanding {
         reject_remote_request(&serde_json::json!({"id":id}), failure, catalogs, outbound);
     }
 }
@@ -682,7 +698,7 @@ fn complete_catalog(
     catalogs: &Catalogs,
     batch_id: usize,
     remote: Value,
-    outbound: &mpsc::SyncSender<OutgoingMessage>,
+    outbound: &OutboundSender,
 ) {
     let mut catalogs = catalogs
         .lock()

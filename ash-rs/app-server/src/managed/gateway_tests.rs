@@ -1,5 +1,6 @@
 use super::*;
 use std::io::BufReader;
+use std::sync::mpsc;
 
 #[cfg(unix)]
 struct TestGateway {
@@ -332,50 +333,6 @@ fn agents_gateway_serves_the_catalog_while_another_request_is_running() {
 }
 
 #[test]
-fn ssh_initialize_routes_early_messages_and_keeps_the_buffered_stream() {
-    use ash_app_server_protocol::protocol::initialize::ProtocolVersion;
-    use ash_app_server_protocol::protocol::initialize::ServerCapabilities;
-
-    let mut capabilities = ServerCapabilities {
-        sessions: true,
-        threads: true,
-        turns: true,
-        ..ServerCapabilities::default()
-    };
-    capabilities.advertise_contracts();
-    let notification = serde_json::json!({"jsonrpc":"2.0","method":"queue/changed","params":{}});
-    let host_request =
-        serde_json::json!({"jsonrpc":"2.0","id":"host:1","method":"browser/open","params":{}});
-    let response = serde_json::json!({"jsonrpc":"2.0","id":1,"result":{
-        "serverInfo":{"name":"ash-app-server","version":"test"},
-        "protocolVersion":ProtocolVersion::current(),
-        "schemaHash":"test", "capabilities":capabilities,"slashCommands":[]
-    }});
-    let trailing = serde_json::json!({"jsonrpc":"2.0","id":2,"result":{}});
-    let stream = format!("{notification}\n{host_request}\n{response}\n{trailing}\n");
-    let mut reader = JsonlReader::new(std::io::Cursor::new(stream), DEFAULT_MAX_MESSAGE_BYTES);
-    let (outbound, received) = mpsc::channel();
-    read_remote_initialize(&mut reader, &JsonRpcId::Number(1), 7, &outbound).unwrap();
-    assert_eq!(received.try_recv().unwrap(), notification.to_string());
-    let routed: Value = serde_json::from_str(&received.try_recv().unwrap()).unwrap();
-    assert_eq!(routed["id"], "browser-host:gateway:7:host:1");
-    assert!(received.try_recv().is_err());
-    assert_eq!(
-        reader.read_message().unwrap().unwrap(),
-        trailing.to_string()
-    );
-
-    let mut reader = JsonlReader::new(
-        std::io::Cursor::new(format!("{response}\n")),
-        DEFAULT_MAX_MESSAGE_BYTES,
-    );
-    let error =
-        read_remote_initialize(&mut reader, &JsonRpcId::Number(2), 7, &outbound).unwrap_err();
-    assert_eq!(error.kind(), io::ErrorKind::InvalidData);
-    assert!(error.to_string().contains("ID mismatch"));
-}
-
-#[test]
 fn remote_catalog_preserves_each_session_root_and_deduplicates_host_views() {
     let index: RemoteSessionIndex = Arc::new(Mutex::new(BTreeMap::new()));
     let key = ("build-host".to_owned(), "/work/first".to_owned());
@@ -403,9 +360,9 @@ fn remote_catalog_preserves_each_session_root_and_deduplicates_host_views() {
             remaining: 2,
         },
     )])));
-    let (outbound, received) = mpsc::sync_channel(16);
+    let (outbound, received) = crate::server::message_queue::outbound_queue(16);
     complete_catalog(&catalogs, 1, remote.clone(), &outbound);
-    assert!(received.try_recv().is_err());
+    assert_eq!(catalogs.lock().unwrap().get(&1).unwrap().remaining, 1);
     complete_catalog(&catalogs, 1, remote, &outbound);
     let merged: Value = serde_json::from_str(&received.recv().unwrap().raw).unwrap();
     assert_eq!(merged["result"]["sessions"].as_array().unwrap().len(), 2);
@@ -425,4 +382,157 @@ fn host_request_route_restores_the_issuing_server_id() {
     let (route, original) = untag_host_response(&response).unwrap();
     assert_eq!(route, 5);
     assert_eq!(original["id"], "browser-host:1:2");
+}
+
+#[cfg(unix)]
+fn remote_initialize_result() -> String {
+    let server = crate::server::request_dispatch::tests::server();
+    server.handle_json(
+        &mut server.product_host_connection(),
+        &serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"dispatch-test","version":"1"},"capabilities":{}}}).to_string(),
+    )
+}
+
+#[cfg(unix)]
+#[test]
+fn ssh_stop_is_delivered_while_all_ordinary_pending_slots_are_occupied() {
+    let initialize = remote_initialize_result();
+    let catalog = serde_json::json!({"jsonrpc":"2.0","id":catalog_request_id(1),"result":{"sessions":[{"sessionId":"remote-session","threads":[],"executionTarget":{"type":"local","root":"/workspace"}}]}}).to_string();
+    let mut gateway = gateway_with_ssh(std::time::Duration::from_secs(10), |marker| {
+        format!(
+            "IFS= read -r initialize\nprintf '%s\\n' '{}'\nIFS= read -r request\nprintf '%s\\n' '{}'\nwhile IFS= read -r request; do\ncase \"$request\" in\n*'\"type\":\"stop\"'*) printf '%s' \"$request\" > '{}'; printf '%s\\n' '{{\"jsonrpc\":\"2.0\",\"id\":67,\"result\":{{}}}}';;\nesac\ndone\n",
+            initialize.replace('\'', "'\"'\"'"),
+            catalog,
+            marker.display(),
+        )
+    });
+    gateway
+        .client
+        .send(2, "session/list", serde_json::json!({}));
+    assert_eq!(
+        gateway.client.read()["result"]["sessions"][0]["sessionId"],
+        "remote-session"
+    );
+    for id in 3..=66 {
+        gateway.client.send(
+            id,
+            "session/thread/read",
+            serde_json::json!({"sessionId":"remote-session","threadId":"remote-thread"}),
+        );
+    }
+    gateway.client.send(67, "session/request", serde_json::json!({"commandId":"stop-remote-session","sessionId":"remote-session","request":{"type":"stop"}}));
+    let response = gateway.client.read();
+    assert_eq!(response["id"], 67);
+    assert!(response["result"].is_object(), "{response}");
+    let forwarded: Value = serde_json::from_str(&wait_for_ssh(&gateway.marker)).unwrap();
+    assert_eq!(forwarded["params"]["request"]["type"], "stop");
+    gateway.client.send(68, "model/list", serde_json::json!({}));
+    assert_eq!(gateway.client.read()["id"], 68);
+    gateway.close();
+    gateway
+        .completed
+        .recv_timeout(std::time::Duration::from_secs(3))
+        .unwrap()
+        .unwrap();
+    gateway.served.take().unwrap().join().unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn ssh_host_reply_overflow_ends_only_its_route_and_completes_each_request_once() {
+    use std::io::Write;
+    let mut gateway = gateway_with_ssh(std::time::Duration::from_secs(10), |marker| {
+        format!(
+            "IFS= read -r initialize\nprintf '%s' $$ > '{}'\ni=0\nwhile [ \"$i\" -lt 17 ]; do\nprintf '{{\"jsonrpc\":\"2.0\",\"id\":\"host:%s\",\"method\":\"browser/open\",\"params\":{{}}}}\\n' \"$i\"\ni=$((i+1))\ndone\nwhile IFS= read -r request; do :; done\n",
+            marker.display(),
+        )
+    });
+    // The remote never completes initialize, so its writer cannot drain any of these queues.
+    for id in 2..=65 {
+        gateway.client.send(id, "session/create", serde_json::json!({"executionTarget":{"type":"ssh","host":"stalled-host","root":"/workspace"}}));
+    }
+    for _ in 0..17 {
+        let host = gateway.client.read();
+        assert_eq!(host["method"], "browser/open");
+        writeln!(
+            gateway.client.writer,
+            "{}",
+            serde_json::json!({"jsonrpc":"2.0","id":host["id"],"result":{}})
+        )
+        .unwrap();
+    }
+    gateway
+        .client
+        .send(1000, "model/list", serde_json::json!({}));
+    let mut completed = std::collections::BTreeSet::new();
+    while completed.len() < 65 {
+        let response = gateway.client.read();
+        let id = response["id"].as_u64().unwrap();
+        assert!(
+            completed.insert(id),
+            "duplicate terminal response: {response}"
+        );
+        if id == 1000 {
+            assert!(response["result"].is_object());
+        } else {
+            assert!((2..=65).contains(&id), "{response}");
+            assert!(response["error"].is_object(), "{response}");
+        }
+    }
+    // A subsequent local response also proves the gateway survived the concurrent SSH EOF.
+    gateway
+        .client
+        .send(1001, "model/list", serde_json::json!({}));
+    assert_eq!(gateway.client.read()["id"], 1001);
+    gateway.close();
+    gateway
+        .completed
+        .recv_timeout(std::time::Duration::from_secs(3))
+        .unwrap()
+        .unwrap();
+    gateway.served.take().unwrap().join().unwrap();
+}
+
+#[test]
+fn ssh_buffered_response_cannot_complete_an_id_already_finished_by_route_failure() {
+    use std::sync::atomic::AtomicBool;
+    let pending = Arc::new(Mutex::new(BTreeMap::from([(
+        1,
+        PendingRemoteRequests {
+            closed: false,
+            ids: vec![(serde_json::json!(2), RequestLane::Interactive)],
+        },
+    )])));
+    let catalogs = Arc::new(Mutex::new(BTreeMap::new()));
+    let sessions = Arc::new(Mutex::new(BTreeMap::new()));
+    let alive = Arc::new(AtomicBool::new(true));
+    let (outbound, received) = crate::server::message_queue::outbound_queue(16);
+    fail_remote_requests(
+        1,
+        &io::Error::from(io::ErrorKind::BrokenPipe),
+        &pending,
+        &catalogs,
+        &outbound,
+    );
+    let failure: Value = serde_json::from_str(&received.recv().unwrap().raw).unwrap();
+    assert_eq!(failure["id"], 2);
+    assert!(failure["error"].is_object());
+    let reader = JsonlReader::new(
+        std::io::Cursor::new("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{}}\n"),
+        DEFAULT_MAX_MESSAGE_BYTES,
+    );
+    read_remote_messages(
+        reader,
+        ("host".into(), "/workspace".into()),
+        1,
+        alive,
+        outbound,
+        sessions,
+        catalogs,
+        pending,
+    );
+    assert!(
+        received.recv().is_err(),
+        "a late response cannot follow route failure"
+    );
 }

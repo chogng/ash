@@ -117,3 +117,69 @@ fn control_overflow_closes_instead_of_dropping_existing_messages() {
     assert_eq!(queue.drain().len(), MAX_NOTIFICATION_QUEUE_LEN);
     assert!(!queue.listener().wait());
 }
+
+fn queue_with_bytes(limit: usize) -> NotificationQueue {
+    NotificationQueue {
+        inner: Arc::new(NotificationQueueInner {
+            state: Mutex::new(NotificationQueueState::new(MessageBudget::new(limit))),
+            changed: Condvar::new(),
+        }),
+    }
+}
+
+#[test]
+fn byte_overflow_prunes_transcript_updates_and_preserves_the_reset_and_durable_event() {
+    let transient = serde_json::json!({"method":"session/thread/transcript/update","params":{"sessionId":"session-1","threadId":"thread-1","durableSequence":7,"revision":9,"streamCursor":{"sequence":1},"changes":[{"type":"upsert","text":"x".repeat(1024)}]}});
+    let queue = queue_with_bytes(serialized_value_bytes(&transient));
+    queue.push(transient);
+    let durable = serde_json::json!({"method":"config/changed","params":{"revision":1}});
+    queue.push(durable.clone());
+    let values = queue.drain();
+    assert_eq!(values.len(), 2);
+    assert_eq!(values[0]["params"]["changes"][0]["type"], "clearTransient");
+    assert_eq!(values[0]["params"]["durableSequence"], 7);
+    assert_eq!(values[0]["params"]["revision"], 9);
+    assert_eq!(values[1], durable);
+    assert!(!queue.inner.state.lock().unwrap().closed);
+}
+
+#[test]
+fn causal_and_background_session_notifications_share_bytes_and_moves_do_not_charge_twice() {
+    let value = serde_json::json!({"method":"session/thread/update","params":{"sessionId":"session-1","update":{"type":"committed"}}});
+    let size = serialized_value_bytes(&value);
+    let queue = queue_with_bytes(size * 2);
+    let request = queue.defer_causal_notifications(Some("session-1"));
+    queue.push(value.clone());
+    let producer = queue.clone();
+    let background = value.clone();
+    std::thread::spawn(move || producer.push(background))
+        .join()
+        .unwrap();
+    assert!(queue.drain().is_empty());
+    assert!(
+        queue
+            .inner
+            .state
+            .lock()
+            .unwrap()
+            .budget
+            .try_reserve(1)
+            .is_none()
+    );
+    drop(request);
+    assert_eq!(queue.drain(), [value.clone(), value.clone()]);
+    assert!(!queue.inner.state.lock().unwrap().closed);
+    queue.push(value);
+    assert_eq!(queue.drain().len(), 1);
+}
+
+#[test]
+fn durable_byte_overflow_closes_and_keeps_the_already_accepted_event() {
+    let value = serde_json::json!({"method":"config/changed","params":{"revision":1}});
+    let queue = queue_with_bytes(serialized_value_bytes(&value));
+    queue.push(value.clone());
+    queue.push(value.clone());
+    assert!(queue.inner.state.lock().unwrap().closed);
+    assert_eq!(queue.drain(), [value]);
+    assert!(!queue.listener().wait());
+}

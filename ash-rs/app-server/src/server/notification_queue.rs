@@ -1,8 +1,12 @@
+use super::message_queue::MessageBudget;
+use super::message_queue::MessageBytes;
+use super::message_queue::serialized_value_bytes;
 use serde_json::Value;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
+use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::Condvar;
@@ -40,7 +44,7 @@ impl Drop for NotificationDeferral {
             Arc::ptr_eq(&self.queue.inner, &deferred.owner),
             "request notification scopes close in stack order"
         );
-        self.queue.extend(deferred.state.values);
+        self.queue.extend_queued(deferred.state.values);
         if deferred.state.closed {
             self.queue.close();
         }
@@ -63,7 +67,8 @@ struct NotificationQueueInner {
 
 #[derive(Debug)]
 struct NotificationQueueState {
-    values: VecDeque<Value>,
+    values: VecDeque<QueuedNotification>,
+    budget: MessageBudget,
     closed: bool,
     sessions: BTreeMap<String, SessionNotifications>,
     initialized: bool,
@@ -71,8 +76,30 @@ struct NotificationQueueState {
 
 impl Default for NotificationQueueState {
     fn default() -> Self {
+        Self::new(MessageBudget::new(
+            ash_app_server_transport::DEFAULT_MAX_MESSAGE_BYTES,
+        ))
+    }
+}
+
+#[derive(Debug)]
+struct QueuedNotification {
+    value: Value,
+    _bytes: MessageBytes,
+}
+
+impl Deref for QueuedNotification {
+    type Target = Value;
+    fn deref(&self) -> &Value {
+        &self.value
+    }
+}
+
+impl NotificationQueueState {
+    fn new(budget: MessageBudget) -> Self {
         Self {
             values: VecDeque::new(),
+            budget,
             closed: false,
             sessions: BTreeMap::new(),
             initialized: true,
@@ -80,14 +107,54 @@ impl Default for NotificationQueueState {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct SessionNotifications {
     active: usize,
     pending: NotificationQueueState,
 }
 
 impl NotificationQueueState {
-    fn extend(&mut self, values: impl IntoIterator<Item = Value>) {
+    fn prune_transient(&mut self) {
+        let resets = transcript_resets_for_dropped_notifications(&self.values);
+        self.values
+            .retain(|queued| !is_transient_notification(queued));
+        for reset in resets {
+            self.push_value(reset);
+        }
+    }
+
+    fn push_value(&mut self, value: Value) {
+        if self.closed {
+            return;
+        }
+        if let Some(session_id) = value.pointer("/params/sessionId").and_then(Value::as_str)
+            && value.get("id").is_none()
+            && let Some(session) = self.sessions.get_mut(session_id)
+        {
+            session.pending.push_value(value);
+            return;
+        }
+        let size = serialized_value_bytes(&value);
+        let mut bytes = self.budget.try_reserve(size);
+        if self.values.len() >= MAX_NOTIFICATION_QUEUE_LEN || bytes.is_none() {
+            // Apply the existing transcript reset contract at both limits. Durable events and
+            // host calls are never silently dropped when a peer falls behind.
+            self.prune_transient();
+            if bytes.is_none() {
+                bytes = self.budget.try_reserve(size);
+            }
+        }
+        let Some(bytes) = bytes else {
+            self.closed = true;
+            return;
+        };
+        self.extend([QueuedNotification {
+            value,
+            _bytes: bytes,
+        }]);
+    }
+
+    fn extend(&mut self, values: impl IntoIterator<Item = QueuedNotification>) {
         for value in values {
             if self.closed {
                 break;
@@ -100,15 +167,7 @@ impl NotificationQueueState {
                 continue;
             }
             if self.values.len() >= MAX_NOTIFICATION_QUEUE_LEN {
-                let resets = transcript_resets_for_dropped_notifications(&self.values);
-                self.values
-                    .retain(|queued| !is_transient_notification(queued));
-                for reset in resets {
-                    if self.values.len() >= MAX_NOTIFICATION_QUEUE_LEN {
-                        break;
-                    }
-                    self.values.push_back(reset);
-                }
+                self.prune_transient();
             }
             if self.values.len() >= MAX_NOTIFICATION_QUEUE_LEN {
                 self.closed = true;
@@ -150,20 +209,25 @@ impl NotificationQueue {
         &self,
         session_id: Option<&str>,
     ) -> NotificationDeferral {
-        if let Some(session_id) = session_id {
-            self.inner
-                .state
-                .lock()
-                .unwrap()
-                .sessions
-                .entry(session_id.to_owned())
-                .or_default()
-                .active += 1;
-        }
+        let budget = {
+            let mut state = self.inner.state.lock().unwrap();
+            let budget = state.budget.clone();
+            if let Some(session_id) = session_id {
+                state
+                    .sessions
+                    .entry(session_id.to_owned())
+                    .or_insert_with(|| SessionNotifications {
+                        active: 0,
+                        pending: NotificationQueueState::new(budget.clone()),
+                    })
+                    .active += 1;
+            }
+            budget
+        };
         DEFERRED.with(|pending| {
             pending.borrow_mut().push(DeferredNotifications {
                 owner: Arc::clone(&self.inner),
-                state: NotificationQueueState::default(),
+                state: NotificationQueueState::new(budget),
             })
         });
         NotificationDeferral {
@@ -223,17 +287,46 @@ impl NotificationQueue {
                 if value.get("id").is_some() {
                     immediate.push(value);
                 } else {
-                    deferred.state.extend([value]);
+                    deferred.state.push_value(value);
                 }
             }
             immediate
         });
         if let Ok(mut state) = self.inner.state.lock() {
             let was_empty = state.values.is_empty();
-            state.extend(immediate);
+            for value in immediate {
+                state.push_value(value);
+            }
             if (was_empty && !state.values.is_empty()) || state.closed {
                 self.inner.changed.notify_all();
             }
+        }
+    }
+
+    fn extend_queued(&self, values: impl IntoIterator<Item = QueuedNotification>) {
+        let immediate = DEFERRED.with(|pending| {
+            let mut pending = pending.borrow_mut();
+            let deferred = pending
+                .iter_mut()
+                .rev()
+                .find(|pending| Arc::ptr_eq(&pending.owner, &self.inner));
+            let Some(deferred) = deferred else {
+                return values.into_iter().collect::<Vec<_>>();
+            };
+            let mut immediate = Vec::new();
+            for value in values {
+                if value.get("id").is_some() {
+                    immediate.push(value);
+                } else {
+                    deferred.state.extend([value]);
+                }
+            }
+            immediate
+        });
+        let mut state = self.inner.state.lock().unwrap();
+        state.extend(immediate);
+        if !state.values.is_empty() || state.closed {
+            self.inner.changed.notify_all();
         }
     }
 
@@ -241,7 +334,7 @@ impl NotificationQueue {
         self.inner
             .state
             .lock()
-            .map(|mut state| state.values.drain(..).collect())
+            .map(|mut state| state.values.drain(..).map(|queued| queued.value).collect())
             .unwrap_or_default()
     }
 
@@ -305,7 +398,9 @@ fn is_transient_notification(value: &Value) -> bool {
                 .is_some_and(|kind| kind != "committed")
 }
 
-fn transcript_resets_for_dropped_notifications(values: &VecDeque<Value>) -> Vec<Value> {
+fn transcript_resets_for_dropped_notifications(
+    values: &VecDeque<QueuedNotification>,
+) -> Vec<Value> {
     let mut scopes = BTreeMap::<(String, String), (u64, u64)>::new();
     for value in values {
         if value.get("method").and_then(Value::as_str) != Some("session/thread/transcript/update")

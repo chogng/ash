@@ -1,8 +1,8 @@
 use super::ProfileAppServerRegistry;
 use super::Target;
 use super::tag_host_request;
+use crate::server::message_queue::OutboundSender;
 use crate::server::request_dispatch::IncomingRequest;
-use crate::server::request_dispatch::OutgoingMessage;
 use crate::server::request_dispatch::RequestDispatchHandle;
 use crate::server::request_dispatch::RequestLane;
 use serde_json::Value;
@@ -50,6 +50,7 @@ pub(super) struct LocalTarget<'scope> {
     pub(super) route_id: usize,
     input: Option<mpsc::SyncSender<RoutedRequest>>,
     state: Arc<Mutex<State>>,
+    budgets: crate::server::message_queue::InputBudgets,
     opening: Option<thread::ScopedJoinHandle<'scope, io::Result<()>>>,
 }
 
@@ -61,12 +62,13 @@ impl<'scope> LocalTarget<'scope> {
         initialize: IncomingRequest,
         route_id: usize,
         requests: RequestDispatchHandle<'env>,
-        outbound: mpsc::SyncSender<OutgoingMessage>,
+        outbound: OutboundSender,
     ) -> Self {
         let (input, incoming) =
             mpsc::sync_channel::<RoutedRequest>(REQUEST_CAPACITY + CONTROL_CAPACITY);
         let state = Arc::new(Mutex::new(State::default()));
         let opening_state = Arc::clone(&state);
+        let budgets = requests.budgets();
         let opening = scope.spawn(move || {
             let opened = (|| {
                 let server = registry
@@ -147,6 +149,7 @@ impl<'scope> LocalTarget<'scope> {
             route_id,
             input: Some(input),
             state,
+            budgets,
             opening: Some(opening),
         }
     }
@@ -155,7 +158,7 @@ impl<'scope> LocalTarget<'scope> {
         !self.state.lock().unwrap().closed
     }
 
-    pub(super) fn send(&self, raw: IncomingRequest, request: &Value) -> io::Result<()> {
+    pub(super) fn send(&self, mut raw: IncomingRequest, request: &Value) -> io::Result<()> {
         let lane = RequestLane::for_message(
             request["method"]
                 .as_str()
@@ -179,6 +182,12 @@ impl<'scope> LocalTarget<'scope> {
                 "Local directory request capacity exhausted",
             ));
         }
+        raw.retain(&self.budgets, lane).map_err(|()| {
+            io::Error::new(
+                io::ErrorKind::WouldBlock,
+                "Local directory request byte capacity exhausted",
+            )
+        })?;
         *count += 1;
         let routed = RoutedRequest {
             raw,

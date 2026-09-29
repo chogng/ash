@@ -1,3 +1,5 @@
+use super::message_queue::InputBudgets;
+use super::message_queue::MessageBytes;
 use super::request_serialization::ConnectionClosed;
 use super::request_serialization::RequestPermit;
 use super::request_serialization::RequestScheduler;
@@ -22,18 +24,37 @@ const CONTROL_CAPACITY: usize = 16;
 
 #[derive(Clone)]
 pub(crate) struct IncomingRequest {
-    pub(crate) raw: String,
+    raw: Arc<zeroize::Zeroizing<String>>,
     received_at: Instant,
     received_time: SystemTime,
+    bytes: Option<Arc<MessageBytes>>,
 }
 
 impl From<String> for IncomingRequest {
     fn from(raw: String) -> Self {
         Self {
-            raw,
+            raw: Arc::new(zeroize::Zeroizing::new(raw)),
             received_at: Instant::now(),
             received_time: SystemTime::now(),
+            bytes: None,
         }
+    }
+}
+
+impl IncomingRequest {
+    pub(crate) fn clear(&mut self) {
+        // Routing clones share one allocation. Its last owner zeroizes the original frame.
+        self.raw = Arc::new(zeroize::Zeroizing::new(String::new()));
+    }
+    pub(crate) fn retain(&mut self, budgets: &InputBudgets, lane: RequestLane) -> Result<(), ()> {
+        if self.bytes.is_none() {
+            let budget = match lane {
+                RequestLane::Control => &budgets.control,
+                _ => &budgets.ordinary,
+            };
+            self.bytes = Some(Arc::new(budget.try_reserve(self.len()).ok_or(())?));
+        }
+        Ok(())
     }
 }
 
@@ -47,6 +68,7 @@ impl Deref for IncomingRequest {
 pub(crate) struct OutgoingMessage {
     pub(crate) raw: String,
     trace: ash_otel::OutboundTrace,
+    pub(super) bytes: Option<MessageBytes>,
 }
 
 impl From<String> for OutgoingMessage {
@@ -54,6 +76,7 @@ impl From<String> for OutgoingMessage {
         Self {
             raw,
             trace: ash_otel::OutboundTrace::capture(),
+            bytes: None,
         }
     }
 }
@@ -77,7 +100,7 @@ impl OutgoingMessage {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum RequestLane {
     Interactive,
     Background,
@@ -111,7 +134,7 @@ impl RequestLane {
                 | ClientMethod::ProviderProbe
                 | ClientMethod::ProviderModelsList
                 | ClientMethod::FsCopy
-                | ClientMethod::FsPasteSystemCutFiles
+                | ClientMethod::FsPasteSystemFiles
                 | ClientMethod::GrepIndexRebuild,
             ) => Self::Background,
             _ => Self::Interactive,
@@ -134,7 +157,7 @@ impl RequestLane {
                 params
                     .pointer("/request/type")
                     .and_then(serde_json::Value::as_str),
-                Some("interruptTurn" | "resolveInteraction")
+                Some("stop" | "interruptTurn" | "resolveInteraction")
             )
         {
             return Self::Control;
@@ -175,6 +198,7 @@ pub(crate) struct RequestDispatcher<'scope, 'env> {
 pub(crate) struct RequestDispatchHandle<'env> {
     pending: Arc<(Mutex<Pending<'env>>, Condvar)>,
     ready: Vec<mpsc::Sender<Ready>>,
+    budgets: InputBudgets,
 }
 
 impl<'env> Deref for RequestDispatcher<'_, 'env> {
@@ -238,7 +262,11 @@ impl<'scope, 'env: 'scope> RequestDispatcher<'scope, 'env> {
             }
         }
         Ok(Self {
-            handle: RequestDispatchHandle { pending, ready },
+            handle: RequestDispatchHandle {
+                pending,
+                ready,
+                budgets: InputBudgets::default(),
+            },
             workers,
         })
     }
@@ -270,6 +298,17 @@ impl<'scope, 'env: 'scope> RequestDispatcher<'scope, 'env> {
 }
 
 impl<'env> RequestDispatchHandle<'env> {
+    pub(crate) fn budgets(&self) -> InputBudgets {
+        self.budgets.clone()
+    }
+
+    pub(crate) fn retain_input(
+        &self,
+        raw: &mut IncomingRequest,
+        lane: RequestLane,
+    ) -> Result<(), ()> {
+        raw.retain(&self.budgets, lane)
+    }
     fn reserve(&self, lane: RequestLane) -> Result<u64, ()> {
         let mut pending = self.pending.0.lock().unwrap();
         let (count, capacity) = match lane {
@@ -322,13 +361,14 @@ impl<'env> RequestDispatchHandle<'env> {
         raw: impl Into<IncomingRequest>,
         deliver: impl FnOnce(String) -> io::Result<()> + Send + 'env,
     ) -> io::Result<()> {
-        use zeroize::Zeroize;
         let mut raw = raw.into();
         let prepared = server.prepare_request(connection, &raw);
-        raw.raw.zeroize();
         let mut prepared = match prepared {
             Ok(prepared) => prepared,
-            Err(response) => return deliver(response),
+            Err(response) => {
+                raw.clear();
+                return deliver(response);
+            }
         };
         prepared.received_at = raw.received_at;
         prepared.received_time = raw.received_time;
@@ -341,7 +381,10 @@ impl<'env> RequestDispatchHandle<'env> {
         let resource = prepared.scope.clone();
         let cancellation = prepared.cancellation.clone();
         let mut connection = connection.clone();
-        let ticket = match self.reserve(lane) {
+        let retained = self.retain_input(&mut raw, lane);
+        raw.clear();
+        let bytes = raw.bytes.take();
+        let ticket = match retained.and_then(|()| self.reserve(lane)) {
             Ok(ticket) => ticket,
             Err(()) => {
                 cancellations.finish(connection_id, request_number);
@@ -360,6 +403,7 @@ impl<'env> RequestDispatchHandle<'env> {
             cancellation,
             lane,
             Box::new(move |admission| {
+                let _bytes = bytes;
                 server.execute_request(&mut connection, prepared, admission, deliver)
             }),
         );
