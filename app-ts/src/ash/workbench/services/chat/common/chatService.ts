@@ -52,6 +52,34 @@ export interface ChatAudioAttachment {
 	readonly durationMs: number;
 }
 
+export interface ChatReasoningState {
+	readonly scope: string;
+	readonly item: unknown;
+}
+
+export type ChatToolSource =
+	| { readonly type: "product"; readonly component: string }
+	| { readonly type: "plugin"; readonly pluginId: string; readonly version: string; readonly packageDigest: string; readonly contributionId: string }
+	| { readonly type: "mcp"; readonly serverId: string; readonly remoteName: string; readonly catalogGeneration: number; readonly connectionGeneration: number }
+	| { readonly type: "dynamic"; readonly name: string }
+	| { readonly type: "extension" | "system"; readonly id: string };
+
+export interface ChatToolCallBinding {
+	readonly registryIncarnation?: string | null;
+	readonly registryGeneration: number;
+	readonly definitionDigest: string;
+	readonly sourceChain: readonly ChatToolSource[];
+	readonly activity?: { readonly type: "read" | "search" | "list" | "edit"; readonly target: string } | { readonly type: "run" } | null;
+	readonly caller: { readonly type: "direct" } | { readonly type: "codeMode"; readonly parentToolCallId: string; readonly cellId: string; readonly runtimeCallId: string };
+}
+
+export type ChatContentPart =
+	| { readonly type: "text"; readonly text: string }
+	| { readonly type: "imageAttachment"; readonly attachment: ChatImageAttachment; readonly detail: "auto" | "low" | "high" | "original" }
+	| { readonly type: "imageUrl"; readonly url: string; readonly detail: "auto" | "low" | "high" | "original" }
+	| { readonly type: "audioAttachment"; readonly attachment: ChatAudioAttachment }
+	| { readonly type: "audioUrl"; readonly url: string };
+
 export interface AdvisorConfig {
 	readonly model: ModelRef;
 	readonly enabled: boolean;
@@ -86,10 +114,10 @@ export type ThreadItem =
 	| { readonly type: "userImageAttachment"; readonly itemId: string; readonly turnId: string; readonly attachment: ChatImageAttachment }
 	| { readonly type: "userAudioAttachment"; readonly itemId: string; readonly turnId: string; readonly attachment: ChatAudioAttachment }
 	| { readonly type: "agentMessage"; readonly itemId: string; readonly turnId: string; readonly text: string }
-	| { readonly type: "reasoning"; readonly itemId: string; readonly turnId: string; readonly text: string }
+	| { readonly type: "reasoning"; readonly itemId: string; readonly turnId: string; readonly text: string; readonly state: readonly ChatReasoningState[] }
 	| { readonly type: "plan"; readonly itemId: string; readonly turnId: string; readonly text: string }
-	| { readonly type: "toolCall"; readonly itemId: string; readonly turnId: string; readonly toolCallId: string; readonly name: string; readonly argumentsJson: string }
-	| { readonly type: "toolResult"; readonly itemId: string; readonly turnId: string; readonly toolCallId: string; readonly text: string; readonly isError: boolean };
+	| { readonly type: "toolCall"; readonly itemId: string; readonly turnId: string; readonly toolCallId: string; readonly name: string; readonly argumentsJson: string; readonly binding?: ChatToolCallBinding | null }
+	| { readonly type: "toolResult"; readonly itemId: string; readonly turnId: string; readonly toolCallId: string; readonly text: string; readonly content?: readonly ChatContentPart[] | null; readonly isError: boolean };
 
 export type TurnStatus = "created" | "running" | "waitingForApproval" | "waitingForUserInput" | "waitingForCapability" | "cancelling" | "completed" | "failed" | "interrupted";
 

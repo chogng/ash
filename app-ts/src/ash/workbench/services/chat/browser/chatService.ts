@@ -450,18 +450,7 @@ function toThreadTranscriptEntry(entry: ThreadTranscriptEntryDto): ThreadTranscr
 }
 
 function toThreadItem(item: ThreadItemDto): ThreadItem {
-	switch (item.type) {
-		case "userMessage": return { type: item.type, itemId: item.itemId, turnId: item.turnId, text: item.text };
-		case "userContext": return { type: item.type, itemId: item.itemId, turnId: item.turnId, name: item.name, content: item.content };
-		case "userImage": return { type: item.type, itemId: item.itemId, turnId: item.turnId, url: item.url };
-		case "userImageAttachment": return { type: item.type, itemId: item.itemId, turnId: item.turnId, attachment: { ...item.attachment } };
-		case "userAudioAttachment": return { type: item.type, itemId: item.itemId, turnId: item.turnId, attachment: { ...item.attachment } };
-		case "agentMessage":
-		case "reasoning":
-		case "plan": return { type: item.type, itemId: item.itemId, turnId: item.turnId, text: item.text };
-		case "toolCall": return { type: item.type, itemId: item.itemId, turnId: item.turnId, toolCallId: item.toolCallId, name: item.name, argumentsJson: item.argumentsJson };
-		case "toolResult": return { type: item.type, itemId: item.itemId, turnId: item.turnId, toolCallId: item.toolCallId, text: item.text, isError: item.isError };
-	}
+	return { ...item };
 }
 
 function toAgentResponse(response: ResolveInteractionOptions["response"]): AgentResponseDto {

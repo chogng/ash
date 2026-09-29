@@ -26,7 +26,7 @@ import { PreferencesService as BrowserPreferencesService } from "../../../workbe
 import { emptyEditorServiceState } from '../../../workbench/test/common/testEditorService.js';
 import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from "../../../workbench/services/layout/browser/layoutService.js";
 import { ChatService } from "../../../workbench/services/chat/browser/chatService.js";
-import { IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadUpdateEnvelope, type TurnError } from "../../../workbench/services/chat/common/chatService.js";
+import { IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadTranscriptUpdateEnvelope, type ThreadUpdateEnvelope, type TurnError } from "../../../workbench/services/chat/common/chatService.js";
 import { ModelCatalogConfiguration } from "../../../workbench/services/chat/common/modelCatalog.js";
 import { WorkbenchConfigurationService } from "../../../workbench/services/configuration/browser/configurationService.js";
 import { SessionsManagementService as BaseSessionsManagementService } from "../../services/sessions/browser/sessionsManagementService.js";
@@ -1657,6 +1657,41 @@ test("Chat service retains Agent identity and branch origin when reading a Threa
 	const read = await chat.readThread("session-1", "thread-1");
 	assert.equal(read.thread.agentId, "agent-1");
 	assert.deepEqual(read.thread.origin, { type: "root" });
+});
+
+test("Chat service preserves complete transcript items from reads and updates", async () => {
+	const items: Thread["turns"][number]["items"] = [
+		{ type: "reasoning", itemId: "reasoning-1", turnId: "turn-1", text: "Checking", state: [{ scope: "provider/model", item: { id: "encrypted-state" } }] },
+		{
+			type: "toolCall", itemId: "call-1", turnId: "turn-1", toolCallId: "tool-1", name: "shell", argumentsJson: '{}',
+			binding: {
+				registryGeneration: 3, definitionDigest: "digest", sourceChain: [{ type: "product", component: "shell" }],
+				activity: { type: "run" }, caller: { type: "direct" },
+			},
+		},
+		{
+			type: "toolResult", itemId: "result-1", turnId: "turn-1", toolCallId: "tool-1", text: "Done", isError: false,
+			content: [{ type: "text", text: "Done" }, { type: "imageUrl", url: "https://example.test/image.png", detail: "high" }],
+		},
+	];
+	const original = thread("Done");
+	const currentThread: Thread = { ...original, turns: original.turns.map(turn => ({ ...turn, items })) };
+	const fake = fakeApi({ thread: () => currentThread });
+	using chat = createChatService(fake.api);
+	const read = await chat.readThread("session-1", "thread-1");
+	assert.deepEqual(read.thread.turns[0].items, items);
+	assert.deepEqual(read.transcript.entries.map(entry => entry.type === "item" ? entry.item : undefined), items);
+
+	const updates: ThreadTranscriptUpdateEnvelope[] = [];
+	using listener = chat.onDidUpdateThreadTranscript(update => updates.push(update));
+	fake.emit({
+		method: "session/thread/transcript/update",
+		params: {
+			sessionId: "session-1", threadId: "thread-1", durableSequence: 4, revision: 5,
+			changes: items.map(item => ({ type: "upsert" as const, entry: { type: "item" as const, entryId: `item:${item.itemId}`, turnId: item.turnId, item, transient: false } })),
+		},
+	});
+	assert.deepEqual(updates[0]?.changes.map(change => change.type === "upsert" && change.entry.type === "item" ? change.entry.item : undefined), items);
 });
 
 test("Chat service accepts committed fork-history import notifications", () => {
