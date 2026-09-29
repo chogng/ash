@@ -1,6 +1,5 @@
 use super::StatusIndicator;
-use crate::render::RenderContext;
-use crate::thread::TurnActivity;
+use crate::render::{RenderContext, truncate_with_ellipsis};
 use crate::thread::composer::content_area;
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -21,14 +20,7 @@ pub(super) fn draw(
     if area.is_empty() {
         return;
     }
-    let (label, active) = match indicator.activity {
-        TurnActivity::Starting => ("Starting", true),
-        TurnActivity::Working => ("Working", true),
-        TurnActivity::WaitingForApproval => ("Waiting for approval", false),
-        TurnActivity::WaitingForUserInput => ("Waiting for input", false),
-        TurnActivity::WaitingForCapability => ("Waiting for capability", false),
-        TurnActivity::Cancelling => ("Cancelling", true),
-    };
+    let (label, active) = indicator.label();
     let label = context.localize(label);
     let elapsed = indicator.timer.elapsed();
     let marker = if active {
@@ -63,9 +55,15 @@ pub(super) fn draw(
     } else {
         format!(" · {hint} {}", context.localize("to interrupt"))
     };
-    let mut spans = vec![Span::styled(label.clone(), Style::default().fg(color))];
     // Keep the action discoverable before spending remaining columns on elapsed time.
     let width = usize::from(content.width);
+    let label = if !hint.is_empty() && hint.width() <= width && label.width() + hint.width() > width
+    {
+        truncate_with_ellipsis(&label, width - hint.width())
+    } else {
+        label.into_owned()
+    };
+    let mut spans = vec![Span::styled(label.clone(), Style::default().fg(color))];
     if label.width() + time.width() + hint.width() <= width {
         spans.push(Span::raw(time));
         spans.push(Span::raw(hint));

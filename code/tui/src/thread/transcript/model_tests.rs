@@ -1,6 +1,11 @@
 use super::CellLifecycle;
 use super::TranscriptCellId;
 use super::TranscriptModel;
+use crate::render::Renderable;
+use crate::thread::transcript::ChatHistoryPointerState;
+use crate::thread::transcript::ChatHistoryRenderCache;
+use crate::thread::transcript::ChatHistoryScroll;
+use crate::thread::transcript::ChatHistoryView;
 use crate::thread::transcript::CommandStatus;
 use crate::thread::transcript::LocalCommandCompletion;
 use crate::thread::transcript::MessageRole;
@@ -14,7 +19,10 @@ use ash_protocol::ToolCallId;
 use ash_protocol::ToolName;
 use ash_protocol::ToolOutputStream;
 use ash_protocol::TurnId;
+use ratatui::Terminal;
+use ratatui::backend::TestBackend;
 use std::collections::BTreeSet;
+use unicode_width::UnicodeWidthStr;
 
 #[test]
 fn tool_call_output_and_result_form_one_exec_cell() {
@@ -61,7 +69,87 @@ fn tool_call_output_and_result_form_one_exec_cell() {
     assert_eq!(model.cells()[0].lifecycle(), CellLifecycle::Final);
     let views = model.views(&BTreeSet::new(), None);
     assert_eq!(views[0].command_status(), Some(CommandStatus::Succeeded));
-    assert_eq!(views[0].text(), "Ran exec");
+    assert_eq!(views[0].text(), "Command finished");
+}
+
+#[test]
+fn grouped_history_failure_names_the_failed_call_and_command_completion_stays_neutral() {
+    let turn = turn_id("turn");
+    let call = |name: &str| ThreadTranscriptEntry::Item {
+        entry_id: format!("call-{name}"),
+        turn_id: turn.clone(),
+        item: ThreadItem::ToolCall {
+            item_id: item_id(&format!("call-item-{name}")),
+            turn_id: turn.clone(),
+            tool_call_id: call_id(name),
+            name: ToolName::new(name).unwrap(),
+            arguments_json: "{}".into(),
+            binding: None,
+        },
+        transient: false,
+    };
+    let result = |name: &str, text: &str, is_error: bool| ThreadTranscriptEntry::Item {
+        entry_id: format!("result-{name}"),
+        turn_id: turn.clone(),
+        item: ThreadItem::ToolResult {
+            item_id: item_id(&format!("result-item-{name}")),
+            turn_id: turn.clone(),
+            tool_call_id: call_id(name),
+            text: text.into(),
+            content: None,
+            is_error,
+        },
+        transient: false,
+    };
+    let mut model = TranscriptModel::default();
+    model.replace(snapshot(vec![
+        call("history_list"),
+        result("history_list", "2 entries", false),
+        call("history_read"),
+        result("history_read", "record missing", true),
+        call("shell-command"),
+        result("shell-command", "exit 0", false),
+    ]));
+
+    assert_eq!(model.cells().len(), 2);
+    let views = model.views(&BTreeSet::new(), None);
+    let context = crate::render::test_context().with_language(crate::nls::Language::Chinese);
+    let scroll = ChatHistoryScroll::default();
+    let render_cache = ChatHistoryRenderCache::default();
+    let view = ChatHistoryView {
+        jump_label: "Jump to bottom",
+        header: None,
+        messages: &views,
+        scroll: &scroll,
+        render_cache: &render_cache,
+        pointer: ChatHistoryPointerState::default(),
+    };
+    let mut terminal = Terminal::new(TestBackend::new(50, 5)).unwrap();
+    terminal
+        .draw(|frame| view.render(frame, frame.area(), context))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let visible = (0..5)
+        .map(|y| {
+            let mut row = String::new();
+            let mut continuation = 0;
+            for x in 0..50 {
+                if continuation > 0 {
+                    continuation -= 1;
+                    continue;
+                }
+                let symbol = buffer[(x, y)].symbol();
+                row.push_str(symbol);
+                continuation = UnicodeWidthStr::width(symbol).saturating_sub(1);
+            }
+            row.trim_end().to_owned()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    crate::tui_assert_snapshot!("grouped_history_failure_chinese", visible);
+    assert_eq!(buffer[(0, 0)].fg, context.muted());
+    assert_eq!(buffer[(3, 1)].fg, context.danger());
+    assert_eq!(buffer[(0, 3)].fg, context.muted());
 }
 
 #[test]

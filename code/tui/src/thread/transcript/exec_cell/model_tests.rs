@@ -1,6 +1,6 @@
 use super::ExecCell;
 use super::ExecGroup;
-use super::ExecutionKind;
+use crate::nls::Language;
 use crate::thread::transcript::CommandStatus;
 use ash_protocol::ToolCallId;
 use ash_protocol::ToolName;
@@ -23,7 +23,7 @@ fn exploration_calls_group_by_stable_tool_classification() {
     );
 
     assert_eq!(cell.group, ExecGroup::ExploreGroup);
-    assert_eq!(cell.summary(), "Explored 2 operations");
+    assert_eq!(cell.summary(Language::English), "Exploring 2 operations");
 }
 
 #[test]
@@ -52,6 +52,10 @@ fn output_and_result_route_to_the_exact_tool_call() {
     cell.complete("second-result".into(), &second, "second done".into(), true);
 
     assert_eq!(cell.status(), CommandStatus::Failed);
+    assert_eq!(
+        cell.summary(Language::Chinese),
+        "已探查 2 项操作 · 1 项失败"
+    );
     let detail = cell.full_details();
     assert!(detail.contains("second only"));
     assert!(detail.contains("first done"));
@@ -79,29 +83,21 @@ fn live_output_is_bounded_with_an_omission_marker() {
 }
 
 #[test]
-fn execution_kind_distinguishes_commands_mutations_and_neutral_tools() {
-    let command = ExecCell::start(
-        "command-entry".into(),
-        call_id("command"),
-        &tool_name("shell-command"),
+fn history_tools_are_grouped_with_read_operations() {
+    let mut cell = ExecCell::start(
+        "list-entry".into(),
+        call_id("history-list"),
+        &tool_name("history_list"),
         "{}".into(),
     );
-    let mutation = ExecCell::start(
-        "mutation-entry".into(),
-        call_id("mutation"),
-        &tool_name("write_file"),
-        "{}".into(),
-    );
-    let read = ExecCell::start(
+    assert!(cell.can_accept(&tool_name("history_read")));
+    cell.push_call(
         "read-entry".into(),
-        call_id("read-kind"),
-        &tool_name("read_file"),
+        call_id("history-read"),
+        &tool_name("history_read"),
         "{}".into(),
     );
-
-    assert_eq!(command.execution_kind(), ExecutionKind::Command);
-    assert_eq!(mutation.execution_kind(), ExecutionKind::Mutation);
-    assert_eq!(read.execution_kind(), ExecutionKind::Neutral);
+    assert_eq!(cell.summary(Language::Chinese), "正在探查 2 项操作");
 }
 
 fn call_id(value: &str) -> ToolCallId {

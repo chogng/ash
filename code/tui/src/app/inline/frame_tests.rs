@@ -92,6 +92,16 @@ fn running_tip_appears_below_the_inline_spinner() {
     let rendered = text(&render(&app, 80, 20));
     assert!(rendered.contains("Working"));
     assert!(rendered.contains("└ Tip: Ask Ash to list steps for complex tasks"));
+
+    let mut settings = TerminalSettings::default();
+    settings.set_screen_mode(ScreenMode::Inline);
+    settings.set_language(crate::nls::Language::Chinese);
+    app.update(ConfigEvent::SettingsReceived(settings));
+    let localized = text(&render(&app, 80, 20));
+    assert!(localized.contains("正在处理"));
+    assert!(localized.contains("└ 技巧：复杂任务可以请 Ash 先列出步骤"));
+    assert!(!localized.contains("Working"));
+    crate::tui_assert_snapshot!("inline_running_tip_after_language_change", localized);
 }
 
 #[test]

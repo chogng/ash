@@ -87,7 +87,7 @@ fn execution_output_uses_a_solid_circle_with_semantic_color() {
         ),
         (
             CellView::exec("shell", CommandStatus::Succeeded),
-            test_context().success(),
+            test_context().muted(),
         ),
         (
             CellView::exec("write_file", CommandStatus::Failed),
@@ -95,7 +95,7 @@ fn execution_output_uses_a_solid_circle_with_semantic_color() {
         ),
         (
             CellView::exec("write_file", CommandStatus::Succeeded),
-            test_context().accent(),
+            test_context().muted(),
         ),
         (
             CellView::exec("shell", CommandStatus::Running),

@@ -2130,6 +2130,27 @@ fn render(app: &App, width: u16, height: u16) -> String {
         .join("\n")
 }
 
+fn render_visible_text(app: &App, width: u16, height: u16) -> String {
+    let buffer = render_buffer(app, width, height);
+    (0..height)
+        .map(|y| {
+            let mut line = String::new();
+            let mut continuation = 0;
+            for x in 0..width {
+                if continuation > 0 {
+                    continuation -= 1;
+                    continue;
+                }
+                let symbol = buffer[(x, y)].symbol();
+                line.push_str(symbol);
+                continuation = UnicodeWidthStr::width(symbol).saturating_sub(1);
+            }
+            line
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 #[test]
 fn config_general_tab_uses_localized_label() {
     let mut app = App::new();
@@ -3146,6 +3167,15 @@ fn running_tip_appears_below_spinner_and_leaves_when_waiting() {
     assert!(rendered.contains("Working"));
     assert!(rendered.contains("└ Tip: Ask Ash to list steps for complex tasks"));
     assert_eq!(areas.status_indicator.bottom(), areas.top_tip.y);
+
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_language(crate::nls::Language::Chinese);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    let localized = render_visible_text(&app, 80, 20);
+    assert!(localized.contains("正在处理"));
+    assert!(localized.contains("└ 技巧：复杂任务可以请 Ash 先列出步骤"));
+    assert!(!localized.contains("Working"));
+    crate::tui_assert_snapshot!("running_tip_after_language_change", localized);
 
     app.update(ThreadEvent::TurnActivityChanged(
         TurnActivity::WaitingForApproval,

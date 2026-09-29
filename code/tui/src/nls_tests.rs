@@ -7,12 +7,35 @@ use super::text;
 fn product_chrome_keys_are_unique() {
     let mut keys = std::collections::BTreeSet::new();
     let mut duplicates = Vec::new();
-    for translation in super::UI_TRANSLATIONS {
+    for translation in super::UI_TRANSLATIONS.iter().chain(super::SPINNER_VERBS) {
         if !keys.insert(translation.english) {
             duplicates.push(translation.english);
         }
+        assert!(!translation.japanese.is_empty(), "{}", translation.english);
+        assert!(!translation.chinese.is_empty(), "{}", translation.english);
+        assert!(!translation.french.is_empty(), "{}", translation.english);
     }
     assert!(duplicates.is_empty(), "duplicate NLS keys: {duplicates:?}");
+}
+
+#[test]
+fn spinner_verbs_are_distinct_in_every_language() {
+    assert!(super::SPINNER_VERBS.len() >= 100);
+    for language in [
+        Language::English,
+        Language::Japanese,
+        Language::Chinese,
+        Language::French,
+    ] {
+        let mut words = std::collections::BTreeSet::new();
+        for entry in super::SPINNER_VERBS {
+            let word = localize(language, entry.english);
+            assert!(
+                words.insert(word.into_owned()),
+                "duplicate {language:?} word"
+            );
+        }
+    }
 }
 
 #[test]

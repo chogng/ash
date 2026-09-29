@@ -1,0 +1,10 @@
+---
+source: code/tui/src/thread/status_indicator/view_tests.rs
+expression: text
+---
+⠋ 正在启动 · 0m 00s 总计
+⠋ 正在处理 · 0m 00s 总计
+○ 等待批准 · 0m 00s 总计
+○ 等待输入 · 0m 00s 总计
+○ 等待功能就绪 · 0m 00s 总计
+⠋ 正在取消 · 0m 00s 总计

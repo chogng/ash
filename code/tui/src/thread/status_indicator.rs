@@ -4,7 +4,7 @@ mod view;
 pub(crate) use timer::StatusTimer;
 
 use super::TurnActivity;
-use crate::nls::Message;
+use crate::nls::{self, Message};
 use crate::render::RenderContext;
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -29,6 +29,21 @@ pub(crate) struct StatusIndicator<'a> {
 }
 
 impl StatusIndicator<'_> {
+    fn label(&self) -> (&'static str, bool) {
+        match self.activity {
+            TurnActivity::Starting => ("Starting", true),
+            TurnActivity::Working => {
+                let index = (self.timer.runs_started().saturating_sub(1) as usize)
+                    % nls::spinner_verb_count();
+                (nls::spinner_verb(index), true)
+            }
+            TurnActivity::WaitingForApproval => ("Waiting for approval", false),
+            TurnActivity::WaitingForUserInput => ("Waiting for input", false),
+            TurnActivity::WaitingForCapability => ("Waiting for capability", false),
+            TurnActivity::Cancelling => ("Cancelling", true),
+        }
+    }
+
     pub(crate) fn tip(&self) -> Option<Message> {
         if !self.show_tips
             || !matches!(

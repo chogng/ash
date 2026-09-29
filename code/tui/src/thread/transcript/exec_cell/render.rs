@@ -1,5 +1,5 @@
 use super::ExecCell;
-use super::ExecutionKind;
+use super::truncate_utf8;
 use crate::render::RenderContext;
 use crate::thread::transcript::CommandStatus;
 use crate::thread::transcript::history_cell::CellLines;
@@ -12,6 +12,10 @@ use crate::thread::transcript::history_cell::MessageRole;
 use crate::thread::transcript::history_cell::finish_lines;
 use crate::thread::transcript::history_cell::prefixed_body;
 use crate::thread::transcript::history_cell::push_detail_lines;
+use ash_ansi_escape::ansi_text;
+use ratatui::style::Style;
+use ratatui::text::Line;
+use ratatui::text::Span;
 use std::borrow::Cow;
 
 const EXPANDED_LINES: usize = 12;
@@ -21,7 +25,7 @@ impl HistoryCell for ExecCell {
         MessageRole::Command
     }
     fn summary(&self, _: CellMode) -> Cow<'_, str> {
-        Cow::Owned(self.summary())
+        Cow::Owned(self.summary(crate::nls::Language::English))
     }
     fn detail(&self, mode: CellMode) -> Option<Cow<'_, str>> {
         match mode {
@@ -51,14 +55,38 @@ impl HistoryCell for ExecCell {
     ) -> CellLines {
         let color = match self.status() {
             CommandStatus::Submitted | CommandStatus::Running => context.warning(),
+            CommandStatus::Failed if self.calls.len() > 1 => context.muted(),
             CommandStatus::Failed => context.danger(),
-            CommandStatus::Succeeded => match self.execution_kind() {
-                ExecutionKind::Command => context.success(),
-                ExecutionKind::Mutation => context.accent(),
-                _ => context.muted(),
-            },
+            CommandStatus::Succeeded => context.muted(),
         };
-        let mut lines = prefixed_body(&self.summary(), "●", color, view, context);
+        let mut lines = prefixed_body(&self.summary(context.language()), "●", color, view, context);
+        if view.mode == CellMode::Collapsed {
+            for call in self.calls.iter().filter(|call| call.failed) {
+                let label = call.failure_label(context.language());
+                let reason = call
+                    .result
+                    .as_deref()
+                    .and_then(|result| {
+                        ansi_text(result)
+                            .lines
+                            .into_iter()
+                            .map(|line| line.to_string())
+                            .find(|line| !line.trim().is_empty())
+                    })
+                    .map(|line| truncate_utf8(&line, 160));
+                let mut spans = vec![
+                    Span::styled("└─ ", Style::default().fg(context.muted())),
+                    Span::styled(label, Style::default().fg(context.danger())),
+                ];
+                if let Some(reason) = reason {
+                    spans.push(Span::styled(
+                        format!(" — {reason}"),
+                        Style::default().fg(context.muted()),
+                    ));
+                }
+                lines.push(Line::from(spans));
+            }
+        }
         if let Some(detail) = self.detail(view.mode) {
             push_detail_lines(&mut lines, DetailFormat::Ansi, &detail, context);
         }

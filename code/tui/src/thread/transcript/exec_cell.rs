@@ -1,18 +1,13 @@
 mod render;
 
+use crate::nls::Language;
+use crate::nls::Text;
 use crate::thread::transcript::CommandStatus;
 use crate::thread::transcript::TranscriptCellId;
 use ash_protocol::ToolCallId;
 use ash_protocol::ToolName;
 use ash_protocol::ToolOutputStream;
 use std::collections::BTreeSet;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum ExecutionKind {
-    Command,
-    Mutation,
-    Neutral,
-}
 
 const MAX_GROUP_CALLS: usize = 16;
 const MAX_LIVE_BYTES: usize = 64 * 1024;
@@ -54,6 +49,17 @@ struct ExecCall {
 }
 
 impl ExecCall {
+    fn failure_label(&self, language: Language) -> String {
+        let template = match self.name.as_str() {
+            "history_list" => "Failed to list history",
+            "history_read" => "Failed to read history",
+            "history_search" => "Failed to search history",
+            _ if self.class == ExecClass::Command => "Command failed",
+            _ => "{0} failed",
+        };
+        localized(language, template, &[&self.name])
+    }
+
     fn new(
         entry_id: Option<String>,
         tool_call_id: ToolCallId,
@@ -334,23 +340,58 @@ impl ExecCell {
             .join("\n\n")
     }
 
-    fn summary(&self) -> String {
+    fn summary(&self, language: Language) -> String {
+        let failed = self.calls.iter().filter(|call| call.failed).count();
+        let running = self.is_live();
         match (self.group, self.calls.as_slice()) {
-            (_, [call]) if self.is_live() => format!("Running {}", call.name),
-            (_, [call]) if call.failed => format!("{} failed", call.name),
-            (_, [call]) => format!("Ran {}", call.name),
-            (ExecGroup::ExploreGroup, calls) => format!("Explored {} operations", calls.len()),
-            (ExecGroup::CompactCommandGroup, calls) => format!("Ran {} commands", calls.len()),
-            (ExecGroup::SingleExec, calls) => format!("Ran {} tools", calls.len()),
-        }
-    }
-
-    fn execution_kind(&self) -> ExecutionKind {
-        match self.calls.first().map(|call| call.class) {
-            Some(ExecClass::Command) => ExecutionKind::Command,
-            Some(ExecClass::Mutation) => ExecutionKind::Mutation,
-            Some(ExecClass::Read | ExecClass::Search | ExecClass::List | ExecClass::Other)
-            | None => ExecutionKind::Neutral,
+            (_, [call]) => {
+                if !running && call.failed {
+                    return call.failure_label(language);
+                }
+                let history = match (call.name.as_str(), running) {
+                    ("history_list", true) => Some("Listing history"),
+                    ("history_list", false) => Some("Listed history"),
+                    ("history_read", true) => Some("Reading history"),
+                    ("history_read", false) => Some("Read history"),
+                    ("history_search", true) => Some("Searching history"),
+                    ("history_search", false) => Some("Searched history"),
+                    _ => None,
+                };
+                if let Some(template) = history {
+                    return localized(language, template, &[]);
+                }
+                let template = match (running, call.class) {
+                    (true, ExecClass::Command) => "Running command",
+                    (false, ExecClass::Command) => "Command finished",
+                    (true, _) => "Running {0}",
+                    (false, _) => "Completed {0}",
+                };
+                localized(language, template, &[&call.name])
+            }
+            (ExecGroup::ExploreGroup, calls) => {
+                let count = calls.len().to_string();
+                let failures = failed.to_string();
+                let template = match (running, failed > 0) {
+                    (true, true) => "Exploring {0} operations · {1} failed",
+                    (true, false) => "Exploring {0} operations",
+                    (false, true) => "Explored {0} operations · {1} failed",
+                    (false, false) => "Explored {0} operations",
+                };
+                localized(language, template, &[&count, &failures])
+            }
+            (ExecGroup::CompactCommandGroup, calls) => {
+                let count = calls.len().to_string();
+                let template = if running {
+                    "Running {0} commands"
+                } else {
+                    "Finished {0} commands"
+                };
+                localized(language, template, &[&count])
+            }
+            (ExecGroup::SingleExec, calls) => {
+                let count = calls.len().to_string();
+                localized(language, "Completed {0} tools", &[&count])
+            }
         }
     }
 
@@ -371,14 +412,28 @@ fn group_for(class: ExecClass) -> ExecGroup {
 
 fn classify(name: &str) -> ExecClass {
     match name {
-        "read" | "read_file" | "read_text_file" => ExecClass::Read,
-        "search" | "search_files" | "grep" | "glob" | "rg" | "find" => ExecClass::Search,
-        "list" | "list_dir" | "list_directory" => ExecClass::List,
+        "read" | "read_file" | "read_text_file" | "history_read" => ExecClass::Read,
+        "search" | "search_files" | "grep" | "glob" | "rg" | "find" | "history_search" => {
+            ExecClass::Search
+        }
+        "list" | "list_dir" | "list_directory" | "history_list" => ExecClass::List,
         "command" | "exec" | "exec_command" | "shell" | "shell-command" | "shell_command"
         | "terminal" => ExecClass::Command,
         "apply_patch" | "edit" | "write_file" => ExecClass::Mutation,
         _ => ExecClass::Other,
     }
+}
+
+fn localized(language: Language, template: &str, arguments: &[&str]) -> String {
+    let mut text = Text::template(
+        template,
+        arguments
+            .iter()
+            .map(|value| Text::literal(*value))
+            .collect(),
+    );
+    text.localize(language);
+    text.to_string()
 }
 
 fn bounded_text(text: &str, max_bytes: usize, max_lines: usize) -> String {
