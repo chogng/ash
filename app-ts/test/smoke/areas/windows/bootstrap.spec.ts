@@ -133,17 +133,22 @@ test('Windows development launcher shows the Workbench window', async ({}, testI
 		const socket = new WebSocket(target.webSocketDebuggerUrl);
 		try {
 			await new Promise<void>((resolveOpen, reject) => { socket.onopen = () => resolveOpen(); socket.onerror = reject; });
-			const visible = await new Promise<boolean>((resolveResult, reject) => {
-				const timer = setTimeout(() => reject(new Error('Electron visibility check timed out')), 5_000);
-				socket.onmessage = event => {
-					const response = JSON.parse(String(event.data)) as { id?: number; result?: { result?: { value?: boolean } } };
-					if (response.id !== 1) { return; }
+			let requestId = 0;
+			const isVisible = (): Promise<boolean> => new Promise((resolveResult, reject) => {
+				const id = ++requestId;
+				const timer = setTimeout(() => { socket.removeEventListener('message', onMessage); reject(new Error('Electron visibility check timed out')); }, 5_000);
+				const onMessage = (event: MessageEvent): void => {
+					const response = JSON.parse(String(event.data)) as { id?: number; result?: { result?: { value?: boolean }; exceptionDetails?: { text: string } } };
+					if (response.id !== id) return;
 					clearTimeout(timer);
+					socket.removeEventListener('message', onMessage);
+					if (response.result?.exceptionDetails) { reject(new Error(response.result.exceptionDetails.text)); return; }
 					resolveResult(response.result?.result?.value === true);
 				};
-				socket.send(JSON.stringify({ id: 1, method: 'Runtime.evaluate', params: { expression: "process.mainModule.require('electron').BrowserWindow.getAllWindows()[0].isVisible()", returnByValue: true } }));
+				socket.addEventListener('message', onMessage);
+				socket.send(JSON.stringify({ id, method: 'Runtime.evaluate', params: { expression: "process.mainModule.require('electron').BrowserWindow.getAllWindows()[0].isVisible()", returnByValue: true } }));
 			});
-			expect(visible).toBe(true);
+			await expect.poll(isVisible, { timeout: 10_000 }).toBe(true);
 		} finally { socket.close(); }
 	} finally {
 		await browser?.close();

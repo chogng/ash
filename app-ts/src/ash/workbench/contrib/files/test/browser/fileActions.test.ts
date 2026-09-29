@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { URI } from '../../../../../base/common/uri.js';
-import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+import { IClipboardService, type IClipboardResources } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IDialogService, type IConfirmationDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
 import { Event } from '../../../../../base/common/event.js';
@@ -184,7 +184,7 @@ test('Explorer copy and cut paste selected files with conflict names', async () 
 	const existing = new Set(['/project/one.txt', '/project/two.txt', '/project/dest', '/project/dest/one.txt']);
 	const copied: string[] = [];
 	const renamed: string[] = [];
-	let resourceClipboard: readonly URI[] = [];
+	let resourceClipboard: IClipboardResources = { resources: [], operation: 'copy' };
 	using services = new ServiceContainer();
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IExplorerService, explorer);
@@ -192,8 +192,8 @@ test('Explorer copy and cut paste selected files with conflict names', async () 
 		readText: async () => '',
 		writeText: async () => {},
 		readResources: async () => resourceClipboard,
-		writeResources: async resources => { resourceClipboard = [...resources]; },
-		hasResources: async () => resourceClipboard.length > 0,
+		writeResources: async (resources, operation) => { resourceClipboard = { resources: [...resources], operation }; },
+		hasResources: async () => resourceClipboard.resources.length > 0,
 	});
 	services.registerInstance(IFileService, {
 		stat: async (resource: URI) => { if (!existing.has(resource.fsPath)) throw new FileNotFoundError(resource); return { resource, kind: FileKind.File, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined }; },
@@ -213,31 +213,34 @@ test('Explorer copy and cut paste selected files with conflict names', async () 
 	assert.equal(explorer.getToCopy().items.length, 0);
 	selected = [first];
 	await commands.executeCommand(CUT_FILE_COMMAND_ID);
+	resourceClipboard = { resources: resourceClipboard.resources, operation: 'copy' };
 	await commands.executeCommand(CANCEL_CUT_COMMAND_ID);
 	assert.equal(explorer.getToCopy().items.length, 0);
+	assert.deepEqual(resourceClipboard, { resources: [first.resource], operation: 'copy' });
 	selected = [new ExplorerItem(URI.file('/project/src'), 'src', FileKind.Directory), new ExplorerItem(URI.file('/project/src/child.txt'), 'child.txt', FileKind.File)];
 	await commands.executeCommand(COPY_FILE_COMMAND_ID);
 	assert.deepEqual(explorer.getToCopy().items.map(item => item.name), ['src']);
 });
 
-test('Explorer paste reads resources copied in another window', async () => {
+test('Explorer paste keeps copy and cut operations across windows', async () => {
 	await import('../../browser/fileActions.contribution.js');
 	const root = URI.file('/project');
 	const source = URI.file('/project/100% ready.bin');
 	const destination = URI.file('/project/destination');
-	let resources: readonly URI[] = [];
+	let pasteDestination = destination;
+	let clipboardResources: IClipboardResources = { resources: [], operation: 'copy' };
 	const clipboard = {
 		readText: async () => '',
 		writeText: async () => {},
-		readResources: async () => resources,
-		writeResources: async (value: readonly URI[]) => { resources = [...value]; },
-		hasResources: async () => resources.length > 0,
+		readResources: async () => clipboardResources,
+		writeResources: async (resources: readonly URI[], operation: 'copy' | 'move') => { clipboardResources = { resources: [...resources], operation }; },
+		hasResources: async () => clipboardResources.resources.length > 0,
 	};
 	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
 	using first = createExplorerService(workspace);
 	using second = createExplorerService(workspace);
 	using firstView = first.registerView({ getContext: () => [new ExplorerItem(source, '100% ready.bin', FileKind.File)], getAccessibleContent: () => '', focus() {} });
-	using secondView = second.registerView({ getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', focus() {} });
+	using secondView = second.registerView({ getContext: () => [new ExplorerItem(pasteDestination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', focus() {} });
 	using firstServices = new ServiceContainer();
 	firstServices.registerInstance(IWorkspaceContextService, workspace);
 	firstServices.registerInstance(IExplorerService, first);
@@ -245,21 +248,29 @@ test('Explorer paste reads resources copied in another window', async () => {
 	using firstCommands = new CommandService(firstServices);
 	await firstCommands.executeCommand(COPY_FILE_COMMAND_ID);
 
-	const copied: string[] = [];
+	const operations: string[] = [];
 	using secondServices = new ServiceContainer();
 	secondServices.registerInstance(IWorkspaceContextService, workspace);
 	secondServices.registerInstance(IExplorerService, second);
 	secondServices.registerInstance(IClipboardService, clipboard);
 	secondServices.registerInstance(IFileService, {
-		stat: async resource => {
+		stat: async (resource: URI) => {
 			if (resource.toString() === source.toString()) return { resource, kind: FileKind.File, sizeBytes: 3, readonly: false, modifiedAtMillis: undefined };
 			throw new FileNotFoundError(resource);
 		},
-		copy: async (from, to) => { copied.push(`${from.fsPath} -> ${to.fsPath}`); },
-	} as FileServiceContract);
+		copy: async (from: URI, to: URI) => { operations.push(`copy ${from.fsPath} -> ${to.fsPath}`); },
+		rename: async (from: URI, to: URI) => { operations.push(`move ${from.fsPath} -> ${to.fsPath}`); },
+	} as unknown as FileServiceContract);
 	using secondCommands = new CommandService(secondServices);
 	await secondCommands.executeCommand(PASTE_FILE_COMMAND_ID);
-	assert.deepEqual(copied, ['/project/100% ready.bin -> /project/destination/100% ready.bin']);
+	assert.deepEqual(operations, ['copy /project/100% ready.bin -> /project/destination/100% ready.bin']);
+	await firstCommands.executeCommand(CUT_FILE_COMMAND_ID);
+	pasteDestination = URI.file('/project/other');
+	await secondCommands.executeCommand(PASTE_FILE_COMMAND_ID);
+	assert.deepEqual(operations, [
+		'copy /project/100% ready.bin -> /project/destination/100% ready.bin',
+		'move /project/100% ready.bin -> /project/other/100% ready.bin',
+	]);
 });
 
 test('Explorer cut across nested workspace roots copies before deleting the source', async () => {
@@ -276,15 +287,18 @@ test('Explorer cut across nested workspace roots copies before deleting the sour
 	});
 	using explorer = createExplorerService(workspace);
 	using view = explorer.registerView({ getContext: () => [selected], getAccessibleContent: () => '', focus() {} });
-	let resources: readonly URI[] = [];
+	let clipboardResources: IClipboardResources = { resources: [], operation: 'copy' };
 	const operations: string[] = [];
 	using services = new ServiceContainer();
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IExplorerService, explorer);
 	services.registerInstance(IClipboardService, {
-		readResources: async () => resources,
-		writeResources: async value => { resources = value; },
-	} as IClipboardService);
+		readText: async () => '',
+		writeText: async () => {},
+		readResources: async () => clipboardResources,
+		writeResources: async (resources, operation) => { clipboardResources = { resources, operation }; },
+		hasResources: async () => clipboardResources.resources.length > 0,
+	});
 	services.registerInstance(IFileService, {
 		stat: async (resource: URI) => { throw new FileNotFoundError(resource); },
 		copy: async () => { operations.push('copy'); },
@@ -324,7 +338,7 @@ test('Explorer paste imports exact bytes from the system file list', async () =>
 		services.registerInstance(IWorkspaceContextService, workspace);
 		services.registerInstance(IExplorerService, explorer);
 		services.registerInstance(IClipboardService, {
-			readResources: async () => [],
+			readResources: async () => ({ resources: [], operation: 'copy' }),
 		} as unknown as IClipboardService);
 		services.registerInstance(IFileService, {
 			stat: async (resource: URI) => { throw new FileNotFoundError(resource); },
@@ -361,7 +375,7 @@ test('Copy Path commands copy the active file and its workspace-relative path', 
 		services.registerInstance(IClipboardService, {
 			readText: async () => copied.at(-1) ?? '',
 			writeText: async (value: string) => { copied.push(value); },
-			readResources: async () => [],
+			readResources: async () => ({ resources: [], operation: 'copy' }),
 			writeResources: async () => {},
 			hasResources: async () => false,
 		});

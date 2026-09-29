@@ -30,7 +30,7 @@ export async function copyExplorerItems(accessor: ServicesAccessor, cut: boolean
 	const items = selection.filter(item => !isWorkspaceRoot(accessor, item.resource) && !selection.some(parent =>
 		parent !== item && parent.kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqualOrParent(item.resource, parent.resource)));
 	if (!items.length) return;
-	await accessor.get(IClipboardService).writeResources(items.map(item => item.resource));
+	await accessor.get(IClipboardService).writeResources(items.map(item => item.resource), cut ? 'move' : 'copy');
 	accessor.get(IExplorerService).setToCopy(items, cut);
 }
 
@@ -38,9 +38,9 @@ export async function copyExplorerItems(accessor: ServicesAccessor, cut: boolean
 export async function cancelExplorerCut(accessor: ServicesAccessor): Promise<void> {
 	const explorer = accessor.get(IExplorerService);
 	if (!explorer.getToCopy().cut) return;
-	const resources = await accessor.get(IClipboardService).readResources();
-	if (sameResources(resources, explorer.getToCopy().items.map(item => item.resource))) {
-		await accessor.get(IClipboardService).writeResources([]);
+	const { resources, operation } = await accessor.get(IClipboardService).readResources();
+	if (operation === 'move' && sameResources(resources, explorer.getToCopy().items.map(item => item.resource))) {
+		await accessor.get(IClipboardService).writeResources([], 'copy');
 	}
 	explorer.setToCopy([], false);
 }
@@ -49,11 +49,11 @@ export async function cancelExplorerCut(accessor: ServicesAccessor): Promise<voi
 export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: unknown): Promise<void> {
 	if (fileList !== undefined && !(fileList instanceof FileList)) throw new TypeError('Invalid files to paste');
 	const explorer = accessor.get(IExplorerService);
-	const resources = await accessor.get(IClipboardService).readResources();
+	const { resources, operation } = await accessor.get(IClipboardService).readResources();
 	const nativeFiles = resources.length === 0 && fileList && fileList.length > 0 ? [...fileList] : [];
 	if (!nativeFiles.length && !resources.length) return;
 	const localClipboard = explorer.getToCopy();
-	const cut = nativeFiles.length === 0 && localClipboard.cut && sameResources(resources, localClipboard.items.map(item => item.resource));
+	const cut = nativeFiles.length === 0 && operation === 'move';
 	const selection = explorer.getContext()[0];
 	const workspaceContext = accessor.get(IWorkspaceContextService);
 	const directory = selection && selection.resource.scheme !== 'ash-workspace'
@@ -86,7 +86,7 @@ export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: 
 		}
 	}
 	if (cut) {
-		await accessor.get(IClipboardService).writeResources([]);
+		await accessor.get(IClipboardService).writeResources([], 'copy');
 		explorer.setToCopy([], false);
 	}
 }

@@ -27,8 +27,8 @@ test('browser resource clipboard is shared across service instances and follows 
 		const second = new BrowserClipboardService(clipboard);
 		const resource = URI.file('/workspace/100% ready.txt');
 
-		await first.writeResources([resource]);
-		assert.deepEqual(await second.readResources(), [resource]);
+		await first.writeResources([resource], 'move');
+		assert.deepEqual(await second.readResources(), { resources: [resource], operation: 'move' });
 		await second.writeText('different clipboard content');
 		assert.equal(await first.hasResources(), false);
 	} finally {

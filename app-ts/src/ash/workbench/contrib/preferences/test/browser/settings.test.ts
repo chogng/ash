@@ -363,7 +363,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	let hideMenu: ((didCancel: boolean) => void) | undefined;
 	const clipboardService: IClipboardService = {
 		readText: async () => '',
-		readResources: async () => [],
+		readResources: async () => ({ resources: [], operation: 'copy' }),
 		writeResources: async () => {},
 		hasResources: async () => false,
 		writeText: value => {

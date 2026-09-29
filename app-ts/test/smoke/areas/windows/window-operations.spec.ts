@@ -43,7 +43,7 @@ test('Electron Workbench window operations use the registered window host', asyn
 	expect(result).toEqual({ count: 1, focused: true, zoomNotification: 1, changedZoom: 1, changedAlwaysOnTop: true, zoom: 0, alwaysOnTop: false, rejected: true });
 });
 
-test('window picker data includes the Agents child window and can focus it', async ({ application, target, workbench }) => {
+test('window picker data includes the Agents window and can focus it', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'This scenario requires the Code Electron Workbench');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const opened = application.waitForEvent('window');
@@ -54,21 +54,28 @@ test('window picker data includes the Agents child window and can focus it', asy
 	try {
 		const windows = await workbench.page.evaluate(async () => {
 			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown> } } }).ash.ipcRenderer;
-			return ipc.invoke('ash:window:operation', { kind: 'list' }) as Promise<readonly { id: number; parentId?: number }[]>;
+			return ipc.invoke('ash:window:operation', { kind: 'list' }) as Promise<readonly { id: number; focused: boolean }[]>;
 		});
 		expect(windows).toHaveLength(2);
-		const child = windows.find(window => window.parentId !== undefined);
-		expect(child?.parentId).toBe(windows.find(window => window.parentId === undefined)?.id);
+		const agents = windows.find(window => window.focused);
+		const workbenchWindow = windows.find(window => window.id !== agents?.id);
+		expect(agents).toBeDefined();
+		expect(workbenchWindow).toBeDefined();
 		await workbench.page.evaluate(async id => {
 			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown> } } }).ash.ipcRenderer;
 			await ipc.invoke('ash:window:operation', { kind: 'focus', windowId: id });
-		}, child!.id);
-		await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.id)).toBe(child!.id);
+		}, workbenchWindow!.id);
+		await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.id)).toBe(workbenchWindow!.id);
+		await workbench.page.evaluate(async id => {
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+			await ipc.invoke('ash:window:operation', { kind: 'focus', windowId: id });
+		}, agents!.id);
+		await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.id)).toBe(agents!.id);
 		await expect(childPage.locator('.ash-sessions-window')).toBeVisible();
 		await childPage.keyboard.press('ControlOrMeta+Alt+w');
-		await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.id)).toBe(child!.parentId);
+		await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.id)).toBe(workbenchWindow!.id);
 		await workbench.page.keyboard.press('ControlOrMeta+Alt+w');
-		await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.id)).toBe(child!.id);
+		await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.id)).toBe(agents!.id);
 	} finally {
 		if (!childPage.isClosed()) await childPage.close();
 	}

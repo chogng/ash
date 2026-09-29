@@ -6,6 +6,14 @@ import type { BrowserWindow, MessageBoxOptions } from 'electron';
 import { expect, test } from '../../../automation/test.js';
 import { parseWorkspace } from '../../../../src/ash/platform/workspace/common/workspace.js';
 
+function windowsPreferredDropEffect(): number {
+	const output = execFileSync('powershell.exe', [
+		'-NoProfile', '-STA', '-Command',
+		'Add-Type -AssemblyName System.Windows.Forms; $data = [System.Windows.Forms.Clipboard]::GetDataObject().GetData("Preferred DropEffect"); if ($data -isnot [System.IO.MemoryStream]) { throw "Missing Preferred DropEffect" }; [BitConverter]::ToInt32($data.ToArray(), 0)',
+	], { encoding: 'utf8' });
+	return Number(output.trim());
+}
+
 test('repeated folder opens wait for the permission choice past 30 seconds', async ({ target, testWorkspace, workbench }) => {
 	test.setTimeout(75_000);
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'This scenario requires the Code desktop and App Server');
@@ -129,18 +137,24 @@ test('Explorer shortcuts copy and move binary files into folders', async ({ targ
 		return data instanceof Blob ? data.text() : undefined;
 	});
 	expect(copiedFiles).toContain('clipboard.bin');
+	await expect(page.evaluate(async () => {
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<void> } } }).ash.ipcRenderer;
+		await ipc.invoke('ash:host:writeClipboardResources', { resources: [], operation: 'delete' });
+	})).rejects.toThrow(/Invalid clipboard resources/);
 	if (process.platform === 'win32') {
 		const fileDropList = execFileSync('powershell.exe', [
 			'-NoProfile', '-STA', '-Command',
 			'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::GetFileDropList()',
 		], { encoding: 'utf8' }).trim().split(/\r?\n/);
 		expect(fileDropList).toContain(join(directory, 'clipboard.bin'));
+		expect(windowsPreferredDropEffect()).toBe(1);
 	}
 	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'paste-target', exact: true }).click();
 	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+v' : 'Control+v');
 	await expect.poll(async () => readFile(join(directory, 'paste-target', 'clipboard.bin')).then(value => [...value], () => [])).toEqual([...bytes]);
 	await source.click();
 	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+x' : 'Control+x');
+	if (process.platform === 'win32') expect(windowsPreferredDropEffect()).toBe(2);
 	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'move-target', exact: true }).click();
 	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+v' : 'Control+v');
 	await expect.poll(async () => readFile(join(directory, 'move-target', 'clipboard.bin')).then(value => [...value], () => [])).toEqual([...bytes]);
@@ -150,6 +164,16 @@ test('Explorer shortcuts copy and move binary files into folders', async ({ targ
 	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'paste-target', exact: true }).click();
 	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+v' : 'Control+v');
 	await expect.poll(async () => readFile(join(directory, 'paste-target', 'folder-to-copy', 'nested.bin')).then(value => [...value], () => [])).toEqual([...bytes]);
+	if (process.platform === 'win32') {
+		const external = join(directory, 'external.bin');
+		await writeFile(external, bytes);
+		execFileSync('powershell.exe', [
+			'-NoProfile', '-STA', '-Command',
+			'Add-Type -AssemblyName System.Windows.Forms; $files = New-Object System.Collections.Specialized.StringCollection; [void]$files.Add($env:ASH_TEST_CLIPBOARD_FILE); [System.Windows.Forms.Clipboard]::SetFileDropList($files)',
+		], { env: { ...process.env, ASH_TEST_CLIPBOARD_FILE: external } });
+		await page.keyboard.press('Control+v');
+		await expect.poll(async () => readFile(join(directory, 'paste-target', 'external.bin')).then(value => [...value], () => [])).toEqual([...bytes]);
+	}
 });
 
 test('Explorer opens the focused file context menu from the keyboard', async ({ target, application, workbench }) => {
