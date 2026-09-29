@@ -62,7 +62,7 @@ test('Chat input omits the unused find control and keeps its text evenly inset',
 	expect(editorChrome.rulerDisplay).toBe('none');
 });
 
-test('Chat input shows a round voice action when empty and a send arrow for text', async ({ target, workbench }) => {
+test('Chat input places the microphone beside voice or send at the right edge', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
@@ -70,10 +70,28 @@ test('Chat input shows a round voice action when empty and a send arrow for text
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	const toolbar = chat.locator('.ash-chat-input-toolbars');
+	const rightActionLayout = async (actionId: string) => toolbar.evaluate((element, id) => {
+		const mic = element.querySelector<HTMLElement>('[data-action-id="ash.chat.input.mic"]');
+		const action = element.querySelector<HTMLElement>(`[data-action-id="${id}"]`);
+		if (!mic || !action) throw new Error('Chat input actions are incomplete');
+		const micBounds = mic.getBoundingClientRect();
+		const actionBounds = action.getBoundingClientRect();
+		return {
+			micLeft: micBounds.left,
+			toolbarMiddle: element.getBoundingClientRect().left + element.getBoundingClientRect().width / 2,
+			gap: actionBounds.left - micBounds.right,
+			rightInset: element.getBoundingClientRect().right - actionBounds.right,
+		};
+	}, actionId);
 	await expect(toolbar.locator('[data-action-id="ash.chat.input.attachment"]')).toHaveCount(0);
 	await expect(toolbar.locator('[data-action-id="ash.chat.input.mic"] button')).toHaveCount(1);
 	const voiceButton = toolbar.locator('[data-action-id="ash.chat.input.voice"] button');
 	await expect(voiceButton).toBeVisible();
+	const emptyLayout = await rightActionLayout('ash.chat.input.voice');
+	expect(emptyLayout.micLeft).toBeGreaterThan(emptyLayout.toolbarMiddle);
+	expect(emptyLayout.gap).toBeGreaterThanOrEqual(0);
+	expect(emptyLayout.gap).toBeLessThanOrEqual(16);
+	expect(emptyLayout.rightInset).toBeLessThanOrEqual(2);
 	await expect(voiceButton.locator('[data-ash-icon-id="voice-mode"]')).toHaveCount(1);
 	const shape = await voiceButton.evaluate(button => {
 		const bounds = button.getBoundingClientRect();
@@ -89,9 +107,22 @@ test('Chat input shows a round voice action when empty and a send arrow for text
 	const sendButton = toolbar.locator('[data-action-id="ash.chat.input.send"] button');
 	await expect(sendButton.locator('[data-ash-icon-id="arrow-up"]')).toHaveCount(1);
 	await expect(sendButton).toHaveCSS('border-radius', '50%');
+	const messageLayout = await rightActionLayout('ash.chat.input.send');
+	expect(messageLayout.micLeft).toBeGreaterThan(messageLayout.toolbarMiddle);
+	expect(messageLayout.gap).toBeGreaterThanOrEqual(0);
+	expect(messageLayout.gap).toBeLessThanOrEqual(16);
+	expect(messageLayout.rightInset).toBeLessThanOrEqual(2);
 	await page.keyboard.press('ControlOrMeta+A');
 	await page.keyboard.press('Backspace');
 	await expect(toolbar.locator('[data-action-id="ash.chat.input.voice"] button')).toBeVisible();
+	await page.keyboard.insertText('/config');
+	await expect(toolbar.locator('[data-action-id="ash.chat.input.mic"]')).toHaveCount(0);
+	const commandRightInset = await toolbar.evaluate(element => {
+		const send = element.querySelector<HTMLElement>('[data-action-id="ash.chat.input.send"]');
+		if (!send) throw new Error('Chat send action is missing');
+		return element.getBoundingClientRect().right - send.getBoundingClientRect().right;
+	});
+	expect(commandRightInset).toBeLessThanOrEqual(2);
 });
 
 test('Desktop Chat sends the selected local dictation package through its microphone button', async ({ target, workbench }) => {

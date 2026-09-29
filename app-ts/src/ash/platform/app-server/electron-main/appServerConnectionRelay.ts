@@ -12,6 +12,7 @@ import { ChildProcessJsonlTransport, DEFAULT_MAX_JSONL_FRAME_BYTES } from '../no
 
 /** Owns one renderer's connection carrier; the carrier connects to the shared profile daemon. */
 export class AppServerConnectionRelay extends Disposable {
+	private connectionOptions: { readonly enabled: false } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher };
 	private readonly transport = this._register(new MutableDisposable<ChildProcessJsonlTransport>());
 	private readonly portResources = this._register(new MutableDisposable<IDisposable>());
 	private readonly changes = this._register(new Emitter<AppServerConnectionState>());
@@ -22,7 +23,17 @@ export class AppServerConnectionRelay extends Disposable {
 	private diagnostic = '';
 	private nonce: string | undefined;
 
-	constructor(public readonly options: { readonly enabled: false } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher }) { super(); }
+	constructor(options: { readonly enabled: false } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher }) {
+		super();
+		this.connectionOptions = options;
+	}
+
+	public get options(): { readonly enabled: false } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher } { return this.connectionOptions; }
+
+	public replaceProcessLauncher(processLauncher: IAppServerProcessLauncher): void {
+		if (!this.options.enabled || this.state !== 'stopped') throw new Error('App Server launcher can only change while stopped');
+		this.connectionOptions = { enabled: true, processLauncher };
+	}
 
 	public async start(): Promise<void> {
 		this.assertNotDisposed();
@@ -60,7 +71,7 @@ export class AppServerConnectionRelay extends Disposable {
 
 	public routes(renderer: WebContents, metadata: () => { workspaceId: string; workspaceRoot: string }): readonly IpcRoute<unknown, unknown>[] {
 		this.renderer = renderer;
-		const processLauncher = this.options.enabled ? this.options.processLauncher : undefined;
+		const processLauncher = (): IAppServerProcessLauncher | undefined => this.options.enabled ? this.options.processLauncher : undefined;
 		const reset = (): void => { void this.stop(); };
 		renderer.on('render-process-gone', reset);
 		// Initial navigation must keep the connection started before the window loaded.
@@ -75,12 +86,13 @@ export class AppServerConnectionRelay extends Disposable {
 				return value.nonce;
 			},
 			invoke: async nonce => {
-				if (!processLauncher) { return { enabled: false }; }
+				const launcher = processLauncher();
+				if (!launcher) { return { enabled: false }; }
 				if (this.nonce !== undefined) { await this.stop(); }
 				let transport = this.transport.value;
 				if (!transport) {
-					await processLauncher.validate();
-					transport = new ChildProcessJsonlTransport(processLauncher.launch());
+					await launcher.validate();
+					transport = new ChildProcessJsonlTransport(launcher.launch());
 					this.transport.value = transport;
 				}
 				this.attach(renderer, nonce as string, transport);
@@ -96,12 +108,12 @@ export class AppServerConnectionRelay extends Disposable {
 					return new AppServerProtocolIncompatibleError(value.kind === 'missingCapability' ? { kind: value.kind, ...common } : { kind: value.kind, ...common, received: number('received') });
 				}
 				throw new Error('Invalid runtime incompatibility');
-			}, invoke: value => processLauncher?.recoverInitializationFailure?.(value) ?? false,
+			}, invoke: value => processLauncher()?.recoverInitializationFailure?.(value) ?? false,
 		}, {
 			channel: 'ash:app-server:initialized', validate: value => value,
 			invoke: async value => {
 				if (!isRecord(value) || value.nonce !== this.nonce || this.nonce === undefined) { throw new Error('Connection initialization superseded'); }
-				await processLauncher?.didInitialize?.();
+				await processLauncher()?.didInitialize?.();
 				this.setState('ready');
 			},
 		}];

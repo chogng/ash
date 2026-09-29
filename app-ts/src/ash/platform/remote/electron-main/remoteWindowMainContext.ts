@@ -54,7 +54,18 @@ export class RemoteWindowMainContext extends Disposable {
 
 	constructor(private readonly options: RemoteWindowMainContextOptions) {
 		super();
-		const recovery = this.createConnectionRecovery();
+		const recovery: IRemoteAgentRecoveryMainService = {
+			reconnect: () => {
+				const current = this.createConnectionRecovery();
+				if (!current) throw new Error('Remote reconnect is not available for this connection');
+				return current.reconnect();
+			},
+			rollback: () => {
+				const current = this.createConnectionRecovery();
+				if (!current) throw new Error('Remote runtime rollback is not available for this connection');
+				return current.rollback();
+			},
+		};
 		this.ipcRoutes = Object.freeze([
 			...remoteAgentIpcRoutes(options.supervisor, () => options.workspaceContext.getWorkspace(), recovery),
 			...remoteConnectionIpcRoutes(options.connections),

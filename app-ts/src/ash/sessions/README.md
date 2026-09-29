@@ -115,8 +115,10 @@ and dirs. It does not grant access and is not the editor window Workspace from
   visibility, active selection, focus, and navigation history.
 - Each runtime, Part, retained Chat pane, App Server event subscription, and
   interaction service is disposed with the Sessions window.
-- Closing an Electron Workbench window leaves its Sessions window open. The
-  Sessions window retains its own workspace context and connection until it closes.
+- An Electron process has one Sessions window. Opening it from another
+  Workbench focuses the existing window and switches its workspace context and
+  App Server connection before handing off a chat. Closing a Workbench leaves
+  the Sessions window open with its most recently selected workspace.
 - Returning to Workbench closes the Electron Sessions window and focuses or
   reopens the same workspace, or navigates the browser page to its sibling
   Workbench entry.

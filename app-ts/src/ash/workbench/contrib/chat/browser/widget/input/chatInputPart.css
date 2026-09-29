@@ -301,10 +301,18 @@
   background: var(--ash-button-primary-background);
 }
 
-.ash-chat-input-toolbars .ash-chat-input-send,
-.ash-chat-input-toolbars .ash-chat-input-voice,
-.ash-chat-input-toolbars .ash-chat-input-interrupt {
+.ash-chat-input-toolbars .ash-chat-input-mic {
   margin-left: auto;
+}
+
+.ash-chat-input-toolbars .ash-chat-input-send,
+.ash-chat-input-toolbars .ash-chat-input-voice {
+  margin-left: auto;
+}
+
+.ash-chat-input-toolbars .ash-chat-input-mic + .ash-chat-input-send,
+.ash-chat-input-toolbars .ash-chat-input-mic + .ash-chat-input-voice {
+  margin-left: 0;
 }
 
 .ash-chat-input-toolbars .ash-chat-input-send-action,

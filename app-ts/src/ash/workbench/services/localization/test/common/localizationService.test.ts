@@ -103,7 +103,8 @@ test("localization lookup falls back to English and formats parameters", async (
 		localization.translate('ash', 'chat.modelPicker.auto', 'Auto'),
 		localization.translate('ash', 'chat.modelPicker.addModels', 'Add Models'),
 		localization.translate('ash', 'chat.modelPicker.contextWindow', '{0} context window', { '0': '200,000' }),
-	], ['自动', '添加模型', '上下文窗口：200,000 个词元']);
+		localization.translate('ash', 'chat.modelPicker.thinkingEffort', 'Thinking Level'),
+	], ['自动', '添加模型', '上下文窗口：200,000 个词元', '推理强度']);
 	assert.deepEqual([
 		localization.translate('ash', 'sessions.activity.chat', 'Chat'),
 		localization.translate('ash', 'sessions.activity.colab', 'Collaboration'),

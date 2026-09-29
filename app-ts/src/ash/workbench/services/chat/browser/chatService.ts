@@ -122,7 +122,7 @@ export class ChatService extends Disposable implements IChatService {
 
 	private async loadModelCatalog(): Promise<readonly ModelCatalogEntry[]> {
 		const [catalog, providers] = await Promise.all([this.options.modelApi.listModels(), this.options.modelApi.listProviders()]);
-		const models: ModelCatalogEntry[] = [...catalog.models];
+		const models: Parameters<typeof this.acceptModelCatalog>[0][number][] = [...catalog.models];
 		for (const connection of ['kimi-desktop', 'kimi-cli']) {
 			if (!providers.providers.some(provider => provider.connection === connection && provider.ready)) continue;
 			models.push(...await this.options.modelApi.listProviderModels(connection));
@@ -274,6 +274,7 @@ export class ChatService extends Disposable implements IChatService {
 		readonly displayName: string;
 		readonly contextWindow?: number | null;
 		readonly supportedReasoningEfforts?: ModelCatalogEntry['supportedReasoningEfforts'];
+		readonly modelReasoningEffort?: ModelCatalogEntry['modelReasoningEffort'] | null;
 	}[]): readonly ModelCatalogEntry[] {
 		const identities = new Set<string>();
 		const catalog = entries.map(entry => {
@@ -285,6 +286,7 @@ export class ChatService extends Disposable implements IChatService {
 				displayName: entry.displayName,
 				...(entry.contextWindow !== undefined ? { contextWindow: entry.contextWindow } : {}),
 				...(entry.supportedReasoningEfforts !== undefined ? { supportedReasoningEfforts: Object.freeze([...entry.supportedReasoningEfforts]) } : {}),
+				...(entry.modelReasoningEffort != null ? { modelReasoningEffort: entry.modelReasoningEffort } : {}),
 			});
 		});
 		const changed = !sameModelCatalog(this.modelCatalog, catalog);
@@ -310,6 +312,7 @@ function sameModelCatalog(left: readonly ModelCatalogEntry[], right: readonly Mo
 			&& entry.displayName === candidate.displayName
 			&& modelRefIdentity(entry.model) === modelRefIdentity(candidate.model)
 			&& entry.contextWindow === candidate.contextWindow
+			&& entry.modelReasoningEffort === candidate.modelReasoningEffort
 			&& entry.supportedReasoningEfforts?.join('\0') === candidate.supportedReasoningEfforts?.join('\0');
 	});
 }

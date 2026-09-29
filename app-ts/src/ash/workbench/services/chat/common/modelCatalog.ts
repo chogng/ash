@@ -14,6 +14,7 @@ export interface ModelCatalogEntry {
 	readonly displayName: string;
 	readonly contextWindow?: number | null;
 	readonly supportedReasoningEfforts?: readonly ModelReasoningEffort[];
+	readonly modelReasoningEffort?: ModelReasoningEffort;
 }
 
 /** User-owned presentation preferences for the shared model catalog. */

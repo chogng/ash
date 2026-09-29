@@ -89,5 +89,8 @@ test('Explorer expands and collapses a refreshed folder without replacing siblin
 	await folder.click();
 	await expect(folder).toHaveAttribute('aria-expanded', 'true');
 	await expect(nested).toHaveCount(1);
+	await folder.locator('.ash-tree-contents').click({ clickCount: 2 });
+	await expect(folder).toHaveAttribute('aria-expanded', 'true');
+	await expect(nested).toHaveCount(1);
 	expect(await siblingRow?.evaluate(row => row.isConnected)).toBe(true);
 });

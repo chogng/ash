@@ -224,6 +224,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		displayName: "GPT-5.6 Sol",
 		contextWindow: 128000,
 		supportedReasoningEfforts: ["low", "medium", "high"] as const,
+		modelReasoningEffort: 'medium' as const,
 	};
 	const fake = fakeApi({
 		sessions: [
@@ -455,7 +456,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, "Agent");
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.model'] button .ash-button-label")?.textContent, "GPT-5.6 Sol");
-		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort'] button")?.getAttribute('aria-label'), 'Thinking Effort: Default');
+		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort'] button")?.getAttribute('aria-label'), 'Thinking Effort: Medium');
 		assert.equal(inputToolbar?.querySelector(".ash-chat-input-model-access-badge"), null);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mic'] button")?.disabled, true);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.voice'] button")?.disabled, true);
@@ -471,6 +472,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	assert.match(modelPicker?.textContent ?? '', /GPT-5\.6 Sol/);
 	assert.match(modelPicker?.textContent ?? '', /128,000 context tokens/);
 	assert.match(modelPicker?.textContent ?? '', /Thinking: low, medium, high/);
+	assert.equal(modelPicker?.querySelector('.ash-quick-pick-row-action'), null);
 	const modelSearch = modelPicker?.querySelector<HTMLInputElement>('input');
 	assert.ok(modelSearch);
 	modelSearch.value = 'no-such-model';
@@ -481,7 +483,19 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	modelSearch.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
 	assert.ok(modelSearch.getAttribute('aria-activedescendant'));
 	modelSearch.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-	assert.equal(modelButton?.getAttribute('aria-expanded'), 'false');
+	assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.model'] button")?.getAttribute('aria-expanded'), 'false');
+	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort'] button")?.click();
+	const effortMenu = dom.window.document.querySelector<HTMLElement>('.ash-chat-model-configuration-menu');
+	assert.equal(effortMenu?.querySelector('.ash-chat-model-configuration-heading')?.textContent, 'Thinking Level');
+	assert.deepEqual([...effortMenu?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? []].map(button => button.textContent), ['Low', 'MediumDefault', 'High']);
+	assert.equal(effortMenu?.querySelector('[role="menuitemradio"][aria-checked="true"]')?.textContent, 'MediumDefault');
+	assert.equal(effortMenu?.querySelector('[role="menuitemradio"][aria-checked="true"]')?.getAttribute('aria-description'), 'Default');
+	effortMenu?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort.high'] button")?.click();
+	await waitFor(() => firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort'] button")?.getAttribute('aria-label') === 'Thinking Effort: High');
+	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort'] button")?.click();
+	assert.equal(dom.window.document.querySelector('.ash-chat-model-configuration-menu [role="menuitemradio"][aria-checked="true"]')?.textContent, 'High');
+	dom.window.document.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort.medium'] button")?.click();
+	await waitFor(() => firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort'] button")?.getAttribute('aria-label') === 'Thinking Effort: Medium');
 	shownContextMenuActions = [];
 	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
 	assert.deepEqual(shownContextMenuActions, []);
@@ -1613,6 +1627,7 @@ interface FakeOptions {
 		readonly displayName: string;
 		readonly contextWindow?: number | null;
 		readonly supportedReasoningEfforts?: readonly ('none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max')[];
+		readonly modelReasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max';
 	}[];
 	readonly configuredProviders?: readonly string[];
 	readonly providers?: readonly ModelProviderCredentialStatus[];

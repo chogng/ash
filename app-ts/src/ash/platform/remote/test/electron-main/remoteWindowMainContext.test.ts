@@ -117,7 +117,7 @@ test("Remote window context owns routes, projections, and Workspace tunnel clean
 test("Remote window context scopes verified rollback to its own supervisor", async () => {
 	const workspace = URI.parse("ash-remote://ssh+build-linux/workspace/one");
 	const calls: string[] = [];
-	const launcher = new SshAppServerProcessLauncher({
+	let launcher = new SshAppServerProcessLauncher({
 		workspace,
 		sshExecutable: "custom-ssh",
 		remoteExecutable: "ash",
@@ -131,7 +131,7 @@ test("Remote window context scopes verified rollback to its own supervisor", asy
 	const supervisor = {
 		generation: 9,
 		state: "ready",
-		options: { processLauncher: launcher },
+		get options() { return { enabled: true, processLauncher: launcher }; },
 		onStateChange: (listener: (state: AppServerConnectionState) => void): IDisposable => {
 			stateListeners.add(listener);
 			return toDisposable(() => stateListeners.delete(listener));
@@ -172,13 +172,25 @@ test("Remote window context scopes verified rollback to its own supervisor", asy
 		prepareForRuntimeReplacement: () => { calls.push("prepare-terminals"); },
 	});
 	try {
+		const nextWorkspace = URI.parse('ash-remote://ssh+build-next/workspace/two');
+		launcher = new SshAppServerProcessLauncher({
+			workspace: nextWorkspace,
+			sshExecutable: 'custom-ssh',
+			remoteExecutable: 'ash',
+			localEnvironment: {},
+			rollbackRuntime: async (host, remoteWorkspace, sshExecutable) => {
+				calls.push(`rollback:${host}:${remoteWorkspace}:${sshExecutable}`);
+				return '/opt/ash/previous/bin/ash-remote-server';
+			},
+		});
+		workspaceContext.updateWorkspace({ id: 'remote-two', uri: nextWorkspace });
 		const route = context.ipcRoutes.find(candidate => candidate.channel === REMOTE_AGENT_RUNTIME_ROLLBACK_CHANNEL);
 		assert.ok(route);
 		const result = await route.invoke(route.validate(undefined));
 		assert.deepEqual(result, { kind: "rolledBack" });
 		assert.deepEqual(calls, [
 			"confirm",
-			"rollback:build-linux:/workspace/one:custom-ssh",
+			"rollback:build-next:/workspace/two:custom-ssh",
 			"prepare-terminals",
 			"stop",
 			"start",

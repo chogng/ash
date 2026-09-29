@@ -84,6 +84,12 @@
   font-size: var(--ash-fontSize-label1);
 }
 
+.ash-chat-model-configuration-heading {
+  padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+  color: var(--ash-description-foreground);
+  font-size: var(--ash-fontSize-label2);
+}
+
 .ash-chat-model-picker .ash-quick-pick-row-content {
   min-height: var(--ash-spacing-size240);
   padding: var(--ash-spacing-size20) var(--ash-spacing-size100);

@@ -14,7 +14,7 @@ import { constants, readFileSync, watch } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { isCancellationError } from "../../base/common/errors.js";
 import { createUuid } from '../../base/common/uuid.js';
-import { Disposable, DisposableMap, DisposableStore, DisposableTracker, installDisposableTracker, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
+import { Disposable, DisposableMap, DisposableStore, DisposableTracker, MutableDisposable, installDisposableTracker, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { assertDefined } from "../../base/common/types.js";
 import { AshApplicationName } from '../common/application.js';
 import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry, WorkbenchRendererEntry, withWorkbenchModeId, type WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
@@ -130,21 +130,23 @@ interface WorkbenchWindowRecord extends IWorkbenchWindowRecord {
 }
 
 class SessionsWindowRecord extends Disposable {
-	readonly workspaceId: string;
 	readonly workspaceContext: WorkspaceContextMainService;
 	readonly remoteConnections: IRemoteConnectionService;
 	readonly modeId: WorkbenchModeId;
+	readonly runtimeResources = this._register(new MutableDisposable<DisposableStore>());
+	supervisor: AppServerConnectionRelay | undefined;
 	private readonly handoffs = new Map<string, { readonly options: IOpenAgentsWindowOptions; readonly resolve: () => void; readonly reject: (error: Error) => void }>();
 	private readonly handoffQueue: string[] = [];
 
-	constructor(workspaceId: string, workspaceContext: WorkspaceContextMainService, remoteConnections: IRemoteConnectionService, modeId: WorkbenchModeId) {
+	constructor(workspaceContext: WorkspaceContextMainService, remoteConnections: IRemoteConnectionService, modeId: WorkbenchModeId) {
 		super();
-		this.workspaceId = workspaceId;
 		this.workspaceContext = this._register(workspaceContext);
 		this.remoteConnections = remoteConnections;
 		this.modeId = modeId;
 		this._register(toDisposable(() => this.rejectHandoffs(new Error('Agents Window closed before the handoff completed'))));
 	}
+
+	get workspaceId(): string { return this.workspaceContext.getWorkspace().id; }
 
 	enqueueHandoff(options: IOpenAgentsWindowOptions): Promise<void> {
 		const id = createUuid();
@@ -184,6 +186,8 @@ type WindowSessionEntry =
 	| { readonly kind: 'workbench'; readonly workspace: IAnyWorkspaceIdentifier }
 	| { readonly kind: 'sessions'; readonly workspace: IAnyWorkspaceIdentifier; readonly modeId: WorkbenchModeId };
 
+const AGENTS_WINDOW_KEY = 'agents';
+
 async function watchProfileThemeFiles(profileRoot: string, window: BrowserWindow, resources: DisposableStore): Promise<void> {
 	const directory = join(profileRoot, 'themes');
 	await mkdir(directory, { recursive: true });
@@ -210,7 +214,8 @@ export class AshApplication extends Disposable {
 	private readonly windowIconPath: string | undefined;
 
 	private readonly workbenchWindows = new WorkbenchWindowRegistry<WorkbenchWindowRecord>();
-	private readonly sessionsWindows = this._register(new DisposableMap<string, SessionsWindowRecord>());
+	private readonly sessionsWindow = this._register(new MutableDisposable<SessionsWindowRecord>());
+	private sessionsWindowOpenQueue: Promise<void> = Promise.resolve();
 	private readonly windowsMainService = this._register(new WindowsMainService(
 		() => this.workbenchWindows.values().map(record => record.window),
 		async () => {
@@ -353,7 +358,7 @@ export class AshApplication extends Disposable {
 		if (active) {
 			if (active.kind === 'workbench') this.workbenchWindows.findWorkspace(active.workspace)?.focus();
 			else {
-				const window = this.windowsMainService.managedWindow(active.workspace.id);
+				const window = this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY);
 				if (window) focusWindow(window);
 			}
 		}
@@ -387,7 +392,7 @@ export class AshApplication extends Disposable {
 
 	async disposeAfterStartupFailure(): Promise<void> {
 		this.windowsMainService.dispose();
-		this.sessionsWindows.dispose();
+		this.sessionsWindow.dispose();
 		try {
 			await this.closePersistentServices();
 		} finally {
@@ -541,9 +546,10 @@ export class AshApplication extends Disposable {
 	private createAppServerConnectionRelay(
 		workspace: IAnyWorkspaceIdentifier,
 		resources: DisposableStore,
+		existing?: AppServerConnectionRelay,
 	): AppServerConnectionRelay {
 		if (this.appServerStartupMode === "disabled") {
-			return new AppServerConnectionRelay({ enabled: false });
+			return existing ?? new AppServerConnectionRelay({ enabled: false });
 		}
 		const packageLocation = {
 			appPath: app.getAppPath(),
@@ -574,10 +580,11 @@ export class AshApplication extends Disposable {
 				args: [app.isPackaged || process.env.ASH_DEV_REUSE_APP_SERVER === "1" ? "connect" : "connect-selected"],
 				environment: { ...this.appServerEnvironment(workspace), ASH_APP_SERVER_PATH: selectDevelopmentAppServerExecutable(appServerExecutablePath(packageLocation), developmentExecutable) },
 			});
-		const supervisor = new AppServerConnectionRelay({
+		const supervisor = existing ?? new AppServerConnectionRelay({
 			enabled: true,
 			processLauncher,
 		});
+		if (existing) existing.replaceProcessLauncher(processLauncher);
 		if (generationFile && processLauncher instanceof LocalAppServerProcessLauncher) {
 			resources.add(new DevelopmentAppServerReloader({ generationFile, launcher: processLauncher, supervisor }));
 		}
@@ -945,20 +952,26 @@ export class AshApplication extends Disposable {
 			});
 	}
 
-	/** Opens a Sessions window with its own workspace and connection lifetime. */
-	private async openSessionsWindow(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace, modeId: WorkbenchModeId, handoff?: IOpenAgentsWindowOptions): Promise<void> {
+	private openSessionsWindow(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace, modeId: WorkbenchModeId, handoff?: IOpenAgentsWindowOptions): Promise<void> {
+		const opening = this.sessionsWindowOpenQueue.then(() => this.performOpenSessionsWindow(workspace, resolvedWorkspace, modeId, handoff));
+		this.sessionsWindowOpenQueue = opening.then(() => undefined, () => undefined);
+		return opening;
+	}
+
+	/** Opens the one Agents window and selects the requesting Workspace before a handoff. */
+	private async performOpenSessionsWindow(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace, modeId: WorkbenchModeId, handoff?: IOpenAgentsWindowOptions): Promise<void> {
 		const mode = WorkbenchModeRegistry.get(modeId);
 		if (!mode.dedicatedSessions) {
 			throw new Error(`${mode.title} does not provide a dedicated Sessions window`);
 		}
 		const workspaces = this.workspaces;
 		if (!workspaces) throw new Error('Workspace service is not initialized');
-		let sessions = this.sessionsWindows.get(workspace.id);
+		let sessions = this.sessionsWindow.value;
 		if (!sessions) {
 			const remoteConnections = this.createRemoteConnections(workspaces);
 			const workspaceContext = new WorkspaceContextMainService(workspace, resolvedWorkspace);
-			sessions = new SessionsWindowRecord(workspace.id, workspaceContext, remoteConnections, modeId);
-			this.sessionsWindows.set(workspace.id, sessions);
+			sessions = new SessionsWindowRecord(workspaceContext, remoteConnections, modeId);
+			this.sessionsWindow.value = sessions;
 		}
 		const session = sessions;
 		const sessionsEntry = this.resolveRendererEntry("sessions", session.modeId);
@@ -967,8 +980,9 @@ export class AshApplication extends Disposable {
 			defaultState: { mode: WindowMode.Normal, width: 1_180, height: 780 },
 		});
 		const titleBarStyle = this.titleBarStyle;
+		const wasOpen = this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY) !== undefined;
 		await this.windowsMainService.openManagedWindow(
-			workspace.id,
+			AGENTS_WINDOW_KEY,
 			options => new BrowserWindow(options),
 			{
 				title: `${WorkbenchModeRegistry.get(session.modeId).title} Sessions`,
@@ -998,7 +1012,16 @@ export class AshApplication extends Disposable {
 					const windowControlsOverlay = new WindowControlsOverlay(colors => {
 						if (titleBarStyle === 'custom' && (process.platform === 'win32' || process.platform === 'linux')) window.setTitleBarOverlay(colors);
 					});
-					const sessionsRelay = windowDisposables.add(this.createAppServerConnectionRelay(session.workspaceContext.getWorkspace(), windowDisposables));
+					const runtimeResources = new DisposableStore();
+					let sessionsRelay: AppServerConnectionRelay;
+					try {
+						sessionsRelay = windowDisposables.add(this.createAppServerConnectionRelay(session.workspaceContext.getWorkspace(), runtimeResources));
+					} catch (error) {
+						runtimeResources.dispose();
+						throw error;
+					}
+					session.supervisor = sessionsRelay;
+					session.runtimeResources.value = runtimeResources;
 					const remoteWindowContext = windowDisposables.add(new RemoteWindowMainContext({
 						supervisor: sessionsRelay,
 						workspaceContext: session.workspaceContext,
@@ -1044,8 +1067,8 @@ export class AshApplication extends Disposable {
 							validate: validateReturnToWorkbench,
 							invoke: async () => {
 								// Keep one window alive when Agents is the only restored window.
-								const opened = await this.openWorkspace(workspace, workspaces);
-								await this.windowsMainService.closeManagedWindow(session.workspaceId);
+								const opened = await this.openWorkspace(session.workspaceContext.getWorkspace(), workspaces);
+								await this.windowsMainService.closeManagedWindow(AGENTS_WINDOW_KEY);
 								opened?.focus();
 							},
 						},
@@ -1075,17 +1098,50 @@ export class AshApplication extends Disposable {
 			},
 			() => {
 				const closedWorkspace = session.workspaceContext.getWorkspace();
-				if (this.sessionsWindows.get(session.workspaceId) === session) this.sessionsWindows.deleteAndDispose(session.workspaceId);
+				if (this.sessionsWindow.value === session) this.sessionsWindow.clear();
 				this.windowSessionStateHandler.windowClosed({ kind: 'sessions', workspace: closedWorkspace, modeId: session.modeId });
 			},
 		);
-		this.windowSessionStateHandler.windowOpened();
+		await this.selectSessionsWorkspace(session, workspace, resolvedWorkspace);
+		if (!wasOpen) this.windowSessionStateHandler.windowOpened();
 		if (handoff) {
 			const completed = session.enqueueHandoff(handoff);
-			const window = this.windowsMainService.managedWindow(workspace.id);
+			const window = this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY);
 			if (!window) throw new Error('Agents Window is unavailable for handoff');
 			window.webContents.send(AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL);
 			await completed;
+		}
+	}
+
+	private async selectSessionsWorkspace(session: SessionsWindowRecord, workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace): Promise<void> {
+		const previousWorkspace = session.workspaceContext.getWorkspace();
+		if (previousWorkspace.id === workspace.id) return;
+		const previousResolvedWorkspace = session.workspaceContext.getResolvedWorkspace();
+		const supervisor = session.supervisor;
+		if (!supervisor) throw new Error('Agents Window connection is unavailable');
+		if (!supervisor.options.enabled) {
+			session.workspaceContext.updateWorkspace(workspace, resolvedWorkspace);
+			return;
+		}
+		const previousLauncher = supervisor.options.processLauncher;
+		const runtimeResources = new DisposableStore();
+		await supervisor.stop();
+		try {
+			this.createAppServerConnectionRelay(workspace, runtimeResources, supervisor);
+			session.workspaceContext.updateWorkspace(workspace, resolvedWorkspace);
+			await supervisor.start();
+			session.runtimeResources.value = runtimeResources;
+		} catch (error) {
+			await supervisor.stop();
+			supervisor.replaceProcessLauncher(previousLauncher);
+			session.workspaceContext.updateWorkspace(previousWorkspace, previousResolvedWorkspace);
+			runtimeResources.dispose();
+			try {
+				await supervisor.start();
+			} catch (rollbackError) {
+				throw new AggregateError([error, rollbackError], 'Agents workspace switch and rollback both failed');
+			}
+			throw error;
 		}
 	}
 
@@ -1409,16 +1465,15 @@ export class AshApplication extends Disposable {
 
 	private getOpenWindowSessions(): readonly IWindowSessionWindow<WindowSessionEntry>[] {
 		const focusedWindowId = BrowserWindow.getFocusedWindow()?.id;
+		const session = this.sessionsWindow.value;
+		const sessionsWindow = session && this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY);
 		return [
 			...this.workbenchWindows.values().map(record => ({
 				id: record.id,
 				entry: { kind: 'workbench' as const, workspace: record.openedWorkspace },
 				focused: record.id === focusedWindowId,
 			})),
-			...[...this.sessionsWindows].flatMap(([, session]) => {
-				const window = this.windowsMainService.managedWindow(session.workspaceId);
-				return window ? [{ id: window.id, entry: { kind: 'sessions' as const, workspace: session.workspaceContext.getWorkspace(), modeId: session.modeId }, focused: window.id === focusedWindowId }] : [];
-			}),
+			...(sessionsWindow && session ? [{ id: sessionsWindow.id, entry: { kind: 'sessions' as const, workspace: session.workspaceContext.getWorkspace(), modeId: session.modeId }, focused: sessionsWindow.id === focusedWindowId }] : []),
 		];
 	}
 

@@ -25,7 +25,8 @@ import { SkillSelectorCatalog } from "../../../common/skillSelectors.js";
 import type { ChatInputDelegate, ChatInputState } from "./chatInput.js";
 import { ChatInputEditors, type IChatInputEditor } from "./chatInputEditorRegistry.js";
 import { ModelPickerActionItem } from './modelPicker/modelPickerActionItem.js';
-import { ModelPickerConfiguration, modelPickerEffortLabel } from './modelPicker/modelPickerConfiguration.js';
+import { ModelPickerConfiguration } from './modelPicker/modelPickerConfiguration.js';
+import { modelPickerEffortLabel } from './modelPicker/modelPickerModelConfig.js';
 import { ModePickerActionItem, type ChatInputMode } from './modePickerActionItem.js';
 
 type ChatInputToolbarPresentation = "mode" | "model" | "effort" | "mic" | "voice" | "send" | "interrupt";
@@ -344,6 +345,7 @@ export class ChatInputPart extends Disposable {
 				},
 			);
 		const selectedModel = this.toolbarState.models.find(entry => sameModel(entry.model, this.toolbarState.selectedModel));
+		const selectedEffortLabel = modelPickerEffortLabel(this.toolbarState.selectedReasoningEffort ?? selectedModel?.modelReasoningEffort);
 		const modelAction = new ChatInputAction(
 			"ash.chat.input.model",
 			this.toolbarState.isAutomaticModel ? localize('chat.modelPicker.auto', 'Auto') : selectedModel?.displayName ?? "Model",
@@ -356,8 +358,8 @@ export class ChatInputPart extends Disposable {
 		const effortAction = !this.toolbarState.isAutomaticModel && selectedModel?.supportedReasoningEfforts?.length
 			? new ChatInputAction(
 				'ash.chat.input.effort',
-				modelPickerEffortLabel(this.toolbarState.selectedReasoningEffort),
-				localize('chat.modelPicker.effortAriaLabel', 'Thinking Effort: {0}', modelPickerEffortLabel(this.toolbarState.selectedReasoningEffort)),
+				selectedEffortLabel,
+				localize('chat.modelPicker.effortAriaLabel', 'Thinking Effort: {0}', selectedEffortLabel),
 				undefined,
 				true,
 				'effort',
