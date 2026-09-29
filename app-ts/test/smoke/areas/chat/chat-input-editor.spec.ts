@@ -25,6 +25,7 @@ test('Empty chat keeps its input near the pane edges', async ({ target, workbenc
 			composerBottomInset: inputBounds.bottom - composerBounds.bottom,
 			composerLeftInset: composerBounds.left - inputBounds.left,
 			composerRightInset: inputBounds.right - composerBounds.right,
+			composerHeight: composerBounds.height,
 			toolbarHeight: toolbar.getBoundingClientRect().height,
 			actionHeight: action.getBoundingClientRect().height,
 			actionBottomInset: composerBounds.bottom - action.getBoundingClientRect().bottom,
@@ -37,6 +38,7 @@ test('Empty chat keeps its input near the pane edges', async ({ target, workbenc
 		composerBottomInset: 4,
 		composerLeftInset: 12,
 		composerRightInset: 12,
+		composerHeight: 140,
 		toolbarHeight: 22,
 		actionHeight: 22,
 		actionBottomInset: 7,
@@ -64,6 +66,8 @@ test('Chat input omits the unused find control and keeps the prompt evenly inset
 			textInset: placeholderBounds.left - viewport.getBoundingClientRect().left,
 			textTopInset: placeholderBounds.top - containerBounds.top,
 			textLeftInset: placeholderBounds.left - containerBounds.left,
+			editorTopInset: viewport.getBoundingClientRect().top - containerBounds.top,
+			textInsetWithinEditor: placeholderBounds.top - viewport.getBoundingClientRect().top,
 			attachmentsDisplay: getComputedStyle(attachments).display,
 			rulerDisplay: getComputedStyle(ruler).display,
 		};
@@ -71,6 +75,8 @@ test('Chat input omits the unused find control and keeps the prompt evenly inset
 	expect(editorChrome.textInset).toBe(0);
 	expect(editorChrome.textTopInset).toBe(7);
 	expect(editorChrome.textLeftInset).toBe(7);
+	expect(editorChrome.editorTopInset).toBe(7);
+	expect(editorChrome.textInsetWithinEditor).toBe(0);
 	expect(editorChrome.attachmentsDisplay).toBe('none');
 	expect(editorChrome.rulerDisplay).toBe('none');
 });
@@ -187,18 +193,18 @@ test('Chat input resizes with wrapped text and retains keyboard focus', async ({
 	await host.evaluate(element => element.style.width = '180px');
 	await input.focus();
 	await page.keyboard.insertText('word '.repeat(80));
-	await expect(editor).toHaveCSS('height', '320px');
+	await expect(editor).toHaveCSS('height', '314px');
 	await expect(input).toBeFocused();
 
 	await host.evaluate(element => element.style.width = '1000px');
-	await expect(editor).toHaveCSS('height', '106px');
+	await expect(editor).toHaveCSS('height', '100px');
 	await expect(input).toBeFocused();
 
 	await host.evaluate(element => element.style.width = '180px');
-	await expect(editor).toHaveCSS('height', '320px');
+	await expect(editor).toHaveCSS('height', '314px');
 	await page.keyboard.press('ControlOrMeta+A');
 	await page.keyboard.press('Backspace');
-	await expect(editor).toHaveCSS('height', '106px');
+	await expect(editor).toHaveCSS('height', '100px');
 	await expect(input).toBeFocused();
 });
 

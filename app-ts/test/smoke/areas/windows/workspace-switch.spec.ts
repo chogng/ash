@@ -1,6 +1,7 @@
 import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ElectronApplication } from '@playwright/test';
+import type { BrowserWindow, MessageBoxOptions } from 'electron';
 import { expect, test } from '../../../automation/test.js';
 import { parseWorkspace } from '../../../../src/ash/platform/workspace/common/workspace.js';
 
@@ -87,14 +88,16 @@ test('Explorer file context menu includes file actions for the clicked row', asy
 		const file = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
 		await file.click({ button: 'right' });
 		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashExplorerMenuTest?: { labels: string[] } }).ashExplorerMenuTest?.labels)).toEqual(expect.arrayContaining([
-			'New File...',
-			'New Folder...',
 			'Open to the Side',
 			'Copy Path',
 			'Copy Relative Path',
 			'Rename',
 			'Delete Permanently',
 		]));
+		const labels = await electron.evaluate(() => (globalThis as typeof globalThis & { ashExplorerMenuTest?: { labels: string[] } }).ashExplorerMenuTest?.labels ?? []);
+		expect(labels).not.toContain('New File...');
+		expect(labels).not.toContain('New Folder...');
+		expect(labels).not.toContain('Download File...');
 	} finally {
 		await electron.evaluate(({ Menu }) => {
 			(globalThis as typeof globalThis & { ashExplorerMenuTest?: { restore: () => void } }).ashExplorerMenuTest?.restore();
@@ -129,8 +132,40 @@ test('Explorer opens the focused file context menu from the keyboard', async ({ 
 	}
 });
 
-test('Explorer creates a sibling folder from a file context menu', async ({ target, application, testWorkspace, workbench }) => {
+test('Explorer file shortcuts target the selected file', async ({ target, application, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'This scenario requires the Code desktop and App Server');
+	const electron = application as ElectronApplication;
+	await electron.evaluate(({ dialog }) => {
+		const original = dialog.showMessageBox.bind(dialog);
+		const state = globalThis as typeof globalThis & { ashExplorerDeleteDialogTest?: { message?: string; restore: () => void } };
+		state.ashExplorerDeleteDialogTest = { restore: () => { dialog.showMessageBox = original; } };
+		dialog.showMessageBox = (async (...args: [MessageBoxOptions] | [BrowserWindow, MessageBoxOptions]) => {
+			const options = args.length === 1 ? args[0] : args[1];
+			state.ashExplorerDeleteDialogTest!.message = options.message;
+			return { response: 1, checkboxChecked: false };
+		}) as typeof dialog.showMessageBox;
+	});
+	try {
+		const page = workbench.page;
+		await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' }).click();
+		await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Alt+Backspace' : 'Shift+Delete');
+		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashExplorerDeleteDialogTest?: { message?: string } }).ashExplorerDeleteDialogTest?.message)).toBe('Permanently delete main.ts?');
+		await page.keyboard.press(process.platform === 'darwin' ? 'Enter' : 'F2');
+		const input = page.locator('.ash-quick-pick-input input');
+		await expect(input).toBeVisible();
+		await expect(input).toHaveValue('main.ts');
+		await input.press('Escape');
+	} finally {
+		await electron.evaluate(({ dialog }) => {
+			(globalThis as typeof globalThis & { ashExplorerDeleteDialogTest?: { restore: () => void } }).ashExplorerDeleteDialogTest?.restore();
+		});
+	}
+});
+
+test('Explorer creates a child folder from a folder context menu', async ({ target, application, testWorkspace, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'This scenario requires the Code desktop and App Server');
+	const parent = join(testWorkspace.directory, 'menu-parent');
+	await mkdir(parent);
 	const electron = application as ElectronApplication;
 	await electron.evaluate(({ Menu }) => {
 		const originalPopup = Menu.prototype.popup;
@@ -144,12 +179,15 @@ test('Explorer creates a sibling folder from a file context menu', async ({ targ
 		};
 	});
 	try {
-		await workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' }).click({ button: 'right' });
+		const folder = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'menu-parent' });
+		await expect(folder).toHaveCount(1);
+		await folder.click({ button: 'right' });
 		const input = workbench.page.locator('.ash-quick-pick-input input');
 		await expect(input).toBeVisible();
 		await input.fill('created-from-menu');
 		await input.press('Enter');
-		await expect.poll(async () => stat(join(testWorkspace.directory, 'created-from-menu')).then(metadata => metadata.isDirectory(), () => false)).toBe(true);
+		await expect.poll(async () => stat(join(parent, 'created-from-menu')).then(metadata => metadata.isDirectory(), () => false)).toBe(true);
+		await folder.click();
 		await expect(workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'created-from-menu' })).toHaveCount(1);
 	} finally {
 		await electron.evaluate(({ Menu }) => {

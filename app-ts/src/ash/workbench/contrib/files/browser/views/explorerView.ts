@@ -49,6 +49,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	private readonly hasContextResource: IContextKey<boolean>;
 	private readonly contextIsFile: IContextKey<boolean>;
 	private readonly contextCanModify: IContextKey<boolean>;
+	private readonly contextCanCreate: IContextKey<boolean>;
 
 	constructor(
 		container: HTMLElement,
@@ -115,6 +116,8 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		this.hasContextResource = this.scopedContext.createKey<boolean>('ashExplorerHasResource', false);
 		this.contextIsFile = this.scopedContext.createKey<boolean>('ashExplorerIsFile', false);
 		this.contextCanModify = this.scopedContext.createKey<boolean>('ashExplorerCanModify', false);
+		this.contextCanCreate = this.scopedContext.createKey<boolean>('ashExplorerCanCreate', false);
+		this._register(this.tree.onDidChangeSelection(({ elements }) => this.updateExplorerContextKeys(elements[0])));
 		this._register(addDisposableListener(this.tree.domNode, 'contextmenu', event => this.showExplorerContextMenu(event)));
 		this._register(addDisposableListener(this.tree.domNode, 'keydown', event => {
 			if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) this.showExplorerContextMenu(event);
@@ -222,11 +225,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			? this.tree.getVisibleElements().find(candidate => candidate.resource.toString() === row?.dataset.treeId)
 			: this.tree.focus;
 		this.tree.setSelection(item ? [item] : []);
-		const isRoot = item ? this.workspaceContextService.getWorkspace().folders.some(folder => extUriBiasedIgnorePathCase.isEqual(folder.uri, item.resource)) : false;
-		this.hasContextResource.set(!!item);
-		this.contextIsFile.set(item?.kind === FileKind.File);
-		this.contextCanModify.set(!!item && !isRoot);
-		this.scopedContext.setContext(ResourceSchemeContext.key, item?.resource.scheme);
+		this.updateExplorerContextKeys(item);
 		const anchor = event instanceof MouseEvent
 			? { x: event.clientX, y: event.clientY, targetWindow: this.element.ownerDocument.defaultView ?? undefined }
 			: row ?? this.tree.element;
@@ -237,6 +236,15 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			getAnchor: () => anchor,
 			onHide: didCancel => { if (didCancel) this.tree.domFocus(); },
 		});
+	}
+
+	private updateExplorerContextKeys(item: ExplorerItem | undefined): void {
+		const isRoot = item ? this.workspaceContextService.getWorkspace().folders.some(folder => extUriBiasedIgnorePathCase.isEqual(folder.uri, item.resource)) : false;
+		this.hasContextResource.set(!!item);
+		this.contextIsFile.set(item?.kind === FileKind.File);
+		this.contextCanModify.set(!!item && !isRoot);
+		this.contextCanCreate.set(item?.kind === FileKind.Directory || (!item && this.workspaceContextService.getWorkspace().folders.length > 0));
+		this.scopedContext.setContext(ResourceSchemeContext.key, item?.resource.scheme);
 	}
 
 	private async initialize(): Promise<void> {

@@ -267,11 +267,14 @@ test("ExplorerView opens workspace files on single click", async () => {
 		assert.equal((contextMenu?.menuActionOptions?.arg as URI).toString(), URI.file('C:\\project\\src\\main.ts').toString());
 		assert.equal(contextMenu?.contextKeyService?.getValue('ashExplorerIsFile'), true);
 		assert.equal(contextMenu?.contextKeyService?.getValue('ashExplorerCanModify'), true);
+		assert.equal(contextMenu?.contextKeyService?.getValue('ashExplorerCanCreate'), false);
 		assert.equal(explorerService.getContext()[0]?.name, 'main.ts');
 		readmeRow.dispatchEvent(new browser.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
 		assert.equal(explorerService.getContext()[0]?.name, 'README.md');
 		pane.element.querySelector<HTMLElement>('.ash-tree')?.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'F10', shiftKey: true }));
 		assert.equal(contextMenu?.menuId?.id, 'ExplorerContext');
+		sourceFolder.dispatchEvent(new browser.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+		assert.equal(contextMenu?.contextKeyService?.getValue('ashExplorerCanCreate'), true);
 		assert.equal([...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => rowLabel(row) === 'src'), sourceFolder);
 		sourceFolder.click();
 		assert.deepEqual(rowLabels(pane.element), ['src', 'README.md']);
