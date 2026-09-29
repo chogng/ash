@@ -445,6 +445,26 @@ test("ObjectTreeModel keeps local updates atomic and expands ancestors", () => {
 	model.dispose();
 });
 
+test("ObjectTreeModel keeps node identity without reindexing on collapse and rerender", () => {
+	let identityReads = 0;
+	const model = new ObjectTreeModel<TestNode>({
+		identityProvider: { getId: (node) => { identityReads++; return node.id; } },
+	});
+	model.setChildren([{
+		element: { id: "parent", label: "Parent", expanded: false },
+		children: Array.from({ length: 100 }, (_, index) => ({ element: { id: `child-${index}`, label: `Child ${index}`, expanded: false } })),
+	}]);
+	const child = model.getNode("child-99");
+	const readsAfterStructure = identityReads;
+
+	assert.equal(model.collapse("parent"), true);
+	model.rerender("parent");
+	assert.equal(model.expand("parent"), true);
+	assert.equal(identityReads, readsAfterStructure);
+	assert.equal(model.getNode("child-99"), child);
+	model.dispose();
+});
+
 test("ObjectTreeModel filters recursively and sorts every level", () => {
 	const model = new ObjectTreeModel<TestNode>({
 		identityProvider: { getId: (node) => node.id },

@@ -155,7 +155,8 @@ export class URI {
 	withPath(path: string): URI {
 		const url = new URL(this.url.href);
 		url.pathname = path;
-		return new URI(parseUrl(url.href));
+		validatePercentEncoding(url.pathname, "path");
+		return new URI(url);
 	}
 
 	/** Returns a copy with a different percent-encoded query. */

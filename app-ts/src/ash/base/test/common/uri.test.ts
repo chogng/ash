@@ -55,3 +55,12 @@ test("URI changes are immutable and fragments can be removed explicitly", () => 
 	assert.equal(resource.withQuery("rev=3").query, "rev=3");
 	assert.equal(resource.withPath("/renamed").path, "/renamed");
 });
+
+test("URI.withPath keeps the other components and validates the new path", () => {
+	const parent = URI.parse("ash://workspace/root?rev=2#anchor");
+	const child = parent.withPath("/root/hello%20world.txt");
+
+	assert.equal(child.toString(), "ash://workspace/root/hello%20world.txt?rev=2#anchor");
+	assert.equal(parent.toString(), "ash://workspace/root?rev=2#anchor");
+	assert.throws(() => parent.withPath("/root/bad%ZZ.txt"), TypeError);
+});

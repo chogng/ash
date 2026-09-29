@@ -30,6 +30,7 @@ type JsonSchema = boolean | {
 };
 
 const protocolSchema = JSON.parse(__PROTOCOL_SCHEMA__) as JsonSchema;
+const propertyEntries = new WeakMap<Exclude<JsonSchema, boolean>, readonly (readonly [string, JsonSchema])[]>();
 
 export type DecodedAppServerEnvelope =
 	| { readonly kind: 'response'; readonly id: JsonRpcId; readonly result: unknown }
@@ -189,9 +190,11 @@ function validateNumber(schema: Exclude<JsonSchema, boolean>, value: number, pat
 }
 
 function validateString(schema: Exclude<JsonSchema, boolean>, value: string, path: string): void {
-	const length = [...value].length;
-	if (schema.minLength !== undefined && length < schema.minLength) throw failure(path, `expected at least ${schema.minLength} characters`);
-	if (schema.maxLength !== undefined && length > schema.maxLength) throw failure(path, `expected at most ${schema.maxLength} characters`);
+	if (schema.minLength !== undefined || schema.maxLength !== undefined) {
+		const length = [...value].length;
+		if (schema.minLength !== undefined && length < schema.minLength) throw failure(path, `expected at least ${schema.minLength} characters`);
+		if (schema.maxLength !== undefined && length > schema.maxLength) throw failure(path, `expected at most ${schema.maxLength} characters`);
+	}
 	if (schema.pattern !== undefined && !new RegExp(schema.pattern, 'u').test(value)) throw failure(path, `expected string matching ${schema.pattern}`);
 }
 
@@ -212,8 +215,17 @@ function validateObject(schema: Exclude<JsonSchema, boolean>, value: Readonly<Re
 	for (const required of schema.required ?? []) {
 		if (!Object.hasOwn(value, required)) throw failure(`${path}.${required}`, 'missing required field');
 	}
-	for (const [name, propertySchema] of Object.entries(schema.properties ?? {})) {
+	let entries = propertyEntries.get(schema);
+	if (!entries) {
+		entries = Object.entries(schema.properties ?? {});
+		propertyEntries.set(schema, entries);
+	}
+	for (const [name, propertySchema] of entries) {
 		if (Object.hasOwn(value, name)) validate(propertySchema, value[name], `${path}.${name}`);
+	}
+	const additional = schema.additionalProperties ?? schema.unevaluatedProperties;
+	if (additional === undefined || additional === true) {
+		if (schema.additionalProperties !== false && schema.unevaluatedProperties !== false) return;
 	}
 	const declared = declaredProperties(schema, value, new Set<string>());
 	const unknown = Object.keys(value).filter(key => !declared.has(key));
@@ -221,7 +233,6 @@ function validateObject(schema: Exclude<JsonSchema, boolean>, value: Readonly<Re
 		if (unknown.length > 0) throw failure(`${path}.${unknown[0]}`, 'unknown field');
 		return;
 	}
-	const additional = schema.additionalProperties ?? schema.unevaluatedProperties;
 	if (additional && typeof additional === 'object') {
 		for (const key of unknown) validate(additional, value[key], `${path}.${key}`);
 	}
@@ -260,19 +271,20 @@ function matches(schema: JsonSchema, value: unknown, path: string): boolean {
 }
 
 function matchesType(type: string | readonly string[], value: unknown): boolean {
-	const types = typeof type === 'string' ? [type] : type;
-	return types.some(candidate => {
-		switch (candidate) {
-			case 'null': return value === null;
-			case 'boolean': return typeof value === 'boolean';
-			case 'string': return typeof value === 'string';
-			case 'number': return typeof value === 'number' && Number.isFinite(value);
-			case 'integer': return typeof value === 'number' && Number.isSafeInteger(value);
-			case 'array': return Array.isArray(value);
-			case 'object': return isRecord(value);
-			default: return false;
-		}
-	});
+	return typeof type === 'string' ? matchesSingleType(type, value) : type.some(candidate => matchesSingleType(candidate, value));
+}
+
+function matchesSingleType(type: string, value: unknown): boolean {
+	switch (type) {
+		case 'null': return value === null;
+		case 'boolean': return typeof value === 'boolean';
+		case 'string': return typeof value === 'string';
+		case 'number': return typeof value === 'number' && Number.isFinite(value);
+		case 'integer': return typeof value === 'number' && Number.isSafeInteger(value);
+		case 'array': return Array.isArray(value);
+		case 'object': return isRecord(value);
+		default: return false;
+	}
 }
 
 function typeDescription(type: string | readonly string[]): string {

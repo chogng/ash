@@ -52,8 +52,6 @@ export class ObjectTreeModel<TNode> extends Disposable {
 	private readonly _onDidChange = this._register(new Emitter<ObjectTreeModelChangeEvent<TNode>>());
 	private readonly _onDidChangeCollapseState = this._register(new Emitter<ObjectTreeModelCollapseStateChangeEvent<TNode>>());
 	private readonly index: IndexTreeModel<TNode>;
-	private readonly identityProvider: ObjectTreeIdentityProvider<TNode>;
-	private nodesById = new Map<string, ObjectTreeNode<TNode>>();
 	private sorter: TreeSorter<TNode> | undefined;
 	private changeKindOverride: ObjectTreeModelChangeKind | undefined;
 
@@ -62,7 +60,6 @@ export class ObjectTreeModel<TNode> extends Disposable {
 
 	constructor(options: ObjectTreeModelOptions<TNode>) {
 		super();
-		this.identityProvider = options.identityProvider;
 		this.sorter = options.sorter;
 		this.index = this._register(new IndexTreeModel<TNode>(undefined as TNode, {
 			defaultCollapseState: options.defaultCollapseState,
@@ -71,13 +68,11 @@ export class ObjectTreeModel<TNode> extends Disposable {
 			preserveCollapseStateByIdentity: true,
 		}));
 		this._register(this.index.onDidChange((event) => {
-			this.rebuildIdentityIndex();
 			this._onDidChange.fire({ kind: this.changeKindOverride ?? event.kind, node: event.node as ObjectTreeNode<TNode> | undefined });
 		}));
 		this._register(this.index.onDidChangeCollapseState(({ node, collapsed }) => {
 			this._onDidChangeCollapseState.fire({ node: node as ObjectTreeNode<TNode>, collapsed });
 		}));
-		this.rebuildIdentityIndex();
 	}
 
 	get children(): readonly TNode[] { return this.index.rootNodes.map((node) => node.element); }
@@ -86,10 +81,13 @@ export class ObjectTreeModel<TNode> extends Disposable {
 	get visibleNodes(): readonly ObjectTreeNode<TNode>[] { return this.index.visibleNodes as readonly ObjectTreeNode<TNode>[]; }
 	get size(): number { return this.index.size; }
 
-	has(id: string): boolean { return this.nodesById.has(id); }
-	getNode(id: string): ObjectTreeNode<TNode> | undefined { return this.nodesById.get(id); }
-	getElement(id: string): TNode | undefined { return this.nodesById.get(id)?.element; }
-	getParent(id: string): ObjectTreeNode<TNode> | undefined { return this.nodesById.get(id)?.parent; }
+	has(id: string): boolean { return this.getNode(id) !== undefined; }
+	getNode(id: string): ObjectTreeNode<TNode> | undefined {
+		const node = this.index.getNodeById(id);
+		return node === this.index.rootNode ? undefined : node as ObjectTreeNode<TNode> | undefined;
+	}
+	getElement(id: string): TNode | undefined { return this.getNode(id)?.element; }
+	getParent(id: string): ObjectTreeNode<TNode> | undefined { return this.getNode(id)?.parent; }
 
 	setChildren(children: readonly ObjectTreeElement<TNode>[]): void {
 		this.withChangeKind("structure", () => this.index.setChildren(this.prepareElements(children)));
@@ -141,21 +139,8 @@ export class ObjectTreeModel<TNode> extends Disposable {
 		}));
 	}
 
-	private rebuildIdentityIndex(): void {
-		const next = new Map<string, ObjectTreeNode<TNode>>();
-		for (const node of this.index.rootNodes) {
-			const visit = (candidate: IndexTreeNode<TNode>): void => {
-				const id = this.identityProvider.getId(candidate.element);
-				next.set(id, candidate as ObjectTreeNode<TNode>);
-				for (const child of candidate.children) visit(child);
-			};
-			visit(node);
-		}
-		this.nodesById = next;
-	}
-
 	private requireNode(id: string): ObjectTreeNode<TNode> {
-		const node = this.nodesById.get(id);
+		const node = this.getNode(id);
 		if (!node) throw new RangeError(`Unknown tree node ID: ${id}`);
 		return node;
 	}

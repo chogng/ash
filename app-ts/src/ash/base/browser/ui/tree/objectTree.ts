@@ -127,7 +127,7 @@ export class ObjectTree<TNode> extends Disposable {
 		}));
 		this.element = this.tree.element;
 		this.domNode = this.tree.domNode;
-		this._register(this.model.onDidChange(() => this.render()));
+		this._register(this.model.onDidChange(({ kind }) => this.render(kind === "structure" || kind === "sort")));
 		this._register(this.model.onDidChangeCollapseState(({ node, collapsed }) => {
 			this._onDidChangeCollapseState.fire({ element: node.element, node, collapsed, browserEvent: this.collapseBrowserEvent?.id === node.id ? this.collapseBrowserEvent.event : undefined });
 		}));
@@ -161,7 +161,7 @@ export class ObjectTree<TNode> extends Disposable {
 		this._register(this.tree.onDidChangeFind((event: TreeFindResult<ObjectTreeNode<TNode>>) => {
 			this._onDidChangeFind.fire({ pattern: event.pattern, matches: event.matches.map((node) => node.element), activeMatch: event.activeMatch?.element });
 		}));
-		this.render();
+		this.render(true);
 	}
 
 	setChildren(children: readonly ObjectTreeElement<TNode>[]): void {
@@ -225,9 +225,9 @@ export class ObjectTree<TNode> extends Disposable {
 	updateElementHeight(id: string, height: number | undefined): void { this.tree.updateElementHeight(id, height); }
 	getElementTop(id: string): number | undefined { return this.tree.getElementTop(id); }
 
-	private render(): void {
+	private render(structureChanged: boolean): void {
 		this.onWillRender?.();
-		this.tree.setFindCandidates(flattenTreeNodes(this.model.rootNodes));
+		if (structureChanged) this.tree.setFindCandidates(flattenTreeNodes(this.model.rootNodes));
 		this.tree.items = this.model.visibleNodes;
 	}
 }

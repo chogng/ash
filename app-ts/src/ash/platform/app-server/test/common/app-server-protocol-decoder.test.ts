@@ -89,6 +89,18 @@ test('App Server response decoding selects the result schema from its pending me
 	);
 });
 
+test('directory responses validate every entry while accepting unspecified fields', () => {
+	const response = {
+		jsonrpc: '2.0', id: 12,
+		result: { entries: [{ name: 'one.txt', fileType: 'file', extensionData: true }, { name: 'two', fileType: 'directory' }] },
+	};
+	assert.deepEqual(decodeAppServerResponse('fs/readDirectory', response), response);
+	assert.throws(() => decodeAppServerResponse('fs/readDirectory', {
+		...response,
+		result: { entries: [response.result.entries[0], { name: 'broken', fileType: 'invalid' }] },
+	}), AppServerProtocolDecodeError);
+});
+
 test('account revisions preserve the full unsigned 64-bit value across the generated boundary', () => {
 	const result = {
 		revision: '18446744073709551615',
