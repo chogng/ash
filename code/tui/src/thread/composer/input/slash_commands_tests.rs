@@ -73,12 +73,12 @@ fn builtins_follow_enum_presentation_order() {
                 "skills",
                 "memories",
                 "mcp",
+                "hooks",
                 "resume",
                 "archive",
                 "connectors",
                 "rewind",
                 "config",
-                "startup",
                 "home",
                 "add-dir",
                 "cd",
@@ -104,10 +104,7 @@ fn builtins_follow_enum_presentation_order() {
             names
         }
     );
-    assert_eq!(
-        definitions.len(),
-        33
-    );
+    assert_eq!(definitions.len(), 33);
 }
 
 #[test]

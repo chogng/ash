@@ -8,6 +8,7 @@ mod connectors;
 mod dirs;
 mod git;
 mod host;
+mod hooks;
 mod issues;
 mod keymap;
 mod keymap_setup;
@@ -175,22 +176,12 @@ pub(crate) enum AppServerProcess {
     Remote,
 }
 
-impl TuiConnectionKind {
-    pub(crate) const fn label(self) -> &'static str {
-        match self {
-            Self::Local => "Local App Server",
-            Self::Remote => "Remote App Server",
-        }
-    }
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct TuiStartupContext {
     pub(crate) workspace: PathBuf,
     pub(crate) profile_root: Option<PathBuf>,
     pub(crate) connection: TuiConnectionKind,
     pub(crate) app_server_process: AppServerProcess,
-    pub(crate) recovery: Option<TuiRecoveryState>,
 }
 
 impl TuiStartupContext {
@@ -201,7 +192,6 @@ impl TuiStartupContext {
             profile_root: None,
             connection: TuiConnectionKind::Local,
             app_server_process: AppServerProcess::IncludedInTui,
-            recovery: None,
         }
     }
 }
@@ -295,7 +285,6 @@ impl TuiOptions {
             profile_root: self.profile_root.clone(),
             connection: self.connection,
             app_server_process: self.app_server_process,
-            recovery: self.recovery.clone(),
         }
     }
 }

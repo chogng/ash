@@ -2,6 +2,7 @@
 
 use crate::app::AppEvent;
 use crate::dirs;
+use crate::hooks;
 use crate::mcp;
 use crate::sessions;
 use crate::sessions::ActiveConversation;
@@ -169,6 +170,11 @@ where
                 .events
                 .push(mcp::Event::SettingsOpened(mcp::load_selection(client)?).into());
         }
+        TuiSlashCommandAction::Hooks => {
+            output
+                .events
+                .push(hooks::Event::Opened(hooks::load(client)?).into());
+        }
         TuiSlashCommandAction::Connectors => {
             output.events.push(
                 crate::connectors::Event::PickerOpened(crate::connectors::load_selection(client)?)
@@ -332,7 +338,6 @@ where
         | TuiSlashCommandAction::Export
         | TuiSlashCommandAction::Help
         | TuiSlashCommandAction::Shortcuts
-        | TuiSlashCommandAction::Startup
         | TuiSlashCommandAction::Home
         | TuiSlashCommandAction::StatusLine => {
             return Err(CommandExecutionError(

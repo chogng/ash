@@ -1341,29 +1341,6 @@ fn config_owns_the_advisor_model_picker() {
 }
 
 #[test]
-fn startup_slash_command_opens_a_read_only_context_panel() {
-    let mut app = App::new();
-    app.insert_text("/startup");
-
-    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-
-    assert_eq!(action, None);
-    assert_eq!(
-        app.list_selection().map(|selection| selection.title()),
-        Some("Startup")
-    );
-    assert_eq!(
-        app.command_panel_key_hints().map(|hints| hints.text()),
-        Some("Esc to close")
-    );
-    assert_eq!(
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        None
-    );
-    assert!(app.command_panel().is_some());
-}
-
-#[test]
 fn theme_slash_command_is_owned_by_the_tui_host() {
     let mut app = App::new();
     app.insert_text("/theme");

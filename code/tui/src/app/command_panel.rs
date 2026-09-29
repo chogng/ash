@@ -1,4 +1,3 @@
-use crate::TuiStartupContext;
 use crate::config::ConfigChoices;
 use crate::config::ConfigEditor;
 use crate::config::ConfigEditorOutcome;
@@ -96,13 +95,13 @@ pub(crate) enum CommandPanel {
     Marketplace(crate::marketplace::Panel),
     Lsp(crate::lsp::Panel),
     Mcp(ListSelection<McpSelectionAction>),
+    Hooks(crate::hooks::Panel),
     Memories(crate::memories::Panel),
     Model(ListSelection<ModelSelectionAction>),
     ProjectRoots(ListSelection<RootSelectionAction>),
     Rewind(ListSelection<RewindSelectionAction>),
     Sessions(ListSelection<SessionSelectionAction>),
     Skills(ListSelection<SkillSelectionAction>),
-    Startup(ListSelection<()>),
     Usage(ListSelection<()>),
     Status(StatusPanel),
     StatusLine(ListSelection<StatusLineSelectionAction>),
@@ -120,6 +119,7 @@ pub(crate) enum CommandPanelOutcome {
     Marketplace(crate::marketplace::Command),
     Lsp(crate::lsp::Outcome),
     Mcp(McpSelectionAction),
+    Hooks(crate::hooks::Outcome),
     Memories(crate::memories::Command),
     Model(ModelSelectionAction),
     ProjectRoot(RootSelectionAction),
@@ -151,6 +151,7 @@ impl CommandPanel {
             Self::GitBranches(panel) => panel.parent_title(),
             Self::GitWorktrees(panel) => panel.parent_title(),
             Self::Memories(panel) => panel.parent_title(),
+            Self::Hooks(panel) => panel.parent_title(),
             _ => None,
         }
     }
@@ -178,6 +179,9 @@ impl CommandPanel {
                 crossterm::event::KeyCode::Esc,
                 crossterm::event::KeyModifiers::NONE,
             ));
+        }
+        if let Self::Hooks(panel) = self {
+            panel.return_to_parent();
         }
     }
 
@@ -309,13 +313,6 @@ impl CommandPanel {
         Self::Skills(ListSelection::new(spec.model, spec.actions))
     }
 
-    pub(crate) fn startup(context: &TuiStartupContext) -> Self {
-        Self::Startup(ListSelection::new(
-            super::startup::choices(context),
-            BTreeMap::new(),
-        ))
-    }
-
     pub(crate) fn status_line(spec: StatusLineChoices) -> Self {
         Self::StatusLine(ListSelection::new(spec.model, spec.actions))
     }
@@ -372,6 +369,7 @@ impl CommandPanel {
             }
             Self::Lsp(content) => CommandPanelOutcome::Lsp(content.handle_key(key)),
             Self::Mcp(content) => map_selection(content.handle_key(key), CommandPanelOutcome::Mcp),
+            Self::Hooks(content) => CommandPanelOutcome::Hooks(content.handle_key(key)),
             Self::Model(content) => {
                 map_selection(content.handle_model_key(key), CommandPanelOutcome::Model)
             }
@@ -387,7 +385,6 @@ impl CommandPanel {
             Self::Skills(content) => {
                 map_selection(content.handle_key(key), CommandPanelOutcome::Skills)
             }
-            Self::Startup(content) => map_read_only(content.handle_key(key)),
             Self::Status(content) => match content.handle_key(key, area) {
                 StatusPanelOutcome::Consumed => CommandPanelOutcome::Consumed,
                 StatusPanelOutcome::Dismiss => CommandPanelOutcome::Dismiss,
@@ -414,12 +411,12 @@ impl CommandPanel {
             Self::Marketplace(content) => content.handle_paste(pasted),
             Self::Lsp(content) => content.handle_paste(pasted),
             Self::Mcp(content) => content.handle_paste(pasted),
+            Self::Hooks(content) => content.handle_paste(pasted),
             Self::Model(content) => content.handle_paste(pasted),
             Self::ProjectRoots(content) => content.handle_paste(pasted),
             Self::Rewind(content) => content.handle_paste(pasted),
             Self::Sessions(content) => content.handle_paste(pasted),
             Self::Skills(content) => content.handle_paste(pasted),
-            Self::Startup(content) => content.handle_paste(pasted),
             Self::Status(_) => {}
             Self::StatusLine(content) => content.handle_paste(pasted),
             Self::Theme(content) => content.handle_paste(pasted),
@@ -430,7 +427,6 @@ impl CommandPanel {
         match self {
             Self::Help(content)
             | Self::Loading(content)
-            | Self::Startup(content)
             | Self::Usage(content) => {
                 content.state_mut().localize(language);
             }
@@ -440,6 +436,7 @@ impl CommandPanel {
             Self::Marketplace(content) => content.localize(language),
             Self::Lsp(content) => content.localize(language),
             Self::Mcp(content) => content.state_mut().localize(language),
+            Self::Hooks(content) => content.localize(language),
             Self::Model(content) => content.state_mut().localize(language),
             Self::ProjectRoots(content) => content.state_mut().localize(language),
             Self::Rewind(content) => content.state_mut().localize(language),
@@ -480,12 +477,15 @@ impl CommandPanel {
             Self::Marketplace(selection) => Some(selection.state()),
             Self::Lsp(selection) => Some(selection.state()),
             Self::Mcp(selection) => Some(selection.state()),
+            Self::Hooks(panel) => match panel.page() {
+                crate::hooks::PageView::Selection(selection) => Some(selection),
+                crate::hooks::PageView::Prompt(_) => None,
+            },
             Self::Model(selection) => Some(selection.state()),
             Self::ProjectRoots(selection) => Some(selection.state()),
             Self::Rewind(selection) => Some(selection.state()),
             Self::Sessions(selection) => Some(selection.state()),
             Self::Skills(selection) => Some(selection.state()),
-            Self::Startup(selection) => Some(selection.state()),
             Self::Status(_) => None,
             Self::StatusLine(selection) => Some(selection.state()),
             Self::Theme(picker) => Some(picker.selection()),
@@ -507,12 +507,12 @@ impl CommandPanel {
             Self::Marketplace(selection) => Some(selection.state_mut()),
             Self::Lsp(selection) => Some(selection.state_mut()),
             Self::Mcp(selection) => Some(selection.state_mut()),
+            Self::Hooks(panel) => panel.selection_mut(),
             Self::Model(selection) => Some(selection.state_mut()),
             Self::ProjectRoots(selection) => Some(selection.state_mut()),
             Self::Rewind(selection) => Some(selection.state_mut()),
             Self::Sessions(selection) => Some(selection.state_mut()),
             Self::Skills(selection) => Some(selection.state_mut()),
-            Self::Startup(selection) => Some(selection.state_mut()),
             Self::StatusLine(selection) => Some(selection.state_mut()),
             Self::Theme(picker) => Some(picker.selection_mut()),
             Self::Status(_) => None,
@@ -587,12 +587,17 @@ impl CommandPanel {
             Self::Marketplace(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Lsp(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Mcp(selection) => CommandPanelBody::Selection(selection.state()),
+            Self::Hooks(panel) => match panel.page() {
+                crate::hooks::PageView::Selection(selection) => {
+                    CommandPanelBody::Selection(selection)
+                }
+                crate::hooks::PageView::Prompt(prompt) => CommandPanelBody::Prompt(prompt),
+            },
             Self::Model(selection) => CommandPanelBody::Selection(selection.state()),
             Self::ProjectRoots(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Rewind(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Sessions(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Skills(selection) => CommandPanelBody::Selection(selection.state()),
-            Self::Startup(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Status(panel) => CommandPanelBody::Status(panel),
             Self::StatusLine(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Theme(picker) => CommandPanelBody::Selection(picker.selection()),
@@ -638,12 +643,12 @@ impl CommandPanel {
             Self::Marketplace(content) => content.key_hints(),
             Self::Lsp(content) => content.key_hints(),
             Self::Mcp(content) => content.key_hints(),
+            Self::Hooks(content) => content.key_hints(),
             Self::Model(content) => content.model_key_hints(),
             Self::ProjectRoots(content) => content.key_hints(),
             Self::Rewind(content) => content.key_hints(),
             Self::Sessions(content) => content.key_hints(),
             Self::Skills(content) => content.key_hints(),
-            Self::Startup(content) => content.key_hints(),
             Self::Status(content) => content.key_hints(),
             Self::StatusLine(content) => content.key_hints(),
             Self::Theme(content) => content.key_hints(),

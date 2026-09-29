@@ -34,7 +34,6 @@ mod requests;
 #[path = "app/session_manager_tests.rs"]
 mod session_manager_tests;
 mod start;
-mod startup;
 mod state;
 mod top_tip;
 #[cfg(test)]

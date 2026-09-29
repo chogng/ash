@@ -21,6 +21,12 @@ use ash_app_server_client::{
     AppServerClient, InProcessClientOptions, InProcessTransport, start_in_process_client,
 };
 use ash_app_server_protocol::protocol::common::ClientInfo;
+use ash_app_server_protocol::protocol::config::HookActionDto;
+use ash_app_server_protocol::protocol::config::HookConfigDto;
+use ash_app_server_protocol::protocol::config::HookEnablementDto;
+use ash_app_server_protocol::protocol::config::HookEventDto;
+use ash_app_server_protocol::protocol::config::HookMatcherDto;
+use ash_app_server_protocol::protocol::config::HookUpsertParams;
 use ash_app_server_protocol::protocol::config::{ProviderConfigDto, ProviderConfigureParams};
 use ash_app_server_protocol::protocol::environment::PermissionDto;
 use ash_app_server_protocol::protocol::environment::SessionDirListParams;
@@ -255,6 +261,84 @@ fn status_mcp_connectors_and_skills_return_real_surfaces() {
             .collect::<Vec<_>>(),
         vec!["create-instructions", "skill-creator"]
     );
+
+    drop(client);
+    let _ = fs::remove_dir_all(state_root);
+}
+
+#[test]
+fn hooks_command_opens_configured_hooks_and_persists_enablement() {
+    let (mut client, state_root) = client();
+    let revision = client.read_config().unwrap().revision;
+    client
+        .upsert_hook(HookUpsertParams {
+            command_id: CommandId::new("configure-review-hook").unwrap(),
+            expected_revision: revision,
+            hook: HookConfigDto {
+                id: "user:hook:review".into(),
+                event: HookEventDto::BeforeTool,
+                matcher: HookMatcherDto { tool_names: vec![] },
+                action: HookActionDto::Process {
+                    program: "review-hook".into(),
+                    args: vec![],
+                },
+                enablement: HookEnablementDto::Disabled,
+            },
+        })
+        .unwrap();
+    let mut conversation = ActiveConversation::start(&mut client, "hooks".into()).unwrap();
+    let mut app = App::new();
+
+    execute(
+        &mut conversation,
+        &mut client,
+        invocation(TuiSlashCommandAction::Hooks, ""),
+        &mut app,
+    );
+    let Some(CommandPanel::Hooks(panel)) = app.panels_mut().command_mut() else {
+        panic!("expected Hooks panel");
+    };
+    panel.selection_mut().unwrap().focus_item(
+        &crate::widgets::list_selection::ListSelectionItemId::new("user:hook:review"),
+    );
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    let Some(AppCommand::Hooks(crate::hooks::Command::SetEnablement(id, enablement))) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("expected Hook enablement command");
+    };
+    assert_eq!(id, "user:hook:review");
+    assert_eq!(enablement, HookEnablementDto::Enabled);
+    app.update(
+        crate::hooks::execute(
+            &mut client,
+            crate::hooks::Command::SetEnablement(id, enablement),
+        )
+        .unwrap(),
+    );
+    assert_eq!(
+        client.read_config().unwrap().hooks["user:hook:review"].enablement,
+        HookEnablementDto::Enabled
+    );
+
+    let mut edited = client.read_config().unwrap().hooks["user:hook:review"].clone();
+    edited.action = HookActionDto::Process {
+        program: "review-hook-v2".into(),
+        args: vec!["--check".into()],
+    };
+    app.update(crate::hooks::execute(&mut client, crate::hooks::Command::Upsert(edited)).unwrap());
+    assert!(matches!(
+        &client.read_config().unwrap().hooks["user:hook:review"].action,
+        HookActionDto::Process { program, args } if program == "review-hook-v2" && args.len() == 1 && args[0] == "--check"
+    ));
+    app.update(
+        crate::hooks::execute(
+            &mut client,
+            crate::hooks::Command::Remove("user:hook:review".into()),
+        )
+        .unwrap(),
+    );
+    assert!(client.read_config().unwrap().hooks.is_empty());
 
     drop(client);
     let _ = fs::remove_dir_all(state_root);
