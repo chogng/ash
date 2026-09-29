@@ -4,7 +4,7 @@ import { Disposable, DisposableTracker, installDisposableTracker, toDisposable }
 import { onUnexpectedError } from '../../base/common/errors.js';
 import { URI } from '../../base/common/uri.js';
 import { IFileService } from '../../platform/files/common/files.js';
-import { ElectronBrowserClipboardService } from '../../platform/clipboard/electron-browser/electronBrowserClipboardService.js';
+import { ElectronRendererClipboardService } from '../../platform/clipboard/electron-browser/electronRendererClipboardService.js';
 import { validateConfigurationSnapshot } from '../../platform/configuration/common/configurationIpc.js';
 import { invoke } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { ServiceContainer } from '../../platform/instantiation/common/instantiation.js';
@@ -62,7 +62,7 @@ export class DesktopMain extends Disposable {
 				keyboardLayoutProvider: api.keyboardLayout,
 				userKeyboardLayoutApi: api.userKeyboardLayout,
 				nativeHostApi: api.nativeHost,
-				clipboardService: new ElectronBrowserClipboardService(),
+				clipboardService: new ElectronRendererClipboardService(),
 				dialogHandler: new NativeDialogHandler(api.nativeHost, container),
 				userThemeService: userThemes,
 				createContextMenuService: options => createElectronWorkbenchContextMenuService(options, api.nativeContextMenu),

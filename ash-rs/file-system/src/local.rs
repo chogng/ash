@@ -72,6 +72,18 @@ impl FileSystem for LocalFileSystem {
         self
     }
 
+    fn paste_system_cut_files(&self, directory: &Path) -> Result<bool, FileSystemError> {
+        #[cfg(windows)]
+        {
+            return paste_windows_cut_files(self, directory);
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = directory;
+            Ok(false)
+        }
+    }
+
     fn copy_to(
         &self,
         source: &Path,
@@ -211,6 +223,181 @@ impl FileSystem for LocalFileSystem {
             files.delete(path, missing, mode)
         })
     }
+}
+
+#[cfg(windows)]
+fn paste_windows_cut_files(
+    filesystem: &LocalFileSystem,
+    directory: &Path,
+) -> Result<bool, FileSystemError> {
+    use clipboard_win::formats::{FileList, RawData};
+    use std::ffi::OsString;
+
+    let drop_effect = clipboard_win::register_format("Preferred DropEffect")
+        .ok_or_else(|| FileSystemError::Io("Cannot register Windows clipboard format".into()))?;
+    let ash_format = clipboard_win::register_format("web application/x-ash-resources")
+        .ok_or_else(|| FileSystemError::Io("Cannot register Ash clipboard format".into()))?;
+    let clipboard = clipboard_win::Clipboard::new_attempts(10)
+        .map_err(|error| FileSystemError::Io(error.to_string()))?;
+    if clipboard_win::is_format_avail(ash_format.get())
+        || !clipboard_win::is_format_avail(drop_effect.get())
+    {
+        return Ok(false);
+    }
+    let effect: Vec<u8> = clipboard_win::get(RawData(drop_effect.get()))
+        .map_err(|error| FileSystemError::Io(error.to_string()))?;
+    if effect.len() < 4 || u32::from_le_bytes(effect[..4].try_into().unwrap()) != 2 {
+        return Ok(false);
+    }
+    let sources: Vec<PathBuf> =
+        clipboard_win::get(FileList).map_err(|error| FileSystemError::Io(error.to_string()))?;
+    let clipboard_sequence = clipboard_win::seq_num();
+    drop(clipboard);
+    if sources.is_empty()
+        || sources.len() > 1024
+        || sources.iter().any(|source| !source.is_absolute())
+    {
+        return Err(FileSystemError::InvalidPath(directory.to_path_buf()));
+    }
+
+    filesystem.execute(Permission::WriteFiles, |target_files| {
+        let _guard = target_files
+            .dir
+            .directory()
+            .lock_writes()
+            .map_err(|_| FileSystemError::Io("directory write lock is poisoned".into()))?;
+        let target_directory = target_files.resolve_existing(directory)?;
+        if !target_files.handle().is_dir(&target_directory) {
+            return Err(FileSystemError::NotDirectory(directory.to_path_buf()));
+        }
+        let destination = target_files.dir.canonical_path().join(&target_directory);
+        let canonical_sources: Vec<PathBuf> = sources
+            .iter()
+            .map(|source| {
+                let kind = std::fs::symlink_metadata(source)
+                    .map_err(io_error)?
+                    .file_type();
+                if kind.is_symlink() || (!kind.is_file() && !kind.is_dir()) {
+                    return Err(FileSystemError::InvalidPath(source.clone()));
+                }
+                source.canonicalize().map_err(io_error)
+            })
+            .collect::<Result<_, _>>()?;
+        for (index, source) in canonical_sources.iter().enumerate() {
+            if canonical_sources
+                .iter()
+                .enumerate()
+                .any(|(other_index, other)| index != other_index && source.starts_with(other))
+            {
+                return Err(FileSystemError::InvalidPath(source.clone()));
+            }
+            if target_files.dir.canonical_path().starts_with(source)
+                || destination.starts_with(source)
+            {
+                return Err(FileSystemError::InvalidPath(source.clone()));
+            }
+        }
+
+        let mut reserved = std::collections::HashSet::new();
+        let mut transfers = Vec::new();
+        for source in &canonical_sources {
+            if source.parent() == Some(destination.as_path()) {
+                continue;
+            }
+            let name = source
+                .file_name()
+                .ok_or_else(|| FileSystemError::InvalidPath(source.clone()))?;
+            let stem = source.file_stem().unwrap_or(name);
+            let extension = source.extension();
+            let mut target: Option<PathBuf> = None;
+            for index in 0..10_000 {
+                let mut candidate_name = OsString::from(stem);
+                if index > 0 {
+                    candidate_name.push(" copy");
+                    if index > 1 {
+                        candidate_name.push(format!(" {index}"));
+                    }
+                }
+                if let Some(extension) = extension {
+                    candidate_name.push(".");
+                    candidate_name.push(extension);
+                }
+                let candidate = target_directory.join(candidate_name);
+                if !reserved.insert(candidate.to_string_lossy().to_lowercase()) {
+                    continue;
+                }
+                if !target_files
+                    .handle()
+                    .try_exists(&candidate)
+                    .map_err(io_error)?
+                {
+                    target = Some(candidate);
+                    break;
+                }
+            }
+            let target =
+                target.ok_or_else(|| FileSystemError::AlreadyExists(destination.join(name)))?;
+            transfers.push((source, target));
+        }
+        let mut copied_targets = Vec::new();
+        let copied = (|| {
+            for (source, target) in &transfers {
+                let parent = source
+                    .parent()
+                    .ok_or_else(|| FileSystemError::InvalidPath(source.to_path_buf()))?;
+                let name = source
+                    .file_name()
+                    .ok_or_else(|| FileSystemError::InvalidPath(source.to_path_buf()))?;
+                let source_directory =
+                    Directory::open_ambient_dir(parent, cap_std::ambient_authority())
+                        .map_err(io_error)?;
+                copy_resource(
+                    &source_directory,
+                    Path::new(name),
+                    target_files.handle(),
+                    target,
+                )?;
+                copied_targets.push(target.clone());
+            }
+            Ok::<(), FileSystemError>(())
+        })();
+        if let Err(error) = copied {
+            for copied in copied_targets.iter().rev() {
+                let _ = remove_resource(target_files.handle(), copied, FileDeleteMode::Recursive);
+            }
+            return Err(error);
+        }
+        for (source, _) in transfers {
+            let parent = source
+                .parent()
+                .ok_or_else(|| FileSystemError::InvalidPath(source.clone()))?;
+            let name = source
+                .file_name()
+                .ok_or_else(|| FileSystemError::InvalidPath(source.clone()))?;
+            let source_directory =
+                Directory::open_ambient_dir(parent, cap_std::ambient_authority())
+                    .map_err(io_error)?;
+            if source_directory
+                .symlink_metadata(name)
+                .map_err(io_error)?
+                .is_dir()
+            {
+                source_directory.remove_dir_all(name).map_err(io_error)?;
+            } else {
+                source_directory.remove_file(name).map_err(io_error)?;
+            }
+        }
+        Ok(())
+    })?;
+    if let (Some(before), Ok(_clipboard)) = (
+        clipboard_sequence,
+        clipboard_win::Clipboard::new_attempts(10),
+    ) {
+        if clipboard_win::seq_num() == Some(before) {
+            clipboard_win::empty().map_err(|error| FileSystemError::Io(error.to_string()))?;
+        }
+    }
+    Ok(true)
 }
 
 fn copy_resource(

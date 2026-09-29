@@ -23,6 +23,8 @@ pub trait FileSystem: Send + Sync {
         destination: &dyn FileSystem,
         target: &Path,
     ) -> Result<(), FileSystemError>;
+    /// Moves Windows shell-cut files into a granted directory, using the clipboard as source authority.
+    fn paste_system_cut_files(&self, directory: &Path) -> Result<bool, FileSystemError>;
     /// Checks the requested action against this service's subject and directory grant.
     /// Every I/O entry must also validate its exact permission under the revocation lease.
     fn ensure_permission(

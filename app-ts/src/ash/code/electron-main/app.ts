@@ -36,7 +36,6 @@ import { editJsonObjectProperty } from '../../base/common/json.js';
 import { ConfigurationMainService } from "../../platform/configuration/electron-main/configurationMainService.js";
 import { nativeContextMenuIpcRoutes } from "../../platform/contextview/electron-main/contextMenuIpc.js";
 import { developmentArtifactsPath } from "../../platform/environment/node/developmentArtifacts.js";
-import { ElectronClipboardService } from "../../platform/clipboard/electron-main/electronClipboardService.js";
 import { ElectronOpenerService } from "../../platform/opener/electron-main/electronOpenerService.js";
 import { KeybindingsResourceMainService } from "../../platform/keybinding/electron-main/keybindingsResourceMainService.js";
 import { NativeKeyboardLayoutMainService } from "../../platform/keyboardLayout/electron-main/nativeKeyboardLayoutMainService.js";

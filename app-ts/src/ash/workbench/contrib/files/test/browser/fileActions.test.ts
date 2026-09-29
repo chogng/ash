@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
+import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { IClipboardService, type IClipboardResources } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IDialogService, type IConfirmationDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
 import { Event } from '../../../../../base/common/event.js';
 import { IFileService, FileKind, FileNotFoundError, type IFileService as FileServiceContract } from '../../../../../platform/files/common/files.js';
+import { ISystemFileTransferService } from '../../../../../platform/files/common/systemFileTransferService.js';
 import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickInputService as QuickInputServiceContract } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
@@ -195,6 +197,7 @@ test('Explorer copy and cut paste selected files with conflict names', async () 
 		writeResources: async (resources, operation) => { resourceClipboard = { resources: [...resources], operation }; },
 		hasResources: async () => resourceClipboard.resources.length > 0,
 	});
+	services.registerInstance(ISystemFileTransferService, { pasteSystemCutFiles: async () => false });
 	services.registerInstance(IFileService, {
 		stat: async (resource: URI) => { if (!existing.has(resource.fsPath)) throw new FileNotFoundError(resource); return { resource, kind: FileKind.File, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined }; },
 		copy: async (source: URI, target: URI) => { copied.push(`${source.fsPath} -> ${target.fsPath}`); existing.add(target.fsPath); },
@@ -253,6 +256,7 @@ test('Explorer paste keeps copy and cut operations across windows', async () => 
 	secondServices.registerInstance(IWorkspaceContextService, workspace);
 	secondServices.registerInstance(IExplorerService, second);
 	secondServices.registerInstance(IClipboardService, clipboard);
+	secondServices.registerInstance(ISystemFileTransferService, { pasteSystemCutFiles: async () => false });
 	secondServices.registerInstance(IFileService, {
 		stat: async (resource: URI) => {
 			if (resource.toString() === source.toString()) return { resource, kind: FileKind.File, sizeBytes: 3, readonly: false, modifiedAtMillis: undefined };
@@ -299,6 +303,7 @@ test('Explorer cut across nested workspace roots copies before deleting the sour
 		writeResources: async (resources, operation) => { clipboardResources = { resources, operation }; },
 		hasResources: async () => clipboardResources.resources.length > 0,
 	});
+	services.registerInstance(ISystemFileTransferService, { pasteSystemCutFiles: async () => false });
 	services.registerInstance(IFileService, {
 		stat: async (resource: URI) => { throw new FileNotFoundError(resource); },
 		copy: async () => { operations.push('copy'); },
@@ -312,6 +317,36 @@ test('Explorer cut across nested workspace roots copies before deleting the sour
 	await commands.executeCommand(PASTE_FILE_COMMAND_ID);
 
 	assert.deepEqual(operations, ['copy', 'delete']);
+});
+
+test('Explorer paste moves a system cut through the file transfer service', async () => {
+	await import('../../browser/fileActions.contribution.js');
+	const browser = new JSDOM('<!doctype html><body></body>');
+	try {
+		setARIAContainer(browser.window.document.body);
+		const destination = URI.file('/project/destination');
+		using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+		using explorer = createExplorerService(workspace);
+		using view = explorer.registerView({ getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', focus() {} });
+		const moves: string[] = [];
+		using services = new ServiceContainer();
+		services.registerInstance(IWorkspaceContextService, workspace);
+		services.registerInstance(IExplorerService, explorer);
+		services.registerInstance(IClipboardService, {
+			readResources: async () => ({ resources: [], operation: 'copy' }),
+		} as unknown as IClipboardService);
+		services.registerInstance(ISystemFileTransferService, {
+			pasteSystemCutFiles: async directory => { moves.push(directory.fsPath); return true; },
+		});
+		services.registerInstance(IFileService, {} as FileServiceContract);
+		using commands = new CommandService(services);
+
+		await commands.executeCommand(PASTE_FILE_COMMAND_ID);
+
+		assert.deepEqual(moves, ['/project/destination']);
+	} finally {
+		browser.window.close();
+	}
 });
 
 test('Explorer paste imports exact bytes from the system file list', async () => {
@@ -334,12 +369,14 @@ test('Explorer paste imports exact bytes from the system file list', async () =>
 		using explorer = createExplorerService(workspace);
 		using view = explorer.registerView({ getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', focus() {} });
 		const writes: { resource: string; bytes: number[] }[] = [];
+		const attemptedTransfers: string[] = [];
 		using services = new ServiceContainer();
 		services.registerInstance(IWorkspaceContextService, workspace);
 		services.registerInstance(IExplorerService, explorer);
 		services.registerInstance(IClipboardService, {
 			readResources: async () => ({ resources: [], operation: 'copy' }),
 		} as unknown as IClipboardService);
+		services.registerInstance(ISystemFileTransferService, { pasteSystemCutFiles: async directory => { attemptedTransfers.push(directory.fsPath); return false; } });
 		services.registerInstance(IFileService, {
 			stat: async (resource: URI) => { throw new FileNotFoundError(resource); },
 			writeFileBytes: async (resource: URI, content: Uint8Array) => {
@@ -349,6 +386,7 @@ test('Explorer paste imports exact bytes from the system file list', async () =>
 		} as unknown as FileServiceContract);
 		using commands = new CommandService(services);
 		await commands.executeCommand(PASTE_FILE_COMMAND_ID, fileList);
+		assert.deepEqual(attemptedTransfers, ['/project/destination']);
 		assert.deepEqual(writes, [{ resource: '/project/destination/picture.bin', bytes: [0, 255, 42] }]);
 	} finally {
 		if (previousFileList) Object.defineProperty(globalThis, 'FileList', previousFileList);

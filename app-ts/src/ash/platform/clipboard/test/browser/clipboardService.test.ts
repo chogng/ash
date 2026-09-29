@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { URI } from '../../../../base/common/uri.js';
-import { BrowserClipboardService } from '../../browser/browserClipboardService.js';
+import { BrowserClipboardService } from '../../browser/clipboardService.js';
 
 test('browser resource clipboard is shared across service instances and follows external writes', async () => {
 	const previousClipboardItem = Object.getOwnPropertyDescriptor(globalThis, 'ClipboardItem');

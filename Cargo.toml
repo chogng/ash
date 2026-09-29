@@ -313,6 +313,7 @@ accesskit-platform = { package = "accesskit_winit", version = "0.32.2" }
 anyhow = "1"
 ansi-to-tui = "7.0.0"
 arboard = { version = "3", features = ["wayland-data-control"] }
+clipboard-win = "5.4.1"
 ashpd = { version = "0.13.13", default-features = false }
 base64 = "0.22"
 block2 = "0.5.1"

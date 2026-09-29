@@ -16,6 +16,7 @@ use ash_app_server_protocol::protocol::fs::FsFileType;
 use ash_app_server_protocol::protocol::fs::FsGetMetadataParams;
 use ash_app_server_protocol::protocol::fs::FsGetMetadataResult;
 use ash_app_server_protocol::protocol::fs::FsMissingTargetBehavior;
+use ash_app_server_protocol::protocol::fs::FsPasteSystemCutFilesParams;
 use ash_app_server_protocol::protocol::fs::FsReadBinaryFileParams;
 use ash_app_server_protocol::protocol::fs::FsReadBinaryFileResult;
 use ash_app_server_protocol::protocol::fs::FsReadDirectoryEntry;
@@ -24,8 +25,8 @@ use ash_app_server_protocol::protocol::fs::FsReadDirectoryResult;
 use ash_app_server_protocol::protocol::fs::FsReadFileParams;
 use ash_app_server_protocol::protocol::fs::FsReadFileResult;
 use ash_app_server_protocol::protocol::fs::FsRenameParams;
-use ash_app_server_protocol::protocol::fs::FsWriteFileParams;
 use ash_app_server_protocol::protocol::fs::FsWriteBinaryFileParams;
+use ash_app_server_protocol::protocol::fs::FsWriteFileParams;
 use ash_app_server_protocol::protocol::fs::FsWriteFileResult;
 use ash_app_server_protocol::protocol::resources::ResourceMetadataResult;
 use ash_file_access::Permission;
@@ -37,9 +38,9 @@ use ash_file_system::FileType;
 use ash_file_system::FileWriteCondition;
 use ash_file_system::MissingTargetBehavior;
 use ash_file_system::file_revision;
+use base64::Engine;
 use serde_json::Value;
 use std::time::Duration;
-use base64::Engine;
 
 const MAX_EDITOR_FILE_BYTES: usize = 50 * 1024 * 1024;
 const BINARY_PREVIEW_RESOURCE_TTL: Duration = Duration::from_secs(300);
@@ -239,6 +240,17 @@ impl AppServer {
             .copy_to(&params.source, target.as_ref(), &params.target)
             .map_err(file_system_error)?;
         result(&())
+    }
+
+    pub(super) fn fs_paste_system_cut_files(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: FsPasteSystemCutFilesParams = decode(params)?;
+        let files =
+            self.file_system_for_request(Some(&params.dir_id), None, Permission::WriteFiles)?;
+        result(
+            &files
+                .paste_system_cut_files(&params.path)
+                .map_err(file_system_error)?,
+        )
     }
 
     pub(super) fn fs_delete(&self, params: &Value) -> Result<Value, RpcError> {

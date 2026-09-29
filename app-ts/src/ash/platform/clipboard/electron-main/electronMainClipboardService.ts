@@ -4,7 +4,7 @@ import { URI } from '../../../base/common/uri.js';
 import type { IClipboardResources, IClipboardService } from '../common/clipboardService.js';
 
 /** Electron main-process adapter for the system clipboard. */
-export class ElectronClipboardService implements IClipboardService {
+export class ElectronMainClipboardService implements IClipboardService {
 	private static readonly fileFormat = 'web application/x-ash-resources';
 
 	async readText(): Promise<string> {
@@ -17,9 +17,9 @@ export class ElectronClipboardService implements IClipboardService {
 
 	async readResources(): Promise<IClipboardResources> {
 		const item = (await clipboard.read())[0];
-		if (!item?.types.includes(ElectronClipboardService.fileFormat)) return { resources: [], operation: 'copy' };
+		if (!item?.types.includes(ElectronMainClipboardService.fileFormat)) return { resources: [], operation: 'copy' };
 		try {
-			const blob = await item.getType(ElectronClipboardService.fileFormat);
+			const blob = await item.getType(ElectronMainClipboardService.fileFormat);
 			if (!(blob instanceof Blob)) return { resources: [], operation: 'copy' };
 			const values: unknown = JSON.parse(await blob.text());
 			if (!values || typeof values !== 'object' || !('resources' in values) || !('operation' in values)
@@ -37,7 +37,7 @@ export class ElectronClipboardService implements IClipboardService {
 			return;
 		}
 		const formats: Record<string, string | Blob> = {
-			[ElectronClipboardService.fileFormat]: JSON.stringify({ resources: resources.map(resource => resource.toString()), operation }),
+			[ElectronMainClipboardService.fileFormat]: JSON.stringify({ resources: resources.map(resource => resource.toString()), operation }),
 		};
 		const localFiles = resources.filter(resource => resource.scheme === Schemas.file);
 		if (localFiles.length > 0) {
@@ -51,6 +51,6 @@ export class ElectronClipboardService implements IClipboardService {
 	}
 
 	async hasResources(): Promise<boolean> {
-		return clipboard.has(ElectronClipboardService.fileFormat);
+		return clipboard.has(ElectronMainClipboardService.fileFormat);
 	}
 }

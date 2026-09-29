@@ -7870,6 +7870,22 @@
         {
           "properties": {
             "method": {
+              "const": "fs/pasteSystemCutFiles",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/FsPasteSystemCutFilesParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "fs/rename",
               "type": "string"
             },
@@ -12679,6 +12695,22 @@
             },
             "result": {
               "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "fs/pasteSystemCutFiles",
+              "type": "string"
+            },
+            "result": {
+              "type": "boolean"
             }
           },
           "required": [
@@ -19312,6 +19344,22 @@
         "ignore"
       ],
       "type": "string"
+    },
+    "FsPasteSystemCutFilesParams": {
+      "description": "Pastes files currently cut in the Windows system clipboard into a granted workspace directory.",
+      "properties": {
+        "dirId": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "dirId",
+        "path"
+      ],
+      "type": "object"
     },
     "FsReadBinaryFileParams": {
       "description": "Read one binary file relative to the configured directory root.",

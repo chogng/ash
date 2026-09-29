@@ -7,7 +7,7 @@ import { createDisconnectedRendererApi } from "../../platform/app-server/browser
 import { IndexedDbConfigurationApi } from '../../platform/configuration/browser/indexedDbConfigurationApi.js';
 import { BrowserLifecycleService } from '../../workbench/services/lifecycle/browser/lifecycleService.js';
 import { createBrowserContextMenuService } from "../../platform/contextview/browser/contextMenuService.js";
-import { BrowserClipboardService } from '../../platform/clipboard/browser/browserClipboardService.js';
+import { BrowserClipboardService } from '../../platform/clipboard/browser/clipboardService.js';
 import { connectBrowserWorkbenchHost } from '../../workbench/browser/web.host.js';
 import { showStartupError } from '../../workbench/browser/startupError.js';
 import type { WorkbenchModeId } from "../../workbench/common/workbenchMode.js";

@@ -1,6 +1,6 @@
 import { WorkbenchModeRegistry, type WorkbenchModeId } from "../common/workbenchMode.js";
 import type { RendererCapabilityContribution } from "../../platform/app-server/browser/webRendererApi.js";
-import { BrowserClipboardService } from "../../platform/clipboard/browser/browserClipboardService.js";
+import { BrowserClipboardService } from "../../platform/clipboard/browser/clipboardService.js";
 import { startWebWorkbench } from "./web.factory.js";
 import { showStartupError } from "./startupError.js";
 import type { IDisposable } from "../../base/common/lifecycle.js";

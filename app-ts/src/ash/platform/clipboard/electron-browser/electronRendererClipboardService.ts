@@ -3,7 +3,7 @@ import { invoke } from '../../ipc/electron-browser/rendererIpc.js';
 import type { IClipboardResources, IClipboardService } from '../common/clipboardService.js';
 
 /** Reads and writes the shared desktop clipboard through Electron Main. */
-export class ElectronBrowserClipboardService implements IClipboardService {
+export class ElectronRendererClipboardService implements IClipboardService {
 	public readText(): Promise<string> {
 		return invoke<string>('ash:host:readClipboard');
 	}

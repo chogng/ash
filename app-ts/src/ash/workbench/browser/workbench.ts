@@ -80,6 +80,7 @@ import { MultiplexFileService } from "../../platform/files/browser/multiplexFile
 import { IQuickInputService } from "../../platform/quickinput/common/quickInput.js";
 import type { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
 import { IFileSystemProviderService } from "../../platform/files/common/fileSystemProviderService.js";
+import { ISystemFileTransferService } from '../../platform/files/common/systemFileTransferService.js';
 import {
 	IFileService,
 } from "../../platform/files/common/files.js";
@@ -285,7 +286,7 @@ import { IChatContextPickService } from "../services/chat/common/chatContextServ
 import type { IUserKeyboardLayoutApi } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
 import { WorkbenchModeService } from "../services/workbenchMode/browser/workbenchModeService.js";
 import { IWorkbenchModeService } from "../services/workbenchMode/common/workbenchModeService.js";
-import { BrowserClipboardService } from "../../platform/clipboard/browser/browserClipboardService.js";
+import { BrowserClipboardService } from "../../platform/clipboard/browser/clipboardService.js";
 import { IClipboardService } from "../../platform/clipboard/common/clipboardService.js";
 
 /** Host-specific inputs required to construct a workbench. */
@@ -509,6 +510,7 @@ export class Workbench extends Disposable {
 		const fileService = this._register(new MultiplexFileService(workspaceFileService));
 		if (browserFileSystemProvider) this._register(fileService.registerProvider('file', browserFileSystemProvider));
 		services.registerInstance(IFileService, fileService);
+		services.registerInstance(ISystemFileTransferService, workspaceFileService);
 		services.registerInstance(IFileSystemProviderService, fileService);
 		const textFileService = new TextFileService(fileService);
 		services.registerInstance(ITextFileService, textFileService);

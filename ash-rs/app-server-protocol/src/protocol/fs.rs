@@ -231,6 +231,14 @@ pub struct FsCopyParams {
     pub target: PathBuf,
 }
 
+/// Pastes files currently cut in the Windows system clipboard into a granted workspace directory.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FsPasteSystemCutFilesParams {
+    pub dir_id: String,
+    pub path: PathBuf,
+}
+
 /// Deletes one directory file or directory.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

@@ -14,6 +14,7 @@ export function createDisconnectedFileApi(unavailable: UnavailableOperation): IF
 		createFile: () => unavailable("fs.createFile"),
 		createDirectory: () => unavailable("fs.createDirectory"),
 		copy: () => unavailable("fs.copy"),
+		pasteSystemCutFiles: async () => false,
 		rename: () => unavailable("fs.rename"),
 		delete: () => unavailable("fs.delete"),
 	};
@@ -30,6 +31,7 @@ export function createAppServerFileApi(connection: AppServerProtocolClient): IFi
 		createFile: (params) => appServerRequest(connection, "fs/createFile", params),
 		createDirectory: (params) => appServerRequest(connection, "fs/createDirectory", params),
 		copy: (params) => voidResult(appServerRequest(connection, "fs/copy", params)),
+		pasteSystemCutFiles: (params) => appServerRequest(connection, "fs/pasteSystemCutFiles", params),
 		rename: (params) => voidResult(appServerRequest(connection, "fs/rename", params)),
 		delete: (params) => voidResult(appServerRequest(connection, "fs/delete", params)),
 	};

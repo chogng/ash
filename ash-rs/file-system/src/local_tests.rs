@@ -412,6 +412,7 @@ fn a_read_authorization_cannot_mutate_or_browse() {
     assert_eq!(fs::read(directory.path.join("file")).unwrap(), b"old");
 }
 
+#[cfg(unix)]
 #[test]
 fn old_filesystem_cannot_access_a_replacement_root() {
     let parent = tempfile::tempdir().unwrap();
@@ -438,6 +439,35 @@ fn old_filesystem_cannot_access_a_replacement_root() {
     assert_eq!(fs::read(path.join("file")).unwrap(), b"replacement");
 }
 
+#[cfg(windows)]
+#[test]
+fn open_root_cannot_be_replaced_on_windows() {
+    let parent = tempfile::tempdir().unwrap();
+    let root = parent.path().join("root");
+    fs::create_dir(&root).unwrap();
+    fs::write(root.join("file"), "original").unwrap();
+    let grant = ash_file_access::Grant::for_environment(
+        Dir::open_local(&root).unwrap(),
+        ash_file_access::GrantSource::ExplicitUser,
+        ash_file_access::Permissions::new([
+            ash_file_access::Permission::ReadFiles,
+            ash_file_access::Permission::WriteFiles,
+        ]),
+    );
+    let files = LocalFileSystem::new(grant);
+
+    // Windows keeps the authorized root open and rejects a rename that would rebind its path.
+    let error = fs::rename(&root, parent.path().join("old")).unwrap_err();
+    assert_eq!(error.raw_os_error(), Some(32));
+    assert!(!parent.path().join("old").exists());
+    assert_eq!(
+        files.read_file(Path::new("file"), 100).unwrap(),
+        b"original"
+    );
+    assert_eq!(fs::read(root.join("file")).unwrap(), b"original");
+}
+
+#[cfg(unix)]
 #[test]
 fn root_replacement_after_admission_keeps_io_on_the_opened_object() {
     let parent = tempfile::tempdir().unwrap();
@@ -460,6 +490,32 @@ fn root_replacement_after_admission_keeps_io_on_the_opened_object() {
         })
         .unwrap();
     assert_eq!(bytes, b"original");
+}
+
+#[cfg(windows)]
+#[test]
+fn root_replacement_attempt_after_admission_keeps_io_on_the_opened_object() {
+    let parent = tempfile::tempdir().unwrap();
+    let root = parent.path().join("root");
+    fs::create_dir(&root).unwrap();
+    fs::write(root.join("file"), "original").unwrap();
+    let grant = ash_file_access::Grant::for_environment(
+        Dir::open_local(&root).unwrap(),
+        ash_file_access::GrantSource::ExplicitUser,
+        ash_file_access::Permissions::new([ash_file_access::Permission::ReadFiles]),
+    );
+    let files = LocalFileSystem::new(grant);
+    let bytes = files
+        .execute(ash_file_access::Permission::ReadFiles, |scoped| {
+            let relative = scoped.resolve_existing(Path::new("file"))?;
+            let error = fs::rename(&root, parent.path().join("old")).unwrap_err();
+            assert_eq!(error.raw_os_error(), Some(32));
+            scoped.handle().read(relative).map_err(io_error)
+        })
+        .unwrap();
+    assert_eq!(bytes, b"original");
+    assert_eq!(fs::read(root.join("file")).unwrap(), b"original");
+    assert!(!parent.path().join("old").exists());
 }
 
 #[test]

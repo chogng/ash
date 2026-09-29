@@ -61,7 +61,7 @@ import { IChatContextPickService } from "../../workbench/services/chat/common/ch
 import { WorkbenchWindow } from "../../workbench/browser/window.js";
 import { AccessibleViewService } from '../../workbench/contrib/accessibility/browser/accessibleView.js';
 import { IAccountService } from '../../platform/accounts/common/accountService.js';
-import { BrowserClipboardService } from '../../platform/clipboard/browser/browserClipboardService.js';
+import { BrowserClipboardService } from '../../platform/clipboard/browser/clipboardService.js';
 import { INativeHostService } from '../../workbench/common/services.js';
 import { WorkbenchModeRegistry, type WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import type { ActivityBarPosition } from '../../workbench/common/configuration.js';

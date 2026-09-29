@@ -1533,6 +1533,7 @@ dependencies = [
  "ash-file-access",
  "ash-file-identity",
  "cap-std",
+ "clipboard-win",
  "sha2 0.10.9",
  "tempfile",
 ]

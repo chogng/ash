@@ -9,6 +9,7 @@ import { URI } from "../../../base/common/uri.js";
 import { FileKind, FileNotFoundError, FileRevisionConflictError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileContent, type IFileEntry, type IFileService, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from "../common/files.js";
 import { workspaceRelativePath, type IWorkspaceContextService } from "../../workspace/common/workspace.js";
 import { isRemoteResource } from "../../remote/common/remote.js";
+import type { ISystemFileTransferService } from '../common/systemFileTransferService.js';
 
 /** Narrow App Server surface consumed by the browser file-service adapter. */
 export interface IFileSystemApi {
@@ -21,6 +22,7 @@ export interface IFileSystemApi {
 	createFile(params: import("../../app-server/common/generated/index.js").FsCreateFileParams): Promise<FsGetMetadataResult>;
 	createDirectory(params: import("../../app-server/common/generated/index.js").FsCreateDirectoryParams): Promise<FsGetMetadataResult>;
 	copy(params: import("../../app-server/common/generated/index.js").FsCopyParams): Promise<void>;
+	pasteSystemCutFiles(params: import("../../app-server/common/generated/index.js").FsPasteSystemCutFilesParams): Promise<boolean>;
 	rename(params: import("../../app-server/common/generated/index.js").FsRenameParams): Promise<void>;
 	delete(params: import("../../app-server/common/generated/index.js").FsDeleteParams): Promise<void>;
 }
@@ -35,7 +37,7 @@ export interface BrowserFileServiceOptions {
 /**
  * Maps workspace resource URIs to the App Server's root-relative filesystem protocol.
  */
-export class BrowserFileService extends Disposable implements IFileService {
+export class BrowserFileService extends Disposable implements IFileService, ISystemFileTransferService {
 	private readonly api: IFileSystemApi;
 	private readonly resourceApi: IResourceApi;
 	private readonly workspaceContextService: IWorkspaceContextService;
@@ -139,6 +141,10 @@ export class BrowserFileService extends Disposable implements IFileService {
 		const from = this.fileTarget(source);
 		const to = this.fileTarget(target);
 		return this.api.copy({ sourceDirId: from.dirId, source: from.path, targetDirId: to.dirId, target: to.path });
+	}
+
+	pasteSystemCutFiles(directory: URI): Promise<boolean> {
+		return this.api.pasteSystemCutFiles(this.fileTarget(directory));
 	}
 
 	rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {

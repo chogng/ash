@@ -1,7 +1,7 @@
 import { collectElectronMemory } from '../../memory/electron-main/electronMemoryCollector.js';
 import { URI } from '../../../base/common/uri.js';
 import type { BrowserWindow } from 'electron/main';
-import { ElectronClipboardService } from '../../clipboard/electron-main/electronClipboardService.js';
+import { ElectronMainClipboardService } from '../../clipboard/electron-main/electronMainClipboardService.js';
 import { ElectronOpenerService } from '../../opener/electron-main/electronOpenerService.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import type { DialogRequest } from '../../dialogs/common/dialogs.js';
@@ -10,7 +10,7 @@ export function rendererSystemHostRoutes(
 	window: BrowserWindow,
 	directoryPermissionPrompt: (path: string) => DialogRequest,
 ): readonly IpcRoute<unknown, unknown>[] {
-	const clipboard = new ElectronClipboardService();
+	const clipboard = new ElectronMainClipboardService();
 	const opener = new ElectronOpenerService();
 	const text = (value: unknown): string => { if (typeof value !== 'string' || value.length > 1_000_000) { throw new Error('Invalid host text'); } return value; };
 	const resourceWrite = (value: unknown): { resources: string[]; operation: 'copy' | 'move' } => {

@@ -1,4 +1,4 @@
-import type { FsCopyParams, FsCreateDirectoryParams, FsCreateFileParams, FsDeleteParams, FsGetMetadataParams, FsGetMetadataResult, FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsRenameParams, FsWriteBinaryFileParams, FsWriteFileParams, FsWriteFileResult } from "../../app-server/common/generated/index.js";
+import type { FsCopyParams, FsCreateDirectoryParams, FsCreateFileParams, FsDeleteParams, FsGetMetadataParams, FsGetMetadataResult, FsPasteSystemCutFilesParams, FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsRenameParams, FsWriteBinaryFileParams, FsWriteFileParams, FsWriteFileResult } from "../../app-server/common/generated/index.js";
 
 export interface IFileApi {
 	getMetadata(params: FsGetMetadataParams): Promise<FsGetMetadataResult>;
@@ -10,6 +10,7 @@ export interface IFileApi {
 	createFile(params: FsCreateFileParams): Promise<FsGetMetadataResult>;
 	createDirectory(params: FsCreateDirectoryParams): Promise<FsGetMetadataResult>;
 	copy(params: FsCopyParams): Promise<void>;
+	pasteSystemCutFiles(params: FsPasteSystemCutFilesParams): Promise<boolean>;
 	rename(params: FsRenameParams): Promise<void>;
 	delete(params: FsDeleteParams): Promise<void>;
 }

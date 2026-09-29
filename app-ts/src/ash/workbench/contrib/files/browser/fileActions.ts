@@ -1,3 +1,4 @@
+import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { basename, dirname, extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -5,6 +6,7 @@ import { localize } from '../../../../nls.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { FileKind, FileNotFoundError, IFileService } from '../../../../platform/files/common/files.js';
+import { ISystemFileTransferService } from '../../../../platform/files/common/systemFileTransferService.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
@@ -49,9 +51,9 @@ export async function cancelExplorerCut(accessor: ServicesAccessor): Promise<voi
 export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: unknown): Promise<void> {
 	if (fileList !== undefined && !(fileList instanceof FileList)) throw new TypeError('Invalid files to paste');
 	const explorer = accessor.get(IExplorerService);
-	const { resources, operation } = await accessor.get(IClipboardService).readResources();
+	const clipboard = accessor.get(IClipboardService);
+	const { resources, operation } = await clipboard.readResources();
 	const nativeFiles = resources.length === 0 && fileList && fileList.length > 0 ? [...fileList] : [];
-	if (!nativeFiles.length && !resources.length) return;
 	const localClipboard = explorer.getToCopy();
 	const cut = nativeFiles.length === 0 && operation === 'move';
 	const selection = explorer.getContext()[0];
@@ -61,6 +63,12 @@ export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: 
 		: await resolveCreationDirectory(accessor, 'folder');
 	if (!directory) return;
 	const files = accessor.get(IFileService);
+	if (!resources.length && await accessor.get(ISystemFileTransferService).pasteSystemCutFiles(directory)) {
+		explorer.setToCopy([], false);
+		status(localize('accessibility.explorerSystemFilesMoved', 'Files moved into the selected folder.'));
+		return;
+	}
+	if (!nativeFiles.length && !resources.length) return;
 	for (const file of nativeFiles) {
 		if (!validFileName(file.name)) continue;
 		const target = await availablePasteTarget(files, directory, file.name);

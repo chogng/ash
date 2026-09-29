@@ -623,6 +623,8 @@ use crate::protocol::fs::FsGetMetadataResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsMissingTargetBehavior;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::fs::FsPasteSystemCutFilesParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsReadBinaryFileParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsReadBinaryFileResult;
@@ -3456,6 +3458,11 @@ client_methods! {
         response: (),
         serialization: GlobalExclusive,
     },
+    FsPasteSystemCutFiles => "fs/pasteSystemCutFiles" {
+        params: FsPasteSystemCutFilesParams,
+        response: bool,
+        serialization: GlobalExclusive,
+    },
     FsRename => "fs/rename" {
         params: FsRenameParams,
         response: (),
@@ -4945,6 +4952,7 @@ typescript_bindings! {
     FsCreateFileParams,
     FsCreateDirectoryParams,
     FsCopyParams,
+    FsPasteSystemCutFilesParams,
     FsRenameParams,
     FsDeleteParams,
     FsChanged,

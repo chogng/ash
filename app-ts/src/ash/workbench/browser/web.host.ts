@@ -3,7 +3,7 @@ import { toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { URI } from '../../base/common/uri.js';
 import { authenticateWebAppServer, type AppServerWebSocketTransport } from '../../platform/app-server/browser/appServerWebSocketTransport.js';
 import { connectWebRendererApi, type RendererCapabilityContribution } from '../../platform/app-server/browser/webRendererApi.js';
-import { BrowserClipboardService } from '../../platform/clipboard/browser/browserClipboardService.js';
+import { BrowserClipboardService } from '../../platform/clipboard/browser/clipboardService.js';
 import { BrowserOpenerService } from '../../platform/opener/browser/browserOpenerService.js';
 import { AppServerWebWorkspaceClient } from '../services/workspaces/browser/appServerWebWorkspaceClient.js';
 

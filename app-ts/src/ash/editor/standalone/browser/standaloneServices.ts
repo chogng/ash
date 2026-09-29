@@ -30,7 +30,7 @@ import { StandaloneThemeService } from "./standaloneThemeService.js";
 import { Emitter, Event } from '../../../base/common/event.js';
 import { IWorkspaceContextService, WorkbenchState, type IWorkspace, type IWorkspaceFolder } from '../../../platform/workspace/common/workspace.js';
 import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
-import { BrowserClipboardService } from '../../../platform/clipboard/browser/browserClipboardService.js';
+import { BrowserClipboardService } from '../../../platform/clipboard/browser/clipboardService.js';
 import { IClipboardService } from '../../../platform/clipboard/common/clipboardService.js';
 import { ContextKeyService, IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
 import { FormattingConflicts } from '../../contrib/format/browser/format.js';

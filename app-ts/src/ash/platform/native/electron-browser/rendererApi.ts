@@ -7,7 +7,7 @@ import { AppServerProtocolIncompatibleError } from '../../app-server/common/appS
 import { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
 import { AppServerMessagePortTransport } from '../../app-server/electron-browser/appServerMessagePortTransport.js';
 import { createRendererHost, type RendererCapabilityContribution } from '../../app-server/browser/webRendererApi.js';
-import { ElectronBrowserClipboardService } from '../../clipboard/electron-browser/electronBrowserClipboardService.js';
+import { ElectronRendererClipboardService } from '../../clipboard/electron-browser/electronRendererClipboardService.js';
 import { createDisconnectedRendererApi } from '../../app-server/browser/rendererApi.js';
 import { AppServerAutomationService } from '../../automation/browser/appServerAutomationService.js';
 import { registerAppServerBrowserHost } from '../../browser/electron-browser/appServerBrowserHost.js';
@@ -105,7 +105,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 					wait: id => invoke('ash:oauth-callback:wait', { id }),
 					close: id => invoke('ash:oauth-callback:close', { id }),
 				},
-				clipboardService: new ElectronBrowserClipboardService(),
+				clipboardService: new ElectronRendererClipboardService(),
 			}, contributions);
 			if (client.capabilities?.memories) { backend = { ...backend, memories: resources.add(new AppServerMemoriesService(client)) }; }
 			if (client.capabilities?.contracts.memoryDiagnostics?.version === 1) { backend = { ...backend, memoryDiagnostics: resources.add(new AppServerMemoryDiagnosticsService(client, 'electron', () => invoke<MemoryObservation[]>('ash:memory:collect'))) }; }

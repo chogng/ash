@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { basename, dirname, join, resolve } from 'node:path';
 import type { ElectronApplication } from '@playwright/test';
 import type { BrowserWindow, MessageBoxOptions } from 'electron';
 import { expect, test } from '../../../automation/test.js';
@@ -196,6 +197,33 @@ test('Explorer shortcuts copy and move binary files into folders', async ({ targ
 		], { env: { ...process.env, ASH_TEST_CLIPBOARD_FILE: external } });
 		await page.keyboard.press('Control+v');
 		await expect.poll(async () => readFile(join(directory, 'paste-target', 'external.bin')).then(value => [...value], () => [])).toEqual([...bytes]);
+		const externalDirectory = await mkdtemp(join(tmpdir(), 'ash-explorer-cut-'));
+		try {
+			const externalFile = join(externalDirectory, 'external-cut.bin');
+			const externalFolder = join(externalDirectory, 'external-cut-folder');
+			await mkdir(externalFolder);
+			await writeFile(externalFile, bytes);
+			await writeFile(join(externalFolder, 'nested.bin'), bytes);
+			execFileSync('powershell.exe', [
+				'-NoProfile', '-STA', '-Command',
+				'Add-Type -AssemblyName System.Windows.Forms; $paths = New-Object System.Collections.Specialized.StringCollection; [void]$paths.Add($env:ASH_TEST_CUT_FILE); [void]$paths.Add($env:ASH_TEST_CUT_FOLDER); $data = New-Object System.Windows.Forms.DataObject; $data.SetFileDropList($paths); $data.SetData("Preferred DropEffect", (New-Object System.IO.MemoryStream(,[byte[]](2,0,0,0)))); [System.Windows.Forms.Clipboard]::SetDataObject($data, $true)',
+			], { env: { ...process.env, ASH_TEST_CUT_FILE: externalFile, ASH_TEST_CUT_FOLDER: externalFolder } });
+			expect(windowsPreferredDropEffect()).toBe(2);
+			await page.keyboard.press('Control+v');
+			await expect.poll(async () => readFile(join(directory, 'paste-target', 'external-cut.bin')).then(value => [...value], () => [])).toEqual([...bytes]);
+			await expect.poll(async () => readFile(join(directory, 'paste-target', 'external-cut-folder', 'nested.bin')).then(value => [...value], () => [])).toEqual([...bytes]);
+			await expect.poll(async () => stat(externalFile).then(() => true, () => false)).toBe(false);
+			await expect.poll(async () => stat(externalFolder).then(() => true, () => false)).toBe(false);
+			const remainingClipboardFiles = execFileSync('powershell.exe', [
+				'-NoProfile', '-STA', '-Command',
+				'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::GetFileDropList().Count',
+			], { encoding: 'utf8' });
+			expect(Number(remainingClipboardFiles.trim())).toBe(0);
+		} finally {
+			const path = resolve(externalDirectory);
+			if (dirname(path) !== resolve(tmpdir()) || !basename(path).startsWith('ash-explorer-cut-')) throw new Error('Unexpected external clipboard test directory');
+			await rm(path, { recursive: true, force: true });
+		}
 	}
 });
 

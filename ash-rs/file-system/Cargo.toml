@@ -16,6 +16,9 @@ sha2 = { workspace = true }
 ash-file-access = { workspace = true }
 ash-file-identity = { workspace = true }
 
+[target.'cfg(windows)'.dependencies]
+clipboard-win = { workspace = true, features = ["std"] }
+
 [dev-dependencies]
 tempfile = { workspace = true }
 
