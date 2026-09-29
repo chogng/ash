@@ -11,6 +11,7 @@ export interface ObjectTreeOptions<TNode> {
 	readonly scrolling?: ListScrolling;
 	readonly indent?: number;
 	readonly indentGuides?: TreeIndentGuides;
+	readonly expandOnDoubleClick?: boolean;
 	readonly expandOnlyOnTwistieClick?: boolean | ((element: TNode) => boolean);
 	readonly getHeight?: (element: TNode) => number;
 	readonly dnd?: TreeDragAndDrop<TNode>;
@@ -109,6 +110,7 @@ export class ObjectTree<TNode> extends Disposable {
 			scrolling: options.scrolling,
 			indent: options.indent,
 			indentGuides: options.indentGuides,
+			expandOnDoubleClick: options.expandOnDoubleClick,
 			expandOnlyOnTwistieClick: typeof expandOnlyOnTwistieClick === "function" ? (node) => expandOnlyOnTwistieClick(node.element) : expandOnlyOnTwistieClick,
 			getHeight: options.getHeight ? (node) => options.getHeight!(node.element) : undefined,
 			dnd: options.dnd ? mapDragAndDrop(options.dnd) : undefined,
@@ -264,6 +266,7 @@ export interface CompressibleObjectTreeOptions<T> {
 	readonly scrolling?: ListScrolling;
 	readonly indent?: number;
 	readonly indentGuides?: TreeIndentGuides;
+	readonly expandOnDoubleClick?: boolean;
 	readonly expandOnlyOnTwistieClick?: boolean | ((elements: readonly T[]) => boolean);
 	readonly getHeight?: (elements: readonly T[]) => number;
 	readonly dnd?: TreeDragAndDrop<T>;
@@ -333,6 +336,7 @@ export class CompressibleObjectTree<T> extends Disposable {
 			scrolling: options.scrolling,
 			indent: options.indent,
 			indentGuides: options.indentGuides,
+			expandOnDoubleClick: options.expandOnDoubleClick,
 			expandOnlyOnTwistieClick: typeof expandOnlyOnTwistieClick === "function" ? (node) => expandOnlyOnTwistieClick(node.element.elements) : expandOnlyOnTwistieClick,
 			getHeight: options.getHeight ? (node) => options.getHeight!(node.element.elements) : undefined,
 			dnd: options.dnd ? mapCompressedDragAndDrop(options.dnd) : undefined,

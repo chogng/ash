@@ -567,6 +567,45 @@ test("ObjectTree projects the model as flat list rows with tree ARIA", () => {
 	dom.window.close();
 });
 
+test("ObjectTree applies double-click expansion policy to row contents", () => {
+	for (const scenario of [
+		{ name: "default", expandOnlyOnTwistieClick: false, expandOnDoubleClick: undefined, expected: [false, true] },
+		{ name: "disabled", expandOnlyOnTwistieClick: false, expandOnDoubleClick: false, expected: [false] },
+		{ name: "twistie only", expandOnlyOnTwistieClick: true, expandOnDoubleClick: undefined, expected: [false] },
+		{ name: "twistie only and disabled", expandOnlyOnTwistieClick: true, expandOnDoubleClick: false, expected: [] },
+	]) {
+		const dom = new JSDOM("<!doctype html><body></body>");
+		const tree = new ObjectTree<TestNode>(dom.window.document.body, {
+			expandOnDoubleClick: scenario.expandOnDoubleClick,
+			expandOnlyOnTwistieClick: scenario.expandOnlyOnTwistieClick,
+			modelOptions: { identityProvider: { getId: node => node.id } },
+			renderElement: element => {
+				const label = h(dom.window.document, "span");
+				label.textContent = element.label;
+				return label;
+			},
+		});
+		tree.setChildren([{
+			element: { id: "folder", label: "Folder", expanded: false },
+			collapsed: true,
+			children: [{ element: { id: "child", label: "Child", expanded: false } }],
+		}]);
+		const collapsed: boolean[] = [];
+		tree.onDidChangeCollapseState(event => collapsed.push(event.collapsed));
+		for (const detail of [1, 2]) {
+			const folder = tree.element.querySelector<HTMLElement>("[data-tree-id='folder'] .ash-tree-contents");
+			assert.ok(folder);
+			folder.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, button: 0, detail }));
+		}
+		const folder = tree.element.querySelector<HTMLElement>("[data-tree-id='folder'] .ash-tree-contents");
+		assert.ok(folder);
+		folder.dispatchEvent(new dom.window.MouseEvent("dblclick", { bubbles: true, button: 0, detail: 2 }));
+		assert.deepEqual(collapsed, scenario.expected, scenario.name);
+		tree.dispose();
+		dom.window.close();
+	}
+});
+
 test("ObjectTree releases hidden rows when its hierarchy is replaced", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const removed: string[] = [];

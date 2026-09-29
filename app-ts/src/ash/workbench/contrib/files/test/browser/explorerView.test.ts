@@ -283,7 +283,10 @@ test("ExplorerView opens workspace files on single click", async () => {
 		sourceFolder.click();
 		assert.equal(sourceFolder.getAttribute("aria-expanded"), "false");
 		assert.deepEqual(rowLabels(pane.element), ["src", "README.md"]);
-		sourceFolder.dispatchEvent(new browser.window.MouseEvent("dblclick", { bubbles: true, button: 0, detail: 2 }));
+		sourceFolder.dispatchEvent(new browser.window.MouseEvent("click", { bubbles: true, button: 0, detail: 2 }));
+		const expandedSourceFolder = [...pane.element.querySelectorAll<HTMLElement>(".ash-tree-row")].find(row => rowLabel(row) === "src");
+		assert.ok(expandedSourceFolder);
+		expandedSourceFolder.dispatchEvent(new browser.window.MouseEvent("dblclick", { bubbles: true, button: 0, detail: 2 }));
 		assert.equal(sourceFolder.getAttribute("aria-expanded"), "true");
 		assert.deepEqual(rowLabels(pane.element), ["src", "main.ts", "README.md"]);
 

@@ -14,6 +14,8 @@ export interface AbstractTreeOptions<T, TNode extends AbstractTreeNode<T>> {
 	readonly scrolling?: ListScrolling;
 	readonly indent?: number;
 	readonly indentGuides?: TreeIndentGuides;
+	/** Whether the second click of a double-click gesture toggles expansion. Defaults to true. */
+	readonly expandOnDoubleClick?: boolean;
 	readonly expandOnlyOnTwistieClick?: boolean | ((element: TNode) => boolean);
 	readonly getHeight?: (element: TNode) => number;
 	readonly dnd?: TreeDragAndDrop<TNode>;
@@ -269,11 +271,12 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 
 	private onListPointer(node: TNode, browserEvent: MouseEvent): void {
 		const target = this.pointerTarget(browserEvent);
+		const canToggle = browserEvent.button === 0 && (this.options.expandOnDoubleClick !== false || browserEvent.detail !== 2);
 		if (target === "twistie") {
-			if (browserEvent.button === 0) this.requestCollapseChange(node, browserEvent);
+			if (canToggle) this.requestCollapseChange(node, browserEvent);
 			return;
 		}
-		if (browserEvent.button === 0 && browserEvent.detail !== 2 && !this.expandOnlyOnTwistieClick(node)) this.requestCollapseChange(node, browserEvent);
+		if (canToggle && (!this.expandOnlyOnTwistieClick(node) || browserEvent.detail === 2)) this.requestCollapseChange(node, browserEvent);
 		const event = { element: node, target, browserEvent } as const;
 		this._onPointer.fire(event);
 		this._onDidActivate.fire({ element: node, browserEvent });
@@ -282,7 +285,6 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	private onListDoubleClick(node: TNode, browserEvent: MouseEvent): void {
 		const target = this.pointerTarget(browserEvent);
 		if (target === "twistie") return;
-		if (browserEvent.button === 0 && this.expandOnlyOnTwistieClick(node)) this.requestCollapseChange(node, browserEvent);
 		this._onDidDoubleClick.fire({ element: node, target, browserEvent });
 	}
 

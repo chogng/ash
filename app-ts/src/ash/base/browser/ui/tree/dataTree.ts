@@ -10,6 +10,7 @@ export interface DataTreeOptions<T> {
 	readonly scrolling?: ListScrolling;
 	readonly indent?: number;
 	readonly indentGuides?: TreeIndentGuides;
+	readonly expandOnDoubleClick?: boolean;
 	readonly expandOnlyOnTwistieClick?: boolean | ((element: T) => boolean);
 	readonly getHeight?: (element: T) => number;
 	readonly dnd?: TreeDragAndDrop<T>;
@@ -50,6 +51,7 @@ export class DataTree<TInput, T> extends Disposable {
 			scrolling: options.scrolling,
 			indent: options.indent,
 			indentGuides: options.indentGuides,
+			expandOnDoubleClick: options.expandOnDoubleClick,
 			expandOnlyOnTwistieClick: options.expandOnlyOnTwistieClick,
 			getHeight: options.getHeight,
 			dnd: options.dnd,

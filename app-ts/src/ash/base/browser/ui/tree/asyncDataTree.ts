@@ -15,6 +15,7 @@ interface AsyncDataTreeCommonOptions<T> {
 	readonly scrolling?: ListScrolling;
 	readonly indent?: number;
 	readonly indentGuides?: TreeIndentGuides;
+	readonly expandOnDoubleClick?: boolean;
 	readonly identityProvider?: ObjectTreeIdentityProvider<T>;
 	readonly sorter?: TreeSorter<T>;
 	readonly filter?: TreeFilter<T>;
@@ -324,6 +325,7 @@ export class AsyncDataTree<TInput, T> extends AbstractAsyncDataTree<TInput, T, A
 			scrolling: options.scrolling,
 			indent: options.indent,
 			indentGuides: options.indentGuides,
+			expandOnDoubleClick: options.expandOnDoubleClick,
 			expandOnlyOnTwistieClick: options.expandOnlyOnTwistieClick,
 			getHeight: options.getHeight,
 			dnd: options.dnd,
@@ -362,6 +364,7 @@ export class CompressibleAsyncDataTree<TInput, T> extends AbstractAsyncDataTree<
 			scrolling: options.scrolling,
 			indent: options.indent,
 			indentGuides: options.indentGuides,
+			expandOnDoubleClick: options.expandOnDoubleClick,
 			expandOnlyOnTwistieClick: options.expandOnlyOnTwistieClick,
 			getHeight: options.getHeight,
 			dnd: options.dnd,

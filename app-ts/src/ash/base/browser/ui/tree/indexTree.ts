@@ -10,6 +10,7 @@ export interface IndexTreeOptions<T> {
 	readonly scrolling?: ListScrolling;
 	readonly indent?: number;
 	readonly indentGuides?: TreeIndentGuides;
+	readonly expandOnDoubleClick?: boolean;
 	readonly expandOnlyOnTwistieClick?: boolean | ((element: T) => boolean);
 	readonly getHeight?: (element: T) => number;
 	readonly dnd?: TreeDragAndDrop<T>;
@@ -85,6 +86,7 @@ export class IndexTree<T> extends Disposable {
 			scrolling: options.scrolling,
 			indent: options.indent,
 			indentGuides: options.indentGuides,
+			expandOnDoubleClick: options.expandOnDoubleClick,
 			expandOnlyOnTwistieClick: typeof expandOnlyOnTwistieClick === "function" ? (node) => expandOnlyOnTwistieClick(node.element) : expandOnlyOnTwistieClick,
 			getHeight: options.getHeight ? (node) => options.getHeight!(node.element) : undefined,
 			dnd: options.dnd ? mapDragAndDrop(options.dnd) : undefined,
