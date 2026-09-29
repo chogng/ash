@@ -30,6 +30,7 @@ pub(crate) struct ListSelection<A> {
     state: ListSelectionState,
     actions: BTreeMap<ListSelectionItemId, A>,
     key_hints: KeyHints,
+    key_hints_without_details: KeyHints,
     search_hints: KeyHints,
 }
 
@@ -39,11 +40,13 @@ impl<A> ListSelection<A> {
         actions: BTreeMap<ListSelectionItemId, A>,
     ) -> Self {
         let key_hints = model.key_hints();
+        let key_hints_without_details = model.key_hints_without_details();
         let search_hints = search_hints(&model);
         Self {
             state: ListSelectionState::new(model),
             actions,
             key_hints,
+            key_hints_without_details,
             search_hints,
         }
     }
@@ -54,6 +57,7 @@ impl<A> ListSelection<A> {
         actions: BTreeMap<ListSelectionItemId, A>,
     ) {
         self.key_hints = model.key_hints();
+        self.key_hints_without_details = model.key_hints_without_details();
         self.search_hints = search_hints(&model);
         self.state.replace_model(model);
         self.actions = actions;
@@ -64,8 +68,15 @@ impl<A> ListSelection<A> {
             &self.search_hints
         } else if self.state.tabs_focused() {
             &bindings::TAB_HINTS
-        } else {
+        } else if self.state.items_focused()
+            && self
+                .state
+                .selected_item()
+                .is_some_and(super::ListSelectionItem::has_expandable_details)
+        {
             &self.key_hints
+        } else {
+            &self.key_hints_without_details
         }
     }
 

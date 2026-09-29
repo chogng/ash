@@ -18,5 +18,5 @@ expression: "render(&app, 100, 20)"
             │                                                                         │             
             │                                                                         │             
   ──────────│                                                                         │───────────  
-  > Build an│  Enter/Space change · ←/→ details · Tab tabs · / search · Esc close     │             
+  > Build an│  Enter/Space change · Tab tabs · / search · Esc close                   │             
   ──────────└─────────────────────────────────────────────────────────────────────────┘atic model

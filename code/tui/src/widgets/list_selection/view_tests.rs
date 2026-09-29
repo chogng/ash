@@ -336,8 +336,11 @@ fn expandable_items_keep_selection_on_the_left_and_show_state_after_the_value() 
                 vec![
                     ListSelectionItem::new("Mode")
                         .with_id(ListSelectionItemId::new("mode"))
+                        .with_details("Mode details")
                         .with_columns("Mode", "Mode details", "off"),
-                    ListSelectionItem::new("Action").with_id(ListSelectionItemId::new("action")),
+                    ListSelectionItem::new("Action")
+                        .with_id(ListSelectionItemId::new("action"))
+                        .with_columns("Action", "Action details", "on"),
                 ],
             )],
         )
@@ -363,6 +366,18 @@ fn expandable_items_keep_selection_on_the_left_and_show_state_after_the_value() 
     assert_eq!(next[(0, 2)].symbol(), ">");
     assert_eq!(next[(37, 0)].symbol(), "-");
     assert_eq!(next[(37, 2)].symbol(), " ");
+    assert_eq!(next[(34, 2)].symbol(), "o");
+    state.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    assert!(!state.expanded(state.selected_item().unwrap()));
+    assert_eq!(state.body_rows(40), 3);
+
+    let mut terminal = Terminal::new(TestBackend::new(40, 10)).unwrap();
+    terminal
+        .draw(|frame| {
+            draw_body_with_pointer(frame, frame.area(), &state, None, None, test_context())
+        })
+        .unwrap();
+    crate::tui_assert_snapshot!("mixed_expandable_items", terminal.backend().to_string());
 }
 
 #[test]
@@ -375,6 +390,9 @@ fn expanded_descriptions_wrap_and_follow_items_after_filtering_and_refresh() {
             vec![
                 ListSelectionItem::new("First")
                     .with_id(ListSelectionItemId::new("first"))
+                    .with_details(
+                        "A long description that wraps across several narrow terminal lines.",
+                    )
                     .with_columns(
                         "First",
                         "A long description that wraps across several narrow terminal lines.",
@@ -382,6 +400,7 @@ fn expanded_descriptions_wrap_and_follow_items_after_filtering_and_refresh() {
                     ),
                 ListSelectionItem::new("Second")
                     .with_id(ListSelectionItemId::new("second"))
+                    .with_details("Another explanation")
                     .with_columns("Second", "Another explanation", "on"),
             ],
         )],

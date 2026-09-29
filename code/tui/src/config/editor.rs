@@ -640,6 +640,14 @@ impl ConfigEditor {
                 .with_compact_action("/", "search")
                 .with_compact_action("Esc", "close")
         });
+        static RESET_WITHOUT_DETAILS: LazyLock<KeyHints> = LazyLock::new(|| {
+            KeyHints::compact()
+                .with_compact_action("Enter", "change")
+                .with_compact_action("r", "reset")
+                .with_compact_action("Tab", "tabs")
+                .with_compact_action("/", "search")
+                .with_compact_action("Esc", "close")
+        });
         static PROVIDERS: LazyLock<KeyHints> = LazyLock::new(|| {
             KeyHints::compact()
                 .with_compact_action("Enter/Space", "change")
@@ -663,7 +671,16 @@ impl ConfigEditor {
             return provider_panel.key_hints();
         }
         if self.selection.state().items_focused() && self.selected_setting().is_some() {
-            return &RESET;
+            return if self
+                .selection
+                .state()
+                .selected_item()
+                .is_some_and(ListSelectionItem::has_expandable_details)
+            {
+                &RESET
+            } else {
+                &RESET_WITHOUT_DETAILS
+            };
         }
         if self.selection.state().items_focused() && self.selection.state().selected_item().and_then(ListSelectionItem::id).and_then(|id| self.selection.action(id)).is_some_and(|action| matches!(action, ConfigSelectionAction::OpenProvider(settings) if settings.config.custom.is_some())) {
             &CUSTOM_PROVIDER
@@ -1131,6 +1148,10 @@ pub(crate) fn config_choices(
             ),
         ListSelectionItem::new(nls::text(language, Message::ConfigMemoryDiagnostics))
             .with_id(memory_diagnostics_id)
+            .with_details(nls::text(
+                language,
+                Message::ConfigMemoryDiagnosticsDescription,
+            ))
             .with_columns(
                 nls::text(language, Message::ConfigMemoryDiagnostics),
                 nls::text(language, Message::ConfigMemoryDiagnosticsDescription),
@@ -1145,6 +1166,10 @@ pub(crate) fn config_choices(
             ),
         ListSelectionItem::new(nls::text(language, Message::ConfigGitChangesAsDiff))
             .with_id(git_changes_id)
+            .with_details(nls::text(
+                language,
+                Message::ConfigGitChangesAsDiffDescription,
+            ))
             .with_columns(
                 nls::text(language, Message::ConfigGitChangesAsDiff),
                 nls::text(language, Message::ConfigGitChangesAsDiffDescription),
@@ -1183,6 +1208,10 @@ pub(crate) fn config_choices(
     config_items.push(
         ListSelectionItem::new(nls::localize(language, "Memories"))
             .with_id(memories_id)
+            .with_details(nls::localize(
+                language,
+                "Allow model recall and saving; existing memories are kept when off",
+            ))
             .with_columns(
                 nls::localize(language, "Memories"),
                 nls::localize(
@@ -1195,6 +1224,7 @@ pub(crate) fn config_choices(
     config_items.push(
         ListSelectionItem::new(nls::text(language, Message::ConfigGitAutoFetch))
             .with_id(git_mode_id)
+            .with_details(nls::text(language, Message::ConfigGitAutoFetchDescription))
             .with_columns(
                 nls::text(language, Message::ConfigGitAutoFetch),
                 nls::text(language, Message::ConfigGitAutoFetchDescription),
@@ -1311,6 +1341,10 @@ pub(crate) fn advisor_choices(
                 vec![
                     ListSelectionItem::new(nls::text(language, Message::ConfigAdvisorEnabled))
                         .with_id(enabled_id)
+                        .with_details(nls::text(
+                            language,
+                            Message::ConfigAdvisorEnabledDescription,
+                        ))
                         .with_columns(
                             nls::text(language, Message::ConfigAdvisorEnabled),
                             nls::text(language, Message::ConfigAdvisorEnabledDescription),
@@ -1325,6 +1359,7 @@ pub(crate) fn advisor_choices(
                         ),
                     ListSelectionItem::new(nls::text(language, Message::ConfigAdvisorModel))
                         .with_id(model_id)
+                        .with_details(nls::text(language, Message::ConfigAdvisorDescription))
                         .with_columns(
                             nls::text(language, Message::ConfigAdvisorModel),
                             nls::text(language, Message::ConfigAdvisorDescription),

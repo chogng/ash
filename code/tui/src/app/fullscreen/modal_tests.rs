@@ -1826,26 +1826,28 @@ fn config_descriptions_expand_below_items_and_keep_mouse_targets_aligned() {
     let mut app = crate::app::App::new();
     app.open_home();
     app.update(crate::config::Event::EditorOpened(config_choices()));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     let collapsed = frame_text(&app);
-    assert!(!collapsed.contains("Use Vim editing"));
+    assert!(!collapsed.contains("Continuously collect bounded memory evidence"));
     assert!(
         app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE))
             .is_none()
     );
-    assert!(frame_text(&app).contains("Use Vim editing in ChatInput"));
+    assert!(frame_text(&app).contains("Continuously collect bounded memory evidence"));
     crate::tui_assert_snapshot!("config_expanded_description", frame_text(&app));
     let area = Rect::new(0, 0, 100, 30);
     let body = super::body_area(app.command_panel().unwrap(), super::layout(area).content);
     let first = body.y + crate::widgets::search_box::SEARCH_BOX_HEIGHT;
     assert_eq!(
-        super::target_at(&app, area, Position::new(body.x + 3, first + 1)),
+        super::target_at(&app, area, Position::new(body.x + 3, first + 3)),
         Some(super::Target::Text)
     );
     assert_eq!(
-        super::target_at(&app, area, Position::new(body.x + 3, first + 3)),
+        super::target_at(&app, area, Position::new(body.x + 3, first + 4)),
         Some(super::Target::Panel(
             crate::app::command_panel::CommandPanelPointerTarget::List(
-                ListSelectionPointerTarget::Item(ListSelectionItemId::new("memory-diagnostics"))
+                ListSelectionPointerTarget::Item(ListSelectionItemId::new("auto-update"))
             )
         ))
     );
@@ -1908,6 +1910,7 @@ fn config_switches_keep_the_selected_language_after_saving() {
                 .unwrap()
                 .label()
                 .replace(' ', "");
+            let details_marker = if id == "terminal-vim-mode" { "" } else { "+" };
             let body = super::body_area(
                 app.command_panel().unwrap(),
                 super::layout(Rect::new(0, 0, 100, 30)).content,
@@ -1922,7 +1925,7 @@ fn config_switches_keep_the_selected_language_after_saving() {
             let switch_row = |frame: &str| frame.lines().nth(row_index).unwrap().replace(' ', "");
             let before = frame_text(&app);
             assert!(
-                switch_row(&before).contains(&format!("{label}{off}+│")),
+                switch_row(&before).contains(&format!("{label}{off}{details_marker}│")),
                 "{id}: selected row was {}",
                 switch_row(&before)
             );
@@ -1970,7 +1973,10 @@ fn config_switches_keep_the_selected_language_after_saving() {
                 let frame = frame_text(&app);
                 let row = switch_row(&frame);
                 assert!(
-                    row.contains(&format!("{label}{}+│", if enabled { on } else { off })),
+                    row.contains(&format!(
+                        "{label}{}{details_marker}│",
+                        if enabled { on } else { off }
+                    )),
                     "{language:?} {id}: {row}"
                 );
                 if !enabled {

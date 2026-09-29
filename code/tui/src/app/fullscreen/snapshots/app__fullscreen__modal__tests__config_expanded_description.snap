@@ -12,20 +12,20 @@ expression: frame_text(&app)
   │    ▝  ▘ │  ╭────────────────────────────────────────────────────────────────────╮ │          │  
   │         │  │ Search configuration                                               │ │          │  
   │         │  ╰────────────────────────────────────────────────────────────────────╯ │          │  
-  │         │> Vim mode                                                         off - │          │  
-  │         │    Use Vim editing in ChatInput                                         │          │  
-  │         │  Show tips                                                         on + │          │  
-  │         │  Memory diagnostics                                               off + │          │  
-  ╰─────────│  Automatic updates                                             Latest + │──────────╯  
+  │         │  Vim mode                                                         off   │          │  
+  │         │  Show tips                                                         on   │          │  
+  │         │> Memory diagnostics                                               off - │          │  
+  │         │    Continuously collect bounded memory evidence                         │          │  
+  ╰─────────│  Automatic updates                                             Latest   │──────────╯  
             │  Show Git changes as diff                                         off + │             
-            │  Language                                                     English + │             
-            │  Status bar style                                              Simple + │             
-            │  Key hint style                                              Contrast + │             
-            │  Screen mode                                               fullscreen + │             
+            │  Language                                                     English   │             
+            │  Status bar style                                              Simple   │             
+            │  Key hint style                                              Contrast   │             
+            │  Screen mode                                               fullscreen   │             
             │  Memories                                                         off + │             
             │  Automatic Git fetch                                              Off + │             
-            │  Git fetch interval                                              180s + │             
-            │  Git branch marker                                          Powerline + │             
+            │  Git fetch interval                                              180s   │             
+            │  Git branch marker                                          Powerline   │             
             │  3 more below                                                           │ Esc return  
   ──────────│  Enter change · r reset · ←/→ details · Tab tabs · / search · Esc close │───────────  
   > Build an└─────────────────────────────────────────────────────────────────────────┘             

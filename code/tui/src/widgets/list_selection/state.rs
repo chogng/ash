@@ -27,6 +27,7 @@ pub(crate) struct ListSelectionItem {
     id: Option<ListSelectionItemId>,
     label: Text,
     description: Option<Text>,
+    details: Option<Text>,
     columns: Option<ListSelectionItemColumns>,
     selection_foreground: Option<Color>,
     presentation_focus: Option<Color>,
@@ -57,6 +58,7 @@ impl ListSelectionItem {
             id: None,
             label: label.into(),
             description: None,
+            details: None,
             columns: None,
             selection_foreground: None,
             presentation_focus: None,
@@ -73,6 +75,11 @@ impl ListSelectionItem {
 
     pub(crate) fn with_description(mut self, description: impl Into<Text>) -> Self {
         self.description = Some(description.into());
+        self
+    }
+
+    pub(crate) fn with_details(mut self, details: impl Into<Text>) -> Self {
+        self.details = Some(details.into());
         self
     }
 
@@ -145,12 +152,14 @@ impl ListSelectionItem {
         self.description.as_deref()
     }
 
-    pub(super) fn detail(&self) -> Option<&str> {
-        self.columns
-            .as_ref()
-            .map(|columns| columns.middle.as_str())
-            .or(self.description())
-            .filter(|description| !description.is_empty())
+    pub(super) fn details(&self) -> Option<&str> {
+        self.details
+            .as_deref()
+            .filter(|details| !details.is_empty())
+    }
+
+    pub(crate) fn has_expandable_details(&self) -> bool {
+        self.id.is_some() && self.details().is_some()
     }
 
     pub(super) fn columns(&self) -> Option<&ListSelectionItemColumns> {
@@ -229,6 +238,11 @@ struct ListSelectionPresentation {
     show_tabs: bool,
     initial_selected: usize,
     expandable: bool,
+}
+
+enum DetailsHint {
+    Show,
+    Hide,
 }
 
 impl ListSelectionModel {
@@ -335,14 +349,23 @@ impl ListSelectionModel {
     }
 
     pub(crate) fn key_hints(&self) -> KeyHints {
+        self.key_hints_for_details(DetailsHint::Show)
+    }
+
+    pub(crate) fn key_hints_without_details(&self) -> KeyHints {
+        self.key_hints_for_details(DetailsHint::Hide)
+    }
+
+    fn key_hints_for_details(&self, details_hint: DetailsHint) -> KeyHints {
         let presentation = &self.presentation;
         if presentation.expandable {
-            let mut hints = KeyHints::compact()
-                .with_compact_action(
-                    presentation.activation.keys(),
-                    presentation.activation.action(),
-                )
-                .with_compact_action("←/→", "details");
+            let mut hints = KeyHints::compact().with_compact_action(
+                presentation.activation.keys(),
+                presentation.activation.action(),
+            );
+            if matches!(details_hint, DetailsHint::Show) {
+                hints = hints.with_compact_action("←/→", "details");
+            }
             if presentation.show_tabs {
                 hints = hints.with_compact_action("Tab", "tabs");
             }
@@ -446,10 +469,12 @@ impl ListSelectionState {
         self.model = model;
         self.tabs.replace_tabs(tabs);
         self.expanded.retain(|id| {
-            self.tabs
-                .tabs()
-                .iter()
-                .any(|group| group.items.iter().any(|item| item.id() == Some(id)))
+            self.tabs.tabs().iter().any(|group| {
+                group
+                    .items
+                    .iter()
+                    .any(|item| item.id() == Some(id) && item.has_expandable_details())
+            })
         });
         if let Some(id) = selected
             && let Some(index) = self
@@ -485,7 +510,7 @@ impl ListSelectionState {
     }
 
     pub(super) fn expanded(&self, item: &ListSelectionItem) -> bool {
-        item.id().is_some_and(|id| self.expanded.contains(id))
+        item.has_expandable_details() && item.id().is_some_and(|id| self.expanded.contains(id))
     }
 
     pub(crate) fn title(&self) -> &str {
@@ -812,6 +837,12 @@ impl ListSelectionState {
             {
                 if let Some(id) = self.selected_item_id() {
                     if self.model.expandable {
+                        if !self
+                            .selected_item()
+                            .is_some_and(ListSelectionItem::has_expandable_details)
+                        {
+                            return ListSelectionInputOutcome::Consumed;
+                        }
                         if bindings::RIGHT.matches(key) {
                             self.expanded.insert(id);
                         } else {
@@ -1044,6 +1075,9 @@ fn localize_groups(groups: &mut [ListSelectionGroup], language: crate::nls::Lang
             item.label.localize(language);
             if let Some(description) = item.description.as_mut() {
                 description.localize(language);
+            }
+            if let Some(details) = item.details.as_mut() {
+                details.localize(language);
             }
             if let Some(columns) = item.columns.as_mut() {
                 columns.leading = crate::nls::localize_owned(language, &columns.leading);

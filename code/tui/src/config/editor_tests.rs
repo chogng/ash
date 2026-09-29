@@ -1078,6 +1078,47 @@ fn config_option_arrows_do_not_change_values_or_pages() {
 }
 
 #[test]
+fn config_details_are_available_only_for_settings_that_need_explanation() {
+    let mut editor = super::ConfigEditor::new(config_choices(
+        &empty_config_snapshot(),
+        &providers(),
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    ));
+    assert!(
+        !editor
+            .selection
+            .state()
+            .selected_item()
+            .unwrap()
+            .has_expandable_details()
+    );
+    assert!(!editor.key_hints().text().contains("details"));
+    let collapsed_rows = editor.selection.state().body_rows(80);
+    editor.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    assert_eq!(editor.selection.state().body_rows(80), collapsed_rows);
+
+    assert!(
+        editor
+            .selection
+            .state_mut()
+            .focus_item(&ListSelectionItemId::new("memory-diagnostics"))
+    );
+    assert!(
+        editor
+            .selection
+            .state()
+            .selected_item()
+            .unwrap()
+            .has_expandable_details()
+    );
+    assert!(editor.key_hints().text().contains("details"));
+    let collapsed_rows = editor.selection.state().body_rows(80);
+    editor.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    assert_eq!(editor.selection.state().body_rows(80), collapsed_rows + 1);
+}
+
+#[test]
 fn config_editor_shows_on_when_vim_is_enabled() {
     let mut terminal = TerminalSettings::default();
     terminal.set_input_mode(ChatInputMode::Vim);

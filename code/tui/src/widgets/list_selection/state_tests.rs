@@ -6,6 +6,7 @@ use super::ListSelectionItemId;
 use super::ListSelectionModel;
 use super::ListSelectionState;
 use crate::keymap::bindings;
+use crate::widgets::list_selection::ListSelection;
 use crate::widgets::list_selection::ListSelectionPointerTarget;
 use crate::widgets::search_box::SearchBoxModel;
 use crossterm::event::KeyCode;
@@ -193,6 +194,41 @@ fn arrow_keys_adjust_the_selected_actionable_item() {
         state.handle_key(key(KeyCode::Right)),
         ListSelectionInputOutcome::Adjust(item_id, ListSelectionAdjustment::Next)
     );
+}
+
+#[test]
+fn details_hint_and_arrow_keys_follow_the_selected_item_capability() {
+    let mut list = ListSelection::<()>::new(
+        ListSelectionModel::new(
+            "Config",
+            vec![ListSelectionGroup::new(
+                "General",
+                vec![
+                    ListSelectionItem::new("Simple")
+                        .with_id(ListSelectionItemId::new("simple"))
+                        .with_columns("Simple", "Simple description", "off"),
+                    ListSelectionItem::new("Explained")
+                        .with_id(ListSelectionItemId::new("explained"))
+                        .with_details("Useful explanation")
+                        .with_columns("Explained", "Useful explanation", "on"),
+                ],
+            )],
+        )
+        .without_tab_bar()
+        .with_expandable_descriptions(),
+        Default::default(),
+    );
+    assert!(!list.key_hints().text().contains("details"));
+    assert_eq!(
+        list.state_mut().handle_key(key(KeyCode::Right)),
+        ListSelectionInputOutcome::Consumed
+    );
+    assert_eq!(list.state().body_rows(40), 2);
+
+    list.state_mut().handle_key(key(KeyCode::Down));
+    assert!(list.key_hints().text().contains("details"));
+    list.state_mut().handle_key(key(KeyCode::Right));
+    assert_eq!(list.state().body_rows(40), 3);
 }
 
 #[test]

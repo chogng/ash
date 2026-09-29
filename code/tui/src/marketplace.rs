@@ -622,7 +622,8 @@ fn push(
     items.push(if description.is_empty() {
         item
     } else {
-        item.with_description(description)
+        item.with_description(description.clone())
+            .with_details(description)
     });
     actions.insert(id, action);
 }

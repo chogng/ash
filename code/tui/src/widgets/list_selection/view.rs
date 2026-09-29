@@ -172,7 +172,7 @@ pub(crate) fn draw_body_with_pointer(
                 if item.section_divider() {
                     continue;
                 }
-                let description = item.detail().unwrap_or_default();
+                let description = item.details().unwrap_or_default();
                 frame.render_widget(
                     Paragraph::new(description)
                         .wrap(ratatui::widgets::Wrap { trim: false })
@@ -364,8 +364,8 @@ impl ListSelectionState {
                 rows.push((index, 1));
             }
             rows.push((index, 0));
-            if self.expandable() && self.expanded(item) {
-                let description = item.detail().unwrap_or_default();
+            if self.expandable() && item.has_expandable_details() && self.expanded(item) {
+                let description = item.details().unwrap_or_default();
                 if !description.is_empty() {
                     let paragraph =
                         Paragraph::new(description).wrap(ratatui::widgets::Wrap { trim: false });
@@ -619,7 +619,7 @@ fn draw_item(
                 1,
             ),
         );
-        if let Some(expanded) = expanded.filter(|_| item.detail().is_some()) {
+        if let Some(expanded) = expanded.filter(|_| item.has_expandable_details()) {
             frame.render_widget(
                 Paragraph::new(if expanded { "-" } else { "+" }).style(marker_style),
                 Rect::new(area.right().saturating_sub(1), area.y, 1, 1),
