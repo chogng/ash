@@ -8,7 +8,7 @@ consumers:
   - desktop
   - cli
   - external-clients
-lastUpdated: 2026-09-10
+lastUpdated: 2026-09-29
 ```
 
 本文描述当前开发期的唯一 App Server 契约。项目不保留旧 wire API、旧 DTO 或旧持久化格式
@@ -31,7 +31,7 @@ Session、Thread、Turn 和更新流，不建立第二套领域模型。
 | 组织长期多根工作 | 受信产品 host 使用 `project/*` 保存根目录表并弱关联 Session | Project 不授予目录权限，也不改变 Thread 身份 |
 | 管理长期 Memory | 受信产品 host 使用 `memory/*` 在 Profile、Project 或 Dir 作用域显式读写 | 后端持久化正文；普通连接不可读取，删除后 live store 与命令回执不保留正文 |
 | 关闭一个 Session Tab | 前端通过 `session/request` 提交 `request.type = stop` | 枚举同一 `session_id` 的 Thread，持久化各 Thread 的停止事实并中断活动 Turn；不创建 Session 状态 |
-| 持续显示执行进度 | 订阅 Thread 更新并按序列消费 | 发现缺口时重新读取快照，不猜测丢失状态 |
+| 持续显示执行进度 | 读取 Thread 正文快照并订阅语义条目更新 | 后端整理条目内容和顺序；客户端决定排版，发现缺口时重新读取快照 |
 | 修改配置或资源 | 调用类型化方法并携带命令身份 | 重复命令可重放结果，冲突载荷会被拒绝 |
 | 同步 Marketplace 安装状态 | 同一 profile daemon 写入，收到 generation 失效提示后重新 list | Desktop、Ash Code 与 app 不建立第二份安装 authority |
 | 响应批准或用户输入 | 回复等待中的类型化请求 | 回复绑定精确请求和当前 Thread |
@@ -269,8 +269,8 @@ Desktop 当前实现和 Playwright 后续边界见
 | `session/request` | `session_id` grouping boundary | tagged request；树级动作枚举 Thread，Thread/Turn 写入绑定具体 Thread |
 | `session/unsubscribe` | connection | 删除订阅 |
 | `model/list` | model catalog | 参数 `{}`；各端使用固定内置目录，登录和接入切换不改变模型身份集合；目录不证明请求成功 |
-| `session/thread/read` | Session + Thread | 读取 canonical Thread snapshot |
-| `session/thread/subscribe` | Session + Thread + connection | snapshot + `afterSequence` 之后的 durable gap |
+| `session/thread/read` | Session + Thread | 读取 Thread 及其正文快照 |
+| `session/thread/subscribe` | Session + Thread + connection | Thread 与正文快照，加上 `afterSequence` 之后的 durable gap |
 | `session/thread/unsubscribe` | Session + Thread + connection | 删除 child Thread 订阅 |
 | `config/read` | config | 读取配置 |
 | `connector/list` | Connector authority | 读取不含 secret/reference 的外部账号连接投影 |
@@ -788,6 +788,29 @@ Thread {
 
 每个 Turn 始终包含完整的 `items: ThreadItem[]`、累计 `usage`、可选 `contextUsage`、可选 `pendingInteraction` metadata 与可选稳定错误。`contextUsage` 是最近一次模型调用完成后的当前 model-visible context token 数；优先使用 provider-reported input + output，缺字段时使用 Core 的 deterministic input estimate 并以 `source = estimated` 标识。`pendingInteraction` 不含 interaction payload；完整请求只能通过 owner-directed delivery 获得。客户端不得从日志文本或瞬态 delta 推断权威终态或当前上下文占用。
 
+### Thread 正文条目与三端显示
+
+当前的分工是：后端确定一段内容属于什么、在哪个 Turn、按什么顺序出现；客户端决定宽度、换行、间距、折叠、滚动和交互。`session/thread/read` 与 `session/thread/subscribe` 均返回 `thread` 和 `transcript`。`transcript` 是 `ThreadTranscriptSnapshot`，含稳定 `entryId`、当前 `revision` 和按序排列的完整条目。定义以 [`ash-thread-transcript`](../ash-rs/thread-transcript/src/model.rs) 与 [`ThreadItem`](../ash-rs/protocol/src/item.rs) 为准。
+
+| 正文条目 | 后端给出的含义 |
+| --- | --- |
+| `item` | 带类型的 `ThreadItem`：用户和 Agent 消息、思考、计划文本、工具调用与结果、附件及上下文；同时标明是否为临时内容 |
+| `turnPlan` | 当前 Turn 的结构化计划 |
+| `turnError` | 当前 Turn 的稳定错误 |
+| `toolOutput` | 绑定 `toolCallId` 的临时 stdout 或 stderr 内容 |
+
+App Server 的 [`TranscriptAccumulator`](../ash-rs/thread-transcript/src/accumulator.rs) 汇集内部增量，向客户端发送完整条目的 `upsert`、按 ID `remove` 或 `clearTransient`，而不是让各端自行拼接零散文字。`session/thread/transcript/update` 带 `sessionId`、`threadId`、`durableSequence` 和递增的 `revision`；`streamCursor` 只用于临时流的连续性。客户端按条目身份应用更新；修订号不连续时重新读取正文快照，不从可见文字推断消息、工具或执行状态。`Thread` 仍是已提交事实的权威来源，正文快照负责显示顺序和临时内容。
+
+| 客户端 | 当前显示职责 |
+| --- | --- |
+| Ash Code TUI | 将条目组织成可绘制的消息和工具单元；`fullscreen` 在应用内整屏布局和滚动，`inline` 将已定稿单元逐块写入终端历史，活动内容留在稳定视口。实现与终端边界见 [TUI README](../code/tui/README.md#终端生命周期)。 |
+| Rust 桌面界面 | 保存正文快照及更新，将条目排成会话时间线；见 [正文状态](../app-rs/session/src/pane/transcript.rs)和[时间线](../app-rs/session/src/pane/timeline.rs)。 |
+| TypeScript 桌面界面 | 通过 Chat 服务保留后端条目字段，再映射为聊天列表单元；见 [服务接口](../app-ts/src/ash/workbench/services/chat/common/chatService.ts)和[列表映射](../app-ts/src/ash/workbench/contrib/chat/browser/widget/chatListItems.ts)。 |
+
+最初报告的 inline 空行增长发生在终端排版层，不是后端增加了空消息。[inline 输出](../code/tui/src/app/inline/output.rs)现在只把定稿单元按身份写入主屏历史一次，输入与活动回复在有界视口内重绘；临时面板关闭后回到原历史。重复 `/status`、多轮回复、面板和尺寸变化有 [真实 CLI/PTY 测试](../ash-cli/tests/tui/terminal.rs)覆盖。自动化用例不能代替所有宿主终端的实际显示检查，其他终端组合的验证范围见 [TUI README](../code/tui/README.md#全屏终端兼容性验证)。
+
+工具执行产生的 `ToolCall`、`ToolResult` 是后端条目；`/status` 等本地斜杠命令是客户端操作，TUI 可在自己的正文中显示操作与结果，但不把它们伪装成持久化的 Thread 条目。当前三端都接入了后端语义条目，具体显示能力仍有差异：TypeScript 聊天列表和 Rust 桌面时间线主要以文字显示工具结果；TypeScript 服务虽保留工具结果的富内容字段，列表尚未逐种呈现这些内容。这是客户端显示范围，不改变后端的内容归属。
+
 `session/request` 的 `StartTurn` 参数：
 
 ```json
@@ -880,6 +903,7 @@ mutation gate 下重读 exact pending request，过期后持久化 `DeadlineElap
 
 - `session/changed`，只提示 `sessionId` 对应的派生树需要重新读取；
 - `session/thread/update`，payload 为 Session subscription 的 `ThreadUpdateEnvelope`；
+- `session/thread/transcript/update`，payload 为后端整理后的 `ThreadTranscriptUpdateEnvelope`；
 - `agent/request`，payload 为仅发送给 selected owner 的 full `AgentRequestEnvelope`；
 - `config/changed`，payload 为已提交的 Config `revision` 与 `generation`；
 - `skills/changed`，payload 为新的 catalog `generation`；
@@ -900,8 +924,7 @@ durable update 使用 `durableSequence`。Thread 的低延迟非 durable update 
 Thread 的 operation 在 request 分支中携带该 Thread 的 `expectedSequence`。结果通过 tagged
 `SessionRequestResult` 区分树视图、child Thread 和 Turn 返回值。
 
-Session subscription 和显式 `session/thread/subscribe` 都使用同一个 `session/thread/update`
-notification；通知 payload 始终带有 Session/Thread scope。
+Session subscription 和显式 `session/thread/subscribe` 都接收同一 Thread 的原始更新与正文更新；通知 payload 始终带有 Session/Thread scope。原始更新提供已提交事实与执行事件，正文更新供显示；客户端不应再从原始文字增量重复组装正文条目。
 
 `session/subscribe` 原子建立 Session subscription，并返回当前 Session 视图，以及每个 child Thread 的
 `SessionThreadProjection` snapshot/gap；Session 自身没有 sequence 或 committed gap。同一
