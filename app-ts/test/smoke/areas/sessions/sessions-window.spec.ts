@@ -205,6 +205,7 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 		}
 	}
 	await expect(navigation.getByRole('button', { name: 'Tab', exact: true }).locator('svg')).toHaveAttribute('data-ash-icon-id', 'keyboard-tab');
+	await expect(navigation.getByRole('button', { name: 'Personalization' }).locator('svg')).toHaveAttribute('data-ash-icon-id', 'briefcase');
 	await expect(navigation.getByRole('button', { name: 'General' })).toHaveAttribute('aria-current', 'page');
 	await expect(navigation.getByRole('button', { name: 'General' })).toHaveCSS('background-color', 'rgb(240, 240, 240)');
 	await expect(settings.getByRole('heading', { name: 'General' })).toBeVisible();
