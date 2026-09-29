@@ -461,7 +461,16 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	assert.match(modelPicker?.textContent ?? '', /GPT-5\.6 Sol/);
 	assert.match(modelPicker?.textContent ?? '', /128,000 context tokens/);
 	assert.match(modelPicker?.textContent ?? '', /Thinking: low, medium, high/);
-	modelPicker?.querySelector<HTMLInputElement>('input')?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+	const modelSearch = modelPicker?.querySelector<HTMLInputElement>('input');
+	assert.ok(modelSearch);
+	modelSearch.value = 'no-such-model';
+	modelSearch.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+	assert.equal(modelPicker?.querySelectorAll('.ash-quick-pick-row-content').length, 0);
+	modelSearch.value = 'GPT-5.6 Sol';
+	modelSearch.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+	modelSearch.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+	assert.ok(modelSearch.getAttribute('aria-activedescendant'));
+	modelSearch.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.equal(modelButton?.getAttribute('aria-expanded'), 'false');
 	shownContextMenuActions = [];
 	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
