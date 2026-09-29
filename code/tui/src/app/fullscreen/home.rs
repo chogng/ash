@@ -302,9 +302,7 @@ pub(super) fn handle_key(app: &mut App, key: KeyEvent) -> Option<Option<AppComma
             app.show_conversation()
         }
         (_, KeyCode::Char(_))
-            if selected.is_some()
-                && (key.modifiers == KeyModifiers::NONE
-                    || key.modifiers == KeyModifiers::SHIFT) =>
+            if key.modifiers == KeyModifiers::NONE || key.modifiers == KeyModifiers::SHIFT =>
         {
             app.fullscreen.home.selected = None;
             app.fullscreen.focus_input();

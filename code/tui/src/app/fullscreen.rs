@@ -106,7 +106,7 @@ impl Fullscreen {
     }
 
     pub(in crate::app) fn focus_home_input_for_paste(&mut self) {
-        if self.welcome_visible() && self.home.selected.is_some() {
+        if self.welcome_visible() {
             self.home.selected = None;
             self.focus_input();
         }

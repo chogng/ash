@@ -487,7 +487,9 @@ pub(in crate::app) fn handle_mouse(
             match target_at(app, area, mouse.column, mouse.row) {
                 Some(PointerTarget::Composer(_)) => super::navigation::focus_input(app),
                 Some(PointerTarget::Header(target)) => app.fullscreen.focus_header(target),
+                Some(PointerTarget::HomeAction(_)) => {}
                 Some(_) => app.fullscreen.focus_page(),
+                None if app.fullscreen.home_visible() => super::navigation::focus_input(app),
                 None => super::navigation::focus_page(app),
             }
         }

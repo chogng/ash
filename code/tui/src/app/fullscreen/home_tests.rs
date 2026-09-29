@@ -6,6 +6,9 @@ use crate::thread::Command as ThreadCommand;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use crossterm::event::MouseButton;
+use crossterm::event::MouseEvent;
+use crossterm::event::MouseEventKind;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
@@ -267,6 +270,111 @@ fn first_character_clears_welcome_and_keeps_the_workspace_header() {
     whitespace.handle_key(key(KeyCode::Char(' ')));
     assert_eq!(whitespace.input(), " ");
     assert!(!whitespace.fullscreen_welcome_visible());
+}
+
+#[test]
+fn clicking_empty_home_space_keeps_the_composer_ready() {
+    let mut app = unstarted_app();
+    app.open_home();
+    let area = ratatui::layout::Rect::new(0, 0, 80, 24);
+    let areas = crate::app::fullscreen::layout(&app, area);
+    let position = ratatui::layout::Position::new(
+        areas.session.transcript.x,
+        areas.session.transcript.bottom() - 1,
+    );
+    assert_eq!(
+        super::super::pointer::target_at(&app, area, position.x, position.y),
+        None
+    );
+    let mouse = |kind| MouseEvent {
+        kind,
+        column: position.x,
+        row: position.y,
+        modifiers: KeyModifiers::NONE,
+    };
+
+    super::super::pointer::handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Down(MouseButton::Left)),
+    );
+    super::super::pointer::handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Up(MouseButton::Left)),
+    );
+
+    assert!(app.chat_input_focused());
+    let buffer = render(&app, area.width, area.height);
+    let input = crate::thread::composer::content_area(areas.input);
+    assert_eq!(
+        buffer[(input.x, areas.input.y)].fg,
+        app.render_context().chat_input_chrome()
+    );
+    crate::tui_assert_snapshot!("home_empty_click_keeps_input", text(&buffer));
+
+    app.handle_key(key(KeyCode::Char('x')));
+    assert_eq!(app.input(), "x");
+}
+
+#[test]
+fn pressing_a_home_action_keeps_input_until_the_action_activates() {
+    let mut app = unstarted_app();
+    app.open_home();
+    let area = ratatui::layout::Rect::new(0, 0, 80, 24);
+    let actions = super::layout(
+        crate::app::fullscreen::layout(&app, area)
+            .session
+            .transcript,
+    )
+    .actions;
+    let mouse = |kind| MouseEvent {
+        kind,
+        column: actions.x,
+        row: actions.y,
+        modifiers: KeyModifiers::NONE,
+    };
+
+    super::super::pointer::handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Down(MouseButton::Left)),
+    );
+    assert!(app.chat_input_focused());
+
+    super::super::pointer::handle_mouse(
+        &mut app,
+        area,
+        mouse(MouseEventKind::Up(MouseButton::Left)),
+    );
+    assert!(app.chat_input_focused());
+    assert_eq!(
+        super::super::pointer::activate_pointer_item(&mut app, area, actions.x, actions.y),
+        Some(AppCommand::Git(crate::git::Command::OpenWorktrees))
+    );
+    assert!(!app.chat_input_focused());
+}
+
+#[test]
+fn home_page_focus_without_an_action_accepts_text_and_paste() {
+    let mut typed = unstarted_app();
+    typed.open_home();
+    assert!(typed.chat_input_focused());
+    typed.fullscreen.focus_page();
+    assert_eq!(typed.fullscreen.home.selected, None);
+    assert!(!typed.chat_input_focused());
+
+    typed.handle_key(key(KeyCode::Char('x')));
+
+    assert_eq!(typed.input(), "x");
+    assert!(typed.chat_input_focused());
+
+    let mut pasted = unstarted_app();
+    pasted.open_home();
+    pasted.fullscreen.focus_page();
+    pasted.handle_paste("检查项目结构".into());
+    assert_eq!(pasted.input(), "检查项目结构");
+    assert!(pasted.chat_input_focused());
 }
 
 #[test]
