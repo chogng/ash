@@ -90,6 +90,10 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
 				};
 			},
 			createFile: async ({ path }) => ({ fileType: "file", sizeBytes: path.length - path.length, readonly: false, modifiedAtMillis: null }),
+			createDirectory: async ({ path }) => {
+				assert.equal(path, 'new-folder');
+				return { fileType: 'directory', sizeBytes: 0, readonly: false, modifiedAtMillis: null };
+			},
 			rename: async () => {},
 			delete: async () => {},
 		},
@@ -123,6 +127,7 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
 		{ resource: URI.file("C:\\project\\paper.pdf"), bytes: new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55, 10]), revision: "revision-binary" },
 	);
 	assert.deepEqual(releasedResources, ["resource-pdf"]);
+	assert.equal((await service.createDirectory(URI.file('C:\\project\\new-folder'))).kind, FileKind.Directory);
 	assert.deepEqual(
 		await service.writeFile({
 			resource: URI.file("C:\\project\\src\\main.ts"),
@@ -155,6 +160,7 @@ test("BrowserFileService maps App Server revision conflicts to the file contract
 			readBinaryFile: async () => { throw new Error("unavailable"); },
 			writeFile: async () => { throw new AppServerRemoteError(-32000, "Revision conflict", { kind: "FileSystemRevisionConflict" }); },
 			createFile: async () => { throw new Error("unavailable"); },
+			createDirectory: async () => { throw new Error('unavailable'); },
 			rename: async () => { throw new Error("unavailable"); },
 			delete: async () => { throw new Error("unavailable"); },
 		},
@@ -184,6 +190,7 @@ test("BrowserFileService reads connection-owned binary resources in bounded chun
 			}),
 			writeFile: async () => { throw new Error("not used"); },
 			createFile: async () => { throw new Error("not used"); },
+			createDirectory: async () => { throw new Error('not used'); },
 			rename: async () => { throw new Error("not used"); },
 			delete: async () => { throw new Error("not used"); },
 		},
@@ -269,6 +276,7 @@ function unavailableFileApi() {
 		readBinaryFile: async () => { throw new Error("unavailable"); },
 		writeFile: async () => { throw new Error("unavailable"); },
 		createFile: async () => { throw new Error("unavailable"); },
+		createDirectory: async () => { throw new Error('unavailable'); },
 		rename: async () => { throw new Error("unavailable"); },
 		delete: async () => { throw new Error("unavailable"); },
 	};

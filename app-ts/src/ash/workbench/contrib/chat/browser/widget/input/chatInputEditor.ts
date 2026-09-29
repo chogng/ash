@@ -22,7 +22,8 @@ import { CHAT_INPUT_LANGUAGE_ID, createChatCommandCompletionProvider } from "./c
 import { createChatSkillCompletionProvider } from "./chatSkillCompletion.js";
 
 const CHAT_INPUT_LINE_HEIGHT = 20;
-const CHAT_INPUT_EDITOR_PADDING = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
+// The prompt's top inset belongs to the editor; the input surface sizes the toolbar separately.
+const CHAT_INPUT_EDITOR_PADDING = Object.freeze({ top: 6, right: 0, bottom: 0, left: 0 });
 const CHAT_INPUT_MIN_HEIGHT = 106;
 const CHAT_INPUT_MAX_HEIGHT = 320;
 

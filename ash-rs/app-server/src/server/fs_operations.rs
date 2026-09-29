@@ -6,6 +6,7 @@ use super::operations::resource_rpc_error;
 use super::result;
 use crate::resource_store::MAX_RESOURCE_BYTES;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
+use ash_app_server_protocol::protocol::fs::FsCreateDirectoryParams;
 use ash_app_server_protocol::protocol::fs::FsCreateFileParams;
 use ash_app_server_protocol::protocol::fs::FsDeleteMode;
 use ash_app_server_protocol::protocol::fs::FsDeleteParams;
@@ -162,6 +163,19 @@ impl AppServer {
                 Permission::WriteFiles,
             )?
             .create_file(&params.path, existing_behavior(params.existing))
+            .map_err(file_system_error)?;
+        result(&metadata_result(metadata))
+    }
+
+    pub(super) fn fs_create_directory(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: FsCreateDirectoryParams = decode(params)?;
+        let metadata = self
+            .file_system_for_request(
+                params.dir_id.as_deref(),
+                params.session_directory.as_ref(),
+                Permission::WriteFiles,
+            )?
+            .create_directory(&params.path)
             .map_err(file_system_error)?;
         result(&metadata_result(metadata))
     }

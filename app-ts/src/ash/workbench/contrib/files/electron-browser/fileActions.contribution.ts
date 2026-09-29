@@ -8,6 +8,7 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import { INativeHostService } from '../../../common/services.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { ResourceSchemeContext } from '../../../common/contextkeys.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IExplorerService } from '../browser/files.js';
 import { revealResourcesInOS } from './fileCommands.js';
 
@@ -29,7 +30,7 @@ registerAction2(class RevealFileInOSAction extends Action2 {
 			title: revealLabel(),
 			f1: true,
 			menu: [
-				{ id: MenuId.ExplorerContext, group: 'navigation', order: 20 },
+				{ id: MenuId.ExplorerContext, when: ContextKeyExpr.and(ContextKeyExpr.has('ashExplorerHasResource'), ResourceSchemeContext.isEqualTo(Schemas.file)), group: 'navigation', order: 20 },
 				{ id: MenuId.EditorTitle, when: ResourceSchemeContext.isEqualTo(Schemas.file), group: 'navigation', order: 20 },
 			],
 		});

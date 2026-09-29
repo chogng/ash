@@ -1,4 +1,3 @@
-import "./chatInputPart.css";
 import { addDisposableListener, h } from "../../../../../../base/browser/dom.js";
 import { ButtonActionViewItem, type ActionViewItem } from "../../../../../../base/browser/ui/actionbar/actionViewItems.js";
 import { status as announceStatus } from "../../../../../../base/browser/ui/aria/aria.js";

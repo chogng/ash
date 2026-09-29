@@ -332,6 +332,7 @@ export type { FrontendConfigDto } from './FrontendConfigDto.js';
 export type { FrozenAgentDefinitionRef } from './FrozenAgentDefinitionRef.js';
 export type { FrozenSkillActivation } from './FrozenSkillActivation.js';
 export type { FsChanged } from './FsChanged.js';
+export type { FsCreateDirectoryParams } from './FsCreateDirectoryParams.js';
 export type { FsCreateFileParams } from './FsCreateFileParams.js';
 export type { FsDeleteMode } from './FsDeleteMode.js';
 export type { FsDeleteParams } from './FsDeleteParams.js';

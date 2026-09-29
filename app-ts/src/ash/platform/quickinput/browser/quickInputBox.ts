@@ -24,6 +24,7 @@ export class QuickInputBox extends Disposable {
 			ariaLabel: options.title ?? options.placeHolder ?? localize('quickInput.inputTitle', 'Quick Input'),
 		}));
 		this.inputBox.element.classList.add('ash-quick-pick-input');
+		if (options.value !== undefined) this.inputBox.value = options.value;
 		this.onDidAccept = this.acceptEmitter.event;
 		this.onDidCancel = this.cancelEmitter.event;
 		this.onDidError = this.errorEmitter.event;

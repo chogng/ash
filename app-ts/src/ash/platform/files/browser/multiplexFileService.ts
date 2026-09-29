@@ -70,6 +70,10 @@ export class MultiplexFileService extends Disposable implements IFileService, IF
 		return this.provider(resource).createFile(resource, existing);
 	}
 
+	public createDirectory(resource: URI): Promise<IFileStat> {
+		return this.provider(resource).createDirectory(resource);
+	}
+
 	public rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {
 		const provider = this.provider(source);
 		if (provider !== this.provider(target)) throw new Error('Renaming across file system providers is not supported');

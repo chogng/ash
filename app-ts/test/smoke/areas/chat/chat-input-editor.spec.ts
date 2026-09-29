@@ -1,7 +1,7 @@
 import { expect, test } from '../../../automation/test.js';
 
 test('Empty chat keeps its input near the pane edges', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+	test.skip(target.workbenchMode !== 'code', 'Uses the Code Chat shell.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -12,27 +12,39 @@ test('Empty chat keeps its input near the pane edges', async ({ target, workbenc
 		const list = element.querySelector<HTMLElement>('.ash-chat-list-widget');
 		const input = element.querySelector<HTMLElement>('.ash-chat-input-part');
 		const composer = element.querySelector<HTMLElement>('.ash-chat-input-container');
-		if (!list || !input || !composer) throw new Error('Chat layout is incomplete');
+		const toolbar = element.querySelector<HTMLElement>('.ash-chat-input-toolbars');
+		const action = element.querySelector<HTMLElement>('.ash-chat-input-mode-action');
+		if (!list || !input || !composer || !toolbar || !action) throw new Error('Chat layout is incomplete');
 		const chatBounds = element.getBoundingClientRect();
+		const inputBounds = input.getBoundingClientRect();
 		const composerBounds = composer.getBoundingClientRect();
 		return {
-			chatTop: chatBounds.top,
 			listHeight: list.getBoundingClientRect().height,
-			inputTop: input.getBoundingClientRect().top,
-			composerTopInset: composerBounds.top - chatBounds.top,
-			composerLeftInset: composerBounds.left - chatBounds.left,
-			composerRightInset: chatBounds.right - composerBounds.right,
+			inputTopInset: inputBounds.top - chatBounds.top,
+			composerTopInset: composerBounds.top - inputBounds.top,
+			composerBottomInset: inputBounds.bottom - composerBounds.bottom,
+			composerLeftInset: composerBounds.left - inputBounds.left,
+			composerRightInset: inputBounds.right - composerBounds.right,
+			toolbarHeight: toolbar.getBoundingClientRect().height,
+			actionHeight: action.getBoundingClientRect().height,
+			actionBottomInset: composerBounds.bottom - action.getBoundingClientRect().bottom,
 		};
 	});
-	expect(layout.listHeight).toBe(0);
-	expect(layout.inputTop).toBeCloseTo(layout.chatTop, 0);
-	expect(layout.composerTopInset).toBe(12);
-	expect(layout.composerLeftInset).toBe(12);
-	expect(layout.composerRightInset).toBe(12);
+	expect(layout).toEqual({
+		listHeight: 0,
+		inputTopInset: 0,
+		composerTopInset: 4,
+		composerBottomInset: 4,
+		composerLeftInset: 12,
+		composerRightInset: 12,
+		toolbarHeight: 22,
+		actionHeight: 22,
+		actionBottomInset: 7,
+	});
 });
 
-test('Chat input omits the unused find control and keeps its text evenly inset', async ({ target, workbench }) => {
-	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+test('Chat input omits the unused find control and keeps the prompt evenly inset', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'Uses the Code Chat shell.');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -56,8 +68,9 @@ test('Chat input omits the unused find control and keeps its text evenly inset',
 			rulerDisplay: getComputedStyle(ruler).display,
 		};
 	});
-	expect(editorChrome.textInset).toBeLessThanOrEqual(4);
-	expect(editorChrome.textTopInset).toBeCloseTo(editorChrome.textLeftInset, 0);
+	expect(editorChrome.textInset).toBe(0);
+	expect(editorChrome.textTopInset).toBe(7);
+	expect(editorChrome.textLeftInset).toBe(7);
 	expect(editorChrome.attachmentsDisplay).toBe('none');
 	expect(editorChrome.rulerDisplay).toBe('none');
 });

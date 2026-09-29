@@ -7742,6 +7742,22 @@
         {
           "properties": {
             "method": {
+              "const": "fs/createDirectory",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/FsCreateDirectoryParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "fs/rename",
               "type": "string"
             },
@@ -12483,6 +12499,22 @@
           "properties": {
             "method": {
               "const": "fs/createFile",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/FsGetMetadataResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "fs/createDirectory",
               "type": "string"
             },
             "result": {
@@ -18907,6 +18939,34 @@
           "type": "object"
         }
       ]
+    },
+    "FsCreateDirectoryParams": {
+      "description": "Creates one workspace directory.",
+      "properties": {
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionDirSelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
     },
     "FsCreateFileParams": {
       "description": "Creates one empty directory file.",

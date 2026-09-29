@@ -74,6 +74,10 @@ export class SettingsFileSystemProvider extends Disposable implements IFileSyste
 		return this.stat(resource);
 	}
 
+	public createDirectory(resource: URI): Promise<IFileStat> {
+		return Promise.reject(new FileOperationNotSupportedError(resource, 'createDirectory'));
+	}
+
 	public rename(source: URI, _target: URI, _existing: FileExistingTargetBehavior): Promise<void> {
 		return Promise.reject(new FileOperationNotSupportedError(source, 'rename'));
 	}

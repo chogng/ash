@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { test } from 'mocha';
 import { URI } from '../../../../base/common/uri.js';
 import { DiskFileSystemProviderClient, LOCAL_FILE_SYSTEM_CHANNEL_NAME } from '../../common/diskFileSystemProviderClient.js';
-import { FileNotFoundError, FileRevisionConflictError } from '../../common/files.js';
+import { FileKind, FileNotFoundError, FileRevisionConflictError } from '../../common/files.js';
 import { diskFileSystemProviderRoutes } from '../../electron-main/diskFileSystemProviderServer.js';
 import { DiskFileSystemProvider } from '../../node/diskFileSystemProvider.js';
 
@@ -26,6 +26,9 @@ test('desktop file transport preserves resources, revisions, and root boundaries
 		await assert.rejects(client.readFile(URI.file(join(directory, '..', 'outside.json'))), /outside the granted roots/);
 		await assert.rejects(client.readFile(URI.file(join(directory, 'missing.json'))), FileNotFoundError);
 		assert.equal((await client.readDirectory(URI.file(directory)))[0]?.resource.toString(), resource.toString());
+		const folder = URI.file(join(directory, 'new-folder'));
+		assert.equal((await client.createDirectory(folder)).kind, FileKind.Directory);
+		await client.delete(folder, 'error', 'fileOrEmptyDirectory');
 		const target = URI.file(join(directory, 'target.json'));
 		await writeFile(target.fsPath, 'keep');
 		await assert.rejects(client.rename(resource, target, 'error'));

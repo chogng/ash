@@ -47,6 +47,7 @@ export interface IQuickPick<TItem extends IQuickPickItem>
 export interface IInputOptions {
 	readonly title?: string;
 	readonly placeHolder?: string;
+	readonly value?: string;
 	readonly password?: boolean;
 	readonly validateInput?: (value: string) => Promise<string | null | undefined>;
 }

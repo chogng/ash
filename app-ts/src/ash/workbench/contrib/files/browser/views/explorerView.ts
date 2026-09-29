@@ -9,7 +9,7 @@ import { ILabelService } from "../../../../../platform/label/common/labelService
 import { WorkbenchAsyncDataTree, type ResourceOpenEvent } from "../../../../../platform/list/browser/listService.js";
 import { IEditorService } from "../../../../services/editor/common/editorService.js";
 import { ViewPane, type IViewPaneOptions } from "../../../../browser/parts/views/viewPane.js";
-import { h } from "../../../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
 import { appendIcon } from "../../../../../base/browser/ui/lxicons/lxicon.js";
 import { Lxicon } from "../../../../../base/common/lxicons.js";
 import { ExplorerItem } from "../../common/explorerModel.js";
@@ -18,7 +18,10 @@ import { ExplorerDataSource, ExplorerFindProvider, FileSorter, FilesRenderer } f
 import { extUriBiasedIgnorePathCase } from "../../../../../base/common/resources.js";
 import { IExplorerService, type IExplorerView } from '../files.js';
 import { ExplorerFocusedContext } from '../files.js';
-import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IContextKeyService, type IScopedContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import type { IContextKey } from '../../../../../platform/contextkey/common/contextkey.js';
+import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import { MenuId } from '../../../../../platform/actions/common/actions.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { explorerFileContribRegistry } from '../explorerFileContrib.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
@@ -26,6 +29,7 @@ import { localize, onDidChangeNls } from '../../../../../nls.js';
 import { WorkspaceWatcher } from '../workspaceWatcher.js';
 import { FileEditorInput } from '../editors/fileEditorInput.js';
 import { ListConfiguration, type TreeExpandMode } from '../../../../../platform/list/common/listConfiguration.js';
+import { ResourceSchemeContext } from '../../../../common/contextkeys.js';
 
 /** Workspace file tree backed by `IFileService` and the Workbench editor. */
 export class ExplorerView extends ViewPane implements IExplorerView {
@@ -41,6 +45,10 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	private treeErrorElement: ExplorerItem | undefined;
 	private workspaceGeneration = 0;
 	private readonly loadedNests = new Set<string>();
+	private readonly scopedContext: IScopedContextKeyService;
+	private readonly hasContextResource: IContextKey<boolean>;
+	private readonly contextIsFile: IContextKey<boolean>;
+	private readonly contextCanModify: IContextKey<boolean>;
 
 	constructor(
 		container: HTMLElement,
@@ -55,6 +63,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IAccessibleViewService accessibleViewService: IAccessibleViewService,
+		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 		@IFileLabelDecorationService fileLabelDecorationService?: IFileLabelDecorationService,
 		@ILabelService labelService?: ILabelService,
 	) {
@@ -101,8 +110,15 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			},
 		}));
 		this._register(new ExplorerFindProvider(this.tree, this.headerElement));
-		const scopedContext = this._register(contextKeyService.createScoped(this.element));
-		ExplorerFocusedContext.bindTo(scopedContext).set(true);
+		this.scopedContext = this._register(contextKeyService.createScoped(this.element));
+		ExplorerFocusedContext.bindTo(this.scopedContext).set(true);
+		this.hasContextResource = this.scopedContext.createKey<boolean>('ashExplorerHasResource', false);
+		this.contextIsFile = this.scopedContext.createKey<boolean>('ashExplorerIsFile', false);
+		this.contextCanModify = this.scopedContext.createKey<boolean>('ashExplorerCanModify', false);
+		this._register(addDisposableListener(this.tree.domNode, 'contextmenu', event => this.showExplorerContextMenu(event)));
+		this._register(addDisposableListener(this.tree.domNode, 'keydown', event => {
+			if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) this.showExplorerContextMenu(event);
+		}));
 		const updateAriaLabel = () => {
 			const label = localize('accessibility.explorerTreeLabel', 'Workspace files');
 			const hint = accessibleViewService.getOpenAriaHint(AccessibilityVerbositySettingId.Explorer);
@@ -196,6 +212,31 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 
 	public focus(): void {
 		this.tree.domFocus();
+	}
+
+	private showExplorerContextMenu(event: MouseEvent | KeyboardEvent): void {
+		event.preventDefault();
+		event.stopPropagation();
+		const row = event.target instanceof Element ? event.target.closest<HTMLElement>('.ash-tree-row') : null;
+		const item = event instanceof MouseEvent
+			? this.tree.getVisibleElements().find(candidate => candidate.resource.toString() === row?.dataset.treeId)
+			: this.tree.focus;
+		this.tree.setSelection(item ? [item] : []);
+		const isRoot = item ? this.workspaceContextService.getWorkspace().folders.some(folder => extUriBiasedIgnorePathCase.isEqual(folder.uri, item.resource)) : false;
+		this.hasContextResource.set(!!item);
+		this.contextIsFile.set(item?.kind === FileKind.File);
+		this.contextCanModify.set(!!item && !isRoot);
+		this.scopedContext.setContext(ResourceSchemeContext.key, item?.resource.scheme);
+		const anchor = event instanceof MouseEvent
+			? { x: event.clientX, y: event.clientY, targetWindow: this.element.ownerDocument.defaultView ?? undefined }
+			: row ?? this.tree.element;
+		this.contextMenuService.showContextMenu({
+			menuId: MenuId.ExplorerContext,
+			contextKeyService: this.scopedContext,
+			menuActionOptions: { arg: item?.resource, shouldForwardArgs: true },
+			getAnchor: () => anchor,
+			onHide: didCancel => { if (didCancel) this.tree.domFocus(); },
+		});
 	}
 
 	private async initialize(): Promise<void> {

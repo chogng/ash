@@ -14,6 +14,7 @@ import { emptyEditorServiceState } from '../../../../../workbench/test/common/te
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import type { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import type { IContextMenuMenuDelegate, IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 
 test("ExplorerView opens workspace files on single click", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
@@ -36,6 +37,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 	let editorFocusCount = 0;
 	let hoverCreations = 0;
 	let hoverDisposals = 0;
+	let contextMenu: IContextMenuMenuDelegate | undefined;
 	const fileService: IFileService = {
 		onDidChangeFiles: fileChanges.event,
 		stat: async () => { throw new Error('Explorer must load the workspace root with one directory read'); },
@@ -103,6 +105,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 			throw new Error("Explorer must delegate file writes to the selected editor");
 		},
 		createFile: async () => { throw new Error("Explorer must not create files in this test"); },
+		createDirectory: async () => { throw new Error("Explorer must not create directories in this test"); },
 		rename: async () => { throw new Error("Explorer must not rename files in this test"); },
 		delete: async () => { throw new Error("Explorer must not delete files in this test"); },
 	};
@@ -206,6 +209,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 			{} as IInstantiationService,
 			contextKeyService,
 			accessibleViewService,
+			{ showContextMenu: delegate => { contextMenu = delegate as IContextMenuMenuDelegate; } } as IContextMenuService,
 		);
 		browser.window.document.body.append(pane.element);
 		assert.equal(
@@ -258,6 +262,16 @@ test("ExplorerView opens workspace files on single click", async () => {
 		assert.ok(mainRow);
 		const readmeRow = [...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => rowLabel(row) === 'README.md');
 		assert.ok(readmeRow);
+		mainRow.dispatchEvent(new browser.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 12, clientY: 24 }));
+		assert.equal(contextMenu?.menuId?.id, 'ExplorerContext');
+		assert.equal((contextMenu?.menuActionOptions?.arg as URI).toString(), URI.file('C:\\project\\src\\main.ts').toString());
+		assert.equal(contextMenu?.contextKeyService?.getValue('ashExplorerIsFile'), true);
+		assert.equal(contextMenu?.contextKeyService?.getValue('ashExplorerCanModify'), true);
+		assert.equal(explorerService.getContext()[0]?.name, 'main.ts');
+		readmeRow.dispatchEvent(new browser.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+		assert.equal(explorerService.getContext()[0]?.name, 'README.md');
+		pane.element.querySelector<HTMLElement>('.ash-tree')?.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'F10', shiftKey: true }));
+		assert.equal(contextMenu?.menuId?.id, 'ExplorerContext');
 		assert.equal([...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => rowLabel(row) === 'src'), sourceFolder);
 		sourceFolder.click();
 		assert.deepEqual(rowLabels(pane.element), ['src', 'README.md']);

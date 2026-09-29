@@ -4,6 +4,7 @@ import { JSDOM } from 'jsdom';
 import { URI } from '../../../../../base/common/uri.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { IDialogService, type IConfirmationDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
 import { Event } from '../../../../../base/common/event.js';
 import { IFileService, FileKind, type IFileService as FileServiceContract } from '../../../../../platform/files/common/files.js';
 import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -14,7 +15,7 @@ import { IEditorService, type IEditorService as EditorServiceContract } from '..
 import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
 import type { IEditorPart as EditorPartContract } from '../../../../browser/parts/editor/editorPart.js';
 import { COPY_PATH_COMMAND_ID, COPY_RELATIVE_PATH_COMMAND_ID, OPEN_FILE_COMMAND_ID, SAVE_FILE_COMMAND_ID } from '../../browser/fileConstants.js';
-import { DOWNLOAD_COMMAND_ID, NEW_FILE_COMMAND_ID } from '../../browser/fileActions.js';
+import { DELETE_FILE_COMMAND_ID, DOWNLOAD_COMMAND_ID, NEW_FILE_COMMAND_ID, NEW_FOLDER_COMMAND_ID, OPEN_TO_SIDE_COMMAND_ID, RENAME_FILE_COMMAND_ID } from '../../browser/fileActions.js';
 import { IExplorerService } from '../../browser/files.js';
 import { ExplorerService } from '../../browser/explorerService.js';
 import { ExplorerItem } from '../../common/explorerModel.js';
@@ -135,6 +136,41 @@ test('New File command creates and opens a file in the active workspace folder',
 	}
 });
 
+test('New Folder command creates a directory under the selected folder', async () => {
+	await import('../../browser/fileActions.contribution.js');
+	const root = URI.file('/project');
+	const folder = URI.file('/project/src');
+	const created: URI[] = [];
+	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+	const explorer = new ExplorerService();
+	using registration = explorer.registerView({
+		getContext: () => [new ExplorerItem(folder, 'src', FileKind.Directory)],
+		getAccessibleContent: () => '',
+		focus() {},
+	});
+	using services = new ServiceContainer();
+	services.registerInstance(IWorkspaceContextService, workspace);
+	services.registerInstance(IExplorerService, explorer);
+	services.registerInstance(IEditorService, { activeEditor: undefined } as EditorServiceContract);
+	services.registerInstance(IQuickInputService, {
+		input: async options => {
+			assert.equal(options.title, 'New Folder Name');
+			assert.equal(await options.validateInput?.('../escape'), 'Enter a name without path separators.');
+			return 'generated';
+		},
+	} as QuickInputServiceContract);
+	services.registerInstance(IFileService, {
+		createDirectory: async resource => {
+			created.push(resource);
+			return { resource, kind: FileKind.Directory, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined };
+		},
+	} as FileServiceContract);
+	using commands = new CommandService(services);
+
+	await commands.executeCommand(NEW_FOLDER_COMMAND_ID);
+	assert.deepEqual(created, [URI.file('/project/src/generated')]);
+});
+
 test('Copy Path commands copy the active file and its workspace-relative path', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
@@ -210,6 +246,65 @@ test('Download File command preserves the active file bytes and filename', async
 		else Reflect.deleteProperty(globalThis, 'document');
 		browser.window.close();
 	}
+});
+
+test('Explorer menu commands rename, open beside the editor, and delete the selected file', async () => {
+	await import('../../browser/fileActions.contribution.js');
+	const root = URI.file('/project');
+	const selected = URI.file('/project/old.ts');
+	const renamed: string[] = [];
+	const deleted: string[] = [];
+	const opened: string[] = [];
+	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+	const explorer = new ExplorerService();
+	using registration = explorer.registerView({
+		getContext: () => [new ExplorerItem(selected, 'old.ts', FileKind.File)],
+		getAccessibleContent: () => '',
+		focus() {},
+	});
+	using services = new ServiceContainer();
+	services.registerInstance(IWorkspaceContextService, workspace);
+	services.registerInstance(IExplorerService, explorer);
+	services.registerInstance(IQuickInputService, {
+		input: async options => {
+			assert.equal(options.value, 'old.ts');
+			assert.equal(await options.validateInput?.('../escape'), 'Enter a file name without path separators.');
+			return 'new.ts';
+		},
+	} as QuickInputServiceContract);
+	services.registerInstance(IFileService, {
+		rename: async (source, target, existing) => {
+			assert.equal(existing, 'error');
+			renamed.push(`${source.toString()} -> ${target.toString()}`);
+		},
+		delete: async (resource, missing, mode) => {
+			assert.equal(missing, 'error');
+			assert.equal(mode, 'recursive');
+			deleted.push(resource.toString());
+		},
+	} as FileServiceContract);
+	services.registerInstance(IDialogService, {
+		confirm: async (options: IConfirmationDialogOptions) => {
+			assert.equal(options.message, 'Permanently delete old.ts?');
+			return { confirmed: true };
+		},
+	} as unknown as IDialogService);
+	services.registerInstance(IEditorService, {
+		openEditor: async (input, options, target) => {
+			assert.deepEqual(options, { pinned: true });
+			assert.equal(target, 'sideGroup');
+			opened.push(input.resource.toString());
+		},
+	} as EditorServiceContract);
+	using commands = new CommandService(services);
+
+	await commands.executeCommand(OPEN_TO_SIDE_COMMAND_ID);
+	await commands.executeCommand(RENAME_FILE_COMMAND_ID);
+	await commands.executeCommand(DELETE_FILE_COMMAND_ID);
+
+	assert.deepEqual(opened, [selected.toString()]);
+	assert.deepEqual(renamed, [`${selected.toString()} -> ${URI.file('/project/new.ts').toString()}`]);
+	assert.deepEqual(deleted, [selected.toString()]);
 });
 
 test('Reveal in OS command sends the selected local file to the desktop host', async () => {

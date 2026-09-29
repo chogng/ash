@@ -98,6 +98,7 @@ class TestFileService implements IFileService {
 	async readDirectory() { return []; }
 	async writeFile(_request: IFileWriteRequest): Promise<never> { throw new Error("read only"); }
 	async createFile(): Promise<never> { throw new Error("read only"); }
+	async createDirectory(): Promise<never> { throw new Error("read only"); }
 	async rename(): Promise<never> { throw new Error("read only"); }
 	async delete(): Promise<never> { throw new Error("read only"); }
 }

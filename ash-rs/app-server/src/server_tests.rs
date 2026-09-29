@@ -5781,6 +5781,16 @@ fn filesystem_rpc_lists_and_describes_paths() {
             "params":{"resourceId":binary["result"]["resource"]["resourceId"],"offset":0,"maxBytes":262144}
         }),
     );
+    let directory = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":10,
+            "method":"fs/createDirectory",
+            "params":{"path":"src/generated"}
+        }),
+    );
 
     assert_eq!(
         listed["result"]["entries"],
@@ -5793,6 +5803,8 @@ fn filesystem_rpc_lists_and_describes_paths() {
     assert_eq!(written["result"]["metadata"]["sizeBytes"], 7);
     assert!(written["result"]["revision"].is_string());
     assert_eq!(created["result"]["metadata"]["sizeBytes"], 3);
+    assert_eq!(directory["result"]["fileType"], "directory");
+    assert!(root.join("src/generated").is_dir());
     assert_eq!(stale["error"]["code"], -32042);
     assert_eq!(stale["error"]["message"], "FileSystemRevisionConflict");
     assert_eq!(
@@ -6864,6 +6876,12 @@ fn filesystem_rpc_enforces_file_permissions_and_revocation() {
                 4,
                 "fs/writeFile",
                 serde_json::json!({"path":"file", "content":"new"}),
+                ash_file_access::Permission::WriteFiles,
+            ),
+            (
+                6,
+                "fs/createDirectory",
+                serde_json::json!({"path":"new-folder"}),
                 ash_file_access::Permission::WriteFiles,
             ),
         ] {

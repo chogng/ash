@@ -179,6 +179,19 @@ pub struct FsCreateFileParams {
     pub existing: FsExistingTargetBehavior,
 }
 
+/// Creates one workspace directory.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FsCreateDirectoryParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dir_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<SessionDirSelector>,
+    pub path: PathBuf,
+}
+
 /// Renames one directory file or directory.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

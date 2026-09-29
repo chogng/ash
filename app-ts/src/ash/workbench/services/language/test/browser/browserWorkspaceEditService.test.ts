@@ -343,6 +343,7 @@ class MemoryFileService implements IFileService {
 		this.resources.set(resource.toString(), "");
 		return this.stat(resource);
 	}
+	async createDirectory(): Promise<never> { throw new Error('Workspace edit tests do not create directories'); }
 	async rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {
 		if (this.failRename) throw new Error("injected rename failure");
 		const sourceText = this.text(source);

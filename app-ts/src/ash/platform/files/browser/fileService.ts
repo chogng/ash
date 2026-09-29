@@ -18,6 +18,7 @@ export interface IFileSystemApi {
 	readBinaryFile(params: FsReadBinaryFileParams): Promise<FsReadBinaryFileResult>;
 	writeFile(params: FsWriteFileParams): Promise<FsWriteFileResult>;
 	createFile(params: import("../../app-server/common/generated/index.js").FsCreateFileParams): Promise<FsGetMetadataResult>;
+	createDirectory(params: import("../../app-server/common/generated/index.js").FsCreateDirectoryParams): Promise<FsGetMetadataResult>;
 	rename(params: import("../../app-server/common/generated/index.js").FsRenameParams): Promise<void>;
 	delete(params: import("../../app-server/common/generated/index.js").FsDeleteParams): Promise<void>;
 }
@@ -110,6 +111,11 @@ export class BrowserFileService extends Disposable implements IFileService {
 
 	async createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat> {
 		const result = await this.api.createFile({ ...this.fileTarget(resource), existing });
+		return { resource, kind: fileKind(result.fileType), sizeBytes: result.sizeBytes, readonly: result.readonly, modifiedAtMillis: result.modifiedAtMillis ?? undefined };
+	}
+
+	async createDirectory(resource: URI): Promise<IFileStat> {
+		const result = await this.api.createDirectory(this.fileTarget(resource));
 		return { resource, kind: fileKind(result.fileType), sizeBytes: result.sizeBytes, readonly: result.readonly, modifiedAtMillis: result.modifiedAtMillis ?? undefined };
 	}
 

@@ -1,5 +1,6 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { ElectronApplication } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import { parseWorkspace } from '../../../../src/ash/platform/workspace/common/workspace.js';
 
@@ -65,6 +66,96 @@ test('opening a folder displays its files in Explorer', async ({ target, testWor
 	await expect(folder).toHaveAttribute('aria-expanded', 'false');
 	await expect(page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'nested.txt' })).toHaveCount(0);
 	expect(await fileRow?.evaluate(row => row.isConnected)).toBe(true);
+});
+
+test('Explorer file context menu includes file actions for the clicked row', async ({ target, application, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'This scenario requires the Code desktop and App Server');
+	const electron = application as ElectronApplication;
+	await electron.evaluate(({ Menu }) => {
+		const originalPopup = Menu.prototype.popup;
+		const state = globalThis as typeof globalThis & { ashExplorerMenuTest?: { labels: string[]; restore: () => void } };
+		state.ashExplorerMenuTest = {
+			labels: [],
+			restore: () => { Menu.prototype.popup = originalPopup; },
+		};
+		Menu.prototype.popup = function(options) {
+			state.ashExplorerMenuTest!.labels = this.items.map(item => item.label);
+			options?.callback?.();
+		};
+	});
+	try {
+		const file = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
+		await file.click({ button: 'right' });
+		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashExplorerMenuTest?: { labels: string[] } }).ashExplorerMenuTest?.labels)).toEqual(expect.arrayContaining([
+			'New File...',
+			'New Folder...',
+			'Open to the Side',
+			'Copy Path',
+			'Copy Relative Path',
+			'Rename',
+			'Delete Permanently',
+		]));
+	} finally {
+		await electron.evaluate(({ Menu }) => {
+			(globalThis as typeof globalThis & { ashExplorerMenuTest?: { restore: () => void } }).ashExplorerMenuTest?.restore();
+		});
+	}
+});
+
+test('Explorer opens the focused file context menu from the keyboard', async ({ target, application, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'This scenario requires the Code desktop and App Server');
+	const electron = application as ElectronApplication;
+	await electron.evaluate(({ Menu }) => {
+		const originalPopup = Menu.prototype.popup;
+		const state = globalThis as typeof globalThis & { ashExplorerKeyboardMenuTest?: { labels: string[]; restore: () => void } };
+		state.ashExplorerKeyboardMenuTest = {
+			labels: [],
+			restore: () => { Menu.prototype.popup = originalPopup; },
+		};
+		Menu.prototype.popup = function(options) {
+			state.ashExplorerKeyboardMenuTest!.labels = this.items.map(item => item.label);
+			options?.callback?.();
+		};
+	});
+	try {
+		const file = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
+		await file.click();
+		await workbench.page.keyboard.press('Shift+F10');
+		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashExplorerKeyboardMenuTest?: { labels: string[] } }).ashExplorerKeyboardMenuTest?.labels)).toContain('Rename');
+	} finally {
+		await electron.evaluate(({ Menu }) => {
+			(globalThis as typeof globalThis & { ashExplorerKeyboardMenuTest?: { restore: () => void } }).ashExplorerKeyboardMenuTest?.restore();
+		});
+	}
+});
+
+test('Explorer creates a sibling folder from a file context menu', async ({ target, application, testWorkspace, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'This scenario requires the Code desktop and App Server');
+	const electron = application as ElectronApplication;
+	await electron.evaluate(({ Menu }) => {
+		const originalPopup = Menu.prototype.popup;
+		const state = globalThis as typeof globalThis & { ashExplorerFolderTest?: { restore: () => void } };
+		state.ashExplorerFolderTest = { restore: () => { Menu.prototype.popup = originalPopup; } };
+		Menu.prototype.popup = function(options) {
+			const folder = this.items.find(item => item.label === 'New Folder...');
+			const select = folder?.click as (() => void) | undefined;
+			select?.();
+			options?.callback?.();
+		};
+	});
+	try {
+		await workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' }).click({ button: 'right' });
+		const input = workbench.page.locator('.ash-quick-pick-input input');
+		await expect(input).toBeVisible();
+		await input.fill('created-from-menu');
+		await input.press('Enter');
+		await expect.poll(async () => stat(join(testWorkspace.directory, 'created-from-menu')).then(metadata => metadata.isDirectory(), () => false)).toBe(true);
+		await expect(workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'created-from-menu' })).toHaveCount(1);
+	} finally {
+		await electron.evaluate(({ Menu }) => {
+			(globalThis as typeof globalThis & { ashExplorerFolderTest?: { restore: () => void } }).ashExplorerFolderTest?.restore();
+		});
+	}
 });
 
 test('Explorer expands and collapses a refreshed folder without replacing sibling rows', async ({ target, testWorkspace, workbench }) => {

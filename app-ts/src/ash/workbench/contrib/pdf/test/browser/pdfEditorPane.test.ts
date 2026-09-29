@@ -113,6 +113,7 @@ test("workspace PDF loader reads only through the binary file contract", async (
 		readFileBytes: async (requested) => ({ resource: requested, bytes: new Uint8Array([37, 80, 68, 70]), revision: "pdf-revision" }),
 		writeFile: async () => { throw new Error("PDF loader is read-only"); },
 		createFile: async () => { throw new Error("PDF loader is read-only"); },
+		createDirectory: async () => { throw new Error("PDF loader is read-only"); },
 		rename: async () => { throw new Error("PDF loader is read-only"); },
 		delete: async () => { throw new Error("PDF loader is read-only"); },
 	} satisfies IFileService);

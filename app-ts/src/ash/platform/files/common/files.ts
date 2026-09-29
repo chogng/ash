@@ -80,6 +80,7 @@ export interface IFileService {
 	readFileBytes(resource: URI): Promise<IFileBytes>;
 	writeFile(request: IFileWriteRequest): Promise<IFileWriteResult>;
 	createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat>;
+	createDirectory(resource: URI): Promise<IFileStat>;
 	rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void>;
 	delete(resource: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode): Promise<void>;
 }

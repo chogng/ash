@@ -126,6 +126,7 @@ import type { ExtensionResourceOpenParams } from './types/ExtensionResourceOpenP
 import type { ExtensionResourceOpenResult } from './types/ExtensionResourceOpenResult.js';
 import type { FeedbackPrepareParams } from './types/FeedbackPrepareParams.js';
 import type { FeedbackUploadParams } from './types/FeedbackUploadParams.js';
+import type { FsCreateDirectoryParams } from './types/FsCreateDirectoryParams.js';
 import type { FsCreateFileParams } from './types/FsCreateFileParams.js';
 import type { FsDeleteParams } from './types/FsDeleteParams.js';
 import type { FsGetMetadataParams } from './types/FsGetMetadataParams.js';
@@ -664,6 +665,7 @@ export interface AppServerRequestMap {
   "language/foldingRanges": { params: LanguageOperationParams<LanguageDocumentFeaturesParams>; response: LanguageFoldingRangesResult };
   "fs/writeFile": { params: FsWriteFileParams; response: FsWriteFileResult };
   "fs/createFile": { params: FsCreateFileParams; response: FsGetMetadataResult };
+  "fs/createDirectory": { params: FsCreateDirectoryParams; response: FsGetMetadataResult };
   "fs/rename": { params: FsRenameParams; response: null };
   "fs/delete": { params: FsDeleteParams; response: null };
   "issue/configure": { params: IssueConfigureParams; response: ConfigCommandResult };
@@ -973,6 +975,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "language/foldingRanges": { method: "language/foldingRanges" },
   "fs/writeFile": { method: "fs/writeFile" },
   "fs/createFile": { method: "fs/createFile" },
+  "fs/createDirectory": { method: "fs/createDirectory" },
   "fs/rename": { method: "fs/rename" },
   "fs/delete": { method: "fs/delete" },
   "issue/configure": { method: "issue/configure" },

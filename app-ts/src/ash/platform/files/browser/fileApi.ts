@@ -11,6 +11,7 @@ export function createDisconnectedFileApi(unavailable: UnavailableOperation): IF
 		readBinaryFile: () => unavailable("fs.readBinaryFile"),
 		writeFile: () => unavailable("fs.writeFile"),
 		createFile: () => unavailable("fs.createFile"),
+		createDirectory: () => unavailable("fs.createDirectory"),
 		rename: () => unavailable("fs.rename"),
 		delete: () => unavailable("fs.delete"),
 	};
@@ -24,6 +25,7 @@ export function createAppServerFileApi(connection: AppServerProtocolClient): IFi
 		readBinaryFile: (params) => appServerRequest(connection, "fs/readBinaryFile", params),
 		writeFile: (params) => appServerRequest(connection, "fs/writeFile", params),
 		createFile: (params) => appServerRequest(connection, "fs/createFile", params),
+		createDirectory: (params) => appServerRequest(connection, "fs/createDirectory", params),
 		rename: (params) => voidResult(appServerRequest(connection, "fs/rename", params)),
 		delete: (params) => voidResult(appServerRequest(connection, "fs/delete", params)),
 	};

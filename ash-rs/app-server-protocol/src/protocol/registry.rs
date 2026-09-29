@@ -593,6 +593,8 @@ use crate::protocol::extensions::ExtensionResourceOpenResult;
 use crate::protocol::extensions::ExtensionSourceKindDto;
 use crate::protocol::fs::FsChanged;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::fs::FsCreateDirectoryParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsCreateFileParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsDeleteMode;
@@ -3416,6 +3418,11 @@ client_methods! {
         response: FsGetMetadataResult,
         serialization: GlobalExclusive,
     },
+    FsCreateDirectory => "fs/createDirectory" {
+        params: FsCreateDirectoryParams,
+        response: FsGetMetadataResult,
+        serialization: GlobalExclusive,
+    },
     FsRename => "fs/rename" {
         params: FsRenameParams,
         response: (),
@@ -4895,6 +4902,7 @@ typescript_bindings! {
     FsMissingTargetBehavior,
     FsDeleteMode,
     FsCreateFileParams,
+    FsCreateDirectoryParams,
     FsRenameParams,
     FsDeleteParams,
     FsChanged,

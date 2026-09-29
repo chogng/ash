@@ -110,6 +110,7 @@ class PreviewFileService implements IFileService {
 	async readFileBytes(resource: URI) { const content = await this.readFile(resource); return { resource, bytes: new TextEncoder().encode(content.content), revision: content.revision }; }
 	async writeFile(): Promise<never> { throw new Error("Preview must not write files"); }
 	async createFile(): Promise<never> { throw new Error("Preview must not create files"); }
+	async createDirectory(): Promise<never> { throw new Error("Preview must not create directories"); }
 	async rename(): Promise<never> { throw new Error("Preview must not rename files"); }
 	async delete(): Promise<never> { throw new Error("Preview must not delete files"); }
 }

@@ -103,6 +103,7 @@ interface AsyncTreeView<T> extends IDisposable {
 	readonly onDidChangeCollapseState: Event<AsyncTreeCollapseEvent<T>>;
 	readonly focus: T | undefined;
 	readonly selection: readonly T[];
+	setSelection(elements: readonly T[], browserEvent?: UIEvent): void;
 	getVisibleElements(): readonly T[];
 	domFocus(): void;
 	setChildren(children: readonly CompressibleTreeElement<T>[]): void;
@@ -172,6 +173,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 	get focus(): T | undefined { return this.tree.focus; }
 	get selection(): readonly T[] { return this.tree.selection; }
 	getVisibleElements(): readonly T[] { return this.tree.getVisibleElements(); }
+	setSelection(elements: readonly T[], browserEvent?: UIEvent): void { this.tree.setSelection(elements, browserEvent); }
 	domFocus(): void { this.tree.domFocus(); }
 	setFindPattern(pattern: string): void { this.tree.setFindPattern(pattern); }
 	findNext(): T | undefined { return this.tree.findNext(); }
@@ -395,6 +397,7 @@ function objectTreeView<T>(tree: ObjectTree<T>, getId: (element: T) => string): 
 		onDidChangeCollapseState: tree.onDidChangeCollapseState,
 		get focus() { return tree.focus; },
 		get selection() { return tree.selection; },
+		setSelection: (elements, browserEvent) => tree.setSelection(elements.map(getId), browserEvent),
 		getVisibleElements: () => tree.getVisibleElements(),
 		domFocus: () => tree.domFocus(),
 		setChildren: (children) => tree.setChildren(children),
@@ -426,6 +429,7 @@ function compressibleTreeView<T>(tree: CompressibleObjectTree<T>): AsyncTreeView
 		onDidChangeCollapseState: tree.onDidChangeCollapseState,
 		get focus() { return tree.focus; },
 		get selection() { return tree.selection; },
+		setSelection: (elements, browserEvent) => tree.setSelection(elements, browserEvent),
 		getVisibleElements: () => tree.getVisibleElements(),
 		domFocus: () => tree.domFocus(),
 		setChildren: (children) => tree.setChildren(children),

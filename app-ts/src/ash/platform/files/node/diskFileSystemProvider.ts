@@ -66,6 +66,12 @@ export class DiskFileSystemProvider extends Disposable implements IFileService {
 		return this.stat(resource);
 	}
 
+	public async createDirectory(resource: URI): Promise<IFileStat> {
+		await mkdir(await this.path(resource), { recursive: true });
+		this.changes.fire({ resources: [resource] });
+		return this.stat(resource);
+	}
+
 	public async rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {
 		const from = await this.path(source);
 		const to = await this.path(target);

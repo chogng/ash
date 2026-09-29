@@ -43,6 +43,11 @@ export class DiskFileSystemProviderClient extends Disposable implements IFileSer
 		this.changes.fire({ resources: [resource] });
 		return { ...result, resource };
 	}
+	public async createDirectory(resource: URI): Promise<IFileStat> {
+		const result = await this.call<IFileStat>('createDirectory', resource);
+		this.changes.fire({ resources: [resource] });
+		return { ...result, resource };
+	}
 	public async rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {
 		await this.call('rename', source, { target: target.toString(), existing });
 		this.changes.fire({ resources: [source, target] });

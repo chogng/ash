@@ -61,6 +61,10 @@ class TestFileProvider implements IFileSystemProvider {
 		return this.stat(resource);
 	}
 
+	public createDirectory(resource: URI): Promise<IFileStat> {
+		return this.stat(resource);
+	}
+
 	public rename(_source: URI, _target: URI, _existing: FileExistingTargetBehavior): Promise<void> {
 		return Promise.resolve();
 	}

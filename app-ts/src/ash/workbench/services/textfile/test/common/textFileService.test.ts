@@ -168,6 +168,7 @@ class TestFileService implements IFileService {
 	}
 
 	async createFile(): Promise<never> { throw new Error("Text file tests do not create empty files"); }
+	async createDirectory(): Promise<never> { throw new Error("Text file tests do not create directories"); }
 	async rename(): Promise<never> { throw new Error("Text file tests do not rename files"); }
 	async delete(): Promise<never> { throw new Error("Text file tests do not delete files"); }
 }

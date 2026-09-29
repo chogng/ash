@@ -112,6 +112,7 @@ class FakeFileService implements IFileService {
 	async readFileBytes(): Promise<IFileBytes> { throw new Error("unused"); }
 	async writeFile(): Promise<IFileWriteResult> { throw new Error("unused"); }
 	async createFile(): Promise<IFileStat> { throw new Error("unused"); }
+	async createDirectory(): Promise<IFileStat> { throw new Error("unused"); }
 	async rename() { throw new Error("unused"); }
 	async delete() { throw new Error("unused"); }
 	private relative(resource: URI): string { return decodeURIComponent(resource.path).slice(decodeURIComponent(this.root.path).length + 1); }

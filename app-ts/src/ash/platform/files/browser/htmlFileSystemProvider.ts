@@ -138,6 +138,13 @@ export class HTMLFileSystemProvider extends Disposable implements IFileService {
 		return this.stat(resource);
 	}
 
+	public async createDirectory(resource: URI): Promise<IFileStat> {
+		const { parent, name } = await this.parent(resource);
+		await parent.getDirectoryHandle(name, { create: true });
+		this.changes.fire({ resources: [resource] });
+		return this.stat(resource);
+	}
+
 	public async rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {
 		const sourceParts = partsOf(source);
 		const targetParts = partsOf(target);

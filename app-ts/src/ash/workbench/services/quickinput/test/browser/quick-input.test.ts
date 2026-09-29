@@ -346,6 +346,12 @@ test('Quick Input masks a password, validates it, clears it, and restores focus'
 	assert.equal(dom.window.document.querySelector('.ash-quick-pick'), null);
 	assert.equal(dom.window.document.activeElement, editor);
 
+	const renamed = service.input({ title: 'Rename', value: 'old.ts' });
+	const renameInput = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input');
+	assert.equal(renameInput?.value, 'old.ts');
+	renameInput?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
+	assert.equal(await renamed, 'old.ts');
+
 	const cancelled = service.input({ title: 'Another key', password: true });
 	const next = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input');
 	assert.ok(next);
