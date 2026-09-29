@@ -42,13 +42,14 @@ impl AppServer {
                 ash_app_server_protocol::protocol::error::AppServerErrorName::GitOperationFailed,
             ));
         }
-        match self.threads.read_thread(&thread_id) {
+        let agent_runtime = self.agent_runtime();
+        match agent_runtime.read_thread(&thread_id) {
             Ok(thread) => {
                 let session_id = thread.session_id;
-                let thread_ids = self
-                    .threads
-                    .list_session_threads(&session_id)
+                let thread_ids = agent_runtime
+                    .read_session(&session_id)
                     .map_err(core_error)?
+                    .threads
                     .into_iter()
                     .map(|thread| thread.thread_id)
                     .filter(|thread_id| runtime.binding(thread_id).is_some())
