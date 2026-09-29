@@ -98,7 +98,7 @@ fn input_hints(app: &App) -> KeyHints {
     ) {
         hints = hints.with_compact_action(keys, "permissions");
     }
-    hints.with_note("/home")
+    hints
 }
 
 fn bottom_content(app: &App) -> BottomContent<'_> {

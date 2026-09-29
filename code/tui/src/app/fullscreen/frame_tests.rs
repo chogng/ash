@@ -176,7 +176,10 @@ fn conversation_chrome_keeps_home_and_input_visible_without_a_welcome_message() 
             .unwrap()
             .contains("ask permissions on")
     );
-    assert!(rendered.lines().last().unwrap().contains("/home"));
+    assert_eq!(
+        rendered.lines().last().unwrap().trim_end(),
+        "  Enter send  ·  shift+tab permissions"
+    );
 }
 
 #[test]
