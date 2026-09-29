@@ -546,7 +546,7 @@ export class SessionsPreferences extends Disposable {
 				{ title: localize('sessions.settings.account', 'Account'), icon: Lxicon.account, settings: [] },
 				{ title: localize('sessions.settings.appearance', 'Appearance'), icon: Lxicon.appearance, settings: appearanceSettings },
 				{ title: localize('sessions.settings.voice', 'Voice'), icon: Lxicon.mic, settings: voiceSettings },
-				{ title: localize('sessions.settings.personalization', 'Personalization'), icon: Lxicon.customize, settings: [] },
+				{ title: localize('sessions.settings.personalization', 'Personalization'), icon: Lxicon.briefcase, settings: [] },
 			],
 		}, {
 			title: localize('sessions.settings.section.development', 'Development'),
