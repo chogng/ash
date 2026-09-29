@@ -224,6 +224,74 @@ test("ListView renders only the managed viewport while preserving logical positi
 	dom.window.close();
 });
 
+test("ListView mounts no rows while its managed viewport is hidden and restores visible rows on layout", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const view = new ListView<string>(dom.window.document.body, {
+		scrolling: "managed",
+		getId: item => item,
+		getHeight: () => 22,
+		renderItem: item => {
+			const label = h(dom.window.document, "span");
+			label.textContent = item;
+			return label;
+		},
+	});
+	const viewport = view.domNode.querySelector<HTMLElement>(".ash-scrollbar-viewport");
+	assert.ok(viewport);
+	let height = 0;
+	Object.defineProperties(viewport, {
+		clientWidth: { value: 100 },
+		clientHeight: { get: () => height },
+		scrollHeight: { value: 110_000 },
+	});
+	view.items = Array.from({ length: 5_000 }, (_, index) => `Item ${index}`);
+	assert.equal(view.element.querySelectorAll(":scope > .ash-list-row").length, 0);
+	assert.equal(view.getElementTop(4_999), 109_978);
+
+	height = 44;
+	view.layout(44);
+	assert.ok(view.row(0));
+	assert.ok(view.element.querySelectorAll(":scope > .ash-list-row").length < 5_000);
+	height = 0;
+	view.layout(0);
+	assert.equal(view.element.querySelectorAll(":scope > .ash-list-row").length, 0);
+	view.dispose();
+	dom.window.close();
+});
+
+test("List restores its active descendant when a hidden managed viewport becomes visible", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const list = new List<string>(dom.window.document.body, {
+		scrolling: "managed",
+		getId: item => item,
+		getHeight: () => 22,
+		renderItem: item => {
+			const label = h(dom.window.document, "span");
+			label.textContent = item;
+			return label;
+		},
+	});
+	const viewport = list.domNode.querySelector<HTMLElement>(".ash-scrollbar-viewport");
+	assert.ok(viewport);
+	let height = 0;
+	Object.defineProperties(viewport, {
+		clientWidth: { value: 100 },
+		clientHeight: { get: () => height },
+		scrollHeight: { value: 2_200 },
+	});
+	list.items = Array.from({ length: 100 }, (_, index) => `Item ${index}`);
+	assert.equal(list.element.hasAttribute("aria-activedescendant"), false);
+	height = 44;
+	list.layout(44);
+	assert.equal(list.element.getAttribute("aria-activedescendant"), list.row(0)?.id);
+	assert.equal(list.row(0)?.classList.contains("is-active"), true);
+	height = 0;
+	list.layout(0);
+	assert.equal(list.element.hasAttribute("aria-activedescendant"), false);
+	list.dispose();
+	dom.window.close();
+});
+
 test("List keeps focus state when managed scrolling creates a row", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const list = new List<string>(dom.window.document.body, {

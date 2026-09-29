@@ -1,7 +1,7 @@
 import { Emitter, type Event } from "../../../common/event.js";
 import { Disposable } from "../../../common/lifecycle.js";
 import { IndexTreeModel, type IndexTreeNode } from "./indexTreeModel.js";
-import type { TreeFilter, TreeSorter } from "./tree.js";
+import type { TreeFilter, TreeSorter, TreeVisibleSplice } from "./tree.js";
 
 export type ObjectTreeDefaultCollapseState = "collapsed" | "expanded";
 export type ObjectTreeModelChangeKind = "structure" | "collapse" | "filter" | "sort" | "rerender";
@@ -34,6 +34,7 @@ export interface ObjectTreeModelOptions<TNode> {
 export interface ObjectTreeModelChangeEvent<TNode> {
 	readonly kind: ObjectTreeModelChangeKind;
 	readonly node: ObjectTreeNode<TNode> | undefined;
+	readonly visibleSplice?: TreeVisibleSplice<ObjectTreeNode<TNode>>;
 }
 
 export interface ObjectTreeModelCollapseStateChangeEvent<TNode> {
@@ -68,7 +69,7 @@ export class ObjectTreeModel<TNode> extends Disposable {
 			preserveCollapseStateByIdentity: true,
 		}));
 		this._register(this.index.onDidChange((event) => {
-			this._onDidChange.fire({ kind: this.changeKindOverride ?? event.kind, node: event.node as ObjectTreeNode<TNode> | undefined });
+			this._onDidChange.fire({ kind: this.changeKindOverride ?? event.kind, node: event.node as ObjectTreeNode<TNode> | undefined, visibleSplice: event.visibleSplice as TreeVisibleSplice<ObjectTreeNode<TNode>> | undefined });
 		}));
 		this._register(this.index.onDidChangeCollapseState(({ node, collapsed }) => {
 			this._onDidChangeCollapseState.fire({ node: node as ObjectTreeNode<TNode>, collapsed });

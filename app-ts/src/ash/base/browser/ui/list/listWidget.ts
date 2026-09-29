@@ -100,6 +100,7 @@ export class List<T> extends Disposable {
 		this.element = this.view.element;
 		this.domNode = this.view.domNode;
 		this.onDidScroll = this.view.onDidScroll;
+		this._register(this.view.onDidRenderRows(() => this.syncActiveDescendant()));
 		this._register(addDisposableListener(this.element, "mousemove", (event: MouseEvent) => {
 			if (options.focusOnMouseMove === false) return;
 			const index = this.view.getRowIndex(event);
@@ -227,11 +228,16 @@ export class List<T> extends Disposable {
 			const index = Number(row.dataset.index);
 			this.updateRowState(row, index);
 		});
+		this.syncActiveDescendant();
 		const activeRow = this.view.row(this._activeIndex);
-		if (activeRow) {
-			this.element.setAttribute("aria-activedescendant", activeRow.id);
-			if (this.options.scrolling !== "managed") activeRow.scrollIntoView?.({ block: "nearest" });
-		} else this.element.removeAttribute("aria-activedescendant");
+		if (activeRow && this.options.scrolling !== "managed") activeRow.scrollIntoView?.({ block: "nearest" });
+	}
+
+	private syncActiveDescendant(): void {
+		const activeRow = this.view.row(this._activeIndex);
+		if (this.element.getAttribute("aria-activedescendant") === (activeRow?.id ?? null)) return;
+		if (activeRow) this.element.setAttribute("aria-activedescendant", activeRow.id);
+		else this.element.removeAttribute("aria-activedescendant");
 	}
 
 	private updateRowState(row: HTMLElement, index: number): void {

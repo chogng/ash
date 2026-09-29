@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { DragAndDropDataKind } from "../../browser/ui/dnd/dnd.js";
+import { AbstractTree } from "../../browser/ui/tree/abstractTree.js";
 import { AsyncDataTree, CompressibleAsyncDataTree } from "../../browser/ui/tree/asyncDataTree.js";
 import { CompressibleObjectTreeModel, compressTreeElement, decompressTreeElement } from "../../browser/ui/tree/compressedObjectTreeModel.js";
 import { DataTree } from "../../browser/ui/tree/dataTree.js";
@@ -37,6 +38,36 @@ test("IndexTreeModel owns index locations and atomic splice", () => {
 	assert.deepEqual(model.visibleNodes.map((node) => node.element.id), ["parent", "inserted", "sibling"]);
 	assert.throws(() => model.splice([], 0), /child position/);
 	assert.equal(model.getNode([2]).element.id, "sibling");
+	model.dispose();
+});
+
+test("IndexTreeModel reports the changed visible range and keeps unrelated branches intact", () => {
+	const model = new IndexTreeModel<TestNode>({ id: "root", label: "Root", expanded: true }, {
+		identityProvider: { getId: node => node.id },
+		preserveCollapseStateByIdentity: true,
+	});
+	model.setChildren([
+		{ element: { id: "left", label: "Left", expanded: false }, children: [{ element: { id: "child", label: "Child", expanded: false } }] },
+		{ element: { id: "right", label: "Right", expanded: false }, children: [{ element: { id: "stable", label: "Stable", expanded: false } }] },
+	]);
+	const stable = model.getNodeById("stable");
+	const changes: Array<{ start: number; deleteCount: number; ids: string[] }> = [];
+	model.onDidChange(({ visibleSplice }) => {
+		if (visibleSplice) changes.push({ start: visibleSplice.start, deleteCount: visibleSplice.deleteCount, ids: visibleSplice.elements.map(node => node.id) });
+	});
+	model.setNodeChildren([0], [{
+		element: { id: "wrapper", label: "Wrapper", expanded: false },
+		children: [{ element: { id: "child", label: "Child", expanded: false } }],
+	}]);
+	assert.deepEqual(changes, [{ start: 1, deleteCount: 1, ids: ["wrapper", "child"] }]);
+	assert.deepEqual(model.getNodeById("child")?.location, [0, 0, 0]);
+	assert.equal(model.getNodeById("stable"), stable);
+	assert.deepEqual(model.getNodeById("stable")?.location, [1, 0]);
+	model.collapse([0]);
+	assert.deepEqual(changes.at(-1), { start: 1, deleteCount: 2, ids: [] });
+	model.expand([0]);
+	assert.deepEqual(changes.at(-1), { start: 1, deleteCount: 0, ids: ["wrapper", "child"] });
+	assert.deepEqual(model.visibleNodes.map(node => node.id), ["left", "wrapper", "child", "right", "stable"]);
 	model.dispose();
 });
 
@@ -81,6 +112,42 @@ test("IndexTree renders splice results through the shared flat AbstractTree", ()
 	tree.splice([1], 0, [{ element: { id: "second", label: "Second", expanded: false } }]);
 	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(":scope > .ash-tree-row")].map((row) => row.textContent), ["First", "Second"]);
 	assert.equal(tree.element.querySelector(".ash-tree-row")?.getAttribute("aria-posinset"), "1");
+	tree.dispose();
+	dom.window.close();
+});
+
+test("AbstractTree loads collapsed find candidates only while searching", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const node = {
+		id: "item",
+		element: { id: "item", label: "Item", expanded: false },
+		parent: undefined,
+		children: [],
+		depth: 1,
+		collapsible: false,
+		collapsed: false,
+		visible: true,
+		visibleChildIndex: 0,
+		visibleChildrenCount: 1,
+	};
+	const tree = new AbstractTree<TestNode, typeof node>(dom.window.document.body, {
+		keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: element => element.label },
+		renderElement: element => {
+			const label = h(dom.window.document, "span");
+			label.textContent = element.element.label;
+			return label;
+		},
+	});
+	let candidateReads = 0;
+	tree.setFindCandidates(() => { candidateReads += 1; return [node]; });
+	tree.items = [node];
+	assert.equal(candidateReads, 0);
+	tree.setFindPattern("Item");
+	assert.equal(tree.findNext(), node);
+	assert.equal(candidateReads, 1);
+	tree.clearFind();
+	tree.items = [node];
+	assert.equal(candidateReads, 1);
 	tree.dispose();
 	dom.window.close();
 });
@@ -258,6 +325,33 @@ test("AsyncDataTree refreshes expanded descendants while preserving rows", async
 	assert.equal(tree.element.querySelector('[data-tree-id="group"]'), groupRow);
 	assert.equal(tree.element.querySelector('[data-tree-id="child"]'), childRow);
 	assert.equal(groupReads, 2);
+	tree.dispose();
+	dom.window.close();
+});
+
+test("AsyncDataTree preserves loaded children after an invalid refresh", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const root: TestNode = { id: "root", label: "Root", expanded: true };
+	const child: TestNode = { id: "child", label: "Child", expanded: false };
+	let children: readonly TestNode[] = [child];
+	const tree = new AsyncDataTree<TestNode, TestNode>(dom.window.document.body, {
+		hasChildren: element => element === root,
+		getChildren: () => children,
+	}, {
+		identityProvider: { getId: element => element.id },
+		renderElement: element => {
+			const label = h(dom.window.document, "span");
+			label.textContent = element.label;
+			return label;
+		},
+	});
+	await tree.setInput(root);
+	children = [child, child];
+	await assert.rejects(tree.updateChildren(root), /Duplicate tree node ID/);
+	assert.deepEqual(tree.getVisibleElements().map(element => element.id), ["child"]);
+	children = [{ id: "replacement", label: "Replacement", expanded: false }];
+	await tree.updateChildren(root);
+	assert.deepEqual(tree.getVisibleElements().map(element => element.id), ["replacement"]);
 	tree.dispose();
 	dom.window.close();
 });
@@ -471,6 +565,30 @@ test("ObjectTreeModel keeps node identity without reindexing on collapse and rer
 	model.dispose();
 });
 
+test("ObjectTree avoids remeasuring unchanged children during a directory refresh", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	let heightReads = 0;
+	const tree = new ObjectTree<TestNode>(dom.window.document.body, {
+		modelOptions: { identityProvider: { getId: node => node.id } },
+		getHeight: () => { heightReads += 1; return 22; },
+		reuseRows: true,
+		renderElement: element => {
+			const label = h(dom.window.document, "span");
+			label.textContent = element.label;
+			return label;
+		},
+	});
+	const children = Array.from({ length: 100 }, (_, index) => ({ element: { id: `child-${index}`, label: `Child ${index}`, expanded: false } }));
+	tree.setChildren([{ element: { id: "folder", label: "Folder", expanded: false }, children }]);
+	const firstRow = tree.element.querySelector('[data-tree-id="child-0"]');
+	heightReads = 0;
+	tree.setNodeChildren("folder", children);
+	assert.ok(heightReads < 10);
+	assert.equal(tree.element.querySelector('[data-tree-id="child-0"]'), firstRow);
+	tree.dispose();
+	dom.window.close();
+});
+
 test("ObjectTreeModel filters recursively and sorts every level", () => {
 	const model = new ObjectTreeModel<TestNode>({
 		identityProvider: { getId: (node) => node.id },
@@ -490,8 +608,14 @@ test("ObjectTreeModel filters recursively and sorts every level", () => {
 	assert.equal(model.getNode("hidden")?.visibleChildrenCount, 1);
 	assert.equal(model.getNode("match-a")?.visibleChildIndex, 0);
 	assert.equal(model.getNode("match-a")?.visibleChildrenCount, 1);
+	model.setNodeChildren("a-group", [
+		{ element: { id: "hidden", label: "Hidden", expanded: false } },
+		{ element: { id: "match-a", label: "Match A", expanded: false } },
+		{ element: { id: "match-new", label: "Match new", expanded: false } },
+	]);
+	assert.deepEqual(model.visibleNodes.map((node) => node.id), ["a-group", "match-a", "match-new", "z-group", "match-b"]);
 	model.setFilter(undefined);
-	assert.deepEqual(model.visibleNodes.map((node) => node.id), ["a-group", "hidden", "match-a", "z-group", "match-b"]);
+	assert.deepEqual(model.visibleNodes.map((node) => node.id), ["a-group", "hidden", "match-a", "match-new", "z-group", "match-b"]);
 	model.dispose();
 });
 

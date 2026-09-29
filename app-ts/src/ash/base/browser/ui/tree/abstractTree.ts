@@ -7,7 +7,7 @@ import { Emitter, type Event } from "../../../common/event.js";
 import { Disposable, MutableDisposable, type IDisposable } from "../../../common/lifecycle.js";
 import { Lxicon } from "../../../common/lxicons.js";
 import { rot } from "../../../common/numbers.js";
-import type { AbstractTreeNode, TreeAcceptEvent, TreeActivateEvent, TreeCollapseRequestEvent, TreeDragAndDrop, TreeDragOverReaction, TreeFindMatchType, TreeFindMode, TreeFindResult, TreeFocusChangeEvent, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreePointerEvent, TreePointerTarget, TreeSelectionChangeEvent, TreeSelectionPresentation, TreeTwistieState } from "./tree.js";
+import type { AbstractTreeNode, TreeAcceptEvent, TreeActivateEvent, TreeCollapseRequestEvent, TreeDragAndDrop, TreeDragOverReaction, TreeFindMatchType, TreeFindMode, TreeFindResult, TreeFocusChangeEvent, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreePointerEvent, TreePointerTarget, TreeSelectionChangeEvent, TreeSelectionPresentation, TreeTwistieState, TreeVisibleSplice } from "./tree.js";
 
 export interface AbstractTreeOptions<T, TNode extends AbstractTreeNode<T>> {
 	readonly ariaLabel?: string;
@@ -55,7 +55,8 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	private readonly stickyContainer: HTMLDivElement | undefined;
 	private readonly renderedElements = new WeakMap<HTMLDivElement, T>();
 	private sourceItems: readonly TNode[] = [];
-	private findCandidates: readonly TNode[] = [];
+	private findCandidatesProvider: (() => readonly TNode[]) | undefined;
+	private findCandidates: readonly TNode[] | undefined;
 	private readonly autoExpandTimer = this._register(new MutableDisposable<IDisposable>());
 	private autoExpandId: string | undefined;
 
@@ -126,8 +127,20 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	domFocus(): void { this.list.domFocus(); }
 	set items(items: readonly TNode[]) {
 		this.sourceItems = items;
-		const candidates = this.findCandidates.length > 0 ? this.findCandidates : items;
+		const candidates = this.findController?.query ? this.findableNodes() : items;
 		this.spliceItems(this.findController?.update(this.findController.query, candidates, items) ?? items);
+		this.restoreStickyContainer();
+		this.updateStickyScroll();
+		this.emitFindResult();
+	}
+
+	spliceVisibleItems(items: readonly TNode[], splice: TreeVisibleSplice<TNode>): void {
+		if (this.findController?.query) {
+			this.items = items;
+			return;
+		}
+		this.sourceItems = items;
+		this.spliceListRange(splice);
 		this.restoreStickyContainer();
 		this.updateStickyScroll();
 		this.emitFindResult();
@@ -144,7 +157,10 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		this.updateStickyScroll();
 	}
 
-	setFindCandidates(nodes: readonly TNode[]): void { this.findCandidates = nodes; }
+	setFindCandidates(provider: () => readonly TNode[]): void {
+		this.findCandidatesProvider = provider;
+		this.findCandidates = undefined;
+	}
 	get focus(): TNode | undefined { return this.list.activeItem; }
 	get selection(): readonly TNode[] { return this.list.selection; }
 
@@ -160,8 +176,9 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 
 	setFindPattern(pattern: string): void {
 		if (!this.findController) throw new Error("Tree find requires a keyboardNavigationLabelProvider");
-		const candidates = this.findCandidates.length > 0 ? this.findCandidates : this.sourceItems;
+		const candidates = pattern ? this.findableNodes() : this.sourceItems;
 		this.spliceItems(this.findController.update(pattern, candidates, this.sourceItems));
+		if (!pattern) this.findCandidates = undefined;
 		this.restoreStickyContainer();
 		const active = this.findController.activeMatch;
 		if (active) this.setFocus(active.id);
@@ -185,16 +202,24 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	}
 
 	private spliceItems(items: readonly TNode[]): void {
+		this.spliceListRange({ start: 0, deleteCount: this.list.items.length, elements: items });
+	}
+
+	private spliceListRange(splice: TreeVisibleSplice<TNode>): void {
 		const previous = this.list.items;
-		let start = 0;
-		while (start < previous.length && start < items.length && previous[start] === items[start]) start += 1;
-		let previousEnd = previous.length;
-		let nextEnd = items.length;
-		while (previousEnd > start && nextEnd > start && previous[previousEnd - 1] === items[nextEnd - 1]) {
+		let start = splice.start;
+		let nextStart = 0;
+		while (start < splice.start + splice.deleteCount && nextStart < splice.elements.length && previous[start] === splice.elements[nextStart]) {
+			start += 1;
+			nextStart += 1;
+		}
+		let previousEnd = splice.start + splice.deleteCount;
+		let nextEnd = splice.elements.length;
+		while (previousEnd > start && nextEnd > nextStart && previous[previousEnd - 1] === splice.elements[nextEnd - 1]) {
 			previousEnd -= 1;
 			nextEnd -= 1;
 		}
-		this.list.splice(start, previousEnd - start, items.slice(start, nextEnd));
+		this.list.splice(start, previousEnd - start, splice.elements.slice(nextStart, nextEnd));
 	}
 
 	private renderRow(node: TNode, row: HTMLDivElement): HTMLElement {
@@ -334,10 +359,16 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	}
 
 	private moveFind(delta: 1 | -1): TNode | undefined {
-		const match = this.findController?.next(this.findCandidates.length > 0 ? this.findCandidates : this.sourceItems, delta);
+		const candidates = this.findController?.query ? this.findableNodes() : this.sourceItems;
+		const match = this.findController?.next(candidates, delta);
 		if (match) this.setFocus(match.id);
 		this.emitFindResult();
 		return match;
+	}
+
+	private findableNodes(): readonly TNode[] {
+		if (!this.findCandidatesProvider) return this.sourceItems;
+		return this.findCandidates ??= this.findCandidatesProvider();
 	}
 
 	private isExpanded(node: TNode): boolean { return !node.collapsed || (this.findController?.isExpandedByFilter(node) ?? false); }

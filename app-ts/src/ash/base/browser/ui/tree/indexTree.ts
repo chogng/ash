@@ -3,7 +3,7 @@ import { Disposable } from "../../../common/lifecycle.js";
 import type { ListScrolling } from "../list/list.js";
 import { AbstractTree } from "./abstractTree.js";
 import { IndexTreeModel, type IndexTreeModelOptions, type IndexTreeNode } from "./indexTreeModel.js";
-import { flattenTreeNodes, mapTreeDragData, type IndexTreeLocation, type TreeDragAndDrop, type TreeElement, type TreeFindMatchType, type TreeFindMode, type TreeIndentGuides, type TreeKeyboardNavigationLabelProvider, type TreePointerTarget, type TreeTwistieState } from "./tree.js";
+import { flattenTreeNodes, mapTreeDragData, type IndexTreeLocation, type TreeDragAndDrop, type TreeElement, type TreeFindMatchType, type TreeFindMode, type TreeIndentGuides, type TreeKeyboardNavigationLabelProvider, type TreePointerTarget, type TreeTwistieState, type TreeVisibleSplice } from "./tree.js";
 
 export interface IndexTreeOptions<T> {
 	readonly ariaLabel?: string;
@@ -100,7 +100,7 @@ export class IndexTree<T> extends Disposable {
 		}));
 		this.element = this.tree.element;
 		this.domNode = this.tree.domNode;
-		this._register(this.model.onDidChange(() => this.render()));
+		this._register(this.model.onDidChange(({ visibleSplice }) => this.render(visibleSplice)));
 		this._register(this.model.onDidChangeCollapseState(({ node, collapsed }) => {
 			this._onDidChangeCollapseState.fire({ element: node.element, node, collapsed, browserEvent: this.collapseBrowserEvent?.id === node.id ? this.collapseBrowserEvent.event : undefined });
 		}));
@@ -144,9 +144,10 @@ export class IndexTree<T> extends Disposable {
 	clearFind(): void { this.tree.clearFind(); }
 	updateElementHeight(location: IndexTreeLocation, height: number | undefined): void { this.tree.updateElementHeight(this.model.getNode(location).id, height); }
 
-	private render(): void {
-		this.tree.setFindCandidates(flattenTreeNodes(this.model.rootNodes));
-		this.tree.items = this.model.visibleNodes;
+	private render(visibleSplice?: TreeVisibleSplice<IndexTreeNode<T>>): void {
+		this.tree.setFindCandidates(() => flattenTreeNodes(this.model.rootNodes));
+		if (visibleSplice) this.tree.spliceVisibleItems(this.model.visibleNodes, visibleSplice);
+		else this.tree.items = this.model.visibleNodes;
 	}
 }
 

@@ -36,6 +36,7 @@ export class ListView<T> extends Disposable {
 	readonly domNode: HTMLDivElement;
 	private readonly scrollable: ScrollableElement | undefined;
 	private readonly _onDidScroll = this._register(new Emitter<number>());
+	private readonly _onDidRenderRows = this._register(new Emitter<void>());
 	private readonly heightOverrides = new Map<string, number>();
 	private readonly renderedRows = new Map<string, { readonly item: T; readonly row: HTMLDivElement; readonly index: number }>();
 	private readonly retainedRows = new Map<string, { readonly item: T; readonly row: HTMLDivElement; readonly index: number }>();
@@ -45,6 +46,7 @@ export class ListView<T> extends Disposable {
 	private itemOffsets: readonly number[] = [0];
 
 	readonly onDidScroll: Event<number> = this._onDidScroll.event;
+	readonly onDidRenderRows: Event<void> = this._onDidRenderRows.event;
 
 	constructor(container: HTMLElement, private readonly options: ListViewOptions<T>) {
 		super();
@@ -220,6 +222,7 @@ export class ListView<T> extends Disposable {
 			if (row !== next) this.element.insertBefore(row, next);
 			previous = row;
 		}
+		this._onDidRenderRows.fire();
 	}
 
 	private createRow(item: T, index: number, itemId: string): HTMLDivElement {
@@ -258,7 +261,8 @@ export class ListView<T> extends Disposable {
 
 	private renderRange(): { readonly start: number; readonly end: number } {
 		const scrollable = this.scrollable;
-		if (!this.isVirtualized || !scrollable || scrollable.state.height <= 0 || this._items.length === 0) return { start: 0, end: this._items.length };
+		if (!this.isVirtualized || !scrollable) return { start: 0, end: this._items.length };
+		if (scrollable.state.height <= 0) return { start: 0, end: 0 };
 		const viewport = scrollable.state;
 		const start = Math.max(0, this.indexAt(Math.max(0, viewport.top - 200)));
 		const end = Math.min(this._items.length, this.indexAt(viewport.top + viewport.height + 200) + 1);

@@ -142,7 +142,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 	private readonly requests = new Map<string | undefined, AsyncTreeRequest>();
 	private readonly _onDidChangeLoadState = this._register(new Emitter<AsyncDataTreeLoadStateEvent<T>>());
 	private readonly _onDidError = this._register(new Emitter<AsyncDataTreeErrorEvent<T>>());
-	private states = new Map<string, AsyncNodeState<T>>();
+	private readonly states = new Map<string, AsyncNodeState<T>>();
 	private rootChildren: readonly string[] = [];
 	private input: TInput | undefined;
 	private generatedId = 0;
@@ -261,31 +261,31 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 	}
 
 	private replaceChildren(parentId: string | undefined, elements: readonly T[]): void {
-		const nextStates = new Map(this.states);
-		const oldChildren = parentId === undefined ? this.rootChildren : nextStates.get(parentId)?.children ?? [];
+		const parent = parentId === undefined ? undefined : this.states.get(parentId);
+		if (parentId !== undefined && !parent) throw new RangeError(`Unknown AsyncDataTree parent: ${parentId}`);
+		const oldChildren = parentId === undefined ? this.rootChildren : parent!.children ?? [];
 		const oldChildIds = new Set(oldChildren);
 		const childIds: string[] = [];
+		const nextChildren: AsyncNodeState<T>[] = [];
 		const seen = new Set<string>();
 		for (const element of elements) {
 			const id = this.getId(element);
-			if (seen.has(id) || nextStates.has(id) && !oldChildIds.has(id)) throw new Error(`Duplicate tree node ID: ${id}`);
+			if (seen.has(id) || this.states.has(id) && !oldChildIds.has(id)) throw new Error(`Duplicate tree node ID: ${id}`);
 			seen.add(id);
 			childIds.push(id);
-			const previous = nextStates.get(id);
+			const previous = this.states.get(id);
 			const hasChildren = this.dataSource.hasChildren(element);
-			if (!hasChildren) {
-				for (const childId of previous?.children ?? []) removeStateSubtree(childId, nextStates);
+			nextChildren.push({ id, element, parentId, hasChildren, children: hasChildren ? previous?.children : undefined });
+		}
+		for (const id of oldChildren) if (!seen.has(id)) removeStateSubtree(id, this.states);
+		for (const child of nextChildren) {
+			if (!child.hasChildren) {
+				for (const id of this.states.get(child.id)?.children ?? []) removeStateSubtree(id, this.states);
 			}
-			nextStates.set(id, { id, element, parentId, hasChildren, children: hasChildren ? previous?.children : undefined });
+			this.states.set(child.id, child);
 		}
-		for (const id of oldChildren) if (!seen.has(id)) removeStateSubtree(id, nextStates);
 		if (parentId === undefined) this.rootChildren = childIds;
-		else {
-			const parent = nextStates.get(parentId);
-			if (!parent) throw new RangeError(`Unknown AsyncDataTree parent: ${parentId}`);
-			nextStates.set(parentId, { ...parent, children: childIds });
-		}
-		this.states = nextStates;
+		else this.states.set(parentId, { ...parent!, children: childIds });
 	}
 
 	private render(): void { this.tree.setChildren(this.rootChildren.map((id) => this.toTreeElement(id))); }

@@ -4,7 +4,7 @@ import type { ListScrolling } from "../list/list.js";
 import { AbstractTree } from "./abstractTree.js";
 import { CompressibleObjectTreeModel, type CompressibleObjectTreeModelOptions, type CompressibleTreeElement, type CompressedTreeNode } from "./compressedObjectTreeModel.js";
 import { ObjectTreeModel, type ObjectTreeElement, type ObjectTreeModelOptions, type ObjectTreeNode } from "./objectTreeModel.js";
-import { flattenTreeNodes, mapTreeDragData, type TreeDragAndDrop, type TreeFindMatchType, type TreeFindMode, type TreeFindResult, type TreeIndentGuides, type TreeKeyboardNavigationLabelProvider, type TreePointerTarget, type TreeSelectionPresentation, type TreeTwistieState } from "./tree.js";
+import { flattenTreeNodes, mapTreeDragData, type TreeDragAndDrop, type TreeFindMatchType, type TreeFindMode, type TreeFindResult, type TreeIndentGuides, type TreeKeyboardNavigationLabelProvider, type TreePointerTarget, type TreeSelectionPresentation, type TreeTwistieState, type TreeVisibleSplice } from "./tree.js";
 
 export interface ObjectTreeOptions<TNode> {
 	readonly ariaLabel?: string;
@@ -129,13 +129,13 @@ export class ObjectTree<TNode> extends Disposable {
 		}));
 		this.element = this.tree.element;
 		this.domNode = this.tree.domNode;
-		this._register(this.model.onDidChange(({ kind, node }) => {
+		this._register(this.model.onDidChange(({ kind, node, visibleSplice }) => {
 			if (kind === "rerender" && node) {
 				this.onWillRender?.();
 				this.tree.rerender(node.id);
 				return;
 			}
-			this.render(kind === "structure" || kind === "sort");
+			this.render(kind === "structure" || kind === "sort", visibleSplice);
 		}));
 		this._register(this.model.onDidChangeCollapseState(({ node, collapsed }) => {
 			this._onDidChangeCollapseState.fire({ element: node.element, node, collapsed, browserEvent: this.collapseBrowserEvent?.id === node.id ? this.collapseBrowserEvent.event : undefined });
@@ -234,10 +234,11 @@ export class ObjectTree<TNode> extends Disposable {
 	updateElementHeight(id: string, height: number | undefined): void { this.tree.updateElementHeight(id, height); }
 	getElementTop(id: string): number | undefined { return this.tree.getElementTop(id); }
 
-	private render(structureChanged: boolean): void {
+	private render(structureChanged: boolean, visibleSplice?: TreeVisibleSplice<ObjectTreeNode<TNode>>): void {
 		this.onWillRender?.();
-		if (structureChanged) this.tree.setFindCandidates(flattenTreeNodes(this.model.rootNodes));
-		this.tree.items = this.model.visibleNodes;
+		if (structureChanged) this.tree.setFindCandidates(() => flattenTreeNodes(this.model.rootNodes));
+		if (visibleSplice) this.tree.spliceVisibleItems(this.model.visibleNodes, visibleSplice);
+		else this.tree.items = this.model.visibleNodes;
 		// Removed nodes may still have detached rows; release them after the new visible rows are mounted.
 		if (structureChanged) this.tree.clearRetainedRows();
 	}
@@ -398,7 +399,7 @@ export class CompressibleObjectTree<T> extends Disposable {
 	}
 
 	private render(): void {
-		this.tree.setFindCandidates(flattenTreeNodes(this.model.rootNodes));
+		this.tree.setFindCandidates(() => flattenTreeNodes(this.model.rootNodes));
 		this.tree.items = this.model.visibleNodes;
 	}
 }

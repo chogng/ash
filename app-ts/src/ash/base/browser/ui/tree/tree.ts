@@ -38,6 +38,12 @@ export interface AsyncTreeDataSource<TInput, T> {
 
 export type IndexTreeLocation = readonly number[];
 
+export interface TreeVisibleSplice<TNode> {
+	readonly start: number;
+	readonly deleteCount: number;
+	readonly elements: readonly TNode[];
+}
+
 export type TreeIndentGuides = "none" | "onHover" | "always";
 export type TreeSelectionPresentation = "active" | "subtle";
 
