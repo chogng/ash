@@ -25,8 +25,7 @@ pnpm dev:desktop
 VS Code 的 `Ash Desktop (Electron)` F5 配置运行 `just ash-desktop`：TypeScript
 Renderer 和 CSS 改动由 Vite 热更新，Main 与 Preload 改动只重启 Electron。后端包输入未变化时直接复用，
 Rust 源码或 Cargo 输入变化时由后端 watcher 构建，并仅在新二进制发布后切换 App Server。
-`Ash Desktop UI (reuse App Server)` 则跳过后端构建和监听，连接当前 profile 中兼容的服务；
-首次使用这个前端专用入口而本机尚无开发后端包时，先运行 `pnpm --dir app-ts prepare:backend`。
+`Ash Desktop UI (reuse App Server)` 会先准备开发后端包，然后跳过后端监听，连接当前 profile 中兼容的服务。
 
 只开发桌面界面、但需要检查 Electron 特有的窗口、标题栏、菜单和原生交互时，运行：
 
