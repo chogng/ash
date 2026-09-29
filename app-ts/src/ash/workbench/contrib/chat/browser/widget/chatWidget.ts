@@ -25,6 +25,7 @@ import { ASH_REMOTE_SCHEME, createSshRemoteWorkspaceUri, getRemoteWorkspacePath 
 import { OPEN_CHAT_SETTINGS_COMMAND_ID } from "../../common/chat.js";
 import { OpenSettingsCommandId } from '../../../preferences/common/preferences.js';
 import type { IDictationService } from '../../../../../platform/dictation/common/dictationService.js';
+import type { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/common/nativeHost.js';
 
 /** The presentation consumes one conversation model owned by its product. */
@@ -67,6 +68,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		contextViewService: IContextViewService,
 		commandService: ICommandService,
 		accessibleViewService: IAccessibleViewService,
+		notifications: INotificationService,
 		openerService?: IOpenerService,
 		editorService?: IEditorService,
 		imageResourceLoader?: (resource: URI) => Promise<Blob>,
@@ -107,7 +109,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			openModelSettings: () => commandService.executeCommand(OpenSettingsCommandId, 'models'),
 			resolveInteraction: (response) => this.model.resolveInteraction(response),
 		};
-		this.inputPart = this._register(new ChatInputPart(this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, dictation));
+		this.inputPart = this._register(new ChatInputPart(this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, notifications, dictation));
 		this.element.append(this.goalElement, this.listWidget.element, this.inputPart.element);
 		this._register(this.model.onDidChange(() => this.render()));
 		this._register(toDisposable(() => this.element.remove()));

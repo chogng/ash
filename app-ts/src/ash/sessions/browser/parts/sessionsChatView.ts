@@ -15,6 +15,7 @@ import type { SessionId } from "../../services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import type { SessionsViewSelection } from "../../services/sessions/browser/sessionsService.js";
 import type { IDictationService } from '../../../platform/dictation/common/dictationService.js';
+import type { INotificationService } from '../../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../../platform/native/common/nativeHost.js';
 import { localize } from '../../../nls.js';
 
@@ -27,6 +28,7 @@ export interface SessionsChatViewOptions {
 	readonly contextMenuService: IContextMenuService;
 	readonly contextViewService: IContextViewService;
 	readonly accessibleViewService: IAccessibleViewService;
+	readonly notifications: INotificationService;
 	readonly commandService: ICommandService;
 	readonly activateSelection: (selection: SessionsViewSelection) => void;
 	readonly closeSelection: (selection: SessionsViewSelection) => void;
@@ -47,6 +49,7 @@ export class SessionsChatView extends Disposable {
 	private readonly contextMenuService: IContextMenuService;
 	private readonly contextViewService: IContextViewService;
 	private readonly accessibleViewService: IAccessibleViewService;
+	private readonly notifications: INotificationService;
 	private readonly commandService: ICommandService;
 	private readonly activateSelection: (selection: SessionsViewSelection) => void;
 	private readonly closeSelection: (selection: SessionsViewSelection) => void;
@@ -60,6 +63,7 @@ export class SessionsChatView extends Disposable {
 		this.contextMenuService = options.contextMenuService;
 		this.contextViewService = options.contextViewService;
 		this.accessibleViewService = options.accessibleViewService;
+		this.notifications = options.notifications;
 		this.commandService = options.commandService;
 		this.activateSelection = options.activateSelection;
 		this.closeSelection = options.closeSelection;
@@ -114,6 +118,7 @@ export class SessionsChatView extends Disposable {
 					contextMenuService: this.contextMenuService,
 					contextViewService: this.contextViewService,
 					accessibleViewService: this.accessibleViewService,
+					notifications: this.notifications,
 					commandService: this.commandService,
 					activateSelection: this.activateSelection,
 					closeSelection: this.closeSelection,
@@ -230,6 +235,7 @@ class SessionsChatGridEntry extends Disposable implements IView {
 			options.contextViewService,
 			options.commandService,
 			options.accessibleViewService,
+			options.notifications,
 			undefined,
 			undefined,
 			undefined,

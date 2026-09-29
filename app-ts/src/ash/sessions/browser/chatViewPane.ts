@@ -26,6 +26,7 @@ import { createAgentSessionsModel } from './agentSessionsModel.js';
 import { localize } from '../../nls.js';
 import { ChatWidgetModel } from './chatWidgetModel.js';
 import { IRendererHostService, type IRendererHost } from '../../platform/renderer/common/rendererHost.js';
+import { INotificationService } from '../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 
 let chatViewInstanceId = 0;
@@ -75,6 +76,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
 		@IFileService private readonly fileService: IFileService,
 		@IAccessibleViewService private readonly accessibleViewService: IAccessibleViewService,
+		@INotificationService private readonly notifications: INotificationService,
 		@IContextKeyService contextKeyService?: IContextKeyService,
 		@IOpenerService private readonly openerService?: IOpenerService,
 		@IEditorService private readonly editorService?: IEditorService,
@@ -206,6 +208,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 					this.contextViewService,
 					this.commandService,
 					this.accessibleViewService,
+					this.notifications,
 					this.openerService,
 					this.editorService,
 					resource => readMarkdownImageResource(this.fileService, resource),
@@ -235,6 +238,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 					this.contextViewService,
 					this.commandService,
 					this.accessibleViewService,
+					this.notifications,
 					this.openerService,
 					this.editorService,
 					resource => readMarkdownImageResource(this.fileService, resource),

@@ -12,6 +12,7 @@ import { WorkbenchToolBar } from "../../../../../../platform/actions/browser/too
 import type { IAccessibleViewService } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import type { IDictationService, IDictationSession } from "../../../../../../platform/dictation/common/dictationService.js";
 import type { IOpenAgentsWindowOptions } from '../../../../../../platform/native/common/nativeHost.js';
+import type { INotificationService } from '../../../../../../platform/notification/common/notification.js';
 import type { IContextMenuService } from "../../../../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../../../../platform/contextview/browser/contextView.js";
 import type { ModelCatalogEntry } from "../../../../../services/chat/common/chatService.js";
@@ -76,11 +77,10 @@ export class ChatInputPart extends Disposable {
 	private dictationSession: IDictationSession | undefined;
 	private dictationStarting = false;
 	private dictationCancelStart = false;
-	private dictationError: string | undefined;
 	private visible = true;
 	private draftRevision = 0;
 
-	constructor(container: HTMLElement, delegate: ChatInputDelegate, contextMenuService: IContextMenuService, contextViewService: IContextViewService, private readonly accessibleViewService: IAccessibleViewService, private readonly dictation?: IDictationService) {
+	constructor(container: HTMLElement, delegate: ChatInputDelegate, contextMenuService: IContextMenuService, contextViewService: IContextViewService, private readonly accessibleViewService: IAccessibleViewService, private readonly notifications: INotificationService, private readonly dictation?: IDictationService) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.delegate = delegate;
@@ -399,7 +399,6 @@ export class ChatInputPart extends Disposable {
 		if (!this.dictation || this.dictationStarting) return;
 		this.dictationStarting = true;
 		this.dictationCancelStart = false;
-		this.dictationError = undefined;
 		this.status.textContent = this.statusText(this.state);
 		this.renderToolbarActions();
 		let ended = false;
@@ -425,7 +424,7 @@ export class ChatInputPart extends Disposable {
 				this.dictationPreview.textContent = '';
 				this.dictationPreview.hidden = true;
 				if (this.isDisposed) return;
-				this.dictationError = error;
+				if (error) this.notifications.error(localize('chat.input.dictationFailed', 'Dictation failed: {0}', error));
 				this.status.textContent = this.statusText(this.state);
 				this.renderToolbarActions();
 			});
@@ -435,7 +434,7 @@ export class ChatInputPart extends Disposable {
 			}
 			this.dictationSession = session;
 		} catch (error) {
-			this.dictationError = String(error);
+			if (!this.isDisposed) this.notifications.error(localize('chat.input.dictationFailed', 'Dictation failed: {0}', String(error)));
 		} finally {
 			this.dictationStarting = false;
 			if (!this.isDisposed) {
@@ -454,8 +453,7 @@ export class ChatInputPart extends Disposable {
 		try {
 			await session.stop();
 		} catch (error) {
-			this.dictationError = String(error);
-			if (!this.isDisposed) this.status.textContent = this.statusText(this.state);
+			if (!this.isDisposed) this.notifications.error(localize('chat.input.dictationFailed', 'Dictation failed: {0}', String(error)));
 		}
 	}
 
@@ -609,7 +607,6 @@ export class ChatInputPart extends Disposable {
 
 	private statusText(state: ChatInputState): string {
 		if (state.error) return state.error;
-		if (this.dictationError) return localize('chat.input.dictationFailed', 'Dictation failed: {0}', this.dictationError);
 		if (this.dictationSession || this.dictationStarting) return localize('chat.input.dictationListening', 'Listening…');
 		switch (state.phase) {
 			case "loading":

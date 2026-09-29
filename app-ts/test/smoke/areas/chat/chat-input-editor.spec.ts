@@ -117,7 +117,8 @@ test('Desktop Chat sends the selected local dictation package through its microp
 	await expect(button).toBeEnabled();
 	await expect(button).toHaveAttribute('aria-label', 'Dictate message');
 	await button.click();
-		await expect(page.locator('.ash-chat-view-pane .ash-chat:visible .ash-chat-status')).toContainText('Could not read dictation model package');
+		await expect(page.locator('.ash-notification')).toContainText('Could not read dictation model package');
+		await expect(page.locator('.ash-chat-view-pane .ash-chat:visible .ash-chat-status')).not.toContainText('Could not read dictation model package');
 	await expect(button).not.toHaveAttribute('aria-pressed', 'true');
 	} finally {
 		await page.evaluate(async source => {

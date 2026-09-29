@@ -4,6 +4,7 @@ import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import type { IFileService } from '../../../platform/files/common/files.js';
 import type { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
+import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
 import { Emitter, Event } from "../../../base/common/event.js";
 import { toDisposable } from "../../../base/common/lifecycle.js";
 import type { IMenu, IMenuService } from "../../../platform/actions/common/actions.js";
@@ -50,6 +51,7 @@ test("opens a local Chat tab before the backend session request settles", () => 
 		layoutService,
 		{} as IFileService,
 		{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService,
+		new NotificationService(),
 	);
 
 	assert.equal(sessionService.untitledSessions.length, 1);

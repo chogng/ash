@@ -342,6 +342,7 @@ export class Workbench extends Disposable {
 			contextMenuService: contextMenus,
 			contextViewService: contextViews,
 			accessibleViewService,
+			notifications: notificationService,
 			commandService,
 			activateSelection: selection => view.activateSelection(selection),
 			closeSelection: selection => view.closeVisibleSelection(selection),

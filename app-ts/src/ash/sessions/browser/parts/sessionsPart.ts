@@ -12,6 +12,7 @@ import { SessionsChatView } from "./sessionsChatView.js";
 import { h } from "../../../base/browser/dom.js";
 import { localize } from '../../../nls.js';
 import type { IDictationService } from '../../../platform/dictation/common/dictationService.js';
+import type { INotificationService } from '../../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../../platform/native/common/nativeHost.js';
 
 export interface SessionsPartOptions {
@@ -21,6 +22,7 @@ export interface SessionsPartOptions {
 	readonly contextMenuService: IContextMenuService;
 	readonly contextViewService: IContextViewService;
 	readonly accessibleViewService: IAccessibleViewService;
+	readonly notifications: INotificationService;
 	readonly commandService: ICommandService;
 	readonly activateSelection: (selection: SessionsViewSelection) => void;
 	readonly closeSelection: (selection: SessionsViewSelection) => void;
@@ -51,6 +53,7 @@ export class SessionsPart extends WorkbenchPart {
 			contextMenuService: options.contextMenuService,
 			contextViewService: options.contextViewService,
 			accessibleViewService: options.accessibleViewService,
+			notifications: options.notifications,
 			commandService: options.commandService,
 			activateSelection: options.activateSelection,
 			closeSelection: options.closeSelection,

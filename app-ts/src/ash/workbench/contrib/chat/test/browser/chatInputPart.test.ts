@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import type { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import type { IDictationService } from '../../../../../platform/dictation/common/dictationService.js';
+import { NotificationSeverity } from '../../../../../platform/notification/common/notification.js';
+import { NotificationService } from '../../../../services/notification/common/notificationService.js';
 import { ChatInputPart } from '../../browser/widget/input/chatInputPart.js';
 import type { ChatInputDelegate } from '../../browser/widget/input/chatInput.js';
 
@@ -19,10 +22,13 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-function inputPart(): ChatInputPart {
+const sharedNotifications = new NotificationService();
+suiteTeardown(() => sharedNotifications.dispose());
+
+function inputPart(notifications: NotificationService, dictation?: IDictationService): ChatInputPart {
 	const container = document.createElement('div');
 	document.body.append(container);
-	return new ChatInputPart(container, {} as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+	return new ChatInputPart(container, {} as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, dictation);
 }
 
 function edit(part: ChatInputPart, text: string): void {
@@ -33,8 +39,8 @@ function edit(part: ChatInputPart, text: string): void {
 }
 
 test('Chat draft handoff moves text and resolved attachments after acknowledgement', async () => {
-	using source = inputPart();
-	using target = inputPart();
+	using source = inputPart(sharedNotifications);
+	using target = inputPart(sharedNotifications);
 	edit(source, 'Review this file');
 	source.addContext({ id: 'src/file.ts', kind: 'file', name: 'file.ts', resolve: async () => ({ name: 'file.ts', content: 'const answer = 42;' }) });
 	const captured = await source.captureDraft();
@@ -53,11 +59,42 @@ test('Chat draft handoff moves text and resolved attachments after acknowledgeme
 });
 
 test('Chat draft handoff leaves text edited after capture in the source', async () => {
-	using source = inputPart();
+	using source = inputPart(sharedNotifications);
 	edit(source, 'First draft');
 	const captured = await source.captureDraft();
 	assert.ok(captured);
 	edit(source, 'Revised draft');
 	captured.clear();
 	assert.equal(source.element.querySelector('textarea')?.value, 'Revised draft');
+});
+
+test('Chat dictation startup failure appears in notifications and leaves input status clear', async () => {
+	using notifications = new NotificationService();
+	using part = inputPart(notifications, { start: async () => { throw new Error('HTTP 403'); } });
+	part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')?.click();
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.deepEqual(notifications.getNotifications().map(item => ({ severity: item.severity, message: item.message })), [
+		{ severity: NotificationSeverity.Error, message: 'Dictation failed: Error: HTTP 403' },
+	]);
+	assert.equal(part.element.querySelector('.ash-chat-status')?.textContent, 'Loading chat...');
+});
+
+test('Chat dictation session failure appears in notifications and releases the microphone', async () => {
+	using notifications = new NotificationService();
+	let endSession: ((error?: string) => void) | undefined;
+	using part = inputPart(notifications, { start: async (_onTranscript, onEnded) => {
+		endSession = onEnded;
+		return { stop: async () => {} };
+	} });
+	const microphone = part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button');
+	assert.ok(microphone);
+	microphone.click();
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')?.getAttribute('aria-pressed'), 'true');
+	endSession?.('HTTP 403');
+	assert.deepEqual(notifications.getNotifications().map(item => ({ severity: item.severity, message: item.message })), [
+		{ severity: NotificationSeverity.Error, message: 'Dictation failed: HTTP 403' },
+	]);
+	assert.equal(part.element.querySelector('.ash-chat-status')?.textContent, 'Loading chat...');
+	assert.notEqual(part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')?.getAttribute('aria-pressed'), 'true');
 });

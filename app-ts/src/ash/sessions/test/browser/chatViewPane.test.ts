@@ -12,6 +12,7 @@ import { MenuId } from "../../../platform/actions/common/actions.js";
 import { MenuService } from "../../../platform/actions/common/menuService.js";
 import type { IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
 import type { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
+import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
 import { ServiceContainer } from "../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService } from "../../../platform/quickinput/common/quickInput.js";
 import { CommandService } from "../../../workbench/services/commands/common/commandService.js";
@@ -49,6 +50,7 @@ const unavailableFileService = {
 	readFileBytes: async () => { throw new Error('File read is unavailable in this test'); },
 } as unknown as IFileService;
 const unavailableAccessibleViewService = { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService;
+const notifications = new NotificationService();
 
 class SessionsManagementService extends BaseSessionsManagementService {
 	constructor(api: IRendererHost) {
@@ -172,6 +174,7 @@ test('Chat loads an Ash remote workspace image through the file service', async 
 			testLayoutService(),
 			fileService,
 			unavailableAccessibleViewService,
+			notifications,
 			contextKeys,
 		);
 		dom.window.document.body.append(pane.element);
@@ -280,6 +283,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		layout,
 		unavailableFileService,
 		unavailableAccessibleViewService,
+		notifications,
 		contextKeys,
 	);
 	chatView = pane;
@@ -714,6 +718,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 		layout,
 		unavailableFileService,
 		unavailableAccessibleViewService,
+		notifications,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -855,6 +860,7 @@ test("the New Chat slash command opens an untitled session", async () => {
 		layout,
 		unavailableFileService,
 		unavailableAccessibleViewService,
+		notifications,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -931,6 +937,7 @@ test("failed first send keeps the untitled session and its input draft", async (
 		layout,
 		unavailableFileService,
 		unavailableAccessibleViewService,
+		notifications,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1012,6 +1019,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 		layout,
 		unavailableFileService,
 		unavailableAccessibleViewService,
+		notifications,
 	);
 	dom.window.document.body.append(pane.element);
 

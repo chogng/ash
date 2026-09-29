@@ -7,6 +7,7 @@ import type { ICommandEvent, ICommandService } from "../../../platform/commands/
 import type { IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../platform/contextview/browser/contextView.js";
 import type { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
+import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
 import type { IChatService, ThreadUpdateEnvelope } from "../../../workbench/services/chat/common/chatService.js";
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import { SessionsService } from "../../../sessions/services/sessions/browser/sessionsService.js";
@@ -157,6 +158,7 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 		contextMenuService,
 		contextViewService,
 		accessibleViewService: { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService,
+		notifications: new NotificationService(),
 		commandService,
 		activateSelection: selection => viewService.activateSelection(selection),
 		closeSelection: selection => viewService.closeVisibleSelection(selection),
