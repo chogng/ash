@@ -26,6 +26,11 @@ pub(super) fn app() -> App {
 }
 
 pub(super) fn render(app: &App, width: u16, rows: u16) -> Buffer {
+    let rows = if super::output::expanded(app) {
+        rows
+    } else {
+        super::layout::height(app, Rect::new(0, 0, width, rows))
+    };
     let mut terminal = Terminal::new(TestBackend::new(width, rows)).unwrap();
     terminal
         .draw(|frame| draw(frame, app, &Default::default()))
@@ -139,9 +144,9 @@ fn input_stays_at_bottom_with_terminal_mouse_selection() {
     assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
     app.insert_text("继续检查终端历史");
     let buffer = render(&app, 80, 32);
-    assert_eq!(buffer.area.height, 32);
+    assert!(buffer.area.height < 32);
     assert!(text(&buffer).contains("继续检查终端历史"));
-    assert!(text(&buffer).contains("Ash Code v"));
+    assert!(!text(&buffer).contains("Ash Code v"));
     crate::tui_assert_snapshot!("input", text(&buffer));
     let layout = super::layout(&app, buffer.area);
     assert!(layout.input.height > 0);
@@ -194,11 +199,18 @@ fn config_opens_and_closes_without_reprinting_history() {
     assert!(app.command_panel().is_some());
     let buffer = render(&app, 100, 32);
     assert!(text(&buffer).contains("Vim mode"));
+    assert!(text(&buffer).contains("Screen mode"));
+    assert!(!text(&buffer).contains("more below"));
+    assert!(super::layout(&app, buffer.area).session.composer.height > 12);
     crate::tui_assert_snapshot!("config", text(&buffer));
+    let compact = render(&app, 100, 14);
+    assert!(text(&compact).contains("more below"));
+    assert!(text(&compact).contains("Esc close"));
+    crate::tui_assert_snapshot!("config_compact", text(&compact));
     for _ in 0..8 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
-    let scrolled = render(&app, 100, 32);
+    let scrolled = render(&app, 100, 14);
     assert!(text(&scrolled).contains("Screen mode"));
     assert!(text(&scrolled).contains("inline"));
     crate::tui_assert_snapshot!("config_scrolled_to_screen_mode", text(&scrolled));

@@ -6,14 +6,11 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 
 pub(super) fn desired_height(panel: &CommandPanel, width: u16) -> u16 {
-    // A tall temporary panel would push a screen of empty rows into main-screen scrollback.
-    const MAX_PANEL_ROWS: u16 = 12;
     let body = panel.body();
     let content_width = PanelLayout::content_width(width);
     crate::widgets::panel::HEADER_ROWS
         .saturating_add(body.tab_rows(content_width))
         .saturating_add(body.body_rows(content_width))
-        .min(MAX_PANEL_ROWS)
 }
 
 pub(super) fn draw(
