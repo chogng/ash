@@ -22,7 +22,7 @@ def _crate_aliases(include_dev = False):
     result["//conditions:default"] = {label: alias for label, alias in aliases.items() if label in common}
     return select(result)
 
-def ash_rust_crate(name, crate_name, data = [], crate_features = [], test_env_inherit = [], test_env = {}, testonly = False):
+def ash_rust_crate(name, crate_name, data = [], crate_features = [], extra_aliases = {}, extra_deps = [], test_env_inherit = [], test_env = {}, testonly = False):
     """Defines a Cargo library crate and its unit-test target.
 
     The crate's dependencies come from the workspace Cargo.lock through the
@@ -37,19 +37,20 @@ def ash_rust_crate(name, crate_name, data = [], crate_features = [], test_env_in
     rust_library(
         name = name,
         testonly = testonly,
-        aliases = _crate_aliases(),
+        aliases = _crate_aliases() | extra_aliases,
         crate_name = crate_name,
         crate_features = crate_features,
         compile_data = data,
-        deps = all_crate_deps(),
+        deps = all_crate_deps() + extra_deps,
         edition = "2024",
+        rustc_env_files = ["//:workspace-version-env"],
         srcs = srcs,
         visibility = ["//visibility:public"],
     )
 
     rust_test(
         name = name + "-unit-tests",
-        aliases = _crate_aliases(include_dev = True),
+        aliases = _crate_aliases(include_dev = True) | extra_aliases,
         crate = ":" + name,
         data = data,
         env = test_env,
@@ -57,10 +58,11 @@ def ash_rust_crate(name, crate_name, data = [], crate_features = [], test_env_in
         deps = all_crate_deps(
             normal = True,
             normal_dev = True,
-        ),
+        ) + extra_deps,
+        rustc_env_files = ["//:workspace-version-env"],
     )
 
-def ash_rust_binary(name, crate_name, crate_root, deps, data = []):
+def ash_rust_binary(name, crate_name, crate_root, deps, data = [], extra_aliases = {}):
     """Defines a Cargo binary using the lockfile-derived dependency graph.
 
     Callers provide the package library in `deps` when the binary imports it.
@@ -68,12 +70,13 @@ def ash_rust_binary(name, crate_name, crate_root, deps, data = []):
     """
     rust_binary(
         name = name,
-        aliases = _crate_aliases(),
+        aliases = _crate_aliases() | extra_aliases,
         crate_name = crate_name,
         compile_data = data,
         crate_root = crate_root,
         deps = all_crate_deps() + deps,
         edition = "2024",
+        rustc_env_files = ["//:workspace-version-env"],
         srcs = native.glob(["src/**/*.rs"]),
         visibility = ["//visibility:public"],
     )

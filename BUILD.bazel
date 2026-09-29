@@ -1,5 +1,14 @@
 load("@apple_support//xcode:xcode_config.bzl", "xcode_config")
 
+# First-party Rust rules need the same version embedded by Cargo, including TUI snapshots.
+genrule(
+    name = "workspace-version-env",
+    srcs = ["Cargo.toml"],
+    outs = ["workspace-version.env"],
+    cmd = """awk '/^\\[workspace.package\\]$$/ { in_package = 1; next } in_package && /^\\[/ { exit } in_package && /^version = / { gsub(/"/, "", $$3); print "CARGO_PKG_VERSION=" $$3; exit }' $(location Cargo.toml) > $@ && test -s $@""",
+    visibility = ["//visibility:public"],
+)
+
 xcode_config(name = "disable_xcode")
 
 # Keep host selection explicit so the Rust toolchain sees the same libc/ABI

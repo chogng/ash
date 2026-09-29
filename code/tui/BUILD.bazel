@@ -1,7 +1,19 @@
+load("@crates//:defs.bzl", "all_crate_deps")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
 load("//:defs.bzl", "ash_rust_crate")
+
+cargo_build_script(
+    name = "build_script",
+    srcs = ["build.rs"],
+    crate_root = "build.rs",
+    data = ["assets/welcome/pet.sprite"],
+    deps = all_crate_deps(build = True),
+    edition = "2024",
+)
 
 ash_rust_crate(
     name = "tui",
     crate_name = "ash_tui",
     data = ["assets/mermaid_preview.html"],
+    extra_deps = [":build_script"],
 )

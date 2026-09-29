@@ -145,7 +145,7 @@ pnpm --dir app-ts run test:smoke:browser:full
 
 Desktop 的 `code` 与 `academic` 通过同一个 `build:desktop` 入口构建，`ASH_WORKBENCH_MODE` 选择启动时的默认模式；两者共用一个 Renderer 产物。
 
-#### Bazel 边界测试
+#### Bazel 边界与 TUI 场景测试
 
 Bazelisk 按 `.bazelversion` 选择 Bazel。Windows 先在当前 PowerShell 中配置 Git Bash 路径：
 
@@ -154,7 +154,9 @@ $env:BAZEL_SH = "C:\Program Files\Git\bin\bash.exe"
 bazelisk test //app-rs:app_ci --test_output=errors --test_env=PATH
 ```
 
-其他平台直接运行同一条 `bazelisk test` 命令。测试包组装会启动仓库固定版本的 Node，因此 `--test_env=PATH` 将已配置的 Node 路径传给 Bazel 测试进程。该目标检查 App 边界和打包契约；产品行为测试使用上面的对应入口。
+其他平台直接运行同一条 `bazelisk test` 命令。测试包组装会启动仓库固定版本的 Node，因此 `--test_env=PATH` 将已配置的 Node 路径传给 Bazel 测试进程。该目标检查 App 边界和打包契约。
+
+`//ash-cli:tui-real-scenarios` 在 Bazel 下运行与 `just test-tui` 相同的 CLI/TUI PTY 场景。运行前将锁定版本的 `rg` 和 `tgrep` 路径分别设为 `ASH_RG_PATH` 和 `ASH_TGREP_PATH`；CI 从两个 runtime lock 下载并校验它们。Linux CI 运行该目标时跳过需要实际沙盒执行的场景，那些场景仍由 macOS 的 `just test-tui` 作业覆盖。
 
 ### 准备步骤与验证范围
 
@@ -169,7 +171,7 @@ bazelisk test //app-rs:app_ci --test_output=errors --test_env=PATH
 | --- | --- | --- |
 | `frontend.yml` | 构建工具类型检查与测试、Stanza 构建、前端单测、生产 Browser 与 Electron UI Playwright | 相关路径的 main 提交、PR、手动 |
 | `tooling.yml` | 三个平台的 Python lint、格式、构建、包布局和签名契约测试 | 相关路径的 main 提交、PR、手动 |
-| `bazel-boundary.yml` | Bazel 下的 App 边界、发布契约、打包和签名测试 | 相关路径的 main 提交、PR、发布、手动 |
+| `bazel-boundary.yml` | Bazel 下的 App 边界、发布契约、打包和签名测试，以及 CLI/TUI PTY 场景 | 相关路径的 main 提交、PR、发布、手动 |
 | `platform-checks.yml` | 平台实机验证和发布包签名、上传 | 发布、手动；签名和上传只在发布时执行 |
 
 Browser 和 Electron UI 检查不启动 App Server；真实后端集成继续使用对应的本地命令和平台验证。Playwright 失败时上传报告和 trace。
@@ -287,6 +289,8 @@ just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/rep
 同日测量 `just ash-desktop`：本机当前输出目录首次执行 `predev` 用时 237.03 秒，其中 Cargo 构建 223 秒；复用已发布后端包再执行 `predev` 用时 1.82 秒。Vite 8 的默认依赖扫描在 Workbench 构造参数装饰器处报错，随后首次打开窗口时分批优化依赖并重载页面。改为显式预先优化五个前端依赖后，在两次都因配置变化而失效依赖缓存的单次 Playwright 对比中，菜单和编辑区可见耗时为 4507→2873 毫秒，首次窗口后的重载次数为 1→0。这个对比只说明依赖缓存失效时的首次加载，不代表日常热启动或 Rust 冷编译也同比例提速。日志和测量条件保存在 `.build/build-health/electron-startup-20260926/`。
 
 同一输出目录下，只在 `code/tui/src` 放入一个未参与编译的临时文件，原来的后端包输入摘要会失效，`pnpm --dir app-ts prepare:backend` 因而运行 Cargo 和资源准备，单次耗时 13.41 秒。后端包输入改为只跟踪实际打包的后端源码后，同样的临时文件不再触发准备，单次耗时 0.16 秒；两次都选中同一已发布包。临时文件已删除。此对比是跨产品源码变化后的复用路径，不代表后端源码实际修改后的编译耗时。
+
+2026-09-28 在 macOS arm64、Rust 1.98.0、本机共享增量输出下，对 `ash-tui` 测试目标的 `opt-level = 1` 与仅该包 `opt-level = 0` 做源码编辑对照。每轮在 `code/tui/src/usage.rs` 的同一条提示中切换一个标点，用 `just test ash-tui --lib --no-run` 编译并恢复源码；仅计入日志中只重新编译 `ash-tui` 的轮次。原配置三轮为 16.84、13.31、12.49 秒；新配置三轮为 6.72、6.16、12.44 秒，中位数 13.31→6.72 秒，减少 49.5%。一次新配置轮次还重编了 App Server 等依赖，未计入。无改动重跑与完整产品的源码编辑耗时未测。测试程序大小为 235.2→253.9 MiB；`time` 记录的最大 RSS 约为 1.90→1.97–2.07 GB。完整的 1172 项 TUI 单测在两种配置下均通过，执行阶段分别用时 12.69 和 15.72 秒，另有 2 项既有忽略。新配置的 `just check ash-tui`、`just rust-warnings ash-tui` 和 `just build-code` 均通过。新配置在独立空输出目录中单次冷编该测试目标用时 580.34 秒、最大 RSS 2.71 GB；没有同条件原配置冷编样本，因此不能推断冷编提速。日志保存在 `.build/build-health/tui-test-profile-20260928/`。`cargo tree -p ash-tui -e normal` 去重后为 470 个包，加入 `dev` 边后为 883 个；测试依赖通过 `ash-app-server-client/in-process` 包含完整 App Server。这是依赖规模的证据，不等于关键路径耗时；本次改动不减少首次编译的依赖图。
 
 ## 构建源码与仓库脚本边界
 

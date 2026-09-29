@@ -1,9 +1,22 @@
+load("@crates//:defs.bzl", "all_crate_deps")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
 load("//:defs.bzl", "ash_rust_crate")
+
+cargo_build_script(
+    name = "build_script",
+    srcs = ["build.rs"],
+    crate_root = "build.rs",
+    data = ["schema/metadata.json"],
+    deps = all_crate_deps(build = True),
+    edition = "2024",
+)
 
 ash_rust_crate(
     name = "app-server-protocol",
     crate_name = "ash_app_server_protocol",
+    crate_features = ["json-schema"],
     data = glob(["schema/**"]) + ["src/typescript_decoder.template.ts"],
+    extra_deps = [":build_script"],
 )
 
 exports_files(["schema/metadata.json"])

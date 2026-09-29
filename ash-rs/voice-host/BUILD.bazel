@@ -3,12 +3,25 @@ load("//:defs.bzl", "ash_rust_binary", "ash_rust_crate")
 ash_rust_crate(
     name = "voice-host",
     crate_name = "voice_host",
+)
+
+ash_rust_crate(
+    name = "voice-host-enabled",
+    crate_name = "voice_host",
     crate_features = ["host"],
+    extra_deps = [
+        "//ash-rs/process-hardening:process-hardening",
+        "@crates//:cpal",
+        "@crates//:crossbeam-queue",
+        "@crates//:rubato",
+        "@crates//:sonora",
+    ],
 )
 
 ash_rust_binary(
     name = "ash-voice-host",
     crate_name = "ash_voice_host",
     crate_root = "src/main.rs",
-    deps = [":voice-host"],
+    deps = [":voice-host-enabled", "//ash-rs/process-hardening:process-hardening"],
+    extra_aliases = {"//ash-rs/process-hardening": "process_hardening"},
 )

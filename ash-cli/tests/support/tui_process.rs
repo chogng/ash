@@ -18,6 +18,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::OnceLock;
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
@@ -40,12 +41,82 @@ pub const SMALL_SIZE: PtySize = PtySize {
     pixel_height: 0,
 };
 
+fn ash_executable() -> PathBuf {
+    match option_env!("ASH_BAZEL_ASH") {
+        Some(path) => bazel_runfile(path),
+        None => PathBuf::from(option_env!("CARGO_BIN_EXE_ash").expect("Cargo ash executable")),
+    }
+}
+
+fn daemon_executable() -> PathBuf {
+    match option_env!("ASH_BAZEL_DAEMON") {
+        Some(path) => bazel_runfile(path),
+        None => ash_executable().with_file_name(format!(
+            "ash-app-server-daemon{}",
+            std::env::consts::EXE_SUFFIX
+        )),
+    }
+}
+
+fn app_server_executable() -> PathBuf {
+    match option_env!("ASH_BAZEL_APP_SERVER") {
+        Some(path) => bazel_runfile(path),
+        None => ash_executable()
+            .with_file_name(format!("ash-app-server{}", std::env::consts::EXE_SUFFIX)),
+    }
+}
+
+fn bazel_runfile(path: &str) -> PathBuf {
+    if let Some(directory) = std::env::var_os("RUNFILES_DIR") {
+        return PathBuf::from(directory).join(path);
+    }
+    let manifest = std::env::var("RUNFILES_MANIFEST_FILE").expect("Bazel runfiles manifest");
+    let contents = fs::read_to_string(manifest).expect("read Bazel runfiles manifest");
+    let value = contents
+        .lines()
+        .filter_map(|line| line.split_once(' '))
+        .find_map(|(key, value)| (key == path).then_some(value))
+        .unwrap_or_else(|| panic!("missing Bazel runfile: {path}"));
+    PathBuf::from(value)
+}
+
+struct StagedBinaries {
+    _directory: TempDir,
+    ash: PathBuf,
+    daemon: PathBuf,
+    app_server: PathBuf,
+}
+
+impl StagedBinaries {
+    fn new() -> Self {
+        // Bazel exposes executable runfiles as symlinks; the daemon requires regular files.
+        // Keep one real copy of each binary shared by this test process.
+        let directory = tempfile::tempdir().unwrap();
+        let staged = |source: PathBuf| {
+            let destination = directory
+                .path()
+                .join(source.file_name().expect("executable name"));
+            fs::copy(source, &destination).unwrap();
+            destination
+        };
+        Self {
+            ash: staged(ash_executable()),
+            daemon: staged(daemon_executable()),
+            app_server: staged(app_server_executable()),
+            _directory: directory,
+        }
+    }
+}
+
+static STAGED_BINARIES: OnceLock<StagedBinaries> = OnceLock::new();
+
 pub struct Fixture {
     _root: TempDir,
     root: PathBuf,
     workspace: PathBuf,
     profile: PathBuf,
-    daemon: PathBuf,
+    ash: PathBuf,
+    app_server: PathBuf,
     product_services: Option<PathBuf>,
     voice_host: Option<PathBuf>,
 }
@@ -89,11 +160,20 @@ impl Fixture {
         let profile = path.join("profile");
         fs::create_dir_all(&workspace).unwrap();
         fs::create_dir_all(&profile).unwrap();
-        assert!(Path::new(env!("CARGO_BIN_EXE_ash")).is_absolute());
-        let daemon = Path::new(env!("CARGO_BIN_EXE_ash")).with_file_name(format!(
-            "ash-app-server-daemon{}",
-            std::env::consts::EXE_SUFFIX
-        ));
+        let (ash, daemon, app_server) = if option_env!("ASH_BAZEL_ASH").is_some() {
+            let staged = STAGED_BINARIES.get_or_init(StagedBinaries::new);
+            (
+                staged.ash.clone(),
+                staged.daemon.clone(),
+                staged.app_server.clone(),
+            )
+        } else {
+            (
+                ash_executable(),
+                daemon_executable(),
+                app_server_executable(),
+            )
+        };
         assert!(
             daemon.is_file(),
             "build the matching daemon with `just test-tui`"
@@ -103,7 +183,8 @@ impl Fixture {
             root: path,
             workspace,
             profile,
-            daemon,
+            ash,
+            app_server,
             product_services: None,
             voice_host: None,
         }
@@ -126,11 +207,7 @@ impl Fixture {
             ("ASH_HOME", self.profile.clone()),
             ("ASH_WORKSPACE_ROOT", self.workspace.clone()),
             ("CODEX_HOME", self.codex_home()),
-            (
-                "ASH_APP_SERVER_PATH",
-                self.daemon
-                    .with_file_name(format!("ash-app-server{}", std::env::consts::EXE_SUFFIX)),
-            ),
+            ("ASH_APP_SERVER_PATH", self.app_server.clone()),
         ];
         if let Some(path) = &self.product_services {
             environment.push(("ASH_PRODUCT_SERVICES_PATH", path.clone()));
@@ -143,7 +220,7 @@ impl Fixture {
             let mut environment = environment;
             environment.push((
                 "ASH_WINDOWS_COMMAND_RUNNER_PATH",
-                self.daemon.with_file_name("ash-command-runner.exe"),
+                self.ash.with_file_name("ash-command-runner.exe"),
             ));
             environment
         };
@@ -233,7 +310,7 @@ baseUrl = "{base_url}"
     }
 
     pub fn sessions(&self) -> Vec<ash_protocol::Session> {
-        let mut command = StdioAppServerCommand::new(env!("CARGO_BIN_EXE_ash"))
+        let mut command = StdioAppServerCommand::new(&self.ash)
             .with_argument("app-server")
             .with_argument("connect");
         for (name, value) in self.environment() {
@@ -286,7 +363,7 @@ impl Drop for Fixture {
             }
         }
         // Stop only the daemon belonging to this isolated fixture before deleting it.
-        let _ = std::process::Command::new(env!("CARGO_BIN_EXE_ash"))
+        let _ = std::process::Command::new(&self.ash)
             .args(["app-server", "daemon", "stop"])
             .envs(self.environment())
             .output();
@@ -364,7 +441,7 @@ impl TuiProcess {
                 }
             }
         });
-        let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_ash"));
+        let mut command = CommandBuilder::new(&fixture.ash);
         command.args(args);
         command.cwd(&fixture.workspace);
         command.env("TERM", "xterm-256color");
@@ -910,10 +987,18 @@ fn assert_named_snapshot(name: &str, screen: String) {
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or_else(|| panic!("snapshot name must end in valid UTF-8: {}", name.display()));
-    let mut snapshot_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/snapshots");
-    if let Some(parent) = name.parent() {
-        snapshot_dir.push(parent);
-    }
+    let snapshot_file = match option_env!("ASH_BAZEL_ASH") {
+        Some(_) => bazel_runfile(&format!(
+            "{}/ash-cli/tests/snapshots/{}.snap",
+            std::env::var("TEST_WORKSPACE").expect("Bazel test workspace"),
+            name.display()
+        )),
+        None => PathBuf::from(option_env!("CARGO_MANIFEST_DIR").expect("Cargo manifest directory"))
+            .join("tests/snapshots")
+            .join(name)
+            .with_extension("snap"),
+    };
+    let snapshot_dir = snapshot_file.parent().expect("snapshot parent directory");
 
     let mut settings = insta::Settings::clone_current();
     settings.set_prepend_module_to_snapshot(false);
