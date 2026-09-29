@@ -1426,15 +1426,6 @@ fn command_panel_supports_keyboard_tab_switching_and_search() {
 }
 
 #[test]
-fn startup_panel_renders_the_effective_context() {
-    let mut app = App::new();
-    app.insert_text("/startup");
-    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-
-    crate::tui_assert_snapshot!("startup_panel", render(&app, 80, 20));
-}
-
-#[test]
 fn theme_candidate_focus_changes_content_without_repainting_modal_chrome() {
     let mut app = App::new();
     app.update(AppEvent::HelpOpened(ListSelectionModel::new(
@@ -1616,6 +1607,7 @@ fn bare_slash_renders_the_first_command_window() {
     assert!(rendered.contains("/skills"));
     assert!(rendered.contains("/memories"));
     assert!(rendered.contains("/mcp"));
+    assert!(rendered.contains("/hooks"));
     assert!(rendered.contains("/usage"));
     assert!(!rendered.contains("/resume"));
     assert!(!rendered.contains("/archive-thread"));
@@ -1623,6 +1615,20 @@ fn bare_slash_renders_the_first_command_window() {
     assert!(!rendered.contains("/thread "));
     assert!(!rendered.contains("/login"));
     assert!(!rendered.contains("/plugins"));
+}
+
+#[test]
+fn hooks_panel_opens_fullscreen_and_restores_input_after_close() {
+    let mut app = App::new();
+    app.insert_text("keep this draft");
+    app.update(crate::hooks::Event::Opened(
+        std::collections::BTreeMap::new(),
+    ));
+    assert_eq!(app.list_selection().unwrap().title(), "Hooks");
+    crate::tui_assert_snapshot!("hooks_fullscreen", render(&app, 80, 20));
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.command_panel().is_none());
+    assert!(app.input().contains("keep this draft"));
 }
 
 #[test]

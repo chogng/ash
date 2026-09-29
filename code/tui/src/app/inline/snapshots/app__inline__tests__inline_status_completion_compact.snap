@@ -1,0 +1,15 @@
+---
+source: code/tui/src/app/inline/frame_tests.rs
+expression: "text(&render(&app, 80, 60))"
+---
+                                                                                
+  ─────────────────────────────────────────────────────────────────────── 1/4   
+  /status                    show the active session, thread, and model         
+  /statusline                choose the items shown in the status line          
+  /shortcuts                 browse and customize terminal shortcuts            
+  /pr                        ask the Agent to create or inspect a pull request  
+────────────────────────────────────────────────────────────────────────────────
+> /status                                                                       
+────────────────────────────────────────────────────────────────────────────────
+                                                                                
+  ⏸ ask permissions on

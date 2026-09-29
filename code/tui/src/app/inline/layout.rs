@@ -23,7 +23,7 @@ pub(in crate::app) fn layout(app: &App, area: Rect) -> Layout {
 }
 
 pub(super) fn height(app: &App, screen: Rect) -> u16 {
-    if browsing(app) || app.overlay().is_some() || app.completion_visible() {
+    if browsing(app) || app.overlay().is_some() {
         return screen.height;
     }
     let areas = layout(app, screen);
@@ -37,8 +37,15 @@ pub(super) fn height(app: &App, screen: Rect) -> u16 {
             app.transcript_render_cache(),
         ))
     });
+    let completion_rows = if app.completion_visible() {
+        let view = app.chat_composer_view();
+        chat_input::completion_desired_height(screen, &view, app.language())
+    } else {
+        0
+    };
     controls
         .saturating_add(rows.min(u16::MAX as usize) as u16)
+        .saturating_add(completion_rows)
         .min(screen.height)
         .max(1)
 }

@@ -54,6 +54,62 @@ fn actual_tui_inline_preserves_history_across_panels_resize_and_exit() {
 }
 
 #[test]
+fn inline_slash_completion_does_not_append_a_blank_terminal_page() {
+    let fixture = Fixture::new();
+    let server = ScenarioServer::start([HttpResponse::streaming(["UNUSED"], None)]);
+    fixture.write_config(&server.base_url());
+    fixture.append_config("\n[tui]\nscreenMode = \"inline\"\n");
+    let mut process = TuiProcess::start_in_vscode(&fixture, &[], LARGE_SIZE);
+    process.wait_for_stable_screen("ask permissions on");
+
+    process.submit("/status");
+    process.wait_for_stable_screen("Full context window");
+    process.escape();
+    process.wait_for_stable_screen("ask permissions on");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while process.screen().contains("image in clipboard") {
+        assert!(Instant::now() < deadline, "temporary input tip did not expire");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    process.wait_for_stable_screen("← Dashboard");
+    let history = process.terminal_text();
+    let header = history
+        .find("Ash Code")
+        .expect("welcome header in terminal history");
+    let command = history
+        .find("> /status")
+        .expect("command in terminal history");
+    let gap = &history[header..command];
+    let longest_blank_run = gap
+        .lines()
+        .fold((0, 0), |(longest, current), line| {
+            let current = if line.trim().is_empty() {
+                current + 1
+            } else {
+                0
+            };
+            (longest.max(current), current)
+        })
+        .0;
+    assert!(
+        longest_blank_run < 20,
+        "slash completion appended {longest_blank_run} empty rows:\n{history}"
+    );
+    let screen = process.screen();
+    let command_row = screen
+        .lines()
+        .position(|line| line.contains("> /status"))
+        .expect("submitted command is visible");
+    let input_row = input_top_row(&process);
+    assert!(
+        input_row - command_row < 16,
+        "closing the status panel left a blank page:\n{screen}"
+    );
+    process.assert_snapshot("inline/status_after_compact_slash_completion");
+    process.quit();
+}
+
+#[test]
 fn actual_tui_inline_statusline_stays_at_terminal_bottom() {
     let fixture = Fixture::new();
     let server = ScenarioServer::start([HttpResponse::streaming(["BOTTOM-ANCHORED-REPLY"], None)]);
