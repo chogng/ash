@@ -1,5 +1,5 @@
 import { addDisposableListener, h, stopEvent } from '../../../../../base/browser/dom.js';
-import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize, onDidChangeNls } from '../../../../../nls.js';
 import { FileKind, type IFileService } from '../../../../../platform/files/common/files.js';
 import type { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -12,7 +12,7 @@ import { DEFAULT_LABELS_CONTAINER, ResourceLabels, type IResourceIconRenderer } 
 import { ExplorerItem } from '../../common/explorerModel.js';
 import { ExplorerFileNestingSettingId, ExplorerFileNestingTrie } from '../../common/explorerFileNestingTrie.js';
 import { provideDecorations } from './explorerDecorationsProvider.js';
-import { explorerFileContribRegistry, type IExplorerFileContribution } from '../explorerFileContrib.js';
+import { explorerFileContribRegistry } from '../explorerFileContrib.js';
 
 /** Provides keyboard file-name finding over the Explorer's loaded tree. */
 export class ExplorerFindProvider extends Disposable {
@@ -109,8 +109,7 @@ export class ExplorerDataSource {
 /** Owns the labels and hovers created for the currently rendered tree rows. */
 export class FilesRenderer extends Disposable {
 	private readonly labels: ResourceLabels;
-	private readonly renderedLabels = this._register(new DisposableStore());
-	private readonly contributions: IExplorerFileContribution[] = [];
+	private readonly renderedRows = this._register(new DisposableMap<HTMLElement, DisposableStore>());
 
 	constructor(
 		private readonly document: Document,
@@ -130,18 +129,16 @@ export class FilesRenderer extends Disposable {
 		}));
 	}
 
-	public clear(): void {
-		for (const contribution of this.contributions) {
-			contribution.setResource(undefined);
-		}
-		this.contributions.length = 0;
-		this.renderedLabels.clear();
+	public disposeRow(row: HTMLDivElement): void {
+		const content = row.querySelector<HTMLElement>('.ash-explorer-row-content');
+		if (content) this.renderedRows.deleteAndDispose(content);
 	}
 
 	public renderElement(item: ExplorerItem): HTMLElement {
 		const content = h(this.document, 'span');
 		content.className = `ash-explorer-row-content ash-explorer-${item.kind}`;
-		const label = this.renderedLabels.add(this.labels.create(content));
+		const resources = this.renderedRows.set(content, new DisposableStore());
+		const label = resources.add(this.labels.create(content));
 		const decoration = provideDecorations(item);
 		label.setFile(item.resource, {
 			fileKind: item.kind,
@@ -152,15 +149,15 @@ export class FilesRenderer extends Disposable {
 			} : {}),
 		});
 		const labelText = label.element.querySelector<HTMLElement>('.ash-icon-label-text');
-		this.renderedLabels.add(this.hoverService.setupHover({
+		resources.add(this.hoverService.setupHover({
 			target: label.element,
 			content: () => labelText && labelText.scrollWidth > labelText.clientWidth ? item.name : undefined,
 			groupId: 'explorer.items',
 		}));
 		if (item.kind === FileKind.File) {
-			for (const contribution of explorerFileContribRegistry.create(this.instantiationService, content, this.renderedLabels)) {
+			for (const contribution of explorerFileContribRegistry.create(this.instantiationService, content, resources)) {
 				contribution.setResource(item.resource);
-				this.contributions.push(contribution);
+				resources.add(toDisposable(() => contribution.setResource(undefined)));
 			}
 		}
 		return content;

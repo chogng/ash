@@ -21,6 +21,11 @@ export interface ListViewOptions<T> {
 	readonly getDragElements?: (item: T, index: number) => readonly T[];
 	readonly accessibilityProvider?: ListAccessibilityProvider<T>;
 	readonly renderItem: (item: T, index: number, row: HTMLDivElement) => HTMLElement;
+	/** Retains a row only while its ID and item object remain the same. */
+	readonly reuseRows?: boolean;
+	readonly updateItem?: (item: T, index: number, row: HTMLDivElement) => void;
+	/** Releases resources owned by a row before removal and when the list is disposed. */
+	readonly onDidRemoveRow?: (row: HTMLDivElement) => void;
 }
 
 /** Low-level flat row view that owns DOM, sizing, scrolling, and DnD. */
@@ -54,6 +59,9 @@ export class ListView<T> extends Disposable {
 			container.append(this.element);
 		}
 		this._register(toDisposable(() => this.element.remove()));
+		this._register(toDisposable(() => {
+			for (const row of this.element.querySelectorAll<HTMLDivElement>(":scope > .ash-list-row")) this.options.onDidRemoveRow?.(row);
+		}));
 		if (this.scrollable) this._register(this.scrollable.onDidScroll(event => this._onDidScroll.fire(event.current.top)));
 		else this._register(addDisposableListener(this.element, "scroll", () => this._onDidScroll.fire(this.element.scrollTop)));
 		if (options.dnd) this._register(new ListViewDragAndDrop(this, options.dnd, options.getDragElements ?? ((item) => [item])));
@@ -69,10 +77,23 @@ export class ListView<T> extends Disposable {
 	set items(items: readonly T[]) {
 		const nextItems = [...items];
 		const seen = new Set<string>();
+		const previousRows = [...this.element.querySelectorAll<HTMLDivElement>(":scope > .ash-list-row")];
+		const previous = new Map<string, { readonly item: T; readonly row: HTMLDivElement }>();
+		if (this.options.reuseRows) {
+			this._items.forEach((item, index) => previous.set(this.itemId(item, index), { item, row: previousRows[index]! }));
+		}
 		const rows = nextItems.map((item, index) => {
 			const itemId = this.itemId(item, index);
 			if (seen.has(itemId)) throw new TypeError(`Duplicate List item ID: ${itemId}`);
 			seen.add(itemId);
+			const existing = previous.get(itemId);
+			if (existing?.item === item) {
+				const row = existing.row;
+				row.dataset.index = String(index);
+				this.updateAccessibility(row, item);
+				this.options.updateItem?.(item, index, row);
+				return row;
+			}
 			const row = h(this.element.ownerDocument, "div");
 			row.className = "ash-list-row";
 			row.id = `${this.element.id}-item-${encodeURIComponent(itemId)}`;
@@ -84,21 +105,40 @@ export class ListView<T> extends Disposable {
 				row.draggable = true;
 				row.classList.add(DndCssClasses.Draggable);
 			}
-			const accessibility = this.options.accessibilityProvider;
-			setRole(row, accessibility?.getRole?.(item) ?? (this.options.role === "tree" ? "treeitem" : "option"));
-			setAriaAttribute(row, "selected", false);
-			this.setNumericAria(row, "aria-level", accessibility?.getAriaLevel?.(item));
-			this.setNumericAria(row, "aria-setsize", accessibility?.getAriaSetSize?.(item));
-			this.setNumericAria(row, "aria-posinset", accessibility?.getAriaPosInSet?.(item));
-			const expanded = accessibility?.isExpanded?.(item);
-			if (expanded !== undefined) row.setAttribute("aria-expanded", String(expanded));
-			const ariaLabel = accessibility?.getAriaLabel?.(item);
-			if (ariaLabel) row.setAttribute("aria-label", ariaLabel);
+			this.updateAccessibility(row, item);
 			row.append(this.options.renderItem(item, index, row));
 			return row;
 		});
+		const retained = new Set(rows);
+		for (const row of previousRows) {
+			if (retained.has(row)) continue;
+			this.options.onDidRemoveRow?.(row);
+			if (this.options.reuseRows) row.remove();
+		}
 		this._items = nextItems;
-		this.element.replaceChildren(...rows);
+		if (!this.options.reuseRows || previousRows.length === 0) {
+			this.element.replaceChildren(...rows);
+			return;
+		}
+		for (let index = 0; index < rows.length; index += 1) {
+			const row = rows[index]!;
+			if (this.element.children[index] !== row) this.element.insertBefore(row, this.element.children[index] ?? null);
+		}
+	}
+
+	private updateAccessibility(row: HTMLDivElement, item: T): void {
+		const accessibility = this.options.accessibilityProvider;
+		setRole(row, accessibility?.getRole?.(item) ?? (this.options.role === "tree" ? "treeitem" : "option"));
+		setAriaAttribute(row, "selected", false);
+		this.setNumericAria(row, "aria-level", accessibility?.getAriaLevel?.(item));
+		this.setNumericAria(row, "aria-setsize", accessibility?.getAriaSetSize?.(item));
+		this.setNumericAria(row, "aria-posinset", accessibility?.getAriaPosInSet?.(item));
+		const expanded = accessibility?.isExpanded?.(item);
+		if (expanded !== undefined) row.setAttribute("aria-expanded", String(expanded));
+		else row.removeAttribute("aria-expanded");
+		const ariaLabel = accessibility?.getAriaLabel?.(item);
+		if (ariaLabel) row.setAttribute("aria-label", ariaLabel);
+		else row.removeAttribute("aria-label");
 	}
 
 	row(index: number): HTMLElement | undefined {
@@ -156,7 +196,10 @@ export class ListView<T> extends Disposable {
 	}
 
 	private itemId(item: T, index: number): string { return this.options.getId?.(item) ?? String(index); }
-	private setNumericAria(row: HTMLElement, name: string, value: number | undefined): void { if (value !== undefined) row.setAttribute(name, String(value)); }
+	private setNumericAria(row: HTMLElement, name: string, value: number | undefined): void {
+		if (value !== undefined) row.setAttribute(name, String(value));
+		else row.removeAttribute(name);
+	}
 }
 
 interface MutableDragAndDropData<T> extends DragAndDropData<T> {

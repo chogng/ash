@@ -86,7 +86,8 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			identityProvider: { getId: (node) => node.resource.toString() },
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: item => item.name },
 			openOnSingleClick: true,
-			onWillRender: () => renderer.clear(),
+			reuseRows: true,
+			onDidRemoveRow: row => renderer.disposeRow(row),
 			renderElement: (item) => renderer.renderElement(item),
 		}));
 		this._register(new ExplorerFindProvider(this.tree, this.headerElement));
@@ -181,11 +182,8 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			return;
 		}
 		try {
-			const roots = await Promise.all(workspace.folders.map(async folder => {
-				const metadata = await this.fileService.stat(folder.uri);
-				if (metadata.kind !== FileKind.Directory) throw new Error(`${folder.name} is not a directory`);
-				return new ExplorerItem(folder.uri, folder.name, FileKind.Directory);
-			}));
+			// Workspace folders are validated at the host boundary; the first directory read reports an invalid root.
+			const roots = workspace.folders.map(folder => new ExplorerItem(folder.uri, folder.name, FileKind.Directory));
 			if (this.isDisposed || generation !== this.workspaceGeneration) return;
 			if (roots.length === 1) {
 				this.setTitle(roots[0]!.name);
@@ -199,8 +197,9 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 					Object.freeze(roots),
 				);
 			}
-			this.render();
 			await this.tree.setInput(this.root);
+			if (this.isDisposed || generation !== this.workspaceGeneration) return;
+			this.render();
 		} catch (error) {
 			if (this.isDisposed || generation !== this.workspaceGeneration) return;
 			this.error = error instanceof Error

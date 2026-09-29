@@ -92,17 +92,19 @@ test("AsyncDataTree loads on expansion and rejects stale refresh results", async
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const root: TestNode = { id: "root", label: "Root", expanded: true };
 	const group: TestNode = { id: "group", label: "Group", expanded: false };
+	const sibling: TestNode = { id: "sibling", label: "Sibling", expanded: false };
 	const stale: TestNode = { id: "stale", label: "Stale", expanded: false };
 	const current: TestNode = { id: "current", label: "Current", expanded: false };
 	const pending: Array<(children: readonly TestNode[]) => void> = [];
 	const tree = new AsyncDataTree<TestNode, TestNode>(dom.window.document.body, {
 		hasChildren: (element) => element === root || element === group,
 		getChildren: (element) => {
-			if (element === root) return [group];
+			if (element === root) return [group, sibling];
 			return new Promise<readonly TestNode[]>((resolve) => pending.push(resolve));
 		},
 	}, {
 		identityProvider: { getId: (element) => element.id },
+		reuseRows: true,
 		renderElement: (element) => {
 			const label = h(dom.window.document, "span");
 			label.textContent = element.label;
@@ -110,7 +112,11 @@ test("AsyncDataTree loads on expansion and rejects stale refresh results", async
 		},
 	});
 	await tree.setInput(root);
+	const siblingRow = tree.element.querySelector('[data-tree-id="sibling"]');
+	const groupRow = tree.element.querySelector('[data-tree-id="group"]');
 	assert.equal(tree.expand(group), true);
+	assert.equal(tree.element.querySelector('[data-tree-id="sibling"]'), siblingRow);
+	assert.equal(tree.element.querySelector('[data-tree-id="group"]'), groupRow);
 	assert.equal(pending.length, 1);
 	const latest = tree.updateChildren(group);
 	assert.equal(pending.length, 2);
@@ -118,7 +124,11 @@ test("AsyncDataTree loads on expansion and rejects stale refresh results", async
 	await latest;
 	pending[0]!([stale]);
 	await Promise.resolve();
-	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(".ash-tree-row")].map((row) => row.textContent), ["Group", "Current"]);
+	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(".ash-tree-row")].map((row) => row.textContent), ["Group", "Current", "Sibling"]);
+	assert.equal(tree.element.querySelector('[data-tree-id="sibling"]'), siblingRow);
+	assert.equal(tree.collapse(group), true);
+	assert.equal(tree.element.querySelector('[data-tree-id="group"]'), groupRow);
+	assert.equal(groupRow?.getAttribute('aria-expanded'), 'false');
 	tree.dispose();
 	dom.window.close();
 });

@@ -28,15 +28,11 @@ test("ExplorerView opens workspace files on single click", async () => {
 	let openedOptions: EditorOpenOptions | undefined;
 	let openedTarget: EditorOpenTarget | undefined;
 	let editorFocusCount = 0;
+	let hoverCreations = 0;
+	let hoverDisposals = 0;
 	const fileService: IFileService = {
 		onDidChangeFiles: fileChanges.event,
-		stat: async (resource) => ({
-			resource,
-			kind: FileKind.Directory,
-			sizeBytes: 0,
-			readonly: false,
-			modifiedAtMillis: undefined,
-		}),
+		stat: async () => { throw new Error('Explorer must load the workspace root with one directory read'); },
 		readDirectory: async (resource) => {
 			directoryReads.push(resource.toString());
 			if (resource.toString() === root.toString()) {
@@ -127,7 +123,10 @@ test("ExplorerView opens workspace files on single click", async () => {
 		},
 	};
 	const hoverService: IHoverService = {
-		setupHover: () => testManagedHover(),
+		setupHover: () => {
+			hoverCreations += 1;
+			return testManagedHover(() => { hoverDisposals += 1; });
+		},
 		showHover: () => testManagedHover(),
 		hideHover() {},
 	};
@@ -244,6 +243,20 @@ test("ExplorerView opens workspace files on single click", async () => {
 		assert.equal(explorerService.getContext()[0]?.resource.toString(), URI.file('C:\\project\\src').toString());
 
 		await waitFor(() => rowLabels(pane.element).includes("main.ts"));
+		assert.equal(hoverCreations, 3);
+		const readmeRow = [...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => rowLabel(row) === 'README.md');
+		assert.ok(readmeRow);
+		assert.equal([...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => rowLabel(row) === 'src'), sourceFolder);
+		sourceFolder.click();
+		assert.deepEqual(rowLabels(pane.element), ['src', 'README.md']);
+		assert.equal(hoverCreations, 3);
+		assert.equal(hoverDisposals, 1);
+		assert.equal(pane.element.querySelector('[aria-expanded="false"]'), sourceFolder);
+		assert.equal([...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => rowLabel(row) === 'README.md'), readmeRow);
+		sourceFolder.click();
+		assert.deepEqual(rowLabels(pane.element), ['src', 'main.ts', 'README.md']);
+		assert.equal(hoverCreations, 4);
+		assert.equal([...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => rowLabel(row) === 'README.md'), readmeRow);
 		assert.deepEqual(rowLabels(pane.element), [
 			"src",
 			"main.ts",
@@ -310,14 +323,14 @@ test("ExplorerView opens workspace files on single click", async () => {
 	}
 });
 
-function testManagedHover(): IManagedHover {
+function testManagedHover(onDispose?: () => void): IManagedHover {
 	return {
 		visible: false,
 		show() {},
 		hide() {},
 		update() {},
-		dispose() {},
-		[Symbol.dispose]() {},
+		dispose() { onDispose?.(); },
+		[Symbol.dispose]() { onDispose?.(); },
 	};
 }
 

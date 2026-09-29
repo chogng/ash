@@ -20,6 +20,9 @@ export interface ListOptions<T> {
 	readonly dnd?: ListDragAndDrop<T>;
 	readonly accessibilityProvider?: ListAccessibilityProvider<T>;
 	readonly renderItem: (item: T, index: number, row: HTMLDivElement) => HTMLElement;
+	readonly reuseRows?: boolean;
+	readonly updateItem?: (item: T, index: number, row: HTMLDivElement) => void;
+	readonly onDidRemoveRow?: (row: HTMLDivElement) => void;
 }
 
 export interface ListActiveChangeEvent<T> {
@@ -83,6 +86,9 @@ export class List<T> extends Disposable {
 			getDragElements: (item, index) => this._selectionIndexes.includes(index) ? this.selection : [item],
 			accessibilityProvider: options.accessibilityProvider,
 			renderItem: options.renderItem,
+			reuseRows: options.reuseRows,
+			updateItem: options.updateItem,
+			onDidRemoveRow: options.onDidRemoveRow,
 		}));
 		this.element = this.view.element;
 		this.domNode = this.view.domNode;

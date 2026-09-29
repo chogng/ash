@@ -22,6 +22,8 @@ export interface ObjectTreeOptions<TNode> {
 	readonly stickyScrollMaxItemCount?: number;
 	readonly modelOptions: ObjectTreeModelOptions<TNode>;
 	readonly onWillRender?: () => void;
+	readonly reuseRows?: boolean;
+	readonly onDidRemoveRow?: (row: HTMLDivElement) => void;
 	readonly renderElement: (element: TNode, node: ObjectTreeNode<TNode>) => HTMLElement;
 	readonly renderTwistie?: (element: TNode, state: TreeTwistieState, container: HTMLSpanElement) => void;
 }
@@ -115,6 +117,8 @@ export class ObjectTree<TNode> extends Disposable {
 			selectionPresentation: options.selectionPresentation,
 			enableStickyScroll: options.enableStickyScroll,
 			stickyScrollMaxItemCount: options.stickyScrollMaxItemCount,
+			reuseRows: options.reuseRows,
+			onDidRemoveRow: options.onDidRemoveRow,
 			renderElement: (node) => options.renderElement(node.element, node),
 			renderTwistie: options.renderTwistie
 				? (node, state, container) => options.renderTwistie!(node.element, state, container)

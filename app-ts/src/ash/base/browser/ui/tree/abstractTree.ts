@@ -25,6 +25,8 @@ export interface AbstractTreeOptions<T, TNode extends AbstractTreeNode<T>> {
 	readonly stickyScrollMaxItemCount?: number;
 	readonly renderElement: (element: TNode) => HTMLElement;
 	readonly renderTwistie?: (element: TNode, state: TreeTwistieState, container: HTMLSpanElement) => void;
+	readonly reuseRows?: boolean;
+	readonly onDidRemoveRow?: (row: HTMLDivElement) => void;
 }
 
 /**
@@ -88,6 +90,9 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 				isExpanded: (node) => node.collapsible ? this.isExpanded(node) : undefined,
 			},
 			renderItem: (node, _index, row) => this.renderRow(node, row),
+			reuseRows: options.reuseRows,
+			updateItem: (node, _index, row) => this.updateRow(node, row),
+			onDidRemoveRow: options.onDidRemoveRow,
 		}));
 		this.element = this.list.element;
 		this.element.classList.add(
@@ -171,6 +176,9 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		row.classList.toggle("collapsed", node.collapsible && !this.isExpanded(node));
 		row.classList.toggle("find-match", this.findController?.isMatch(node) ?? false);
 		row.style.paddingLeft = treeRowPadding(node.depth);
+		row.dataset.treeDepth = String(node.depth);
+		row.dataset.treeExpanded = String(node.collapsible && !node.collapsed);
+		row.dataset.treeCollapsible = String(node.collapsible);
 		const inner = h(document, "span");
 		inner.className = "ash-tree-row-inner";
 		const indent = h(document, "span");
@@ -192,6 +200,35 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		contents.append(this.options.renderElement(node));
 		inner.append(indent, twistie, contents);
 		return inner;
+	}
+
+	private updateRow(node: TNode, row: HTMLDivElement): void {
+		row.classList.toggle("collapsible", node.collapsible);
+		row.classList.toggle("expanded", node.collapsible && !node.collapsed);
+		row.classList.toggle("collapsed", node.collapsible && node.collapsed);
+		row.classList.toggle("find-match", this.findController?.isMatch(node) ?? false);
+		row.style.paddingLeft = treeRowPadding(node.depth);
+		const twistie = row.querySelector<HTMLSpanElement>(":scope > .ash-tree-row-inner > .ash-tree-twistie");
+		if (!twistie) return;
+		const expanded = node.collapsible && !node.collapsed;
+		if (this.options.renderTwistie || row.dataset.treeExpanded !== String(expanded) || row.dataset.treeCollapsible !== String(node.collapsible)) {
+			twistie.replaceChildren();
+			const state = { collapsible: node.collapsible, expanded };
+			if (this.options.renderTwistie) this.options.renderTwistie(node, state, twistie);
+			else if (state.collapsible) appendIcon(state.expanded ? Lxicon.chevronDown : Lxicon.chevronRight, twistie);
+			row.dataset.treeExpanded = String(expanded);
+			row.dataset.treeCollapsible = String(node.collapsible);
+		}
+		const indent = row.querySelector<HTMLSpanElement>(":scope > .ash-tree-row-inner > .ash-tree-indent");
+		if (indent && row.dataset.treeDepth !== String(node.depth)) {
+			indent.replaceChildren();
+			for (let index = 1; index < node.depth; index += 1) {
+				const guide = h(row.ownerDocument, "span");
+				guide.className = "ash-tree-indent-guide";
+				indent.append(guide);
+			}
+			row.dataset.treeDepth = String(node.depth);
+		}
 	}
 
 	private onListPointer(node: TNode, browserEvent: MouseEvent): void {

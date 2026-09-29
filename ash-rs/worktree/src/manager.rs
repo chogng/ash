@@ -1195,6 +1195,13 @@ impl WorktreeManager {
         source_dir_id: &str,
     ) -> Result<Vec<(String, ManagedDirBinding)>> {
         let mut bindings = self.recover_directory_threads(source_dir_id).await?;
+        // Without a managed root, no linked Thread worktrees can exist. Opening the source Git
+        // repository here would delay directory activation even though there is nothing to recover.
+        let managed_root = match dunce::canonicalize(&self.settings.root) {
+            Ok(root) => root,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(bindings),
+            Err(error) => return Err(error.into()),
+        };
         let source_repository = match self.git.open_repository(source_directory).await {
             Ok(repository) => repository,
             Err(GitError::NotAWorkingTree { .. }) => return Ok(bindings),
@@ -1202,11 +1209,6 @@ impl WorktreeManager {
         };
         self.repair_managed_worktrees(&source_repository).await?;
         let worktrees = self.list(source_directory).await?;
-        let managed_root = match dunce::canonicalize(&self.settings.root) {
-            Ok(root) => root,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(bindings),
-            Err(error) => return Err(error.into()),
-        };
         for worktree in worktrees {
             let Some(thread_id) = worktree.owner_thread_id() else {
                 continue;

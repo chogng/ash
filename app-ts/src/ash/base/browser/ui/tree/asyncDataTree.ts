@@ -21,6 +21,8 @@ interface AsyncDataTreeCommonOptions<T> {
 	readonly collapseByDefault?: (element: T) => boolean;
 	readonly isIncompressible?: (element: T) => boolean;
 	readonly onWillRender?: () => void;
+	readonly reuseRows?: boolean;
+	readonly onDidRemoveRow?: (row: HTMLDivElement) => void;
 	readonly findMode?: TreeFindMode;
 	readonly findMatchType?: TreeFindMatchType;
 	readonly enableStickyScroll?: boolean;
@@ -97,6 +99,7 @@ interface AsyncTreeView<T> extends IDisposable {
 	getVisibleElements(): readonly T[];
 	domFocus(): void;
 	setChildren(children: readonly CompressibleTreeElement<T>[]): void;
+	setNodeChildren(element: T, children: readonly CompressibleTreeElement<T>[]): void;
 	collapse(element: T): boolean;
 	expand(element: T): boolean;
 	expandTo(element: T): boolean;
@@ -203,7 +206,8 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 			const children = [...await this.dataSource.getChildren(parent)];
 			if (!this.isCurrentRequest(requestKey, request, generation)) return;
 			this.replaceChildren(parentId, children);
-			this.render();
+			if (parentId === undefined) this.render();
+			else this.tree.setNodeChildren(parent as T, this.states.get(parentId)!.children!.map(id => this.toTreeElement(id)));
 		} catch (error) {
 			if (!this.isCurrentRequest(requestKey, request, generation)) return;
 			this._onDidError.fire({ element: parentId === undefined ? undefined : parent as T, error });
@@ -222,9 +226,11 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		const oldChildren = parentId === undefined ? this.rootChildren : nextStates.get(parentId)?.children ?? [];
 		for (const id of oldChildren) removeStateSubtree(id, nextStates);
 		const childIds: string[] = [];
+		const seen = new Set<string>();
 		for (const element of elements) {
 			const id = this.getId(element);
-			if (childIds.includes(id) || nextStates.has(id)) throw new Error(`Duplicate tree node ID: ${id}`);
+			if (seen.has(id) || nextStates.has(id)) throw new Error(`Duplicate tree node ID: ${id}`);
+			seen.add(id);
 			childIds.push(id);
 			nextStates.set(id, { id, element, parentId, hasChildren: this.dataSource.hasChildren(element), children: undefined });
 		}
@@ -283,6 +289,8 @@ export class AsyncDataTree<TInput, T> extends AbstractAsyncDataTree<TInput, T, A
 			stickyScrollMaxItemCount: options.stickyScrollMaxItemCount,
 			modelOptions: { defaultCollapseState: "collapsed", identityProvider: { getId: (element) => this.getId(element) }, sorter: options.sorter, filter: options.filter },
 			onWillRender: options.onWillRender,
+			reuseRows: options.reuseRows,
+			onDidRemoveRow: options.onDidRemoveRow,
 			renderElement: options.renderElement,
 			renderTwistie: options.renderTwistie
 				? (element, state, container) => options.renderTwistie!(element, { ...state, loading: this.isLoading(element) }, container)
@@ -341,6 +349,7 @@ function objectTreeView<T>(tree: ObjectTree<T>, getId: (element: T) => string): 
 		getVisibleElements: () => tree.getVisibleElements(),
 		domFocus: () => tree.domFocus(),
 		setChildren: (children) => tree.setChildren(children),
+		setNodeChildren: (element, children) => tree.setNodeChildren(getId(element), children),
 		collapse: (element) => tree.collapse(getId(element)),
 		expand: (element) => tree.expand(getId(element)),
 		expandTo: (element) => tree.expandTo(getId(element)),
@@ -369,6 +378,7 @@ function compressibleTreeView<T>(tree: CompressibleObjectTree<T>): AsyncTreeView
 		getVisibleElements: () => tree.getVisibleElements(),
 		domFocus: () => tree.domFocus(),
 		setChildren: (children) => tree.setChildren(children),
+		setNodeChildren: (element, children) => tree.setNodeChildren(element, children),
 		collapse: (element) => tree.collapse(element),
 		expand: (element) => tree.expand(element),
 		expandTo: (element) => tree.expandTo(element),
