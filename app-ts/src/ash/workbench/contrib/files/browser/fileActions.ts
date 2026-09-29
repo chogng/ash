@@ -1,6 +1,6 @@
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { dirname, extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
-import type { URI } from '../../../../base/common/uri.js';
+import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
@@ -53,7 +53,7 @@ export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: 
 	const selection = explorer.getContext()[0];
 	const folders = accessor.get(IWorkspaceContextService).getWorkspace().folders;
 	const directory = selection && selection.resource.scheme !== 'ash-workspace'
-		? selection.kind === FileKind.Directory ? selection.resource : selection.resource.withPath(selection.resource.path.slice(0, selection.resource.path.lastIndexOf('/')))
+		? selection.kind === FileKind.Directory ? selection.resource : dirname(selection.resource)
 		: await resolveCreationDirectory(accessor, 'folder');
 	if (!directory) return;
 	const files = accessor.get(IFileService);
@@ -70,7 +70,7 @@ export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: 
 		if (kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqualOrParent(directory, resource)) {
 			throw new Error(localize({ bundle: 'ash', key: 'files.pasteIntoSelf' }, 'Cannot paste a folder into itself.'));
 		}
-		const desired = directory.joinPathSegment(name);
+		const desired = URI.joinPath(directory, name);
 		if (cut && extUriBiasedIgnorePathCase.isEqual(desired, resource)) continue;
 		const target = await availablePasteTarget(files, directory, name);
 		if (cut && folders.some(folder => extUriBiasedIgnorePathCase.isEqualOrParent(resource, folder.uri) && extUriBiasedIgnorePathCase.isEqualOrParent(target, folder.uri))) {
@@ -95,7 +95,7 @@ async function availablePasteTarget(files: IFileService, directory: URI, name: s
 	const stem = dot > 0 ? name.slice(0, dot) : name;
 	const extension = dot > 0 ? name.slice(dot) : '';
 	for (let index = 0; index < 10_000; index++) {
-		const candidate = directory.joinPathSegment(index === 0 ? name : `${stem} copy${index === 1 ? '' : ` ${index}`}${extension}`);
+		const candidate = URI.joinPath(directory, index === 0 ? name : `${stem} copy${index === 1 ? '' : ` ${index}`}${extension}`);
 		try { await files.stat(candidate); }
 		catch (error) { if (error instanceof FileNotFoundError) return candidate; throw error; }
 	}
@@ -114,8 +114,7 @@ export async function renameExplorerItem(accessor: ServicesAccessor): Promise<vo
 	});
 	if (name === undefined || name === item.name) return;
 	if (!validFileName(name)) throw new Error(localize({ bundle: 'ash', key: 'workbench.newFileInvalidName' }, 'Enter a file name without path separators.'));
-	const parent = item.resource.path.slice(0, item.resource.path.lastIndexOf('/'));
-	await accessor.get(IFileService).rename(item.resource, item.resource.withPath(`${parent}/${encodeURIComponent(name)}`), 'error');
+	await accessor.get(IFileService).rename(item.resource, URI.joinPath(dirname(item.resource), name), 'error');
 }
 
 export async function deleteExplorerItem(accessor: ServicesAccessor): Promise<void> {
@@ -155,7 +154,7 @@ export async function createNewFile(accessor: ServicesAccessor): Promise<void> {
 	if (!validFileName(name)) {
 		throw new Error(localize({ bundle: 'ash', key: 'workbench.newFileInvalidName' }, 'Enter a file name without path separators.'));
 	}
-	const resource = directory.joinPathSegment(name);
+	const resource = URI.joinPath(directory, name);
 	await accessor.get(IFileService).createFile(resource, 'error');
 	await accessor.get(IEditorService).openEditor(new FileEditorInput(resource, { label: name }));
 }
@@ -172,7 +171,7 @@ export async function createNewFolder(accessor: ServicesAccessor): Promise<void>
 	});
 	if (name === undefined) return;
 	if (!validFileName(name)) throw new Error(localize({ bundle: 'ash', key: 'files.invalidName' }, 'Enter a name without path separators.'));
-	await accessor.get(IFileService).createDirectory(directory.withPath(`${directory.path.replace(/\/$/, '')}/${encodeURIComponent(name)}`));
+	await accessor.get(IFileService).createDirectory(URI.joinPath(directory, name));
 }
 
 async function resolveCreationDirectory(accessor: ServicesAccessor, kind: 'file' | 'folder'): Promise<URI | undefined> {
