@@ -4,6 +4,7 @@ use super::RpcError;
 use super::core_error;
 use super::decode;
 use super::result;
+use ash_app_server_protocol::protocol::agent::AgentCapabilitiesReadResult;
 use ash_app_server_protocol::protocol::common::SchemaHash;
 use ash_app_server_protocol::protocol::common::ServerInfo;
 use ash_app_server_protocol::protocol::document::TypstCompileParams;
@@ -305,6 +306,27 @@ impl AppServer {
             schema_hash: SchemaHash(schema_hash()),
             capabilities,
             slash_commands: self.slash_commands.commands().to_vec(),
+        })
+    }
+
+    pub(super) fn agent_capabilities_read(
+        &self,
+        connection: &ConnectionState,
+    ) -> Result<Value, RpcError> {
+        let (tools, configured) = match self.local_env_tool_ports() {
+            Some(ports) => ports.capabilities_snapshot(),
+            None => (Vec::new(), false),
+        };
+        #[cfg(windows)]
+        let candidates = vec!["mxc".to_owned(), "windows".to_owned()];
+        #[cfg(not(windows))]
+        let candidates = vec!["mxc".to_owned()];
+        let sandbox_backends = if configured { candidates } else { Vec::new() };
+        result(&AgentCapabilitiesReadResult {
+            tools,
+            local_process_sandbox_configured: configured,
+            sandbox_backends,
+            directory_grants_readable: connection.supports_dir_permissions_host(),
         })
     }
 

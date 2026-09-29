@@ -7,6 +7,8 @@ import type { IContextMenuService as ContextMenuService } from '../../../../../p
 import type { ILocalizationService } from '../../../../../workbench/services/localization/common/localizationService.js';
 import type { IGitService } from '../../../../../workbench/contrib/git/common/gitService.js';
 import type { IChatService } from '../../../../../workbench/services/chat/common/chatService.js';
+import type { IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
+import type { IDirPermissionsService } from '../../../../../platform/dirPermissions/common/dirPermissionsService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>', {
 	pretendToBeVisual: true,
@@ -62,6 +64,9 @@ const { GitConfiguration } = await import('../../../../../workbench/contrib/git/
 const { ScmConfiguration } = await import('../../../../../workbench/contrib/scm/common/scmConfiguration.js');
 const { IGitService: GitServiceId } = await import('../../../../../workbench/contrib/git/common/gitService.js');
 const { IChatService: ChatServiceId } = await import('../../../../../workbench/services/chat/common/chatService.js');
+await import('../../../../../workbench/services/chat/common/modelCatalog.js');
+const { IRendererHostService } = await import('../../../../../platform/renderer/common/rendererHost.js');
+const { IDirPermissionsService: DirPermissionsServiceId } = await import('../../../../../platform/dirPermissions/common/dirPermissionsService.js');
 const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(ConfigurationExtensions.Configuration);
 const { EditorPart } = await import('../../../../../workbench/browser/parts/editor/editorPart.js');
 const { EditorPaneMatch } = await import('../../../../../workbench/browser/parts/editor/editorPane.js');
@@ -150,7 +155,8 @@ test('settingsLayout is the single projection from registered settings to catego
 		'models',
 		'rules',
 		'skills',
-		'tools-and-mcps',
+		'tools',
+		'sandbox',
 		'hooks',
 	]);
 	assert.deepEqual(model.settings.map(setting => setting.id), defaults.all.map(setting => setting.id));
@@ -418,6 +424,27 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(LocalizationServiceId, localizationService);
 	services.registerInstance(GitServiceId, gitService);
 	services.registerInstance(ChatServiceId, chatService);
+	let capabilityReads = 0;
+	services.registerInstance(IRendererHostService, {
+		agentCapabilities: {
+			read: async () => {
+				capabilityReads++;
+				return {
+					tools: [{ name: 'read_file', description: 'Read a file.', source: 'local', sourceDetails: ['ash-app-server'], exposure: 'direct', authority: 'directoryRead' }],
+					localProcessSandboxConfigured: true,
+					sandboxBackends: ['mxc'],
+					directoryGrantsReadable: true,
+				};
+			},
+		},
+		appServer: {
+			onConnectionState: () => ({ dispose() {} }),
+		},
+	} as unknown as IRendererHost);
+	services.registerInstance(DirPermissionsServiceId, {
+		onDidChangePermissions: Event.None,
+		list: async () => ({ revision: 1, entries: [{ dir: 'dir-1', path: '/workspace', permissions: ['readFiles'] }] }),
+	} as unknown as IDirPermissionsService);
 	const instantiationService = services;
 	const editorPanes = new EditorPaneRegistry();
 	disposables.add(editorPanes.register({
@@ -425,7 +452,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		name: 'Settings',
 		canOpen: input => isSettingsEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
 		create: () => instantiationService.createInstance(new ServiceConstructionDescriptor(SettingsEditor, {
-			serviceDependencies: [ClipboardServiceId, ConfigurationServiceId, IContextMenuService, IContextViewService, LocalizationServiceId, GitServiceId, ChatServiceId],
+			serviceDependencies: [ClipboardServiceId, ConfigurationServiceId, IContextMenuService, IContextViewService, LocalizationServiceId, GitServiceId, ChatServiceId, IRendererHostService, DirPermissionsServiceId],
 		})),
 	}));
 	const editor = disposables.add(new EditorPart(root, { registry: editorPanes, instantiationService }));
@@ -509,11 +536,20 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')?.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.equal(root.querySelector('[data-tree-id="group.agents"]')?.getAttribute('aria-expanded'), 'true');
 	assert.deepEqual(
-		['agents', 'teams', 'agent-defaults', 'models', 'rules', 'skills', 'tools-and-mcps', 'hooks']
+		['agents', 'teams', 'agent-defaults', 'models', 'rules', 'skills', 'tools', 'sandbox', 'hooks']
 			.map(categoryId => root.querySelector<HTMLElement>(`[data-settings-category-id="${categoryId}"]`)?.textContent),
-		['My Agents', 'Teams', 'Defaults', 'Models', 'Rules', 'Skills', 'Tools & MCPs', 'Hooks'],
+		['My Agents', 'Teams', 'Defaults', 'Models', 'Rules', 'Skills', 'Tools', 'Sandbox', 'Hooks'],
 	);
 	assert.equal(root.querySelector('[data-tree-id="general"]')?.getAttribute('aria-selected'), 'true');
+	root.querySelector<HTMLElement>('[data-settings-category-id="tools"]')?.click();
+	await nextTurn();
+	assert.match(root.querySelector('.ash-agent-capabilities-settings')?.textContent ?? '', /read_file/);
+	root.querySelector<HTMLElement>('[data-settings-category-id="sandbox"]')?.click();
+	await nextTurn();
+	assert.match(root.querySelector('.ash-agent-capabilities-settings')?.textContent ?? '', /\/workspace/);
+	root.querySelector<HTMLElement>('[data-settings-category-id="tools"]')?.click();
+	await nextTurn();
+	assert.equal(capabilityReads, 3);
 	root.querySelector<HTMLElement>('[data-settings-category-id="models"]')?.click();
 	await nextTurn();
 	assert.equal(root.querySelector('[data-settings-container]')?.getAttribute('data-active-settings-category'), 'models');

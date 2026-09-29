@@ -9,6 +9,8 @@ import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/c
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { IGitService } from '../../../contrib/git/common/gitService.js';
 import { IChatService } from '../../../services/chat/common/chatService.js';
+import { IRendererHostService } from '../../../../platform/renderer/common/rendererHost.js';
+import { IDirPermissionsService } from '../../../../platform/dirPermissions/common/dirPermissionsService.js';
 import { isSettingsEditorInput } from '../../../services/preferences/common/settingsEditorInput.js';
 import { SettingsEditor, SettingsEditorId } from './settingsEditor.js';
 import { PreferencesContribution } from '../common/preferencesContribution.js';
@@ -32,6 +34,8 @@ registerEditorPane({
 				ILocalizationService,
 				IGitService,
 				IChatService,
+				IRendererHostService,
+				IDirPermissionsService,
 			],
 		}));
 	},

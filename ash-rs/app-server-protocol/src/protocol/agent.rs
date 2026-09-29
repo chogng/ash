@@ -5,6 +5,7 @@ use ash_protocol::AgentRoleSource;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadOrigin;
+use ash_protocol::ToolSourceProvenance;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -45,4 +46,56 @@ pub struct AgentRoleEntry {
 #[serde(rename_all = "camelCase")]
 pub struct AgentRoleListResult {
     pub agents: Vec<AgentRoleEntry>,
+}
+
+/// Describes the authority a tool may request; the decision is made for each call.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ToolAuthorityDto {
+    DirectoryRead,
+    DirectoryWrite,
+    ProcessExecution,
+    ProductService,
+    ProviderDefined,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ToolSourceDto {
+    Environment,
+    Dynamic,
+    Extension,
+    Host,
+    Local,
+    Mcp,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ToolExposureDto {
+    Direct,
+    Deferred,
+    ModelOnly,
+    Hidden,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentToolCapabilityDto {
+    pub name: String,
+    pub description: String,
+    pub source: ToolSourceDto,
+    pub source_chain: Vec<ToolSourceProvenance>,
+    pub exposure: ToolExposureDto,
+    pub authority: ToolAuthorityDto,
+}
+
+/// A snapshot of registered tools and configured local process isolation.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentCapabilitiesReadResult {
+    pub tools: Vec<AgentToolCapabilityDto>,
+    pub local_process_sandbox_configured: bool,
+    pub sandbox_backends: Vec<String>,
+    pub directory_grants_readable: bool,
 }

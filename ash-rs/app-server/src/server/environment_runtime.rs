@@ -801,6 +801,20 @@ pub(crate) struct EnvToolPorts {
 }
 
 impl EnvToolPorts {
+    pub(crate) fn capabilities_snapshot(
+        &self,
+    ) -> (
+        Vec<ash_app_server_protocol::protocol::agent::AgentToolCapabilityDto>,
+        bool,
+    ) {
+        // Replacement updates this state and the registry under the same lock.
+        let state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        (self.reloadable.catalog(), state.executables_enabled)
+    }
+
     #[cfg(test)]
     pub(crate) fn definitions(&self) -> Vec<ash_protocol::ToolDefinition> {
         self.reloadable.tools().definitions()

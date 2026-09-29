@@ -1,5 +1,28 @@
 import { expect, test } from '../../../automation/test.js';
 
+test('Workbench exposes current Tools and Sandbox capabilities', async ({ target, workbench }) => {
+	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires Code with App Server');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+Shift+P');
+	await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
+	await page.keyboard.press('Enter');
+	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+	await settings.locator('[data-settings-group-id="agents"]').click();
+	await settings.locator('[data-settings-category-id="tools"]').click();
+	await expect(settings.locator('.ash-agent-capabilities-settings')).toBeVisible();
+	await expect(settings.locator('.ash-agent-capabilities-status')).toBeEmpty();
+	await expect(settings.getByText('Could not load agent capabilities.')).toHaveCount(0);
+	await settings.locator('[data-settings-category-id="sandbox"]').click();
+	await expect(settings.getByRole('heading', { name: 'Configured directory grants' })).toBeVisible();
+	await expect(settings.locator('.ash-agent-capabilities-note').first()).toContainText('process sandbox');
+	if (target.kind === 'browser') {
+		await expect(settings.getByText('Directory grants can only be inspected by the desktop host.')).toBeVisible();
+	} else {
+		await expect(settings.getByText('These saved grants are an upper bound.', { exact: false })).toBeVisible();
+	}
+	await expect(settings.getByText('Could not load agent capabilities.')).toHaveCount(0);
+});
+
 test('Workbench and Sessions Models share model visibility', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires Electron Code with App Server');
 	if (target.kind !== 'electron' || !('windows' in application)) return;

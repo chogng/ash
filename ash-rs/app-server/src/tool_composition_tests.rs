@@ -16,6 +16,8 @@ use ash_action_policy::ExecutionDecision;
 use ash_action_policy::GrantId;
 use ash_action_policy::ResolvedAction;
 use ash_action_policy::SandboxCompatibility;
+use ash_app_server_protocol::protocol::agent::ToolAuthorityDto;
+use ash_app_server_protocol::protocol::agent::ToolSourceDto;
 use ash_async_utils::CancellationToken;
 use ash_config::ToolSearchModeConfig;
 use ash_core::ProcessExecutionOutput;
@@ -854,6 +856,41 @@ fn reload_switches_future_calls_but_preserves_prepared_call_generation() {
             .unwrap(),
         ToolExecutionOutput::Success("replacement".into())
     );
+}
+
+#[test]
+fn capability_catalog_tracks_the_current_tool_generation() {
+    let initial = combine_tool_ports(vec![ToolPort::local(
+        Arc::new(FakeTools::new(
+            "read_file",
+            ActionSource::BuiltInTool,
+            "initial",
+        )),
+        Arc::new(AskPolicy),
+    )])
+    .unwrap();
+    let ports = ReloadableToolPorts::new(initial);
+    assert_eq!(
+        ports.catalog()[0].authority,
+        ToolAuthorityDto::DirectoryRead
+    );
+
+    let replacement = combine_tool_ports(vec![ToolPort::mcp(
+        Arc::new(FakeTools::new(
+            "external_status",
+            ActionSource::McpServer,
+            "mcp",
+        )),
+        Arc::new(AskPolicy),
+    )])
+    .unwrap();
+    ports.replace(replacement);
+    let catalog = ports.catalog();
+    assert_eq!(catalog.len(), 1);
+    assert_eq!(catalog[0].name, "external_status");
+    assert_eq!(catalog[0].authority, ToolAuthorityDto::ProviderDefined);
+    assert_eq!(catalog[0].source, ToolSourceDto::Mcp);
+    assert!(!catalog[0].source_chain.is_empty());
 }
 
 #[test]

@@ -843,6 +843,36 @@
         }
       ]
     },
+    "AgentCapabilitiesReadResult": {
+      "description": "A snapshot of registered tools and configured local process isolation.",
+      "properties": {
+        "directoryGrantsReadable": {
+          "type": "boolean"
+        },
+        "localProcessSandboxConfigured": {
+          "type": "boolean"
+        },
+        "sandboxBackends": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "tools": {
+          "items": {
+            "$ref": "#/$defs/AgentToolCapabilityDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "tools",
+        "localProcessSandboxConfigured",
+        "sandboxBackends",
+        "directoryGrantsReadable"
+      ],
+      "type": "object"
+    },
     "AgentCapabilityScope": {
       "description": "Frozen upper bounds on tools used by this Agent, tools it may delegate, and Skill instructions.",
       "properties": {
@@ -1876,6 +1906,40 @@
         "sessionId",
         "threadId",
         "origin"
+      ],
+      "type": "object"
+    },
+    "AgentToolCapabilityDto": {
+      "properties": {
+        "authority": {
+          "$ref": "#/$defs/ToolAuthorityDto"
+        },
+        "description": {
+          "type": "string"
+        },
+        "exposure": {
+          "$ref": "#/$defs/ToolExposureDto"
+        },
+        "name": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/ToolSourceDto"
+        },
+        "sourceChain": {
+          "items": {
+            "$ref": "#/$defs/ToolSourceProvenance"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "source",
+        "sourceChain",
+        "exposure",
+        "authority"
       ],
       "type": "object"
     },
@@ -4879,6 +4943,22 @@
           "properties": {
             "method": {
               "const": "agent/roles/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "agent/capabilities/read",
               "type": "string"
             },
             "params": {
@@ -9687,6 +9767,22 @@
             },
             "result": {
               "$ref": "#/$defs/AgentRoleListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "agent/capabilities/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/AgentCapabilitiesReadResult"
             }
           },
           "required": [
@@ -37680,6 +37776,17 @@
         }
       ]
     },
+    "ToolAuthorityDto": {
+      "description": "Describes the authority a tool may request; the decision is made for each call.",
+      "enum": [
+        "directoryRead",
+        "directoryWrite",
+        "processExecution",
+        "productService",
+        "providerDefined"
+      ],
+      "type": "string"
+    },
     "ToolCallBinding": {
       "description": "Durable binding between one Tool Call and the exact definition/source generation it selected.\n\nRuntime keys are intentionally absent. Recovery must compare this value with an available\nimmutable source snapshot and fail closed when the exact binding can no longer be restored.",
       "properties": {
@@ -37872,6 +37979,15 @@
         }
       ]
     },
+    "ToolExposureDto": {
+      "enum": [
+        "direct",
+        "deferred",
+        "modelOnly",
+        "hidden"
+      ],
+      "type": "string"
+    },
     "ToolMode": {
       "description": "Selects how a model may use the ordinary Tool catalog for one Turn.\n\n`Direct` is the compatibility default. `CodeMode` keeps the ordinary direct surface and adds\nthe Code Mode entry points. `CodeModeOnly` exposes only those entry points while the projected\nordinary tools remain callable from JavaScript.",
       "enum": [
@@ -38053,6 +38169,17 @@
       "enum": [
         "lexical",
         "hybridEmbedding"
+      ],
+      "type": "string"
+    },
+    "ToolSourceDto": {
+      "enum": [
+        "environment",
+        "dynamic",
+        "extension",
+        "host",
+        "local",
+        "mcp"
       ],
       "type": "string"
     },

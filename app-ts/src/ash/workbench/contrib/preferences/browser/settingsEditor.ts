@@ -6,6 +6,8 @@ import type { IContextViewProvider } from '../../../../base/browser/ui/contextvi
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
+import type { IDirPermissionsService } from '../../../../platform/dirPermissions/common/dirPermissionsService.js';
+import type { IRendererHost } from '../../../../platform/renderer/common/rendererHost.js';
 import { ConfigurationTarget, type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
@@ -23,6 +25,7 @@ import { isSettingsEditorInput } from '../../../services/preferences/common/sett
 import { DefaultSettings, SettingsEditorModel } from '../../../services/preferences/common/settingsModels.js';
 import { SettingsRenderer } from './settingsRenderers.js';
 import { ModelsSettings } from './modelsSettings.js';
+import { AgentCapabilitiesSettings } from './agentCapabilitiesSettings.js';
 import { SettingsSearchQuery } from './settingsSearch.js';
 import { SettingsSearchWidget } from './settingsWidgets.js';
 import { createSettingsLayout, settingsRootNodes, SettingsCategories, type SettingsCategoryDescriptor, type SettingsCategoryGroupDescriptor, type SettingsLayoutCategory } from './settingsLayout.js';
@@ -50,6 +53,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 	private navigationScrollable!: ScrollableElement;
 	private readonly settingsModel: ISettingsEditorModel;
 	private modelsSettings!: ModelsSettings;
+	private agentCapabilitiesSettings!: AgentCapabilitiesSettings;
 	private settingsTree!: SettingsTree<ISetting>;
 	private tocTree!: TOCTree;
 	private treeModel!: SettingsTreeModel<ISetting>;
@@ -67,6 +71,8 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		localizationService: ILocalizationService,
 		gitService: IGitService,
 		private readonly chatService: IChatService,
+		private readonly rendererHost: IRendererHost,
+		private readonly dirPermissionsService: IDirPermissionsService,
 	) {
 		super();
 		this.configurationService = configurationService;
@@ -187,6 +193,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 			contextMenuProvider: this.contextMenuProvider,
 			contextViewProvider: this.contextViewProvider,
 		}));
+		this.agentCapabilitiesSettings = this._register(new AgentCapabilitiesSettings(settingsContent, this.rendererHost.agentCapabilities, this.rendererHost.appServer, this.dirPermissionsService, this.localizationService));
 		this.renderCategory(initialCategory);
 
 		this._register(this.localizationService.onDidChange(() => this.updateLocalizedChrome()));
@@ -243,6 +250,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		this.tocTree.setFindPattern(query.text);
 		this.treeModel.setQuery(query);
 		this.modelsSettings.setVisible(query.isEmpty && this.activeCategory.id === 'models');
+		this.agentCapabilitiesSettings.setView(query.isEmpty && (this.activeCategory.id === 'tools' || this.activeCategory.id === 'sandbox') ? this.activeCategory.id : undefined);
 		this.navigationScrollable.scrollTo(0, 0);
 		this.navigationScrollable.layout();
 	}
@@ -277,6 +285,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		if (!target) throw new RangeError(`Settings layout does not expose navigation target '${targetId}'`);
 		this.settingsTree.setNavigationTarget(targetId);
 		this.modelsSettings.setVisible(category.id === 'models' && !this.searchWidget?.value);
+		this.agentCapabilitiesSettings.setView(!this.searchWidget?.value && (category.id === 'tools' || category.id === 'sandbox') ? category.id : undefined);
 		this.activeNavigationTarget = entry;
 		this.content.classList.toggle('has-navigation-target', entry !== undefined);
 		if (entry) this.content.dataset.activeSettingsTarget = entry.target.targetId;

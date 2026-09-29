@@ -41,6 +41,8 @@ use crate::protocol::account::AccountUpdated;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::account::AccountXaiUsageDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::agent::AgentCapabilitiesReadResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::AgentReadParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::AgentReadResult;
@@ -50,6 +52,14 @@ use crate::protocol::agent::AgentRoleEntry;
 use crate::protocol::agent::AgentRoleListResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::AgentThread;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::agent::AgentToolCapabilityDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::agent::ToolAuthorityDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::agent::ToolExposureDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::agent::ToolSourceDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::attachments::AttachmentImportRemoteParams;
 #[cfg(any(test, feature = "export"))]
@@ -629,9 +639,9 @@ use crate::protocol::fs::FsReadFileResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsRenameParams;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::fs::FsWriteFileParams;
-#[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsWriteBinaryFileParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::fs::FsWriteFileParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsWriteFileResult;
 #[cfg(any(test, feature = "export"))]
@@ -2510,6 +2520,11 @@ client_methods! {
         response: AgentRoleListResult,
         serialization: GlobalSharedRead,
     },
+    AgentCapabilitiesRead => "agent/capabilities/read" {
+        params: EmptyParams,
+        response: AgentCapabilitiesReadResult,
+        serialization: GlobalSharedRead,
+    },
     SessionRead => "session/read" {
         params: SessionReadParams,
         response: SessionResult,
@@ -4303,6 +4318,11 @@ typescript_bindings! {
     AgentRoleSource,
     AgentRoleEntry,
     AgentRoleListResult,
+    AgentCapabilitiesReadResult,
+    AgentToolCapabilityDto,
+    ToolAuthorityDto,
+    ToolExposureDto,
+    ToolSourceDto,
     AgentRoleSnapshot,
     AgentTreeExecutionStatus,
     AgentTreeWaitingReason,

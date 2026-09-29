@@ -2322,6 +2322,22 @@ fn model_catalog_is_global_and_session_views_do_not_own_model_selection() {
 }
 
 #[test]
+fn agent_capabilities_read_reports_unconfigured_local_execution() {
+    let server = server();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let response = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"agent/capabilities/read","params":{}}),
+    );
+    assert_eq!(response["result"]["tools"], serde_json::json!([]));
+    assert_eq!(response["result"]["localProcessSandboxConfigured"], false);
+    assert_eq!(response["result"]["sandboxBackends"], serde_json::json!([]));
+    assert_eq!(response["result"]["directoryGrantsReadable"], false);
+}
+
+#[test]
 fn start_turn_model_and_reasoning_effort_are_scoped_to_their_thread() {
     let default = model_ref("gpt-default");
     let alternate = model_ref("gpt-alternate");
@@ -5825,7 +5841,10 @@ fn filesystem_rpc_lists_and_describes_paths() {
     assert_eq!(created["result"]["metadata"]["sizeBytes"], 3);
     assert_eq!(directory["result"]["fileType"], "directory");
     assert_eq!(pasted["result"]["metadata"]["sizeBytes"], 3);
-    assert_eq!(std::fs::read(root.join("src/picture.bin")).unwrap(), [0, 255, 42]);
+    assert_eq!(
+        std::fs::read(root.join("src/picture.bin")).unwrap(),
+        [0, 255, 42]
+    );
     assert!(pasted_again.get("error").is_some());
     assert!(root.join("src/generated").is_dir());
     assert_eq!(stale["error"]["code"], -32042);

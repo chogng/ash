@@ -2203,6 +2203,7 @@ impl AppServer {
             Some(ClientMethod::MessageCheckpoints) => self.message_checkpoints(&request.params),
             Some(ClientMethod::AgentRead) => self.agent_read(&request.params),
             Some(ClientMethod::AgentRoleList) => self.agent_roles_list(),
+            Some(ClientMethod::AgentCapabilitiesRead) => self.agent_capabilities_read(connection),
             Some(ClientMethod::SessionList) => self.session_list(),
             Some(ClientMethod::SessionCatalogSubscribe) => {
                 self.session_catalog_subscribe(connection)

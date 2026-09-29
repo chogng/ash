@@ -16,6 +16,10 @@ use ash_action_policy::GrantId;
 use ash_action_policy::ResolvedAction;
 use ash_action_policy::ReviewEvidence;
 use ash_action_policy::SandboxCompatibility;
+use ash_app_server_protocol::protocol::agent::AgentToolCapabilityDto;
+use ash_app_server_protocol::protocol::agent::ToolAuthorityDto;
+use ash_app_server_protocol::protocol::agent::ToolExposureDto;
+use ash_app_server_protocol::protocol::agent::ToolSourceDto;
 use ash_async_utils::CancellationToken;
 use ash_config::ToolSearchModeConfig;
 use ash_core::ModelToolCatalogSnapshot;
@@ -445,11 +449,13 @@ enum ToolContributionRuntime {
 pub(crate) struct CombinedToolPorts {
     pub(crate) tools: Arc<dyn ToolService>,
     pub(crate) policy: Arc<dyn ActionPolicyService>,
+    catalog: Vec<AgentToolCapabilityDto>,
 }
 
 struct ToolGeneration {
     tools: Arc<dyn ToolService>,
     policy: Arc<dyn ActionPolicyService>,
+    catalog: Vec<AgentToolCapabilityDto>,
 }
 
 struct BoundToolCall {
@@ -487,6 +493,10 @@ impl ReloadableToolPorts {
             .diagnostic
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+    }
+
+    pub(crate) fn catalog(&self) -> Vec<AgentToolCapabilityDto> {
+        self.generation().catalog.clone()
     }
 
     pub(crate) fn record_reconcile_failure(&self, error: impl Into<String>) {
@@ -911,10 +921,12 @@ fn tool_generation(combined: Option<CombinedToolPorts>) -> ToolGeneration {
         Some(combined) => ToolGeneration {
             tools: combined.tools,
             policy: combined.policy,
+            catalog: combined.catalog,
         },
         None => ToolGeneration {
             tools: Arc::new(EmptyToolService),
             policy: Arc::new(EmptyActionPolicyService),
+            catalog: Vec::new(),
         },
     }
 }
@@ -1065,6 +1077,29 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
         }
     }
     let (registry, routes) = build_registry(registry_generation, &definitions)?;
+    let catalog = definitions
+        .iter()
+        .map(|collected| AgentToolCapabilityDto {
+            name: collected.contribution.definition.name.to_string(),
+            description: collected.contribution.definition.description.clone(),
+            source: match collected.kind {
+                ToolPortKind::Environment => ToolSourceDto::Environment,
+                ToolPortKind::Dynamic => ToolSourceDto::Dynamic,
+                ToolPortKind::Extension => ToolSourceDto::Extension,
+                ToolPortKind::Host => ToolSourceDto::Host,
+                ToolPortKind::Local => ToolSourceDto::Local,
+                ToolPortKind::Mcp => ToolSourceDto::Mcp,
+            },
+            source_chain: tool_source_chain(collected),
+            exposure: match collected.contribution.exposure {
+                ToolExposure::Direct => ToolExposureDto::Direct,
+                ToolExposure::Deferred => ToolExposureDto::Deferred,
+                ToolExposure::DirectModelOnly => ToolExposureDto::ModelOnly,
+                ToolExposure::Hidden => ToolExposureDto::Hidden,
+            },
+            authority: tool_authority(collected),
+        })
+        .collect();
     let protocol_definitions = definitions
         .into_iter()
         .map(|collected| collected.contribution.definition)
@@ -1089,7 +1124,38 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
             mcp: mcp_policy,
             search_enabled,
         }),
+        catalog,
     }))
+}
+
+fn tool_authority(tool: &CollectedToolDefinition) -> ToolAuthorityDto {
+    if tool.kind != ToolPortKind::Local {
+        return match tool.kind {
+            ToolPortKind::Environment
+            | ToolPortKind::Dynamic
+            | ToolPortKind::Extension
+            | ToolPortKind::Mcp => ToolAuthorityDto::ProviderDefined,
+            ToolPortKind::Host => ToolAuthorityDto::ProductService,
+            ToolPortKind::Local => unreachable!(),
+        };
+    }
+    match tool.contribution.definition.name.as_str() {
+        "read_file" | "grep" | "glob" => ToolAuthorityDto::DirectoryRead,
+        "write_file" | "edit" | "apply_patch" => ToolAuthorityDto::DirectoryWrite,
+        "shell-command" | "shell-session" => ToolAuthorityDto::ProcessExecution,
+        _ => ToolAuthorityDto::ProductService,
+    }
+}
+
+fn tool_source_chain(tool: &CollectedToolDefinition) -> Vec<ToolSourceProvenance> {
+    if tool.contribution.source_chain.is_empty() {
+        vec![
+            tool.kind
+                .source_provenance(&tool.contribution.definition.name),
+        ]
+    } else {
+        tool.contribution.source_chain.clone()
+    }
 }
 
 struct CollectedToolDefinition {
@@ -1145,17 +1211,7 @@ fn build_registry(
                     collected.contribution.search.clone(),
                 )
                 .map_err(|error| ToolCompositionError(error.to_string()))?
-                .with_source_chain(
-                    if collected.contribution.source_chain.is_empty() {
-                        vec![
-                            collected
-                                .kind
-                                .source_provenance(&collected.contribution.definition.name),
-                        ]
-                    } else {
-                        collected.contribution.source_chain.clone()
-                    },
-                ),
+                .with_source_chain(tool_source_chain(collected)),
             )
             .map_err(|error| ToolCompositionError(error.to_string()))?;
     }
