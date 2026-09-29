@@ -209,7 +209,7 @@ export class BulkEditPreviewPane extends ViewPane {
 }
 
 function resourceLabel(resource: { readonly path: string }): string {
-	const path = decodeURIComponent(resource.path).replaceAll("\\", "/");
+	const path = resource.path.replaceAll("\\", "/");
 	return path.split("/").filter(Boolean).pop() ?? path;
 }
 

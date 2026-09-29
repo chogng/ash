@@ -232,17 +232,12 @@ function toEditorRange(range: Marker["range"]): Range {
 }
 
 function resourceName(resource: URI): string {
-	const path = decodedPath(resource);
+	const path = resource.path;
 	return path.slice(path.lastIndexOf("/") + 1) || resource.authority || resource.toString();
 }
 
 function resourceParent(resource: URI): string {
-	const path = decodedPath(resource);
+	const path = resource.path;
 	const separator = path.lastIndexOf("/");
 	return separator > 0 ? path.slice(0, separator) : resource.authority;
-}
-
-function decodedPath(resource: URI): string {
-	try { return decodeURIComponent(resource.path); }
-	catch { return resource.path; }
 }

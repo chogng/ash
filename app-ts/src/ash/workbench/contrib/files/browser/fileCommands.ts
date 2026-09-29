@@ -19,7 +19,7 @@ export async function copyRelativeFilePath(accessor: ServicesAccessor, resourceA
 	const folders = accessor.get(IWorkspaceContextService).getWorkspace().folders;
 	const folder = folders
 		.filter(candidate => extUriBiasedIgnorePathCase.isEqualOrParent(resource, candidate.uri))
-		.sort((left, right) => right.uri.path.length - left.uri.path.length)[0];
+		.sort((left, right) => right.uri.toEncodedComponents().path.length - left.uri.toEncodedComponents().path.length)[0];
 	if (!folder) {
 		throw new Error(localize({ bundle: 'ash', key: 'workbench.copyRelativePathOutsideWorkspace' }, 'The file is outside the current workspace.'));
 	}

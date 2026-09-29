@@ -34,7 +34,8 @@ export class TextFileSaveErrorHandler {
 }
 
 function fileName(resource: URI): string {
-	return decodeURIComponent(resource.path.split('/').pop() || resource.path);
+	const encodedPath = resource.toEncodedComponents().path;
+	return decodeURIComponent(encodedPath.split('/').pop() || encodedPath);
 }
 
 function errorMessage(error: unknown): string {

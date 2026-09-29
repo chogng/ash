@@ -7,8 +7,9 @@ export namespace DataUri {
 	export const META_DATA_MIME = 'mime';
 
 	export function parseMetaData(resource: URI): Map<string, string> {
-		const comma = resource.path.indexOf(',');
-		const header = comma === -1 ? resource.path : resource.path.slice(0, comma);
+		const path = resource.toEncodedComponents().path;
+		const comma = path.indexOf(',');
+		const header = comma === -1 ? path : path.slice(0, comma);
 		const [mime, ...parameters] = header.split(';');
 		const metadata = new Map<string, string>();
 		if (mime) {
@@ -36,6 +37,7 @@ export enum ResourcePathCasing {
  * Implementations must return stable comparison keys for the same URI.
  */
 export interface IExtUri {
+	dirname(uri: URI): URI;
 	getComparisonKey(uri: URI): string;
 	getComparisonKeyIgnoringFragment(uri: URI): string;
 	isEqual(left: URI | undefined, right: URI | undefined): boolean;
@@ -84,6 +86,15 @@ export class ExtUri implements IExtUri {
 		this.pathCasing = pathCasing;
 	}
 
+	dirname(uri: URI): URI {
+		const path = uri.toEncodedComponents().path.replace(/\/+$/u, '');
+		if (!path) {
+			return uri;
+		}
+		const separator = path.lastIndexOf('/');
+		return uri.withEncodedPath(separator <= 0 ? '/' : path.slice(0, separator));
+	}
+
 	getComparisonKey(uri: URI): string {
 		return this.createComparisonKey(uri, true);
 	}
@@ -99,19 +110,21 @@ export class ExtUri implements IExtUri {
 	}
 
 	isEqualOrParent(base: URI, parentCandidate: URI, ignoreFragment = false): boolean {
+		const baseEncoded = base.toEncodedComponents();
+		const parentEncoded = parentCandidate.toEncodedComponents();
 		if (base.scheme !== parentCandidate.scheme || base.authority.toLowerCase() !== parentCandidate.authority.toLowerCase()) {
 			return false;
 		}
-		if (normalizePercentEncoding(base.query) !== normalizePercentEncoding(parentCandidate.query)) {
+		if (normalizePercentEncoding(baseEncoded.query) !== normalizePercentEncoding(parentEncoded.query)) {
 			return false;
 		}
-		if (!ignoreFragment && normalizePercentEncoding(base.fragment) !== normalizePercentEncoding(parentCandidate.fragment)) {
+		if (!ignoreFragment && normalizePercentEncoding(baseEncoded.fragment) !== normalizePercentEncoding(parentEncoded.fragment)) {
 			return false;
 		}
 
 		const ignoreCase = this.ignorePathCasing(base);
-		const path = comparisonPath(base.path, ignoreCase).replace(/\/+$/u, '') || '/';
-		const parent = comparisonPath(parentCandidate.path, ignoreCase).replace(/\/+$/u, '') || '/';
+		const path = comparisonPath(baseEncoded.path, ignoreCase).replace(/\/+$/u, '') || '/';
+		const parent = comparisonPath(parentEncoded.path, ignoreCase).replace(/\/+$/u, '') || '/';
 		return path === parent || path.startsWith(parent === '/' ? parent : `${parent}/`);
 	}
 
@@ -130,16 +143,17 @@ export class ExtUri implements IExtUri {
 	}
 
 	private createComparisonKey(uri: URI, includeFragment: boolean): string {
-		const path = comparisonPath(uri.path, this.ignorePathCasing(uri));
+		const encoded = uri.toEncodedComponents();
+		const path = comparisonPath(encoded.path, this.ignorePathCasing(uri));
 		const fragment = includeFragment
-			? normalizePercentEncoding(uri.fragment)
+			? normalizePercentEncoding(encoded.fragment)
 			: "";
 
 		return [
 			keyPart(uri.scheme.toLowerCase()),
 			keyPart(uri.authority.toLowerCase()),
 			keyPart(path),
-			keyPart(normalizePercentEncoding(uri.query)),
+			keyPart(normalizePercentEncoding(encoded.query)),
 			keyPart(fragment),
 		].join("");
 	}
@@ -147,6 +161,14 @@ export class ExtUri implements IExtUri {
 
 /** URI identity that preserves path casing. */
 export const extUri = new ExtUri(() => ResourcePathCasing.Sensitive);
+
+export const dirname = extUri.dirname.bind(extUri);
+
+/** Returns the decoded final path segment without treating escaped slashes as separators. */
+export function basename(uri: URI): string {
+	const path = uri.toEncodedComponents().path.replace(/\/+$/u, '');
+	return decodeURIComponent(path.slice(path.lastIndexOf('/') + 1));
+}
 
 /**
  * URI identity biased toward the current native file-system path casing.

@@ -16,7 +16,7 @@ import { Lxicon } from "../../../../../base/common/lxicons.js";
 import { ExplorerItem } from "../../common/explorerModel.js";
 import { ExplorerFileNestingSettingId } from '../../common/explorerFileNestingTrie.js';
 import { ExplorerDataSource, ExplorerFindProvider, FileSorter, FilesRenderer } from "./explorerViewer.js";
-import { extUriBiasedIgnorePathCase } from "../../../../../base/common/resources.js";
+import { dirname, extUriBiasedIgnorePathCase } from "../../../../../base/common/resources.js";
 import { IExplorerService, type IExplorerView } from '../files.js';
 import { ExplorerFocusedContext } from '../files.js';
 import { IContextKeyService, type IScopedContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -220,8 +220,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 				);
 				const targets = new Map<string, { item: ExplorerItem; recursive: boolean }>();
 				for (const resource of changed) {
-					const separator = resource.path.lastIndexOf('/');
-					const parent = resource.withPath(resource.path.slice(0, separator) || '/');
+					const parent = dirname(resource);
 					const directory = directories.get(extUriBiasedIgnorePathCase.getComparisonKey(parent));
 					if (!directory) {
 						void this.refreshItem(root, true);

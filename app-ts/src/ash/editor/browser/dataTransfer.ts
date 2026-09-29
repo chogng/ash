@@ -38,7 +38,7 @@ export function toExternalVSDataTransfer(sourceDataTransfer: DataTransfer, overw
 			const file = item.getAsFile();
 			if (!file) continue;
 			const path = getPathForFile(file);
-			try { resources.push(path ? URI.file(path).toString() : URI.parse(file.name, true).toString()); } catch { }
+			try { resources.push(path ? URI.file(path).toString() : URI.parse(file.name).toString()); } catch { }
 		}
 		if (resources.length > 0) result.replace(Mimes.uriList, createStringDataTransferItem(UriList.create(resources)));
 	}

@@ -285,12 +285,12 @@ export function resolveMarkdownWorkspaceResource(resource: URI): URI | undefined
 		catch { return undefined; }
 	}
 	if (resource.scheme === Schemas.vscodeFileResource) {
-		return resource.authority === 'vscode-app' ? URI.parse(`file://${resource.path}`) : undefined;
+		return resource.authority === 'vscode-app' ? URI.parse(`file://${resource.toEncodedComponents().path}`) : undefined;
 	}
 	if (resource.scheme === Schemas.vscodeRemote || resource.scheme === Schemas.vscodeRemoteResource) {
 		const match = /^ssh-remote\+([A-Za-z0-9._-]+)$/u.exec(resource.authority);
 		if (!match) return undefined;
-		try { return createSshRemoteWorkspaceUri(match[1]!, decodeURIComponent(resource.path)); }
+		try { return createSshRemoteWorkspaceUri(match[1]!, resource.path); }
 		catch { return undefined; }
 	}
 	return undefined;

@@ -217,7 +217,8 @@ class UserThemeResources extends Disposable implements IUserThemeService {
 						}
 						content = await this.read(target);
 					}
-					const file = decodeURIComponent(content.resource.path.slice(content.resource.path.lastIndexOf('/') + 1));
+					const encodedPath = content.resource.toEncodedComponents().path;
+					const file = decodeURIComponent(encodedPath.slice(encodedPath.lastIndexOf('/') + 1));
 					const id = userThemeId(file.slice(0, -5));
 					const theme = await this.compileTheme(file, content.content, id);
 					const existing = WorkbenchThemesRegistry.getColorTheme(id);

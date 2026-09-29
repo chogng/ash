@@ -1,13 +1,35 @@
+import { CharCode } from './charCode.js';
+import { MarshalledId } from './marshallingIds.js';
+import * as paths from './path.js';
+import { isWindows } from './platform.js';
+
 const URI_SCHEME = /^[A-Za-z][A-Za-z\d+.-]*:/;
 const WINDOWS_DRIVE_PATH = /^[A-Za-z]:[\\/]/;
-const WINDOWS_URI_DRIVE_PATH = /^\/[A-Za-z]:\//;
 
+/** URI components are decoded; `toString()` retains their encoded spelling. */
 export interface UriComponents {
 	readonly scheme: string;
 	readonly authority?: string;
 	readonly path?: string;
 	readonly query?: string;
 	readonly fragment?: string;
+}
+
+interface UriState extends UriComponents {
+	readonly $mid: MarshalledId.Uri;
+	readonly external: string;
+}
+
+function encodePath(path: string): string {
+	return encodeURI(path).replaceAll('?', '%3F').replaceAll('#', '%23');
+}
+
+function encodeQuery(query: string): string {
+	return encodeURI(query).replaceAll('#', '%23');
+}
+
+function encodeFragment(fragment: string): string {
+	return encodeURI(fragment).replaceAll('#', '%23');
 }
 
 export function isUriComponents(value: unknown): value is UriComponents {
@@ -21,13 +43,8 @@ export function isUriComponents(value: unknown): value is UriComponents {
 }
 
 function parseUrl(value: string): URL {
-	if (WINDOWS_DRIVE_PATH.test(value)) {
-		throw new TypeError(
-			`Windows paths must be created with URI.file(): ${value}`,
-		);
-	}
 	if (!URI_SCHEME.test(value)) {
-		throw new TypeError(`URI must be absolute: ${value}`);
+		throw new TypeError(`URI scheme is missing: ${value}`);
 	}
 
 	let url: URL;
@@ -39,6 +56,9 @@ function parseUrl(value: string): URL {
 
 	if (url.username || url.password) {
 		throw new TypeError("Resource URIs must not contain credentials");
+	}
+	if (!url.host && url.pathname.startsWith('//')) {
+		throw new TypeError('URI path without an authority must not start with //');
 	}
 
 	validatePercentEncoding(url.pathname, "path");
@@ -60,9 +80,8 @@ function validatePercentEncoding(value: string, component: string): void {
 /**
  * An immutable absolute resource URI.
  *
- * Component accessors retain URI percent encoding so values round-trip without
- * changing reserved characters. Use `fsPath` when a decoded native path is
- * required for a `file:` URI.
+ * Component accessors return decoded values. The encoded spelling remains
+ * available through `toString()` for resource identity and transport.
  */
 export class URI {
 	private value: URL | string;
@@ -76,9 +95,26 @@ export class URI {
 		return this.value;
 	}
 
-	/** Parses and canonicalizes an absolute URI. */
-	static parse(value: string, _strict = false): URI {
-		void _strict;
+	static isUri(value: unknown): value is URI {
+		if (value instanceof URI) return true;
+		if (!value || typeof value !== 'object') return false;
+		const candidate = value as Partial<URI>;
+		return typeof candidate.scheme === 'string'
+			&& typeof candidate.authority === 'string'
+			&& typeof candidate.path === 'string'
+			&& typeof candidate.query === 'string'
+			&& typeof candidate.fragment === 'string'
+			&& typeof candidate.fsPath === 'string'
+			&& typeof candidate.with === 'function'
+			&& typeof candidate.toString === 'function';
+	}
+
+	/** Parses a URI; non-strict mode assigns the file scheme when it is missing. */
+	static parse(value: string, strict = false): URI {
+		if (!URI_SCHEME.test(value)) {
+			if (strict) throw new TypeError(`URI scheme is missing: ${value}`);
+			return new URI(parseUrl(new URL(value, 'file:///').href));
+		}
 		return new URI(parseUrl(value));
 	}
 
@@ -90,7 +126,7 @@ export class URI {
 			throw new TypeError("File path must not be empty");
 		}
 
-		const normalized = path.replaceAll("\\", "/");
+		const normalized = isWindows ? path.replaceAll("\\", "/") : path;
 		if (normalized.startsWith("//")) {
 			const withoutPrefix = normalized.replace(/^\/+/, "");
 			const separator = withoutPrefix.indexOf("/");
@@ -102,7 +138,7 @@ export class URI {
 				throw new TypeError(`UNC path must contain a host: ${path}`);
 			}
 			const url = new URL(`file://${authority}/`);
-			url.pathname = resourcePath.replaceAll('%', '%25');
+			url.pathname = encodePath(resourcePath);
 			return new URI(url);
 		}
 
@@ -114,7 +150,7 @@ export class URI {
 			? `/${normalized}`
 			: normalized;
 		const url = new URL("file:///");
-		url.pathname = resourcePath.replaceAll('%', '%25');
+		url.pathname = encodePath(resourcePath);
 		return new URI(url);
 	}
 
@@ -127,15 +163,26 @@ export class URI {
 	}
 
 	get path(): string {
-		return this.url.pathname;
+		return decodeURIComponent(this.url.pathname);
 	}
 
 	get query(): string {
-		return this.url.search.slice(1);
+		return decodeURIComponent(this.url.search.slice(1));
 	}
 
 	get fragment(): string {
-		return this.url.hash.slice(1);
+		return decodeURIComponent(this.url.hash.slice(1));
+	}
+
+	/** Encoded components used when the original URI spelling determines identity. */
+	toEncodedComponents(): Required<UriComponents> {
+		return {
+			scheme: this.scheme,
+			authority: this.authority,
+			path: this.url.pathname,
+			query: this.url.search.slice(1),
+			fragment: this.url.hash.slice(1),
+		};
 	}
 
 	/**
@@ -145,65 +192,128 @@ export class URI {
 		if (this.scheme !== "file") {
 			throw new TypeError(`URI scheme is not file: ${this.scheme}`);
 		}
-
-		const decodedPath = decodeURIComponent(this.url.pathname);
-		if (this.url.host) {
-			return `\\\\${this.url.host}${decodedPath.replaceAll("/", "\\")}`;
-		}
-		if (WINDOWS_URI_DRIVE_PATH.test(decodedPath)) {
-			return decodedPath.slice(1).replaceAll("/", "\\");
-		}
-		return decodedPath;
+		return uriToFsPath(this);
 	}
 
-	/** Returns a copy with a different percent-encoded path. */
-	withPath(path: string): URI {
+	/** Creates a URI from decoded components. */
+	static from(components: UriComponents, strict = false): URI {
+		if (components.authority && components.path && !components.path.startsWith("/")) {
+			throw new TypeError("URI paths with an authority must start with /");
+		}
+		if (!components.authority && components.path?.startsWith('//')) {
+			throw new TypeError('URI path without an authority must not start with //');
+		}
+		if (strict && !components.scheme) throw new TypeError('URI scheme is missing');
+		const scheme = components.scheme || 'file';
+		const path = (scheme === 'file' && !components.path?.startsWith('/')) ? `/${components.path ?? ''}` : components.path ?? '';
+		let value = `${scheme}:`;
+		if (components.authority || scheme === "file") {
+			value += `//${components.authority ?? ""}`;
+		}
+		value += encodePath(path);
+		if (components.query) {
+			value += `?${encodeQuery(components.query)}`;
+		}
+		if (components.fragment) {
+			value += `#${encodeFragment(components.fragment)}`;
+		}
+		return URI.parse(value, true);
+	}
+
+	/** Restores a URI serialized by `toJSON`. */
+	static revive(data: UriComponents | URI): URI;
+	static revive(data: UriComponents | URI | undefined): URI | undefined;
+	static revive(data: UriComponents | URI | null): URI | null;
+	static revive(data: UriComponents | URI | undefined | null): URI | undefined | null;
+	static revive(data: UriComponents | URI | undefined | null): URI | undefined | null {
+		if (!data || data instanceof URI) {
+			return data;
+		}
+		if ('external' in data && typeof data.external === 'string') {
+			return URI.parse(data.external);
+		}
+		return URI.from(data);
+	}
+
+	/** Returns a URI with the specified decoded components changed. */
+	with(change: { scheme?: string; authority?: string | null; path?: string | null; query?: string | null; fragment?: string | null }): URI {
+		const scheme = change.scheme === undefined ? this.scheme : change.scheme;
+		const authority = change.authority === undefined ? this.authority : change.authority ?? '';
+		const path = change.path === undefined ? this.path : change.path ?? '';
+		const query = change.query === undefined ? this.query : change.query ?? '';
+		const fragment = change.fragment === undefined ? this.fragment : change.fragment ?? '';
+		if (scheme === this.scheme && authority === this.authority && path === this.path && query === this.query && fragment === this.fragment) return this;
+		if (authority && path && !path.startsWith('/')) throw new TypeError('URI paths with an authority must start with /');
+
+		const encoded = this.toEncodedComponents();
+		let value = `${scheme}:`;
+		if (authority || scheme === 'file') value += `//${authority}`;
+		value += change.path === undefined ? encoded.path : encodePath(path);
+		if (query) value += `?${change.query === undefined ? encoded.query : encodeQuery(query)}`;
+		if (fragment) value += `#${change.fragment === undefined ? encoded.fragment : encodeFragment(fragment)}`;
+		return URI.parse(value);
+	}
+
+	/** Joins path fragments while preserving the other URI components. */
+	static joinPath(uri: URI, ...fragments: string[]): URI {
+		if (!uri.path) {
+			throw new TypeError(`URI has no path: ${uri.toString()}`);
+		}
+		const encodedFragments = fragments.map(fragment => fragment.split('/').map(encodeURIComponent).join('/'));
+		return uri.withEncodedPath(paths.joinPath(uri.url.pathname, ...encodedFragments));
+	}
+
+	/** Changes the encoded path without merging escaped separators with path boundaries. */
+	withEncodedPath(path: string): URI {
+		validatePercentEncoding(path, "path");
 		const url = new URL(this.url.href);
 		url.pathname = path;
-		validatePercentEncoding(url.pathname, "path");
 		return new URI(url);
 	}
 
 	/** Appends one decoded child name to a hierarchical URI. */
 	joinPathSegment(name: string): URI {
-		const suffix = this.url.search + this.url.hash;
-		const href = this.url.href;
-		const base = href.slice(0, href.length - suffix.length);
-		const separator = base.endsWith("/") ? "" : "/";
-		const child = `${base}${separator}${encodeURIComponent(name)}${suffix}`;
-		// The parent is canonical and the segment is encoded; only dot segments need URL path resolution now.
-		return new URI(name === '.' || name === '..' ? new URL(child) : child);
+		return this.withEncodedPath(paths.joinPath(this.url.pathname, name === '.' || name === '..' ? name : encodeURIComponent(name)));
 	}
 
-	/** Returns a copy with a different percent-encoded query. */
-	withQuery(query: string): URI {
-		const url = new URL(this.url.href);
-		url.search = query.length === 0 ? "" : `?${query}`;
-		return new URI(parseUrl(url.href));
+	toString(skipEncoding = false): string {
+		if (!skipEncoding) return typeof this.value === 'string' ? this.value : this.value.href;
+		const path = this.path.replaceAll('?', '%3F').replaceAll('#', '%23');
+		const query = this.query.replaceAll('#', '%23');
+		const authority = (this.authority || this.scheme === 'file') ? `//${this.authority}` : '';
+		return `${this.scheme}:${authority}${path}${query ? `?${query}` : ''}${this.fragment ? `#${this.fragment}` : ''}`;
 	}
 
-	/** Returns a copy without a query component. */
-	withoutQuery(): URI {
-		return this.withQuery("");
+	toJSON(): UriComponents {
+		const state: UriState = {
+			$mid: MarshalledId.Uri,
+			external: this.toString(),
+			scheme: this.scheme,
+			authority: this.authority,
+			path: this.path,
+			query: this.query,
+			fragment: this.fragment,
+		};
+		return state;
+	}
+}
+
+/** Converts a file URI to a path for the current operating system. */
+function uriToFsPath(uri: URI): string {
+	const path = uri.path;
+	if (uri.authority) {
+		const uncPath = `//${uri.authority}${path}`;
+		return isWindows ? uncPath.replaceAll("/", "\\") : uncPath;
 	}
 
-	/** Returns a copy with a different percent-encoded fragment. */
-	withFragment(fragment: string): URI {
-		const url = new URL(this.url.href);
-		url.hash = fragment.length === 0 ? "" : `#${fragment}`;
-		return new URI(parseUrl(url.href));
+	const hasDriveLetter = path.length >= 3
+		&& path.charCodeAt(0) === CharCode.Slash
+		&& ((path.charCodeAt(1) >= CharCode.A && path.charCodeAt(1) <= CharCode.Z)
+			|| (path.charCodeAt(1) >= CharCode.a && path.charCodeAt(1) <= CharCode.z))
+		&& path.charCodeAt(2) === CharCode.Colon;
+	if (!hasDriveLetter) {
+		return path;
 	}
-
-	/** Returns a copy without a fragment component. */
-	withoutFragment(): URI {
-		return this.withFragment("");
-	}
-
-	toString(): string {
-		return typeof this.value === 'string' ? this.value : this.value.href;
-	}
-
-	toJSON(): string {
-		return this.toString();
-	}
+	const filePath = path.slice(1);
+	return isWindows ? filePath.replaceAll("/", "\\") : filePath;
 }

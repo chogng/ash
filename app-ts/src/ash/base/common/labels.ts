@@ -1,4 +1,5 @@
 import { isMacintosh, isWindows, OperatingSystem } from "./platform.js";
+import { basename } from "./resources.js";
 import { URI } from "./uri.js";
 
 /** Inputs used to format a resource as a user-facing path label. */
@@ -43,7 +44,7 @@ function getRelativePathLabel(resource: URI, provider: IRelativePathProvider, os
 	// us a path-only URI, align it with the first workspace scheme just as VS
 	// Code does before asking the provider for ownership.
 	if (resource.scheme !== firstFolder.uri.scheme && resource.path.startsWith('/') && !resource.path.startsWith('//')) {
-		resource = firstFolder.uri.withPath(resource.path);
+		resource = firstFolder.uri.with({ path: resource.path });
 	}
 	const folder = provider.getWorkspaceFolder(resource);
 	if (!folder) return undefined;
@@ -56,7 +57,7 @@ function getRelativePathLabel(resource: URI, provider: IRelativePathProvider, os
 }
 
 function resourcePath(resource: URI, os: OperatingSystem): string {
-	const path = resource.scheme === "file" ? resource.fsPath : decodeURIComponent(resource.path);
+	const path = resource.scheme === "file" ? resource.fsPath : resource.path;
 	return os === OperatingSystem.Windows ? path.replaceAll("/", "\\") : path.replaceAll("\\", "/");
 }
 
@@ -73,9 +74,7 @@ function relativePath(folder: string, resource: string, os: OperatingSystem): st
 }
 
 function basenameOrAuthority(resource: URI): string {
-	const path = decodeURIComponent(resource.path).replace(/\/+$/u, "");
-	const basename = path.slice(path.lastIndexOf("/") + 1);
-	return basename || resource.authority || resource.toString();
+	return basename(resource) || resource.authority || resource.toString();
 }
 
 /** Normalizes a drive letter without changing the remainder of the path. */

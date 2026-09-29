@@ -22,12 +22,11 @@ export class BreadcrumbsModel {
 	constructor(readonly resource: URI, private readonly fallbackLabel?: string) {}
 
 	getElements(): readonly FileElement[] {
-		const path = decodePath(this.resource.path);
-		const segments = path.split("/").filter(Boolean);
+		const segments = this.resource.toEncodedComponents().path.split("/").filter(Boolean);
 		const elements: FileElement[] = [];
 		if (this.resource.authority) {
 			elements.push(new FileElement(
-				this.resource.withPath("/"),
+				this.resource.with({ path: '/' }),
 				FileKind.Directory,
 				this.resource.authority,
 			));
@@ -36,9 +35,9 @@ export class BreadcrumbsModel {
 		for (const [index, segment] of segments.entries()) {
 			currentPath += `/${segment}`;
 			elements.push(new FileElement(
-				this.resource.withPath(currentPath),
+				this.resource.withEncodedPath(currentPath),
 				index === segments.length - 1 ? FileKind.File : FileKind.Directory,
-				segment,
+				decodeURIComponent(segment),
 			));
 		}
 		if (elements.length === 0) {
@@ -61,13 +60,5 @@ export class BreadcrumbsModel {
 			path.push(new SymbolElement(containing));
 			siblings = containing.children ?? [];
 		}
-	}
-}
-
-function decodePath(path: string): string {
-	try {
-		return decodeURIComponent(path);
-	} catch {
-		return path;
 	}
 }

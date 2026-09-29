@@ -984,7 +984,7 @@ function testEditorService(opened: Array<{ readonly input: EditorInput; readonly
 function testFileIconThemeService(): IResourceIconRenderer {
 	return {
 		onDidChangeResourceIcons: () => ({ dispose(): void {}, [Symbol.dispose](): void {} }),
-		renderFileIcon: (resource, container) => { container.dataset.fileIcon = decodeURIComponent(resource.path.split("/").at(-1) ?? ""); },
+		renderFileIcon: (resource, container) => { container.dataset.fileIcon = decodeURIComponent(resource.toEncodedComponents().path.split("/").at(-1) ?? ""); },
 	};
 }
 

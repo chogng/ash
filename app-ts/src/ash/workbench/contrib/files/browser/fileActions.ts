@@ -1,5 +1,6 @@
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
-import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
+<<<<<<< HEAD
+import { dirname, extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
@@ -155,7 +156,7 @@ export async function createNewFile(accessor: ServicesAccessor): Promise<void> {
 	if (!validFileName(name)) {
 		throw new Error(localize({ bundle: 'ash', key: 'workbench.newFileInvalidName' }, 'Enter a file name without path separators.'));
 	}
-	const resource = directory.withPath(`${directory.path.replace(/\/$/, '')}/${encodeURIComponent(name)}`);
+	const resource = directory.joinPathSegment(name);
 	await accessor.get(IFileService).createFile(resource, 'error');
 	await accessor.get(IEditorService).openEditor(new FileEditorInput(resource, { label: name }));
 }
@@ -186,14 +187,14 @@ async function resolveCreationDirectory(accessor: ServicesAccessor, kind: 'file'
 	const selection = accessor.get(IExplorerService).getContext()[0];
 	const selectionDirectory = selection?.kind === FileKind.Directory
 		? selection.resource
-		: selection?.resource.withPath(selection.resource.path.slice(0, selection.resource.path.lastIndexOf('/')));
+		: selection ? dirname(selection.resource) : undefined;
 	const selectedDirectory = selectionDirectory && workspace.folders.some(folder => extUriBiasedIgnorePathCase.isEqualOrParent(selectionDirectory, folder.uri))
 		? selectionDirectory
 		: undefined;
 	const activeResource = accessor.get(IEditorService).activeEditor?.resource;
 	const activeFolder = workspace.folders
 		.filter(folder => activeResource && extUriBiasedIgnorePathCase.isEqualOrParent(activeResource, folder.uri))
-		.sort((left, right) => right.uri.path.length - left.uri.path.length)[0];
+		.sort((left, right) => right.uri.toEncodedComponents().path.length - left.uri.toEncodedComponents().path.length)[0];
 	const folder = selectedDirectory ? undefined : activeFolder ?? (workspace.folders.length === 1
 		? workspace.folders[0]
 		: await pickWorkspaceFolder(quickInput, workspace.folders, kind));

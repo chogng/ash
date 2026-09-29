@@ -63,7 +63,7 @@ export function isMarkdownString(value: unknown): value is IMarkdownString {
 		&& (candidate.supportThemeIcons === undefined || typeof candidate.supportThemeIcons === 'boolean')
 		&& (candidate.supportHtml === undefined || typeof candidate.supportHtml === 'boolean')
 		&& (candidate.supportAlertSyntax === undefined || typeof candidate.supportAlertSyntax === 'boolean')
-		&& (candidate.baseUri === undefined || candidate.baseUri instanceof URI);
+		&& (candidate.baseUri === undefined || URI.isUri(candidate.baseUri));
 }
 
 function isMarkdownStringTrust(value: unknown): boolean {

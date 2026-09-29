@@ -122,11 +122,16 @@ class RelativePathProvider extends TransferProvider {
 	protected async getEdit(transfer: IReadonlyVSDataTransfer): Promise<TransferEdit | undefined> {
 		const uris = await readUris(transfer);
 		const paths = uris.flatMap(({ uri }) => {
-			const folder = this.workspace.getWorkspace().folders.find(candidate =>
-				candidate.uri.scheme === uri.scheme
-				&& candidate.uri.authority === uri.authority
-				&& uri.path.startsWith(`${candidate.uri.path.replace(/\/$/u, '')}/`));
-			return folder ? [uri.path.slice(folder.uri.path.replace(/\/$/u, '').length + 1)] : [];
+			const uriPath = uri.toEncodedComponents().path;
+			const folder = this.workspace.getWorkspace().folders.find(candidate => {
+				const folderPath = candidate.uri.toEncodedComponents().path.replace(/\/$/u, '');
+				return candidate.uri.scheme === uri.scheme
+					&& candidate.uri.authority === uri.authority
+					&& uriPath.startsWith(`${folderPath}/`);
+			});
+			if (!folder) return [];
+			const folderPath = folder.uri.toEncodedComponents().path.replace(/\/$/u, '');
+			return [decodeURIComponent(uriPath.slice(folderPath.length + 1))];
 		});
 		if (paths.length === 0) return undefined;
 		return {

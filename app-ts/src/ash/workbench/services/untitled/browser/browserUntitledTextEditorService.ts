@@ -1,7 +1,7 @@
 import { Emitter } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Schemas } from "../../../../base/common/network.js";
-import { extUri } from "../../../../base/common/resources.js";
+import { basename, extUri } from "../../../../base/common/resources.js";
 import { URI } from "../../../../base/common/uri.js";
 import { IWorkingCopyService } from "../../workingCopy/common/workingCopyService.js";
 import { type IUntitledTextEditor, type IUntitledTextEditorService, type UntitledTextEditorOptions } from "../common/untitledTextEditorService.js";
@@ -40,7 +40,7 @@ export class BrowserUntitledTextEditorService extends Disposable implements IUnt
 				resource = URI.parse(`${Schemas.untitled}:/Untitled-${this.nextUntitledNumber++}`);
 			} while (this.editors.has(extUri.getComparisonKey(resource)));
 		}
-		const label = options.label ?? (resource.path.split("/").pop() || resource.authority || resource.toString());
+		const label = options.label ?? (basename(resource) || resource.authority || resource.toString());
 		const editor = new UntitledTextEditor(resource, label, options.initialText ?? "", options.languageId);
 		this.editors.set(extUri.getComparisonKey(editor.resource), editor);
 		this._onDidCreate.fire(editor);

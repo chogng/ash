@@ -1,4 +1,5 @@
 import { URI } from "../../../base/common/uri.js";
+import { basename } from "../../../base/common/resources.js";
 import type { Event } from "../../../base/common/event.js";
 import { isNonEmptyString } from "../../../base/common/types.js";
 import {
@@ -344,7 +345,5 @@ function workspaceName(configPath: URI): string {
 }
 
 function resourceName(resource: URI): string {
-	const path = decodeURIComponent(resource.path).replace(/\/+$/, '');
-	const name = path.slice(path.lastIndexOf('/') + 1);
-	return name || resource.authority || resource.toString();
+	return basename(resource) || resource.authority || resource.toString();
 }

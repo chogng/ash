@@ -1,5 +1,5 @@
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
-import { extUri } from '../../../../base/common/resources.js';
+import { dirname, extUri } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import {
@@ -107,7 +107,7 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 			? options.defaultUri.path.startsWith('/@browser/')
 			: !!workspaceRoot && extUri.isEqualOrParent(options.defaultUri, workspaceRoot));
 		if (options.defaultUri && defaultIsAccessible) {
-			const parent = options.defaultUri.withPath(options.defaultUri.path.slice(0, options.defaultUri.path.lastIndexOf('/')));
+			const parent = dirname(options.defaultUri);
 			try {
 				defaultDirectory = (await this.host.fileService().stat(options.defaultUri)).kind === FileKind.Directory
 					? options.defaultUri
@@ -138,7 +138,7 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 					await this.dialogs().showMessage({ severity: DialogSeverity.Error, message: localize('dialog.fileTypeMismatch', 'Choose a file name matching the selected file types.') });
 					continue;
 				}
-				const target = directory.withPath(`${directory.path.replace(/\/$/, '')}/${encodeURIComponent(name)}`);
+				const target = directory.joinPathSegment(name);
 				let kind: FileKind;
 				try {
 					kind = (await this.host.fileService().stat(target)).kind;
@@ -186,7 +186,7 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 		let directory = initial;
 		if (initial !== root) {
 			try {
-				if ((await this.host.fileService().stat(initial)).kind !== FileKind.Directory) directory = initial.withPath(initial.path.slice(0, initial.path.lastIndexOf('/')));
+				if ((await this.host.fileService().stat(initial)).kind !== FileKind.Directory) directory = dirname(initial);
 			} catch (error) {
 				if (!(error instanceof FileNotFoundError)) throw error;
 				directory = root;
@@ -199,7 +199,7 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 				...(options.canSelectMany && selected.size ? [{ kind: 'done' as const, label: `${options.openLabel ?? localize('dialog.finishSelection', 'Done')} (${selected.size})` }] : []),
 				...(directory.toString() === root.toString() ? [] : [{
 					kind: 'parent' as const,
-					resource: directory.withPath(directory.path.slice(0, directory.path.lastIndexOf('/'))),
+					resource: dirname(directory),
 					label: '..',
 				}]),
 				...entries.filter(entry => entry.kind === FileKind.Directory).map(entry => ({

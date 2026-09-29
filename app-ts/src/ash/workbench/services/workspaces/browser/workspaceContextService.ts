@@ -42,12 +42,12 @@ export class WorkspaceContextService extends Disposable implements IWorkspaceCon
 	}
 
 	getWorkspaceFolder(resource: URI): IWorkspaceFolder | null {
-		const candidate = resource.withoutQuery().withoutFragment();
+		const candidate = resource.with({ query: null, fragment: null });
 		let match: IWorkspaceFolder | null = null;
 		for (const folder of this.workspace.folders) {
 			if (
 				extUriBiasedIgnorePathCase.isEqualOrParent(candidate, folder.uri)
-				&& (!match || folder.uri.path.length > match.uri.path.length)
+				&& (!match || folder.uri.toEncodedComponents().path.length > match.uri.toEncodedComponents().path.length)
 			) {
 				match = folder;
 			}

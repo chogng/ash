@@ -1150,7 +1150,7 @@ function executeEditorCommand<T>(emitter: Emitter<EditorCommandEvent>, commandId
 }
 
 function editorLabel(resource: URI): string {
-	const path = decodeURIComponent(resource.path);
+	const path = resource.path;
 	return path.slice(path.lastIndexOf('/') + 1) || 'Text editor';
 }
 

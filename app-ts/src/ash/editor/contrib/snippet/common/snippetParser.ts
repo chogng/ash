@@ -40,7 +40,7 @@ export interface SnippetVariableResolver {
 
 /** File variables shared by completion and transfer snippets. */
 export function createSnippetVariables(resource: URI): SnippetVariableResolver {
-	const filePath = decodeURIComponent(resource.path);
+	const filePath = resource.path;
 	const separator = filePath.lastIndexOf('/');
 	const filename = filePath.slice(separator + 1);
 	const extension = filename.lastIndexOf('.');

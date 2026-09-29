@@ -212,7 +212,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		if (!isSettingsEditorInput(input)) throw new TypeError(`Settings editor cannot open ${input.resource}`);
 		if (signal.aborted) throw signal.reason;
 		this.search(this.searchWidget?.value ?? '');
-		const categoryId = new URLSearchParams(input.resource.query).get('category');
+		const categoryId = new URLSearchParams(input.resource.toEncodedComponents().query).get('category');
 		if (categoryId) {
 			const category = SettingsCategories.find(candidate => candidate.id === categoryId);
 			if (!category) throw new RangeError(`Settings category is not available: ${categoryId}`);

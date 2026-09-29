@@ -292,7 +292,7 @@ export class DebugService extends Disposable implements IDebugService {
 	}
 }
 
-function childResource(root: URI, relativePath: string): URI { const base = root.path.endsWith("/") ? root.path.slice(0, -1) : root.path; return root.withPath(`${base}/${relativePath.split("/").map(encodeURIComponent).join("/")}`); }
+function childResource(root: URI, relativePath: string): URI { return URI.joinPath(root, ...relativePath.split("/")); }
 function createBreakpoint(resource: URI, lineNumber: number, enabled: boolean): IDebugBreakpoint { return Object.freeze({ id: `${resource.toString()}:${lineNumber}`, resource, lineNumber, enabled, verified: false }); }
 function compareBreakpoints(left: IDebugBreakpoint, right: IDebugBreakpoint): number { return left.resource.toString().localeCompare(right.resource.toString()) || left.lineNumber - right.lineNumber; }
 function normalizeExpression(expression: string): string {

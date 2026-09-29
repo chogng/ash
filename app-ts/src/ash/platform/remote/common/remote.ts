@@ -48,7 +48,7 @@ export function getRemoteWorkspacePath(resource: URI): string {
 	const authority = getRemoteAuthority(resource);
 	if (!authority) throw new Error("Resource is not a Remote workspace URI");
 	if (resource.query || resource.fragment) throw new Error("Remote workspace URI must not contain a query or fragment");
-	const path = normalizeRemoteWorkspacePath(decodeURIComponent(resource.path));
+	const path = normalizeRemoteWorkspacePath(resource.path);
 	if (createSshRemoteWorkspaceUri(authority.host, path).toString() !== resource.toString()) {
 		throw new Error("Remote workspace URI must use its canonical resource identity");
 	}

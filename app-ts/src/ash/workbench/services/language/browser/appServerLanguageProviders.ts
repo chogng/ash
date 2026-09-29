@@ -580,7 +580,7 @@ function workspaceRootForResource(workspace: IWorkspaceContextService, resource:
 		if (!resource) continue;
 		try {
 			workspaceRelativePath(folder.uri, resource);
-			if (!match || folder.uri.path.length > match.uri.path.length) match = { id: folder.id, uri: folder.uri, ...(folders.length > 1 ? { wireId: folder.id } : {}) };
+			if (!match || folder.uri.toEncodedComponents().path.length > match.uri.toEncodedComponents().path.length) match = { id: folder.id, uri: folder.uri, ...(folders.length > 1 ? { wireId: folder.id } : {}) };
 		} catch {
 			// Resource belongs to a different Workspace folder.
 		}

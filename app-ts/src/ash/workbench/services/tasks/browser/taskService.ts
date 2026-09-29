@@ -1,7 +1,7 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { getErrorMessage } from "../../../../base/common/errors.js";
 import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
-import { type URI } from "../../../../base/common/uri.js";
+import { URI } from "../../../../base/common/uri.js";
 import { FileKind, FileNotFoundError, type IFileService } from "../../../../platform/files/common/files.js";
 import type { ILogService } from "../../../../platform/log/common/log.js";
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
@@ -302,8 +302,7 @@ class TaskRun extends Disposable implements ITaskRun {
 }
 
 function childResource(root: URI, relativePath: string): URI {
-	const base = root.path.endsWith("/") ? root.path.slice(0, -1) : root.path;
-	return root.withPath(`${base}/${relativePath.split("/").map(encodeURIComponent).join("/")}`);
+	return URI.joinPath(root, ...relativePath.split("/"));
 }
 
 function affectsTaskConfiguration(resources: readonly URI[] | undefined): boolean {
@@ -363,7 +362,7 @@ function resolveKnownTask(task: IWorkspaceTask, tasks: readonly IWorkspaceTask[]
 
 function substituteWorkspaceVariables(command: string, root: URI | undefined): string {
 	if (!root) return command;
-	const workspaceFolder = root.scheme === "file" ? root.fsPath : decodeURIComponent(root.path);
+	const workspaceFolder = root.scheme === "file" ? root.fsPath : root.path;
 	const basename = workspaceFolder.replace(/[\\/]+$/, "").split(/[\\/]/).at(-1) ?? "";
 	return command.replaceAll("${workspaceFolder}", workspaceFolder).replaceAll("${workspaceFolderBasename}", basename);
 }

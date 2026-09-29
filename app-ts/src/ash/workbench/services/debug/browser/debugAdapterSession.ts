@@ -144,7 +144,7 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 	async syncBreakpoints(): Promise<void> {
 		const groups = new Map<string, IDebugBreakpoint[]>();
 		for (const breakpoint of this.breakpoints().filter(breakpoint => breakpoint.enabled && (breakpoint.resource.scheme === "file" || isRemoteResource(breakpoint.resource)))) {
-			const path = breakpoint.resource.scheme === "file" ? breakpoint.resource.fsPath : decodeURIComponent(breakpoint.resource.path);
+			const path = breakpoint.resource.scheme === "file" ? breakpoint.resource.fsPath : breakpoint.resource.path;
 			const group = groups.get(path) ?? [];
 			group.push(breakpoint);
 			groups.set(path, group);
@@ -378,7 +378,7 @@ function string(value: unknown, path: string): string { if (typeof value !== "st
 function boolean(value: unknown, path: string): boolean { if (typeof value !== "boolean") throw new TypeError(`${path} must be a boolean`); return value; }
 function positiveInteger(value: unknown, path: string, allowZero = false): number { if (!Number.isSafeInteger(value) || (allowZero ? (value as number) < 0 : (value as number) <= 0)) throw new TypeError(`${path} must be ${allowZero ? "non-negative" : "positive"}`); return value as number; }
 function withTimeout<T>(promise: Promise<T>, milliseconds: number, timeoutMessage: string): Promise<T> { return new Promise((resolve, reject) => { const timeout = setTimeout(() => reject(new Error(timeoutMessage)), milliseconds); promise.then(value => { clearTimeout(timeout); resolve(value); }, error => { clearTimeout(timeout); reject(error); }); }); }
-function workspaceFolderPath(workspace: URI): string { return workspace.scheme === "file" ? workspace.fsPath : decodeURIComponent(workspace.path); }
+function workspaceFolderPath(workspace: URI): string { return workspace.scheme === "file" ? workspace.fsPath : workspace.path; }
 
 function sourceResource(workspace: URI, adapterPath: string): URI | undefined {
 	if (workspace.scheme === "file") {
@@ -388,7 +388,7 @@ function sourceResource(workspace: URI, adapterPath: string): URI | undefined {
 	if (!adapterPath.startsWith("/") || adapterPath.includes("\0")) return undefined;
 	const segments = adapterPath.split("/");
 	if (adapterPath !== "/" && (adapterPath.endsWith("/") || segments.slice(1).some(segment => segment.length === 0 || segment === "." || segment === ".."))) return undefined;
-	return workspace.withPath(segments.map(encodeURIComponent).join("/"));
+	return workspace.with({ path: adapterPath });
 }
 
 function expandWorkspaceVariables(value: Readonly<Record<string, unknown>>, workspaceFolder: string): Readonly<Record<string, unknown>> {

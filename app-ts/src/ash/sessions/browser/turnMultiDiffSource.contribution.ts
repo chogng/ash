@@ -135,7 +135,7 @@ function turnSourceIdentity(uri: URI): {
 	if (uri.scheme !== 'ash-multi-diff' || !uri.path.startsWith('/turn/')) return undefined;
 	const scope = uri.path.split('/').at(-1);
 	if (scope !== 'currentTurn' && scope !== 'throughCurrentTurn' && scope !== 'previousTurn') throw new Error('Invalid Turn source scope.');
-	const query = new URLSearchParams(uri.query);
+	const query = new URLSearchParams(uri.toEncodedComponents().query);
 	const sessionId = query.get('session');
 	const threadId = query.get('thread');
 	const changes = query.get('changes');

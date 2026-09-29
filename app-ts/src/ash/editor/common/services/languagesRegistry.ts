@@ -120,7 +120,8 @@ export class LanguagesRegistry extends Disposable {
 		this.assertNotDisposed();
 		if (!input || typeof input !== "object") throw new TypeError("Language resolution input is required");
 		const path = normalizePath(input.resource.path);
-		const fileName = path.slice(path.lastIndexOf("/") + 1);
+		const encodedPath = input.resource.toEncodedComponents().path;
+		const fileName = normalizePath(decodeURIComponent(encodedPath.slice(encodedPath.lastIndexOf("/") + 1)));
 		const contentType = input.contentType?.toLowerCase();
 		const firstLine = normalizeFirstLineText(input.firstLine);
 		let best: LanguageMatch | undefined;

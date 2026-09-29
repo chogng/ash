@@ -2,7 +2,7 @@ import type { ConfigReadResult, GitConfigDto, GitHeadDto, GitRepositoryChangeDto
 import { Emitter } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
-import type { URI } from "../../../../base/common/uri.js";
+import { URI } from "../../../../base/common/uri.js";
 import type { AppServerConnectionState, IAppServerApi, IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { IGitApi } from "../../../../platform/git/common/gitApi.js";
@@ -133,11 +133,11 @@ export class GitService extends Disposable implements IGitService {
 
 	repositoryForResource(resource: URI): GitRepository | undefined {
 		let match: GitRepository | undefined;
-		const pathOnlyResource = resource.withoutQuery().withoutFragment();
+		const pathOnlyResource = resource.with({ query: null, fragment: null });
 		for (const repository of this.repositoryList) {
-			const root = repository.root.withoutQuery().withoutFragment();
+			const root = repository.root.with({ query: null, fragment: null });
 			if (!extUriBiasedIgnorePathCase.isEqualOrParent(pathOnlyResource, root)) continue;
-			if (!match || root.path.length > match.root.path.length) match = repository;
+			if (!match || root.toEncodedComponents().path.length > match.root.toEncodedComponents().path.length) match = repository;
 		}
 		return match;
 	}
@@ -401,8 +401,7 @@ function toGitRepository(repository: GitRepositoryDto, workspaceFolders: readonl
 
 function appendRelativePath(root: URI, relativePath: string): URI {
 	if (!relativePath) return root;
-	const encoded = relativePath.replaceAll("\\", "/").split("/").filter(Boolean).map(encodeURIComponent).join("/");
-	return root.withPath(`${root.path.replace(/\/$/u, "")}/${encoded}`);
+	return URI.joinPath(root, ...relativePath.replaceAll("\\", "/").split("/").filter(Boolean));
 }
 
 function repositorySignature(repositories: readonly GitRepository[]): string {

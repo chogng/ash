@@ -182,7 +182,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 function editorInputLabel(input: EditorInput): { readonly name: string; readonly description?: string } {
 	const path = input.resource.scheme === "file"
 		? input.resource.fsPath
-		: decodeURIComponent(input.resource.path);
+		: input.resource.path;
 	const normalizedPath = path.replaceAll("\\", "/").replace(/\/+$/, "");
 	const separator = normalizedPath.lastIndexOf("/");
 	const explicitLabel = input.label?.trim();

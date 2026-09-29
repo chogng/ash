@@ -1,5 +1,6 @@
 import "./media/binaryEditorPane.css";
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
+import { basename } from "../../../../base/common/resources.js";
 import { Action2, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService, type IQuickPickItem } from "../../../../platform/quickinput/common/quickInput.js";
@@ -40,7 +41,7 @@ registerAction2(class CompareBinaryEditorsAction extends Action2 {
 		picker.placeholder = "Select the original file to compare";
 		picker.items = candidates.map(input => ({
 			input,
-			label: input.label ?? input.resource.path.split("/").at(-1) ?? input.resource.toString(),
+			label: input.label ?? (basename(input.resource) || input.resource.toString()),
 			detail: input.resource.toString(),
 		}));
 		disposables.add(picker.onDidAccept(item => {

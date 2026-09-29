@@ -3,6 +3,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { EmbeddedCodeEditorWidget } from '../../../browser/widget/codeEditor/embeddedCodeEditorWidget.js';
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
+import { basename } from "../../../../base/common/resources.js";
 import { Selection } from "../../../common/core/selection.js";
 import { type Position } from "../../../common/core/position.js";
 import { type View } from "../../../browser/view.js";
@@ -198,8 +199,7 @@ function navigationLabel(kind: LanguageNavigationKind): string {
 }
 
 function resourceLabel(resource: URI): string {
-	const path = decodeURIComponent(resource.path).replace(/\/+$/, "");
-	return path.slice(path.lastIndexOf("/") + 1) || resource.toString();
+	return basename(resource) || resource.toString();
 }
 
 function normalizeLanguageLocation(location: LanguageLocation): LanguageLocation {

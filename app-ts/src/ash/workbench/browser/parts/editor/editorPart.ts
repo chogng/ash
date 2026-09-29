@@ -1,5 +1,6 @@
 import "./media/editorpart.css";
 import { isNonEmptyArray } from "../../../../base/common/arrays.js";
+import { basename } from "../../../../base/common/resources.js";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import type { URI } from "../../../../base/common/uri.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
@@ -362,7 +363,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			if (stat.sizeBytes < thresholdMiB * 1024 * 1024) return;
 			const confirmed = await dialogService.confirm({
 				title: "Open Large File",
-				message: `Open ${input.label ?? input.resource.path.split("/").at(-1) ?? input.resource.path}?`,
+				message: `Open ${input.label ?? (basename(input.resource) || input.resource.path)}?`,
 				detail: `This file is ${(stat.sizeBytes / 1024 / 1024).toFixed(1)} MiB. Opening it may take time and use substantial memory.`,
 				primaryButton: "Open File",
 				cancelButton: "Cancel",
@@ -889,9 +890,7 @@ function legacyGridDescriptor(
 
 function editorInputLabel(input: Pick<EditorInput, "resource" | "label">): string {
 	if (input.label?.trim()) return input.label;
-	const path = decodeURIComponent(input.resource.path).replace(/\/+$/, "");
-	const separator = path.lastIndexOf("/");
-	return path.slice(separator + 1) || input.resource.toString();
+	return basename(input.resource) || input.resource.toString();
 }
 
 class EditorGroupHost extends Disposable {

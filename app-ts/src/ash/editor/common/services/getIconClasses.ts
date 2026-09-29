@@ -32,8 +32,8 @@ export function getIconClasses(
 	if (metadata) {
 		name = metadata.get(DataUri.META_DATA_LABEL);
 	} else {
-		const path = decodeURIComponent(resource.path).replace(/\/+$/u, '');
-		const segments = path.split('/').filter(Boolean);
+		const path = resource.toEncodedComponents().path.replace(/\/+$/u, '');
+		const segments = path.split('/').filter(Boolean).map(decodeURIComponent);
 		name = segments.at(-1) ?? resource.authority;
 		const parent = segments.at(-2);
 		if (parent) {

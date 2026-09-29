@@ -374,7 +374,8 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		for (const folder of this.workspace.getWorkspace().folders) {
 			try {
 				const path = workspaceRelativePath(folder.uri, resource);
-				if (!match || folder.uri.path.length > match.rootLength) match = { dirId: folder.id, path, rootLength: folder.uri.path.length };
+				const rootLength = folder.uri.toEncodedComponents().path.length;
+				if (!match || rootLength > match.rootLength) match = { dirId: folder.id, path, rootLength };
 			} catch {
 				// Resource belongs to a different Workspace folder.
 			}

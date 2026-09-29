@@ -43,11 +43,11 @@ export class WorkspacePdfAnnotationStore implements IPdfAnnotationStore {
 
 /** Returns the visible, versioned companion resource used to persist PDF annotations. */
 export function pdfAnnotationSidecarResource(resource: URI): URI {
-	return resource.withPath(`${resource.path}.ash-annotations.json`).withoutQuery().withoutFragment();
+	return resource.withEncodedPath(`${resource.toEncodedComponents().path}.ash-annotations.json`).with({ query: null, fragment: null });
 }
 
 function pdfAnnotationDirectory(resource: URI): URI {
-	const path = resource.path;
+	const path = resource.toEncodedComponents().path;
 	const separator = path.lastIndexOf("/");
-	return resource.withPath(separator <= 0 ? "/" : path.slice(0, separator + 1)).withoutQuery().withoutFragment();
+	return resource.withEncodedPath(separator <= 0 ? "/" : path.slice(0, separator + 1)).with({ query: null, fragment: null });
 }

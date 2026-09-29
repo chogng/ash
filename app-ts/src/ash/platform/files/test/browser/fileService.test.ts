@@ -27,14 +27,14 @@ test("workspaceRelativePath confines resources to the folder", () => {
 test("workspaceRelativePath preserves case-sensitive Remote resource identity", () => {
 	const root = createSshRemoteWorkspaceUri("work-server", "/home/ash/Project");
 	assert.equal(workspaceRelativePath(root, root), ".");
-	assert.equal(workspaceRelativePath(root, root.withPath("/home/ash/Project/src/main.ts")), "src/main.ts");
-	assert.throws(() => workspaceRelativePath(root, root.withPath("/home/ash/project/src/main.ts")), /outside/);
+	assert.equal(workspaceRelativePath(root, root.with({ path: '/home/ash/Project/src/main.ts' })), 'src/main.ts');
+	assert.throws(() => workspaceRelativePath(root, root.with({ path: '/home/ash/project/src/main.ts' })), /outside/);
 	assert.throws(() => workspaceRelativePath(root, createSshRemoteWorkspaceUri("other-server", "/home/ash/Project/src/main.ts")), /current workspace/);
 });
 
 test("workspace paths preserve backslashes as POSIX filename characters for Remote resources", () => {
 	const root = createSshRemoteWorkspaceUri("work-server", "/home/ash/Project");
-	const resource = root.withPath("/home/ash/Project/src%5Cgenerated/main.ts");
+	const resource = root.with({ path: '/home/ash/Project/src\\generated/main.ts' });
 
 	assert.equal(workspaceRelativePath(root, resource), "src\\generated/main.ts");
 	assert.equal(workspaceResourceFromPath(root, "src\\generated/main.ts")?.toString(), resource.toString());

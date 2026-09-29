@@ -1,5 +1,6 @@
 import './media/editorquickaccess.css';
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
+import { basename } from "../../../../base/common/resources.js";
 import { onDidChangeNls, localize } from "../../../../nls.js";
 import type { IQuickAccessProvider } from "../../../../platform/quickinput/common/quickAccess.js";
 import type { IQuickPick, IQuickPickItem } from "../../../../platform/quickinput/common/quickInput.js";
@@ -55,7 +56,5 @@ export class AllEditorsByMostRecentlyUsedQuickAccess implements IQuickAccessProv
 
 function editorInputLabel(input: EditorIdentifier["input"]): string {
 	if (input.label?.trim()) return input.label;
-	const path = decodeURIComponent(input.resource.path).replace(/\/+$/u, "");
-	const separator = path.lastIndexOf("/");
-	return path.slice(separator + 1) || input.resource.toString();
+	return basename(input.resource) || input.resource.toString();
 }

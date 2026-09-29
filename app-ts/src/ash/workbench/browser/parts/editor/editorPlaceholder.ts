@@ -2,6 +2,7 @@ import "./media/editorplaceholder.css";
 import { h, type IDimension } from "../../../../base/browser/dom.js";
 import { Button } from "../../../../base/browser/ui/button/button.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { basename } from "../../../../base/common/resources.js";
 import { localize } from "../../../../nls.js";
 import type { EditorInput } from "./editorInput.js";
 import { EditorPaneVisibility, type IEditorPane } from "./editorPane.js";
@@ -91,9 +92,7 @@ export class ErrorPlaceholderEditor extends Disposable implements IEditorPane {
 
 function editorInputLabel(input: Pick<EditorInput, "resource" | "label">): string {
 	if (input.label?.trim()) return input.label;
-	const path = decodeURIComponent(input.resource.path).replace(/\/+$/u, "");
-	const separator = path.lastIndexOf("/");
-	return path.slice(separator + 1) || input.resource.toString();
+	return basename(input.resource) || input.resource.toString();
 }
 
 function errorMessage(error: unknown): string {

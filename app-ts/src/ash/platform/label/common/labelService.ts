@@ -1,6 +1,7 @@
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { getPathLabel, type IPathLabelFormatting, type IRelativePathProvider, type IUserHomeProvider } from '../../../base/common/labels.js';
 import { operatingSystem, type OperatingSystem } from '../../../base/common/platform.js';
+import { basename } from '../../../base/common/resources.js';
 import type { URI } from '../../../base/common/uri.js';
 import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
@@ -71,8 +72,7 @@ export class LabelService extends Disposable implements ILabelService {
 	}
 
 	getUriBasenameLabel(resource: URI): string {
-		const path = decodeURIComponent(resource.path).replace(/\/+$/u, '');
-		return path.slice(path.lastIndexOf('/') + 1) || resource.authority || resource.toString();
+		return basename(resource) || resource.authority || resource.toString();
 	}
 
 	getSeparator(_resource?: URI): string {

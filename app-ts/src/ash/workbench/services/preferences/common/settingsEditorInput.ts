@@ -9,7 +9,7 @@ export const UserSettingsResource = URI.parse(`${SettingsFileSystemScheme}:/user
 /** Creates the singleton input routed to the Workbench Settings editor. */
 export function createSettingsEditorInput(category?: string): EditorInput {
 	return {
-		resource: category ? SettingsEditorResource.withQuery(`category=${encodeURIComponent(category)}`) : SettingsEditorResource,
+		resource: category ? SettingsEditorResource.with({ query: `category=${category}` }) : SettingsEditorResource,
 		contentType: SettingsEditorContentType,
 		label: 'Ash Settings',
 		readOnly: true,

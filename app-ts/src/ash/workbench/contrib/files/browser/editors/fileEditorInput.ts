@@ -22,7 +22,8 @@ export class FileEditorInput implements EditorInput {
 
 	constructor(readonly resource: URI, options: FileEditorInputOptions = {}) {
 		if (resource.scheme !== 'file' && !isRemoteResource(resource)) throw new TypeError('File editor input requires a file resource');
-		this.label = options.label ?? decodeURIComponent(resource.path.split('/').pop() || resource.path);
+		const encodedPath = resource.toEncodedComponents().path;
+		this.label = options.label ?? decodeURIComponent(encodedPath.split('/').pop() || encodedPath);
 		this.contentType = options.contentType;
 		this.languageId = options.languageId;
 		this.readOnly = options.readOnly;

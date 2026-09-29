@@ -55,6 +55,6 @@ export class SymbolsQuickAccessProvider implements IQuickAccessProvider {
 }
 
 function resourceLabel(resource: LanguageWorkspaceSymbol['resource']): string {
-	const path = decodeURIComponent(resource.path);
+	const path = resource.path;
 	return path.slice(path.lastIndexOf('/') + 1) || resource.toString();
 }

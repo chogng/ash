@@ -1,4 +1,5 @@
 import { Disposable, DisposableStore } from "../../../../base/common/lifecycle.js";
+import { dirname } from "../../../../base/common/resources.js";
 import type { URI } from "../../../../base/common/uri.js";
 import { localize } from "../../../../nls.js";
 import { FileKind, IFileService, type IFileEntry } from "../../../../platform/files/common/files.js";
@@ -25,10 +26,9 @@ export class BreadcrumbsFilePicker extends Disposable {
 		@IQuickInputService private readonly quickInputService: IQuickInputService,
 	) {
 		super();
-		const path = element.uri.path;
 		this.directory = element.kind === FileKind.Directory
 			? element.uri
-			: element.uri.withPath(path.slice(0, path.lastIndexOf("/")) || "/");
+			: dirname(element.uri);
 	}
 
 	async show(): Promise<void> {

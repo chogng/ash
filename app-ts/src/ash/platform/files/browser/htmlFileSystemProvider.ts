@@ -280,10 +280,11 @@ export class HTMLFileSystemProvider extends Disposable implements IFileService {
 }
 
 function partsOf(resource: URI): { id: string; name: string; parts: readonly string[] } {
-	if (resource.scheme !== 'file' || resource.authority || resource.query || resource.fragment || !resource.path.startsWith(ROOT_PREFIX)) {
+	const encodedPath = resource.toEncodedComponents().path;
+	if (resource.scheme !== 'file' || resource.authority || resource.query || resource.fragment || !encodedPath.startsWith(ROOT_PREFIX)) {
 		throw new FileNotFoundError(resource);
 	}
-	const segments = resource.path.slice(ROOT_PREFIX.length).split('/').map(decodeURIComponent);
+	const segments = encodedPath.slice(ROOT_PREFIX.length).split('/').map(decodeURIComponent);
 	const [id, name, ...parts] = segments;
 	if (!id || !name || segments.some(segment => !segment || segment === '.' || segment === '..' || segment.includes('\\'))) {
 		throw new FileNotFoundError(resource);
@@ -296,7 +297,7 @@ function rootUri(directory: SavedDirectory): URI {
 }
 
 function childUri(parent: URI, name: string): URI {
-	return parent.withPath(`${parent.path.replace(/\/$/, '')}/${encodeURIComponent(name)}`);
+	return parent.joinPathSegment(name);
 }
 
 async function revision(bytes: Uint8Array): Promise<string> {

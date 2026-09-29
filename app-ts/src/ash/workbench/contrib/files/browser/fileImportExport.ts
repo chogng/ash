@@ -8,7 +8,8 @@ export class FileDownload {
 
 	public async download(resource: URI, ownerDocument: Document): Promise<void> {
 		const { bytes } = await this.fileService.readFileBytes(resource);
-		const name = decodeURIComponent(resource.path.slice(resource.path.lastIndexOf('/') + 1));
+		const encodedPath = resource.toEncodedComponents().path;
+		const name = decodeURIComponent(encodedPath.slice(encodedPath.lastIndexOf('/') + 1));
 		triggerDownload(new Blob([new Uint8Array(bytes)]), name, ownerDocument);
 	}
 }

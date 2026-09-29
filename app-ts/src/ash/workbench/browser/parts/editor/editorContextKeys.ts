@@ -196,7 +196,7 @@ function resetEditorContextKeys(contextKeyService: IContextKeyService, keys: Edi
 }
 
 function resourceContextPath(resource: EditorInput['resource']): string {
-	return resource.scheme === 'file' ? resource.fsPath : decodeURIComponent(resource.path);
+	return resource.scheme === 'file' ? resource.fsPath : resource.path;
 }
 
 function resourceFilename(path: string): string | undefined {

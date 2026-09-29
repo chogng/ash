@@ -266,7 +266,7 @@ function directionLabel(direction: HierarchyDirection): string {
 	}
 }
 function hierarchyIdentity(item: LanguageHierarchyItem): string { return `${item.resource.toString()}\0${item.selectionRange.getStartPosition().lineNumber}:${item.selectionRange.getStartPosition().column}`; }
-function resourceLabel(resource: URI): string { const path = decodeURIComponent(resource.path); return path.slice(path.lastIndexOf("/") + 1) || resource.toString(); }
+function resourceLabel(resource: URI): string { const path = resource.path; return path.slice(path.lastIndexOf("/") + 1) || resource.toString(); }
 
 interface PreparedCallHierarchy {
 	readonly roots: readonly LanguageHierarchyItem[];

@@ -3,9 +3,11 @@ import { test } from "mocha";
 import { ResourceMap, ResourceSet } from "../../common/map.js";
 import {
 	ExtUri,
+	basename,
 	extUri,
 	DataUri,
 	ResourcePathCasing,
+	dirname,
 } from "../../common/resources.js";
 import { URI } from "../../common/uri.js";
 
@@ -69,13 +71,24 @@ test('ExtUri applies URI identity and casing rules to parent paths', () => {
 	const child = URI.parse('ash://workspace/Project/src/file.ts?revision=1#anchor');
 
 	assert.equal(extUri.isEqualOrParent(child, root), true);
-	assert.equal(extUri.isEqualOrParent(child.withFragment('other'), root), false);
-	assert.equal(extUri.isEqualOrParent(child.withFragment('other'), root, true), true);
-	assert.equal(extUri.isEqualOrParent(child.withQuery('revision=2'), root), false);
+	assert.equal(extUri.isEqualOrParent(child.with({ fragment: 'other' }), root), false);
+	assert.equal(extUri.isEqualOrParent(child.with({ fragment: 'other' }), root, true), true);
+	assert.equal(extUri.isEqualOrParent(child.with({ query: 'revision=2' }), root), false);
 	assert.equal(extUri.isEqualOrParent(URI.parse('ash://workspace/project/src/file.ts?revision=1#anchor'), root), false);
 	assert.equal(caseInsensitiveExtUri.isEqualOrParent(URI.parse('ash://workspace/project/src/file.ts?revision=1#anchor'), root), true);
 	assert.equal(extUri.isEqualOrParent(URI.parse('ash://workspace/Project%2Fsrc/file.ts?revision=1#anchor'), root), false);
 	assert.equal(caseInsensitiveExtUri.isEqual(URI.parse('ash://workspace/a%2Fb'), URI.parse('ash://workspace/a/b')), false);
+});
+
+test('dirname keeps an escaped slash inside its filename', () => {
+	const resource = URI.parse('ash://workspace/project/a%2Fb.txt');
+	assert.equal(dirname(resource).toString(), 'ash://workspace/project');
+	assert.equal(dirname(URI.parse('ash://workspace/project/')).toString(), 'ash://workspace/');
+});
+
+test('basename decodes the final path segment after finding its boundary', () => {
+	assert.equal(basename(URI.parse('ash://workspace/project/a%2Fb.txt')), 'a/b.txt');
+	assert.equal(basename(URI.parse('ash://workspace/project/a%20b.txt/')), 'a b.txt');
 });
 
 test("ResourceMap uses exact URI identity by default", () => {

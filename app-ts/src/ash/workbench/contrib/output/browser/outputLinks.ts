@@ -43,8 +43,7 @@ function resolveWorkspaceResource(candidate: string, folders: readonly IWorkspac
 	const segments = normalized.split("/");
 	if (segments.some(segment => !segment || segment === "." || segment === "..")) return undefined;
 	for (const folder of folders) {
-		const path = `${folder.uri.path.replace(/\/$/, "")}/${segments.map(encodeURIComponent).join("/")}`;
-		const resource = folder.uri.withPath(path);
+		const resource = URI.joinPath(folder.uri, ...segments);
 		if (belongsToWorkspace(folder.uri, resource)) return resource;
 	}
 	return undefined;

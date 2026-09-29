@@ -84,6 +84,7 @@ function validateProvider(provider: QuickDiffProvider): void {
 function containsResource(root: URI | undefined, resource: URI): boolean {
 	if (!root) return true;
 	if (root.scheme !== resource.scheme || root.authority !== resource.authority) return false;
-	const rootPath = root.path.replace(/\/$/u, '');
-	return resource.path === rootPath || resource.path.startsWith(`${rootPath}/`);
+	const rootPath = root.toEncodedComponents().path.replace(/\/$/u, '');
+	const resourcePath = resource.toEncodedComponents().path;
+	return resourcePath === rootPath || resourcePath.startsWith(`${rootPath}/`);
 }

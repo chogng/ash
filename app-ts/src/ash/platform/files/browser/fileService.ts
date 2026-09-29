@@ -165,8 +165,9 @@ export class BrowserFileService extends Disposable implements IFileService {
 		for (const folder of folders) {
 			try {
 				const path = workspaceRelativePath(folder.uri, resource);
-				if (!match || folder.uri.path.length > match.rootLength) {
-					match = { dirId: folder.id, path, rootLength: folder.uri.path.length };
+				const rootLength = folder.uri.toEncodedComponents().path.length;
+				if (!match || rootLength > match.rootLength) {
+					match = { dirId: folder.id, path, rootLength };
 				}
 			} catch {
 				// A resource may only belong to one of the workspace's independent roots.
@@ -274,7 +275,7 @@ export function workspaceRelativePath(root: URI, resource: URI): string {
 }
 
 function decodedPath(resource: URI): string {
-	const path = decodeURIComponent(resource.path);
+	const path = resource.path;
 	return resource.scheme === "file" ? path.replaceAll("\\", "/") : path;
 }
 
@@ -289,8 +290,7 @@ export function workspaceResourceFromPath(root: URI, path: string): URI | undefi
 	const normalizedPath = root.scheme === "file" ? path.replaceAll("\\", "/") : path;
 	const segments = normalizedPath.split("/");
 	if (segments.length === 0 || segments.some(segment => segment.length === 0 || segment === "." || segment === "..")) return undefined;
-	const rootPath = root.path.endsWith("/") ? root.path.slice(0, -1) : root.path;
-	return root.withPath(`${rootPath}/${segments.map(encodeURIComponent).join("/")}`);
+	return URI.joinPath(root, ...segments);
 }
 
 function isWorkspaceFileSystemResource(resource: URI): boolean {

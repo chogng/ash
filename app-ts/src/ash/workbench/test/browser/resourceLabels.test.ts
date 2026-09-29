@@ -74,7 +74,7 @@ test('Workspace labels use the closest folder for nested resources', () => {
 		],
 	});
 	using labels = new LabelService(workspace, OperatingSystem.Linux);
-	const resource = URI.file('/project/src/main.ts').withQuery('preview');
+	const resource = URI.file('/project/src/main.ts').with({ query: 'preview' });
 
 	assert.equal(workspace.getWorkspaceFolder(resource)?.id, 'nested');
 	assert.equal(labels.getUriLabel(resource, { relative: true }), 'src • main.ts');

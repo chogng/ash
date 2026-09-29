@@ -117,7 +117,7 @@ class FakeFileService implements IFileService {
 	async copy(): Promise<void> { throw new Error("Copy is not used in this test"); }
 	async rename() { throw new Error("unused"); }
 	async delete() { throw new Error("unused"); }
-	private relative(resource: URI): string { return decodeURIComponent(resource.path).slice(decodeURIComponent(this.root.path).length + 1); }
+	private relative(resource: URI): string { return resource.path.slice(this.root.path.length + 1); }
 }
 
 class FakeTerminalService extends Disposable implements ITerminalService {

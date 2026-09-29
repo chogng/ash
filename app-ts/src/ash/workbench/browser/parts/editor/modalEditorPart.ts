@@ -6,6 +6,7 @@ import { observeElementSize } from '../../../../base/browser/observer.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { DisposableMap, Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { basename } from '../../../../base/common/resources.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import type { EditorInput, EditorOpenOptions } from '../../../services/editor/common/editorService.js';
 import { EditorOpenSupersededError } from './editorGroup.js';
@@ -253,7 +254,5 @@ class ModalEditorPaneInstance extends Disposable {
 
 function editorInputLabel(input: Pick<EditorInput, 'resource' | 'label'>): string {
 	if (input.label?.trim()) return input.label;
-	const path = decodeURIComponent(input.resource.path).replace(/\/+$/u, '');
-	const separator = path.lastIndexOf('/');
-	return path.slice(separator + 1) || input.resource.toString();
+	return basename(input.resource) || input.resource.toString();
 }
