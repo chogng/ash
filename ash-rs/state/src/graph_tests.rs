@@ -22,6 +22,7 @@ fn start(
         .start_thread(
             &NoThreadWorktreeBinder,
             StartThreadRequest {
+                execution_target: None,
                 branch_name: None,
                 agent_id,
                 agent: None,
@@ -111,6 +112,7 @@ fn invalid_binding_rolls_back_thread_events_catalog_and_agent_creation() {
     let wrong_agent = AgentId::new("wrong-agent").unwrap();
     let child = ThreadId::new("invalid-child").unwrap();
     let result = threads.create_thread(CreateThreadRequest {
+        execution_target: None,
         agent_id: wrong_agent.clone(),
         origin: ThreadOrigin::Fork {
             parent_thread_id: root.thread_id.clone(),

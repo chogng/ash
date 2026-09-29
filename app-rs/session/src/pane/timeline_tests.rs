@@ -32,6 +32,7 @@ fn timeline_groups_shell_result_under_its_tool_call() {
             kind: ash_protocol::TurnKind::Coding,
             instructions: None,
             model: None,
+            reasoning_effort: None,
             tool_profile: None,
             tool_mode: Default::default(),
             approval_mode: ash_protocol::ApprovalMode::AskPermissions,

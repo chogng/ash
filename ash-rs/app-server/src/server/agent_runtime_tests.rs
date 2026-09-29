@@ -91,7 +91,7 @@ fn root_agent_picker_lists_authorized_roles_and_creates_the_selected_session() {
     let created = call(
         3,
         "session/create",
-        json!({"commandId":"selected-reviewer", "title":"Review", "workspace":{"type":"current"}, "agent":{"type":"exact", "source":source, "name":"reviewer"}}),
+        json!({"commandId":"selected-reviewer", "title":"Review", "executionTarget":null, "agent":{"type":"exact", "source":source, "name":"reviewer"}}),
     );
     assert!(created.get("result").is_some(), "{created}");
     let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();
@@ -123,7 +123,7 @@ fn recovered_spawn_starts_a_new_child_turn_once() {
         .start_thread(
             &ash_core::NoThreadWorktreeBinder,
             StartThreadRequest {
-                workspace: None,
+                execution_target: None,
                 branch_name: None,
                 agent_id: None,
                 agent: None,
@@ -413,7 +413,7 @@ fn built_in_model_guidance_reaches_rpc_roots_and_default_workers_through_tool_ex
         );
         let created = call(
             "session/create",
-            json!({"commandId":"initial-guidance-root", "title":"guided root", "workspace":{"type":"current"}, "agent":{"type":"default"}}),
+            json!({"commandId":"initial-guidance-root", "title":"guided root", "executionTarget":null, "agent":{"type":"default"}}),
         );
         let session = created["session"]["sessionId"].as_str().unwrap();
         let session_id = ash_protocol::SessionId::new(session).unwrap();
@@ -634,7 +634,7 @@ fn rpc_turn_executes_browser_tool_only_on_its_originating_window() {
         let created = call(
             connection,
             "session/create",
-            json!({"commandId":format!("browser-session-{index}"),"title":"Browser task","workspace":{"type":"current"},"agent":{"type":"default"}}),
+            json!({"commandId":format!("browser-session-{index}"),"title":"Browser task","executionTarget":null,"agent":{"type":"default"}}),
         );
         let session = created["session"]["sessionId"].as_str().unwrap();
         call(

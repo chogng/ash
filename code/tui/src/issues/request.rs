@@ -11,6 +11,7 @@ use ash_app_server_client::AppServerRequestHandle;
 use ash_app_server_protocol::protocol::issues::IssueListParams;
 use ash_app_server_protocol::protocol::issues::IssueReadParams;
 use ash_app_server_protocol::protocol::issues::IssueRepository;
+use std::path::Path;
 
 pub(crate) fn execute(
     client: &mut AppServerRequestHandle,
@@ -125,8 +126,9 @@ pub(crate) fn start(
     mut client: AppServerRequestHandle,
     current: Option<Conversation>,
     command: Command,
+    root: &Path,
 ) -> Result<ConversationCompletion, String> {
-    let session_id = start_session(&mut client, command)?;
+    let session_id = start_session(&mut client, command, root)?;
     let conversation = ActiveConversation::open(&mut client, session_id.as_str(), None)
         .map_err(|error| error.to_string())?;
     let change = crate::sessions::ConversationChange {
@@ -153,6 +155,7 @@ fn repository_dto(repository: Repository) -> IssueRepository {
 fn start_session<T: ash_app_server_client::JsonRpcTransport>(
     client: &mut ash_app_server_client::AppServerClient<T>,
     command: Command,
+    root: &Path,
 ) -> Result<ash_protocol::SessionId, String> {
     let Command::Start {
         command_id,
@@ -179,6 +182,9 @@ fn start_session<T: ash_app_server_client::JsonRpcTransport>(
                 branch_name: None,
                 agent_id: None,
                 command_id: command_id.clone(),
+                execution_target: Some(ash_protocol::SessionExecutionTarget::Local {
+                    root: root.to_path_buf(),
+                }),
                 title: if numbers.len() <= 4 {
                     format!(
                         "Issues {}",

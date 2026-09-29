@@ -6,14 +6,13 @@ use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::initialize::{
     InitializeResult, REQUIRED_SESSION_CAPABILITIES, ensure_protocol_compatible,
 };
-use ash_app_server_protocol::protocol::session::SessionWorkspaceSelection;
 use ash_app_server_protocol::rpc::JsonRpcFailure;
 use ash_app_server_protocol::rpc::JsonRpcId;
 use ash_app_server_transport::DEFAULT_MAX_MESSAGE_BYTES;
 use ash_app_server_transport::JsonlReader;
 use ash_app_server_transport::JsonlWriter;
+use ash_protocol::SessionExecutionTarget;
 use ash_protocol::SessionId;
-use ash_protocol::SessionWorkspace;
 use ash_protocol::ThreadId;
 use ash_remote::RemoteProfile;
 use ash_remote::remote_app_server_command;
@@ -271,17 +270,18 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                         .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))?;
                     continue;
                 }
-                let workspace = match selected_workspace(&registry, &remote_sessions, &request) {
-                    Ok(workspace) => workspace,
-                    Err(error) => {
-                        outbound
-                            .send(routing_error(id, &error))
-                            .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))?;
-                        continue;
-                    }
-                };
-                let target = match workspace {
-                    Some(SessionWorkspace::Local { root }) => {
+                let execution_target =
+                    match selected_execution_target(&registry, &remote_sessions, &request) {
+                        Ok(target) => target,
+                        Err(error) => {
+                            outbound
+                                .send(routing_error(id, &error))
+                                .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))?;
+                            continue;
+                        }
+                    };
+                let target = match execution_target {
+                    Some(SessionExecutionTarget::Local { root }) => {
                         let root = dunce::canonicalize(root)?;
                         if !local.contains_key(&root) {
                             let server = registry
@@ -328,7 +328,7 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                         }
                         local.get_mut(&root).expect("inserted local Session target")
                     }
-                    Some(SessionWorkspace::Ssh { host, root }) => {
+                    Some(SessionExecutionTarget::Ssh { host, root }) => {
                         let key = (host, root);
                         if remote
                             .get(&key)
@@ -394,8 +394,8 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                         let target = remote.get_mut(&key).expect("inserted SSH target");
                         let mut forwarded = request.clone();
                         if method == Some("session/create") {
-                            forwarded["params"]["workspace"] =
-                                serde_json::json!({"type":"current"});
+                            forwarded["params"]["executionTarget"] =
+                                serde_json::json!({"type":"local","root":key.1.clone()});
                         }
                         track_remote_request(&remote_pending, target.route_id, &forwarded);
                         if let Err(error) = target.writer.write_message(&forwarded.to_string()) {
@@ -606,8 +606,8 @@ fn annotate_remote_sessions(value: &mut Value, key: &RemoteKey, sessions: &Remot
                     let selected = (
                         key.0.clone(),
                         object
-                            .get("workspace")
-                            .and_then(|workspace| workspace.get("root"))
+                            .get("executionTarget")
+                            .and_then(|target| target.get("root"))
                             .and_then(Value::as_str)
                             .unwrap_or(&key.1)
                             .to_owned(),
@@ -628,7 +628,7 @@ fn annotate_remote_sessions(value: &mut Value, key: &RemoteKey, sessions: &Remot
                         }
                     }
                     object.insert(
-                        "workspace".into(),
+                        "executionTarget".into(),
                         serde_json::json!({"type":"ssh","host":selected.0,"root":selected.1}),
                     );
                 }
@@ -727,28 +727,22 @@ fn untag_host_response(message: &Value) -> io::Result<(usize, Value)> {
     Ok((route_id, response))
 }
 
-fn selected_workspace(
+fn selected_execution_target(
     registry: &ProfileAppServerRegistry,
     remote_sessions: &RemoteSessionIndex,
     request: &Value,
-) -> Result<Option<SessionWorkspace>, String> {
+) -> Result<Option<SessionExecutionTarget>, String> {
     let method = request.get("method").and_then(Value::as_str);
     let params = request.get("params");
     if method == Some("session/create") {
-        let selected: SessionWorkspaceSelection = serde_json::from_value(
+        let selected: Option<SessionExecutionTarget> = serde_json::from_value(
             params
-                .and_then(|params| params.get("workspace"))
+                .and_then(|params| params.get("executionTarget"))
                 .cloned()
-                .ok_or("Session creation requires a workspace")?,
+                .ok_or("Session creation requires an execution target")?,
         )
         .map_err(|error| error.to_string())?;
-        return Ok(match selected {
-            SessionWorkspaceSelection::Current => None,
-            SessionWorkspaceSelection::Local { root } => Some(SessionWorkspace::Local { root }),
-            SessionWorkspaceSelection::Ssh { host, root } => {
-                Some(SessionWorkspace::Ssh { host, root })
-            }
-        });
+        return Ok(selected);
     }
     if let Some(session_id) = params
         .and_then(|params| params.get("sessionId"))
@@ -760,11 +754,11 @@ fn selected_workspace(
             .get(session_id)
             .cloned()
         {
-            return Ok(Some(SessionWorkspace::Ssh { host, root }));
+            return Ok(Some(SessionExecutionTarget::Ssh { host, root }));
         }
         let session_id =
             SessionId::new(session_id.to_owned()).map_err(|error| error.to_string())?;
-        return registry.workspace_for_session(&session_id);
+        return registry.execution_target_for_session(&session_id);
     }
     if let Some(thread_id) = params
         .and_then(|params| params.get("threadId"))
@@ -776,10 +770,10 @@ fn selected_workspace(
             .get(thread_id)
             .cloned()
         {
-            return Ok(Some(SessionWorkspace::Ssh { host, root }));
+            return Ok(Some(SessionExecutionTarget::Ssh { host, root }));
         }
         let thread_id = ThreadId::new(thread_id.to_owned()).map_err(|error| error.to_string())?;
-        return registry.workspace_for_thread(&thread_id);
+        return registry.execution_target_for_thread(&thread_id);
     }
     Ok(None)
 }

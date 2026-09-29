@@ -240,7 +240,7 @@ where
             } else {
                 arguments
             };
-            *conversation = Some(ActiveConversation::start(client, title)?);
+            *conversation = Some(ActiveConversation::start_at(client, title, workspace)?);
             output.conversation_change = Some(ConversationChange {
                 notice: "Started a new session.".into(),
                 transcript: crate::sessions::ConversationTranscript::Clear,

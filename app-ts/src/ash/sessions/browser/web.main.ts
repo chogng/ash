@@ -9,10 +9,12 @@ import { BrowserLifecycleService } from '../../workbench/services/lifecycle/brow
 import { createBrowserContextMenuService } from "../../platform/contextview/browser/contextMenuService.js";
 import { BrowserClipboardService } from '../../platform/clipboard/browser/clipboardService.js';
 import { connectBrowserWorkbenchHost } from '../../workbench/browser/web.host.js';
+import { workspaceFromIdentifier } from '../../platform/workspace/common/workspace.js';
 import { showStartupError } from '../../workbench/browser/startupError.js';
 import type { WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import type { SessionsProfile } from "../common/sessionsProfile.js";
 import { Workbench } from "./workbench.js";
+import { selectionFromWorkspace } from './workspaceSelection.js';
 
 /** Starts a browser-hosted Sessions page with the optional renderer host. */
 export function startBrowserSessions(modeId: WorkbenchModeId, profile: SessionsProfile): void {
@@ -45,7 +47,7 @@ async function mountBrowserSessions(modeId: WorkbenchModeId, profile: SessionsPr
 			modeId,
 			profile,
 			api: host?.api ?? createDisconnectedRendererApi(),
-			workspaceSelection: () => ({ type: 'current' }),
+			workspaceSelection: () => host?.workspace ? selectionFromWorkspace(workspaceFromIdentifier(host.workspace)) : { type: 'current' },
 			configurationApi,
 			initialConfigurationSnapshot,
 			lifecycleService: new BrowserLifecycleService({ ownerWindow, onError: onUnexpectedError }),

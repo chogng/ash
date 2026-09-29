@@ -56,7 +56,10 @@ export type SessionStatus = "active" | "archived";
 export type SessionWorkspaceSelection =
 	| { readonly type: 'current' }
 	| { readonly type: 'local'; readonly root: string }
-	| { readonly type: 'ssh'; readonly host: string; readonly root: string };
+	| { readonly type: 'ssh'; readonly host: string; readonly root: string }
+	| { readonly type: 'multiple'; readonly folders: readonly { readonly label: string; readonly target: SessionExecutionTarget }[] };
+
+export type SessionExecutionTarget = Extract<SessionWorkspaceSelection, { readonly type: 'local' | 'ssh' }>;
 
 /** Frontend product model for one App Server Session tree. */
 export interface ISession {

@@ -11,11 +11,10 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 pub const APP_SERVER_PROTOCOL_MAJOR: u32 = 7;
-pub const APP_SERVER_PROTOCOL_REVISION: u32 = 6;
-// Version 9 requires an execution workspace in session/create. Older servers would ignore the
-// selector and bind the Session to the connection directory, so clients must reject them before
-// sending a root creation request.
-pub const APP_SERVER_CAPABILITY_VERSION: u32 = 9;
+pub const APP_SERVER_PROTOCOL_REVISION: u32 = 7;
+// Version 10 requires an explicit execution target or null in session/create. An older server
+// interprets this request using its Workspace selector, so clients must reject that contract.
+pub const APP_SERVER_CAPABILITY_VERSION: u32 = 10;
 
 pub const REQUIRED_SESSION_CAPABILITIES: &[CapabilityRequirement] = &[
     CapabilityRequirement::exact("sessions", APP_SERVER_CAPABILITY_VERSION),

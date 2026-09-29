@@ -183,7 +183,7 @@ pub struct CreateThreadRequest {
     pub session_id: SessionId,
     pub thread_id: ThreadId,
     pub title: String,
-    pub workspace: Option<ash_protocol::SessionWorkspace>,
+    pub execution_target: Option<ash_protocol::SessionExecutionTarget>,
 }
 
 enum ForkDestination {
@@ -619,7 +619,7 @@ impl ThreadController {
             session_id: request.session_id,
             thread_id: request.thread_id.clone(),
             title: request.title,
-            workspace: request.workspace,
+            execution_target: request.execution_target,
         }];
         events.extend(initial_events);
         let (snapshot, batch) = self.project_batch_with_history(
@@ -676,7 +676,7 @@ impl ThreadController {
             session_id,
             thread_id,
             title: request.title,
-            workspace: request.workspace,
+            execution_target: request.execution_target,
         })
     }
 
@@ -702,9 +702,9 @@ impl ThreadController {
             origin: ThreadOrigin::Root,
             branch_name: None,
         })?;
-        let workspace = self
+        let execution_target = self
             .read_session_catalog(&request.session_id)?
-            .and_then(|session| session.workspace);
+            .and_then(|session| session.execution_target);
         self.create_thread(CreateThreadRequest {
             agent_id,
             origin: ThreadOrigin::Root,
@@ -712,7 +712,7 @@ impl ThreadController {
             session_id: request.session_id,
             thread_id,
             title: request.title,
-            workspace,
+            execution_target,
         })
     }
 
@@ -855,7 +855,7 @@ impl ThreadController {
                 session_id: request.session_id,
                 thread_id: request.thread_id.clone(),
                 title: request.title,
-                workspace: source.workspace.clone(),
+                execution_target: source.execution_target.clone(),
             },
             vec![ThreadEvent::HistoryPrefixBound {
                 thread_id: request.thread_id,
@@ -902,7 +902,7 @@ impl ThreadController {
                 session_id: request.session_id,
                 thread_id: request.thread_id.clone(),
                 title: request.title,
-                workspace: source.workspace.clone(),
+                execution_target: source.execution_target.clone(),
             },
             vec![ThreadEvent::HistoryPrefixBound {
                 thread_id: request.thread_id,
@@ -3044,7 +3044,7 @@ fn matching_created_thread(
         && snapshot.origin == request.origin
         && snapshot.thread_id == request.thread_id
         && snapshot.title == request.title
-        && snapshot.workspace == request.workspace
+        && snapshot.execution_target == request.execution_target
         && snapshot.agent.as_ref() == request.agent.as_ref()
     {
         Ok(snapshot.clone())
@@ -3073,7 +3073,7 @@ fn thread_catalog_record(snapshot: &ThreadSnapshot) -> ThreadCatalogRecord {
             forked_from_id: snapshot.forked_from_id.clone(),
             status: snapshot.status,
         },
-        workspace: snapshot.workspace.clone(),
+        execution_target: snapshot.execution_target.clone(),
         sequence: snapshot.sequence,
         manager: thread_manager_info(snapshot),
         archived_at_unix_ms: snapshot.archived_at_unix_ms,

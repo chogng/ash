@@ -29,6 +29,7 @@ fn trace_groups_thread_streams_by_session_id() {
         .recover_threads()
         .unwrap()
         .create_thread(CreateThreadRequest {
+            execution_target: None,
             agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
             origin: Default::default(),
             agent: None,
@@ -56,6 +57,7 @@ fn trace_contains_the_complete_nested_history_prefix_closure() {
         .start_thread(
             &ash_core::NoThreadWorktreeBinder,
             core_api::StartThreadRequest {
+                execution_target: None,
                 branch_name: None,
                 agent_id: None,
                 agent: None,

@@ -22,20 +22,20 @@ pub struct Session {
     pub status: SessionStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
-    pub workspace: Option<SessionWorkspace>,
+    pub execution_target: Option<SessionExecutionTarget>,
     #[serde(default)]
     pub manager: SessionManagerInfo,
     pub threads: Vec<SessionThread>,
 }
 
-/// The execution root selected for a Session, independent of the editor's open Workspace.
+/// The execution authority selected for a Session, independent of the editor's open Workspace.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(
     tag = "type",
     rename_all = "camelCase",
     rename_all_fields = "camelCase"
 )]
-pub enum SessionWorkspace {
+pub enum SessionExecutionTarget {
     Local { root: PathBuf },
     Ssh { host: String, root: String },
 }

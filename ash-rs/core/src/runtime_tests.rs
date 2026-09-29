@@ -121,7 +121,7 @@ impl Fixture {
         let thread_id = ThreadId::new("thread").unwrap();
         threads
             .create_thread(CreateThreadRequest {
-                workspace: None,
+                execution_target: None,
                 agent_id: AgentId::new("agent").unwrap(),
                 agent: None,
                 origin: ThreadOrigin::Root,

@@ -125,12 +125,13 @@ impl AppDriver {
                 if let crate::issues::Command::Start { generation, .. } = &command {
                     let generation = *generation;
                     let conversation = self.conversation.clone();
+                    let root = self.app.startup_context().workspace.clone();
                     self.requests.spawn(
                         request_key,
                         "ash-tui-issue-start",
                         move || Completion::IssueCreated {
                             generation,
-                            result: crate::issues::start(client, conversation, command),
+                            result: crate::issues::start(client, conversation, command, &root),
                         },
                         &mut self.app,
                         origin,
@@ -452,10 +453,11 @@ impl AppDriver {
         let name = request.name();
         let client = self.client.clone();
         let conversation = self.conversation.clone();
+        let root = self.app.startup_context().workspace.clone();
         self.requests.spawn(
             request_key,
             name,
-            move || Completion::Sessions(request.execute(client, conversation)),
+            move || Completion::Sessions(request.execute(client, conversation, &root)),
             &mut self.app,
             origin,
         );

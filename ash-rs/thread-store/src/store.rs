@@ -19,7 +19,8 @@ pub struct ThreadCatalogRecord {
     pub session_id: SessionId,
     pub thread: SessionThread,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub workspace: Option<ash_protocol::SessionWorkspace>,
+    #[serde(alias = "workspace")]
+    pub execution_target: Option<ash_protocol::SessionExecutionTarget>,
     pub sequence: u64,
     pub manager: SessionManagerInfo,
     pub archived_at_unix_ms: Option<u64>,
@@ -55,7 +56,7 @@ pub fn session_from_catalog(
         session_id,
         title,
         status,
-        workspace: root.workspace.clone(),
+        execution_target: root.execution_target.clone(),
         manager,
         threads: records.into_iter().map(|record| record.thread).collect(),
     })

@@ -7,10 +7,13 @@ import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../../wo
 import { SessionsManagementService } from '../../../../services/sessions/browser/sessionsManagementService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { AppServerSessionsProvider } from './appServerSessionsProvider.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
+import { pickWorkspaceFolder, selectionFromWorkspace } from '../../../../browser/workspaceSelection.js';
 
 class WorkbenchSessionsManagementService extends SessionsManagementService {
-	constructor(@IRendererHostService api: IRendererHost) {
-		super(new AppServerSessionsProvider({ session: api.session, model: api.model, turn: api.turn, events: api.events, workspace: () => ({ type: 'current' }) }));
+	constructor(@IRendererHostService api: IRendererHost, @IWorkspaceContextService workspace: IWorkspaceContextService, @IQuickInputService quickInput: IQuickInputService) {
+		super(new AppServerSessionsProvider({ session: api.session, model: api.model, turn: api.turn, events: api.events, workspace: () => selectionFromWorkspace(workspace.getWorkspace()), selectWorkspace: folders => pickWorkspaceFolder(quickInput, folders) }));
 	}
 }
 

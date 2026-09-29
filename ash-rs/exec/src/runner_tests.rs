@@ -208,6 +208,7 @@ fn test_runner() -> ExecRunner {
             name: "ash-exec-tests".into(),
             version: "1".into(),
         },
+        std::path::PathBuf::from("/repo"),
     )
     .with_options(
         ExecRunnerOptions::new()

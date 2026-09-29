@@ -234,6 +234,7 @@ fn session() -> Session {
         session_id: session_id("root"),
         title: "Session".into(),
         status: SessionStatus::Active,
+        execution_target: None,
         manager: Default::default(),
         threads: vec![root(), child("child-a"), child("child-b")],
     }

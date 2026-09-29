@@ -90,7 +90,7 @@ pub enum ThreadEvent {
         /// The root Thread records the Session execution authority. Descendants inherit it.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
-        workspace: Option<crate::SessionWorkspace>,
+        execution_target: Option<crate::SessionExecutionTarget>,
     },
     /// Changes future model selections without rewriting historical invocation or billing facts.
     ModelProvidersMigrated {

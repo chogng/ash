@@ -433,6 +433,7 @@ fn session(
         session_id: SessionId::new(id).unwrap(),
         title: id.into(),
         status: SessionStatus::Active,
+        execution_target: None,
         manager: SessionManagerInfo {
             status,
             status_changed_at_unix_ms: 10_000,

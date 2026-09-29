@@ -541,7 +541,7 @@ fn canonical_session_contains_thread_identity_presentation_and_lineage_without_h
         session_id: SessionId::new("session_1").expect("test ID is non-empty"),
         title: "task".into(),
         status: SessionStatus::Active,
-        workspace: None,
+        execution_target: None,
         manager: Default::default(),
         threads: vec![
             SessionThread {

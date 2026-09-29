@@ -1295,6 +1295,7 @@ fn agent_thread_switcher_starts_at_the_empty_input_cursor_column() {
         session_id,
         title: "Session".into(),
         status: SessionStatus::Active,
+        execution_target: None,
         manager: Default::default(),
         threads: vec![
             SessionThread {
@@ -2142,6 +2143,7 @@ fn manager_session(
         } else {
             SessionStatus::Active
         },
+        execution_target: None,
         manager: SessionManagerInfo {
             status,
             status_changed_at_unix_ms: current_unix_millis().saturating_sub(5_000),

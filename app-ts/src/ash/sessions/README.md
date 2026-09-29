@@ -106,13 +106,15 @@ the App Server provider. Sessions views consume `ISessionsManagementService`
 and frontend-owned domain types; Workbench Chat presentation consumes its model
 through a view contract and never imports the Sessions product layer.
 
-An untitled Session captures the selected Workbench directory when it opens.
-Materialization sends that directory to App Server, which stores the execution
-root with the root Thread and Session catalog. Existing Sessions keep their
-own root when another Workbench hands off a chat. Local roots select a directory
-runtime; SSH roots select the configured remote App Server. The editor window
-Workspace only selects the root for a new Session. The frontend workspace
-summary displays the Session's stored root and does not grant access.
+An untitled Session captures the frontend Workspace when it opens. A single
+folder supplies its execution target; a multi-root Workspace asks the user to
+choose a folder when the draft becomes durable. An empty Workspace sends no
+target. `session/create` carries `executionTarget` (local or SSH), never the
+editor Workspace. App Server stores the execution target with the root Thread
+and Session catalog. Existing Sessions keep their own target when another
+Workbench hands off a chat. Local targets select a directory runtime; SSH
+targets select the configured remote App Server. The frontend workspace summary
+displays the stored root and does not grant access.
 
 ## Failure and lifecycle semantics
 
@@ -156,6 +158,8 @@ summary displays the Session's stored root and does not grant access.
 - `services/sessions/test/browser/sessionsManagementService.test.ts` protects
   catalog refresh, provider invalidation, drafts, and operations without
   inventing Session sequence state.
+- `test/browser/workspaceSelection.test.ts` protects the frontend mapping from
+  empty, single-folder, and multi-root Workspaces to execution targets.
 - `test/smoke/areas/sessions/sessions-window.spec.ts` verifies the dedicated
   Electron window, all five Parts, Activity Bar actions, list search, details visibility, multiple Grid leaves, close, return flow,
   and system-wide shortcut registration and release.

@@ -1,4 +1,5 @@
 import { Emitter, type Event } from "../../base/common/event.js";
+import { isCancellationError } from "../../base/common/errors.js";
 import { Disposable, toDisposable } from "../../base/common/lifecycle.js";
 import type { AgentResponse, ChatAgent, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, TurnChangeSetSummary, TurnInteraction } from "../../workbench/services/chat/common/chatService.js";
 import { localize } from "../../nls.js";
@@ -353,6 +354,10 @@ export class ChatWidgetModel extends Disposable {
 			await this.refreshThread();
 			this.setState("ready");
 		} catch (error) {
+			if (isCancellationError(error)) {
+				this.setState('ready');
+				throw error;
+			}
 			this.setError(error);
 			throw error;
 		}

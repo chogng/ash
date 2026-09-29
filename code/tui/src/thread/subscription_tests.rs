@@ -480,6 +480,7 @@ fn update(session_id: &str, thread_id: &str, durable_sequence: u64) -> ThreadUpd
                 session_id,
                 thread_id,
                 title: "Thread".into(),
+                execution_target: None,
             },
         },
     }

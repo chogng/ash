@@ -26,6 +26,7 @@ fn repository_keeps_idle_history_lazy_and_loads_it_on_access() {
     let thread_id = ThreadId::new("thread-1").expect("test ID is non-empty");
     let created = threads
         .create_thread(CreateThreadRequest {
+            execution_target: None,
             agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
             origin: Default::default(),
             agent: None,
@@ -94,6 +95,7 @@ fn repository_rebuilds_an_outdated_catalog_row_from_thread_history() {
     let thread_id = ThreadId::new("thread-rebuild").unwrap();
     threads
         .create_thread(CreateThreadRequest {
+            execution_target: None,
             agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
             origin: Default::default(),
             agent: None,

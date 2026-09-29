@@ -56,15 +56,21 @@ fn issue_start_selects_the_root_role_and_retries_the_same_initial_input() {
         },
         numbers: vec![3, 5],
     };
-    assert!(start_session(&mut client, command.clone()).is_err());
+    assert!(start_session(&mut client, command.clone(), std::path::Path::new("/repo")).is_err());
     assert_eq!(
-        start_session(&mut client, command).unwrap().as_str(),
+        start_session(&mut client, command, std::path::Path::new("/repo"))
+            .unwrap()
+            .as_str(),
         "root"
     );
     let requests = requests.lock().unwrap();
     assert_eq!(requests.len(), 4);
     assert_eq!(requests[0]["params"], requests[2]["params"]);
     assert_eq!(requests[1]["params"], requests[3]["params"]);
+    assert_eq!(
+        requests[0]["params"]["executionTarget"],
+        serde_json::json!({"type":"local","root":"/repo"})
+    );
     assert_eq!(
         requests[0]["params"]["agent"],
         serde_json::json!({"type":"exact","source":{"type":"builtIn"},"name":"issue"})

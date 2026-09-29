@@ -21,7 +21,7 @@ pub struct StartThreadRequest {
     pub command_id: CommandId,
     pub title: String,
     pub branch_name: Option<String>,
-    pub workspace: Option<ash_protocol::SessionWorkspace>,
+    pub execution_target: Option<ash_protocol::SessionExecutionTarget>,
 }
 
 pub struct CreateBranchRequest {

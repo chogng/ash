@@ -118,7 +118,7 @@ fn create_thread(controller: &ThreadController, title: &str) -> ThreadId {
     .expect("test ID is non-empty");
     controller
         .create_thread(CreateThreadRequest {
-            workspace: None,
+            execution_target: None,
             agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
             origin: Default::default(),
             agent: None,
@@ -131,9 +131,9 @@ fn create_thread(controller: &ThreadController, title: &str) -> ThreadId {
 }
 
 #[test]
-fn session_workspace_survives_catalog_reload() {
+fn session_execution_target_survives_catalog_reload() {
     let store = Arc::new(InMemoryThreadStore::default());
-    let workspace = ash_protocol::SessionWorkspace::Local {
+    let target = ash_protocol::SessionExecutionTarget::Local {
         root: std::path::PathBuf::from("/workspace/project"),
     };
     let session_id = SessionId::new("workspace-session").unwrap();
@@ -146,7 +146,7 @@ fn session_workspace_survives_catalog_reload() {
             session_id: session_id.clone(),
             thread_id: ThreadId::new(session_id.as_str()).unwrap(),
             title: "Workspace session".into(),
-            workspace: Some(workspace.clone()),
+            execution_target: Some(target.clone()),
         })
         .unwrap();
     drop(threads);
@@ -157,8 +157,8 @@ fn session_workspace_survives_catalog_reload() {
             .read_session_catalog(&session_id)
             .unwrap()
             .unwrap()
-            .workspace,
-        Some(workspace)
+            .execution_target,
+        Some(target)
     );
 }
 
@@ -172,7 +172,7 @@ fn restoring_a_session_replays_durably_without_reopening_children() {
     for id in [&root, &child] {
         threads
             .create_thread(CreateThreadRequest {
-                workspace: None,
+                execution_target: None,
                 agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
                 origin: Default::default(),
                 agent: None,
@@ -230,7 +230,7 @@ fn deleting_a_session_forgets_loaded_threads_and_keeps_other_sessions() {
     let kept = ThreadId::new("thread_kept").unwrap();
     threads
         .create_thread(CreateThreadRequest {
-            workspace: None,
+            execution_target: None,
             agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
             origin: Default::default(),
             agent: None,
@@ -1081,7 +1081,7 @@ fn failed_thread_creation_does_not_register_a_projection() {
     assert!(
         threads
             .create_thread(CreateThreadRequest {
-                workspace: None,
+                execution_target: None,
                 agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
                 origin: Default::default(),
                 agent: None,

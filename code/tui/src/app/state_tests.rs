@@ -3500,6 +3500,7 @@ fn manager_state_session(id: &str) -> Session {
         session_id: SessionId::new(id).unwrap(),
         title: id.into(),
         status: SessionStatus::Active,
+        execution_target: None,
         manager: Default::default(),
         threads: Vec::new(),
     }

@@ -59,6 +59,7 @@ fn session(value: &str) -> Session {
         session_id: session_id(value),
         title: value.into(),
         status: SessionStatus::Active,
+        execution_target: None,
         manager: Default::default(),
         threads: Vec::new(),
     }

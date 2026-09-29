@@ -13,13 +13,14 @@ use ash_protocol::AgentResponse;
 use ash_protocol::AgentTreeProjection;
 use ash_protocol::ReviewTarget;
 use ash_protocol::Session;
+use ash_protocol::SessionExecutionTarget;
 use ash_protocol::Thread;
 use ash_protocol::ThreadUpdateEnvelope;
 use ash_protocol::ToolMode;
 use ash_thread_transcript::ThreadTranscriptSnapshot;
 use serde::Deserialize;
+use serde::Deserializer;
 use serde::Serialize;
-use std::path::PathBuf;
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -32,24 +33,22 @@ pub struct SessionCreateParams {
     pub agent: ash_protocol::AgentRoleSelection,
     pub command_id: CommandId,
     pub title: String,
-    pub workspace: SessionWorkspaceSelection,
+    /// Null creates a Session without a selected execution directory.
+    #[serde(deserialize_with = "deserialize_execution_target")]
+    pub execution_target: Option<SessionExecutionTarget>,
     /// Creates the new session's linked worktree on a new local Git branch.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub branch_name: Option<String>,
 }
 
-/// Selects the execution root before the root Thread and its managed directory are created.
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(
-    tag = "type",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
-pub enum SessionWorkspaceSelection {
-    Current,
-    Local { root: PathBuf },
-    Ssh { host: String, root: String },
+fn deserialize_execution_target<'de, D>(
+    deserializer: D,
+) -> Result<Option<SessionExecutionTarget>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::deserialize(deserializer)
 }
 
 #[cfg(test)]

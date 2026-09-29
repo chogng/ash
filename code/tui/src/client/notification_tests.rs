@@ -83,6 +83,7 @@ fn thread_update_preserves_typed_scope_and_sequence() {
                 session_id,
                 thread_id,
                 title: "Thread".into(),
+                execution_target: None,
             },
         },
     };

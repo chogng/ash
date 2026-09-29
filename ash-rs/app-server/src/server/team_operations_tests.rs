@@ -109,7 +109,7 @@ fn team_rpc_keeps_member_identity_across_tasks_and_restart() {
     let existing = server
         .agent_runtime()
         .start_thread(StartThreadRequest {
-            workspace: None,
+            execution_target: None,
             agent_id: Some(AgentId::new("lead-a").unwrap()),
             command_id: ash_protocol::CommandId::new("existing-thread").unwrap(),
             title: "Existing workflow task".into(),

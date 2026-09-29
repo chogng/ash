@@ -259,6 +259,7 @@ impl Runtime {
 fn create(threads: &ThreadController, session: &SessionId, thread: &ThreadId) {
     threads
         .create_thread(CreateThreadRequest {
+            execution_target: None,
             agent_id: protocol::AgentId::new(format!("agent-{thread}")).unwrap(),
             origin: Default::default(),
             agent: None,

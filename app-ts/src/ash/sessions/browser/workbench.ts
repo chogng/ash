@@ -28,6 +28,7 @@ import { IStorageService, WillSaveStateReason } from "../../platform/storage/com
 import { IThemeService } from "../../platform/theme/common/themeService.js";
 import { WorkbenchState } from "../../platform/workspace/common/workspace.js";
 import type { SessionWorkspaceSelection } from '../services/sessions/common/session.js';
+import { pickWorkspaceFolder } from './workspaceSelection.js';
 import type { WorkbenchPart } from "../../workbench/browser/part.js";
 import type { ContextMenuServiceFactory } from "../../platform/contextview/browser/contextMenuService.js";
 import { setHoverDelegate } from "../../base/browser/ui/hover/hoverDelegate.js";
@@ -155,6 +156,7 @@ export class Workbench extends Disposable {
 		const sessions = this.sessionsManagement = this._register(new SessionsManagementService(new AppServerSessionsProvider({
 			session: options.api.session,
 			workspace: options.workspaceSelection,
+			selectWorkspace: folders => pickWorkspaceFolder(services.get(IQuickInputService), folders),
 			model: options.api.model,
 			turn: options.api.turn,
 			events: options.api.events,
@@ -417,6 +419,7 @@ export class Workbench extends Disposable {
 function sameWorkspace(first: SessionWorkspaceSelection, second: SessionWorkspaceSelection): boolean {
 	if (first.type !== second.type) return false;
 	if (first.type === 'current') return true;
+	if (first.type === 'multiple' && second.type === 'multiple') return first.folders.length === second.folders.length && first.folders.every((folder, index) => folder.label === second.folders[index]?.label && sameWorkspace(folder.target, second.folders[index]!.target));
 	if (first.type === 'local' && second.type === 'local') return first.root === second.root;
 	return first.type === 'ssh' && second.type === 'ssh' && first.host === second.host && first.root === second.root;
 }

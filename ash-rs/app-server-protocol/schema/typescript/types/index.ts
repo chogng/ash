@@ -815,6 +815,7 @@ export type { SessionDirMutationResult } from './SessionDirMutationResult.js';
 export type { SessionDirPermissionsSetParams } from './SessionDirPermissionsSetParams.js';
 export type { SessionDirRemoveParams } from './SessionDirRemoveParams.js';
 export type { SessionDirSelector } from './SessionDirSelector.js';
+export type { SessionExecutionTarget } from './SessionExecutionTarget.js';
 export type { SessionId } from './SessionId.js';
 export type { SessionListResult } from './SessionListResult.js';
 export type { SessionManagerActivity } from './SessionManagerActivity.js';
@@ -838,8 +839,6 @@ export type { SessionThreadSubscribeParams } from './SessionThreadSubscribeParam
 export type { SessionThreadSubscribeResult } from './SessionThreadSubscribeResult.js';
 export type { SessionThreadUnsubscribeParams } from './SessionThreadUnsubscribeParams.js';
 export type { SessionUnsubscribeParams } from './SessionUnsubscribeParams.js';
-export type { SessionWorkspace } from './SessionWorkspace.js';
-export type { SessionWorkspaceSelection } from './SessionWorkspaceSelection.js';
 export type { SkillActivationReason } from './SkillActivationReason.js';
 export type { SkillCatalogReloadDto } from './SkillCatalogReloadDto.js';
 export type { SkillCompatibilityDto } from './SkillCompatibilityDto.js';

@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
+import { isCancellationError } from "../../../../../base/common/errors.js";
 import type { AgentTreeNodeProjection, ModelUsageSummary, ServerNotification, Session as SessionDto, SessionThreadProjection } from "../../../../../platform/app-server/common/generated/index.js";
 import type { IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
 import type { ISessionApi, ITurnApi } from "../../../../../platform/sessions/common/sessionApi.js";
 import { SessionsManagementService } from "../../browser/sessionsManagementService.js";
 import { AppServerSessionsProvider } from "../../../../contrib/providers/appServer/browser/appServerSessionsProvider.js";
-import type { SessionWorkspaceSelection } from "../../common/session.js";
+import type { SessionExecutionTarget, SessionWorkspaceSelection } from "../../common/session.js";
 
 test("management initializes the catalog from provider-owned Session mapping", async () => {
 	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
@@ -27,7 +28,7 @@ test("an untitled Session keeps its selected directory when the Agents window ch
 	const fake = sessionHost([], undefined, () => selected);
 	const created: unknown[] = [];
 	fake.host.session.create = async params => {
-		created.push(params.workspace);
+		created.push(params.executionTarget);
 		const value = session(`session-${created.length}`, `thread-${created.length}`);
 		fake.sessions.push(value);
 		return { session: value, agentTree: { roots: [] } };
@@ -43,6 +44,41 @@ test("an untitled Session keeps its selected directory when the Agents window ch
 		{ type: 'local', root: '/work/first' },
 		{ type: 'local', root: '/work/second' },
 	]);
+});
+
+test("a multi-root Workspace sends the selected folder as the execution target", async () => {
+	const folders = [
+		{ label: 'first', target: { type: 'local' as const, root: '/work/first' } },
+		{ label: 'second', target: { type: 'ssh' as const, host: 'build', root: '/work/second' } },
+	];
+	const fake = sessionHost([], undefined, () => ({ type: 'multiple', folders }));
+	let receivedFolders: unknown;
+	fake.host.selectWorkspace = async choices => { receivedFolders = choices; return choices[1]!.target; };
+	let executionTarget: unknown;
+	fake.host.session.create = async params => {
+		executionTarget = params.executionTarget;
+		const value = { ...session('created', 'thread'), executionTarget: params.executionTarget };
+		fake.sessions.push(value);
+		return { session: value, agentTree: { roots: [] } };
+	};
+	fake.host.session.createThread = async () => ({ session: fake.sessions[0]!, threadId: 'thread' });
+	using service = new SessionsManagementService(new AppServerSessionsProvider(fake.host));
+	const draft = service.createUntitledSession();
+	const active = await service.materializeUntitledSession(draft.untitledSessionId);
+	assert.deepEqual(receivedFolders, folders);
+	assert.deepEqual(executionTarget, folders[1]!.target);
+	assert.deepEqual(active.session.workspace, { authorityId: 'build', root: '/work/second' });
+});
+
+test("closing the multi-root folder picker leaves the draft ready", async () => {
+	const fake = sessionHost([], undefined, () => ({ type: 'multiple', folders: [{ label: 'first', target: { type: 'local', root: '/work/first' } }] }));
+	let created = false;
+	fake.host.session.create = async () => { created = true; throw new Error('unexpected'); };
+	using service = new SessionsManagementService(new AppServerSessionsProvider(fake.host));
+	const draft = service.createUntitledSession();
+	await assert.rejects(service.materializeUntitledSession(draft.untitledSessionId), isCancellationError);
+	assert.equal(created, false);
+	assert.equal(service.state, 'ready');
 });
 
 test("Session list becomes ready while the opened conversation is still loading", async () => {
@@ -343,7 +379,7 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 		},
 	};
 	return {
-		host: { session: api, turn, events, workspace },
+		host: { session: api, turn, events, workspace, selectWorkspace: async (_folders: readonly { readonly label: string; readonly target: SessionExecutionTarget }[]): Promise<SessionExecutionTarget | undefined> => undefined },
 		sessions,
 		archiveRequests,
 		interruptRequests,

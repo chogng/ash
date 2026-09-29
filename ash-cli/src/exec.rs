@@ -138,15 +138,14 @@ fn run_headless(options: HeadlessCliOptions) -> Result<(), CliError> {
 
 fn headless_runner() -> Result<ExecRunner, CliError> {
     let executable = std::env::current_exe().map_err(CliError::failure)?;
+    let execution_root = configured_dir().map_err(CliError::failure)?;
     let command = StdioAppServerCommand::new(executable)
         .with_argument("app-server")
         .with_argument("connect")
         .with_environment_variable("ASH_HOME", crate::profile_root()?.into_os_string())
         .with_environment_variable(
             "ASH_WORKSPACE_ROOT",
-            configured_dir()
-                .map_err(CliError::failure)?
-                .into_os_string(),
+            execution_root.clone().into_os_string(),
         );
     Ok(ExecRunner::new(
         command,
@@ -154,6 +153,7 @@ fn headless_runner() -> Result<ExecRunner, CliError> {
             name: "ash-cli-exec".into(),
             version: build_info::VERSION.into(),
         },
+        execution_root,
     ))
 }
 

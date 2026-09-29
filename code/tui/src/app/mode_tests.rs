@@ -281,6 +281,7 @@ fn session_catalog() -> Vec<ash_protocol::Session> {
             session_id: ash_protocol::SessionId::new(name).unwrap(),
             title: format!("{name} session"),
             status: ash_protocol::SessionStatus::Active,
+            execution_target: None,
             manager: Default::default(),
             threads: vec![ash_protocol::SessionThread {
                 thread_id: ash_protocol::ThreadId::new(name).unwrap(),

@@ -59,6 +59,7 @@ fn open_change_set(thread_id: ThreadId) -> TurnChangeSet {
 
 fn catalog(session_id: &SessionId, thread_id: &ThreadId, sequence: u64) -> ThreadCatalogRecord {
     ThreadCatalogRecord {
+        execution_target: None,
         binding: agent_graph_store::ThreadBinding {
             agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
             session_id: session_id.clone(),
@@ -85,6 +86,22 @@ fn catalog(session_id: &SessionId, thread_id: &ThreadId, sequence: u64) -> Threa
     }
 }
 
+#[test]
+fn legacy_catalog_target_is_read_without_rewriting_the_record() {
+    let session_id = SessionId::new("session_1").unwrap();
+    let thread_id = ThreadId::new("thread_1").unwrap();
+    let mut expected = catalog(&session_id, &thread_id, 1);
+    expected.execution_target = Some(ash_protocol::SessionExecutionTarget::Local {
+        root: "/repo".into(),
+    });
+    let mut legacy = serde_json::to_value(&expected).unwrap();
+    let fields = legacy.as_object_mut().unwrap();
+    let target = fields.remove("execution_target").unwrap();
+    fields.insert("workspace".into(), target);
+    let restored: ThreadCatalogRecord = serde_json::from_value(legacy).unwrap();
+    assert_eq!(restored, expected);
+}
+
 fn append_created_thread(
     store: &SqliteThreadStore,
     session_id: &SessionId,
@@ -106,6 +123,7 @@ fn append_created_thread(
                 recorded_at: Timestamp(u128::from(ordinal)),
                 command: None,
                 event: ThreadEvent::ThreadCreated {
+                    execution_target: None,
                     agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                     origin: Default::default(),
                     agent: None,
@@ -214,6 +232,7 @@ fn sqlite_thread_store_recovers_typed_events() {
         recorded_at: Timestamp(2),
         command: None,
         event: ThreadEvent::ThreadCreated {
+            execution_target: None,
             agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
             origin: Default::default(),
             agent: None,
@@ -627,6 +646,7 @@ fn sqlite_thread_catalog_rejects_index_metadata_mismatch() {
                 recorded_at: Timestamp(2),
                 command: None,
                 event: ThreadEvent::ThreadCreated {
+                    execution_target: None,
                     agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                     origin: Default::default(),
                     agent: None,
@@ -744,6 +764,7 @@ fn sqlite_thread_append_is_atomic_and_sequence_checked() {
         recorded_at: Timestamp(1),
         command: None,
         event: ThreadEvent::ThreadCreated {
+            execution_target: None,
             agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
             origin: Default::default(),
             agent: None,
@@ -798,6 +819,7 @@ fn sqlite_thread_recovery_rejects_metadata_mismatch_and_accepts_legacy_schema() 
         recorded_at: Timestamp(1),
         command: None,
         event: ThreadEvent::ThreadCreated {
+            execution_target: None,
             agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
             origin: Default::default(),
             agent: None,

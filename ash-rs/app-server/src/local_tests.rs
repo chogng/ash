@@ -1001,9 +1001,10 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0","id":2,"method":"session/create",
-            "params":{"commandId":"create-session","title":"Turn changes","workspace":{"type":"current"}}
+            "params":{"commandId":"create-session","title":"Turn changes","executionTarget":{"type":"local","root":dir.path()}}
         }),
     );
+    assert!(session.get("error").is_none(), "{session}");
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
     let thread = local_call(
         &server,
@@ -1244,7 +1245,7 @@ fn managed_network_approval_resumes_the_same_shell_process_through_rpc() {
         &server,
         &mut connection,
         serde_json::json!({
-            "jsonrpc":"2.0","id":3,"method":"session/create","params":{"commandId":"network-session","title":"Network","workspace":{"type":"current"}}
+            "jsonrpc":"2.0","id":3,"method":"session/create","params":{"commandId":"network-session","title":"Network","executionTarget":null}
         }),
     );
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
@@ -1392,7 +1393,7 @@ fn non_git_turns_keep_their_isolated_dir_without_creating_change_sets() {
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0","id":3,"method":"session/create",
-            "params":{"commandId":"create-non-git-session","title":"Plain directory","workspace":{"type":"current"}}
+            "params":{"commandId":"create-non-git-session","title":"Plain directory","executionTarget":null}
         }),
     );
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
@@ -1493,13 +1494,18 @@ fn shared_profile_runtime_shares_sessions_across_env_hosts() {
 
     let created: serde_json::Value = serde_json::from_str(&first.handle_json(
         &mut first_connection,
-        r#"{"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"create-shared","title":"Shared task","workspace":{"type":"current"}}}"#,
+        &serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"create-shared","title":"Shared task","executionTarget":{"type":"local","root":first_dir.path()}}}).to_string(),
     ))
     .unwrap();
     let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();
     assert_eq!(
-        created["result"]["session"]["workspace"]["root"],
-        first_dir.path().to_string_lossy().as_ref()
+        created["result"]["session"]["executionTarget"]["root"],
+        first_dir
+            .path()
+            .canonicalize()
+            .unwrap()
+            .to_string_lossy()
+            .as_ref()
     );
 
     let listed: serde_json::Value = serde_json::from_str(&second.handle_json(
@@ -2886,7 +2892,7 @@ fn message_restore_points_preserve_git_versions_after_restart() {
     let session = local_call(
         &server,
         &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"session/create","params":{"commandId":"root","title":"Restore messages","workspace":{"type":"current"}}}),
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"session/create","params":{"commandId":"root","title":"Restore messages","executionTarget":{"type":"local","root":repo.path()}}}),
     );
     let session_id = session["result"]["session"]["sessionId"]
         .as_str()
@@ -3057,7 +3063,7 @@ fn deleting_a_managed_worktree_deletes_its_session_and_discards_checkout_content
     let created = local_call(
         &server,
         &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"create-managed","title":"Managed work","workspace":{"type":"current"}}}),
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"create-managed","title":"Managed work","executionTarget":null}}),
     );
     assert!(created.get("error").is_none(), "{created}");
     let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();

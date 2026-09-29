@@ -23,6 +23,7 @@ fn stored_event_round_trip_preserves_history_contract() {
             },
         }),
         event: ThreadEvent::ThreadCreated {
+            execution_target: None,
             agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
             origin: Default::default(),
             agent: None,
@@ -37,6 +38,22 @@ fn stored_event_round_trip_preserves_history_contract() {
 
     assert_eq!(decoded, event);
     assert_eq!(decoded.thread_id(), &thread_id);
+}
+
+#[test]
+fn legacy_workspace_field_replays_as_execution_target() {
+    let json = r#"{"schemaVersion":20,"eventId":"created","sequence":1,"threadId":"old","recordedAt":1,"event":{"type":"threadCreated","agentId":"agent","sessionId":"session","threadId":"old","title":"Old","workspace":{"type":"local","root":"/repo"}}}"#;
+    let record: StoredEvent = serde_json::from_str(json).unwrap();
+    assert!(matches!(&record.event, ThreadEvent::ThreadCreated {
+        execution_target: Some(ash_protocol::SessionExecutionTarget::Local { root }), ..
+    } if root == std::path::Path::new("/repo")));
+    assert_eq!(serde_json::to_string(&record).unwrap(), json);
+    let prefix = crate::HistoryPrefix {
+        events: vec![record],
+    };
+    let expected =
+        ash_protocol::ContentDigest::sha256(format!("{{\"events\":[{json}]}}").as_bytes());
+    assert_eq!(prefix.reference().unwrap().digest, expected);
 }
 
 #[test]

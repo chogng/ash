@@ -7,13 +7,13 @@ fn remote_catalog_preserves_each_session_root_and_deduplicates_host_views() {
     let mut remote = serde_json::json!({
         "jsonrpc":"2.0", "id":catalog_request_id(1),
         "result":{"sessions":[
-            {"sessionId":"one","threads":[{"threadId":"thread-one"}],"workspace":{"type":"local","root":"/work/first"}},
-            {"sessionId":"two","threads":[{"threadId":"thread-two"}],"workspace":{"type":"local","root":"/work/second"}}
+            {"sessionId":"one","threads":[{"threadId":"thread-one"}],"executionTarget":{"type":"local","root":"/work/first"}},
+            {"sessionId":"two","threads":[{"threadId":"thread-two"}],"executionTarget":{"type":"local","root":"/work/second"}}
         ]}
     });
     annotate_remote_sessions(&mut remote, &key, &index);
     assert_eq!(
-        remote["result"]["sessions"][1]["workspace"],
+        remote["result"]["sessions"][1]["executionTarget"],
         serde_json::json!({"type":"ssh","host":"build-host","root":"/work/second"})
     );
     assert_eq!(

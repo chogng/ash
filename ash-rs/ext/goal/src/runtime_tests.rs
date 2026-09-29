@@ -243,6 +243,7 @@ fn started_review_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
     let thread_id = ThreadId::new("review-thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
+            execution_target: None,
             agent_id: protocol::AgentId::new("agent-test").unwrap(),
             origin: Default::default(),
             agent: None,
@@ -287,6 +288,7 @@ fn started_turn_with_options(
     let thread_id = ThreadId::new("thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
+            execution_target: None,
             agent_id: protocol::AgentId::new("agent-test").unwrap(),
             origin: Default::default(),
             agent: None,

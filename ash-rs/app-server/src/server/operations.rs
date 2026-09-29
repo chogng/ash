@@ -1694,17 +1694,17 @@ impl AppServer {
             SessionStatus::Active
         };
         let manager = session_manager_info(&snapshots, root.created_at_unix_ms, status);
-        let workspace = self
+        let execution_target = self
             .agent_runtime()
             .read_session_catalog(&session_id)
             .map_err(core_error)?
-            .and_then(|session| session.workspace);
+            .and_then(|session| session.execution_target);
         let agent_tree = view.agent_tree;
         let session = Session {
             session_id: session_id.clone(),
             title: root.title.clone(),
             status,
-            workspace,
+            execution_target,
             manager,
             threads: snapshots
                 .into_iter()

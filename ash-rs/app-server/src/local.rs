@@ -824,27 +824,27 @@ impl From<Option<ash_file_access::DirBinding>> for ProfileUpdateScopeKey {
 }
 
 impl LocalProfileRuntime {
-    pub(crate) fn workspace_for_session(
+    pub(crate) fn execution_target_for_session(
         &self,
         session_id: &ash_protocol::SessionId,
-    ) -> Result<Option<ash_protocol::SessionWorkspace>, String> {
+    ) -> Result<Option<ash_protocol::SessionExecutionTarget>, String> {
         Ok(self
             .threads
             .read_session_catalog(session_id)
             .map_err(|error| error.to_string())?
             .ok_or_else(|| format!("Session {session_id} was not found"))?
-            .workspace)
+            .execution_target)
     }
 
-    pub(crate) fn workspace_for_thread(
+    pub(crate) fn execution_target_for_thread(
         &self,
         thread_id: &ash_protocol::ThreadId,
-    ) -> Result<Option<ash_protocol::SessionWorkspace>, String> {
+    ) -> Result<Option<ash_protocol::SessionExecutionTarget>, String> {
         let thread = self
             .threads
             .read_thread(thread_id)
             .map_err(|error| error.to_string())?;
-        self.workspace_for_session(&thread.session_id)
+        self.execution_target_for_session(&thread.session_id)
     }
     /// Attaches one trace listener before this profile is shared by Directory runtimes.
     pub fn with_trace_exporter(mut self, exporter: otel_trace_websocket::Exporter) -> Self {

@@ -402,7 +402,7 @@ fn frozen_tool_profile_rejects_definition_drift_before_model_invocation() {
     let thread_id = ThreadId::new("profile-thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
-            workspace: None,
+            execution_target: None,
             agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
             origin: Default::default(),
             agent: None,
@@ -1272,7 +1272,7 @@ fn explicit_skill_selection_uses_frozen_digest_and_layered_body() {
     let thread_id = ThreadId::new("skill-thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
-            workspace: None,
+            execution_target: None,
             agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
             origin: Default::default(),
             agent: None,
@@ -1848,7 +1848,7 @@ fn restart_after_overflow_checkpoint_commit_does_not_replay_the_model_call() {
     let thread_id = ThreadId::new("overflow-restart-thread").unwrap();
     original
         .create_thread(CreateThreadRequest {
-            workspace: None,
+            execution_target: None,
             agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
             origin: Default::default(),
             agent: None,
@@ -2030,7 +2030,7 @@ fn model_usage_and_goal_projection_are_identical_after_recovery() {
     let thread_id = ThreadId::new("usage-recovery-thread").unwrap();
     original
         .create_thread(CreateThreadRequest {
-            workspace: None,
+            execution_target: None,
             agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
             origin: Default::default(),
             agent: None,
@@ -2256,7 +2256,7 @@ fn per_thread_mailboxes_run_independently_and_interrupt_the_active_turn() {
     let fast_thread_id = ThreadId::new("fast-thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
-            workspace: None,
+            execution_target: None,
             agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
             origin: Default::default(),
             agent: None,
@@ -3767,7 +3767,7 @@ fn started_turn_with_store(
     let thread_id = ThreadId::new("thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
-            workspace: None,
+            execution_target: None,
             agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
             origin: Default::default(),
             agent: None,

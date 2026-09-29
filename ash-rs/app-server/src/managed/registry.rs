@@ -14,8 +14,8 @@ use crate::open_local_app_server;
 
 use ash_app_server_daemon::ConnectionOptions;
 use ash_app_server_daemon::GrantSource;
+use ash_protocol::SessionExecutionTarget;
 use ash_protocol::SessionId;
-use ash_protocol::SessionWorkspace;
 use ash_protocol::ThreadId;
 use ash_remote::{RemoteDirPath, RemoteProfile, SshHost, SshTarget};
 use ash_remote_profile_store::RemoteConnectionProfileStore;
@@ -97,18 +97,19 @@ impl ProfileAppServerRegistry {
         ))
     }
 
-    pub(crate) fn workspace_for_session(
+    pub(crate) fn execution_target_for_session(
         &self,
         session_id: &SessionId,
-    ) -> Result<Option<SessionWorkspace>, String> {
-        self.profile_runtime.workspace_for_session(session_id)
+    ) -> Result<Option<SessionExecutionTarget>, String> {
+        self.profile_runtime
+            .execution_target_for_session(session_id)
     }
 
-    pub(crate) fn workspace_for_thread(
+    pub(crate) fn execution_target_for_thread(
         &self,
         thread_id: &ThreadId,
-    ) -> Result<Option<SessionWorkspace>, String> {
-        self.profile_runtime.workspace_for_thread(thread_id)
+    ) -> Result<Option<SessionExecutionTarget>, String> {
+        self.profile_runtime.execution_target_for_thread(thread_id)
     }
 
     pub(crate) fn remote_profiles(&self) -> Result<Vec<RemoteProfile>, String> {

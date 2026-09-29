@@ -632,7 +632,7 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         .map(|(index, item)| (item.item_id().clone(), index as u64 + 2))
         .collect();
     ThreadSnapshot {
-        workspace: None,
+        execution_target: None,
         advisor: Default::default(),
         user_time_contexts: Default::default(),
         history_sources: Default::default(),

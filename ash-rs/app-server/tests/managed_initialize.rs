@@ -139,12 +139,12 @@ fn agents_connection_keeps_sessions_in_two_local_directories() {
         (
             2,
             "session/create",
-            json!({"commandId":"agents-first","title":"First","workspace":{"type":"local","root":first}}),
+            json!({"commandId":"agents-first","title":"First","executionTarget":{"type":"local","root":first}}),
         ),
         (
             3,
             "session/create",
-            json!({"commandId":"agents-second","title":"Second","workspace":{"type":"local","root":second}}),
+            json!({"commandId":"agents-second","title":"Second","executionTarget":{"type":"local","root":second}}),
         ),
         (4, "session/list", json!({})),
     ] {
@@ -170,9 +170,11 @@ fn agents_connection_keeps_sessions_in_two_local_directories() {
             let sessions = response["result"]["sessions"].as_array().unwrap();
             assert_eq!(sessions.len(), 2, "{response}");
             assert!(sessions.iter().any(|session| session["title"] == "First"
-                && session["workspace"]["root"] == first.to_string_lossy().as_ref()));
+                && session["executionTarget"]["root"]
+                    == first.canonicalize().unwrap().to_string_lossy().as_ref()));
             assert!(sessions.iter().any(|session| session["title"] == "Second"
-                && session["workspace"]["root"] == second.to_string_lossy().as_ref()));
+                && session["executionTarget"]["root"]
+                    == second.canonicalize().unwrap().to_string_lossy().as_ref()));
         }
     }
 }
@@ -182,12 +184,19 @@ fn agents_connection_routes_ssh_sessions_and_merges_the_catalog() {
     let root = tempfile::tempdir().unwrap();
     let profile = root.path().join("profile");
     let remote_home = root.path().join("remote-profile");
+    let remote_dir = root.path().join("remote-project");
     fs::create_dir(&profile).unwrap();
     fs::create_dir(&remote_home).unwrap();
+    fs::create_dir(&remote_dir).unwrap();
+    let remote_root = remote_dir
+        .canonicalize()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
     let remote_profile = RemoteProfile::new(
         SshTarget::new(
             SshHost::parse("test-host").unwrap(),
-            RemoteDirPath::parse("/workspace/test").unwrap(),
+            RemoteDirPath::parse(&remote_root).unwrap(),
         ),
         RemoteRuntime::new("ash-app-server").unwrap(),
     );
@@ -201,9 +210,9 @@ fn agents_connection_routes_ssh_sessions_and_merges_the_catalog() {
     });
     let executable = env!("CARGO_BIN_EXE_ash-app-server");
     if cfg!(windows) {
-        fs::write(&ssh_stub, format!("@echo off\r\nset \"ASH_HOME={}\"\r\nset \"ASH_WORKSPACE_ROOT=\"\r\n\"{}\" --listen stdio://\r\n", remote_home.display(), executable)).unwrap();
+        fs::write(&ssh_stub, format!("@echo off\r\nset \"ASH_HOME={}\"\r\nset \"ASH_WORKSPACE_ROOT={}\"\r\n\"{}\" --listen stdio://\r\n", remote_home.display(), remote_root, executable)).unwrap();
     } else {
-        fs::write(&ssh_stub, format!("#!/bin/sh\nexport ASH_HOME='{}'\nunset ASH_WORKSPACE_ROOT\nexec '{}' --listen stdio://\n", remote_home.display(), executable)).unwrap();
+        fs::write(&ssh_stub, format!("#!/bin/sh\nexport ASH_HOME='{}'\nexport ASH_WORKSPACE_ROOT='{}'\nexec '{}' --listen stdio://\n", remote_home.display(), remote_root, executable)).unwrap();
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -261,12 +270,12 @@ fn agents_connection_routes_ssh_sessions_and_merges_the_catalog() {
     let created = call(
         2,
         "session/create",
-        json!({"commandId":"remote-task","title":"Remote task","workspace":{"type":"ssh","host":"test-host","root":"/workspace/test"}}),
+        json!({"commandId":"remote-task","title":"Remote task","executionTarget":{"type":"ssh","host":"test-host","root":remote_root}}),
     );
     assert!(created.get("error").is_none(), "{created}");
     assert_eq!(
-        created["result"]["session"]["workspace"],
-        json!({"type":"ssh","host":"test-host","root":"/workspace/test"})
+        created["result"]["session"]["executionTarget"],
+        json!({"type":"ssh","host":"test-host","root":remote_root})
     );
     let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();
     let thread = call(
@@ -287,7 +296,10 @@ fn agents_connection_routes_ssh_sessions_and_merges_the_catalog() {
     );
     let read = call(5, "session/read", json!({"sessionId":session_id}));
     assert!(read.get("error").is_none(), "{read}");
-    assert_eq!(read["result"]["session"]["workspace"]["host"], "test-host");
+    assert_eq!(
+        read["result"]["session"]["executionTarget"]["host"],
+        "test-host"
+    );
     assert_eq!(
         read["result"]["session"]["threads"][0]["threadId"],
         thread_id

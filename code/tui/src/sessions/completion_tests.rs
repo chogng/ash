@@ -136,8 +136,11 @@ fn fork_command_preserves_selection_and_starts_only_when_prompted() {
             command.command_line().as_deref(),
             Some(command_text.as_str())
         );
-        let completion = prepare_command(ApprovalMode::BypassPermissions, command)
-            .execute(client.clone(), Some(current.clone()));
+        let completion = prepare_command(ApprovalMode::BypassPermissions, command).execute(
+            client.clone(),
+            Some(current.clone()),
+            std::path::Path::new("."),
+        );
         let SessionCompletion::Forked {
             command,
             result: Ok(result),

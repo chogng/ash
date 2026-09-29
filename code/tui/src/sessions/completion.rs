@@ -17,6 +17,7 @@ use ash_protocol::ApprovalMode;
 use ash_protocol::Session;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
+use std::path::Path;
 
 pub(crate) struct ConversationCompletion {
     pub(crate) conversation: ActiveConversation,
@@ -114,6 +115,7 @@ impl CommandRequest {
         self,
         mut client: AppServerRequestHandle,
         current: Option<Conversation>,
+        root: &Path,
     ) -> SessionCompletion {
         match self {
             Self::Fork {
@@ -179,6 +181,7 @@ impl CommandRequest {
                 current.map(|c| c.subscription),
                 submission,
                 approval_mode,
+                root,
             )),
             Self::SwitchThread { thread_id } => {
                 let result = current
@@ -268,10 +271,11 @@ pub(crate) fn create_manager_session_and_start(
     subscription: Option<ThreadSubscription>,
     submission: ChatSubmission,
     approval_mode: ApprovalMode,
+    root: &Path,
 ) -> Result<ManagerSessionCompletion, String> {
     let title = submission.display_text.clone();
-    let conversation =
-        ActiveConversation::start(&mut client, title).map_err(|error| error.to_string())?;
+    let conversation = ActiveConversation::start_at(&mut client, title, root)
+        .map_err(|error| error.to_string())?;
     let change = ConversationChange {
         notice: String::new(),
         transcript: super::ConversationTranscript::Clear,

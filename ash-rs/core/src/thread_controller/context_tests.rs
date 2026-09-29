@@ -29,7 +29,7 @@ impl Fixture {
         let thread = ThreadId::new("prompt-thread").unwrap();
         controller
             .create_thread(CreateThreadRequest {
-                workspace: None,
+                execution_target: None,
                 agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
                 origin: Default::default(),
                 agent: None,

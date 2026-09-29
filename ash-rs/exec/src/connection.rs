@@ -19,12 +19,14 @@ use ash_app_server_protocol::protocol::turn::TurnStartResult;
 use ash_protocol::ApprovalMode;
 use ash_protocol::CommandId;
 use ash_protocol::Session;
+use ash_protocol::SessionExecutionTarget;
 use ash_protocol::SessionId;
 use ash_protocol::Thread;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadUpdateEnvelope;
 use ash_protocol::TurnId;
 use std::fmt;
+use std::path::PathBuf;
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::Duration;
 
@@ -123,12 +125,14 @@ pub(crate) struct ServerConnection {
     session: Option<AppServerSession>,
     client: AppServerRequestHandle,
     events: AppServerEvents,
+    execution_root: PathBuf,
 }
 
 impl ServerConnection {
     pub fn start_stdio(
         command: StdioAppServerCommand,
         client_info: ClientInfo,
+        execution_root: PathBuf,
     ) -> Result<Self, ConnectionError> {
         let session = AppServerSession::start_stdio(
             command,
@@ -139,10 +143,13 @@ impl ServerConnection {
             },
         )
         .map_err(|error| ConnectionError::new(error.to_string()))?;
-        Self::from_session(session)
+        Self::from_session(session, execution_root)
     }
 
-    fn from_session(mut session: AppServerSession) -> Result<Self, ConnectionError> {
+    fn from_session(
+        mut session: AppServerSession,
+        execution_root: PathBuf,
+    ) -> Result<Self, ConnectionError> {
         let client = session.client();
         let events = match session.take_events() {
             Ok(events) => events,
@@ -155,6 +162,7 @@ impl ServerConnection {
             session: Some(session),
             client,
             events,
+            execution_root,
         })
     }
 
@@ -189,7 +197,9 @@ impl ExecConnection for ServerConnection {
                 agent: ash_protocol::AgentRoleSelection::Default,
                 command_id,
                 title,
-                workspace: ash_app_server_protocol::protocol::session::SessionWorkspaceSelection::Current,
+                execution_target: Some(SessionExecutionTarget::Local {
+                    root: self.execution_root.clone(),
+                }),
             })
             .map(|result| result.session)
             .map_err(|error| ConnectionError::new(error.to_string()))

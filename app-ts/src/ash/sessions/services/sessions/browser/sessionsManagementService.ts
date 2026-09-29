@@ -1,4 +1,5 @@
 import { Emitter } from "../../../../base/common/event.js";
+import { isCancellationError } from "../../../../base/common/errors.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";
 import type { IActiveSessionThread, IUntitledChatSession, ISession, ModelRef, SessionId, SessionWorkspaceSelection, ThreadId } from "../common/session.js";
@@ -176,6 +177,10 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		try {
 			return await this.provider.create(title, workspace, model, agent);
 		} catch (error) {
+			if (isCancellationError(error)) {
+				this.setState('ready');
+				throw error;
+			}
 			this.setError(error);
 			throw error;
 		}

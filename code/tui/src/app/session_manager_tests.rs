@@ -491,6 +491,7 @@ fn session() -> Session {
         session_id: SessionId::new("current").unwrap(),
         title: "Snapshot session".into(),
         status: SessionStatus::Active,
+        execution_target: None,
         manager: SessionManagerInfo {
             status: SessionManagerStatus::Idle,
             status_changed_at_unix_ms: 0,

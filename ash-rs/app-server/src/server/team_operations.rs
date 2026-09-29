@@ -161,8 +161,8 @@ impl AppServer {
                         title,
                         agent,
                         branch_name: None,
-                        workspace: self.dir_services.as_ref().map(|dirs| {
-                            ash_protocol::SessionWorkspace::Local {
+                        execution_target: self.dir_services.as_ref().map(|dirs| {
+                            ash_protocol::SessionExecutionTarget::Local {
                                 root: dirs.root.clone(),
                             }
                         }),

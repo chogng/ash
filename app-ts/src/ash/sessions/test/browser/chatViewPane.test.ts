@@ -54,7 +54,7 @@ const notifications = new NotificationService();
 
 class SessionsManagementService extends BaseSessionsManagementService {
 	constructor(api: IRendererHost) {
-		super(new AppServerSessionsProvider({ session: api.session, model: api.model, turn: api.turn, events: api.events, workspace: () => ({ type: 'current' }) }));
+		super(new AppServerSessionsProvider({ session: api.session, model: api.model, turn: api.turn, events: api.events, workspace: () => ({ type: 'current' }), selectWorkspace: async () => undefined }));
 	}
 }
 for (const [name, value] of Object.entries({

@@ -36,6 +36,7 @@ fn response() -> SessionResult {
             session_id: SessionId::new("thread:session-1").unwrap(),
             title: "Coordinator".into(),
             status: ash_protocol::SessionStatus::Active,
+            execution_target: None,
             manager: ash_protocol::SessionManagerInfo {
                 status: ash_protocol::SessionManagerStatus::Working,
                 ..Default::default()

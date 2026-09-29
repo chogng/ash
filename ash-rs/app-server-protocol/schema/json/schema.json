@@ -31419,6 +31419,16 @@
     "Session": {
       "description": "A read-only view of Threads grouped by their shared `session_id`.\n\nSession has no independent event stream, sequence, or mutable runtime state. Thread remains the\npersistence, ordering, and execution boundary.",
       "properties": {
+        "executionTarget": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionExecutionTarget"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "manager": {
           "$ref": "#/$defs/SessionManagerInfo",
           "default": {
@@ -31440,16 +31450,6 @@
         },
         "title": {
           "type": "string"
-        },
-        "workspace": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SessionWorkspace"
-            },
-            {
-              "type": "null"
-            }
-          ]
         }
       },
       "required": [
@@ -31520,17 +31520,24 @@
         "commandId": {
           "$ref": "#/$defs/CommandId"
         },
+        "executionTarget": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionExecutionTarget"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Null creates a Session without a selected execution directory."
+        },
         "title": {
           "type": "string"
-        },
-        "workspace": {
-          "$ref": "#/$defs/SessionWorkspaceSelection"
         }
       },
       "required": [
         "commandId",
-        "title",
-        "workspace"
+        "title"
       ],
       "type": "object"
     },
@@ -31794,6 +31801,47 @@
         "path"
       ],
       "type": "object"
+    },
+    "SessionExecutionTarget": {
+      "description": "The execution authority selected for a Session, independent of the editor's open Workspace.",
+      "oneOf": [
+        {
+          "properties": {
+            "root": {
+              "type": "string"
+            },
+            "type": {
+              "const": "local",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "root"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "host": {
+              "type": "string"
+            },
+            "root": {
+              "type": "string"
+            },
+            "type": {
+              "const": "ssh",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "host",
+            "root"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "SessionId": {
       "description": "Stable identity for one product-level Agent session.",
@@ -32969,100 +33017,6 @@
         "sessionId"
       ],
       "type": "object"
-    },
-    "SessionWorkspace": {
-      "description": "The execution root selected for a Session, independent of the editor's open Workspace.",
-      "oneOf": [
-        {
-          "properties": {
-            "root": {
-              "type": "string"
-            },
-            "type": {
-              "const": "local",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "root"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "host": {
-              "type": "string"
-            },
-            "root": {
-              "type": "string"
-            },
-            "type": {
-              "const": "ssh",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "host",
-            "root"
-          ],
-          "type": "object"
-        }
-      ]
-    },
-    "SessionWorkspaceSelection": {
-      "description": "Selects the execution root before the root Thread and its managed directory are created.",
-      "oneOf": [
-        {
-          "properties": {
-            "type": {
-              "const": "current",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "root": {
-              "type": "string"
-            },
-            "type": {
-              "const": "local",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "root"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "host": {
-              "type": "string"
-            },
-            "root": {
-              "type": "string"
-            },
-            "type": {
-              "const": "ssh",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "host",
-            "root"
-          ],
-          "type": "object"
-        }
-      ]
     },
     "SkillActivationReason": {
       "enum": [
@@ -35340,6 +35294,17 @@
               ],
               "description": "Absent only in history written before schema version 16."
             },
+            "executionTarget": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/SessionExecutionTarget"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The root Thread records the Session execution authority. Descendants inherit it."
+            },
             "origin": {
               "$ref": "#/$defs/ThreadOrigin"
             },
@@ -35355,17 +35320,6 @@
             "type": {
               "const": "threadCreated",
               "type": "string"
-            },
-            "workspace": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/SessionWorkspace"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "The root Thread records the Session execution authority. Descendants inherit it."
             }
           },
           "required": [

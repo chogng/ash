@@ -44,7 +44,7 @@ impl AppServer {
                             agent: None,
                             command_id: session_command.clone(),
                             title: run.definition.title.clone(),
-                            workspace: Some(ash_protocol::SessionWorkspace::Local {
+                            execution_target: Some(ash_protocol::SessionExecutionTarget::Local {
                                 root: run.definition.directory.clone().into(),
                             }),
                         }) {

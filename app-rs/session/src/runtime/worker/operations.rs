@@ -162,6 +162,9 @@ fn create_session(client: &mut AppServerRequestHandle, cwd: &Path) -> Result<Ses
             agent: ash_protocol::AgentRoleSelection::Default,
             command_id: next_command_id("session"),
             title: cwd_title(cwd),
+            execution_target: Some(ash_protocol::SessionExecutionTarget::Local {
+                root: cwd.to_path_buf(),
+            }),
         })
         .map(|result| result.session)
         .map_err(client_error)
@@ -367,6 +370,7 @@ pub(super) fn submit_agent_message(
                 expected_sequence: active.sequence,
                 approval_mode: active.approval_mode,
                 model: None,
+                reasoning_effort: None,
                 tool_mode: None,
                 input: vec![InputItem::Text { text }],
             },

@@ -17,11 +17,10 @@ use ash_app_server_protocol::protocol::session::SessionSubscribeParams;
 use ash_app_server_protocol::protocol::session::SessionSubscribeResult;
 use ash_app_server_protocol::protocol::session::SessionThreadProjection;
 use ash_app_server_protocol::protocol::session::SessionUnsubscribeParams;
-use ash_app_server_protocol::protocol::session::SessionWorkspaceSelection;
 use ash_protocol::CommandId;
 use ash_protocol::HookEvent;
+use ash_protocol::SessionExecutionTarget;
 use ash_protocol::SessionId;
-use ash_protocol::SessionWorkspace;
 use ash_protocol::ThreadId;
 use core_api::HookEventRequest;
 use core_api::HookEventScope;
@@ -145,18 +144,12 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: SessionCreateParams = decode(params)?;
-        let workspace = match &params.workspace {
-            SessionWorkspaceSelection::Current => {
-                self.dir_services
-                    .as_ref()
-                    .map(|selected| SessionWorkspace::Local {
-                        root: selected.root.clone(),
-                    })
-            }
-            SessionWorkspaceSelection::Local { root } => {
+        let execution_target = match &params.execution_target {
+            None => None,
+            Some(SessionExecutionTarget::Local { root }) => {
                 let selected = self.dir_services.as_ref().ok_or_else(|| {
                     core_error(core_api::CoreError::InvalidInput(
-                        "Session workspace is unavailable".into(),
+                        "Session execution directory is unavailable".into(),
                     ))
                 })?;
                 let requested = ash_file_access::Dir::open_local(root).map_err(|error| {
@@ -164,16 +157,17 @@ impl AppServer {
                 })?;
                 if requested.id() != selected.id {
                     return Err(core_error(core_api::CoreError::InvalidInput(
-                        "Session workspace belongs to a different directory runtime".into(),
+                        "Session execution directory belongs to a different directory runtime"
+                            .into(),
                     )));
                 }
-                Some(SessionWorkspace::Local {
+                Some(SessionExecutionTarget::Local {
                     root: selected.root.clone(),
                 })
             }
-            SessionWorkspaceSelection::Ssh { .. } => {
+            Some(SessionExecutionTarget::Ssh { .. }) => {
                 return Err(core_error(core_api::CoreError::InvalidInput(
-                    "SSH Session workspace must be routed through the profile host".into(),
+                    "SSH Session execution target must be routed through the profile host".into(),
                 )));
             }
         };
@@ -204,14 +198,14 @@ impl AppServer {
             });
             let legacy_creation = params.agent_id.is_none()
                 && existing.agent_id.as_str() == format!("legacy-agent:{}", existing.thread_id);
-            let existing_workspace = self
+            let existing_execution_target = self
                 .agent_runtime()
                 .read_session_catalog(&existing.session_id)
                 .map_err(core_error)?
-                .and_then(|session| session.workspace);
+                .and_then(|session| session.execution_target);
             if !matches
                 || params.title != existing.title
-                || existing_workspace != workspace
+                || existing_execution_target != execution_target
                 || (expected_agent_id != existing.agent_id && !legacy_creation)
                 || params.branch_name.as_deref().is_some_and(|name| {
                     self.git_turn_changes
@@ -241,7 +235,7 @@ impl AppServer {
                     title: params.title,
                     agent,
                     branch_name: params.branch_name,
-                    workspace,
+                    execution_target,
                 })
                 .map_err(core_error)?;
             (created, true)

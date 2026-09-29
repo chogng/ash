@@ -112,7 +112,7 @@ impl ThreadController {
                 session_id: source.session_id,
                 thread_id: thread_id.clone(),
                 title: request.title,
-                workspace: source.workspace.clone(),
+                execution_target: source.execution_target.clone(),
             },
             vec![ThreadEvent::HistoryPrefixBound {
                 thread_id,

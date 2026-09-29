@@ -97,7 +97,11 @@ pub(super) fn start(
             || terminal_settings.screen_mode() == crate::terminal::ScreenMode::Fullscreen);
     let initial = match recovery {
         Some(recovery) => Some(ActiveConversation::recover(&mut client, recovery)?),
-        None if !show_home => Some(ActiveConversation::start(&mut client, thread_title)?),
+        None if !show_home => Some(ActiveConversation::start_at(
+            &mut client,
+            thread_title,
+            &display_dir_root,
+        )?),
         None => None,
     }
     .map(|mut conversation| {

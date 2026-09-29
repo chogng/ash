@@ -20,6 +20,7 @@ fn resume_picker_selects_the_current_session_and_maps_enter_to_its_id() {
         session_id: SessionId::new("session-1").unwrap(),
         title: "Current work".into(),
         status: SessionStatus::Active,
+        execution_target: None,
         manager: Default::default(),
         threads: Vec::new(),
     }];
@@ -48,6 +49,7 @@ fn resume_action_ids_do_not_change_when_sessions_are_reordered() {
         session_id: SessionId::new(id).unwrap(),
         title: id.into(),
         status: SessionStatus::Active,
+        execution_target: None,
         manager: Default::default(),
         threads: Vec::new(),
     };
@@ -68,6 +70,7 @@ fn resume_picker_excludes_archived_sessions_and_keeps_current_selection() {
             session_id: SessionId::new("session-2").unwrap(),
             title: "Archived work".into(),
             status: SessionStatus::Archived,
+            execution_target: None,
             manager: Default::default(),
             threads: Vec::new(),
         },
@@ -75,6 +78,7 @@ fn resume_picker_excludes_archived_sessions_and_keeps_current_selection() {
             session_id: SessionId::new("session-1").unwrap(),
             title: "Active work".into(),
             status: SessionStatus::Active,
+            execution_target: None,
             manager: Default::default(),
             threads: Vec::new(),
         },
@@ -82,6 +86,7 @@ fn resume_picker_excludes_archived_sessions_and_keeps_current_selection() {
             session_id: SessionId::new("session-3").unwrap(),
             title: "Other work".into(),
             status: SessionStatus::Active,
+            execution_target: None,
             manager: Default::default(),
             threads: Vec::new(),
         },
@@ -116,6 +121,7 @@ fn resume_items_show_time_and_tokens_without_branches_or_ids() {
         session_id: SessionId::new("session-sized").unwrap(),
         title: "Sized work".into(),
         status: SessionStatus::Active,
+        execution_target: None,
         manager: Default::default(),
         threads: vec![SessionThread {
             thread_id: ThreadId::new("thread-sized").unwrap(),
@@ -149,6 +155,7 @@ fn resume_picker_is_empty_when_every_session_is_archived() {
         session_id: SessionId::new("archived").unwrap(),
         title: "Archived work".into(),
         status: SessionStatus::Archived,
+        execution_target: None,
         manager: Default::default(),
         threads: Vec::new(),
     };
@@ -178,6 +185,7 @@ fn resume_picker_renders_only_session_title_time_and_tokens() {
             session_id: SessionId::new(format!("thread:{index}")).unwrap(),
             title: format!("Conversation {}", index + 1),
             status: SessionStatus::Active,
+            execution_target: None,
             manager: ash_protocol::SessionManagerInfo {
                 status_changed_at_unix_ms: now - elapsed,
                 ..Default::default()
@@ -221,6 +229,7 @@ fn resume_time_floors_elapsed_time_and_omits_zero_trailing_units() {
         session_id: SessionId::new("session-time").unwrap(),
         title: "Time formatting".into(),
         status: SessionStatus::Active,
+        execution_target: None,
         manager: Default::default(),
         threads: Vec::new(),
     };
@@ -266,6 +275,7 @@ fn resume_time_shows_local_date_starting_at_seven_days() {
         session_id: SessionId::new("session-date").unwrap(),
         title: "Older work".into(),
         status: SessionStatus::Archived,
+        execution_target: None,
         manager: ash_protocol::SessionManagerInfo {
             status_changed_at_unix_ms: changed_at,
             ..Default::default()
