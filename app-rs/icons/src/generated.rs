@@ -104,6 +104,7 @@ mod artwork {
     pub(crate) const FOLD: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/fold.svg"));
     pub(crate) const FOLDER_DOWNLOADED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/folder-downloaded.svg"));
     pub(crate) const FOLDERS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/folders.svg"));
+    pub(crate) const FORK: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/fork.svg"));
     pub(crate) const GEAR: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/gear.svg"));
     pub(crate) const GIT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/git.svg"));
     pub(crate) const GIT_BRANCH: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/git-branch.svg"));
@@ -212,6 +213,7 @@ mod artwork {
     pub(crate) const UNPIN: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/unpin.svg"));
     pub(crate) const VOICE_MODE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/voice-mode.svg"));
     pub(crate) const WARNING: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/warning.svg"));
+    pub(crate) const WORKTREE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/worktree.svg"));
     pub(crate) const WRITE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/write.svg"));
     pub(crate) const XLS_GREEN: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/xls-green.svg"));
     pub(crate) const XLS_LETTER: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/xls-letter.svg"));
@@ -322,6 +324,7 @@ pub mod icons {
     pub const FOLD: Icon = Icon::new(IconId::new("fold"), artwork::FOLD);
     pub const FOLDER_DOWNLOADED: Icon = Icon::new(IconId::new("folder-downloaded"), artwork::FOLDER_DOWNLOADED);
     pub const FOLDERS: Icon = Icon::new(IconId::new("folders"), artwork::FOLDERS);
+    pub const FORK: Icon = Icon::new(IconId::new("fork"), artwork::FORK);
     pub const GEAR: Icon = Icon::new(IconId::new("gear"), artwork::GEAR);
     pub const GIT: Icon = Icon::new(IconId::new("git"), artwork::GIT);
     pub const GIT_BRANCH: Icon = Icon::new(IconId::new("git-branch"), artwork::GIT_BRANCH);
@@ -430,6 +433,7 @@ pub mod icons {
     pub const UNPIN: Icon = Icon::new(IconId::new("unpin"), artwork::UNPIN);
     pub const VOICE_MODE: Icon = Icon::new(IconId::new("voice-mode"), artwork::VOICE_MODE);
     pub const WARNING: Icon = Icon::new(IconId::new("warning"), artwork::WARNING);
+    pub const WORKTREE: Icon = Icon::new(IconId::new("worktree"), artwork::WORKTREE);
     pub const WRITE: Icon = Icon::new(IconId::new("write"), artwork::WRITE);
     pub const XLS_GREEN: Icon = Icon::new(IconId::new("xls-green"), artwork::XLS_GREEN);
     pub const XLS_LETTER: Icon = Icon::new(IconId::new("xls-letter"), artwork::XLS_LETTER);
@@ -536,6 +540,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::FOLD,
     icons::FOLDER_DOWNLOADED,
     icons::FOLDERS,
+    icons::FORK,
     icons::GEAR,
     icons::GIT,
     icons::GIT_BRANCH,
@@ -644,6 +649,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::UNPIN,
     icons::VOICE_MODE,
     icons::WARNING,
+    icons::WORKTREE,
     icons::WRITE,
     icons::XLS_GREEN,
     icons::XLS_LETTER,
@@ -751,6 +757,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("fold", artwork::FOLD),
     ("folder-downloaded", artwork::FOLDER_DOWNLOADED),
     ("folders", artwork::FOLDERS),
+    ("fork", artwork::FORK),
     ("gear", artwork::GEAR),
     ("git", artwork::GIT),
     ("git-branch", artwork::GIT_BRANCH),
@@ -859,6 +866,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("unpin", artwork::UNPIN),
     ("voice-mode", artwork::VOICE_MODE),
     ("warning", artwork::WARNING),
+    ("worktree", artwork::WORKTREE),
     ("write", artwork::WRITE),
     ("xls-green", artwork::XLS_GREEN),
     ("xls-letter", artwork::XLS_LETTER),

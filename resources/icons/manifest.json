@@ -482,6 +482,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "fork",
+      "file": "fork.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "gear",
       "file": "gear.svg",
       "rendering": "symbolic"
@@ -1019,6 +1024,11 @@
     {
       "id": "warning",
       "file": "warning.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "worktree",
+      "file": "worktree.svg",
       "rendering": "symbolic"
     },
     {
