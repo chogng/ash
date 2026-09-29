@@ -76,7 +76,12 @@ fn sign_release(arguments: Arguments, encoded_key: &str) -> Result<(), String> {
         "ash-desktop" => ash_product_update::UpdateProduct::ElectronDesktop,
         "ash-app" => ash_product_update::UpdateProduct::RustDesktop,
         "ash-code" => ash_product_update::UpdateProduct::AshCode,
-        _ => return Err("update product must be ash-desktop, ash-app, or ash-code".into()),
+        "ash-app-server" => ash_product_update::UpdateProduct::AppServer,
+        _ => {
+            return Err(
+                "update product must be ash-desktop, ash-app, ash-code, or ash-app-server".into(),
+            );
+        }
     };
     let policy = match arguments.channel.as_str() {
         "latest" => ash_product_update::UpdatePolicy::Latest,

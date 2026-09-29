@@ -10,14 +10,15 @@
 ## 命令与路径
 
 - `ash-app-server-daemon connect` 取得共享 profile 服务连接并代理 stdio。
-- `ash-app-server-daemon start|ensure-selected|restart|stop|version` 输出单行 JSON；`pid` 是实际后台进程 PID。
-- `ensure-selected` 比对运行中进程记录的可执行文件摘要和随包 `buildId` 与本次选中的后台程序；相同时复用，不同时先结束旧进程再启动新进程。`just ash` 和 `just ash-package-run` 在打开终端界面前调用它；已安装 Ash Code 当前选中的 CLI 使用 `connect-selected` 在首次连接前执行相同检查。切换可能中断旧进程中的任务。
+- `ash-app-server-daemon start|update|ensure-selected|restart|stop|version` 输出单行 JSON；`pid` 是实际后台进程 PID。`version` 同时报告 `daemonVersion` 和已选中的 `installedVersion`，便于看出更新是否还在等待重启；后台未运行时，`daemonVersion` 是本次调用程序的版本。
+- 发布包首次连接时，后台将完整的、包含独立 JavaScript 运行环境的调用方安装包复制到 `ASH_HOME/app-server-packages`，并从其中启动服务。后续普通连接只使用该 profile 选中的后台版本。`ensure-selected` 明确安装并选择调用方版本；相同时复用，不同时先结束旧进程再启动新进程。开发命令 `just ash` 和 `just ash-package-run` 使用它选择开发构建。切换可能中断旧进程中的任务。
+- `update` 用调用方安装包中的公钥验证独立发布的 App Server stable 描述和归档，再安装并选中较新的完整后台包。它不打断正在运行的服务；下一次停止后启动或明确执行 `restart` 才使用新版本。App Server stable 版本可独立于 Code stable 版本提升。
 - `ASH_APP_SERVER_PATH` 显式选择后台可执行文件，必须是绝对路径；默认使用控制程序同目录的 `ash-app-server[.exe]`。
 - 发布产品通过 `ASH_APP_SERVER_SHA256` 传入后台程序的预期摘要，匹配后才启动；开发 generation 使用实际内容身份。
 - `--product-services PATH` 显式指定产品服务配置；profile 路径和随包资源发现由 `install-context` 提供。
 - 包租约覆盖启动交接，后台服务自己持有运行期间的租约。
 
-本地端点按 profile 固定，不随产品包版本、schema hash 或后端文件摘要变化。它使用 [`ash-uds`](../uds/README.md) 的私有目录和同用户校验。不同版本安装通过 initialize 校验协议主版本和必需能力；schema hash 差异只作诊断。普通 start/connect 遇到协议不兼容时连接失败；只有 `ensure-selected` 或 `restart` 会替换后台进程。控制程序不需要长期驻留；每个窗口保留自己的连接。
+本地端点按 profile 固定，不随产品包版本、schema hash 或后端文件摘要变化。它使用 [`ash-uds`](../uds/README.md) 的私有目录和同用户校验。不同版本安装通过 initialize 校验协议主版本和必需能力；schema hash 差异只作诊断。普通 start/connect 遇到协议不兼容时连接失败；只有明确的 `ensure-selected` 或 `restart` 会替换后台进程。协议不兼容的旧客户端需要更新后才能使用新后台。控制程序不需要长期驻留；每个窗口保留自己的连接。
 
 ## 验证
 

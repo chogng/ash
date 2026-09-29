@@ -33,7 +33,7 @@ Workbench / 编辑器调用方
 
 ## 谁启动后端
 
-桌面启动时，[Electron 应用入口](../src/ash/code/electron-main/app.ts)创建窗口的连接转发组件；[本地启动器](../src/ash/platform/app-server/electron-main/localAppServerProcessLauncher.ts)运行 `ash-app-server-daemon connect-selected`（前端专用调试入口可运行 `connect`）。[连接转发组件](../src/ash/platform/app-server/electron-main/appServerConnectionRelay.ts)把该连接载体的消息与 Renderer 的 MessagePort 对接。[daemon 客户端](../../ash-rs/app-server-daemon/src/client.rs)选择或复用同一 profile 的受管理 App Server，再转发当前连接的输入输出。因此窗口有各自的连接载体和协议客户端，后端服务进程可由多个窗口共用；不要把“每窗口一条连接”理解成“每窗口一个 Rust 服务进程”。
+桌面启动时，[Electron 应用入口](../src/ash/code/electron-main/app.ts)创建窗口的连接转发组件；发布版的[本地启动器](../src/ash/platform/app-server/electron-main/localAppServerProcessLauncher.ts)运行 `ash-app-server-daemon connect`，开发版完整启动选择开发构建。[连接转发组件](../src/ash/platform/app-server/electron-main/appServerConnectionRelay.ts)把该连接载体的消息与 Renderer 的 MessagePort 对接。[daemon 客户端](../../ash-rs/app-server-daemon/src/client.rs)复用同一 profile 选中的受管理 App Server，首次没有后台包时从完整的随包后端安装，再转发当前连接的输入输出。因此窗口有各自的连接载体和协议客户端，后端服务进程可由多个窗口共用；不要把“每窗口一条连接”理解成“每窗口一个 Rust 服务进程”。
 
 Web 页面使用另一条接入路径：浏览器直接连接经过认证的 App Server WebSocket，不经过 Electron Main；领域 Service 与 API 的职责仍相同。详细连接生命周期见[前端连接与浏览器能力](design/app-server-connection.md)。
 

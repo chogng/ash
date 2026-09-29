@@ -41,6 +41,7 @@ pub fn protocol_metadata() -> String {
     let metadata = serde_json::json!({
         "major": crate::protocol::initialize::APP_SERVER_PROTOCOL_MAJOR,
         "revision": crate::protocol::initialize::APP_SERVER_PROTOCOL_REVISION,
+        "capabilityVersion": crate::protocol::initialize::APP_SERVER_CAPABILITY_VERSION,
         "schemaHash": schema_hash(),
     });
     let mut output =

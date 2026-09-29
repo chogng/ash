@@ -50,6 +50,14 @@ pub fn run_command(
                 .map(crate::process::PackageDigest::Expected)
                 .unwrap_or(crate::process::PackageDigest::NotProvided),
         ),
+        Command::Update => {
+            let output = crate::update::install_stable(options.profile_root(), backend_executable)?;
+            println!(
+                "{}",
+                serde_json::to_string(&output).map_err(|error| error.to_string())?
+            );
+            Ok(())
+        }
         Command::Lifecycle(command) => {
             let output = crate::run_lifecycle(command, options, backend_executable)?;
             println!(
@@ -65,6 +73,7 @@ pub fn run_command(
 enum Command {
     Connect,
     ConnectSelected,
+    Update,
     Lifecycle(LifecycleCommand),
 }
 
@@ -75,6 +84,7 @@ fn parse(arguments: &[String]) -> Result<(Command, Option<PathBuf>), String> {
     let command = match command.as_str() {
         "connect" => Command::Connect,
         "connect-selected" => Command::ConnectSelected,
+        "update" => Command::Update,
         "start" => Command::Lifecycle(LifecycleCommand::Start),
         "ensure-selected" => Command::Lifecycle(LifecycleCommand::EnsureSelected),
         "restart" => Command::Lifecycle(LifecycleCommand::Restart),
@@ -91,7 +101,7 @@ fn parse(arguments: &[String]) -> Result<(Command, Option<PathBuf>), String> {
 }
 
 fn usage() -> &'static str {
-    "usage: ash-app-server-daemon <connect|connect-selected|start|ensure-selected|restart|stop|version> [--product-services PATH]"
+    "usage: ash-app-server-daemon <connect|connect-selected|update|start|ensure-selected|restart|stop|version> [--product-services PATH]"
 }
 
 /// Resolves the App Server executable managed by this command adapter.

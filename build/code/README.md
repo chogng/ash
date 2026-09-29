@@ -15,6 +15,10 @@
    `archive.py` 生成确定性的发布归档及 SHA-256 旁车文件。
 4. `update-sign/` 的 `ash-update-sign` 对更新描述签名。
 
+发布任务还将共享运行时包独立签名并归档为 `ash-app-server-<target>`，由
+`ash-app-server-promote.yml` 单独提升 stable 指针。`ash app-server daemon update` 只安装该后台包，
+不会改变 Code 的安装版本。
+
 `package.py` 只接受未经系统签名的 release 运行时包，且要求锁定的独立 Node 程序。
 CLI 和运行时共用一个 `ash-package.json`，安装、远端传输和更新验证读取同一份完整文件清单。
 

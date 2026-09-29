@@ -171,7 +171,10 @@ fn selected_package_replaces_a_daemon_when_only_bundled_resources_change() {
         std::fs::write(
             package.join("ash-package.json"),
             serde_json::to_vec(&json!({
-                "buildId": format!("sha256:{}", digest_digit.repeat(64))
+                "buildId": format!("sha256:{}", digest_digit.repeat(64)),
+                "buildProfile": "dev-small",
+                "files": {},
+                "javascriptRuntime": { "kind": "hostProvidedNode" }
             }))
             .unwrap(),
         )
@@ -352,18 +355,31 @@ fn stop_closes_active_connections_after_its_bounded_grace_window() {
     .join()
     .unwrap();
     assert_eq!(stopped.status, LifecycleStatus::Stopped);
-    let mut after_stop = String::new();
-    match reader.read_line(&mut after_stop) {
-        Ok(0) => {}
-        Err(error)
-            if matches!(
-                error.kind(),
-                std::io::ErrorKind::ConnectionReset
-                    | std::io::ErrorKind::ConnectionAborted
-                    | std::io::ErrorKind::BrokenPipe
-            ) => {}
-        result => panic!("active connection remained readable after stop: {result:?}"),
+    // Notifications already queued before stop may still be readable from the socket buffer.
+    let mut closed = false;
+    for _ in 0..32 {
+        let mut after_stop = String::new();
+        match reader.read_line(&mut after_stop) {
+            Ok(0) => {
+                closed = true;
+                break;
+            }
+            Ok(_) => continue,
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::ConnectionReset
+                        | std::io::ErrorKind::ConnectionAborted
+                        | std::io::ErrorKind::BrokenPipe
+                ) =>
+            {
+                closed = true;
+                break;
+            }
+            result => panic!("active connection remained readable after stop: {result:?}"),
+        }
     }
+    assert!(closed, "active connection stayed open after stop");
     drop(stream);
     drop(cleanup);
 }

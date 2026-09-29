@@ -221,6 +221,20 @@ jobs:
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
 
+      - name: Sign Windows App Server runtime executables
+        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
+        uses: Azure/artifact-signing-action@208f8af4bf26cf2af8597424e3cb5582801523ba # v2.0.0
+        with:
+          endpoint: ${{ vars.ASH_WINDOWS_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.ASH_WINDOWS_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.ASH_WINDOWS_CERTIFICATE_PROFILE }}
+          files-folder: ${{ github.workspace }}\.build\releases\runtime-${{ matrix.target }}
+          files-folder-filter: exe
+          files-folder-recurse: true
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
       - name: Apply system signatures
         if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'macOS'
         shell: bash
@@ -229,6 +243,9 @@ jobs:
         run: |
           ${{ matrix.python }} -B build/ash_rs/sign.py \
             --package-dir ".build/releases/ash-code-${{ matrix.target }}" \
+            --target "${{ matrix.target }}"
+          ${{ matrix.python }} -B build/ash_rs/sign.py \
+            --package-dir ".build/releases/runtime-${{ matrix.target }}" \
             --target "${{ matrix.target }}"
 
       - name: Verify and record Windows signatures
@@ -242,23 +259,33 @@ jobs:
             --package-dir ".build/releases/ash-code-${{ matrix.target }}" `
             --target "${{ matrix.target }}" `
             --verify-only
+          ${{ matrix.python }} -B build/ash_rs/sign.py `
+            --package-dir ".build/releases/runtime-${{ matrix.target }}" `
+            --target "${{ matrix.target }}" `
+            --verify-only
 
-      - name: Build Ash Code release archive
+      - name: Build Code and App Server release archives
         if: github.event_name == 'release' && matrix.release_package != false
         shell: bash
         run: |
           ${{ matrix.python }} -B build/code/archive.py \
             --package-dir ".build/releases/ash-code-${{ matrix.target }}" \
             --output ".build/releases/ash-code-${{ matrix.target }}.${{ matrix.archive }}"
+          ${{ matrix.python }} -B build/code/archive.py \
+            --product ash-app-server \
+            --package-dir ".build/releases/runtime-${{ matrix.target }}" \
+            --output ".build/releases/ash-app-server-${{ matrix.target }}.${{ matrix.archive }}"
 
-      - name: Notarize macOS release archive
+      - name: Notarize macOS release archives
         if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'macOS'
         shell: bash
         run: |
           ${{ matrix.python }} -B build/darwin/notarize.py \
             ".build/releases/ash-code-${{ matrix.target }}.${{ matrix.archive }}"
+          ${{ matrix.python }} -B build/darwin/notarize.py \
+            ".build/releases/ash-app-server-${{ matrix.target }}.${{ matrix.archive }}"
 
-      - name: Sign Ash Code update
+      - name: Sign Code and App Server updates
         if: github.event_name == 'release' && matrix.release_package != false
         shell: bash
         env:
@@ -277,8 +304,19 @@ jobs:
             --archive ".build/releases/ash-code-${{ matrix.target }}.${{ matrix.archive }}" \
             --output ".build/releases/ash-code-${{ matrix.target }}.update.json" \
             --public-key "$ASH_UPDATE_PUBLIC_KEY"
+          "$signer" \
+            --repository chogng/ash \
+            --product ash-app-server \
+            --channel latest \
+            --version "${GITHUB_REF_NAME#v}" \
+            --release-tag "$GITHUB_REF_NAME" \
+            --target "${{ matrix.target }}" \
+            --format "${{ matrix.update_format }}" \
+            --archive ".build/releases/ash-app-server-${{ matrix.target }}.${{ matrix.archive }}" \
+            --output ".build/releases/ash-app-server-${{ matrix.target }}.update.json" \
+            --public-key "$ASH_UPDATE_PUBLIC_KEY"
 
-      - name: Publish Ash Code release package
+      - name: Publish Code and App Server release packages
         if: github.event_name == 'release' && matrix.release_package != false
         shell: bash
         env:
@@ -287,7 +325,10 @@ jobs:
           gh release upload "$GITHUB_REF_NAME" \
             ".build/releases/ash-code-${{ matrix.target }}.${{ matrix.archive }}" \
             ".build/releases/ash-code-${{ matrix.target }}.${{ matrix.archive }}.sha256" \
-            ".build/releases/ash-code-${{ matrix.target }}.update.json"
+            ".build/releases/ash-code-${{ matrix.target }}.update.json" \
+            ".build/releases/ash-app-server-${{ matrix.target }}.${{ matrix.archive }}" \
+            ".build/releases/ash-app-server-${{ matrix.target }}.${{ matrix.archive }}.sha256" \
+            ".build/releases/ash-app-server-${{ matrix.target }}.update.json"
 
       - name: Install Desktop packaging dependencies
         if: github.event_name == 'release' && matrix.release_package != false && (runner.os == 'macOS' || runner.os == 'Windows')

@@ -242,7 +242,9 @@ fn start_unlocked(
         ));
     }
 
-    let daemon = resolve_backend_executable(backend_executable, PackageDigest::NotProvided)?;
+    let selected =
+        crate::installation::selected_backend(options.profile_root(), backend_executable)?;
+    let daemon = resolve_backend_executable(&selected, PackageDigest::NotProvided)?;
     start_new_unlocked(endpoint, options, &daemon)
 }
 
@@ -309,7 +311,9 @@ fn ensure_selected_unlocked(
     backend_executable: &Path,
     package_digest: PackageDigest<'_>,
 ) -> Result<LifecycleOutput, String> {
-    let selected = resolve_backend_executable(backend_executable, package_digest)?;
+    let installed =
+        crate::installation::install_from_client(options.profile_root(), backend_executable)?;
+    let selected = resolve_backend_executable(&installed, package_digest)?;
     let mut replaced = false;
     if let Some(control) = request_control(endpoint, ControlCommand::Status)? {
         if control.state == ControlState::Stopping {
@@ -412,14 +416,12 @@ fn version_unlocked(
     endpoint: &EndpointPaths,
     options: &ConnectionOptions,
 ) -> Result<LifecycleOutput, String> {
+    let installed_version = crate::installation::installed_version(options.profile_root())?;
     let Some(control) = request_control(endpoint, ControlCommand::Status)? else {
         remove_stale_process_record(&endpoint.pid)?;
-        return Ok(lifecycle_output(
-            LifecycleStatus::NotRunning,
-            endpoint,
-            None,
-            None,
-        ));
+        let mut output = lifecycle_output(LifecycleStatus::NotRunning, endpoint, None, None);
+        output.installed_version = installed_version;
+        return Ok(output);
     };
     if control.state == ControlState::Stopping {
         return Err("Local App Server daemon is stopping".into());
@@ -427,12 +429,14 @@ fn version_unlocked(
     validate_managed_response(endpoint, &control)?;
     let probe =
         probe_app_server(endpoint, options).map_err(|error| diagnostic_error(endpoint, &error))?;
-    Ok(lifecycle_output(
+    let mut output = lifecycle_output(
         LifecycleStatus::Running,
         endpoint,
         Some(&control),
         Some(&probe),
-    ))
+    );
+    output.installed_version = installed_version;
+    Ok(output)
 }
 
 fn validate_executable_identity(
@@ -462,6 +466,7 @@ fn lifecycle_output(
         daemon_version: control
             .map(|control| control.daemon_version.clone())
             .unwrap_or_else(|| build_info::VERSION.into()),
+        installed_version: None,
         endpoint_path: endpoint.socket.clone(),
         log_path: endpoint.log.clone(),
         app_server_name: probe.map(|probe| probe.server_name.clone()),

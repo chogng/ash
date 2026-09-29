@@ -144,25 +144,6 @@ struct ManagedInstall {
     update_public_key: ash_product_update::UpdatePublicKey,
 }
 
-pub(super) fn selected_managed_install() -> Result<bool, String> {
-    let executable = std::env::current_exe()
-        .map_err(|error| format!("could not locate the running Ash executable: {error}"))?;
-    selected_managed_executable(&executable)
-}
-
-fn selected_managed_executable(executable: &Path) -> Result<bool, String> {
-    let executable = fs::canonicalize(executable)
-        .map_err(|error| format!("could not resolve the Ash executable: {error}"))?;
-    let Some((root, _, package)) = managed_install_paths(&executable) else {
-        return Ok(false);
-    };
-    if !root.join(INSTALL_MARKER).exists() {
-        return Ok(false);
-    }
-    require_install_marker(root)?;
-    selected_package_matches(root, package)
-}
-
 fn managed_install_paths(executable: &Path) -> Option<(&Path, &Path, &Path)> {
     let binary_directory = executable
         .parent()

@@ -28,7 +28,13 @@ serde_json = { workspace = true }
 ash-app-server-protocol = { workspace = true }
 ash-app-server-transport = { workspace = true }
 ash-package-store = { workspace = true }
+ash-product-update = { workspace = true }
 ash-uds = { workspace = true }
+flate2 = { workspace = true }
+semver = { workspace = true }
+tar = { workspace = true }
+ureq = { workspace = true }
+zip = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 sha2 = { workspace = true, features = ["asm"] }

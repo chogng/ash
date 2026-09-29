@@ -167,6 +167,50 @@ fn desktop_windows_installer_uses_the_signed_executable_format() {
 }
 
 #[test]
+fn app_server_has_its_own_signed_stable_product_identity() {
+    let directory = TempDir::new().unwrap();
+    let archive = directory
+        .path()
+        .join("ash-app-server-aarch64-apple-darwin.zip");
+    fs::write(&archive, b"server archive").unwrap();
+    let output = directory.path().join("server.update.json");
+    let signing_key = SigningKey::from_bytes(&[7u8; 32]);
+    let public_key: String = signing_key
+        .verifying_key()
+        .to_bytes()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    sign_release(
+        Arguments {
+            repository: "chogng/ash".into(),
+            product: "ash-app-server".into(),
+            channel: "stable".into(),
+            version: "1.2.3".into(),
+            release_tag: "v1.2.3".into(),
+            target: "aarch64-apple-darwin".into(),
+            format: "zip".into(),
+            archive,
+            output: output.clone(),
+            public_key,
+        },
+        &"07".repeat(32),
+    )
+    .unwrap();
+    let verified = ash_product_update::verify_release(
+        &fs::read(output).unwrap(),
+        ash_product_update::UpdatePublicKey::from_bytes(signing_key.verifying_key().to_bytes()),
+        &ash_product_update::ExpectedRelease {
+            product: ash_product_update::UpdateProduct::AppServer,
+            policy: ash_product_update::UpdatePolicy::Stable,
+            target: "aarch64-apple-darwin".into(),
+        },
+    )
+    .unwrap();
+    assert_eq!(verified.version, Version::parse("1.2.3").unwrap());
+}
+
+#[test]
 fn release_descriptor_rejects_unversioned_tags_and_unknown_channels() {
     let directory = TempDir::new().unwrap();
     let archive = directory

@@ -106,6 +106,8 @@ class AshCodeArchiveTests(unittest.TestCase):
             executable = package / "bin/ash"
             executable.parent.mkdir(parents=True)
             executable.write_bytes(b"ash")
+            if os.name != "nt":
+                executable.chmod(0o755)
             (package / "ash-package.json").write_text(
                 json.dumps(
                     {
@@ -177,6 +179,38 @@ class AshCodeArchiveTests(unittest.TestCase):
             with patch.object(archive_builder, "validate_package_directory"):
                 with self.assertRaisesRegex(RuntimeError, "system signing"):
                     archive_builder.create_archive(package, output)
+
+    def test_app_server_archive_requires_a_self_contained_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = root / "runtime"
+            executable = package / "bin/ash-app-server"
+            executable.parent.mkdir(parents=True)
+            executable.write_bytes(b"server")
+            manifest = package / "ash-package.json"
+            metadata = {
+                "layoutVersion": 2,
+                "target": "aarch64-unknown-linux-gnu",
+                "components": {"appServer": {}},
+                "javascriptRuntime": {"kind": "packagedNode"},
+            }
+            manifest.write_text(json.dumps(metadata), encoding="utf-8")
+            archive = root / "ash-app-server-aarch64-unknown-linux-gnu.tar.gz"
+            with (
+                posix_executable(executable),
+                patch.object(archive_builder, "validate_package_directory"),
+                patch.object(archive_builder, "require_verified_system_signing"),
+            ):
+                archive_builder.create_archive(package, archive, "ash-app-server")
+            self.assertTrue(archive.is_file())
+            metadata["javascriptRuntime"] = {"kind": "hostProvidedNode"}
+            manifest.write_text(json.dumps(metadata), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "identity is invalid"):
+                archive_builder.create_archive(
+                    package,
+                    root / "other/ash-app-server-aarch64-unknown-linux-gnu.tar.gz",
+                    "ash-app-server",
+                )
 
     @unittest.skipIf(os.name == "nt", "the POSIX installer is tested on POSIX hosts")
     def test_posix_installer_publishes_a_version_and_stable_launcher(self) -> None:

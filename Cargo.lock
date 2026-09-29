@@ -744,17 +744,23 @@ dependencies = [
  "ash-install-context",
  "ash-package-store",
  "ash-process-hardening",
+ "ash-product-update",
  "ash-uds",
  "ash-utils-home-dir",
  "dunce",
+ "flate2",
  "libc",
  "rustix 1.1.4",
+ "semver",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "signal-hook",
+ "tar",
  "tempfile",
+ "ureq",
  "windows-sys 0.59.0",
+ "zip 4.6.1",
 ]
 
 [[package]]

@@ -51,6 +51,7 @@ pub enum UpdateProduct {
     ElectronDesktop,
     RustDesktop,
     AshCode,
+    AppServer,
 }
 
 /// Package serialization selected by a product installation adapter.

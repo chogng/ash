@@ -1,0 +1,73 @@
+name: Promote Ash App Server stable release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semantic version to promote without the v prefix
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ASH_UPDATE_PUBLIC_KEY: ${{ vars.ASH_UPDATE_PUBLIC_KEY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build update signer
+        run: python3 -B scripts/cargo.py build --package ash-update-sign --bin ash-update-sign
+
+      - name: Sign stable App Server pointers
+        env:
+          ASH_UPDATE_SIGNING_KEY: ${{ secrets.ASH_UPDATE_SIGNING_KEY }}
+        run: |
+          version="${{ inputs.version }}"
+          case "$version" in
+            *[!0-9.]*|.*|*.) exit 2 ;;
+          esac
+          release_tag="v${version}"
+          output=".build/stable-app-server"
+          mkdir -p "$output"
+          for target in \
+            aarch64-apple-darwin \
+            x86_64-apple-darwin \
+            aarch64-unknown-linux-gnu \
+            x86_64-unknown-linux-gnu \
+            aarch64-pc-windows-msvc \
+            x86_64-pc-windows-msvc
+          do
+            case "$target" in
+              *-apple-darwin) archive="ash-app-server-${target}.zip"; format="zip" ;;
+              *) archive="ash-app-server-${target}.tar.gz"; format="tar-gz" ;;
+            esac
+            gh release download "$release_tag" --pattern "$archive" --dir "$output"
+            .build/cargo/debug/ash-update-sign \
+              --repository chogng/ash \
+              --product ash-app-server \
+              --channel stable \
+              --version "$version" \
+              --release-tag "$release_tag" \
+              --target "$target" \
+              --format "$format" \
+              --archive "$output/$archive" \
+              --output "$output/ash-app-server-stable-${target}.update.json" \
+              --public-key "$ASH_UPDATE_PUBLIC_KEY"
+          done
+
+      - name: Publish stable App Server pointers
+        run: |
+          gh release view ash-app-server-stable >/dev/null 2>&1 || \
+            gh release create ash-app-server-stable \
+              --target "$GITHUB_SHA" \
+              --title "Ash App Server stable channel" \
+              --notes "Signed pointers managed by the stable promotion workflow." \
+              --prerelease \
+              --latest=false
+          gh release upload ash-app-server-stable .build/stable-app-server/*.update.json --clobber

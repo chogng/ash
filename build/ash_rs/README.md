@@ -153,6 +153,10 @@ the signed descriptor and recheck every package file. CI reads the public key fr
 from the `ASH_UPDATE_SIGNING_KEY` secret. The stable stream changes only through the explicit
 `ash-code-promote.yml` workflow.
 
+The runtime package is also system signed, archived, and signed as the separate
+`ash-app-server` update product. Its stable pointer is promoted by
+`ash-app-server-promote.yml`, independently of the Code stable pointer.
+
 Rust Desktop release jobs pass the same unsigned packaged-Node runtime to
 [`build/app_rs/build.py`](../app_rs/build.py). The app executable is placed beside the App Server
 executables, and its metadata and signing records are included in the shared file manifest. The

@@ -2,8 +2,10 @@
 
 mod client;
 mod endpoint;
+mod installation;
 mod managed;
 mod process;
+mod update;
 mod wire;
 
 use std::path::Path;
@@ -119,6 +121,9 @@ pub struct LifecycleOutput {
     pub instance_id: Option<String>,
     /// Daemon crate version.
     pub daemon_version: String,
+    /// Selected package version, which may be newer than the running daemon.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub installed_version: Option<String>,
     /// Profile-scoped control and App Server socket.
     pub endpoint_path: PathBuf,
     /// Bounded daemon stdout/stderr log.

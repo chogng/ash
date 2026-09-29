@@ -74,8 +74,8 @@ pnpm dev:web:full
 ripgrep 与平台 sandbox helper。编号清单选择当前包，进程租约保护正在运行的包，存储固定保留当前与回滚包。Electron 默认生成 `hostProvidedNode` variant，
 不再下载或复制 standalone Node；`dev:web:full` 使用 `packagedNode` variant，为后端能力提供独立 JavaScript runtime。
 开发态和发布态 Electron 都通过随包的
-`<package>/bin/ash-app-server-daemon[.exe]` 连接共享 App Server。完整开发和发布启动使用
-`connect-selected` 选择当前后端；VS Code 的前端调试入口使用普通 `connect` 复用兼容的运行进程。
+`<package>/bin/ash-app-server-daemon[.exe]` 连接共享 App Server。开发态完整启动选择当前开发构建，
+前端调试入口及发布态使用 `connect` 复用 profile 当前选中的后台。发布版随附包含独立 Node 运行环境的完整后台包，供首次安装；后续桌面更新不自动替换共享后台。
 `prepare:desktop` 并行执行原生模块重建、前端生成资源检查和 `prepare:backend`。
 `predev` 与 `predev:electron` 共用这个入口；`prestart` 先建立主进程输出目录，
 再执行同一组准备任务。`prepare:backend:web` 明确选择带 Node 的后端包，

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a deterministic managed Ash Code archive and SHA-256 sidecar."""
+"""Create a deterministic signed-product package archive and SHA-256 sidecar."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from build.ash_rs.layout import require_verified_system_signing  # noqa: E402
 from build.ash_rs.layout import validate_package_directory  # noqa: E402
 
 
-def create_archive(package: Path, output: Path) -> Path:
+def create_archive(package: Path, output: Path, product: str = "ash-code") -> Path:
     package = package.expanduser().resolve()
     output = output.expanduser().resolve()
     if output.exists() or output.with_suffix(output.suffix + ".sha256").exists():
@@ -37,14 +37,22 @@ def create_archive(package: Path, output: Path) -> Path:
         raise RuntimeError("Ash Code release package identity is invalid")
     spec = target_spec(target)
     suffix = ".zip" if spec.operating_system.value == "darwin" else ".tar.gz"
-    expected_name = f"ash-code-{target}{suffix}"
+    if product not in ("ash-code", "ash-app-server"):
+        raise RuntimeError(f"Unsupported release product: {product}")
+    expected_name = f"{product}-{target}{suffix}"
+    expected_component = "cli" if product == "ash-code" else "appServer"
     if (
         metadata.get("layoutVersion") != 2
         or not isinstance(components, dict)
-        or "cli" not in components
+        or expected_component not in components
+        or (product == "ash-app-server" and "cli" in components)
+        or (
+            product == "ash-app-server"
+            and metadata.get("javascriptRuntime") != {"kind": "packagedNode"}
+        )
         or output.name != expected_name
     ):
-        raise RuntimeError("Ash Code release package identity is invalid")
+        raise RuntimeError(f"{product} release package identity is invalid")
     validate_package_directory(package, spec)
     require_verified_system_signing(package, spec)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -146,11 +154,16 @@ def sha256(path: Path) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--product", choices=("ash-code", "ash-app-server"), default="ash-code"
+    )
     parser.add_argument("--package-dir", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args()
-    checksum = create_archive(arguments.package_dir, arguments.output)
-    print(f"Built Ash Code archive at {arguments.output.resolve()}")
+    checksum = create_archive(
+        arguments.package_dir, arguments.output, arguments.product
+    )
+    print(f"Built {arguments.product} archive at {arguments.output.resolve()}")
     print(f"Built checksum at {checksum}")
     return 0
 

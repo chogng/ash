@@ -22,7 +22,7 @@ export interface LocalAppServerProcessLauncherOptions {
 	readonly fileSha256?: (path: string) => Promise<string>;
 }
 
-/** Launches the packaged App Server directly on the Desktop host. */
+/** Launches the packaged daemon command used by the Desktop connection. */
 export class LocalAppServerProcessLauncher implements IAppServerProcessLauncher {
 	private readonly spawnProcess: SpawnLocalAppServer;
 	private readonly fileExists: (path: string) => boolean;
