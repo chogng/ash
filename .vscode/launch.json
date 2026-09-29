@@ -16,9 +16,9 @@
 			"name": "Ash Desktop (Electron)",
 			"type": "node-terminal",
 			"request": "launch",
-			"command": "just ash-desktop",
-			"osx": {
-				"command": "uv run --python 3.12 just ash-desktop"
+			"command": "bash ./scripts/ash-desktop.sh",
+			"windows": {
+				"command": "cmd /d /c .\\scripts\\ash-desktop.bat"
 			},
 			"cwd": "${workspaceFolder}",
 			"presentation": {
@@ -30,9 +30,9 @@
 			"name": "Ash Desktop UI (reuse App Server)",
 			"type": "node-terminal",
 			"request": "launch",
-			"command": "pnpm --dir app-ts dev:ui:connected",
-			"osx": {
-				"command": "uv run --python 3.12 pnpm --dir app-ts dev:ui:connected"
+			"command": "bash ./scripts/ash-desktop.sh --reuse-app-server",
+			"windows": {
+				"command": "cmd /d /c .\\scripts\\ash-desktop.bat --reuse-app-server"
 			},
 			"cwd": "${workspaceFolder}",
 			"presentation": {

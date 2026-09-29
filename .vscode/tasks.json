@@ -23,12 +23,9 @@
 		{
 			"label": "Launch Ash Browser Vite",
 			"type": "shell",
-			"command": "nvm use >/dev/null && pnpm --dir app-ts dev:web",
+			"command": "pnpm --dir app-ts dev:web",
 			"isBackground": true,
 			"options": {
-				"shell": {
-					"args": ["-lic"]
-				},
 				"cwd": "${workspaceFolder}"
 			},
 			"problemMatcher": {
@@ -61,11 +58,9 @@
 		{
 			"label": "Launch Stanza Vite",
 			"type": "shell",
-			"command": "nvm use >/dev/null && pnpm run dev:stanza",
+			"command": "pnpm run dev:stanza",
 			"options": {
-				"shell": {
-					"args": ["-lic"]
-				}
+				"cwd": "${workspaceFolder}"
 			},
 			"isBackground": true,
 			"problemMatcher": {
