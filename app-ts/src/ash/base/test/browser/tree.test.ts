@@ -40,6 +40,33 @@ test("IndexTreeModel owns index locations and atomic splice", () => {
 	model.dispose();
 });
 
+test("IndexTreeModel preserves filtered visibility while toggling collapsed branches", () => {
+	let filterCalls = 0;
+	const model = new IndexTreeModel<TestNode>({ id: "root", label: "Root", expanded: true }, {
+		filter: { filter: () => { filterCalls += 1; return TreeVisibility.Visible; } },
+	});
+	model.setChildren([{
+		element: { id: "folder", label: "Folder", expanded: false },
+		children: [{
+			element: { id: "nested", label: "Nested", expanded: false },
+			children: [{ element: { id: "file", label: "File", expanded: false } }],
+		}],
+	}, { element: { id: "sibling", label: "Sibling", expanded: false } }]);
+	const callsAfterStructure = filterCalls;
+
+	assert.equal(model.collapseRecursive([0]), true);
+	assert.deepEqual(model.visibleNodes.map(node => node.element.id), ["folder", "sibling"]);
+	assert.equal(model.expandTo([0, 0, 0]), true);
+	assert.deepEqual(model.visibleNodes.map(node => node.element.id), ["folder", "nested", "file", "sibling"]);
+	assert.equal(model.collapse([0]), true);
+	assert.equal(model.expand([0]), true);
+	assert.deepEqual(model.visibleNodes.map(node => node.element.id), ["folder", "nested", "file", "sibling"]);
+	assert.equal(filterCalls, callsAfterStructure);
+	model.refilter();
+	assert.ok(filterCalls > callsAfterStructure);
+	model.dispose();
+});
+
 test("IndexTree renders splice results through the shared flat AbstractTree", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const tree = new IndexTree<TestNode>(dom.window.document.body, { id: "root", label: "Root", expanded: true }, {

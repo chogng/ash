@@ -29,6 +29,44 @@ test("ListView owns flat rows and sizing without Widget selection policy", () =>
 	dom.window.close();
 });
 
+test("ListView keeps unchanged rows attached when tree items are inserted or removed", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const view = new ListView<string>(dom.window.document.body, {
+		getId: item => item,
+		reuseRows: true,
+		renderItem: item => {
+			const label = h(dom.window.document, "button");
+			label.textContent = item;
+			return label;
+		},
+	});
+	view.items = ["Before", "Folder", "After"];
+	const before = view.row(0);
+	const folder = view.row(1);
+	const after = view.row(2);
+	const focusedButton = folder?.querySelector("button");
+	assert.ok(focusedButton);
+	focusedButton.focus();
+	const observer = new dom.window.MutationObserver(() => undefined);
+	observer.observe(view.element, { childList: true });
+
+	view.items = ["Before", "Folder", "Child", "After"];
+	assert.deepEqual([...view.element.children].map(row => row.textContent), ["Before", "Folder", "Child", "After"]);
+	assert.equal(view.row(0), before);
+	assert.equal(view.row(1), folder);
+	assert.equal(view.row(3), after);
+	assert.equal(dom.window.document.activeElement, focusedButton);
+	assert.equal(observer.takeRecords().flatMap(record => [...record.removedNodes]).length, 0);
+
+	view.items = ["Before", "Folder", "After"];
+	assert.equal(view.row(2), after);
+	assert.equal(dom.window.document.activeElement, focusedButton);
+	assert.deepEqual(observer.takeRecords().flatMap(record => [...record.removedNodes].map(node => node.textContent)), ["Child"]);
+	observer.disconnect();
+	view.dispose();
+	dom.window.close();
+});
+
 test("ListView owns the managed scrollbar and reports its scroll position", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const view = new ListView<string>(dom.window.document.body, {

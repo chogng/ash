@@ -139,7 +139,12 @@ export class ListView<T> extends Disposable {
 			if (!retainedIds.has(itemId)) this.removeRenderedRow(itemId, rendered.row);
 		}
 		this.element.style.height = this.isVirtualized ? `${this.itemOffsets.at(-1) ?? 0}px` : "";
-		this.element.replaceChildren(...rows);
+		let previous: HTMLDivElement | undefined;
+		for (const row of rows) {
+			const next = previous ? previous.nextSibling : this.element.firstChild;
+			if (row !== next) this.element.insertBefore(row, next);
+			previous = row;
+		}
 	}
 
 	private createRow(item: T, index: number, itemId: string): HTMLDivElement {

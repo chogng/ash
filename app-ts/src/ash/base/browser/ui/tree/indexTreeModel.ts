@@ -161,7 +161,7 @@ export class IndexTreeModel<T> extends Disposable {
 			node = node.parent;
 		}
 		if (changed.length === 0) return false;
-		this.recomputeVisibleNodes();
+		this.flattenVisibleNodes();
 		this._onDidChange.fire({ kind: "collapse", node: this.requireNode(location) });
 		for (const changedNode of changed) this._onDidChangeCollapseState.fire({ node: changedNode, collapsed: false });
 		return true;
@@ -217,7 +217,7 @@ export class IndexTreeModel<T> extends Disposable {
 		const node = this.requireMutableNode(location);
 		if (node === this.root || !node.collapsible || node.collapsed === collapsed) return false;
 		node.collapsed = collapsed;
-		this.recomputeVisibleNodes();
+		this.flattenVisibleNodes();
 		this._onDidChange.fire({ kind: "collapse", node });
 		this._onDidChangeCollapseState.fire({ node, collapsed });
 		return true;
@@ -235,7 +235,7 @@ export class IndexTreeModel<T> extends Disposable {
 		};
 		visit(root);
 		if (changed.length === 0) return false;
-		this.recomputeVisibleNodes();
+		this.flattenVisibleNodes();
 		this._onDidChange.fire({ kind: "collapse", node: root === this.root ? undefined : root });
 		for (const node of changed) this._onDidChangeCollapseState.fire({ node, collapsed });
 		return true;
@@ -258,6 +258,10 @@ export class IndexTreeModel<T> extends Disposable {
 	private recomputeVisibleNodes(): void {
 		for (const child of this.root.children) this.updateFilterVisibility(child, TreeVisibility.Visible);
 		this.updateVisibleChildMetadata(this.root.children);
+		this.flattenVisibleNodes();
+	}
+
+	private flattenVisibleNodes(): void {
 		const visible: IndexTreeNode<T>[] = [];
 		const append = (node: MutableIndexTreeNode<T>): void => {
 			if (!node.visible) return;
