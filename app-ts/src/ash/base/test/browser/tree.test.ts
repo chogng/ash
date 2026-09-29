@@ -567,6 +567,31 @@ test("ObjectTree projects the model as flat list rows with tree ARIA", () => {
 	dom.window.close();
 });
 
+test("ObjectTree releases hidden rows when its hierarchy is replaced", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const removed: string[] = [];
+	const tree = new ObjectTree<TestNode>(dom.window.document.body, {
+		modelOptions: { identityProvider: { getId: node => node.id } },
+		reuseRows: true,
+		onDidRemoveRow: row => removed.push(row.dataset.treeId!),
+		renderElement: element => {
+			const label = h(dom.window.document, "span");
+			label.textContent = element.label;
+			return label;
+		},
+	});
+	tree.setChildren([{ element: { id: "folder", label: "Folder", expanded: false }, children: [
+		{ element: { id: "child", label: "Child", expanded: false } },
+	] }]);
+	tree.collapse("folder");
+	assert.deepEqual(removed, []);
+	tree.setChildren([{ element: { id: "replacement", label: "Replacement", expanded: false } }]);
+	assert.deepEqual(removed.sort(), ["child", "folder"]);
+	tree.dispose();
+	assert.deepEqual(removed.sort(), ["child", "folder", "replacement"]);
+	dom.window.close();
+});
+
 test("ObjectTree delegates focus, selection, and keyboard navigation to List", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const tree = createObjectTree(dom);

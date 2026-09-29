@@ -236,6 +236,8 @@ export class ObjectTree<TNode> extends Disposable {
 		this.onWillRender?.();
 		if (structureChanged) this.tree.setFindCandidates(flattenTreeNodes(this.model.rootNodes));
 		this.tree.items = this.model.visibleNodes;
+		// Removed nodes may still have detached rows; release them after the new visible rows are mounted.
+		if (structureChanged) this.tree.clearRetainedRows();
 	}
 }
 

@@ -98,6 +98,38 @@ test("ListView splice measures changed rows and keeps unchanged rows mounted", (
 	dom.window.close();
 });
 
+test("ListView reuses hidden rows and releases the bounded cache", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const disposed: string[] = [];
+	let created = 0;
+	const view = new ListView<string>(dom.window.document.body, {
+		getId: item => item,
+		reuseRows: true,
+		renderItem: item => {
+			created += 1;
+			const label = h(dom.window.document, "span");
+			label.textContent = item;
+			return label;
+		},
+		onDidRemoveRow: row => disposed.push(row.dataset.listId!),
+	});
+	const items = Array.from({ length: 130 }, (_, index) => String(index));
+	view.items = items;
+	const first = view.row(0);
+	const last = view.row(129);
+	view.items = [];
+	assert.equal(disposed.length, 2);
+	view.items = ["129"];
+	assert.equal(view.row(0), last);
+	assert.equal(created, 130);
+	view.items = ["0"];
+	assert.equal(view.row(0) === first, false);
+	assert.equal(created, 131);
+	view.dispose();
+	assert.equal(disposed.length, 131);
+	dom.window.close();
+});
+
 test("List splice preserves focus and selection when rows move", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const list = new List<string>(dom.window.document.body, {

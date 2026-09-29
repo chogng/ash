@@ -120,6 +120,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	}
 
 	get items(): readonly TNode[] { return this.list.items; }
+	clearRetainedRows(): void { this.list.clearRetainedRows(); }
 	domFocus(): void { this.list.domFocus(); }
 	set items(items: readonly TNode[]) {
 		this.sourceItems = items;

@@ -23,10 +23,10 @@ export interface ListViewOptions<T> {
 	readonly getDragElements?: (item: T, index: number) => readonly T[];
 	readonly accessibilityProvider?: ListAccessibilityProvider<T>;
 	readonly renderItem: (item: T, index: number, row: HTMLDivElement) => HTMLElement;
-	/** Retains a row only while its ID and item object remain the same. */
+	/** Retains matching rows while visible and in a bounded offscreen cache. */
 	readonly reuseRows?: boolean;
 	readonly updateItem?: (item: T, index: number, row: HTMLDivElement, rerender: boolean) => void;
-	/** Releases resources owned by a row before its rendered content is replaced or removed. */
+	/** Releases resources when a row is permanently discarded, including cache eviction. */
 	readonly onDidRemoveRow?: (row: HTMLDivElement) => void;
 }
 
@@ -38,6 +38,7 @@ export class ListView<T> extends Disposable {
 	private readonly _onDidScroll = this._register(new Emitter<number>());
 	private readonly heightOverrides = new Map<string, number>();
 	private readonly renderedRows = new Map<string, { readonly item: T; readonly row: HTMLDivElement; readonly index: number }>();
+	private readonly retainedRows = new Map<string, { readonly item: T; readonly row: HTMLDivElement; readonly index: number }>();
 	private readonly itemIdSet = new Set<string>();
 	private _items: readonly T[] = [];
 	private itemIds: readonly string[] = [];
@@ -68,6 +69,7 @@ export class ListView<T> extends Disposable {
 		this._register(toDisposable(() => this.element.remove()));
 		this._register(toDisposable(() => {
 			for (const row of this.element.querySelectorAll<HTMLDivElement>(":scope > .ash-list-row")) this.options.onDidRemoveRow?.(row);
+			this.clearRetainedRows();
 		}));
 		if (this.scrollable) this._register(this.scrollable.onDidScroll(event => {
 			if (this.isVirtualized) this.renderRows();
@@ -82,6 +84,10 @@ export class ListView<T> extends Disposable {
 	}
 
 	get items(): readonly T[] { return this._items; }
+	clearRetainedRows(): void {
+		for (const retained of this.retainedRows.values()) this.options.onDidRemoveRow?.(retained.row);
+		this.retainedRows.clear();
+	}
 
 	layout(height: number): void {
 		this.domNode.style.height = `${height}px`;
@@ -173,14 +179,21 @@ export class ListView<T> extends Disposable {
 			const item = this._items[index]!;
 			const itemId = this.itemIds[index]!;
 			retainedIds.add(itemId);
-			const previous = this.renderedRows.get(itemId);
+			const retained = this.retainedRows.get(itemId);
+			if (retained) this.retainedRows.delete(itemId);
+			const previous = this.renderedRows.get(itemId) ?? retained;
 			const existing = previous;
 			let row: HTMLDivElement;
 			if (existing?.item === item) {
 				row = existing.row;
 				row.dataset.index = String(index);
 				this.updateAccessibility(row, item);
-				this.options.updateItem?.(item, index, row, false);
+				this.options.updateItem?.(item, index, row, retained !== undefined);
+				if (retained) {
+					const height = this.heightOverrides.get(itemId) ?? normalizeHeight(this.options.getHeight?.(item));
+					if (height === undefined) row.style.removeProperty("height");
+					else row.style.height = `${height}px`;
+				}
 			} else {
 				if (previous) this.removeRenderedRow(itemId, previous.row);
 				row = this.createRow(item, index, itemId);
@@ -195,7 +208,9 @@ export class ListView<T> extends Disposable {
 			rows.push(row);
 		}
 		for (const [itemId, rendered] of [...this.renderedRows]) {
-			if (!retainedIds.has(itemId)) this.removeRenderedRow(itemId, rendered.row);
+			if (retainedIds.has(itemId)) continue;
+			if (this.options.reuseRows && this.options.getId) this.retainRenderedRow(itemId, rendered);
+			else this.removeRenderedRow(itemId, rendered.row);
 		}
 		this.element.style.height = this.isVirtualized ? `${this.itemOffsets.at(-1) ?? 0}px` : "";
 		let previous: HTMLDivElement | undefined;
@@ -227,6 +242,17 @@ export class ListView<T> extends Disposable {
 		this.options.onDidRemoveRow?.(row);
 		row.remove();
 		this.renderedRows.delete(itemId);
+	}
+
+	private retainRenderedRow(itemId: string, rendered: { readonly item: T; readonly row: HTMLDivElement; readonly index: number }): void {
+		rendered.row.remove();
+		this.renderedRows.delete(itemId);
+		this.retainedRows.set(itemId, rendered);
+		if (this.retainedRows.size <= 128) return;
+		const first = this.retainedRows.keys().next().value!;
+		const evicted = this.retainedRows.get(first)!;
+		this.retainedRows.delete(first);
+		this.options.onDidRemoveRow?.(evicted.row);
 	}
 
 	private renderRange(): { readonly start: number; readonly end: number } {

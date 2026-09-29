@@ -115,6 +115,7 @@ export class List<T> extends Disposable {
 	}
 
 	get items(): readonly T[] { return this.view.items; }
+	clearRetainedRows(): void { this.view.clearRetainedRows(); }
 	layout(height: number): void { this.view.layout(height); }
 
 	set items(items: readonly T[]) {

@@ -65,8 +65,10 @@ export class BrowserFileService extends Disposable implements IFileService {
 		performance.mark('ash-tree:fs-request');
 		const result = await this.api.readDirectory(this.fileTarget(resource));
 		performance.mark('ash-tree:fs-response');
+		const parentPath = resource.path;
+		const childBasePath = parentPath.endsWith('/') ? parentPath.slice(0, -1) : parentPath;
 		return result.entries.map((entry) => ({
-			resource: childResource(resource, entry.name),
+			resource: resource.withPath(`${childBasePath}/${encodeURIComponent(entry.name)}`),
 			name: entry.name,
 			kind: fileKind(entry.fileType),
 		}));
@@ -247,13 +249,6 @@ function decodedPath(resource: URI): string {
 function isCaseInsensitiveFileSystemPath(path: string): boolean {
 	return /^\/[A-Za-z]:\//.test(`${path}/`) ||
 		globalThis.navigator?.platform?.startsWith("Mac") === true;
-}
-
-function childResource(parent: URI, name: string): URI {
-	const base = parent.path.endsWith("/")
-		? parent.path.slice(0, -1)
-		: parent.path;
-	return parent.withPath(`${base}/${encodeURIComponent(name)}`);
 }
 
 /** Resolves one slash-separated protocol path beneath a workspace root. */
