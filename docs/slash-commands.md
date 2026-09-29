@@ -121,7 +121,7 @@ Web/Electron Workbench 和 Ash Code TUI 使用一个包管理入口，加上各�
 | 入口 | 用户操作 | 安装相关操作 |
 | --- | --- | --- |
 | `/marketplace` | 搜索所有来源、查看包内容与版本、安装、更新、卸载 | 使用同一个 Core Plugins 服务 |
-| `/skills` | 查看可用 Skill、启用/停用、查看诊断；通过 `$name` 调用 | “获取更多”打开 Marketplace 的 Skill 筛选 |
+| `/skills` | 查看可用 Skill、启用/停用、查看诊断；通过 `$name` 调用 | 在 TUI 中用 `/marketplace` 搜索可安装 Skill |
 | `/lsp` | 查看当前语言与服务器、配置启用状态和路径、检查运行故障 | “查找服务器”打开 Marketplace 的语言筛选 |
 | `/plugins` | 打开 Marketplace 的插件分类，查看已安装和未安装包 | 按所选安装记录更新和卸载 |
 | MCP、Connector 领域 | 管连接、认证、工具与运行状态；当前不新增 Desktop slash command | Marketplace 提供对应 capability 筛选 |
@@ -129,7 +129,7 @@ Web/Electron Workbench 和 Ash Code TUI 使用一个包管理入口，加上各�
 - package 是版本和卸载单位；一个 Plugin 包携带的 Skill、MCP 等能力不分别安装，也不重复登记。
 - 领域页面可直接提供安装按钮，但必须调用同一个包管理服务，并明确显示实际安装的整个包。
 - 包搜索支持 package family 和 capability 筛选；领域入口按 capability 查询，包含 Plugin bundle 中的能力。
-  `/skills` 不使用 `packageType=skill` 限制；`/lsp` 按当前编辑器语言 ID 查询明确的 executable 路由。
+  `/lsp` 按当前编辑器语言 ID 查询明确的 executable 路由。
 - 搜索命中语言包不代表其中每种语言都有 LSP；服务器路由必须来自已验证 catalog 的明确声明。
 - 安装、更新和卸载通知使领域重新读取状态；进程、文档、认证、启用设置仍归各领域管理。
 
@@ -143,7 +143,7 @@ Marketplace 按能力分类提供页签，另有插件包页签；`/marketplace`
 `/` 聚焦搜索，`i` 打开安装审阅，`u` 打开卸载确认，`r` 刷新当前分类。Tab/Shift+Tab、方向键和 Esc 沿用 Config 面板的焦点与返回规则；安装前仍审阅整个包，已安装版本按具体安装记录更新和卸载。
 `/lsp` 的 Available、Configured、Directories 页签显示可用服务器、配置和会话目录；输入语言 ID 后进入
 Marketplace 精确路由搜索。可用表示已启用且程序可解析，不表示进程已启动。
-`/skills`、`/mcp`、`/connectors`、`/lsp` 的获取入口进入同一个 Marketplace；语言服务器配置统一由 `/lsp` 管理，Config 不再重复提供页签。
+Ash Code 的 `/skills` 只管理已发现的技能，安装技能从 `/marketplace` 进入。`/mcp`、`/connectors`、`/lsp` 的获取入口进入同一个 Marketplace；语言服务器配置统一由 `/lsp` 管理，Config 不再重复提供页签。
 分类不对应独立来源：Ash 发行配置已包含 `ash` Marketplace，只有接入另一个独立目录才需要增加来源与信任根。
 终端在显示边界翻译共享命令描述和参数提示；面板动态文案使用翻译模板，包名、语言 ID、路径、权限标识和第三方描述保持原文。
 终端使用共享列表的 Tab/方向键、搜索与鼠标路径；请求期间可按 Esc 关闭，迟到结果不会重开面板。

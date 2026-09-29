@@ -6,7 +6,22 @@ use client::OperationClient;
 use client::ResolvedApiTarget;
 use serde_json::Value;
 
+use crate::QuotaLimit;
+
 pub const BUSINESS_URL: &str = "https://api.z.ai";
+
+/// Reads quota with the current Coding Plan request key.
+pub fn read_quota(
+    transport: &dyn OperationClient,
+    request_key: &str,
+    cancellation: &CancellationToken,
+) -> Result<Vec<QuotaLimit>, RequestError> {
+    let target = ResolvedApiTarget::new(
+        BUSINESS_URL,
+        vec![http_client::HttpHeader::new("Authorization", request_key)],
+    );
+    crate::coding_plan::read_quota(transport, &target, cancellation)
+}
 
 /// Exchanges the login token for a business token and resolves model request credentials.
 pub fn issue_api_key(

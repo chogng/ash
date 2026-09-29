@@ -1,12 +1,18 @@
 ---
 source: code/tui/src/app/usage_tests.rs
-expression: screen
+expression: bigmodel_screen
 ---
   .                                                        [— / —] [Dashboard]
 
+
         ┌── Usage ─────────────────────────────────────────────────[✗]─┐
         │                                                              │
-        │  Sign in to a subscription: /config > Providers.             │
+        │   BigModel    Z.AI                                           │
+        │                                                              │
+        │> BigModel plan  ·  Not reported                              │
+        │  5-hour limit                                                │
+        │  5h window  ·  87% left (13% used)                           │
+        │  Resets  ·  2026-09-28 00:00 UTC                             │
         │                                                              │
         │                                                              │
         │                                                              │
@@ -17,6 +23,8 @@ expression: screen
         │                                                              │
         │                                                              │
         │                                                              │
-  ──────│                                                              │──────
-  > Buil│  Esc to close                                                │
-  ──────└──────────────────────────────────────────────────────────────┘model
+        │                                                              │
+        │                                                              │
+  ──────│  Tab/Shift+Tab to switch · Esc to close                      │──────
+  > Buil└──────────────────────────────────────────────────────────────┘
+  ─────────────────────────────────────────────────────────── Automatic model

@@ -22,14 +22,16 @@ pub(crate) fn load<T: JsonRpcTransport>(client: &mut AppServerClient<T>) -> Resu
         .filter(|account| {
             matches!(
                 account.provider.as_str(),
-                "chatgpt-subscription" | "kimi-subscription" | "xai-subscription"
+                "chatgpt-subscription"
+                    | "kimi-subscription"
+                    | "xai-subscription"
+                    | "bigmodel-coding-plan"
+                    | "zai-coding-plan"
             )
         })
         .collect();
     if accounts.is_empty() {
-        return Ok(message(
-            "Sign in to ChatGPT, Kimi or xAI: /config > Providers.",
-        ));
+        return Ok(message("Sign in to a subscription: /config > Providers."));
     }
     let mut groups = Vec::new();
     let mut reconnect = None;
@@ -37,6 +39,8 @@ pub(crate) fn load<T: JsonRpcTransport>(client: &mut AppServerClient<T>) -> Resu
         let name = match account.provider.as_str() {
             "xai-subscription" => "xAI",
             "kimi-subscription" => "Kimi",
+            "bigmodel-coding-plan" => "BigModel",
+            "zai-coding-plan" => "Z.AI",
             _ => "ChatGPT",
         };
         if account.status != AccountStatusDto::Ready {
@@ -95,17 +99,14 @@ fn choices(usage: AccountRateLimitsReadResult) -> ListSelectionGroup {
     if let Some(xai) = usage.xai {
         return xai_choices(usage.plan, xai);
     }
-    let provider = if usage.provider == "kimi-subscription" {
-        "Kimi"
-    } else {
-        "ChatGPT"
+    let (provider, plan_label) = match usage.provider.as_str() {
+        "kimi-subscription" => ("Kimi", "Kimi plan"),
+        "bigmodel-coding-plan" => ("BigModel", "BigModel plan"),
+        "zai-coding-plan" => ("Z.AI", "Z.AI plan"),
+        _ => ("ChatGPT", "ChatGPT plan"),
     };
     let mut items = vec![detail(
-        if provider == "Kimi" {
-            "Kimi plan"
-        } else {
-            "ChatGPT plan"
-        },
+        plan_label,
         usage.plan.unwrap_or_else(|| "Not reported".into()),
     )];
     if usage.limits.is_empty() {

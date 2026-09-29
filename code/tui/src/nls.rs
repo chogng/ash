@@ -865,12 +865,6 @@ const UI_TRANSLATIONS: &[Translation] = &[
     translation("plugin", "プラグイン", "插件", "plugin"),
     translation("marketplace", "マーケットプレイス", "扩展市场", "catalogue"),
     translation(
-        "Get skills",
-        "スキルを入手",
-        "获取技能",
-        "Obtenir des compétences",
-    ),
-    translation(
         "Get MCP servers",
         "MCP サーバーを入手",
         "获取 MCP 服务器",
@@ -883,18 +877,8 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Obtenir des connecteurs",
     ),
     translation("All ({0})", "すべて ({0})", "全部 ({0})", "Tous ({0})"),
-    translation(
-        "Enabled ({0})",
-        "有効 ({0})",
-        "已启用 ({0})",
-        "Activés ({0})",
-    ),
-    translation(
-        "Disabled ({0})",
-        "無効 ({0})",
-        "已停用 ({0})",
-        "Désactivés ({0})",
-    ),
+    translation("On ({0})", "オン ({0})", "开启 ({0})", "Activés ({0})"),
+    translation("Off ({0})", "オフ ({0})", "关闭 ({0})", "Désactivés ({0})"),
     translation(
         "Refresh installed packages",
         "インストール済みパッケージを更新",
@@ -2691,6 +2675,20 @@ const UI_TRANSLATIONS: &[Translation] = &[
     ),
     translation("Kimi plan", "Kimi プラン", "Kimi 套餐", "Abonnement Kimi"),
     translation(
+        "BigModel plan",
+        "BigModel プラン",
+        "BigModel 套餐",
+        "Abonnement BigModel",
+    ),
+    translation("Z.AI plan", "Z.AI プラン", "Z.AI 套餐", "Abonnement Z.AI"),
+    translation(
+        "Coding Plan limit",
+        "Coding Plan の上限",
+        "编程套餐额度",
+        "Limite Coding Plan",
+    ),
+    translation("MCP limit", "MCP の上限", "MCP 额度", "Limite MCP"),
+    translation(
         "5-hour limit",
         "5 時間の上限",
         "5 小时额度",
@@ -2730,16 +2728,16 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Relancer /usage pour actualiser",
     ),
     translation(
+        "Sign in to a subscription: /config > Providers.",
+        "/config > プロバイダーでサブスクリプションにログインしてください。",
+        "在 /config > Providers 登录订阅账户。",
+        "Connectez-vous à un abonnement dans /config > Providers.",
+    ),
+    translation(
         "show subscription quotas and reset times",
         "サブスクリプションの利用上限とリセット時刻を表示",
         "查看订阅额度和重置时间",
         "afficher les quotas des abonnements et leur réinitialisation",
-    ),
-    translation(
-        "Sign in to ChatGPT, Kimi or xAI: /config > Providers.",
-        "/config > プロバイダーで ChatGPT、Kimi、xAI にログインしてください。",
-        "在 /config > 提供商中登录 ChatGPT、Kimi 或 xAI 后查看额度。",
-        "Connectez-vous à ChatGPT, Kimi ou xAI dans /config > Fournisseurs.",
     ),
     translation(
         "Reconnect ChatGPT in /config > Providers.",
@@ -3013,7 +3011,6 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "中断或退出",
         "Interrompre ou quitter",
     ),
-    translation("Manage", "管理", "管理", "Gérer"),
     translation(
         "No color themes available",
         "利用可能なカラーテーマはありません",

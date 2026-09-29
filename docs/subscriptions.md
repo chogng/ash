@@ -11,8 +11,8 @@ Ash Code 的订阅区目前提供 ChatGPT、Kimi、Super Grok、BigModel 和 Z.A
 | Kimi Desktop | `kimi-desktop` 连接；只读使用桌面端的 Kimi Code 运行配置 | `kimi-desktop` 的桌面端 Code 网关 | 尚未接入账户和额度查询 |
 | Kimi Code CLI | `kimi-cli` 连接；只读使用 CLI 的 OAuth 凭据文件 | `kimi-cli` 的 CLI 配置端点 | 尚未接入账户和额度查询 |
 | Super Grok | `xai-subscription` 账户；Ash 设备码登录，或只读使用已有 Grok 登录 | `xai` 的 Grok 订阅代理 | 套餐、使用比例、周期和余额 |
-| BigModel | 只读复用 ZCode 个人版 Coding Plan 账号，或在 Ash 浏览器登录 | `open.bigmodel.cn` 的 Coding Plan 端点 | 尚未提供账户额度查询 |
-| Z.AI | 只读复用 ZCode 个人版 Coding Plan 账号，或在 Ash 浏览器登录 | `api.z.ai` 的 Coding Plan 端点 | 尚未提供账户额度查询 |
+| BigModel | 只读复用 ZCode 个人版 Coding Plan 账号，或在 Ash 浏览器登录 | `open.bigmodel.cn` 的 Coding Plan 端点 | 上游返回的额度窗口与重置时间；套餐等级未提供 |
+| Z.AI | 只读复用 ZCode 个人版 Coding Plan 账号，或在 Ash 浏览器登录 | `api.z.ai` 的 Coding Plan 端点 | 上游返回的额度窗口与重置时间；套餐等级未提供 |
 
 BigModel 与 Z.AI 使用[官方 ZCode](https://zcode.z.ai/en/docs/configuration) 的账号授权；已在 ZCode 登录时直接使用它的请求凭据，否则在 Ash 登录并自动取得请求凭据。用户不填写 Coding Plan Key。
 
@@ -27,8 +27,8 @@ BigModel 与 Z.AI 使用[官方 ZCode](https://zcode.z.ai/en/docs/configuration)
 | ChatGPT | 检测到 Codex 时只读使用其认证存储；否则 Ash 创建并维护 Codex 兼容认证记录，不向 profile SecretStore 复制 token | 当前 ID token 的 `chatgpt_plan_type`；`/usage` 另从额度接口读取 `plan_type` | 后台观察认证存储变化；Codex 管理的凭据由 Codex 更新，Ash 管理的凭据由 Ash 续期；每次打开 `/usage` 重新查额度 |
 | Kimi | Ash 的 profile SecretStore；`ash-kimi` 负责续期 | Kimi Coding API `/me` 的 `user_level_name`；未提供时为 `null` | 后台观察凭据并定期查询账户资料；每次打开 `/usage` 重新查套餐与额度 |
 | Super Grok | Ash 设备码登录保存在 profile SecretStore；没有 Ash 登录时，只读使用后端主机的 `~/.grok/auth.json` | Grok Build `/v1/settings` 的 `subscription_tier_display`，其次是该接口的 `subscription_tier` 或 `/v1/user?include=subscription` 的 `subscriptionTier`；显示服务端返回的完整名称，例如 `SuperGrok Heavy` | 后台观察凭据并定期查询账户和设置；复用 Grok 文件时，Ash 只在内存中保存与当前令牌对应的脱敏账户资料，令牌变化后自动更新；`/usage` 重新查当期数据 |
-| BigModel | 只读使用 ZCode 凭据文件；Ash 自己登录时保存在 profile SecretStore | 当前无法查询实际套餐等级 | 后台观察账户凭据；每次模型请求重新读取当前凭据；上游资格由实际请求判定 |
-| Z.AI | 只读使用 ZCode 凭据文件；Ash 自己登录时保存在 profile SecretStore | 当前无法查询实际套餐等级 | 后台观察账户凭据；每次模型请求重新读取当前凭据；上游资格由实际请求判定 |
+| BigModel | 只读使用 ZCode 凭据文件；Ash 自己登录时保存在 profile SecretStore | 当前无法查询实际套餐等级 | 后台观察账户凭据；每次模型请求重新读取当前凭据；打开 `/usage` 时查询额度；上游资格由实际请求判定 |
+| Z.AI | 只读使用 ZCode 凭据文件；Ash 自己登录时保存在 profile SecretStore | 当前无法查询实际套餐等级 | 后台观察账户凭据；每次模型请求重新读取当前凭据；打开 `/usage` 时查询额度；上游资格由实际请求判定 |
 
 读取其他客户端的认证文件，不等于把它导入成 Ash 自己维护的凭据。只读复用时，原客户端仍负责刷新或替换其 token；Ash 每次使用前读取当前凭据，不复制外部 refresh token，也不写回外部认证文件。Ash 自己发起登录时，才由相应供应商适配器保存并维护 Ash 管理的凭据。账户名称、邮箱和等级进入的是脱敏账户状态；认证凭据和额度结果不作为普通 `/config` 配置项保存。Grok Build 的 `/v1/settings` 是服务端 HTTP 接口，不是 Ash 的 `/settings` 命令；用户仍在 `/config` 查看连接，在 `/usage` 主动查询额度。
 
@@ -40,11 +40,11 @@ BigModel 与 Z.AI 使用[官方 ZCode](https://zcode.z.ai/en/docs/configuration)
 
 ## 账户额度与刷新
 
-`account/rateLimits/read` 支持 ChatGPT、Kimi 和 Super Grok，按 `{ provider, accountId }` 查询指定账户；接口字段、身份检查和错误见 [App Server 账号接口](ash-app-server-api.md#11-account-与登录)。ChatGPT 返回额度窗口的已使用比例、UTC 重置时间和点数；Kimi 返回上游实际提供的五小时、每周或每月窗口；Super Grok 返回上游周期、使用比例和余额。各供应商的额度含义不同，界面分别展示。BigModel Coding Plan 和 Z.AI Coding Plan 尚未接入这个额度接口。
+`account/rateLimits/read` 支持五个订阅入口，按 `{ provider, accountId }` 查询指定账户；接口字段、身份检查和错误见 [App Server 账号接口](ash-app-server-api.md#11-account-与登录)。ChatGPT 返回额度窗口的已使用比例、UTC 重置时间和点数；Kimi 返回上游实际提供的五小时、每周或每月窗口；Super Grok 返回上游周期、使用比例和余额。BigModel 与 Z.AI 查询 Coding Plan monitor 的额度窗口；接口没有返回的套餐、额度或重置时间保持“未提供”。各供应商的额度含义不同，界面分别展示。
 
 `ash-subscriptions` 负责后台观察周期，并在账户变化时重新读取模型目录。更新 Kimi 和 Super Grok 的账户展示资料时，由 `ash-login` 核对当前账户并提交脱敏状态；供应商适配器读取远端资料。模型发现仍由模型目录服务执行，额度仍在打开 `/usage` 时查询。
 
-每次运行 `/usage` 都读取当前已登录账户，并为每个就绪的 ChatGPT、Kimi 或 Super Grok 账户查询一次额度。面板中的页签切换和重绘只使用这次查询的结果；关闭后再次运行 `/usage` 才会重新查询。当前没有定时刷新，也不读取或保存本地额度缓存文件。Codex 兼容的 `auth.json` 只用于认证，不提供额度数据。
+每次运行 `/usage` 都读取当前已登录账户，并为五个订阅入口中每个就绪的账户查询一次额度。面板中的页签切换和重绘只使用这次查询的结果；关闭后再次运行 `/usage` 才会重新查询。当前没有定时刷新，也不读取或保存本地额度缓存文件。Codex 兼容的 `auth.json` 只用于认证，不提供额度数据。
 
 这个命令由用户主动打开，请求次数取决于打开次数，因此保持即时查询，不为它增加本地额度缓存。若以后提供常驻额度显示，再由账户侧维护按账户区分、带更新时间的共享数据，并确定刷新时机；本地保存的上次结果只能作为带时间标记的旧值展示，不能当作当前余额。
 

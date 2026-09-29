@@ -754,9 +754,6 @@ impl App {
                 Some(StatusCommand::EditLine(edit).into())
             }
             CommandPanelOutcome::Theme(outcome) => self.handle_theme_picker_outcome(outcome),
-            CommandPanelOutcome::Skills(SkillSelectionAction::Marketplace) => {
-                Some(MarketplaceCommand::browse(Some(MarketplaceCapabilityKindDto::Skill)).into())
-            }
             CommandPanelOutcome::Mcp(McpSelectionAction::Marketplace) => {
                 Some(MarketplaceCommand::browse(Some(MarketplaceCapabilityKindDto::Mcp)).into())
             }

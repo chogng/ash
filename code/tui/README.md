@@ -38,7 +38,7 @@ just ash
 | 持续内存诊断 | [memory.rs](src/memory.rs)；Config 提供开关，Status 只读展示 |
 | 界面语言与类型化文案 | [nls.rs](src/nls.rs)；持久化由 [config/settings.rs](src/config/settings.rs) 负责 |
 | 状态信息和本机资源 | [status](src/status)、[process_resources.rs](../../ash-rs/memory-diagnostics/src/process_resources.rs) |
-| ChatGPT / Kimi / xAI 订阅额度与重置时间（`/usage`） | [usage.rs](src/usage.rs)，每次打开通过 App Server 查询；多订阅用 Tab 切换，Esc 关闭，再次运行刷新。各订阅入口的额度支持见[订阅接入与额度](../../docs/subscriptions.md#账户额度与刷新) |
+| 五个订阅入口的额度与重置时间（`/usage`） | [usage.rs](src/usage.rs)，每次打开通过 App Server 查询；多订阅用 Tab 切换，Esc 关闭，再次运行刷新。各订阅入口的额度支持见[订阅接入与额度](../../docs/subscriptions.md#账户额度与刷新) |
 | 终端恢复、鼠标捕获协议和历史输出 | [session.rs](src/terminal/session.rs)、[scrollback.rs](src/terminal/scrollback.rs)、[terminal.rs](src/terminal.rs) |
 | 屏幕模式与页面组合 | [frame.rs](src/app/frame.rs)、[fullscreen.rs](src/app/fullscreen.rs)、[inline.rs](src/app/inline.rs) |
 | 全屏布局、鼠标和选区 | [layout.rs](src/app/fullscreen/layout.rs)、[pointer.rs](src/app/fullscreen/pointer.rs)、[selection.rs](src/app/fullscreen/selection.rs) |
@@ -171,7 +171,7 @@ TUI 不扫描 Skill 正文；完整 `SKILL.md` 由后端在接受任务后按需
 | 会话管理 | `/agents` 与 `/sessions` 打开同一管理器；`/subagents` 进入当前会话的 Thread 切换区 |
 | 回退 | `/rewind` 或空输入下 500 ms 内连续 Esc 创建子 Thread，继承目标之前已结束的任务，原 Thread 不变 |
 | 归档 | 归档当前会话成功后才创建新会话；归档列表的恢复不重跑已结束任务 |
-| Skills | 目录只展示元数据；Manage 使用带来源的 Skill 身份与配置版本修改启用状态，随后重读 |
+| Skills | 目录只展示元数据；All、On、Off 页签中的技能项使用带来源的 Skill 身份与配置版本修改启用状态，随后重读 |
 | Connectors | 支持设备码授权和断开；API key 与浏览器回调 OAuth 连接仍通过 Desktop 设置完成 |
 | 目录 | 添加目录和授予访问权限分别处理；使用 Session RPC 与权限版本，不写入 profile 设置 |
 | 设置和模型 | 带预期配置版本保存；各功能只接收自己需要的字段 |
@@ -374,7 +374,7 @@ just test-tui
 - `/marketplace [query]` 按全部、技能、插件、MCP、连接器、可执行程序、编程语言、主题、语言包和资源页签浏览；安装前审阅整个包的版本、能力和权限。
 - `/plugins` 直接打开 Marketplace 的“已安装”页签，按精确版本更新或卸载；使用中的包等待消费方释放后删除。
 - `/lsp [language-id]` 查看当前目录可用服务器，修改启用状态、程序路径或恢复配置默认值。
-- `/skills`、`/mcp`、`/connectors`、`/lsp` 的获取入口连接同一个包管理服务；Config 不重复提供语言服务器页签。
+- `/skills` 浏览和管理已发现的技能，`/marketplace` 搜索可安装技能；`/mcp`、`/connectors`、`/lsp` 的获取入口连接同一个包管理服务。Config 不重复提供语言服务器页签。
 - 分类页签共用已配置的 Marketplace 来源；发行配置已提供 `ash`，增加独立来源才需要配置新的 metadata/targets 地址与信任根。
 - `marketplace.rs` 和 `lsp.rs` 拥有终端状态与交互，后端继续拥有安装、解析和配置。共享契约见 [Slash Commands](../../docs/slash-commands.md#marketplace-与领域管理入口)。
 - 定向验证：`just test ash-tui marketplace`；真实终端流程：`just test-tui actual_tui_marketplace_and_lsp_commands`。

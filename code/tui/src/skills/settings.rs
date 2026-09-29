@@ -6,14 +6,13 @@ use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::search_box::SearchBoxModel;
 use ash_app_server_protocol::protocol::skills::{
-    SkillDiagnosticDto, SkillEnablementDto, SkillListResult, SkillSourceKindDto,
+    SkillDiagnosticDto, SkillEnablementDto, SkillListResult,
 };
 use ash_protocol::SkillId;
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum SkillSelectionAction {
-    Marketplace,
     SetEnablement {
         skill_id: SkillId,
         enablement: SkillEnablementDto,
@@ -28,25 +27,32 @@ pub(crate) struct SkillChoices {
 
 pub(crate) fn skill_choices(catalog: &SkillListResult) -> SkillChoices {
     let mut actions = BTreeMap::new();
-    let marketplace_id = ListSelectionItemId::new("marketplace");
-    actions.insert(marketplace_id.clone(), SkillSelectionAction::Marketplace);
     let all = catalog
         .skills
         .iter()
         .enumerate()
         .map(|(index, skill)| {
             let item_id = ListSelectionItemId::new(format!("skill-{index}"));
+            let enablement = match skill.enablement {
+                SkillEnablementDto::Disabled => SkillEnablementDto::Enabled,
+                SkillEnablementDto::Enabled => SkillEnablementDto::Disabled,
+            };
+            actions.insert(
+                item_id.clone(),
+                SkillSelectionAction::SetEnablement {
+                    skill_id: skill.id.clone(),
+                    enablement,
+                },
+            );
             ListSelectionItem::new(Text::literal(skill.id.name.as_str()))
                 .with_id(item_id)
-                .with_description(Text::template(
-                    "{0}  ·  {1}  ·  {2}  ·  {3}",
-                    vec![
-                        enablement_label(skill.enablement).into(),
-                        source_kind_label(skill.source_kind).into(),
-                        Text::literal(skill.id.source.to_string()),
-                        Text::literal(&skill.description),
-                    ],
-                ))
+                .with_details(Text::literal(&skill.description))
+                .with_columns(
+                    skill.id.name.as_str(),
+                    &skill.description,
+                    enablement_label(skill.enablement),
+                )
+                .with_description(Text::literal(&skill.description))
         })
         .collect::<Vec<_>>();
     let enabled = all
@@ -61,35 +67,6 @@ pub(crate) fn skill_choices(catalog: &SkillListResult) -> SkillChoices {
         .filter(|(_, skill)| skill.enablement == SkillEnablementDto::Disabled)
         .map(|(item, _)| item.clone())
         .collect::<Vec<_>>();
-    let manage = catalog
-        .skills
-        .iter()
-        .enumerate()
-        .map(|(index, skill)| {
-            let item_id = ListSelectionItemId::new(format!("manage-skill-{index}"));
-            let enablement = match skill.enablement {
-                SkillEnablementDto::Disabled => SkillEnablementDto::Enabled,
-                SkillEnablementDto::Enabled => SkillEnablementDto::Disabled,
-            };
-            actions.insert(
-                item_id.clone(),
-                SkillSelectionAction::SetEnablement {
-                    skill_id: skill.id.clone(),
-                    enablement,
-                },
-            );
-            ListSelectionItem::new(Text::literal(skill.id.name.as_str()))
-                .with_id(item_id)
-                .with_description(Text::template(
-                    "{0} → {1}  ·  {2}",
-                    vec![
-                        enablement_label(skill.enablement).into(),
-                        enablement_label(enablement).into(),
-                        Text::literal(skill.id.source.to_string()),
-                    ],
-                ))
-        })
-        .collect::<Vec<_>>();
     let enabled_count = enabled.len();
     let disabled_count = disabled.len();
 
@@ -102,24 +79,17 @@ pub(crate) fn skill_choices(catalog: &SkillListResult) -> SkillChoices {
                     all,
                 ),
                 ListSelectionGroup::new(
-                    Text::template(
-                        "Enabled ({0})",
-                        vec![Text::literal(enabled_count.to_string())],
-                    ),
+                    Text::template("On ({0})", vec![Text::literal(enabled_count.to_string())]),
                     enabled,
                 ),
                 ListSelectionGroup::new(
-                    Text::template(
-                        "Disabled ({0})",
-                        vec![Text::literal(disabled_count.to_string())],
-                    ),
+                    Text::template("Off ({0})", vec![Text::literal(disabled_count.to_string())]),
                     disabled,
                 ),
-                ListSelectionGroup::new("Manage", manage),
             ],
         )
+        .with_expandable_descriptions()
         .with_activation(bindings::SKILL_TOGGLE)
-        .with_action(ListSelectionItem::new("Get skills").with_id(marketplace_id))
         .with_search(SearchBoxModel::new("Search available skills"))
         .with_empty_message("No matching skills"),
         actions,
@@ -127,20 +97,10 @@ pub(crate) fn skill_choices(catalog: &SkillListResult) -> SkillChoices {
     }
 }
 
-fn source_kind_label(kind: SkillSourceKindDto) -> &'static str {
-    match kind {
-        SkillSourceKindDto::BuiltIn => "built-in",
-        SkillSourceKindDto::User => "user",
-        SkillSourceKindDto::Directory => "directory",
-        SkillSourceKindDto::Plugin => "plugin",
-        SkillSourceKindDto::Marketplace => "marketplace",
-    }
-}
-
 fn enablement_label(enablement: SkillEnablementDto) -> &'static str {
     match enablement {
-        SkillEnablementDto::Disabled => "disabled",
-        SkillEnablementDto::Enabled => "enabled",
+        SkillEnablementDto::Disabled => "off",
+        SkillEnablementDto::Enabled => "on",
     }
 }
 

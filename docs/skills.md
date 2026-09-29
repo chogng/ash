@@ -81,8 +81,7 @@ invalidation 会触发完整重扫；只有 entry、diagnostic 或 enablement �
 
 TUI 与 Desktop 消费同一 typed catalog，并把 enabled、compatible、名称无歧义的 Skill 显示为 `$name` 候选。选择 `$commit` 后，客户端保留用户可见的 `$commit …` 文本，同时提交 exact pinned `SkillRef`；目录发现阶段不读取正文。Skill 与 Slash Command 使用不同前缀，因此同名不会冲突。`skills/changed` 会刷新 `$` 候选列表。
 
-TUI `/skills` 提供 All/Enabled/Disabled/Manage/Errors tabs、搜索、左右切页和上下选择；只有 Manage
-中的动作修改后续 catalog eligibility。它是管理入口，不是日常执行 Skill 的二级 picker。
+TUI `/skills` 提供 All/On/Off 页签和搜索；列表显示技能名称与 on/off 状态，左右键展开或收起描述。在任一页签选中技能后按 Enter/Space 切换启用状态，修改后重读目录。安装技能从 `/marketplace` 进入。
 
 当前显式和受信任自动激活链已经接通。显式协议输入为：
 

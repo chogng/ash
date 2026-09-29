@@ -44,6 +44,8 @@ use std::time::UNIX_EPOCH;
 use url::Url;
 use zeroize::Zeroize;
 
+pub use backend_client::QuotaLimit;
+
 pub const BIGMODEL_PROVIDER_ID: &str = "bigmodel-coding-plan";
 pub const ZAI_PROVIDER_ID: &str = "zai-coding-plan";
 const OAUTH_BASE_URL: &str = "https://zcode.z.ai/api/v1/oauth/cli";
@@ -52,6 +54,15 @@ const OAUTH_BASE_URL: &str = "https://zcode.z.ai/api/v1/oauth/cli";
 pub struct GlmApiTarget {
     pub account_id: String,
     pub target: ResolvedApiTarget,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GlmUsageError {
+    Unavailable,
+    AccountChanged,
+    AuthenticationRequired,
+    Cancelled,
+    RequestFailed,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -180,6 +191,50 @@ impl GlmOAuth {
 
     pub fn account_id(&self) -> Result<Option<String>, LoginError> {
         Ok(self.load()?.map(|credential| credential.account_id.clone()))
+    }
+
+    /// Queries the account bound to the current request key, then checks that the
+    /// credential is still current before publishing its result.
+    pub fn read_usage(
+        &self,
+        account_id: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<QuotaLimit>, GlmUsageError> {
+        let credential = self
+            .load()
+            .map_err(|_| GlmUsageError::Unavailable)?
+            .ok_or(GlmUsageError::AuthenticationRequired)?;
+        if credential.account_id != account_id {
+            return Err(GlmUsageError::AccountChanged);
+        }
+        let limits = match self.provider {
+            GlmProvider::BigModel => backend_client::bigmodel::read_quota(
+                self.client.as_ref(),
+                &credential.model_key,
+                cancellation,
+            ),
+            GlmProvider::Zai => backend_client::zai::read_quota(
+                self.client.as_ref(),
+                &credential.model_key,
+                cancellation,
+            ),
+        }
+        .map_err(|error| match error {
+            backend_client::RequestError::Cancelled => GlmUsageError::Cancelled,
+            backend_client::RequestError::HttpStatus(401 | 403) => {
+                GlmUsageError::AuthenticationRequired
+            }
+            _ => GlmUsageError::RequestFailed,
+        })?;
+        cancellation.check().map_err(|_| GlmUsageError::Cancelled)?;
+        let current = self
+            .load()
+            .map_err(|_| GlmUsageError::Unavailable)?
+            .ok_or(GlmUsageError::AccountChanged)?;
+        if current.account_id != credential.account_id || current.revision != credential.revision {
+            return Err(GlmUsageError::AccountChanged);
+        }
+        Ok(limits)
     }
 
     fn load(&self) -> Result<Option<Credential>, LoginError> {

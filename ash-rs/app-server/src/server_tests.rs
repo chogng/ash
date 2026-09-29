@@ -230,6 +230,102 @@ fn xai_account_and_usage_rpc_use_the_subscription_backend_and_observe_logout() {
 }
 
 #[test]
+fn glm_coding_plan_usage_reads_each_account_and_preserves_reported_windows() {
+    use ash_client::ClientError;
+    use ash_client::ClientRequest;
+    use ash_client::ClientResponse;
+    use ash_client::OperationClient;
+    use ash_secrets::SecretStore;
+
+    struct QuotaClient(Mutex<Vec<String>>);
+    impl OperationClient for QuotaClient {
+        fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            let authorization = request
+                .headers()
+                .iter()
+                .find(|header| header.name() == "Authorization")
+                .unwrap();
+            assert!(matches!(authorization.value(), "bigmodel-key" | "zai-key"));
+            self.0.lock().unwrap().push(request.url().to_owned());
+            Ok(ClientResponse::new(
+                200,
+                vec![],
+                br#"{"code":200,"data":{"limits":[{"type":"CREDIT_LIMIT","percentage":12.5,"unit":3,"number":5,"nextResetTime":1790553600000},{"type":"TOKENS_LIMIT","percentage":0,"unit":6,"number":1},{"type":"TIME_LIMIT","percentage":35,"unit":5,"number":1}]}}"#.to_vec(),
+            ))
+        }
+    }
+    let secrets = Arc::new(ash_secrets::MemorySecretStore::default());
+    for (provider, key) in [("bigmodel", "bigmodel-key"), ("zai", "zai-key")] {
+        secrets
+            .store(
+                &ash_secrets::SecretKey::new(format!("provider/{provider}/current/oauth")).unwrap(),
+                &ash_secrets::SecretValue::new(
+                    serde_json::to_vec(&serde_json::json!({
+                        "account_id": format!("{provider}-account"),
+                        "email": null,
+                        "display_name": null,
+                        "model_key": key,
+                        "revision": 1
+                    }))
+                    .unwrap(),
+                ),
+            )
+            .unwrap();
+    }
+    let client = Arc::new(QuotaClient(Mutex::new(Vec::new())));
+    let server = server().with_glm_accounts(
+        ash_glm::GlmOAuth::with_client(
+            ash_glm::GlmProvider::BigModel,
+            secrets.clone(),
+            client.clone(),
+        ),
+        ash_glm::GlmOAuth::with_client(ash_glm::GlmProvider::Zai, secrets, client.clone()),
+    );
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    for (index, (provider, account, url)) in [
+        (
+            "bigmodel-coding-plan",
+            "bigmodel-account",
+            "https://open.bigmodel.cn/api/monitor/usage/quota/limit",
+        ),
+        (
+            "zai-coding-plan",
+            "zai-account",
+            "https://api.z.ai/api/monitor/usage/quota/limit",
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let response = call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":index + 2,"method":"account/rateLimits/read","params":{"provider":provider,"accountId":account}}),
+        );
+        assert_eq!(
+            response["result"]["limits"][0]["primary"]["usedPercent"],
+            13
+        );
+        assert_eq!(
+            response["result"]["limits"][0]["primary"]["resetsAt"],
+            1790553600_u64
+        );
+        assert_eq!(response["result"]["limits"][1]["primary"]["usedPercent"], 0);
+        assert_eq!(response["result"]["limits"][2]["name"], "MCP limit");
+        assert!(response["result"]["plan"].is_null());
+        assert_eq!(client.0.lock().unwrap()[index], url);
+    }
+    let changed = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":4,"method":"account/rateLimits/read","params":{"provider":"zai-coding-plan","accountId":"other"}}),
+    );
+    assert_eq!(changed["error"]["message"], "AccountChanged");
+    assert_eq!(client.0.lock().unwrap().len(), 2);
+}
+
+#[test]
 fn kimi_account_and_usage_rpc_read_the_current_subscription_without_exposing_credentials() {
     use ash_client::ClientError;
     use ash_client::ClientRequest;

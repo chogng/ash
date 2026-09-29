@@ -1,12 +1,21 @@
 ---
 source: code/tui/src/app/usage_tests.rs
-expression: screen
+expression: zai_screen
 ---
   .                                                        [— / —] [Dashboard]
 
+
         ┌── Usage ─────────────────────────────────────────────────[✗]─┐
         │                                                              │
-        │  Sign in to a subscription: /config > Providers.             │
+        │   BigModel    Z.AI                                           │
+        │                                                              │
+        │> Z.AI plan  ·  Not reported                                  │
+        │  Weekly limit                                                │
+        │  7d window  ·  65% left (35% used)                           │
+        │  Resets  ·  Not reported                                     │
+        │  MCP limit                                                   │
+        │  Window  ·  98% left (2% used)                               │
+        │  Resets  ·  Not reported                                     │
         │                                                              │
         │                                                              │
         │                                                              │
@@ -16,7 +25,6 @@ expression: screen
         │                                                              │
         │                                                              │
         │                                                              │
-        │                                                              │
-  ──────│                                                              │──────
-  > Buil│  Esc to close                                                │
-  ──────└──────────────────────────────────────────────────────────────┘model
+  ──────│  Tab/Shift+Tab to switch · Esc to close                      │──────
+  > Buil└──────────────────────────────────────────────────────────────┘
+  ─────────────────────────────────────────────────────────── Automatic model

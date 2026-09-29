@@ -1060,11 +1060,12 @@ account/updated
 provider/models/updated
 ```
 
-`account/rateLimits/read` 按 `{ provider, accountId }` 查询指定账号。支持 `provider = "chatgpt-subscription"`、`"kimi-subscription"` 和 `"xai-subscription"`。本地组合复用对应供应商的登录与模型认证对象，通过各自的 `backend-client` 模块读取后台数据，不接触客户端凭据。
+`account/rateLimits/read` 按 `{ provider, accountId }` 查询指定账号。支持 `provider = "chatgpt-subscription"`、`"kimi-subscription"`、`"xai-subscription"`、`"bigmodel-coding-plan"` 和 `"zai-coding-plan"`。本地组合复用对应供应商的登录与模型认证对象，通过各自的 `backend-client` 模块读取后台数据，不接触客户端凭据。
 
 - xAI 的 `limits` 为空、`credits` 为 `null`；`xai` 保留独立的信用额度合约：`usedPercent` 为小数，`periodType/periodStart/periodEnd` 为上游周期，`allowed/message` 为访问状态。`prepaidCents/onDemandUsedCents/onDemandCapCents` 为整数 USD 分字符串，避免跨语言精度损失。未提供的数据为 `null`；ChatGPT 不序列化 `xai`。
 - 后台账户观察查询已就绪 xAI 账号的 `/user?include=subscription` 与 Grok Build `/settings`，并通过登录服务更新邮箱、姓名、组织及 `plan`。xAI 的 `plan` 优先使用设置接口给出的完整 `subscription_tier_display`，其次使用 `subscription_tier` 或账户接口的 `subscriptionTier`；没有服务端等级时为 `null`。`account/rateLimits/read` 的 xAI `plan` 使用同一优先顺序。
 - Kimi 的后台账户观察从 `/coding/v1/me` 更新昵称、邮箱与 `user_level_name`。额度查询从 `/coding/v1/usages` 读取实际返回的 `limit_5h`、`limit_7d` 和 `limit_month_total`；每个窗口成为单独的 `limits` 项。缺失的窗口不生成，`limit_month_code` 是月度总量中的 Code 用量份额，不作为独立额度。重置时间缺失时 `resetsAt = null`，客户端显示“未提供”。
+- BigModel 与 Z.AI 使用当前 Coding Plan 请求密钥读取各自区域的 `/api/monitor/usage/quota/limit`。`TOKENS_LIMIT` 与 `CREDIT_LIMIT` 按上游的窗口单位映射五小时或每周额度；`TIME_LIMIT` 作为 MCP 额度显示。缺失的比例不生成额度项，缺失的重置时间为 `null`，套餐等级仍为 `null`。请求完成后重新核对账号与凭据代次。
 - 账号资料和额度查询均不持有全局读写锁。请求前后检查登录身份，取消或退出登录后的旧响应不进入账号状态。订阅接入不提供充值、购卡、充值提醒或付款入口。已有重置卡的查询和使用保留在 `backend-client::chatgpt`，尚未暴露为 RPC。
 
 - 结果为 `{ provider, accountId, plan, limits, credits, xai? }`；`plan` 未提供时为 `null`。ChatGPT 的 `limits` 包含 `codex` 主额度和上游提供的附加模型额度，各项含 `id`、`name`、`model`、`allowed`、`limitReached`、`primary`、`secondary`。

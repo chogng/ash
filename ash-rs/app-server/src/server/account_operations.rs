@@ -69,6 +69,22 @@ impl AppServer {
                 .map_err(kimi_error)?;
             return result(&kimi_usage(params, account, usage));
         }
+        if matches!(
+            params.provider.as_str(),
+            ash_glm::BIGMODEL_PROVIDER_ID | ash_glm::ZAI_PROVIDER_ID
+        ) {
+            let account = if params.provider == ash_glm::BIGMODEL_PROVIDER_ID {
+                &self.bigmodel
+            } else {
+                &self.zai
+            };
+            let usage = account
+                .as_ref()
+                .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::AccountUnavailable))?
+                .read_usage(&params.account_id, cancellation)
+                .map_err(glm_usage_error)?;
+            return result(&glm_usage(params, usage));
+        }
         if params.provider != ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID {
             return Err(RpcError::new(
                 -32030,
@@ -317,6 +333,74 @@ fn kimi_error(error: ash_kimi::KimiError) -> RpcError {
         },
         name,
     )
+}
+
+fn glm_usage_error(error: ash_glm::GlmUsageError) -> RpcError {
+    let name = match error {
+        ash_glm::GlmUsageError::Unavailable => AppServerErrorName::AccountUnavailable,
+        ash_glm::GlmUsageError::AccountChanged => AppServerErrorName::AccountChanged,
+        ash_glm::GlmUsageError::AuthenticationRequired => {
+            AppServerErrorName::AccountAuthenticationRequired
+        }
+        ash_glm::GlmUsageError::Cancelled => AppServerErrorName::RequestCancelled,
+        ash_glm::GlmUsageError::RequestFailed => AppServerErrorName::AccountOperationFailed,
+    };
+    RpcError::new(
+        if error == ash_glm::GlmUsageError::Cancelled {
+            -32800
+        } else {
+            -32030
+        },
+        name,
+    )
+}
+
+fn glm_usage(
+    params: AccountRateLimitsReadParams,
+    limits: Vec<ash_glm::QuotaLimit>,
+) -> AccountRateLimitsReadResult {
+    let limits = limits
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, limit)| {
+            let (name, seconds) = match (limit.kind.as_str(), limit.unit, limit.number) {
+                ("TOKENS_LIMIT" | "CREDIT_LIMIT", Some(3), Some(5)) => ("5-hour limit", 18_000),
+                ("TOKENS_LIMIT" | "CREDIT_LIMIT", Some(6), Some(1)) => ("Weekly limit", 604_800),
+                ("TOKENS_LIMIT" | "CREDIT_LIMIT", _, _) => ("Coding Plan limit", 0),
+                ("TIME_LIMIT", _, _) => ("MCP limit", 0),
+                _ => return None,
+            };
+            let percent = limit
+                .percentage
+                .filter(|value| value.is_finite() && *value >= 0.0)?;
+            let used_percent = percent.ceil() as u32;
+            Some(AccountRateLimitDto {
+                id: format!("glm-{index}"),
+                name: Some(name.into()),
+                model: None,
+                allowed: None,
+                limit_reached: Some(percent >= 100.0),
+                primary: Some(AccountRateLimitWindowDto {
+                    used_percent,
+                    window_seconds: seconds,
+                    // The monitor reports epoch milliseconds; unknown units remain unknown.
+                    resets_at: limit
+                        .next_reset_time
+                        .filter(|time| *time >= 1_000_000_000_000)
+                        .map(|time| time / 1000),
+                }),
+                secondary: None,
+            })
+        })
+        .collect();
+    AccountRateLimitsReadResult {
+        provider: params.provider,
+        account_id: params.account_id,
+        plan: None,
+        limits,
+        credits: None,
+        xai: None,
+    }
 }
 
 fn kimi_usage(

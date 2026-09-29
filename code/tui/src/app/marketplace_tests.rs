@@ -643,7 +643,7 @@ fn lsp_writes_backend_configuration_and_restores_defaults_in_the_selected_direct
 }
 
 #[test]
-fn marketplace_consumer_panels_use_the_shared_installation_entry() {
+fn skills_panel_with_empty_catalog_has_no_marketplace_action() {
     use crate::widgets::list_selection::ListSelectionClick;
     let mut app = App::new();
     let skills = ash_app_server_protocol::protocol::skills::SkillListResult {
@@ -654,18 +654,13 @@ fn marketplace_consumer_panels_use_the_shared_installation_entry() {
     app.update(crate::skills::Event::SettingsOpened(
         crate::skills::skill_choices(&skills),
     ));
-    crate::tui_assert_snapshot!("skills_marketplace_entry", screen(&app));
+    crate::tui_assert_snapshot!("skills_empty_panel", screen(&app));
     let outcome = app.panels_mut().command_mut().unwrap().handle_click(
         &ListSelectionPointerTarget::Action,
         Rect::new(0, 0, 100, 32),
         ListSelectionClick::Single,
     );
-    assert_eq!(
-        app.handle_command_panel_outcome(outcome),
-        Some(AppCommand::Marketplace(marketplace::Command::browse(Some(
-            Kind::Skill
-        ))))
-    );
+    assert!(app.handle_command_panel_outcome(outcome).is_none());
 }
 
 #[test]
@@ -845,9 +840,15 @@ fn skills_and_config_chinese_panels_keep_distinct_responsibilities() {
     assert_eq!(state.visible_items()[0].label(), "skills");
     assert_eq!(
         state.visible_items()[0].description(),
-        Some("已启用  ·  用户  ·  user:skill-source:personal  ·  Available · {0}")
+        Some("Available · {0}")
     );
-    crate::tui_assert_snapshot!("skills_chinese_marketplace_entry", screen(&app));
+    assert!(!screen(&app).contains("Available · {0}"));
+    crate::tui_assert_snapshot!("skills_chinese_collapsed", screen(&app));
+    app.handle_key(key(KeyCode::Right));
+    assert!(screen(&app).contains("Available · {0}"));
+    crate::tui_assert_snapshot!("skills_chinese_expanded", screen(&app));
+    app.handle_key(key(KeyCode::Left));
+    assert!(!screen(&app).contains("Available · {0}"));
     let mut terminal = crate::config::TerminalSettings::default();
     terminal.set_language(crate::nls::Language::Chinese);
     app.update(crate::config::Event::EditorOpened(

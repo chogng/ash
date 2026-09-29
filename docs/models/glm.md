@@ -1,6 +1,6 @@
 # GLM：BigModel 与 Z.AI 接入
 
-BigModel 和 Z.AI 各有 Coding Plan 与开发者 API 两种接入，共四个独立连接。两个 Coding Plan 会只读使用本机 ZCode 已登录的个人版 Coding Plan 账号；没有对应账号时，按[官方 ZCode](https://zcode.z.ai/en/docs/configuration) 的流程打开浏览器，在 Ash 内登录并保存请求凭据。订阅页不要求填写 Key。开发者 API 仍单独录入 API key。Ash 尚不能读取 Coding Plan 的实际套餐或额度。其他订阅的对比见[订阅计划接入与额度](../subscriptions.md)。
+BigModel 和 Z.AI 各有 Coding Plan 与开发者 API 两种接入，共四个独立连接。两个 Coding Plan 会只读使用本机 ZCode 已登录的个人版 Coding Plan 账号；没有对应账号时，按[官方 ZCode](https://zcode.z.ai/en/docs/configuration) 的流程打开浏览器，在 Ash 内登录并保存请求凭据。订阅页不要求填写 Key。开发者 API 仍单独录入 API key。`/usage` 查询当前 Coding Plan 额度；实际套餐等级仍未提供。其他订阅的对比见[订阅计划接入与额度](../subscriptions.md)。
 
 ## 连接与请求目标
 
@@ -17,6 +17,6 @@ ZCode 登录保存在其用户目录的 `~/.zcode/v2/credentials.json`，Ash 每
 
 ## 状态与退出
 
-Ash 目前不能查询这两个 Coding Plan 的实际套餐等级或账户额度。它们不支持 `account/rateLimits/read`，也不会出现在 `/usage` 中；上游是否允许请求，要以实际调用结果为准。
+两个 Coding Plan 支持 `account/rateLimits/read`，并在账户就绪时出现在 `/usage` 中。查询使用当前账户的 Coding Plan 请求密钥，读取对应区域的 `/api/monitor/usage/quota/limit`。界面显示接口实际返回的五小时、每周与 MCP 额度及重置时间；未返回的字段保持“未提供”，不根据入口名称推断套餐等级。上游是否允许模型请求，仍以实际调用结果为准。[Z.AI 官方用量插件](https://github.com/zai-org/zai-coding-plugins/blob/main/plugins/glm-plan-usage/skills/usage-query-skill/scripts/query-usage.mjs)使用相同额度接口。
 
 在订阅页按 `l` 退出 Ash 自己登录的 Coding Plan 时，Ash 删除该订阅保存的账户和内部请求凭据。复用 ZCode 账号时，需在 ZCode 退出登录；Ash 不删除外部凭据。另一个 Coding Plan 账户和两个 API 连接的密钥不受影响。配置和选择规则见[登录与账户系统](../login.md#订阅入口与-api-入口)。

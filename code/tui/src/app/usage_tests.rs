@@ -77,6 +77,58 @@ fn usage_displays_kimi_plan_and_only_the_returned_quota_windows() {
 }
 
 #[test]
+fn usage_opens_bigmodel_and_zai_coding_plan_tabs_with_reported_limits() {
+    let accounts = json!({"revision":"1","accounts":[
+        {"provider":"bigmodel-coding-plan","accountId":"bigmodel-1","status":"ready","credentialRevision":"1"},
+        {"provider":"zai-coding-plan","accountId":"zai-1","status":"ready","credentialRevision":"1"}
+    ]});
+    let bigmodel = json!({"provider":"bigmodel-coding-plan","accountId":"bigmodel-1","plan":null,"limits":[
+        {"id":"glm-0","name":"5-hour limit","model":null,"allowed":null,"limitReached":false,"primary":{"usedPercent":13,"windowSeconds":18000,"resetsAt":1790553600},"secondary":null}
+    ],"credits":null});
+    let zai = json!({"provider":"zai-coding-plan","accountId":"zai-1","plan":null,"limits":[
+        {"id":"glm-0","name":"Weekly limit","model":null,"allowed":null,"limitReached":false,"primary":{"usedPercent":35,"windowSeconds":604800,"resetsAt":null},"secondary":null},
+        {"id":"glm-1","name":"MCP limit","model":null,"allowed":null,"limitReached":false,"primary":{"usedPercent":2,"windowSeconds":0,"resetsAt":null},"secondary":null}
+    ],"credits":null});
+    let (mut client, requests) = client(vec![accounts, bigmodel, zai]);
+    let mut app = App::new();
+    app.update(crate::usage::load(&mut client).unwrap());
+    assert_eq!(requests.lock().unwrap().len(), 3);
+    assert_eq!(
+        requests.lock().unwrap()[1]["params"]["provider"],
+        "bigmodel-coding-plan"
+    );
+    assert_eq!(
+        requests.lock().unwrap()[2]["params"]["provider"],
+        "zai-coding-plan"
+    );
+    let bigmodel_screen = render(&app, 80, 28);
+    assert!(bigmodel_screen.contains("BigModel plan  ·  Not reported"));
+    assert!(bigmodel_screen.contains("87% left (13% used)"));
+    crate::tui_assert_snapshot!("usage_bigmodel", bigmodel_screen);
+    app.handle_key(key(KeyCode::Tab));
+    assert_eq!(
+        app.list_selection()
+            .unwrap()
+            .selected_item()
+            .unwrap()
+            .label(),
+        "Z.AI plan"
+    );
+    let zai_screen = render(&app, 80, 28);
+    assert!(zai_screen.contains("Weekly limit"));
+    assert!(zai_screen.contains("MCP limit"));
+    crate::tui_assert_snapshot!("usage_zai", zai_screen);
+    assert_eq!(
+        crate::nls::localize(crate::nls::Language::Chinese, "BigModel plan"),
+        "BigModel 套餐"
+    );
+    assert_eq!(
+        crate::nls::localize(crate::nls::Language::Chinese, "MCP limit"),
+        "MCP 额度"
+    );
+}
+
+#[test]
 fn usage_keeps_ready_subscription_visible_when_kimi_needs_reauthentication() {
     let accounts = json!({"revision":"1","accounts":[
         {"provider":"kimi-subscription","accountId":"current","status":"reauthenticationRequired","credentialRevision":"1"},
@@ -214,7 +266,7 @@ fn usage_requires_a_ready_chatgpt_account_before_querying_quota() {
         (
             "usage_signed_out",
             json!({"revision":"1","accounts":[]}),
-            "Sign in to ChatGPT",
+            "Sign in to a subscription",
         ),
         (
             "usage_reauthentication",

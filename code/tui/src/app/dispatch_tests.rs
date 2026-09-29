@@ -283,34 +283,15 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
         vec!["create-instructions", "skill-creator"]
     );
     assert!(
-        all.visible_items()
+        !all.visible_items()
             .iter()
             .find(|item| item.label() == "skill-creator")
             .unwrap()
             .description()
             .unwrap()
-            .contains("enabled  ·  built-in  ·  builtin:skill-source:ash-release")
+            .contains("builtin:skill-source")
     );
 
-    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-    let enabled = app.list_selection().unwrap();
-    assert_eq!(enabled.active_tab().label(), "Enabled (2)");
-    assert_eq!(
-        enabled
-            .visible_items()
-            .iter()
-            .map(|item| item.label())
-            .collect::<Vec<_>>(),
-        vec!["create-instructions", "skill-creator"]
-    );
-
-    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     let action = app
         .handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
@@ -333,13 +314,45 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
     )
     .unwrap();
     app.update(SkillEvent::SettingsUpdated(view));
-    app.handle_key(KeyEvent::new(KeyCode::Home, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     let disabled = app.list_selection().unwrap();
-    assert_eq!(disabled.active_tab().label(), "Disabled (1)");
+    assert_eq!(disabled.active_tab().label(), "Off (1)");
     assert_eq!(disabled.visible_items()[0].label(), "skill-creator");
+    let action = app
+        .handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        .unwrap();
+    let AppCommand::Skills(SkillCommand::SetEnablement {
+        skill_id,
+        enablement,
+    }) = action
+    else {
+        panic!("Enter should enable a skill from the Off tab");
+    };
+    assert_eq!(skill_id.name.as_str(), "skill-creator");
+    assert_eq!(enablement, SkillEnablementDto::Enabled);
+    let view = crate::skills::set_enablement(
+        &mut client,
+        Some(&ash_protocol::SessionId::new("test-session").unwrap()),
+        skill_id,
+        enablement,
+    )
+    .unwrap();
+    app.update(SkillEvent::SettingsUpdated(view));
+    app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE));
+    let enabled = app.list_selection().unwrap();
+    assert_eq!(enabled.active_tab().label(), "On (2)");
+    assert_eq!(enabled.visible_items().len(), 2);
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    let action = app
+        .handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        .unwrap();
+    assert!(matches!(
+        action,
+        AppCommand::Skills(SkillCommand::SetEnablement { skill_id, enablement })
+            if skill_id.name.as_str() == "skill-creator"
+                && enablement == SkillEnablementDto::Disabled
+    ));
 
     drop(client);
     let _ = fs::remove_dir_all(state_root);

@@ -3,9 +3,40 @@ use crate::client::Client;
 use async_utils::CancellationToken;
 use client::OperationClient;
 use client::ResolvedApiTarget;
+use serde::Deserialize;
 use serde_json::Value;
 
 const KEY_NAME: &str = "ash-coding-plan";
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct QuotaLimit {
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub percentage: Option<f64>,
+    pub unit: Option<u32>,
+    pub number: Option<u32>,
+    pub next_reset_time: Option<u64>,
+}
+
+/// Current limits reported by the Coding Plan monitor endpoint.
+pub fn read_quota(
+    transport: &dyn OperationClient,
+    target: &ResolvedApiTarget,
+    cancellation: &CancellationToken,
+) -> Result<Vec<QuotaLimit>, RequestError> {
+    let http = Client::new(transport, target)?;
+    let response: Value = http.get(
+        http.endpoint(["api", "monitor", "usage", "quota", "limit"])?,
+        &[],
+        cancellation,
+    )?;
+    let limits = data(&response)?
+        .get("limits")
+        .cloned()
+        .ok_or(RequestError::InvalidResponse)?;
+    serde_json::from_value(limits).map_err(|_| RequestError::InvalidResponse)
+}
 
 pub(super) fn issue_api_key(
     transport: &dyn OperationClient,

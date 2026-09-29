@@ -6,4 +6,4 @@ ZCode credentials are read for each model request and are never copied into Ash 
 
 `ash-login` owns login IDs, cancellation, account state, and logout. This crate owns the provider protocol and private credential lifecycle. An Ash login can be removed from Ash; a ZCode account must be signed out in ZCode. `ash-model-provider` reads the matching account and request target together for each model invocation. The two accounts never share stored credentials; the `zai` model vendor ID remains shared across their model definitions.
 
-The App Server exposes both through `account/login/start`, `account/read`, `account/logout`, and the existing login completion notifications. Account quota and plan tier are not yet exposed for either provider.
+The App Server exposes both through `account/login/start`, `account/read`, `account/logout`, and the existing login completion notifications. Quota is exposed through `account/rateLimits/read` using the current Coding Plan request key; the account is checked again before publication. The upstream response does not establish a plan tier, so it remains unknown.

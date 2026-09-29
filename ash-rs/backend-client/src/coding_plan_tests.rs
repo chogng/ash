@@ -135,6 +135,37 @@ fn coding_plan_rejects_ambiguous_organizations_before_creating_a_key() {
 }
 
 #[test]
+fn both_coding_plan_regions_query_their_own_quota_endpoint_with_the_request_key() {
+    for (bigmodel, expected_url) in [
+        (
+            true,
+            "https://open.bigmodel.cn/api/monitor/usage/quota/limit",
+        ),
+        (false, "https://api.z.ai/api/monitor/usage/quota/limit"),
+    ] {
+        let client = ScriptedClient::new([
+            r#"{"code":200,"data":{"limits":[{"type":"CREDIT_LIMIT","percentage":12.5,"unit":3,"number":5,"nextResetTime":1790553600000}]}}"#,
+        ]);
+        let limits = if bigmodel {
+            crate::bigmodel::read_quota(&client, "coding-key", &CancellationSource::new().token())
+        } else {
+            crate::zai::read_quota(&client, "coding-key", &CancellationSource::new().token())
+        }
+        .unwrap();
+        assert_eq!(limits.len(), 1);
+        assert_eq!(limits[0].kind, "CREDIT_LIMIT");
+        assert_eq!(limits[0].percentage, Some(12.5));
+        let requests = client.requests.lock().unwrap();
+        assert_eq!(requests[0].url(), expected_url);
+        assert!(
+            requests[0].headers().iter().any(|header| {
+                header.name() == "Authorization" && header.value() == "coding-key"
+            })
+        );
+    }
+}
+
+#[test]
 fn coding_plan_rejects_ambiguous_projects_before_creating_a_key() {
     let client = ScriptedClient::new([
         r#"{"code":200,"data":{"organizations":[{"organizationName":"默认机构","organizationId":"org","projects":[{"projectName":"默认项目备份","projectId":"a"},{"projectName":"Team","projectId":"b"}]}]}}"#,

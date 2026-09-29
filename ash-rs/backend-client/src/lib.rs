@@ -3,14 +3,15 @@
 #[path = "bigmodel/client.rs"]
 pub mod bigmodel;
 pub mod chatgpt;
-pub mod kimi;
 mod client;
 mod coding_plan;
+pub mod kimi;
 pub mod supergrok;
 #[path = "zai/client.rs"]
 pub mod zai;
 
 pub use client::RequestError;
+pub use coding_plan::QuotaLimit;
 
 #[cfg(test)]
 mod test_support;
