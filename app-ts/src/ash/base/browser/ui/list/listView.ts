@@ -310,7 +310,6 @@ export class ListView<T> extends Disposable {
 		const viewport = this.scrollable.state;
 		if (top < viewport.top) this.scrollable.scrollTo(viewport.left, top);
 		else if (bottom > viewport.top + viewport.height) this.scrollable.scrollTo(viewport.left, bottom - viewport.height);
-		this.renderRows();
 	}
 
 	get scrollElement(): HTMLElement { return this.scrollable?.scrollableElement ?? this.element; }

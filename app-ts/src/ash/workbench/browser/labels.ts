@@ -260,21 +260,7 @@ class ResourceLabelWidget extends Disposable {
 	}
 
 	setFile(resource: URI, options: IFileLabelOptions = {}): void {
-		const workspaceFolder = options.fileKind === FileKind.Directory ? this.services.workspaceContextService.getWorkspaceFolder(resource) : undefined;
-		const name = options.hideLabel
-			? undefined
-			: workspaceFolder && isEqualResource(workspaceFolder.uri, resource)
-				? workspaceFolder.name
-				: basenameOrAuthority(resource);
-		const description = options.hidePath || workspaceFolder && isEqualResource(workspaceFolder.uri, resource)
-			? undefined
-			: parentLabel(resource, this.services.workspaceContextService, this.services.labelService);
-		this.setResourceInternal({
-			resource,
-			name,
-			description: description && description !== '.' ? description : undefined,
-			range: options.range,
-		}, options, true);
+		this.setResourceInternal({ resource, range: options.range }, options, true);
 	}
 
 	setResource(label: IResourceLabelProps, options: IResourceLabelOptions = {}): void {
@@ -354,7 +340,7 @@ class ResourceLabelWidget extends Disposable {
 			displayName = applyNameAffixes(fileName, options.namePrefix, options.nameSuffix);
 			displayDescription = fileOptions.hidePath || workspaceFolder && isEqualResource(workspaceFolder.uri, resource)
 				? undefined
-					: parentLabel(resource, this.services.workspaceContextService, this.services.labelService);
+				: parentLabel(resource, this.services.workspaceContextService, this.services.labelService);
 			const untitled = resource.scheme === 'untitled' && !options.forceLabel
 				? this.services.untitledTextEditorService?.get(resource)
 				: undefined;
