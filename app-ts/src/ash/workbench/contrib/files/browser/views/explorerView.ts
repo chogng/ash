@@ -151,11 +151,32 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		this._register(watcher.onDidChange(resources => {
 			const roots = this.root?.children ?? (this.root ? [this.root] : []);
 			for (const root of roots) {
-				if (resources && !resources.some(resource =>
-					extUriBiasedIgnorePathCase.isEqualOrParent(resource, root.resource))) {
+				const changed = resources?.filter(resource => extUriBiasedIgnorePathCase.isEqualOrParent(resource, root.resource));
+				if (changed && changed.length === 0) continue;
+				if (!changed || changed.some(resource => extUriBiasedIgnorePathCase.isEqual(resource, root.resource))) {
+					void this.refreshItem(root, true);
 					continue;
 				}
-				void this.refreshRoot(root);
+				const directories = new Map(
+					[root, ...this.tree.getVisibleElements().filter(item => item.kind === FileKind.Directory)]
+						.map(item => [extUriBiasedIgnorePathCase.getComparisonKey(item.resource), item] as const),
+				);
+				const targets = new Map<string, { item: ExplorerItem; recursive: boolean }>();
+				for (const resource of changed) {
+					const separator = resource.path.lastIndexOf('/');
+					const parent = resource.withPath(resource.path.slice(0, separator) || '/');
+					const directory = directories.get(extUriBiasedIgnorePathCase.getComparisonKey(parent));
+					if (!directory) {
+						void this.refreshItem(root, true);
+						targets.clear();
+						break;
+					}
+					targets.set(extUriBiasedIgnorePathCase.getComparisonKey(directory.resource), {
+						item: directory,
+						recursive: directories.has(extUriBiasedIgnorePathCase.getComparisonKey(resource)),
+					});
+				}
+				for (const target of targets.values()) void this.refreshItem(target.item, target.recursive);
 			}
 		}));
 		this.render();
@@ -221,10 +242,14 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	}
 
 	private async refreshRoot(root: ExplorerItem): Promise<void> {
+		await this.refreshItem(root, true);
+	}
+
+	private async refreshItem(item: ExplorerItem, recursive: boolean): Promise<void> {
 		const generation = this.workspaceGeneration;
 		this.loadedNests.clear();
 		try {
-			await this.tree.updateChildren(root, { recursive: true });
+			await this.tree.updateChildren(item, { recursive });
 			if (generation !== this.workspaceGeneration || this.isDisposed) return;
 			this.error = undefined;
 			this.treeError = false;
@@ -234,7 +259,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			if (generation !== this.workspaceGeneration || this.isDisposed) return;
 			this.error = error instanceof Error ? error.message : "Unable to refresh workspace files.";
 			this.treeError = true;
-			this.treeErrorElement = root;
+			this.treeErrorElement = item;
 			this.render();
 		}
 	}

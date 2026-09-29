@@ -1870,41 +1870,45 @@ impl AppServer {
             None => None,
         };
         let request_span = self.telemetry.start(diagnostics::Activity::Rpc);
-        let response = if cancellation.is_cancelled() {
-            error_response(request.id, -32800, AppServerErrorName::RequestCancelled)
+        let dispatch_result = if cancellation.is_cancelled() {
+            None
         } else {
-            let response = match self.dispatch(connection, &mut request, &cancellation) {
-                Ok(result) => serde_json::to_value(JsonRpcSuccess::new(request.id.clone(), result))
-                    .expect("JSON-RPC success response must serialize"),
-                Err(error) => {
-                    let mut response = AppServerError::new(error.code, error.message);
-                    if let Some(detail) = error.detail {
-                        response.message.push_str(&format!(": {detail}"));
-                    }
-                    serde_json::to_value(JsonRpcFailure::new(request.id.clone(), response))
-                        .expect("error response must serialize")
-                }
-            };
-            if cancellation.is_cancelled() {
-                error_response(
-                    request.id.clone(),
+            Some(self.dispatch(connection, &mut request, &cancellation))
+        };
+        let cancelled = cancellation.is_cancelled();
+        let (response, outcome) = if cancelled {
+            (
+                serialize_response(error_response(
+                    request.id,
                     -32800,
                     AppServerErrorName::RequestCancelled,
-                )
-            } else {
-                response
+                )),
+                diagnostics::Outcome::Cancelled,
+            )
+        } else {
+            match dispatch_result.expect("uncancelled request must have a dispatch result") {
+                Ok(result) => (
+                    serde_json::to_string(&JsonRpcSuccess::new(request.id, result))
+                        .expect("JSON-RPC success response must serialize"),
+                    diagnostics::Outcome::Succeeded,
+                ),
+                Err(error) => {
+                    let mut failure = AppServerError::new(error.code, error.message);
+                    if let Some(detail) = error.detail {
+                        failure.message.push_str(&format!(": {detail}"));
+                    }
+                    (
+                        serde_json::to_string(&JsonRpcFailure::new(request.id, failure))
+                            .expect("JSON-RPC error response must serialize"),
+                        diagnostics::Outcome::Failed,
+                    )
+                }
             }
         };
         self.request_cancellations
             .finish(connection.connection_id, request_id);
-        request_span.finish(if cancellation.is_cancelled() {
-            diagnostics::Outcome::Cancelled
-        } else if response.get("error").is_some() {
-            diagnostics::Outcome::Failed
-        } else {
-            diagnostics::Outcome::Succeeded
-        });
-        serialize_response(response)
+        request_span.finish(outcome);
+        response
     }
 
     pub fn serve_stdio(&self) -> Result<(), std::io::Error> {
