@@ -51,6 +51,83 @@ fn spawn_agent_describes_the_built_in_issue_role() {
 }
 
 #[test]
+fn spawn_agent_uses_a_flat_strict_role_schema() {
+    let definition = service()
+        .definitions()
+        .into_iter()
+        .find(|definition| definition.name.as_str() == SPAWN_AGENT_TOOL_NAME)
+        .unwrap();
+    let agent = &definition.parameters["properties"]["agent"];
+
+    assert_eq!(agent["type"], "object");
+    assert!(agent.get("anyOf").is_none());
+    assert_eq!(
+        agent["required"],
+        json!(["type", "name", "source"])
+    );
+    assert_eq!(
+        agent["properties"]["source"]["required"],
+        json!(["type", "id"])
+    );
+}
+
+#[test]
+fn spawn_agent_flat_role_arguments_decode_to_existing_selections() {
+    let default: SpawnArguments = decode_arguments(&json!({
+        "task": "Inspect the parser",
+        "name": null,
+        "agent": {"type": "default", "name": null, "source": null},
+        "context": null,
+        "team_run_id": null,
+        "member_id": null
+    }))
+    .unwrap();
+    assert_eq!(default.agent, protocol::AgentRoleSelection::Default);
+
+    let built_in: SpawnArguments = decode_arguments(&json!({
+        "task": "Inspect the parser",
+        "name": "investigator",
+        "agent": {
+            "type": "exact",
+            "name": "develop/investigator",
+            "source": {"type": "builtIn", "id": null}
+        },
+        "context": null,
+        "team_run_id": null,
+        "member_id": null
+    }))
+    .unwrap();
+    assert!(matches!(
+        built_in.agent,
+        protocol::AgentRoleSelection::Exact {
+            source: protocol::AgentRoleSource::BuiltIn,
+            ref name
+        } if name == "develop/investigator"
+    ));
+
+    let directory: SpawnArguments = decode_arguments(&json!({
+        "task": "Inspect the parser",
+        "name": null,
+        "agent": {
+            "type": "exact",
+            "name": "reviewer",
+            "source": {"type": "directory", "id": "workspace"}
+        },
+        "context": null,
+        "team_run_id": null,
+        "member_id": null
+    }))
+    .unwrap();
+    assert!(matches!(
+        directory.agent,
+        protocol::AgentRoleSelection::Exact {
+            source: protocol::AgentRoleSource::Directory { ref id },
+            ref name
+        } if id == "workspace" && name == "reviewer"
+    ));
+}
+
+#[test]
 fn prepares_agent_coordination_as_a_builtin_system_operation() {
     let service = service();
     let call = ToolCall {

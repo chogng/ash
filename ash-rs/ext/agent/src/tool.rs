@@ -863,17 +863,22 @@ fn spawn_definition() -> ToolDefinition {
                 },
                 "agent": {
                     "description": agent_description,
-                    "anyOf": [
-                        { "type": "object", "properties": { "type": { "const": "default" } }, "required": ["type"], "additionalProperties": false },
-                        { "type": "object", "properties": {
-                            "type": { "const": "exact" },
-                            "name": { "type": "string", "minLength": 1 },
-                            "source": { "anyOf": [
-                                { "type": "object", "properties": { "type": { "const": "builtIn" } }, "required": ["type"], "additionalProperties": false },
-                                { "type": "object", "properties": { "type": { "const": "directory" }, "id": { "type": "string", "minLength": 1 } }, "required": ["type", "id"], "additionalProperties": false }
-                            ] }
-                        }, "required": ["type", "name", "source"], "additionalProperties": false }
-                    ]
+                    "type": "object",
+                    "properties": {
+                        "type": { "type": "string", "enum": ["default", "exact"] },
+                        "name": { "type": ["string", "null"], "minLength": 1 },
+                        "source": {
+                            "type": ["object", "null"],
+                            "properties": {
+                                "type": { "type": "string", "enum": ["builtIn", "directory"] },
+                                "id": { "type": ["string", "null"], "minLength": 1 }
+                            },
+                            "required": ["type", "id"],
+                            "additionalProperties": false
+                        }
+                    },
+                    "required": ["type", "name", "source"],
+                    "additionalProperties": false
                 },
                 "context": {
                     "type": ["object", "null"],
