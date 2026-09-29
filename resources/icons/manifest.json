@@ -112,6 +112,16 @@
       "rendering": "symbolic"
     },
     {
+      "id": "briefcase",
+      "file": "briefcase.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "briefcase-filled",
+      "file": "briefcase-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "browser-explore",
       "file": "browser-explore.svg",
       "rendering": "symbolic"
@@ -294,16 +304,6 @@
     {
       "id": "cursor-filled",
       "file": "cursor-filled.svg",
-      "rendering": "symbolic"
-    },
-    {
-      "id": "customize",
-      "file": "customize.svg",
-      "rendering": "symbolic"
-    },
-    {
-      "id": "customize-filled",
-      "file": "customize-filled.svg",
       "rendering": "symbolic"
     },
     {
@@ -889,6 +889,11 @@
     {
       "id": "settings",
       "file": "settings.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "skill",
+      "file": "skill.svg",
       "rendering": "symbolic"
     },
     {

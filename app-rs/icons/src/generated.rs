@@ -30,6 +30,8 @@ mod artwork {
     pub(crate) const BOLD: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/bold.svg"));
     pub(crate) const BOOK: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/book.svg"));
     pub(crate) const BOOKS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/books.svg"));
+    pub(crate) const BRIEFCASE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/briefcase.svg"));
+    pub(crate) const BRIEFCASE_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/briefcase-filled.svg"));
     pub(crate) const BROWSER_EXPLORE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/browser-explore.svg"));
     pub(crate) const BROWSER_WEB: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/browser-web.svg"));
     pub(crate) const CALENDAR: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/calendar.svg"));
@@ -67,8 +69,6 @@ mod artwork {
     pub(crate) const CSV_LETTER_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/csv-letter-filled.svg"));
     pub(crate) const CURSOR: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/cursor.svg"));
     pub(crate) const CURSOR_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/cursor-filled.svg"));
-    pub(crate) const CUSTOMIZE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/customize.svg"));
-    pub(crate) const CUSTOMIZE_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/customize-filled.svg"));
     pub(crate) const DATABASE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/database.svg"));
     pub(crate) const DATABASE_FLAT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/database-flat.svg"));
     pub(crate) const DEBUG: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/debug.svg"));
@@ -186,6 +186,7 @@ mod artwork {
     pub(crate) const SCREEN_NORMAL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/screen-normal.svg"));
     pub(crate) const SEARCH: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/search.svg"));
     pub(crate) const SETTINGS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/settings.svg"));
+    pub(crate) const SKILL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/skill.svg"));
     pub(crate) const SPLIT_HORIZONTAL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/split-horizontal.svg"));
     pub(crate) const SPLIT_PAGE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/split-page.svg"));
     pub(crate) const SPLIT_VERTICAL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/split-vertical.svg"));
@@ -250,6 +251,8 @@ pub mod icons {
     pub const BOLD: Icon = Icon::new(IconId::new("bold"), artwork::BOLD);
     pub const BOOK: Icon = Icon::new(IconId::new("book"), artwork::BOOK);
     pub const BOOKS: Icon = Icon::new(IconId::new("books"), artwork::BOOKS);
+    pub const BRIEFCASE: Icon = Icon::new(IconId::new("briefcase"), artwork::BRIEFCASE);
+    pub const BRIEFCASE_FILLED: Icon = Icon::new(IconId::new("briefcase-filled"), artwork::BRIEFCASE_FILLED);
     pub const BROWSER_EXPLORE: Icon = Icon::new(IconId::new("browser-explore"), artwork::BROWSER_EXPLORE);
     pub const BROWSER_WEB: Icon = Icon::new(IconId::new("browser-web"), artwork::BROWSER_WEB);
     pub const CALENDAR: Icon = Icon::new(IconId::new("calendar"), artwork::CALENDAR);
@@ -287,8 +290,6 @@ pub mod icons {
     pub const CSV_LETTER_FILLED: Icon = Icon::new(IconId::new("csv-letter-filled"), artwork::CSV_LETTER_FILLED);
     pub const CURSOR: Icon = Icon::new(IconId::new("cursor"), artwork::CURSOR);
     pub const CURSOR_FILLED: Icon = Icon::new(IconId::new("cursor-filled"), artwork::CURSOR_FILLED);
-    pub const CUSTOMIZE: Icon = Icon::new(IconId::new("customize"), artwork::CUSTOMIZE);
-    pub const CUSTOMIZE_FILLED: Icon = Icon::new(IconId::new("customize-filled"), artwork::CUSTOMIZE_FILLED);
     pub const DATABASE: Icon = Icon::new(IconId::new("database"), artwork::DATABASE);
     pub const DATABASE_FLAT: Icon = Icon::new(IconId::new("database-flat"), artwork::DATABASE_FLAT);
     pub const DEBUG: Icon = Icon::new(IconId::new("debug"), artwork::DEBUG);
@@ -406,6 +407,7 @@ pub mod icons {
     pub const SCREEN_NORMAL: Icon = Icon::new(IconId::new("screen-normal"), artwork::SCREEN_NORMAL);
     pub const SEARCH: Icon = Icon::new(IconId::new("search"), artwork::SEARCH);
     pub const SETTINGS: Icon = Icon::new(IconId::new("settings"), artwork::SETTINGS);
+    pub const SKILL: Icon = Icon::new(IconId::new("skill"), artwork::SKILL);
     pub const SPLIT_HORIZONTAL: Icon = Icon::new(IconId::new("split-horizontal"), artwork::SPLIT_HORIZONTAL);
     pub const SPLIT_PAGE: Icon = Icon::new(IconId::new("split-page"), artwork::SPLIT_PAGE);
     pub const SPLIT_VERTICAL: Icon = Icon::new(IconId::new("split-vertical"), artwork::SPLIT_VERTICAL);
@@ -466,6 +468,8 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::BOLD,
     icons::BOOK,
     icons::BOOKS,
+    icons::BRIEFCASE,
+    icons::BRIEFCASE_FILLED,
     icons::BROWSER_EXPLORE,
     icons::BROWSER_WEB,
     icons::CALENDAR,
@@ -503,8 +507,6 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::CSV_LETTER_FILLED,
     icons::CURSOR,
     icons::CURSOR_FILLED,
-    icons::CUSTOMIZE,
-    icons::CUSTOMIZE_FILLED,
     icons::DATABASE,
     icons::DATABASE_FLAT,
     icons::DEBUG,
@@ -622,6 +624,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::SCREEN_NORMAL,
     icons::SEARCH,
     icons::SETTINGS,
+    icons::SKILL,
     icons::SPLIT_HORIZONTAL,
     icons::SPLIT_PAGE,
     icons::SPLIT_VERTICAL,
@@ -683,6 +686,8 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("bold", artwork::BOLD),
     ("book", artwork::BOOK),
     ("books", artwork::BOOKS),
+    ("briefcase", artwork::BRIEFCASE),
+    ("briefcase-filled", artwork::BRIEFCASE_FILLED),
     ("browser-explore", artwork::BROWSER_EXPLORE),
     ("browser-web", artwork::BROWSER_WEB),
     ("calendar", artwork::CALENDAR),
@@ -720,8 +725,6 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("csv-letter-filled", artwork::CSV_LETTER_FILLED),
     ("cursor", artwork::CURSOR),
     ("cursor-filled", artwork::CURSOR_FILLED),
-    ("customize", artwork::CUSTOMIZE),
-    ("customize-filled", artwork::CUSTOMIZE_FILLED),
     ("database", artwork::DATABASE),
     ("database-flat", artwork::DATABASE_FLAT),
     ("debug", artwork::DEBUG),
@@ -839,6 +842,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("screen-normal", artwork::SCREEN_NORMAL),
     ("search", artwork::SEARCH),
     ("settings", artwork::SETTINGS),
+    ("skill", artwork::SKILL),
     ("split-horizontal", artwork::SPLIT_HORIZONTAL),
     ("split-page", artwork::SPLIT_PAGE),
     ("split-vertical", artwork::SPLIT_VERTICAL),
