@@ -27,6 +27,7 @@ pub use filesystem::PatternMatchTiming;
 pub use filesystem::ResolvedFileSystem;
 pub use filesystem::SandboxPathAccess;
 pub use filesystem::SandboxPathRule;
+pub use filesystem::reject_linked_file;
 pub use manager::{SandboxBackend, SandboxManager};
 pub use model::{
     FileSystemAccess, ManagedNetworkAccess, NetworkAccess, PreparedCommand, ProcessIo,

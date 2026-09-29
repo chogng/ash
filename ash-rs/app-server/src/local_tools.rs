@@ -1235,7 +1235,7 @@ fn materialize_patch_targets(
             authorization.dir().resolve_for_write(&relative)
         }
         .map_err(|error| CoreError::Policy(error.to_string()))?;
-        ensure_local_file_access(authorization.dir(), &resolved, true)?;
+        ensure_local_file_access(authorization.dir(), &resolved)?;
         targets.push(resolved.display().to_string());
         let prefix = if existing && line.starts_with("*** Update File: ") {
             "*** Update File: "
@@ -1522,6 +1522,7 @@ fn local_isolation() -> ash_sandboxing::FileSystemIsolation {
     }
 }
 
+const LOCAL_DENIED_NAME: &str = ".env";
 const LOCAL_DENIED_GLOBS: &[&str] = &["**/.env"];
 
 fn local_sandbox_scope(dir: &Dir) -> Result<SandboxScope, CoreError> {
@@ -1532,7 +1533,11 @@ fn local_sandbox_scope(dir: &Dir) -> Result<SandboxScope, CoreError> {
                 dir.clone(),
                 *pattern,
                 SandboxPathAccess::Denied,
-                PatternMatchTiming::PreparationSnapshot,
+                if cfg!(target_os = "macos") {
+                    PatternMatchTiming::Continuous
+                } else {
+                    PatternMatchTiming::PreparationSnapshot
+                },
             )
         })
         .collect::<Result<Vec<_>, _>>()
@@ -1557,10 +1562,15 @@ fn local_command_authority(
         | ToolAuthorization::PermissionBypassed(_)
         | ToolAuthorization::ApprovedOnce(_) => {}
     }
-    // Ordinary execution approval widens the remaining access, not explicit
-    // files denied by this execution's preparation snapshot.
+    // Approval does not remove the workspace's explicit read denials.
     let denied = scope
         .map(|scope| {
+            if scope.path_rules().iter().any(|rule| {
+                rule.access() == SandboxPathAccess::Denied
+                    && rule.pattern_timing() == Some(PatternMatchTiming::Continuous)
+            }) {
+                return Ok(true);
+            }
             scope
                 .resolve_filesystem(FileSystemAccess::FullAccess)
                 .map(|filesystem| !filesystem.denied_paths().is_empty())
@@ -1586,23 +1596,27 @@ fn local_command_authority(
     Ok(CommandExecutionAuthority::Unrestricted)
 }
 
-fn ensure_local_file_access(dir: &Dir, path: &Path, write: bool) -> Result<(), CoreError> {
-    let filesystem = local_sandbox_scope(dir)?
-        .resolve_filesystem(FileSystemAccess::DirectoryWrite)
-        .map_err(|error| CoreError::Policy(error.to_string()))?;
-    let allowed = if write {
-        filesystem.allows_write(path)
-    } else {
-        filesystem.allows_read(path)
-    };
-    if allowed {
-        Ok(())
-    } else {
-        Err(CoreError::Policy(format!(
+fn ensure_local_file_access(dir: &Dir, path: &Path) -> Result<(), CoreError> {
+    let relative = path.strip_prefix(dir.canonical_path()).map_err(|_| {
+        CoreError::Policy(format!(
+            "path is outside the authorized directory: {}",
+            path.display()
+        ))
+    })?;
+    if relative
+        .iter()
+        .any(|component| component == LOCAL_DENIED_NAME)
+    {
+        return Err(CoreError::Policy(format!(
             "path is denied by the local filesystem policy: {}",
             path.display()
-        )))
+        )));
     }
+    if path.exists() {
+        ash_sandboxing::reject_linked_file(path)
+            .map_err(|error| CoreError::Policy(error.to_string()))?;
+    }
+    Ok(())
 }
 
 fn read_only_sandbox() -> SandboxPolicy {

@@ -184,6 +184,63 @@ fn dir_resolution_is_bound_to_the_exact_session_and_grant() {
     );
 }
 
+#[cfg(target_os = "macos")]
+#[test]
+fn file_tools_read_a_large_workspace_without_scanning_every_entry() {
+    let dir = tempfile::tempdir().unwrap();
+    let build = dir.path().join("build");
+    fs::create_dir(&build).unwrap();
+    for index in 0..50_001 {
+        fs::File::create(build.join(format!("entry-{index}"))).unwrap();
+    }
+    let public = dir.path().join("public.txt");
+    fs::write(&public, "public-value").unwrap();
+    let nested = dir.path().join("config");
+    fs::create_dir(&nested).unwrap();
+    let private = nested.join(".env");
+    fs::write(&private, "private-value").unwrap();
+    let grant = authorization(dir.path());
+    let ripgrep = RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap();
+    let shell = LocalShellToolService::new(
+        grant.authorize(Permission::ExecuteCommands).unwrap(),
+        ripgrep.clone(),
+        PassThroughBackend,
+    )
+    .unwrap();
+    let grep = Arc::new(grep::Service::new(grep::Backend::Ripgrep, ripgrep, None).unwrap());
+    let suite = LocalToolSuite::new(
+        shell,
+        grep,
+        Arc::new(file_search::Service),
+        Arc::new(crate::dir_grants::DirGrants::default()),
+        grant,
+    );
+    let read = suite
+        .read_file(
+            &tool_call(
+                "read_file",
+                serde_json::json!({"path": public, "offset": null, "limit": null}),
+            ),
+            "thread",
+            None,
+            None,
+        )
+        .unwrap();
+    assert!(matches!(read, ToolExecutionOutput::Success(text) if text.contains("public-value")));
+    let denied = suite.read_file(
+        &tool_call(
+            "read_file",
+            serde_json::json!({"path": private, "offset": null, "limit": null}),
+        ),
+        "thread",
+        None,
+        None,
+    );
+    assert!(
+        matches!(denied, Err(error) if error.to_string().contains("denied by the local filesystem policy"))
+    );
+}
+
 #[test]
 fn shell_session_tool_returns_early_then_drives_the_same_process() {
     let cwd_dir = tempfile::tempdir().unwrap();

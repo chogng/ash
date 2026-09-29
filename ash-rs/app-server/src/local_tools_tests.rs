@@ -48,7 +48,19 @@ impl SandboxBackend for DeniedPathBackend {
     ) -> Result<PreparedCommand, SandboxError> {
         assert_eq!(policy.file_system(), FileSystemAccess::FullAccess);
         assert_eq!(policy.network(), NetworkAccess::Allowed);
+        #[cfg(target_os = "macos")]
+        {
+            scope
+                .resolve_filesystem_with_continuous_patterns(policy.file_system())
+                .unwrap();
+            assert!(scope.path_rules().iter().any(|rule| {
+                rule.access() == SandboxPathAccess::Denied
+                    && rule.continuous_pattern() == Some("**/.env")
+            }));
+        }
+        #[cfg(not(target_os = "macos"))]
         let filesystem = scope.resolve_filesystem(policy.file_system()).unwrap();
+        #[cfg(not(target_os = "macos"))]
         assert!(
             filesystem
                 .denied_paths()
@@ -69,10 +81,15 @@ fn approved_shell_keeps_an_existing_env_denial() {
         grant_id: GrantId::new("approved-shell"),
     };
 
-    assert_eq!(
-        local_command_authority(&approval, shell_sandbox(), Some(&scope)).unwrap(),
-        CommandExecutionAuthority::Unrestricted
-    );
+    let before_creation =
+        local_command_authority(&approval, shell_sandbox(), Some(&scope)).unwrap();
+    #[cfg(target_os = "macos")]
+    assert!(matches!(
+        before_creation,
+        CommandExecutionAuthority::Sandboxed(_)
+    ));
+    #[cfg(not(target_os = "macos"))]
+    assert_eq!(before_creation, CommandExecutionAuthority::Unrestricted);
 
     let managed = SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Managed)
         .with_host_acl_changes(local_acl_changes())

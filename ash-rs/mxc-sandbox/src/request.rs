@@ -22,6 +22,8 @@ pub(super) struct Request {
     bubblewrap: Option<PathBuf>,
     private_ipc: Vec<String>,
     proxy_port: Option<u16>,
+    #[cfg(target_os = "macos")]
+    seatbelt_deny_regexes: Vec<String>,
 }
 
 impl Request {
@@ -49,6 +51,8 @@ impl Request {
             bubblewrap: None,
             private_ipc: Vec::new(),
             proxy_port,
+            #[cfg(target_os = "macos")]
+            seatbelt_deny_regexes: Vec::new(),
         })
     }
 
@@ -69,6 +73,11 @@ impl Request {
     #[cfg(target_os = "macos")]
     pub fn set_private_ipc(&mut self, paths: Vec<String>) {
         self.private_ipc = paths;
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn set_seatbelt_deny_regexes(&mut self, regexes: Vec<String>) {
+        self.seatbelt_deny_regexes = regexes;
     }
 
     pub fn prepare(&self) -> Result<(), SandboxError> {
@@ -96,6 +105,28 @@ impl Request {
             let seatbelt = self.inner.seatbelt.get_or_insert_with(Default::default);
             seatbelt.allow_unix_sockets = false;
             seatbelt.allowed_unix_socket_paths = self.private_ipc;
+            if !self.seatbelt_deny_regexes.is_empty() {
+                if seatbelt.profile_override.is_some() {
+                    return Err(SandboxError::UnsupportedPolicy(
+                        "continuous path rules cannot extend a Seatbelt profile override".into(),
+                    ));
+                }
+                let mut profile = seatbelt_common::profile_builder::build_profile_with_proxy(
+                    &self.inner,
+                    self.inner.policy.network_proxy.address.as_ref(),
+                )
+                .map_err(SandboxError::UnsupportedPolicy)?;
+                for regex in &self.seatbelt_deny_regexes {
+                    profile.push_str(&format!(
+                        "\n(deny file-read* file-write* (regex #\"{regex}\"))"
+                    ));
+                }
+                self.inner
+                    .seatbelt
+                    .as_mut()
+                    .expect("Seatbelt configuration was created above")
+                    .profile_override = Some(profile);
+            }
         }
         let mut logger = Logger::new(Mode::Buffer);
         #[cfg(windows)]

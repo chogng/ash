@@ -162,6 +162,7 @@ mod execution {
     use ash_tool_executor::ExecutionLimits;
     use std::fs;
     use std::time::Duration;
+    use std::time::Instant;
 
     struct Approved;
     impl ApprovalPolicy for Approved {
@@ -217,6 +218,97 @@ mod execution {
                 }
             }
         }
+    }
+
+    #[test]
+    fn workspace_git_runs_with_a_continuous_env_denial() {
+        let temp = tempfile::tempdir().unwrap();
+        let initialized = std::process::Command::new("/usr/bin/git")
+            .args(["init", "--quiet"])
+            .current_dir(temp.path())
+            .output()
+            .unwrap();
+        assert!(initialized.status.success(), "{initialized:?}");
+        fs::write(temp.path().join(".gitignore"), "build/\n").unwrap();
+        let build = temp.path().join("build");
+        fs::create_dir(&build).unwrap();
+        for index in 0..50_001 {
+            fs::File::create(build.join(format!("entry-{index}"))).unwrap();
+        }
+        let dir = Dir::open_local(temp.path()).unwrap();
+        let scope = SandboxScope::single(dir.clone())
+            .with_path_rules(vec![
+                SandboxPathRule::pattern(
+                    dir,
+                    "**/.env",
+                    SandboxPathAccess::Denied,
+                    PatternMatchTiming::Continuous,
+                )
+                .unwrap(),
+            ])
+            .unwrap();
+        let policy = SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied);
+        let status = run(
+            &scope,
+            policy,
+            "/usr/bin/git",
+            &["status".into(), "--short".into()],
+        );
+        assert_eq!(status.exit_code, Some(0), "{status:?}");
+        let device = run(
+            &scope,
+            policy,
+            "/bin/sh",
+            &["-c".into(), "printf output >/dev/null".into()],
+        );
+        assert_eq!(device.exit_code, Some(0), "{device:?}");
+
+        let path = temp.path().join(".env");
+        let gate = temp.path().join("ready");
+        let started = temp.path().join("started");
+        let writer = std::thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(4);
+            while !started.exists() {
+                assert!(Instant::now() < deadline, "sandboxed shell did not start");
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            fs::write(path, "private-value").unwrap();
+            fs::write(gate, "ready").unwrap();
+        });
+        let late_read = run(
+            &scope,
+            policy,
+            "/bin/sh",
+            &[
+                "-c".into(),
+                "touch started; while [ ! -e ready ]; do sleep 0.05; done; cat .env".into(),
+            ],
+        );
+        writer.join().unwrap();
+        assert_ne!(late_read.exit_code, Some(0), "{late_read:?}");
+        assert!(!late_read.stdout.contains("private-value"), "{late_read:?}");
+
+        let linked_read = run(
+            &scope,
+            policy,
+            "/bin/sh",
+            &["-c".into(), "ln .env alias && cat alias".into()],
+        );
+        assert_ne!(linked_read.exit_code, Some(0), "{linked_read:?}");
+        assert!(
+            !linked_read.stdout.contains("private-value"),
+            "{linked_read:?}"
+        );
+        fs::hard_link(temp.path().join(".env"), temp.path().join("alias-host")).unwrap();
+        let command = SandboxCommand::new(
+            "/bin/cat",
+            ["alias-host"],
+            scope.command_dir().canonical_path(),
+        );
+        let error = MxcSandbox::new(InstallContext::current())
+            .prepare_scoped(&command, policy, &scope)
+            .unwrap_err();
+        assert!(error.to_string().contains("hard links"), "{error:?}");
     }
 
     #[test]

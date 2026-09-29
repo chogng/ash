@@ -1,14 +1,12 @@
 //! Resolves a [`crate::SandboxScope`] into the concrete host filesystem view
 //! shared by every process backend and file tool.
 //!
-//! Resolution is a preparation-time snapshot: grants, path rules and hidden
-//! directories are bound to canonical host paths once, before launch. The
-//! canonicalization and containment proofs delegate to `ash-file-access`
-//! (`Dir::resolve_existing`); this module owns only the sandbox policy
+//! Exact rules and preparation-time patterns bind to canonical host paths
+//! before launch. The canonicalization and containment proofs delegate to
+//! `ash-file-access` (`Dir::resolve_existing`); this module owns policy
 //! semantics such as deny precedence, protected metadata and host-read scope.
-//! Path rules cannot defer that binding to the backends, because a policy
-//! expressed in lexical paths is symlink-bypassable and continuous matching is
-//! not supported by the registered process backends.
+//! A backend may explicitly accept continuous patterns when it enforces them
+//! at every access; otherwise resolution rejects those rules.
 
 use crate::FileSystemAccess;
 use crate::PROTECTED_DIR_METADATA_NAMES;
@@ -130,6 +128,16 @@ impl SandboxPathRule {
             SandboxPathSelector::Pattern { timing, .. } => Some(timing),
         }
     }
+
+    pub fn continuous_pattern(&self) -> Option<&str> {
+        match &self.selector {
+            SandboxPathSelector::Pattern {
+                relative,
+                timing: PatternMatchTiming::Continuous,
+            } => Some(relative),
+            _ => None,
+        }
+    }
 }
 
 /// Fully resolved filesystem input shared by every process backend and file tool.
@@ -177,6 +185,7 @@ impl ResolvedFileSystem {
 pub(crate) fn resolve(
     scope: &SandboxScope,
     access: FileSystemAccess,
+    continuous_patterns: ContinuousPatterns,
 ) -> Result<ResolvedFileSystem, SandboxError> {
     let mut readwrite = BTreeSet::new();
     let mut readonly = BTreeSet::new();
@@ -220,7 +229,7 @@ pub(crate) fn resolve(
     );
 
     for rule in scope.path_rules() {
-        let paths = resolve_rule(rule)?;
+        let paths = resolve_rule(rule, continuous_patterns)?;
         if rule.access() == SandboxPathAccess::Denied {
             for path in &paths {
                 reject_linked_file(path)?;
@@ -249,16 +258,17 @@ pub(crate) fn resolve(
     })
 }
 
-fn reject_linked_file(path: &Path) -> Result<(), SandboxError> {
+/// Reject a multiply linked file when a path-based deny cannot identify its aliases.
+pub fn reject_linked_file(path: &Path) -> Result<(), SandboxError> {
     let metadata = std::fs::metadata(path).map_err(|error| {
         SandboxError::Io(format!(
-            "cannot inspect denied path '{}': {error}",
+            "cannot inspect protected path '{}': {error}",
             path.display()
         ))
     })?;
     if metadata.is_file() && !file_has_one_link(path, &metadata)? {
         return Err(SandboxError::UnsupportedPolicy(format!(
-            "denied file has multiple or unknown hard links: {}",
+            "protected file has multiple or unknown hard links: {}",
             path.display()
         )));
     }
@@ -293,7 +303,16 @@ fn file_has_one_link(_: &Path, _: &std::fs::Metadata) -> Result<bool, SandboxErr
     Ok(false)
 }
 
-fn resolve_rule(rule: &SandboxPathRule) -> Result<Vec<PathBuf>, SandboxError> {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ContinuousPatterns {
+    Reject,
+    EnforcedByBackend,
+}
+
+fn resolve_rule(
+    rule: &SandboxPathRule,
+    continuous_patterns: ContinuousPatterns,
+) -> Result<Vec<PathBuf>, SandboxError> {
     match &rule.selector {
         SandboxPathSelector::Exact { relative, missing } => {
             let candidate = rule.owner.canonical_path().join(relative);
@@ -316,6 +335,9 @@ fn resolve_rule(rule: &SandboxPathRule) -> Result<Vec<PathBuf>, SandboxError> {
         }
         SandboxPathSelector::Pattern { relative, timing } => {
             if *timing == PatternMatchTiming::Continuous {
+                if continuous_patterns == ContinuousPatterns::EnforcedByBackend {
+                    return Ok(Vec::new());
+                }
                 return Err(SandboxError::UnsupportedPolicy(
                     "continuous filesystem patterns are not supported by the registered process backends"
                         .into(),

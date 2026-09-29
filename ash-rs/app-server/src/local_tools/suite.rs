@@ -266,11 +266,11 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
         .map_err(|_| format!("path is outside the authorized directories: {value}"))?;
         match permission {
             DirPermission::ReadFiles | DirPermission::InspectRepository => {
-                super::ensure_local_file_access(&root, &absolute, false)
+                super::ensure_local_file_access(&root, &absolute)
                     .map_err(|error| error.to_string())?;
             }
             DirPermission::WriteFiles | DirPermission::MutateRepository => {
-                super::ensure_local_file_access(&root, &absolute, true)
+                super::ensure_local_file_access(&root, &absolute)
                     .map_err(|error| error.to_string())?;
             }
             _ => {}

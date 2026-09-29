@@ -201,7 +201,19 @@ impl SandboxScope {
         &self,
         access: crate::FileSystemAccess,
     ) -> Result<ResolvedFileSystem, SandboxError> {
-        crate::filesystem::resolve(self, access)
+        crate::filesystem::resolve(self, access, crate::filesystem::ContinuousPatterns::Reject)
+    }
+
+    /// Resolve exact rules while the caller enforces continuous patterns in its process backend.
+    pub fn resolve_filesystem_with_continuous_patterns(
+        &self,
+        access: crate::FileSystemAccess,
+    ) -> Result<ResolvedFileSystem, SandboxError> {
+        crate::filesystem::resolve(
+            self,
+            access,
+            crate::filesystem::ContinuousPatterns::EnforcedByBackend,
+        )
     }
 
     /// Whether this scope grants only its command directory without hiding host directories.
