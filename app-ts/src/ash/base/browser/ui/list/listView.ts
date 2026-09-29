@@ -61,6 +61,7 @@ export class ListView<T> extends Disposable {
 			this.scrollable = this._register(new ScrollableElement(container, { direction: "vertical", tabIndex: -1 }));
 			this.scrollable.setContent(this.element);
 			this.domNode = this.scrollable.element;
+			this.domNode.classList.add("ash-list-scrollable");
 		} else {
 			this.scrollable = undefined;
 			this.domNode = this.element;

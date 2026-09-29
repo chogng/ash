@@ -3,6 +3,43 @@ import { readFile } from 'node:fs/promises';
 
 test.use({ openWorkspace: false });
 
+test('Explorer selection stays beneath its scrollbar', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'browser' || target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');
+	const page = workbench.page;
+	await page.evaluate(async () => {
+		const root = await navigator.storage.getDirectory();
+		const folder = await root.getDirectoryHandle(`ash-scrollbar-${crypto.randomUUID()}`, { create: true });
+		for (let index = 0; index < 60; index++) {
+			await folder.getFileHandle(`file-${String(index).padStart(2, '0')}.txt`, { create: true });
+		}
+		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
+	});
+	await page.getByRole('button', { name: 'Application menu' }).click();
+	await page.getByRole('menu').first().getByRole('menuitem', { name: 'File' }).click();
+	await page.keyboard.press('Escape');
+	await page.keyboard.press('Escape');
+	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+	if (await showSidebar.isVisible()) await showSidebar.click();
+	await page.getByRole('button', { name: 'Open Folder', exact: true }).click();
+	const explorer = page.locator('.ash-explorer');
+	const row = explorer.getByRole('treeitem', { name: 'file-00.txt' });
+	await row.click();
+	await expect(row).toHaveClass(/selected/);
+	await explorer.hover();
+	const track = explorer.locator('.ash-list-scrollable > .ash-scrollbar-track-vertical');
+	await expect(track).toBeVisible();
+	const overlap = await row.evaluate(element => {
+		const track = element.closest('.ash-list-scrollable')?.querySelector<HTMLElement>(':scope > .ash-scrollbar-track-vertical');
+		if (!track) return false;
+		const rowBounds = element.getBoundingClientRect();
+		const trackBounds = track.getBoundingClientRect();
+		const x = trackBounds.left + trackBounds.width / 2;
+		const y = rowBounds.top + rowBounds.height / 2;
+		return rowBounds.right > x && document.elementFromPoint(x, y)?.closest('.ash-scrollbar-track-vertical') === track;
+	});
+	expect(overlap).toBe(true);
+});
+
 test('browser opens an authorized local folder and saves its files', async ({ target, workbench }) => {
 	test.skip(target.kind !== 'browser' || target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');
 	const page = workbench.page;
@@ -167,10 +204,18 @@ test('browser Explorer expands and collapses a folder without replacing sibling 
 	await folder.click();
 	await expect(folder).toHaveAttribute('aria-expanded', 'true');
 	await expect(nested).toHaveCount(1);
+	await expect(folder).toHaveClass(/selected/);
+	await expect(folder).toHaveCSS('outline-style', 'none');
+	await page.keyboard.press('ArrowDown');
+	await expect(nested).toHaveClass(/focused/);
+	await expect(nested).toHaveCSS('outline-style', 'solid');
 	await folder.click();
 	await expect(folder).toHaveAttribute('aria-expanded', 'false');
 	await expect(nested).toHaveCount(0);
 	await folder.click();
+	await expect(folder).toHaveAttribute('aria-expanded', 'true');
+	await expect(nested).toHaveCount(1);
+	await folder.locator('.ash-tree-contents').click({ clickCount: 2 });
 	await expect(folder).toHaveAttribute('aria-expanded', 'true');
 	await expect(nested).toHaveCount(1);
 	await expect(explorer.getByRole('tree')).toHaveAttribute('aria-busy', 'false');

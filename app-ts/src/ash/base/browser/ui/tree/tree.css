@@ -104,7 +104,7 @@
   background: var(--ash-list-active-selection-background);
 }
 
-.ash-tree:focus .ash-tree-row.focused {
+.ash-tree:focus-visible .ash-tree-row.focused {
   outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
   outline-offset: -1px;
 }
