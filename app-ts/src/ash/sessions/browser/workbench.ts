@@ -341,6 +341,7 @@ export class Workbench extends Disposable {
 			dictation: options.api.dictation,
 			contextMenuService: contextMenus,
 			contextViewService: contextViews,
+			accessibleViewService,
 			commandService,
 			activateSelection: selection => view.activateSelection(selection),
 			closeSelection: selection => view.closeVisibleSelection(selection),

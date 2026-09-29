@@ -9,12 +9,14 @@ import { Disposable, DisposableStore, toDisposable } from "../../../../../../bas
 import { Lxicon } from "../../../../../../base/common/lxicons.js";
 import { localize } from "../../../../../../nls.js";
 import { WorkbenchToolBar } from "../../../../../../platform/actions/browser/toolbar.js";
+import type { IAccessibleViewService } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import type { IDictationService, IDictationSession } from "../../../../../../platform/dictation/common/dictationService.js";
 import type { IOpenAgentsWindowOptions } from '../../../../../../platform/native/common/nativeHost.js';
 import type { IContextMenuService } from "../../../../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../../../../platform/contextview/browser/contextView.js";
 import type { ModelCatalogEntry } from "../../../../../services/chat/common/chatService.js";
 import type { ChatAgent } from '../../../../../services/chat/common/chatService.js';
+import type { ModelReasoningEffort } from '../../../../../services/chat/common/modelCatalog.js';
 import type { ChatContextAttachment } from "../../../../../services/chat/common/chatContextService.js";
 import type { ModelRef } from "../../../../../services/chat/common/chatService.js";
 import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog } from "../../../common/slashCommands.js";
@@ -22,9 +24,10 @@ import { SkillSelectorCatalog } from "../../../common/skillSelectors.js";
 import type { ChatInputDelegate, ChatInputState } from "./chatInput.js";
 import { ChatInputEditors, type IChatInputEditor } from "./chatInputEditorRegistry.js";
 import { ModelPickerActionItem } from './modelPicker/modelPickerActionItem.js';
+import { ModelPickerConfiguration, modelPickerEffortLabel } from './modelPicker/modelPickerConfiguration.js';
 import { ModePickerActionItem, type ChatInputMode } from './modePickerActionItem.js';
 
-type ChatInputToolbarPresentation = "mode" | "model" | "mic" | "voice" | "send" | "interrupt";
+type ChatInputToolbarPresentation = "mode" | "model" | "effort" | "mic" | "voice" | "send" | "interrupt";
 
 interface ChatInputToolbarState {
 	readonly canSubmit: boolean;
@@ -33,6 +36,7 @@ interface ChatInputToolbarState {
 	readonly inputKind: "message" | "command";
 	readonly models: readonly ModelCatalogEntry[];
 	readonly selectedModel?: ModelRef;
+	readonly selectedReasoningEffort?: ModelReasoningEffort;
 	readonly isAutomaticModel: boolean;
 	readonly selectedAgent?: ChatAgent;
 	readonly agentName?: string;
@@ -76,7 +80,7 @@ export class ChatInputPart extends Disposable {
 	private visible = true;
 	private draftRevision = 0;
 
-	constructor(container: HTMLElement, delegate: ChatInputDelegate, contextMenuService: IContextMenuService, contextViewService: IContextViewService, private readonly dictation?: IDictationService) {
+	constructor(container: HTMLElement, delegate: ChatInputDelegate, contextMenuService: IContextMenuService, contextViewService: IContextViewService, private readonly accessibleViewService: IAccessibleViewService, private readonly dictation?: IDictationService) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.delegate = delegate;
@@ -266,6 +270,7 @@ export class ChatInputPart extends Disposable {
 			inputKind: input.kind === "message" ? "message" : "command",
 			models: this.state.models,
 			selectedModel: this.state.selectedModel,
+			selectedReasoningEffort: this.state.selectedReasoningEffort,
 			isAutomaticModel: this.state.isAutomaticModel,
 			selectedAgent: this.state.selectedAgent,
 			agentName: this.state.agentName,
@@ -278,6 +283,7 @@ export class ChatInputPart extends Disposable {
 			state.inputKind === this.toolbarState.inputKind &&
 			state.models === this.toolbarState.models &&
 			sameModel(state.selectedModel, this.toolbarState.selectedModel) &&
+			state.selectedReasoningEffort === this.toolbarState.selectedReasoningEffort &&
 			state.isAutomaticModel === this.toolbarState.isAutomaticModel &&
 			state.selectedAgent?.name === this.toolbarState.selectedAgent?.name &&
 			state.selectedAgent?.sourceId === this.toolbarState.selectedAgent?.sourceId &&
@@ -347,6 +353,17 @@ export class ChatInputPart extends Disposable {
 			"model",
 			() => {},
 		);
+		const effortAction = !this.toolbarState.isAutomaticModel && selectedModel?.supportedReasoningEfforts?.length
+			? new ChatInputAction(
+				'ash.chat.input.effort',
+				modelPickerEffortLabel(this.toolbarState.selectedReasoningEffort),
+				localize('chat.modelPicker.effortAriaLabel', 'Thinking Effort: {0}', modelPickerEffortLabel(this.toolbarState.selectedReasoningEffort)),
+				undefined,
+				true,
+				'effort',
+				() => {},
+			)
+			: undefined;
 		const micAction = new ChatInputAction(
 			"ash.chat.input.mic",
 			localize('chat.input.dictate', 'Dictate message'),
@@ -370,7 +387,7 @@ export class ChatInputPart extends Disposable {
 				new ChatInputAction("ash.chat.input.interrupt", "Stop", "Stop response", Lxicon.close, true, "interrupt", () => void this.delegate.interrupt()),
 			]
 			: [sendAction];
-		const inputActions = this.toolbarState.inputKind === "command" ? [modeAction] : [modeAction, modelAction, micAction];
+		const inputActions = this.toolbarState.inputKind === "command" ? [modeAction] : [modeAction, modelAction, ...(effortAction ? [effortAction] : []), micAction];
 		this.inputToolbar.setActions([...inputActions, ...trailingActions]);
 	}
 
@@ -476,14 +493,20 @@ export class ChatInputPart extends Disposable {
 			return new ModelPickerActionItem(action, {
 				getModels: () => this.state.models,
 				getSelectedModel: () => this.state.selectedModel,
-				getSelectedReasoningEffort: () => this.state.selectedReasoningEffort,
 				isAutomaticModel: () => this.state.isAutomaticModel,
 				getModelsError: () => this.state.modelsError,
 				selectModel: model => this.delegate.selectModel(model),
-				selectReasoningEffort: effort => this.delegate.selectReasoningEffort(effort),
 				selectAutomaticModel: () => this.delegate.selectAutomaticModel(),
 				openSettings: () => this.delegate.openModelSettings(),
 			}, contextViewService);
+		}
+		if (action.presentation === 'effort') {
+			const entry = this.state.models.find(model => sameModel(model.model, this.state.selectedModel))!;
+			return new ModelPickerConfiguration(action, entry, this.state.selectedReasoningEffort, async effort => {
+				await this.delegate.selectReasoningEffort(effort);
+				// Updating the effort replaces the toolbar action, so return focus to its new button.
+				this.inputToolbar.element.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort'] button")?.focus();
+			}, contextViewService, this.accessibleViewService);
 		}
 		if (action instanceof SelectorAction) {
 			return new ModePickerActionItem(action, contextViewService, this.mode, () => {

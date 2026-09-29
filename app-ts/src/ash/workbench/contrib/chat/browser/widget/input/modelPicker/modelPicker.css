@@ -79,34 +79,9 @@
   cursor: pointer;
 }
 
-.ash-chat-model-picker-configuration {
-  display: flex;
-  min-height: var(--ash-spacing-size400);
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ash-spacing-size80);
-  padding: 0 var(--ash-spacing-size100);
-  border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-}
-
-.ash-chat-model-picker-configuration select {
-  min-width: 120px;
-  max-width: 55%;
-  height: var(--ash-spacing-size320);
-  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-  border-radius: var(--ash-cornerRadius-small);
-  color: var(--ash-input-foreground);
-  background: var(--ash-input-background);
-}
-
-.ash-chat-model-picker-configuration select:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
-}
-
-.ash-high-contrast .ash-chat-model-picker-configuration,
-.ash-high-contrast .ash-chat-model-picker-configuration select {
-  border-color: var(--ash-contrast-border);
+.ash-chat-model-configuration-menu {
+  min-width: 160px;
+  font-size: var(--ash-fontSize-label1);
 }
 
 .ash-chat-model-picker .ash-quick-pick-row-content {

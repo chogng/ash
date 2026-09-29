@@ -1,6 +1,7 @@
 import "./media/chatViewPane.css";
 import { setDisposableOwner, toDisposable } from "../../base/common/lifecycle.js";
 import { IMenuService } from "../../platform/actions/common/actions.js";
+import { IAccessibleViewService } from '../../platform/accessibility/browser/accessibleView.js';
 import { IContextMenuService, IContextViewService } from "../../platform/contextview/browser/contextView.js";
 import { ICommandService } from "../../platform/commands/common/commands.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../workbench/browser/parts/views/viewPane.js";
@@ -73,6 +74,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		@ICommandService commandService: ICommandService,
 		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
 		@IFileService private readonly fileService: IFileService,
+		@IAccessibleViewService private readonly accessibleViewService: IAccessibleViewService,
 		@IContextKeyService contextKeyService?: IContextKeyService,
 		@IOpenerService private readonly openerService?: IOpenerService,
 		@IEditorService private readonly editorService?: IEditorService,
@@ -203,6 +205,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 					this.contextMenuService,
 					this.contextViewService,
 					this.commandService,
+					this.accessibleViewService,
 					this.openerService,
 					this.editorService,
 					resource => readMarkdownImageResource(this.fileService, resource),
@@ -231,6 +234,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 					this.contextMenuService,
 					this.contextViewService,
 					this.commandService,
+					this.accessibleViewService,
 					this.openerService,
 					this.editorService,
 					resource => readMarkdownImageResource(this.fileService, resource),

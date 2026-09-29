@@ -6,9 +6,7 @@ import { Disposable, DisposableStore, MutableDisposable } from '../../../../../.
 import { localize } from '../../../../../../../nls.js';
 import type { IContextViewService } from '../../../../../../../platform/contextview/browser/contextView.js';
 import { QuickInputList } from '../../../../../../../platform/quickinput/browser/quickInputList.js';
-import { modelRefIdentity, type ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
 import type { IModelPickerDelegate } from './modelPickerActionItem.js';
-import { createModelPickerConfiguration } from './modelPickerConfiguration.js';
 import { ModelPickerDetailsMenu } from './modelPickerHover.js';
 import { buildModelPickerItems, type ModelPickerItem } from './modelPickerItems.js';
 
@@ -84,13 +82,6 @@ export class ModelPickerWidget extends Disposable {
 		autoSwitch.setAttribute('role', 'switch');
 		autoSwitch.checked = this.delegate.isAutomaticModel();
 		autoRow.append(autoLabel, autoSwitch);
-		const selectedModel = this.delegate.getSelectedModel();
-		const selectedEntry = !autoSwitch.checked && selectedModel
-			? models.find(entry => modelRefIdentity(entry.model) === modelRefIdentity(selectedModel))
-			: undefined;
-		const configuration = selectedEntry
-			? createModelPickerConfiguration(ownerDocument, selectedEntry, this.delegate.getSelectedReasoningEffort())
-			: undefined;
 		const listContainer = h(ownerDocument, 'div');
 		listContainer.className = 'ash-chat-model-picker-list';
 		const footer = h(ownerDocument, 'div');
@@ -103,9 +94,7 @@ export class ModelPickerWidget extends Disposable {
 		error.className = 'ash-chat-model-picker-error';
 		error.setAttribute('role', 'status');
 		error.hidden = true;
-		content.append(searchContainer, autoRow);
-		if (configuration) content.append(configuration.row);
-		content.append(listContainer, footer, error);
+		content.append(searchContainer, autoRow, listContainer, footer, error);
 
 		if (!this.showContextView(anchor, content, session)) return;
 		const list = session.add(new QuickInputList<ModelPickerItem>(listContainer, 'menu'));
@@ -121,7 +110,7 @@ export class ModelPickerWidget extends Disposable {
 			} else detailsMenu.hide();
 		}));
 		list.items = buildModelPickerItems(models, autoSwitch.checked ? undefined : this.delegate.getSelectedModel());
-		list.layout(configuration ? 260 : 300);
+		list.layout(300);
 		this.contextView.layout();
 		session.add(addDisposableListener(listContainer, 'mousemove', event => {
 			hasNavigated = true;
@@ -139,18 +128,6 @@ export class ModelPickerWidget extends Disposable {
 				error.textContent = localize('chat.modelPicker.selectionFailed', 'Could not select model');
 				error.hidden = false;
 			});
-		}));
-		if (configuration) session.add(addDisposableListener(configuration.select, 'change', () => {
-			const previous = this.delegate.getSelectedReasoningEffort();
-			const effort = configuration.select.value || undefined;
-			void this.delegate.selectReasoningEffort(effort as ModelReasoningEffort | undefined).then(
-				() => this.contextView.hide(),
-				() => {
-					configuration.select.value = previous ?? '';
-					error.textContent = localize('chat.modelPicker.effortFailed', 'Could not set thinking effort');
-					error.hidden = false;
-				},
-			);
 		}));
 		session.add(addDisposableListener(addModels, 'click', () => {
 			this.contextView.hide();

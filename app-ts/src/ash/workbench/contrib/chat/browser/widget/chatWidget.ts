@@ -2,6 +2,7 @@ import './media/chat.css';
 import { Disposable, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
 import type { Event } from "../../../../../base/common/event.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
+import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { AgentResponse, ChatAgent, ModelRef, SessionId, ThreadGoal, ThreadId } from "../../../../services/chat/common/chatService.js";
@@ -65,6 +66,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		contextMenuService: IContextMenuService,
 		contextViewService: IContextViewService,
 		commandService: ICommandService,
+		accessibleViewService: IAccessibleViewService,
 		openerService?: IOpenerService,
 		editorService?: IEditorService,
 		imageResourceLoader?: (resource: URI) => Promise<Blob>,
@@ -105,7 +107,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			openModelSettings: () => commandService.executeCommand(OpenSettingsCommandId, 'models'),
 			resolveInteraction: (response) => this.model.resolveInteraction(response),
 		};
-		this.inputPart = this._register(new ChatInputPart(this.element, inputDelegate, contextMenuService, contextViewService, dictation));
+		this.inputPart = this._register(new ChatInputPart(this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, dictation));
 		this.element.append(this.goalElement, this.listWidget.element, this.inputPart.element);
 		this._register(this.model.onDidChange(() => this.render()));
 		this._register(toDisposable(() => this.element.remove()));

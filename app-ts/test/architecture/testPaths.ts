@@ -5,9 +5,10 @@ import { dirname, resolve } from "node:path";
 export function findDesktopRoot(start: string): string {
 	let candidate = resolve(start);
 	while (true) {
-		if (existsSync(resolve(candidate, "package.json")) && existsSync(resolve(candidate, "src/ash"))) return candidate;
+		// Compiled tests also contain package.json and src/ash, but not TypeScript source.
+		if (existsSync(resolve(candidate, "package.json")) && existsSync(resolve(candidate, "src/ash/nls.ts"))) return candidate;
 		const nestedDesktop = resolve(candidate, "app-ts");
-		if (existsSync(resolve(nestedDesktop, "package.json")) && existsSync(resolve(nestedDesktop, "src/ash"))) {
+		if (existsSync(resolve(nestedDesktop, "package.json")) && existsSync(resolve(nestedDesktop, "src/ash/nls.ts"))) {
 			return nestedDesktop;
 		}
 		const parent = dirname(candidate);

@@ -11,6 +11,7 @@ import { Lxicon } from "../../../base/common/lxicons.js";
 import { MenuId } from "../../../platform/actions/common/actions.js";
 import { MenuService } from "../../../platform/actions/common/menuService.js";
 import type { IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
+import type { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { ServiceContainer } from "../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService } from "../../../platform/quickinput/common/quickInput.js";
 import { CommandService } from "../../../workbench/services/commands/common/commandService.js";
@@ -47,6 +48,7 @@ const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 const unavailableFileService = {
 	readFileBytes: async () => { throw new Error('File read is unavailable in this test'); },
 } as unknown as IFileService;
+const unavailableAccessibleViewService = { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService;
 
 class SessionsManagementService extends BaseSessionsManagementService {
 	constructor(api: IRendererHost) {
@@ -169,6 +171,7 @@ test('Chat loads an Ash remote workspace image through the file service', async 
 			commands,
 			testLayoutService(),
 			fileService,
+			unavailableAccessibleViewService,
 			contextKeys,
 		);
 		dom.window.document.body.append(pane.element);
@@ -276,6 +279,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		commands,
 		layout,
 		unavailableFileService,
+		unavailableAccessibleViewService,
 		contextKeys,
 	);
 	chatView = pane;
@@ -440,12 +444,14 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 			[
 				"ash.chat.input.mode",
 				"ash.chat.input.model",
+				"ash.chat.input.effort",
 				"ash.chat.input.mic",
 				"ash.chat.input.voice",
 			],
 		);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, "Agent");
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.model'] button .ash-button-label")?.textContent, "GPT-5.6 Sol");
+		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort'] button")?.getAttribute('aria-label'), 'Thinking Effort: Default');
 		assert.equal(inputToolbar?.querySelector(".ash-chat-input-model-access-badge"), null);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mic'] button")?.disabled, true);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.voice'] button")?.disabled, true);
@@ -707,6 +713,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 		commands,
 		layout,
 		unavailableFileService,
+		unavailableAccessibleViewService,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -847,6 +854,7 @@ test("the New Chat slash command opens an untitled session", async () => {
 		commands,
 		layout,
 		unavailableFileService,
+		unavailableAccessibleViewService,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -922,6 +930,7 @@ test("failed first send keeps the untitled session and its input draft", async (
 		commands,
 		layout,
 		unavailableFileService,
+		unavailableAccessibleViewService,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1002,6 +1011,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 		commands,
 		layout,
 		unavailableFileService,
+		unavailableAccessibleViewService,
 	);
 	dom.window.document.body.append(pane.element);
 

@@ -3,6 +3,7 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import type { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
+import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { ChatInputPart } from '../../browser/widget/input/chatInputPart.js';
 import type { ChatInputDelegate } from '../../browser/widget/input/chatInput.js';
 
@@ -21,7 +22,7 @@ for (const [name, value] of Object.entries({
 function inputPart(): ChatInputPart {
 	const container = document.createElement('div');
 	document.body.append(container);
-	return new ChatInputPart(container, {} as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService);
+	return new ChatInputPart(container, {} as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 }
 
 function edit(part: ChatInputPart, text: string): void {

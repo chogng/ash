@@ -1,6 +1,7 @@
 import "./media/sessionsPart.css";
 import { Dimension } from "../../../base/browser/dom.js";
 import type { ICommandService } from "../../../platform/commands/common/commands.js";
+import type { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import type { IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../platform/contextview/browser/contextView.js";
 import type { IChatService } from "../../../workbench/services/chat/common/chatService.js";
@@ -19,6 +20,7 @@ export interface SessionsPartOptions {
 	readonly dictation?: IDictationService;
 	readonly contextMenuService: IContextMenuService;
 	readonly contextViewService: IContextViewService;
+	readonly accessibleViewService: IAccessibleViewService;
 	readonly commandService: ICommandService;
 	readonly activateSelection: (selection: SessionsViewSelection) => void;
 	readonly closeSelection: (selection: SessionsViewSelection) => void;
@@ -48,6 +50,7 @@ export class SessionsPart extends WorkbenchPart {
 			sessionService: options.sessionService,
 			contextMenuService: options.contextMenuService,
 			contextViewService: options.contextViewService,
+			accessibleViewService: options.accessibleViewService,
 			commandService: options.commandService,
 			activateSelection: options.activateSelection,
 			closeSelection: options.closeSelection,

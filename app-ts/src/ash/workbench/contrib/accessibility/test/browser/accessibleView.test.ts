@@ -27,6 +27,9 @@ test('Explorer accessibility hint follows the verbosity setting', async () => {
 		assert.match(accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.DiffEditor) ?? '', /Alt\+F1/);
 		await configuration.updateValue(AccessibilityVerbositySettingId.DiffEditor, false);
 		assert.equal(accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.DiffEditor), undefined);
+		assert.match(accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.ChatModelConfiguration) ?? '', /Alt\+F1/);
+		await configuration.updateValue(AccessibilityVerbositySettingId.ChatModelConfiguration, false);
+		assert.equal(accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.ChatModelConfiguration), undefined);
 	} finally {
 		browser.window.close();
 	}
