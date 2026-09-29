@@ -52,6 +52,7 @@ formats, and update delivery belong to their respective owners.
 The release entry point is `build/ash_rs/build.py`. It reads the checked-in App Server protocol metadata and binds its major, revision, and schema hash into `ash-package.json`; it does not rewrite checked-in fixtures. `verify:protocol` remains an explicit fixture check, while `generate:protocol` refreshes repository fixtures when they are intentionally being reviewed. If `--server-bin` or
 `--app-server-daemon-bin` is omitted, `cargo.py` builds the corresponding product-neutral
 `ash-app-server` or profile-scoped `ash-app-server-daemon` for the selected target.
+When `ASH_UPDATE_PUBLIC_KEY` or `--update-public-key` is supplied, the builder binds that trusted key into the App Server component of the immutable package metadata. The release backend uses it to verify independently published stable updates while running; development packages without a key do not check automatically.
 It collects all missing first-party executables into one locked Cargo build, including
 the Code Mode Host, Remote programs, and Windows sandbox when required. Prebuilt inputs
 are validated before the build and are not rebuilt. Executable paths come from Cargo's

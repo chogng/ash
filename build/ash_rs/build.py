@@ -2,6 +2,7 @@
 """Build a canonical Ash package directory."""
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import Optional, Sequence
@@ -98,6 +99,11 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
             "Package the locked standalone Node runtime, or require a product host "
             "such as Electron to inject an exact Node-compatible executable."
         ),
+    )
+    parser.add_argument(
+        "--update-public-key",
+        default=os.environ.get("ASH_UPDATE_PUBLIC_KEY"),
+        help="Ed25519 public key trusted by the independently updated App Server.",
     )
     parser.add_argument(
         "--bwrap-bin",
@@ -231,6 +237,7 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         voice_host_binary=binaries["ash-voice-host"],
         collaboration_server_binary=binaries["ash-collaboration-server"],
         protocol_metadata=protocol_metadata,
+        update_public_key=args.update_public_key,
         build_profile=args.cargo_profile,
         windows_sandbox_binary=binaries["ash-windows-sandbox"]
         if spec.is_windows

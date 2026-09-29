@@ -11,8 +11,9 @@
 
 - `ash-app-server-daemon connect` 取得共享 profile 服务连接并代理 stdio。
 - `ash-app-server-daemon start|update|ensure-selected|restart|stop|version` 输出单行 JSON；`pid` 是实际后台进程 PID。`version` 同时报告 `daemonVersion` 和已选中的 `installedVersion`，便于看出更新是否还在等待重启；后台未运行时，`daemonVersion` 是本次调用程序的版本。
-- 发布包首次连接时，后台将完整的、包含独立 JavaScript 运行环境的调用方安装包复制到 `ASH_HOME/app-server-packages`，并从其中启动服务。后续普通连接只使用该 profile 选中的后台版本。`ensure-selected` 明确安装并选择调用方版本；相同时复用，不同时先结束旧进程再启动新进程。开发命令 `just ash` 和 `just ash-package-run` 使用它选择开发构建。切换可能中断旧进程中的任务。
-- `update` 用调用方安装包中的公钥验证独立发布的 App Server stable 描述和归档，再安装并选中较新的完整后台包。它不打断正在运行的服务；下一次停止后启动或明确执行 `restart` 才使用新版本。App Server stable 版本可独立于 Code stable 版本提升。
+- 发布包首次连接时，后台将完整的、包含独立 JavaScript 运行环境的调用方安装包复制到 `ASH_HOME/app-server-packages`，并从其中启动服务。后续普通连接只使用该 profile 选中的后台版本。`ensure-selected` 明确安装并固定调用方构建；相同时复用，不同时先结束旧进程再启动新进程。开发命令 `just ash` 和 `just ash-package-run` 使用它选择开发构建。切换可能中断旧进程中的任务。
+- 含有可信更新公钥的 release 后台运行一分钟后检查 stable 版本，随后每小时检查一次。检查在后台进程内进行，不另起常驻更新进程；下载和安装不打断当前任务。新包在后台自然退出后下次启动生效，也可明确执行 `restart`。显式固定的构建不被自动检查覆盖。
+- `update` 用调用方安装包中的公钥验证独立发布的 App Server stable 描述和归档，再安装并选中较新的完整后台包。它也会取消显式固定，恢复 stable 自动检查。App Server stable 版本可独立于 Code stable 版本提升。
 - `ASH_APP_SERVER_PATH` 显式选择后台可执行文件，必须是绝对路径；默认使用控制程序同目录的 `ash-app-server[.exe]`。
 - 发布产品通过 `ASH_APP_SERVER_SHA256` 传入后台程序的预期摘要，匹配后才启动；开发 generation 使用实际内容身份。
 - `--product-services PATH` 显式指定产品服务配置；profile 路径和随包资源发现由 `install-context` 提供。

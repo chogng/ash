@@ -212,6 +212,8 @@ mod tests;
 mod command;
 pub use command::backend_executable_path;
 pub use command::run_command;
+pub use update::AutomaticUpdater;
+pub use update::start_automatic_updates;
 
 pub use managed::ManagedConnection;
 pub use managed::ManagedEndpoint;

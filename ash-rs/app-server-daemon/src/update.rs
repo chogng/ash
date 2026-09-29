@@ -7,6 +7,9 @@ use std::io::Read;
 use std::io::Write;
 use std::path::Component;
 use std::path::Path;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -28,6 +31,91 @@ const REPOSITORY: &str = "chogng/ash";
 const MAX_DESCRIPTOR_BYTES: u64 = 64 * 1024;
 const MAX_ARCHIVE_ENTRIES: usize = 100_000;
 const MAX_UNPACKED_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+const INITIAL_CHECK_DELAY: Duration = Duration::from_secs(60);
+const UPDATE_CHECK_INTERVAL: Duration = Duration::from_secs(60 * 60);
+
+/// Owns the update timer for one running App Server process.
+pub struct AutomaticUpdater {
+    stop: mpsc::Sender<()>,
+    _worker: thread::JoinHandle<()>,
+}
+
+impl Drop for AutomaticUpdater {
+    fn drop(&mut self) {
+        let _ = self.stop.send(());
+    }
+}
+
+/// Checks for stable releases only while a self-contained App Server is running.
+pub fn start_automatic_updates(profile_root: &Path) -> Result<Option<AutomaticUpdater>, String> {
+    let backend = std::env::current_exe().map_err(|error| error.to_string())?;
+    if !eligible_for_automatic_updates(&backend)? {
+        return Ok(None);
+    }
+    let profile_root = profile_root.to_path_buf();
+    let (stop, requests) = mpsc::channel();
+    let worker = thread::Builder::new()
+        .name("ash-app-server-update".into())
+        .spawn(move || {
+            if !matches!(
+                requests.recv_timeout(INITIAL_CHECK_DELAY),
+                Err(mpsc::RecvTimeoutError::Timeout)
+            ) {
+                return;
+            }
+            loop {
+                match install_stable_with_mode(&profile_root, &backend, UpdateMode::Automatic) {
+                    Ok(result) if result.status == "installed" => {
+                        eprintln!(
+                            "App Server {} installed for the next start",
+                            result.installed_version
+                        );
+                    }
+                    Ok(_) => {}
+                    Err(error) => eprintln!("App Server automatic update failed: {error}"),
+                }
+                if !matches!(
+                    requests.recv_timeout(UPDATE_CHECK_INTERVAL),
+                    Err(mpsc::RecvTimeoutError::Timeout)
+                ) {
+                    return;
+                }
+            }
+        })
+        .map_err(|error| error.to_string())?;
+    Ok(Some(AutomaticUpdater {
+        stop,
+        _worker: worker,
+    }))
+}
+
+fn eligible_for_automatic_updates(backend: &Path) -> Result<bool, String> {
+    let source = backend
+        .parent()
+        .and_then(Path::parent)
+        .ok_or("App Server executable is outside a package")?;
+    if backend != crate::installation::backend_in(source) {
+        return Ok(false);
+    }
+    let metadata_path = source.join("ash-package.json");
+    if !metadata_path.is_file() {
+        return Ok(false);
+    }
+    let metadata: serde_json::Value =
+        serde_json::from_slice(&fs::read(&metadata_path).map_err(|error| error.to_string())?)
+            .map_err(|error| error.to_string())?;
+    Ok(metadata["buildProfile"].as_str() == Some("release")
+        && metadata["javascriptRuntime"]["kind"].as_str() == Some("packagedNode")
+        && metadata["components"]["appServer"]["updatePublicKey"]
+            .as_str()
+            .is_some_and(|key| UpdatePublicKey::from_hex(key).is_ok()))
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum UpdateMode {
+    Manual,
+    Automatic,
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -66,6 +154,14 @@ pub(crate) fn install_stable(
     profile_root: &Path,
     caller_backend: &Path,
 ) -> Result<UpdateOutput, String> {
+    install_stable_with_mode(profile_root, caller_backend, UpdateMode::Manual)
+}
+
+fn install_stable_with_mode(
+    profile_root: &Path,
+    caller_backend: &Path,
+    mode: UpdateMode,
+) -> Result<UpdateOutput, String> {
     let source = caller_backend
         .parent()
         .and_then(Path::parent)
@@ -74,6 +170,11 @@ pub(crate) fn install_stable(
         return Err("App Server executable does not match its package entrypoint".into());
     }
     let key = update_public_key(source)?;
+    if mode == UpdateMode::Automatic && crate::installation::selected_is_pinned(profile_root)? {
+        let store = PackageStore::open(profile_root.join("app-server-packages"))
+            .map_err(|error| error.to_string())?;
+        return selected_output(&store, "pinned");
+    }
     let target = build_info::BuildInfo::current().target;
     let descriptor_url = format!(
         "https://github.com/{REPOSITORY}/releases/download/ash-app-server-stable/ash-app-server-stable-{target}.update.json"
@@ -81,6 +182,7 @@ pub(crate) fn install_stable(
     let response = ureq::get(&descriptor_url)
         .set("User-Agent", "Ash-App-Server-Update")
         .set("Accept", "application/json")
+        .timeout(Duration::from_secs(15))
         .call()
         .map_err(|error| format!("could not fetch App Server update: {error}"))?;
     let mut descriptor = Vec::new();
@@ -118,8 +220,18 @@ pub(crate) fn install_stable(
 
     let store_root = profile_root.join("app-server-packages");
     let store = PackageStore::open(&store_root).map_err(|error| error.to_string())?;
-    if let Some(installed) = installed_version(&store)? {
-        if release.version <= installed {
+    {
+        let endpoint = EndpointPaths::prepare(profile_root)?;
+        let _operation_lock = endpoint.acquire_operation_lock()?;
+        if mode == UpdateMode::Automatic && crate::installation::selected_is_pinned(profile_root)? {
+            return selected_output(&store, "pinned");
+        }
+        if let Some(installed) = installed_version(&store)?
+            && release.version <= installed
+        {
+            if mode == UpdateMode::Manual {
+                crate::installation::clear_pin(profile_root)?;
+            }
             return Ok(UpdateOutput {
                 status: "current",
                 installed_version: installed.to_string(),
@@ -158,6 +270,9 @@ pub(crate) fn install_stable(
                 .components
                 .get("appServer")
                 .is_some_and(serde_json::Value::is_object)
+            || !metadata.components["appServer"]["updatePublicKey"]
+                .as_str()
+                .is_some_and(|key| UpdatePublicKey::from_hex(key).is_ok())
             || metadata.components.get("cli").is_some()
         {
             return Err("signed App Server package does not match this client and target".into());
@@ -166,9 +281,15 @@ pub(crate) fn install_stable(
         // concurrently selected newer package cannot be replaced by this download.
         let endpoint = EndpointPaths::prepare(profile_root)?;
         let _operation_lock = endpoint.acquire_operation_lock()?;
+        if mode == UpdateMode::Automatic && crate::installation::selected_is_pinned(profile_root)? {
+            return selected_output(&store, "pinned");
+        }
         if let Some(installed) = installed_version(&store)?
             && release.version <= installed
         {
+            if mode == UpdateMode::Manual {
+                crate::installation::clear_pin(profile_root)?;
+            }
             return Ok(UpdateOutput {
                 status: "current",
                 installed_version: installed.to_string(),
@@ -176,6 +297,9 @@ pub(crate) fn install_stable(
             });
         }
         store.publish(&package).map_err(|error| error.to_string())?;
+        if mode == UpdateMode::Manual {
+            crate::installation::clear_pin(profile_root)?;
+        }
         Ok(UpdateOutput {
             status: "installed",
             installed_version: release.version.to_string(),
@@ -184,6 +308,15 @@ pub(crate) fn install_stable(
     })();
     let _ = fs::remove_dir_all(staging);
     result
+}
+
+fn selected_output(store: &PackageStore, status: &'static str) -> Result<UpdateOutput, String> {
+    let installed = installed_version(store)?.ok_or("selected App Server package is missing")?;
+    Ok(UpdateOutput {
+        status,
+        installed_version: installed.to_string(),
+        restart_required: false,
+    })
 }
 
 fn installed_version(store: &PackageStore) -> Result<Option<Version>, String> {
@@ -201,7 +334,9 @@ fn update_public_key(source: &Path) -> Result<UpdatePublicKey, String> {
         &fs::read(source.join("ash-package.json")).map_err(|error| error.to_string())?,
     )
     .map_err(|error| error.to_string())?;
-    let value = if let Some(key) = metadata["components"]["cli"]["updatePublicKey"].as_str() {
+    let value = if let Some(key) = metadata["components"]["appServer"]["updatePublicKey"].as_str() {
+        key.to_owned()
+    } else if let Some(key) = metadata["components"]["cli"]["updatePublicKey"].as_str() {
         key.to_owned()
     } else {
         let desktop_key = source.join("update-public-key");

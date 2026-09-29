@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from build.lib.targets import TARGETS
 from build.code.package import build_code_package
 from build.ash_rs.build import main as build_main
+from build.ash_rs.build import parse_arguments as parse_build_arguments
 from build.ash_rs.bubblewrap import load_vendored_source, resolve_bubblewrap
 from build.ash_rs.layout import (
     build_package_directory,
@@ -46,6 +47,15 @@ PRODUCTION_BUBBLEWRAP_SOURCE = REPOSITORY_ROOT / "ash-rs" / "vendor" / "bubblewr
 
 
 class PackageTests(unittest.TestCase):
+    def test_release_builder_reads_update_key_from_environment(self) -> None:
+        with patch.dict(os.environ, {"ASH_UPDATE_PUBLIC_KEY": "a" * 64}):
+            options = parse_build_arguments(["--package-dir", "package"])
+            self.assertEqual(options.update_public_key, "a" * 64)
+            override = parse_build_arguments(
+                ["--package-dir", "package", "--update-public-key", "b" * 64]
+            )
+            self.assertEqual(override.update_public_key, "b" * 64)
+
     def test_reads_only_the_workspace_package_version(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             manifest = Path(temporary) / "Cargo.toml"
@@ -319,6 +329,13 @@ class PackageTests(unittest.TestCase):
                 livekit={
                     "executable": str(executable_file(root / "livekit", b"livekit")),
                 },
+                update_public_key="11" * 32,
+            )
+            self.assertEqual(
+                "11" * 32,
+                json.loads((runtime_output / "ash-package.json").read_text())[
+                    "components"
+                ]["appServer"]["updatePublicKey"],
             )
             self.assertNotIn(
                 "cli",

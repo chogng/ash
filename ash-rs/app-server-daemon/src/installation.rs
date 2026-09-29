@@ -14,10 +14,19 @@ use serde::Deserialize;
 
 const STORE_DIRECTORY: &str = "app-server-packages";
 const METADATA_FILE: &str = "ash-package.json";
+const PIN_FILE: &str = "pinned-build-id";
 const MAX_METADATA_BYTES: u64 = 1024 * 1024;
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(crate) enum ClientSelection {
+    Initial,
+    Explicit,
+}
 
 #[derive(Deserialize)]
 struct PackageFiles {
+    #[serde(rename = "buildId")]
+    build_id: String,
     #[serde(rename = "buildProfile")]
     build_profile: String,
     files: BTreeMap<String, String>,
@@ -39,7 +48,7 @@ pub(crate) fn selected_backend(
     if let Some(selected) = store.current().map_err(|error| error.to_string())? {
         return Ok(backend_in(&selected.package_root));
     }
-    install_from_client(profile_root, caller_backend)
+    install_from_client(profile_root, caller_backend, ClientSelection::Initial)
 }
 
 pub(crate) fn installed_version(profile_root: &Path) -> Result<Option<String>, String> {
@@ -61,6 +70,7 @@ pub(crate) fn installed_version(profile_root: &Path) -> Result<Option<String>, S
 pub(crate) fn install_from_client(
     profile_root: &Path,
     caller_backend: &Path,
+    selection: ClientSelection,
 ) -> Result<PathBuf, String> {
     let source = caller_backend
         .parent()
@@ -143,12 +153,67 @@ pub(crate) fn install_from_client(
             fs::set_permissions(target, permissions).map_err(|error| error.to_string())?;
         }
         let selected = store.publish(&staging).map_err(|error| error.to_string())?;
+        if selection == ClientSelection::Explicit {
+            // A rejected package must leave the previously selected build pinned.
+            write_pin(&store_root, &files.build_id)?;
+        }
         Ok(backend_in(&selected.package_root))
     })();
     if result.is_err() {
         let _ = fs::remove_dir_all(staging);
     }
     result
+}
+
+pub(crate) fn selected_is_pinned(profile_root: &Path) -> Result<bool, String> {
+    let store_root = profile_root.join(STORE_DIRECTORY);
+    let pin_path = store_root.join(PIN_FILE);
+    let pin_kind = match fs::symlink_metadata(&pin_path) {
+        Ok(kind) => kind,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error.to_string()),
+    };
+    if !pin_kind.is_file() || pin_kind.file_type().is_symlink() || pin_kind.len() != 71 {
+        return Err("App Server pinned build identity is invalid".into());
+    }
+    let pin = fs::read_to_string(pin_path).map_err(|error| error.to_string())?;
+    if !pin.starts_with("sha256:")
+        || !pin[7..]
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err("App Server pinned build identity is invalid".into());
+    }
+    let store = PackageStore::open(store_root).map_err(|error| error.to_string())?;
+    let Some(selected) = store.current().map_err(|error| error.to_string())? else {
+        return Ok(false);
+    };
+    let metadata: PackageFiles = serde_json::from_slice(
+        &fs::read(selected.package_root.join(METADATA_FILE)).map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())?;
+    // A later selection must not inherit a pin belonging to an older build.
+    Ok(pin == metadata.build_id)
+}
+
+pub(crate) fn clear_pin(profile_root: &Path) -> Result<(), String> {
+    match fs::remove_file(profile_root.join(STORE_DIRECTORY).join(PIN_FILE)) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+fn write_pin(store_root: &Path, build_id: &str) -> Result<(), String> {
+    let temporary = store_root.join(format!(".{PIN_FILE}.{}", std::process::id()));
+    fs::write(&temporary, build_id).map_err(|error| error.to_string())?;
+    let pin = store_root.join(PIN_FILE);
+    match fs::remove_file(&pin) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.to_string()),
+    }
+    fs::rename(temporary, pin).map_err(|error| error.to_string())
 }
 
 pub(crate) fn backend_in(package: &Path) -> PathBuf {

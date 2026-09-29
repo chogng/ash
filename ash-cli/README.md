@@ -45,7 +45,7 @@
 - 同一个插件 ID 安装了多个版本时，变更命令必须加 `--version VERSION`。启用不自动授予权限。
 - 管理命令连接当前 `ASH_HOME` 的 daemon；尚未运行时按既有生命周期启动。命令退出只关闭自身连接。
 - 本地连接复用当前 profile 选中的后台版本；首次没有后台包时，从完整的调用方安装包复制一份到 profile。CLI 更新不会替换正在运行的后台；明确执行 `ash app-server daemon ensure-selected` 才选择调用方的版本，切换可能中断任务。
-- `ash app-server daemon update` 单独安装已签名的 stable 后台版本，不更新 CLI。正在运行的后台继续服务；执行 `ash app-server daemon restart` 后使用新版本。
+- `ash app-server daemon update` 单独安装已签名的 stable 后台版本，不更新 CLI，并取消 `ensure-selected` 对调用方构建的固定。带可信公钥的 release 后台运行时也会定时检查 stable 版本；正在运行的任务继续使用旧版，后台下次启动或明确执行 `restart` 后使用新版。
 - `ask` 和 `exec` 也通过相同的 profile daemon 执行 Turn；与同时运行的桌面端共用 Session、Thread 和后台任务状态。
 - `doctor` 的账户为空属于提示，API-key Provider 仍可使用；检查失败返回非零退出码。
 - `mcp add` 拒绝覆盖同名声明；当前入口只配置无认证 transport。

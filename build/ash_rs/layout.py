@@ -57,6 +57,7 @@ def build_package_directory(
     node: Optional[NodeResolution],
     bubblewrap: Optional[BubblewrapResolution] = None,
     protocol_metadata: Optional[Dict[str, object]] = None,
+    update_public_key: Optional[str] = None,
     build_profile: str = "release",
     windows_sandbox_binary: Optional[Path] = None,
     voice_host_binary: Optional[Path] = None,
@@ -75,6 +76,11 @@ def build_package_directory(
         or livekit is None
     ):
         raise RuntimeError("Call helper executables are required in product packages")
+    if (
+        update_public_key is not None
+        and re.fullmatch(r"[a-fA-F0-9]{64}", update_public_key) is None
+    ):
+        raise RuntimeError("App Server update public key must be 64 hexadecimal digits")
     output = output.expanduser().resolve()
     if output.exists():
         raise RuntimeError(
@@ -154,6 +160,9 @@ def build_package_directory(
                 "protocol": protocol_metadata
                 if protocol_metadata is not None
                 else load_protocol_metadata(repository_root),
+                "updatePublicKey": update_public_key.lower()
+                if update_public_key is not None
+                else None,
             },
             "remoteRuntimeBundle": str(remote_runtime_bundle)
             if remote_runtime_bundle
@@ -317,6 +326,8 @@ def assemble_package(staging: Path, inputs: dict) -> None:
             "source": "cargo-build",
             "binarySha256": file_sha256(staging / relative.format(exe=suffix)),
         }
+    if options["updatePublicKey"] is not None:
+        components["appServer"]["updatePublicKey"] = options["updatePublicKey"]
     if is_windows:
         components["windowsSandbox"] = {
             "source": "cargo-build",
@@ -461,6 +472,12 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
             raise RuntimeError("Package CLI update public key is invalid")
         first_party_artifacts["cli"] = package / "bin" / spec.cli_name
         executables.append(package / "bin" / spec.cli_name)
+    app_server_key = components.get("appServer", {}).get("updatePublicKey")
+    if app_server_key is not None and (
+        not isinstance(app_server_key, str)
+        or re.fullmatch(r"[a-f0-9]{64}", app_server_key) is None
+    ):
+        raise RuntimeError("Package App Server update public key is invalid")
     if "app" in components:
         first_party_artifacts["app"] = package / "bin" / spec.app_name
         executables.append(package / "bin" / spec.app_name)

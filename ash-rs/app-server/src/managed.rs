@@ -32,6 +32,7 @@ pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> R
     ))?);
     let idle_timeout = configured_idle_timeout()?;
     let mut endpoint = ManagedEndpoint::bind(&profile_root)?;
+    let _automatic_updates = ash_app_server_daemon::start_automatic_updates(&profile_root)?;
     let mut automation = Some(registry.start_automation()?);
     let mut queue = Some(registry.start_queue()?);
     let active_connections = Arc::new(LocalConnections::new());

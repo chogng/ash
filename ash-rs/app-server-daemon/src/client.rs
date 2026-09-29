@@ -311,8 +311,11 @@ fn ensure_selected_unlocked(
     backend_executable: &Path,
     package_digest: PackageDigest<'_>,
 ) -> Result<LifecycleOutput, String> {
-    let installed =
-        crate::installation::install_from_client(options.profile_root(), backend_executable)?;
+    let installed = crate::installation::install_from_client(
+        options.profile_root(),
+        backend_executable,
+        crate::installation::ClientSelection::Explicit,
+    )?;
     let selected = resolve_backend_executable(&installed, package_digest)?;
     let mut replaced = false;
     if let Some(control) = request_control(endpoint, ControlCommand::Status)? {

@@ -8,7 +8,7 @@
 
 正式发布按顺序组装，已有输出目录不会被覆盖：
 
-1. 用 `build/ash_rs/build.py` 生成不含 CLI 的共享运行时包，JavaScript 运行时选择 `packaged-node`。
+1. 用 `build/ash_rs/build.py` 生成不含 CLI 的共享运行时包，JavaScript 运行时选择 `packaged-node`，并将 `ASH_UPDATE_PUBLIC_KEY` 写入后台组件的包元数据。
 2. 用 `package.py --runtime-package ... --cli-bin ... --update-public-key ... --package-dir ...`
    加入 `ash` 命令，重算文件清单和包身份，并重新验证完整包。
 3. macOS 和 Windows 使用 `build/ash_rs/sign.py` 签名并记录整包可执行文件；随后用
