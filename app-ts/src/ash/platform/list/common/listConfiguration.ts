@@ -2,6 +2,7 @@ import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } fr
 import { Registry } from "../../registry/common/platform.js";
 
 export type ListOpenMode = "doubleClick" | "singleClick";
+export type TreeExpandMode = "doubleClick" | "singleClick";
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
@@ -12,6 +13,14 @@ export const ListConfiguration = Object.freeze({
 		defaultValue: "singleClick",
 		parse(value: unknown): ListOpenMode {
 			if (value !== "singleClick" && value !== "doubleClick") throw new TypeError(`Unknown list open mode: ${String(value)}`);
+			return value;
+		},
+	}),
+	treeExpandMode: configurationRegistry.registerConfiguration<TreeExpandMode>({
+		key: "workbench.tree.expandMode",
+		defaultValue: "singleClick",
+		parse(value: unknown): TreeExpandMode {
+			if (value !== "singleClick" && value !== "doubleClick") throw new TypeError(`Unknown tree expand mode: ${String(value)}`);
 			return value;
 		},
 	}),

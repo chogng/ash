@@ -24,6 +24,7 @@ import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../.
 import { localize, onDidChangeNls } from '../../../../../nls.js';
 import { WorkspaceWatcher } from '../workspaceWatcher.js';
 import { FileEditorInput } from '../editors/fileEditorInput.js';
+import { ListConfiguration, type TreeExpandMode } from '../../../../../platform/list/common/listConfiguration.js';
 
 /** Workspace file tree backed by `IFileService` and the Workbench editor. */
 export class ExplorerView extends ViewPane implements IExplorerView {
@@ -82,7 +83,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			configurationService,
 			indentGuides: "always",
 			collapseByDefault: item => item.kind !== FileKind.File,
-			expandOnlyOnTwistieClick: false,
+			expandOnlyOnTwistieClick: () => configurationService.getValue<TreeExpandMode>(ListConfiguration.treeExpandMode) === "doubleClick",
 			identityProvider: { getId: (node) => node.resource.toString() },
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: item => item.name },
 			openOnSingleClick: true,

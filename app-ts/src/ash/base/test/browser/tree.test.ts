@@ -133,6 +133,49 @@ test("AsyncDataTree loads on expansion and rejects stale refresh results", async
 	dom.window.close();
 });
 
+test("AsyncDataTree does not restart a lazy load when a node is collapsed and expanded", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const root: TestNode = { id: "root", label: "Root", expanded: true };
+	const group: TestNode = { id: "group", label: "Group", expanded: false };
+	const child: TestNode = { id: "child", label: "Child", expanded: false };
+	let reads = 0;
+	let resolveChildren: ((children: readonly TestNode[]) => void) | undefined;
+	const tree = new AsyncDataTree<TestNode, TestNode>(dom.window.document.body, {
+		hasChildren: (element) => element === root || element === group,
+		getChildren: (element) => {
+			if (element === root) return [group];
+			reads += 1;
+			return new Promise<readonly TestNode[]>((resolve) => { resolveChildren = resolve; });
+		},
+	}, {
+		identityProvider: { getId: (element) => element.id },
+		renderElement: (element) => {
+			const label = h(dom.window.document, "span");
+			label.textContent = element.label;
+			return label;
+		},
+	});
+	await tree.setInput(root);
+	const loaded = new Promise<void>((resolve) => {
+		const listener = tree.onDidChangeLoadState(({ element, loading }) => {
+			if (element !== group || loading) return;
+			listener.dispose();
+			resolve();
+		});
+	});
+
+	assert.equal(tree.expand(group), true);
+	assert.equal(tree.collapse(group), true);
+	assert.equal(tree.expand(group), true);
+	assert.equal(reads, 1);
+	resolveChildren?.([child]);
+	await loaded;
+	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(".ash-tree-row")].map((row) => row.textContent), ["Group", "Child"]);
+
+	tree.dispose();
+	dom.window.close();
+});
+
 test("CompressibleObjectTreeModel round-trips chains and honors incompressible boundaries", () => {
 	const leaf: TestNode = { id: "leaf", label: "Leaf", expanded: false };
 	const boundary: TestNode = { id: "boundary", label: "Boundary", expanded: false };

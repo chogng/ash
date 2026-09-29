@@ -14,13 +14,19 @@ interface TestItem {
 	readonly id: string;
 }
 
-test("Platform List owns and validates the shared open-mode configuration", () => {
+test("Platform List owns and validates its shared interaction configuration", () => {
 	assert.equal(configurationRegistry.owns(ListConfiguration.openMode), true);
-	const configuration = configurationRegistry.getConfiguration(ListConfiguration.openMode);
-	assert.ok(configuration);
-	assert.equal(configuration.defaultValue, "singleClick");
-	assert.equal(configuration.parse("doubleClick"), "doubleClick");
-	assert.throws(() => configuration.parse("hover"), /Unknown list open mode/);
+	const openMode = configurationRegistry.getConfiguration(ListConfiguration.openMode);
+	assert.ok(openMode);
+	assert.equal(openMode.defaultValue, "singleClick");
+	assert.equal(openMode.parse("doubleClick"), "doubleClick");
+	assert.throws(() => openMode.parse("hover"), /Unknown list open mode/);
+	assert.equal(configurationRegistry.owns(ListConfiguration.treeExpandMode), true);
+	const treeExpandMode = configurationRegistry.getConfiguration(ListConfiguration.treeExpandMode);
+	assert.ok(treeExpandMode);
+	assert.equal(treeExpandMode.defaultValue, "singleClick");
+	assert.equal(treeExpandMode.parse("doubleClick"), "doubleClick");
+	assert.throws(() => treeExpandMode.parse("hover"), /Unknown tree expand mode/);
 });
 
 test("WorkbenchObjectTree derives preview, pinned, and side-by-side open intent", async () => {

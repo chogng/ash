@@ -144,7 +144,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		this.element = this.tree.element;
 		this._register(this.tree.onDidChangeCollapseState(({ element, collapsed }) => {
 			const state = this.states.get(this.getId(element));
-			if (!collapsed && state?.hasChildren && state.children === undefined) void this.updateChildren(element).catch(() => undefined);
+			if (!collapsed && state?.hasChildren && state.children === undefined && !this.isLoading(element)) void this.updateChildren(element).catch(() => undefined);
 		}));
 		this._register(toDisposable(() => {
 			this.generation += 1;
