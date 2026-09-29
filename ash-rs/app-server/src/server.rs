@@ -2578,8 +2578,10 @@ impl AppServer {
                 self.language_resolve_code_action(&request.params, cancellation)
             }
             Some(ClientMethod::FsWriteFile) => self.fs_write_file(&request.params),
+            Some(ClientMethod::FsWriteBinaryFile) => self.fs_write_binary_file(&request.params),
             Some(ClientMethod::FsCreateFile) => self.fs_create_file(&request.params),
             Some(ClientMethod::FsCreateDirectory) => self.fs_create_directory(&request.params),
+            Some(ClientMethod::FsCopy) => self.fs_copy(&request.params),
             Some(ClientMethod::FsRename) => self.fs_rename(&request.params),
             Some(ClientMethod::FsDelete) => self.fs_delete(&request.params),
             Some(ClientMethod::GitRepositories) => self.git_repositories(),

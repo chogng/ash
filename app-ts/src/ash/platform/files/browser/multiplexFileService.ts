@@ -66,12 +66,22 @@ export class MultiplexFileService extends Disposable implements IFileService, IF
 		return this.provider(request.resource).writeFile(request);
 	}
 
+	public writeFileBytes(resource: URI, bytes: Uint8Array): Promise<IFileWriteResult> {
+		return this.provider(resource).writeFileBytes(resource, bytes);
+	}
+
 	public createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat> {
 		return this.provider(resource).createFile(resource, existing);
 	}
 
 	public createDirectory(resource: URI): Promise<IFileStat> {
 		return this.provider(resource).createDirectory(resource);
+	}
+
+	public copy(source: URI, target: URI): Promise<void> {
+		const provider = this.provider(source);
+		if (provider !== this.provider(target)) throw new Error('Copying across file system providers is not supported');
+		return provider.copy(source, target);
 	}
 
 	public rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {

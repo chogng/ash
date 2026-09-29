@@ -7726,6 +7726,22 @@
         {
           "properties": {
             "method": {
+              "const": "fs/writeBinaryFile",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/FsWriteBinaryFileParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "fs/createFile",
               "type": "string"
             },
@@ -7747,6 +7763,22 @@
             },
             "params": {
               "$ref": "#/$defs/FsCreateDirectoryParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "fs/copy",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/FsCopyParams"
             }
           },
           "required": [
@@ -12498,6 +12530,22 @@
         {
           "properties": {
             "method": {
+              "const": "fs/writeBinaryFile",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/FsWriteFileResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "fs/createFile",
               "type": "string"
             },
@@ -12519,6 +12567,22 @@
             },
             "result": {
               "$ref": "#/$defs/FsGetMetadataResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "fs/copy",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
             }
           },
           "required": [
@@ -18940,6 +19004,30 @@
         }
       ]
     },
+    "FsCopyParams": {
+      "description": "Copies a file or directory between explicitly granted workspace roots.",
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "sourceDirId": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "targetDirId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sourceDirId",
+        "source",
+        "targetDirId",
+        "target"
+      ],
+      "type": "object"
+    },
     "FsCreateDirectoryParams": {
       "description": "Creates one workspace directory.",
       "properties": {
@@ -19311,6 +19399,38 @@
         "source",
         "target",
         "existing"
+      ],
+      "type": "object"
+    },
+    "FsWriteBinaryFileParams": {
+      "description": "Create a workspace file from exact bytes supplied by a user file paste.",
+      "properties": {
+        "dataBase64": {
+          "type": "string"
+        },
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionDirSelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "dataBase64"
       ],
       "type": "object"
     },

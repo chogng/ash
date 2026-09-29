@@ -69,9 +69,11 @@ class TestFileService implements IFileService {
 			revision: "after",
 		};
 	}
+	async writeFileBytes(): Promise<never> { throw new Error('PDF annotation tests do not paste files'); }
 
 	async createFile(): Promise<never> { throw new Error("PDF annotation tests do not create empty files"); }
 	async createDirectory(): Promise<never> { throw new Error("PDF annotation tests do not create directories"); }
+	async copy(): Promise<void> { throw new Error("Copy is not used in this test"); }
 	async rename(): Promise<never> { throw new Error("PDF annotation tests do not rename files"); }
 	async delete(): Promise<never> { throw new Error("PDF annotation tests do not delete files"); }
 }

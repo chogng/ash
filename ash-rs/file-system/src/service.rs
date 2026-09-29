@@ -6,6 +6,7 @@ use crate::FileMetadata;
 use crate::FileSystemError;
 use crate::FileWriteCondition;
 use crate::MissingTargetBehavior;
+use std::any::Any;
 use std::path::Path;
 
 /// Directory-scoped filesystem access used by both client adapters and Agent tools.
@@ -13,6 +14,15 @@ use std::path::Path;
 /// Implementations must resolve every relative input beneath their configured authority root and
 /// must reject absolute paths, parent traversal, and symlink escapes before performing I/O.
 pub trait FileSystem: Send + Sync {
+    fn as_any(&self) -> &dyn Any;
+
+    /// Copies a file or directory between granted roots without loading its contents into a protocol message.
+    fn copy_to(
+        &self,
+        source: &Path,
+        destination: &dyn FileSystem,
+        target: &Path,
+    ) -> Result<(), FileSystemError>;
     /// Checks the requested action against this service's subject and directory grant.
     /// Every I/O entry must also validate its exact permission under the revocation lease.
     fn ensure_permission(

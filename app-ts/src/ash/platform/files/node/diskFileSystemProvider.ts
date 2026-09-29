@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { link, lstat, mkdir, readFile, readdir, rename, rm, rmdir, writeFile } from 'node:fs/promises';
+import { copyFile, link, lstat, mkdir, readFile, readdir, rename, rm, rmdir, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
@@ -57,6 +58,14 @@ export class DiskFileSystemProvider extends Disposable implements IFileService {
 		return { stat: await this.stat(request.resource), revision: revision(Buffer.from(request.content)) };
 	}
 
+	public async writeFileBytes(resource: URI, bytes: Uint8Array): Promise<IFileWriteResult> {
+		const path = await this.path(resource);
+		await mkdir(dirname(path), { recursive: true });
+		await writeFile(path, bytes, { flag: 'wx' });
+		this.changes.fire({ resources: [resource] });
+		return { stat: await this.stat(resource), revision: revision(bytes) };
+	}
+
 	public async createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat> {
 		const path = await this.path(resource);
 		await mkdir(dirname(path), { recursive: true });
@@ -70,6 +79,28 @@ export class DiskFileSystemProvider extends Disposable implements IFileService {
 		await mkdir(await this.path(resource), { recursive: true });
 		this.changes.fire({ resources: [resource] });
 		return this.stat(resource);
+	}
+
+	public async copy(source: URI, target: URI): Promise<void> {
+		const from = await this.path(source);
+		const to = await this.path(target);
+		if (this.roots.includes(from) || this.roots.includes(to) || to === from || to.startsWith(`${from}${sep}`)) throw new Error('Cannot copy a granted root or into itself');
+		try { await lstat(to); throw new Error('Copy target already exists'); }
+		catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+		let created = false;
+		const copyEntry = async (fromPath: string, toPath: string): Promise<void> => {
+			const metadata = await lstat(fromPath);
+			if (metadata.isSymbolicLink()) throw new Error('Symbolic links cannot be copied');
+			if (metadata.isDirectory()) {
+				await mkdir(toPath);
+				if (fromPath === from) created = true;
+				for (const entry of await readdir(fromPath)) await copyEntry(resolve(fromPath, entry), resolve(toPath, entry));
+			} else if (metadata.isFile()) { await copyFile(fromPath, toPath, constants.COPYFILE_EXCL); if (fromPath === from) created = true; }
+			else throw new Error('Unsupported file type');
+		};
+		try { await copyEntry(from, to); }
+		catch (error) { if (created) await rm(to, { recursive: true, force: true }); throw error; }
+		this.changes.fire({ resources: [target] });
 	}
 
 	public async rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {

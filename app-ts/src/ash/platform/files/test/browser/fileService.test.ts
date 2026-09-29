@@ -89,11 +89,16 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
 					revision: "revision-write",
 				};
 			},
+			writeBinaryFile: async ({ path, dataBase64 }) => {
+				assert.deepEqual({ path, dataBase64 }, { path: 'payload.bin', dataBase64: 'AP8q' });
+				return { metadata: { fileType: 'file', sizeBytes: 3, readonly: false, modifiedAtMillis: null }, revision: 'revision-bytes' };
+			},
 			createFile: async ({ path }) => ({ fileType: "file", sizeBytes: path.length - path.length, readonly: false, modifiedAtMillis: null }),
 			createDirectory: async ({ path }) => {
 				assert.equal(path, 'new-folder');
 				return { fileType: 'directory', sizeBytes: 0, readonly: false, modifiedAtMillis: null };
 			},
+			copy: async () => { throw new Error('not used'); },
 			rename: async () => {},
 			delete: async () => {},
 		},
@@ -145,6 +150,10 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
 			revision: "revision-write",
 		},
 	);
+	assert.deepEqual(await service.writeFileBytes(URI.file('C:\\project\\payload.bin'), new Uint8Array([0, 255, 42])), {
+		stat: { resource: URI.file('C:\\project\\payload.bin'), kind: FileKind.File, sizeBytes: 3, readonly: false, modifiedAtMillis: undefined },
+		revision: 'revision-bytes',
+	});
 });
 
 test("BrowserFileService maps App Server revision conflicts to the file contract", async () => {
@@ -159,8 +168,10 @@ test("BrowserFileService maps App Server revision conflicts to the file contract
 			readFile: async () => { throw new Error("unavailable"); },
 			readBinaryFile: async () => { throw new Error("unavailable"); },
 			writeFile: async () => { throw new AppServerRemoteError(-32000, "Revision conflict", { kind: "FileSystemRevisionConflict" }); },
+			writeBinaryFile: async () => { throw new Error('unavailable'); },
 			createFile: async () => { throw new Error("unavailable"); },
 			createDirectory: async () => { throw new Error('unavailable'); },
+			copy: async () => { throw new Error('unavailable'); },
 			rename: async () => { throw new Error("unavailable"); },
 			delete: async () => { throw new Error("unavailable"); },
 		},
@@ -189,8 +200,10 @@ test("BrowserFileService reads connection-owned binary resources in bounded chun
 				revision: "revision-large",
 			}),
 			writeFile: async () => { throw new Error("not used"); },
+			writeBinaryFile: async () => { throw new Error('not used'); },
 			createFile: async () => { throw new Error("not used"); },
 			createDirectory: async () => { throw new Error('not used'); },
+			copy: async () => { throw new Error('not used'); },
 			rename: async () => { throw new Error("not used"); },
 			delete: async () => { throw new Error("not used"); },
 		},
@@ -246,6 +259,7 @@ test("BrowserFileService routes nested multi-root resources by Workspace folder 
 		configuration: URI.file("C:\\project.code-workspace"),
 	});
 	const requests: { readonly dirId?: string; readonly path: string }[] = [];
+	const copies: unknown[] = [];
 	const service = new BrowserFileService({
 		workspaceContextService,
 		resourceApi: unavailableResourceApi(),
@@ -255,6 +269,7 @@ test("BrowserFileService routes nested multi-root resources by Workspace folder 
 				requests.push(params);
 				return { content: params.path, revision: "revision" };
 			},
+			copy: async params => { copies.push(params); },
 		},
 	});
 
@@ -265,6 +280,8 @@ test("BrowserFileService routes nested multi-root resources by Workspace folder 
 		{ dirId: "parent", path: "README.md" },
 		{ dirId: "nested", path: "src/main.ts" },
 	]);
+	await service.copy(URI.file("C:\\project\\README.md"), URI.file("C:\\project\\packages\\nested\\README.md"));
+	assert.deepEqual(copies, [{ sourceDirId: 'parent', source: 'README.md', targetDirId: 'nested', target: 'README.md' }]);
 	assert.throws(() => service.rename(URI.file("C:\\project\\README.md"), URI.file("C:\\project\\packages\\nested\\README.md"), "error"), /across workspace folders/i);
 });
 
@@ -275,8 +292,10 @@ function unavailableFileApi() {
 		readFile: async () => { throw new Error("unavailable"); },
 		readBinaryFile: async () => { throw new Error("unavailable"); },
 		writeFile: async () => { throw new Error("unavailable"); },
+		writeBinaryFile: async () => { throw new Error('unavailable'); },
 		createFile: async () => { throw new Error("unavailable"); },
 		createDirectory: async () => { throw new Error('unavailable'); },
+		copy: async () => { throw new Error('unavailable'); },
 		rename: async () => { throw new Error("unavailable"); },
 		delete: async () => { throw new Error("unavailable"); },
 	};

@@ -131,6 +131,20 @@ pub struct FsWriteFileParams {
     pub expected_revision: Option<String>,
 }
 
+/// Create a workspace file from exact bytes supplied by a user file paste.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FsWriteBinaryFileParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dir_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<SessionDirSelector>,
+    pub path: PathBuf,
+    pub data_base64: String,
+}
+
 /// Metadata returned after one successful `fs/writeFile`.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -205,6 +219,16 @@ pub struct FsRenameParams {
     pub source: PathBuf,
     pub target: PathBuf,
     pub existing: FsExistingTargetBehavior,
+}
+
+/// Copies a file or directory between explicitly granted workspace roots.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FsCopyParams {
+    pub source_dir_id: String,
+    pub source: PathBuf,
+    pub target_dir_id: String,
+    pub target: PathBuf,
 }
 
 /// Deletes one directory file or directory.

@@ -1,6 +1,7 @@
 import { URI } from "../../../../../base/common/uri.js";
 import { IConfigurationService } from "../../../../../platform/configuration/common/configuration.js";
 import { FileKind, IFileService } from "../../../../../platform/files/common/files.js";
+import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";
 import { IResourceIconRenderer } from "../../../../browser/labels.js";
 import { IHoverService } from "../../../../../platform/hover/browser/hoverService.js";
@@ -21,15 +22,18 @@ import { ExplorerFocusedContext } from '../files.js';
 import { IContextKeyService, type IScopedContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import type { IContextKey } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { MenuId } from '../../../../../platform/actions/common/actions.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { explorerFileContribRegistry } from '../explorerFileContrib.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { localize, onDidChangeNls } from '../../../../../nls.js';
+import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { WorkspaceWatcher } from '../workspaceWatcher.js';
 import { FileEditorInput } from '../editors/fileEditorInput.js';
 import { ListConfiguration, type TreeExpandMode } from '../../../../../platform/list/common/listConfiguration.js';
 import { ResourceSchemeContext } from '../../../../common/contextkeys.js';
+import { PASTE_FILE_COMMAND_ID } from '../fileActions.js';
 
 /** Workspace file tree backed by `IFileService` and the Workbench editor. */
 export class ExplorerView extends ViewPane implements IExplorerView {
@@ -50,6 +54,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	private readonly contextIsFile: IContextKey<boolean>;
 	private readonly contextCanModify: IContextKey<boolean>;
 	private readonly contextCanCreate: IContextKey<boolean>;
+	private readonly hasCutFiles: IContextKey<boolean>;
 
 	constructor(
 		container: HTMLElement,
@@ -65,6 +70,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IAccessibleViewService accessibleViewService: IAccessibleViewService,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
+		@ICommandService private readonly commandService: ICommandService,
 		@IFileLabelDecorationService fileLabelDecorationService?: IFileLabelDecorationService,
 		@ILabelService labelService?: ILabelService,
 	) {
@@ -117,9 +123,40 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		this.contextIsFile = this.scopedContext.createKey<boolean>('ashExplorerIsFile', false);
 		this.contextCanModify = this.scopedContext.createKey<boolean>('ashExplorerCanModify', false);
 		this.contextCanCreate = this.scopedContext.createKey<boolean>('ashExplorerCanCreate', false);
+		this.hasCutFiles = this.scopedContext.createKey<boolean>('ashExplorerHasCutFiles', explorerService.getToCopy().cut);
+		this._register(explorerService.onDidChangeClipboard(() => {
+			const clipboard = explorerService.getToCopy();
+			this.hasCutFiles.set(clipboard.cut);
+			if (clipboard.items.length) status(clipboard.cut
+				? localize('accessibility.explorerCut', '{0} items ready to move.', clipboard.items.length)
+				: localize('accessibility.explorerCopy', '{0} items ready to copy.', clipboard.items.length));
+		}));
 		this._register(this.tree.onDidChangeSelection(({ elements }) => this.updateExplorerContextKeys(elements[0])));
 		this._register(addDisposableListener(this.tree.domNode, 'contextmenu', event => this.showExplorerContextMenu(event)));
+		let pendingKeyboardPaste: ReturnType<typeof setTimeout> | undefined;
+		this._register(toDisposable(() => clearTimeout(pendingKeyboardPaste)));
+		const paste = (files?: FileList): void => {
+			void this.commandService.executeCommand(PASTE_FILE_COMMAND_ID, files).catch(error => {
+				this.error = error instanceof Error ? error.message : String(error);
+				this.render();
+			});
+		};
+		this._register(addDisposableListener(this.tree.domNode, 'paste', event => {
+			clearTimeout(pendingKeyboardPaste);
+			pendingKeyboardPaste = undefined;
+			event.preventDefault();
+			paste(event.clipboardData?.files);
+		}));
 		this._register(addDisposableListener(this.tree.domNode, 'keydown', event => {
+			if (event.key.toLowerCase() === 'v' && (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey) {
+				clearTimeout(pendingKeyboardPaste);
+				// A browser paste event carries files from the system file manager. If it arrives,
+				// it owns this shortcut; otherwise the command reads Ash resources from the clipboard.
+				pendingKeyboardPaste = setTimeout(() => {
+					pendingKeyboardPaste = undefined;
+					paste();
+				}, 0);
+			}
 			if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) this.showExplorerContextMenu(event);
 		}));
 		const updateAriaLabel = () => {
@@ -164,6 +201,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			for (const root of roots) void this.refreshRoot(root);
 		}));
 		this._register(workspaceContextService.onDidChangeWorkspace(() => {
+			explorerService.setToCopy([], false);
 			void this.initialize();
 		}));
 		const watcher = this._register(new WorkspaceWatcher(fileService, workspaceContextService));
@@ -208,9 +246,10 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 
 	public getAccessibleContent(): string {
 		const heading = localize('accessibility.explorerVisibleFiles', 'Visible workspace files');
+		const operations = localize('accessibility.explorerFileOperations', 'Select files or folders, then use Ctrl or Command plus X to cut, C to copy, or V to paste. Press Escape to cancel a cut.');
 		const files = this.tree.getVisibleElements().map(item =>
 			`${item.kind === FileKind.Directory ? localize('accessibility.explorerFolder', 'Folder') : localize('accessibility.explorerFile', 'File')}: ${item.name}`);
-		return [heading, this.root?.name ?? '', ...files].filter(Boolean).join('\n');
+		return [heading, operations, this.root?.name ?? '', ...files].filter(Boolean).join('\n');
 	}
 
 	public focus(): void {
@@ -224,7 +263,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		const item = event instanceof MouseEvent
 			? this.tree.getVisibleElements().find(candidate => candidate.resource.toString() === row?.dataset.treeId)
 			: this.tree.focus;
-		this.tree.setSelection(item ? [item] : []);
+		if (!item || !this.tree.selection.includes(item)) this.tree.setSelection(item ? [item] : []);
 		this.updateExplorerContextKeys(item);
 		const anchor = event instanceof MouseEvent
 			? { x: event.clientX, y: event.clientY, targetWindow: this.element.ownerDocument.defaultView ?? undefined }
@@ -239,11 +278,11 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	}
 
 	private updateExplorerContextKeys(item: ExplorerItem | undefined): void {
-		const isRoot = item ? this.workspaceContextService.getWorkspace().folders.some(folder => extUriBiasedIgnorePathCase.isEqual(folder.uri, item.resource)) : false;
+		const isRoot = item ? item.resource.scheme === 'ash-workspace' || this.workspaceContextService.getWorkspace().folders.some(folder => extUriBiasedIgnorePathCase.isEqual(folder.uri, item.resource)) : false;
 		this.hasContextResource.set(!!item);
 		this.contextIsFile.set(item?.kind === FileKind.File);
 		this.contextCanModify.set(!!item && !isRoot);
-		this.contextCanCreate.set(item?.kind === FileKind.Directory || (!item && this.workspaceContextService.getWorkspace().folders.length > 0));
+		this.contextCanCreate.set((!!item && item.resource.scheme !== 'ash-workspace') || (!item && this.workspaceContextService.getWorkspace().folders.length > 0));
 		this.scopedContext.setContext(ResourceSchemeContext.key, item?.resource.scheme);
 	}
 

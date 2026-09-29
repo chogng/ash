@@ -593,6 +593,8 @@ use crate::protocol::extensions::ExtensionResourceOpenResult;
 use crate::protocol::extensions::ExtensionSourceKindDto;
 use crate::protocol::fs::FsChanged;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::fs::FsCopyParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsCreateDirectoryParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsCreateFileParams;
@@ -628,6 +630,8 @@ use crate::protocol::fs::FsReadFileResult;
 use crate::protocol::fs::FsRenameParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsWriteFileParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::fs::FsWriteBinaryFileParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsWriteFileResult;
 #[cfg(any(test, feature = "export"))]
@@ -3413,6 +3417,11 @@ client_methods! {
         response: FsWriteFileResult,
         serialization: GlobalExclusive,
     },
+    FsWriteBinaryFile => "fs/writeBinaryFile" {
+        params: FsWriteBinaryFileParams,
+        response: FsWriteFileResult,
+        serialization: GlobalExclusive,
+    },
     FsCreateFile => "fs/createFile" {
         params: FsCreateFileParams,
         response: FsGetMetadataResult,
@@ -3421,6 +3430,11 @@ client_methods! {
     FsCreateDirectory => "fs/createDirectory" {
         params: FsCreateDirectoryParams,
         response: FsGetMetadataResult,
+        serialization: GlobalExclusive,
+    },
+    FsCopy => "fs/copy" {
+        params: FsCopyParams,
+        response: (),
         serialization: GlobalExclusive,
     },
     FsRename => "fs/rename" {
@@ -4897,12 +4911,14 @@ typescript_bindings! {
     LanguageCodeActionsResult,
     LanguageResolveCodeActionParams,
     FsWriteFileParams,
+    FsWriteBinaryFileParams,
     FsWriteFileResult,
     FsExistingTargetBehavior,
     FsMissingTargetBehavior,
     FsDeleteMode,
     FsCreateFileParams,
     FsCreateDirectoryParams,
+    FsCopyParams,
     FsRenameParams,
     FsDeleteParams,
     FsChanged,

@@ -79,8 +79,12 @@ export interface IFileService {
 	readFile(resource: URI): Promise<IFileContent>;
 	readFileBytes(resource: URI): Promise<IFileBytes>;
 	writeFile(request: IFileWriteRequest): Promise<IFileWriteResult>;
+	/** Creates a file from exact bytes without replacing an existing nonempty file. */
+	writeFileBytes(resource: URI, bytes: Uint8Array): Promise<IFileWriteResult>;
 	createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat>;
 	createDirectory(resource: URI): Promise<IFileStat>;
+	/** Copies one file or directory, failing if the target exists. */
+	copy(source: URI, target: URI): Promise<void>;
 	rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void>;
 	delete(resource: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode): Promise<void>;
 }

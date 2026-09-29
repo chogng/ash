@@ -126,6 +126,7 @@ import type { ExtensionResourceOpenParams } from './types/ExtensionResourceOpenP
 import type { ExtensionResourceOpenResult } from './types/ExtensionResourceOpenResult.js';
 import type { FeedbackPrepareParams } from './types/FeedbackPrepareParams.js';
 import type { FeedbackUploadParams } from './types/FeedbackUploadParams.js';
+import type { FsCopyParams } from './types/FsCopyParams.js';
 import type { FsCreateDirectoryParams } from './types/FsCreateDirectoryParams.js';
 import type { FsCreateFileParams } from './types/FsCreateFileParams.js';
 import type { FsDeleteParams } from './types/FsDeleteParams.js';
@@ -138,6 +139,7 @@ import type { FsReadDirectoryResult } from './types/FsReadDirectoryResult.js';
 import type { FsReadFileParams } from './types/FsReadFileParams.js';
 import type { FsReadFileResult } from './types/FsReadFileResult.js';
 import type { FsRenameParams } from './types/FsRenameParams.js';
+import type { FsWriteBinaryFileParams } from './types/FsWriteBinaryFileParams.js';
 import type { FsWriteFileParams } from './types/FsWriteFileParams.js';
 import type { FsWriteFileResult } from './types/FsWriteFileResult.js';
 import type { GitBranchCreateParams } from './types/GitBranchCreateParams.js';
@@ -664,8 +666,10 @@ export interface AppServerRequestMap {
   "language/colorPresentations": { params: LanguageOperationParams<LanguageColorPresentationsParams>; response: LanguageColorPresentationsResult };
   "language/foldingRanges": { params: LanguageOperationParams<LanguageDocumentFeaturesParams>; response: LanguageFoldingRangesResult };
   "fs/writeFile": { params: FsWriteFileParams; response: FsWriteFileResult };
+  "fs/writeBinaryFile": { params: FsWriteBinaryFileParams; response: FsWriteFileResult };
   "fs/createFile": { params: FsCreateFileParams; response: FsGetMetadataResult };
   "fs/createDirectory": { params: FsCreateDirectoryParams; response: FsGetMetadataResult };
+  "fs/copy": { params: FsCopyParams; response: null };
   "fs/rename": { params: FsRenameParams; response: null };
   "fs/delete": { params: FsDeleteParams; response: null };
   "issue/configure": { params: IssueConfigureParams; response: ConfigCommandResult };
@@ -974,8 +978,10 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "language/colorPresentations": { method: "language/colorPresentations" },
   "language/foldingRanges": { method: "language/foldingRanges" },
   "fs/writeFile": { method: "fs/writeFile" },
+  "fs/writeBinaryFile": { method: "fs/writeBinaryFile" },
   "fs/createFile": { method: "fs/createFile" },
   "fs/createDirectory": { method: "fs/createDirectory" },
+  "fs/copy": { method: "fs/copy" },
   "fs/rename": { method: "fs/rename" },
   "fs/delete": { method: "fs/delete" },
   "issue/configure": { method: "issue/configure" },

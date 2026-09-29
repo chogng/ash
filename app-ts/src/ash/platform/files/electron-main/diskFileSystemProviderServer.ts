@@ -22,8 +22,14 @@ export function diskFileSystemProviderRoutes(provider: IFileService, userDataHom
 						result = { ...written, stat: { ...written.stat, resource: resource.toString() } };
 						break;
 					}
+					case 'writeFileBytes': {
+						const written = await provider.writeFileBytes(resource, new Uint8Array(request.bytes as ArrayLike<number>));
+						result = { ...written, stat: { ...written.stat, resource: resource.toString() } };
+						break;
+					}
 					case 'createFile': result = { ...await provider.createFile(resource, request.existing as 'error' | 'overwrite' | 'ignore'), resource: resource.toString() }; break;
 					case 'createDirectory': result = { ...await provider.createDirectory(resource), resource: resource.toString() }; break;
+					case 'copy': result = await provider.copy(resource, URI.parse(request.target as string)); break;
 					case 'rename': result = await provider.rename(resource, URI.parse(request.target as string), request.existing as 'error' | 'overwrite' | 'ignore'); break;
 					case 'delete': result = await provider.delete(resource, request.missing as 'error' | 'ignore', request.mode as 'fileOrEmptyDirectory' | 'recursive'); break;
 				}
@@ -38,11 +44,12 @@ export function diskFileSystemProviderRoutes(provider: IFileService, userDataHom
 function validateRequest(value: unknown): Record<string, unknown> {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid file request');
 	const request = value as Record<string, unknown>;
-	const operations = ['stat', 'readDirectory', 'readFile', 'readFileBytes', 'writeFile', 'createFile', 'createDirectory', 'rename', 'delete'];
+	const operations = ['stat', 'readDirectory', 'readFile', 'readFileBytes', 'writeFile', 'writeFileBytes', 'createFile', 'createDirectory', 'copy', 'rename', 'delete'];
 	if (!operations.includes(request.operation as string) || typeof request.resource !== 'string' || request.resource.length > 8192) throw new Error('Invalid file operation or resource');
 	if (request.operation === 'writeFile' && (typeof request.content !== 'string' || request.content.length > 16_777_216 || (request.expectedRevision !== undefined && typeof request.expectedRevision !== 'string'))) throw new Error('Invalid file write');
+	if (request.operation === 'writeFileBytes' && (!(request.bytes instanceof Uint8Array) || request.bytes.byteLength > 50 * 1024 * 1024)) throw new Error('Invalid binary file write');
 	if ((request.operation === 'createFile' || request.operation === 'rename') && !['error', 'overwrite', 'ignore'].includes(request.existing as string)) throw new Error('Invalid existing target behavior');
-	if (request.operation === 'rename' && typeof request.target !== 'string') throw new Error('Invalid target resource');
+	if ((request.operation === 'rename' || request.operation === 'copy') && typeof request.target !== 'string') throw new Error('Invalid target resource');
 	if (request.operation === 'delete' && (!['error', 'ignore'].includes(request.missing as string) || !['fileOrEmptyDirectory', 'recursive'].includes(request.mode as string))) throw new Error('Invalid file delete');
 	return request;
 }

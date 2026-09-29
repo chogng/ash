@@ -338,6 +338,10 @@ export class WorkbenchKeybindingService
 				this.leaveChordMode();
 				event.stop();
 				return true;
+
+			case KeybindingResolveKind.PassThrough:
+				this.leaveChordMode();
+				return false;
 		}
 	}
 
@@ -480,5 +484,7 @@ function formatResolveResult(result: KeybindingResolveResult): string {
 			return `command ${result.command} (${getKeybindingLabel(result.keybinding)})`;
 		case KeybindingResolveKind.Blocked:
 			return `blocked (${getKeybindingLabel(result.keybinding)})`;
+		case KeybindingResolveKind.PassThrough:
+			return `pass through (${getKeybindingLabel(result.keybinding)})`;
 	}
 }

@@ -305,6 +305,7 @@ export interface IStartWorkbenchOptions {
 	readonly keyboardLayoutProvider?: IKeyboardLayoutProvider;
 	readonly userKeyboardLayoutApi?: IUserKeyboardLayoutApi;
 	readonly nativeHostApi?: INativeHostApi;
+	readonly clipboardService?: IClipboardService;
 	readonly dialogHandler?: IDialogHandler;
 	readonly userThemeService?: IUserThemeServiceContract;
 	readonly createContextMenuService: ContextMenuServiceFactory;
@@ -328,6 +329,7 @@ export function startWorkbench({
 	keyboardLayoutProvider,
 	userKeyboardLayoutApi,
 	nativeHostApi,
+	clipboardService,
 	dialogHandler,
 	userThemeService,
 	createContextMenuService,
@@ -348,6 +350,7 @@ export function startWorkbench({
 		keyboardLayoutProvider,
 		userKeyboardLayoutApi,
 		nativeHostApi,
+		clipboardService,
 		dialogHandler,
 		userThemeService,
 		createContextMenuService,
@@ -393,6 +396,7 @@ export class Workbench extends Disposable {
 		keyboardLayoutProvider: IKeyboardLayoutProvider | undefined,
 		userKeyboardLayoutApi: IUserKeyboardLayoutApi | undefined,
 		nativeHostApi: INativeHostApi | undefined,
+		clipboardService: IClipboardService | undefined,
 		dialogHandler: IDialogHandler | undefined,
 		userThemeService: IUserThemeServiceContract | undefined,
 		createContextMenuService: ContextMenuServiceFactory,
@@ -622,7 +626,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(INotificationService, notificationService);
 		const progressService = this._register(new BrowserProgressService(feedbackHost));
 		services.registerInstance(IProgressService, progressService);
-		services.registerInstance(IClipboardService, new BrowserClipboardService(ownerWindow.navigator.clipboard));
+		services.registerInstance(IClipboardService, clipboardService ?? new BrowserClipboardService(ownerWindow.navigator.clipboard));
 		this.lifecycleService = this._register(lifecycleService);
 		services.registerInstance(ILifecycleService, lifecycleService);
 		services.registerInstance(IWorkbenchModeService, this._register(new WorkbenchModeService({

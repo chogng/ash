@@ -6,7 +6,7 @@ import { IClipboardService } from '../../../../../platform/clipboard/common/clip
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IDialogService, type IConfirmationDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
 import { Event } from '../../../../../base/common/event.js';
-import { IFileService, FileKind, type IFileService as FileServiceContract } from '../../../../../platform/files/common/files.js';
+import { IFileService, FileKind, FileNotFoundError, type IFileService as FileServiceContract } from '../../../../../platform/files/common/files.js';
 import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickInputService as QuickInputServiceContract } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
@@ -15,7 +15,7 @@ import { IEditorService, type IEditorService as EditorServiceContract } from '..
 import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
 import type { IEditorPart as EditorPartContract } from '../../../../browser/parts/editor/editorPart.js';
 import { COPY_PATH_COMMAND_ID, COPY_RELATIVE_PATH_COMMAND_ID, OPEN_FILE_COMMAND_ID, SAVE_FILE_COMMAND_ID } from '../../browser/fileConstants.js';
-import { DELETE_FILE_COMMAND_ID, DOWNLOAD_COMMAND_ID, NEW_FILE_COMMAND_ID, NEW_FOLDER_COMMAND_ID, OPEN_TO_SIDE_COMMAND_ID, RENAME_FILE_COMMAND_ID } from '../../browser/fileActions.js';
+import { CANCEL_CUT_COMMAND_ID, COPY_FILE_COMMAND_ID, CUT_FILE_COMMAND_ID, DELETE_FILE_COMMAND_ID, DOWNLOAD_COMMAND_ID, NEW_FILE_COMMAND_ID, NEW_FOLDER_COMMAND_ID, OPEN_TO_SIDE_COMMAND_ID, PASTE_FILE_COMMAND_ID, RENAME_FILE_COMMAND_ID } from '../../browser/fileActions.js';
 import { IExplorerService } from '../../browser/files.js';
 import { ExplorerService } from '../../browser/explorerService.js';
 import { ExplorerItem } from '../../common/explorerModel.js';
@@ -171,6 +171,137 @@ test('New Folder command creates a directory under the selected folder', async (
 	assert.deepEqual(created, [URI.file('/project/src/generated')]);
 });
 
+test('Explorer copy and cut paste selected files with conflict names', async () => {
+	await import('../../browser/fileActions.contribution.js');
+	const root = URI.file('/project');
+	const first = new ExplorerItem(URI.file('/project/one.txt'), 'one.txt', FileKind.File);
+	const second = new ExplorerItem(URI.file('/project/two.txt'), 'two.txt', FileKind.File);
+	const folder = new ExplorerItem(URI.file('/project/dest'), 'dest', FileKind.Directory);
+	let selected: readonly ExplorerItem[] = [first, second];
+	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+	const explorer = new ExplorerService();
+	using registration = explorer.registerView({ getContext: () => selected, getAccessibleContent: () => '', focus() {} });
+	const existing = new Set(['/project/one.txt', '/project/two.txt', '/project/dest', '/project/dest/one.txt']);
+	const copied: string[] = [];
+	const renamed: string[] = [];
+	let resourceClipboard: readonly URI[] = [];
+	using services = new ServiceContainer();
+	services.registerInstance(IWorkspaceContextService, workspace);
+	services.registerInstance(IExplorerService, explorer);
+	services.registerInstance(IClipboardService, {
+		readText: async () => '',
+		writeText: async () => {},
+		readResources: async () => resourceClipboard,
+		writeResources: async resources => { resourceClipboard = [...resources]; },
+		hasResources: async () => resourceClipboard.length > 0,
+	});
+	services.registerInstance(IFileService, {
+		stat: async (resource: URI) => { if (!existing.has(resource.fsPath)) throw new FileNotFoundError(resource); return { resource, kind: FileKind.File, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined }; },
+		copy: async (source: URI, target: URI) => { copied.push(`${source.fsPath} -> ${target.fsPath}`); existing.add(target.fsPath); },
+		rename: async (source: URI, target: URI) => { renamed.push(`${source.fsPath} -> ${target.fsPath}`); existing.delete(source.fsPath); existing.add(target.fsPath); },
+	} as unknown as FileServiceContract);
+	using commands = new CommandService(services);
+	await commands.executeCommand(COPY_FILE_COMMAND_ID);
+	selected = [folder];
+	await commands.executeCommand(PASTE_FILE_COMMAND_ID);
+	assert.deepEqual(copied, ['/project/one.txt -> /project/dest/one copy.txt', '/project/two.txt -> /project/dest/two.txt']);
+	selected = [second];
+	await commands.executeCommand(CUT_FILE_COMMAND_ID);
+	selected = [folder];
+	await commands.executeCommand(PASTE_FILE_COMMAND_ID);
+	assert.deepEqual(renamed, ['/project/two.txt -> /project/dest/two copy.txt']);
+	assert.equal(explorer.getToCopy().items.length, 0);
+	selected = [first];
+	await commands.executeCommand(CUT_FILE_COMMAND_ID);
+	await commands.executeCommand(CANCEL_CUT_COMMAND_ID);
+	assert.equal(explorer.getToCopy().items.length, 0);
+	selected = [new ExplorerItem(URI.file('/project/src'), 'src', FileKind.Directory), new ExplorerItem(URI.file('/project/src/child.txt'), 'child.txt', FileKind.File)];
+	await commands.executeCommand(COPY_FILE_COMMAND_ID);
+	assert.deepEqual(explorer.getToCopy().items.map(item => item.name), ['src']);
+});
+
+test('Explorer paste reads resources copied in another window', async () => {
+	await import('../../browser/fileActions.contribution.js');
+	const root = URI.file('/project');
+	const source = URI.file('/project/source.bin');
+	const destination = URI.file('/project/destination');
+	let resources: readonly URI[] = [];
+	const clipboard = {
+		readText: async () => '',
+		writeText: async () => {},
+		readResources: async () => resources,
+		writeResources: async (value: readonly URI[]) => { resources = [...value]; },
+		hasResources: async () => resources.length > 0,
+	};
+	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+	const first = new ExplorerService();
+	const second = new ExplorerService();
+	using firstView = first.registerView({ getContext: () => [new ExplorerItem(source, 'source.bin', FileKind.File)], getAccessibleContent: () => '', focus() {} });
+	using secondView = second.registerView({ getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', focus() {} });
+	using firstServices = new ServiceContainer();
+	firstServices.registerInstance(IWorkspaceContextService, workspace);
+	firstServices.registerInstance(IExplorerService, first);
+	firstServices.registerInstance(IClipboardService, clipboard);
+	using firstCommands = new CommandService(firstServices);
+	await firstCommands.executeCommand(COPY_FILE_COMMAND_ID);
+
+	const copied: string[] = [];
+	using secondServices = new ServiceContainer();
+	secondServices.registerInstance(IWorkspaceContextService, workspace);
+	secondServices.registerInstance(IExplorerService, second);
+	secondServices.registerInstance(IClipboardService, clipboard);
+	secondServices.registerInstance(IFileService, {
+		stat: async resource => {
+			if (resource.toString() === source.toString()) return { resource, kind: FileKind.File, sizeBytes: 3, readonly: false, modifiedAtMillis: undefined };
+			throw new FileNotFoundError(resource);
+		},
+		copy: async (from, to) => { copied.push(`${from.fsPath} -> ${to.fsPath}`); },
+	} as FileServiceContract);
+	using secondCommands = new CommandService(secondServices);
+	await secondCommands.executeCommand(PASTE_FILE_COMMAND_ID);
+	assert.deepEqual(copied, ['/project/source.bin -> /project/destination/source.bin']);
+});
+
+test('Explorer paste imports exact bytes from the system file list', async () => {
+	await import('../../browser/fileActions.contribution.js');
+	const browser = new JSDOM('<!doctype html><body></body>');
+	const previousFileList = Object.getOwnPropertyDescriptor(globalThis, 'FileList');
+	Object.defineProperty(globalThis, 'FileList', { configurable: true, value: browser.window.FileList });
+	try {
+		const root = URI.file('/project');
+		const destination = URI.file('/project/destination');
+		const bytes = new Uint8Array([0, 255, 42]);
+		const file = { name: 'picture.bin', arrayBuffer: async () => bytes.buffer } as File;
+		const fileList = Object.create(browser.window.FileList.prototype) as FileList;
+		Object.defineProperties(fileList, {
+			0: { value: file },
+			length: { value: 1 },
+			[Symbol.iterator]: { value: function* () { yield file; } },
+		});
+		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+		const explorer = new ExplorerService();
+		using view = explorer.registerView({ getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', focus() {} });
+		const writes: { resource: string; bytes: number[] }[] = [];
+		using services = new ServiceContainer();
+		services.registerInstance(IWorkspaceContextService, workspace);
+		services.registerInstance(IExplorerService, explorer);
+		services.registerInstance(IFileService, {
+			stat: async (resource: URI) => { throw new FileNotFoundError(resource); },
+			writeFileBytes: async (resource: URI, content: Uint8Array) => {
+				writes.push({ resource: resource.fsPath, bytes: [...content] });
+				return { stat: { resource, kind: FileKind.File, sizeBytes: content.length, readonly: false, modifiedAtMillis: undefined }, revision: 'copied' };
+			},
+		} as unknown as FileServiceContract);
+		using commands = new CommandService(services);
+		await commands.executeCommand(PASTE_FILE_COMMAND_ID, fileList);
+		assert.deepEqual(writes, [{ resource: '/project/destination/picture.bin', bytes: [0, 255, 42] }]);
+	} finally {
+		if (previousFileList) Object.defineProperty(globalThis, 'FileList', previousFileList);
+		else Reflect.deleteProperty(globalThis, 'FileList');
+		browser.window.close();
+	}
+});
+
 test('Copy Path commands copy the active file and its workspace-relative path', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
@@ -189,6 +320,9 @@ test('Copy Path commands copy the active file and its workspace-relative path', 
 		services.registerInstance(IClipboardService, {
 			readText: async () => copied.at(-1) ?? '',
 			writeText: async (value: string) => { copied.push(value); },
+			readResources: async () => [],
+			writeResources: async () => {},
+			hasResources: async () => false,
 		});
 		using commands = new CommandService(services);
 

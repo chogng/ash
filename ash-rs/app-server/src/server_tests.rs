@@ -5791,6 +5791,26 @@ fn filesystem_rpc_lists_and_describes_paths() {
             "params":{"path":"src/generated"}
         }),
     );
+    let pasted = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":11,
+            "method":"fs/writeBinaryFile",
+            "params":{"path":"src/picture.bin","dataBase64":"AP8q"}
+        }),
+    );
+    let pasted_again = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":12,
+            "method":"fs/writeBinaryFile",
+            "params":{"path":"src/picture.bin","dataBase64":"AQID"}
+        }),
+    );
 
     assert_eq!(
         listed["result"]["entries"],
@@ -5804,6 +5824,9 @@ fn filesystem_rpc_lists_and_describes_paths() {
     assert!(written["result"]["revision"].is_string());
     assert_eq!(created["result"]["metadata"]["sizeBytes"], 3);
     assert_eq!(directory["result"]["fileType"], "directory");
+    assert_eq!(pasted["result"]["metadata"]["sizeBytes"], 3);
+    assert_eq!(std::fs::read(root.join("src/picture.bin")).unwrap(), [0, 255, 42]);
+    assert!(pasted_again.get("error").is_some());
     assert!(root.join("src/generated").is_dir());
     assert_eq!(stale["error"]["code"], -32042);
     assert_eq!(stale["error"]["message"], "FileSystemRevisionConflict");

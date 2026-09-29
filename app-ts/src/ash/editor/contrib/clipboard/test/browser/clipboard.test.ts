@@ -242,9 +242,15 @@ class MemoryClipboardService implements IClipboardServiceContract {
 	text = '';
 	async readText(): Promise<string> { return this.text; }
 	async writeText(value: string): Promise<void> { this.text = value; }
+	async readResources(): Promise<readonly never[]> { return []; }
+	async writeResources(): Promise<void> {}
+	async hasResources(): Promise<boolean> { return false; }
 }
 
 class DeferredClipboardService implements IClipboardServiceContract {
+	async readResources(): Promise<readonly never[]> { return []; }
+	async writeResources(): Promise<void> {}
+	async hasResources(): Promise<boolean> { return false; }
 	private readonly reads: Array<(text: string) => void> = [];
 	private readonly writes: Array<() => void> = [];
 	readonly writtenTexts: string[] = [];

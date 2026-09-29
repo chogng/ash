@@ -5,6 +5,37 @@ use std::sync::atomic::{AtomicU64, Ordering};
 static NEXT_DIR: AtomicU64 = AtomicU64::new(1);
 
 #[test]
+fn copies_binary_files_and_directories_between_granted_roots() {
+    let source = TestDir::new();
+    let target = TestDir::new();
+    fs::create_dir(source.path.join("folder")).unwrap();
+    let bytes = [0, 255, 1, 128];
+    fs::write(source.path.join("folder/data.bin"), bytes).unwrap();
+    let source_files = source.file_system();
+    let target_files = target.file_system();
+
+    source_files
+        .copy_to(Path::new("folder"), &target_files, Path::new("copied"))
+        .unwrap();
+    assert_eq!(
+        fs::read(target.path.join("copied/data.bin")).unwrap(),
+        bytes
+    );
+    assert!(matches!(
+        source_files.copy_to(Path::new("folder"), &target_files, Path::new("copied")),
+        Err(FileSystemError::AlreadyExists(_))
+    ));
+    assert!(matches!(
+        source_files.copy_to(
+            Path::new("folder"),
+            &source_files,
+            Path::new("folder/child")
+        ),
+        Err(FileSystemError::InvalidPath(_))
+    ));
+}
+
+#[test]
 fn lists_metadata_and_bounded_file_content_inside_dir() {
     let dir = TestDir::new();
     fs::create_dir(dir.path.join("src")).unwrap();

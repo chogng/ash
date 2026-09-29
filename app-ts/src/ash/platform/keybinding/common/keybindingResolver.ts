@@ -25,6 +25,7 @@ export enum KeybindingResolveKind {
 	MoreChordsNeeded = "moreChordsNeeded",
 	Command = "command",
 	Blocked = "blocked",
+	PassThrough = "passThrough",
 }
 
 export type KeybindingResolveResult =
@@ -41,6 +42,10 @@ export type KeybindingResolveResult =
 	}
 	| {
 		readonly kind: KeybindingResolveKind.Blocked;
+		readonly keybinding: ResolvedKeybinding;
+	}
+	| {
+		readonly kind: KeybindingResolveKind.PassThrough;
 		readonly keybinding: ResolvedKeybinding;
 	};
 
@@ -107,6 +112,12 @@ export class KeybindingResolver {
 				keybinding: winner.keybinding,
 			};
 		}
+		if (winner.rule.kind === KeybindingRuleKind.PassThrough) {
+			return {
+				kind: KeybindingResolveKind.PassThrough,
+				keybinding: winner.keybinding,
+			};
+		}
 		return {
 			kind: KeybindingResolveKind.Command,
 			command: winner.rule.command,
@@ -121,7 +132,7 @@ export class KeybindingResolver {
 	): ResolvedKeybinding | undefined {
 		return this.winningRules(context)
 			.find(({ rule }) =>
-				rule.kind === KeybindingRuleKind.Command &&
+				(rule.kind === KeybindingRuleKind.Command || rule.kind === KeybindingRuleKind.PassThrough) &&
 				rule.command === command
 			)?.keybinding;
 	}
@@ -132,7 +143,7 @@ export class KeybindingResolver {
 	): readonly ResolvedKeybinding[] {
 		return this.winningRules(context)
 			.filter(({ rule }) =>
-				rule.kind === KeybindingRuleKind.Command &&
+				(rule.kind === KeybindingRuleKind.Command || rule.kind === KeybindingRuleKind.PassThrough) &&
 				rule.command === command
 			)
 			.map(({ keybinding }) => keybinding);

@@ -116,6 +116,19 @@ test("resolver applies context, source, priority, and latest-registration preced
 	);
 });
 
+test("pass-through keybinding leaves the browser shortcut available to the focused view", () => {
+	using registrations = new DisposableStore();
+	const registry = new KeybindingRegistry();
+	const contexts = registrations.add(new ContextKeyService());
+	const keybinding = Keybinding.single(logicalKey("p", { ctrlKey: true }));
+	registrations.add(registry.registerKeybindingRule({ command: "editor.paste", keybinding, priority: 100 }));
+	registrations.add(registry.registerKeybindingPassThrough({ keybinding, when: ContextKeyExpr.has("explorerFocused"), priority: 200 }));
+	const resolver = new KeybindingResolver({ registry, resolveKeybinding: value => resolveKeybinding(value, OperatingSystem.Windows) });
+	assert.equal(resolver.resolve(contexts, [keyEventData()]).kind, KeybindingResolveKind.Command);
+	contexts.setContext("explorerFocused", true);
+	assert.equal(resolver.resolve(contexts, [keyEventData()]).kind, KeybindingResolveKind.PassThrough);
+});
+
 test("when expressions preserve boolean precedence and comparisons", () => {
 	using contexts = new ContextKeyService();
 	const expression = parseContextKeyExpression(

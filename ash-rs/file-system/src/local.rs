@@ -68,6 +68,62 @@ impl LocalFileSystem {
 }
 
 impl FileSystem for LocalFileSystem {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn copy_to(
+        &self,
+        source: &Path,
+        destination: &dyn FileSystem,
+        target: &Path,
+    ) -> Result<(), FileSystemError> {
+        let destination = destination
+            .as_any()
+            .downcast_ref::<Self>()
+            .ok_or_else(|| FileSystemError::Io("incompatible filesystem for copy".into()))?;
+        self.execute(Permission::BrowseFiles, |_| {
+            self.execute(Permission::ReadFiles, |source_files| {
+                destination.execute(Permission::WriteFiles, |target_files| {
+                    let _guard = target_files.dir.directory().lock_writes().map_err(|_| {
+                        FileSystemError::Io("directory write lock is poisoned".into())
+                    })?;
+                    let source_path = source_files.resolve_existing(source)?;
+                    let target_path = target_files.resolve_for_write(target)?;
+                    let source_absolute = source_files.dir.canonical_path().join(&source_path);
+                    let target_absolute = target_files.dir.canonical_path().join(&target_path);
+                    if target_absolute.starts_with(&source_absolute) {
+                        return Err(FileSystemError::InvalidPath(target.to_path_buf()));
+                    }
+                    if target_files
+                        .handle()
+                        .try_exists(&target_path)
+                        .map_err(io_error)?
+                    {
+                        return Err(FileSystemError::AlreadyExists(target.to_path_buf()));
+                    }
+                    let parent = target_path
+                        .parent()
+                        .ok_or_else(|| FileSystemError::InvalidPath(target.to_path_buf()))?;
+                    let parent = if parent.as_os_str().is_empty() {
+                        Path::new(".")
+                    } else {
+                        parent
+                    };
+                    if !target_files.handle().is_dir(parent) {
+                        return Err(FileSystemError::NotDirectory(target.to_path_buf()));
+                    }
+                    copy_resource(
+                        source_files.handle(),
+                        &source_path,
+                        target_files.handle(),
+                        &target_path,
+                    )
+                })
+            })
+        })
+    }
+
     fn create_directory(&self, path: &Path) -> Result<FileMetadata, FileSystemError> {
         self.execute(Permission::WriteFiles, |files| {
             let _guard = files
@@ -155,6 +211,69 @@ impl FileSystem for LocalFileSystem {
             files.delete(path, missing, mode)
         })
     }
+}
+
+fn copy_resource(
+    source_dir: &Directory,
+    source: &Path,
+    target_dir: &Directory,
+    target: &Path,
+) -> Result<(), FileSystemError> {
+    let kind = source_dir
+        .symlink_metadata(source)
+        .map_err(io_error)?
+        .file_type();
+    if kind.is_symlink() {
+        return Err(FileSystemError::InvalidPath(source.to_path_buf()));
+    }
+    if kind.is_file() {
+        let mut from = source_dir.open(source).map_err(io_error)?;
+        let mut to = target_dir
+            .open_with(target, OpenOptions::new().write(true).create_new(true))
+            .map_err(|error| {
+                if error.kind() == std::io::ErrorKind::AlreadyExists {
+                    FileSystemError::AlreadyExists(target.to_path_buf())
+                } else {
+                    io_error(error)
+                }
+            })?;
+        let result = std::io::copy(&mut from, &mut to)
+            .and_then(|_| {
+                target_dir.set_permissions(target, source_dir.metadata(source)?.permissions())
+            })
+            .map_err(io_error);
+        if result.is_err() {
+            let _ = target_dir.remove_file(target);
+        }
+        return result;
+    }
+    if !kind.is_dir() {
+        return Err(FileSystemError::NotFile(source.to_path_buf()));
+    }
+    target_dir.create_dir(target).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::AlreadyExists {
+            FileSystemError::AlreadyExists(target.to_path_buf())
+        } else {
+            io_error(error)
+        }
+    })?;
+    let result = (|| {
+        for entry in source_dir.read_dir(source).map_err(io_error)? {
+            let entry = entry.map_err(io_error)?;
+            let name = entry.file_name();
+            copy_resource(
+                source_dir,
+                &source.join(&name),
+                target_dir,
+                &target.join(&name),
+            )?;
+        }
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = target_dir.remove_dir_all(target);
+    }
+    result
 }
 
 /// Local implementation that confines all operations to one canonical directory.

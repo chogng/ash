@@ -6,6 +6,7 @@ use super::operations::resource_rpc_error;
 use super::result;
 use crate::resource_store::MAX_RESOURCE_BYTES;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
+use ash_app_server_protocol::protocol::fs::FsCopyParams;
 use ash_app_server_protocol::protocol::fs::FsCreateDirectoryParams;
 use ash_app_server_protocol::protocol::fs::FsCreateFileParams;
 use ash_app_server_protocol::protocol::fs::FsDeleteMode;
@@ -24,6 +25,7 @@ use ash_app_server_protocol::protocol::fs::FsReadFileParams;
 use ash_app_server_protocol::protocol::fs::FsReadFileResult;
 use ash_app_server_protocol::protocol::fs::FsRenameParams;
 use ash_app_server_protocol::protocol::fs::FsWriteFileParams;
+use ash_app_server_protocol::protocol::fs::FsWriteBinaryFileParams;
 use ash_app_server_protocol::protocol::fs::FsWriteFileResult;
 use ash_app_server_protocol::protocol::resources::ResourceMetadataResult;
 use ash_file_access::Permission;
@@ -37,6 +39,7 @@ use ash_file_system::MissingTargetBehavior;
 use ash_file_system::file_revision;
 use serde_json::Value;
 use std::time::Duration;
+use base64::Engine;
 
 const MAX_EDITOR_FILE_BYTES: usize = 50 * 1024 * 1024;
 const BINARY_PREVIEW_RESOURCE_TTL: Duration = Duration::from_secs(300);
@@ -154,6 +157,33 @@ impl AppServer {
         })
     }
 
+    pub(super) fn fs_write_binary_file(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: FsWriteBinaryFileParams = decode(params)?;
+        if params.data_base64.len() > (MAX_EDITOR_FILE_BYTES * 4 / 3 + 4) {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(&params.data_base64)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let metadata = self
+            .file_system_for_request(
+                params.dir_id.as_deref(),
+                params.session_directory.as_ref(),
+                Permission::WriteFiles,
+            )?
+            .write_file_with_condition(
+                &params.path,
+                &bytes,
+                MAX_EDITOR_FILE_BYTES,
+                &FileWriteCondition::MissingOrEmpty,
+            )
+            .map_err(file_system_error)?;
+        result(&FsWriteFileResult {
+            metadata: metadata_result(metadata),
+            revision: file_revision(&bytes),
+        })
+    }
+
     pub(super) fn fs_create_file(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FsCreateFileParams = decode(params)?;
         let metadata = self
@@ -193,6 +223,21 @@ impl AppServer {
             existing_behavior(params.existing),
         )
         .map_err(file_system_error)?;
+        result(&())
+    }
+
+    pub(super) fn fs_copy(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: FsCopyParams = decode(params)?;
+        let source =
+            self.file_system_for_request(Some(&params.source_dir_id), None, Permission::ReadFiles)?;
+        let target = self.file_system_for_request(
+            Some(&params.target_dir_id),
+            None,
+            Permission::WriteFiles,
+        )?;
+        source
+            .copy_to(&params.source, target.as_ref(), &params.target)
+            .map_err(file_system_error)?;
         result(&())
     }
 

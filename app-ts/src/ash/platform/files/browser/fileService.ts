@@ -1,4 +1,4 @@
-import type { FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsWriteFileParams, FsWriteFileResult, ResourceMetadataResult, ResourceReadResult } from "../../app-server/common/generated/index.js";
+import type { FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsWriteBinaryFileParams, FsWriteFileParams, FsWriteFileResult, ResourceMetadataResult, ResourceReadResult } from "../../app-server/common/generated/index.js";
 import type { FsChanged } from "../../app-server/common/generated/index.js";
 import type { IResourceApi } from "../../app-server/common/appServerApi.js";
 import { AppServerRemoteError } from "../../app-server/common/appServerError.js";
@@ -17,8 +17,10 @@ export interface IFileSystemApi {
 	readFile(params: FsReadFileParams): Promise<FsReadFileResult>;
 	readBinaryFile(params: FsReadBinaryFileParams): Promise<FsReadBinaryFileResult>;
 	writeFile(params: FsWriteFileParams): Promise<FsWriteFileResult>;
+	writeBinaryFile(params: FsWriteBinaryFileParams): Promise<FsWriteFileResult>;
 	createFile(params: import("../../app-server/common/generated/index.js").FsCreateFileParams): Promise<FsGetMetadataResult>;
 	createDirectory(params: import("../../app-server/common/generated/index.js").FsCreateDirectoryParams): Promise<FsGetMetadataResult>;
+	copy(params: import("../../app-server/common/generated/index.js").FsCopyParams): Promise<void>;
 	rename(params: import("../../app-server/common/generated/index.js").FsRenameParams): Promise<void>;
 	delete(params: import("../../app-server/common/generated/index.js").FsDeleteParams): Promise<void>;
 }
@@ -109,6 +111,20 @@ export class BrowserFileService extends Disposable implements IFileService {
 		}
 	}
 
+	async writeFileBytes(resource: URI, bytes: Uint8Array): Promise<IFileWriteResult> {
+		const result = await this.api.writeBinaryFile({ ...this.fileTarget(resource), dataBase64: encodeBinaryFile(bytes) });
+		return Object.freeze({
+			stat: {
+				resource,
+				kind: fileKind(result.metadata.fileType),
+				sizeBytes: result.metadata.sizeBytes,
+				readonly: result.metadata.readonly,
+				modifiedAtMillis: result.metadata.modifiedAtMillis ?? undefined,
+			},
+			revision: result.revision,
+		});
+	}
+
 	async createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat> {
 		const result = await this.api.createFile({ ...this.fileTarget(resource), existing });
 		return { resource, kind: fileKind(result.fileType), sizeBytes: result.sizeBytes, readonly: result.readonly, modifiedAtMillis: result.modifiedAtMillis ?? undefined };
@@ -117,6 +133,12 @@ export class BrowserFileService extends Disposable implements IFileService {
 	async createDirectory(resource: URI): Promise<IFileStat> {
 		const result = await this.api.createDirectory(this.fileTarget(resource));
 		return { resource, kind: fileKind(result.fileType), sizeBytes: result.sizeBytes, readonly: result.readonly, modifiedAtMillis: result.modifiedAtMillis ?? undefined };
+	}
+
+	copy(source: URI, target: URI): Promise<void> {
+		const from = this.fileTarget(source);
+		const to = this.fileTarget(target);
+		return this.api.copy({ sourceDirId: from.dirId, source: from.path, targetDirId: to.dirId, target: to.path });
 	}
 
 	rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {
@@ -207,6 +229,14 @@ function isFileNotFound(error: unknown): boolean {
 
 const MAX_RESOURCE_READ_BYTES = 262_144;
 const MAX_BINARY_FILE_BYTES = 16 * 1024 * 1024;
+
+function encodeBinaryFile(bytes: Uint8Array): string {
+	let binary = '';
+	for (let offset = 0; offset < bytes.length; offset += 8192) {
+		binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
+	}
+	return btoa(binary);
+}
 
 function decodeResourceChunk(chunk: ResourceReadResult, resourceId: string, expectedOffset: number, totalSize: number): Uint8Array {
 	if (chunk.resourceId !== resourceId || chunk.offset !== expectedOffset) {

@@ -335,6 +335,7 @@ class MemoryFileService implements IFileService {
 	async readFile(resource: URI) { return { resource, content: this.text(resource), revision: this.text(resource) }; }
 	async readFileBytes(resource: URI) { return { resource, bytes: new TextEncoder().encode(this.text(resource)), revision: this.text(resource) }; }
 	async writeFile(request: { readonly resource: URI; readonly content: string }) { this.resources.set(request.resource.toString(), request.content); return { stat: await this.stat(request.resource), revision: request.content }; }
+	async writeFileBytes(resource: URI, bytes: Uint8Array) { this.resources.set(resource.toString(), new TextDecoder().decode(bytes)); return { stat: await this.stat(resource), revision: 'bytes' }; }
 	async createFile(resource: URI, existing: FileExistingTargetBehavior) {
 		if (this.has(resource)) {
 			if (existing === "error") throw new Error("FileSystemOperationFailed");
@@ -344,6 +345,7 @@ class MemoryFileService implements IFileService {
 		return this.stat(resource);
 	}
 	async createDirectory(): Promise<never> { throw new Error('Workspace edit tests do not create directories'); }
+	async copy(): Promise<void> { throw new Error("Copy is not used in this test"); }
 	async rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {
 		if (this.failRename) throw new Error("injected rename failure");
 		const sourceText = this.text(source);

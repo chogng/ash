@@ -28,6 +28,14 @@ test('desktop file transport preserves resources, revisions, and root boundaries
 		assert.equal((await client.readDirectory(URI.file(directory)))[0]?.resource.toString(), resource.toString());
 		const folder = URI.file(join(directory, 'new-folder'));
 		assert.equal((await client.createDirectory(folder)).kind, FileKind.Directory);
+		const binary = URI.file(join(folder.fsPath, 'bytes.bin'));
+		await writeFile(binary.fsPath, Buffer.from([0, 255, 1]));
+		const copiedFolder = URI.file(join(directory, 'copied-folder'));
+		await client.copy(folder, copiedFolder);
+		assert.deepEqual(await readFile(join(copiedFolder.fsPath, 'bytes.bin')), Buffer.from([0, 255, 1]));
+		await assert.rejects(client.copy(folder, copiedFolder), /already exists|target exists/i);
+		await client.delete(copiedFolder, 'error', 'recursive');
+		await client.delete(binary, 'error', 'fileOrEmptyDirectory');
 		await client.delete(folder, 'error', 'fileOrEmptyDirectory');
 		const target = URI.file(join(directory, 'target.json'));
 		await writeFile(target.fsPath, 'keep');

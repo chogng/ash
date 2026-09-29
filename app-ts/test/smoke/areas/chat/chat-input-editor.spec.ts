@@ -45,6 +45,83 @@ test('Empty chat keeps its input near the pane edges', async ({ target, workbenc
 	});
 });
 
+test('Agent mode picker compacts when the model needs room', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+	const page = workbench.page;
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	const composer = page.locator('.ash-chat-view-pane .ash-chat:visible .ash-chat-input-container');
+	const picker = composer.locator('[data-action-id="ash.chat.input.mode"] button');
+	const label = picker.locator('.ash-icon-label-container');
+	try {
+		await composer.evaluate(element => { element.style.width = '380px'; });
+		await expect(label).toBeVisible();
+		await composer.evaluate(element => { element.style.width = '320px'; });
+		await expect(label).toBeVisible();
+		await composer.evaluate(element => { element.style.width = '180px'; });
+		await expect(label).toBeHidden();
+		await expect(picker.locator('.ash-icon-label-icon')).toBeVisible();
+		await expect(picker.locator('.ash-chat-input-mode-indicator')).toBeVisible();
+		await expect(picker).toHaveAttribute('aria-label', /^Mode: /);
+		const triggerBounds = await picker.evaluate(button => {
+			const icon = button.querySelector<HTMLElement>('.ash-icon-label-icon');
+			const indicator = button.querySelector<HTMLElement>('.ash-chat-input-mode-indicator');
+			if (!icon || !indicator) throw new Error('Agent mode trigger is incomplete');
+			const buttonBounds = button.getBoundingClientRect();
+			return {
+				iconInside: icon.getBoundingClientRect().left >= buttonBounds.left,
+				indicatorInside: indicator.getBoundingClientRect().right <= buttonBounds.right,
+			};
+		});
+		expect(triggerBounds).toEqual({ iconInside: true, indicatorInside: true });
+		await picker.press('ArrowDown');
+		const menu = page.locator('.ash-chat-input-mode-menu');
+		await expect(menu).toBeVisible();
+		await menu.press('Escape');
+		await expect(picker).toBeFocused();
+		await composer.evaluate(element => { element.style.width = '380px'; });
+		await expect(label).toBeVisible();
+	} finally {
+		await composer.evaluate(element => { element.style.removeProperty('width'); });
+	}
+});
+
+test('Model picker uses free toolbar space before truncating its label', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+	const page = workbench.page;
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	const composer = page.locator('.ash-chat-view-pane .ash-chat:visible .ash-chat-input-container');
+	const modelLabel = composer.locator('[data-action-id="ash.chat.input.model"] .ash-button-label');
+	// The disconnected catalog only exposes a short label; exercise the toolbar with a longer model name.
+	await modelLabel.evaluate(element => { element.textContent = 'GPT-5.6 Sol Extended Context Preview'; });
+	const overflow = async (): Promise<number> => modelLabel.evaluate(element => element.scrollWidth - element.clientWidth);
+	try {
+		await composer.evaluate(element => { element.style.width = '520px'; });
+		await expect.poll(overflow).toBeLessThanOrEqual(1);
+		await composer.evaluate(element => { element.style.width = '280px'; });
+		await expect.poll(overflow).toBeGreaterThan(1);
+		const narrowLayout = await composer.evaluate(element => {
+			const toolbar = element.querySelector<HTMLElement>('.ash-chat-input-toolbars');
+			const model = element.querySelector<HTMLElement>('.ash-chat-input-model-selector');
+			const mic = element.querySelector<HTMLElement>('.ash-chat-input-mic');
+			const send = element.querySelector<HTMLElement>('.ash-chat-input-send, .ash-chat-input-voice');
+			if (!toolbar || !model || !mic || !send) throw new Error('Chat toolbar is incomplete');
+			return {
+				modelBeforeMic: model.getBoundingClientRect().right <= mic.getBoundingClientRect().left,
+				sendInsideToolbar: send.getBoundingClientRect().right <= toolbar.getBoundingClientRect().right + 1,
+			};
+		});
+		expect(narrowLayout).toEqual({ modelBeforeMic: true, sendInsideToolbar: true });
+		await composer.evaluate(element => { element.style.width = '520px'; });
+		await expect.poll(overflow).toBeLessThanOrEqual(1);
+	} finally {
+		await composer.evaluate(element => { element.style.removeProperty('width'); });
+	}
+});
+
 test('Chat input omits the unused find control and keeps the prompt evenly inset', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'Uses the Code Chat shell.');
 	const page = workbench.page;
@@ -70,6 +147,9 @@ test('Chat input omits the unused find control and keeps the prompt evenly inset
 			textInsetWithinEditor: placeholderBounds.top - viewport.getBoundingClientRect().top,
 			attachmentsDisplay: getComputedStyle(attachments).display,
 			rulerDisplay: getComputedStyle(ruler).display,
+			viewportBackground: getComputedStyle(viewport).backgroundColor,
+			editorBackground: getComputedStyle(viewport).getPropertyValue('--ash-editor-background').trim(),
+			inputBackground: getComputedStyle(viewport).getPropertyValue('--ash-input-background').trim(),
 		};
 	});
 	expect(editorChrome.textInset).toBe(0);
@@ -79,6 +159,8 @@ test('Chat input omits the unused find control and keeps the prompt evenly inset
 	expect(editorChrome.textInsetWithinEditor).toBe(0);
 	expect(editorChrome.attachmentsDisplay).toBe('none');
 	expect(editorChrome.rulerDisplay).toBe('none');
+	expect(editorChrome.viewportBackground).toBe('rgba(0, 0, 0, 0)');
+	expect(editorChrome.editorBackground).toBe(editorChrome.inputBackground);
 });
 
 test('Chat input places the microphone beside voice or send at the right edge', async ({ target, workbench }) => {

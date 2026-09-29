@@ -33,6 +33,7 @@ export enum KeybindingSource {
 export enum KeybindingRuleKind {
 	Command = "command",
 	Blocker = "blocker",
+	PassThrough = "passThrough",
 }
 
 /** One command shortcut contribution before host-specific resolution. */
@@ -53,6 +54,11 @@ export interface IKeybindingBlocker {
 	readonly priority?: number;
 }
 
+export interface IKeybindingPassThrough extends IKeybindingBlocker {
+	/** Command shown beside the shortcut in menus; dispatch remains with the focused DOM view. */
+	readonly command?: CommandId;
+}
+
 export interface IRegisteredCommandKeybindingRule
 	extends IKeybindingRule {
 	readonly kind: KeybindingRuleKind.Command;
@@ -67,9 +73,17 @@ export interface IRegisteredKeybindingBlocker
 	readonly order: number;
 }
 
+export interface IRegisteredKeybindingPassThrough
+	extends IKeybindingPassThrough {
+	readonly kind: KeybindingRuleKind.PassThrough;
+	readonly keybinding: Keybinding;
+	readonly order: number;
+}
+
 export type IRegisteredKeybindingRule =
 	| IRegisteredCommandKeybindingRule
-	| IRegisteredKeybindingBlocker;
+	| IRegisteredKeybindingBlocker
+	| IRegisteredKeybindingPassThrough;
 
 /** Stores realm-wide keybinding contributions and their override order. */
 export class KeybindingRegistry {
@@ -97,6 +111,17 @@ export class KeybindingRegistry {
 			...blocker,
 			keybinding: resolveKeybinding(blocker.keybinding),
 			kind: KeybindingRuleKind.Blocker,
+			order: this.nextOrder++,
+		};
+		return this.register(registered);
+	}
+
+	/** Reserves a shortcut while allowing the browser event to reach its DOM target. */
+	registerKeybindingPassThrough(rule: IKeybindingPassThrough): IDisposable {
+		const registered: IRegisteredKeybindingPassThrough = {
+			...rule,
+			keybinding: resolveKeybinding(rule.keybinding),
+			kind: KeybindingRuleKind.PassThrough,
 			order: this.nextOrder++,
 		};
 		return this.register(registered);

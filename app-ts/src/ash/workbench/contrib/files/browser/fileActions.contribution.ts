@@ -18,7 +18,7 @@ import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { COPY_PATH_COMMAND_ID, COPY_RELATIVE_PATH_COMMAND_ID, NEW_UNTITLED_FILE_COMMAND_ID, OPEN_FILE_COMMAND_ID, SAVE_FILE_COMMAND_ID } from './fileConstants.js';
 import { copyFilePath, copyRelativeFilePath, resolveFileResource } from './fileCommands.js';
-import { createNewFile, createNewFolder, deleteExplorerItem, DELETE_FILE_COMMAND_ID, DOWNLOAD_COMMAND_ID, NEW_FILE_COMMAND_ID, NEW_FOLDER_COMMAND_ID, openExplorerItemToSide, OPEN_TO_SIDE_COMMAND_ID, renameExplorerItem, RENAME_FILE_COMMAND_ID } from './fileActions.js';
+import { cancelExplorerCut, CANCEL_CUT_COMMAND_ID, copyExplorerItems, COPY_FILE_COMMAND_ID, createNewFile, createNewFolder, CUT_FILE_COMMAND_ID, deleteExplorerItem, DELETE_FILE_COMMAND_ID, DOWNLOAD_COMMAND_ID, NEW_FILE_COMMAND_ID, NEW_FOLDER_COMMAND_ID, openExplorerItemToSide, OPEN_TO_SIDE_COMMAND_ID, pasteExplorerItems, PASTE_FILE_COMMAND_ID, renameExplorerItem, RENAME_FILE_COMMAND_ID } from './fileActions.js';
 import { FileDownload } from './fileImportExport.js';
 import { FileEditorInput } from './editors/fileEditorInput.js';
 import { ExplorerFocusedContext } from './files.js';
@@ -105,6 +105,10 @@ CommandsRegistry.registerMany([
 	{ id: COPY_RELATIVE_PATH_COMMAND_ID, handler: copyRelativeFilePath },
 	{ id: RENAME_FILE_COMMAND_ID, handler: renameExplorerItem },
 	{ id: DELETE_FILE_COMMAND_ID, handler: deleteExplorerItem },
+	{ id: CUT_FILE_COMMAND_ID, handler: accessor => copyExplorerItems(accessor, true) },
+	{ id: COPY_FILE_COMMAND_ID, handler: accessor => copyExplorerItems(accessor, false) },
+	{ id: PASTE_FILE_COMMAND_ID, handler: pasteExplorerItems },
+	{ id: CANCEL_CUT_COMMAND_ID, handler: cancelExplorerCut },
 ]);
 
 MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: NEW_FILE_COMMAND_ID, title: localizedString('ash', 'workbench.newFile', 'New File...') }, when: ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0) });
@@ -135,6 +139,21 @@ MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
 	when: downloadWhen,
 	group: '5b_importexport',
 	order: 10,
+});
+MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
+	command: { id: CUT_FILE_COMMAND_ID, title: localizedString('ash', 'files.cut', 'Cut') },
+	when: canModifyWhen,
+	group: '5_cutcopypaste', order: 8,
+});
+MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
+	command: { id: COPY_FILE_COMMAND_ID, title: localizedString('ash', 'files.copy', 'Copy') },
+	when: canModifyWhen,
+	group: '5_cutcopypaste', order: 10,
+});
+MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
+	command: { id: PASTE_FILE_COMMAND_ID, title: localizedString('ash', 'files.paste', 'Paste') },
+	when: canCreateWhen,
+	group: '5_cutcopypaste', order: 20,
 });
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
 	command: { id: COPY_PATH_COMMAND_ID, title: localizedString('ash', 'workbench.copyPath', 'Copy Path') },
@@ -175,3 +194,8 @@ KeybindingsRegistry.registerKeybindingRule({
 	when: explorerShortcutWhen,
 	priority: KeybindingWeight.WorkbenchContrib + 10,
 });
+KeybindingsRegistry.registerKeybindingRule({ command: CUT_FILE_COMMAND_ID, keybinding: Keybinding.single(logicalKey('x', { primaryKey: true })), when: explorerShortcutWhen, priority: KeybindingWeight.WorkbenchContrib + 10 });
+KeybindingsRegistry.registerKeybindingRule({ command: COPY_FILE_COMMAND_ID, keybinding: Keybinding.single(logicalKey('c', { primaryKey: true })), when: explorerShortcutWhen, priority: KeybindingWeight.WorkbenchContrib + 10 });
+// Let the tree receive the browser paste event, including files copied in the system file manager.
+KeybindingsRegistry.registerKeybindingPassThrough({ command: PASTE_FILE_COMMAND_ID, keybinding: Keybinding.single(logicalKey('v', { primaryKey: true })), when: ContextKeyExpr.and(ExplorerFocusedContext.isEqualTo(true), canCreateWhen), priority: KeybindingWeight.WorkbenchContrib + 10 });
+KeybindingsRegistry.registerKeybindingRule({ command: CANCEL_CUT_COMMAND_ID, keybinding: Keybinding.single(logicalKey('Escape')), when: ContextKeyExpr.and(ExplorerFocusedContext.isEqualTo(true), ContextKeyExpr.has('ashExplorerHasCutFiles')), priority: KeybindingWeight.WorkbenchContrib + 10 });

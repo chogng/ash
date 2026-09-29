@@ -57,6 +57,10 @@ class TestFileProvider implements IFileSystemProvider {
 		return Promise.resolve({ stat: { resource: request.resource, kind: FileKind.File, sizeBytes: request.content.length, readonly: false, modifiedAtMillis: undefined }, revision: this.label });
 	}
 
+	public writeFileBytes(resource: URI, bytes: Uint8Array): Promise<IFileWriteResult> {
+		return Promise.resolve({ stat: { resource, kind: FileKind.File, sizeBytes: bytes.length, readonly: false, modifiedAtMillis: undefined }, revision: this.label });
+	}
+
 	public createFile(resource: URI, _existing: FileExistingTargetBehavior): Promise<IFileStat> {
 		return this.stat(resource);
 	}
@@ -64,6 +68,8 @@ class TestFileProvider implements IFileSystemProvider {
 	public createDirectory(resource: URI): Promise<IFileStat> {
 		return this.stat(resource);
 	}
+
+	public copy(_source: URI, _target: URI): Promise<void> { return Promise.resolve(); }
 
 	public rename(_source: URI, _target: URI, _existing: FileExistingTargetBehavior): Promise<void> {
 		return Promise.resolve();

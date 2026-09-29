@@ -68,6 +68,10 @@ export class SettingsFileSystemProvider extends Disposable implements IFileSyste
 		});
 	}
 
+	public writeFileBytes(resource: URI, _bytes: Uint8Array): Promise<IFileWriteResult> {
+		return Promise.reject(new FileOperationNotSupportedError(resource, 'writeFileBytes'));
+	}
+
 	public async createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat> {
 		if (!isEqualResource(resource, UserSettingsResource)) throw new FileOperationNotSupportedError(resource, 'createFile');
 		if (existing === 'error') throw new Error(`File already exists: ${resource.toString()}`);
@@ -76,6 +80,10 @@ export class SettingsFileSystemProvider extends Disposable implements IFileSyste
 
 	public createDirectory(resource: URI): Promise<IFileStat> {
 		return Promise.reject(new FileOperationNotSupportedError(resource, 'createDirectory'));
+	}
+
+	public copy(source: URI, _target: URI): Promise<void> {
+		return Promise.reject(new FileOperationNotSupportedError(source, 'copy'));
 	}
 
 	public rename(source: URI, _target: URI, _existing: FileExistingTargetBehavior): Promise<void> {

@@ -15,6 +15,7 @@ import { ContextKeyService } from '../../../../../platform/contextkey/browser/co
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import type { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { IContextMenuMenuDelegate, IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
 
 test("ExplorerView opens workspace files on single click", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
@@ -104,8 +105,10 @@ test("ExplorerView opens workspace files on single click", async () => {
 		writeFile: async (_request) => {
 			throw new Error("Explorer must delegate file writes to the selected editor");
 		},
+		writeFileBytes: async () => { throw new Error('File paste is not used in this test'); },
 		createFile: async () => { throw new Error("Explorer must not create files in this test"); },
 		createDirectory: async () => { throw new Error("Explorer must not create directories in this test"); },
+		copy: async () => { throw new Error("Copy is not used in this test"); },
 		rename: async () => { throw new Error("Explorer must not rename files in this test"); },
 		delete: async () => { throw new Error("Explorer must not delete files in this test"); },
 	};
@@ -210,6 +213,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 			contextKeyService,
 			accessibleViewService,
 			{ showContextMenu: delegate => { contextMenu = delegate as IContextMenuMenuDelegate; } } as IContextMenuService,
+			{ executeCommand: async () => undefined } as unknown as ICommandService,
 		);
 		browser.window.document.body.append(pane.element);
 		assert.equal(

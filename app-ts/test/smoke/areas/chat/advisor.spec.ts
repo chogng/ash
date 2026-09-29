@@ -9,6 +9,17 @@ test('Disconnected model picker explains the empty catalog and opens settings', 
 	}
 	const selector = page.locator("[data-action-id='ash.chat.input.model'] button");
 	await expect(selector).toBeEnabled();
+	await expect(selector.locator('.ash-dropdown-menu-indicator')).toHaveCount(0);
+	const modeSelector = page.locator("[data-action-id='ash.chat.input.mode'] button");
+	const selectorPadding = await selector.evaluate(button => {
+		const style = getComputedStyle(button);
+		return [style.paddingLeft, style.paddingRight];
+	});
+	const modePadding = await modeSelector.evaluate(button => {
+		const style = getComputedStyle(button);
+		return [style.paddingLeft, style.paddingRight];
+	});
+	expect(selectorPadding).toEqual(modePadding);
 	await selector.click();
 	const picker = page.getByRole('dialog', { name: 'Choose a chat model' });
 	await expectModelPickerAnchored(picker, selector);

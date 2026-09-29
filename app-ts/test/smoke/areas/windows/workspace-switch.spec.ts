@@ -1,4 +1,4 @@
-import { mkdir, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ElectronApplication } from '@playwright/test';
 import type { BrowserWindow, MessageBoxOptions } from 'electron';
@@ -89,6 +89,8 @@ test('Explorer file context menu includes file actions for the clicked row', asy
 		await file.click({ button: 'right' });
 		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashExplorerMenuTest?: { labels: string[] } }).ashExplorerMenuTest?.labels)).toEqual(expect.arrayContaining([
 			'Open to the Side',
+			'Cut',
+			'Copy',
 			'Copy Path',
 			'Copy Relative Path',
 			'Rename',
@@ -103,6 +105,36 @@ test('Explorer file context menu includes file actions for the clicked row', asy
 			(globalThis as typeof globalThis & { ashExplorerMenuTest?: { restore: () => void } }).ashExplorerMenuTest?.restore();
 		});
 	}
+});
+
+test('Explorer shortcuts copy and move binary files into folders', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'This scenario requires the Code desktop and App Server');
+	const directory = testWorkspace.directory;
+	await mkdir(join(directory, 'paste-target'));
+	await mkdir(join(directory, 'move-target'));
+	await mkdir(join(directory, 'folder-to-copy'));
+	const bytes = Buffer.from([0, 255, 1, 128]);
+	await writeFile(join(directory, 'clipboard.bin'), bytes);
+	await writeFile(join(directory, 'folder-to-copy', 'nested.bin'), bytes);
+	const page = workbench.page;
+	const source = page.locator('.ash-explorer').getByRole('treeitem', { name: 'clipboard.bin', exact: true });
+	await expect(source).toHaveCount(1);
+	await source.click();
+	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+c' : 'Control+c');
+	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'paste-target', exact: true }).click();
+	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+v' : 'Control+v');
+	await expect.poll(async () => readFile(join(directory, 'paste-target', 'clipboard.bin')).then(value => [...value], () => [])).toEqual([...bytes]);
+	await source.click();
+	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+x' : 'Control+x');
+	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'move-target', exact: true }).click();
+	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+v' : 'Control+v');
+	await expect.poll(async () => readFile(join(directory, 'move-target', 'clipboard.bin')).then(value => [...value], () => [])).toEqual([...bytes]);
+	await expect.poll(async () => stat(join(directory, 'clipboard.bin')).then(() => true, () => false)).toBe(false);
+	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'folder-to-copy', exact: true }).click();
+	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+c' : 'Control+c');
+	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'paste-target', exact: true }).click();
+	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+v' : 'Control+v');
+	await expect.poll(async () => readFile(join(directory, 'paste-target', 'folder-to-copy', 'nested.bin')).then(value => [...value], () => [])).toEqual([...bytes]);
 });
 
 test('Explorer opens the focused file context menu from the keyboard', async ({ target, application, workbench }) => {
@@ -222,4 +254,33 @@ test('Explorer expands and collapses a refreshed folder without replacing siblin
 	await expect(folder).toHaveAttribute('aria-expanded', 'true');
 	await expect(nested).toHaveCount(1);
 	expect(await siblingRow?.evaluate(row => row.isConnected)).toBe(true);
+});
+
+test('Explorer uses the desktop clipboard and imports binary files from a paste event', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'This scenario requires the Code desktop and App Server');
+	const destination = join(testWorkspace.directory, 'paste-target');
+	await mkdir(destination);
+	const page = workbench.page;
+	const explorer = page.locator('.ash-explorer');
+	const source = explorer.getByRole('treeitem', { name: 'main.ts', exact: true });
+	const folder = explorer.getByRole('treeitem', { name: 'paste-target', exact: true });
+	await expect(folder).toBeVisible();
+	await source.click();
+	await explorer.getByRole('tree').focus();
+	await page.keyboard.press('ControlOrMeta+C');
+	await expect.poll(() => page.evaluate(async () => {
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<string[]> } } }).ash.ipcRenderer;
+		return (await ipc.invoke('ash:host:readClipboardResources')).length;
+	})).toBe(1);
+	await folder.click();
+	await explorer.getByRole('tree').focus();
+	await page.keyboard.press('ControlOrMeta+V');
+	await expect.poll(async () => readFile(join(destination, 'main.ts'), 'utf8').catch(() => undefined)).toBe('const value = 1;\n');
+
+	await explorer.getByRole('tree').evaluate(tree => {
+		const data = new DataTransfer();
+		data.items.add(new File([new Uint8Array([0, 255, 42])], 'picture.bin'));
+		tree.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data }));
+	});
+	await expect.poll(async () => readFile(join(destination, 'picture.bin')).then(bytes => [...bytes], () => undefined)).toEqual([0, 255, 42]);
 });

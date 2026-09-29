@@ -121,6 +121,24 @@ export class HTMLFileSystemProvider extends Disposable implements IFileService {
 		return { stat: await this.stat(request.resource), revision: await revision(new TextEncoder().encode(request.content)) };
 	}
 
+	public async writeFileBytes(resource: URI, bytes: Uint8Array): Promise<IFileWriteResult> {
+		const { parent, name } = await this.parent(resource);
+		try { await parent.getFileHandle(name); throw new Error('Copy target already exists'); }
+		catch (error) { if (!isMissing(error)) throw error; }
+		const handle = await parent.getFileHandle(name, { create: true });
+		const writable = await handle.createWritable();
+		try {
+			await writable.write(Uint8Array.from(bytes));
+			await writable.close();
+		} catch (error) {
+			await writable.abort();
+			await parent.removeEntry(name);
+			throw error;
+		}
+		this.changes.fire({ resources: [resource] });
+		return { stat: await this.stat(resource), revision: await revision(bytes) };
+	}
+
 	public async createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat> {
 		const { parent, name } = await this.parent(resource);
 		let found = true;
@@ -143,6 +161,33 @@ export class HTMLFileSystemProvider extends Disposable implements IFileService {
 		await parent.getDirectoryHandle(name, { create: true });
 		this.changes.fire({ resources: [resource] });
 		return this.stat(resource);
+	}
+
+	public async copy(source: URI, target: URI): Promise<void> {
+		const sourceParts = partsOf(source);
+		const targetParts = partsOf(target);
+		if (sourceParts.parts.length === 0 || targetParts.parts.length === 0 ||
+			(sourceParts.id === targetParts.id && target.path.startsWith(`${source.path}/`))) {
+			throw new FileOperationNotSupportedError(source, 'copy');
+		}
+		const sourceHandle = await this.handle(source);
+		const { parent, name } = await this.parent(target);
+		try { await this.handle(target); throw new Error('Copy target already exists'); }
+		catch (error) { if (!(error instanceof FileNotFoundError)) throw error; }
+		const copyEntry = async (from: FileSystemHandle, toParent: FileSystemDirectoryHandle, toName: string): Promise<void> => {
+			if (isDirectoryHandle(from)) {
+				const to = await toParent.getDirectoryHandle(toName, { create: true });
+				for await (const [childName, child] of (from as IterableDirectoryHandle).entries()) await copyEntry(child, to, childName);
+			} else if (isFileHandle(from)) {
+				const file = await toParent.getFileHandle(toName, { create: true });
+				const writable = await file.createWritable();
+				try { await writable.write(await from.getFile()); await writable.close(); }
+				catch (error) { await writable.abort(); throw error; }
+			}
+		};
+		try { await copyEntry(sourceHandle, parent, name); }
+		catch (error) { await parent.removeEntry(name, { recursive: true }); throw error; }
+		this.changes.fire({ resources: [target] });
 	}
 
 	public async rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {

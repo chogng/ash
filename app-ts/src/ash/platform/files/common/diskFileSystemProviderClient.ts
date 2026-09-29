@@ -38,6 +38,11 @@ export class DiskFileSystemProviderClient extends Disposable implements IFileSer
 		this.changes.fire({ resources: [request.resource] });
 		return { ...result, stat: { ...result.stat, resource: request.resource } };
 	}
+	public async writeFileBytes(resource: URI, bytes: Uint8Array): Promise<IFileWriteResult> {
+		const result = await this.call<IFileWriteResult>('writeFileBytes', resource, { bytes });
+		this.changes.fire({ resources: [resource] });
+		return { ...result, stat: { ...result.stat, resource } };
+	}
 	public async createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat> {
 		const result = await this.call<IFileStat>('createFile', resource, { existing });
 		this.changes.fire({ resources: [resource] });
@@ -47,6 +52,10 @@ export class DiskFileSystemProviderClient extends Disposable implements IFileSer
 		const result = await this.call<IFileStat>('createDirectory', resource);
 		this.changes.fire({ resources: [resource] });
 		return { ...result, resource };
+	}
+	public async copy(source: URI, target: URI): Promise<void> {
+		await this.call('copy', source, { target: target.toString() });
+		this.changes.fire({ resources: [target] });
 	}
 	public async rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {
 		await this.call('rename', source, { target: target.toString(), existing });

@@ -129,5 +129,7 @@ function resultKind(kind: KeybindingResolveKind): ResolverFixture["result"]["kin
 			return "command";
 		case KeybindingResolveKind.Blocked:
 			return "blocked";
+		case KeybindingResolveKind.PassThrough:
+			throw new Error('Pass-through rules are not part of the shared resolver fixtures');
 	}
 }

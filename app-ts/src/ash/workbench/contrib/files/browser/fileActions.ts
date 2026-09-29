@@ -3,7 +3,8 @@ import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js
 import type { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { FileKind, IFileService } from '../../../../platform/files/common/files.js';
+import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
+import { FileKind, FileNotFoundError, IFileService } from '../../../../platform/files/common/files.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
@@ -17,6 +18,89 @@ export const DOWNLOAD_COMMAND_ID = 'explorer.download';
 export const RENAME_FILE_COMMAND_ID = 'renameFile';
 export const DELETE_FILE_COMMAND_ID = 'deleteFile';
 export const OPEN_TO_SIDE_COMMAND_ID = 'explorer.openToSide';
+export const CUT_FILE_COMMAND_ID = 'filesExplorer.cut';
+export const COPY_FILE_COMMAND_ID = 'filesExplorer.copy';
+export const PASTE_FILE_COMMAND_ID = 'filesExplorer.paste';
+export const CANCEL_CUT_COMMAND_ID = 'filesExplorer.cancelCut';
+
+export async function copyExplorerItems(accessor: ServicesAccessor, cut: boolean): Promise<void> {
+	const selection = accessor.get(IExplorerService).getContext();
+	const items = selection.filter(item => !isWorkspaceRoot(accessor, item.resource) && !selection.some(parent =>
+		parent !== item && parent.kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqualOrParent(item.resource, parent.resource)));
+	if (!items.length) return;
+	await accessor.get(IClipboardService).writeResources(items.map(item => item.resource));
+	accessor.get(IExplorerService).setToCopy(items, cut);
+}
+
+export async function cancelExplorerCut(accessor: ServicesAccessor): Promise<void> {
+	const explorer = accessor.get(IExplorerService);
+	if (!explorer.getToCopy().cut) return;
+	const resources = await accessor.get(IClipboardService).readResources();
+	if (sameResources(resources, explorer.getToCopy().items.map(item => item.resource))) {
+		await accessor.get(IClipboardService).writeResources([]);
+	}
+	explorer.setToCopy([], false);
+}
+
+export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: unknown): Promise<void> {
+	if (fileList !== undefined && !(fileList instanceof FileList)) throw new TypeError('Invalid files to paste');
+	const explorer = accessor.get(IExplorerService);
+	const nativeFiles = fileList && fileList.length > 0 ? [...fileList] : [];
+	const resources = nativeFiles.length ? [] : await accessor.get(IClipboardService).readResources();
+	if (!nativeFiles.length && !resources.length) return;
+	const localClipboard = explorer.getToCopy();
+	const cut = nativeFiles.length === 0 && localClipboard.cut && sameResources(resources, localClipboard.items.map(item => item.resource));
+	const selection = explorer.getContext()[0];
+	const folders = accessor.get(IWorkspaceContextService).getWorkspace().folders;
+	const directory = selection && selection.resource.scheme !== 'ash-workspace'
+		? selection.kind === FileKind.Directory ? selection.resource : selection.resource.withPath(selection.resource.path.slice(0, selection.resource.path.lastIndexOf('/')))
+		: await resolveCreationDirectory(accessor, 'folder');
+	if (!directory) return;
+	const files = accessor.get(IFileService);
+	for (const file of nativeFiles) {
+		if (!validFileName(file.name)) continue;
+		const target = await availablePasteTarget(files, directory, file.name);
+		await files.writeFileBytes(target, new Uint8Array(await file.arrayBuffer()));
+	}
+	for (const resource of resources) {
+		const local = localClipboard.items.find(item => extUriBiasedIgnorePathCase.isEqual(item.resource, resource));
+		const kind = local?.kind ?? (await files.stat(resource)).kind;
+		const name = local?.name ?? decodeURIComponent(resource.path.slice(resource.path.lastIndexOf('/') + 1));
+		if (!validFileName(name)) continue;
+		if (kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqualOrParent(directory, resource)) {
+			throw new Error(localize({ bundle: 'ash', key: 'files.pasteIntoSelf' }, 'Cannot paste a folder into itself.'));
+		}
+		const desired = directory.joinPathSegment(name);
+		if (cut && extUriBiasedIgnorePathCase.isEqual(desired, resource)) continue;
+		const target = await availablePasteTarget(files, directory, name);
+		if (cut && folders.some(folder => extUriBiasedIgnorePathCase.isEqualOrParent(resource, folder.uri) && extUriBiasedIgnorePathCase.isEqualOrParent(target, folder.uri))) {
+			await files.rename(resource, target, 'error');
+		} else {
+			await files.copy(resource, target);
+			if (cut) await files.delete(resource, 'error', 'recursive');
+		}
+	}
+	if (cut) {
+		await accessor.get(IClipboardService).writeResources([]);
+		explorer.setToCopy([], false);
+	}
+}
+
+function sameResources(left: readonly URI[], right: readonly URI[]): boolean {
+	return left.length === right.length && left.every((resource, index) => extUriBiasedIgnorePathCase.isEqual(resource, right[index]));
+}
+
+async function availablePasteTarget(files: IFileService, directory: URI, name: string): Promise<URI> {
+	const dot = name.lastIndexOf('.');
+	const stem = dot > 0 ? name.slice(0, dot) : name;
+	const extension = dot > 0 ? name.slice(dot) : '';
+	for (let index = 0; index < 10_000; index++) {
+		const candidate = directory.joinPathSegment(index === 0 ? name : `${stem} copy${index === 1 ? '' : ` ${index}`}${extension}`);
+		try { await files.stat(candidate); }
+		catch (error) { if (error instanceof FileNotFoundError) return candidate; throw error; }
+	}
+	throw new Error(localize({ bundle: 'ash', key: 'files.pasteNoName' }, 'Could not find an available file name.'));
+}
 
 export async function renameExplorerItem(accessor: ServicesAccessor): Promise<void> {
 	const item = accessor.get(IExplorerService).getContext()[0];
@@ -53,7 +137,7 @@ export async function openExplorerItemToSide(accessor: ServicesAccessor): Promis
 }
 
 function isWorkspaceRoot(accessor: ServicesAccessor, resource: URI): boolean {
-	return accessor.get(IWorkspaceContextService).getWorkspace().folders.some(folder => extUriBiasedIgnorePathCase.isEqual(folder.uri, resource));
+	return resource.scheme === 'ash-workspace' || accessor.get(IWorkspaceContextService).getWorkspace().folders.some(folder => extUriBiasedIgnorePathCase.isEqual(folder.uri, resource));
 }
 
 /** Creates a file in the selected Explorer folder and opens it in the editor. */

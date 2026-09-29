@@ -310,7 +310,6 @@
 
 .ash-chat-input-toolbars .ash-chat-input-model-selector {
   min-width: 0;
-  max-width: 180px;
 }
 
 .ash-chat-input-toolbars .ash-chat-input-effort-selector {
@@ -402,10 +401,6 @@
   .ash-chat-input-toolbars.ash-toolbar .ash-chat-input-mode-selector .ash-chat-input-action.ash-chat-input-mode-action {
     padding-inline: var(--ash-spacing-size60);
     font-size: 12px;
-  }
-
-  .ash-chat-input-toolbars .ash-chat-input-model-selector {
-    max-width: 80px;
   }
 
   .ash-chat-input-toolbars .ash-chat-input-effort-selector {

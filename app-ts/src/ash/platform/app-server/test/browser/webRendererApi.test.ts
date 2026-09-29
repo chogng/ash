@@ -10,7 +10,7 @@ import { AppServerProtocolClient } from "../../../../platform/app-server/browser
 
 const connectorHostServices = {
 	openerService: { openExternal: async () => undefined },
-	clipboardService: { readText: async () => '', writeText: async () => undefined },
+	clipboardService: { readText: async () => '', writeText: async () => undefined, readResources: async () => [], writeResources: async () => undefined, hasResources: async () => false },
 };
 
 test('Web reconnect initializes again without replaying an uncertain write', async () => {
