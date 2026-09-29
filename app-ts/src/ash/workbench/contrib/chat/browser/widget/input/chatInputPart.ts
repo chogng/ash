@@ -23,6 +23,7 @@ import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog } fro
 import { SkillSelectorCatalog } from "../../../common/skillSelectors.js";
 import type { ChatInputDelegate, ChatInputState } from "./chatInput.js";
 import { ChatInputEditors, type IChatInputEditor } from "./chatInputEditorRegistry.js";
+import { ChatInputPickerResponsiveLayout } from './chatInputPickerResponsiveLayout.js';
 import { ModelPickerActionItem } from './modelPicker/modelPickerActionItem.js';
 import { ModelPickerConfiguration } from './modelPicker/modelPickerConfiguration.js';
 import { modelPickerEffortLabel } from './modelPicker/modelPickerModelConfig.js';
@@ -66,6 +67,7 @@ export class ChatInputPart extends Disposable {
 	private readonly inputContainer: HTMLFormElement;
 	private readonly input: IChatInputEditor;
 	private readonly inputToolbar: WorkbenchToolBar;
+	private readonly pickerResponsiveLayout: ChatInputPickerResponsiveLayout;
 	private readonly slashCommands = new SlashCommandCatalog(DesktopSlashCommands, []);
 	private readonly skills = new SkillSelectorCatalog();
 	private state: ChatInputState = { phase: "loading", canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
@@ -116,6 +118,7 @@ export class ChatInputPart extends Disposable {
 			actionViewItemProvider: action => this.createToolbarViewItem(action, contextViewService),
 		}));
 		this.inputToolbar.element.classList.add("ash-chat-input-toolbars");
+		this.pickerResponsiveLayout = this._register(new ChatInputPickerResponsiveLayout(this.inputToolbar.element));
 		this.inputContainer.append(this.attachmentList, editorHost, this.inputToolbar.element);
 		this.element.append(this.status, this.dictationPreview, this.interaction, this.inputContainer);
 		this._register(addDisposableListener(this.inputContainer, "focusin", () => this.inputContainer.classList.add("focused")));
@@ -390,6 +393,7 @@ export class ChatInputPart extends Disposable {
 			: [sendAction];
 		const inputActions = this.toolbarState.inputKind === "command" ? [modeAction] : [modeAction, modelAction, ...(effortAction ? [effortAction] : []), micAction];
 		this.inputToolbar.setActions([...inputActions, ...trailingActions]);
+		this.pickerResponsiveLayout.layout();
 	}
 
 	private async toggleDictation(): Promise<void> {

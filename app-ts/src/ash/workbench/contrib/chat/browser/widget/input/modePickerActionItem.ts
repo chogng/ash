@@ -39,6 +39,7 @@ export class ModePickerActionItem extends ButtonActionViewItem {
 		this.button.toggleClassName('ash-chat-input-mode-action', true);
 		this.button.toggleClassName('disabled', !this.action.enabled);
 		button.querySelector('.ash-button-label')?.classList.add('ash-chat-input-mode-action-label');
+		button.setAttribute('aria-label', this.action.tooltip);
 		button.setAttribute('aria-haspopup', 'menu');
 		button.setAttribute('aria-expanded', 'false');
 		const indicator = h(container.ownerDocument, 'span');

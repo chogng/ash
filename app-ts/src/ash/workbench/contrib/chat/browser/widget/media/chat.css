@@ -227,10 +227,15 @@
 
 .ash-chat-input-toolbars .ash-chat-input-mode-selector {
   min-width: 0;
+  flex-shrink: 0;
 }
 
 .ash-chat-input-toolbars.ash-toolbar .ash-action-view-item.icon.ash-chat-input-mode-selector .ash-icon-label-container {
   display: inline-flex;
+}
+
+.ash-chat-input-toolbars.ash-toolbar .ash-action-view-item.icon.ash-chat-input-mode-selector.compact .ash-icon-label-container {
+  display: none;
 }
 
 .ash-chat-input-toolbars.ash-toolbar .ash-chat-input-mode-selector.mode-plan .ash-chat-input-mode-action {
@@ -273,14 +278,14 @@
   width: auto;
   height: auto;
   clip-path: none;
-  text-overflow: ellipsis;
+  text-overflow: clip;
   white-space: nowrap;
 }
 
 .ash-chat-input-action.ash-chat-input-model-action {
   min-width: 0;
   max-width: 100%;
-  padding: 0 4px;
+  padding: 0 var(--ash-spacing-size80);
   border-radius: var(--ash-corner-radius-circle);
   font-size: 13px;
 }
@@ -408,13 +413,7 @@
   }
 
   .ash-chat-input-action.ash-chat-input-model-action {
-    padding-inline: 0;
+    padding-inline: var(--ash-spacing-size60);
     font-size: 13px;
-  }
-}
-
-@container (max-width: 260px) {
-  .ash-chat-input-toolbars.ash-toolbar .ash-action-view-item.icon.ash-chat-input-mode-selector .ash-icon-label-container {
-    display: none;
   }
 }

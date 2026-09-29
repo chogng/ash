@@ -5,4 +5,9 @@
   min-width: 0;
   min-height: 100px;
   overflow: visible;
+  --ash-editor-background: var(--ash-input-background);
+}
+
+.ash-chat-input-editor .stanza-editor {
+  background-color: transparent;
 }
