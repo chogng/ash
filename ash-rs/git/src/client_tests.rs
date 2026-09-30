@@ -190,6 +190,6 @@ async fn system_git_uses_an_absolute_installation_path_when_workspace_contains_g
     assert!(GitClient::with_executable("git".into(), GitExecutionLimits::default()).is_err());
 }
 
-#[cfg(windows)]
+#[cfg(any(unix, windows))]
 #[path = "process_tests.rs"]
 mod process;

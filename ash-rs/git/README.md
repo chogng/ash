@@ -64,6 +64,7 @@ watch subscription、operation queue 或 wire DTO 放进上述 module，意味�
 - 普通命令的超时覆盖等待退出、写入 stdin 和读取 stdout/stderr。输出采集直接属于当前 future，取消时同步释放，避免读写任务脱离操作生命周期。
 - 仓库探测按规范化目录、Git 程序、查询 PATH 策略和执行限制合并；不同程序或限制不会混用结果。
 - 探测完成或全部调用方取消后立即移除记录，不缓存成功或失败结果。单个调用方取消不会中断其他调用方；排队等待不占用进程执行超时。
+- Unix 普通命令与流式查询各自使用独立进程组；超时、future 取消和错误结束整个组，包括主程序退出后仍持有管道的助手。完整成功后释放组的清理责任，保留正常启动的后台后代。
 - Windows 普通命令与流式查询均通过 `pty::JobObject::spawn_contained` 创建。Job 在完整操作期间存活，超时、取消或错误释放时结束进程树；成功后保留正常启动的后台后代。
 
 ```text
@@ -252,8 +253,7 @@ private `GitCommandProfile` 固定三类执行：
 - `CommandFailed`：strict query 的 nonzero Git exit；
 - `InvalidOutput`：Git success output 不满足 parser contract。
 
-当前 API 没有调用方 cancellation token。Timeout 是唯一中断机制；未来 service cancellation 必须
-进入 `GitClient` 的 process lifecycle，不能只在 App Server 丢弃 future。
+异步操作 future 拥有 Git 进程及其输出采集；调用方取消并释放 future 时，进程生命周期清理会结束子进程树。App Server 的 clone、fetch、pull、push 将连接取消信号接入这一生命周期。取消不会回滚已发生的仓库修改；仅中止后续执行。
 
 ## 集成边界
 

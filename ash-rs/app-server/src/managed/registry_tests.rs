@@ -129,6 +129,7 @@ fn concurrent_directory_openers_share_one_runtime() {
 struct Gateway {
     client: crate::server::request_dispatch::tests::Client,
     served: Option<thread::JoinHandle<io::Result<()>>>,
+    completed: mpsc::Receiver<()>,
     closed: bool,
 }
 
@@ -137,6 +138,7 @@ impl Gateway {
     fn start(registry: Arc<ProfileAppServerRegistry>) -> Self {
         let (client, host) = crate::server::request_dispatch::tests::Client::pair();
         let server = Arc::new(crate::server::request_dispatch::tests::server());
+        let (done, completed) = mpsc::channel();
         let served = thread::spawn(move || {
             let (reader, writer) = ash_app_server_transport::LocalStream::pair(host).unwrap();
             let result = super::super::gateway::serve(
@@ -146,14 +148,17 @@ impl Gateway {
                 writer,
                 super::super::gateway::RemoteLaunch::from_environment(),
             );
-            match result {
+            let result = match result {
                 Err(error) if crate::managed::is_peer_disconnect(&error) => Ok(()),
                 result => result,
-            }
+            };
+            let _ = done.send(());
+            result
         });
         let mut gateway = Self {
             client,
             served: Some(served),
+            completed,
             closed: false,
         };
         gateway.client.initialize();
@@ -189,7 +194,9 @@ fn gateway_directory_startup_leaves_profile_and_other_routes_available() {
         ))
         .unwrap(),
     );
-    registry.server_for_local_session(second.path()).unwrap();
+    registry
+        .server_for(registry.local_options(second.path()))
+        .unwrap();
     let opening = Arc::new(DirRuntime::default());
     registry.servers.lock().unwrap().insert(
         DirRuntimeKey {
@@ -285,12 +292,16 @@ fn gateway_bounds_cold_directory_requests_and_drops_them_on_disconnect() {
     assert!(response["result"].is_object());
     gateway.client.close();
     gateway.closed = true;
-    // Keep the startup gate held until the gateway closes the route. This models a filesystem
-    // operation returning after EOF; the route must release its connection without executing.
-    thread::sleep(Duration::from_millis(100));
+    // Connection cleanup must finish while shared initialization is still blocked.
+    gateway
+        .completed
+        .recv_timeout(Duration::from_secs(3))
+        .unwrap();
     drop(held);
     drop(gateway);
-    let server = registry.server_for_local_session(directory.path()).unwrap();
+    let server = registry
+        .server_for(registry.local_options(directory.path()))
+        .unwrap();
     let mut connection = server.product_host_connection();
     server.handle_json(&mut connection, r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"verify","version":"1"},"capabilities":{}}}"#);
     let response: serde_json::Value = serde_json::from_str(&server.handle_json(
@@ -345,4 +356,96 @@ fn gateway_directory_startup_failure_completes_requests_and_preserves_the_connec
     let response = gateway.client.read();
     assert_eq!(response["id"], 4);
     assert!(response["result"].is_object());
+}
+
+#[test]
+fn cancelling_one_directory_waiter_preserves_initialization_for_another_waiter() {
+    use ash_async_utils::CancellationSource;
+    let profile = tempfile::tempdir().unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let registry = Arc::new(
+        ProfileAppServerRegistry::open(ConnectionOptions::new(
+            profile.path(),
+            None,
+            GrantSource::HostConfiguration,
+            None,
+        ))
+        .unwrap(),
+    );
+    let opening = Arc::new(DirRuntime::default());
+    registry.servers.lock().unwrap().insert(
+        DirRuntimeKey {
+            dir_root: Some(dunce::canonicalize(directory.path()).unwrap()),
+            dir_grant_source: GrantSource::UserConfig,
+            product_services_identity: None,
+        },
+        Arc::clone(&opening),
+    );
+    let first = CancellationSource::new();
+    let second = CancellationSource::new();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let held = opening.opening.lock().unwrap();
+    runtime.block_on(async {
+        let first_token = first.token();
+        let second_token = second.token();
+        let first_wait = registry.open_local_session(directory.path(), &first_token);
+        let second_wait = registry.open_local_session(directory.path(), &second_token);
+        tokio::pin!(first_wait, second_wait);
+        // Poll both submissions before cancelling, ensuring the second has a live request.
+        tokio::select! { _ = &mut first_wait => panic!("startup gate was bypassed"), _ = &mut second_wait => panic!("startup gate was bypassed"), _ = tokio::time::sleep(Duration::from_millis(30)) => {} }
+        first.cancel();
+        assert!(tokio::time::timeout(Duration::from_secs(3), first_wait).await.unwrap().is_err());
+        drop(held);
+        let server = tokio::time::timeout(Duration::from_secs(3), second_wait).await.unwrap().unwrap();
+        let found = registry.server_for(registry.local_options(directory.path())).unwrap();
+        assert!(Arc::ptr_eq(&server, &found));
+        assert_eq!(registry.ready_servers().unwrap().len(), 1);
+    });
+}
+
+#[test]
+fn shared_directory_waiters_do_not_occupy_workers_needed_by_other_directories() {
+    use ash_async_utils::CancellationSource;
+    let profile = tempfile::tempdir().unwrap();
+    let blocked = tempfile::tempdir().unwrap();
+    let other = tempfile::tempdir().unwrap();
+    let registry = ProfileAppServerRegistry::open(ConnectionOptions::new(
+        profile.path(),
+        None,
+        GrantSource::HostConfiguration,
+        None,
+    ))
+    .unwrap();
+    let shared = Arc::new(DirRuntime::default());
+    shared.opening.lock().unwrap().running = true;
+    registry.servers.lock().unwrap().insert(
+        DirRuntimeKey {
+            dir_root: Some(dunce::canonicalize(blocked.path()).unwrap()),
+            dir_grant_source: GrantSource::UserConfig,
+            product_services_identity: None,
+        },
+        Arc::clone(&shared),
+    );
+    let cancellation = CancellationSource::new();
+    let token = cancellation.token();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        let waits = (0..8).map(|_| registry.open_local_session(blocked.path(), &token));
+        let waits = futures::future::join_all(waits);
+        tokio::pin!(waits);
+        tokio::select! { _ = &mut waits => panic!("shared initialization is pending"), _ = tokio::time::sleep(Duration::from_millis(30)) => {} }
+        let found = tokio::time::timeout(Duration::from_secs(3), registry.open_local_session(other.path(), &token)).await.unwrap().unwrap();
+        assert_eq!(registry.ready_servers().unwrap().len(), 1);
+        cancellation.cancel();
+        assert!(tokio::time::timeout(Duration::from_secs(3), waits).await.unwrap().iter().all(Result::is_err));
+        assert_eq!(registry.startup.waiters.load(Ordering::Acquire), 0);
+        assert!(Arc::ptr_eq(&found, &registry.server_for(registry.local_options(other.path())).unwrap()));
+    });
+    assert!(finish_directory(&shared, Err("fixture initialization finished".into())).is_err());
 }

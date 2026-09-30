@@ -5,6 +5,7 @@ use crate::server::message_queue::OutboundSender;
 use crate::server::request_dispatch::IncomingRequest;
 use crate::server::request_dispatch::RequestDispatchHandle;
 use crate::server::request_dispatch::RequestLane;
+use ash_async_utils::CancellationSource;
 use serde_json::Value;
 use std::io;
 use std::path::PathBuf;
@@ -51,6 +52,7 @@ pub(super) struct LocalTarget<'scope> {
     input: Option<mpsc::SyncSender<RoutedRequest>>,
     state: Arc<Mutex<State>>,
     budgets: crate::server::message_queue::InputBudgets,
+    cancellation: CancellationSource,
     opening: Option<thread::ScopedJoinHandle<'scope, io::Result<()>>>,
 }
 
@@ -69,10 +71,15 @@ impl<'scope> LocalTarget<'scope> {
         let state = Arc::new(Mutex::new(State::default()));
         let opening_state = Arc::clone(&state);
         let budgets = requests.budgets();
+        let cancellation = CancellationSource::new();
+        let opening_cancellation = cancellation.token();
         let opening = scope.spawn(move || {
             let opened = (|| {
-                let server = registry
-                    .server_for_local_session(&root)
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()?;
+                let server = runtime
+                    .block_on(registry.open_local_session(&root, &opening_cancellation))
                     .map_err(io::Error::other)?;
                 let mut connection = server.product_host_connection();
                 let response = server.handle_json(&mut connection, &initialize);
@@ -151,6 +158,7 @@ impl<'scope> LocalTarget<'scope> {
             state,
             budgets,
             opening: Some(opening),
+            cancellation,
         }
     }
 
@@ -220,6 +228,7 @@ impl<'scope> LocalTarget<'scope> {
     }
 
     pub(super) fn close(&mut self) {
+        self.cancellation.cancel();
         let target = {
             let mut state = self.state.lock().unwrap();
             state.closed = true;

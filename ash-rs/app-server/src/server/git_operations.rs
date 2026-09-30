@@ -36,6 +36,8 @@ use ash_app_server_protocol::protocol::git::GitWorktreeListResult;
 use ash_app_server_protocol::protocol::git::GitWorktreeResolveParams;
 use ash_app_server_protocol::protocol::git::GitWorktreeResolveResult;
 use ash_app_server_protocol::protocol::git::GitWorktreeStateDto;
+use ash_async_utils::CancellationToken;
+use ash_async_utils::FutureCancellationExt;
 use ash_git::GitClient;
 use ash_git::GitError;
 use ash_protocol::HookEvent;
@@ -57,6 +59,7 @@ impl AppServer {
         &self,
         connection: &ConnectionState,
         value: &Value,
+        cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         if !connection.allows_product_host_capabilities() {
             return Err(RpcError::new(
@@ -74,7 +77,12 @@ impl AppServer {
             .build()
             .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
         let path = runtime
-            .block_on(GitClient::system().clone_repository(&params.url, parent))
+            .block_on(
+                GitClient::system()
+                    .clone_repository(&params.url, parent)
+                    .with_cancellation(cancellation.clone()),
+            )
+            .map_err(|_| RpcError::new(-32800, AppServerErrorName::RequestCancelled))?
             .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?;
         result(&GitCloneResult {
             repository_path: path.to_string_lossy().into_owned(),
@@ -480,32 +488,45 @@ impl AppServer {
         })
     }
 
-    pub(super) fn git_fetch(&self, value: &Value) -> Result<Value, RpcError> {
+    pub(super) fn git_fetch(
+        &self,
+        value: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: GitFetchParams = decode(value)?;
         let status = self
             .git_runtime_service()?
             .fetch_for(
                 params.repository_id.as_deref(),
                 params.mode.unwrap_or(GitFetchModeDto::All),
+                cancellation,
             )
             .map_err(git_error)?;
         result(&GitOperationResult { status })
     }
 
-    pub(super) fn git_pull(&self, value: &Value) -> Result<Value, RpcError> {
+    pub(super) fn git_pull(
+        &self,
+        value: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: GitRepositoryParams = decode(value)?;
         let status = self
             .git_runtime_service()?
-            .pull_fast_forward_for(params.repository_id.as_deref())
+            .pull_fast_forward_for(params.repository_id.as_deref(), cancellation)
             .map_err(git_error)?;
         result(&GitOperationResult { status })
     }
 
-    pub(super) fn git_push(&self, value: &Value) -> Result<Value, RpcError> {
+    pub(super) fn git_push(
+        &self,
+        value: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: GitRepositoryParams = decode(value)?;
         let status = self
             .git_runtime_service()?
-            .push_for(params.repository_id.as_deref())
+            .push_for(params.repository_id.as_deref(), cancellation)
             .map_err(git_error)?;
         result(&GitOperationResult { status })
     }
@@ -546,6 +567,9 @@ fn validate_object_id(object_id: &str) -> Result<(), RpcError> {
 
 pub(super) fn git_error(error: GitRuntimeError) -> RpcError {
     match error {
+        GitRuntimeError::Service(GitServiceError::Cancelled) => {
+            RpcError::new(-32800, AppServerErrorName::RequestCancelled)
+        }
         GitRuntimeError::InvalidGraphCursor => {
             RpcError::new(-32602, AppServerErrorName::InvalidParams)
         }

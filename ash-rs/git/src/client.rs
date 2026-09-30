@@ -121,6 +121,19 @@ enum ExecutableSource {
     Explicit(PathBuf),
 }
 
+/// Retains the spawned group ID even after Git exits while helpers still hold output pipes.
+#[cfg(unix)]
+struct GitProcessGroup(Option<u32>);
+
+#[cfg(unix)]
+impl Drop for GitProcessGroup {
+    fn drop(&mut self) {
+        if let Some(id) = self.0 {
+            let _ = pty::process_group::kill_process_group(id);
+        }
+    }
+}
+
 struct CloneDestination(Option<PathBuf>);
 
 impl Drop for CloneDestination {
@@ -417,6 +430,8 @@ impl GitClient {
         let mut child = command
             .spawn()
             .map_err(|source| GitError::io("spawn Git process", source))?;
+        #[cfg(unix)]
+        let group = GitProcessGroup(Some(child.id().expect("new Git process has an ID")));
         let stdout = child
             .stdout
             .take()
@@ -428,6 +443,8 @@ impl GitClient {
         let stderr_task = tokio::spawn(read_bounded(stderr, self.limits.max_output_bytes));
         Ok(GitQueryStream {
             child,
+            #[cfg(unix)]
+            group,
             #[cfg(windows)]
             job,
             stdout: BufReader::new(stdout),
@@ -471,6 +488,8 @@ impl GitClient {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
+        #[cfg(unix)]
+        command.process_group(0);
         invocation.profile.configure(&mut command);
         command.envs(
             invocation
@@ -502,6 +521,8 @@ impl GitClient {
         let mut child = command
             .spawn()
             .map_err(|source| GitError::io("spawn Git process", source))?;
+        #[cfg(unix)]
+        let mut group = GitProcessGroup(Some(child.id().expect("new Git process has an ID")));
         let stdout = child
             .stdout
             .take()
@@ -552,6 +573,10 @@ impl GitClient {
                 stream: "stderr",
                 limit_bytes: self.limits.max_output_bytes,
             });
+        }
+        #[cfg(unix)]
+        if status.success() {
+            group.0 = None;
         }
         #[cfg(windows)]
         if status.success() {
@@ -703,6 +728,8 @@ pub(crate) struct GitCommandOutput {
 
 pub(crate) struct GitQueryStream {
     child: Child,
+    #[cfg(unix)]
+    group: GitProcessGroup,
     #[cfg(windows)]
     job: pty::JobObject,
     stdout: BufReader<ChildStdout>,
@@ -806,6 +833,10 @@ impl GitQueryStream {
             });
         }
         if status.success() {
+            #[cfg(unix)]
+            {
+                self.group.0 = None;
+            }
             #[cfg(windows)]
             self.job
                 .preserve_descendants()

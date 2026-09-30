@@ -6,11 +6,13 @@ use crate::client::FsmonitorOverride;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::path::Path;
+#[cfg(windows)]
 use std::process::Command;
 use std::time::Duration;
 
 const FIXTURE: &str = "client::tests::process::child_fixture";
 
+#[cfg(windows)]
 #[test]
 fn child_fixture() {
     let Ok(mode) = std::env::var("ASH_GIT_TEST_MODE") else {
@@ -35,11 +37,21 @@ fn child_fixture() {
 }
 
 fn invocation(root: &Path, mode: &str) -> GitInvocation {
+    #[cfg(windows)]
     std::fs::hard_link(
         std::env::current_exe().unwrap(),
         root.join("git-job-fixture.exe"),
     )
     .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let executable = root.join("git-job-fixture");
+        // A shell child avoids loading the entire test binary while unrelated Git tests run.
+        // Both modes leave a real descendant holding the captured pipes.
+        std::fs::write(&executable, "#!/bin/sh\n(printf ready > \"$ASH_GIT_TEST_ROOT/ready\"; sleep 3; printf survived > \"$ASH_GIT_TEST_ROOT/survived\") &\nif [ \"$ASH_GIT_TEST_MODE\" = parent ]; then wait; fi\n").unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
     let mut exec_path = OsString::from("--exec-path=");
     exec_path.push(root);
     GitInvocation::query(
@@ -69,18 +81,33 @@ async fn assert_descendant_stopped(root: &Path) {
     );
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn deadline_covers_pipes_held_after_git_exits() {
-    let directory = tempfile::tempdir().unwrap();
+    let executable = std::env::current_exe().unwrap();
+    let directory = tempfile::tempdir_in(executable.parent().unwrap()).unwrap();
     let mut client = GitClient::system();
     client.limits =
         GitExecutionLimits::new(Duration::from_millis(900), Duration::from_secs(5), 4096).unwrap();
-    let result = tokio::time::timeout(
-        Duration::from_secs(3),
-        client.run(invocation(directory.path(), "orphan")),
-    )
-    .await
-    .unwrap();
+    let invocation = invocation(directory.path(), "orphan");
+    let task = tokio::spawn(async move { client.run(invocation).await });
+    // The deadline must exercise inherited pipes, rather than a child that has not been
+    // scheduled yet. Keep the timer frozen and the runtime runnable until the real child starts.
+    let startup_deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while !directory.path().join("ready").exists() {
+        assert!(std::time::Instant::now() < startup_deadline);
+        assert!(
+            !task.is_finished(),
+            "Git finished before its descendant started"
+        );
+        tokio::task::yield_now().await;
+    }
+    tokio::time::advance(Duration::from_millis(900)).await;
+    // Killing and reaping the OS process need real scheduling after the deadline fires.
+    tokio::time::resume();
+    let result = tokio::time::timeout(Duration::from_secs(3), task)
+        .await
+        .unwrap()
+        .unwrap();
     assert!(
         matches!(result, Err(GitError::TimedOut { .. })),
         "Git output collection must reach its deadline"
@@ -90,7 +117,8 @@ async fn deadline_covers_pipes_held_after_git_exits() {
 
 #[tokio::test]
 async fn cancelling_git_work_kills_its_running_descendants() {
-    let directory = tempfile::tempdir().unwrap();
+    let executable = std::env::current_exe().unwrap();
+    let directory = tempfile::tempdir_in(executable.parent().unwrap()).unwrap();
     let invocation = invocation(directory.path(), "parent");
     let task = tokio::spawn(async move { GitClient::system().run(invocation).await });
     tokio::time::timeout(Duration::from_secs(3), async {
@@ -107,7 +135,8 @@ async fn cancelling_git_work_kills_its_running_descendants() {
 
 #[tokio::test]
 async fn cancelling_last_discovery_waiter_kills_its_running_descendants() {
-    let directory = tempfile::tempdir().unwrap();
+    let executable = std::env::current_exe().unwrap();
+    let directory = tempfile::tempdir_in(executable.parent().unwrap()).unwrap();
     let invocation = invocation(directory.path(), "parent");
     let client = GitClient::system();
     let key = crate::discovery::Key {

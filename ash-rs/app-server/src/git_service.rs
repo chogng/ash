@@ -1,3 +1,5 @@
+use ash_async_utils::CancellationToken;
+use ash_async_utils::FutureCancellationExt;
 use ash_file_access::Authorization;
 use ash_file_access::Dir;
 use ash_file_access::Permission;
@@ -537,24 +539,32 @@ impl GitService {
         })
     }
 
-    pub(crate) fn fetch(&self) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
-        self.mutate_remote(GitRemoteMutation::Fetch)
+    pub(crate) fn fetch(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
+        self.mutate_remote(GitRemoteMutation::Fetch, cancellation)
     }
 
     pub(crate) fn fetch_default(
         &self,
+        cancellation: &CancellationToken,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
-        self.mutate_remote(GitRemoteMutation::FetchDefault)
+        self.mutate_remote(GitRemoteMutation::FetchDefault, cancellation)
     }
 
     pub(crate) fn pull_fast_forward(
         &self,
+        cancellation: &CancellationToken,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
-        self.mutate_remote(GitRemoteMutation::PullFastForward)
+        self.mutate_remote(GitRemoteMutation::PullFastForward, cancellation)
     }
 
-    pub(crate) fn push(&self) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
-        self.mutate_remote(GitRemoteMutation::Push)
+    pub(crate) fn push(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
+        self.mutate_remote(GitRemoteMutation::Push, cancellation)
     }
 
     fn mutate_paths(
@@ -587,27 +597,35 @@ impl GitService {
     fn mutate_remote(
         &self,
         operation: GitRemoteMutation,
+        cancellation: &CancellationToken,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
         self.ensure_mutable()?;
-        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
-        runtime.block_on(async {
-            let repository = self.open_repository().await?;
-            match operation {
-                GitRemoteMutation::FetchDefault => self.client.fetch_default(&repository).await,
-                GitRemoteMutation::Fetch => self.client.fetch(&repository).await,
-                GitRemoteMutation::PullFastForward => {
-                    self.client.pull_fast_forward(&repository).await
+        let runtime = lock_for_request(&self.runtime, cancellation)?;
+        runtime
+            .block_on(
+                async {
+                    let repository = self.open_repository().await?;
+                    match operation {
+                        GitRemoteMutation::FetchDefault => {
+                            self.client.fetch_default(&repository).await
+                        }
+                        GitRemoteMutation::Fetch => self.client.fetch(&repository).await,
+                        GitRemoteMutation::PullFastForward => {
+                            self.client.pull_fast_forward(&repository).await
+                        }
+                        GitRemoteMutation::Push => self.client.push(&repository).await,
+                    }
+                    .map_err(GitServiceError::Git)?;
+                    let snapshot = self
+                        .client
+                        .snapshot(&repository)
+                        .await
+                        .map_err(GitServiceError::Git)?;
+                    Ok((repository, snapshot))
                 }
-                GitRemoteMutation::Push => self.client.push(&repository).await,
-            }
-            .map_err(GitServiceError::Git)?;
-            let snapshot = self
-                .client
-                .snapshot(&repository)
-                .await
-                .map_err(GitServiceError::Git)?;
-            Ok((repository, snapshot))
-        })
+                .with_cancellation(cancellation.clone()),
+            )
+            .map_err(|_| GitServiceError::Cancelled)?
     }
 
     async fn open_repository(&self) -> Result<GitRepository, GitServiceError> {
@@ -663,6 +681,7 @@ impl GitService {
 
 #[derive(Debug)]
 pub(crate) enum GitServiceError {
+    Cancelled,
     BranchNotFound,
     Boundary,
     CommitChangeNotFound,
@@ -683,4 +702,24 @@ fn has_conflict_markers(text: &str) -> bool {
             || line.starts_with(">>>>>>> ")
             || line == ">>>>>>>"
     })
+}
+
+/// Repository background work shares these locks with RPC. A disconnected caller must leave
+/// the wait as well as the Git future; the short polling interval bounds synchronous lock waits.
+pub(crate) fn lock_for_request<'a, T>(
+    lock: &'a Mutex<T>,
+    cancellation: &CancellationToken,
+) -> Result<std::sync::MutexGuard<'a, T>, GitServiceError> {
+    loop {
+        cancellation
+            .check()
+            .map_err(|_| GitServiceError::Cancelled)?;
+        match lock.try_lock() {
+            Ok(guard) => return Ok(guard),
+            Err(std::sync::TryLockError::Poisoned(_)) => return Err(GitServiceError::Runtime),
+            Err(std::sync::TryLockError::WouldBlock) => {
+                std::thread::sleep(std::time::Duration::from_millis(10))
+            }
+        }
+    }
 }

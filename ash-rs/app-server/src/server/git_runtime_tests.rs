@@ -71,13 +71,18 @@ fn automatic_fetch_runs_from_shared_config_without_a_frontend() {
         .unwrap();
 
     let deadline = Instant::now() + Duration::from_secs(10);
+    let mut notified = false;
     loop {
         let output = Command::new("git")
             .args(["rev-parse", "--verify", "refs/remotes/origin/main"])
             .current_dir(consumer.root())
             .output()
             .unwrap();
-        if output.status.success() {
+        notified |= queue
+            .drain()
+            .iter()
+            .any(|notification| notification["method"] == "git/statusChanged");
+        if output.status.success() && notified {
             assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), expected);
             break;
         }
@@ -89,10 +94,8 @@ fn automatic_fetch_runs_from_shared_config_without_a_frontend() {
     }
     drop(watcher);
     assert!(
-        queue
-            .drain()
-            .iter()
-            .any(|notification| { notification["method"] == "git/statusChanged" })
+        notified,
+        "completed automatic fetch must publish its status before stop"
     );
 }
 
@@ -522,4 +525,103 @@ fn inspection_authorization(root: &Path) -> Authorization {
     )
     .authorize(Permission::InspectRepository)
     .unwrap()
+}
+
+#[test]
+fn stopping_watchers_cancels_an_active_automatic_fetch_before_joining_refresh() {
+    use std::io::Read;
+    use std::net::TcpListener;
+    let repository = TestRepository::init();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("git://{}/repo.git", listener.local_addr().unwrap());
+    repository.git(&["remote", "add", "origin", &url]);
+    listener.set_nonblocking(true).unwrap();
+    let accepting = std::thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(3);
+        loop {
+            match listener.accept() {
+                Ok((stream, _)) => return stream,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    assert!(Instant::now() < deadline, "automatic fetch did not connect");
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                Err(error) => panic!("listener failed: {error}"),
+            }
+        }
+    });
+    let config_path = repository.root().join("autofetch.sqlite3");
+    std::fs::write(
+        config_path.with_extension("toml"),
+        "schemaVersion = 5\n[git]\nautofetch = 'all'\nautofetchPeriod = 60\n",
+    )
+    .unwrap();
+    let config = Arc::new(ConfigStore::open(&config_path).unwrap());
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    runtime.status().unwrap();
+    let watcher = runtime.start_watching(Some(config));
+    let mut remote = accepting.join().unwrap();
+    remote.set_nonblocking(false).unwrap();
+    remote
+        .set_read_timeout(Some(Duration::from_secs(3)))
+        .unwrap();
+    let mut bytes = [0; 256];
+    assert!(remote.read(&mut bytes).unwrap() > 0);
+    // Force a refresh request that competes with the active network operation's lock.
+    repository.write("during-fetch.txt", "refresh\n");
+    let (done, completed) = std::sync::mpsc::channel();
+    let closing = std::thread::spawn(move || {
+        drop(watcher);
+        done.send(()).unwrap();
+    });
+    completed.recv_timeout(Duration::from_secs(3)).unwrap();
+    closing.join().unwrap();
+    assert_eq!(remote.read(&mut bytes).unwrap(), 0);
+    assert!(runtime.status().is_ok());
+}
+
+#[test]
+fn partially_failed_fetch_invalidates_the_graph_after_a_remote_ref_was_updated() {
+    use ash_async_utils::CancellationSource;
+    let repository = TestRepository::init();
+    for value in ["initial", "updated"] {
+        repository.write("tracked.txt", value);
+        repository.git(&["add", "tracked.txt"]);
+        repository.git(&["commit", "-m", value]);
+    }
+    let remote = TestRepository::init();
+    remote.write("remote.txt", "remote commit\n");
+    remote.git(&["add", "remote.txt"]);
+    remote.git(&["commit", "-m", "remote commit"]);
+    repository.git(&["remote", "add", "first", remote.root().to_str().unwrap()]);
+    let missing = repository.root().join("missing-remote");
+    repository.git(&["remote", "add", "second", missing.to_str().unwrap()]);
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    runtime.status().unwrap();
+    let page = runtime
+        .graph(1, std::num::NonZeroUsize::new(1).unwrap(), None)
+        .unwrap();
+    let cursor = page.next_cursor.unwrap();
+    let cancellation = CancellationSource::new();
+    assert!(runtime.fetch(&cancellation.token()).is_err());
+    assert_eq!(
+        repository.git_output(&["rev-parse", "refs/remotes/first/main"]),
+        remote.git_output(&["rev-parse", "HEAD"])
+    );
+    assert!(matches!(
+        runtime.graph(1, std::num::NonZeroUsize::new(1).unwrap(), Some(&cursor)),
+        Err(super::GitRuntimeError::InvalidGraphCursor)
+    ));
+    assert!(
+        runtime
+            .graph(1, std::num::NonZeroUsize::new(10).unwrap(), None)
+            .is_ok()
+    );
 }

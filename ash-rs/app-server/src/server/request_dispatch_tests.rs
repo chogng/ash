@@ -156,6 +156,7 @@ fn stalled_git_clone_leaves_queries_and_control_requests_available() {
         }),
     );
     let mut remote = accepting.join().unwrap();
+    remote.set_nonblocking(false).unwrap();
     remote
         .set_read_timeout(Some(Duration::from_secs(3)))
         .unwrap();
@@ -626,4 +627,172 @@ fn request_byte_saturation_rejects_work_but_keeps_control_and_releases_on_comple
         dispatch.finish().unwrap();
     });
     assert!(budget.try_reserve(ordinary.len()).is_some());
+}
+
+#[test]
+fn socket_eof_stops_running_git_network_operations_without_waiting_for_remote_reply() {
+    use ash_file_access::Dir;
+    use ash_file_access::Grant;
+    use ash_file_access::GrantSource;
+    use ash_file_access::Permission;
+    use ash_file_access::Permissions;
+    use std::io::Read;
+    use std::net::TcpListener;
+    for method in ["git/clone", "git/fetch", "git/pull", "git/push"] {
+        let directory = tempfile::tempdir().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let accepting = thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(3);
+            loop {
+                match listener.accept() {
+                    Ok((stream, _)) => return stream,
+                    Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                        assert!(Instant::now() < deadline, "Git did not connect");
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(error) => panic!("Git listener failed: {error}"),
+                }
+            }
+        });
+        let mut backend = server();
+        if method != "git/clone" {
+            for args in [
+                vec!["init", "--initial-branch=main"],
+                vec![
+                    "-c",
+                    "user.name=Test",
+                    "-c",
+                    "user.email=test@example.com",
+                    "commit",
+                    "--allow-empty",
+                    "-m",
+                    "Initial",
+                ],
+            ] {
+                let output = std::process::Command::new("git")
+                    .args(args)
+                    .current_dir(directory.path())
+                    .output()
+                    .unwrap();
+                assert!(
+                    output.status.success(),
+                    "{}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+            for (key, value) in [
+                ("remote.origin.url", format!("git://{address}/repo.git")),
+                (
+                    "remote.origin.fetch",
+                    "+refs/heads/*:refs/remotes/origin/*".to_string(),
+                ),
+                ("branch.main.remote", "origin".to_string()),
+                ("branch.main.merge", "refs/heads/main".to_string()),
+            ] {
+                assert!(
+                    std::process::Command::new("git")
+                        .args(["config", key, &value])
+                        .current_dir(directory.path())
+                        .status()
+                        .unwrap()
+                        .success()
+                );
+            }
+            let authorization = Grant::for_environment(
+                Dir::open_local(directory.path()).unwrap(),
+                GrantSource::HostConfiguration,
+                Permissions::new([Permission::MutateRepository]),
+            )
+            .authorize(Permission::MutateRepository)
+            .unwrap();
+            backend = backend.with_git_root(authorization).unwrap();
+        }
+        let backend = Arc::new(backend);
+        let serving = Arc::clone(&backend);
+        let (mut client, host) = Client::pair();
+        let (done, completed) = mpsc::channel();
+        let served = thread::spawn(move || {
+            let (reader, writer) = ash_app_server_transport::LocalStream::pair(host).unwrap();
+            done.send(serving.serve_product_host_stream(BufReader::new(reader), writer))
+                .unwrap();
+        });
+        client.initialize();
+        client.send(
+            2,
+            method,
+            if method == "git/clone" {
+                json!({"url":format!("git://{address}/repo.git"),"parentPath":directory.path()})
+            } else {
+                json!({})
+            },
+        );
+        let mut remote = accepting.join().unwrap();
+        remote.set_nonblocking(false).unwrap();
+        remote
+            .set_read_timeout(Some(Duration::from_secs(3)))
+            .unwrap();
+        let mut bytes = [0; 256];
+        assert!(
+            remote.read(&mut bytes).unwrap() > 0,
+            "{method} must actually start"
+        );
+        client.close();
+        let stopped = completed.recv_timeout(Duration::from_secs(3)).unwrap();
+        assert!(
+            stopped.as_ref().err().is_none_or(|error| matches!(
+                error.kind(),
+                io::ErrorKind::ConnectionAborted
+                    | io::ErrorKind::ConnectionReset
+                    | io::ErrorKind::BrokenPipe
+            )),
+            "{method}: {stopped:?}"
+        );
+        served.join().unwrap();
+        assert_eq!(
+            remote.read(&mut bytes).unwrap(),
+            0,
+            "{method} left its network process alive"
+        );
+        if method == "git/clone" {
+            for entry in directory.path().read_dir().unwrap() {
+                assert!(
+                    entry.unwrap().path().read_dir().unwrap().next().is_some(),
+                    "empty clone reservation was retained"
+                );
+            }
+        }
+        let (mut other, host) = Client::pair();
+        let served = thread::spawn(move || {
+            backend.serve_product_host_stream(BufReader::new(host.try_clone().unwrap()), host)
+        });
+        other.initialize();
+        other.send(2, "model/list", json!({}));
+        assert!(other.read()["result"].is_object());
+        other.close();
+        served.join().unwrap().unwrap();
+    }
+}
+
+#[test]
+fn cancelling_git_lock_wait_does_not_wait_for_background_repository_work() {
+    use ash_async_utils::CancellationSource;
+    let operation = Arc::new(Mutex::new(()));
+    let held = operation.lock().unwrap();
+    let waiting = Arc::clone(&operation);
+    let cancellation = CancellationSource::new();
+    let token = cancellation.token();
+    let (done, completed) = mpsc::channel();
+    let waiter = thread::spawn(move || {
+        done.send(matches!(
+            crate::git_service::lock_for_request(&waiting, &token),
+            Err(crate::git_service::GitServiceError::Cancelled)
+        ))
+        .unwrap();
+    });
+    cancellation.cancel();
+    assert!(completed.recv_timeout(Duration::from_secs(3)).unwrap());
+    drop(held);
+    waiter.join().unwrap();
 }

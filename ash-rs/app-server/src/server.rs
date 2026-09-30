@@ -2657,7 +2657,9 @@ impl AppServer {
             Some(ClientMethod::FsRename) => self.fs_rename(&request.params),
             Some(ClientMethod::FsDelete) => self.fs_delete(&request.params),
             Some(ClientMethod::GitRepositories) => self.git_repositories(),
-            Some(ClientMethod::GitClone) => self.git_clone(connection, &request.params),
+            Some(ClientMethod::GitClone) => {
+                self.git_clone(connection, &request.params, cancellation)
+            }
             Some(ClientMethod::GitStatus) => self.git_status(&request.params),
             Some(ClientMethod::GitTextDiff) => self.git_text_diff(&request.params),
             Some(ClientMethod::GitBranchList) => self.git_branch_list(&request.params),
@@ -2681,9 +2683,9 @@ impl AppServer {
             Some(ClientMethod::GitUnstage) => self.git_unstage(&request.params),
             Some(ClientMethod::GitDiscardWorktree) => self.git_discard_worktree(&request.params),
             Some(ClientMethod::GitCommit) => self.git_commit(&request.params),
-            Some(ClientMethod::GitFetch) => self.git_fetch(&request.params),
-            Some(ClientMethod::GitPull) => self.git_pull(&request.params),
-            Some(ClientMethod::GitPush) => self.git_push(&request.params),
+            Some(ClientMethod::GitFetch) => self.git_fetch(&request.params, cancellation),
+            Some(ClientMethod::GitPull) => self.git_pull(&request.params, cancellation),
+            Some(ClientMethod::GitPush) => self.git_push(&request.params, cancellation),
             Some(ClientMethod::ContentSearchStart) => {
                 self.content_search_start(connection, &request.params)
             }

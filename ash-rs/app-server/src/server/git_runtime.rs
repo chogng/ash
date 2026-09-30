@@ -2,6 +2,7 @@ use super::update_broker::UpdateBroker;
 use crate::git_service::GitService;
 use crate::git_service::GitServiceCommit;
 use crate::git_service::GitServiceError;
+use crate::git_service::lock_for_request;
 use ash_app_server_protocol::protocol::git::GitBranchDto;
 use ash_app_server_protocol::protocol::git::GitChangeFileComparisonDto;
 use ash_app_server_protocol::protocol::git::GitChangeFileResult;
@@ -30,6 +31,8 @@ use ash_app_server_protocol::protocol::git::GitSubmoduleStateDto;
 use ash_app_server_protocol::protocol::git::GitTextDiffDto;
 use ash_app_server_protocol::protocol::git::GitTextDiffResult;
 use ash_app_server_protocol::protocol::git::GitUpstreamDto;
+use ash_async_utils::CancellationSource;
+use ash_async_utils::CancellationToken;
 use ash_config::ConfigStore;
 use ash_config::GitAutoFetchMode;
 use ash_file_access::Authorization;
@@ -88,6 +91,7 @@ struct GitRepositoryRuntime {
 pub(super) struct GitWatcher {
     shutdown: Option<tokio::sync::oneshot::Sender<()>>,
     auto_fetch_shutdown: Option<mpsc::Sender<()>>,
+    auto_fetch_cancellation: Option<CancellationSource>,
     thread: Option<JoinHandle<()>>,
     children: Vec<GitWatcher>,
 }
@@ -466,37 +470,50 @@ impl GitRuntime {
         &self,
         repository_id: Option<&str>,
         mode: GitFetchModeDto,
+        cancellation: &CancellationToken,
     ) -> Result<GitStatusResult, GitRuntimeError> {
         match mode {
-            GitFetchModeDto::Default => self.repository(repository_id)?.fetch_default(),
-            GitFetchModeDto::All => self.repository(repository_id)?.fetch(),
+            GitFetchModeDto::Default => self.repository(repository_id)?.fetch_default(cancellation),
+            GitFetchModeDto::All => self.repository(repository_id)?.fetch(cancellation),
         }
     }
 
-    pub(super) fn fetch(&self) -> Result<GitStatusResult, GitRuntimeError> {
-        self.fetch_for(None, GitFetchModeDto::All)
+    pub(super) fn fetch(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.fetch_for(None, GitFetchModeDto::All, cancellation)
     }
 
     pub(super) fn pull_fast_forward_for(
         &self,
         repository_id: Option<&str>,
+        cancellation: &CancellationToken,
     ) -> Result<GitStatusResult, GitRuntimeError> {
-        self.repository(repository_id)?.pull_fast_forward()
+        self.repository(repository_id)?
+            .pull_fast_forward(cancellation)
     }
 
-    pub(super) fn pull_fast_forward(&self) -> Result<GitStatusResult, GitRuntimeError> {
-        self.pull_fast_forward_for(None)
+    pub(super) fn pull_fast_forward(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.pull_fast_forward_for(None, cancellation)
     }
 
     pub(super) fn push_for(
         &self,
         repository_id: Option<&str>,
+        cancellation: &CancellationToken,
     ) -> Result<GitStatusResult, GitRuntimeError> {
-        self.repository(repository_id)?.push()
+        self.repository(repository_id)?.push(cancellation)
     }
 
-    pub(super) fn push(&self) -> Result<GitStatusResult, GitRuntimeError> {
-        self.push_for(None)
+    pub(super) fn push(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.push_for(None, cancellation)
     }
 
     pub(super) fn close_connection(&self, connection_id: u64) {
@@ -522,6 +539,7 @@ impl GitRuntime {
         GitWatcher {
             shutdown: None,
             auto_fetch_shutdown: None,
+            auto_fetch_cancellation: None,
             thread: None,
             children,
         }
@@ -948,20 +966,32 @@ impl GitRepositoryRuntime {
         })
     }
 
-    pub(super) fn fetch(&self) -> Result<GitStatusResult, GitRuntimeError> {
-        self.mutate_remote(GitService::fetch)
+    pub(super) fn fetch(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.mutate_remote(GitService::fetch, cancellation)
     }
 
-    pub(super) fn fetch_default(&self) -> Result<GitStatusResult, GitRuntimeError> {
-        self.mutate_remote(GitService::fetch_default)
+    pub(super) fn fetch_default(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.mutate_remote(GitService::fetch_default, cancellation)
     }
 
-    pub(super) fn pull_fast_forward(&self) -> Result<GitStatusResult, GitRuntimeError> {
-        self.mutate_remote(GitService::pull_fast_forward)
+    pub(super) fn pull_fast_forward(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.mutate_remote(GitService::pull_fast_forward, cancellation)
     }
 
-    pub(super) fn push(&self) -> Result<GitStatusResult, GitRuntimeError> {
-        self.mutate_remote(GitService::push)
+    pub(super) fn push(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.mutate_remote(GitService::push, cancellation)
     }
 
     pub(super) fn start_watching(self: &Arc<Self>) -> GitWatcher {
@@ -977,6 +1007,7 @@ impl GitRepositoryRuntime {
         GitWatcher {
             shutdown: Some(shutdown),
             auto_fetch_shutdown: None,
+            auto_fetch_cancellation: None,
             thread,
             children: Vec::new(),
         }
@@ -985,13 +1016,16 @@ impl GitRepositoryRuntime {
     fn start_autofetch(self: &Arc<Self>, config: Arc<ConfigStore>) -> GitWatcher {
         let (shutdown, shutdown_rx) = mpsc::channel();
         let runtime = Arc::downgrade(self);
+        let cancellation = CancellationSource::new();
+        let token = cancellation.token();
         let thread = std::thread::Builder::new()
             .name("ash-git-autofetch".into())
-            .spawn(move || run_autofetch(runtime, config, shutdown_rx))
+            .spawn(move || run_autofetch(runtime, config, shutdown_rx, token))
             .expect("Git automatic-fetch worker starts");
         GitWatcher {
             shutdown: None,
             auto_fetch_shutdown: Some(shutdown),
+            auto_fetch_cancellation: Some(cancellation),
             thread: Some(thread),
             children: Vec::new(),
         }
@@ -1017,14 +1051,17 @@ impl GitRepositoryRuntime {
         &self,
         operation: fn(
             &GitService,
+            &CancellationToken,
         ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError>,
+        cancellation: &CancellationToken,
     ) -> Result<GitStatusResult, GitRuntimeError> {
-        let _operation = self
-            .operation
-            .lock()
-            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
-        let (repository, snapshot) = operation(&self.service).map_err(GitRuntimeError::Service)?;
+        let _operation =
+            lock_for_request(&self.operation, cancellation).map_err(GitRuntimeError::Service)?;
+        let outcome = operation(&self.service, cancellation);
+        // A remote mutation can update refs before cancellation or failure. Future graph reads
+        // must not continue an earlier traversal, even when no success response was delivered.
         self.invalidate_graphs()?;
+        let (repository, snapshot) = outcome.map_err(GitRuntimeError::Service)?;
         self.accept_status(repository, snapshot, StatusNotification::Always)
     }
 
@@ -1143,14 +1180,28 @@ impl GitRepositoryRuntime {
     }
 }
 
-impl Drop for GitWatcher {
-    fn drop(&mut self) {
+impl GitWatcher {
+    fn signal_shutdown(&mut self) {
+        if let Some(cancellation) = self.auto_fetch_cancellation.take() {
+            cancellation.cancel();
+        }
         if let Some(shutdown) = self.shutdown.take() {
             let _ = shutdown.send(());
         }
         if let Some(shutdown) = self.auto_fetch_shutdown.take() {
             let _ = shutdown.send(());
         }
+        // Refresh and autofetch share repository locks. Signal every child before joining any
+        // of them, so a refresh cannot wait on an autofetch whose cancellation is still pending.
+        for child in &mut self.children {
+            child.signal_shutdown();
+        }
+    }
+}
+
+impl Drop for GitWatcher {
+    fn drop(&mut self) {
+        self.signal_shutdown();
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
         }
@@ -1162,6 +1213,7 @@ fn run_autofetch(
     runtime: std::sync::Weak<GitRepositoryRuntime>,
     config: Arc<ConfigStore>,
     shutdown: mpsc::Receiver<()>,
+    cancellation: CancellationToken,
 ) {
     let changes = config.subscribe_changes();
     let Ok(snapshot) = config.read_snapshot() else {
@@ -1179,10 +1231,13 @@ fn run_autofetch(
                 return;
             };
             let result = match policy.autofetch {
-                GitAutoFetchMode::Default => repository.fetch_default(),
-                GitAutoFetchMode::All => repository.fetch(),
+                GitAutoFetchMode::Default => repository.fetch_default(&cancellation),
+                GitAutoFetchMode::All => repository.fetch(&cancellation),
                 GitAutoFetchMode::Off => unreachable!(),
             };
+            if cancellation.is_cancelled() {
+                return;
+            }
             if let Err(error) = result {
                 log::warn!("Git automatic fetch failed: {error:?}");
             }

@@ -23,9 +23,12 @@ tempfile = { workspace = true }
 [target.'cfg(windows)'.dependencies]
 pty = { package = "ash-utils-pty", path = "../utils/pty" }
 
+[target.'cfg(unix)'.dependencies]
+pty = { package = "ash-utils-pty", path = "../utils/pty" }
+
 [dev-dependencies]
 pretty_assertions = { workspace = true }
-tokio = { workspace = true, features = ["io-util", "macros", "process", "rt", "time"] }
+tokio = { workspace = true, features = ["io-util", "macros", "process", "rt", "test-util", "time"] }
 
 [lints]
 workspace = true
