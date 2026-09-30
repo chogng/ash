@@ -1,9 +1,9 @@
 import { lstatSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from "../common/generated/index.js";
+import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from "../../app-server/common/generated/index.js";
 import { developmentArtifactsPath, developmentAshPackagePath } from "../../environment/node/developmentArtifacts.js";
 
-export interface AppServerPackageLocation {
+export interface AppServerDaemonPackageLocation {
 	readonly appPath: string;
 	readonly expectedVersion?: string;
 	readonly isPackaged: boolean;
@@ -28,16 +28,16 @@ interface AshPackageMetadata {
 }
 
 /** Reads the digest bound to the signed product package; development generations use protocol negotiation. */
-export function packagedAppServerDaemonSha256(location: AppServerPackageLocation): string | undefined {
+export function packagedAppServerDaemonSha256(location: AppServerDaemonPackageLocation): string | undefined {
 	return packagedComponentSha256(location, "appServerDaemon");
 }
 
 /** Reads the separately signed managed backend digest. */
-export function packagedAppServerSha256(location: AppServerPackageLocation): string | undefined {
+export function packagedAppServerSha256(location: AppServerDaemonPackageLocation): string | undefined {
 	return packagedComponentSha256(location, "appServer");
 }
 
-function packagedComponentSha256(location: AppServerPackageLocation, component: "appServer" | "appServerDaemon"): string | undefined {
+function packagedComponentSha256(location: AppServerDaemonPackageLocation, component: "appServer" | "appServerDaemon"): string | undefined {
 	if (!location.isPackaged) return undefined;
 	const packageRoot = appServerPackageRoot(location);
 	const metadataPath = join(packageRoot, "ash-package.json");
@@ -58,11 +58,11 @@ function packagedComponentSha256(location: AppServerPackageLocation, component: 
 }
 
 /** Resolves the profile-scoped App Server daemon from the canonical Desktop package layout. */
-export function appServerDaemonExecutablePath(location: AppServerPackageLocation): string {
+export function appServerDaemonExecutablePath(location: AppServerDaemonPackageLocation): string {
 	return join(appServerPackageRoot(location), "bin", location.platform === "win32" ? "ash-app-server-daemon.exe" : "ash-app-server-daemon");
 }
 
-function appServerPackageRoot(location: AppServerPackageLocation): string {
+function appServerPackageRoot(location: AppServerDaemonPackageLocation): string {
 	const packageRoot = location.isPackaged
 		? location.resourcesPath
 		: developmentAshPackagePath(location.appPath);
@@ -74,12 +74,7 @@ export function developmentAppServerGenerationPath(appPath: string): string {
 	return developmentArtifactsPath(appPath, "dev", "app-server", "current.json");
 }
 
-/** Resolves the local Remote management executable from the product package. */
-export function remoteExecutablePath(location: AppServerPackageLocation): string {
-	return join(appServerPackageRoot(location), "bin", location.platform === "win32" ? "ash-remote.exe" : "ash-remote");
-}
-
 /** Resolves the managed App Server executable independently of its lifecycle command carrier. */
-export function appServerExecutablePath(location: AppServerPackageLocation): string {
+export function appServerExecutablePath(location: AppServerDaemonPackageLocation): string {
 	return join(appServerPackageRoot(location), "bin", location.platform === "win32" ? "ash-app-server.exe" : "ash-app-server");
 }

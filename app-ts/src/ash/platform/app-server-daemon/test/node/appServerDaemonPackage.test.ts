@@ -3,8 +3,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "mocha";
-import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from "../../common/generated/index.js";
-import { appServerDaemonExecutablePath, packagedAppServerDaemonSha256, packagedAppServerSha256, remoteExecutablePath } from "../../../../platform/app-server/electron-main/appServerPackage.js";
+import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from '../../../app-server/common/generated/index.js';
+import { appServerDaemonExecutablePath, packagedAppServerDaemonSha256, packagedAppServerSha256 } from '../../node/appServerDaemonPackage.js';
+import { remoteExecutablePath } from '../../../remote/node/remotePackage.js';
+import { createAppServerDaemonLauncher } from '../../electron-main/appServerDaemonLauncher.js';
 
 test("development and production resolve the same canonical package entrypoint", () => {
 	const workspace = mkdtempSync(join(tmpdir(), "ash-workspace-"));
@@ -14,6 +16,16 @@ test("development and production resolve the same canonical package entrypoint",
 	mkdirSync(join(developmentRoot, "manifests"), { recursive: true });
 	writeFileSync(join(developmentRoot, "manifests", "00000000000000000001.json"), JSON.stringify({ formatVersion: 1, sequence: 1, directory: `packages/0.1.0/${build}` }));
 	try {
+		const connection = createAppServerDaemonLauncher({
+			packageLocation: { appPath, isPackaged: false, platform: 'linux', resourcesPath: '/installed/resources' },
+			sourceEnvironment: {}, profileRoot: '/profile', electronExecutable: '/electron', role: 'workbench',
+		});
+		assert.deepStrictEqual({ executable: connection.launcher.executable, args: connection.launcher.options.args, backend: connection.launcher.environment.ASH_APP_SERVER_PATH, generationFile: connection.generationFile }, {
+			executable: join(developmentRoot, 'packages', '0.1.0', build, 'bin', 'ash-app-server-daemon'),
+			args: ['connect-selected'],
+			backend: join(developmentRoot, 'packages', '0.1.0', build, 'bin', 'ash-app-server'),
+			generationFile: undefined,
+		});
 		assert.equal(
 			appServerDaemonExecutablePath({
 				appPath,

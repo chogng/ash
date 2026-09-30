@@ -9,7 +9,7 @@ import { launchElectron } from '../../../automation/playwrightElectron.js';
 import type { ISandboxGlobals } from "../../../../src/ash/base/parts/sandbox/electron-browser/sandboxTypes.js";
 import { decodeAppServerServerRequestResult } from '../../../../src/ash/platform/app-server/common/generated/AppServerProtocolDecoder.js';
 import type { Page } from '@playwright/test';
-import { appServerDaemonExecutablePath, appServerExecutablePath } from '../../../../src/ash/platform/app-server/electron-main/appServerPackage.js';
+import { appServerDaemonExecutablePath, appServerExecutablePath } from '../../../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js';
 
 test('two desktops isolate browser targets and closing one preserves the other', async ({ target, testWorkspace }) => {
 	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required', 'Requires the shared managed backend');

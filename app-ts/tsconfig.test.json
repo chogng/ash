@@ -57,7 +57,7 @@
     "src/ash/workbench/services/documentCollaboration/**/*.ts",
     "src/ash/workbench/services/documentEditor/**/*.ts",
     "src/ash/platform/app-server/electron-main/app-server-client.ts",
-    "src/ash/platform/app-server/electron-main/appServerPackage.ts",
+    "src/ash/platform/app-server-daemon/node/appServerDaemonPackage.ts",
     "src/ash/platform/app-server/electron-main/app-server-ipc.ts",
     "src/ash/platform/app-server/electron-main/app-server-session.ts",
     "src/ash/platform/app-server/electron-main/app-server-supervisor.ts",

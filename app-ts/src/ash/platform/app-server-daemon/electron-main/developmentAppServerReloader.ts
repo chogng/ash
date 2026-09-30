@@ -5,16 +5,16 @@ import { basename, dirname, resolve } from "node:path";
 import { promisify } from "node:util";
 import { Disposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { AppServerConnectionRelay } from "../../app-server/electron-main/appServerConnectionRelay.js";
-import type { LocalAppServerProcessLauncher } from "../../app-server/electron-main/localAppServerProcessLauncher.js";
+import type { AppServerDaemonLauncher } from "./appServerDaemonLauncher.js";
 
 const MAX_GENERATION_BYTES = 4_096;
 const execFileAsync = promisify(execFile);
 type DevelopmentAppServerConnectionRelay = Pick<AppServerConnectionRelay, "onStateChange" | "start" | "state" | "stop">;
-type RestartManagedDaemon = (launcher: LocalAppServerProcessLauncher) => Promise<void>;
+type RestartManagedDaemon = (launcher: AppServerDaemonLauncher) => Promise<void>;
 
 export interface DevelopmentAppServerReloaderOptions {
 	readonly generationFile: string;
-	readonly launcher: LocalAppServerProcessLauncher;
+	readonly launcher: AppServerDaemonLauncher;
 	readonly supervisor: DevelopmentAppServerConnectionRelay;
 	readonly debounceMs?: number;
 	readonly watchGeneration?: (generationFile: string, listener: () => void) => IDisposable;
@@ -137,7 +137,7 @@ export function selectDevelopmentAppServerExecutable(packagedExecutable: string,
 
 export async function restartDevelopmentAppServer(
 	supervisor: Pick<AppServerConnectionRelay, "start" | "stop">,
-	launcher: LocalAppServerProcessLauncher,
+	launcher: AppServerDaemonLauncher,
 	executable: string,
 	restartDaemon: RestartManagedDaemon = restartManagedDaemon,
 ): Promise<void> {
@@ -161,7 +161,7 @@ export async function restartDevelopmentAppServer(
 	}
 }
 
-async function restartManagedDaemon(launcher: LocalAppServerProcessLauncher): Promise<void> {
+async function restartManagedDaemon(launcher: AppServerDaemonLauncher): Promise<void> {
 	await execFileAsync(launcher.executable, ["restart"], {
 		env: { ...launcher.environment },
 		maxBuffer: 1_048_576,

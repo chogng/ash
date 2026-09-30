@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { test } from "mocha";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
 import type { AppServerConnectionState } from "../../../../platform/app-server/common/appServerApi.js";
-import { LocalAppServerProcessLauncher } from "../../../../platform/app-server/electron-main/localAppServerProcessLauncher.js";
-import { DevelopmentAppServerReloader, readDevelopmentAppServerGeneration, restartDevelopmentAppServer, selectDevelopmentAppServerExecutable } from "../../../../platform/app-server/electron-main/developmentAppServerReloader.js";
+import { AppServerDaemonLauncher } from "../../../../platform/app-server-daemon/electron-main/appServerDaemonLauncher.js";
+import { DevelopmentAppServerReloader, readDevelopmentAppServerGeneration, restartDevelopmentAppServer, selectDevelopmentAppServerExecutable } from "../../../../platform/app-server-daemon/electron-main/developmentAppServerReloader.js";
 
 test("development Server Host generation resolves one confined built executable", async () => {
 	const root = await mkdtemp(join(tmpdir(), "ash-app-server-generation-"));
@@ -138,8 +138,8 @@ test("development Server Host queues a generation until initial startup is stabl
 	reloader.dispose();
 });
 
-function launcherAt(executable: string): LocalAppServerProcessLauncher {
-	return new LocalAppServerProcessLauncher({
+function launcherAt(executable: string): AppServerDaemonLauncher {
+	return new AppServerDaemonLauncher({
 		executable: "/test/ash-app-server-daemon",
 		args: ["connect-selected"],
 		environment: { ASH_APP_SERVER_PATH: executable },

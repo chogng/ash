@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { appServerDaemonExecutablePath } from '../../../../src/ash/platform/app-server/electron-main/appServerPackage.js';
+import { appServerDaemonExecutablePath } from '../../../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js';
 import { resolveElectronConfiguration } from '../../../automation/electron.js';
 import { launchBrowser } from '../../../automation/playwrightBrowser.js';
 

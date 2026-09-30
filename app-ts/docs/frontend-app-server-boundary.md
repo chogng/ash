@@ -25,7 +25,8 @@ Workbench / 编辑器调用方
 | `platform/<领域>/browser/`、`workbench/services/<领域>/browser/` 或 `workbench/contrib/<功能>/browser/` | 领域 API 适配层、Service 实现 | 进程启动、通用连接状态 |
 | `platform/app-server/browser/` | 协议客户端、请求配对、初始化和通知 | 具体领域的业务状态 |
 | `platform/app-server/electron-browser/` | Renderer 的 MessagePort 传输 | Rust 进程管理 |
-| `platform/app-server/electron-main/` | 连接载体启动、端口取得和透明转发 | 业务方法路由、领域 Service |
+| `platform/app-server/electron-main/` | 窗口连接、端口取得和透明转发，以及本地与远程启动器共用的连接载体契约 | daemon 包选择、业务方法路由、领域 Service |
+| `platform/app-server-daemon/` | 本地 daemon 连接程序、包路径与摘要校验、环境变量和开发构建重启 | JSON-RPC 请求配对、领域状态、Rust 进程管理的第二份实现 |
 | `code/electron-main/` | Electron 应用、窗口与上述组件的装配 | 领域协议解析 |
 | `ash-rs/` | 协议入口及各 Rust 领域的执行与持久状态 | 前端编辑器对象和窗口 UI |
 
@@ -33,7 +34,9 @@ Workbench / 编辑器调用方
 
 ## 谁启动后端
 
-桌面启动时，[Electron 应用入口](../src/ash/code/electron-main/app.ts)创建窗口的连接转发组件；发布版的[本地启动器](../src/ash/platform/app-server/electron-main/localAppServerProcessLauncher.ts)运行 `ash-app-server-daemon connect`，开发版完整启动选择开发构建。[连接转发组件](../src/ash/platform/app-server/electron-main/appServerConnectionRelay.ts)把该连接载体的消息与 Renderer 的 MessagePort 对接。[daemon 客户端](../../ash-rs/app-server-daemon/src/client.rs)复用同一 profile 选中的受管理 App Server，首次没有后台包时从完整的随包后端安装，再转发当前连接的输入输出。因此窗口有各自的连接载体和协议客户端，后端服务进程可由多个窗口共用；不要把“每窗口一条连接”理解成“每窗口一个 Rust 服务进程”。
+桌面启动时，[Electron 应用入口](../src/ash/code/electron-main/app.ts)调用 [daemon 创建入口](../src/ash/platform/app-server-daemon/electron-main/appServerDaemonLauncher.ts)，再装配窗口的连接转发组件。daemon 模块选择包、校验摘要、构造明确的环境变量；发布版运行 `ash-app-server-daemon connect`，开发版运行 `connect-selected`。[开发重载器](../src/ash/platform/app-server-daemon/electron-main/developmentAppServerReloader.ts)负责选择新的开发构建并明确重启后台。[连接转发组件](../src/ash/platform/app-server/electron-main/appServerConnectionRelay.ts)把连接程序的消息与 Renderer 的 MessagePort 对接。[Rust daemon 客户端](../../ash-rs/app-server-daemon/src/client.rs)复用同一 profile 选中的受管理 App Server，首次没有后台包时从完整的随包后端安装，再转发当前连接的输入输出。
+
+窗口有各自的连接程序和协议客户端，后端服务进程可由多个窗口共用。关闭窗口只释放其连接，不停止共享后台；明确重启后台会影响同一 profile 的所有连接。实际进程管理、启动互斥和版本选择由 Rust daemon 拥有，TypeScript 模块只调用它。SSH 连接与远程运行包继续属于 `platform/remote`。
 
 Web 页面使用另一条接入路径：浏览器直接连接经过认证的 App Server WebSocket，不经过 Electron Main；领域 Service 与 API 的职责仍相同。详细连接生命周期见[前端连接与浏览器能力](design/app-server-connection.md)。
 

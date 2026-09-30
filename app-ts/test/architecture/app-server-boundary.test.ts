@@ -32,5 +32,5 @@ test("Desktop packages the shared backend host instead of the Ash Code CLI", () 
 	assert.match(backendBuilder, /host_build=True/u);
 	assert.doesNotMatch(packageScript, /"--target",/u);
 	assert.doesNotMatch(watcher, /spawn\(['"]cargo['"]/u);
-	assert.match(electronMain, /platform\/app-server\/electron-main\/appServerPackage\.js/u);
+	assert.match(electronMain, /platform\/app-server-daemon\/electron-main\/appServerDaemonLauncher\.js/u);
 });

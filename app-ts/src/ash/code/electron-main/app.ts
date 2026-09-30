@@ -19,11 +19,11 @@ import { assertDefined } from "../../base/common/types.js";
 import { AshApplicationName } from '../common/application.js';
 import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry, WorkbenchRendererEntry, withWorkbenchModeId, type WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import { ElectronContextMenu } from "../../base/parts/contextmenu/electron-main/contextmenu.js";
-import { buildAppServerEnvironment, type AppServerHostPlatform } from "../../platform/app-server/common/appServerEnvironment.js";
 import { AppServerConnectionRelay } from "../../platform/app-server/electron-main/appServerConnectionRelay.js";
-import { appServerExecutablePath, appServerDaemonExecutablePath, developmentAppServerGenerationPath, packagedAppServerDaemonSha256, packagedAppServerSha256, remoteExecutablePath } from "../../platform/app-server/electron-main/appServerPackage.js";
-import { DevelopmentAppServerReloader, readDevelopmentAppServerGenerationSync, selectDevelopmentAppServerExecutable } from "../../platform/app-server/electron-main/developmentAppServerReloader.js";
-import { LocalAppServerProcessLauncher } from "../../platform/app-server/electron-main/localAppServerProcessLauncher.js";
+import { DevelopmentAppServerReloader } from "../../platform/app-server-daemon/electron-main/developmentAppServerReloader.js";
+import { AppServerDaemonLauncher, createAppServerDaemonLauncher } from "../../platform/app-server-daemon/electron-main/appServerDaemonLauncher.js";
+import { remoteExecutablePath } from "../../platform/remote/node/remotePackage.js";
+import type { IAppServerProcessLauncher } from '../../platform/app-server/electron-main/appServerProcessLauncher.js';
 import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from "../../platform/ipc/electron-main/trustedIpcRouter.js";
 import { BROWSER_VIEW_EVENT_CHANNEL } from "../../platform/browser/common/browserView.js";
 import { browserViewIpcRoutes } from "../../platform/browser/electron-main/browserViewIpc.js";
@@ -551,45 +551,28 @@ export class AshApplication extends Disposable {
 		if (this.appServerStartupMode === "disabled") {
 			return existing ?? new AppServerConnectionRelay({ enabled: false });
 		}
-		const packageLocation = {
-			appPath: app.getAppPath(),
-			expectedVersion: app.getVersion(),
-			isPackaged: app.isPackaged,
-			platform: process.platform,
-			resourcesPath: process.resourcesPath,
-		};
-		const packagedExecutable = appServerDaemonExecutablePath(packageLocation);
-		const expectedPackagedSha256 = packagedAppServerDaemonSha256(packageLocation);
-		const generationFile = !app.isPackaged && process.env.ASH_DEV_APP_SERVER_RELOAD === "1"
-			? developmentAppServerGenerationPath(app.getAppPath())
-			: undefined;
-		let developmentExecutable: string | undefined;
-		if (generationFile) {
-			try {
-				developmentExecutable = readDevelopmentAppServerGenerationSync(generationFile);
-			} catch (error) {
-				console.error("[app-server] Ignoring invalid development generation", error);
-			}
-		}
-		const processLauncher = role === 'workbench' && isRemoteWorkspaceIdentifier(workspace)
-			? this.createSshAppServerProcessLauncher(workspace, resources)
-			: new LocalAppServerProcessLauncher({
-				executable: packagedExecutable,
-				expectedSha256: expectedPackagedSha256,
-				// Development connections select the current build; packaged clients use the profile's selected backend.
-				args: [app.isPackaged ? "connect" : "connect-selected"],
-				environment: {
-					...this.appServerEnvironment(role === 'agents' ? UNKNOWN_EMPTY_WINDOW_WORKSPACE : workspace),
-					...(role === 'agents' ? { ASH_APP_SERVER_CONNECTION_ROLE: 'agents' } : {}),
-					ASH_APP_SERVER_PATH: selectDevelopmentAppServerExecutable(appServerExecutablePath(packageLocation), developmentExecutable),
-				},
+		let processLauncher: IAppServerProcessLauncher;
+		let generationFile: string | undefined;
+		if (role === 'workbench' && isRemoteWorkspaceIdentifier(workspace)) {
+			processLauncher = this.createSshAppServerProcessLauncher(workspace, resources);
+		} else {
+			const connection = createAppServerDaemonLauncher({
+				packageLocation: { appPath: app.getAppPath(), expectedVersion: app.getVersion(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath },
+				sourceEnvironment: process.env,
+				profileRoot: this.profileRoot,
+				electronExecutable: process.execPath,
+				workspaceRoot: role === 'workbench' && isSingleFolderWorkspaceIdentifier(workspace) ? workspace.uri.fsPath : undefined,
+				role,
 			});
+			processLauncher = connection.launcher;
+			generationFile = connection.generationFile;
+		}
 		const supervisor = existing ?? new AppServerConnectionRelay({
 			enabled: true,
 			processLauncher,
 		});
 		if (existing) existing.replaceProcessLauncher(processLauncher);
-		if (generationFile && processLauncher instanceof LocalAppServerProcessLauncher) {
+		if (generationFile && processLauncher instanceof AppServerDaemonLauncher) {
 			resources.add(new DevelopmentAppServerReloader({ generationFile, launcher: processLauncher, supervisor }));
 		}
 		return supervisor;
@@ -1289,7 +1272,7 @@ export class AshApplication extends Disposable {
 			};
 		}
 		const launcher = supervisor.options.enabled ? supervisor.options.processLauncher : undefined;
-		if (!(launcher instanceof LocalAppServerProcessLauncher) && !(launcher instanceof SshAppServerProcessLauncher)) {
+		if (!(launcher instanceof AppServerDaemonLauncher) && !(launcher instanceof SshAppServerProcessLauncher)) {
 			throw new Error("Workspace connection has no directory launcher");
 		}
 		const appServerWorkspace = createAppServerWorkspaceTransitionAdapter(supervisor,
@@ -1303,14 +1286,14 @@ export class AshApplication extends Disposable {
 
 	private async reconnectAppServerWorkspace(
 		supervisor: AppServerConnectionRelay,
-		launcher: LocalAppServerProcessLauncher | SshAppServerProcessLauncher,
+		launcher: AppServerDaemonLauncher | SshAppServerProcessLauncher,
 		root: string,
 		grant: DirGrant,
 		workspaceId: string,
 		previousWorkspaceId: string,
 		workspaceHost: RendererWorkspaceHost,
 	): Promise<void> {
-		const previous = launcher instanceof LocalAppServerProcessLauncher
+		const previous = launcher instanceof AppServerDaemonLauncher
 			? { kind: "local" as const, launcher, environment: launcher.environment, root: launcher.environment.ASH_WORKSPACE_ROOT }
 			: { kind: "remote" as const, launcher, root: launcher.workspaceRoot };
 		await workspaceHost.persistDirectoryGrant(root, grant);
@@ -1485,44 +1468,6 @@ export class AshApplication extends Disposable {
 				{ '0': path },
 			),
 		};
-	}
-
-	private appServerEnvironment(workspace: IAnyWorkspaceIdentifier): Readonly<Record<string, string>> {
-		const packageLocation = {
-			appPath: app.getAppPath(),
-			isPackaged: app.isPackaged,
-			platform: process.platform,
-			resourcesPath: process.resourcesPath,
-		};
-		const backendSha256 = packagedAppServerSha256(packageLocation);
-		let hostPlatform: AppServerHostPlatform;
-		switch (process.platform) {
-			case 'win32': hostPlatform = 'windows'; break;
-			case 'darwin': hostPlatform = 'macos'; break;
-			case 'linux': hostPlatform = 'linux'; break;
-			default: throw new Error(`Unsupported App Server host platform: ${process.platform}`);
-		}
-		return buildAppServerEnvironment(process.env, hostPlatform, {
-			...(process.env.ASH_RG_PATH
-				? { ASH_RG_PATH: process.env.ASH_RG_PATH }
-				: {}),
-			...(process.env.ASH_SSH_PATH
-				? { ASH_SSH_PATH: process.env.ASH_SSH_PATH }
-				: {}),
-			...(process.env.ASH_PRODUCT_SERVICES_PATH
-				? { ASH_PRODUCT_SERVICES_PATH: process.env.ASH_PRODUCT_SERVICES_PATH }
-				: {}),
-			ASH_ELECTRON_RUN_AS_NODE_PATH: process.execPath,
-			ASH_APP_SERVER_PATH: appServerExecutablePath(packageLocation),
-			...(backendSha256 ? { ASH_APP_SERVER_SHA256: backendSha256 } : {}),
-			ASH_HOME: this.profileRoot,
-			...(isSingleFolderWorkspaceIdentifier(workspace)
-				? {
-					ASH_WORKSPACE_ROOT: workspace.uri.fsPath,
-					ASH_DIR_GRANT_SOURCE: "userConfig",
-				}
-				: {}),
-		}, 'desktop');
 	}
 
 	private createWindowsStateHandler(

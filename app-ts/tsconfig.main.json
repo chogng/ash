@@ -16,6 +16,8 @@
     "src/ash/code/common/**/*.ts",
     "src/ash/code/electron-main/**/*.ts",
     "src/ash/platform/app-server/electron-main/**/*.ts",
+    "src/ash/platform/app-server-daemon/electron-main/**/*.ts",
+    "src/ash/platform/app-server-daemon/node/**/*.ts",
     "src/ash/platform/browser/common/**/*.ts",
     "src/ash/platform/browser/electron-main/**/*.ts",
     "src/ash/platform/clipboard/electron-main/**/*.ts",

@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
-import { appServerDaemonExecutablePath } from "../../src/ash/platform/app-server/electron-main/appServerPackage.js";
+import { appServerDaemonExecutablePath } from "../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js";
 import { _electron, type ElectronApplication, type Request } from "@playwright/test";
 import { ElectronPlaywrightDriver } from "./electronDriver.js";
 import { resolveElectronConfiguration, type ElectronLaunchOptions } from "./electron.js";

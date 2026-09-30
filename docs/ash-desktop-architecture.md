@@ -213,7 +213,7 @@ Desktop 主进程入口同步注册 Electron `ready` 监听器；异步启动链
 开发态与发布态共享 canonical Ash package contract。Python 开发组装器
 `build/ash_rs/prepare.py` 按 target、JavaScript runtime 与 build profile 组装不可变 debug
 package；Rust package store 在完整文件清单校验通过后发布编号 manifest，并用进程 lease 保护正在运行的 package。它读取 production builder
-使用的同一份 runtime lock、校验 archive digest。`appServerExecutablePath()` 在开发态选择该
+使用的同一份 runtime lock、校验 archive digest。`appServerDaemonExecutablePath()` 在开发态选择该
 package root，在发布态选择 Electron `resourcesPath`，两者都只启动
 `<package>/bin/ash-app-server-daemon[.exe]`，其 `connect` 命令负责取得共享服务连接。独立监听使用同包的
 `<package>/bin/ash-app-server[.exe]`。两者都由开发与发布组装器
@@ -241,6 +241,12 @@ Main 必须：
 
 Main 不把 `ipcRenderer`、`fs`、`child_process`、`webContents` 或任意 JSON-RPC method
 直接暴露给 Renderer。
+
+本地 daemon 的 TypeScript 对接位于 `platform/app-server-daemon`：创建入口负责包路径、摘要、
+环境变量与 `connect` / `connect-selected` 选择，开发重载器负责明确重启后台。
+`code/electron-main/app.ts` 只装配启动器、窗口连接和重载器；SSH 启动与远程包定位仍由
+`platform/remote` 拥有。`platform/app-server` 保留 renderer 协议客户端和 Main 连接转发。
+窗口关闭只终止连接程序，实际共享后台的生命周期由 Rust daemon 管理。
 
 当前 `ChildProcessJsonlTransport` 将子进程 stream lifecycle 与 JSON-RPC pairing 分开。它在积累无限 buffer 前按原始 byte 拒绝超过 1 MiB 的 frame，只接受严格 LF 和有效 UTF-8；outbound write 同时等待 callback 与 drain，并限制 pending write 数。child/stdio 任一错误都会关闭 transport；stderr 只保留 64 KiB ring，诊断读取时脱敏 credential。`close()` 异步、幂等，并在 graceful deadline 后强制终止。`pnpm --dir app-ts run test:main` 覆盖分片 UTF-8、超限 frame、非法 framing、backpressure、stderr 和 close。
 

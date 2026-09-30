@@ -7,7 +7,7 @@ import { performance } from 'node:perf_hooks';
 import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
 import { launchElectron, type ElectronLaunchMilestone, type ElectronLaunchResult } from '../../../automation/playwrightElectron.js';
-import { appServerDaemonExecutablePath, appServerExecutablePath } from '../../../../src/ash/platform/app-server/electron-main/appServerPackage.js';
+import { appServerDaemonExecutablePath, appServerExecutablePath } from '../../../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js';
 
 const execFileAsync = promisify(execFile);
 const samplesPerCohort = 5;
