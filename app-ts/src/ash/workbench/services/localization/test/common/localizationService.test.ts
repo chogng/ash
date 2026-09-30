@@ -164,7 +164,11 @@ test("localization lookup falls back to English and formats parameters", async (
 	assert.equal(localization.translate('ash', 'inspectTokens.scope', 'Token type'), '词法单元类型');
 	assert.equal(localization.translate('ash', 'quickHelp.dialog', 'Quick Access Help'), '快速访问帮助');
 	assert.equal(localization.translate('ash', 'quickCommand.placeholder', 'Type > for commands, ? for help, or @ for symbols'), '输入 > 查找命令、? 查看帮助，或 @ 查找符号');
-	assert.equal(localization.translate('ash', 'workbench.editorPinnedTabHint', 'Pinned tab. Double-click or press Alt+Enter to unpin.'), '已固定的标签。双击或按 Alt+Enter 可取消固定。');
+	assert.deepEqual([
+		localization.translate('ash', 'workbench.editorPinnedTabHint', 'Pinned tab. Press Alt+Enter to unpin.'),
+		localization.translate('ash', 'workbench.editorPreviewTabHint', 'Double-click to keep this tab open. Press Alt+Enter to pin this tab.'),
+		localization.translate('ash', 'workbench.editorUnpinnedTabHint', 'Press Alt+Enter to pin this tab.'),
+	], ['已固定的标签。按 Alt+Enter 可取消固定。', '双击可保留此标签。按 Alt+Enter 可固定此标签。', '按 Alt+Enter 可固定此标签。']);
 	assert.deepEqual([
 		localization.translate('ash', 'workbench.closeOtherEditors', 'Close Other Editors'),
 		localization.translate('ash', 'workbench.pinEditor', 'Pin Editor'),

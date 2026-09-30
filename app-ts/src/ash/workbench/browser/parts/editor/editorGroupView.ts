@@ -71,6 +71,8 @@ export interface IEditorGroup {
 	restoreEditorViewState(input: EditorInput, state: SerializedEditorViewState | undefined): boolean;
 	isPreview(input: EditorInput): boolean;
 	isSticky(input: EditorInput): boolean;
+	/** Keeps a preview open as an ordinary tab; fixed tab placement is a separate operation. */
+	pinEditor(input?: EditorInput): void;
 	toggleSticky(input: EditorInput): void;
 
 	openEditor(
@@ -241,6 +243,7 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 				void this.closeEditor(input).catch(reportEditorCloseError);
 			},
 			showContextMenu: (input, event, tab) => this.showTabContextMenu(input, event, tab),
+			pinEditor: input => this.pinEditor(input),
 			toggleSticky: input => this.toggleSticky(input),
 			startDrag: input => options.dragAndDrop?.start(this, input),
 			isDragging: () => options.dragAndDrop?.isDragging() ?? false,
@@ -424,6 +427,16 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 
 	isSticky(input: EditorInput): boolean {
 		return this.model.isSticky(input);
+	}
+
+	pinEditor(input: EditorInput | undefined = this.activeInput): void {
+		if (!input) return;
+		const entry = this.requireEntry(input);
+		if (!entry.preview) return;
+		const restoreTabFocus = this.domNode.ownerDocument.activeElement?.id === entry.tabId;
+		this.model.pin(input);
+		this.publishEditorState(entry);
+		if (restoreTabFocus) this.domNode.ownerDocument.getElementById(entry.tabId)?.focus();
 	}
 
 	toggleSticky(input: EditorInput): void {

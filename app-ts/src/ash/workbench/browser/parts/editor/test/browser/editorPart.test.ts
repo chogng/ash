@@ -800,6 +800,38 @@ test("EditorPart saves and restores groups, tabs, previews, active state, and pa
 	dom.window.close();
 });
 
+test('double-clicking a preview keeps the tab without making it sticky', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const registry = new EditorPaneRegistry();
+		registry.registerEditorPane(descriptor('stanza.editor.code', '.ts', () => new TestEditorPane('stanza.editor.code')));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		const current = input('C:/project/current.ts');
+		const next = input('C:/project/next.ts');
+		await editor.openEditor(current, { pinned: false });
+		const group = editor.activeGroup;
+		const changes: string[] = [];
+		using listener = group.onDidChangeEditors(event => changes.push(event.kind));
+		const label = group.domNode.querySelector<HTMLButtonElement>('.ash-tab-label')!;
+		const tabId = label.id;
+		label.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, detail: 1 }));
+		const activeLabel = dom.window.document.getElementById(tabId)!;
+		activeLabel.focus();
+		activeLabel.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, detail: 2 }));
+		assert.deepEqual({ preview: group.isPreview(current), sticky: group.isSticky(current), focused: dom.window.document.activeElement?.id }, { preview: false, sticky: false, focused: tabId });
+		assert.deepEqual(changes, ['editorStateChanged']);
+		group.pinEditor();
+		assert.deepEqual(changes, ['editorStateChanged']);
+		await editor.openEditor(next, { pinned: false });
+		assert.deepEqual(group.inputs, [current, next]);
+		const saved = editor.saveWorkingSet('kept-preview');
+		await editor.applyWorkingSet(saved, { preserveFocus: true });
+		assert.deepEqual(editor.activeGroup.editors.map(state => ({ preview: state.isPreview, sticky: state.isSticky })), [{ preview: false, sticky: false }, { preview: true, sticky: false }]);
+	} finally {
+		dom.window.close();
+	}
+});
+
 test("Editor tabs keep sticky editors in their own row across working-set restore", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
@@ -814,9 +846,7 @@ test("Editor tabs keep sticky editors in their own row across working-set restor
 		'.ash-ordinary-editor-tabs-row .ash-tab:first-child .ash-tab-label',
 	);
 	assert.ok(stick);
-	stick.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, detail: 1 }));
-	editor.domNode.querySelector<HTMLButtonElement>('.ash-ordinary-editor-tabs-row .ash-tab:first-child .ash-tab-label')
-		?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, detail: 2 }));
+	stick.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true }));
 	assert.equal(editor.activeGroup.isSticky(first), true);
 	assert.equal(editor.activeGroup.isPreview(first), false);
 	assert.equal(editor.domNode.querySelectorAll(".ash-sticky-editor-tabs-row .ash-tab").length, 1);

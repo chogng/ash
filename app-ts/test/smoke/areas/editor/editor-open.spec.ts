@@ -32,10 +32,18 @@ test("App Server workspace files open in Stanza and save through the editor regi
 	await expect(explorer.locator('.ash-tree')).toBeFocused();
 	await expect(group.content.locator(".stanza-editor")).toBeVisible();
 
+	await tab.getByRole('tab').dblclick();
+	await expect(tab).not.toHaveClass(/preview/);
+	await expect(group.title.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(0);
+	await expect(tab.getByRole('tab')).toBeFocused();
 	await fileRow.dblclick();
 	await expect(tab).not.toHaveClass(/preview/);
+	await explorer.locator('.ash-tree-row').filter({ hasText: 'main.rs' }).click();
+	await expect(group.tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
+	await expect(group.tabs.filter({ hasText: 'main.rs' })).toHaveCount(1);
+	await tab.getByRole('tab').click();
 
-	const input = group.content.locator(".stanza-editor-input");
+	const input = group.content.getByRole('textbox', { name: 'main.ts', exact: true });
 	await expect(input).toBeAttached();
 	await input.focus();
 	await input.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
@@ -248,7 +256,8 @@ test("Sticky and ordinary editors occupy separate tab rows", async ({ target, wo
 	const ordinary = group.title.locator(".ash-ordinary-editor-tabs-row");
 	const sticky = group.title.locator(".ash-sticky-editor-tabs-row");
 	await expect(ordinary.locator(".ash-tab")).toHaveCount(2);
-	await ordinary.locator('.ash-tab').filter({ hasText: "main.ts" }).getByRole('tab').dblclick();
+	await ordinary.locator('.ash-tab').filter({ hasText: "main.ts" }).getByRole('tab').click();
+	await ordinary.locator('.ash-tab').filter({ hasText: "main.ts" }).getByRole('tab').press('Alt+Enter');
 	await expect(sticky.locator(".ash-tab")).toHaveCount(1);
 	await expect(ordinary.locator(".ash-tab")).toHaveCount(1);
 	await expect(sticky.getByRole("tab", { name: "main.ts" })).toBeFocused();

@@ -51,12 +51,14 @@ test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion 
 	const drops: Array<{ target: EditorInput | undefined; position: "before" | "after" }> = [];
 	const previews: EditorInput[] = [];
 	const stickyToggles: EditorInput[] = [];
+	const keptEditors: EditorInput[] = [];
 	let dragging = false;
 	using services = createTestEditorServices();
 	const control = services.createInstance(MultiEditorTabsControl,dom.window.document.body, {
 		activate: () => undefined,
 		preview: (input) => previews.push(input),
 		close: () => undefined,
+		pinEditor: input => keptEditors.push(input),
 		toggleSticky: input => stickyToggles.push(input),
 		startDrag: () => {
 			dragging = true;
@@ -94,6 +96,9 @@ test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion 
 	const firstLabel = firstTab.querySelector<HTMLButtonElement>('.ash-tab-label');
 	firstLabel?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, detail: 1 }));
 	firstLabel?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, detail: 2 }));
+	assert.deepEqual(keptEditors, [first]);
+	assert.deepEqual(stickyToggles, []);
+	firstLabel?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true }));
 	assert.deepEqual(stickyToggles, [first]);
 	assert.equal(firstTab.classList.contains(DndCssClasses.Dragging), false);
 	control.dispose();
@@ -108,6 +113,7 @@ test("MultiEditorTabsControl forwards external resource drops to the target tab"
 		activate: () => undefined,
 		preview: () => undefined,
 		close: () => undefined,
+		pinEditor: () => undefined,
 		toggleSticky: () => undefined,
 		startDrag: () => undefined,
 		isDragging: () => false,
@@ -255,6 +261,7 @@ const inertDelegate: EditorTabsDelegate = {
 	activate: () => undefined,
 	preview: () => undefined,
 	close: () => undefined,
+	pinEditor: () => undefined,
 	toggleSticky: () => undefined,
 	startDrag: () => undefined,
 	isDragging: () => false,

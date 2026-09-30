@@ -3,6 +3,31 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
+test('double-clicking Welcome keeps it in the ordinary row and preserves an explicit pin', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	const welcome = page.getByRole('tab', { name: 'Welcome', exact: true });
+	const ordinary = page.locator('.ash-ordinary-editor-tabs-row .ash-tab').filter({ has: welcome });
+	await expect(ordinary).toHaveCount(1);
+	const tabId = await welcome.getAttribute('id');
+	await welcome.dblclick();
+	await expect(ordinary).toHaveCount(1);
+	await expect(ordinary).not.toHaveClass(/preview/u);
+	await expect(page.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(0);
+	await expect(welcome).toHaveAttribute('id', tabId!);
+	await expect(welcome).toBeFocused();
+	await welcome.dblclick();
+	await expect(ordinary).toHaveCount(1);
+	await welcome.press('Alt+Enter');
+	const sticky = page.locator('.ash-sticky-editor-tabs-row .ash-tab').filter({ has: welcome });
+	await expect(sticky).toHaveCount(1);
+	await welcome.dblclick();
+	await expect(sticky).toHaveCount(1);
+	await expect(welcome).toBeFocused();
+	await welcome.press('Alt+Enter');
+	await expect(ordinary).toHaveCount(1);
+});
+
 test('editor tab uses the editor surface and shares its pin and close slot', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
@@ -31,7 +56,7 @@ test('editor tab uses the editor surface and shares its pin and close slot', asy
 	});
 	expect(closeGeometry).toEqual({ width: 22, height: 22, iconWidth: 16, iconHeight: 16, left: 3, right: 3 });
 
-	await ordinary.getByRole('tab').dblclick();
+	await ordinary.getByRole('tab').press('Alt+Enter');
 	const sticky = page.locator('.ash-sticky-editor-tabs-row .ash-tab.checked');
 	await expect(sticky).toHaveCount(1);
 	const close = sticky.locator('.ash-tab-close-action');

@@ -114,7 +114,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			assertDefined(editor, `Editor tab is not available: ${label.id}`);
 			event.preventDefault();
 			event.stopPropagation();
-			this.delegate.toggleSticky(editor.input);
+			this.delegate.pinEditor(editor.input);
 		}, true));
 	}
 
@@ -143,6 +143,12 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			const label = editorInputLabel(editor.input);
 			const state = editor.hasExternalChange ? "conflict" : editor.isDirty ? "dirty" : undefined;
 			const stateLabel = editor.hasExternalChange ? "conflict with changes on disk" : editor.isDirty ? "unsaved changes" : undefined;
+			let ariaDescription = localize("workbench.editorUnpinnedTabHint", "Press Alt+Enter to pin this tab.");
+			if (editor.sticky) {
+				ariaDescription = localize("workbench.editorPinnedTabHint", "Pinned tab. Press Alt+Enter to unpin.");
+			} else if (editor.preview) {
+				ariaDescription = localize("workbench.editorPreviewTabHint", "Double-click to keep this tab open. Press Alt+Enter to pin this tab.");
+			}
 			return {
 				id: editor.instanceId,
 				value: editor,
@@ -159,9 +165,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 				},
 				tooltip: stateLabel ? `${editor.input.resource.toString()} — ${stateLabel}` : editor.input.resource.toString(),
 				ariaLabel: stateLabel ? `${label.name}, ${stateLabel}` : label.name,
-				ariaDescription: editor.sticky
-					? localize("workbench.editorPinnedTabHint", "Pinned tab. Double-click or press Alt+Enter to unpin.")
-					: localize("workbench.editorUnpinnedTabHint", "Double-click or press Alt+Enter to pin this tab."),
+				ariaDescription,
 				...(state ? { state } : {}),
 				preview: editor.preview,
 				closeActionIndicatorIcon: editor.sticky ? Lxicon.pinned : undefined,
