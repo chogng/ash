@@ -1,6 +1,6 @@
 # 构建与开发
 
-本文说明环境准备、启动、构建、测试和清理。产品关系见 [产品线](product-lines.md)，桌面端开发细节见 [app-ts README](../app-ts/README.md)。
+本文说明仓库环境准备、产品构建、通用验证和清理。Electron、Browser、Stanza 的启动模式、热更新和前端测试集中在 [app-ts README](../app-ts/README.md)；产品关系见 [产品线](product-lines.md)。
 
 ## 构建入口
 
@@ -49,20 +49,13 @@
 
 #### 启动
 
-| 用途 | 命令 | F5 配置 |
+| 产品 | 命令 | F5 配置 |
 | --- | --- | --- |
-| 完整 Electron 桌面端，监听前后端变化 | `just ash-desktop` | `Ash (Electron)` |
-| 完整 Electron 桌面端，仅监听前端和 Electron 宿主变化 | `pnpm --dir app-ts dev:ui:connected` | `Ash (Electron, Frontend Watch Only)` |
-| Electron 界面，不构建或启动后端 | `pnpm dev:desktop:ui` | — |
-| 浏览器前端，不构建或启动后端 | `pnpm dev:web` | `Ash Web (Chrome, UI Only)` |
-| 带 App Server 的完整 Web 开发环境 | `pnpm dev:web:full` | — |
+| 完整 Electron 桌面端 | `just ash-desktop` | `Ash (Electron)` |
 | Rust 桌面端 | `just app` | `Ash App (Rust)` |
 | 终端界面 | `just ash` | `Ash Code (TUI)` |
-| 独立 Stanza 编辑器 | `pnpm dev:stanza` | `Stanza Editor - Standalone` |
 
-Web 仅前端模式使用 `http://127.0.0.1:5173/`；完整 Web 模式使用 5174 端口，需打开终端输出的认证链接。完整 Web 模式用于本机开发集成。F5 配置见 [launch.json](../.vscode/launch.json)，macOS 的 Electron 入口通过 `uv` 选择 Python 3.12。
-
-Electron 完整开发启动会准备后端包；输入未变化时复用已有包。Renderer 与 CSS 由 Vite 热更新，Main/Preload 改动重启 Electron，后端监听模式在 Rust 改动后重编译并切换 App Server。`ASH_WORKBENCH_MODE` 选择初始 Workbench 模式，两种内置模式共用启动和构建入口。
+仅前端、只监听前端、完整 Web 和独立编辑器的区别及对应命令见 [前端启动方式](../app-ts/README.md#启动项目)。
 
 #### 构建与维护
 
@@ -71,8 +64,6 @@ Electron 完整开发启动会准备后端包；输入未变化时复用已有�
 | `just build` | 构建三条产品线及其开发所需服务程序 |
 | `just build-code` / `just build-desktop` / `just build-app` | 构建指定产品 |
 | `just build-rust` | 构建根 Rust workspace |
-| `pnpm build` | 构建 Electron Main、Preload 和 Renderer |
-| `pnpm build:stanza` | 构建独立编辑器 |
 | `just check <package>` | 检查指定 Rust 包 |
 | `just lint` | 检查 Python 代码 |
 | `just fmt` / `just fmt-check` | 格式化或检查 Just、Rust 和第一方 Python 源码 |
@@ -92,19 +83,12 @@ Electron 完整开发启动会准备后端包；输入未变化时复用已有�
 | `just test-python` / `just test-python build` | 全部仓库 Python 测试，或仅构建工具测试 |
 | `pnpm test` | Rust 协议验证、构建工具检查和前端单测 |
 | `pnpm test:build` | TypeScript 构建工具单测 |
-| `pnpm test:integration` | 浏览器集成测试 |
-| `pnpm test:desktop:smoke:browser` | 浏览器 UI，无 App Server |
-| `pnpm test:web-integration` | 浏览器与真实 App Server |
-| `pnpm test:desktop:smoke:ui` | Electron UI，无 App Server |
-| `pnpm test:desktop:smoke` | Electron 与真实 App Server |
 
-这些测试入口会准备各自需要的输入。完整 Web 测试不构建 Electron Main/Preload。Playwright 失败时查看报告和 trace；按端划分的验证命令见 [app-ts README](../app-ts/README.md)。
+Electron、Browser、编辑器的构建和测试命令，以及测试是否启动 App Server，见 [前端验证命令](../app-ts/README.md#常用命令)。
 
 #### UI 场景录屏
 
-[test/scenario](../test/scenario/) 的 Playwright 运行器保存步骤截图、trace、录屏、字幕 MP4 和 HTML 报告。需要带 `drawtext` 滤镜的 FFmpeg：macOS 使用 `ffmpeg-full` 并将其 `bin` 加入 PATH，Windows 可安装 `Gyan.FFmpeg`，Linux 可安装 `ffmpeg`。
-
-先执行 `pnpm run scenario:compile`。已有开发构建时，执行 `node test/scenario/out/runScenario.js <scenario.cjs> --dev`；Web 场景增加 `--web --headless`。从构建开始准备时使用 `pnpm run scenario -- <scenario.cjs> --dev`。临时场景和证据放在 `.build/ash-playwright-mcp/`，证据位于其 `evidence/` 子目录。
+场景录屏需要带 `drawtext` 滤镜的 FFmpeg：macOS 使用 `ffmpeg-full` 并将其 `bin` 加入 PATH，Windows 可安装 `Gyan.FFmpeg`，Linux 可安装 `ffmpeg`。运行方法和证据目录见 [前端 UI 场景录屏](../app-ts/README.md#ui-场景录屏)。
 
 #### Bazel 边界与 TUI 场景测试
 

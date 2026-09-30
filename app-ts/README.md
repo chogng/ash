@@ -1,289 +1,126 @@
 # `ash` Electron Desktop
 
-`ash` 是 Ash 的 Electron Desktop 产品线。它由 Renderer、Preload 和 Electron Main 组成，
-通过 App Server 使用 Rust 后端；三条公开产品线的关系见
-[`docs/product-lines.md`](../docs/product-lines.md)。
-前端 Service、领域 API、协议客户端与 Electron Main 的职责见
-[前端 Service 与 Rust App Server 的连接边界](docs/frontend-app-server-boundary.md)。
-
-`code` 与 `academic` 两种内置 Workbench 模式的窗口重载、统一 Renderer 和 contribution 所有权以 [`docs/workbench-modes.md`](../docs/workbench-modes.md) 为准；本 README 只记录 Desktop 实现、运行与验证入口。
+`app-ts` 提供 Electron 桌面端和 Browser Workbench，包含 Renderer、Preload 和 Electron Main，通过 App Server 使用 Rust 后端。本 README 说明前端开发、启动和验证；环境安装、仓库通用命令及清理见 [构建指南](../docs/build.md#构建入口)。产品关系见 [产品线](../docs/product-lines.md)。
 
 ## 启动项目
 
-首次运行时，先在仓库根目录 `ash` 下安装依赖：
+完成 [环境初始化](../docs/build.md#初始化) 后，在仓库根目录选择启动方式：
 
-```bash
-pnpm install
-```
+| 用途 | 命令 | F5 配置 |
+| --- | --- | --- |
+| 完整 Electron 桌面端，监听前后端变化 | `pnpm dev:desktop`，等同于 `just ash-desktop` | `Ash (Electron)` |
+| 完整 Electron 桌面端，仅监听前端和 Electron 宿主变化 | `pnpm --dir app-ts dev:ui:connected` | `Ash (Electron, Frontend Watch Only)` |
+| Electron 界面，不构建或启动后端 | `pnpm dev:desktop:ui` | — |
+| 浏览器前端，不构建或启动后端 | `pnpm dev:web` | `Ash Web (Chrome, UI Only)` |
+| 浏览器与真实 App Server | `pnpm dev:web:full` | — |
+| 独立 Stanza 编辑器 | `pnpm dev:stanza` | `Stanza Editor - Standalone` |
 
-安装完成后，在仓库根目录执行下面的命令启动桌面端：
+`Frontend Watch Only` 仍连接 Rust 后端，只是不监听后端源码变化。两种仅 UI 模式中的聊天、文件、Git、终端和搜索等后端操作不可用；选择文件夹只更新界面的工作区上下文。
 
-```bash
-pnpm dev:desktop
-```
+浏览器仅前端模式打开 `http://127.0.0.1:5173/`。完整 Web 模式使用 5174 端口，须打开终端输出的认证链接。Stanza 页面为 `http://127.0.0.1:5199/build/app_ts/vite/stanza/index.html`，仅启动编辑器，可通过 `globalThis.stanza.editor` 检查模型和编辑器。
 
-VS Code 的 `Ash (Electron)` F5 配置运行 `just ash-desktop`；在 macOS 上先由
-`uv run --python 3.12` 选择构建脚本使用的 Python。TypeScript Renderer 和 CSS 改动由 Vite 热更新，
-Main 与 Preload 改动只重启 Electron。后端包输入未变化时直接复用，
-Rust 源码或 Cargo 输入变化时由后端 watcher 构建，并仅在新二进制发布后切换 App Server。
-`Ash (Electron, Frontend Watch Only)` 同样启动完整桌面端并连接 Rust 后端，但只监听前端及 Electron 宿主变化，不监听后端源码；已有服务端与当前构建相同时复用，否则切换到当前构建。
+F5 配置见 [launch.json](../.vscode/launch.json)。macOS 的 Electron 入口通过 `uv run --python 3.12` 选择 Python；手动运行命令时，按 [macOS 环境要求](../docs/build.md#macos-与-linux-开发环境) 配置。
 
-只开发桌面界面、但需要检查 Electron 特有的窗口、标题栏、菜单和原生交互时，运行：
-
-```bash
-pnpm dev:desktop:ui
-```
-
-该命令只同步前端生成资源，并启动 Vite、Electron 主进程、预加载脚本和 Electron 窗口；不会构建 Rust 开发包，也不会启动 App Server。窗口中的 App Server 状态会保持为已停止，依赖后端的聊天、文件、Git、终端和搜索操作会明确不可用；选择文件夹仅更新界面的工作区上下文，方便检查前端布局和状态。可以在 Settings 的 Workbench Mode 中切换并重载当前窗口；需要覆盖启动初始模式时设置 `ASH_WORKBENCH_MODE` 环境变量。
-
-只开发 Browser Workbench 界面时，在仓库根目录运行：
-
-```bash
-pnpm dev:web
-```
-
-VS Code 的 `Ash Web (Chrome, UI Only)` F5 配置会执行同一条命令并打开 Chrome。
-该命令只同步生成资源并启动监听 `127.0.0.1:5173` 的 Vite 开发服务器；打开
-`http://127.0.0.1:5173/` 即会进入当前产品版本的 Browser Workbench。该模式不编译或启动 Rust。
-Browser Workbench 使用 disconnected API，因此 UI 可以独立开发；Chat、Explorer、Git、
-Terminal 等依赖后端的操作会明确报告不可用。
-
-只调试 Stanza 编辑器和它的 standalone services 时，在仓库根目录运行：
-
-```bash
-pnpm dev:stanza
-```
-
-打开 `http://127.0.0.1:5199/build/app_ts/vite/stanza/index.html`。VS Code 的
-`Stanza Editor - Standalone` 启动配置会执行同一条命令并打开浏览器调试。调试页使用
-`globalThis.stanza.editor.create/createModel`，因此可以直接在浏览器控制台检查模型、编辑器和
-生命周期事件，不会启动 Workbench 或 App Server。
-
-需要真实 App Server 能力时运行完整 Web 开发模式：
-
-```bash
-pnpm dev:web:full
-```
-
-完整模式由 Vite 在 `127.0.0.1:5174` 提供前端资源。打开终端输出的认证链接后，Browser
-直接连接受管理 Rust App Server 的独立端口；Vite HMR 只负责前端热更新。退出开发服务会释放
-对应浏览器监听，不终止其他客户端使用的后端。Browser 命令通过设置或 URL 参数选择内置模式；
-`ASH_WORKBENCH_MODE` 只覆盖开发进程的初始模式，不维护模式后缀命令。
-
-`dev` 与 `dev:web:full` 会先调用 `build/ash_rs/prepare.py` 生成
-`.build/runtime/dev/store-v1/<target>/<javascript-runtime>/dev-small/packages/<version>/<build-id>`；其中包含 product-neutral `ash-app-server` backend host、锁定版本的
-ripgrep 与平台 sandbox helper。编号清单选择当前包，进程租约保护正在运行的包，存储固定保留当前与回滚包。Electron 默认生成 `hostProvidedNode` variant，
-不再下载或复制 standalone Node；`dev:web:full` 使用 `packagedNode` variant，为后端能力提供独立 JavaScript runtime。
-开发态和发布态 Electron 都通过随包的
-`<package>/bin/ash-app-server-daemon[.exe]` 连接共享 App Server。开发态完整启动选择当前开发构建，
-前端调试入口及发布态使用 `connect` 复用 profile 当前选中的后台。发布版随附包含独立 Node 运行环境的完整后台包，供首次安装；后续桌面更新不自动替换共享后台。
-`prepare:desktop` 并行执行原生模块重建、前端生成资源检查和 `prepare:backend`。
-`predev` 与 `predev:electron` 共用这个入口；`prestart` 先建立主进程输出目录，
-再执行同一组准备任务。`prepare:backend:web` 明确选择带 Node 的后端包，
-供完整 Browser 模式使用。后端包输入未变化时直接复用已发布包。
-
-前端脚本只读取已发布包的位置。`dev:desktop` 随后启动 Vite、主进程、
-预加载脚本和 Electron；`dev:web:full` 启动 Vite，并按浏览器连接管理
-App Server。启动后不要关闭终端，停止服务可以按 `Ctrl+C`。
+`code` 与 `academic` 共用启动入口和 Renderer 产物。Settings 中切换 Workbench Mode 会保存选择并重载窗口；开发时可用 `ASH_WORKBENCH_MODE` 覆盖初始模式，见 [Workbench 模式](../docs/workbench-modes.md)。停止开发启动器使用 `Ctrl+C`；退出 Web 启动器会撤销该入口的浏览器授权，不终止其他客户端正在使用的后端。
 
 ### 开发态热更新
 
-热更新分为两个单向依赖层：`src/ash/base/common/hotReload.ts` 定义 Renderer realm 内通用的
-export-handler runtime，`src/ash/base/common/hotReloadHelpers.ts` 在其上提供
-`readHotReloadableExport`、`observeHotReloadableExports` 和 `createHotClass`；两者都不依赖 Vite 或
-Workbench。`build/app_ts/vite/` 拥有开发入口、语法分析、HMR 边界注入和完整 Vite 配置。Workbench 产品
-源码不启用或配置开发工具。
+| 改动 | 更新方式 |
+| --- | --- |
+| Renderer 与 CSS | Vite 热更新；符合条件的 UI 方法修改保留现有实例 |
+| Electron Main / Preload | 编译和 preload 沙箱依赖校验通过后重启 Electron |
+| Rust 后端 | 完整桌面开发命令监听后端，构建并发布新程序后切换 App Server |
 
-Renderer 开发服务器使用 Vite HMR。`build/app_ts/vite/setup-dev.ts` 在产品入口前启用 runtime。CSS 由 Vite
-直接替换；一般运行时导出会交给 helper 注册的观察者决定是否接受更新。名称以 `Part`、`ViewPane` 或
-`Widget` 结尾的持久 UI 类由 `build/app_ts/vite/hotReloadPlugin.ts` 建立稳定身份，方法修改会补丁到
-现有实例，因此 Workbench 状态和当前窗口不需要重建。其他确实只修改原型方法的派生 UI 类可以用
-`@ash-hot-reload patch-prototype` 显式加入同一机制。
+Renderer 中，`Part`、`ViewPane`、`Widget` 的普通方法和 getter/setter 可修改现有实例；构造器、字段、静态状态、模块副作用或继承关系变化会重载页面。其他仅修改原型方法的 UI 类可用 `@ash-hot-reload patch-prototype` 加入。运行时实现见 `base/common/hotReload.ts`、`hotReloadHelpers.ts`，开发转换见 `build/app_ts/vite/hotReloadPlugin.ts`。
 
-Vite 开发入口预先优化前端使用的第三方依赖，不扫描 Workbench 源码来发现依赖。这样依赖扫描器不会在
-TypeScript 转换前解析构造参数装饰器，也不会在首次打开窗口时分批优化依赖并重载页面。
+Electron 启动前并行准备键盘模块、前端生成资源和后端包；后端输入未变化时复用已有包。Main/Preload 编译或校验失败会保留当前进程。后端构建失败时当前 App Server 继续运行，初始化失败时回滚到上一版本；监听器忽略 Cargo 输出，避免构建再次触发自己。
 
-Vite 插件会在模块执行前比较 TypeScript 语法结构。只有普通实例方法、getter 和 setter 的变化进入
-原型热替换；构造器、实例字段、静态状态、装饰器、模块声明/副作用或继承关系变化都会自动执行完整
-页面重载，并在开发服务器日志中说明原因。这样旧实例不会静默保留过期的初始化状态。Electron Main
-与 Preload 仍会重启整个 Electron 进程。`build/app_ts/launch/electron.ts --watch` 调用 `build/app_ts/host.ts`
-用一次 TypeScript 项目构建监听 Main 与 Preload，首次启动直接使用监听器的编译结果。只有两边都完成当前编译、没有错误，且
-编译后的 preload 通过沙盒依赖校验，才启动或重启 Electron；任何编译或校验失败都会保留当前
-进程，避免加载同一轮增量编译中的半成品模块图。
+需要单独监听后端时，在仓库根目录执行 `pnpm dev:desktop:rust`。仅 UI、`dev:ui:connected` 和普通 Web 模式不监听后端。后端开发包和下载规则见 [共享包构建](../build/ash_rs/README.md)。
 
-完整 Electron 开发命令还会运行 `build/app_ts/watch-app-server.ts`。它监听 Rust 源码和 Cargo manifest，调用
-`build/ash_rs/develop.py` 完成 `ash-app-server` 的 `dev-small` profile 构建并发布不可变 generation；每个本地 Workbench window 随后通过现有 App
-Server supervisor 停止旧连接并启动新 generation。构建失败时当前 App Server 继续运行，初始化失败
-时自动回滚到上一 generation。Python 后端构建遵循 `CARGO_TARGET_DIR`，并直接读取 Cargo JSON artifact 报告的
-executable 路径，不依赖默认 target layout；generation 以 executable 内容摘要命名，内容未变化时不会重复发布，只保留当前版本
-和一个回滚版本。TypeScript watcher 只接受 `ash-rs` 源文件与根 `Cargo.toml`、`Cargo.lock`，明确忽略默认
-`.build/cargo` 以及解析后的自定义 `CARGO_TARGET_DIR` 内生成的 Rust 文件，避免一次构建再次触发自己。可以单独运行
-`pnpm dev:rust` 启动同一 watcher；`dev:ui`、`dev:ui:connected` 和
-不启动 Rust 的 disconnected Web 模式不会监听后端。
+### 打开工作区
 
-不带项目路径启动时，Ash 使用空窗口上下文。构建完成后，可以通过启动参数打开一个项目目录：
+构建完成后可通过启动参数打开目录或工作区：
 
 ```powershell
 pnpm --dir app-ts start -- C:\path\to\project
-```
-
-也可以显式声明目标类型：
-
-```powershell
 pnpm --dir app-ts start -- --folder C:\path\to\project
 pnpm --dir app-ts start -- --workspace C:\path\to\team.ash-workspace
 ```
 
-单目录启动时，当前版本会把目录作为 App Server 的 canonical `Dir`，并通过
-`fs/getMetadata`、`fs/readDirectory` 为 Renderer 的 Explorer 提供按需目录枚举，并通过
-`fs/readFile` 把不超过 10 MiB 的 UTF-8 文件打开到已注册的文本编辑器。编辑目前只保留在
-内存模型中；保存、写入/重命名、文件监听与自动刷新、多根 Workspace 配置解析尚未实现。
-Explorer 使用的 Seti 主题 JSON 和 WOFF 由 `platform/theme/browser` 直接拥有。TypeScript 从主题 JSON 推导所需结构，不维护额外的 Schema、生成类型或构建时资源副本。
-
-代码中 `platform/workspace` 定义当前窗口的 Workspace 模型与上下文，
-`platform/workspaces` 负责启动目标解析和后续工作区管理能力。两者不是同一服务的单复数别名。
+不传路径时打开空窗口。工作区模型由 `platform/workspace` 定义，启动目标解析和工作区管理由 `platform/workspaces` 负责；资源身份约定见 [资源身份](docs/resource-identity.md)。
 
 ## Electron 启动门禁
 
-Electron 启动统一经过 `src/main.ts` 和 `code/electron-main/main.ts`；它们先执行 bootstrap，打包应用从共享 profile 的 `workbench.mode` 读取初始模式 ID，非打包应用允许 `ASH_WORKBENCH_MODE` 覆盖，然后在 Electron `ready` 事件后启动应用，不在 ESM 顶层等待 `app.whenReady()`。应用运行后由 Workbench Mode Service 持久化模式选择，并通过带新 Mode URL 的窗口重载完成 Code/Academic 切换；Electron Main 不再按 Product 或静态 Mode 分派。`AshApplication.startupAfterReady()` 会断言 Electron 已进入 Ready，从结构上避免入口模块和 `ready` 生命周期互相等待。
+`src/main.ts` 先执行 bootstrap，再进入 `code/electron-main/main.ts`。应用在 Electron Ready 后启动；入口模块不在顶层等待 `app.whenReady()`，避免模块加载与 Ready 互相等待。
 
-本地 Electron 调试使用统一命令：
+连接 App Server 后校验初始化结果、服务端身份、协议主版本及必需能力版本，schema hash 用于诊断。门禁通过后创建业务窗口，窗口在 `ready-to-show` 后显示。失败时对话框提供重试或退出；重试先恢复连接组件的 stopped 状态。启动测量方法见 [Desktop 启动测量](docs/desktop-startup.md)。
 
-```sh
-pnpm dev
-pnpm dev:ui
-pnpm start
-```
-
-需要直接以 Academic 作为开发初始模式时仍使用相同命令，例如 `ASH_WORKBENCH_MODE=academic pnpm dev`。无论初始模式为何，Vite 都把 Code、Academic 和 Code Sessions 入口输出到同一个 `.build/app-ts/renderer/ash` 目录。
-
-Ready 后在后台连接 App Server，并完成 initialize、server identity、protocol major
-与必需能力版本校验；schema hash 进入诊断，门禁通过后才创建业务 Workbench 窗口。主窗口初始保持隐藏，
-在 `ready-to-show` 后恢复窗口模式并显示，启动过程不创建额外的 splash 窗口。
-门禁失败时使用 Electron 原生对话框提供 Retry/Quit，重试会先把 supervisor 恢复到
-stopped 状态。
-
-Electron Main 通过 allowlisted `ASH_ELECTRON_RUN_AS_NODE_PATH=process.execPath` 把当前 exact host executable
-声明给 Rust App Server。CSS provider 仍由 Rust 直接监督，只在启动该 LSP child 时设置
-`ELECTRON_RUN_AS_NODE=1`；Renderer 和普通 App Server 进程都不会进入 Node mode。Browser、CLI、
-remote/headless 形态没有 Electron，因此继续使用 package 中的 standalone Node。
+Electron 将当前可执行文件提供给后端的 JavaScript LSP 启动器，只有对应子进程使用 `ELECTRON_RUN_AS_NODE=1`；Renderer 和普通 App Server 不进入 Node mode。完整 Web 模式使用随包的独立 Node。进程与连接职责见 [前端连接边界](docs/frontend-app-server-boundary.md)。
 
 ## Browser Workbench
 
-Browser 与 Electron 现在各自只有一个 `workbench.html` 入口。`workbench/browser/web.factory.ts` 拥有自动启动与 `pagehide` 释放，`web.api.ts` 定义 embedder 输入；入口通过 `ash-workbench-mode` URL 参数选择一个模式 contribution，Workbench runtime 和 session profile 保持共享。设置切换先以 `reload` 原因完成 lifecycle shutdown，再由 Browser URL 或 Electron Main 重载当前窗口。
+Browser 和 Electron 各使用一个 `workbench.html` 入口。`web.factory.ts` 管理 Web 自动启动与页面释放，`web.api.ts` 定义嵌入方输入；`ash-workbench-mode` URL 参数选择初始模式。
 
-Renderer 控件、Workbench Part 与 CSS 状态的 canonical 所有权规范见
-[`docs/ui-styling-ownership.md`](../docs/ui-styling-ownership.md)。
-Pane-like Part 的标题槽位、CompositeBar、命名与生命周期规范见
-[`docs/workbench-pane-composite-design.md`](../docs/workbench-pane-composite-design.md)。
-Command、MenuId、Context Key 与菜单型 Toolbar 的 canonical 组合规范见
-[`docs/menu-system.md`](../docs/menu-system.md)。
+完整 Web 模式通过认证 WebSocket 直接连接 App Server。一次性票据在当前页签兑换会话后从 URL 移除，刷新复用 `sessionStorage` 中的会话。启动器仍运行时，后端重启会重新认证和连接，不重发旧写请求。授权过期或被撤销后需打开新的认证链接；当前入口仅用于本机单用户，未提供公网认证和 TLS。
 
-普通 `dev:web`、`dev:renderer` 和静态 Browser 构建未配置 host 时由
-`platform/app-server/browser/rendererApi.ts` 提供 disconnected API：UI 正常启动，状态栏显示
-App Server 不可用，产品操作明确失败。`dev:web:full` 使用 Vite 提供前端资源，
-由 `build/app_ts/web.ts` 启动受管理 App Server 的认证浏览器入口。`build:web` / `start:web`
-使用 Rust HTTP 入口提供编译产物；浏览器通过 WebSocket 直接交换 JSON-RPC。
-
-打开启动器给出的完整链接：URL fragment 中的一次性票据兑换为当前页签的会话，随后从地址栏移除。
-工作区由可信启动入口绑定，浏览器不能声明目录权限宿主。刷新时复用 `sessionStorage` 中的会话；
-Web 启动器仍运行时，后端重启后页面会自动重新认证和连接，不刷新编辑器、不重发旧写请求。
-关闭 Web 启动器会撤销对应授权；会话过期或被撤销后需要使用新的认证链接。
-
-嵌入方仍可在产品入口执行前设置 `globalThis.ashWebWorkbenchHost = { api, workspace }`。
-这个对象是进程内能力，不接受不可信 JSON。认证、职责与验收记录见
-[前端连接与浏览器能力](docs/design/app-server-connection.md)。当前入口限于本机单用户，未提供公网认证及 TLS。
+嵌入方可在产品入口执行前设置 `globalThis.ashWebWorkbenchHost = { api, workspace }`，这是进程内能力契约，不接受不可信 JSON。未配置宿主的普通 Web 入口使用 disconnected API。认证和连接生命周期见 [前端连接与浏览器能力](docs/design/app-server-connection.md)。
 
 ## Electron sandbox 边界
 
-`base/parts/sandbox/electron-browser/preload.cts` 是主窗口唯一的 preload 入口。它在
-`sandbox: true` 与 `contextIsolation: true` 下运行，运行时只能加载 `electron`，并通过
-`ISandboxGlobals` 暴露受 `ash:` 前缀约束的 IPC 与只读进程元数据。
+主窗口唯一的 preload 入口为 `base/parts/sandbox/electron-browser/preload.cts`，运行于 `sandbox: true` 和 `contextIsolation: true`，只加载 `electron`，通过 `ISandboxGlobals` 暴露限定的 IPC 和只读进程元数据。
 
-普通 Renderer 中的 `createElectronRendererApi()` 是该底层桥接的唯一产品适配器；Workbench
-只在 composition root 消费它生成的 `AshElectronRendererApi`，再注册按领域划分的 Workbench Service；
-contrib 不直接持有聚合 Renderer Host。Electron Main 的 `registerTrustedIpcRoutes()`
-继续负责 sender、main frame、入口 URL 和参数验证。若修改 preload、频道或 API 组装，必须同时
-运行 `pnpm --dir app-ts build` 与 `pnpm --dir app-ts test:main`。跨进程
-所有权与安全取舍以 [`docs/ash-desktop-architecture.md`](../docs/ash-desktop-architecture.md)
-为准。
+Renderer 通过 `createElectronRendererApi()` 适配桥接，由组合入口注册领域 Service；contrib 不直接持有聚合宿主 API。Main 校验消息发送者、主 frame、入口 URL 和参数。修改 preload、频道或 API 组装时，验证 `pnpm --dir app-ts build` 与 `pnpm --dir app-ts test:main`；职责见 [沙箱桥接与 Renderer API](../docs/ash-desktop-architecture.md#5-沙箱桥接与-renderer-api)。
 
 ## 嵌入式浏览器边界
 
-`platform/browser` 提供当前窗口的 `WebContentsView` 平台能力。Workbench 通过组合入口注入的
-`IBrowserViewApi` 创建、布局、导航、隐藏和关闭目标；Electron Main 中的
-`BrowserViewMainService` 持有真实 `WebContentsView`，`browserViewIpcRoutes()` 对每条命令做
-exact-shape validation。第三方页面使用独立的临时 partition，默认拒绝权限和下载；弹窗请求交由 Workbench 打开新的页签，
-并且不会加载主窗口的 Ash preload。
+`platform/browser` 提供窗口内的 `WebContentsView` 能力。Workbench 通过 `IBrowserViewApi` 管理布局和导航，Main 持有真实页面并校验命令。第三方页面使用临时 partition，不加载 Ash preload；权限和下载默认拒绝，弹窗由 Workbench 打开为新页签。
 
-Agent 浏览器能力复用同一目标权威源：Desktop 在 App Server initialize 中声明 browser host，
-`BrowserAutomationMainService` 处理 `browser/create`、`browser/observe`、`browser/perform` 和
-`browser/close` 反向 JSON-RPC。Rust 保留 Tool、批准、连接 owner、超时和截图 Resource authority；
-Electron Main 只执行有界语义 CDP 动作。实现直接使用 Electron 的 Node runtime，不启动 Node
-sidecar、不开放调试端口，也不接受任意 CDP method。App Server 连接退出时只回收通过宿主能力
-创建的目标，不影响 Renderer 自己持有的目标。
+Agent 浏览器操作复用同一组目标：Rust 管理工具、批准、超时和资源权限，Main 执行限定的 CDP 动作。实现不开放调试端口或任意 CDP 调用。连接退出只回收通过该连接创建的目标。
 
-`workbench/contrib/browserView/electron-browser` 提供浏览器页签、地址栏、前进后退、停止与重新加载，
-并同步可见性和页面尺寸。命令入口为 `Browser: Open Browser`；网页内按 F6 或 Ctrl+L 返回地址栏。
-Agent 创建的页面也打开为可见页签。任务只能使用发起该轮任务的连接所提供的宿主。
-Playwright 进程内代理、高级 locator、登录持久化和权限交互尚未提供。跨进程所有权以
-[`docs/ash-desktop-architecture.md`](../docs/ash-desktop-architecture.md) 的 Browser
-Capability 章节为准。
+界面命令为 `Browser: Open Browser`，网页中用 F6 或 Ctrl+L 返回地址栏。Agent 创建的目标也显示为页签；Playwright 进程内代理、登录持久化和权限交互尚未提供。详细边界见 [浏览器能力](../docs/ash-desktop-architecture.md#7-浏览器能力)。
 
 ## iframe Webview
 
-`platform/webview/browser/webviewElement.ts` 提供 Renderer 内的 `WebviewElement`，用于
-Markdown Preview、受控 HTML UI 和后续自定义编辑器。创建者持有并释放该对象，宿主按需挂载
-其 `element`；内容通过 `srcdoc` 运行在不含 `allow-same-origin` 的 sandbox 中，并由固定 CSP
-禁止网络子资源连接、嵌套 frame 和表单提交。
+`platform/webview/browser/webviewElement.ts` 提供用于 Markdown 预览和受控 HTML 的 `WebviewElement`，创建者负责释放。内容在 `srcdoc` sandbox iframe 中运行，不包含 `allow-same-origin`；固定 CSP 禁止网络子资源、嵌套 frame 和表单提交。
 
-iframe 内容只能通过一次性获取的 `acquireAshWebviewApi().postMessage()` 向宿主发送数据；
-宿主同时校验消息来源窗口和实例频道。该组件不获得 `AshElectronRendererApi`、Electron IPC
-或 Node 能力。当前尚无扩展宿主、独立 webview origin、资源 URI 映射和持久化 webview state；
-这些不能视为已实现能力。架构边界见
-[`docs/ash-desktop-architecture.md`](../docs/ash-desktop-architecture.md)。
+iframe 仅通过 `acquireAshWebviewApi().postMessage()` 通信，宿主校验来源窗口和实例频道；内容没有 Electron IPC 或 Node 能力。扩展宿主、资源 URI 映射和持久化 webview state 尚未提供，见 [iframe Webview](../docs/ash-desktop-architecture.md#62-iframe-webview)。
 
 ## Markdown
 
-`base/common/marked/` 保留 Marked 源码，`base/browser/dompurify/` 保留 DOMPurify 源码；
-`base/browser/domSanitize.ts` 是 HTML 清理入口。`base/browser/markdownRenderer.ts` 提供
-Workbench 短内容的 `MarkdownElement` 和同步 `renderWorkbenchMarkdown`。完整文档预览也走同一
-Marked renderer，再经同一套 DOMPurify 策略清理后交给 `WebviewElement` 的 sandbox iframe。
-解析器输出不能直接写入 DOM 或 iframe。
+短内容和文档预览共用 Marked 解析与 DOMPurify 清理。`base/browser/markdownRenderer.ts` 提供短内容渲染，`MarkdownDocumentView` 将完整预览适配到 Editor Part；解析器输出不能直接写入 DOM 或 iframe。
 
-渲染入口支持 GFM、硬换行、自定义 Marked 扩展、链接和图片 URI 改写、代码块渲染回调、流式
-未完成语法、GitHub 风格提示块、主题图标和显式 HTML。HTML 与自定义扩展输出始终经过 sanitizer；
-命令链接按 `MarkdownString.isTrusted` 检查，HTTP(S) 图片默认允许，调用方可用 `remoteImageIsAllowed`
-按资源策略进一步限制。
-代码块渲染器由调用方提供，当前没有默认语法着色器。
+渲染支持 GFM、流式未完成语法、提示块、主题图标以及调用方注入的解析扩展和代码块 renderer。HTML 始终清理，命令链接需明确授权，文件链接需资源上下文或完全信任，远程图片可由调用方策略限制。默认语法着色、Mermaid、KaTeX 尚未提供。详细边界见 [Markdown](../docs/ash-desktop-architecture.md#63-markdown)。
 
-`workbench/contrib/markdown/browser/markdownDocumentRenderer.ts` 提供产品层
-`MarkdownDocumentView`，将平台预览适配为 Editor Part 可持有的视图，并接管链接打开回调。
-`markdown.contribution.ts` 由 Workbench contribution 入口静态加载，负责该功能的产品样式，
-不重复 platform 的解析与安全实现。
+## 常用命令
 
-Workbench 静态装配按 host 分层：`workbench.common.main.ts` 加载 Browser 与 Electron
-共享的 contribution，`workbench.web.main.ts` 与 `workbench.desktop.main.ts` 只加载各自
-host 的 adapter 和 contribution。Mode 入口在 host main 之外独立选择 editor bundle 与不可变的
-`WorkbenchSession` 初始 composition；可选的专用 Sessions renderer 由
-`WorkbenchModeRegistry` 中的 `dedicatedSessions` 定义和模式自己的 `SessionsProfile` 装配。新增功能时不得从
-共享 `Workbench` 构造实现反向导入 Mode 或 Sessions 入口。
+以下命令均在仓库根目录执行；仓库通用 Rust、Python 和构建工具验证见 [构建指南](../docs/build.md#测试)。
 
-Chat 的运行中普通文本 Send 由 `ChatWidgetModel` 路由到生成协议中的 `steerTurn` Session operation；
-running 或交互等待期间输入工具栏同时显示 Send 与 Stop。Renderer 不自行排队或判定消息已生效，
-最终 transcript、delivery 和错误始终以 App Server 的 canonical Thread projection 为准。
+| 命令 | 覆盖范围 |
+| --- | --- |
+| `pnpm build:desktop` | Electron Main、Preload 和 Renderer |
+| `pnpm build:stanza` | 独立编辑器 |
+| `pnpm --dir app-ts typecheck:renderer` | Renderer 类型检查 |
+| `pnpm --dir app-ts test:main` | 构建工具和前端单测 |
+| `pnpm test:integration` | 浏览器集成测试 |
+| `pnpm test:desktop:smoke:browser` | 浏览器 UI，无 App Server |
+| `pnpm test:web-integration` | 浏览器与真实 App Server |
+| `pnpm test:desktop:smoke:ui` | Electron UI，无 App Server |
+| `pnpm test:desktop:smoke` | Electron 与真实 App Server |
+| `pnpm test:desktop:app` | Code 模式的 Electron 编辑器应用测试 |
 
-链接支持 HTTP、HTTPS、mailto、页内 fragment 和 VS Code 资源 URI；`command:` 需要明确授权，
-`file:` 需要文件资源上下文或完全信任。工作区资源链接由编辑器打开，外部链接交由宿主处理。
-图片支持内嵌的 PNG、JPEG、GIF 与 WebP、文件资源和 HTTP(S) 图片；`remoteImageIsAllowed` 可按
-资源策略拒绝远程图片。自定义 Marked 插件和代码块 renderer 可由调用方注入；默认语法着色、
-Mermaid 和 KaTeX 尚未提供。
-详细边界见
-[`docs/ash-desktop-architecture.md`](../docs/ash-desktop-architecture.md#63-markdown)。
+测试入口会准备对应输入；完整 Web 测试不构建 Electron Main/Preload。Electron UI、Browser UI 和真实后端测试使用各自的 Playwright 项目，失败时查看报告和 trace。
+
+需要验证 Academic 初始模式时，Bash 使用 `ASH_WORKBENCH_MODE=academic pnpm test:desktop:app`；PowerShell 先设置 `$env:ASH_WORKBENCH_MODE = 'academic'`，再运行同一测试命令。模式切换契约见 [Workbench 模式](../docs/workbench-modes.md)。
+
+### UI 场景录屏
+
+[test/scenario](../test/scenario/) 的 Playwright 运行器保存步骤截图、trace、录屏、字幕 MP4 和 HTML 报告；FFmpeg 要求见 [构建指南](../docs/build.md#ui-场景录屏)。
+
+先执行 `pnpm run scenario:compile`。已有开发构建时运行 `node test/scenario/out/runScenario.js <scenario.cjs> --dev`，Web 场景增加 `--web --headless`。需要从构建开始准备时使用 `pnpm run scenario -- <scenario.cjs> --dev`。临时场景和证据放在 `.build/ash-playwright-mcp/`，证据位于 `evidence/` 子目录。
 
 ## 安装失败时
 
-如果出现 `ERR_PNPM_ENOENT`、`electron_tmp` 或 Electron 目录 rename 错误，请先关闭正在运行的 Electron、Vite 和 Node 进程，然后在仓库根目录重建依赖：
+遇到 `ERR_PNPM_ENOENT`、`electron_tmp` 或 Electron 目录 rename 错误时，关闭本项目的 Electron、Vite 和相关 Node 进程，再在仓库根目录重建依赖：
 
 ```powershell
 Remove-Item -LiteralPath .\node_modules -Recurse -Force
@@ -292,32 +129,20 @@ pnpm install
 pnpm dev:desktop
 ```
 
-这里只会删除 pnpm 生成的依赖目录，不会删除源码或 `pnpm-lock.yaml`。如果仍然失败，请暂时关闭占用 Electron 文件的杀毒软件实时扫描后重试。
+这里只删除生成的依赖目录。Electron 安装脚本由 [pnpm-workspace.yaml](../pnpm-workspace.yaml) 的 `allowBuilds` 管理。
 
-## 常用命令
+## 继续阅读
 
-以下命令均可在仓库根目录执行：
-
-```bash
-# 构建桌面端
-pnpm build:desktop
-
-# 运行默认 Code 模式的 Electron 应用测试
-pnpm test:desktop:app
-# 以 Academic 作为测试启动模式
-ASH_WORKBENCH_MODE=academic pnpm test:desktop:app
-
-# 只运行桌面端主进程测试
-pnpm --dir app-ts test:main
-
-# 检查 renderer 类型
-pnpm --dir app-ts typecheck:renderer
-```
-
-如果 Electron 的依赖安装被 pnpm 拦截，请确认安装提示中的 `electron` 构建脚本已被允许。
+| 内容 | 文档 |
+| --- | --- |
+| 前端领域 Service、协议客户端与 Main 分工 | [前端连接边界](docs/frontend-app-server-boundary.md) |
+| Desktop 进程、窗口与 Renderer 架构 | [Desktop 架构](../docs/ash-desktop-architecture.md) |
+| Workbench 模式和 contribution 装配 | [Workbench 模式](../docs/workbench-modes.md) |
+| DOM 与通用浏览器组件 | [Browser foundation](docs/browser-foundation.md) |
+| 控件、Part 与 CSS 所有权 | [UI 样式职责](../docs/ui-styling-ownership.md) |
+| Pane、CompositeBar 与生命周期 | [Workbench 面板](../docs/workbench-pane-composite-design.md) |
+| Command、MenuId、Context Key 与 Toolbar | [菜单系统](../docs/menu-system.md) |
 
 ## 第三方许可证
 
-Desktop 直接运行时依赖及其源码内保留的许可证文本见
-[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。发布打包必须包含该清单及
-`app-ts/licenses/` 中的直接依赖许可证，并从清单引用的组件权威路径复制 Seti 与 Typst 许可证材料；同时保留 Electron 与所选原生运行时随附的上游 notices。源码树不保存这些组件许可证的第二份发布副本。
+直接运行依赖及其源码许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。发布包必须包含该清单和 `app-ts/licenses/` 中的直接依赖许可证，从组件所属路径复制 Seti、Typst 许可证，并保留 Electron 和所选运行时的上游 notices；源码树不维护第二份发布副本。
