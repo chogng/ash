@@ -1067,6 +1067,7 @@ test('Sessions titlebar aligns its application menu and actions', async ({ appli
 
 test('Sessions titlebar sidebar toggle stays transparent at rest and responds to pointer and keyboard', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
+	await expect(workbench.page.locator('.ash-titlebar-left-actions [data-action-id="workbench.action.toggleSideBar"] button')).toHaveCSS('border-radius', '4px');
 	let page = workbench.page;
 	if (target.kind === 'browser') {
 		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
@@ -1084,6 +1085,7 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 		await page.mouse.move(400, 180);
 		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect.poll(() => page.locator('[data-part="titlebar"] .ash-menubar button').evaluateAll(buttons => buttons.map(button => getComputedStyle(button).borderRadius))).toEqual(['8px', '8px', '8px', '8px']);
 		await toggle.hover();
 		await expect(toggle).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		await toggle.click();
@@ -1109,6 +1111,7 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 		await expect(sidebar).toBeVisible();
 		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 		await expect(toggle).toHaveAccessibleName('Hide sidebar');
+		await expect(toggle).toHaveCSS('border-radius', '8px');
 		await expect(toggle.locator('svg[data-ash-icon-id="layout-sidebar-left-2"]')).toBeVisible();
 	}
 });

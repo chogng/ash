@@ -29,6 +29,7 @@
 .ash-workbench.ash-sessions-fullscreen .ash-sessions-window-controls-spacer { display: none; }
 
 .ash-sessions-titlebar-left > .ash-menubar {
+  --ash-menubar-action-radius: var(--ash-corner-radius-large);
   --ash-action-bar-gap: var(--ash-spacing-size80);
   --ash-toolbar-action-size: var(--ash-spacing-size280);
   --ash-toolbar-hover-background: var(--ash-title-bar-hover-background);
