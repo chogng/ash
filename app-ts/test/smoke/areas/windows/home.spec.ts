@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { access, link, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { access, link, mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -35,32 +35,13 @@ test('Desktop reopens an authorized workspace after its backend stops', async ({
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'This checks a stopped backend on Desktop.');
 	test.setTimeout(90_000);
 	const directory = await mkdtemp(join(tmpdir(), 'ash-'));
-	const profile = join(directory, 'profile');
-	const daemon = appServerDaemonExecutablePath({ appPath: resolve(import.meta.dirname, '../../../..'), isPackaged: false, platform: process.platform, resourcesPath: '' });
-	const priorHome = process.env.HOME;
-	const priorUserProfile = process.env.USERPROFILE;
-	process.env.HOME = directory;
-	process.env.USERPROFILE = directory;
-	const environment = { ...process.env, ASH_HOME: profile };
 	let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
 	try {
-		// Startup must use test credentials, independent of accounts on the developer's machine.
-		const credentials = join(directory, '.zcode', 'v2');
-		await mkdir(credentials, { recursive: true });
-		const entries: Record<string, string> = {};
-		for (const provider of ['bigmodel', 'zai']) {
-			const id = `account:${provider}-individual-coding-plan`;
-			entries[`account-provider:${id}:identity`] = 'offline-test';
-			entries[`account-provider:coding-plan:${id}:account:offline-test:api-key`] = 'offline-test-key';
-		}
-		await writeFile(join(credentials, 'credentials.json'), JSON.stringify(entries));
-
-		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory: join(directory, 'first'), profileDirectory: profile, workspaceDirectory: testWorkspace.directory, workspacePermissions: 'development' });
+		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory: directory, workspaceDirectory: testWorkspace.directory, workspacePermissions: 'development' });
 		await desktop.close();
 		desktop = undefined;
-		await execFileAsync(daemon, ['stop'], { env: environment, windowsHide: true, timeout: 30_000 });
 
-		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory: join(directory, 'second'), profileDirectory: profile, workspaceDirectory: testWorkspace.directory });
+		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory: directory, workspaceDirectory: testWorkspace.directory });
 		const page = desktop.driver.workbench.page;
 		await expect(desktop.driver.workbench.element).toBeVisible();
 		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
@@ -73,77 +54,42 @@ test('Desktop reopens an authorized workspace after its backend stops', async ({
 		try {
 			await desktop?.close();
 		} finally {
-			try {
-				await execFileAsync(daemon, ['stop'], { env: environment, windowsHide: true, timeout: 30_000 });
-			} finally {
-				if (priorHome === undefined) delete process.env.HOME;
-				else process.env.HOME = priorHome;
-				if (priorUserProfile === undefined) delete process.env.USERPROFILE;
-				else process.env.USERPROFILE = priorUserProfile;
-				await rm(directory, { force: true, recursive: true, maxRetries: 10, retryDelay: 100 });
-			}
+			await rm(directory, { force: true, recursive: true, maxRetries: 10, retryDelay: 100 });
 		}
 	}
 });
 
-test('Desktop replaces a daemon started from another package generation', async ({ target }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || process.platform !== 'win32', 'This checks Windows Desktop backend selection.');
-	const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-'));
-	const profile = join(userDataDirectory, 'profile');
-	const appPath = resolve(import.meta.dirname, '../../../..');
-	const packageLocation = { appPath, isPackaged: false, platform: process.platform, resourcesPath: '' };
-	const daemon = appServerDaemonExecutablePath(packageLocation);
-	const selectedBackend = appServerExecutablePath(packageLocation);
-	const staleBackend = join(userDataDirectory, 'stale-app-server.exe');
-	let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
-	try {
-		// The same binary outside its package has a different generation identity.
-		await link(selectedBackend, staleBackend);
-		const environment = { ...process.env, ASH_HOME: profile, ASH_APP_SERVER_PATH: staleBackend };
-		const started = JSON.parse((await execFileAsync(daemon, ['start'], { env: environment, windowsHide: true })).stdout) as { readonly pid: number };
-		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory });
-		const selected = JSON.parse((await execFileAsync(daemon, ['version'], { env: { ...environment, ASH_APP_SERVER_PATH: selectedBackend }, windowsHide: true })).stdout) as { readonly pid: number };
-		expect(selected.pid).not.toBe(started.pid);
-		await expect(desktop.driver.workbench.element).toBeVisible();
-	} finally {
-		if (desktop) {
-			await desktop.close();
-		} else {
-			await execFileAsync(daemon, ['stop'], { env: { ...process.env, ASH_HOME: profile, ASH_APP_SERVER_PATH: selectedBackend }, windowsHide: true });
-		}
-		await rm(userDataDirectory, { force: true, recursive: true, maxRetries: 10, retryDelay: 100 });
-	}
-});
-
-test('Desktop reuses a daemon from the selected development package', async ({ target }) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'This checks the Electron frontend debugging connection.');
-	const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-'));
-	const profile = join(userDataDirectory, 'profile');
-	const appPath = resolve(import.meta.dirname, '../../../..');
-	const packageLocation = { appPath, isPackaged: false, platform: process.platform, resourcesPath: '' };
-	const daemon = appServerDaemonExecutablePath(packageLocation);
-	const selectedBackend = appServerExecutablePath(packageLocation);
-	const environment = { ...process.env, ASH_HOME: profile, ASH_APP_SERVER_PATH: selectedBackend };
-	let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
-	try {
-		const started = JSON.parse((await execFileAsync(daemon, ['start'], { env: environment, windowsHide: true })).stdout) as { readonly pid: number };
-		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory, profileDirectory: profile });
-		const connected = JSON.parse((await execFileAsync(daemon, ['version'], { env: environment, windowsHide: true })).stdout) as { readonly pid: number };
-		expect(connected.pid).toBe(started.pid);
-		await expect(desktop.driver.workbench.element).toBeVisible();
-	} finally {
+for (const packageState of ['selected', 'other'] as const) {
+	const title = packageState === 'selected'
+		? 'Desktop reuses a daemon from the selected development package'
+		: 'Desktop replaces a daemon started from another package generation';
+	test(title, async ({ target }) => {
+		test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires the Desktop backend.');
+		test.skip(packageState === 'other' && process.platform !== 'win32', 'This checks Windows package identity.');
+		const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-'));
+		const profile = join(userDataDirectory, 'profile');
+		const packageLocation = { appPath: resolve(import.meta.dirname, '../../../..'), isPackaged: false, platform: process.platform, resourcesPath: '' };
+		const daemon = appServerDaemonExecutablePath(packageLocation);
+		const selectedBackend = appServerExecutablePath(packageLocation);
+		const existingBackend = packageState === 'selected' ? selectedBackend : join(userDataDirectory, 'other-app-server.exe');
+		const environment = { ...process.env, ASH_HOME: profile, ASH_APP_SERVER_PATH: existingBackend };
+		let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
 		try {
-			if (desktop) {
-				// This test owns the Electron process and profile; quit without waiting for application state flushing.
-				desktop.application.process().kill('SIGKILL');
-				await desktop.application.close();
+			// A hard link outside the package keeps the binary identical but changes its package identity.
+			if (packageState === 'other') {
+				await link(selectedBackend, existingBackend);
 			}
+			const started = JSON.parse((await execFileAsync(daemon, ['start'], { env: environment, windowsHide: true })).stdout) as { readonly pid: number };
+			desktop = await launchElectron({ appServerMode: 'required', userDataDirectory });
+			const connected = JSON.parse((await execFileAsync(daemon, ['version'], { env: environment, windowsHide: true })).stdout) as { readonly pid: number };
+			expect(connected.pid === started.pid).toBe(packageState === 'selected');
 		} finally {
 			try {
-				await execFileAsync(daemon, ['stop'], { env: environment, windowsHide: true });
+				await desktop?.close();
 			} finally {
+				await execFileAsync(daemon, ['stop'], { env: environment, windowsHide: true });
 				await rm(userDataDirectory, { force: true, recursive: true, maxRetries: 10, retryDelay: 100 });
 			}
 		}
-	}
-});
+	});
+}

@@ -84,7 +84,7 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 			await ready;
 			onMilestone?.('workbench-ready');
 		} catch (error) {
-			const text = await page.locator('body').innerText().catch(() => 'Document is unavailable');
+			const text = await page.evaluate(() => [document.body.innerText, ...Array.from(document.querySelectorAll('textarea'), field => field.value)].join('\n')).catch(() => 'Document is unavailable');
 			const details = [
 				...driver.consoleErrors.slice(-8),
 				...pageErrors,
