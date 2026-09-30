@@ -10,6 +10,7 @@ import { BreadcrumbsService } from "../../breadcrumbs.js";
 import { AutoLockGroupsConfiguration, DefaultBinaryEditorConfiguration, DynamicEditorConfigurations, DiffEditorAssociationsConfiguration, EditorAssociationsConfiguration, EditorLargeFileConfirmationConfiguration } from "../../editorConfiguration.js";
 import { createDiffEditorInput } from "../../../../../common/editor/diffEditorInput.js";
 import { InMemoryConfigurationService } from "../../../../../../platform/configuration/common/inMemoryConfigurationService.js";
+import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import type { IFileService } from "../../../../../../platform/files/common/files.js";
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../../../../platform/configuration/common/configurationRegistry.js";
 import { Registry } from "../../../../../../platform/registry/common/platform.js";
@@ -39,7 +40,7 @@ import { TestThemeService } from '../../../../../../platform/theme/test/common/t
 import { BrowserStorageService } from '../../../../../../workbench/services/storage/browser/storageService.js';
 import { CommandService } from '../../../../../../workbench/services/commands/common/commandService.js';
 import { IHistoryService } from '../../../../../../workbench/services/history/common/history.js';
-import type {
+import {
 	IKeybindingService,
 } from "../../../../../../platform/keybinding/common/keybinding.js";
 import {
@@ -113,6 +114,7 @@ const { BrowserAuxiliaryWindowService } = await import("../../../../../../workbe
 await import(
 	"../../../../../../workbench/contrib/preferences/browser/preferences.contribution.js"
 );
+await import('../../../../../../workbench/browser/workbench.contribution.js');
 
 suiteTeardown(() => browserEnvironment.window.close());
 
@@ -297,7 +299,7 @@ test("EditorPart passes Workbench file services to pane factories", async () => 
 	dom.window.close();
 });
 
-test("EditorPart shows command shortcuts until an editor opens", async () => {
+test("EditorPart applies empty-editor tips changes without showing them over an editor", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
 	registry.register(descriptor(
@@ -306,6 +308,11 @@ test("EditorPart shows command shortcuts until an editor opens", async () => {
 		() => new TestEditorPane("stanza.editor.code"),
 	));
 	const keybindings = new TestKeybindingService();
+	using configuration = new InMemoryConfigurationService();
+	using services = new ServiceContainer();
+	services.registerInstance(IKeybindingService, keybindings);
+	services.registerInstance(IConfigurationService, configuration);
+	await assert.rejects(configuration.updateValue('workbench.tips.enabled', 'false'), /must be boolean/);
 	keybindings.set(
 		"test.openEditor",
 		Keybinding.single(logicalKey("o", { primaryKey: true })),
@@ -317,6 +324,7 @@ test("EditorPart shows command shortcuts until an editor opens", async () => {
 	});
 	const editor = new EditorPart(dom.window.document.body, {
 		keybindingService: keybindings,
+		instantiationService: services,
 		registry,
 	});
 	dom.window.document.body.append(editor.domNode);
@@ -325,13 +333,22 @@ test("EditorPart shows command shortcuts until an editor opens", async () => {
 		editor.domNode.textContent ?? "",
 		/Open Editor.*(?:Ctrl\+|⌘)O/,
 	);
+	await configuration.updateValue('workbench.tips.enabled', false);
+	assert.equal(editor.domNode.querySelector('.ash-editor-group-watermark-shortcuts')?.childElementCount, 0);
+	await configuration.updateValue('workbench.tips.enabled', true);
+	assert.match(editor.domNode.textContent ?? '', /Open Editor.*(?:Ctrl\+|⌘)O/);
 	await editor.openEditor(input("C:\\project\\main.ts"));
+	await configuration.updateValue('workbench.tips.enabled', false);
+	await configuration.updateValue('workbench.tips.enabled', true);
 	assert.equal(
 		editor.domNode.querySelector<HTMLElement>(
 			".ash-editor-group-watermark-shortcuts",
 		)?.hidden,
 		true,
 	);
+	await editor.closeEditor(editor.activeInput!);
+	assert.equal(editor.domNode.querySelector<HTMLElement>('.ash-editor-group-watermark-shortcuts')?.hidden, false);
+	assert.match(editor.domNode.textContent ?? '', /Open Editor.*(?:Ctrl\+|⌘)O/);
 
 	editor.dispose();
 	entry.dispose();
@@ -1593,6 +1610,31 @@ test("BrowserAuxiliaryWindowService opens, registers, mirrors styles, and releas
 	opener.window.close();
 	popup.window.close();
 	reopenedPopup.window.close();
+});
+
+test('workspace shutdown saves an untitled editor through Save As before accepting the transition', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const registry = new EditorPaneRegistry();
+	const untitled: EditorInput = { resource: URI.parse('untitled:/Draft'), label: 'Draft' };
+	const destination = URI.file('/project/draft.txt');
+	using copy = new TestWorkingCopy(untitled.resource);
+	copy.markDirty();
+	let savedTo: URI | undefined;
+	registry.register({
+		id: 'test.save-as', name: 'Save As', canOpen: () => EditorPaneMatch.Default,
+		create: () => Object.assign(new TestEditorPane('test.save-as', copy), { saveAs: async (target: URI) => { savedTo = target; await copy.saveAs(); } }),
+	});
+	using editor = new EditorPart(dom.window.document.body, {
+		registry, fileDialogService: new TestFileDialogService(ConfirmResult.SAVE),
+		saveAsResource: async () => destination,
+		replaceEditorResource: async (group, input, replacement) => { await group.replaceEditor(input, replacement); },
+	});
+	await editor.openEditor(untitled);
+	assert.equal(await editor.confirmCloseAllEditors(), true);
+	assert.equal(savedTo?.toString(), destination.toString());
+	assert.equal(copy.saveCount, 0);
+	assert.equal(editor.activeInput?.resource.toString(), destination.toString());
+	dom.window.close();
 });
 
 class TestEditorPane extends Disposable implements IEditorPane {

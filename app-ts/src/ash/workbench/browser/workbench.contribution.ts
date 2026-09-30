@@ -34,7 +34,7 @@ import { registerAction2 } from '../../platform/actions/common/actions.js';
 import { localize } from '../../nls.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../platform/registry/common/platform.js';
-import { OpenFolderAction, OpenFolderViaWorkspaceAction } from './actions/workspaceActions.js';
+import { CloseWorkspaceAction, OpenFolderAction, OpenFolderViaWorkspaceAction } from './actions/workspaceActions.js';
 import { ShowAboutDialogAction } from './actions/windowActions.js';
 import "../contrib/bulkEdit/browser/bulkEdit.contribution.js";
 import "../contrib/binaryEditor/browser/binaryEditor.contribution.js";
@@ -53,6 +53,22 @@ import "./parts/editor/editor.contribution.js";
 import "./parts/titlebar/menubar.contribution.js";
 import "./parts/titlebar/titlebarActions.js";
 import "./parts/notifications/notificationsCommands.js";
+
+Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration<boolean>({
+	key: 'workbench.tips.enabled',
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') {
+			throw new TypeError('Editor tips setting must be boolean');
+		}
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('workbench.tips.enabled.title', 'Empty editor tips'); },
+		get description() { return localize('workbench.tips.enabled.description', 'Show command shortcuts when no editor is open.'); },
+	},
+});
 
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration<boolean>({
 	key: 'workbench.editor.restoreEditors',
@@ -86,6 +102,7 @@ registerRemoteViews();
 registerTerminalView();
 registerAction2(OpenFolderAction);
 registerAction2(OpenFolderViaWorkspaceAction);
+registerAction2(CloseWorkspaceAction);
 registerAction2(ShowAboutDialogAction);
 
 registerWorkbenchContribution(

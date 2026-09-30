@@ -98,7 +98,9 @@ registerAction2(class CloseAllEditorsAction extends Action2 {
 			id: CloseAllEditorsCommandId,
 			title: localizedString("ash", "workbench.closeAllEditors", "Close All Editors"),
 			f1: true,
-			menu: { id: MenuId.MenubarFileMenu, when: EditorsVisibleContext.isEqualTo(true), group: "4_close", order: 2 },
+			precondition: EditorsVisibleContext.isEqualTo(true),
+			menu: { id: MenuId.MenubarFileMenu, group: "6_close", order: 1 },
+			keybinding: { primary: Keybinding.chord(logicalKey("k", { primaryKey: true }), logicalKey("w", { primaryKey: true })) },
 		});
 	}
 

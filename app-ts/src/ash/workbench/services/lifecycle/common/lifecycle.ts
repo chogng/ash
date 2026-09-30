@@ -2,7 +2,7 @@ import type { Event } from "../../../../base/common/event.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 
 export type LifecyclePhase = "running" | "shuttingDown" | "shutdown";
-export type ShutdownReason = "pageHide" | "windowClose" | "reload" | "quit";
+export type ShutdownReason = "pageHide" | "windowClose" | "reload" | "load" | "quit";
 
 export interface IBeforeShutdownEvent {
 	readonly reason: ShutdownReason;

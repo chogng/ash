@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL } from '../../../window/common/window.js';
+import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_PREPARE_LOAD_CHANNEL } from '../../../window/common/window.js';
 import type { IStateService } from '../../../state/node/state.js';
 import { LifecycleMainService, windowCloseResponseIpcRoute } from '../../electron-main/lifecycleMainService.js';
 
@@ -40,6 +40,28 @@ function createStateService(): IStateService {
 		close: async () => {},
 	};
 }
+
+test('loading a workspace shares the shutdown handshake without closing the window', async () => {
+	const window = new TestWindow();
+	using service = new LifecycleMainService<TestWindow>(() => {}, () => {}, createStateService(), '1.0.0');
+	using registration = service.registerWindow(window);
+	const route = windowCloseResponseIpcRoute(service, window);
+	route.invoke(route.validate({ kind: 'ready' }));
+	const cancelled = service.unload(window);
+	assert.deepEqual(window.messages, [{ channel: WINDOW_PREPARE_LOAD_CHANNEL, token: 1 }]);
+	route.invoke(route.validate({ kind: 'vetoed', token: 1 }));
+	assert.equal(await cancelled, false);
+	const accepted = service.unload(window);
+	route.invoke(route.validate({ kind: 'complete', token: 2 }));
+	assert.equal(await accepted, true);
+	assert.equal(window.destroyed, false);
+	window.emitRendererLoading();
+	route.invoke(route.validate({ kind: 'ready' }));
+	window.close();
+	assert.deepEqual(window.messages.at(-1), { channel: WINDOW_PREPARE_CLOSE_CHANNEL, token: 3 });
+	assert.equal(window.destroyed, false);
+	route.invoke(route.validate({ kind: 'complete', token: 3 }));
+});
 
 test('main lifecycle waits for renderer shutdown, reports failure, and permits retry', () => {
 	const window = new TestWindow();

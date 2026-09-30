@@ -12,6 +12,9 @@ test("Remote Agent IPC projects only sanitized authority and connection generati
 	const supervisor = { generation: 7 } as AppServerConnectionRelay;
 
 	assert.deepEqual(remoteAgentConnection(supervisor, { id: "local", uri: URI.file("/tmp") }), { kind: "local", generation: 7 });
+	assert.deepEqual(remoteAgentConnection(supervisor, { id: 'empty-remote', remoteAuthority: 'ssh+work-server' }), {
+		kind: 'ssh', generation: 7, authority: 'ssh+work-server', host: 'work-server',
+	});
 	assert.deepEqual(remoteAgentConnection(supervisor, {
 		id: "remote",
 		uri: createSshRemoteWorkspaceUri("work-server", "/home/ash/project"),
@@ -47,11 +50,14 @@ test("Remote Agent IPC delegates path-free reconnect and rollback only for a Rem
 	assert.deepEqual(await rollback.invoke(rollback.validate(undefined)), { kind: "rolledBack" });
 	assert.equal(reconnects, 1);
 	assert.equal(rollbacks, 1);
+	workspace = { id: 'empty-remote', remoteAuthority: 'ssh+work-server' };
+	assert.deepEqual(await reconnect.invoke(reconnect.validate(undefined)), { kind: 'reconnected' });
+	assert.equal(reconnects, 2);
 
 	workspace = { id: "local", uri: URI.file("/tmp") };
 	await assert.rejects(async () => reconnect.invoke(reconnect.validate(undefined)), /SSH Remote Workspace/);
 	await assert.rejects(async () => rollback.invoke(rollback.validate(undefined)), /SSH Remote Workspace/);
-	assert.equal(reconnects, 1);
+	assert.equal(reconnects, 2);
 	assert.equal(rollbacks, 1);
 });
 

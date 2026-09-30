@@ -169,6 +169,10 @@ test("localization lookup falls back to English and formats parameters", async (
 		localization.translate('ash', 'workbench.pinEditor', 'Pin Editor'),
 		localization.translate('ash', 'workbench.unpinEditor', 'Unpin Editor'),
 	], ['关闭其他编辑器', '固定编辑器', '取消固定编辑器']);
+	assert.deepEqual([
+		localization.translate('ash', 'workbench.closeFolder', 'Close Folder'),
+		localization.translate('ash', 'workbench.closeWorkspace', 'Close Workspace'),
+	], ['关闭文件夹', '关闭工作区']);
 	assert.equal(localization.translate('ash', 'chat.settings.advisorDisable', 'Turn Advisor off'), '关闭顾问');
 	assert.equal(localization.translate('ash', 'chat.advisor.configure', 'Configure an advisor model in Chat Settings before asking for a second opinion'), '请先在聊天设置中配置顾问模型，再请求第二意见');
 	assert.deepEqual([

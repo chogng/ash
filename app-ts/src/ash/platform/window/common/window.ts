@@ -1,5 +1,21 @@
 import { isMacintosh, isWeb } from '../../../base/common/platform.js';
 import type { IConfigurationService } from '../../configuration/common/configuration.js';
+import { createSshRemoteAuthority } from '../../remote/common/remote.js';
+
+export interface IOpenEmptyWindowOptions {
+	readonly forceReuseWindow?: boolean;
+	readonly remoteAuthority?: string;
+}
+
+export function validateOpenEmptyWindowOptions(value: unknown): IOpenEmptyWindowOptions {
+	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Invalid empty window options');
+	const options = value as Record<string, unknown>;
+	if (Object.keys(options).some(key => key !== 'forceReuseWindow' && key !== 'remoteAuthority') || options.forceReuseWindow !== undefined && typeof options.forceReuseWindow !== 'boolean') throw new TypeError('Invalid empty window options');
+	if (options.remoteAuthority !== undefined) {
+		if (typeof options.remoteAuthority !== 'string' || !options.remoteAuthority.startsWith('ssh+') || createSshRemoteAuthority(options.remoteAuthority.slice(4)).authority !== options.remoteAuthority) throw new TypeError('Invalid Remote authority');
+	}
+	return options as IOpenEmptyWindowOptions;
+}
 
 export const enum MenuSettings {
 	MenuStyle = 'window.menuStyle',
@@ -66,6 +82,7 @@ export const WINDOW_OPERATION_CHANNEL = 'ash:window:operation';
 export const WINDOW_ZOOM_CHANGED_CHANNEL = 'ash:window:zoom-changed';
 export const WINDOW_FULLSCREEN_CHANGED_CHANNEL = 'ash:window:fullscreen-changed';
 export const WINDOW_PREPARE_CLOSE_CHANNEL = 'ash:window:prepare-close';
+export const WINDOW_PREPARE_LOAD_CHANNEL = 'ash:window:prepare-load';
 export const WINDOW_CLOSE_RESPONSE_CHANNEL = 'ash:window:close-response';
 export const WINDOW_ZOOM_LEVEL_SETTING = 'window.zoomLevel';
 

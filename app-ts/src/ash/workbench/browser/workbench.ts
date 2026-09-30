@@ -676,10 +676,11 @@ export class Workbench extends Disposable {
 		const recentWorkspaces = this._register(new RecentWorkspacesService(storage, workspaceContext, workspaceOpenService));
 		services.registerInstance(IRecentWorkspacesService, recentWorkspaces);
 		this._register(lifecycleService.onBeforeShutdown(event => {
+			if (event.reason === 'load') event.veto(editorParts.confirmCloseAllEditors().then(confirmed => !confirmed), 'workspace editor changes');
 			event.veto(workingCopyBackupTracker.flush().then(() => false), 'working-copy backup flush');
 		}));
 		this._register(lifecycleService.onWillShutdown(event => {
-			event.join(storage.flush(WillSaveStateReason.SHUTDOWN), "Workbench storage flush");
+			event.join(workingCopyBackupTracker.flush().then(() => storage.flush(WillSaveStateReason.SHUTDOWN)), "Workbench storage flush");
 		}));
 		const outputService = this._register(new OutputService({ storageService: storage }));
 		services.registerInstance(IOutputService, outputService);

@@ -5,6 +5,7 @@ import {
 	NATIVE_HOST_PICK_FOLDER_CHANNEL,
 	NATIVE_HOST_PICK_FILE_CHANNEL,
 	NATIVE_HOST_OPEN_WORKSPACE_CHANNEL,
+	NATIVE_HOST_OPEN_WINDOW_CHANNEL,
 	NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL,
 	NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL,
 	NATIVE_HOST_SAVE_FILE_CHANNEL,
@@ -38,6 +39,8 @@ import {
 	validateRevealFilePath,
 } from "../common/nativeHost.js";
 
+import { validateOpenEmptyWindowOptions, type IOpenEmptyWindowOptions } from '../../window/common/window.js';
+
 /** Main-process implementation of native operations for one window. */
 export interface INativeHostMainService {
 	performDialogOperation(operation: NativeDialogOperation): unknown;
@@ -45,6 +48,7 @@ export interface INativeHostMainService {
 	pickFolder(): Promise<string | undefined>;
 	pickFile(options: INativeOpenDialogOptions): Promise<readonly string[] | undefined>;
 	openWorkspace(root: string): Promise<void>;
+	openWindow(options: IOpenEmptyWindowOptions): Promise<void>;
 	openAgentsWindow(options?: IOpenAgentsWindowOptions): Promise<void>;
 	revealFile(path: string): void;
 	saveFile(options: INativeSaveFileOptions): Promise<string | undefined>;
@@ -89,6 +93,11 @@ export function nativeHostIpcRoutes(
 			channel: NATIVE_HOST_OPEN_WORKSPACE_CHANNEL,
 			validate: validateOpenWorkspace,
 			invoke: (root) => service.openWorkspace(root as string),
+		},
+		{
+			channel: NATIVE_HOST_OPEN_WINDOW_CHANNEL,
+			validate: validateOpenEmptyWindowOptions,
+			invoke: options => service.openWindow(options as IOpenEmptyWindowOptions),
 		},
 		{
 			channel: NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL,

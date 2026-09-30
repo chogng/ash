@@ -4,7 +4,7 @@ import { directBrowserViewNavigation } from "../../browser/common/browserViewNav
 import type { IBrowserViewNavigationResolver } from "../../browser/common/browserViewNavigation.js";
 import { normalizeBrowserViewUrl } from "../../browser/common/browserView.js";
 import type { IAnyWorkspaceIdentifier } from "../../workspace/common/workspace.js";
-import { isRemoteWorkspaceIdentifier } from "../../workspace/common/workspace.js";
+import { getWorkspaceRemoteAuthority } from "../../workspace/common/workspace.js";
 import type { IRemoteTunnelService } from "../common/remoteTunnelService.js";
 import type { RemoteTunnel } from "../common/remoteTunnelService.js";
 
@@ -22,11 +22,11 @@ export class RemoteBrowserViewNavigationResolver implements IBrowserViewNavigati
 		const requestedUrl = normalizeBrowserViewUrl(value);
 		const parsed = new URL(requestedUrl);
 		const workspace = this.options.getWorkspace();
-		if (!isRemoteWorkspaceIdentifier(workspace) || !isLoopbackWebUrl(parsed)) {
+		if (!getWorkspaceRemoteAuthority(workspace) || !isLoopbackWebUrl(parsed)) {
 			return directBrowserViewNavigation(requestedUrl);
 		}
 		throwIfCancelled(signal, "Remote Browser navigation was cancelled");
-		const workspaceIdentity = `${workspace.id}\0${workspace.uri.toString()}`;
+		const workspaceIdentity = `${workspace.id}\0${getWorkspaceRemoteAuthority(workspace)}`;
 		const remotePort = parsed.port ? Number(parsed.port) : defaultPort(parsed.protocol);
 		const tunnel = await this.options.tunnels.open({ remotePort });
 		if (signal.aborted) {
@@ -154,7 +154,7 @@ function replaceAuthority(value: URL, hostname: string, port: number): string {
 function matchesRemoteWorkspace(getWorkspace: () => IAnyWorkspaceIdentifier, expectedIdentity: string): boolean {
 	try {
 		const workspace = getWorkspace();
-		return isRemoteWorkspaceIdentifier(workspace) && `${workspace.id}\0${workspace.uri.toString()}` === expectedIdentity;
+		return getWorkspaceRemoteAuthority(workspace) !== undefined && `${workspace.id}\0${getWorkspaceRemoteAuthority(workspace)}` === expectedIdentity;
 	} catch {
 		return false;
 	}

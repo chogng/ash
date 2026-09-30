@@ -69,6 +69,7 @@ test('Electron titlebar applies the active theme and releases its subscription w
 			pickFolder: async () => undefined,
 			pickFile: async () => undefined,
 			openWorkspace: async () => {},
+			openWindow: async () => {},
 			openAgentsWindow: async () => {},
 			revealFile: async () => {},
 			toggleDeveloperTools: async () => {},

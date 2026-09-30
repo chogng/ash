@@ -6,14 +6,16 @@ import { test } from "mocha";
 import { isCancellationError } from "../../../../base/common/errors.js";
 import { URI } from "../../../../base/common/uri.js";
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
+import type { IAnyWorkspaceIdentifier } from '../../../../platform/workspace/common/workspace.js';
 import { SshRemoteTunnelService, sshTunnelArguments } from "../../../../platform/remote/electron-main/sshRemoteTunnelService.js";
 import type { RemoteTunnelChange } from "../../../../platform/remote/common/remoteTunnelService.js";
 
 test("SSH tunnel coordinator fixes both ends of the forward to loopback", async () => {
-	const child = new FakeChildProcess();
+	let child = new FakeChildProcess();
 	let launch: { executable: string; args: readonly string[] } | undefined;
+	let workspace: IAnyWorkspaceIdentifier = { id: 'remote', uri: createSshRemoteWorkspaceUri('build-server', '/srv/project') };
 	using service = new SshRemoteTunnelService({
-		getWorkspace: () => ({ id: "remote", uri: createSshRemoteWorkspaceUri("build-server", "/srv/project") }),
+		getWorkspace: () => workspace,
 		sshExecutable: "ssh",
 		localEnvironment: { SSH_AUTH_SOCK: "/tmp/agent.sock" },
 		reserveLocalPort: async () => 41_234,
@@ -41,6 +43,11 @@ test("SSH tunnel coordinator fixes both ends of the forward to loopback", async 
 
 	await service.close(tunnel.id);
 	assert.deepEqual(await service.list(), []);
+	workspace = { id: 'empty-remote', remoteAuthority: 'ssh+build-server' };
+	child = new FakeChildProcess();
+	const nextTunnel = await service.open({ remotePort: 3_000 });
+	assert.deepEqual(launch?.args, sshTunnelArguments('build-server', 41_234, 3_000));
+	await service.close(nextTunnel.id);
 });
 
 test("SSH tunnel coordinator rejects local workspaces before spawning a process", async () => {

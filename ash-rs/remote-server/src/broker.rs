@@ -163,16 +163,23 @@ mod unix {
             fs::create_dir_all(options.profile_root()).map_err(RemoteServerError::from_io)?;
             let profile_root =
                 fs::canonicalize(options.profile_root()).map_err(RemoteServerError::from_io)?;
-            let dir_root =
-                fs::canonicalize(options.dir_root()).map_err(RemoteServerError::from_io)?;
+            let dir_root = options
+                .dir_root()
+                .map(fs::canonicalize)
+                .transpose()
+                .map_err(RemoteServerError::from_io)?;
             let runtime_executable = std::env::current_exe()
                 .and_then(fs::canonicalize)
                 .map_err(RemoteServerError::from_io)?;
             let effective_uid = rustix::process::geteuid().as_raw();
             let runtime_root = PathBuf::from(format!("/tmp/ash-remote-server-{effective_uid}"));
             ensure_private_runtime_root(&runtime_root, effective_uid)?;
-            let identity =
-                endpoint_identity(options, &profile_root, &dir_root, &runtime_executable)?;
+            let identity = endpoint_identity(
+                options,
+                &profile_root,
+                dir_root.as_deref(),
+                &runtime_executable,
+            )?;
             Ok(Self {
                 socket: runtime_root.join(format!("{identity}.sock")),
                 start_lock: runtime_root.join(format!("{identity}.starting")),
@@ -184,7 +191,7 @@ mod unix {
     pub(super) fn endpoint_identity(
         options: &RemoteServerOptions,
         profile_root: &Path,
-        dir_root: &Path,
+        dir_root: Option<&Path>,
         runtime_executable: &Path,
     ) -> Result<String, RemoteServerError> {
         let executable_metadata =
@@ -197,7 +204,9 @@ mod unix {
         let mut digest = Sha256::new();
         digest.update(profile_root.as_os_str().as_bytes());
         digest.update([0]);
-        digest.update(dir_root.as_os_str().as_bytes());
+        if let Some(dir_root) = dir_root {
+            digest.update(dir_root.as_os_str().as_bytes());
+        }
         digest.update([0]);
         digest.update(runtime_executable.as_os_str().as_bytes());
         digest.update([0]);
@@ -351,11 +360,14 @@ mod unix {
         command
             .arg("daemon")
             .env("ASH_HOME", options.profile_root())
-            .env("ASH_WORKSPACE_ROOT", options.dir_root())
             .process_group(0)
             .stdin(Stdio::null())
             .stdout(Stdio::from(log))
             .stderr(Stdio::from(error_log));
+        match options.dir_root() {
+            Some(dir_root) => command.env("ASH_WORKSPACE_ROOT", dir_root),
+            None => command.env_remove("ASH_WORKSPACE_ROOT"),
+        };
         if let Some(path) = options.product_services_path() {
             command.env(PRODUCT_SERVICES_PATH_ENV, path);
         }

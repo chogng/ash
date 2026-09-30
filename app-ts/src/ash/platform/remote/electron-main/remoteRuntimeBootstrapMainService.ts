@@ -1,6 +1,7 @@
 import { throwIfCancelled } from "../../../base/common/cancellation.js";
 import { Disposable } from "../../../base/common/lifecycle.js";
-import type { URI } from "../../../base/common/uri.js";
+import { URI } from "../../../base/common/uri.js";
+import type { SshRemoteAuthority } from '../common/remote.js';
 import type { RemoteRuntimeInstallProgress } from "../common/remoteRuntimeInstallProgress.js";
 import { RemoteRuntimeInstallProgressMainService } from "./remoteRuntimeInstallProgressMainService.js";
 import type { RemoteRuntimeInstallProgressOperation } from "./remoteRuntimeInstallProgressMainService.js";
@@ -26,7 +27,7 @@ export interface IRemoteRuntimeConnectionProfiles {
 }
 
 export interface RemoteRuntimeBootstrapMainServiceOptions {
-	readonly workspace: URI;
+	readonly workspace: URI | SshRemoteAuthority;
 	readonly sshExecutable: string;
 	readonly remoteExecutable: string;
 	readonly localEnvironment: NodeJS.ProcessEnv;
@@ -47,7 +48,7 @@ export class RemoteRuntimeBootstrapMainService extends Disposable {
 
 	constructor(private readonly options: RemoteRuntimeBootstrapMainServiceOptions) {
 		super();
-		const profiles = options.connectionProfiles;
+		const profiles = options.workspace instanceof URI ? options.connectionProfiles : undefined;
 		this.processLauncher = new SshAppServerProcessLauncher({
 			workspace: options.workspace,
 			sshExecutable: options.sshExecutable,

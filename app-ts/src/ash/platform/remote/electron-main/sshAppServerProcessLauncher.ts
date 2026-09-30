@@ -1,8 +1,8 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
-import type { URI } from "../../../base/common/uri.js";
+import { URI } from "../../../base/common/uri.js";
 import { AppServerProtocolIncompatibleError } from "../../app-server/common/appServerProtocolCompatibility.js";
 import type { IAppServerProcessLauncher } from "../../app-server/electron-main/appServerProcessLauncher.js";
-import { createSshRemoteWorkspaceUri, getRemoteAuthority, getRemoteWorkspacePath } from "../common/remote.js";
+import { createSshRemoteWorkspaceUri, getRemoteAuthority, getRemoteWorkspacePath, type SshRemoteAuthority } from "../common/remote.js";
 import { isCanonicalAbsolutePosixPath, validLocalCommand } from "./remoteCommand.js";
 
 export interface SpawnSshAppServerOptions {
@@ -27,7 +27,7 @@ export type RollbackSshRuntime = (host: string, workspace: string, sshExecutable
 export type SettleSshRuntimeProvision = () => void;
 
 export interface SshAppServerProcessLauncherOptions {
-	readonly workspace: URI;
+	readonly workspace: URI | SshRemoteAuthority;
 	readonly sshExecutable: string;
 	readonly remoteExecutable: string;
 	readonly localEnvironment: NodeJS.ProcessEnv;
@@ -53,7 +53,9 @@ export class SshAppServerProcessLauncher implements IAppServerProcessLauncher {
 	private readonly host: string;
 	private readonly spawnProcess: SpawnSshAppServer;
 	private readonly probeRuntime: ProbeSshRuntime;
-	private workspacePath: string;
+	private workspacePath: string | undefined;
+	// Runtime selection belongs to the connection profile chosen at startup, even after its folder is closed.
+	private readonly profileWorkspacePath: string | undefined;
 	private remoteExecutable: string;
 	private profileResolved = false;
 	private provisionAttempted = false;
@@ -61,11 +63,12 @@ export class SshAppServerProcessLauncher implements IAppServerProcessLauncher {
 	readonly description: string;
 
 	constructor(readonly options: SshAppServerProcessLauncherOptions) {
-		const authority = getRemoteAuthority(options.workspace);
+		const authority = options.workspace instanceof URI ? getRemoteAuthority(options.workspace) : options.workspace;
 		if (!authority || authority.type !== "ssh") throw new Error("SSH App Server launcher requires an SSH Remote workspace");
 		if (!validLocalCommand(options.sshExecutable) || !validLocalCommand(options.remoteExecutable)) throw new Error("SSH and Remote Ash executable names must be non-empty and contain no control characters");
 		this.host = authority.host;
-		this.workspacePath = getRemoteWorkspacePath(options.workspace);
+		this.workspacePath = options.workspace instanceof URI ? getRemoteWorkspacePath(options.workspace) : undefined;
+		this.profileWorkspacePath = this.workspacePath;
 		this.description = `ssh://${authority.host}`;
 		this.remoteExecutable = options.remoteExecutable;
 		this.spawnProcess = options.spawnProcess ?? defaultSpawn;
@@ -74,24 +77,24 @@ export class SshAppServerProcessLauncher implements IAppServerProcessLauncher {
 
 	/** Whether this product host supplied a credential-free, verified profile rollback. */
 	get runtimeRollbackAvailable(): boolean {
-		return this.options.rollbackRuntime !== undefined;
+		return this.options.rollbackRuntime !== undefined && this.profileWorkspacePath !== undefined;
 	}
 
 	/** Absolute POSIX Workspace root selected for the next Remote App Server connection. */
-	get workspaceRoot(): string {
+	get workspaceRoot(): string | undefined {
 		return this.workspacePath;
 	}
 
 	/** Retargets this same SSH authority without moving credentials or execution into Renderer. */
-	replaceWorkspaceRoot(root: string): void {
-		this.workspacePath = getRemoteWorkspacePath(createSshRemoteWorkspaceUri(this.host, root));
+	replaceWorkspaceRoot(root: string | undefined): void {
+		this.workspacePath = root === undefined ? undefined : getRemoteWorkspacePath(createSshRemoteWorkspaceUri(this.host, root));
 		this.profileResolved = false;
 	}
 
 	async validate(): Promise<void> {
 		this.provisionAttempted = false;
-		if (!this.profileResolved && this.options.resolveRuntime) {
-			const stored = await this.options.resolveRuntime(this.host, this.workspacePath);
+		if (!this.profileResolved && this.options.resolveRuntime && this.profileWorkspacePath !== undefined) {
+			const stored = await this.options.resolveRuntime(this.host, this.profileWorkspacePath);
 			if (stored !== undefined) {
 				if (!isCanonicalAbsolutePosixPath(stored)) throw new Error("Stored Remote runtime is not a canonical absolute POSIX path");
 				this.remoteExecutable = stored;
@@ -112,14 +115,14 @@ export class SshAppServerProcessLauncher implements IAppServerProcessLauncher {
 	}
 
 	async didInitialize(): Promise<void> {
-		await this.options.activateRuntime?.(this.host, this.workspacePath, this.remoteExecutable);
+		if (this.profileWorkspacePath !== undefined) await this.options.activateRuntime?.(this.host, this.profileWorkspacePath, this.remoteExecutable);
 	}
 
 	/** Selects the previous runtime only after the host callback verifies its SSH compatibility. */
 	async rollbackRuntime(): Promise<void> {
 		const rollbackRuntime = this.options.rollbackRuntime;
-		if (!rollbackRuntime) throw new Error("Remote runtime rollback is not available for this connection");
-		const runtime = await rollbackRuntime(this.host, this.workspacePath, this.options.sshExecutable);
+		if (!rollbackRuntime || this.profileWorkspacePath === undefined) throw new Error("Remote runtime rollback is not available for this connection");
+		const runtime = await rollbackRuntime(this.host, this.profileWorkspacePath, this.options.sshExecutable);
 		if (!validLocalCommand(runtime) || !isCanonicalAbsolutePosixPath(runtime)) {
 			throw new Error("Remote runtime rollback returned an invalid executable path");
 		}
@@ -173,8 +176,9 @@ export class SshAppServerProcessLauncher implements IAppServerProcessLauncher {
 	}
 }
 
-export function remoteRemoteCommand(executable: string, workspacePath: string): string {
-	return ["env", `ASH_WORKSPACE_ROOT=${workspacePath}`, executable, "connect"].map(quotePosixShellArgument).join(" ");
+export function remoteRemoteCommand(executable: string, workspacePath: string | undefined): string {
+	const environment = workspacePath === undefined ? ['env', '-u', 'ASH_WORKSPACE_ROOT'] : ['env', `ASH_WORKSPACE_ROOT=${workspacePath}`];
+	return [...environment, executable, 'connect'].map(quotePosixShellArgument).join(' ');
 }
 
 const RUNTIME_FOUND_MARKER = "__ASH_REMOTE_RUNTIME_FOUND__:";

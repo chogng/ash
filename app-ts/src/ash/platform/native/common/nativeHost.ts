@@ -1,6 +1,6 @@
 import type { DisposableHandle } from "../../ipc/common/ipc.js";
 import type { DialogRequest, FileFilter, IDialogOutcome } from '../../dialogs/common/dialogs.js';
-import type { IWorkbenchWindowInfo } from '../../window/common/window.js';
+import type { IWorkbenchWindowInfo, IOpenEmptyWindowOptions } from '../../window/common/window.js';
 
 export const NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL =
 	"ash:native-host:toggle-developer-tools";
@@ -10,6 +10,7 @@ export const NATIVE_HOST_PICK_FILE_CHANNEL =
 	"ash:native-host:pick-file";
 export const NATIVE_HOST_OPEN_WORKSPACE_CHANNEL =
 	"ash:native-host:open-workspace";
+export const NATIVE_HOST_OPEN_WINDOW_CHANNEL = 'ash:window:open';
 export const NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL = 'ash:native-host:open-agents-window';
 export const NATIVE_HOST_SET_WINDOW_THEME_CHANNEL =
 	"ash:native-host:set-window-theme";
@@ -154,6 +155,7 @@ export interface INativeHostApi {
 	pickFolder(): Promise<string | undefined>;
 	pickFile(options: INativeOpenDialogOptions): Promise<readonly string[] | undefined>;
 	openWorkspace(root: string): Promise<void>;
+	openWindow(options: IOpenEmptyWindowOptions): Promise<void>;
 	openAgentsWindow(options?: IOpenAgentsWindowOptions): Promise<void>;
 	revealFile(path: string): Promise<void>;
 	setWindowTheme(theme: INativeWindowTheme): Promise<void>;

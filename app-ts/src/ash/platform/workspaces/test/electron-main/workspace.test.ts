@@ -18,6 +18,8 @@ import {
 	WorkbenchState,
 } from "../../../../platform/workspace/common/workspace.js";
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
+
+
 import { WorkspaceOpenTargetKind } from '../../../../platform/environment/common/argv.js';
 import { WorkspaceTransitionFailureKind, WorkspaceTransitionFailureStage, WorkspaceTransitionMainService, WorkspaceTransitionPhase, WorkspaceTransitionRecovery, WorkspaceTransitionStatus } from "../../../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
 import { AppServerWorkspaceTransitionAdapter, type IAppServerWorkspaceTransitionHost } from "../../../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
@@ -38,6 +40,13 @@ import {
 function windowsForWorkspacePaths(paths: IWorkspacePathService): WindowsMainService<never> {
 	return new WindowsMainService<never>(() => [], async () => undefined, process.platform, paths);
 }
+
+test('empty Remote workspaces retain their authority through persisted and renderer boundaries', () => {
+	const workspace = { id: 'empty-remote', remoteAuthority: 'ssh+work-server' };
+	assert.deepEqual(parseWorkspaceIdentifier(serializeWorkspaceIdentifier(workspace)), workspace);
+	assert.deepEqual(parseWorkspace(serializeWorkspace(workspaceFromIdentifier(workspace))), { ...workspace, folders: [] });
+	assert.throws(() => parseWorkspaceIdentifier({ ...workspace, remoteAuthority: 'ssh+user@host' }), /Remote SSH host/);
+});
 
 test("windows service resolves SSH folders without reading the local filesystem", async () => {
 	let localReads = 0;

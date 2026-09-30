@@ -1,8 +1,12 @@
 import { localizedString } from '../../../platform/action/common/action.js';
-import { Action2, MenuId } from '../../../platform/actions/common/actions.js';
+import { Keybinding, logicalKey } from '../../../base/common/keybindings.js';
+import { Action2, MenuId, MenusRegistry } from '../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
+import { IsNativeContext } from '../../../platform/contextkey/common/contextkeys.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
-import { BrowserLocalFolderSupportContext, OpenFolderWorkspaceSupportContext } from '../../common/contextkeys.js';
+import { BrowserLocalFolderSupportContext, OpenFolderWorkspaceSupportContext, WorkbenchStateContext } from '../../common/contextkeys.js';
+import { IHostService } from '../../services/host/browser/host.js';
+import { getWorkspaceRemoteAuthority, IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { IWorkspaceOpenService } from '../../services/workspaces/browser/workspaceOpenService.js';
 
 export const OpenFolderCommandId = 'workbench.action.files.openFolder';
@@ -10,6 +14,48 @@ const OpenFolderViaWorkspaceWhen = ContextKeyExpr.and(
 	OpenFolderWorkspaceSupportContext.isEqualTo(false),
 	BrowserLocalFolderSupportContext.isEqualTo(true),
 );
+const EmptyWorkspaceSupport = ContextKeyExpr.or(IsNativeContext.isEqualTo(true), BrowserLocalFolderSupportContext.isEqualTo(true));
+const CloseWorkspacePrecondition = ContextKeyExpr.and(EmptyWorkspaceSupport, ContextKeyExpr.notEquals(WorkbenchStateContext.key, 'empty'));
+
+export class CloseWorkspaceAction extends Action2 {
+	static readonly ID = 'workbench.action.closeFolder';
+
+	constructor() {
+		super({
+			id: CloseWorkspaceAction.ID,
+			title: localizedString('ash', 'workbench.closeWorkspace', 'Close Workspace'),
+			f1: true,
+			precondition: CloseWorkspacePrecondition,
+			keybinding: { primary: Keybinding.chord(logicalKey('k', { primaryKey: true }), logicalKey('f')) },
+		});
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const remoteAuthority = getWorkspaceRemoteAuthority(accessor.get(IWorkspaceContextService).getWorkspace());
+		return accessor.get(IHostService).openWindow({ forceReuseWindow: true, ...(remoteAuthority ? { remoteAuthority } : {}) });
+	}
+}
+
+MenusRegistry.appendMenuItems([
+	{
+		id: MenuId.MenubarFileMenu,
+		item: {
+			command: { id: CloseWorkspaceAction.ID, title: localizedString('ash', 'workbench.closeFolder', 'Close Folder'), precondition: CloseWorkspacePrecondition },
+			when: ContextKeyExpr.and(EmptyWorkspaceSupport, WorkbenchStateContext.isEqualTo('folder')),
+			group: '6_close',
+			order: 3,
+		},
+	},
+	{
+		id: MenuId.MenubarFileMenu,
+		item: {
+			command: { id: CloseWorkspaceAction.ID, title: localizedString('ash', 'workbench.closeWorkspace', 'Close Workspace'), precondition: CloseWorkspacePrecondition },
+			when: ContextKeyExpr.and(EmptyWorkspaceSupport, WorkbenchStateContext.isEqualTo('workspace')),
+			group: '6_close',
+			order: 3,
+		},
+	},
+]);
 
 /** Opens a folder through the current Workbench host. */
 export class OpenFolderAction extends Action2 {

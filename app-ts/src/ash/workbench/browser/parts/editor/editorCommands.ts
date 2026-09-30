@@ -18,7 +18,7 @@ registerAction2(class CloseActiveEditorAction extends Action2 {
 			f1: true,
 			precondition: EditorsVisibleContext.isEqualTo(true),
 			menu: [
-				{ id: MenuId.MenubarFileMenu, group: "4_close", order: 1 },
+				{ id: MenuId.MenubarFileMenu, group: "6_close", order: 2 },
 				{ id: MenuId.EditorTitleContext, group: "4_close", order: 1 },
 			],
 			keybinding: { primary: Keybinding.single(logicalKey("w", { primaryKey: true })) },

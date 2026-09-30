@@ -5,8 +5,8 @@ import { CancellationError, getErrorMessage } from "../../../base/common/errors.
 import { Emitter } from "../../../base/common/event.js";
 import { Disposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { IAnyWorkspaceIdentifier } from "../../workspace/common/workspace.js";
-import { isRemoteWorkspaceIdentifier } from "../../workspace/common/workspace.js";
-import { getRemoteAuthority } from "../common/remote.js";
+import { getWorkspaceRemoteAuthority } from "../../workspace/common/workspace.js";
+import { createSshRemoteAuthority } from "../common/remote.js";
 import { type IRemoteTunnelService, type RemoteTunnel, type RemoteTunnelChange, type RemoteTunnelOpenRequest } from "../common/remoteTunnelService.js";
 
 const DEFAULT_CONNECT_TIMEOUT_SECONDS = 10;
@@ -172,13 +172,11 @@ export class SshRemoteTunnelService extends Disposable implements IRemoteTunnelS
 
 	private remoteAuthority(): { readonly host: string } {
 		const workspace = this.options.getWorkspace();
-		if (!isRemoteWorkspaceIdentifier(workspace)) {
+		const remoteAuthority = getWorkspaceRemoteAuthority(workspace);
+		if (!remoteAuthority) {
 			throw new Error("Remote tunnels require an SSH Remote Workspace");
 		}
-		const authority = getRemoteAuthority(workspace.uri);
-		if (!authority || authority.type !== "ssh") {
-			throw new Error("Remote tunnels require an SSH Remote authority");
-		}
+		const authority = createSshRemoteAuthority(remoteAuthority.slice(4));
 		return authority;
 	}
 

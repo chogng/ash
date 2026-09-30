@@ -62,7 +62,7 @@ import { WindowsStateHandler, WindowSessionStateHandler, type IWindowSessionEntr
 import { WindowsMainService, trackWindowResourceChanges, windowOperationIpcRoute, windowResourceIpcRoutes, workspaceContextIpcRoutes } from "../../platform/windows/electron-main/windowsMainService.js";
 import { LifecycleMainService, windowCloseResponseIpcRoute } from '../../platform/lifecycle/electron-main/lifecycleMainService.js';
 import { focusWindow, WindowMode, WorkspaceContextMainService, type IWindowState } from "../../platform/window/electron-main/window.js";
-import { type IAnyWorkspaceIdentifier, type IWorkspace, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE } from "../../platform/workspace/common/workspace.js";
+import { type IAnyWorkspaceIdentifier, type IWorkspace, getWorkspaceRemoteAuthority, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE } from "../../platform/workspace/common/workspace.js";
 import { createEmptyWorkspaceIdentifier } from "../../platform/workspaces/node/workspaces.js";
 import { packagedRemoteRuntimeCatalogSource } from "../../platform/remote/electron-main/packagedRemoteRuntimeCatalog.js";
 import { RemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from "../../platform/remote/electron-main/remoteRuntimeInstaller.js";
@@ -71,7 +71,7 @@ import { RemoteConnectionProfiles } from "../../platform/remote/electron-main/re
 import { RemoteConnections } from "../../platform/remote/electron-main/remoteConnections.js";
 import { UnavailableRemoteConnectionService, type IRemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
 import type { RemoteConnectionDefinition } from "../../platform/remote/common/remoteConnectionService.js";
-import { getRemoteAuthority, isRemoteResource } from "../../platform/remote/common/remote.js";
+import { createSshRemoteAuthority, getRemoteAuthority, isRemoteResource } from "../../platform/remote/common/remote.js";
 import { RemoteBrowserViewNavigationResolver } from "../../platform/remote/electron-main/remoteBrowserViewNavigationResolver.js";
 import { SshRemoteTunnelService } from "../../platform/remote/electron-main/sshRemoteTunnelService.js";
 import { createRemoteRuntimeInstallProgressLogger } from "../../platform/remote/electron-main/remoteRuntimeBootstrapMainService.js";
@@ -553,7 +553,7 @@ export class AshApplication extends Disposable {
 		}
 		let processLauncher: IAppServerProcessLauncher;
 		let generationFile: string | undefined;
-		if (role === 'workbench' && isRemoteWorkspaceIdentifier(workspace)) {
+		if (role === 'workbench' && getWorkspaceRemoteAuthority(workspace) !== undefined) {
 			processLauncher = this.createSshAppServerProcessLauncher(workspace, resources);
 		} else {
 			const connection = createAppServerDaemonLauncher({
@@ -579,7 +579,9 @@ export class AshApplication extends Disposable {
 	}
 
 	private createSshAppServerProcessLauncher(workspace: IAnyWorkspaceIdentifier, resources: DisposableStore) {
-		if (!isRemoteWorkspaceIdentifier(workspace)) throw new Error("SSH App Server launcher requires a Remote workspace");
+		const remoteAuthority = getWorkspaceRemoteAuthority(workspace);
+		if (!remoteAuthority) throw new Error("SSH App Server launcher requires a Remote window");
+		const remoteWorkspace = isSingleFolderWorkspaceIdentifier(workspace) ? workspace.uri : createSshRemoteAuthority(remoteAuthority.slice(4));
 		const sshExecutable = process.env.ASH_SSH_PATH ?? "ssh";
 		const remoteExecutable = remoteExecutablePath({
 			appPath: app.getAppPath(),
@@ -612,7 +614,7 @@ export class AshApplication extends Disposable {
 			environment: { ...process.env, ASH_HOME: this.profileRoot },
 		}) : undefined;
 		const bootstrap = resources.add(new RemoteRuntimeBootstrapMainService({
-			workspace: workspace.uri,
+			workspace: remoteWorkspace,
 			sshExecutable,
 			remoteExecutable: configuredRuntime ?? "ash-remote-server",
 			localEnvironment: process.env,
@@ -780,8 +782,9 @@ export class AshApplication extends Disposable {
 			this.workbenchWindows.updateWorkspace(record.id, nextWorkspace);
 			this.windowSessionStateHandler.windowChanged();
 		}));
+		let loadingWorkspace = false;
 		windowDisposables.add(workspaceContext.onDidChangeWorkspace(({ resolvedWorkspace }) => {
-			if (!window.isDestroyed()) {
+			if (!loadingWorkspace && !window.isDestroyed()) {
 				window.webContents.send(WORKSPACE_CONTEXT_CHANGED_CHANNEL, serializeWorkspace(resolvedWorkspace));
 			}
 		}));
@@ -806,7 +809,7 @@ export class AshApplication extends Disposable {
 		}));
 		const performTransitionToFolder = async (folderPath: string, selectionRequired: boolean): Promise<void> => {
 			const currentWorkspace = workspaceContext.getWorkspace();
-			const nextWorkspace = isRemoteWorkspaceIdentifier(currentWorkspace)
+			const nextWorkspace = getWorkspaceRemoteAuthority(currentWorkspace) !== undefined
 				? await this.resolveRemoteFolderWorkspace(currentWorkspace, folderPath)
 				: await workspaces.resolveFolder(folderPath);
 			if (nextWorkspace.id === currentWorkspace.id) return;
@@ -835,6 +838,7 @@ export class AshApplication extends Disposable {
 			return operation;
 		};
 		record.openWorkspace = (root) => transitionToFolder(root, true);
+
 		windowDisposables.add(toDisposable(() => this.dialogs.cancelWindow(window)));
 		const windowControlsOverlay = new WindowControlsOverlay(colors => {
 			if (titleBarStyle === 'custom' && (process.platform === 'win32' || process.platform === 'linux')) window.setTitleBarOverlay(colors);
@@ -851,6 +855,39 @@ export class AshApplication extends Disposable {
 			windowOperationIpcRoute(this.windowsMainService, window),
 			windowCloseResponseIpcRoute(this.lifecycleMainService, window),
 			...nativeHostIpcRoutes({
+				openWindow: async options => {
+					const workspace = { ...createEmptyWorkspaceIdentifier(), ...(options.remoteAuthority ? { remoteAuthority: options.remoteAuthority } : {}) };
+					if (!options.forceReuseWindow) {
+						await this.openWorkspace(workspace, workspaces);
+						return;
+					}
+					if (options.remoteAuthority !== getWorkspaceRemoteAuthority(workspaceContext.getWorkspace())) throw new Error('Reusing a window must preserve its Remote authority');
+					let rendererLoad: Promise<void> | undefined;
+					const operation = workspaceOpenQueue.then(async () => {
+						if (!await this.lifecycleMainService.unload(window)) return;
+						try {
+							await record.windowsStateHandler.saveWindowState(window);
+							window.webContents.send('ash:terminal:prepareReplacement');
+							if (this.appServerStartupMode !== 'disabled') {
+								const launcher = supervisor.options.enabled ? supervisor.options.processLauncher : undefined;
+								if (!(launcher instanceof AppServerDaemonLauncher) && !(launcher instanceof SshAppServerProcessLauncher)) throw new Error('Workspace connection has no directory launcher');
+								await this.reconnectAppServerWorkspace(supervisor, launcher, undefined, { type: 'config' }, workspace.id, workspaceContext.getWorkspace().id, workspaceHost);
+							}
+							loadingWorkspace = true;
+							workspaceContext.updateWorkspace(workspace);
+						} finally {
+							// Reply to the caller before replacing the renderer that owns the IPC request.
+							rendererLoad = new Promise<void>(resolve => {
+								setImmediate(() => {
+									void this.loadRendererEntry(window, this.resolveRendererEntry('workbench', record.modeId))
+										.catch(error => this.reportWindowOpenFailure(error)).finally(() => { loadingWorkspace = false; resolve(); });
+								});
+							});
+						}
+					});
+					workspaceOpenQueue = operation.then(async () => { await rendererLoad; }, async () => { await rendererLoad; });
+					await operation;
+				},
 				performDialogOperation: operation => this.dialogs.perform(window, operation),
 				performShellCommand: operation => this.performShellCommand(operation),
 				pickFolder: async () => {
@@ -1287,7 +1324,7 @@ export class AshApplication extends Disposable {
 	private async reconnectAppServerWorkspace(
 		supervisor: AppServerConnectionRelay,
 		launcher: AppServerDaemonLauncher | SshAppServerProcessLauncher,
-		root: string,
+		root: string | undefined,
 		grant: DirGrant,
 		workspaceId: string,
 		previousWorkspaceId: string,
@@ -1296,16 +1333,24 @@ export class AshApplication extends Disposable {
 		const previous = launcher instanceof AppServerDaemonLauncher
 			? { kind: "local" as const, launcher, environment: launcher.environment, root: launcher.environment.ASH_WORKSPACE_ROOT }
 			: { kind: "remote" as const, launcher, root: launcher.workspaceRoot };
-		await workspaceHost.persistDirectoryGrant(root, grant);
+		if (root !== undefined) await workspaceHost.persistDirectoryGrant(root, grant);
 		await supervisor.stop();
 		if (previous.kind === "local") {
-			previous.launcher.replaceEnvironment({ ...previous.environment, ASH_WORKSPACE_ROOT: root, ASH_DIR_GRANT_SOURCE: "userConfig" });
+			const environment = { ...previous.environment };
+			if (root === undefined) {
+				delete environment.ASH_WORKSPACE_ROOT;
+				delete environment.ASH_DIR_GRANT_SOURCE;
+			} else {
+				environment.ASH_WORKSPACE_ROOT = root;
+				environment.ASH_DIR_GRANT_SOURCE = 'userConfig';
+			}
+			previous.launcher.replaceEnvironment(environment);
 		} else {
 			previous.launcher.replaceWorkspaceRoot(root);
 		}
 		try {
 			await supervisor.start();
-			await workspaceHost.setFolders([{ id: workspaceId, path: root, grant: { type: "config" } }]);
+			await workspaceHost.setFolders(root === undefined ? [] : [{ id: workspaceId, path: root, grant: { type: "config" } }]);
 		} catch (error) {
 			await supervisor.stop();
 			if (previous.kind === "local") {
@@ -1329,8 +1374,9 @@ export class AshApplication extends Disposable {
 		currentWorkspace: IAnyWorkspaceIdentifier,
 		folderPath: string,
 	) {
-		if (!isRemoteWorkspaceIdentifier(currentWorkspace)) throw new Error("Remote Workspace resolution requires a Remote window");
-		const authority = getRemoteAuthority(currentWorkspace.uri);
+		const remoteAuthority = getWorkspaceRemoteAuthority(currentWorkspace);
+		if (!remoteAuthority) throw new Error("Remote Workspace resolution requires a Remote window");
+		const authority = createSshRemoteAuthority(remoteAuthority.slice(4));
 		if (!authority || authority.type !== "ssh") throw new Error("Unsupported Remote Workspace authority");
 		const workspace = await this.windowsMainService.resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.RemoteFolder, path: folderPath, sshHost: authority.host }, process.cwd());
 		if (!isSingleFolderWorkspaceIdentifier(workspace) || !isRemoteWorkspaceIdentifier(workspace)) {

@@ -8,6 +8,37 @@ import { IQuickInputService } from "../../../../../../platform/quickinput/common
 import { CommandService } from "../../../../../services/commands/common/commandService.js";
 import { WorkbenchQuickInputService } from "../../../../../services/quickinput/browser/quickInputService.js";
 import { IEditorPart, type IEditorPart as EditorPartContract } from "../../editorPart.js";
+import { registerAction2, MenuId } from '../../../../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../../../../platform/actions/common/menuService.js';
+import { CloseWorkspaceAction } from '../../../../actions/workspaceActions.js';
+import { IHostService } from '../../../../../services/host/browser/host.js';
+import { IWorkspaceContextService } from '../../../../../../platform/workspace/common/workspace.js';
+import { WorkspaceContextService } from '../../../../../services/workspaces/browser/workspaceContextService.js';
+import { createTestWorkbenchContextKeysHandler } from '../../../../../test/common/testWorkbenchContextKeys.js';
+
+test('Close Workspace delegates an empty window to the host and follows workspace menu state', async () => {
+	using registration = registerAction2(CloseWorkspaceAction);
+	using workspace = new WorkspaceContextService({ id: 'folder', uri: URI.file('/project') });
+	using services = new ServiceContainer();
+	using contextKeys = new ContextKeyService();
+	using bindings = createTestWorkbenchContextKeysHandler(contextKeys, { workspaceContextService: workspace, browserLocalFolderSupported: true });
+	using commands = new CommandService(services);
+	const menus = new MenuService(commands, contextKeys);
+	const requests: unknown[] = [];
+	services.registerInstance(IWorkspaceContextService, workspace);
+	services.registerInstance(IHostService, { openWindow: async options => { requests.push(options); } });
+	const closeMenu = () => menus.getMenuActions(MenuId.MenubarFileMenu).flatMap(([, actions]) => actions).filter(action => action.id === CloseWorkspaceAction.ID).map(action => ({ label: action.label, enabled: action.enabled }));
+	assert.deepEqual(closeMenu(), [{ label: 'Close Folder', enabled: true }]);
+	await commands.executeCommand(CloseWorkspaceAction.ID);
+	assert.deepEqual(requests, [{ forceReuseWindow: true }]);
+	workspace.updateWorkspace({ id: 'empty', folders: [] });
+	assert.deepEqual(closeMenu(), []);
+	workspace.updateWorkspace({ id: 'multi', folders: [], configuration: URI.file('/team.ash-workspace') });
+	assert.deepEqual(closeMenu(), [{ label: 'Close Workspace', enabled: true }]);
+	workspace.updateWorkspace({ id: 'remote', folders: [{ id: 'remote', uri: URI.parse('ash-remote://ssh+work-server/project'), name: 'project', index: 0 }] });
+	await commands.executeCommand(CloseWorkspaceAction.ID);
+	assert.deepEqual(requests.at(-1), { forceReuseWindow: true, remoteAuthority: 'ssh+work-server' });
+});
 
 test("editor commands close the active tab and reopen it with a chosen editor", async () => {
 	const dom = new JSDOM("<!doctype html><body><button>Editor</button></body>");

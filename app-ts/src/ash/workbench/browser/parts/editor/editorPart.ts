@@ -551,6 +551,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			await workingCopy.revert(controller.signal);
 			return !workingCopy.isDirty;
 		}
+		if (group && input.resource.scheme === 'untitled') return this.saveEditor(group, input, pane);
 		await workingCopy.save(controller.signal);
 		if (group && !group.inputs.some(candidate => editorInputKey(candidate) === editorInputKey(input))) return true;
 		return !workingCopy.isDirty;

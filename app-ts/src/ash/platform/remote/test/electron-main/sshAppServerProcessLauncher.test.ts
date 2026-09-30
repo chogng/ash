@@ -35,6 +35,11 @@ test("SSH launcher starts a non-interactive Remote App Server over stdio", () =>
 		],
 		environment,
 	}]);
+	launcher.replaceWorkspaceRoot(undefined);
+	launcher.launch();
+	assert.equal(launcher.workspaceRoot, undefined);
+	assert.equal(launches[1]!.args.at(-1), "'env' '-u' 'ASH_WORKSPACE_ROOT' '/opt/ash/bin/ash-remote-server' 'connect'");
+	assert.equal(launches[1]!.args[5], 'work-server');
 });
 
 test("SSH launcher retargets the same authority to another Workspace root", () => {

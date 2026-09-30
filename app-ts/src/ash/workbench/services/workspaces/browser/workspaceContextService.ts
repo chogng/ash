@@ -69,6 +69,7 @@ function sameWorkspace(left: IWorkspace, right: IWorkspace): boolean {
 	return left.id === right.id &&
 		left.configuration?.toString() === right.configuration?.toString() &&
 		left.name === right.name &&
+		left.remoteAuthority === right.remoteAuthority &&
 		left.folders.length === right.folders.length &&
 		left.folders.every((folder, index) => {
 			const candidate = right.folders[index];

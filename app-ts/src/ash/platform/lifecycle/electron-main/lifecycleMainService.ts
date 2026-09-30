@@ -1,7 +1,15 @@
 import { Disposable, DisposableMap, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import type { IStateService } from '../../state/node/state.js';
-import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, validateWindowCloseResponse, type WindowCloseResponse } from '../../window/common/window.js';
+import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_PREPARE_LOAD_CHANNEL, validateWindowCloseResponse, type WindowCloseResponse } from '../../window/common/window.js';
+
+interface WindowCloseState {
+	ready: boolean;
+	authorized: boolean;
+	pendingToken: number | undefined;
+	timer: ReturnType<typeof setTimeout> | undefined;
+	completeUnload: ((accepted: boolean) => void) | undefined;
+}
 
 interface ILifecycleWindow {
 	on(event: 'close', listener: (event: { preventDefault(): void }) => void): unknown;
@@ -19,7 +27,7 @@ interface ILifecycleWindow {
 export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disposable {
 	private static readonly updateRestartStateKey = 'updateRestartVersion';
 	private readonly windowRegistrations = this._register(new DisposableMap<TWindow, IDisposable>());
-	private readonly closeStates = new Map<TWindow, { ready: boolean; authorized: boolean; pendingToken: number | undefined; timer: ReturnType<typeof setTimeout> | undefined }>();
+	private readonly closeStates = new Map<TWindow, WindowCloseState>();
 	private nextCloseToken = 0;
 	public readonly wasRestarted: boolean;
 
@@ -43,12 +51,14 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disp
 	public registerWindow(window: TWindow): IDisposable {
 		this.assertNotDisposed();
 		if (this.windowRegistrations.has(window)) throw new Error('Workbench window is already registered for close');
-		const state = { ready: false, authorized: false, pendingToken: undefined as number | undefined, timer: undefined as ReturnType<typeof setTimeout> | undefined };
+		const state: WindowCloseState = { ready: false, authorized: false, pendingToken: undefined, timer: undefined, completeUnload: undefined };
 		this.closeStates.set(window, state);
 		const clearPending = (): void => {
 			if (state.timer) clearTimeout(state.timer);
 			state.timer = undefined;
 			state.pendingToken = undefined;
+			state.completeUnload?.(false);
+			state.completeUnload = undefined;
 		};
 		const onClose = (event: { preventDefault(): void }): void => {
 			if (state.authorized || !state.ready) return;
@@ -78,6 +88,26 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disp
 		return toDisposable(() => this.windowRegistrations.deleteAndDispose(window));
 	}
 
+	/** The renderer must finish its shutdown participants before this window loads another workspace. */
+	public unload(window: TWindow): Promise<boolean> {
+		const state = this.closeStates.get(window);
+		if (!state || window.isDestroyed() || !state.ready) throw new Error('Workbench window is not ready to unload');
+		if (state.pendingToken !== undefined) throw new Error('Workbench window already has a shutdown request');
+		return new Promise<boolean>(resolve => {
+			const token = ++this.nextCloseToken;
+			state.pendingToken = token;
+			state.completeUnload = resolve;
+			state.timer = setTimeout(() => {
+				state.pendingToken = undefined;
+				state.timer = undefined;
+				state.completeUnload = undefined;
+				resolve(false);
+				this.reportFailure(window, 'The window did not respond to the workspace load request.');
+			}, 30_000);
+			window.webContents.send(WINDOW_PREPARE_LOAD_CHANNEL, token);
+		});
+	}
+
 	public respondToClose(window: TWindow, response: WindowCloseResponse): void {
 		const state = this.closeStates.get(window);
 		if (!state || window.isDestroyed()) throw new Error('Workbench window is closed');
@@ -89,6 +119,13 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disp
 		if (state.timer) clearTimeout(state.timer);
 		state.timer = undefined;
 		state.pendingToken = undefined;
+		const completeUnload = state.completeUnload;
+		state.completeUnload = undefined;
+		if (completeUnload) {
+			completeUnload(response.kind === 'complete');
+			if (response.kind === 'failed') this.reportFailure(window, response.message);
+			return;
+		}
 		if (response.kind === 'complete') {
 			state.authorized = true;
 			window.close();

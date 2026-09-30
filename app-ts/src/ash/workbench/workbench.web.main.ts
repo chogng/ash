@@ -5,3 +5,8 @@
  * Electron belong in `workbench.common.main.ts`.
  */
 import "./workbench.common.main.js";
+import { BrowserHostService } from './services/host/browser/browserHostService.js';
+import { IHostService } from './services/host/browser/host.js';
+import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
+
+registerSingleton(IHostService, BrowserHostService, InstantiationType.Delayed);

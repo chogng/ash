@@ -114,11 +114,11 @@ test('Workbench restores editor tabs unless editor restoration is disabled', asy
 		const page = await application.firstWindow();
 		await new Workbench(page).waitForReady();
 		await expect(page.locator('.ash-getting-started')).toBeVisible();
-		await page.locator('.ash-tab').hover();
-		await page.locator('.ash-tab-close-action button').click();
+		await page.locator('[data-part="editor"] .ash-tab').hover();
+		await page.locator('[data-part="editor"] .ash-tab-close-action button').click();
 		await page.keyboard.press(process.platform === 'darwin' ? 'Meta+N' : 'Control+N');
 		await page.keyboard.press(process.platform === 'darwin' ? 'Meta+N' : 'Control+N');
-		await expect(page.locator('.ash-tab')).toHaveCount(2);
+		await expect(page.locator('[data-part="editor"] .ash-tab')).toHaveCount(2);
 		await expect.poll(() => page.evaluate(() => Object.values(localStorage).some(value => value.includes('editorparts.state')))).toBe(true);
 		await application.close();
 		application = undefined;
@@ -126,7 +126,7 @@ test('Workbench restores editor tabs unless editor restoration is disabled', asy
 		application = await launch(userDataDirectory);
 		const restored = await application.firstWindow();
 		await new Workbench(restored).waitForReady();
-		await expect(restored.locator('.ash-tab')).toHaveCount(2);
+		await expect(restored.locator('[data-part="editor"] .ash-tab')).toHaveCount(2);
 		await expect(restored.locator('.ash-getting-started')).toHaveCount(0);
 		await writeFile(join(userDataDirectory, 'profile', 'settings.json'), '{"workbench.startupEditor":"none","workbench.editor.restoreEditors":false}\n');
 		await application.close();
@@ -135,9 +135,9 @@ test('Workbench restores editor tabs unless editor restoration is disabled', asy
 		application = await launch(userDataDirectory);
 		const disabled = await application.firstWindow();
 		await new Workbench(disabled).waitForReady();
-		await expect(disabled.locator('.ash-tab')).toHaveCount(0);
+		await expect(disabled.locator('[data-part="editor"] .ash-tab')).toHaveCount(0);
 		await disabled.keyboard.press(process.platform === 'darwin' ? 'Meta+N' : 'Control+N');
-		const input = disabled.locator('.stanza-editor-input');
+		const input = disabled.locator('[data-part="editor"] .stanza-editor-input');
 		await input.focus();
 		await input.type('unsaved after restart');
 		await application.close();
@@ -146,8 +146,8 @@ test('Workbench restores editor tabs unless editor restoration is disabled', asy
 		application = await launch(userDataDirectory);
 		const dirty = await application.firstWindow();
 		await new Workbench(dirty).waitForReady();
-		await expect(dirty.locator('.ash-tab')).toHaveCount(1);
-		await expect(dirty.locator('.stanza-editor')).toContainText('unsaved after restart');
+		await expect(dirty.locator('[data-part="editor"] .ash-tab')).toHaveCount(1);
+		await expect(dirty.locator('[data-part="editor"] .stanza-editor')).toContainText('unsaved after restart');
 	} finally {
 		await application?.close();
 	}

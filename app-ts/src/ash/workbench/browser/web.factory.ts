@@ -28,6 +28,7 @@ import { switchBrowserWorkbenchMode } from "../services/workbenchMode/browser/br
 import { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
 import { BrowserLifecycleService } from '../services/lifecycle/browser/lifecycleService.js';
 import { onUnexpectedError } from '../../base/common/errors.js';
+import { EMPTY_WORKSPACE_ID_KEY } from '../services/host/browser/browserHostService.js';
 import { IndexedDbConfigurationApi } from '../../platform/configuration/browser/indexedDbConfigurationApi.js';
 
 /** Creates a browser-hosted Workbench with the shared Web adapters. */
@@ -56,7 +57,7 @@ export function createWebWorkbench(
 }
 
 function getEmptyWorkspaceIdentifier(): IEmptyWorkspaceIdentifier {
-	const key = 'ash.workbench.emptyWorkspaceId';
+	const key = EMPTY_WORKSPACE_ID_KEY;
 	let id = window.sessionStorage.getItem(key);
 	if (!id) {
 		id = `empty-window-${crypto.randomUUID()}`;

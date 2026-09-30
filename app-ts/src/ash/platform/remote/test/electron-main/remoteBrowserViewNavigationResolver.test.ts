@@ -52,6 +52,16 @@ test("Remote Browser derives default HTTPS ports and preserves IPv4 reachability
 	assert.equal(navigation.requestedUrlFor("https://127.0.0.1:41000/next"), "https://[::1]/next");
 });
 
+test('an empty SSH window continues to route loopback navigation through its Remote connection', async () => {
+	const tunnels = new TestRemoteTunnels();
+	const resolver = new RemoteBrowserViewNavigationResolver({ getWorkspace: () => ({ id: 'empty-remote', remoteAuthority: 'ssh+work-server' }), tunnels });
+	const navigation = await resolver.resolve('http://localhost:3000/', new AbortController().signal);
+	assert.equal(navigation.loadUrl, 'http://localhost:41000/');
+	assert.equal(navigation.isReusable(), true);
+	navigation.release();
+	assert.deepEqual(tunnels.closedIds, ['tunnel-1']);
+});
+
 test("Remote Browser retains recovering tunnels but stops reusing failed or removed tunnels", async () => {
 	const tunnels = new TestRemoteTunnels();
 	const resolver = new RemoteBrowserViewNavigationResolver({ getWorkspace: remoteWorkspace, tunnels });

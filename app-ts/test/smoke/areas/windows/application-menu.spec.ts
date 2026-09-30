@@ -1,7 +1,183 @@
 import type { ElectronApplication, Locator } from '@playwright/test';
+import type { BrowserWindow, MessageBoxOptions } from 'electron';
+import { readFile, realpath } from 'node:fs/promises';
+import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
+
+test('File menu keeps close commands visible and closes single and all editors', async ({ target, application, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	const systemMenu = target.kind === 'electron' && process.platform === 'darwin';
+	const electron = application as ElectronApplication;
+	const closeLabels = ['Close All Editors', 'Close Editor'];
+	const openFileMenu = async () => {
+		await page.getByRole('button', { name: 'Application menu' }).click();
+		await page.getByRole('menu').first().getByRole('menuitem', { name: 'File', exact: true }).click();
+		return page.getByRole('menu').last();
+	};
+	const readCloseItems = async () => {
+		if (systemMenu) {
+			return electron.evaluate(({ Menu }, labels) => Menu.getApplicationMenu()?.items.find(item => item.label === 'File')?.submenu?.items
+				.filter(item => labels.includes(item.label)).map(item => ({ label: item.label, enabled: item.enabled })), closeLabels);
+		}
+		const menu = await openFileMenu();
+		const items = await Promise.all(closeLabels.map(async label => ({ label, enabled: await menu.getByRole('menuitem', { name: label, exact: true }).isEnabled() })));
+		await page.keyboard.press('Escape');
+		await page.keyboard.press('Escape');
+		return items;
+	};
+	const runMenuCommand = async (label: string) => {
+		if (systemMenu) {
+			await electron.evaluate(({ Menu }, label) => {
+				const item = Menu.getApplicationMenu()?.items.find(item => item.label === 'File')?.submenu?.items.find(item => item.label === label);
+				if (!item?.enabled) throw new Error(`File menu command is unavailable: ${label}`);
+				item.click({ altKey: false });
+			}, label);
+		} else {
+			await (await openFileMenu()).getByRole('menuitem', { name: label, exact: true }).click();
+		}
+	};
+	const tabs = workbench.editors.element.getByRole('tab');
+	await expect(tabs).toHaveText(['Welcome']);
+	if (await tabs.count() > 0) {
+		await runMenuCommand('Close All Editors');
+	}
+	await expect(tabs).toHaveCount(0);
+	await expect.poll(readCloseItems).toEqual(closeLabels.map(label => ({ label, enabled: false })));
+	await runMenuCommand('New Untitled Text Editor');
+	await runMenuCommand('New Untitled Text Editor');
+	await expect(tabs).toHaveCount(2);
+	await expect.poll(readCloseItems).toEqual(closeLabels.map(label => ({ label, enabled: true })));
+	await runMenuCommand('Close Editor');
+	await expect(tabs).toHaveCount(1);
+	await runMenuCommand('Close All Editors');
+	await expect(tabs).toHaveCount(0);
+	await expect.poll(readCloseItems).toEqual(closeLabels.map(label => ({ label, enabled: false })));
+});
+
+test.describe('File menu closes the workspace', () => {
+	test.use({ openWorkspace: true });
+
+	test('Close Folder returns the current window to an empty workspace', async ({ target, application, workbench }) => {
+		test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+		test.skip(target.kind === 'browser' && target.appServerMode !== 'disabled', 'The server browser requires an authorized folder');
+		const page = workbench.page;
+		const originalRenderer = await page.evaluate(() => performance.timeOrigin);
+		const originalWindow = target.kind === 'electron' ? await (application as ElectronApplication).evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.id) : undefined;
+		if (target.kind === 'browser') {
+			await page.evaluate(async () => {
+				const root = await navigator.storage.getDirectory();
+				const folder = await root.getDirectoryHandle(`ash-close-${crypto.randomUUID()}`, { create: true });
+				Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
+			});
+			await page.keyboard.press('F1');
+			await page.locator('.ash-quick-pick').getByRole('combobox').fill('Open Folder');
+			await page.keyboard.press('Enter');
+		}
+		await page.keyboard.press('F1');
+		await page.locator('.ash-quick-pick').getByRole('combobox').fill('New Untitled Text Editor');
+		await page.keyboard.press('Enter');
+		await expect(workbench.editors.element.getByRole('tab', { name: /Untitled-1/ })).toBeVisible();
+		const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
+		await input.focus();
+		await input.type('unsaved draft');
+		const electron = application as ElectronApplication;
+
+		if (target.kind === 'electron') {
+			await electron.evaluate(({ dialog }) => {
+				const original = dialog.showMessageBox.bind(dialog);
+				const state = globalThis as typeof globalThis & { ashCloseFolderDialog?: { count: number; restore: () => void } };
+				state.ashCloseFolderDialog = { count: 0, restore: () => { dialog.showMessageBox = original; } };
+				dialog.showMessageBox = ((...args: [MessageBoxOptions] | [BrowserWindow, MessageBoxOptions]) => {
+					const options = args.length === 1 ? args[0] : args[1];
+					if (!options.buttons?.includes("Don't Save")) return args.length === 1 ? original(args[0]) : original(args[0], args[1]);
+					const label = state.ashCloseFolderDialog!.count++ === 0 ? 'Cancel' : "Don't Save";
+					return Promise.resolve({ response: options.buttons.indexOf(label), checkboxChecked: false });
+				}) as typeof dialog.showMessageBox;
+			});
+		}
+		const closeFolder = async () => {
+			if (target.kind === 'electron' && process.platform === 'darwin') {
+				await expect.poll(() => electron.evaluate(({ Menu }) => Menu.getApplicationMenu()?.items.find(item => item.label === 'File')?.submenu?.items.find(item => item.label === 'Close Folder')?.enabled)).toBe(true);
+				await electron.evaluate(({ Menu }) => Menu.getApplicationMenu()!.items.find(item => item.label === 'File')!.submenu!.items.find(item => item.label === 'Close Folder')!.click({ altKey: false }));
+			} else {
+				await page.getByRole('button', { name: 'Application menu' }).click();
+				await page.getByRole('menu').first().getByRole('menuitem', { name: 'File', exact: true }).click();
+				await page.getByRole('menu').last().getByRole('menuitem', { name: 'Close Folder', exact: true }).click();
+			}
+		};
+		try {
+			await closeFolder();
+			if (target.kind === 'electron') {
+				await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashCloseFolderDialog?: { count: number } }).ashCloseFolderDialog?.count)).toBe(1);
+			} else {
+				await page.getByRole('dialog', { name: 'Save Changes' }).getByRole('button', { name: 'Cancel', exact: true }).click();
+			}
+			await expect(workbench.editors.groupAt(0).content.locator('.stanza-editor-line-text').first()).toContainText('unsaved draft');
+			await expect(workbench.editors.element.getByRole('tab', { name: /Untitled-1/ })).toBeVisible();
+			expect(await page.evaluate(() => performance.timeOrigin)).toBe(originalRenderer);
+			await closeFolder();
+			if (target.kind === 'browser') {
+				await page.getByRole('dialog', { name: 'Save Changes' }).getByRole('button', { name: "Don't Save", exact: true }).click();
+			}
+			await expect(workbench.editors.element.getByRole('tab')).toHaveText(['Welcome']);
+			await expect.poll(() => page.evaluate(() => performance.timeOrigin)).not.toBe(originalRenderer);
+		} finally {
+			if (target.kind === 'electron') {
+				await electron.evaluate(() => (globalThis as typeof globalThis & { ashCloseFolderDialog?: { restore: () => void } }).ashCloseFolderDialog?.restore());
+			}
+		}
+		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+		if (await showSidebar.isVisible()) await showSidebar.click();
+		await expect(page.getByRole('button', { name: 'Open Folder', exact: true })).toBeVisible();
+		if (target.kind === 'electron') {
+			expect((application as ElectronApplication).windows()).toHaveLength(1);
+			expect(await (application as ElectronApplication).evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.id)).toBe(originalWindow);
+			const context = await page.evaluate(() => (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ folders: unknown[] }> } } }).ash.ipcRenderer.invoke('ash:workspace:context:read'));
+			expect(context.folders).toEqual([]);
+		}
+	});
+
+	test('Close Folder saves the draft before loading the empty workspace', async ({ target, application, testWorkspace, workbench }) => {
+		test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'This scenario saves through the desktop App Server');
+		const page = workbench.page;
+		const destination = join(await realpath(testWorkspace.directory), 'saved-before-close.txt');
+		const electron = application as ElectronApplication;
+		await electron.evaluate(({ dialog }, destination) => {
+			const originalMessage = dialog.showMessageBox.bind(dialog);
+			const originalSave = dialog.showSaveDialog.bind(dialog);
+			const state = globalThis as typeof globalThis & { ashRestoreCloseDialogs?: () => void };
+			state.ashRestoreCloseDialogs = () => { dialog.showMessageBox = originalMessage; dialog.showSaveDialog = originalSave; };
+			dialog.showMessageBox = ((...args: [MessageBoxOptions] | [BrowserWindow, MessageBoxOptions]) => {
+				const options = args.length === 1 ? args[0] : args[1];
+				if (!options.buttons?.includes("Don't Save")) return args.length === 1 ? originalMessage(args[0]) : originalMessage(args[0], args[1]);
+				return Promise.resolve({ response: options.buttons.indexOf('Save'), checkboxChecked: false });
+			}) as typeof dialog.showMessageBox;
+			dialog.showSaveDialog = (async () => ({ canceled: false, filePath: destination })) as typeof dialog.showSaveDialog;
+		}, destination);
+		try {
+			await page.keyboard.press('F1');
+			await page.locator('.ash-quick-pick').getByRole('combobox').fill('New Untitled Text Editor');
+			await page.keyboard.press('Enter');
+			const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
+			await input.focus();
+			await input.type('saved through workspace shutdown');
+			if (process.platform === 'darwin') {
+				await electron.evaluate(({ Menu }) => Menu.getApplicationMenu()!.items.find(item => item.label === 'File')!.submenu!.items.find(item => item.label === 'Close Folder')!.click({ altKey: false }));
+			} else {
+				await page.getByRole('button', { name: 'Application menu' }).click();
+				await page.getByRole('menu').first().getByRole('menuitem', { name: 'File', exact: true }).click();
+				await page.getByRole('menu').last().getByRole('menuitem', { name: 'Close Folder', exact: true }).click();
+			}
+			await expect(workbench.editors.element.getByRole('tab')).toHaveText(['Welcome']);
+			expect(await readFile(destination, 'utf8')).toBe('saved through workspace shutdown');
+		} finally {
+			await electron.evaluate(() => (globalThis as typeof globalThis & { ashRestoreCloseDialogs?: () => void }).ashRestoreCloseDialogs?.());
+		}
+	});
+});
 
 test('macOS system menu receives workbench commands', async ({ target, application }) => {
 	test.skip(target.kind !== 'electron' || process.platform !== 'darwin' || target.workbenchMode !== 'code', 'This scenario requires the macOS Code desktop product');

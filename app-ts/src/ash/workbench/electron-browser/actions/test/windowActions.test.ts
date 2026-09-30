@@ -3,7 +3,7 @@ import { test } from 'mocha';
 import { ServiceContainer } from '../../../../platform/instantiation/common/instantiation.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../platform/configuration/common/inMemoryConfigurationService.js';
-import { NATIVE_HOST_DIALOG_CHANNEL, NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL, NATIVE_HOST_SHELL_COMMAND_CHANNEL } from '../../../../platform/native/common/nativeHost.js';
+import { NATIVE_HOST_OPEN_WINDOW_CHANNEL, NATIVE_HOST_DIALOG_CHANNEL, NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL, NATIVE_HOST_SHELL_COMMAND_CHANNEL } from '../../../../platform/native/common/nativeHost.js';
 import type { INativeHostApi } from '../../../../platform/native/common/nativeHost.js';
 import { nativeHostIpcRoutes } from '../../../../platform/native/electron-main/nativeHostIpc.js';
 import { INativeHostService } from '../../../common/services.js';
@@ -16,6 +16,7 @@ test('desktop dialog and shell routes reject malformed requests', async () => {
 		performDialogOperation: operation => { operations.push(operation); },
 		performShellCommand: async operation => operation,
 		pickFolder: async () => undefined, pickFile: async () => undefined, openWorkspace: async () => {},
+		openWindow: async options => { operations.push(options); },
 		openAgentsWindow: async options => { operations.push(options ?? 'openAgentsWindow'); },
 		revealFile: () => {},
 		saveFile: async () => undefined, isAccessibilitySupportEnabled: () => false,
@@ -47,6 +48,12 @@ test('desktop dialog and shell routes reject malformed requests', async () => {
 	assert.deepEqual(operations.at(-1), handoff);
 	await openAgents.invoke(openAgents.validate(undefined));
 	assert.equal(operations.at(-1), 'openAgentsWindow');
+	const openWindow = routes.find(route => route.channel === NATIVE_HOST_OPEN_WINDOW_CHANNEL);
+	assert.ok(openWindow);
+	assert.throws(() => openWindow.validate('/project'), /Invalid empty window options/);
+	assert.throws(() => openWindow.validate({ remoteAuthority: 'ssh+user@host' }), /Remote SSH host/);
+	await openWindow.invoke(openWindow.validate({ forceReuseWindow: true, remoteAuthority: 'ssh+work-server' }));
+	assert.deepEqual(operations.at(-1), { forceReuseWindow: true, remoteAuthority: 'ssh+work-server' });
 });
 
 test('desktop window commands reach the window host', async () => {
@@ -75,6 +82,7 @@ test('desktop window commands reach the window host', async () => {
 		pickFolder: async () => undefined,
 		pickFile: async () => undefined,
 		openWorkspace: async () => {},
+		openWindow: async () => {},
 		openAgentsWindow: async () => { calls.push('openAgentsWindow'); },
 		revealFile: async () => {},
 		setWindowTheme: async () => {},

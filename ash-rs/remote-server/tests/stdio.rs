@@ -9,6 +9,8 @@ use ash_app_server_client::ConnectionCloseReason;
 use ash_app_server_client::StdioAppServerCommand;
 use ash_app_server_protocol::protocol::common::ClientCapabilities;
 use ash_app_server_protocol::protocol::common::ClientInfo;
+use ash_app_server_protocol::protocol::environment::EnvDirsSetParams;
+use ash_app_server_protocol::protocol::fs::FsReadFileParams;
 #[cfg(unix)]
 use ash_app_server_protocol::protocol::terminal::TerminalAttachParams;
 use ash_app_server_protocol::protocol::terminal::TerminalCloseParams;
@@ -19,6 +21,55 @@ use ash_app_server_protocol::protocol::terminal::TerminalReadParams;
 use ash_app_server_protocol::protocol::terminal::TerminalWriteParams;
 use base64::Engine;
 use tempfile::tempdir;
+
+#[test]
+fn empty_remote_connection_has_no_directory_authority() {
+    let targets = if cfg!(unix) {
+        vec![vec!["app-server", "--listen", "stdio://"], vec!["connect"]]
+    } else {
+        vec![vec!["app-server", "--listen", "stdio://"]]
+    };
+    for arguments in targets {
+        let root = tempdir().unwrap();
+        let mut command = StdioAppServerCommand::new(env!("CARGO_BIN_EXE_ash-remote-server"))
+            .without_environment_variable("ASH_WORKSPACE_ROOT")
+            .with_environment_variable("ASH_HOME", root.path().join("profile").into_os_string())
+            .with_environment_variable("ASH_REMOTE_SERVER_IDLE_TIMEOUT_MILLIS", "200");
+        for argument in arguments {
+            command = command.with_argument(argument);
+        }
+        let session = AppServerSession::start_stdio(
+            command,
+            ClientInfo {
+                name: "empty-remote-test".into(),
+                version: "1".into(),
+            },
+            ClientCapabilities::default(),
+        )
+        .unwrap();
+        assert!(
+            session
+                .client()
+                .set_env_dirs(EnvDirsSetParams { dirs: vec![] })
+                .unwrap()
+                .dirs
+                .is_empty()
+        );
+        let outside = root.path().join("outside.txt");
+        std::fs::write(&outside, "requires a folder grant").unwrap();
+        assert!(
+            session
+                .client()
+                .read_file(FsReadFileParams {
+                    dir_id: None,
+                    session_directory: None,
+                    path: outside,
+                })
+                .is_err()
+        );
+        session.shutdown().unwrap();
+    }
+}
 
 #[test]
 fn remote_server_serves_a_schema_checked_stdio_session() {

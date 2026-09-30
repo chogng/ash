@@ -16,10 +16,18 @@ fn endpoint_identity_changes_when_the_runtime_is_rebuilt_at_the_same_path() {
     fs::write(&runtime, b"first development runtime").unwrap();
     let options = RemoteServerOptions::new(&profile, &dir);
 
-    let first = endpoint_identity(&options, &profile, &dir, &runtime).unwrap();
-    let unchanged = endpoint_identity(&options, &profile, &dir, &runtime).unwrap();
+    let first = endpoint_identity(&options, &profile, Some(&dir), &runtime).unwrap();
+    let unchanged = endpoint_identity(&options, &profile, Some(&dir), &runtime).unwrap();
+    let empty = endpoint_identity(
+        &RemoteServerOptions::empty(&profile),
+        &profile,
+        None,
+        &runtime,
+    )
+    .unwrap();
+    assert_ne!(empty, first);
     fs::write(&runtime, b"second development runtime generation").unwrap();
-    let rebuilt = endpoint_identity(&options, &profile, &dir, &runtime).unwrap();
+    let rebuilt = endpoint_identity(&options, &profile, Some(&dir), &runtime).unwrap();
 
     assert_eq!(first, unchanged);
     assert_ne!(first, rebuilt);

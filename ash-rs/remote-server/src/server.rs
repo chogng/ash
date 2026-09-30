@@ -14,7 +14,7 @@ pub(crate) const PRODUCT_SERVICES_PATH_ENV: &str = "ASH_REMOTE_SERVER_PRODUCT_SE
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RemoteServerOptions {
     profile_root: PathBuf,
-    dir_root: PathBuf,
+    dir_root: Option<PathBuf>,
     product_services_path: Option<PathBuf>,
 }
 
@@ -23,7 +23,16 @@ impl RemoteServerOptions {
     pub fn new(profile_root: impl Into<PathBuf>, dir_root: impl Into<PathBuf>) -> Self {
         Self {
             profile_root: profile_root.into(),
-            dir_root: dir_root.into(),
+            dir_root: Some(dir_root.into()),
+            product_services_path: None,
+        }
+    }
+
+    /// Keeps the Remote connection available without granting a Directory authority.
+    pub fn empty(profile_root: impl Into<PathBuf>) -> Self {
+        Self {
+            profile_root: profile_root.into(),
+            dir_root: None,
             product_services_path: None,
         }
     }
@@ -34,8 +43,8 @@ impl RemoteServerOptions {
     }
 
     /// Returns the remote Directory authority passed to the App Server.
-    pub fn dir_root(&self) -> &std::path::Path {
-        &self.dir_root
+    pub fn dir_root(&self) -> Option<&std::path::Path> {
+        self.dir_root.as_deref()
     }
 
     /// Selects a product-host-owned services manifest without teaching this crate discovery policy.
@@ -101,8 +110,10 @@ pub fn serve_stdio(options: RemoteServerOptions) -> Result<(), RemoteServerError
 pub(crate) fn open_server(options: &RemoteServerOptions) -> Result<AppServer, RemoteServerError> {
     let mut server_options = AppServerOptions::new(options.profile_root.clone())
         .with_host_grok_auth()
-        .with_host_zcode_credentials()
-        .with_dir_root(&options.dir_root);
+        .with_host_zcode_credentials();
+    if let Some(dir_root) = &options.dir_root {
+        server_options = server_options.with_dir_root(dir_root);
+    }
     if let Some(path) = &options.product_services_path {
         let services = LocalProductServicesConfig::load(path, &options.profile_root)
             .map_err(|error| RemoteServerError::new(error.to_string()))?;
@@ -112,18 +123,21 @@ pub(crate) fn open_server(options: &RemoteServerOptions) -> Result<AppServer, Re
 }
 
 fn options_from_environment() -> Result<RemoteServerOptions, RemoteServerError> {
-    let dir_root = env::var_os(DIR_ROOT_ENV)
-        .map(PathBuf::from)
-        .filter(|path| path.is_absolute())
-        .ok_or_else(|| {
-            RemoteServerError::new("ASH_WORKSPACE_ROOT must be an absolute Remote Directory path")
-        })?;
+    let dir_root = env::var_os(DIR_ROOT_ENV).map(PathBuf::from);
+    if dir_root.as_ref().is_some_and(|path| !path.is_absolute()) {
+        return Err(RemoteServerError::new(
+            "ASH_WORKSPACE_ROOT must be an absolute Remote Directory path",
+        ));
+    }
     let profile_root = ash_utils_home_dir::find_ash_home()
         .map_err(|error| RemoteServerError::new(error.to_string()))?;
     if env::var_os("ASH_HOME").is_none() {
         check_legacy_home(&profile_root, legacy_home().as_deref())?;
     }
-    let mut options = RemoteServerOptions::new(profile_root, dir_root);
+    let mut options = match dir_root {
+        Some(dir_root) => RemoteServerOptions::new(profile_root, dir_root),
+        None => RemoteServerOptions::empty(profile_root),
+    };
     if let Some(path) = env::var_os(PRODUCT_SERVICES_PATH_ENV) {
         options = options.with_product_services_path(path);
     }

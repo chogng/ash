@@ -6,7 +6,7 @@ import { isNonEmptyString } from "../../../base/common/types.js";
 import {
 	createServiceIdentifier,
 } from "../../instantiation/common/instantiation.js";
-import { getRemoteWorkspacePath, isRemoteResource } from "../../remote/common/remote.js";
+import { createSshRemoteAuthority, getRemoteWorkspacePath, isRemoteResource } from "../../remote/common/remote.js";
 
 /** Describes whether a workbench contains no project, one folder, or a workspace. */
 export const enum WorkbenchState {
@@ -36,6 +36,7 @@ export interface IBaseWorkspaceIdentifier {
 
 /** Identifies an empty workbench window. */
 export interface IEmptyWorkspaceIdentifier extends IBaseWorkspaceIdentifier {
+	readonly remoteAuthority?: string;
 }
 
 /** Identifies a workbench opened on one folder. */
@@ -72,6 +73,7 @@ export interface IWorkspaceFolder {
 export interface IWorkspace {
 	readonly id: string;
 	readonly folders: readonly IWorkspaceFolder[];
+	readonly remoteAuthority?: string;
 	readonly configuration?: URI;
 	readonly name?: string;
 }
@@ -92,7 +94,7 @@ export function workspaceFromIdentifier(identifier: IAnyWorkspaceIdentifier): IW
 			folders: [{ id: identifier.id, uri: identifier.uri, name: resourceName(identifier.uri), index: 0 }],
 		});
 	}
-	return freezeWorkspace({ id: identifier.id, folders: [] });
+	return freezeWorkspace({ id: identifier.id, folders: [], ...(identifier.remoteAuthority ? { remoteAuthority: identifier.remoteAuthority } : {}) });
 }
 
 /** One atomic replacement of the workspace hosted by a window. */
@@ -165,6 +167,13 @@ export function isRemoteWorkspaceIdentifier(value: unknown): value is ISingleFol
 	return isSingleFolderWorkspaceIdentifier(value) && isRemoteResource(value.uri);
 }
 
+/** Connection identity survives closing the folder in an SSH window. */
+export function getWorkspaceRemoteAuthority(workspace: IAnyWorkspaceIdentifier | IWorkspace): string | undefined {
+	if (isRemoteWorkspaceIdentifier(workspace)) return workspace.uri.authority;
+	if ('folders' in workspace) return workspace.remoteAuthority ?? workspace.folders.find(folder => isRemoteResource(folder.uri))?.uri.authority;
+	return isEmptyWorkspaceIdentifier(workspace) ? workspace.remoteAuthority : undefined;
+}
+
 /** Returns whether a value identifies a multi-root workspace file. */
 export function isWorkspaceIdentifier(
 	value: unknown,
@@ -213,7 +222,7 @@ export function serializeWorkspaceIdentifier(
 			uri: workspace.uri.toString(),
 		};
 	}
-	return { id: workspace.id };
+	return { id: workspace.id, ...(workspace.remoteAuthority ? { remoteAuthority: workspace.remoteAuthority } : {}) };
 }
 
 /** Validates and revives a workspace identity received over IPC. */
@@ -236,10 +245,11 @@ export function parseWorkspaceIdentifier(
 			uri: workspaceResourceUri(record.uri, "workspace folder uri"),
 		});
 	}
-	requireExactKeys(record, ["id"]);
-	return id === UNKNOWN_EMPTY_WINDOW_WORKSPACE.id
+	requireExactKeys(record, record.remoteAuthority === undefined ? ["id"] : ["id", "remoteAuthority"]);
+	const remoteAuthority = record.remoteAuthority === undefined ? undefined : parseRemoteAuthority(record.remoteAuthority);
+	return id === UNKNOWN_EMPTY_WINDOW_WORKSPACE.id && remoteAuthority === undefined
 		? UNKNOWN_EMPTY_WINDOW_WORKSPACE
-		: Object.freeze({ id });
+		: Object.freeze({ id, ...(remoteAuthority ? { remoteAuthority } : {}) });
 }
 
 /** Derives workbench state from an already resolved workspace projection. */
@@ -261,6 +271,7 @@ export function serializeWorkspace(workspace: IWorkspace): unknown {
 		})),
 		...(workspace.configuration ? { configuration: workspace.configuration.toString() } : {}),
 		...(workspace.name ? { name: workspace.name } : {}),
+		...(workspace.remoteAuthority ? { remoteAuthority: workspace.remoteAuthority } : {}),
 	};
 }
 
@@ -270,6 +281,7 @@ export function parseWorkspace(value: unknown): IWorkspace {
 	const expected = ['folders', 'id'];
 	if ('configuration' in record) expected.push('configuration');
 	if ('name' in record) expected.push('name');
+	if ('remoteAuthority' in record) expected.push('remoteAuthority');
 	requireExactKeys(record, expected.sort());
 	const id = nonEmptyString(record.id, 'workspace id');
 	if (!Array.isArray(record.folders)) throw new Error('workspace folders must be an array');
@@ -285,7 +297,8 @@ export function parseWorkspace(value: unknown): IWorkspace {
 		? undefined
 		: fileWorkspaceConfigUri(record.configuration, 'workspace configuration');
 	const name = record.name === undefined ? undefined : nonEmptyString(record.name, 'workspace name');
-	return freezeWorkspace({ id, folders, ...(configuration ? { configuration } : {}), ...(name ? { name } : {}) });
+	const remoteAuthority = record.remoteAuthority === undefined ? undefined : parseRemoteAuthority(record.remoteAuthority);
+	return freezeWorkspace({ id, folders, ...(configuration ? { configuration } : {}), ...(name ? { name } : {}), ...(remoteAuthority ? { remoteAuthority } : {}) });
 }
 
 function exactRecord(value: unknown): Record<string, unknown> {
@@ -368,4 +381,10 @@ function workspaceName(configPath: URI): string {
 
 function resourceName(resource: URI): string {
 	return basename(resource) || resource.authority || resource.toString();
+}
+
+function parseRemoteAuthority(value: unknown): string {
+	const authority = nonEmptyString(value, 'Remote authority');
+	if (!authority.startsWith('ssh+') || createSshRemoteAuthority(authority.slice(4)).authority !== authority) throw new Error('Invalid Remote authority');
+	return authority;
 }

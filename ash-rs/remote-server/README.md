@@ -49,14 +49,16 @@ exits after a bounded idle period. A reconnectable terminal is detached for 30 s
 connection closes, accepts only its 256-bit bearer token, and rotates that token after a successful
 attach.
 
-`RemoteServerOptions` owns the remote profile and Directory roots plus an optional manifest path
-selected by the executable host. The executable discovers its packaged product-services
+`RemoteServerOptions` owns the remote profile, optional Directory root, and optional manifest path.
+Without a Directory root, the same SSH host can serve an empty Workbench without granting access
+to the previously opened folder. Empty and folder connections use separate broker identities.
+The executable selects and discovers its packaged product-services
 manifest through `ash-app-server` and retains a package lease for its lifetime. Manifest discovery, runtime download,
 activation, rollback, SSH retry, and tunnel policy stay outside this crate.
 
 ## Failure semantics
 
-Unsupported command arguments, a missing or relative `ASH_WORKSPACE_ROOT`, an unsafe runtime
+Unsupported command arguments, a relative `ASH_WORKSPACE_ROOT`, an unsafe runtime
 directory, a conflicting endpoint, or daemon startup timeout return `RemoteServerError` before a
 connection is exposed. Per-connection protocol failures are written only to the private daemon
 log. SSH credentials cannot be exposed because SSH is not present in this process.
