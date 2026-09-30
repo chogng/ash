@@ -235,6 +235,16 @@ where
             }
         }
         TuiSlashCommandAction::New => {
+            if let Some(active) = conversation.as_mut() {
+                // The selected Session owns its execution target; the startup
+                // workspace does not describe every active conversation.
+                output.conversation_change = Some(
+                    active
+                        .replace_with_new(client, &arguments)
+                        .map_err(session_error)?,
+                );
+                return Ok(output);
+            }
             let title = if arguments.is_empty() {
                 "TUI conversation".to_owned()
             } else {

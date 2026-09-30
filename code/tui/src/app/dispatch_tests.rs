@@ -140,7 +140,24 @@ fn branch_persists_lineage_switches_threads_and_does_not_call_the_model() {
         invocation(TuiSlashCommandAction::New, "fresh task"),
         &mut app,
     );
+    assert_eq!(
+        app.status(),
+        &Status::Ready,
+        "{}",
+        app.messages().last().unwrap().text()
+    );
     assert_ne!(conversation.session_id(), &original_session);
+    let fresh_session = client
+        .read_session(SessionReadParams {
+            session_id: conversation.session_id().clone(),
+        })
+        .unwrap()
+        .session;
+    assert_eq!(fresh_session.title, "fresh task");
+    assert_eq!(fresh_session.execution_target, None);
+    assert_eq!(fresh_session.threads.len(), 1);
+    assert_ne!(conversation.thread_id(), &original_thread);
+    assert_eq!(fresh_session.threads[0].forked_from_id, None);
     assert_eq!(
         app.messages().last().unwrap().text(),
         "Started a new session."
@@ -165,6 +182,101 @@ fn branch_persists_lineage_switches_threads_and_does_not_call_the_model() {
 
     drop(client);
     let _ = fs::remove_dir_all(state_root);
+}
+
+#[test]
+fn branch_then_new_preserves_execution_target_and_resume_restores_original_session() {
+    let _guard = dispatch_test_guard();
+    let state_root = tempfile::tempdir().unwrap();
+    let workspace = state_root.path().join("workspace");
+    fs::create_dir(&workspace).unwrap();
+    let workspace = workspace.canonicalize().unwrap();
+    let model = Arc::new(OfflineOperationClient::default());
+    let mut client = start_in_process_client(
+        InProcessClientOptions::new(
+            state_root.path(),
+            ClientInfo {
+                name: "ash-tui-new-test".into(),
+                version: "1".into(),
+            },
+        )
+        .with_codex_home(state_root.path().join("codex"))
+        .with_dir_root(&workspace)
+        .with_model_operation_client(model.clone()),
+    )
+    .unwrap();
+    let mut conversation =
+        ActiveConversation::start_at(&mut client, "original".into(), &workspace).unwrap();
+    let original_session = conversation.session_id().clone();
+    // Deliberately keep the startup workspace different from the selected Session.
+    let mut app = App::for_dir(state_root.path());
+    execute(
+        &mut conversation,
+        &mut client,
+        invocation(TuiSlashCommandAction::Branch, "investigation"),
+        &mut app,
+    );
+    assert_eq!(app.status(), &Status::Ready);
+    let branch_thread = conversation.thread_id().clone();
+    execute(
+        &mut conversation,
+        &mut client,
+        invocation(TuiSlashCommandAction::New, "fresh task"),
+        &mut app,
+    );
+    assert_eq!(
+        app.status(),
+        &Status::Ready,
+        "{}",
+        app.messages().last().unwrap().text()
+    );
+    assert_ne!(conversation.session_id(), &original_session);
+    assert_ne!(conversation.thread_id(), &branch_thread);
+    let fresh_session_id = conversation.session_id().clone();
+    let fresh = client
+        .read_session(SessionReadParams {
+            session_id: fresh_session_id.clone(),
+        })
+        .unwrap()
+        .session;
+    assert_eq!(fresh.title, "fresh task");
+    assert_eq!(
+        fresh.execution_target,
+        Some(ash_protocol::SessionExecutionTarget::Local { root: workspace })
+    );
+    assert_eq!(fresh.threads.len(), 1);
+    assert_eq!(fresh.threads[0].forked_from_id, None);
+    execute(
+        &mut conversation,
+        &mut client,
+        invocation(TuiSlashCommandAction::Resume, original_session.as_str()),
+        &mut app,
+    );
+    assert_eq!(app.status(), &Status::Ready);
+    assert_eq!(conversation.session_id(), &original_session);
+    let original = client
+        .read_session(SessionReadParams {
+            session_id: original_session,
+        })
+        .unwrap()
+        .session;
+    assert!(
+        original
+            .threads
+            .iter()
+            .any(|thread| thread.thread_id == branch_thread)
+    );
+    assert_eq!(
+        client
+            .read_session(SessionReadParams {
+                session_id: fresh_session_id
+            })
+            .unwrap()
+            .session
+            .title,
+        "fresh task"
+    );
+    assert_eq!(model.calls(), 0);
 }
 
 #[test]
