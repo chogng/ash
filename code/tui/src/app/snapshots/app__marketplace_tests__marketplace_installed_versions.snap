@@ -5,17 +5,17 @@ expression: screen(&app)
   .                                                                            [— / —] [Dashboard]  
                                                                                                     
                                                                                                     
-            ┌── Marketplace ──────────────────────────────────────────────────────[✗]─┐             
+            ┌── Extensions ───────────────────────────────────────────────────────[✗]─┐             
             │                                                                         │             
-            │   Skills    Plugins    MCP    Connectors    Executables    Languages    │             
-            │   Themes    Localizations    Assets                                     │             
+            │   Skills    Marketplace    MCP    Hooks    Plugins                      │             
             │                                                                         │             
             │  ╭────────────────────────────────────────────────────────────────────╮ │             
             │  │ Search Marketplace; Enter to search                                │ │             
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
-            │  Installed                                                              │             
-            │> web                                                                  + │             
-            │  web                                                                  + │             
+            │  official                                                             - │             
+            │  Skills ─────────────────────────────────────────────────────────────── │             
+            │> web@official                                                         + │             
+            │  web@official                                                         + │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             

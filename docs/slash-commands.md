@@ -123,7 +123,7 @@ Web/Electron Workbench 和 Ash Code TUI 使用一个包管理入口，加上各�
 | `/marketplace` | 搜索所有来源、查看包内容与版本、安装、更新、卸载 | 使用同一个 Core Plugins 服务 |
 | `/skills` | 查看可用 Skill、启用/停用、查看诊断；通过 `$name` 调用 | 在 TUI 中用 `/marketplace` 搜索可安装 Skill |
 | `/lsp` | 查看当前语言与服务器、配置启用状态和路径、检查运行故障 | “查找服务器”打开 Marketplace 的语言筛选 |
-| `/plugins` | 打开 Marketplace 的插件分类，查看已安装和未安装包 | 按所选安装记录更新和卸载 |
+| `/plugins` | Ash Code 管理已安装插件的启停；Workbench 打开 Marketplace 的插件分类 | 包更新和卸载由 Marketplace 提供 |
 | MCP、Connector 领域 | 管连接、认证、工具与运行状态；当前不新增 Desktop slash command | Marketplace 提供对应 capability 筛选 |
 
 - package 是版本和卸载单位；一个 Plugin 包携带的 Skill、MCP 等能力不分别安装，也不重复登记。
@@ -139,8 +139,8 @@ Web/Electron Chat 与 Ash Code 共用 `ProductSlashCommand` 的命令定义；Ru
 已安装列表按安装记录 ID 管理，同包多版本不会混用；目录不可用时仍可读取本地安装列表并卸载。
 Skill 启用和 LSP 配置使用后端配置 revision；遇到冲突保留输入并提示刷新，不自动覆盖。
 Ash Code 同时注册 `/marketplace [query]`、`/plugins`、`/lsp [language-id]`，命令直接打开终端面板。
-Marketplace 按能力分类提供页签，另有插件包页签；`/marketplace` 默认进入技能分类，`/plugins` 进入插件包分类。每个分类内分“已安装”和“未安装”，收起的列表行只显示名称；左右键展开或收起来源、描述和版本。
-`/` 聚焦搜索，`i` 打开安装审阅，`u` 打开卸载确认，`r` 刷新当前分类。Tab/Shift+Tab、方向键和 Esc 沿用 Config 面板的焦点与返回规则；安装前仍审阅整个包，已安装版本按具体安装记录更新和卸载。
+Ash Code 的 Skills、Marketplace、MCP、Hooks、Plugins 共用扩展面板的五个页签，领域命令进入对应页签。停用项在标题后显示红色 `[disable]`，不再用 All / On / Off 筛选。Plugins 以准确版本、摘要和 revision 启停已安装插件。Marketplace 按包身份中的来源分组；Enter 和左右键展开收起来源，来源内用原分类名称作为行标题，包详情仍用左右键展开收起。
+`/` 聚焦搜索，`i` 打开安装审阅，`u` 打开卸载确认，`r` 刷新 Marketplace 或 Plugins。Tab/Shift+Tab、方向键和 Esc 沿用 Config 面板的焦点与返回规则；安装前仍审阅整个包，已安装版本按具体安装记录更新和卸载。
 `/lsp` 的 Available、Configured、Directories 页签显示可用服务器、配置和会话目录；输入语言 ID 后进入
 Marketplace 精确路由搜索。可用表示已启用且程序可解析，不表示进程已启动。
 Ash Code 的 `/skills` 只管理已发现的技能，安装技能从 `/marketplace` 进入。`/mcp`、`/connectors`、`/lsp` 的获取入口进入同一个 Marketplace；语言服务器配置统一由 `/lsp` 管理，Config 不再重复提供页签。

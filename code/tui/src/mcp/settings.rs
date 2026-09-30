@@ -1,8 +1,6 @@
 use crate::keymap::bindings;
-use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
-use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::list_selection::ListSelectionSpec;
 use crate::widgets::search_box::SearchBoxModel;
 use ash_app_server_protocol::protocol::config::McpServerConfigDto;
@@ -30,34 +28,13 @@ pub(crate) fn mcp_choices(servers: &BTreeMap<String, McpServerConfigDto>) -> Mcp
         .enumerate()
         .map(|(index, server)| mcp_item(index, server, &mut actions))
         .collect::<Vec<_>>();
-    let enabled = all
-        .iter()
-        .zip(servers.values())
-        .filter(|(_, server)| server.enablement == McpServerEnablementDto::Enabled)
-        .map(|(item, _)| item.clone())
-        .collect::<Vec<_>>();
-    let disabled = all
-        .iter()
-        .zip(servers.values())
-        .filter(|(_, server)| server.enablement == McpServerEnablementDto::Disabled)
-        .map(|(item, _)| item.clone())
-        .collect::<Vec<_>>();
-    let enabled_count = enabled.len();
-    let disabled_count = disabled.len();
-
     McpChoices {
-        model: ListSelectionModel::new(
-            "MCP servers",
-            vec![
-                ListSelectionGroup::new(format!("All ({})", all.len()), all),
-                ListSelectionGroup::new(format!("Enabled ({enabled_count})"), enabled),
-                ListSelectionGroup::new(format!("Disabled ({disabled_count})"), disabled),
-            ],
-        )
-        .with_activation(bindings::MCP_TOGGLE)
-        .with_action(ListSelectionItem::new("Get MCP servers").with_id(marketplace_id))
-        .with_search(SearchBoxModel::new("Search MCP servers"))
-        .with_empty_message("No matching MCP servers"),
+        model: crate::extensions::model(crate::extensions::Tab::Mcp, all)
+            .with_expandable_descriptions()
+            .with_activation(bindings::MCP_TOGGLE)
+            .with_action(ListSelectionItem::new("Get MCP servers").with_id(marketplace_id))
+            .with_search(SearchBoxModel::new("Search MCP servers"))
+            .with_empty_message("No matching MCP servers"),
         actions,
     }
 }
@@ -79,14 +56,24 @@ fn mcp_item(
             enablement: next_enablement,
         },
     );
-    ListSelectionItem::new(&server.display_name)
-        .with_id(item_id)
-        .with_description(format!(
-            "{}  ·  {}  ·  {}",
-            server.id,
-            enablement_label(server.enablement),
-            transport_label(&server.transport)
-        ))
+    let description = format!(
+        "{}  ·  {}  ·  {}",
+        server.id,
+        enablement_label(server.enablement),
+        transport_label(&server.transport)
+    );
+    let item = ListSelectionItem::new(crate::extensions::title(
+        &server.display_name,
+        server.enablement == McpServerEnablementDto::Enabled,
+    ))
+    .with_id(item_id)
+    .with_description(description.clone())
+    .with_details(description);
+    if server.enablement == McpServerEnablementDto::Disabled {
+        item.with_disabled_suffix()
+    } else {
+        item
+    }
 }
 
 fn enablement_label(enablement: McpServerEnablementDto) -> &'static str {

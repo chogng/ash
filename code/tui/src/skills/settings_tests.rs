@@ -28,6 +28,6 @@ fn settings_keep_backend_diagnostics_out_of_the_tab_model() {
             .iter()
             .map(|tab| tab.label())
             .collect::<Vec<_>>(),
-        vec!["All (0)", "On (0)", "Off (0)"]
+        vec!["Skills", "Marketplace", "MCP", "Hooks", "Plugins"]
     );
 }

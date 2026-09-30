@@ -577,6 +577,15 @@ impl App {
         outcome: CommandPanelOutcome,
     ) -> Option<AppCommand> {
         match outcome {
+            CommandPanelOutcome::ExtensionTab(tab) => Some(
+                ThreadCommand::ExecuteProductCommand(SlashCommandInvocation {
+                    command: tab.command().definition(),
+                    origin: ash_slash_commands::SlashCommandOrigin::Local,
+                    display_arguments: String::new(),
+                    arguments: Vec::new(),
+                })
+                .into(),
+            ),
             CommandPanelOutcome::Dirs(DirSelectionAction::Add {
                 request_id,
                 path,

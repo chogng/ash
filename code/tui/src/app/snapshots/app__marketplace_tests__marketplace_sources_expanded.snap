@@ -10,9 +10,17 @@ expression: screen(&app)
             │   Skills    Marketplace    MCP    Hooks    Plugins                      │             
             │                                                                         │             
             │  ╭────────────────────────────────────────────────────────────────────╮ │             
-            │  │ Search available skills                                            │ │             
+            │  │ Search Marketplace; Enter to search                                │ │             
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
-            │  No matching skills                                                     │             
+            │> ash                                                                  - │             
+            │  Skills ─────────────────────────────────────────────────────────────── │             
+            │  Guide                                                                + │             
+            │  claude-plugins-official                                              - │             
+            │  Plugins ────────────────────────────────────────────────────────────── │             
+            │  Tools                                                                + │             
+            │  openai                                                               - │             
+            │  Skills ─────────────────────────────────────────────────────────────── │             
+            │  Review                                                               + │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
@@ -20,15 +28,7 @@ expression: screen(&app)
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
-            │  Tab/Shift+Tab to switch · Enter to return · Esc to close               │             
+            │  / search · ←/→ details · i install · r refresh                         │             
   ──────────└─────────────────────────────────────────────────────────────────────────┘───────────  
   > Build anything                                                                                  
   ─────────────────────────────────────────────────────────────────────────────── Automatic model

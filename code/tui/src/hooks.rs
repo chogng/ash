@@ -498,19 +498,29 @@ fn root_selection(hooks: &BTreeMap<String, HookConfigDto>) -> ListSelection<Acti
     let items = hooks
         .values()
         .map(|hook| {
-            ListSelectionItem::new(Text::literal(&hook.id))
-                .with_id(ListSelectionItemId::new(&hook.id))
-                .with_description(Text::template(
-                    "{0}  ·  {1}",
-                    vec![
-                        event_label(hook.event).into(),
-                        enablement_label(hook.enablement).into(),
-                    ],
-                ))
+            let description = Text::template(
+                "{0}  ·  {1}",
+                vec![
+                    event_label(hook.event).into(),
+                    enablement_label(hook.enablement).into(),
+                ],
+            );
+            let item = ListSelectionItem::new(crate::extensions::title(
+                &hook.id,
+                hook.enablement == HookEnablementDto::Enabled,
+            ))
+            .with_id(ListSelectionItemId::new(&hook.id))
+            .with_description(description.clone())
+            .with_details(description);
+            if hook.enablement == HookEnablementDto::Disabled {
+                item.with_disabled_suffix()
+            } else {
+                item
+            }
         })
         .collect();
-    let model = ListSelectionModel::new("Hooks", vec![ListSelectionGroup::new("", items)])
-        .without_tab_bar()
+    let model = crate::extensions::model(crate::extensions::Tab::Hooks, items)
+        .with_expandable_descriptions()
         .with_activation(bindings::ACCEPT)
         .with_action(
             ListSelectionItem::new("Add Hook").with_id(ListSelectionItemId::new("add-hook")),

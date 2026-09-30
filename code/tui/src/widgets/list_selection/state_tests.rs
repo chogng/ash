@@ -711,3 +711,57 @@ fn repeated_tab_does_not_move_focus_and_a_single_tab_starts_on_its_item() {
     view.handle_key(key(KeyCode::Down));
     assert!(view.items_focused());
 }
+
+#[test]
+fn expandable_source_groups_hide_children_and_search_finds_collapsed_packages() {
+    let parent = ListSelectionItemId::new("source:ash");
+    let mut state = ListSelectionState::new(
+        ListSelectionModel::new(
+            "Marketplace",
+            vec![ListSelectionGroup::new(
+                "",
+                vec![
+                    ListSelectionItem::new("ash")
+                        .with_id(parent.clone())
+                        .as_expandable_group(),
+                    ListSelectionItem::new("Skills")
+                        .as_section_divider()
+                        .with_parent(parent.clone()),
+                    ListSelectionItem::new("Guide")
+                        .with_id(ListSelectionItemId::new("guide@ash"))
+                        .with_parent(parent),
+                ],
+            )],
+        )
+        .without_tab_bar()
+        .with_expandable_descriptions()
+        .with_search(SearchBoxModel::new("Search")),
+    );
+    assert_eq!(state.visible_items().len(), 3);
+    assert_eq!(
+        state.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE)),
+        ListSelectionInputOutcome::Consumed
+    );
+    assert_eq!(
+        state
+            .visible_items()
+            .iter()
+            .map(|item| item.label())
+            .collect::<Vec<_>>(),
+        ["ash"]
+    );
+    state.focus_search();
+    state.handle_paste("guide".into());
+    assert_eq!(
+        state
+            .visible_items()
+            .iter()
+            .map(|item| item.label())
+            .collect::<Vec<_>>(),
+        ["Guide"]
+    );
+    assert_eq!(
+        state.selected_item().unwrap().id(),
+        Some(&ListSelectionItemId::new("guide@ash"))
+    );
+}

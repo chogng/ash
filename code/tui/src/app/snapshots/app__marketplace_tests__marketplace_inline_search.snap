@@ -23,14 +23,14 @@ expression: screen(&app)
                                                                                                     
                                                                                                     
                                                                                                     
-─ Marketplace ──────────────────────────────────────────────────────────────────────────────────────
+─ Extensions ───────────────────────────────────────────────────────────────────────────────────────
                                                                                                     
-   Skills    Plugins    MCP    Connectors    Executables    Languages    Themes    Localizations    
-   Assets                                                                                           
+   Skills    Marketplace    MCP    Hooks    Plugins                                                 
   ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
   │ Search Marketplace; Enter to search                                                          │  
   ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  
-  Not installed                                                                                     
-> Guide                                                                                          +  
+> official                                                                                       -  
+  Plugins ────────────────────────────────────────────────────────────────────────────────────────  
+  Guide                                                                                          +  
                                                                                                     
   / search · ←/→ details · i install · r refresh

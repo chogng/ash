@@ -1,6 +1,5 @@
 use crate::keymap::bindings;
 use crate::nls::Text;
-use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
@@ -44,63 +43,28 @@ pub(crate) fn skill_choices(catalog: &SkillListResult) -> SkillChoices {
                     enablement,
                 },
             );
-            ListSelectionItem::new(Text::literal(skill.id.name.as_str()))
-                .with_id(item_id)
-                .with_details(Text::literal(&skill.description))
-                .with_columns(
-                    skill.id.name.as_str(),
-                    &skill.description,
-                    enablement_label(skill.enablement),
-                )
-                .with_description(Text::literal(&skill.description))
+            let item = ListSelectionItem::new(crate::extensions::title(
+                skill.id.name.as_str(),
+                skill.enablement == SkillEnablementDto::Enabled,
+            ))
+            .with_id(item_id)
+            .with_details(Text::literal(&skill.description))
+            .with_description(Text::literal(&skill.description));
+            if skill.enablement == SkillEnablementDto::Disabled {
+                item.with_disabled_suffix()
+            } else {
+                item
+            }
         })
         .collect::<Vec<_>>();
-    let enabled = all
-        .iter()
-        .zip(&catalog.skills)
-        .filter(|(_, skill)| skill.enablement == SkillEnablementDto::Enabled)
-        .map(|(item, _)| item.clone())
-        .collect::<Vec<_>>();
-    let disabled = all
-        .iter()
-        .zip(&catalog.skills)
-        .filter(|(_, skill)| skill.enablement == SkillEnablementDto::Disabled)
-        .map(|(item, _)| item.clone())
-        .collect::<Vec<_>>();
-    let enabled_count = enabled.len();
-    let disabled_count = disabled.len();
-
     SkillChoices {
-        model: ListSelectionModel::new(
-            "Skills",
-            vec![
-                ListSelectionGroup::new(
-                    Text::template("All ({0})", vec![Text::literal(all.len().to_string())]),
-                    all,
-                ),
-                ListSelectionGroup::new(
-                    Text::template("On ({0})", vec![Text::literal(enabled_count.to_string())]),
-                    enabled,
-                ),
-                ListSelectionGroup::new(
-                    Text::template("Off ({0})", vec![Text::literal(disabled_count.to_string())]),
-                    disabled,
-                ),
-            ],
-        )
-        .with_expandable_descriptions()
-        .with_activation(bindings::SKILL_TOGGLE)
-        .with_search(SearchBoxModel::new("Search available skills"))
-        .with_empty_message("No matching skills"),
+        model: crate::extensions::model(crate::extensions::Tab::Skills, all)
+            .with_expandable_descriptions()
+            .with_activation(bindings::SKILL_TOGGLE)
+            .with_search(SearchBoxModel::new("Search available skills"))
+            .with_empty_message("No matching skills"),
         actions,
         diagnostics: catalog.diagnostics.clone(),
-    }
-}
-
-fn enablement_label(enablement: SkillEnablementDto) -> &'static str {
-    match enablement {
-        SkillEnablementDto::Disabled => "off",
-        SkillEnablementDto::Enabled => "on",
     }
 }
 

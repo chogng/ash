@@ -45,7 +45,7 @@ fn hooks_panel_opens_inline_and_restores_draft_after_close() {
     app.update(crate::hooks::Event::Opened(
         std::collections::BTreeMap::new(),
     ));
-    assert_eq!(app.list_selection().unwrap().title(), "Hooks");
+    assert_eq!(app.list_selection().unwrap().title(), "Extensions");
     crate::tui_assert_snapshot!("hooks_inline", text(&render(&app, 80, 24)));
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_none());
@@ -387,4 +387,31 @@ fn policy_stays_below_input_and_inline_tips_do_not_fade() {
             .unwrap()
             .contains("⏸ ask permissions on")
     );
+}
+
+#[test]
+fn plugins_inline_marks_disabled_items_and_restores_draft_after_close() {
+    let mut app = app();
+    app.insert_text("keep this draft");
+    let plugins = serde_json::from_value(serde_json::json!({"revision":1,"activationGeneration":1,"packages":[{
+        "id":"review@ash","version":"1","digest":"sha256:fixture","enabled":false,"granted":true,"effective":false,"revoked":false
+    }]})).unwrap();
+    app.update(crate::marketplace::Event(
+        crate::marketplace::Page::Plugins(plugins),
+    ));
+    let buffer = render(&app, 80, 24);
+    let marker = buffer
+        .content
+        .windows(9)
+        .find(|cells| cells.iter().map(|cell| cell.symbol()).collect::<String>() == "[disable]")
+        .unwrap();
+    assert!(
+        marker
+            .iter()
+            .all(|cell| cell.fg == app.render_context().danger())
+    );
+    crate::tui_assert_snapshot!("plugins_inline_disabled", text(&buffer));
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.command_panel().is_none());
+    assert!(app.input().contains("keep this draft"));
 }

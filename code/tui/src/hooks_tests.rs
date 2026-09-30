@@ -39,7 +39,7 @@ fn hooks_panel_opens_details_toggles_and_edits() {
     let PageView::Selection(root) = panel.page() else {
         panic!("expected Hooks list")
     };
-    assert_eq!(root.title(), "Hooks");
+    assert_eq!(root.title(), "Extensions");
     assert_eq!(root.visible_items()[0].label(), "review");
 
     panel
@@ -131,7 +131,7 @@ fn hooks_panel_localizes_titles_and_status_in_chinese() {
     let PageView::Selection(root) = panel.page() else {
         panic!("expected Hooks list");
     };
-    assert_eq!(root.title(), "钩子");
+    assert_eq!(root.title(), "扩展");
     assert_eq!(
         root.visible_items()[0].description(),
         Some("工具执行后  ·  已启用")

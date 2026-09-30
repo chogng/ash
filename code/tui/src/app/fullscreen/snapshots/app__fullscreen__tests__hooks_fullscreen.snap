@@ -4,7 +4,9 @@ expression: "render(&app, 80, 20)"
 ---
   .                                                        [— / —] [Dashboard]  
                                                                                 
-        ┌── Hooks ─────────────────────────────────────────────────[✗]─┐        
+        ┌── Extensions ────────────────────────────────────────────[✗]─┐        
+        │                                                              │        
+        │   Skills    Marketplace    MCP    Hooks    Plugins           │        
         │                                                              │        
         │> Add Hook                                                    │        
         │                                                              │        
@@ -15,8 +17,6 @@ expression: "render(&app, 80, 20)"
         │                                                              │        
         │                                                              │        
         │                                                              │        
-        │                                                              │        
-        │                                                              │        
   ──────│                                                              │──────  
-  > keep│  Enter to confirm  ·  / to search  ·  Esc to close           │        
+  > keep│  Enter confirm · Tab tabs · / search · Esc close             │        
   ──────└──────────────────────────────────────────────────────────────┘model

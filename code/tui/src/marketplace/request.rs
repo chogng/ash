@@ -24,6 +24,22 @@ fn run<T: JsonRpcTransport>(
     command: Command,
 ) -> Result<Page, ClientError> {
     let selected = match command {
+        Command::Plugins => return client.list_plugins().map(Page::Plugins),
+        Command::SetPluginEnablement { revision, package } => {
+            let params = ash_app_server_protocol::protocol::plugins::PluginPackageCommandParams {
+                command_id: crate::client::new_command_id("plugin-enablement").to_string(),
+                expected_revision: revision,
+                id: package.id,
+                version: package.version,
+                digest: package.digest,
+            };
+            if package.enabled {
+                client.disable_plugin(params)?;
+            } else {
+                client.enable_plugin(params)?;
+            }
+            return client.list_plugins().map(Page::Plugins);
+        }
         Command::Browse(params) => {
             let installed = client.list_installed_marketplace_packages();
             let installed = match installed {

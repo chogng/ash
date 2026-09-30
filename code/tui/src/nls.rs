@@ -643,6 +643,26 @@ pub(crate) fn spinner_verb(index: usize) -> &'static str {
 /// Product-owned TUI chrome. Server-provided names, user content, model output, paths, command
 /// identifiers, and code are intentionally absent so they remain byte-for-byte source text.
 const UI_TRANSLATIONS: &[Translation] = &[
+    translation("Extensions", "拡張機能", "扩展", "Extensions"),
+    translation(
+        "{0} [disable]",
+        "{0} [disable]",
+        "{0} [disable]",
+        "{0} [disable]",
+    ),
+    translation(
+        "Search installed plugins",
+        "インストール済みプラグインを検索",
+        "搜索已安装插件",
+        "Rechercher les plugins installés",
+    ),
+    translation(
+        "enable / disable",
+        "有効 / 無効",
+        "启用 / 停用",
+        "activer / désactiver",
+    ),
+    translation("Version {0}", "バージョン {0}", "版本 {0}", "Version {0}"),
     translation(
         "Running command",
         "コマンドを実行中",

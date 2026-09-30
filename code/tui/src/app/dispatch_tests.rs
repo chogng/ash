@@ -229,7 +229,7 @@ fn status_mcp_connectors_and_skills_return_real_surfaces() {
         invocation(TuiSlashCommandAction::Mcp, ""),
         &mut app,
     );
-    assert_eq!(app.list_selection().unwrap().title(), "MCP servers");
+    assert_eq!(app.list_selection().unwrap().title(), "Extensions");
     assert!(app.list_selection().unwrap().search().is_some());
     app.update(AppEvent::CommandPanelClosed);
 
@@ -251,8 +251,8 @@ fn status_mcp_connectors_and_skills_return_real_surfaces() {
     );
     assert_eq!(app.status(), &Status::Ready);
     let selection = app.list_selection().unwrap();
-    assert_eq!(selection.title(), "Skills");
-    assert_eq!(selection.active_tab().label(), "All (2)");
+    assert_eq!(selection.title(), "Extensions");
+    assert_eq!(selection.active_tab().label(), "Skills");
     assert_eq!(
         selection
             .visible_items()
@@ -358,7 +358,7 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
     );
 
     let all = app.list_selection().unwrap();
-    assert_eq!(all.active_tab().label(), "All (2)");
+    assert_eq!(all.active_tab().label(), "Skills");
     assert_eq!(
         all.visible_items()
             .iter()
@@ -398,11 +398,12 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
     )
     .unwrap();
     app.update(SkillEvent::SettingsUpdated(view));
-    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     let disabled = app.list_selection().unwrap();
-    assert_eq!(disabled.active_tab().label(), "Off (1)");
-    assert_eq!(disabled.visible_items()[0].label(), "skill-creator");
+    assert_eq!(disabled.active_tab().label(), "Skills");
+    assert_eq!(
+        disabled.visible_items()[1].label(),
+        "skill-creator [disable]"
+    );
     let action = app
         .handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
         .unwrap();
@@ -411,7 +412,7 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
         enablement,
     }) = action
     else {
-        panic!("Enter should enable a skill from the Off tab");
+        panic!("Enter should enable the disabled skill");
     };
     assert_eq!(skill_id.name.as_str(), "skill-creator");
     assert_eq!(enablement, SkillEnablementDto::Enabled);
@@ -423,11 +424,9 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
     )
     .unwrap();
     app.update(SkillEvent::SettingsUpdated(view));
-    app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE));
     let enabled = app.list_selection().unwrap();
-    assert_eq!(enabled.active_tab().label(), "On (2)");
+    assert_eq!(enabled.active_tab().label(), "Skills");
     assert_eq!(enabled.visible_items().len(), 2);
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     let action = app
         .handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
         .unwrap();

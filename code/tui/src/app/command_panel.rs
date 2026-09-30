@@ -110,6 +110,7 @@ pub(crate) enum CommandPanel {
 
 #[derive(Debug)]
 pub(crate) enum CommandPanelOutcome {
+    ExtensionTab(crate::extensions::Tab),
     Dirs(DirSelectionAction),
     GitBranch(BranchSelectionAction),
     GitWorktree(WorktreeSelectionAction),
@@ -343,7 +344,8 @@ impl CommandPanel {
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent, area: Rect) -> CommandPanelOutcome {
-        match self {
+        let previous = self.extension_tab();
+        let outcome = match self {
             Self::Help(content) | Self::Loading(content) | Self::Usage(content) => {
                 map_read_only(content.handle_key(key))
             }
@@ -393,7 +395,14 @@ impl CommandPanel {
                 map_selection(content.handle_key(key), CommandPanelOutcome::StatusLine)
             }
             Self::Theme(content) => CommandPanelOutcome::Theme(content.handle_key(key)),
+        };
+        if let Some(tab) = self.extension_tab()
+            && previous.is_some()
+            && previous != Some(tab)
+        {
+            return CommandPanelOutcome::ExtensionTab(tab);
         }
+        outcome
     }
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
@@ -534,13 +543,20 @@ impl CommandPanel {
                 CommandPanelOutcome::Model,
             );
         }
-        if let Self::Marketplace(panel) = self
-            && let list_selection::ListSelectionPointerTarget::Tab(index) = target
+        if let list_selection::ListSelectionPointerTarget::Tab(_) = target
+            && self.extension_tab().is_some()
         {
-            return panel
-                .select_tab(*index)
-                .map(CommandPanelOutcome::Marketplace)
-                .unwrap_or(CommandPanelOutcome::Consumed);
+            if matches!(self, Self::Marketplace(panel) if !panel.can_switch_tabs()) {
+                return CommandPanelOutcome::Consumed;
+            }
+            let previous = self.extension_tab();
+            self.list_selection_mut().unwrap().focus_pointer(target);
+            if let Some(tab) = self.extension_tab()
+                && previous != Some(tab)
+            {
+                return CommandPanelOutcome::ExtensionTab(tab);
+            }
+            return CommandPanelOutcome::Consumed;
         }
 
         if self

@@ -359,8 +359,9 @@ impl ListSelectionState {
 
     pub(super) fn item_rows(&self, width: u16) -> Vec<(usize, usize)> {
         let mut rows = Vec::new();
-        for (index, item) in self.visible_items().iter().enumerate() {
-            if index > 0 && item.section_divider() {
+        let items = self.visible_items();
+        for (index, item) in items.iter().enumerate() {
+            if index > 0 && item.section_divider() && !items[index - 1].expandable_group() {
                 rows.push((index, 1));
             }
             rows.push((index, 0));
@@ -539,6 +540,23 @@ fn segmented_prefix_width(total: usize) -> usize {
     2 + total * 2 + total.saturating_sub(1) + 3
 }
 
+fn title_spans<'a>(
+    item: &'a ListSelectionItem,
+    style: Style,
+    context: RenderContext<'_>,
+) -> Vec<Span<'a>> {
+    if item.disabled_suffix()
+        && let Some(title) = item.label().strip_suffix(" [disable]")
+    {
+        vec![
+            Span::styled(title, style),
+            Span::styled(" [disable]", style.fg(context.danger())),
+        ]
+    } else {
+        vec![Span::styled(item.label(), style)]
+    }
+}
+
 fn draw_item(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -599,10 +617,12 @@ fn draw_item(
         let value = item.columns().map_or("", |c| c.trailing.as_str());
         let value_width = (value.width() as u16).min(area.width.saturating_sub(2));
         frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(marker, marker_style),
-                Span::styled(item.label(), label_style),
-            ])),
+            Paragraph::new(Line::from(
+                vec![Span::styled(marker, marker_style)]
+                    .into_iter()
+                    .chain(title_spans(item, label_style, context))
+                    .collect::<Vec<_>>(),
+            )),
             Rect::new(
                 area.x,
                 area.y,

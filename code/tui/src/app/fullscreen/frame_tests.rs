@@ -1636,7 +1636,7 @@ fn hooks_panel_opens_fullscreen_and_restores_input_after_close() {
     app.update(crate::hooks::Event::Opened(
         std::collections::BTreeMap::new(),
     ));
-    assert_eq!(app.list_selection().unwrap().title(), "Hooks");
+    assert_eq!(app.list_selection().unwrap().title(), "Extensions");
     crate::tui_assert_snapshot!("hooks_fullscreen", render(&app, 80, 20));
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_none());

@@ -172,7 +172,7 @@ TUI 不扫描 Skill 正文；完整 `SKILL.md` 由后端在接受任务后按需
 | 会话管理 | `/agents` 与 `/sessions` 打开同一管理器；`/subagents` 进入当前会话的 Thread 切换区 |
 | 回退 | `/rewind` 或空输入下 500 ms 内连续 Esc 创建子 Thread，继承目标之前已结束的任务，原 Thread 不变 |
 | 归档 | 归档当前会话成功后才创建新会话；归档列表的恢复不重跑已结束任务 |
-| Skills | 目录只展示元数据；All、On、Off 页签中的技能项使用带来源的 Skill 身份与配置版本修改启用状态，随后重读 |
+| Skills | 目录只展示元数据；统一扩展面板 Skills 页中的技能项使用带来源的 Skill 身份与配置版本修改启用状态，随后重读 |
 | Connectors | 支持设备码授权和断开；API key 与浏览器回调 OAuth 连接仍通过 Desktop 设置完成 |
 | 目录 | 添加目录和授予访问权限分别处理；使用 Session RPC 与权限版本，不写入 profile 设置 |
 | 设置和模型 | 带预期配置版本保存；各功能只接收自己需要的字段 |
@@ -372,11 +372,12 @@ inline 的真实边界检查使用 `just test-tui inline_repeated_status_keeps_h
 
 ## Marketplace 与语言服务器
 
-- `/marketplace [query]` 按全部、技能、插件、MCP、连接器、可执行程序、编程语言、主题、语言包和资源页签浏览；安装前审阅整个包的版本、能力和权限。
-- `/plugins` 直接打开 Marketplace 的“已安装”页签，按精确版本更新或卸载；使用中的包等待消费方释放后删除。
+- `/skills`、`/marketplace [query]`、`/mcp`、`/hooks`、`/plugins` 打开同一个扩展面板的对应页签。Skills、MCP、Hooks、Plugins 的停用项在标题后显示红色 `[disable]`；技能、MCP 和插件用 Enter 切换启停，Hook 在详情中启停。
+- Marketplace 按包身份中的来源分组，Enter 或左右键展开收起来源；来源下用技能、插件、MCP、连接器、可执行程序、编程语言、主题、语言包和资源作为分类行标题。安装前审阅整个包的版本、能力和权限。
+- Plugins 展示已安装插件的启停状态，按准确版本、摘要和配置版本提交 Enable / Disable；包的更新与卸载仍由 Marketplace 提供，使用中的包等待消费方释放后删除。
 - `/lsp [language-id]` 查看当前目录可用服务器，修改启用状态、程序路径或恢复配置默认值。
 - `/skills` 浏览和管理已发现的技能，`/marketplace` 搜索可安装技能；`/mcp`、`/connectors`、`/lsp` 的获取入口连接同一个包管理服务。Config 不重复提供语言服务器页签。
-- 分类页签共用已配置的 Marketplace 来源；发行配置已提供 `ash`，增加独立来源才需要配置新的 metadata/targets 地址与信任根。
+- Marketplace 展示返回包的来源；发行配置已提供 `ash`，增加独立来源才需要配置新的 metadata/targets 地址与信任根。
 - `marketplace.rs` 和 `lsp.rs` 拥有终端状态与交互，后端继续拥有安装、解析和配置。共享契约见 [Slash Commands](../../docs/slash-commands.md#marketplace-与领域管理入口)。
 - 定向验证：`just test ash-tui marketplace`；真实终端流程：`just test-tui actual_tui_marketplace_and_lsp_commands`。
 

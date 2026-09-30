@@ -163,8 +163,7 @@ fn marketplace_slash_commands_open_panels_without_creating_a_conversation() {
         initialized(true),
         json!({"instanceId":"test","generation":1,"packages":[]}),
         json!({"packages":[]}),
-        json!({"instanceId":"test","generation":1,"packages":[]}),
-        json!({"packages":[]}),
+        json!({"revision":1,"activationGeneration":1,"packages":[]}),
         serde_json::to_value(crate::test_support::empty_config_snapshot()).unwrap(),
         json!({"servers":[]}),
     ]);
@@ -175,9 +174,9 @@ fn marketplace_slash_commands_open_panels_without_creating_a_conversation() {
             TuiSlashCommandAction::Marketplace,
             "rust",
             "Marketplace",
-            "Marketplace",
+            "Extensions",
         ),
-        (TuiSlashCommandAction::Plugins, "", "Plugins", "Marketplace"),
+        (TuiSlashCommandAction::Plugins, "", "Plugins", "Extensions"),
         (
             TuiSlashCommandAction::Lsp,
             "rust",
@@ -221,14 +220,13 @@ fn marketplace_slash_commands_open_panels_without_creating_a_conversation() {
             "initialize",
             "marketplace/listInstalled",
             "marketplace/search",
-            "marketplace/listInstalled",
-            "marketplace/search",
+            "plugin/list",
             "config/read",
             "language/servers"
         ]
     );
     assert_eq!(requests[2]["params"]["query"], "rust");
-    assert_eq!(requests[2]["params"]["capabilityKind"], "skill");
+    assert_eq!(requests[2]["params"]["capabilityKind"], Value::Null);
 }
 
 #[test]
@@ -315,63 +313,28 @@ fn marketplace_category_groups_packages_and_keeps_shortcuts_out_of_search_input(
     assert_eq!(requests[2]["params"]["capabilityKind"], "skill");
     drop(requests);
     let state = app.list_selection().unwrap();
-    assert_eq!(state.tabs().len(), 9);
-    assert_eq!(state.active_tab().label(), "技能");
+    assert_eq!(state.tabs().len(), 5);
+    assert_eq!(state.active_tab().label(), "扩展市场");
     assert_eq!(
         state
             .visible_items()
             .iter()
             .map(|item| item.label())
             .collect::<Vec<_>>(),
-        ["已安装", "Web tools", "未安装", "Guide"]
+        ["ash", "插件", "Guide", "official", "插件", "Web tools"]
     );
     assert_eq!(
-        state.visible_items()[1].description(),
-        Some("来源：official\n描述：Installed bundle\n版本：1.0.0")
-    );
-    assert_eq!(
-        state.visible_items()[3].description(),
+        state.visible_items()[2].description(),
         Some("来源：ash\n描述：Search guide\n版本：2.0.0")
     );
-    assert_eq!(state.selected_item().unwrap().label(), "Web tools");
-    let buffer = frame_buffer(&app);
-    assert_eq!(buffer[(15, 11)].symbol(), "已");
-    assert!(
-        buffer[(15, 11)]
-            .modifier
-            .contains(ratatui::style::Modifier::BOLD)
+    assert_eq!(
+        state.visible_items()[5].description(),
+        Some("来源：official\n描述：Installed bundle\n版本：1.0.0")
     );
-    assert_eq!(buffer[(15, 12)].symbol(), "W");
-    assert_eq!(buffer[(15, 13)].symbol(), "未");
-    assert_eq!(buffer[(15, 14)].symbol(), "G");
+    assert_eq!(state.selected_item().unwrap().label(), "ash");
     crate::tui_assert_snapshot!("marketplace_category_sections", screen(&app));
 
-    app.handle_key(key(KeyCode::Up));
-    assert!(
-        app.list_selection()
-            .unwrap()
-            .search()
-            .unwrap()
-            .input_active()
-    );
-    app.handle_key(key(KeyCode::Down));
-    assert_eq!(
-        app.list_selection()
-            .unwrap()
-            .selected_item()
-            .unwrap()
-            .label(),
-        "Web tools"
-    );
-    app.handle_key(key(KeyCode::Down));
-    assert_eq!(
-        app.list_selection()
-            .unwrap()
-            .selected_item()
-            .unwrap()
-            .label(),
-        "Guide"
-    );
+    focus(&mut app, "guide@ash");
     app.handle_key(key(KeyCode::Right));
     crate::tui_assert_snapshot!("marketplace_expanded_package", screen(&app));
     assert_eq!(
@@ -594,7 +557,7 @@ fn marketplace_and_lsp_panels_render_in_inline_mode() {
         error: None,
     }));
     let buffer = frame_buffer(&app);
-    assert_eq!(buffer[(2, 28)].symbol(), "N");
+    assert_eq!(buffer[(2, 28)].symbol(), "P");
     assert_eq!(buffer[(2, 29)].symbol(), "G");
     crate::tui_assert_snapshot!("marketplace_inline_search", screen(&app));
     app.update(lsp::Event(lsp_page()));
@@ -702,48 +665,35 @@ fn chinese_app() -> App {
 }
 
 #[test]
-fn marketplace_tabs_share_backend_filters_and_keep_search_and_tab_focus() {
+fn marketplace_tabs_open_management_features_and_support_pointer_navigation() {
     let mut app = chinese_app();
     app.update(marketplace::Event(marketplace::Page::Catalog {
-        params: MarketplaceSearchParams {
-            query: "rust".into(),
-            ..Default::default()
-        },
+        params: MarketplaceSearchParams::default(),
         packages: vec![],
         installed: vec![],
         error: None,
     }));
-    let Some(AppCommand::Marketplace(marketplace::Command::Browse(params))) =
-        app.handle_key(key(KeyCode::Tab))
-    else {
-        panic!("tab must search skills")
-    };
-    assert_eq!(params.query, "rust");
-    assert_eq!(params.capability_kind, None);
-    assert_eq!(params.package_type.as_deref(), Some("plugin"));
-    assert!(app.list_selection().unwrap().tabs_focused());
-    app.update(marketplace::Event(marketplace::Page::Catalog {
-        params,
-        packages: vec![],
-        installed: vec![],
-        error: None,
-    }));
-    assert!(app.list_selection().unwrap().tabs_focused());
-    assert_eq!(app.list_selection().unwrap().active_tab().label(), "插件");
-    crate::tui_assert_snapshot!("marketplace_chinese_tabs", screen(&app));
+    assert_eq!(
+        app.list_selection().unwrap().active_tab().label(),
+        "扩展市场"
+    );
+    assert!(matches!(app.handle_key(key(KeyCode::Tab)),
+        Some(AppCommand::Thread(crate::thread::Command::ExecuteProductCommand(invocation)))
+        if invocation.command.name == "mcp"));
     let outcome = app.panels_mut().command_mut().unwrap().handle_click(
-        &ListSelectionPointerTarget::Tab(2),
+        &ListSelectionPointerTarget::Tab(4),
         Rect::new(0, 0, 100, 32),
         crate::widgets::list_selection::ListSelectionClick::Single,
     );
-    let Some(AppCommand::Marketplace(marketplace::Command::Browse(params))) =
-        app.handle_command_panel_outcome(outcome)
-    else {
-        panic!("click must search MCP")
-    };
-    assert_eq!(params.query, "rust");
-    assert_eq!(params.capability_kind, Some(Kind::Mcp));
-    assert_eq!(params.package_type, None);
+    assert!(matches!(app.handle_command_panel_outcome(outcome),
+        Some(AppCommand::Thread(crate::thread::Command::ExecuteProductCommand(invocation)))
+        if invocation.command.name == "plugins"));
+    app.update(marketplace::Event(marketplace::Page::Plugins(
+        serde_json::from_value(json!({"revision":1,"activationGeneration":1,"packages":[]}))
+            .unwrap(),
+    )));
+    assert_eq!(app.list_selection().unwrap().active_tab().label(), "插件");
+    crate::tui_assert_snapshot!("marketplace_chinese_tabs", screen(&app));
 }
 
 #[test]
@@ -777,7 +727,10 @@ fn marketplace_chinese_review_and_installed_actions_preserve_package_identity() 
         packages: vec![package("v1", "1.0.0")],
         selected: Some("v1".into()),
     }));
-    assert_eq!(app.list_selection().unwrap().active_tab().label(), "插件");
+    assert_eq!(
+        app.list_selection().unwrap().active_tab().label(),
+        "扩展市场"
+    );
     crate::tui_assert_snapshot!("marketplace_chinese_installed", screen(&app));
     app.handle_key(key(KeyCode::Enter));
     focus(&mut app, "remove");
@@ -836,7 +789,7 @@ fn skills_and_config_chinese_panels_keep_distinct_responsibilities() {
         }]
     })).unwrap())));
     let state = app.list_selection().unwrap();
-    assert_eq!(state.active_tab().label(), "全部 (1)");
+    assert_eq!(state.active_tab().label(), "技能");
     assert_eq!(state.visible_items()[0].label(), "skills");
     assert_eq!(
         state.visible_items()[0].description(),
@@ -896,7 +849,7 @@ fn marketplace_chinese_completion_and_argument_hint_keep_the_shared_command() {
 }
 
 #[test]
-fn marketplace_failed_tab_load_keeps_the_loaded_view_and_can_be_retried() {
+fn marketplace_failed_load_keeps_the_loaded_view_and_can_be_retried() {
     let mut app = App::new();
     app.update(marketplace::Event(marketplace::Page::Catalog {
         params: MarketplaceSearchParams::default(),
@@ -904,39 +857,229 @@ fn marketplace_failed_tab_load_keeps_the_loaded_view_and_can_be_retried() {
         installed: vec![],
         error: None,
     }));
-    assert!(matches!(
-        app.handle_key(key(KeyCode::Tab)),
-        Some(AppCommand::Marketplace(marketplace::Command::Browse(MarketplaceSearchParams {package_type:Some(ref package_type),..}))) if package_type == "plugin"
-    ));
     let Some(CommandPanel::Marketplace(panel)) = app.panels_mut().command_mut() else {
         panic!("missing marketplace")
     };
     panel.begin_request();
-    assert_eq!(panel.select_tab(1), None);
     panel.fail("Installation records unavailable".into());
-    assert_eq!(panel.state().active_tab().label(), "Skills");
+    assert_eq!(panel.state().active_tab().label(), "Marketplace");
     assert_eq!(
         panel.state().message(),
         Some("Installation records unavailable")
     );
     assert!(matches!(
-        app.handle_key(key(KeyCode::Tab)),
-        Some(AppCommand::Marketplace(marketplace::Command::Browse(MarketplaceSearchParams {package_type:Some(ref package_type),..}))) if package_type == "plugin"
+        app.handle_key(key(KeyCode::Char('r'))),
+        Some(AppCommand::Marketplace(marketplace::Command::Browse(_)))
     ));
-    for _ in 0..2 {
-        app.update(marketplace::Event(marketplace::Page::Catalog {
-            params: MarketplaceSearchParams {
-                package_type: Some("plugin".into()),
-                ..Default::default()
-            },
-            packages: vec![],
-            installed: vec![],
-            error: None,
-        }));
-        assert!(app.list_selection().unwrap().tabs_focused());
+}
+
+#[test]
+fn marketplace_sources_collapse_with_keyboard_and_pointer_and_keep_packages_under_categories() {
+    let mut app = App::new();
+    app.update(marketplace::Event(marketplace::Page::Catalog {
+        params: MarketplaceSearchParams::default(),
+        packages: serde_json::from_value(json!([
+            {"id":"guide@ash","version":"1","packageType":"skill","displayName":"Guide","description":"Guide skill"},
+            {"id":"tools@claude-plugins-official","version":"1","packageType":"plugin","displayName":"Tools","description":"Tool bundle"},
+            {"id":"review@openai","version":"1","packageType":"skill","displayName":"Review","description":"Review skill"}
+        ])).unwrap(), installed: vec![], error: None,
+    }));
+    assert_eq!(
+        app.list_selection()
+            .unwrap()
+            .visible_items()
+            .iter()
+            .map(|item| item.label())
+            .collect::<Vec<_>>(),
+        [
+            "ash",
+            "Skills",
+            "Guide",
+            "claude-plugins-official",
+            "Plugins",
+            "Tools",
+            "openai",
+            "Skills",
+            "Review"
+        ]
+    );
+    assert!(app.handle_key(key(KeyCode::Left)).is_none());
+    assert!(
+        !app.list_selection()
+            .unwrap()
+            .visible_items()
+            .iter()
+            .any(|item| item.label() == "Guide")
+    );
+    crate::tui_assert_snapshot!("marketplace_sources_collapsed", screen(&app));
+    app.handle_key(key(KeyCode::Right));
+    assert!(
+        app.list_selection()
+            .unwrap()
+            .visible_items()
+            .iter()
+            .any(|item| item.label() == "Guide")
+    );
+    let outcome = app.panels_mut().command_mut().unwrap().handle_click(
+        &ListSelectionPointerTarget::Item(ListSelectionItemId::new("source:ash")),
+        Rect::new(0, 0, 100, 32),
+        crate::widgets::list_selection::ListSelectionClick::Single,
+    );
+    assert!(app.handle_command_panel_outcome(outcome).is_none());
+    assert!(
+        !app.list_selection()
+            .unwrap()
+            .visible_items()
+            .iter()
+            .any(|item| item.label() == "Guide")
+    );
+    app.handle_key(key(KeyCode::Enter));
+    crate::tui_assert_snapshot!("marketplace_sources_expanded", screen(&app));
+    focus(&mut app, "guide@ash");
+    assert!(
+        matches!(app.handle_key(key(KeyCode::Char('i'))), Some(AppCommand::Marketplace(marketplace::Command::Review { package_id, .. })) if package_id == "guide@ash")
+    );
+}
+
+fn plugin_result(enabled: bool) -> ash_app_server_protocol::protocol::plugins::PluginListResult {
+    serde_json::from_value(json!({"revision":7,"activationGeneration":3,"packages":[{
+        "id":"tools@ash","version":"1.2.3","digest":"sha256:fixture","enabled":enabled,"granted":true,"effective":enabled,"revoked":false
+    }]})).unwrap()
+}
+
+#[test]
+fn marketplace_plugins_toggle_exact_package_revision_and_render_disabled_suffix_red() {
+    for enabled in [false, true] {
+        let mut app = chinese_app();
+        app.update(marketplace::Event(marketplace::Page::Plugins(
+            plugin_result(enabled),
+        )));
+        assert_eq!(app.list_selection().unwrap().active_tab().label(), "插件");
         assert_eq!(
-            app.list_selection().unwrap().active_tab().label(),
-            "Plugins"
+            app.list_selection().unwrap().visible_items()[0].label(),
+            if enabled {
+                "tools@ash"
+            } else {
+                "tools@ash [disable]"
+            }
+        );
+        if !enabled {
+            let buffer = frame_buffer(&app);
+            let marker = buffer
+                .content
+                .windows(9)
+                .find(|cells| {
+                    cells.iter().map(|cell| cell.symbol()).collect::<String>() == "[disable]"
+                })
+                .unwrap();
+            let context = app.render_context();
+            assert!(marker.iter().all(|cell| cell.fg == context.danger()));
+            crate::tui_assert_snapshot!("plugins_chinese_disabled", screen(&app));
+        }
+        let command = match app.handle_key(key(KeyCode::Enter)).unwrap() {
+            AppCommand::Marketplace(
+                command @ marketplace::Command::SetPluginEnablement { revision: 7, .. },
+            ) => command,
+            _ => panic!("expected exact plugin enablement command"),
+        };
+        let (mut client, requests) = client([
+            json!({"revision":8,"activationGeneration":4,"disposition":"updated"}),
+            serde_json::to_value(plugin_result(!enabled)).unwrap(),
+        ]);
+        app.update(marketplace::execute(&mut client, command).unwrap());
+        let requests = requests.lock().unwrap();
+        assert_eq!(
+            requests[0]["method"],
+            if enabled {
+                "plugin/disable"
+            } else {
+                "plugin/enable"
+            }
+        );
+        assert_eq!(requests[0]["params"]["expectedRevision"], 7);
+        assert_eq!(requests[0]["params"]["id"], "tools@ash");
+        assert_eq!(requests[0]["params"]["version"], "1.2.3");
+        assert_eq!(requests[0]["params"]["digest"], "sha256:fixture");
+        assert_eq!(requests[1]["method"], "plugin/list");
+        assert_eq!(
+            app.list_selection().unwrap().visible_items()[0].label(),
+            if enabled {
+                "tools@ash [disable]"
+            } else {
+                "tools@ash"
+            }
         );
     }
+}
+
+#[test]
+fn management_tabs_cycle_through_feature_commands_and_empty_pages_focus_tabs() {
+    let mut app = App::new();
+    app.update(crate::skills::Event::SettingsOpened(
+        crate::skills::skill_choices(
+            &serde_json::from_value(json!({"generation":1,"skills":[],"diagnostics":[]})).unwrap(),
+        ),
+    ));
+    for (index, command) in [
+        (0, "marketplace"),
+        (1, "mcp"),
+        (2, "hooks"),
+        (3, "plugins"),
+        (4, "skills"),
+    ] {
+        assert_eq!(app.list_selection().unwrap().active_tab_index(), index);
+        let next = app.handle_key(key(KeyCode::Tab));
+        assert!(
+            matches!(next, Some(AppCommand::Thread(crate::thread::Command::ExecuteProductCommand(invocation))) if invocation.command.name == command)
+        );
+        match command {
+            "marketplace" => app.update(marketplace::Event(marketplace::Page::Catalog {
+                params: MarketplaceSearchParams::default(),
+                packages: vec![],
+                installed: vec![],
+                error: None,
+            })),
+            "mcp" => app.update(crate::mcp::Event::SettingsOpened(crate::mcp::mcp_choices(
+                &Default::default(),
+            ))),
+            "hooks" => app.update(crate::hooks::Event::Opened(Default::default())),
+            "plugins" => app.update(marketplace::Event(marketplace::Page::Plugins(
+                serde_json::from_value(
+                    json!({"revision":1,"activationGeneration":1,"packages":[]}),
+                )
+                .unwrap(),
+            ))),
+            "skills" => app.update(crate::skills::Event::SettingsOpened(
+                crate::skills::skill_choices(
+                    &serde_json::from_value(json!({"generation":1,"skills":[],"diagnostics":[]}))
+                        .unwrap(),
+                ),
+            )),
+            _ => unreachable!(),
+        }
+        if command != "hooks" {
+            assert!(app.list_selection().unwrap().tabs_focused());
+        }
+    }
+}
+
+#[test]
+fn management_hook_details_return_to_the_same_tab_without_another_request() {
+    let mut app = App::new();
+    app.update(crate::hooks::Event::Opened(
+        serde_json::from_value(json!({"review":{
+            "id":"review","event":"afterTool","matcher":{"toolNames":[]},
+            "action":{"type":"process","program":"review-hook","args":[]},"enablement":"disabled"
+        }}))
+        .unwrap(),
+    ));
+    assert_eq!(
+        app.list_selection().unwrap().visible_items()[0].label(),
+        "review [disable]"
+    );
+    assert!(app.handle_key(key(KeyCode::Enter)).is_none());
+    assert_eq!(app.list_selection().unwrap().title(), "review");
+    assert!(app.handle_key(key(KeyCode::Esc)).is_none());
+    assert_eq!(app.list_selection().unwrap().title(), "Extensions");
+    assert_eq!(app.list_selection().unwrap().active_tab().label(), "Hooks");
 }

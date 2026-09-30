@@ -13,6 +13,7 @@ mod issues;
 mod keymap;
 mod keymap_setup;
 mod lsp;
+mod extensions;
 mod marketplace;
 mod mcp;
 mod memories;

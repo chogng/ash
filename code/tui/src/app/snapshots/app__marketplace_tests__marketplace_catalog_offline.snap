@@ -5,17 +5,17 @@ expression: screen(&app)
   .                                                                            [— / —] [Dashboard]  
                                                                                                     
                                                                                                     
-            ┌── Marketplace ──────────────────────────────────────────────────────[✗]─┐             
+            ┌── Extensions ───────────────────────────────────────────────────────[✗]─┐             
             │                                                                         │             
-            │   Skills    Plugins    MCP    Connectors    Executables    Languages    │             
-            │   Themes    Localizations    Assets                                     │             
+            │   Skills    Marketplace    MCP    Hooks    Plugins                      │             
             │                                                                         │             
             │  ╭────────────────────────────────────────────────────────────────────╮ │             
             │  │ Search Marketplace; Enter to search                                │ │             
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
             │  server error -32000: Catalog offline                                   │             
-            │  Installed                                                              │             
-            │> web                                                                  + │             
+            │> official                                                             - │             
+            │  Skills ─────────────────────────────────────────────────────────────── │             
+            │  web@official                                                         + │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
@@ -28,7 +28,7 @@ expression: screen(&app)
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
-            │  / search · ←/→ details · u uninstall · r refresh                       │             
+            │  / search · ←/→ details · i install · r refresh                         │             
   ──────────└─────────────────────────────────────────────────────────────────────────┘───────────  
   > Build anything                                                                                  
   ─────────────────────────────────────────────────────────────────────────────── Automatic model

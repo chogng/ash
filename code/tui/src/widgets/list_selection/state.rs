@@ -34,6 +34,11 @@ pub(crate) struct ListSelectionItem {
     preview: Option<ListSelectionPreview>,
     section_heading: bool,
     section_divider: bool,
+    disabled_suffix: bool,
+    // Group members remain in the ordered list so rendering, scrolling and pointer
+    // targets share exactly the same visible rows.
+    parent: Option<ListSelectionItemId>,
+    expandable_group: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -65,7 +70,33 @@ impl ListSelectionItem {
             preview: None,
             section_heading: false,
             section_divider: false,
+            disabled_suffix: false,
+            parent: None,
+            expandable_group: false,
         }
+    }
+
+    pub(crate) fn with_disabled_suffix(mut self) -> Self {
+        self.disabled_suffix = true;
+        self
+    }
+
+    pub(super) fn disabled_suffix(&self) -> bool {
+        self.disabled_suffix
+    }
+
+    pub(super) fn expandable_group(&self) -> bool {
+        self.expandable_group
+    }
+
+    pub(crate) fn with_parent(mut self, parent: ListSelectionItemId) -> Self {
+        self.parent = Some(parent);
+        self
+    }
+
+    pub(crate) fn as_expandable_group(mut self) -> Self {
+        self.expandable_group = true;
+        self
     }
 
     pub(crate) fn with_id(mut self, id: ListSelectionItemId) -> Self {
@@ -159,7 +190,7 @@ impl ListSelectionItem {
     }
 
     pub(crate) fn has_expandable_details(&self) -> bool {
-        self.id.is_some() && self.details().is_some()
+        self.id.is_some() && (self.details().is_some() || self.expandable_group)
     }
 
     pub(super) fn columns(&self) -> Option<&ListSelectionItemColumns> {
@@ -237,6 +268,7 @@ struct ListSelectionPresentation {
     key_hints: KeyHints,
     show_tabs: bool,
     initial_selected: usize,
+    initial_tab: Option<usize>,
     expandable: bool,
 }
 
@@ -270,6 +302,7 @@ impl ListSelectionModel {
                 key_hints: KeyHints::new(),
                 show_tabs: true,
                 initial_selected: 0,
+                initial_tab: None,
                 expandable: false,
             },
         }
@@ -313,6 +346,11 @@ impl ListSelectionModel {
 
     pub(crate) fn without_tab_bar(mut self) -> Self {
         self.presentation.show_tabs = false;
+        self
+    }
+
+    pub(crate) fn with_initial_tab(mut self, index: usize) -> Self {
+        self.presentation.initial_tab = Some(index);
         self
     }
 
@@ -445,6 +483,17 @@ impl ListSelectionState {
             message: None,
             expanded: Default::default(),
         };
+        if let Some(index) = state.model.initial_tab {
+            state.tabs.select(index);
+        }
+        state.expanded = state
+            .tabs
+            .tabs()
+            .iter()
+            .flat_map(|group| &group.items)
+            .filter(|item| item.expandable_group)
+            .filter_map(|item| item.id.clone())
+            .collect();
         state.selected_visible = (state.visible_len() > 0).then_some(
             state
                 .model
@@ -452,6 +501,9 @@ impl ListSelectionState {
                 .min(state.visible_len().saturating_sub(1)),
         );
         state.skip_section_heading(ListSelectionDirection::Next);
+        if state.model.initial_tab.is_some() {
+            state.focus_selected_item_or_tabs();
+        }
         state
     }
 
@@ -792,6 +844,16 @@ impl ListSelectionState {
             && key.kind == KeyEventKind::Press
             && self.model.activation.matches(key)
         {
+            if self
+                .selected_item()
+                .is_some_and(|item| item.expandable_group)
+                && let Some(id) = self.selected_item_id()
+            {
+                if !self.expanded.remove(&id) {
+                    self.expanded.insert(id);
+                }
+                return ListSelectionInputOutcome::Consumed;
+            }
             return self
                 .selected_item_id()
                 .map(ListSelectionInputOutcome::Activate)
@@ -981,7 +1043,18 @@ impl ListSelectionState {
     fn visible_indices(&self) -> Vec<usize> {
         let normalized_query = self.query().to_lowercase();
         if !self.model.filter_input || normalized_query.is_empty() {
-            return (0..self.active_tab().items.len()).collect();
+            return self
+                .active_tab()
+                .items
+                .iter()
+                .enumerate()
+                .filter(|(_, item)| {
+                    item.parent
+                        .as_ref()
+                        .is_none_or(|parent| self.expanded.contains(parent))
+                })
+                .map(|(index, _)| index)
+                .collect();
         }
         let mut matches = self
             .active_tab()
@@ -989,7 +1062,7 @@ impl ListSelectionState {
             .iter()
             .enumerate()
             .filter_map(|(index, item)| {
-                if item.section_heading() {
+                if item.section_heading() || item.expandable_group {
                     return None;
                 }
                 selection_match_score(item.label(), item.description(), &normalized_query)
