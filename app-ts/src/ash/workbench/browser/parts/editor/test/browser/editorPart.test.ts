@@ -578,7 +578,7 @@ test("EditorPart replaces preview tabs and preserves pinned tabs", async () => {
 test("EditorPart requires an explicit dirty-close decision", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
-	const workingCopy = new TestWorkingCopy(URI.file("C:\\project\\dirty.ts"));
+	const workingCopy = new TestWorkingCopy(URI.file("C:/project/dirty.ts"));
 	workingCopy.markDirty();
 	registry.register(descriptor(
 		"stanza.editor.code",
@@ -587,7 +587,7 @@ test("EditorPart requires an explicit dirty-close decision", async () => {
 	));
 	const fileDialogs = new TestFileDialogService(ConfirmResult.CANCEL, ConfirmResult.DONT_SAVE);
 	const editor = new EditorPart(dom.window.document.body, { registry, fileDialogService: fileDialogs });
-	const resourceInput = input("C:\\project\\dirty.ts");
+	const resourceInput = input("C:/project/dirty.ts");
 	await editor.openEditor(resourceInput);
 
 	assert.equal(await editor.closeEditor(resourceInput), false);
@@ -924,7 +924,7 @@ test("EditorPart registers and releases focusable breadcrumbs for its group", as
 	const control = breadcrumbs.getWidget(group.id);
 	assert.ok(control);
 	assert.equal(control.focus(), false);
-	await editor.openEditor(input("C:\\project\\folder\\breadcrumb.ts"));
+	await editor.openEditor(input("C:/project/folder/breadcrumb.ts"));
 	assert.equal(control.focus(), true);
 	assert.equal(dom.window.document.activeElement?.textContent, "breadcrumb.ts");
 	await editor.closeAllEditors({ skipConfirmation: true });
@@ -1333,7 +1333,7 @@ test("EditorPart shows a retryable placeholder when an editor cannot open", asyn
 		},
 	));
 	const editor = new EditorPart(dom.window.document.body, { registry });
-	const retryable = input("C:\\project\\document.retry");
+	const retryable = input("C:/project/document.retry");
 
 	await assert.rejects(editor.openEditor(retryable), /Temporary decoder failure/);
 	assert.equal(editor.activeInput, retryable);
