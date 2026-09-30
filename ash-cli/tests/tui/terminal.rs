@@ -10,6 +10,40 @@ use std::time::Duration;
 use std::time::Instant;
 
 #[test]
+fn inline_submitted_message_appears_once_while_working_and_after_completion() {
+    let fixture = Fixture::new();
+    let gate = Gate::new();
+    let server = ScenarioServer::start([
+        HttpResponse::streaming(["SETUP-DONE"], None),
+        HttpResponse::streaming(["REBASE-IN-PROGRESS", "REBASE-DONE"], Some(gate.clone())),
+        HttpResponse::streaming(["SECOND-REBASE-DONE"], None),
+    ]);
+    fixture.write_config(&server.base_url());
+    fixture.append_config("\n[tui]\nscreenMode = \"inline\"\n");
+    let mut process = TuiProcess::start_in_vscode(&fixture, &[], LARGE_SIZE);
+    process.wait_for_stable_screen("ask permissions on");
+    process.submit("start conversation");
+    process.wait_for_stable_screen("SETUP-DONE");
+    process.submit("rebase");
+    gate.wait_until_reached();
+    process.wait_for_screen("REBASE-IN-PROGRESS");
+    process.wait_for_screen("ctrl+c to interrupt");
+    let working = process.terminal_text();
+    gate.release();
+    assert_eq!(working.matches("> rebase").count(), 1, "{working}");
+    process.wait_for_stable_screen("REBASE-DONE");
+    assert_eq!(process.terminal_text().matches("> rebase").count(), 1);
+
+    // Identical text in a separate submission must remain a separate message.
+    process.submit("rebase");
+    process.wait_for_stable_screen("SECOND-REBASE-DONE");
+    assert_eq!(process.terminal_text().matches("> rebase").count(), 2);
+    assert_eq!(server.request_count(), 3);
+    process.quit();
+    assert_eq!(process.terminal_text().matches("> rebase").count(), 2);
+}
+
+#[test]
 fn actual_tui_inline_preserves_history_across_panels_resize_and_exit() {
     let fixture = Fixture::new();
     let replies = [

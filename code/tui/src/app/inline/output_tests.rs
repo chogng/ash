@@ -4,8 +4,10 @@ use super::super::tests::text;
 use super::Output;
 use super::tail;
 use crate::thread::Event as ThreadEvent;
+use ash_app_server_protocol::protocol::transcript::ThreadTranscriptChange;
 use ash_app_server_protocol::protocol::transcript::ThreadTranscriptEntry;
 use ash_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
+use ash_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
 use ash_protocol::ItemId;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
@@ -14,6 +16,8 @@ use ash_protocol::TurnId;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use ratatui::Terminal;
+use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
@@ -66,6 +70,76 @@ fn snapshot(entries: Vec<ThreadTranscriptEntry>) -> ThreadTranscriptSnapshot {
         revision: 1,
         entries,
     }
+}
+
+#[test]
+fn inline_user_echo_committed_before_turn_start_is_not_drawn_again() {
+    let mut app = app();
+    app.insert_text("rebase");
+    let Some(crate::app::AppCommand::Thread(crate::thread::Command::SubmitTurn { submission })) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("expected one Turn submission");
+    };
+    assert_eq!(submission.display_text, "rebase");
+    let mut output = Output::default();
+    output.select_thread(app.screen_thread_id());
+    assert!(output.pending(&app).is_empty());
+    let turn_id = TurnId::new("turn").unwrap();
+    let user = ThreadTranscriptEntry::Item {
+        entry_id: "user".into(),
+        turn_id: turn_id.clone(),
+        item: ThreadItem::UserMessage {
+            item_id: ItemId::new("user").unwrap(),
+            turn_id: turn_id.clone(),
+            text: "rebase".into(),
+        },
+        transient: false,
+    };
+    // Transcript notifications and the start-request completion use independent queues.
+    app.update(ThreadEvent::TranscriptUpdateReceived(Box::new(
+        ThreadTranscriptUpdateEnvelope {
+            session_id: SessionId::new("session").unwrap(),
+            thread_id: ThreadId::new("thread").unwrap(),
+            durable_sequence: 1,
+            revision: 1,
+            stream_cursor: None,
+            changes: vec![ThreadTranscriptChange::Upsert {
+                entry: user.clone(),
+            }],
+        },
+    )));
+    let pending = output.pending(&app);
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].text(), "rebase");
+    output.record(&pending[0]);
+    app.set_active_turn(turn_id);
+    assert_eq!(app.messages().len(), 1);
+    assert_eq!(
+        tail(&app).len(),
+        1,
+        "active-turn classification changed after the echo was printed"
+    );
+    assert!(
+        output.tail(&app).is_empty(),
+        "committed user echo reappeared in the live viewport"
+    );
+    // Stop the spinner for a deterministic frame while retaining the active Turn identity.
+    app.update(ThreadEvent::TurnCompleted);
+    let mut terminal = Terminal::new(TestBackend::new(60, 16)).unwrap();
+    terminal
+        .draw(|frame| output.draw_tail(frame, &app, &Default::default()))
+        .unwrap();
+    let rendered = text(terminal.backend().buffer());
+    assert!(!rendered.contains("rebase"));
+    crate::tui_assert_snapshot!("committed_user_echo_stays_out_of_live_viewport", rendered);
+    app.update(ThreadEvent::TranscriptSnapshotReceived(snapshot(vec![
+        user,
+    ])));
+    assert!(output.pending(&app).is_empty());
+    assert!(output.tail(&app).is_empty());
+    app.clear_active_turn();
+    assert!(output.pending(&app).is_empty());
 }
 
 #[test]

@@ -51,7 +51,7 @@ impl Output {
             self.write_view(terminal, app, &view, screen.width)?;
             self.record(&view);
         }
-        terminal.draw(|frame, links| draw(frame, app, links))?;
+        terminal.draw(|frame, links| self.draw_tail(frame, app, links))?;
         self.main_viewport_top = terminal.area()?.y;
         Ok(())
     }
@@ -72,10 +72,33 @@ impl Output {
         let width = terminal.screen_area()?.width;
         terminal.set_inline_height(1)?;
         self.write_header(terminal, app, width)?;
-        for view in self.pending(app).into_iter().chain(tail(app)) {
+        for view in self.pending(app).into_iter().chain(self.tail(app)) {
             self.write_view(terminal, app, &view, width)?;
         }
         Ok(())
+    }
+
+    fn draw_tail(
+        &self,
+        frame: &mut ratatui::Frame<'_>,
+        app: &App,
+        links: &std::cell::RefCell<crate::terminal::hyperlinks::FrameLinks>,
+    ) {
+        super::draw_content(frame, app, links, super::Transcript::Tail(self.tail(app)));
+    }
+
+    fn tail<'a>(&self, app: &'a App) -> Vec<CellView<'a>> {
+        // A transcript echo can be committed before the start request completes.
+        // Learning its active Turn must not bring already-written content back into the viewport.
+        tail(app)
+            .into_iter()
+            .filter(|view| {
+                !view
+                    .cell_id
+                    .as_ref()
+                    .is_some_and(|id| self.emitted.contains(id))
+            })
+            .collect()
     }
 
     fn write_header(
