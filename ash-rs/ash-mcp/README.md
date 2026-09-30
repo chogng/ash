@@ -117,7 +117,7 @@ config/list-changed 后的自动 safe-point rebuild，以及 progress/elicitatio
 ```text
 cargo test -p ash-mcp
 cargo clippy -p ash-mcp --all-targets -- -D warnings
-bazel test //ash-rs/mcp:mcp-unit-tests
+bazel test //ash-rs/ash-mcp:mcp-unit-tests
 ```
 
 `catalog_tests.rs` 覆盖 alias 的合法性、边界和 exact identity；`runtime_tests.rs` 使用 fake

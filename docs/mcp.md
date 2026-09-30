@@ -1,6 +1,6 @@
 # MCP 集成系统
 
-> Product runtime 当前实现：[`ash-rs/mcp/`](../ash-rs/mcp/README.md)，
+> Product runtime 当前实现：[`ash-rs/ash-mcp/`](../ash-rs/ash-mcp/README.md)，
 > Rust crate：`ash_mcp`
 > Low-level client 当前实现：[`ash-rs/rmcp-client/`](../ash-rs/rmcp-client/README.md)，
 > Rust crate：`ash_rmcp_client`
@@ -95,7 +95,7 @@ server 启动，Connector connected 也不等于自动批准每次 Tool call。
 - `ash-mcp` 已实现多 server `RequireAll` / `AllowPartial` 启动、分页和 byte/tool limits、
   deterministic alias、exact remote identity、connection/catalog generation、不可变
   catalog/binding、list-changed stale 标记、可取消 tools/call、结果大小限制和有界 shutdown；
-  其实现契约见 [`ash-rs/mcp/README.md`](../ash-rs/mcp/README.md)；
+  其实现契约见 [`ash-rs/ash-mcp/README.md`](../ash-rs/ash-mcp/README.md)；
 - `ash-config` 与 App Server config operations 已有 MCP server declaration CRUD；配置存在不
   等于 runtime 已启用；
 - `ash-protocol` 已有 provider-independent `ToolDefinition`、`ToolCall`、`ToolResult`、
@@ -662,7 +662,7 @@ queue saturation 和 output rejection。
 当前仅工具运行时保持单 crate、私有模块和显式公共导出：
 
 ```text
-ash-rs/mcp/src/
+ash-rs/ash-mcp/src/
 ├── lib.rs
 ├── definition.rs
 ├── error.rs
