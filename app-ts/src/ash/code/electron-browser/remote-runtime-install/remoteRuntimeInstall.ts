@@ -5,7 +5,7 @@ import { createRemoteRuntimeInstallProgressApi } from "../../../platform/remote/
 import { bindColorTheme } from "../../../platform/theme/browser/themeStyles.js";
 import { darkColorTheme } from "../../../platform/theme/common/colorTheme.js";
 import { lightColorTheme } from "../../../platform/theme/common/colorTheme.js";
-import { defaultProductIconTheme, type IColorTheme, type IThemeService } from "../../../platform/theme/common/themeService.js";
+import { noFileIconTheme, defaultProductIconTheme, type IColorTheme, type IThemeService } from "../../../platform/theme/common/themeService.js";
 import { Emitter, Event } from "../../../base/common/event.js";
 
 const api = createRemoteRuntimeInstallProgressApi();
@@ -15,8 +15,10 @@ const themeChanges = resources.add(new Emitter<IColorTheme>());
 const themeService: IThemeService = {
 	onDidColorThemeChange: themeChanges.event,
 	onDidProductIconThemeChange: Event.None,
+	onDidFileIconThemeChange: Event.None,
 	getColorTheme: () => preferredColorScheme.matches ? lightColorTheme : darkColorTheme,
 	getProductIconTheme: () => defaultProductIconTheme,
+	getFileIconTheme: () => noFileIconTheme,
 };
 resources.add(bindColorTheme(themeService, document.documentElement));
 const host = requiredElement("remote-install-host", HTMLParagraphElement);

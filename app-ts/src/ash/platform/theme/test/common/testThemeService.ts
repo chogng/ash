@@ -1,12 +1,13 @@
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Colors } from '../../common/colorRegistry.js';
-import { defaultProductIconTheme, type IColorTheme, type IThemeService } from '../../common/themeService.js';
+import { noFileIconTheme, defaultProductIconTheme, type IColorTheme, type IThemeService } from '../../common/themeService.js';
 
 export class TestThemeService extends Disposable implements IThemeService {
 	private readonly changed = this._register(new Emitter<IColorTheme>());
 	public readonly onDidColorThemeChange = this.changed.event;
 	public readonly onDidProductIconThemeChange = Event.None;
+	public readonly onDidFileIconThemeChange = Event.None;
 
 	constructor(private theme: IColorTheme) {
 		super();
@@ -15,6 +16,7 @@ export class TestThemeService extends Disposable implements IThemeService {
 
 	public getColorTheme(): IColorTheme { return this.theme; }
 	public getProductIconTheme() { return defaultProductIconTheme; }
+	public getFileIconTheme() { return noFileIconTheme; }
 
 	public setColorTheme(theme: IColorTheme): void {
 		if (theme === this.theme) { return; }

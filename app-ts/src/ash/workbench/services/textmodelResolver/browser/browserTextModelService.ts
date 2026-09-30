@@ -1,7 +1,7 @@
 import type { ILanguageConfigurationService } from '../../../../editor/common/languages/languageConfigurationRegistry.js';
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { Schemas } from '../../../../base/common/network.js';
 import { runWhenWindowIdle } from "../../../../base/browser/dom.js";
@@ -20,6 +20,7 @@ interface TextModelEntry {
 	readonly dirtyEmitter: Emitter<void>;
 	readonly externalChangeEmitter: Emitter<void>;
 	readonly modelChangeListener: IDisposable;
+	readonly languageChangeListener: IDisposable;
 	readonly fileChangeListener: IDisposable;
 	savedText: string;
 	revision: string | undefined;
@@ -47,12 +48,20 @@ export interface BrowserTextModelServiceOptions {
 }
 
 /** Shares text models by exact resource identity while references are open. */
-export class BrowserTextModelService implements IFileTextModelService {
+export class BrowserTextModelService extends Disposable implements IFileTextModelService {
 	private readonly entries = new Map<string, TextModelEntry>();
-	private readonly undoRedoParticipant = new RetainedModelUndoRedoHistory();
-	private disposed = false;
+	private readonly undoRedoParticipant = this._register(new RetainedModelUndoRedoHistory());
+	private readonly modelAdded = this._register(new Emitter<TextModel>());
+	private readonly modelRemoved = this._register(new Emitter<TextModel>());
+	private readonly modelLanguageChanged = this._register(new Emitter<{ readonly model: TextModel; readonly oldLanguageId: string }>());
+	public readonly onModelAdded = this.modelAdded.event;
+	public readonly onModelRemoved = this.modelRemoved.event;
+	public readonly onModelLanguageChanged = this.modelLanguageChanged.event;
+
+	public getModel(resource: URI): TextModel | null { return this.entries.get(resource.toString())?.model ?? null; }
 
 	constructor(private readonly resourceStore: ITextResourceStore, private readonly options: BrowserTextModelServiceOptions = {}) {
+		super();
 		if (options.maintenance && typeof options.maintenance.schedule !== "function") {
 			throw new TypeError("Text model maintenance requires a scheduler");
 		}
@@ -109,6 +118,7 @@ export class BrowserTextModelService implements IFileTextModelService {
 			dirtyEmitter,
 			externalChangeEmitter,
 			modelChangeListener: model.onDidChangeContent(() => this.refreshDirty(entry)),
+			languageChangeListener: model.onDidChangeLanguage(event => this.modelLanguageChanged.fire({ model, oldLanguageId: event.oldLanguage })),
 			fileChangeListener: this.resourceStore.onDidChange(event => this.acceptFileChange(entry, event)),
 			// Untitled content has no persisted baseline, including caller supplied initial text.
 			savedText: input.resource.scheme === Schemas.untitled ? "" : model.getText(),
@@ -121,19 +131,17 @@ export class BrowserTextModelService implements IFileTextModelService {
 			references: 0,
 		};
 		this.entries.set(key, entry);
+		this.modelAdded.fire(model);
 		return this.reference(key, entry);
 	}
 
-	dispose(): void {
-		if (this.disposed) return;
-		this.disposed = true;
-		for (const entry of this.entries.values()) this.disposeEntry(entry);
-		this.entries.clear();
-		this.undoRedoParticipant.dispose();
-	}
-
-	[Symbol.dispose](): void {
-		this.dispose();
+	protected override disposeCore(): void {
+		// Remove identities before notifying observers so they cannot resolve a closed model.
+		for (const [key, entry] of this.entries) {
+			this.entries.delete(key);
+			this.disposeEntry(entry);
+		}
+		super.disposeCore();
 	}
 
 	private reference(key: string, entry: TextModelEntry): TextModelReference {
@@ -278,10 +286,12 @@ export class BrowserTextModelService implements IFileTextModelService {
 		entry.disposed = true;
 		this.undoRedoParticipant.remember(entry.resource, entry.model);
 		entry.modelChangeListener.dispose();
+		entry.languageChangeListener.dispose();
 		entry.fileChangeListener.dispose();
 		entry.dirtyEmitter.dispose();
 		entry.externalChangeEmitter.dispose();
 		entry.model.dispose();
+		this.modelRemoved.fire(entry.model);
 	}
 
 	private ensureEntryAlive(entry: TextModelEntry): void {
@@ -289,7 +299,7 @@ export class BrowserTextModelService implements IFileTextModelService {
 	}
 
 	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("BrowserTextModelService is already disposed");
+		if (this.isDisposed) throw new ReferenceError("BrowserTextModelService is already disposed");
 	}
 }
 

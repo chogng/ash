@@ -13,7 +13,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { FileKind, FileNotFoundError, FileRevisionConflictError, IFileService, type IFileContent } from '../../../../platform/files/common/files.js';
 import { type IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { Colors } from '../../../../platform/theme/common/colorRegistry.js';
-import { defaultProductIconTheme, semanticTokenRuleSpecificity, type IColorTheme, type IProductIconTheme, type IThemeService } from '../../../../platform/theme/common/themeService.js';
+import { noFileIconTheme, defaultProductIconTheme, semanticTokenRuleSpecificity, type IFileIconTheme, type IColorTheme, type IProductIconTheme, type IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { getIconDefinition } from '../../../../platform/theme/common/iconRegistry.js';
 import { bindColorTheme } from '../../../../platform/theme/browser/themeStyles.js';
 import type { IResourceIconRenderer } from '../../../browser/labels.js';
@@ -35,6 +35,8 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 	private readonly resourceIconChange = this._register(new Emitter<void>());
 	public readonly onDidChangeResourceIcons = this.resourceIconChange.event;
 	private fileIconTheme: IWorkbenchFileIconTheme | undefined;
+	private readonly fileIconThemeChange = this._register(new Emitter<IFileIconTheme>());
+	public readonly onDidFileIconThemeChange = this.fileIconThemeChange.event;
 	private productIconTheme: IProductIconTheme = defaultProductIconTheme;
 	private readonly productIconThemeChange = this._register(new Emitter<IProductIconTheme>());
 	public readonly onDidProductIconThemeChange = this.productIconThemeChange.event;
@@ -100,6 +102,7 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 	}
 
 	public getProductIconTheme(): IProductIconTheme { return this.productIconTheme; }
+	public getFileIconTheme(): IFileIconTheme { return this.fileIconTheme ?? noFileIconTheme; }
 
 	private resolveColorTheme(): IColorTheme {
 		const preference = this.configurationService.getValue<string>(WorkbenchConfiguration.colorTheme);
@@ -131,6 +134,7 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 		if (this.iconStyles) {
 			this.iconStyles.textContent = theme ? theme.styleSheetContent + '\n.ash-file-icon{font-style:normal;font-weight:normal;line-height:16px;}' : '';
 		}
+		this.fileIconThemeChange.fire(this.getFileIconTheme());
 		this.resourceIconChange.fire();
 	}
 
@@ -143,8 +147,7 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 		this.productIconThemeChange.fire(theme);
 	}
 
-	public renderFileIcon(resource: URI, container: HTMLElement): void {
-		const classes = getIconClasses(undefined, this.languageService, resource, FileKind.File);
+	public renderFileIcon(resource: URI, container: HTMLElement, classes: readonly string[] = getIconClasses(undefined, this.languageService, resource, FileKind.File)): void {
 		const icon = this.fileIconTheme?.resolveFileIcon(classes, isDarkColorScheme(this.colorTheme.colorScheme));
 		container.classList.add(...classes);
 		container.classList.toggle('ash-file-icon', icon !== undefined);

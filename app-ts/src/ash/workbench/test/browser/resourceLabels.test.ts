@@ -1,3 +1,5 @@
+import { Lxicon } from '../../../base/common/lxicons.js';
+import { noFileIconTheme } from '../../../platform/theme/common/themeService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -12,14 +14,15 @@ import { DEFAULT_LABELS_CONTAINER, ResourceLabels, type IResourceIconRenderer } 
 
 test('ResourceLabels formats files and reacts to icon and decoration changes', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const root = URI.file('C:\\project');
-	const resource = URI.file('C:\\project\\src\\main.ts');
+	const root = URI.file('C:/project');
+	const resource = URI.file('C:/project/src/main.ts');
 	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
 	using decorations = new FileLabelDecorationService();
 	using labelService = new LabelService(workspace, OperatingSystem.Linux);
 	const iconThemeChange = new Emitter<void>();
 	const resourceIconRenderer: IResourceIconRenderer = {
 		onDidChangeResourceIcons: iconThemeChange.event,
+		getFileIconTheme: () => ({ ...noFileIconTheme, hasFileIcons: true }),
 		renderFileIcon: (_resource, container) => {
 			container.classList.add('test-file-icon');
 			container.textContent = 'T';
@@ -80,4 +83,38 @@ test('Workspace labels use the closest folder for nested resources', () => {
 	assert.equal(labels.getUriLabel(resource, { relative: true }), 'src • main.ts');
 	assert.equal(workspace.getWorkspaceFolder(URI.file('/project/src-other/main.ts'))?.id, 'root');
 	assert.equal(workspace.getWorkspaceFolder(URI.file('/elsewhere/main.ts')), null);
+});
+
+
+test('a label group updates icon visibility and releases all of its labels', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using workspace = new WorkspaceContextService({ id: 'test', folders: [] });
+		using changes = new Emitter<void>();
+		let renders = 0;
+		using labels = new ResourceLabels(DEFAULT_LABELS_CONTAINER, {
+			workspaceContextService: workspace,
+			resourceIconRenderer: { onDidChangeResourceIcons: changes.event, getFileIconTheme: () => ({ ...noFileIconTheme, hasFileIcons: true }), renderFileIcon: (_resource, container) => { renders++; container.textContent = 'F'; } },
+		});
+		const first = labels.create(dom.window.document.body);
+		const coloredIcon = { ...Lxicon.home, color: { id: 'editor.foreground' } };
+		first.setLabel('Custom', undefined, { icon: coloredIcon });
+		assert.equal(first.element.querySelector<SVGElement>('svg')?.style.color, 'var(--ash-editor-foreground)');
+		labels.setIconVisibility(false);
+		assert.equal(first.element.querySelector('svg'), null);
+		first.setFile(URI.file('/first.ts'));
+		const second = labels.create(dom.window.document.body);
+		second.setFile(URI.file('/second.ts'));
+		assert.deepEqual([...dom.window.document.querySelectorAll('.ash-icon-label-icon')].map(icon => [icon.textContent, icon.classList.contains('is-reserved')]), [['', false], ['', false]]);
+		labels.setIconVisibility(true);
+		assert.deepEqual([...dom.window.document.querySelectorAll('.ash-icon-label-icon')].map(icon => icon.textContent), ['F', 'F']);
+		first.dispose();
+		const before = renders;
+		changes.fire();
+		assert.equal(renders, before + 1);
+		labels.dispose();
+		changes.fire();
+		assert.equal(renders, before + 1);
+		assert.equal(dom.window.document.body.childElementCount, 0);
+	} finally { dom.window.close(); }
 });

@@ -1,3 +1,4 @@
+import { EditorInputSerializerRegistry } from '../../../../../services/editor/common/editorInputSerializer.js';
 import { createTestEditorServices } from '../../../../../test/common/testEditorServices.js';
 import type { IEditorPartOptions } from '../../editorPart.js';
 import Severity from '../../../../../../base/common/severity.js';
@@ -921,20 +922,38 @@ test('EditorPart does not reopen discarded untitled template content', async () 
 	dom.window.close();
 });
 
-test('EditorPart refreshes the tab when an input changes its label', async () => {
+test('EditorPart refreshes the tab when an input changes its label and custom icon', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const registry = new EditorPaneRegistry();
 	registry.registerEditorPane(descriptor('test.editor.default', '', () => new TestEditorPane('test.editor.default')));
 	const editor = createEditorPart(dom.window.document.body, { registry });
 	using labelChanges = new Emitter<void>();
 	let label = 'Untitled-1';
-	const untitled: EditorInput = { resource: URI.parse('untitled:/Untitled-1'), get label() { return label; }, onDidChangeLabel: labelChanges.event };
+	let icon = URI.parse('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>');
+	const untitled: EditorInput = { resource: URI.parse('untitled:/Untitled-1'), get label() { return label; }, getIcon: () => icon, onDidChangeLabel: labelChanges.event };
 	await editor.openEditor(untitled);
+	assert.equal(editor.domNode.querySelector<HTMLImageElement>('.ash-icon-label-image')?.src, icon.toString());
 	label = 'Scratch';
+	icon = URI.parse('data:image/png;base64,aWNvbg==');
 	labelChanges.fire();
 	assert.equal(editor.domNode.querySelector('.ash-tab .ash-icon-label-text')?.textContent, 'Scratch');
+	assert.equal(editor.domNode.querySelector<HTMLImageElement>('.ash-icon-label-image')?.src, icon.toString());
+	const workingSet = JSON.parse(JSON.stringify(editor.saveWorkingSet('custom-icon')));
+	await editor.applyWorkingSet('empty');
+	await editor.applyWorkingSet(workingSet);
+	assert.equal(editor.domNode.querySelector<HTMLImageElement>('.ash-icon-label-image')?.src, icon.toString());
 	editor.dispose();
 	dom.window.close();
+});
+
+test('editor input snapshots preserve semantic icon colors and reject malformed icons', () => {
+	const registry = new EditorInputSerializerRegistry();
+	const icon = { id: 'home', color: { id: 'editor.foreground' } };
+	const input: EditorInput = { resource: URI.parse('ash-welcome:/welcome'), getIcon: () => icon };
+	const snapshot = JSON.parse(JSON.stringify(registry.serialize(input)));
+	assert.deepEqual(registry.deserialize(snapshot).getIcon?.(), icon);
+	snapshot.value.icon = { id: 'home', color: 42 };
+	assert.throws(() => registry.deserialize(snapshot), /icon color must be a string/);
 });
 
 test("EditorPart keeps MRU order across groups and removes closed editors", async () => {

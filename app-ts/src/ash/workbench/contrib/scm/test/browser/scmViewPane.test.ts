@@ -1,3 +1,4 @@
+import { noFileIconTheme } from '../../../../../platform/theme/common/themeService.js';
 import assert from "node:assert/strict";
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DialogResult, type IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
@@ -984,6 +985,7 @@ function testEditorService(opened: Array<{ readonly input: EditorInput; readonly
 function testFileIconThemeService(): IResourceIconRenderer {
 	return {
 		onDidChangeResourceIcons: () => ({ dispose(): void {}, [Symbol.dispose](): void {} }),
+		getFileIconTheme: () => ({ ...noFileIconTheme, hasFileIcons: true }),
 		renderFileIcon: (resource, container) => { container.dataset.fileIcon = decodeURIComponent(resource.toEncodedComponents().path.split("/").at(-1) ?? ""); },
 	};
 }

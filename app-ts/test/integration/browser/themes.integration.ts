@@ -1,3 +1,9 @@
+import type { TextModelReference } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
+import '../../../src/ash/base/browser/ui/iconlabel/iconlabel.css';
+import { Event } from '../../../src/ash/base/common/event.js';
+import { DEFAULT_LABELS_CONTAINER, ResourceLabels } from '../../../src/ash/workbench/browser/labels.js';
+import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
+import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
 import manifest from '../../../../extensions/theme-seti/package.json' with { type: 'json' };
 import themeUrl from '../../../../extensions/theme-seti/icons/vs-seti-icon-theme.json?url';
 import fontUrl from '../../../../extensions/theme-seti/icons/seti.woff?url';
@@ -13,7 +19,7 @@ import '../../../src/ash/base/browser/ui/tree/tree.css';
 import '../../../src/ash/base/browser/ui/list/list.css';
 import '../../../src/ash/editor/browser/widget/richTextEditor/richTextEditorWidget.css';
 import '../../../src/ash/editor/contrib/codeAction/browser/media/codeAction.css';
-import '../../../src/ash/sessions/browser/parts/media/titlebarpart.css';
+import '../../../src/ash/sessions/browser/parts/titlebar/media/titlebarpart.css';
 import '../../../src/ash/workbench/browser/parts/editor/media/modalEditorPart.css';
 import '../../../src/ash/workbench/contrib/pdf/browser/media/pdfEditor.css';
 import '../../../src/ash/workbench/contrib/scm/browser/media/scm.css';
@@ -48,6 +54,9 @@ import { registerIcon } from '../../../src/ash/platform/theme/common/iconRegistr
 
 declare global {
 	interface Window {
+		changeIconModelLanguage(id: string): void;
+		releaseIconModels(): void;
+		disposeIconLabels(): void;
 		registerLateThemeColor(): void;
 		disposeThemeRoot(): void;
 		selectColorTheme(id: string): Promise<void>;
@@ -172,6 +181,21 @@ document.querySelector('#light')!.addEventListener('click', () => { void configu
 document.querySelector('#svg-icons')!.addEventListener('click', () => { void configuration.updateValue(WorkbenchConfiguration.productIconTheme, 'test-svg-product'); });
 document.querySelector('#default-icons')!.addEventListener('click', () => { void configuration.updateValue(WorkbenchConfiguration.productIconTheme, 'default'); });
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
+const workspace = resources.add(new WorkspaceContextService({ id: 'icon-models', folders: [] }));
+resources.add(languages.registerLanguage({ id: 'rust' }));
+const models = resources.add(new BrowserTextModelService({ onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '', revision: undefined }), save: async () => ({ revision: undefined }) }, { languageService: languages }));
+const labels = resources.add(new ResourceLabels(DEFAULT_LABELS_CONTAINER, { workspaceContextService: workspace, resourceIconRenderer: themes, fileModels: models, languageService: languages }));
+const modelReferences: TextModelReference[] = [];
+for (const [id, resource] of [['model-icon', URI.file('/workspace/no-extension')], ['untitled-icon', URI.parse('untitled:/Untitled-1')]] as const) {
+	modelReferences.push(resources.add(await models.acquire({ resource, languageId: 'typescript' }, new AbortController().signal)));
+	const host = document.createElement('button');
+	host.id = id;
+	document.querySelector('#root')!.append(host);
+	labels.create(host).setResource({ resource, name: id });
+}
+window.changeIconModelLanguage = id => { for (const reference of modelReferences) reference.model.setLanguage(languages.createById(id)); };
+window.releaseIconModels = () => { for (const reference of modelReferences) reference.dispose(); };
+window.disposeIconLabels = () => labels.dispose();
 document.body.dataset.ready = 'true';
 
 

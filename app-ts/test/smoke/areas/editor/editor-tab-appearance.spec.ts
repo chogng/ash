@@ -136,10 +136,13 @@ test('editor icon setting updates existing tabs and survives pinning', async ({ 
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const group = workbench.editors.groupAt(0);
-	const tab = group.tabs.filter({ hasText: /Untitled-/u });
+	await expect(group.tabs.filter({ hasText: /Untitled-/u }).locator('.ash-icon-label-icon')).toBeHidden();
+	await workbench.quickaccess.runCommand('workbench.action.openWelcome');
+	const tab = group.tabs.filter({ hasText: 'Welcome' });
 	const icon = tab.locator('.ash-icon-label-icon');
 	await expect(icon).toHaveAttribute('aria-hidden', 'true');
 	await expect(icon).toHaveClass(/is-reserved/u);
+	await expect(icon.locator('svg')).toHaveAttribute('data-ash-icon-id', 'home');
 	const tabId = await tab.getAttribute('id');
 	await workbench.quickaccess.runCommand('workbench.action.openSettings');
 	const settings = page.locator('.ash-settings-editor');

@@ -7,7 +7,7 @@ import type { IWorkspaceTrustRequestService, WorkspaceTrustChoice } from '../../
 import { invoke } from '../../../../platform/ipc/electron-browser/rendererIpc.js';
 import { bindColorTheme } from '../../../../platform/theme/browser/themeStyles.js';
 import { darkColorTheme, lightColorTheme } from '../../../../platform/theme/common/colorTheme.js';
-import { defaultProductIconTheme, type IThemeService } from '../../../../platform/theme/common/themeService.js';
+import { noFileIconTheme, defaultProductIconTheme, type IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { BrowserDialogHandler } from '../../../browser/parts/dialogs/dialog.js';
 
 /** Presents directory authorization in the window before or after Workbench startup. */
@@ -36,8 +36,10 @@ export class DirectoryPermissionDialog extends Disposable implements IWorkspaceT
 				const service: IThemeService = {
 					onDidColorThemeChange: Event.None,
 					onDidProductIconThemeChange: Event.None,
+					onDidFileIconThemeChange: Event.None,
 					getColorTheme: () => theme,
 					getProductIconTheme: () => defaultProductIconTheme,
+					getFileIconTheme: () => noFileIconTheme,
 				};
 				resources.add(bindColorTheme(service, this.container));
 			}

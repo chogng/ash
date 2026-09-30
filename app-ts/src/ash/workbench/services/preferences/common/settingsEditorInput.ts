@@ -1,3 +1,4 @@
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { URI } from '../../../../base/common/uri.js';
 import type { EditorInput } from '../../editor/common/editorService.js';
 
@@ -12,6 +13,7 @@ export function createSettingsEditorInput(category?: string): EditorInput {
 		resource: category ? SettingsEditorResource.with({ query: `category=${category}` }) : SettingsEditorResource,
 		contentType: SettingsEditorContentType,
 		label: 'Ash Settings',
+		getIcon: () => Lxicon.settings,
 		readOnly: true,
 	};
 }

@@ -1,4 +1,4 @@
-import type { IProductIconTheme } from '../../../../platform/theme/common/themeService.js';
+import type { IFileIconTheme, IProductIconTheme } from '../../../../platform/theme/common/themeService.js';
 
 export interface FileIconDefinition {
 	readonly character: string;
@@ -8,7 +8,7 @@ export interface FileIconDefinition {
 	readonly image: string;
 }
 
-export interface IWorkbenchFileIconTheme {
+export interface IWorkbenchFileIconTheme extends IFileIconTheme {
 	readonly id: string;
 	readonly label: string;
 	readonly styleSheetContent: string;

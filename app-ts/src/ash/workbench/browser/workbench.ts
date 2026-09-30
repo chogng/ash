@@ -709,13 +709,7 @@ export class Workbench extends Disposable {
 		this._register(themeService.onDidColorThemeChange(() => updateTextMateTheme()));
 		services.registerInstance(IUserThemeService, userThemeService ?? UnavailableUserThemeService);
 		services.registerInstance(IResourceIconRenderer, themeService);
-		services.registerInstance(IResourceLabelService, this._register(new ResourceLabelService({
-			workspaceContextService: workspaceContext,
-			resourceIconRenderer: themeService,
-			untitledTextEditorService,
-			fileLabelDecorationService: services.get(IFileLabelDecorationService),
-			labelService,
-		})));
+		services.registerInstance(IResourceLabelService, services.createInstance(ResourceLabelService));
 		const statusbarService = this._register(new StatusbarService());
 		services.registerInstance(IStatusbarService, statusbarService);
 		const languageServerStatusService = this._register(new AppServerLanguageServerStatusService(api.events, dialogService, outputService, statusbarService, workspaceContext));

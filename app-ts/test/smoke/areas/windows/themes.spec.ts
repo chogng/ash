@@ -52,7 +52,11 @@ test('Seti extension fonts render in Explorer and editor tabs and can be switche
 			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(values) } });
 		}, id);
 		await expect(icon).toHaveCount(id === null ? 0 : 1);
-		if (id === null) await expect(tabIcon).toBeEmpty();
+		if (id === null) {
+			await expect(tabIcon).toBeEmpty();
+			await expect(tabIcon).not.toHaveClass(/is-reserved/u);
+			await expect(tabIcon).toBeHidden();
+		}
 		else await expect.poll(() => tabIcon.textContent()).not.toBe('');
 		await expect(tab).toHaveAttribute('id', tabId!);
 	}

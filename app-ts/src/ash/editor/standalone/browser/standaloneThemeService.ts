@@ -2,7 +2,7 @@ import { Emitter, Event } from '../../../base/common/event.js';
 import { setIconResolver } from '../../../base/browser/ui/lxicons/lxicon.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { createColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
-import { defaultProductIconTheme, type IColorTheme } from '../../../platform/theme/common/themeService.js';
+import { noFileIconTheme, defaultProductIconTheme, type IColorTheme } from '../../../platform/theme/common/themeService.js';
 import { ColorScheme, isDarkColorScheme } from '../../../platform/theme/common/theme.js';
 import { Colors } from '../../../platform/theme/common/colorRegistry.js';
 import { getIconDefinition } from '../../../platform/theme/common/iconRegistry.js';
@@ -23,6 +23,7 @@ export class StandaloneThemeService extends Disposable implements IStandaloneThe
 	private colorTheme: IStandaloneTheme = withTokenTheme(lightColorTheme, vs);
 	public readonly onDidColorThemeChange = this.changed.event;
 	public readonly onDidProductIconThemeChange = Event.None;
+	public readonly onDidFileIconThemeChange = Event.None;
 	private readonly themes = new Map<string, IStandaloneTheme>();
 	private readonly definitions = new Map<string, IStandaloneThemeData>();
 	private colorMapOverride: Color[] | null = null;
@@ -106,6 +107,7 @@ export class StandaloneThemeService extends Disposable implements IStandaloneThe
 	}
 
 	public getProductIconTheme() { return defaultProductIconTheme; }
+	public getFileIconTheme() { return noFileIconTheme; }
 
 	public setColorTheme(theme: IColorTheme): void {
 		this.registerColorTheme(theme);

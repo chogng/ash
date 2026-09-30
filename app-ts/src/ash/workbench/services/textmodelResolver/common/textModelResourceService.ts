@@ -50,8 +50,13 @@ export interface ITextModelResourceService<TInput extends TextModelInput = TextM
 	acquire(input: TInput, signal: AbortSignal): Promise<TReference>;
 }
 
-/** Revalidates already open file models after a host focus change. */
+/** Shared open file models and their resource and language lifecycle. */
 export interface IFileTextModelService extends ITextModelResourceService {
+	readonly onModelAdded: Event<TextModel>;
+	readonly onModelRemoved: Event<TextModel>;
+	readonly onModelLanguageChanged: Event<{ readonly model: TextModel; readonly oldLanguageId: string }>;
+	getModel(resource: URI): TextModel | null;
+	/** Revalidates an open file after the host regains focus. */
 	refresh(resource: URI): Promise<void>;
 }
 

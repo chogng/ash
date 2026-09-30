@@ -53,13 +53,24 @@ export interface IProductIconTheme {
 
 export const defaultProductIconTheme: IProductIconTheme = Object.freeze({ id: 'default', label: 'Default', icons: new Map() });
 
+/** Capabilities of the active file icon theme, including the disabled state. */
+export interface IFileIconTheme {
+	readonly hasFileIcons: boolean;
+	readonly hasFolderIcons: boolean;
+	readonly hidesExplorerArrows: boolean;
+}
+
+export const noFileIconTheme: IFileIconTheme = Object.freeze({ hasFileIcons: false, hasFolderIcons: false, hidesExplorerArrows: false });
+
 /** Window-scoped access to the active frontend color theme. */
 export interface IThemeService {
 	readonly onDidColorThemeChange: Event<IColorTheme>;
 	readonly onDidProductIconThemeChange: Event<IProductIconTheme>;
+	readonly onDidFileIconThemeChange: Event<IFileIconTheme>;
 
 	getColorTheme(): IColorTheme;
 	getProductIconTheme(): IProductIconTheme;
+	getFileIconTheme(): IFileIconTheme;
 }
 
 export const IThemeService =

@@ -335,3 +335,27 @@ test('Workbench file models observe their hosts language configuration registrat
 	registration.dispose();
 	assert.equal(pairs.matchBracket(new Position(1, 1)), null);
 });
+
+
+test('file model observers see one shared model, language changes and final release', async () => {
+	using languages = new LanguageService();
+	using typescript = languages.registerLanguage({ id: 'typescript' });
+	using rust = languages.registerLanguage({ id: 'rust' });
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(new TestTextFileService('content')), { languageService: languages });
+	const resource = URI.parse('untitled:/observer');
+	const events: string[] = [];
+	using added = models.onModelAdded(model => { assert.equal(models.getModel(resource), model); events.push('added:' + model.getLanguageId()); });
+	using changed = models.onModelLanguageChanged(event => events.push(event.oldLanguageId + '->' + event.model.getLanguageId()));
+	using removed = models.onModelRemoved(() => { assert.equal(models.getModel(resource), null); events.push('removed'); });
+	const first = await models.acquire({ resource, languageId: 'typescript' }, new AbortController().signal);
+	const second = await models.acquire({ resource }, new AbortController().signal);
+	first.model.setLanguage(languages.createById('rust'));
+	first.dispose();
+	assert.equal(models.getModel(resource), second.model);
+	second.dispose();
+	assert.deepEqual(events, ['added:typescript', 'typescript->rust', 'removed']);
+	using reopened = await models.acquire({ resource, languageId: 'typescript' }, new AbortController().signal);
+	models.dispose();
+	assert.equal(models.getModel(resource), null);
+	assert.deepEqual(events.slice(3), ['added:typescript', 'removed']);
+});

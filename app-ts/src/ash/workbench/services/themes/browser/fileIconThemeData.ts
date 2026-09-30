@@ -10,6 +10,8 @@ interface Associations {
 
 /** Validates extension icon documents and resolves their package-relative resources. */
 export class FileIconThemeData implements IWorkbenchFileIconTheme {
+	public readonly hasFileIcons: boolean;
+	public readonly hasFolderIcons: boolean;
 	private constructor(
 		public readonly id: string,
 		public readonly label: string,
@@ -17,10 +19,15 @@ export class FileIconThemeData implements IWorkbenchFileIconTheme {
 		private readonly icons: ReadonlyMap<string, FileIconDefinition>,
 		private readonly normal: Associations,
 		private readonly light: Associations,
-	) {}
+		public readonly hidesExplorerArrows: boolean,
+	) {
+		this.hasFileIcons = [normal, light].some(associations => associations.file !== undefined || [...associations.selectors.keys()].some(selector => selector.endsWith('-file-icon')));
+		this.hasFolderIcons = [normal, light].some(associations => associations.folder !== undefined || associations.rootFolder !== undefined || [...associations.selectors.keys()].some(selector => selector.endsWith('-folder-icon')));
+	}
 
 	public static async load(id: string, label: string, value: unknown, readResource: (path: string) => Promise<Uint8Array>): Promise<FileIconThemeData> {
 		const document = record(value);
+		if (document.hidesExplorerArrows !== undefined && typeof document.hidesExplorerArrows !== 'boolean') { throw new Error('hidesExplorerArrows must be a boolean'); }
 		const fonts = new Map<string, { family: string; size: string }>();
 		const styles: string[] = [];
 		if (document.fonts !== undefined && !Array.isArray(document.fonts)) { throw new Error('Icon fonts must be an array'); }
@@ -67,7 +74,7 @@ export class FileIconThemeData implements IWorkbenchFileIconTheme {
 		const normal = associations(document, icons);
 		const light = associations(document.light ?? {}, icons);
 		styles.push(...suggestionStyles(icons, normal, light));
-		return new FileIconThemeData(id, label, styles.join('\n'), icons, normal, light);
+		return new FileIconThemeData(id, label, styles.join('\n'), icons, normal, light, document.hidesExplorerArrows === true);
 	}
 
 	public resolveFileIcon(classes: readonly string[], dark: boolean): FileIconDefinition | undefined {

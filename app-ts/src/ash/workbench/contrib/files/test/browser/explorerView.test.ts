@@ -1,3 +1,4 @@
+import { noFileIconTheme } from '../../../../../platform/theme/common/themeService.js';
 import { EditorOpenSource } from '../../../../../platform/editor/common/editor.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -134,6 +135,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 			dispose() {},
 			[Symbol.dispose]() {},
 		}),
+		getFileIconTheme: () => ({ ...noFileIconTheme, hasFileIcons: true }),
 		renderFileIcon: (resource, container) => {
 			container.classList.add("ash-seti-file-icon");
 			container.textContent = resource.path.endsWith(".ts") ? "T" : "F";

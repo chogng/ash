@@ -22,7 +22,8 @@
   height: 16px;
 }
 
-.ash-icon-label-icon .ash-icon {
+.ash-icon-label-icon .ash-icon,
+.ash-icon-label-image {
   width: 16px;
   height: 16px;
 }

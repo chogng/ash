@@ -1,3 +1,4 @@
+import type { ThemeIcon } from '../../../../base/common/themables.js';
 import type { URI } from "../../../../base/common/uri.js";
 import type { Event } from '../../../../base/common/event.js';
 import type { Range } from "../../../../editor/common/core/range.js";
@@ -10,7 +11,9 @@ export interface EditorInput {
 	readonly contentType?: string;
 	readonly languageId?: string;
 	readonly label?: string;
+	/** Also signals a change to the editor's custom icon. */
 	readonly onDidChangeLabel?: Event<void>;
+	getIcon?(): ThemeIcon | URI | undefined;
 	readonly readOnly?: boolean;
 	/** Whether the resource path is meaningful to show as breadcrumbs. */
 	readonly showBreadcrumbs?: boolean;

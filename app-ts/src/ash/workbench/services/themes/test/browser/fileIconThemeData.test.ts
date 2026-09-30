@@ -1,3 +1,8 @@
+import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
+import { IResourceIconRenderer } from '../../../../browser/labels.js';
+import { Event } from '../../../../../base/common/event.js';
+import { IFileTextModelService } from '../../../textmodelResolver/common/textModelResourceService.js';
+import { BrowserTextModelService } from '../../../textmodelResolver/browser/browserTextModelService.js';
 import { EditorTitleControl } from '../../../../browser/parts/editor/editorTitleControl.js';
 import { EditorGroupModel } from '../../../../common/editor/editorGroupModel.js';
 import { EditorShowIconsConfiguration, EditorTabsModeConfiguration } from '../../../editor/common/editorConfiguration.js';
@@ -8,7 +13,7 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
-import { DEFAULT_LABELS_CONTAINER, ResourceLabels, IResourceLabelService } from '../../../../browser/labels.js';
+import { DEFAULT_LABELS_CONTAINER, ResourceLabels } from '../../../../browser/labels.js';
 import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -36,6 +41,8 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		using typescript = languages.registerLanguage({ id: 'typescript', extensions: ['.ts'] });
 		using rust = languages.registerLanguage({ id: 'rust', extensions: ['.rs'] });
 		services.registerInstance(ILanguageService, languages);
+		using models = new BrowserTextModelService({ onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: request.bootstrapText ?? '', revision: undefined }), save: async () => ({ revision: undefined }) }, { languageService: languages });
+		services.registerInstance(IFileTextModelService, models);
 		using themes = services.createInstance(WorkbenchThemeService, browser.window.document.body);
 		themes.initialize();
 		const render = (name: string): HTMLElement => {
@@ -57,15 +64,16 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		let iconChanges = 0;
 		using iconListener = themes.onDidChangeResourceIcons(() => iconChanges++);
 		using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('C:/project') });
-		using labels = new ResourceLabels(DEFAULT_LABELS_CONTAINER, { workspaceContextService: workspace, resourceIconRenderer: themes });
+		using labels = new ResourceLabels(DEFAULT_LABELS_CONTAINER, { workspaceContextService: workspace, resourceIconRenderer: themes, fileModels: models, languageService: languages });
 		const label = labels.create(browser.window.document.body);
 		label.setFile(URI.file('C:/project/source.custom'));
-		services.registerInstance(IResourceLabelService, labels);
+		services.registerInstance(IResourceIconRenderer, themes);
+		using editorServices = createTestEditorServices(configuration, services);
 		const group = new EditorGroupModel();
 		const input = { resource: URI.file('C:/project/main.ts') };
 		group.openEditor(input);
 		const delegate: EditorTabsDelegate = { activate() {}, preview() {}, close() {}, toggleSticky() {}, startDrag() {}, isDragging: () => false, drop() {}, dropExternal() {}, endDrag() {} };
-		using title = services.createInstance(EditorTitleControl, browser.window.document.body, delegate, group, undefined, configuration, undefined, undefined, undefined, undefined, undefined);
+		using title = editorServices.createInstance(EditorTitleControl, browser.window.document.body, delegate, group, undefined, configuration, undefined, undefined, undefined, undefined, undefined);
 		const editors = [{ instanceId: 'main', input, panelId: 'main-panel', tabId: 'main-tab' }];
 		title.setEditors(editors, input);
 		const tab = title.domNode.querySelector<HTMLButtonElement>('[role="tab"]')!;
@@ -95,13 +103,36 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		assert.equal(iconChanges, 2);
 		assert.notEqual(labelIcon?.textContent, beforeRegistration);
 		assert.equal(labelIcon?.classList.contains('javascript-lang-file-icon'), true);
+		const modelInput = { resource: URI.file('/project/no-extension'), languageId: 'typescript' };
+		const modelReference = await models.acquire(modelInput, new AbortController().signal);
+		const modelLabel = labels.create(browser.window.document.body);
+		modelLabel.setFile(modelInput.resource);
+		const modelIcon = modelLabel.element.querySelector<HTMLElement>('.ash-icon-label-icon')!;
+		assert(modelIcon.classList.contains('typescript-lang-file-icon'));
+		const beforeLanguageChange = modelIcon.textContent;
+		modelReference.model.setLanguage(languages.createById('javascript'));
+		assert(modelIcon.classList.contains('javascript-lang-file-icon'));
+		assert.notEqual(modelIcon.textContent, beforeLanguageChange);
+		modelReference.dispose();
+		assert.equal(modelIcon.classList.contains('javascript-lang-file-icon'), false);
+		const untitledInput = { resource: URI.parse('untitled:/Untitled-1'), languageId: 'rust' };
+		using untitledReference = await models.acquire(untitledInput, new AbortController().signal);
+		modelLabel.setFile(untitledInput.resource);
+		assert(modelIcon.classList.contains('rust-lang-file-icon'));
+		let themeStateChanges = 0;
+		using themeStateListener = themes.onDidFileIconThemeChange(state => { themeStateChanges++; assert.equal(state, themes.getFileIconTheme()); });
+		assert.equal(themes.getFileIconTheme().hasFileIcons, true);
 		await configuration.updateValue(WorkbenchConfiguration.iconTheme, null);
 		themes.renderFileIcon(URI.file('C:/project/main.ts'), ts);
 		assert.deepEqual([ts.textContent, ts.style.fontFamily, ts.style.color], ['', '', '']);
 		assert.equal(browser.window.document.head.textContent, '');
+		assert.equal(themes.getFileIconTheme().hasFileIcons, false);
+		assert.equal(modelIcon.classList.contains('is-reserved'), false);
 		assert.equal(title.domNode.querySelector('.ash-sticky-editor-tabs-row .ash-icon-label-icon')?.textContent, '');
 		await configuration.updateValue(WorkbenchConfiguration.iconTheme, 'vs-seti');
 		assert.notEqual(render('main.ts').textContent, '');
+		assert.equal(themeStateChanges, 2);
+		modelLabel.dispose();
 		title.dispose();
 		assert.equal(labels.get(1), undefined);
 		themes.dispose();
@@ -115,6 +146,7 @@ test('icon documents reject escaping assets and missing definitions before activ
 	await assert.rejects(FileIconThemeData.load('bad', 'Bad', { fonts: [{ id: 'font', src: [{ path: '../outside.woff', format: 'woff' }] }], iconDefinitions: {} }, read), /inside/);
 	assert.equal(reads, 0);
 	await assert.rejects(FileIconThemeData.load('bad', 'Bad', { iconDefinitions: {}, file: 'absent' }, read), /Unknown file icon/);
+	await assert.rejects(FileIconThemeData.load('bad', 'Bad', { iconDefinitions: {}, hidesExplorerArrows: 'yes' }, read), /must be a boolean/);
 });
 
 test('folder completion classes resolve folder theme associations', async () => {
@@ -125,9 +157,11 @@ test('folder completion classes resolve folder theme associations', async () => 
 			lightSrc: { iconPath: 'light-src.svg' },
 		},
 		folder: 'folder',
+		hidesExplorerArrows: true,
 		folderNames: { src: 'src' },
 		light: { folderNames: { src: 'lightSrc' } },
 	}, async path => new TextEncoder().encode(path));
+	assert.deepEqual([theme.hasFileIcons, theme.hasFolderIcons, theme.hidesExplorerArrows], [false, true, true]);
 	const fallback = theme.resolveFileIcon(['folder-icon'], true);
 	const dark = theme.resolveFileIcon(['folder-icon', 'src-name-folder-icon'], true);
 	const light = theme.resolveFileIcon(['folder-icon', 'src-name-folder-icon'], false);

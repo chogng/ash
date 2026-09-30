@@ -260,3 +260,38 @@ test('TextMate Worker tokenizes hypothetical lines in context without changing t
 	expect(await page.evaluate(() => window.previewInTextMateWorker())).toEqual({ preview: ['[)":2', 'if:0'], unchanged: true, text: '"start\nend"\nif' });
 	expect(errors).toEqual([]);
 });
+
+
+test('open models update file and untitled icons in place and release their language state', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/themes.html');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	const host = page.locator('#model-icon');
+	const icon = host.locator('.ash-icon-label-icon');
+	const untitledIcon = page.locator('#untitled-icon .ash-icon-label-icon');
+	await expect(icon).toHaveClass(/typescript-lang-file-icon/u);
+	await expect(untitledIcon).toHaveClass(/typescript-lang-file-icon/u);
+	const glyph = await icon.textContent();
+	const retained = await icon.elementHandle();
+	await host.focus();
+	await page.evaluate(() => window.changeIconModelLanguage('rust'));
+	await expect(icon).toHaveClass(/rust-lang-file-icon/u);
+	await expect(untitledIcon).toHaveClass(/rust-lang-file-icon/u);
+	await expect(icon).not.toHaveText(glyph!);
+	await expect(host).toBeFocused();
+	expect(await retained!.evaluate(node => node === document.querySelector('#model-icon .ash-icon-label-icon'))).toBe(true);
+	await page.getByRole('button', { name: 'None', exact: true }).click();
+	await expect(icon).toBeHidden();
+	await expect(untitledIcon).not.toHaveClass(/is-reserved/u);
+	await page.getByRole('button', { name: 'Seti', exact: true }).click();
+	await expect(icon).toBeVisible();
+	await expect(icon).toHaveClass(/rust-lang-file-icon/u);
+	await page.evaluate(() => window.releaseIconModels());
+	await expect(icon).not.toHaveClass(/rust-lang-file-icon/u);
+	await expect(untitledIcon).not.toHaveClass(/rust-lang-file-icon/u);
+	await page.evaluate(() => window.disposeIconLabels());
+	await expect(host.locator('.ash-icon-label')).toHaveCount(0);
+	await page.getByRole('button', { name: 'None', exact: true }).click();
+	expect(errors).toEqual([]);
+});

@@ -1,3 +1,4 @@
+import type { ThemeIcon } from '../../../../base/common/themables.js';
 import { URI } from '../../../../base/common/uri.js';
 import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import type { EditorInput } from './editorService.js';
@@ -59,8 +60,17 @@ export const EditorInputSerializers = new EditorInputSerializerRegistry();
 const BaseEditorInputSerializer = Object.freeze({ typeId: 'workbench.editorInput.resource' });
 
 function serializeBaseEditorInput(input: EditorInput): unknown {
+	const icon = input.getIcon?.();
+	let serializedIcon: string | { id: string; color?: string } | undefined;
+	if (icon instanceof URI) {
+		serializedIcon = icon.toString();
+	} else if (icon) {
+		serializedIcon = { id: icon.id };
+		if (icon.color) serializedIcon.color = icon.color.id;
+	}
 	return Object.freeze({
 		resource: input.resource.toString(),
+		...(serializedIcon === undefined ? {} : { icon: serializedIcon }),
 		...(input.contentType === undefined ? {} : { contentType: input.contentType }),
 		...(input.languageId === undefined ? {} : { languageId: input.languageId }),
 		...(input.label === undefined ? {} : { label: input.label }),
@@ -79,8 +89,10 @@ function deserializeBaseEditorInput(value: unknown): EditorInput {
 	const readOnly = optionalBoolean(record.readOnly, 'serialized editor read-only state');
 	const showBreadcrumbs = optionalBoolean(record.showBreadcrumbs, 'serialized editor breadcrumbs');
 	const initialText = optionalString(record.initialText, 'serialized editor initial text');
+	const icon = deserializeIcon(record.icon);
 	return Object.freeze({
 		resource: URI.parse(resource),
+		...(icon === undefined ? {} : { getIcon: () => icon }),
 		...(contentType === undefined ? {} : { contentType }),
 		...(languageId === undefined ? {} : { languageId }),
 		...(label === undefined ? {} : { label }),
@@ -88,6 +100,15 @@ function deserializeBaseEditorInput(value: unknown): EditorInput {
 		...(showBreadcrumbs === undefined ? {} : { showBreadcrumbs }),
 		...(initialText === undefined ? {} : { initialText }),
 	});
+}
+
+function deserializeIcon(value: unknown): ThemeIcon | URI | undefined {
+	if (value === undefined) return undefined;
+	if (typeof value === 'string') return URI.parse(value);
+	const record = requireRecord(value, 'serialized editor icon');
+	const id = requireString(record.id, 'serialized editor icon ID');
+	const color = optionalString(record.color, 'serialized editor icon color');
+	return Object.freeze({ id, ...(color === undefined ? {} : { color: Object.freeze({ id: color }) }) });
 }
 
 export function isSerializedEditorInput(value: unknown): value is SerializedEditorInput {

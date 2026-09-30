@@ -1,3 +1,4 @@
+import { URI } from '../../common/uri.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -94,3 +95,21 @@ function managedHover(): IManagedHover {
 		[Symbol.dispose]() {},
 	};
 }
+
+
+test('IconLabel switches between file renderers, image icons and hidden icons without stale styles', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using label = new IconLabel(dom.window.document.body, { label: 'Custom', renderIcon: container => { container.style.fontFamily = 'file-font'; container.style.color = 'red'; container.textContent = 'F'; } });
+		const node = label.iconElement;
+		const image = URI.parse('data:image/png;base64,aWNvbg==');
+		label.setLabel('Custom', undefined, { iconPath: image });
+		assert.equal(label.iconElement, node);
+		assert.equal(node.style.cssText, '');
+		assert.equal(node.querySelector('img')?.src, image.toString());
+		assert.equal(node.querySelector('img')?.alt, '');
+		label.setLabel('Custom', undefined, { iconPath: image, hideIcon: true });
+		assert.equal(node.childElementCount, 0);
+		assert.equal(node.getAttribute('aria-hidden'), 'true');
+	} finally { dom.window.close(); }
+});

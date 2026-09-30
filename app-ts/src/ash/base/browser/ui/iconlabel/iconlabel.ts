@@ -2,6 +2,7 @@ import type { HoverContent } from '../hover/hover.js';
 import { getHoverDelegate, type IManagedHover } from '../hover/hoverDelegate.js';
 import { appendIcon } from '../lxicons/lxicon.js';
 import { getIconAriaLabel, type IMatch } from '../../../common/iconLabels.js';
+import { URI } from '../../../common/uri.js';
 import type { Icon } from '../../../common/icon.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../common/lifecycle.js';
 import { h, text as createText } from '../../dom.js';
@@ -25,6 +26,7 @@ export interface IconLabelValueOptions {
 	readonly separator?: string;
 	readonly supportIcons?: boolean;
 	readonly icon?: Icon;
+	readonly iconPath?: URI;
 	readonly renderIcon?: (container: HTMLSpanElement) => void;
 	readonly reserveIconSpace?: boolean;
 }
@@ -66,6 +68,7 @@ export class IconLabel extends Disposable {
 
 		this.iconElement = h(ownerDocument, 'span');
 		this.iconElement.className = 'ash-icon-label-icon';
+		this.iconElement.removeAttribute('style');
 		this.iconElement.setAttribute('aria-hidden', 'true');
 
 		this.labelContainer = h(ownerDocument, 'span');
@@ -89,6 +92,7 @@ export class IconLabel extends Disposable {
 			options?.hideIcon ? undefined : options?.renderIcon,
 			options?.reserveIconSpace === true,
 			options?.hideIcon === true,
+			options?.iconPath,
 		);
 
 		this.updateClasses(options);
@@ -113,14 +117,22 @@ export class IconLabel extends Disposable {
 		renderIcon: ((container: HTMLSpanElement) => void) | undefined = undefined,
 		reserveIconSpace = false,
 		hideIcon = false,
+		iconPath?: URI,
 	): void {
-		if (icon && renderIcon) throw new TypeError('IconLabel accepts either a semantic icon or an icon renderer');
+		if (Number(!!icon) + Number(!!renderIcon) + Number(!!iconPath) > 1) throw new TypeError('IconLabel accepts one icon source');
 		this.iconElement.replaceChildren();
 		this.iconElement.className = 'ash-icon-label-icon';
+		this.iconElement.removeAttribute('style');
 		this.iconElement.setAttribute('aria-hidden', 'true');
 		this.iconElement.classList.toggle('is-reserved', reserveIconSpace);
 		if (hideIcon) return;
-		if (icon) appendIcon(icon, this.iconElement);
+		if (iconPath) {
+			const image = this.element.ownerDocument.createElement('img');
+			image.className = 'ash-icon-label-image';
+			image.alt = '';
+			image.src = iconPath.toString();
+			this.iconElement.append(image);
+		} else if (icon) appendIcon(icon, this.iconElement);
 		else renderIcon?.(this.iconElement);
 	}
 

@@ -1,3 +1,4 @@
+import { noFileIconTheme } from '../../../../../platform/theme/common/themeService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -45,7 +46,7 @@ test('Open Editors follows editor groups, dirty state, activation, and close', a
 		dispose() {},
 		[Symbol.dispose]() {},
 	};
-	const icons: IResourceIconRenderer = { onDidChangeResourceIcons: Event.None, renderFileIcon() {} };
+	const icons: IResourceIconRenderer = { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() {} };
 
 	try {
 		const { OpenEditorsView } = await import('../../browser/views/openEditorsView.js');

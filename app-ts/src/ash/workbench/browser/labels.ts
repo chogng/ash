@@ -1,16 +1,23 @@
+import { appendIcon } from '../../base/browser/ui/lxicons/lxicon.js';
+import { colorCssVariable } from '../../platform/theme/common/colorUtils.js';
+import { ILanguageService } from '../../editor/common/languages/language.js';
+import { getIconClasses } from '../../editor/common/services/getIconClasses.js';
+import { IFileTextModelService } from '../services/textmodelResolver/common/textModelResourceService.js';
 import { IconLabel, type IconLabelValueOptions } from '../../base/browser/ui/iconlabel/iconlabel.js';
 import { getPathLabel, type IRelativePathProvider } from '../../base/common/labels.js';
 import { Emitter, Event } from '../../base/common/event.js';
 import { Disposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { basenameOrAuthority, dirnameResource, isEqualResource } from './resourceLabelHelpers.js';
-import type { URI } from '../../base/common/uri.js';
+import { URI } from '../../base/common/uri.js';
 import { operatingSystem } from '../../base/common/platform.js';
 import { createServiceIdentifier } from '../../platform/instantiation/common/instantiation.js';
+import type { IFileIconTheme } from '../../platform/theme/common/themeService.js';
+import type { ThemeIcon } from '../../base/common/themables.js';
 import { FileKind } from '../../platform/files/common/files.js';
-import type { ILabelService } from '../../platform/label/common/labelService.js';
-import type { IWorkspaceContextService } from '../../platform/workspace/common/workspace.js';
-import type { IUntitledTextEditorService } from '../services/untitled/common/untitledTextEditorService.js';
-import type { IFileLabelDecoration, IFileLabelDecorationChangeEvent, IFileLabelDecorationService } from '../services/labels/common/fileLabelDecorationService.js';
+import { ILabelService } from '../../platform/label/common/labelService.js';
+import { IWorkspaceContextService } from '../../platform/workspace/common/workspace.js';
+import { IUntitledTextEditorService } from '../services/untitled/common/untitledTextEditorService.js';
+import { IFileLabelDecorationService, type IFileLabelDecoration, type IFileLabelDecorationChangeEvent } from '../services/labels/common/fileLabelDecorationService.js';
 
 export interface IResourceLabelProps {
 	readonly resource?: URI | { readonly primary?: URI; readonly secondary?: URI };
@@ -19,7 +26,8 @@ export interface IResourceLabelProps {
 	readonly range?: { readonly startLineNumber: number; readonly endLineNumber?: number };
 }
 
-export interface IResourceLabelOptions extends IconLabelValueOptions {
+export interface IResourceLabelOptions extends Omit<IconLabelValueOptions, 'icon' | 'iconPath'> {
+	readonly icon?: ThemeIcon | URI;
 	readonly fileKind?: FileKind;
 	readonly fileDecorations?: { readonly colors: boolean; readonly badges: boolean };
 	readonly forceLabel?: boolean;
@@ -50,7 +58,8 @@ export interface IResourceLabelsContainer {
 /** Renders a resource icon using the active Workbench file icon theme. */
 export interface IResourceIconRenderer {
 	readonly onDidChangeResourceIcons: Event<void>;
-	renderFileIcon(resource: URI, container: HTMLElement): void;
+	getFileIconTheme(): IFileIconTheme;
+	renderFileIcon(resource: URI, container: HTMLElement, classes?: readonly string[]): void;
 }
 
 export const IResourceIconRenderer = createServiceIdentifier<IResourceIconRenderer>('resourceIconRenderer');
@@ -65,10 +74,12 @@ export interface ResourceLabelServices {
 	readonly untitledTextEditorService?: IUntitledTextEditorService;
 	readonly fileLabelDecorationService?: IFileLabelDecorationService;
 	readonly labelService?: ILabelService;
+	readonly fileModels?: IFileTextModelService;
+	readonly languageService?: ILanguageService;
 }
 
-export interface IResourceLabelService extends IDisposable {
-	create(container: HTMLElement, options?: { readonly supportIcons?: boolean }): IResourceLabel;
+export interface IResourceLabelService {
+	createGroup(): ResourceLabels;
 }
 
 export const IResourceLabelService = createServiceIdentifier<IResourceLabelService>('resourceLabelService');
@@ -79,6 +90,7 @@ export class ResourceLabels extends Disposable {
 	private readonly labels = new Set<IResourceLabel>();
 	private readonly decorationChangeEmitter = this._register(new Emitter<void>());
 	private readonly services: ResourceLabelServices;
+	private iconsVisible = true;
 
 	readonly onDidChangeDecorations = this.decorationChangeEmitter.event;
 
@@ -93,6 +105,11 @@ export class ResourceLabels extends Disposable {
 		}));
 		this._register(services.workspaceContextService.onDidChangeWorkspace(() => this.rerenderAll()));
 		this._register(services.resourceIconRenderer.onDidChangeResourceIcons(() => this.rerenderAll(true)));
+		if (services.fileModels) {
+			this._register(services.fileModels.onModelAdded(model => this.rerenderResource(model.uri)));
+			this._register(services.fileModels.onModelRemoved(model => this.rerenderResource(model.uri)));
+			this._register(services.fileModels.onModelLanguageChanged(event => this.rerenderResource(event.model.uri)));
+		}
 		if (services.labelService) this._register(services.labelService.onDidChangeFormatters(event => this.rerenderScheme(event.scheme)));
 		if (services.untitledTextEditorService) {
 			this._register(services.untitledTextEditorService.onDidCreate(() => this.rerenderAll()));
@@ -103,6 +120,7 @@ export class ResourceLabels extends Disposable {
 
 	create(container: HTMLElement, options?: { readonly supportIcons?: boolean }): IResourceLabel {
 		const widget = new ResourceLabelWidget(container, this.services, options);
+		widget.setIconVisibility(this.iconsVisible);
 		this.widgets.add(widget);
 		const label: IResourceLabel = {
 			element: widget.element,
@@ -116,6 +134,11 @@ export class ResourceLabels extends Disposable {
 		};
 		this.labels.add(label);
 		return label;
+	}
+
+	setIconVisibility(visible: boolean): void {
+		this.iconsVisible = visible;
+		for (const widget of this.widgets) widget.setIconVisibility(visible);
 	}
 
 	get(index: number): IResourceLabel | undefined {
@@ -143,6 +166,12 @@ export class ResourceLabels extends Disposable {
 		for (const widget of this.widgets) widget.rerender(forceIcon);
 	}
 
+	private rerenderResource(resource: URI): void {
+		for (const widget of this.widgets) {
+			if (isEqualResource(widget.resource, resource)) widget.rerender();
+		}
+	}
+
 	private rerenderScheme(scheme: string): void {
 		for (const widget of this.widgets) {
 			if (widget.resource?.scheme === scheme) widget.rerender();
@@ -166,17 +195,28 @@ export class ResourceLabels extends Disposable {
 	}
 }
 
-/** Window-scoped factory for consumers that do not need to manage a label group. */
-export class ResourceLabelService extends Disposable implements IResourceLabelService {
-	private readonly labels: ResourceLabels;
+/** Assembles label groups; each consumer owns its group's listeners and labels. */
+export class ResourceLabelService implements IResourceLabelService {
+	constructor(
+		@IWorkspaceContextService private readonly workspaceContextService: IWorkspaceContextService,
+		@IResourceIconRenderer private readonly resourceIconRenderer: IResourceIconRenderer,
+		@IUntitledTextEditorService private readonly untitledTextEditorService: IUntitledTextEditorService,
+		@IFileLabelDecorationService private readonly fileLabelDecorationService: IFileLabelDecorationService,
+		@ILabelService private readonly labelService: ILabelService,
+		@IFileTextModelService private readonly fileModels: IFileTextModelService,
+		@ILanguageService private readonly languageService: ILanguageService,
+	) {}
 
-	constructor(services: ResourceLabelServices) {
-		super();
-		this.labels = this._register(new ResourceLabels(DEFAULT_LABELS_CONTAINER, services));
-	}
-
-	create(container: HTMLElement, options?: { readonly supportIcons?: boolean }): IResourceLabel {
-		return this.labels.create(container, options);
+	createGroup(): ResourceLabels {
+		return new ResourceLabels(DEFAULT_LABELS_CONTAINER, {
+			workspaceContextService: this.workspaceContextService,
+			resourceIconRenderer: this.resourceIconRenderer,
+			untitledTextEditorService: this.untitledTextEditorService,
+			fileLabelDecorationService: this.fileLabelDecorationService,
+			labelService: this.labelService,
+			fileModels: this.fileModels,
+			languageService: this.languageService,
+		});
 	}
 }
 
@@ -228,6 +268,7 @@ class ResourceLabelWidget extends Disposable {
 	private currentSuffix: string | undefined;
 	private fromFileLabel = false;
 	private visible = true;
+	private iconsVisible = true;
 	private pendingRerender = false;
 
 	readonly element: HTMLElement;
@@ -246,17 +287,12 @@ class ResourceLabelWidget extends Disposable {
 	}
 
 	setLabel(label: string | readonly string[], description?: string, options?: IconLabelValueOptions): void {
-		this.current = undefined;
-		this.currentOptions = undefined;
-		this.currentTitle = undefined;
-		this.currentSuffix = undefined;
-		this.fromFileLabel = false;
-		this.label.setLabel(label, description, {
-			...options,
-			hideIcon: options?.hideIcon ?? (options?.icon === undefined && options?.renderIcon === undefined),
-			supportIcons: options?.supportIcons ?? this.supportIcons,
-		});
-		this.renderEmitter.fire();
+		const { iconPath, ...valueOptions } = options ?? {};
+		this.setResourceInternal({ name: label, description }, {
+			...valueOptions,
+			icon: iconPath ?? options?.icon,
+			hideIcon: options?.hideIcon ?? (options?.icon === undefined && iconPath === undefined && options?.renderIcon === undefined),
+		}, false);
 	}
 
 	setFile(resource: URI, options: IFileLabelOptions = {}): void {
@@ -307,6 +343,12 @@ class ResourceLabelWidget extends Disposable {
 		this.renderEmitter.fire();
 	}
 
+	setIconVisibility(visible: boolean): void {
+		if (this.iconsVisible === visible) return;
+		this.iconsVisible = visible;
+		this.rerender();
+	}
+
 	setVisibility(visible: boolean): void {
 		this.visible = visible;
 		if (visible && this.pendingRerender) {
@@ -355,17 +397,28 @@ class ResourceLabelWidget extends Disposable {
 		const extraClasses = decorationClasses(options, decoration);
 		let title = this.currentTitle ?? (resource ? pathLabel(resource, this.services.workspaceContextService, this.services.labelService) : undefined);
 		if (decoration?.tooltip) title = title ? `${title} • ${decoration.tooltip}` : decoration.tooltip;
-		const renderIcon = resource && !options.hideIcon && !options.icon && fileKind !== FileKind.Directory
-			? (container: HTMLSpanElement) => this.services.resourceIconRenderer.renderFileIcon(resource, container)
+		const hideIcon = !this.iconsVisible || options.hideIcon === true;
+		const hasFileIcons = this.services.resourceIconRenderer.getFileIconTheme().hasFileIcons;
+		const iconClasses = resource && this.services.fileModels && this.services.languageService
+			? getIconClasses(this.services.fileModels, this.services.languageService, resource, FileKind.File)
 			: undefined;
+		const customIcon = options.icon instanceof URI ? undefined : options.icon;
+		const customIconColor = customIcon?.color;
+		const renderIcon = customIcon && customIconColor
+			? (container: HTMLSpanElement) => { appendIcon(customIcon, container).style.color = `var(${colorCssVariable(customIconColor.id)})`; }
+			: options.renderIcon ?? (resource && !hideIcon && !options.icon && hasFileIcons && fileKind !== FileKind.Directory
+			? (container: HTMLSpanElement) => this.services.resourceIconRenderer.renderFileIcon(resource, container, iconClasses)
+			: undefined);
 		const iconOptions: IconLabelValueOptions = {
 			...options,
+			hideIcon,
 			title,
 			extraClasses,
 			strikethrough: options.strikethrough || decoration?.strikethrough,
-			icon: options.hideIcon ? undefined : options.icon,
+			icon: !hideIcon && !customIconColor ? customIcon : undefined,
+			iconPath: !hideIcon && options.icon instanceof URI ? options.icon : undefined,
 			renderIcon,
-			reserveIconSpace: options.hideIcon ? false : fileKind !== FileKind.Directory,
+			reserveIconSpace: !hideIcon && (options.reserveIconSpace ?? (options.icon !== undefined || resource !== undefined && hasFileIcons && fileKind !== FileKind.Directory)),
 			suffix: this.currentSuffix,
 			supportIcons: options.supportIcons ?? this.supportIcons,
 		};

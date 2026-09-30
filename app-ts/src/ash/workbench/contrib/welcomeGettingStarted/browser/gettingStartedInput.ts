@@ -1,3 +1,4 @@
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { URI } from '../../../../base/common/uri.js';
 import { extUri } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
@@ -11,6 +12,7 @@ export function createGettingStartedInput(): EditorInput {
 		resource: GettingStartedResource,
 		contentType: GettingStartedContentType,
 		label: localize('gettingStarted.title', 'Welcome'),
+		getIcon: () => Lxicon.home,
 		readOnly: true,
 		showBreadcrumbs: false,
 	};
