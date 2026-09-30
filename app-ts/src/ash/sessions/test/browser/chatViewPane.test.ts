@@ -6,12 +6,14 @@ import type { SessionMutationParams, SessionOperationInput } from "../../../plat
 import type { IRendererHost } from "../../../platform/renderer/common/rendererHost.js";
 import type { IAction } from "../../../base/common/actions.js";
 import { Emitter, Event } from "../../../base/common/event.js";
+import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
+import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { TAB_CLOSE_ACTION_ID } from "../../../base/browser/ui/tablist/tabList.js";
 import { Lxicon } from "../../../base/common/lxicons.js";
 import { MenuId } from "../../../platform/actions/common/actions.js";
 import { MenuService } from "../../../platform/actions/common/menuService.js";
 import type { IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
-import type { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
 import { ServiceContainer } from "../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService } from "../../../platform/quickinput/common/quickInput.js";
@@ -87,7 +89,9 @@ const { BrowserStorageService } = await import('../../../workbench/services/stor
 const testStorageEnvironment = new JSDOM('', { url: 'https://ash.test/' });
 const testStorages: InstanceType<typeof BrowserStorageService>[] = [];
 let testStorageSequence = 0;
-const { openChatMarkdownLink } = await import("../../../workbench/contrib/chat/browser/widget/chatWidget.js");
+const { ChatWidget, openChatMarkdownLink } = await import("../../../workbench/contrib/chat/browser/widget/chatWidget.js");
+const { NewChatInputWidget } = await import('../../contrib/chat/browser/newChatInput.js');
+const { createCodeEditorServices } = await import('../../../editor/test/browser/testCodeEditor.js');
 await import(
 	"../../../workbench/contrib/preferences/browser/preferences.contribution.js"
 );
@@ -684,6 +688,53 @@ test("Turn error cards invoke their typed action without interpreting message te
 	assert.equal(list.element.querySelector("pre")?.textContent, "same opaque message");
 	assert.deepEqual(requestedAction, { type: "chooseModel", label: "Choose another model" });
 	dom.window.close();
+});
+
+test('A centered chat keeps its input when the first message creates the conversation', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using domLifetime = toDisposable(() => dom.window.close());
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using editorResources = new DisposableStore();
+	const editorServices = editorResources.add(createCodeEditorServices(editorResources).createChild());
+	using contextViewService = new BrowserContextViewService(dom.window.document.body);
+	editorServices.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
+	editorServices.registerInstance(INotificationService, notifications);
+	const fake = fakeApi({
+		sessions: [],
+		createSession: session('session-1', undefined, 'New Chat'),
+		createThread: { session: session('session-1', 'thread-1', 'New Chat'), threadId: 'thread-1' },
+	});
+	using sessions = new SessionsManagementService(fake.api);
+	await sessions.initialize();
+	const draft = sessions.createUntitledSession();
+	using commands = new CommandService(new ServiceContainer());
+	using chat = createChatService(fake.api);
+	const widgetModel = new ChatWidgetModel(chat, { kind: 'untitled', session: draft }, sessions);
+	using widget = new ChatWidget(
+		dom.window.document.body,
+		'centered-chat',
+		widgetModel,
+		() => sessions.createUntitledSession(),
+		{ showContextMenu: () => undefined } as unknown as IContextMenuService,
+		contextViewService,
+		commands,
+		unavailableAccessibleViewService,
+		notifications,
+		undefined,
+		undefined,
+		undefined,
+		undefined,
+		(container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, widgetModel, undefined),
+	);
+	widget.setVisible(true);
+	const input = widget.element.querySelector<HTMLElement>('.ash-chat-input-part');
+	const heading = widget.element.querySelector<HTMLHeadingElement>('.ash-sessions-chat-welcome-heading');
+	assert.equal(heading?.hidden, false);
+	await widget.acceptInput('Start this work');
+	assert.equal(heading?.hidden, true);
+	assert.equal(input?.classList.contains('has-conversation'), true);
+	assert.equal(widget.element.querySelector('.ash-chat-input-part'), input);
+	assert.equal(widget.sessionId, 'session-1');
 });
 
 test("an empty Session list opens an untitled session and persists it on its first send", async () => {

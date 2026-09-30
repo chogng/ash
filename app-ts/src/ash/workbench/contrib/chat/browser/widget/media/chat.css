@@ -118,15 +118,17 @@
   container-type: inline-size;
   flex: 0 0 auto;
   flex-direction: column;
-  min-height: 140px;
-  padding: var(--ash-spacing-size60);
-  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-  border-radius: var(--ash-corner-radius-large);
+  min-height: var(--ash-chat-input-min-height, 140px);
+  padding: var(--ash-chat-input-padding, var(--ash-spacing-size60));
+  border: var(--ash-stroke-thickness) solid var(--ash-chat-input-border, var(--ash-input-border));
+  border-radius: var(--ash-chat-input-radius, var(--ash-corner-radius-large));
   background: var(--ash-input-background);
 }
 
 .ash-chat-input-container.focused {
   border-color: var(--ash-focus-border);
+  outline: var(--ash-chat-input-focus-outline, none);
+  outline-offset: var(--ash-chat-input-outline-offset, 0px);
 }
 
 .ash-chat-input-editor-host {
@@ -206,7 +208,7 @@
   min-height: var(--ash-toolbar-action-size);
   flex: 0 0 var(--ash-toolbar-action-size);
   gap: 12px;
-  margin-top: var(--ash-spacing-size40);
+  margin-top: var(--ash-chat-input-toolbar-gap, var(--ash-spacing-size40));
   padding: 0;
 }
 

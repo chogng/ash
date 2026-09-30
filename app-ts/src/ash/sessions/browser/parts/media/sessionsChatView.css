@@ -78,26 +78,9 @@
   flex: 1 1 auto;
 }
 
-.ash-sessions-chat-slot .ash-chat > .ash-chat-input-part,
-.ash-sessions-chat-slot .ash-chat.has-conversation > .ash-chat-input-part {
-  min-height: 200px;
-  padding: var(--ash-spacing-size160) var(--ash-spacing-size200);
-  border-top: var(--ash-stroke-thickness) solid var(--ash-border);
+.ash-sessions-chat-view.single-chat .ash-sessions-chat-slot-header {
+  display: none;
 }
-
-.ash-sessions-chat-slot .ash-chat-input-container {
-  min-height: 160px;
-  border: 0;
-  border-radius: 0;
-  background: var(--ash-editor-background);
-}
-
-.ash-sessions-chat-slot .ash-chat-input-container.focused {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
-}
-
-.ash-sessions-chat-slot .ash-chat-transcript { padding: var(--ash-spacing-size240); }
 
 .ash-sessions-chat-view-empty {
   display: grid;

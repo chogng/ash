@@ -4,6 +4,7 @@ import { ButtonActionViewItem } from "../../../../base/browser/ui/actionbar/acti
 import { SubmenuAction, type IAction } from "../../../../base/common/actions.js";
 import { Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
+import { localize as resolveNls, onDidChangeNls, type LocalizationKey } from "../../../../nls.js";
 import { MenuWorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
 import { type IMenu, type IMenuService, MenuId } from "../../../../platform/actions/common/actions.js";
 import type { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
@@ -12,6 +13,12 @@ import { localize, type ILocalizationService } from "../../../services/localizat
 /** Host-selected menubar presentation owned by the titlebar. */
 export interface IMenubarControl extends IDisposable {
 	readonly domNode: HTMLElement | undefined;
+}
+
+interface MenubarOptions {
+	readonly presentation?: 'application-menu' | 'actions-only';
+	readonly applicationMenuId?: MenuId;
+	readonly titlebarMenuId?: MenuId;
 }
 
 class ApplicationMenuActionViewItem extends ButtonActionViewItem {
@@ -43,7 +50,7 @@ class ApplicationMenuActionViewItem extends ButtonActionViewItem {
 
 /**
  * Collapses File, Edit, and other application menus into the first item of the left titlebar ActionBar.
- * Actions contributed to `MenuId.TitleBarLeft` follow it in the same keyboard and spacing group.
+ * Hosts select the application menu tree and titlebar actions independently.
  * Desktop hosts can omit the button when the system menu bar presents the menu tree.
  */
 export class BrowserMenubarControl extends Disposable
@@ -61,12 +68,15 @@ export class BrowserMenubarControl extends Disposable
 		menuService: IMenuService,
 		contextMenuService: IContextMenuService,
 		localizationService?: ILocalizationService,
-		presentation: 'application-menu' | 'actions-only' = 'application-menu',
+		options: MenubarOptions = {},
 	) {
 		super();
 		this.contextMenuService = contextMenuService;
-		const applicationMenuLabel = () => localize(localizationService, { bundle: "ash.regions", key: "applicationMenu" }, "Application menu");
-		this.menu = this._register(menuService.createMenu(MenuId.MenubarMainMenu));
+		const resolveLabel = (key: LocalizationKey, fallback: string): string => localizationService
+			? localize(localizationService, key, fallback)
+			: resolveNls(key, fallback);
+		const applicationMenuLabel = () => resolveLabel({ bundle: "ash.regions", key: "applicationMenu" }, "Application menu");
+		this.menu = this._register(menuService.createMenu(options.applicationMenuId ?? MenuId.MenubarMainMenu));
 		const action: IAction = {
 			id: "ash.applicationMenu",
 			get label() { return applicationMenuLabel(); },
@@ -75,13 +85,13 @@ export class BrowserMenubarControl extends Disposable
 			enabled: true,
 			run: () => this.toggleMenu(),
 		};
-		const leftActionsLabel = () => localize(localizationService, { bundle: "ash.regions", key: "titleBarLeftActions" }, "Title bar left actions");
-		this.toolbar = this._register(new MenuWorkbenchToolBar(container, menuService, contextMenuService, MenuId.TitleBarLeft, {
+		const leftActionsLabel = () => resolveLabel({ bundle: "ash.regions", key: "titleBarLeftActions" }, "Title bar left actions");
+		this.toolbar = this._register(new MenuWorkbenchToolBar(container, menuService, contextMenuService, options.titlebarMenuId ?? MenuId.TitleBarLeft, {
 			ariaLabel: leftActionsLabel(),
 			presentation: "inherit-foreground",
 			// Layout actions expose their pressed state without a persistent titlebar fill.
 			highlightToggledItems: false,
-			leadingActions: presentation === 'application-menu' ? [action] : [],
+			leadingActions: options.presentation === 'actions-only' ? [] : [action],
 			actionViewItemProvider: (candidate) => {
 				if (candidate !== action) return undefined;
 				const item = new ApplicationMenuActionViewItem(action, (event) => this.handleMenuKeyDown(event));
@@ -94,7 +104,8 @@ export class BrowserMenubarControl extends Disposable
 		this._register(this.toolbar.onDidChangeMenuItems(() => {
 			if (this.active) this.contextMenuService.hideContextMenu();
 		}));
-		if (localizationService) this._register(localizationService.onDidChange(() => {
+		this._register((localizationService?.onDidChange ?? onDidChangeNls)(() => {
+			if (this.active) this.contextMenuService.hideContextMenu();
 			this.domNode.setAttribute("aria-label", leftActionsLabel());
 			if (this.menuItem) this.menuItem.setLabel(applicationMenuLabel());
 		}));
@@ -107,6 +118,7 @@ export class BrowserMenubarControl extends Disposable
 	}
 
 	public setTrailingActions(actions: readonly IAction[]): void {
+		if (this.active) this.contextMenuService.hideContextMenu();
 		this.toolbar.setTrailingActions(actions);
 	}
 

@@ -8,7 +8,7 @@ import type { IChatService } from "../../../workbench/services/chat/common/chatS
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import { WorkbenchPart } from "../../../workbench/browser/part.js";
 import type { SessionsViewSelection } from "../../services/sessions/browser/sessionsService.js";
-import { SessionsChatView } from "./sessionsChatView.js";
+import { SessionsChatView, type SessionsChatViewOptions } from "./sessionsChatView.js";
 import { h } from "../../../base/browser/dom.js";
 import { localize } from '../../../nls.js';
 import type { IDictationService } from '../../../platform/dictation/common/dictationService.js';
@@ -24,6 +24,7 @@ export interface SessionsPartOptions {
 	readonly accessibleViewService: IAccessibleViewService;
 	readonly notifications: INotificationService;
 	readonly commandService: ICommandService;
+	readonly createInputPart: SessionsChatViewOptions['createInputPart'];
 	readonly activateSelection: (selection: SessionsViewSelection) => void;
 	readonly closeSelection: (selection: SessionsViewSelection) => void;
 }
@@ -55,6 +56,7 @@ export class SessionsPart extends WorkbenchPart {
 			accessibleViewService: options.accessibleViewService,
 			notifications: options.notifications,
 			commandService: options.commandService,
+			createInputPart: options.createInputPart,
 			activateSelection: options.activateSelection,
 			closeSelection: options.closeSelection,
 		}));

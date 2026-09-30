@@ -11,6 +11,7 @@ export interface ChatInputEditorOptions {
 	readonly ariaLabel: string;
 	readonly slashCommands: SlashCommandCatalog;
 	readonly skills: SkillSelectorCatalog;
+	readonly height?: { readonly minimum: number; readonly maximum: number };
 }
 
 /** Text editing contract consumed by the Chat composer. */

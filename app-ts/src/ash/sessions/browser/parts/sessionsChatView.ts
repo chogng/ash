@@ -10,6 +10,8 @@ import type { IContextMenuService } from "../../../platform/contextview/browser/
 import type { IContextViewService } from "../../../platform/contextview/browser/contextView.js";
 import { ChatWidget } from "../../../workbench/contrib/chat/browser/widget/chatWidget.js";
 import { ChatWidgetModel } from '../chatWidgetModel.js';
+import type { ChatInputDelegate } from '../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
+import type { ChatInputPart } from '../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import type { IChatService } from "../../../workbench/services/chat/common/chatService.js";
 import type { SessionId } from "../../services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
@@ -30,6 +32,7 @@ export interface SessionsChatViewOptions {
 	readonly accessibleViewService: IAccessibleViewService;
 	readonly notifications: INotificationService;
 	readonly commandService: ICommandService;
+	readonly createInputPart: (container: HTMLElement, delegate: ChatInputDelegate, model: ChatWidgetModel) => ChatInputPart;
 	readonly activateSelection: (selection: SessionsViewSelection) => void;
 	readonly closeSelection: (selection: SessionsViewSelection) => void;
 }
@@ -51,6 +54,7 @@ export class SessionsChatView extends Disposable {
 	private readonly accessibleViewService: IAccessibleViewService;
 	private readonly notifications: INotificationService;
 	private readonly commandService: ICommandService;
+	private readonly createInputPart: SessionsChatViewOptions['createInputPart'];
 	private readonly activateSelection: (selection: SessionsViewSelection) => void;
 	private readonly closeSelection: (selection: SessionsViewSelection) => void;
 
@@ -65,6 +69,7 @@ export class SessionsChatView extends Disposable {
 		this.accessibleViewService = options.accessibleViewService;
 		this.notifications = options.notifications;
 		this.commandService = options.commandService;
+		this.createInputPart = options.createInputPart;
 		this.activateSelection = options.activateSelection;
 		this.closeSelection = options.closeSelection;
 		this.domNode = h(ownerDocument, "section");
@@ -97,6 +102,7 @@ export class SessionsChatView extends Disposable {
 
 	updateVisibleSelections(selections: readonly SessionsViewSelection[], active: SessionsViewSelection | undefined): void {
 		this.rekeyMaterializedEntries();
+		this.domNode.classList.toggle('single-chat', selections.length === 1);
 		this.empty.update(this.sessionService.state, this.sessionService.error);
 		const visibleKeys = new Set(selections.map(selectionKey));
 		for (const [key, entry] of [...this.entries]) {
@@ -120,6 +126,7 @@ export class SessionsChatView extends Disposable {
 					accessibleViewService: this.accessibleViewService,
 					notifications: this.notifications,
 					commandService: this.commandService,
+					createInputPart: this.createInputPart,
 					activateSelection: this.activateSelection,
 					closeSelection: this.closeSelection,
 				});
@@ -226,10 +233,11 @@ class SessionsChatGridEntry extends Disposable implements IView {
 		close.setAttribute("aria-label", "Close visible session");
 		close.textContent = "×";
 		header.append(activate, close);
+		const model = new ChatWidgetModel(options.chatService, options.selection.kind === "session" ? { kind: "session", active: options.selection.active } : { kind: "untitled", session: options.selection.session }, options.sessionService);
 		this.pane = this._register(new ChatWidget(
 			this.element,
 			`ash-sessions-chat-pane-${sessionsChatPaneInstanceId}`,
-			new ChatWidgetModel(options.chatService, options.selection.kind === "session" ? { kind: "session", active: options.selection.active } : { kind: "untitled", session: options.selection.session }, options.sessionService),
+			model,
 			() => { options.sessionService.createUntitledSession(); },
 			options.contextMenuService,
 			options.contextViewService,
@@ -240,6 +248,7 @@ class SessionsChatGridEntry extends Disposable implements IView {
 			undefined,
 			undefined,
 			options.dictation,
+			(container, delegate) => options.createInputPart(container, delegate, model),
 		));
 		this.pane.setTabId(this.title.id);
 		this.pane.setVisible(true);

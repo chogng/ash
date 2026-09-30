@@ -84,7 +84,7 @@ class ElectronMenubarControl extends Disposable
 			options.menuService,
 			options.contextMenuService,
 			options.localizationService,
-			isMacintosh ? 'actions-only' : 'application-menu',
+			{ presentation: isMacintosh ? 'actions-only' : 'application-menu' },
 		));
 		this.domNode = browserMenubar.domNode;
 		if (isMacintosh) {

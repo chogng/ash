@@ -37,12 +37,18 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 	readonly onDidChange: Event<string> = this._onDidChange.event;
 	readonly onDidSubmit: Event<void> = this._onDidSubmit.event;
 	private height = CHAT_INPUT_MIN_HEIGHT;
+	private readonly minimumHeight: number;
+	private readonly maximumHeight: number;
 
 	constructor(options: ChatInputEditorOptions, @IInstantiationService instantiationService: IInstantiationService) {
 		super();
+		this.minimumHeight = options.height?.minimum ?? CHAT_INPUT_MIN_HEIGHT;
+		this.maximumHeight = options.height?.maximum ?? CHAT_INPUT_MAX_HEIGHT;
+		this.height = this.minimumHeight;
 		this.element = h(options.container.ownerDocument, "div");
 		this.element.className = "ash-chat-input-editor";
 		this.element.style.height = `${this.height}px`;
+		this.element.style.minHeight = `${this.minimumHeight}px`;
 		options.container.append(this.element);
 		const providers = this._register(new LanguageCompletionProviderRegistry());
 		this._register(providers.register(createChatCommandCompletionProvider(options.slashCommands)));
@@ -125,7 +131,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 	private syncHeight(): void {
 		if (this.element.clientWidth <= 0) return;
 		const contentHeight = this.editor.getBottomForLineNumber(this.model.lineCount) + CHAT_INPUT_EDITOR_PADDING.bottom;
-		const height = Math.min(CHAT_INPUT_MAX_HEIGHT, Math.max(CHAT_INPUT_MIN_HEIGHT, contentHeight));
+		const height = Math.min(this.maximumHeight, Math.max(this.minimumHeight, contentHeight));
 		if (height === this.height) return;
 		this.height = height;
 		this.element.style.height = `${height}px`;

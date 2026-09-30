@@ -55,6 +55,7 @@ test("localization lookup falls back to English and formats parameters", async (
 	assert.equal(localization.translate("ash.settings", "displayLanguage.title", "Fallback"), "Display Language");
 	assert.equal(localization.translate("ash.missing", "missing", "Hello {name}", { name: "Ada" }), "Hello Ada");
 	await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
+	assert.equal(localization.translate('ash', 'sessions.chat.welcome', 'What can we work on?'), '今天想做些什么？');
 	assert.deepEqual([
 		localization.translate('ash', 'scm.history.actions', 'History actions'),
 		localization.translate('ash', 'scm.history.references', 'History references'),

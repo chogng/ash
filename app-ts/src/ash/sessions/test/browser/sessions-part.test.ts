@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../../../base/common/event.js";
-import { toDisposable } from "../../../base/common/lifecycle.js";
+import { DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import type { ICommandEvent, ICommandService } from "../../../platform/commands/common/commands.js";
-import type { IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
-import type { IContextViewService } from "../../../platform/contextview/browser/contextView.js";
-import type { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
+import { IContextMenuService, IContextViewService } from "../../../platform/contextview/browser/contextView.js";
+import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
+import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
 import type { IChatService, ThreadUpdateEnvelope } from "../../../workbench/services/chat/common/chatService.js";
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
@@ -27,6 +27,8 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 const { SessionsPart } = await import("../../../sessions/browser/parts/sessionsPart.js");
+const { NewChatInputWidget } = await import('../../contrib/chat/browser/newChatInput.js');
+const { createCodeEditorServices } = await import('../../../editor/test/browser/testCodeEditor.js');
 
 suiteTeardown(() => {
 	browserEnvironment.window.close();
@@ -35,6 +37,7 @@ suiteTeardown(() => {
 
 test("SessionsPart remains owned by the Sessions product layer", () => {
 	const dom = browserEnvironment;
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	dom.window.document.body.replaceChildren();
 	const onDidChange = new Emitter<void>();
 	let untitledSessions: readonly IUntitledChatSession[] = [];
@@ -156,14 +159,22 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 		onDidExecuteCommand: commandEvents.event,
 		async executeCommand() { throw new Error("No commands registered"); },
 	};
+	using resources = new DisposableStore();
+	const services = resources.add(createCodeEditorServices(resources).createChild());
+	using notifications = new NotificationService();
+	services.registerInstance(IContextMenuService, contextMenuService);
+	services.registerInstance(IContextViewService, contextViewService);
+	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+	services.registerInstance(INotificationService, notifications);
 	const part = new SessionsPart(dom.window.document.body, {
 		sessionService,
 		chatService,
 		contextMenuService,
 		contextViewService,
 		accessibleViewService: { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService,
-		notifications: new NotificationService(),
+		notifications,
 		commandService,
+		createInputPart: (container, delegate, model) => services.createInstance(NewChatInputWidget, container, delegate, model, undefined),
 		activateSelection: selection => viewService.activateSelection(selection),
 		closeSelection: selection => viewService.closeVisibleSelection(selection),
 	});
@@ -176,12 +187,15 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 	assert.ok(part.domNode.querySelector(".ash-sessions-chat-view"));
 	assert.equal(part.domNode.querySelectorAll(".ash-sessions-chat-slot").length, 2);
 	assert.equal(part.domNode.querySelectorAll(".ash-chat-input-part").length, 2);
+	assert.equal(part.domNode.querySelectorAll('.ash-sessions-chat-input .ash-chat-input-editor').length, 2);
+	assert.equal(part.domNode.querySelectorAll('.ash-sessions-chat-welcome-heading:not([hidden])').length, 2);
 
 	(part.domNode.querySelector(".ash-sessions-chat-slot-title") as HTMLButtonElement).click();
 	assert.ok(part.domNode.querySelector(".ash-sessions-chat-slot.active:first-of-type"));
 
 	(part.domNode.querySelector(".ash-sessions-chat-slot-close") as HTMLButtonElement).click();
 	assert.equal(part.domNode.querySelectorAll(".ash-sessions-chat-slot").length, 1);
+	assert.ok(part.domNode.querySelector('.ash-sessions-chat-view.single-chat'));
 
 	partListener.dispose();
 	part.dispose();

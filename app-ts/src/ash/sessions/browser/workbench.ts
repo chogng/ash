@@ -17,6 +17,17 @@ import type { IConfigurationApi, IConfigurationSnapshot } from "../../platform/c
 import { IConfigurationService } from "../../platform/configuration/common/configuration.js";
 import { ContextKeyExpr } from '../../platform/contextkey/common/contextkey.js';
 import { ServiceContainer } from "../../platform/instantiation/common/instantiation.js";
+import { ICodeEditorService } from '../../editor/browser/services/codeEditorService.js';
+import { StandaloneCodeEditorService } from '../../editor/standalone/browser/standaloneCodeEditorService.js';
+import { ILanguageConfigurationService, LanguageConfigurationService } from '../../editor/common/languages/languageConfigurationRegistry.js';
+import { ILanguageFeaturesService } from '../../editor/common/services/languageFeatures.js';
+import { LanguageFeaturesService } from '../../editor/common/services/languageFeaturesService.js';
+import { NewChatInputWidget } from '../contrib/chat/browser/newChatInput.js';
+import { IAccessibilityService } from '../../platform/accessibility/common/accessibility.js';
+import { AccessibilityService } from '../../platform/accessibility/browser/accessibilityService.js';
+import { ILogService } from '../../platform/log/common/log.js';
+import { LogService } from '../../platform/log/common/logServiceImpl.js';
+import { ConsoleLogSink } from '../../platform/log/common/consoleLogSink.js';
 import type { IKeybindingsResourceApi } from "../../platform/keybinding/common/keybindingsResource.js";
 import { BrowserLayoutService, ILayoutService } from "../../platform/layout/browser/layoutService.js";
 import { ILifecycleService, type ShutdownReason } from "../../workbench/services/lifecycle/common/lifecycle.js";
@@ -89,6 +100,7 @@ import { SessionsManagementService } from "../services/sessions/browser/sessions
 import { ISessionsManagementService } from "../services/sessions/common/sessionsManagement.js";
 import { ISessionsService, SessionsService } from "../services/sessions/browser/sessionsService.js";
 import { SessionsWorkbenchLayout, type SessionsPartId } from "./layoutPolicy.js";
+import { registerLayoutActions } from './layoutActions.js';
 import { AuxiliaryBarPart } from "./parts/auxiliaryBarPart.js";
 import { ActivityBarPart, type SessionsActivityPage } from './parts/activitybar/activityBarPart.js';
 import { SessionsPart } from "./parts/sessionsPart.js";
@@ -143,6 +155,10 @@ export class Workbench extends Disposable {
 		if (options.nativeHostApi) services.registerInstance(INativeHostService, options.nativeHostApi);
 		const languageService = this._register(new LanguageService());
 		services.registerInstance(ILanguageService, languageService);
+		services.registerInstance(ILanguageConfigurationService, this._register(new LanguageConfigurationService(configurationService, languageService)));
+		services.registerInstance(ILanguageFeaturesService, this._register(new LanguageFeaturesService()));
+		services.registerInstance(ICodeEditorService, this._register(new StandaloneCodeEditorService()));
+		services.registerInstance(ILogService, this._register(new LogService({ sinks: [new ConsoleLogSink()] })));
 		const themeService = this.themeService = this._register(services.createInstance(WorkbenchThemeService, options.container));
 		services.registerInstance(IThemeService, themeService);
 		themeService.initialize();
@@ -221,6 +237,11 @@ export class Workbench extends Disposable {
 		this._register(CommandsRegistry.register(RETURN_TO_WORKBENCH_COMMAND_ID, () => options.returnToWorkbench()));
 		const contextKeys = this._register(new ContextKeyService());
 		services.registerInstance(IContextKeyService, contextKeys);
+		services.registerInstance(IAccessibilityService, this._register(new AccessibilityService({
+			root: this.domNode,
+			contextKeyService: contextKeys,
+			configurationService,
+		})));
 		const notificationsCenter = this._register(new NotificationsCenter(this.domNode, feedbackHost, notificationService, undefined, contextKeys, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
 		services.registerInstance(INotificationsCenter, notificationsCenter);
 		const keyboardLayoutService = this._register(new BrowserKeyboardLayoutService({
@@ -280,12 +301,7 @@ export class Workbench extends Disposable {
 		const accountMenu = this._register(new SessionsAccountMenu(accountService, contextMenus, preferences, options.returnToWorkbench));
 
 		let auxiliarybar: AuxiliaryBarPart | undefined;
-		const titlebar = this._register(new TitlebarPart(this.domNode, view, menus, contextMenus, {
-			toggleSidebar: () => {
-				if (layout!.isPartVisible('sidebar')) layout!.hidePart('sidebar');
-				else layout!.showPart('sidebar');
-			},
-		}));
+		const titlebar = this._register(new TitlebarPart(this.domNode, menus, contextMenus));
 		const sidebar = this._register(new SidebarPart(this.domNode, sessions, view, teams, quickInputService, async () => {
 			const catalog = await options.api.session.listAgents();
 			return catalog.agents.map(agent => ({
@@ -343,6 +359,7 @@ export class Workbench extends Disposable {
 			accessibleViewService,
 			notifications: notificationService,
 			commandService,
+			createInputPart: (container, delegate, model) => services.createInstance(NewChatInputWidget, container, delegate, model, options.api.dictation),
 			activateSelection: selection => view.activateSelection(selection),
 			closeSelection: selection => view.closeVisibleSelection(selection),
 		}));
@@ -373,10 +390,7 @@ export class Workbench extends Disposable {
 			}
 		}));
 		this._register(new SessionsModernUIContribution(this.domNode, layout, configurationService));
-		titlebar.updateSidebarVisibility(layout.isPartVisible('sidebar'));
-		this._register(layout.onDidChangePartVisibility(event => {
-			if (event.partId === 'sidebar') titlebar.updateSidebarVisibility(event.visible);
-		}));
+		this._register(registerLayoutActions(layout, view, contextKeys));
 		this._register(bindResizableLayout(this.layoutService.onDidLayoutMainContainer, layout));
 		this.layoutService.layout();
 		this.initialized = this.initialize(view, configurationService);

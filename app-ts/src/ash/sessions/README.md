@@ -27,10 +27,11 @@ is canonical for the renderer implementation and extension points.
 | Provider and management | `contrib/providers/appServer/browser/workbenchSessionsService.contribution.ts`, `services/sessions/common/sessionsManagement.ts`, and `services/sessions/browser/sessionsManagementService.ts` | the App Server provider adapts transport data; management owns catalog, drafts, and operations; the contribution registers and starts it in the regular Workbench |
 | Regular Workbench Chat | `browser/workbenchChat.contribution.ts`, `browser/chatViewPane.ts`, and `browser/chatWidgetModel.ts` | registers the Session-backed Chat view, actions, and navigation service; one model owns selection, draft materialization, and Thread subscriptions for each shared `ChatWidget` |
 | Main conversation | `browser/parts/sessionsChatView.ts` | renders visible durable and untitled Sessions as retained full `ChatWidget` Grid leaves |
+| Sessions composer | `contrib/chat/browser/newChatInput.ts` and `contrib/chat/browser/media/chatInput.css` | owns the welcome layout, first-send placement, appearance, and embedded-editor sizing; reuses shared input operations without changing Workbench defaults |
 | Turn review | `browser/turnMultiDiffSource.ts` and `browser/turnMultiDiffSource.contribution.ts` | compose Turn changes and register their source resolver and commit action with `workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.ts` |
 | Parts | `browser/parts/` | owns product chrome, window navigation, list, primary surface, and typed active context |
 | Activity Bar | `browser/parts/activitybar/` | owns Sessions page navigation, account entry, DOM, and presentation; reuses shared Parts, controls, configuration, and menu services without importing Workbench Activity Bar styles |
-| Application menu | `browser/parts/menubar.contribution.ts` and `browser/parts/titlebar/menubarControl.ts` | the contribution selects shared MenuIds and registers Sessions menu sections and window actions; MenubarControl owns menu interaction and presentation using the shared Toolbar and menu services |
+| Application menu and titlebar actions | `browser/menus.ts`, `browser/parts/menubar.contribution.ts`, and `browser/layoutActions.ts` | Sessions owns its menu root, File menu, and layout action menu; common sections are explicitly shared. The Workbench BrowserMenubarControl owns menu interaction; the layout and Sessions service own sidebar visibility and history |
 | Session chat commands | `browser/actions/sessionsChatActions.ts` | maps the reused ChatWidget New Chat and History commands to the Sessions window's draft and active-chat selection |
 | Open Agents Window | `code/browser/workbench/modes/code.ts`, `workbench/contrib/chat/electron-browser/`, `contrib/openAgentsWindow/electron-browser/`, and `workbench/browser/parts/titlebar/` | the Code browser mode owns page navigation; the Chat desktop contribution owns the titlebar action, hover label, and window command; the Sessions desktop contribution owns system-wide shortcut synchronization; the Workbench titlebar owns the shared mark and motion. Shared shortcut selection lives in `workbench/contrib/keybindings/`, while `platform/globalKeybindings/` owns operating-system registrations |
 
@@ -39,6 +40,11 @@ service contracts. Workbench production code does not import Sessions modules;
 the Code and Academic mode entries load the Sessions contribution that registers
 their Session-backed Chat view and actions. The shared `ChatWidget` renders a
 model supplied by Sessions and does not create or select Sessions itself.
+The dedicated window supplies `NewChatInputWidget` through the shared widget's
+input factory. Sessions selects its embedded `CodeEditorWidget` adapter per
+composer; it does not change the Workbench editor registry. Its CSS styles only
+its own root and configures the shared input through component properties.
+Sessions-only input behavior and appearance stay in this contribution.
 
 ## Execution path
 
@@ -62,8 +68,7 @@ model supplied by Sessions and does not create or select Sessions itself.
    The Activity Bar selects Chat, Collaboration, Library, and Code; Collaboration and Library currently show empty pages.
    Mobile devices remains unavailable. Its right-click menu moves the
    controls to the sidebar top or bottom, hides them, or selects the side rail size through
-   `sessions.activityBar.compact`. The Sessions titlebar hosts its own MenubarControl, which presents Sessions menu contributions through shared Toolbar and menu services. The titlebar owns sidebar visibility
-   and session history. Code shows an empty page in the primary Part; the sidebar owns the new-session control.
+   `sessions.activityBar.compact`. The Sessions titlebar composes the shared BrowserMenubarControl with Sessions menu IDs and visual tokens. Layout actions derive menu context keys from the layout and window Sessions service; the titlebar keeps no separate sidebar or history state. Code shows an empty page in the primary Part; the sidebar owns the new-session control.
    Its spacing follows `sessions.layoutStyle`, independently of the IDE's
    `workbench.layoutStyle`. Both preferences use the same profile settings
    resource; changing either one updates its own window without changing

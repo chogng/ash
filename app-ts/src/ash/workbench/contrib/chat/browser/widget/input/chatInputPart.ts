@@ -22,7 +22,7 @@ import type { ModelRef } from "../../../../../services/chat/common/chatService.j
 import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog } from "../../../common/slashCommands.js";
 import { SkillSelectorCatalog } from "../../../common/skillSelectors.js";
 import type { ChatInputDelegate, ChatInputState } from "./chatInput.js";
-import { ChatInputEditors, type IChatInputEditor } from "./chatInputEditorRegistry.js";
+import { ChatInputEditors, type IChatInputEditor, type IChatInputEditorProvider } from "./chatInputEditorRegistry.js";
 import { ChatInputPickerResponsiveLayout } from './chatInputPickerResponsiveLayout.js';
 import { ModelPickerActionItem } from './modelPicker/modelPickerActionItem.js';
 import { ModelPickerConfiguration } from './modelPicker/modelPickerConfiguration.js';
@@ -82,7 +82,7 @@ export class ChatInputPart extends Disposable {
 	private visible = true;
 	private draftRevision = 0;
 
-	constructor(container: HTMLElement, delegate: ChatInputDelegate, contextMenuService: IContextMenuService, contextViewService: IContextViewService, private readonly accessibleViewService: IAccessibleViewService, private readonly notifications: INotificationService, private readonly dictation?: IDictationService) {
+	constructor(container: HTMLElement, delegate: ChatInputDelegate, contextMenuService: IContextMenuService, contextViewService: IContextViewService, private readonly accessibleViewService: IAccessibleViewService, private readonly notifications: INotificationService, private readonly dictation?: IDictationService, editorProvider: Pick<IChatInputEditorProvider, 'create'> = ChatInputEditors) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.delegate = delegate;
@@ -106,7 +106,7 @@ export class ChatInputPart extends Disposable {
 		this.attachmentList.setAttribute("aria-label", "Attached context");
 		const editorHost = h(ownerDocument, "div");
 		editorHost.className = "ash-chat-input-editor-host";
-		this.input = this._register(ChatInputEditors.create({
+		this.input = this._register(editorProvider.create({
 			container: editorHost,
 			placeholder: "Ask Ash",
 			ariaLabel: "Chat message",

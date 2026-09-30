@@ -270,9 +270,12 @@ test("Chat input starts at the InputPart default height and still grows with con
 	Object.defineProperty(editor.element, 'clientWidth', { value: 480 });
 	editor.layout();
 
-	assert.equal(editor.element.style.height, "106px");
+	// The InputPart supplies the 6px inset; the editor's existing default excludes it.
+	assert.equal(editor.element.style.height, "100px");
 	editor.value = Array.from({ length: 12 }, (_, index) => `Line ${index + 1}`).join("\n");
 	await waitFor(() => editor.element.style.height === "240px");
+	editor.value = Array.from({ length: 50 }, (_, index) => `Line ${index + 1}`).join("\n");
+	await waitFor(() => editor.element.style.height === "314px");
 	dom.window.close();
 });
 

@@ -73,6 +73,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		editorService?: IEditorService,
 		imageResourceLoader?: (resource: URI) => Promise<Blob>,
 		dictation?: IDictationService,
+		createInputPart?: (container: HTMLElement, delegate: ChatInputDelegate) => ChatInputPart,
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
@@ -109,7 +110,9 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			openModelSettings: () => commandService.executeCommand(OpenSettingsCommandId, 'models'),
 			resolveInteraction: (response) => this.model.resolveInteraction(response),
 		};
-		this.inputPart = this._register(new ChatInputPart(this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, notifications, dictation));
+		this.inputPart = this._register(createInputPart
+			? createInputPart(this.element, inputDelegate)
+			: new ChatInputPart(this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, notifications, dictation));
 		this.element.append(this.goalElement, this.listWidget.element, this.inputPart.element);
 		this._register(this.model.onDidChange(() => this.render()));
 		this._register(toDisposable(() => this.element.remove()));
