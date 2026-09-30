@@ -24,6 +24,12 @@ test('editor tab uses the editor surface and shares its pin and close slot', asy
 		return { tab: getComputedStyle(element).backgroundColor, editor };
 	});
 	expect(colors.tab).toBe(colors.editor);
+	const closeGeometry = await ordinary.locator('.ash-tab-close-action button').evaluate(button => {
+		const rect = button.getBoundingClientRect();
+		const icon = button.querySelector('.ash-icon')!.getBoundingClientRect();
+		return { width: rect.width, height: rect.height, iconWidth: icon.width, iconHeight: icon.height, left: icon.left - rect.left, right: rect.right - icon.right };
+	});
+	expect(closeGeometry).toEqual({ width: 22, height: 22, iconWidth: 16, iconHeight: 16, left: 3, right: 3 });
 
 	await ordinary.getByRole('tab').dblclick();
 	const sticky = page.locator('.ash-sticky-editor-tabs-row .ash-tab.checked');

@@ -32,6 +32,11 @@ test('application menu trigger uses the titlebar action size', async ({ target, 
 	const page = workbench.page;
 	const trigger = page.getByRole('toolbar', { name: 'Title bar left actions' }).getByRole('button', { name: 'Application menu' });
 	await expect(trigger).toHaveCount(1);
+	await expect(trigger).toHaveAccessibleName('Application menu');
+	await expect(trigger.locator('.ash-icon')).toBeVisible();
+	await expect(trigger.locator('.ash-button-label')).toBeHidden();
+	await expect(trigger).toHaveCSS('width', '22px');
+	await expect(trigger).toHaveCSS('height', '22px');
 	await expect(page.getByRole('toolbar', { name: 'Title bar left actions' }).getByRole('menubar')).toHaveCount(0);
 	const adjacentAction = page.locator('.ash-titlebar-left-actions [data-action-id="workbench.action.toggleSideBar"] .ash-button');
 	const [triggerBounds, actionBounds] = await Promise.all([trigger.boundingBox(), adjacentAction.boundingBox()]);

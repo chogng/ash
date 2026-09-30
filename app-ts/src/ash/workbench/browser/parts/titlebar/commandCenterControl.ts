@@ -1,3 +1,4 @@
+import './commandCenterControl.css';
 import { h } from '../../../../base/browser/dom.js';
 import { setAriaAttribute } from '../../../../base/browser/ui/aria/aria.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';

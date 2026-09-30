@@ -90,7 +90,7 @@ test("Workbench owns the horizontal ActionBar hover skin", async () => {
 	assert.match(workbenchCss, /background: var\(--ash-toolbar-hover-background\)/);
 });
 
-test("ToolBar icon actions use the 22px borderless VS Code geometry", async () => {
+test("ToolBar icon actions center their content in the 22px borderless hit area", async () => {
 	const sizeSource = await readFile(join(process.cwd(), "src", "ash", "platform", "theme", "common", "sizes", "baseSizes.ts"), "utf8");
 	const toolbarCss = await readFile(join(process.cwd(), "src", "ash", "base", "browser", "ui", "toolbar", "toolbar.css"), "utf8");
 	const tabListCss = await readFile(join(process.cwd(), "src", "ash", "base", "browser", "ui", "tablist", "tablist.css"), "utf8");
@@ -99,10 +99,10 @@ test("ToolBar icon actions use the 22px borderless VS Code geometry", async () =
 	assert.match(sizeSource, /dimension\("toolbar\.actionSize", 22,/);
 	assert.match(
 		toolbarCss,
-		/\.ash-toolbar \.ash-action-view-item\.icon > \.ash-button \{[^}]*width: var\(--ash-toolbar-action-size\);[^}]*border: 0;[^}]*padding: 3px;/s,
+		/\.ash-toolbar \.ash-action-view-item\.icon > \.ash-button \{[^}]*width: var\(--ash-toolbar-action-size\);[^}]*border: 0;[^}]*padding: 0;/s,
 	);
-	assert.match(tabListCss, /\.ash-tab-actions \.ash-action-view-item\.icon \.ash-button \{[^}]*width: var\(--ash-toolbar-action-size\);[^}]*padding: 3px;[^}]*border: 0;/s);
-	assert.match(compositeBarCss, /\.ash-composite-bar-overflow > \.ash-composite-bar-action \{[^}]*width: var\(--ash-toolbar-action-size\);[^}]*height: var\(--ash-toolbar-action-size\);[^}]*padding: 3px;[^}]*border: 0;/s);
+	assert.match(tabListCss, /\.ash-tab-actions \.ash-action-view-item\.icon \.ash-button \{[^}]*width: var\(--ash-toolbar-action-size\);[^}]*padding: 0;[^}]*border: 0;/s);
+	assert.match(compositeBarCss, /\.ash-composite-bar-overflow > \.ash-composite-bar-action \{[^}]*width: var\(--ash-toolbar-action-size\);[^}]*height: var\(--ash-toolbar-action-size\);[^}]*padding: 0;[^}]*border: 0;/s);
 });
 
 test("TabList and CompositeBar each own their pointer interaction styling", async () => {
@@ -133,11 +133,13 @@ test("TabList preserves the standard close-action hover background", async () =>
 	assert.doesNotMatch(chatTabsCss, /--ash-tab-list-(?:checked-)?action-hover-background/);
 });
 
-test("Menubar icon actions hide only their text label", async () => {
+test("Menubar icon actions use ToolBar's label hiding without hiding their icon", async () => {
 	const menubarCss = await readFile(join(process.cwd(), "src", "ash", "workbench", "browser", "parts", "titlebar", "menubarControl.css"), "utf8");
+	const toolbarCss = await readFile(join(process.cwd(), "src", "ash", "base", "browser", "ui", "toolbar", "toolbar.css"), "utf8");
 
 	assert.doesNotMatch(menubarCss, /\.ash-menubar \.ash-menubar-item > span\s*\{[^}]*display:\s*none/s);
-	assert.match(menubarCss, /\.ash-menubar \.ash-menubar-item \.ash-button-label\s*\{[^}]*display:\s*none/s);
+	assert.match(toolbarCss, /\.ash-toolbar \.ash-action-view-item\.icon \.ash-icon-label-container\s*\{[^}]*display:\s*none/s);
+	assert.doesNotMatch(menubarCss, /\.ash-(?:button-label|icon-label-container)\s*\{[^}]*display:\s*none/s);
 });
 
 test("Split actions own their joined geometry outside Terminal", async () => {
@@ -146,7 +148,7 @@ test("Split actions own their joined geometry outside Terminal", async () => {
 	const terminalCss = await readFile(join(sourceRoot, "workbench", "contrib", "terminal", "browser", "view", "media", "terminal.css"), "utf8");
 	const workbenchCss = await readFile(join(sourceRoot, "workbench", "browser", "media", "style.css"), "utf8");
 
-	assert.match(dropdownCss, /\.ash-dropdown-with-primary-action-view-item\s*\{[^}]*display: flex;[^}]*gap: 0;[^}]*border-radius: 4px;/s);
+	assert.match(dropdownCss, /\.ash-dropdown-with-primary-action-view-item\s*\{[^}]*display: flex;[^}]*gap: 0;[^}]*border-radius: var\(--ash-corner-radius-small\);/s);
 	assert.match(workbenchCss, /\.ash-dropdown-with-primary-action-view-item:not\(\.disabled\):hover/);
 	assert.doesNotMatch(terminalCss, /ash-terminal-(?:new|profile)-action/);
 	assert.doesNotMatch(terminalCss, /margin-right:\s*-2px/);

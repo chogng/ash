@@ -32,12 +32,12 @@
 	transform: translateX(-50%);
 }
 
-.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item.checked::after {
-	background: var(--ash-modern-activity-bar-item-active-background);
+.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item:hover::after {
+	background: var(--ash-modern-activity-bar-item-hover-background);
 }
 
-.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item:not(.checked):hover::after {
-	background: var(--ash-modern-activity-bar-item-hover-background);
+.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item.checked::after {
+	background: var(--ash-modern-activity-bar-item-active-background);
 }
 
 .ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item.checked {
@@ -108,24 +108,24 @@
 	padding: var(--ash-spacing-size40);
 }
 
+.ash-workbench.modern-ui:is([data-color-scheme='high-contrast-dark'], [data-color-scheme='high-contrast-light']) .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item:hover::after {
+	background: transparent;
+	outline: var(--ash-stroke-thickness) dashed var(--ash-focus-border);
+}
+
 .ash-workbench.modern-ui:is([data-color-scheme='high-contrast-dark'], [data-color-scheme='high-contrast-light']) .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item.checked::after {
 	background: transparent;
 	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
 }
 
-.ash-workbench.modern-ui:is([data-color-scheme='high-contrast-dark'], [data-color-scheme='high-contrast-light']) .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item:not(.checked):hover::after {
-	background: transparent;
-	outline: var(--ash-stroke-thickness) dashed var(--ash-focus-border);
-}
-
 @media (forced-colors: active) {
+	.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item:hover::after {
+		background: transparent;
+		outline: var(--ash-stroke-thickness) dashed Highlight;
+	}
+
 	.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item.checked::after {
 		background: transparent;
 		outline: var(--ash-stroke-thickness) solid Highlight;
-	}
-
-	.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item:not(.checked):hover::after {
-		background: transparent;
-		outline: var(--ash-stroke-thickness) dashed Highlight;
 	}
 }

@@ -253,6 +253,24 @@ test("find options project checked classes and report invalid regular expression
 	assert.equal(matchDecorationCount(fixture), 0);
 });
 
+test('closed find options keep visual and accessible toggle states in sync', () => {
+	using fixture = createFixture('alpha beta');
+	const state = fixture.find.getState();
+	const options = requiredElement<HTMLElement>(fixture.editor.getContainerDomNode(), '.stanza-editor-find-options-widget');
+	const buttons = [...options.querySelectorAll('button')];
+	const states = () => buttons.map(button => ({ checked: button.classList.contains('checked'), pressed: button.getAttribute('aria-pressed') }));
+
+	state.change({ matchCase: true, wholeWord: true, isRegex: true }, false);
+	assert.equal(options.hidden, false);
+	assert.deepEqual(states(), Array.from({ length: 3 }, () => ({ checked: true, pressed: 'true' })));
+
+	buttons.forEach(button => button.click());
+	assert.deepEqual(states(), Array.from({ length: 3 }, () => ({ checked: false, pressed: 'false' })));
+	assert.deepEqual([state.matchCase, state.wholeWord, state.isRegex], [false, false, false]);
+	startFind(fixture);
+	assert.equal(options.hidden, true);
+});
+
 test("find in selection keeps the opening scope through match navigation and supports Alt+L", () => {
 	const fixture = createFixture("alpha beta alpha beta alpha", new Position((0) + 1, (6) + 1), new Position((0) + 1, (16) + 1));
 	using resources = fixture;

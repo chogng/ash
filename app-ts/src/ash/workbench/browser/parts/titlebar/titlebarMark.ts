@@ -1,3 +1,4 @@
+import './titlebarMark.css';
 import ashMarkSvg from '../../media/ash-mark.svg?raw';
 import { registerLxicon } from '../../../../base/common/lxiconsUtil.js';
 

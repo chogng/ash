@@ -33,22 +33,6 @@
   transform: translate(-50%, -50%);
 }
 
-.ash-titlebar-command-center {
-  position: relative;
-  width: 100%;
-}
-
-.ash-titlebar-command-center-navigation {
-  position: absolute;
-  right: calc(100% + var(--ash-spacing-size80));
-  top: 50%;
-  display: flex;
-  height: 100%;
-  align-items: center;
-  color: var(--ash-title-bar-action-foreground);
-  transform: translateY(-50%);
-}
-
 .ash-titlebar-center-adjacent-actions {
   position: absolute;
   left: calc(100% + var(--ash-spacing-size80));
@@ -59,67 +43,9 @@
   transform: translateY(-50%);
 }
 
-.ash-titlebar-command-center-button {
-  width: 100%;
-  height: 24px;
-  min-height: 24px;
-  min-width: 0;
-  padding: 0 8px;
-  color: var(--ash-command-center-foreground);
-  background: var(--ash-command-center-background);
-  border: var(--ash-stroke-thickness) solid var(--ash-command-center-border);
-  border-radius: var(--ash-corner-radius-small);
-}
-
-.ash-titlebar-command-center-button:hover {
-  background: var(--ash-command-center-hover-background);
-}
-
-.ash-titlebar-command-center-button:active,
-.ash-titlebar-command-center-button:focus-visible,
-.ash-titlebar-command-center-button.active {
-  border-color: var(--ash-command-center-active-border);
-}
-
-.ash-titlebar-command-center-button.active {
-  background: var(--ash-title-bar-background);
-}
-
-.ash-titlebar-command-center-button:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: var(--ash-stroke-thickness);
-}
-
-.ash-titlebar-command-center-button .ash-button-content,
-.ash-titlebar-command-center-button .ash-button-label {
-  min-width: 0;
-}
-
-.ash-titlebar-command-center-button .ash-button-content {
-  max-width: 100%;
-}
-
-.ash-titlebar-command-center-button .ash-icon-label-icon {
-  flex: 0 0 auto;
-}
-
-.ash-titlebar-command-center-button .ash-button-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 @media (max-width: 800px) {
   .ash-titlebar-center {
     width: 32px;
-  }
-
-  .ash-titlebar-command-center-button .ash-button-label {
-    display: none;
-  }
-
-  .ash-titlebar-command-center-button {
-    padding-inline: 6px;
   }
 }
 
@@ -141,68 +67,4 @@
   height: 100%;
   align-items: center;
   color: var(--ash-title-bar-action-foreground);
-}
-
-.ash-titlebar-mark path {
-  transform-box: fill-box;
-  transform-origin: center;
-}
-
-.ash-titlebar-center-adjacent-actions .ash-button:is(:hover, :focus-visible) .ash-titlebar-mark path {
-  animation: ash-titlebar-mark-bloom 780ms cubic-bezier(0.16, 1, 0.3, 1) var(--ash-mark-delay) both;
-}
-
-.ash-titlebar-mark #petal-center {
-  --ash-mark-delay: 170ms;
-  --ash-mark-x: 0px;
-  --ash-mark-y: 0px;
-  --ash-mark-twist: 0deg;
-}
-
-.ash-titlebar-mark #petal-north,
-.ash-titlebar-mark #petal-south {
-  --ash-mark-delay: 320ms;
-}
-
-.ash-titlebar-mark #petal-north { --ash-mark-y: 42px; --ash-mark-twist: -5deg; }
-.ash-titlebar-mark #petal-south { --ash-mark-y: -42px; --ash-mark-twist: 5deg; }
-.ash-titlebar-mark #petal-northwest { --ash-mark-delay: 400ms; --ash-mark-x: 32px; --ash-mark-y: 32px; --ash-mark-twist: -5deg; }
-.ash-titlebar-mark #petal-southeast { --ash-mark-delay: 400ms; --ash-mark-x: -32px; --ash-mark-y: -32px; --ash-mark-twist: 5deg; }
-.ash-titlebar-mark #petal-northeast { --ash-mark-delay: 480ms; --ash-mark-x: -32px; --ash-mark-y: 32px; --ash-mark-twist: 5deg; }
-.ash-titlebar-mark #petal-southwest { --ash-mark-delay: 480ms; --ash-mark-x: 32px; --ash-mark-y: -32px; --ash-mark-twist: -5deg; }
-.ash-titlebar-mark #petal-west { --ash-mark-delay: 560ms; --ash-mark-x: 42px; --ash-mark-twist: -5deg; }
-.ash-titlebar-mark #petal-east { --ash-mark-delay: 560ms; --ash-mark-x: -42px; --ash-mark-twist: 5deg; }
-
-@keyframes ash-titlebar-mark-bloom {
-  0% {
-    opacity: 0;
-    translate: var(--ash-mark-x, 0px) var(--ash-mark-y, 0px);
-    scale: 0.78;
-    rotate: var(--ash-mark-twist, 0deg);
-  }
-
-  72% {
-    opacity: 1;
-    translate: 0 0;
-    scale: 1.015;
-    rotate: 0deg;
-    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  100% {
-    opacity: 1;
-    translate: 0 0;
-    scale: 1;
-    rotate: 0deg;
-  }
-}
-
-.ash-workbench.ash-reduce-motion .ash-titlebar-mark path {
-  animation: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ash-titlebar-mark path {
-    animation: none !important;
-  }
 }

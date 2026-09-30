@@ -270,10 +270,10 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	expect(iconBounds).not.toBeNull();
 	expect(buttonBounds!.width).toBe(36);
 	expect(buttonBounds!.height).toBe(36);
-	expect(iconBounds!.width).toBe(20);
-	expect(iconBounds!.height).toBe(20);
+	expect(iconBounds!.width).toBe(16);
+	expect(iconBounds!.height).toBe(16);
 	const collaborationIcon = activityBar.locator('button svg[data-ash-icon-id="colab"]');
-	await expect(collaborationIcon).toHaveCSS('width', '20px');
+	await expect(collaborationIcon).toHaveCSS('width', '16px');
 	expect(Math.abs(iconBounds!.x + iconBounds!.width / 2 - (buttonBounds!.x + buttonBounds!.width / 2))).toBeLessThanOrEqual(1);
 	expect(Math.abs(iconBounds!.y + iconBounds!.height / 2 - (buttonBounds!.y + buttonBounds!.height / 2))).toBeLessThanOrEqual(1);
 	await chatButton.click({ button: 'right' });
@@ -967,6 +967,8 @@ test('Sessions titlebar aligns its application menu and actions', async ({ appli
 	const toolbar = sessionsPage.locator('[data-part="titlebar"] .ash-toolbar');
 	const buttons = toolbar.getByRole('button');
 	await expect(buttons).toHaveCount(4);
+	await expect(toolbar).toHaveCSS('-webkit-app-region', 'no-drag');
+	await expect(buttons.nth(1)).toHaveAttribute('aria-pressed', 'true');
 	const activityNavigation = sessionsPage.locator('.ash-sessions-activity-content');
 	await expect(activityNavigation.getByRole('button', { name: 'Chat' })).toHaveAttribute('aria-current', 'page');
 	await expect(activityNavigation.getByRole('button', { name: 'Code' })).not.toHaveAttribute('aria-current', 'page');

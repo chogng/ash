@@ -29,7 +29,7 @@
   min-width: var(--ash-toolbar-action-size);
   height: var(--ash-toolbar-action-size);
   min-height: var(--ash-toolbar-action-size);
-  padding: 4px;
+  padding: 0;
   border: 0;
   color: var(--ash-composite-bar-inactive-foreground);
 }
@@ -39,13 +39,8 @@
   height: 16px;
 }
 
-.ash-composite-bar-overflow .ash-icon-label-text {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+.ash-composite-bar-overflow .ash-icon-label-container {
+  display: none;
 }
 
 .ash-composite-bar > .ash-action-bar > .ash-composite-bar-item {

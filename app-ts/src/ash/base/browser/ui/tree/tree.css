@@ -87,8 +87,12 @@
   border-left-color: var(--ash-tree-indent-guides-stroke);
 }
 
-.ash-tree-row:not(.selected):not(.focused):hover {
+.ash-tree-row:hover {
   background: var(--ash-list-hover-background);
+}
+
+.ash-tree-row.focused {
+  background: transparent;
 }
 
 .ash-tree-selection-subtle .ash-tree-row.selected {

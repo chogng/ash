@@ -874,12 +874,15 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 		await expect(page.locator('.ash-sessions-titlebar-title, .ash-sessions-titlebar-avatar')).toHaveCount(0);
 		await expect(page.locator("[data-part='activitybar']")).toBeVisible();
 		const activityButtons = page.locator("[data-part='activitybar'] button");
-		expect(await activityButtons.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['chat-2-filled', 'colab', 'device-mobile', 'account']);
+		expect(await activityButtons.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['chat-2-filled', 'colab', 'library', 'code', 'device-mobile', 'account']);
 		await expect(activityButtons.first()).toHaveAttribute('aria-current', 'page');
-		await expect(activityButtons.nth(1)).toBeDisabled();
-		await expect(activityButtons.nth(2)).toBeDisabled();
-		const mobileBounds = await activityButtons.nth(2).boundingBox();
-		const accountBounds = await activityButtons.nth(3).boundingBox();
+		await expect(page.getByRole('button', { name: 'Collaboration', exact: true })).toBeEnabled();
+		await expect(page.getByRole('button', { name: 'Library', exact: true })).toBeEnabled();
+		await expect(page.getByRole('button', { name: 'Code', exact: true })).toBeEnabled();
+		const mobile = page.getByRole('button', { name: /Mobile devices/u });
+		await expect(mobile).toBeDisabled();
+		const mobileBounds = await mobile.boundingBox();
+		const accountBounds = await page.getByRole('button', { name: 'Accounts', exact: true }).boundingBox();
 		const navigationBounds = await page.locator("[data-part='activitybar']").boundingBox();
 		expect(accountBounds!.y).toBeGreaterThan(mobileBounds!.y);
 		expect(navigationBounds!.y + navigationBounds!.height - (accountBounds!.y + accountBounds!.height)).toBeLessThanOrEqual(16);
@@ -893,10 +896,14 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 		expect(auxiliaryFrameBounds?.width).toBeCloseTo(200, 0);
 		expect(sessionsBounds!.x).toBeGreaterThan(sidebarBounds!.x);
 		expect(auxiliaryBounds!.x).toBeGreaterThan(sessionsBounds!.x);
-		await page.getByRole('button', { name: 'Session details' }).click();
-		await expect(page.locator("[data-part='auxiliarybar']")).toBeHidden();
-		await page.getByRole('button', { name: 'Session details' }).click();
-		await expect(page.locator("[data-part='auxiliarybar']")).toBeVisible();
+		const hideSidebar = page.getByRole('button', { name: 'Hide sidebar', exact: true });
+		await expect(hideSidebar).toHaveAttribute('aria-pressed', 'true');
+		await hideSidebar.click();
+		await expect(page.locator("[data-part='sidebar']")).toBeHidden();
+		const showSidebar = page.getByRole('button', { name: 'Show sidebar', exact: true });
+		await expect(showSidebar).toHaveAttribute('aria-pressed', 'false');
+		await showSidebar.click();
+		await expect(page.locator("[data-part='sidebar']")).toBeVisible();
 		const sessionsNavigation = page.locator("[data-part='activitybar']").getByRole('button', { name: /Chat\. Press Alt\+F1/u });
 		await sessionsNavigation.focus();
 		await page.keyboard.press('Alt+F1');
@@ -925,7 +932,7 @@ test('titlebar toolbar icons fit inside their buttons', async ({ target, workben
 		await expect(toggle).toBeVisible();
 		await expect(toggle).toHaveAccessibleName(accessibleName);
 		await expect(toggle.locator('.ash-icon')).toBeVisible();
-		await expect(toggle.locator('.ash-button-label')).toHaveCSS('clip-path', 'inset(50%)');
+		await expect(toggle.locator('.ash-button-label')).toBeHidden();
 	}
 	const buttons = page.locator('.ash-workbench-titlebar .ash-toolbar .ash-action-view-item.icon > .ash-button');
 	await expect(buttons.first()).toBeVisible();

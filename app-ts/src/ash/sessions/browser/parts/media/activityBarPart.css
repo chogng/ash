@@ -38,7 +38,7 @@
 	gap: var(--ash-spacing-size40);
 }
 
-.ash-sessions-activity-item.ash-button {
+.ash-sessions-activity-item {
 	display: grid;
 	width: var(--ash-spacing-size360);
 	height: var(--ash-spacing-size360);
@@ -50,37 +50,18 @@
 	background: transparent;
 }
 
-.ash-sessions-activity-content.compact:not(.horizontal) .ash-sessions-activity-item.ash-button {
+.ash-sessions-activity-content.compact:not(.horizontal) .ash-sessions-activity-item {
 	width: var(--ash-spacing-size280);
 	height: var(--ash-spacing-size280);
 }
 
-.ash-sessions-activity-item.ash-button:hover,
-.ash-sessions-activity-item.ash-button.selected {
+.ash-sessions-activity-item:not(:disabled):hover,
+.ash-sessions-activity-item.selected {
 	color: var(--ash-foreground);
 	background: var(--ash-sessions-selection-background);
 }
 
-.ash-sessions-activity-item.ash-button:disabled {
-	opacity: .35;
-}
-
-.ash-sessions-activity-item.ash-button:disabled:hover {
-	color: var(--ash-foreground);
-	background: transparent;
-}
-
-.ash-sessions-activity-item.ash-button:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-	outline-offset: 2px;
-}
-
 .ash-sessions-activity-item .ash-icon {
-	width: 20px;
-	height: 20px;
-}
-
-.ash-sessions-activity-content.compact:not(.horizontal) .ash-sessions-activity-item .ash-icon {
 	width: var(--ash-lxicon-font-size);
 	height: var(--ash-lxicon-font-size);
 }

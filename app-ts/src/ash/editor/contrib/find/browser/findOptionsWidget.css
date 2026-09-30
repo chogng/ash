@@ -23,7 +23,7 @@
 }
 
 .stanza-editor-find-options-widget button:hover,
-.stanza-editor-find-options-widget button[aria-pressed="true"] { background: var(--ash-button-hover-background); }
+.stanza-editor-find-options-widget button.checked { background: var(--ash-button-hover-background); }
 
 .stanza-editor-find-options-widget button:focus-visible {
   outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);

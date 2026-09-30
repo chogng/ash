@@ -1,5 +1,29 @@
 import { expect, test } from '../../../automation/test.js';
 
+test('closed find options show a checked button when toggled from the editor', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
+	await expect(input).toBeAttached();
+	await input.focus();
+	await input.type('alpha beta');
+	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Alt+c' : 'Alt+c');
+	const options = workbench.editors.groupAt(0).content.getByRole('group', { name: 'Find options' });
+	const matchCase = options.getByRole('button', { name: 'Match case', exact: true });
+	await expect(options).toBeVisible();
+	await expect(matchCase).toHaveAttribute('aria-pressed', 'true');
+	await expect(matchCase).toHaveClass(/checked/u);
+	await matchCase.hover();
+	const checkedColor = await matchCase.evaluate(button => getComputedStyle(button).backgroundColor);
+	expect(checkedColor).not.toBe('rgba(0, 0, 0, 0)');
+	await matchCase.click();
+	await expect(matchCase).toHaveAttribute('aria-pressed', 'false');
+	await expect(matchCase).not.toHaveClass(/checked/u);
+	await options.getByRole('button', { name: 'Match whole word', exact: true }).hover();
+	await expect(matchCase).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+});
+
 test('editor breadcrumbs use the base widget for keyboard focus and activation', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;

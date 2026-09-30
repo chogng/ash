@@ -88,15 +88,6 @@
   right: -2px;
 }
 
-.ash-tab-list .ash-tab.checked {
-  background: var(--ash-tab-list-active-background);
-}
-
-.ash-tab-list .ash-tab.selected:not(.checked) {
-  color: var(--ash-foreground);
-  background: color-mix(in srgb, var(--ash-tab-list-active-background) 65%, var(--ash-tab-list-inactive-background, transparent));
-}
-
 .ash-tab-label {
   display: flex;
   box-sizing: border-box;
@@ -120,6 +111,15 @@
   border-radius: var(--ash-corner-radius-small);
   color: var(--ash-description-foreground);
   background: var(--ash-tab-list-inactive-background, transparent);
+}
+
+.ash-tab-list .ash-tab.selected {
+  color: var(--ash-foreground);
+  background: color-mix(in srgb, var(--ash-tab-list-active-background) 65%, var(--ash-tab-list-inactive-background, transparent));
+}
+
+.ash-tab-list .ash-tab.checked {
+  background: var(--ash-tab-list-active-background);
 }
 
 .ash-tab-list-inset .ash-tab:hover,
@@ -203,19 +203,14 @@
   height: var(--ash-toolbar-action-size);
   min-height: var(--ash-toolbar-action-size);
   flex: 0 0 var(--ash-toolbar-action-size);
-  padding: 4px;
+  padding: 0;
   border: 0;
   color: inherit;
   background: transparent;
 }
 
-.ash-tab-actions .ash-action-view-item.icon .ash-button-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+.ash-tab-actions .ash-action-view-item.icon .ash-icon-label-container {
+  display: none;
 }
 
 .ash-tab-actions .ash-action-view-item.icon .ash-button:hover {

@@ -71,6 +71,37 @@ test('Explorer keeps selection distinct from hover and reflects keyboard focus',
 	}
 });
 
+test('Modern Activity Bar keeps selected styling above hover in high contrast', async ({ workbench }) => {
+	const page = workbench.page;
+	const bar = page.locator('[data-part="activitybar"]');
+	const selected = bar.locator('.ash-composite-bar-item.checked').first();
+	const other = bar.getByRole('tab', { name: 'Search', exact: true });
+	for (const theme of ['Ash Light', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
+		await page.getByRole('button', { name: 'Manage', exact: true }).click();
+		await page.getByRole('menu').last().getByRole('menuitem', { name: 'Themes', exact: true }).hover();
+		await page.getByRole('menu').last().getByRole('menuitem', { name: 'Color Theme', exact: true }).click();
+		const search = page.locator('.ash-quick-pick').getByRole('combobox');
+		await search.fill(theme);
+		await search.press('Enter');
+		await expect(page.locator('.ash-quick-pick')).toHaveCount(0);
+		await page.mouse.move(400, 180);
+		const selectedStyle = await selected.evaluate(element => {
+			const style = getComputedStyle(element, '::after');
+			return { background: style.backgroundColor, outline: style.outlineStyle, color: style.outlineColor };
+		});
+		await selected.hover();
+		await expect.poll(() => selected.evaluate(element => {
+			const style = getComputedStyle(element, '::after');
+			return { background: style.backgroundColor, outline: style.outlineStyle, color: style.outlineColor };
+		})).toEqual(selectedStyle);
+		if (theme.includes('High Contrast')) {
+			expect(selectedStyle.outline).toBe('solid');
+			await other.hover();
+			await expect.poll(() => other.evaluate(element => getComputedStyle(element, '::after').outlineStyle)).toBe('dashed');
+		}
+	}
+});
+
 test.describe('Workbench shell colors', () => {
 	test.use({ openWorkspace: false });
 

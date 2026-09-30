@@ -84,5 +84,8 @@ export class FindOptionsWidget extends Disposable implements IOverlayWidget {
 		this._register(addDisposableListener(button, 'click', onClick));
 		return button;
 	}
-	private checked(button: HTMLButtonElement, value: boolean): void { button.setAttribute('aria-pressed', String(value)); }
+	private checked(button: HTMLButtonElement, value: boolean): void {
+		button.classList.toggle('checked', value);
+		button.setAttribute('aria-pressed', String(value));
+	}
 }

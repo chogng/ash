@@ -79,6 +79,7 @@ export class BrowserMenubarControl extends Disposable
 		this.toolbar = this._register(new MenuWorkbenchToolBar(container, menuService, contextMenuService, MenuId.TitleBarLeft, {
 			ariaLabel: leftActionsLabel(),
 			presentation: "inherit-foreground",
+			highlightToggledItems: true,
 			leadingActions: presentation === 'application-menu' ? [action] : [],
 			actionViewItemProvider: (candidate) => {
 				if (candidate !== action) return undefined;
