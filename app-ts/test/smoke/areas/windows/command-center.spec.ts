@@ -287,6 +287,12 @@ test('activity bar keeps global actions visible and moves excess views into a me
 	await expect(activitybar.getByRole('button', { name: 'Manage' })).toBeVisible();
 	const overflow = activitybar.getByRole('tab', { name: 'Additional views' });
 	await expect(overflow).toBeVisible();
+	const overflowIcon = overflow.locator('.ash-icon');
+	await expect(overflowIcon).toHaveCSS('width', '24px');
+	await expect(overflowIcon).toHaveCSS('height', '24px');
+	const [iconBounds, labelBounds] = await Promise.all([overflowIcon.boundingBox(), overflow.locator('.ash-icon-label').boundingBox()]);
+	expect(iconBounds!.width).toBeLessThanOrEqual(labelBounds!.width);
+	expect(iconBounds!.height).toBeLessThanOrEqual(labelBounds!.height);
 	await overflow.click();
 	const menu = page.getByRole('menu').last();
 	await expect(menu.getByRole('menuitemcheckbox').first()).toBeVisible();
@@ -656,6 +662,72 @@ test('activity bar context menu changes size and position', async ({ target, wor
 	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Activity Bar Position' }).hover();
 	await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: 'Hidden' }).click();
 	await expect(activitybar).toBeHidden();
+});
+
+test('activity bar icon size follows position and compact in Flat and Modern layouts', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	const activitybar = page.locator('[data-part="activitybar"]');
+	const sidebar = page.locator('[data-part="sidebar"]');
+	const railIcons = activitybar.locator('.ash-composite-bar-destination .ash-icon, .ash-global-composite-bar .ash-button-content .ash-icon');
+	const expectIconSize = async (icons: typeof railIcons, size: number): Promise<void> => {
+		expect(await icons.count()).toBeGreaterThan(0);
+		for (const icon of await icons.all()) {
+			await expect(icon).toHaveCSS('width', `${size}px`);
+			await expect(icon).toHaveCSS('height', `${size}px`);
+			const insets = await icon.evaluate(element => {
+				const icon = element.getBoundingClientRect();
+				const item = element.closest('[role="tab"], button')!.getBoundingClientRect();
+				return [icon.left - item.left, item.right - icon.right, icon.top - item.top, item.bottom - icon.bottom];
+			});
+			for (const inset of insets) expect(inset).toBeGreaterThanOrEqual(0);
+			const iconId = await icon.getAttribute('data-ash-icon-id');
+			expect(Math.abs(insets[0]! - insets[1]!), `${iconId} horizontal centering: ${insets}`).toBeLessThanOrEqual(1);
+			expect(Math.abs(insets[2]! - insets[3]!), `${iconId} vertical centering: ${insets}`).toBeLessThanOrEqual(1);
+		}
+	};
+	const chooseActivityOption = async (menu: string, option: string): Promise<void> => {
+		await page.getByRole('button', { name: 'Manage', exact: true }).click({ button: 'right' });
+		await page.getByRole('menu').last().getByRole('menuitem', { name: menu, exact: true }).click();
+		await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: option, exact: true }).click();
+	};
+	await activitybar.getByRole('tab', { name: 'Explorer' }).click();
+	await expect(sidebar).toBeVisible();
+	for (const style of ['Flat', 'Modern']) {
+		await page.keyboard.press('ControlOrMeta+Shift+P');
+		await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
+		await page.keyboard.press('Enter');
+		const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+		await settings.locator('[data-settings-group-id="workbench"]').click();
+		await settings.locator('[data-settings-category-id="layout"]').click();
+		await settings.locator('[data-configuration-key="workbench.layoutStyle"]').getByRole('combobox').click();
+		await page.getByRole('option', { name: style, exact: true }).click();
+		await settings.locator('.ash-modal-editor-close').click();
+		await expect(settings).toHaveCount(0);
+		if (style === 'Modern') await expect(workbench.element).toHaveClass(/modern-ui/);
+		else await expect(workbench.element).not.toHaveClass(/modern-ui/);
+		await expectIconSize(railIcons, 24);
+		await chooseActivityOption('Activity Bar Size', 'Compact');
+		await expect(activitybar).toHaveClass(/compact/);
+		await expectIconSize(railIcons, 16);
+		await chooseActivityOption('Activity Bar Size', 'Default');
+		await expect(activitybar).not.toHaveClass(/compact/);
+		await expectIconSize(railIcons, 24);
+		for (const position of ['Top', 'Bottom']) {
+			await chooseActivityOption('Activity Bar Position', position);
+			await expect(activitybar).toBeHidden();
+			const selector = sidebar.locator(`.ash-sidebar-composite-bar-${position.toLowerCase()}`);
+			await expect(selector).toBeVisible();
+			await expectIconSize(selector.locator('.ash-composite-bar-destination .ash-icon'), 16);
+			const titlebar = page.locator('[data-part="titlebar"]');
+			for (const name of ['Accounts', 'Manage']) {
+				await expectIconSize(titlebar.getByRole('button', { name, exact: true }).locator('.ash-button-content .ash-icon'), 16);
+			}
+		}
+		await chooseActivityOption('Activity Bar Position', 'Default');
+		await expect(activitybar).toBeVisible();
+		await expectIconSize(railIcons, 24);
+	}
 });
 
 test('top activity bar places the view selector inside the sidebar', async ({ target, workbench }) => {

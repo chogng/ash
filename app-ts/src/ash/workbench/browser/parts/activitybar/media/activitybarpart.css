@@ -2,6 +2,17 @@
 	background: var(--ash-side-bar-background);
 }
 
+/* Keep sizing on the content so the same presentation survives sidebar rehosting. */
+.ash-activity-bar-content {
+	--ash-activity-bar-icon-size: 24px;
+}
+
+.ash-workbench-activitybar.compact > .ash-activity-bar-content,
+.ash-activity-bar-content.compact,
+.ash-activity-bar-content.horizontal {
+	--ash-activity-bar-icon-size: 16px;
+}
+
 .ash-workbench-activitybar > .ash-workbench-part-content {
 	min-height: 0;
 	display: flex;

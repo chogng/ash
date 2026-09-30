@@ -1,5 +1,5 @@
 import { expect, test } from "../../../automation/test.js";
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
@@ -39,6 +39,25 @@ async function returnFromSessions(page: Page): Promise<void> {
 		return;
 	}
 	await page.getByRole('menuitem', { name: 'Return to Workbench' }).click();
+}
+
+async function expectActivityIconSize(navigation: Locator, size: number): Promise<void> {
+	const icons = navigation.locator('button svg.ash-icon');
+	await expect(icons).toHaveCount(6);
+	for (const icon of await icons.all()) {
+		await expect(icon).toHaveCSS('width', `${size}px`);
+		await expect(icon).toHaveCSS('height', `${size}px`);
+		const bounds = await icon.evaluate(element => {
+			const icon = element.getBoundingClientRect();
+			const button = element.closest('button')!.getBoundingClientRect();
+			return {
+				x: Math.abs(icon.x + icon.width / 2 - button.x - button.width / 2),
+				y: Math.abs(icon.y + icon.height / 2 - button.y - button.height / 2),
+			};
+		});
+		expect(bounds.x).toBeLessThanOrEqual(1);
+		expect(bounds.y).toBeLessThanOrEqual(1);
+	}
 }
 
 test('Code chat mode menu shows the available icons and selection', async ({ application, target, workbench }) => {
@@ -141,6 +160,7 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	const activityBar = page.locator('[data-part="activitybar"]');
 	await expect(activityBar).toBeVisible();
 	const activityNavigation = page.locator('.ash-sessions-activity-content');
+	await expectActivityIconSize(activityNavigation, 24);
 	await expect(activityNavigation.getByRole('button', { name: 'Chat' }).locator('svg')).toHaveAttribute('data-ash-icon-id', 'chat-2-filled');
 	await expect(activityNavigation.getByRole('button', { name: 'Chat' })).toHaveAttribute('aria-current', 'page');
 	await expect(activityNavigation.getByRole('button', { name: 'Code' }).locator('svg')).toHaveAttribute('data-ash-icon-id', 'code');
@@ -258,6 +278,7 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await layoutStyle.click();
 	await page.getByRole('option', { name: changedLayoutStyle }).click();
 	await expect(layoutStyle).toHaveText(changedLayoutStyle);
+	await expectActivityIconSize(activityNavigation, 24);
 	await layoutStyle.click();
 	await page.getByRole('option', { name: originalLayoutStyle }).click();
 	await page.keyboard.press('Escape');
@@ -270,10 +291,10 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	expect(iconBounds).not.toBeNull();
 	expect(buttonBounds!.width).toBe(36);
 	expect(buttonBounds!.height).toBe(36);
-	expect(iconBounds!.width).toBe(16);
-	expect(iconBounds!.height).toBe(16);
+	expect(iconBounds!.width).toBe(24);
+	expect(iconBounds!.height).toBe(24);
 	const collaborationIcon = activityBar.locator('button svg[data-ash-icon-id="colab"]');
-	await expect(collaborationIcon).toHaveCSS('width', '16px');
+	await expect(collaborationIcon).toHaveCSS('width', '24px');
 	expect(Math.abs(iconBounds!.x + iconBounds!.width / 2 - (buttonBounds!.x + buttonBounds!.width / 2))).toBeLessThanOrEqual(1);
 	expect(Math.abs(iconBounds!.y + iconBounds!.height / 2 - (buttonBounds!.y + buttonBounds!.height / 2))).toBeLessThanOrEqual(1);
 	await chatButton.click({ button: 'right' });
@@ -281,6 +302,7 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await page.getByRole('menuitemcheckbox', { name: 'Compact' }).click();
 	await expect.poll(() => chatButton.evaluate(button => button.getBoundingClientRect().width)).toBe(28);
 	await expect(collaborationIcon).toHaveCSS('width', '16px');
+	await expectActivityIconSize(activityNavigation, 16);
 	await expect.poll(() => activityBar.evaluate(bar => bar.getBoundingClientRect().width)).toBe(36);
 	await chatButton.click({ button: 'right' });
 	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
@@ -288,17 +310,33 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await expect(activityBar).toBeHidden();
 	const topHost = page.locator('.ash-sessions-activity-host.top');
 	await expect(topHost).toBeVisible();
+	await expectActivityIconSize(activityNavigation, 16);
 	await expect(topHost.locator('button').first()).toHaveAttribute('aria-label', /Chat/);
 	await topHost.locator('button').first().click({ button: 'right' });
 	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
 	await page.getByRole('menuitemcheckbox', { name: 'Bottom' }).click();
 	await expect(page.locator('.ash-sessions-activity-host.bottom')).toBeVisible();
 	await expect(topHost).toBeHidden();
+	await expectActivityIconSize(activityNavigation, 16);
 	await page.locator('.ash-sessions-activity-host.bottom button').first().click({ button: 'right' });
 	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
 	await page.getByRole('menuitemcheckbox', { name: 'Default' }).click();
 	await expect(activityBar).toBeVisible();
 	await expect.poll(() => activityBar.evaluate(bar => bar.getBoundingClientRect().width)).toBe(36);
+	await expectActivityIconSize(activityNavigation, 16);
+	await chatButton.click({ button: 'right' });
+	await page.getByRole('menuitem', { name: 'Activity Bar Size' }).click();
+	await page.getByRole('menuitemcheckbox', { name: 'Default' }).click();
+	await expectActivityIconSize(activityNavigation, 24);
+	await chatButton.click({ button: 'right' });
+	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
+	await page.getByRole('menuitemcheckbox', { name: 'Top' }).click();
+	await expect(topHost).toBeVisible();
+	await expectActivityIconSize(activityNavigation, 16);
+	await topHost.locator('button').first().click({ button: 'right' });
+	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
+	await page.getByRole('menuitemcheckbox', { name: 'Default' }).click();
+	await expectActivityIconSize(activityNavigation, 24);
 	await chatButton.click({ button: 'right' });
 	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
 	await page.getByRole('menuitemcheckbox', { name: 'Hidden' }).click();
@@ -416,6 +454,8 @@ test('Electron Code Sessions Activity Bar follows its position and size settings
 	};
 	try {
 		await updateSettings('default', false);
+		const activityNavigation = page.locator('.ash-sessions-activity-content');
+		await expectActivityIconSize(activityNavigation, 24);
 		const collaboration = page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Collaboration' });
 		const library = page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Library' });
 		await collaboration.click();
@@ -433,13 +473,23 @@ test('Electron Code Sessions Activity Bar follows its position and size settings
 		await page.keyboard.press('Escape');
 		await updateSettings('default', true);
 		await expect.poll(() => chatButton.evaluate(button => button.getBoundingClientRect().width)).toBe(28);
+		await expectActivityIconSize(activityNavigation, 16);
 		await updateSettings('top', true);
 		await expect(page.locator('[data-part="activitybar"]')).toBeHidden();
 		await expect(page.locator('.ash-sessions-activity-host.top')).toBeVisible();
+		await expectActivityIconSize(activityNavigation, 16);
 		await page.reload();
 		await expect(page.locator('.ash-sessions-activity-host.top')).toBeVisible();
+		await expectActivityIconSize(activityNavigation, 16);
 		await updateSettings('bottom', true);
 		await expect(page.locator('.ash-sessions-activity-host.bottom')).toBeVisible();
+		await expectActivityIconSize(activityNavigation, 16);
+		await updateSettings('top', false);
+		await expect(page.locator('.ash-sessions-activity-host.top')).toBeVisible();
+		await expectActivityIconSize(activityNavigation, 16);
+		await updateSettings('default', false);
+		await expect(page.locator('[data-part="activitybar"]')).toBeVisible();
+		await expectActivityIconSize(activityNavigation, 24);
 	} finally {
 		await page.evaluate(async source => {
 			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;

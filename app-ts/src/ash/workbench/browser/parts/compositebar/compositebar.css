@@ -106,7 +106,7 @@
   outline-offset: -1px;
 }
 
-.ash-composite-bar-icon .ash-composite-bar-item.icon .ash-icon-label-text {
+.ash-composite-bar-icon .ash-composite-bar-item.icon .ash-icon-label-container {
   display: none;
 }
 
@@ -150,6 +150,16 @@
 }
 
 .ash-composite-bar-vertical {
+	width: 100%;
+	height: 100%;
+}
+
+.ash-composite-bar-vertical .ash-composite-bar-action .ash-icon {
+	width: var(--ash-activity-bar-icon-size);
+	height: var(--ash-activity-bar-icon-size);
+}
+
+.ash-composite-bar-vertical .ash-composite-bar-overflow > .ash-composite-bar-action {
 	width: 100%;
 	height: 100%;
 }

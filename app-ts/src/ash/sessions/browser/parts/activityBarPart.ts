@@ -1,4 +1,5 @@
 import './media/activityBarPart.css';
+import '../../../workbench/browser/parts/activitybar/media/activitybarpart.css';
 import { addDisposableListener, h } from '../../../base/browser/dom.js';
 import { Button } from '../../../base/browser/ui/button/button.js';
 import { SubmenuAction, type IAction } from '../../../base/common/actions.js';
@@ -39,7 +40,7 @@ export class ActivityBarPart extends WorkbenchPart {
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 	) {
 		super(container, 'activitybar');
-		this.contentDomNode.classList.add('ash-sessions-activity-content');
+		this.contentDomNode.classList.add('ash-sessions-activity-content', 'ash-activity-bar-content');
 		const top = h(container.ownerDocument, 'div');
 		top.className = 'ash-sessions-activity-top';
 		const bottom = h(container.ownerDocument, 'div');

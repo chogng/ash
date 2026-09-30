@@ -19,11 +19,20 @@
 .ash-global-composite-bar .ash-action-view-item > button {
 	width: 32px;
 	height: 32px;
-	padding: 8px;
+	padding: var(--ash-spacing-size40);
 	border: 0;
 	border-radius: var(--ash-corner-radius-small);
 	color: var(--ash-composite-bar-inactive-foreground);
 	background: transparent;
+}
+
+.ash-global-composite-bar .ash-action-view-item > button .ash-icon {
+	width: var(--ash-activity-bar-icon-size);
+	height: var(--ash-activity-bar-icon-size);
+}
+
+.ash-global-composite-bar .ash-button-content > .ash-icon-label-container {
+	display: none;
 }
 
 .ash-global-composite-bar .ash-action-view-item > button:hover,

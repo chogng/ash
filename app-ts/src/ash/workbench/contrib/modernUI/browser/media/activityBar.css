@@ -50,18 +50,8 @@
 	z-index: 1;
 }
 
-.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-icon .ash-composite-bar-action .ash-icon,
-.ash-workbench.modern-ui .ash-workbench-activitybar .ash-global-composite-bar .ash-action-view-item > button .ash-icon {
-	width: 24px;
-	height: 24px;
-}
-
 .ash-workbench.modern-ui .ash-workbench-activitybar .ash-global-composite-bar .ash-action-view-item {
 	height: 36px;
-}
-
-.ash-workbench.modern-ui .ash-workbench-activitybar .ash-global-composite-bar .ash-action-view-item > button {
-	padding: var(--ash-spacing-size40);
 }
 
 .ash-workbench.modern-ui .ash-workbench-activitybar .ash-global-composite-bar .ash-action-view-item > button:hover,
@@ -94,12 +84,6 @@
 .ash-workbench.modern-ui .ash-workbench-activitybar.compact .ash-composite-bar-vertical .ash-composite-bar-item::after {
 	width: var(--ash-spacing-size240);
 	height: var(--ash-spacing-size240);
-}
-
-.ash-workbench.modern-ui .ash-workbench-activitybar.compact .ash-composite-bar-icon .ash-composite-bar-action .ash-icon,
-.ash-workbench.modern-ui .ash-workbench-activitybar.compact .ash-global-composite-bar .ash-action-view-item > button .ash-icon {
-	width: 16px;
-	height: 16px;
 }
 
 .ash-workbench.modern-ui .ash-workbench-activitybar.compact .ash-global-composite-bar .ash-action-view-item > button {

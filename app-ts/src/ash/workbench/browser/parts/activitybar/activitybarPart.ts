@@ -27,6 +27,7 @@ export class ActivitybarPart extends WorkbenchPart {
 		@ILocalizationService private readonly localizationService: ILocalizationService,
 	) {
 		super(container, 'activitybar');
+		this.contentDomNode.classList.add('ash-activity-bar-content');
 		this.layoutStyle = this.configurationService.getValue<WorkbenchLayoutStyle>(WorkbenchConfiguration.layoutStyle);
 		this.compact = this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarCompact);
 		this.sideBarLocation = this.configurationService.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation);

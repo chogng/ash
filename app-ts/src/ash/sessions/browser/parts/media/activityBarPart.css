@@ -62,6 +62,6 @@
 }
 
 .ash-sessions-activity-item .ash-icon {
-	width: var(--ash-lxicon-font-size);
-	height: var(--ash-lxicon-font-size);
+	width: var(--ash-activity-bar-icon-size);
+	height: var(--ash-activity-bar-icon-size);
 }
