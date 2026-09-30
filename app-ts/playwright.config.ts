@@ -17,15 +17,18 @@ export default defineConfig({
 	fullyParallel: false,
 	workers: 1,
 	projects: [
-		...browserProjects,
-		{ name: "electron-ui" },
-		{ name: "electron-academic-ui", testMatch: "**/areas/academic/academic-workbench.spec.ts" },
-		{ name: "electron-app-server" },
-		{
-			name: "electron-editor-app-server",
-			testMatch: workbenchMode === "academic" ? "**/areas/editor/academic-open.spec.ts" : "**/areas/editor/editor-open.spec.ts",
-		},
-		{ name: "electron-pdf-corpus-app-server", testMatch: "**/areas/pdf/pdf-academic-corpus.spec.ts" },
+		...[
+			...browserProjects,
+			{ name: "electron-ui" },
+			{ name: "electron-academic-ui", testMatch: "**/areas/academic/academic-workbench.spec.ts" },
+			{ name: "electron-app-server" },
+			{
+				name: "electron-editor-app-server",
+				testMatch: workbenchMode === "academic" ? "**/areas/editor/academic-open.spec.ts" : "**/areas/editor/editor-open.spec.ts",
+			},
+			{ name: "electron-pdf-corpus-app-server", testMatch: "**/areas/pdf/pdf-academic-corpus.spec.ts" },
+		].map(project => ({ ...project, testIgnore: '**/release-package.spec.ts' })),
+		{ name: 'electron-release', testMatch: '**/release-package.spec.ts', testIgnore: '', timeout: 600_000 },
 	],
 	webServer: process.env.ASH_SMOKE_BROWSER_EXTERNAL_SERVER
 		? undefined

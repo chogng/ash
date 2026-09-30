@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import json
 import sys
 import tempfile
 import unittest
@@ -10,12 +11,41 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from build.ash_rs.sign import sign_package
+from build.ash_rs.layout import require_verified_system_signing
+from build.ash_rs.layout import system_signing_artifacts
+from build.ash_rs.layout import validate_package_directory
+from build.ash_rs.test_support import create_runtime_package
+from build.lib.targets import target_spec
 from build.lib.signing import sha256
 from build.darwin.notarize import notarize
 from build.lib.signing import sign_and_verify
 
 
 class SystemSigningTests(unittest.TestCase):
+    def test_desktop_resource_identity_tracks_signed_helpers_and_added_app_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            package = create_runtime_package(Path(temporary), "x86_64-pc-windows-msvc")
+            spec = target_spec("x86_64-pc-windows-msvc")
+            app = package / "app"
+            app.mkdir()
+            (app / "package.json").write_text('{"name":"ash-desktop"}')
+            (package / "update-public-key").write_text("a" * 64)
+            original = json.loads((package / "ash-package.json").read_text())
+            for artifact in system_signing_artifacts(package, spec).values():
+                artifact.write_bytes(artifact.read_bytes() + b"system-signature")
+
+            sign_package(package, spec.target, lambda _command: None, verify_only=True)
+
+            updated = json.loads((package / "ash-package.json").read_text())
+            self.assertNotEqual(original["buildId"], updated["buildId"])
+            self.assertEqual(
+                updated["components"]["appServerDaemon"]["binarySha256"],
+                sha256(package / "bin/ash-app-server-daemon.exe"),
+            )
+            self.assertIn("app/package.json", updated["files"])
+            validate_package_directory(package, spec)
+            require_verified_system_signing(package, spec)
+
     def test_macos_signs_with_hardened_runtime_and_timestamp(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             artifact = Path(temporary) / "ash"

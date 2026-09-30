@@ -9,10 +9,38 @@ permissions:
   contents: read
 
 jobs:
+  sanity:
+    needs: check
+    if: github.event_name == 'release'
+    uses: ./.github/workflows/release-sanity.yml
+    with:
+      product: all
+      version: ${{ github.event.release.tag_name }}
+      source: pipeline
+
+  publish:
+    needs: sanity
+    if: github.event_name == 'release'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified release packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: release-packages-*
+          path: .build/release-artifacts
+          merge-multiple: true
+      - name: Publish verified packages and signed update descriptions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$RELEASE_TAG" .build/release-artifacts/* --repo "$GITHUB_REPOSITORY"
+
   check:
     name: ${{ matrix.target }} (${{ matrix.runner }})
     permissions:
-      contents: write
+      contents: read
       id-token: write
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
@@ -316,19 +344,19 @@ jobs:
             --output ".build/releases/ash-app-server-${{ matrix.target }}.update.json" \
             --public-key "$ASH_UPDATE_PUBLIC_KEY"
 
-      - name: Publish Code and App Server release packages
+      - name: Stage Code and App Server release packages
         if: github.event_name == 'release' && matrix.release_package != false
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload "$GITHUB_REF_NAME" \
+          mkdir -p ".build/release-artifacts/${{ matrix.target }}"
+          cp \
             ".build/releases/ash-code-${{ matrix.target }}.${{ matrix.archive }}" \
             ".build/releases/ash-code-${{ matrix.target }}.${{ matrix.archive }}.sha256" \
             ".build/releases/ash-code-${{ matrix.target }}.update.json" \
             ".build/releases/ash-app-server-${{ matrix.target }}.${{ matrix.archive }}" \
             ".build/releases/ash-app-server-${{ matrix.target }}.${{ matrix.archive }}.sha256" \
-            ".build/releases/ash-app-server-${{ matrix.target }}.update.json"
+            ".build/releases/ash-app-server-${{ matrix.target }}.update.json" \
+            ".build/release-artifacts/${{ matrix.target }}/"
 
       - name: Install Desktop packaging dependencies
         if: github.event_name == 'release' && matrix.release_package != false && (runner.os == 'macOS' || runner.os == 'Windows')
@@ -343,11 +371,10 @@ jobs:
           ASH_UPDATE_PUBLIC_KEY: ${{ vars.ASH_UPDATE_PUBLIC_KEY }}
         run: pnpm run package:desktop:darwin
 
-      - name: Notarize and publish macOS Desktop
+      - name: Notarize and stage macOS Desktop
         if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'macOS'
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
           ASH_UPDATE_PUBLIC_KEY: ${{ vars.ASH_UPDATE_PUBLIC_KEY }}
           ASH_UPDATE_SIGNING_KEY: ${{ secrets.ASH_UPDATE_SIGNING_KEY }}
         run: |
@@ -371,7 +398,7 @@ jobs:
             --archive "$archive" \
             --output ".build/releases/ash-desktop-${{ matrix.target }}.update.json" \
             --public-key "$ASH_UPDATE_PUBLIC_KEY"
-          gh release upload "$GITHUB_REF_NAME" "$archive" ".build/releases/ash-desktop-${{ matrix.target }}.update.json"
+          cp "$archive" ".build/releases/ash-desktop-${{ matrix.target }}.update.json" ".build/release-artifacts/${{ matrix.target }}/"
 
       - name: Package Windows Desktop bundle
         if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
@@ -432,6 +459,10 @@ jobs:
             & $signTool.FullName verify /pa /all /v $_.FullName
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
+          # Desktop verifies the signed daemon and backend against package metadata at startup.
+          $env:ASH_WINDOWS_SIGNTOOL = $signTool.FullName
+          python -B build/ash_rs/sign.py --package-dir dist/Ash-win32-x64/resources --target x86_64-pc-windows-msvc --verify-only
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm --dir app-ts package:win32:verify
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm --dir app-ts package:win32:installer
@@ -461,11 +492,10 @@ jobs:
           & $signTool.FullName verify /pa /all /v $installer
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Sign and publish Windows Desktop update
+      - name: Sign and stage Windows Desktop update
         if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
           ASH_UPDATE_PUBLIC_KEY: ${{ vars.ASH_UPDATE_PUBLIC_KEY }}
           ASH_UPDATE_SIGNING_KEY: ${{ secrets.ASH_UPDATE_SIGNING_KEY }}
         run: |
@@ -482,4 +512,13 @@ jobs:
             --archive "$archive" \
             --output ".build/releases/ash-desktop-${{ matrix.target }}.update.json" \
             --public-key "$ASH_UPDATE_PUBLIC_KEY"
-          gh release upload "$GITHUB_REF_NAME" "$archive" ".build/releases/ash-desktop-${{ matrix.target }}.update.json"
+          cp "$archive" ".build/releases/ash-desktop-${{ matrix.target }}.update.json" ".build/release-artifacts/${{ matrix.target }}/"
+
+      - name: Upload staged release packages for sanity checks
+        if: github.event_name == 'release' && matrix.release_package != false
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-packages-${{ matrix.target }}
+          path: .build/release-artifacts/${{ matrix.target }}/
+          if-no-files-found: error
+          compression-level: 0

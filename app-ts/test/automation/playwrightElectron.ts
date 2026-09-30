@@ -37,7 +37,7 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 				for (const window of BrowserWindow.getAllWindows()) window.destroy();
 			});
 			if (options.appServerMode === 'required' && options.profileDirectory === undefined) {
-				const daemon = appServerDaemonExecutablePath({ appPath: configuration.cwd, isPackaged: false, platform: process.platform, resourcesPath: '' });
+				const daemon = appServerDaemonExecutablePath({ appPath: configuration.cwd, isPackaged: options.packagedBundle !== undefined, platform: process.platform, resourcesPath: configuration.resourcesPath });
 				await promisify(execFile)(daemon, ['stop'], { env: { ...configuration.env, ASH_HOME: resolve(options.userDataDirectory, 'profile') }, windowsHide: true, timeout: 30_000 });
 			}
 		} finally {

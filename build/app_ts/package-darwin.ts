@@ -102,7 +102,15 @@ try {
 	if (!(await readFile(join(bundlePath, 'Contents', 'Resources', 'electron.icns'))).equals(await readFile(join(repositoryRoot, 'resources', 'darwin', 'ash.icns')))) {
 		throw new Error('The packaged macOS Dock icon does not match Ash artwork');
 	}
-	if (!options.unsigned) await run('codesign', ['--verify', '--deep', '--strict', '--verbose=2', bundlePath], repositoryRoot);
+	if (!options.unsigned) {
+		// Embedded signatures change helper bytes. Refresh their identity, then seal the containing app again.
+		await run(process.env.PYTHON ?? 'python3', [
+			'-B', join(repositoryRoot, 'build', 'ash_rs', 'sign.py'),
+			'--package-dir', join(bundlePath, 'Contents', 'Resources'), '--target', target, '--verify-only',
+		], repositoryRoot);
+		await run('codesign', ['--force', '--sign', signingIdentity!, '--timestamp', '--options', 'runtime', '--preserve-metadata=entitlements,requirements,flags', bundlePath], repositoryRoot);
+		await run('codesign', ['--verify', '--deep', '--strict', '--verbose=2', bundlePath], repositoryRoot);
+	}
 	console.log(`Packaged macOS application: ${bundlePath}`);
 } finally {
 	const [root, directory] = await Promise.all([realpath(buildRoot), realpath(stage)]);

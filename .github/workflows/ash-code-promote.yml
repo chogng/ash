@@ -11,8 +11,19 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: ash-code-stable-promotion
+  cancel-in-progress: false
+
 jobs:
+  sanity:
+    uses: ./.github/workflows/release-sanity.yml
+    with:
+      product: ash-code
+      version: ${{ inputs.version }}
+
   promote:
+    needs: sanity
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -20,6 +31,15 @@ jobs:
       ASH_UPDATE_PUBLIC_KEY: ${{ vars.ASH_UPDATE_PUBLIC_KEY }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+      - name: Download passing sanity reports
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: release-sanity-ash-code-*
+          path: .build/sanity-reports
+          merge-multiple: true
 
       - name: Build update signer
         run: python3 -B scripts/cargo.py build --package ash-update-sign --bin ash-update-sign
@@ -27,8 +47,9 @@ jobs:
       - name: Sign stable release pointers
         env:
           ASH_UPDATE_SIGNING_KEY: ${{ secrets.ASH_UPDATE_SIGNING_KEY }}
+          VERSION: ${{ inputs.version }}
         run: |
-          version="${{ inputs.version }}"
+          version="$VERSION"
           case "$version" in
             *[!0-9.]*|.*|*.) exit 2 ;;
           esac
@@ -48,6 +69,10 @@ jobs:
               *) archive="ash-code-${target}.tar.gz"; format="tar-gz" ;;
             esac
             gh release download "$release_tag" --pattern "$archive" --dir "$output"
+            node build/release/sanity.ts attest \
+              --product ash-code --version "$version" --target "$target" \
+              --report ".build/sanity-reports/ash-code-${target}.json" \
+              --archive "$output/$archive"
             .build/cargo/debug/ash-update-sign \
               --repository chogng/ash \
               --product ash-code \
