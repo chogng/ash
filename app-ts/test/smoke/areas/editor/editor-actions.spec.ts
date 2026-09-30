@@ -4,10 +4,9 @@ test('closed find options show a checked button when toggled from the editor', a
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
-	const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
-	await expect(input).toBeAttached();
-	await input.focus();
-	await input.type('alpha beta');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await editor.waitForTypeInEditor('alpha beta');
 	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Alt+c' : 'Alt+c');
 	const options = workbench.editors.groupAt(0).content.getByRole('group', { name: 'Find options' });
 	const matchCase = options.getByRole('button', { name: 'Match case', exact: true });

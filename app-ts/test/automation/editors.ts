@@ -1,4 +1,5 @@
 import type { Locator, Page } from "@playwright/test";
+import { Editor } from './editor.js';
 
 /** Product-level automation surface for one editor group. */
 export class EditorGroup {
@@ -8,6 +9,7 @@ export class EditorGroup {
 	readonly watermark: Locator;
 	readonly welcome: Locator;
 	readonly tabs: Locator;
+	readonly editor: Editor;
 
 	constructor(element: Locator) {
 		this.element = element;
@@ -16,6 +18,7 @@ export class EditorGroup {
 		this.watermark = this.content.locator('.ash-editor-group-watermark-shortcuts');
 		this.welcome = this.content.locator('.ash-getting-started');
 		this.tabs = element.getByRole("tab");
+		this.editor = new Editor(this.content);
 	}
 
 	async waitForReady(): Promise<void> {
