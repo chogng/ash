@@ -32,6 +32,5 @@
   --ash-action-bar-gap: var(--ash-spacing-size80);
   --ash-toolbar-action-size: var(--ash-spacing-size280);
   --ash-toolbar-hover-background: var(--ash-title-bar-hover-background);
-  --ash-action-bar-toggled-background: var(--ash-sessions-selection-background);
   color: var(--ash-title-bar-foreground);
 }

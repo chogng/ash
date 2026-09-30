@@ -166,7 +166,8 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await expect(activityNavigation.getByRole('button', { name: 'Code' }).locator('svg')).toHaveAttribute('data-ash-icon-id', 'code');
 	await expect(activityNavigation.getByRole('button', { name: 'Code' })).not.toHaveAttribute('aria-current', 'page');
 	await expect(page.locator('.ash-sessions-sidebar-tabs')).toHaveCount(0);
-	await expect(page.getByRole('button', { name: 'Hide sidebar' })).toHaveCSS('background-color', 'rgb(240, 240, 240)');
+	await page.mouse.move(400, 180);
+	await expect(page.getByRole('button', { name: 'Hide sidebar' })).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 	await expect(activityBar.locator('.ash-sessions-activity-top button svg').first()).toHaveAttribute('data-ash-icon-id', 'chat-2-filled');
 	const collaboration = activityBar.getByRole('button', { name: 'Collaboration' });
 	const library = activityBar.getByRole('button', { name: 'Library' });
@@ -1062,6 +1063,54 @@ test('Sessions titlebar aligns its application menu and actions', async ({ appli
 		await sessionsPage.getByRole('menuitem', { name: 'Return to Workbench' }).click();
 	}
 	await closed;
+});
+
+test('Sessions titlebar sidebar toggle stays transparent at rest and responds to pointer and keyboard', async ({ application, target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code');
+	let page = workbench.page;
+	if (target.kind === 'browser') {
+		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+	} else {
+		if (!('windows' in application)) throw new Error('Expected Electron windows');
+		const opened = application.waitForEvent('window');
+		await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
+		page = await opened;
+	}
+	const sidebar = page.locator('[data-part="sidebar"]');
+	const toggle = page.locator('[data-action-id="ash.sessions.toggleSidebar"] button');
+	for (const colorScheme of ['light', 'dark'] as const) {
+		await page.emulateMedia({ colorScheme });
+		await expect(page.locator('#app')).toHaveAttribute('data-color-theme', `ash-${colorScheme}`);
+		await page.mouse.move(400, 180);
+		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await toggle.hover();
+		await expect(toggle).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await toggle.click();
+		await expect(sidebar).toBeHidden();
+		await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+		await expect(toggle).toHaveAccessibleName('Show sidebar');
+		await page.mouse.move(400, 180);
+		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await toggle.hover();
+		await expect(toggle).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await toggle.click();
+		await expect(sidebar).toBeVisible();
+		await page.mouse.move(400, 180);
+		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await page.keyboard.press('Tab');
+		await toggle.focus();
+		await expect(toggle).toHaveCSS('outline-style', 'solid');
+		await expect(toggle).toHaveCSS('outline-width', '1px');
+		await page.keyboard.press('Enter');
+		await expect(sidebar).toBeHidden();
+		await page.keyboard.press('Space');
+		await expect(sidebar).toBeVisible();
+		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+		await expect(toggle).toHaveAccessibleName('Hide sidebar');
+		await expect(toggle.locator('svg[data-ash-icon-id="layout-sidebar-left-2"]')).toBeVisible();
+	}
 });
 
 test('Browser Sessions application menu uses Sessions actions', async ({ target, workbench }) => {

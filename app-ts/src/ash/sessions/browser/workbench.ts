@@ -1,3 +1,4 @@
+import "../../workbench/browser/style.js";
 import "./media/workbench.css";
 import "./actions/sessionsChatActions.js";
 import './activityBarAccessibility.js';
