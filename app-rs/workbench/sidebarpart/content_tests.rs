@@ -47,6 +47,7 @@ fn session(id: &str, title: &str) -> Session {
         session_id: SessionId::new(id).unwrap(),
         title: title.to_owned(),
         status: SessionStatus::Active,
+        execution_target: None,
         manager: Default::default(),
         threads: Vec::new(),
     }

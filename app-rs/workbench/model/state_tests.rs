@@ -14,6 +14,7 @@ fn session(id: &str, title: &str) -> Session {
         session_id: SessionId::new(id).expect("test session ID is non-empty"),
         title: title.to_owned(),
         status: SessionStatus::Active,
+        execution_target: None,
         manager: Default::default(),
         threads: Vec::new(),
     }

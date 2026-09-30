@@ -109,6 +109,7 @@ fn branches(names: &[&str]) -> Vec<GitBranchDto> {
             name: (*name).into(),
             object_id: format!("object-{name}"),
             current: *name == "main",
+            checked_out_elsewhere: Some(false),
             upstream: None,
         })
         .collect()

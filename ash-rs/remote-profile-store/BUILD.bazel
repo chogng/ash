@@ -1,0 +1,6 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "remote-profile-store",
+    crate_name = "ash_remote_profile_store",
+)

@@ -278,7 +278,7 @@ fn session(ids: &TestIds) -> Session {
         session_id: ids.session_id.clone(),
         title: "test run".into(),
         status: SessionStatus::Active,
-        workspace: None,
+        execution_target: None,
         manager: Default::default(),
         threads: vec![],
     }
@@ -311,6 +311,7 @@ fn turn(ids: &TestIds, status: TurnStatus, items: Vec<ThreadItem>) -> Turn {
         kind: ash_protocol::TurnKind::Coding,
         instructions: None,
         model: None,
+        reasoning_effort: None,
         tool_profile: None,
         tool_mode: ash_protocol::ToolMode::Direct,
         approval_mode: ash_protocol::ApprovalMode::AskPermissions,

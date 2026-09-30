@@ -104,7 +104,7 @@ async fn bridge(ending: Ending) {
     let secrets = Arc::new(MemorySecretStore::default());
     secrets
         .store(
-            &provider_api_key_secret_key(&provider),
+            &provider_api_key_secret_key(&config.connection),
             &SecretValue::new(b"fixture-voice-key".to_vec()),
         )
         .unwrap();

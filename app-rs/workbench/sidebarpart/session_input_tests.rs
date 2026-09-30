@@ -14,6 +14,7 @@ fn session_input_keeps_primary_and_additional_directories_in_display_order() {
         session_id: SessionId::new("session-dirs").unwrap(),
         title: "Release summary".to_owned(),
         status: SessionStatus::Active,
+        execution_target: None,
         manager: SessionManagerInfo {
             status: SessionManagerStatus::NeedsInput,
             ..Default::default()

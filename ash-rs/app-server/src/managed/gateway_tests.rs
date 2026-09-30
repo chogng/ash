@@ -1,5 +1,6 @@
 use super::*;
 use std::io::BufReader;
+#[cfg(unix)]
 use std::sync::mpsc;
 
 #[cfg(unix)]
