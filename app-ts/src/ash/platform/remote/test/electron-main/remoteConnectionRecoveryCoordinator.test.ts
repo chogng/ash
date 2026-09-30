@@ -1,9 +1,10 @@
+import { AppServerDaemonLauncher } from "../../../../platform/app-server-daemon/electron-main/appServerDaemonLauncher.js";
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import type { AppServerConnectionState } from "../../../../platform/app-server/common/appServerApi.js";
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
 import { RemoteConnectionRecoveryCoordinator, type RemoteConnectionRecoveryHost } from "../../../../platform/remote/electron-main/remoteConnectionRecoveryCoordinator.js";
-import { SshAppServerProcessLauncher } from "../../../../platform/remote/electron-main/sshAppServerProcessLauncher.js";
+import { RemoteAppServerProcessLauncher } from "../../../../platform/remote/electron-main/remoteAppServerProcessLauncher.js";
 
 test("Remote runtime recovery verifies rollback before replacing the connection", async () => {
 	const lifecycle: string[] = [];
@@ -82,11 +83,12 @@ test("Remote connection recovery rejects concurrent reconnect and rollback opera
 	assert.deepEqual(lifecycle, ["stop", "start"]);
 });
 
-function createLauncher(rollbackRuntime: () => Promise<string>): SshAppServerProcessLauncher {
-	return new SshAppServerProcessLauncher({
+function createLauncher(rollbackRuntime: () => Promise<string>): RemoteAppServerProcessLauncher {
+	return new RemoteAppServerProcessLauncher({
 		workspace: createSshRemoteWorkspaceUri("work-server", "/home/ash/project"),
 		sshExecutable: "ssh",
 		remoteExecutable: "/srv/ash/runtime/two/bin/ash-remote-server",
+		carrier: new AppServerDaemonLauncher({ executable: "/runtime/ash-app-server-daemon", args: ["connect-selected"], environment: {}, fileExists: () => true }),
 		localEnvironment: {},
 		rollbackRuntime,
 	});

@@ -28,6 +28,82 @@ impl Drop for Daemon {
 }
 
 #[test]
+#[cfg(unix)]
+fn workbench_ssh_connections_are_owned_by_one_local_daemon() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = tempfile::tempdir().unwrap();
+    let profile = root.path().join("profile");
+    fs::create_dir(&profile).unwrap();
+    let dir = root.path().join("remote-files");
+    fs::create_dir(&dir).unwrap();
+    fs::write(dir.join("file.txt"), "remote content").unwrap();
+    let ssh = root.path().join("ssh");
+    let runtime = root.path().join("runtime");
+    let log = root.path().join("ssh-arguments");
+    fs::write(&ssh, format!("#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{}'\nfor argument in \"$@\"; do command=$argument; done\nexec /bin/sh -c \"$command\"\n", log.display())).unwrap();
+    fs::write(&runtime, format!("#!/bin/sh\n[ \"$ASH_WORKSPACE_ROOT\" = /remote/project ] || exit 66\nexport ASH_WORKSPACE_ROOT='{}'\nexport ASH_HOME='{}'\nexec '{}' --listen stdio://\n", dir.display(), root.path().join("remote-profile").display(), env!("CARGO_BIN_EXE_ash-app-server"))).unwrap();
+    for path in [&ssh, &runtime] {
+        fs::set_permissions(path, fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let process = Command::new(env!("CARGO_BIN_EXE_ash-app-server"))
+        .arg(ash_app_server_daemon::MANAGED_PROCESS_ARGUMENT)
+        .env("ASH_HOME", &profile)
+        .env("ASH_SSH_PATH", &ssh)
+        .env("ASH_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS", "5000")
+        .spawn()
+        .unwrap();
+    let pid = process.id();
+    let _daemon = Daemon(process);
+    let endpoint = daemon_endpoint_path(&profile).unwrap();
+    let connect = || {
+        let mut stream = connect_when_ready(&endpoint);
+        stream.set_read_timeout(Some(CONNECT_TIMEOUT)).unwrap();
+        writeln!(stream, "{}", json!({"version":2,"dirGrantSource":"hostConfiguration","ssh":{"host":"build","root":"/remote/project","runtime":runtime}})).unwrap();
+        writeln!(stream, "{}", json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"remote-workbench-test","version":"1"},"capabilities":{}}})).unwrap();
+        stream.flush().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        assert!(read_response(&mut reader, 1)["result"].is_object());
+        (stream, reader)
+    };
+    let (first, _first_reader) = connect();
+    let (mut second, mut second_reader) = connect();
+    first.shutdown(std::net::Shutdown::Both).unwrap();
+    writeln!(
+        second,
+        "{}",
+        json!({"jsonrpc":"2.0","id":2,"method":"fs/readFile","params":{"path":"file.txt"}})
+    )
+    .unwrap();
+    second.flush().unwrap();
+    assert_eq!(
+        read_response(&mut second_reader, 2)["result"]["content"],
+        "remote content"
+    );
+
+    let local = ash_app_server_daemon::run_lifecycle(
+        ash_app_server_daemon::LifecycleCommand::Version,
+        ash_app_server_daemon::ConnectionOptions::new(
+            &profile,
+            None,
+            ash_app_server_daemon::GrantSource::HostConfiguration,
+            None,
+        ),
+        std::path::Path::new(env!("CARGO_BIN_EXE_ash-app-server")),
+    )
+    .unwrap();
+    assert_eq!(local.pid, Some(pid));
+    let arguments = fs::read_to_string(log).unwrap();
+    assert_eq!(arguments.matches("BatchMode=yes").count(), 2);
+    assert_eq!(
+        arguments
+            .matches("ASH_WORKSPACE_ROOT=/remote/project")
+            .count(),
+        2
+    );
+    second.shutdown(std::net::Shutdown::Both).unwrap();
+}
+
+#[test]
 fn daemon_keeps_a_directory_connection_open_after_initialize() {
     let root = tempfile::tempdir().unwrap();
     let profile = root.path().join("p");

@@ -143,13 +143,16 @@ impl PendingConnection {
                     let stream = self.reader.into_inner();
                     let (reader, writer) =
                         LocalStream::pair(stream).map_err(|error| error.to_string())?;
-                    let options = ConnectionOptions::new(
+                    let mut options = ConnectionOptions::new(
                         profile_root,
                         connection.dir_root,
                         grant_source,
                         connection.product_services,
                     )
                     .with_role(connection.role);
+                    if let Some(ssh) = connection.ssh {
+                        options = options.with_ssh(ssh.options()?)?;
+                    }
                     return Ok(PreludeProgress::Connection(ManagedConnection {
                         options,
                         web: connection.web,

@@ -78,6 +78,12 @@ impl SqliteThreadStore {
 }
 
 impl ThreadStore for SqliteThreadStore {
+    fn execution_binding(
+        &self,
+        thread_id: &ThreadId,
+    ) -> Result<ash_thread_store::ThreadExecutionBinding, ThreadStoreError> {
+        super::handoff::execution_binding(&*self.connection()?, thread_id)
+    }
     fn pending_checkpoint_cleanup(
         &self,
     ) -> Result<Vec<(String, ash_protocol::RepositoryCheckpoint)>, ThreadStoreError> {
@@ -190,7 +196,7 @@ impl ThreadStore for SqliteThreadStore {
             .map(|row| {
                 let (session_id, json, version, digest) = row.map_err(storage_error)?;
                 let session_id = SessionId::new(session_id).map_err(storage_error)?;
-                decode_session_catalog(&session_id, &json, version, &digest)
+                decode_session_catalog(&connection, &session_id, &json, version, &digest)
             })
             .collect()
     }
@@ -213,7 +219,8 @@ impl ThreadStore for SqliteThreadStore {
             .optional()
             .map_err(storage_error)?;
         if let Some((json, version, digest)) = row {
-            return decode_session_catalog(session_id, &json, version, &digest).map(Some);
+            return decode_session_catalog(&connection, session_id, &json, version, &digest)
+                .map(Some);
         }
         let has_threads = connection
             .query_row(
@@ -542,6 +549,20 @@ impl ThreadStore for SqliteThreadStore {
             write_session_catalog(&transaction, &batch.catalog.session_id)?;
         }
         super::graph::write_binding(&transaction, &batch.catalog)?;
+        if batch.expected_sequence == 0
+            && let Some(source) = batch.catalog.binding.source_thread_id()
+        {
+            // Forks and delegated branches retain imported execution authority, including an
+            // unknown root. Otherwise making a branch would turn an unbound remote history
+            // into an ordinary local Thread and bypass its explicit binding requirement.
+            transaction
+                .execute(
+                    "INSERT INTO remote_history_bindings (thread_id, source, host, root)
+                 SELECT ?1, source, host, root FROM remote_history_bindings WHERE thread_id = ?2",
+                    params![batch.thread_id.as_str(), source.as_str()],
+                )
+                .map_err(storage_error)?;
+        }
         transaction.commit().map_err(storage_error)?;
         Ok(result)
     }
@@ -591,7 +612,7 @@ fn query_catalog(
             {
                 return Err(ThreadStoreError::CatalogDamaged(catalog_thread_id));
             }
-            let record = serde_json::from_str::<ThreadCatalogRecord>(&record_json)
+            let mut record = serde_json::from_str::<ThreadCatalogRecord>(&record_json)
                 .map_err(|_| ThreadStoreError::CatalogDamaged(catalog_thread_id.clone()))?;
             let current_sequence =
                 from_sql_integer(current_sequence).map_err(ThreadStoreError::Storage)?;
@@ -602,6 +623,8 @@ fn query_catalog(
             {
                 return Err(ThreadStoreError::CatalogDamaged(catalog_thread_id));
             }
+            super::handoff::execution_binding(connection, &record.thread.thread_id)?
+                .apply(&mut record.execution_target);
             Ok(record)
         })
         .collect()
@@ -673,6 +696,7 @@ fn session_list_changed(
 }
 
 fn decode_session_catalog(
+    connection: &Connection,
     session_id: &SessionId,
     json: &str,
     version: i64,
@@ -681,10 +705,19 @@ fn decode_session_catalog(
     if version != 1 || ContentDigest::sha256(json.as_bytes()).as_str() != digest {
         return Err(ThreadStoreError::SessionCatalogDamaged(session_id.clone()));
     }
-    let session = serde_json::from_str::<Session>(json)
+    let mut session = serde_json::from_str::<Session>(json)
         .map_err(|_| ThreadStoreError::SessionCatalogDamaged(session_id.clone()))?;
     if &session.session_id != session_id {
         return Err(ThreadStoreError::SessionCatalogDamaged(session_id.clone()));
+    }
+    let mut statement = connection.prepare("SELECT bindings.host, bindings.root FROM remote_history_bindings AS bindings JOIN thread_catalog AS catalog USING(thread_id) WHERE catalog.session_id = ?1 ORDER BY (catalog.thread_id = catalog.session_id) DESC, catalog.thread_id LIMIT 1").map_err(storage_error)?;
+    let binding: Option<(String, Option<String>)> = statement
+        .query_row([session_id.as_str()], |row| Ok((row.get(0)?, row.get(1)?)))
+        .optional()
+        .map_err(storage_error)?;
+    if let Some((host, root)) = binding {
+        ash_thread_store::ThreadExecutionBinding::Remote { host, root }
+            .apply(&mut session.execution_target);
     }
     Ok(session)
 }

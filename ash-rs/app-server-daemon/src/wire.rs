@@ -13,10 +13,11 @@ use crate::GrantSource;
 pub(crate) const CONNECTION_PRELUDE_TIMEOUT: std::time::Duration =
     std::time::Duration::from_secs(5);
 pub(crate) const MAX_PRELUDE_BYTES: usize = 16 * 1024;
-const PRELUDE_VERSION: u32 = 1;
+const PRELUDE_VERSION: u32 = 3;
+const SSH_PRELUDE_VERSION: u32 = 2;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct ConnectionPrelude {
     version: u32,
     pub(crate) dir_root: Option<PathBuf>,
@@ -26,6 +27,22 @@ pub(crate) struct ConnectionPrelude {
     pub(crate) role: ConnectionRole,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) web: Option<ash_app_server_protocol::WebLaunchOptions>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) ssh: Option<SshConnectionPrelude>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct SshConnectionPrelude {
+    host: String,
+    root: Option<String>,
+    runtime: String,
+}
+
+impl SshConnectionPrelude {
+    pub(crate) fn options(&self) -> Result<crate::SshConnectionOptions, String> {
+        crate::SshConnectionOptions::new(&self.host, self.root.as_deref(), &self.runtime)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -38,7 +55,13 @@ pub(crate) enum ConnectionGrantSource {
 impl ConnectionPrelude {
     pub(crate) fn from_options(options: &ConnectionOptions) -> Self {
         Self {
-            version: PRELUDE_VERSION,
+            version: if matches!(options.role(), ConnectionRole::Execution { .. }) {
+                PRELUDE_VERSION
+            } else if options.ssh().is_some() {
+                SSH_PRELUDE_VERSION
+            } else {
+                1
+            },
             dir_root: options.dir_root().map(Path::to_path_buf),
             dir_grant_source: match options.dir_grant_source() {
                 GrantSource::HostConfiguration => ConnectionGrantSource::HostConfiguration,
@@ -47,12 +70,43 @@ impl ConnectionPrelude {
             product_services: options.product_services().map(Path::to_path_buf),
             role: options.role(),
             web: None,
+            ssh: options.ssh().map(|ssh| SshConnectionPrelude {
+                host: ssh.host().into(),
+                root: ssh.root().map(str::to_owned),
+                runtime: ssh.runtime().into(),
+            }),
         }
     }
 
     pub(crate) fn validate(&self) -> Result<(), String> {
-        if self.version != PRELUDE_VERSION {
+        if !(1..=PRELUDE_VERSION).contains(&self.version) {
             return Err("unsupported local App Server connection prelude version".into());
+        }
+        if let Some(ssh) = &self.ssh {
+            if self.version < SSH_PRELUDE_VERSION
+                || self.dir_root.is_some()
+                || self.role != ConnectionRole::Workbench
+                || self.web.is_some()
+            {
+                return Err("invalid SSH App Server connection scope".into());
+            }
+            ssh.options()?;
+        }
+        if let ConnectionRole::Execution { environment } = &self.role {
+            if self.version != PRELUDE_VERSION
+                || self
+                    .dir_root
+                    .as_ref()
+                    .is_none_or(|root| !root.is_absolute())
+                || self.dir_grant_source != ConnectionGrantSource::HostConfiguration
+                || self.web.is_some()
+                || self.ssh.is_some()
+                || self.product_services.is_some()
+            {
+                return Err("invalid execution connection scope".into());
+            }
+            exec_server_protocol::validate_id(environment)
+                .map_err(|_| "invalid execution environment identity".to_owned())?;
         }
         Ok(())
     }
@@ -89,14 +143,16 @@ enum ControlPreludeKind {
 impl ControlPrelude {
     pub(crate) fn new(command: ControlCommand) -> Self {
         Self {
-            version: PRELUDE_VERSION,
+            // Lifecycle commands retain their original shape so a new controller can
+            // inspect and stop an older backend before selecting another generation.
+            version: 1,
             kind: ControlPreludeKind::Control,
             command,
         }
     }
 
     fn validate(&self) -> Result<(), String> {
-        if self.version != PRELUDE_VERSION {
+        if !(1..=PRELUDE_VERSION).contains(&self.version) {
             return Err("unsupported local App Server control prelude version".into());
         }
         Ok(())
@@ -138,6 +194,21 @@ pub(crate) struct ControlResponse {
 }
 
 impl ControlResponse {
+    pub(crate) fn validate_connection(&self, options: &ConnectionOptions) -> Result<(), String> {
+        self.validate()?;
+        let required_version = if matches!(options.role(), ConnectionRole::Execution { .. }) {
+            PRELUDE_VERSION
+        } else if options.ssh().is_some() {
+            SSH_PRELUDE_VERSION
+        } else {
+            1
+        };
+        if self.version < required_version {
+            return Err("running App Server does not support this connection scope; select an updated backend".into());
+        }
+        Ok(())
+    }
+
     pub(crate) fn new(
         state: ControlState,
         pid: u32,
@@ -155,7 +226,7 @@ impl ControlResponse {
     }
 
     pub(crate) fn validate(&self) -> Result<(), String> {
-        if self.version != PRELUDE_VERSION {
+        if !(1..=PRELUDE_VERSION).contains(&self.version) {
             return Err("unsupported local App Server control response version".into());
         }
         Ok(())
@@ -177,3 +248,7 @@ pub(crate) fn write_json_line(writer: &mut impl Write, value: &impl Serialize) -
     writer.write_all(b"\n")?;
     writer.flush()
 }
+
+#[cfg(test)]
+#[path = "wire_tests.rs"]
+mod tests;

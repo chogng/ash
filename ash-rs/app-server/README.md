@@ -62,6 +62,9 @@ just test ash-app-server
 - profile 路径和随包产品服务发现由 `install-context` 提供，客户端消费相同契约。
 - `arg0` 在普通参数解析前分发内部 worker；启动命令绑定实际宿主可执行路径。
 - daemon 的连接和生命周期命令由 [`app-server-daemon`](../app-server-daemon/README.md) 提供。
+- 历史维护入口 `history-identity`、`history-import HOST`、`history-bind SESSION_ID ROOT`
+  分别读取接收 Profile 身份、原子导入归档和显式绑定缺失的远端目录；导入及绑定前停止当前 Profile
+  后台。调用顺序与一次性停写约定见 [remote-server](../remote-server/README.md#history-ownership-transfer)。
 
 验证：`just test ash-app-server --test stdio --test websocket --test worker`。
 
@@ -75,6 +78,10 @@ just test ash-app-server
 - 目录初始化在连接任务中执行，同一目录只初始化一次；目录注册表只保护查找与发布，不在全局锁内执行初始化、终端统计或队列检查。
 - 先取得 profile 端点，再启动后台工作，避免并发启动重复运行任务。
 - daemon crate 提供进程管理和控制端点机制，App Server 依赖它；依赖方向保持单向。
+- 历史已移交的 Profile 只启动执行服务，不打开 Agent 恢复、队列或自动化。原历史仍可读取，
+  任何旧写入方都不能继续修改它。
+- Agents 网关先按本地持久 ID 查找 Session/Thread；已导入的 SSH 历史由本地后端读取。
+  导入回执中的宿主退出旧远端 Agent 目录发现，已验证的 runtime 配置继续供执行服务使用。
 
 ## grep
 

@@ -362,6 +362,8 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 		async stop() { throw new Error("Not used"); },
 	};
 	const turn: ITurnApi = {
+		enqueue: async () => { throw new Error("Queue is unavailable in this fixture"); },
+		listQueued: async () => ({ messages: [] }),
 		async consultAdvisor() { throw new Error("Not used"); },
 		async start() { throw new Error("Not used"); },
 		async compact() { throw new Error("Not used"); },

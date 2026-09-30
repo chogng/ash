@@ -18,6 +18,9 @@ pub struct TurnInstructions {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     model_guidance: Option<ModelInstructionSelection>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    mode_instructions: Option<InstructionText>,
 }
 
 impl TurnInstructions {
@@ -35,6 +38,7 @@ impl TurnInstructions {
             body: body.into(),
             shared: Vec::new(),
             model_guidance: None,
+            mode_instructions: None,
         };
         instructions.validate()?;
         Ok(instructions)
@@ -56,6 +60,9 @@ impl TurnInstructions {
         }
         for shared in &self.shared {
             shared.validate()?;
+        }
+        if let Some(mode) = &self.mode_instructions {
+            mode.validate()?;
         }
         if let Some(ModelInstructionSelection::Specialized {
             instructions,
@@ -90,6 +97,17 @@ impl TurnInstructions {
     pub fn with_model_guidance(mut self, selection: ModelInstructionSelection) -> Self {
         self.model_guidance = Some(selection);
         self
+    }
+
+    /// Replaces only the frozen approach when a delegated worker uses a different mode.
+    /// Keeping it separate prevents copying a parent's coordinating approach into worker rules.
+    pub fn with_mode(mut self, mode: &Self) -> Self {
+        self.mode_instructions = Some(mode.as_text());
+        self
+    }
+
+    pub fn mode_instructions(&self) -> Option<&InstructionText> {
+        self.mode_instructions.as_ref()
     }
 
     /// Returns the frozen common assets preceding the primary instruction body.

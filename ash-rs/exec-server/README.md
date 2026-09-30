@@ -3,8 +3,8 @@
 执行环境的能力与依赖边界；App Server/Core 保持唯一的任务业务状态。
 
 - 管理受沙箱限制的进程、输入、取消、超时和有界输出。
-- 提供同一处理器的进程内调用与鉴权 TCP 调用。
-- 按宿主目录授权读写文件，覆盖写入必须匹配当前版本。
+- 提供同一处理器的进程内调用、鉴权 TCP 调用和宿主已鉴权的 SSH 执行连接。
+- 按宿主目录授权读写文件；10 MiB 文件分块传输，覆盖写入必须匹配当前版本。
 - 管理桌面交互式 PTY、输出字节缓存、连接释放与重连租约。
 - 不保存 Session、Thread、Turn、Agent、模型和审批状态。
 - 依赖方向：App Server/tool-executor → exec-server → sandboxing/file-system/utils-pty；协议独立于实现。
@@ -56,10 +56,39 @@ App Server 设置 `ASH_EXEC_ENVIRONMENTS` 指向配置文件：
 经过原有审批后执行命令或文件操作，结果写回原 Thread。进程 ID 包含 Session/Thread/Turn/工具调用身份。
 Rust 宿主也可以通过 `AppServerOptions::with_execution_environments` 装配本地或远程环境。
 
+本地 Agent 也可以直接使用 SSH 执行环境，不需要创建 TCP token 或手工开隧道：
+
+```json
+[{"environment":"worker","host":"build","root":"/work/project","runtime":"/opt/ash/bin/ash-remote-server"}]
+```
+
+`runtime` 必须是已安装包内的绝对可执行路径；`host` 使用本机 OpenSSH 配置和 SSH agent。
+可选的 `ssh_executable` 由宿主配置选择本机 OpenSSH。配置必须完整指定一种传输；混合字段和
+未知字段会被拒绝。SSH 客户端运行在 Rust 后端，模型只能选择已装配的执行环境。
+远端通过 `execution-connect worker` 进入共享 profile 进程中的独立执行连接，不接受 Agent RPC。
+同一环境 ID 固定到远端的规范目录；其他目录不能复用这个 ID。连接重建保持原实例 ID，
+活动命令阻止宿主按空闲期限退出。一个宿主最多保留 64 个执行环境，每个客户端最多同时使用
+32 条连接；单次 SSH 读取等待最多 15 秒，写入最多 5 秒。失败连接被释放，不自动重发请求。
+
+这条执行能力可供本地 Agent 使用。旧历史已有 [一次性移交入口](../remote-server/README.md#history-ownership-transfer)，
+移交后远端只启动执行服务；Desktop Remote 默认入口及自动迁移尚未切换。
+
 App Server 每次观察最多等待 500 毫秒，输出变化或进程结束时提前返回。读取连接失败后，
 允许在五秒恢复窗口内发起新的观察；单次网络调用仍受传输超时限制。恢复保持原实例、操作 ID
 和输出游标，不重发启动、文件写入或控制请求。取消后继续查询终态，未确认终态则报告结果未知。
 这不提供服务重启后的进程恢复，也不改变远端 App Server 的部署方式。
+
+## 文件传输
+
+`ExecClient` 和 `ExecutionEnvironment` 的 `read_file` / `write_file` 使用同一宿主处理器。
+读取绑定首个范围的磁盘版本，途中变化会拒绝整个读取。写入先上传有界字节块，完整内容
+通过摘要校验后才条件发布；取消和未完成上传不会改动工作区文件。客户端不重发上传块或提交，
+提交响应丢失后只查询原操作结果。Begin/Chunk 阶段断线报告文件尚未发布；发布过程中
+的 IO 错误报告结果未知。该结果记录属于执行实例，重启不继承。
+
+Core 继续拥有审批、调用身份与 ToolResult；操作 ID 包含执行实例、Session、Thread、Turn
+和工具调用身份。准备审批时不创建上传资源，获批后才开始传输。磁盘版本检查由
+file-system 实施；编辑器的未保存内容和外部变更冲突仍由前端 working copy 处理。
 
 ## PTY 边界
 

@@ -39,6 +39,7 @@ fn turn(threads: &ThreadController, thread: &ThreadId, text: &str) -> TurnId {
         .start_turn(
             thread,
             crate::StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 command_id: CommandId::new(text).unwrap(),
                 expected_sequence: crate::SequenceExpectation::Any,

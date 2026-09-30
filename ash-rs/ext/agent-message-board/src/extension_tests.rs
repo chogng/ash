@@ -274,6 +274,7 @@ fn start(threads: &ThreadController, thread: &ThreadId, key: &str) -> TurnId {
         .start_turn(
             thread,
             StartTurnRequest {
+                mode: Default::default(),
                 command_id: protocol::CommandId::new(key).unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,

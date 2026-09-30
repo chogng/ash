@@ -35,8 +35,8 @@ def cargo_target(arguments: list[str]) -> str | None:
     return None
 
 
-def prepare_code_mode_host(
-    cargo: str, arguments: list[str], environment: dict[str, str]
+def prepare_test_executable(
+    cargo: str, arguments: list[str], environment: dict[str, str], package: str
 ) -> str:
     # Cargo does not build a dependency's executable for library tests. Match the
     # test compilation settings and use its reported artifact, not a guessed path.
@@ -76,9 +76,9 @@ def prepare_code_mode_host(
             cargo,
             "build",
             "-p",
-            "ash-code-mode-host",
+            package,
             "--bin",
-            "ash-code-mode-host",
+            package,
             "--message-format=json",
             *selection,
         ],
@@ -93,11 +93,11 @@ def prepare_code_mode_host(
         message = parse_cargo_message(line)
         if diagnostic := cargo_rendered_diagnostic(message):
             sys.stderr.write(diagnostic)
-        if artifact := cargo_artifact_executable(message, "ash-code-mode-host"):
+        if artifact := cargo_artifact_executable(message, package):
             executable = artifact
     result.check_returncode()
     if executable is None:
-        raise RuntimeError("Cargo did not report the Code Mode Host executable")
+        raise RuntimeError(f"Cargo did not report the {package} executable")
     return executable
 
 
@@ -168,8 +168,19 @@ def main(arguments: list[str] | None = None) -> int:
         )
         environment["ASH_TGREP_PATH"] = str(executable.executable)
     if needs_code_mode_host:
-        environment["ASH_CODE_MODE_HOST_BIN"] = prepare_code_mode_host(
-            args.cargo, cargo_arguments, environment
+        environment["ASH_CODE_MODE_HOST_BIN"] = prepare_test_executable(
+            args.cargo, cargo_arguments, environment, "ash-code-mode-host"
+        )
+    if (
+        cargo_arguments[0] == "test"
+        and "--no-run" not in cargo_arguments
+        and "ASH_APP_SERVER_PATH" not in environment
+        and cargo_command_uses_package(
+            args.cargo, cargo_arguments, REPOSITORY_ROOT, "ash-remote-server"
+        )
+    ):
+        environment["ASH_APP_SERVER_PATH"] = prepare_test_executable(
+            args.cargo, cargo_arguments, environment, "ash-app-server"
         )
     return subprocess.run(
         [args.cargo, *cargo_arguments], cwd=REPOSITORY_ROOT, env=environment

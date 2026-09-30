@@ -1,6 +1,6 @@
 import type { AppServerConnectionState } from "../../app-server/common/appServerApi.js";
 import type { RemoteAgentReconnectResult } from "../common/remoteAgentApi.js";
-import type { SshAppServerProcessLauncher } from "./sshAppServerProcessLauncher.js";
+import type { RemoteAppServerProcessLauncher } from "./remoteAppServerProcessLauncher.js";
 
 export interface RemoteConnectionRecoveryHost {
 	readonly state: AppServerConnectionState;
@@ -14,7 +14,7 @@ export class RemoteConnectionRecoveryCoordinator {
 
 	constructor(
 		private readonly host: RemoteConnectionRecoveryHost,
-		private readonly launcher: SshAppServerProcessLauncher,
+		private readonly launcher: RemoteAppServerProcessLauncher,
 		private readonly prepareForConnectionReplacement: () => void = () => {},
 	) {}
 

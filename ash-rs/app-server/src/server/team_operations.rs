@@ -256,6 +256,7 @@ impl AppServer {
             },
             run.coordinator_thread_id.clone(),
             ash_protocol::ApprovalMode::default(),
+            ash_protocol::CollaborationMode::Multitask,
             TurnToolModeSelection::ConfiguredDefault,
             vec![ash_protocol::UserInput::Text { text: prompt }],
             ash_protocol::TurnKind::Coding,

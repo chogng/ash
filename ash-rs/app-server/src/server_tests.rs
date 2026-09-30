@@ -2384,7 +2384,7 @@ fn start_turn_model_and_reasoning_effort_are_scoped_to_their_thread() {
                 "commandId":"first-turn","sessionId":session_id,
                 "request":{
                     "type":"startTurn","expectedSequence":1,"threadId":first_id,
-                    "model":alternate,"reasoningEffort":"high","input":[{"type":"text","text":"first"}]
+                    "mode":"plan","model":alternate,"reasoningEffort":"high","input":[{"type":"text","text":"first"}]
                 }
             }
         }),
@@ -2395,11 +2395,47 @@ fn start_turn_model_and_reasoning_effort_are_scoped_to_their_thread() {
         .threads()
         .read_thread(&ash_protocol::ThreadId::new(first_id).unwrap())
         .unwrap();
-    assert_eq!(first_snapshot.turns.last().unwrap().model, Some(alternate));
+    assert_eq!(
+        first_snapshot.turns.last().unwrap().model,
+        Some(alternate.clone())
+    );
     assert_eq!(
         first_snapshot.turns.last().unwrap().reasoning_effort,
         Some(ash_protocol::ReasoningEffort::High)
     );
+    let first_instructions = first_snapshot
+        .turns
+        .last()
+        .unwrap()
+        .instructions
+        .as_ref()
+        .unwrap();
+    assert_eq!(
+        first_snapshot.turns.last().unwrap().mode,
+        ash_protocol::CollaborationMode::Plan
+    );
+    assert_eq!(first_instructions.owner(), "prompts");
+    assert_eq!(
+        first_instructions.mode_instructions().unwrap().id,
+        "collaboration-mode/plan"
+    );
+    assert!(first_instructions.shared().is_empty());
+
+    let mode_conflict = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":7,"method":"session/request",
+            "params":{
+                "commandId":"first-turn","sessionId":session_id,
+                "request":{
+                    "type":"startTurn","expectedSequence":1,"threadId":first_id,
+                    "mode":"debug","model":alternate,"reasoningEffort":"high","input":[{"type":"text","text":"first"}]
+                }
+            }
+        }),
+    );
+    assert!(mode_conflict.get("error").is_some(), "{mode_conflict}");
 
     let second_turn = call(
         &server,
@@ -2658,7 +2694,7 @@ fn rewrite_endpoint_replays_one_child_and_one_replacement_turn() {
             "jsonrpc":"2.0","id":6,"method":"session/request",
             "params":{
                 "commandId":"turn-second","sessionId":session_id,
-                "request":{"type":"startTurn","expectedSequence":root_snapshot["result"]["thread"]["sequence"],"threadId":root_id,"input":[{"type":"text","text":"second"}]}
+                "request":{"type":"startTurn","mode":"plan","expectedSequence":root_snapshot["result"]["thread"]["sequence"],"threadId":root_id,"input":[{"type":"text","text":"second"}]}
             }
         }),
     );
@@ -2712,6 +2748,7 @@ fn rewrite_endpoint_replays_one_child_and_one_replacement_turn() {
         first["result"]["value"]["turnId"]
     );
     assert_eq!(child.turns[1].turn_id.as_str(), replacement_turn_id);
+    assert_eq!(child.turns[1].mode, ash_protocol::CollaborationMode::Plan);
     assert_eq!(
         child
             .commands
@@ -4855,6 +4892,7 @@ fn interaction_resolution_uses_the_durable_identity_and_resumes_the_turn() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -5217,6 +5255,7 @@ fn expired_interaction_is_cancelled_and_fails_the_turn() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -5310,6 +5349,7 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -5426,6 +5466,7 @@ fn interaction_response_is_rejected_from_a_capable_non_owner_connection() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -6832,6 +6873,7 @@ fn message_restore_interrupts_the_source_and_replays_without_interrupting_later_
             .start_turn(
                 &source,
                 StartTurnRequest {
+                    mode: Default::default(),
                     advisor: None,
                     command_id: ash_protocol::CommandId::new(command).unwrap(),
                     expected_sequence: core_api::SequenceExpectation::Any,

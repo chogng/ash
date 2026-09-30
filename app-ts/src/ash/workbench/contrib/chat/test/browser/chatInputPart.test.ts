@@ -8,7 +8,7 @@ import type { IDictationService } from '../../../../../platform/dictation/common
 import { NotificationSeverity } from '../../../../../platform/notification/common/notification.js';
 import { NotificationService } from '../../../../services/notification/common/notificationService.js';
 import { ChatInputPart } from '../../browser/widget/input/chatInputPart.js';
-import type { ChatInputDelegate } from '../../browser/widget/input/chatInput.js';
+import type { ChatInputDelegate, ChatInputState } from '../../browser/widget/input/chatInput.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
@@ -25,10 +25,13 @@ for (const [name, value] of Object.entries({
 const sharedNotifications = new NotificationService();
 suiteTeardown(() => sharedNotifications.dispose());
 
-function inputPart(notifications: NotificationService, dictation?: IDictationService): ChatInputPart {
+function inputPart(notifications: NotificationService, dictation?: IDictationService, mode: ChatInputState['mode'] = 'agent'): ChatInputPart {
 	const container = document.createElement('div');
 	document.body.append(container);
-	return new ChatInputPart(container, {} as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, dictation);
+	let state: ChatInputState = { mode, queuedMessages: 0, phase: 'loading', canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
+	const part = new ChatInputPart(container, { selectMode: selected => { state = { ...state, mode: selected }; part.render(state); } } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, dictation);
+	part.render(state);
+	return part;
 }
 
 function edit(part: ChatInputPart, text: string): void {
@@ -39,18 +42,20 @@ function edit(part: ChatInputPart, text: string): void {
 }
 
 test('Chat draft handoff moves text and resolved attachments after acknowledgement', async () => {
-	using source = inputPart(sharedNotifications);
+	using source = inputPart(sharedNotifications, undefined, 'debug');
 	using target = inputPart(sharedNotifications);
 	edit(source, 'Review this file');
 	source.addContext({ id: 'src/file.ts', kind: 'file', name: 'file.ts', resolve: async () => ({ name: 'file.ts', content: 'const answer = 42;' }) });
 	const captured = await source.captureDraft();
 	assert.ok(captured);
 	assert.deepEqual(captured.draft, {
+		mode: 'debug',
 		text: 'Review this file',
 		contexts: [{ id: 'src/file.ts', kind: 'file', name: 'file.ts', content: 'const answer = 42;' }],
 	});
 	target.restoreDraft(captured.draft);
 	assert.equal(target.element.querySelector('textarea')?.value, 'Review this file');
+	assert.equal(target.element.querySelector('[data-action-id="ash.chat.input.mode"] button')?.textContent, 'Debug');
 	assert.match(target.element.querySelector('.ash-chat-input-attachments')?.textContent ?? '', /file\.ts/u);
 	assert.throws(() => target.restoreDraft(captured.draft), /already has an unsent draft/u);
 	captured.clear();

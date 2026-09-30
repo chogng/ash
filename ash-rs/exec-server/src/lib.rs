@@ -3,9 +3,11 @@
 mod client;
 mod environment;
 pub mod execution;
+mod file_transfer;
 mod process;
 #[cfg(feature = "local-sandbox")]
 mod sandbox;
+mod ssh;
 pub mod terminal;
 mod transport;
 
@@ -15,7 +17,9 @@ pub use environment::ExecutionEnvironment;
 pub use environment::LocalEnvironment;
 #[cfg(feature = "local-sandbox")]
 pub use sandbox::LocalSandbox;
+pub use ssh::SshEndpoint;
 pub use transport::ExecListener;
+pub use transport::serve_authenticated_stream;
 
 use exec_server_protocol::ExecError;
 use std::fmt;
@@ -25,6 +29,9 @@ pub enum Error {
     Remote(ExecError),
     Transport(std::io::Error),
     Protocol,
+    Cancelled(String),
+    OutcomeUnknown,
+    FileNotPublished(String),
 }
 
 impl fmt::Display for Error {
@@ -33,6 +40,9 @@ impl fmt::Display for Error {
             Self::Remote(error) => write!(f, "execution rejected: {error:?}"),
             Self::Transport(error) => write!(f, "execution connection failed: {error}"),
             Self::Protocol => f.write_str("invalid execution response"),
+            Self::Cancelled(reason) => write!(f, "execution cancelled: {reason}"),
+            Self::OutcomeUnknown => f.write_str("file publication outcome is unknown"),
+            Self::FileNotPublished(reason) => write!(f, "file was not published: {reason}"),
         }
     }
 }

@@ -1,3 +1,4 @@
+import type { SessionMode } from '../../sessions/common/sessionApi.js';
 import type { DisposableHandle } from "../../ipc/common/ipc.js";
 import type { DialogRequest, FileFilter, IDialogOutcome } from '../../dialogs/common/dialogs.js';
 import type { IWorkbenchWindowInfo, IOpenEmptyWindowOptions } from '../../window/common/window.js';
@@ -130,6 +131,7 @@ export interface INativeOpenDialogOptions {
 export interface IOpenAgentsWindowOptions {
 	readonly conversation?: { readonly sessionId: string; readonly threadId: string };
 	readonly draft?: {
+		readonly mode: SessionMode;
 		readonly text: string;
 		readonly contexts: readonly { readonly id: string; readonly kind: string; readonly name: string; readonly content: string }[];
 	};
@@ -196,7 +198,7 @@ export function validateOpenAgentsWindow(value: unknown): IOpenAgentsWindowOptio
 		const draft = options.draft;
 		if (!draft || typeof draft !== 'object' || Array.isArray(draft)) throw new TypeError('Invalid Agents Window draft');
 		const fields = draft as Record<string, unknown>;
-		if (Object.keys(fields).sort().join(',') !== 'contexts,text' || typeof fields.text !== 'string' || !Array.isArray(fields.contexts)) throw new TypeError('Invalid Agents Window draft');
+		if (!['agent', 'plan', 'debug', 'multitask', 'ask'].includes(fields.mode as string) || Object.keys(fields).sort().join(',') !== 'contexts,mode,text' || typeof fields.text !== 'string' || !Array.isArray(fields.contexts)) throw new TypeError('Invalid Agents Window draft');
 		for (const context of fields.contexts) {
 			if (!context || typeof context !== 'object' || Array.isArray(context)) throw new TypeError('Invalid Agents Window context');
 			const attachment = context as Record<string, unknown>;

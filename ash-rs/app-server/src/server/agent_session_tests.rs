@@ -528,6 +528,7 @@ fn fork_session_binds_extensions_and_delivers_approval_after_subscription() {
         .start_turn(
             &thread_id,
             ash_core::StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 command_id: CommandId::new("copy-turn").unwrap(),
                 expected_sequence: core_api::SequenceExpectation::Exact(snapshot.sequence),
@@ -593,4 +594,111 @@ fn fork_session_binds_extensions_and_delivers_approval_after_subscription() {
             .any(|notice| notice.contains("\"method\":\"agent/request\"")
                 && notice.contains("copy-approval"))
     );
+}
+
+#[test]
+fn collaboration_modes_reach_rpc_turns_and_init_without_replacing_shared_rules() {
+    for mode in [
+        ash_protocol::CollaborationMode::Agent,
+        ash_protocol::CollaborationMode::Plan,
+        ash_protocol::CollaborationMode::Debug,
+        ash_protocol::CollaborationMode::Multitask,
+        ash_protocol::CollaborationMode::Ask,
+    ] {
+        for text in ["Inspect the module", "/init"] {
+            let threads = Arc::new(ThreadController::with_store(Arc::new(
+                InMemoryThreadStore::default(),
+            )));
+            let (sender, requests) = mpsc::channel();
+            let server = AppServer::new(threads.clone(), Arc::new(CaptureModel(sender)));
+            let mut connection = server.connection();
+            call(
+                &server,
+                &mut connection,
+                "initialize",
+                serde_json::json!({"clientInfo":{"name":"mode-test","version":"1"},"capabilities":{}}),
+            );
+            let created = call(
+                &server,
+                &mut connection,
+                "session/create",
+                serde_json::json!({"commandId":"mode-root","title":"Modes","executionTarget":null}),
+            );
+            let id = created["result"]["session"]["sessionId"].as_str().unwrap();
+            let response = call(
+                &server,
+                &mut connection,
+                "session/request",
+                serde_json::json!({"commandId":"mode-turn","sessionId":id,
+                    "request":{"type":"startTurn","threadId":id,"expectedSequence":1,
+                        "mode":mode,"input":[{"type":"text","text":text}]}}),
+            );
+            assert!(response.get("error").is_none(), "{response}");
+            let request = requests.recv_timeout(Duration::from_secs(10)).unwrap();
+            let root = threads.read_thread(&ThreadId::new(id).unwrap()).unwrap();
+            let turn = &root.turns[0];
+            assert_eq!(turn.mode, mode);
+            let frozen = turn.instructions.as_ref().unwrap();
+            let approach = collaboration_mode_templates::instructions(mode);
+            assert_eq!(frozen.mode_instructions(), Some(&approach.as_text()));
+            assert_eq!(
+                request
+                    .instructions
+                    .as_deref()
+                    .unwrap()
+                    .matches(approach.body().trim())
+                    .count(),
+                1
+            );
+            assert!(
+                request
+                    .instructions
+                    .as_deref()
+                    .unwrap()
+                    .contains(ash_prompts::AGENT_INSTRUCTIONS.body().trim())
+            );
+            assert!(root.delegations.is_empty());
+        }
+    }
+}
+
+#[test]
+fn analysis_modes_inspect_workflow_commands_without_launching_workflow_agents() {
+    for mode in [
+        ash_protocol::CollaborationMode::Plan,
+        ash_protocol::CollaborationMode::Ask,
+    ] {
+        let threads = Arc::new(ThreadController::with_store(Arc::new(
+            InMemoryThreadStore::default(),
+        )));
+        let (sender, requests) = mpsc::channel();
+        let server = AppServer::new(threads.clone(), Arc::new(CaptureModel(sender)));
+        let mut connection = server.connection();
+        call(
+            &server,
+            &mut connection,
+            "initialize",
+            serde_json::json!({"clientInfo":{"name":"mode-test","version":"1"},"capabilities":{}}),
+        );
+        let created = call(
+            &server,
+            &mut connection,
+            "session/create",
+            serde_json::json!({"commandId":"analysis-root","title":"Analysis","executionTarget":null}),
+        );
+        let id = created["result"]["session"]["sessionId"].as_str().unwrap();
+        let response = call(
+            &server,
+            &mut connection,
+            "session/request",
+            serde_json::json!({"commandId":"analysis-turn","sessionId":id,
+                "request":{"type":"startTurn","threadId":id,"expectedSequence":1,
+                    "mode":mode,"input":[{"type":"text","text":"/develop add search"}]}}),
+        );
+        assert!(response.get("error").is_none(), "{response}");
+        requests.recv_timeout(Duration::from_secs(10)).unwrap();
+        let root = threads.read_thread(&ThreadId::new(id).unwrap()).unwrap();
+        assert_eq!(root.turns[0].mode, mode);
+        assert!(root.delegations.is_empty());
+    }
 }

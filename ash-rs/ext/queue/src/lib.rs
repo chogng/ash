@@ -30,6 +30,12 @@ pub struct QueueInput {
     /// Execution directory selected by the host when accepting the message.
     pub directory: String,
     pub input: Vec<UserInput>,
+    #[serde(default)]
+    pub mode: protocol::CollaborationMode,
+    #[serde(default)]
+    pub model: Option<protocol::ModelRef>,
+    #[serde(default)]
+    pub reasoning_effort: Option<protocol::ReasoningEffort>,
     pub tool_mode: ToolMode,
     pub approval_mode: ApprovalMode,
     #[serde(default)]

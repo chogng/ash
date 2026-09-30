@@ -1,0 +1,18 @@
+[package]
+name = "ash-collaboration-mode-templates"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+readme = "README.md"
+
+[lib]
+doctest = false
+name = "collaboration_mode_templates"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+protocol = { package = "ash-protocol", path = "../protocol" }

@@ -2,4 +2,4 @@
 import type { InstructionText } from './InstructionText.js';
 import type { ModelInstructionSelection } from './ModelInstructionSelection.js';
 
-export type TurnInstructions = { owner: string, id: string, revision: string, body: string, shared?: Array<InstructionText>, modelGuidance?: ModelInstructionSelection | null, };
+export type TurnInstructions = { owner: string, id: string, revision: string, body: string, shared?: Array<InstructionText>, modelGuidance?: ModelInstructionSelection | null, modeInstructions?: InstructionText | null, };

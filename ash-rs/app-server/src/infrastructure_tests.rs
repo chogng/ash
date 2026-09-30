@@ -51,7 +51,7 @@ fn enqueue(
         server,
         connection,
         json!({"jsonrpc":"2.0","id":4,"method":"queue/enqueue","params":{
-            "commandId":"queued-one","sessionId":session,"threadId":thread,"input":[{"type":"text","text":"queued hello"}],
+            "commandId":"queued-one","sessionId":session,"threadId":thread,"mode":"debug","reasoningEffort":"high","input":[{"type":"text","text":"queued hello"}],
             "toolMode":"direct","approvalMode": ash_protocol::ApprovalMode::default()
         }}),
     );
@@ -385,6 +385,29 @@ fn persistent_queue_recovers_after_backend_restart_without_duplicate_turns() {
             .turns
             .len(),
         1
+    );
+    let restored = third
+        .threads()
+        .read_thread(&message.request.thread_id)
+        .unwrap();
+    assert_eq!(
+        restored.turns[0].mode,
+        ash_protocol::CollaborationMode::Debug
+    );
+    assert_eq!(
+        restored.turns[0].reasoning_effort,
+        Some(ash_protocol::ReasoningEffort::High)
+    );
+    assert_eq!(
+        restored.turns[0]
+            .instructions
+            .as_ref()
+            .unwrap()
+            .mode_instructions(),
+        Some(
+            &collaboration_mode_templates::instructions(ash_protocol::CollaborationMode::Debug)
+                .as_text()
+        )
     );
 }
 
@@ -1375,4 +1398,158 @@ fn enabled_memories(path: &std::path::Path) -> Arc<ash_config::ConfigStore> {
         })
         .unwrap();
     config
+}
+
+#[test]
+fn queue_steering_rejects_a_different_mode_without_changing_the_active_turn() {
+    let root = tempfile::tempdir().unwrap();
+    let (server, _) = queued_server(root.path());
+    let mut connection = server.connection();
+    let (session, thread) = create(&server, &mut connection);
+    let thread_id = ash_protocol::ThreadId::new(&thread).unwrap();
+    let turn = server
+        .threads()
+        .start_turn(
+            &thread_id,
+            ash_core::StartTurnRequest {
+                mode: ash_protocol::CollaborationMode::Plan,
+                command_id: ash_protocol::CommandId::new("active-plan").unwrap(),
+                expected_sequence: core_api::SequenceExpectation::Any,
+                model: None,
+                reasoning_effort: None,
+                advisor: None,
+                kind: ash_protocol::TurnKind::Coding,
+                instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze().with_mode(
+                    &collaboration_mode_templates::instructions(
+                        ash_protocol::CollaborationMode::Plan,
+                    ),
+                ),
+                policy_revision: "queue-test".into(),
+                activated_skills: Vec::new(),
+                approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                tool_mode: ash_protocol::ToolMode::Direct,
+                tool_profile: None,
+                input: vec![ash_protocol::UserInput::Text {
+                    text: "plan the change".into(),
+                }],
+            },
+        )
+        .unwrap();
+    let queued = enqueue(&server, &mut connection, &session, &thread);
+    let edited = call(
+        &server,
+        &mut connection,
+        json!({
+            "jsonrpc":"2.0", "id":5, "method":"queue/edit", "params":{
+                "sessionId":session, "threadId":thread, "commandId":queued.request.command_id,
+                "expectedRevision":queued.revision, "action":{"type":"send", "turnId":turn.turn_id}
+            }
+        }),
+    );
+    let message: queue::QueuedMessage =
+        serde_json::from_value(edited["result"].clone()).expect(&edited.to_string());
+    assert!(matches!(server.deliver_queued_message(&message).unwrap(),
+        queue::Delivery::Rejected(reason) if reason == "steerModeMismatch"));
+    let snapshot = server.threads().read_thread(&thread_id).unwrap();
+    assert_eq!(snapshot.turns.len(), 1);
+    assert_eq!(
+        snapshot.turns[0].mode,
+        ash_protocol::CollaborationMode::Plan
+    );
+    assert!(
+        !snapshot
+            .commands
+            .iter()
+            .any(|command| command.receipt.command_id == message.request.command_id)
+    );
+    server
+        .threads()
+        .steer_turn(
+            &thread_id,
+            core_api::SteerTurnRequest {
+                command_id: message.request.command_id.clone(),
+                expected_sequence: core_api::SequenceExpectation::Any,
+                turn_id: turn.turn_id,
+                input: message.request.input.clone(),
+            },
+        )
+        .unwrap();
+    assert!(
+        matches!(server.deliver_queued_message(&message).unwrap(),
+        queue::Delivery::Rejected(reason) if reason == "steerModeMismatch"),
+        "an existing Steer receipt must not let a queued mode bypass the target mode"
+    );
+}
+
+#[test]
+fn queued_modes_survive_reopen_and_use_the_same_init_entrypoint() {
+    for mode in [
+        ash_protocol::CollaborationMode::Plan,
+        ash_protocol::CollaborationMode::Ask,
+        ash_protocol::CollaborationMode::Multitask,
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let (server, _) = queued_server(root.path());
+        let server = server.with_home(Arc::new(ash_home::AshHome::new(
+            ash_utils_absolute_path::AbsolutePathBuf::from_absolute(root.path()).unwrap(),
+        )));
+        let mut connection = server.connection();
+        let (session, thread) = create(&server, &mut connection);
+        let params = json!({"commandId":"queued-mode","sessionId":session,"threadId":thread,
+            "mode":mode,"reasoningEffort":"high","input":[{"type":"text","text":"/init"}],
+            "approvalMode":"askPermissions"});
+        let response = call(
+            &server,
+            &mut connection,
+            json!({"jsonrpc":"2.0","id":4,"method":"queue/enqueue","params":params}),
+        );
+        let accepted: queue::QueuedMessage =
+            serde_json::from_value(response["result"].clone()).expect(&response.to_string());
+        let store = queue::QueueStore::open(&root.path().join("state.sqlite")).unwrap();
+        let message = store.get(&accepted.request.command_id).unwrap().unwrap();
+        assert_eq!(message, accepted);
+        assert_eq!(message.request.mode, mode);
+        assert_eq!(
+            message.request.reasoning_effort,
+            Some(ash_protocol::ReasoningEffort::High)
+        );
+        let queue::Delivery::Started(turn_id) = server.deliver_queued_message(&message).unwrap()
+        else {
+            panic!("mode queue did not start")
+        };
+        super::wait_for_latest_turn(&server, &thread, ash_protocol::TurnStatus::Completed);
+        let snapshot = server
+            .threads()
+            .read_thread(&message.request.thread_id)
+            .unwrap();
+        let turn = snapshot
+            .turns
+            .iter()
+            .find(|turn| turn.turn_id == turn_id)
+            .unwrap();
+        assert_eq!(turn.mode, mode);
+        assert_eq!(
+            turn.reasoning_effort,
+            Some(ash_protocol::ReasoningEffort::High)
+        );
+        assert_eq!(
+            turn.instructions.as_ref().unwrap().id(),
+            "instructions/init"
+        );
+        assert_eq!(
+            turn.instructions.as_ref().unwrap().mode_instructions(),
+            Some(&collaboration_mode_templates::instructions(mode).as_text())
+        );
+        assert!(
+            matches!(server.deliver_queued_message(&message).unwrap(), queue::Delivery::Started(id) if id == turn_id)
+        );
+        let mut conflict = params;
+        conflict["mode"] = json!("debug");
+        let response = call(
+            &server,
+            &mut connection,
+            json!({"jsonrpc":"2.0","id":5,"method":"queue/enqueue","params":conflict}),
+        );
+        assert!(response.get("error").is_some(), "{response}");
+    }
 }

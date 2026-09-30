@@ -7,7 +7,7 @@ use std::path::Path;
 
 use crate::{SqliteDurability, open_sqlite_database};
 
-const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 9;
+const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 10;
 
 pub(super) fn open(path: &Path) -> Result<Connection, String> {
     let mut connection = open_sqlite_database(path, SqliteDurability::Durable)?;
@@ -136,7 +136,13 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
                  DROP TABLE IF EXISTS session_streams;",
             )
             .map_err(sql_error)?,
-        Some(4) | Some(5) | Some(6) | Some(7) | Some(8) | Some(STORAGE_SQLITE_SCHEMA_VERSION) => {}
+        Some(4)
+        | Some(5)
+        | Some(6)
+        | Some(7)
+        | Some(8)
+        | Some(9)
+        | Some(STORAGE_SQLITE_SCHEMA_VERSION) => {}
         Some(version) => {
             return Err(format!(
                 "unsupported event-store SQLite schema version {version}"
@@ -296,6 +302,9 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
                 Err(error) => return Err(error.to_string()),
             }
         }
+    }
+    if locked_version.is_none_or(|version| version < 10) {
+        super::handoff::create_schema(&transaction)?;
     }
     transaction.commit().map_err(sql_error)?;
     Ok(connection)

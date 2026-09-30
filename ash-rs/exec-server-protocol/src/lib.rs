@@ -5,9 +5,10 @@ pub mod terminal;
 use serde::Deserialize;
 use serde::Serialize;
 
-pub const VERSION: u32 = 2;
+pub const VERSION: u32 = 3;
 pub const MAX_FRAME_BYTES: usize = 2 * 1024 * 1024;
-pub const MAX_FILE_BYTES: usize = 256 * 1024;
+pub const MAX_FILE_BYTES: usize = 10 * 1024 * 1024;
+pub const MAX_FILE_CHUNK_BYTES: usize = 256 * 1024;
 pub const MAX_OUTPUT_BYTES: usize = 64 * 1024;
 pub const MAX_READ_WAIT_MILLIS: u64 = 1000;
 
@@ -148,6 +149,27 @@ pub struct FileContent {
     pub revision: String,
 }
 
+/// One revision-pinned range. Clients must discard the whole read if a later range conflicts.
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FileChunk {
+    pub bytes: Vec<u8>,
+    pub revision: String,
+    pub offset: u64,
+    pub total_bytes: u64,
+}
+
+/// Uploads never change a workspace file until an explicit commit succeeds.
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase", tag = "state", deny_unknown_fields)]
+pub enum FileWriteState {
+    Uploading { next_offset: u64 },
+    Committed { revision: String },
+    Aborted,
+    Rejected { error: ExecError },
+    OutcomeUnknown,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", tag = "condition", content = "revision")]
 pub enum WriteCondition {
@@ -186,11 +208,29 @@ pub enum Request {
     },
     FileRead {
         path: String,
+        offset: u64,
+        expected_revision: Option<String>,
     },
-    FileWrite {
+    FileWriteBegin {
+        operation_id: String,
         path: String,
-        bytes: Vec<u8>,
+        total_bytes: u64,
+        content_revision: String,
         condition: WriteCondition,
+    },
+    FileWriteChunk {
+        operation_id: String,
+        offset: u64,
+        bytes: Vec<u8>,
+    },
+    FileWriteCommit {
+        operation_id: String,
+    },
+    FileWriteAbort {
+        operation_id: String,
+    },
+    FileWriteStatus {
+        operation_id: String,
     },
 }
 
@@ -204,8 +244,8 @@ pub enum Request {
 pub enum Response {
     Environment(EnvironmentInfo),
     Process(ProcessSnapshot),
-    File(FileContent),
-    Written,
+    File(FileChunk),
+    FileWrite(FileWriteState),
     ProcessUpdated,
     Error(ExecError),
 }

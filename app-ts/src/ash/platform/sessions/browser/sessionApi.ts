@@ -50,6 +50,8 @@ export function createDisconnectedThreadApi(unavailable: UnavailableOperation): 
 
 export function createDisconnectedTurnApi(unavailable: UnavailableOperation): ITurnApi {
 	return {
+		enqueue: () => unavailable("queue.enqueue"),
+		listQueued: () => unavailable("queue.list"),
 		start: () => unavailable("turn.start"),
 		compact: () => unavailable("turn.compact"),
 		consultAdvisor: () => unavailable("turn.consultAdvisor"),
@@ -123,7 +125,9 @@ export function createAppServerThreadApi(connection: AppServerProtocolClient): I
 
 export function createAppServerTurnApi(connection: AppServerProtocolClient): ITurnApi {
 	return {
-		start: (params) => appServerRequest(connection, "session/request", sessionRequest(params, { type: "startTurn", threadId: params.threadId, expectedSequence: params.expectedSequence, approvalMode: params.approvalMode, model: params.model, toolMode: params.toolMode, input: params.input })).then(turnStartResult),
+		enqueue: params => appServerRequest(connection, "queue/enqueue", params),
+		listQueued: params => appServerRequest(connection, "queue/list", params),
+		start: (params) => appServerRequest(connection, "session/request", sessionRequest(params, { type: "startTurn", threadId: params.threadId, expectedSequence: params.expectedSequence, mode: params.mode, approvalMode: params.approvalMode, model: params.model, reasoningEffort: params.reasoningEffort, toolMode: params.toolMode, input: params.input })).then(turnStartResult),
 		consultAdvisor: (params) => appServerRequest(connection, "session/request", sessionRequest(params, { type: "consultAdvisor", threadId: params.threadId, expectedSequence: params.expectedSequence, question: params.question })).then(turnStartResult),
 		compact: (params) => appServerRequest(connection, "session/request", sessionRequest(params, { type: "compactContext", threadId: params.threadId, expectedSequence: params.expectedSequence, retentionPrompt: params.retentionPrompt })).then(turnStartResult),
 		steer: (params) => appServerRequest(connection, "session/request", sessionRequest(params, { type: "steerTurn", threadId: params.threadId, expectedSequence: params.expectedSequence, turnId: params.turnId, input: params.input })).then(turnSteerResult),

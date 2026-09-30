@@ -139,6 +139,7 @@ impl AgentRuntime for Runtime<'_> {
                 kind: request.kind,
                 input: &request.input,
                 tool_mode: request.tool_mode,
+                mode: request.mode,
             },
         )? {
             return Ok(receipt);
@@ -148,6 +149,7 @@ impl AgentRuntime for Runtime<'_> {
         let input = request.input.clone();
         let tool_mode = request.tool_mode;
         let kind = request.kind;
+        let mode = request.mode;
         let start = self.threads.start_turn(
             thread_id,
             crate::StartTurnRequest {
@@ -157,6 +159,7 @@ impl AgentRuntime for Runtime<'_> {
                 reasoning_effort: request.reasoning_effort,
                 advisor: request.advisor,
                 kind: request.kind,
+                mode,
                 instructions: request.instructions,
                 policy_revision: self.executor.policy_revision(),
                 approval_mode: request.approval_mode,
@@ -175,6 +178,7 @@ impl AgentRuntime for Runtime<'_> {
                         kind,
                         input: &input,
                         tool_mode,
+                        mode,
                     },
                 )?
                 .ok_or_else(|| CoreError::Journal("accepted Turn receipt is missing".into()));
@@ -282,6 +286,7 @@ impl AgentRuntime for Runtime<'_> {
             (
                 ThreadCommand::StartTurn {
                     input,
+                    mode,
                     tool_mode,
                     kind,
                     ..
@@ -289,9 +294,15 @@ impl AgentRuntime for Runtime<'_> {
                 SubmittedCommand::Turn {
                     kind: wanted_kind,
                     input: wanted,
-                    tool_mode: mode,
+                    tool_mode: wanted_tool_mode,
+                    mode: wanted_mode,
                 },
-            ) => input == wanted && *tool_mode == mode && *kind == wanted_kind,
+            ) => {
+                input == wanted
+                    && *tool_mode == wanted_tool_mode
+                    && *kind == wanted_kind
+                    && *mode == wanted_mode
+            }
             (ThreadCommand::StartTurn { input, .. }, SubmittedCommand::Input { input: wanted }) => {
                 input == wanted
             }
@@ -329,16 +340,23 @@ impl AgentRuntime for Runtime<'_> {
             (
                 ThreadCommand::StartTurn {
                     input,
+                    mode,
                     tool_mode,
                     approval_mode,
                     ..
                 },
                 AcceptedCommand::Turn {
+                    mode: wanted_mode,
                     input: wanted,
-                    tool_mode: mode,
+                    tool_mode: mode_tool,
                     approval_mode: approval,
                 },
-            ) => input == wanted && *tool_mode == mode && *approval_mode == approval,
+            ) => {
+                input == wanted
+                    && *mode == wanted_mode
+                    && *tool_mode == mode_tool
+                    && *approval_mode == approval
+            }
             (
                 ThreadCommand::SteerTurn { input, turn_id },
                 AcceptedCommand::Steer {

@@ -1,4 +1,4 @@
-import type { AgentResponse, ChatAgent, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction } from "../../../../../services/chat/common/chatService.js";
+import type { AgentResponse, ChatAgent, ChatMode, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction } from "../../../../../services/chat/common/chatService.js";
 import type { SkillReference } from "../../../../../../platform/skills/common/skillApi.js";
 import type { ModelRef } from "../../../../../services/chat/common/chatService.js";
 import type { ModelReasoningEffort } from "../../../../../services/chat/common/modelCatalog.js";
@@ -18,6 +18,9 @@ export interface ChatInputServerCommandInvocation {
 
 /** State required to render the input area for the selected Thread. */
 export interface ChatInputState {
+	readonly mode: ChatMode;
+	readonly activeMode?: ChatMode;
+	readonly queuedMessages: number;
 	readonly phase: ChatInputPhase;
 	readonly error?: string;
 	readonly canInterrupt: boolean;
@@ -36,7 +39,7 @@ export interface ChatInputState {
 
 /** Operations that the input area may request from its owning Chat pane. */
 export interface ChatInputDelegate {
-	send(text: string, skills?: readonly SkillReference[], contexts?: readonly ChatContextAttachment[]): Promise<void>;
+	send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ChatContextAttachment[]): Promise<void>;
 	executeCommand(invocation: ChatInputCommandInvocation): Promise<void>;
 	executeServerCommand(invocation: ChatInputServerCommandInvocation): Promise<void>;
 	interrupt(): Promise<void>;
@@ -45,6 +48,7 @@ export interface ChatInputDelegate {
 	selectAutomaticModel(): Promise<void>;
 	listAgents(): Promise<readonly ChatAgent[]>;
 	selectAgent(agent: ChatAgent | undefined): void;
+	selectMode(mode: ChatMode): void;
 	openModelSettings(): Promise<void>;
 	resolveInteraction(response: AgentResponse): Promise<void>;
 }

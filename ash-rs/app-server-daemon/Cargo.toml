@@ -15,7 +15,9 @@ name = "ash_app_server_daemon"
 path = "src/lib.rs"
 
 [dependencies]
+exec-server-protocol = { workspace = true }
 ash-utils-home-dir = { workspace = true }
+remote = { package = "ash-remote", path = "../remote" }
 signal-hook = { workspace = true }
 ash-install-context = { workspace = true }
 process-hardening = { workspace = true }

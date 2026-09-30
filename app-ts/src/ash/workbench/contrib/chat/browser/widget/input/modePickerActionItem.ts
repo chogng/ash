@@ -7,12 +7,13 @@ import type { IAction } from '../../../../../../base/common/actions.js';
 import { MutableDisposable } from '../../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import type { IContextViewService } from '../../../../../../platform/contextview/browser/contextView.js';
+import type { ChatMode } from '../../../../../services/chat/common/chatService.js';
 
 interface IModePickerAction extends IAction {
 	readonly actions: readonly IAction[] | (() => Promise<readonly IAction[]>);
 }
 
-export type ChatInputMode = 'agent' | 'plan' | 'debug' | 'multitask' | 'ask';
+export type ChatInputMode = ChatMode;
 
 /** Presents the chat input's mode action as a keyboard-accessible menu. */
 export class ModePickerActionItem extends ButtonActionViewItem {

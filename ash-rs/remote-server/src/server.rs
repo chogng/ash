@@ -52,14 +52,9 @@ impl RemoteServerOptions {
         self.product_services_path = Some(path.into());
         self
     }
-
-    #[cfg(unix)]
-    pub(crate) fn product_services_path(&self) -> Option<&std::path::Path> {
-        self.product_services_path.as_deref()
-    }
 }
 
-/// Runs a direct stdio server or the durable per-Directory broker connection command.
+/// Runs a direct diagnostic server or connects to the shared remote profile backend.
 pub fn run_from_environment(
     arguments: impl IntoIterator<Item = String>,
 ) -> Result<(), RemoteServerError> {
@@ -92,12 +87,78 @@ pub fn run_from_environment_with_product_services(
         {
             serve_stdio(options()?)
         }
-        [command] if command == "connect" => crate::broker::connect(options()?),
-        [command] if command == "daemon" => crate::broker::serve(options()?),
+        [command] if command == "connect" => connect(options()?),
+        [command, receiver] if command == "history-export" => {
+            let receiver = ash_protocol::ContentDigest::new(receiver.clone())
+                .map_err(|error| RemoteServerError::new(error.to_string()))?;
+            let options = options()?;
+            let history =
+                ash_state::SqliteThreadStore::open(options.profile_root.join("state.sqlite3"))
+                    .map_err(|error| RemoteServerError::new(error.to_string()))?;
+            history
+                .freeze_history(&receiver)
+                .map_err(|error| RemoteServerError::new(error.to_string()))?;
+            let executable =
+                ash_app_server_daemon::backend_executable_path().map_err(RemoteServerError::new)?;
+            ash_app_server_daemon::run_lifecycle(
+                ash_app_server_daemon::LifecycleCommand::Stop,
+                ash_app_server_daemon::ConnectionOptions::new(
+                    &options.profile_root,
+                    None,
+                    ash_app_server_daemon::GrantSource::HostConfiguration,
+                    None,
+                ),
+                &executable,
+            )
+            .map_err(RemoteServerError::new)?;
+            let attachments = attachment_store::FileAttachmentStore::open(
+                options.profile_root.join("attachments"),
+            )
+            .map_err(|error| RemoteServerError::new(error.to_string()))?;
+            history
+                .export_history(&receiver, &attachments, std::io::stdout().lock())
+                .map_err(|error| RemoteServerError::new(error.to_string()))
+        }
+        [command, environment] if command == "execution-connect" => {
+            exec_server_protocol::validate_id(environment)
+                .map_err(|_| RemoteServerError::new("Invalid execution environment identity"))?;
+            let options = options()?;
+            let root = options
+                .dir_root
+                .ok_or_else(|| RemoteServerError::new("Execution requires ASH_WORKSPACE_ROOT"))?;
+            let connection = ash_app_server_daemon::ConnectionOptions::new(
+                options.profile_root,
+                Some(root),
+                ash_app_server_daemon::GrantSource::HostConfiguration,
+                None,
+            )
+            .with_role(ash_app_server_daemon::ConnectionRole::Execution {
+                environment: environment.clone(),
+            });
+            let executable =
+                ash_app_server_daemon::backend_executable_path().map_err(RemoteServerError::new)?;
+            ash_app_server_daemon::connect_selected(connection, &executable)
+                .map_err(RemoteServerError::new)
+        }
         _ => Err(RemoteServerError::new(
-            "usage: ash-remote-server connect | app-server --listen stdio://",
+            "usage: ash-remote-server connect | execution-connect ENVIRONMENT | history-export RECEIVER | app-server --listen stdio://",
         )),
     }
+}
+
+fn connect(options: RemoteServerOptions) -> Result<(), RemoteServerError> {
+    let connection = ash_app_server_daemon::ConnectionOptions::new(
+        options.profile_root,
+        options.dir_root,
+        ash_app_server_daemon::GrantSource::HostConfiguration,
+        options.product_services_path,
+    );
+    let executable =
+        ash_app_server_daemon::backend_executable_path().map_err(RemoteServerError::new)?;
+    // Directory authority belongs to this connection, never to the daemon identity. A remote
+    // runtime selection changes the profile's backend generation through the same lifecycle
+    // owner used by local products, so two directories cannot create competing profile writers.
+    ash_app_server_daemon::connect_selected(connection, &executable).map_err(RemoteServerError::new)
 }
 
 /// Opens the Remote App Server and serves its JSON Lines protocol over process stdio.
@@ -217,11 +278,6 @@ impl RemoteServerError {
         Self {
             message: message.into(),
         }
-    }
-
-    #[cfg(unix)]
-    pub(crate) fn from_io(error: std::io::Error) -> Self {
-        Self::new(error.to_string())
     }
 }
 

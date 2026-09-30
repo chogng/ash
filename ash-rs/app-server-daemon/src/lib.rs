@@ -30,12 +30,52 @@ pub enum GrantSource {
 }
 
 /// Product surface using one managed App Server connection.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub enum ConnectionRole {
     #[default]
     Workbench,
     Agents,
+    /// Authenticated execution protocol; no Agent requests are accepted on this connection.
+    Execution {
+        environment: String,
+    },
+}
+
+/// Credential-free SSH destination selected for one Workbench connection.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SshConnectionOptions {
+    host: remote::SshHost,
+    root: Option<remote::RemoteDirPath>,
+    runtime: remote::RemoteRuntime,
+}
+
+impl SshConnectionOptions {
+    /// Validates host, optional remote authority root, and the exact installed executable.
+    pub fn new(host: &str, root: Option<&str>, runtime: &str) -> Result<Self, String> {
+        let host = remote::SshHost::parse(host).map_err(|error| error.to_string())?;
+        let root = root
+            .map(remote::RemoteDirPath::parse)
+            .transpose()
+            .map_err(|error| error.to_string())?;
+        let runtime = remote::RemoteRuntime::new_exact_executable(runtime)
+            .map_err(|error| error.to_string())?;
+        Ok(Self {
+            host,
+            root,
+            runtime,
+        })
+    }
+
+    pub fn host(&self) -> &str {
+        self.host.as_str()
+    }
+    pub fn root(&self) -> Option<&str> {
+        self.root.as_ref().map(remote::RemoteDirPath::as_str)
+    }
+    pub fn runtime(&self) -> &str {
+        self.runtime.executable()
+    }
 }
 
 /// Profile, directory grant, and product-service inputs for one daemon connection.
@@ -46,6 +86,7 @@ pub struct ConnectionOptions {
     dir_grant_source: GrantSource,
     product_services: Option<PathBuf>,
     role: ConnectionRole,
+    ssh: Option<SshConnectionOptions>,
 }
 
 impl ConnectionOptions {
@@ -62,6 +103,7 @@ impl ConnectionOptions {
             dir_grant_source,
             product_services,
             role: ConnectionRole::Workbench,
+            ssh: None,
         }
     }
 
@@ -91,7 +133,22 @@ impl ConnectionOptions {
     }
 
     pub fn role(&self) -> ConnectionRole {
-        self.role
+        self.role.clone()
+    }
+
+    /// Selects remote authority without interpreting its path on the local machine.
+    pub fn with_ssh(mut self, ssh: SshConnectionOptions) -> Result<Self, String> {
+        if self.dir_root.is_some() || self.role != ConnectionRole::Workbench {
+            return Err(
+                "SSH connections require a Workbench role without a local directory".into(),
+            );
+        }
+        self.ssh = Some(ssh);
+        Ok(self)
+    }
+
+    pub fn ssh(&self) -> Option<&SshConnectionOptions> {
+        self.ssh.as_ref()
     }
 }
 

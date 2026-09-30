@@ -1,7 +1,9 @@
 //! Profile-wide service runtime executed by `ash-app-server --managed`.
 
+mod execution;
 mod gateway;
 mod registry;
+mod ssh;
 mod web;
 
 use ash_app_server_daemon::ConnectionOptions;
@@ -26,27 +28,55 @@ const STOP_GRACE_TIMEOUT: Duration = Duration::from_secs(5);
 const STOP_CONNECTION_DRAIN_TIMEOUT: Duration = Duration::from_secs(1);
 
 pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> Result<(), String> {
-    let registry = Arc::new(ProfileAppServerRegistry::open(ConnectionOptions::new(
-        &profile_root,
-        None,
-        GrantSource::HostConfiguration,
-        product_services,
-    ))?);
+    let history = ash_state::SqliteThreadStore::open(profile_root.join("state.sqlite3"))
+        .map_err(|error| error.to_string())?;
+    // Once ownership transfers, this host is execution-only. Opening the profile services
+    // would replay old Turns and restart automation against history owned by the receiver.
+    let registry = match history
+        .history_receiver()
+        .map_err(|error| error.to_string())?
+    {
+        Some(_) => None,
+        None => Some(Arc::new(ProfileAppServerRegistry::open(
+            ConnectionOptions::new(
+                &profile_root,
+                None,
+                GrantSource::HostConfiguration,
+                product_services,
+            ),
+        )?)),
+    };
+    drop(history);
     let idle_timeout = configured_idle_timeout()?;
     let mut endpoint = ManagedEndpoint::bind(&profile_root)?;
     let _automatic_updates = ash_app_server_daemon::start_automatic_updates(&profile_root)?;
-    let mut automation = Some(registry.start_automation()?);
-    let mut queue = Some(registry.start_queue()?);
+    let mut automation = registry
+        .as_ref()
+        .map(|registry| registry.start_automation())
+        .transpose()?;
+    let mut queue = registry
+        .as_ref()
+        .map(|registry| registry.start_queue())
+        .transpose()?;
     let active_connections = Arc::new(LocalConnections::new());
+    let execution = Arc::new(execution::ExecutionRegistry::default());
     let mut idle_since = None;
     let mut stopping_since = None;
     let mut connection_shutdown_since = None;
     loop {
         if endpoint.is_stopping() {
+            if stopping_since.is_none() {
+                execution.stop()?;
+            }
             drop(automation.take());
             drop(queue.take());
             let stopping_since = stopping_since.get_or_insert_with(Instant::now);
-            if active_connections.is_empty() && registry.active_terminal_count() == 0 {
+            if active_connections.is_empty()
+                && registry
+                    .as_ref()
+                    .is_none_or(|registry| registry.active_terminal_count() == 0)
+                && !execution.needs_host()?
+            {
                 exit_after_stop(endpoint);
             }
             if stopping_since.elapsed() >= STOP_GRACE_TIMEOUT {
@@ -72,11 +102,30 @@ pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> R
             let registration = active_connections
                 .register(shutdown_stream)
                 .map_err(|error| error.to_string())?;
-            let web_registry = Arc::clone(&registry);
+            let web_registry = registry.clone();
+            let execution_registry = Arc::clone(&execution);
             thread::Builder::new()
                 .name("ash-local-app-server-connection".into())
                 .spawn(move || {
                     let _registration = registration;
+                    if let ConnectionRole::Execution { environment } = connection.options.role() {
+                        if let Err(error) = execution_registry.serve(connection, &environment) {
+                            eprintln!("managed execution connection failed: {error}");
+                        }
+                        return;
+                    }
+                    let Some(web_registry) = web_registry else {
+                        eprintln!("managed profile history belongs to another host; only execution connections are allowed");
+                        return;
+                    };
+                    if let Some(target) = connection.options.ssh().cloned() {
+                        if let Err(error) = ssh::serve(connection, &target)
+                            && !is_peer_disconnect(&error)
+                        {
+                            eprintln!("managed SSH connection failed: {error}");
+                        }
+                        return;
+                    }
                     let server = match web_registry.server_for(connection.options.clone()) {
                         Ok(server) => server,
                         Err(error) => {
@@ -114,9 +163,11 @@ pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> R
             }
             if active_connections.is_empty()
                 && !endpoint.has_pending_connections()
-                && registry.active_terminal_count() == 0
-                && !registry.automation_needs_host()?
-                && !registry.queue_needs_host()?
+                && registry
+                    .as_ref()
+                    .is_none_or(|registry| registry.active_terminal_count() == 0)
+                && !execution.needs_host()?
+                && !profile_needs_host(&registry)?
             {
                 let idle_since = idle_since.get_or_insert_with(Instant::now);
                 if idle_since.elapsed() >= idle_timeout {
@@ -127,6 +178,13 @@ pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> R
             }
             thread::sleep(IDLE_POLL_INTERVAL);
         }
+    }
+}
+
+fn profile_needs_host(registry: &Option<Arc<ProfileAppServerRegistry>>) -> Result<bool, String> {
+    match registry {
+        Some(registry) => Ok(registry.automation_needs_host()? || registry.queue_needs_host()?),
+        None => Ok(false),
     }
 }
 

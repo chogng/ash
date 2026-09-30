@@ -80,6 +80,7 @@ static NEXT_THREAD: AtomicU64 = AtomicU64::new(1);
 
 fn start_request(key: &str) -> StartTurnRequest {
     StartTurnRequest {
+        mode: Default::default(),
         advisor: None,
         kind: ash_protocol::TurnKind::Coding,
         instructions: crate::test_turn_instructions(),
@@ -1735,6 +1736,7 @@ fn typed_command_rejects_reusing_an_id_with_different_input() {
         .start_turn(&thread, start_request("conflict"))
         .unwrap();
     let conflicting = StartTurnRequest {
+        mode: Default::default(),
         advisor: None,
         kind: ash_protocol::TurnKind::Coding,
         instructions: crate::test_turn_instructions(),
@@ -2321,6 +2323,7 @@ fn start_turn_persists_ordered_text_and_normalized_image_attachment_items() {
         .start_turn(
             &thread,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),

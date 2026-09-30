@@ -1,3 +1,4 @@
+import { AppServerDaemonLauncher } from "../../../../platform/app-server-daemon/electron-main/appServerDaemonLauncher.js";
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { URI } from "../../../../base/common/uri.js";
@@ -13,6 +14,7 @@ test("Remote runtime bootstrap binds install cancellation and settles its projec
 		workspace: URI.parse("ash-remote://ssh+build-linux/workspace/project"),
 		sshExecutable: "ssh",
 		remoteExecutable: "ash",
+		carrier: new AppServerDaemonLauncher({ executable: "/runtime/ash-app-server-daemon", args: ["connect-selected"], environment: {}, fileExists: () => true }),
 		localEnvironment: {},
 		runtimeInstaller: {
 			install: async (_host, options) => {
@@ -61,6 +63,7 @@ test("Remote runtime bootstrap delegates exact profile operations", async () => 
 		workspace: URI.parse("ash-remote://ssh+build-linux/workspace/project"),
 		sshExecutable: "custom-ssh",
 		remoteExecutable: "ash",
+		carrier: new AppServerDaemonLauncher({ executable: "/runtime/ash-app-server-daemon", args: ["connect-selected"], environment: {}, fileExists: () => true }),
 		localEnvironment: {},
 		runtimeInstaller: { install: async () => "/opt/ash/new/bin/ash-remote-server" },
 		connectionProfiles: profiles,

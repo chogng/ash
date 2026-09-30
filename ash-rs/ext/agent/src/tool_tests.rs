@@ -168,144 +168,165 @@ fn refuses_execution_without_durable_turn_identity() {
 
 #[test]
 fn spawn_tool_uses_frozen_intent_parent_to_launch_private_investigator() {
-    let threads = Arc::new(ThreadController::with_store(Arc::new(
-        InMemoryThreadStore::default(),
-    )));
-    let coordinator = Arc::new(MultiAgentCoordinator::new(
-        threads.clone(),
-        AgentTreeLimits::default(),
-    ));
-    let tools = [
-        "read_file",
-        "grep",
-        "glob",
-        "board_read",
-        "board_write",
-        "spawn_agent",
-        "send_agent_message",
-        "wait_agent",
-        "web_search",
-    ]
-    .into_iter()
-    .map(|name| ToolName::new(name).unwrap())
-    .collect::<Vec<_>>();
-    let role = crate::resolve_launched_agent(
-        &protocol::AgentRoleSelection::Exact {
-            source: protocol::AgentRoleSource::BuiltIn,
-            name: "develop/intent".into(),
-        },
-        None,
-        tools.clone(),
-        &[],
-        &[agent_roles::built_in_roles()],
-        &[],
-        crate::AgentLaunch::Workflow,
-    )
-    .unwrap();
-    let parent = threads
-        .start_thread(
-            &ash_core::NoThreadWorktreeBinder,
-            StartThreadRequest {
-                execution_target: None,
-                branch_name: None,
-                agent_id: None,
-                agent: Some(protocol::AgentConfiguration {
-                    role: role.role,
-                    capability_scope: role.capability_scope,
-                    base_instructions: Some(prompts::AGENT_INSTRUCTIONS.freeze()),
-                }),
-                command_id: CommandId::new("intent-parent").unwrap(),
-                title: "Intent".into(),
+    for mode in [
+        protocol::CollaborationMode::Agent,
+        protocol::CollaborationMode::Plan,
+        protocol::CollaborationMode::Debug,
+        protocol::CollaborationMode::Multitask,
+        protocol::CollaborationMode::Ask,
+    ] {
+        let threads = Arc::new(ThreadController::with_store(Arc::new(
+            InMemoryThreadStore::default(),
+        )));
+        let coordinator = Arc::new(MultiAgentCoordinator::new(
+            threads.clone(),
+            AgentTreeLimits::default(),
+        ));
+        let tools = [
+            "read_file",
+            "grep",
+            "glob",
+            "board_read",
+            "board_write",
+            "spawn_agent",
+            "send_agent_message",
+            "wait_agent",
+            "web_search",
+        ]
+        .into_iter()
+        .map(|name| ToolName::new(name).unwrap())
+        .collect::<Vec<_>>();
+        let role = crate::resolve_launched_agent(
+            &protocol::AgentRoleSelection::Exact {
+                source: protocol::AgentRoleSource::BuiltIn,
+                name: "develop/intent".into(),
             },
+            None,
+            tools.clone(),
+            &[],
+            &[agent_roles::built_in_roles()],
+            &[],
+            crate::AgentLaunch::Workflow,
         )
         .unwrap();
-    let turn = threads
-        .start_turn(
-            &parent.thread_id,
-            StartTurnRequest {
-                command_id: CommandId::new("intent-turn").unwrap(),
-                expected_sequence: SequenceExpectation::Exact(1),
-                model: None,
-                reasoning_effort: None,
-                advisor: None,
-                kind: protocol::TurnKind::Coding,
-                instructions: prompts::AGENT_INSTRUCTIONS.freeze(),
-                policy_revision: "test-policy-v1".into(),
-                approval_mode: protocol::ApprovalMode::AskPermissions,
-                tool_mode: protocol::ToolMode::Direct,
-                tool_profile: None,
-                activated_skills: Vec::new(),
-                input: vec![UserInput::Text {
-                    text: "Investigate project facts".into(),
-                }],
-            },
-        )
-        .unwrap();
-    let mut service = MultiAgentToolService::new(
-        coordinator,
-        threads.clone(),
-        Arc::new(NoopTurnBackend),
-        ActionPolicyRevision::new("test-policy-v1"),
-    );
-    for name in tools {
-        if !service.definitions.iter().any(|tool| tool.name == name) {
-            service.definitions.push(definition(
-                name.as_str(),
-                "Read-only fixture tool",
-                json!({"type":"object","properties":{},"additionalProperties":false}),
-            ));
+        let parent = threads
+            .start_thread(
+                &ash_core::NoThreadWorktreeBinder,
+                StartThreadRequest {
+                    execution_target: None,
+                    branch_name: None,
+                    agent_id: None,
+                    agent: Some(protocol::AgentConfiguration {
+                        role: role.role,
+                        capability_scope: role.capability_scope,
+                        base_instructions: Some(prompts::AGENT_INSTRUCTIONS.freeze()),
+                    }),
+                    command_id: CommandId::new("intent-parent").unwrap(),
+                    title: "Intent".into(),
+                },
+            )
+            .unwrap();
+        let turn = threads
+            .start_turn(
+                &parent.thread_id,
+                StartTurnRequest {
+                    mode,
+                    command_id: CommandId::new("intent-turn").unwrap(),
+                    expected_sequence: SequenceExpectation::Exact(1),
+                    model: None,
+                    reasoning_effort: None,
+                    advisor: None,
+                    kind: protocol::TurnKind::Coding,
+                    instructions: prompts::AGENT_INSTRUCTIONS
+                        .freeze()
+                        .with_mode(&collaboration_mode_templates::instructions(mode)),
+                    policy_revision: "test-policy-v1".into(),
+                    approval_mode: protocol::ApprovalMode::AskPermissions,
+                    tool_mode: protocol::ToolMode::Direct,
+                    tool_profile: None,
+                    activated_skills: Vec::new(),
+                    input: vec![UserInput::Text {
+                        text: "Investigate project facts".into(),
+                    }],
+                },
+            )
+            .unwrap();
+        let mut service = MultiAgentToolService::new(
+            coordinator,
+            threads.clone(),
+            Arc::new(NoopTurnBackend),
+            ActionPolicyRevision::new("test-policy-v1"),
+        );
+        for name in tools {
+            if !service.definitions.iter().any(|tool| tool.name == name) {
+                service.definitions.push(definition(
+                    name.as_str(),
+                    "Read-only fixture tool",
+                    json!({"type":"object","properties":{},"additionalProperties":false}),
+                ));
+            }
         }
-    }
-    let executor = ash_core::TurnExecutor::new(
-        threads.clone(),
-        Arc::new(PrivateSpawnModel),
-        Arc::new(service),
-        Arc::new(CoordinationPolicy),
-    );
-    executor.start(&parent.thread_id, &turn.turn_id).unwrap();
-    let deadline = Instant::now() + Duration::from_secs(10);
-    loop {
-        let snapshot = threads.read_thread(&parent.thread_id).unwrap();
-        let status = snapshot.turns.last().unwrap().status;
-        if status == protocol::TurnStatus::Completed {
-            break;
+        let executor = ash_core::TurnExecutor::new(
+            threads.clone(),
+            Arc::new(PrivateSpawnModel),
+            Arc::new(service),
+            Arc::new(CoordinationPolicy),
+        );
+        executor.start(&parent.thread_id, &turn.turn_id).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let snapshot = threads.read_thread(&parent.thread_id).unwrap();
+            let status = snapshot.turns.last().unwrap().status;
+            if status == protocol::TurnStatus::Completed {
+                break;
+            }
+            assert_ne!(status, protocol::TurnStatus::Failed, "{snapshot:?}");
+            assert!(Instant::now() < deadline, "private spawn did not finish");
+            std::thread::yield_now();
         }
-        assert_ne!(status, protocol::TurnStatus::Failed, "{snapshot:?}");
-        assert!(Instant::now() < deadline, "private spawn did not finish");
-        std::thread::yield_now();
-    }
-    let parent = threads.read_thread(&parent.thread_id).unwrap();
-    assert_eq!(parent.delegations.len(), 1);
-    let child = threads
-        .read_thread(
-            parent
-                .delegations
-                .values()
-                .next()
+        let parent = threads.read_thread(&parent.thread_id).unwrap();
+        assert_eq!(parent.delegations.len(), 1);
+        let child = threads
+            .read_thread(
+                parent
+                    .delegations
+                    .values()
+                    .next()
+                    .unwrap()
+                    .child_thread_id
+                    .as_ref()
+                    .unwrap(),
+            )
+            .unwrap();
+        assert_eq!(
+            child
+                .agent_configuration()
                 .unwrap()
-                .child_thread_id
+                .role
                 .as_ref()
-                .unwrap(),
-        )
-        .unwrap();
-    assert_eq!(
-        child
-            .agent_configuration()
-            .unwrap()
-            .role
-            .as_ref()
-            .unwrap()
-            .name,
-        "develop/investigator"
-    );
-    assert!(
-        child
-            .agent_configuration()
-            .unwrap()
-            .capability_scope
-            .delegation_tools
-            .is_empty()
-    );
+                .unwrap()
+                .name,
+            "develop/investigator"
+        );
+        assert!(
+            child
+                .agent_configuration()
+                .unwrap()
+                .capability_scope
+                .delegation_tools
+                .is_empty()
+        );
+        let child_turn = &child.turns[0];
+        assert_eq!(child_turn.mode, mode.delegated());
+        assert_eq!(
+            child_turn
+                .instructions
+                .as_ref()
+                .unwrap()
+                .mode_instructions(),
+            Some(&collaboration_mode_templates::instructions(mode.delegated()).as_text())
+        );
+    }
 }
 
 #[test]
@@ -398,6 +419,7 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
         .start_turn(
             &parent.thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: protocol::TurnKind::Coding,
                 instructions: prompts::AGENT_INSTRUCTIONS.freeze(),

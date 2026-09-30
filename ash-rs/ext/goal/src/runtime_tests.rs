@@ -44,6 +44,7 @@ fn executor(threads: Arc<ThreadController>, model: Arc<ScriptedModel>) -> TurnEx
 #[test]
 fn active_goal_starts_a_hidden_follow_up_until_the_budget_stops_it() {
     let (threads, thread_id, turn_id) = started_turn_with_options(
+        protocol::CollaborationMode::Agent,
         protocol::ToolMode::Direct,
         Some(protocol::ReasoningEffort::High),
     );
@@ -122,6 +123,100 @@ fn active_goal_starts_a_hidden_follow_up_until_the_budget_stops_it() {
 }
 
 #[test]
+fn goal_continuation_preserves_execution_modes_and_waits_after_analysis_modes() {
+    use extension_api::ContinuationContributor;
+    use protocol::CollaborationMode;
+
+    for mode in [
+        CollaborationMode::Agent,
+        CollaborationMode::Plan,
+        CollaborationMode::Debug,
+        CollaborationMode::Multitask,
+        CollaborationMode::Ask,
+    ] {
+        let (threads, thread_id, turn_id) =
+            started_turn_with_options(mode, protocol::ToolMode::Direct, None);
+        threads
+            .create_goal(&thread_id, "finish the requested task".into(), None)
+            .unwrap();
+        threads
+            .complete_turn(&thread_id, &turn_id, "answer complete".into())
+            .unwrap();
+        let extension = crate::runtime::GoalExtension::new(&threads);
+        let next = extension.next_turn(&thread_id, &turn_id).unwrap();
+
+        if matches!(mode, CollaborationMode::Plan | CollaborationMode::Ask) {
+            assert!(next.is_none(), "{mode:?} must wait for the user");
+            assert!(
+                ContinuationContributor::recover(
+                    &extension,
+                    &[SessionId::new("session").unwrap()].into_iter().collect(),
+                )
+                .unwrap()
+                .is_empty(),
+                "recovery must also wait after {mode:?}"
+            );
+            let snapshot = threads.read_thread(&thread_id).unwrap();
+            assert_eq!(snapshot.turns.len(), 1);
+            assert_eq!(
+                snapshot.goal.unwrap().status,
+                protocol::ThreadGoalStatus::Active
+            );
+        } else {
+            let next = next.expect("execution modes continue the active Goal");
+            let snapshot = threads.read_thread(&thread_id).unwrap();
+            let next_turn = snapshot
+                .turns
+                .iter()
+                .find(|turn| turn.turn_id == next.turn_id)
+                .unwrap();
+            assert_eq!(next_turn.mode, mode);
+            assert!(extension.next_turn(&thread_id, &turn_id).unwrap().is_none());
+        }
+    }
+}
+
+#[test]
+fn analysis_modes_do_not_receive_active_goal_execution_instructions() {
+    for mode in [
+        protocol::CollaborationMode::Plan,
+        protocol::CollaborationMode::Ask,
+    ] {
+        let (threads, thread_id, turn_id) =
+            started_turn_with_options(mode, protocol::ToolMode::Direct, None);
+        threads
+            .create_goal(
+                &thread_id,
+                "active goal must not override this analysis".into(),
+                None,
+            )
+            .unwrap();
+        let model = Arc::new(ScriptedModel::new([Ok(text_response("analysis complete"))]));
+        executor(threads.clone(), model.clone())
+            .start(&thread_id, &turn_id)
+            .unwrap();
+        wait_for_turn_status(&threads, &thread_id, &turn_id, TurnStatus::Completed);
+        assert_eq!(model.requests().len(), 1);
+        assert!(!request_contains(
+            &model.requests()[0],
+            "active goal must not override this analysis"
+        ));
+        let extension = crate::runtime::GoalExtension::new(&threads);
+        assert!(
+            extension_api::ContinuationContributor::next_turn(&extension, &thread_id, &turn_id)
+                .unwrap()
+                .is_none()
+        );
+        let snapshot = threads.read_thread(&thread_id).unwrap();
+        assert_eq!(snapshot.turns.len(), 1);
+        assert_eq!(
+            snapshot.goal.unwrap().status,
+            protocol::ThreadGoalStatus::Active
+        );
+    }
+}
+
+#[test]
 fn review_turn_ignores_active_goal_instructions_and_does_not_continue_it() {
     let (threads, thread_id, turn_id) = started_review_turn();
     threads
@@ -157,6 +252,7 @@ fn recovered_active_goal_resumes_a_running_hidden_turn() {
         .start_goal_turn(
             &thread_id,
             StartGoalTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 instructions: prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("recovered-goal-continuation").unwrap(),
@@ -233,7 +329,11 @@ impl ModelService for ScriptedModel {
 }
 
 fn started_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
-    started_turn_with_options(protocol::ToolMode::Direct, None)
+    started_turn_with_options(
+        protocol::CollaborationMode::Agent,
+        protocol::ToolMode::Direct,
+        None,
+    )
 }
 
 fn started_review_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
@@ -256,6 +356,7 @@ fn started_review_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: protocol::TurnKind::Review,
                 instructions: prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -279,6 +380,7 @@ fn started_review_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
 }
 
 fn started_turn_with_options(
+    mode: protocol::CollaborationMode,
     tool_mode: protocol::ToolMode,
     reasoning_effort: Option<protocol::ReasoningEffort>,
 ) -> (Arc<ThreadController>, ThreadId, TurnId) {
@@ -301,6 +403,7 @@ fn started_turn_with_options(
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode,
                 advisor: None,
                 kind: protocol::TurnKind::Coding,
                 instructions: prompts::AGENT_INSTRUCTIONS.freeze(),

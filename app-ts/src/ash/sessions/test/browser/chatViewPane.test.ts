@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
-import type { ModelRef, ServerNotification, Session as SessionDto, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from "../../../platform/app-server/common/generated/index.js";
+import type { ModelRef, QueueEnqueueParams, ServerNotification, Session as SessionDto, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from "../../../platform/app-server/common/generated/index.js";
 import type { SessionMutationParams, SessionOperationInput } from "../../../platform/sessions/common/sessionApi.js";
 import type { IRendererHost } from "../../../platform/renderer/common/rendererHost.js";
 import type { IAction } from "../../../base/common/actions.js";
@@ -828,12 +828,29 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	assert.equal(selectedAgentItem?.getAttribute('role'), 'menuitemradio');
 	assert.equal(selectedAgentItem?.getAttribute('aria-checked'), 'true');
 	selectedAgentItem?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+	untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
+	await waitFor(() => dom.window.document.querySelector('.ash-chat-input-mode-menu') !== null);
+	dom.window.document.querySelector<HTMLButtonElement>(".ash-chat-input-mode-menu [data-action-id='ash.chat.input.mode.plan'] button")?.click();
+	assert.equal(untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'Plan');
+	untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
+	await waitFor(() => dom.window.document.querySelector('.ash-chat-input-mode-menu') !== null);
+	assert.equal(dom.window.document.querySelector<HTMLButtonElement>(".ash-chat-input-mode-menu [data-action-id='ash.chat.input.agent.directory-1.reviewer'] button")?.getAttribute('aria-checked'), 'true');
+	assert.equal(dom.window.document.querySelector<HTMLButtonElement>(".ash-chat-input-mode-menu [data-action-id='ash.chat.input.mode.plan'] button")?.getAttribute('aria-checked'), 'true');
+	dom.window.document.querySelector<HTMLButtonElement>(".ash-chat-input-mode-menu [data-action-id='ash.chat.input.agent.default'] button")?.click();
+	assert.equal(sessions.untitledSessions[0]?.agent, undefined);
+	assert.equal(untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'Plan');
+	await nextTask();
+	untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
+	await waitFor(() => dom.window.document.querySelector('.ash-chat-input-mode-menu') !== null);
+	dom.window.document.querySelector<HTMLButtonElement>(".ash-chat-input-mode-menu [data-action-id='ash.chat.input.agent.directory-1.reviewer'] button")?.click();
+	assert.equal(untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'Plan');
+	await nextTask();
 	failAgentList = true;
 	untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
 	await waitFor(() => dom.window.document.querySelector('.ash-chat-input-mode-menu') !== null);
 	assert.deepEqual(
-		[...dom.window.document.querySelectorAll<HTMLElement>('.ash-chat-input-mode-menu [data-action-id]')].map(item => item.dataset.actionId),
-		['ash.chat.input.mode.agent', 'ash.chat.input.mode.plan', 'ash.chat.input.mode.debug', 'ash.chat.input.mode.multitask', 'ash.chat.input.mode.ask'],
+		[...dom.window.document.querySelectorAll<HTMLElement>('.ash-chat-input-mode-menu [data-action-id]')].map(item => item.dataset.actionId).filter(id => id?.startsWith('ash.chat.input.')),
+		['ash.chat.input.mode.agent', 'ash.chat.input.mode.plan', 'ash.chat.input.mode.debug', 'ash.chat.input.mode.multitask', 'ash.chat.input.mode.ask', 'ash.chat.input.agent.default'],
 	);
 	dom.window.document.querySelector<HTMLButtonElement>('.ash-chat-input-mode-menu [role="menuitemradio"]')?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.equal(untitledPane.classList.contains("empty"), true);
@@ -864,6 +881,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	assert.deepEqual(fake.createSessionRequests[0]?.agent, { type: 'exact', source: { type: 'directory', id: 'directory-1' }, name: 'reviewer' });
 	assert.equal(fake.createThreadRequests.length, 1);
 	assert.equal(fake.turnStartRequests.length, 1);
+	assert.equal(fake.turnStartRequests[0]?.mode, 'plan');
 	assert.equal(contextResolutions, 1);
 	assert.deepEqual(fake.turnStartRequests[0]?.input, [
 		{ type: "context", name: "Git commit abc1234", content: "diff --git a/file b/file" },
@@ -873,6 +891,12 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	assert.equal(sessions.untitledSessions.length, 0);
 	assert.equal(sessions.active?.session.sessionId, "session-1");
 	assert.equal(sessions.active?.threadId, "thread-1");
+	untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
+	await waitFor(() => dom.window.document.querySelector('.ash-chat-input-mode-menu') !== null);
+	const agentMode = dom.window.document.querySelector<HTMLButtonElement>(".ash-chat-input-mode-menu [data-action-id='ash.chat.input.mode.agent'] button");
+	assert.equal(agentMode?.disabled, false);
+	agentMode?.click();
+	assert.equal(untitledPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'Agent');
 	assert.equal(
 		pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.dataset.sessionId,
 		"session-1",
@@ -1398,6 +1422,7 @@ test("ChatWidgetModel projects and refreshes the canonical durable Turn plan", a
 		turns: [{
 			turnId: "turn-1",
 			status: "running",
+			mode: "agent",
 			kind: "coding",
 			toolMode: "direct",
 			approvalMode: "askPermissions",
@@ -1536,6 +1561,7 @@ test("ChatWidgetModel projects a durable Turn failure into the conversation", as
 		turns: [{
 			turnId: "turn-1",
 			status: "failed",
+			mode: "agent",
 			kind: "coding",
 			toolMode: "direct",
 			approvalMode: "askPermissions",
@@ -1807,7 +1833,7 @@ test("Chat service projects unique enabled Skills and submits the exact pinned r
 			version: { type: "pinnedDigest", digest: "sha256:commit" },
 		},
 	}]);
-	await chat.startTurn({ sessionId: "session-1", threadId: "thread-1", expectedSequence: 1, text: "$commit staged changes", skills: [selectors[0]!.skill] });
+	await chat.startTurn({ sessionId: "session-1", threadId: "thread-1", expectedSequence: 1, text: "$commit staged changes", mode: "agent", skills: [selectors[0]!.skill] });
 	assert.deepEqual(fake.turnStartRequests[0]?.input, [
 		{ type: "skill", skill: selectors[0]!.skill },
 		{ type: "text", text: "$commit staged changes" },
@@ -2062,6 +2088,7 @@ test("ChatWidgetModel steers an active Turn instead of starting another Turn", a
 		turns: [{
 			turnId: "turn-running",
 			status: "running",
+			mode: "agent",
 			kind: "coding",
 			toolMode: "direct",
 			approvalMode: "askPermissions",
@@ -2113,6 +2140,78 @@ test("ChatWidgetModel dispatches compact as a standalone server command", async 
 	}]);
 });
 
+test('ChatWidgetModel queues a new mode while keeping the active Turn unchanged', async () => {
+	const activeSession = session('session-1', 'thread-1');
+	const value = thread('working');
+	value.turns[0]!.status = 'running';
+	value.turns[0]!.mode = 'plan';
+	const fake = fakeApi({ sessions: [activeSession], thread: () => value });
+	using chat = createChatService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
+	using model = new ChatWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	assert.equal(model.inputState.mode, 'plan');
+	model.selectMode('multitask');
+	await model.send('Implement independent steps');
+	assert.equal(fake.turnStartRequests.length, 0);
+	assert.equal(fake.turnSteerRequests.length, 0);
+	assert.deepEqual(fake.queuedRequests, [{
+		commandId: fake.queuedRequests[0]!.commandId,
+		sessionId: 'session-1', threadId: 'thread-1', mode: 'multitask',
+		model: undefined, reasoningEffort: undefined,
+		input: [{ type: 'text', text: 'Implement independent steps' }],
+		approvalMode: 'askPermissions',
+	}]);
+	assert.equal(model.inputState.activeMode, 'plan');
+	assert.equal(model.inputState.mode, 'multitask');
+});
+
+test('ChatWidgetModel restores the mode once and keeps it when reconnecting to newer Turns', async () => {
+	const activeSession = session('session-1', 'thread-1');
+	let value = thread('planning');
+	value.turns[0]!.mode = 'plan';
+	const fake = fakeApi({ sessions: [activeSession], thread: () => value });
+	using chat = createChatService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
+	using model = new ChatWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	assert.equal(model.inputState.mode, 'plan');
+	value = { ...value, sequence: value.sequence + 1, turns: [{ ...value.turns[0]!, mode: 'agent' }] };
+	fake.emitReady();
+	await waitFor(() => model.thread?.sequence === value.sequence);
+	assert.equal(model.inputState.mode, 'plan');
+	await model.send('Continue planning');
+	assert.equal(fake.turnStartRequests[0]!.mode, 'plan');
+});
+
+test('ChatWidgetModel submits server commands using the selected mode', async () => {
+	const activeSession = session('session-1', 'thread-1');
+	const fake = fakeApi({ sessions: [activeSession] });
+	using chat = createChatService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
+	using model = new ChatWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	model.selectMode('ask');
+	await model.executeServerCommand('init', '');
+	assert.equal(fake.turnStartRequests[0]!.mode, 'ask');
+	assert.deepEqual(fake.turnStartRequests[0]!.input, [{ type: 'text', text: '/init' }]);
+});
+
+test('ChatWidgetModel retries the recorded mode independently of prompt identity', async () => {
+	const activeSession = session('session-1', 'thread-1');
+	const value = threadWithFailure('providerUnavailable', true);
+	value.turns[0]!.mode = 'debug';
+	value.turns[0]!.items = [{ type: 'userMessage', itemId: 'request', turnId: 'turn-1', text: 'Find the failure' }];
+	const fake = fakeApi({ sessions: [activeSession], thread: () => value });
+	using chat = createChatService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
+	using model = new ChatWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	model.selectMode('ask');
+	await model.retryFailedTurn('turn-1');
+	assert.equal(fake.turnStartRequests[0]!.mode, 'debug');
+});
+
 function testLayoutService(auxiliaryBarVisible = true): IWorkbenchLayoutService {
 	const visibility = new Emitter<WorkbenchPartVisibilityChangeEvent>();
 	const visibleParts = new Set<WorkbenchPartId>(auxiliaryBarVisible ? ["auxiliarybar"] : []);
@@ -2139,6 +2238,7 @@ function fakeApi(options: FakeOptions = {}): {
 	readonly createSessionRequests: readonly SessionCreateParams[];
 	readonly createThreadRequests: readonly SessionOperationInput<"createThread">[];
 	readonly turnStartRequests: readonly SessionOperationInput<"startTurn">[];
+	readonly queuedRequests: readonly QueueEnqueueParams[];
 	readonly advisorRequests: readonly SessionOperationInput<"configureAdvisor">[];
 	readonly consultRequests: readonly SessionOperationInput<"consultAdvisor">[];
 	readonly turnCompactRequests: readonly SessionOperationInput<"compactContext">[];
@@ -2158,6 +2258,7 @@ function fakeApi(options: FakeOptions = {}): {
 	const createSessionRequests: SessionCreateParams[] = [];
 	const createThreadRequests: SessionOperationInput<"createThread">[] = [];
 	const turnStartRequests: SessionOperationInput<"startTurn">[] = [];
+	const queuedRequests: QueueEnqueueParams[] = [];
 	const advisorRequests: SessionOperationInput<"configureAdvisor">[] = [];
 	const consultRequests: SessionOperationInput<"consultAdvisor">[] = [];
 	const turnCompactRequests: SessionOperationInput<"compactContext">[] = [];
@@ -2283,6 +2384,8 @@ function fakeApi(options: FakeOptions = {}): {
 			unsubscribe: async () => undefined,
 		},
 		turn: {
+			enqueue: async (params: QueueEnqueueParams) => { queuedRequests.push(params); return {}; },
+			listQueued: async () => ({ messages: [] }),
 			consultAdvisor: async (params: SessionOperationInput<"consultAdvisor">) => { consultRequests.push(params); return { turnId: "advisor-turn", sequence: params.expectedSequence + 1 }; },
 			start: async (params: SessionOperationInput<"startTurn">) => {
 				turnStartRequests.push(params);
@@ -2313,6 +2416,7 @@ function fakeApi(options: FakeOptions = {}): {
 		createSessionRequests,
 		createThreadRequests,
 		turnStartRequests,
+		queuedRequests,
 		advisorRequests,
 		consultRequests,
 		turnCompactRequests,
@@ -2382,6 +2486,7 @@ function thread(agentText?: string): Thread {
 			? [{
 				turnId: "turn-1",
 				status: "completed",
+				mode: "agent",
 				kind: "coding",
 				toolMode: "direct",
 				approvalMode: "askPermissions",
@@ -2415,6 +2520,7 @@ function failedTurn(code: TurnError["code"], retryable: boolean, message = "Turn
 	return {
 		turnId: "turn-1",
 		status: "failed",
+		mode: "agent",
 		kind: "coding",
 		toolMode: "direct",
 		approvalMode: "askPermissions",

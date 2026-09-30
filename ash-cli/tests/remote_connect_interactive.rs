@@ -95,7 +95,7 @@ fn interactive_remote_tui_preserves_home_draft_after_transport_loss() {
     command.cwd(&dir);
     command.env("TERM", "xterm-256color");
     command.env("ASH_HOME", &profile_root);
-    command.env("ASH_REMOTE_SERVER_IDLE_TIMEOUT_MILLIS", "5000");
+    command.env("ASH_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS", "5000");
     let mut child = ChildGuard::new(pair.slave.spawn_command(command).unwrap());
     drop(pair.slave);
 

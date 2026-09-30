@@ -107,6 +107,9 @@ pub(crate) fn connect_selected_with_digest(
 
 fn connect_ready(options: &ConnectionOptions) -> Result<(), String> {
     let endpoint = EndpointPaths::prepare(options.profile_root())?;
+    let control = request_control(&endpoint, ControlCommand::Status)?
+        .ok_or("App Server exited before the connection scope could be checked")?;
+    control.validate_connection(options)?;
     let stream = connect_existing(&endpoint.socket)?
         .ok_or_else(|| "Local App Server daemon exited before the client connected".to_string())?;
     proxy_stdio(stream, options).map_err(|error| error.to_string())
@@ -238,7 +241,7 @@ fn start_unlocked(
             LifecycleStatus::AlreadyRunning,
             endpoint,
             Some(&control),
-            Some(&probe),
+            probe.as_ref(),
         ));
     }
 
@@ -277,7 +280,7 @@ fn start_new_unlocked(
                         LifecycleStatus::Started,
                         endpoint,
                         Some(&control),
-                        Some(&probe),
+                        probe.as_ref(),
                     ));
                 }
                 Ok(Some(_)) | Ok(None) => {}
@@ -330,7 +333,7 @@ fn ensure_selected_unlocked(
                 LifecycleStatus::AlreadyRunning,
                 endpoint,
                 Some(&control),
-                Some(&probe),
+                probe.as_ref(),
             ));
         }
         stop_unlocked(endpoint)?;
@@ -436,7 +439,7 @@ fn version_unlocked(
         LifecycleStatus::Running,
         endpoint,
         Some(&control),
-        Some(&probe),
+        probe.as_ref(),
     );
     output.installed_version = installed_version;
     Ok(output)
@@ -524,12 +527,62 @@ fn request_control(
 fn probe_app_server(
     endpoint: &EndpointPaths,
     options: &ConnectionOptions,
-) -> Result<ProbeInfo, String> {
+) -> Result<Option<ProbeInfo>, String> {
     let stream = connect_existing(&endpoint.socket)?
         .ok_or_else(|| "Local App Server daemon control endpoint is unavailable".to_string())?;
     let mut stream = DeadlineStream::new(stream, Instant::now() + PROBE_TIMEOUT)
         .map_err(|error| format!("App Server initialize probe deadline failed: {error}"))?;
-    write_json_line(&mut stream, &ConnectionPrelude::from_options(options)).map_err(io_error)?;
+    if let crate::ConnectionRole::Execution { environment } = options.role() {
+        // An execution-only remote host deliberately has no Agent RPC service. Probe its
+        // selected execution contract without opening or recovering profile history.
+        write_json_line(&mut stream, &ConnectionPrelude::from_options(options))
+            .map_err(io_error)?;
+        write_json_line(
+            &mut stream,
+            &exec_server_protocol::Message {
+                version: exec_server_protocol::VERSION,
+                token: String::new(),
+                incarnation: None,
+                request: exec_server_protocol::Request::EnvironmentInfo,
+            },
+        )
+        .map_err(io_error)?;
+        let mut line = String::new();
+        let size = BufReader::new(stream)
+            .take((exec_server_protocol::MAX_FRAME_BYTES + 1) as u64)
+            .read_line(&mut line)
+            .map_err(io_error)?;
+        if size == 0 || size > exec_server_protocol::MAX_FRAME_BYTES || !line.ends_with('\n') {
+            return Err("Execution probe returned no bounded response".into());
+        }
+        let response: exec_server_protocol::Response =
+            serde_json::from_str(&line).map_err(|error| error.to_string())?;
+        match response {
+            exec_server_protocol::Response::Environment(info)
+                if info.environment_id == environment =>
+            {
+                return Ok(None);
+            }
+            exec_server_protocol::Response::Error(
+                exec_server_protocol::ExecError::Conflict
+                | exec_server_protocol::ExecError::InvalidInput,
+            ) => return Ok(None),
+            _ => return Err("Execution probe failed its selected environment contract".into()),
+        }
+    }
+    // Daemon health describes the local profile process. A remote target is initialized by
+    // its owning client connection; an unavailable host must not invalidate local clients.
+    let probe_options = ConnectionOptions::new(
+        options.profile_root(),
+        None,
+        crate::GrantSource::HostConfiguration,
+        options.product_services().map(Path::to_path_buf),
+    );
+    write_json_line(
+        &mut stream,
+        &ConnectionPrelude::from_options(&probe_options),
+    )
+    .map_err(io_error)?;
     write_json_line(
         &mut stream,
         &json!({
@@ -577,10 +630,10 @@ fn probe_app_server(
     }
     ensure_protocol_compatible(&initialized, REQUIRED_SESSION_CAPABILITIES)
         .map_err(|error| format!("App Server protocol is incompatible: {error}"))?;
-    Ok(ProbeInfo {
+    Ok(Some(ProbeInfo {
         server_name: initialized.server_info.name,
         schema_hash: initialized.schema_hash.0,
-    })
+    }))
 }
 
 fn proxy_stdio(mut stream: UnixStream, options: &ConnectionOptions) -> io::Result<()> {

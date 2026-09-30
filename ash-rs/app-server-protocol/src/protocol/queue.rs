@@ -16,7 +16,17 @@ pub struct QueueEnqueueParams {
     pub session_id: SessionId,
     pub thread_id: ThreadId,
     pub input: Vec<InputItem>,
-    pub tool_mode: ToolMode,
+    #[serde(default)]
+    pub mode: ash_protocol::CollaborationMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub model: Option<ash_protocol::ModelRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub reasoning_effort: Option<ash_protocol::ReasoningEffort>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub tool_mode: Option<ToolMode>,
     pub approval_mode: ApprovalMode,
 }
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

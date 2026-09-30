@@ -6,6 +6,8 @@ mod git_turn_changes;
 mod graph;
 #[path = "sqlite/history.rs"]
 mod history;
+#[path = "sqlite/handoff.rs"]
+mod handoff;
 #[path = "sqlite/memories.rs"]
 mod memories;
 #[path = "sqlite/projects.rs"]
@@ -20,3 +22,4 @@ pub use memories::SqliteMemoryStore;
 pub use projects::SqliteProjectStore;
 pub use teams::SqliteTeamStore;
 pub use thread::SqliteThreadStore;
+pub use handoff::HistoryImport;

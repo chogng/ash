@@ -11,6 +11,7 @@ use crate::protocol::turn::TurnInterruptResult;
 use crate::protocol::turn::TurnStartResult;
 use ash_protocol::AgentResponse;
 use ash_protocol::AgentTreeProjection;
+use ash_protocol::CollaborationMode;
 use ash_protocol::ReviewTarget;
 use ash_protocol::Session;
 use ash_protocol::SessionExecutionTarget;
@@ -150,6 +151,8 @@ pub enum SessionRequest {
         thread_id: ThreadId,
         #[ts(type = "number")]
         expected_sequence: u64,
+        #[serde(default)]
+        mode: CollaborationMode,
         #[serde(default)]
         approval_mode: ash_protocol::ApprovalMode,
         #[serde(default, skip_serializing_if = "Option::is_none")]

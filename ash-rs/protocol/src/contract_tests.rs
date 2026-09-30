@@ -403,6 +403,7 @@ fn legacy_start_turn_without_host_skill_activations_remains_distinguishable() {
     assert!(matches!(
         command,
         ThreadCommand::StartTurn {
+            mode: crate::CollaborationMode::Agent,
             kind: TurnKind::Coding,
             host_activated_skills: None,
             instructions: None,
@@ -1150,4 +1151,28 @@ fn root_and_child_agent_configurations_share_the_same_role_size_bound() {
         agent.validate(),
         Err("Agent role instructions exceed 64 KiB")
     );
+}
+
+#[test]
+fn collaboration_modes_round_trip_and_delegated_workers_keep_their_approach() {
+    use crate::CollaborationMode;
+    for (mode, name, child) in [
+        (CollaborationMode::Agent, "agent", CollaborationMode::Agent),
+        (CollaborationMode::Plan, "plan", CollaborationMode::Plan),
+        (CollaborationMode::Debug, "debug", CollaborationMode::Debug),
+        (
+            CollaborationMode::Multitask,
+            "multitask",
+            CollaborationMode::Agent,
+        ),
+        (CollaborationMode::Ask, "ask", CollaborationMode::Ask),
+    ] {
+        assert_eq!(serde_json::to_value(mode).unwrap(), json!(name));
+        assert_eq!(
+            serde_json::from_value::<CollaborationMode>(json!(name)).unwrap(),
+            mode
+        );
+        assert_eq!(mode.delegated(), child);
+    }
+    assert!(serde_json::from_value::<CollaborationMode>(json!("unknown")).is_err());
 }

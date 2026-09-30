@@ -11,6 +11,10 @@ name = "ash_state"
 path = "src/lib.rs"
 
 [dependencies]
+attachment-store = { workspace = true }
+getrandom = { workspace = true }
+sha2 = { workspace = true }
+tempfile = { workspace = true }
 async-utils = { package = "ash-async-utils", path = "../async-utils" }
 agent-graph-store = { workspace = true }
 message-history = { workspace = true }
@@ -33,6 +37,5 @@ ash-file-access = { workspace = true }
 core-api = { workspace = true }
 rusqlite = { workspace = true, features = ["hooks"] }
 ash-core = { workspace = true }
-tempfile = { workspace = true }
 [lints]
 workspace = true

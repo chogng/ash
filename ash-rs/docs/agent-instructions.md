@@ -1,6 +1,6 @@
 # Agent 指令组合、模型专化与评测
 
-本文维护 Agent 共同规则、Role 指令和模型适配的组合设计，以及性能评测、外部参考和后续修改的证据要求。推荐采用共同规则与当前 Role 组合，并为模型专化提供明确入口；尚不能据此声称运行更快、成本更低或任务完成率更高。
+本文维护 Agent 共同规则、协作模式、Role 指令和模型适配的组合设计，以及性能评测、外部参考和后续修改的证据要求。五种模式的行为、切换、队列和子任务规则集中维护在 [协作模式](collaboration-modes.md)。共同规则描述每个 Agent 都遵循的工作约束；协作模式指导当前 Turn 如何处理任务；Role 决定职责与工具上限。尚不能据此声称模式提示运行更快、成本更低或任务完成率更高。
 
 > 状态：通用启动、指令组合和准确模型专化入口已实现；已加入离线 benchmark 与行为回归测试。复核日期：2026-09-09。
 > 本地测量使用仓库的优化测试构建，不是 release 或真实模型质量成绩；没有调用收费模型进行任务集评测。
@@ -10,7 +10,7 @@
 
 | 项目 | 设计决定 | 证据状态 |
 | --- | --- | --- |
-| 指令组合 | 共同规则常驻，每个 Thread 只应用当前 Role | 已接入根、子 Thread 和审查 Turn |
+| 指令组合 | 共同规则、当前协作模式与当前 Role 分开组合 | 五种协作模式按 Turn 冻结；Role 已接入根、子 Thread 和审查 Turn |
 | 默认 Agent | `Default` 使用正常执行配置，不读取专用 Role | `general.toml` 已删除 |
 | Issue 入口 | 页面通过通用 Session 创建契约选择 `issue` | TUI 已接入，旧执行工作流已移除 |
 | 默认 worker | 选择 `Default`，不继承父 Role 的协调职责 | 关键词匹配已删除，完整历史继承也保留角色隔离 |
@@ -21,11 +21,12 @@
 
 ## 组合契约
 
-组合发生在共同规则、模型指导与角色职责之间；更换 Role 时只保留所选角色的职责。一个 Role 不能撤掉共同约束，也不能通过正文授予工具、目录或外部服务权限。
+组合发生在共同规则、协作模式、模型指导与角色职责之间；模式决定当前 Turn 的处理方式，Role 决定 Agent 的职责和执行能力。更换模式不更换 Role，也不改变工具授权。一个 Role 不能撤掉共同约束，也不能通过正文授予工具、目录或外部服务权限。
 
 | 内容 | 表达什么 | 目标 owner |
 | --- | --- | --- |
 | 共同规则 | 保留无关修改、核验交付、如实报告、遵守宿主授权 | Prompts |
+| 协作模式 | Agent、Plan、Debug、Multitask、Ask 当前采用的任务处理方式 | Collaboration Mode Templates；模式标识由 Protocol 定义 |
 | 模型指导 | 针对确定模型有效的指令表达与工具使用指导 | Models Manager 的模型指令资产 |
 | Role | 协调、实现、审查等当前职责和交付要求 | Agent Roles |
 | 工具与运行信息 | 实际可调用工具、环境、父子关系和取消状态 | 各执行领域；Core 组装 |
@@ -33,6 +34,8 @@
 
 - 共同规则不写“必须亲自编码”或“必须委托”。这些是职责选择，会与 `issue` 等角色冲突。
 - `Default` 不加载专用 Role 正文。正常执行能力来自共同规则、任务和实际工具，不依赖额外的通用 worker 文件。
+- 协作模式模板只指导如何处理当前 Turn，不声明或增加 Tool、Skill、目录、网络、委托等能力；模式和 Role 可独立选择。
+- 新 Turn 冻结所选模式模板与当前 Agent 指令。旧 Turn 保留已冻结的指令，切换模式只影响后续新 Turn。
 - 创建 worker 时重新组装指令，只传递允许的任务上下文。父 Role 不因完整历史复制而成为子 Agent 的有效角色指令。
 - Issue 内容作为任务材料输入。Issue Manager 不拥有计划执行、assignment 或调度状态机；GitHub 操作由 Plugin 提供，委托由通用多 Agent 能力执行。
 - Markdown frontmatter 的 `model`、工具列表和 Skill 引用由程序解析；只有正文是提示词。格式并不决定指令优先级。
@@ -46,6 +49,7 @@
 
 | Codex 资产/模块 | Ash 对应入口 | 当前差异与接线 |
 | --- | --- | --- |
+| `collaboration-mode-templates`、`ModeKind` 与 Core 模式上下文 | [`ash-collaboration-mode-templates`](../collaboration-mode-templates/README.md)、`CollaborationMode`、Turn 指令组合 | 五种模式各有独立文本；App Server 把选中的模板与当前 Agent 指令冻结进新 Turn，不替换共同规则或 Role |
 | `permissions_instructions` 与 `templates/permissions` | [`permissions_instructions`](../prompts/src/permissions.rs) | 共同动作授权说明 + AskPermissions/AutoReview/BypassPermissions；Core 每次组装根据已保存的 Turn 模式选择 |
 | 沙箱 read-only/workspace-write/full-access | `templates/permissions/actions.md` | Ash 按 Tool Call 解析文件、网络和沙箱授权；不从可访问目录推断写权限，不描述不存在的全局沙箱状态 |
 | approval never/on-request/unless-trusted、扩展权限工具 | `templates/permissions/approval/*` | 使用 Ash 的三种真实批准模式；不引入 Codex 专用参数和工具 |
@@ -195,7 +199,7 @@ OpenAI 的官方指导强调稳定前缀与显式变量；Anthropic 的缓存包
 
 ### 离线 benchmark
 
-复用当前 Rust owner 的测试设施，不新增另一套 Agent runtime。现有离线入口可在优化测试构建下快速复核；正式发布性能验证另用明确记录的 release 构建，不能混用结果。现有 [planner tests](../core/src/context/planner_tests.rs) 与 [Role 集成测试](../app-server/src/server/agent_selection_tests.rs) 是行为设施，不能把它们的通过时间当成 benchmark 结果。
+复用当前 Rust owner 的测试设施，不新增另一套 Agent runtime。现有离线入口可在优化测试构建下快速复核；正式发布性能验证另用明确记录的 release 构建，不能混用结果。现有 [planner tests](../core/src/context/planner_tests.rs) 与 [Role 集成测试](../app-server/src/server/agent_session_tests.rs) 是行为设施，不能把它们的通过时间当成 benchmark 结果。
 
 | 场景 | 首轮输入规模 | 测量边界 |
 | --- | --- | --- |
@@ -320,6 +324,7 @@ general.toml sha256:98bed24189700a9d836b2217f32e85f9d3cb3d5da234782d549cdcc00e91
 | 资料 | 维护内容 |
 | --- | --- |
 | 本文 | 组合和适配设计、外部取舍、评测方法、已接受决定与证据入口 |
+| [协作模式](collaboration-modes.md) | 五种模式的统一行为、执行边界、队列、子任务和 Cursor 参考 |
 | `docs/agents.md` | Role 选择、定义及启动契约；当前实现单独标注 |
 | 所属 crate README | 当前职责、真实入口和已实现状态；不提前写成已迁移 |
 | 模板源码 | 唯一可执行正文、revision 与对应测试；文档不复制整篇正文 |
@@ -362,7 +367,7 @@ aggregate_and_intervals / failure_examples / artifacts_and_digests / decision
 | --- | --- |
 | `prompts/src/agent.rs`、`prompts/templates/agent/common.md` | 所有 Agent 共用规则的唯一资产与 revision |
 | `protocol/src/agent.rs` | Default/Exact 选择、共享 AgentConfiguration 与工具/Skill 上限 |
-| `protocol/src/turn/instructions.rs` | 扁平共享资产、模型指导与持久化校验 |
+| `protocol/src/turn/instructions.rs` | 扁平共享资产、独立模式资产、模型指导与持久化校验 |
 | `app-server/src/server/agent_selection.rs` | 根、子 Thread 共用的准确来源解析和根 Skill 依赖准备 |
 | `models-manager/src/instructions.rs` | 准确模型指导登记、查找与无效资产拒绝 |
 | `core/src/thread_controller.rs` | 根配置与创建事实同批写入、幂等重放 |

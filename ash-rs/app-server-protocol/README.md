@@ -24,7 +24,7 @@
 | `mcp/server/status` | 空参数 → `McpServerStatusResult` | 每个服务器的 `httpOrigin` 仅包含 HTTP(S) 协议、主机与端口；stdio 为 `null`，不返回用户信息、路径或查询参数 |
 | `feedback/prepare` | HTTPS endpoint → `PreparedFeedback` | 返回待审阅内容和同时绑定内容/地址的摘要；15 分钟有效 |
 | `feedback/upload` | operationId、digest → 空结果 | 用户明确确认后调用；仅原 connection 可上传，不自动重试；支持 request cancellation |
-| `queue/enqueue` | commandId、Session/Thread、输入、toolMode、approvalMode → QueuedMessage | 持久接收与相同请求去重；目录由后端选择 |
+| `queue/enqueue` | commandId、Session/Thread、输入、mode、可选模型/推理等级/toolMode、approvalMode → QueuedMessage | 持久接收与相同请求去重；目录和省略时的工具模式由后端选择 |
 | `queue/list` | Session/Thread → messages | 返回队列状态和输入；窗口关闭不删除队列 |
 | `queue/cancel` | Session/Thread、commandId → QueuedMessage | 取消未交付消息；交付中或已开始使用 Turn 中断 |
 | `queue/edit` | Session/Thread、commandId、expectedRevision、action → QueuedMessage | pause、replace、move、send；冲突直接报错 |
@@ -37,6 +37,10 @@
 | `memoryDiagnostics/start` / `read` / `submit` / `stop` / `export` | 诊断 Session → report/resource | 进程内存诊断，不读取长期 Memory |
 
 `memory/changed` 只向产品 host 发布作用域和新 catalog revision；客户端随后重新读取。`queue/changed` 是无内容的失效通知。Config 的 Feature 来源由 `ash-features` 解释。反馈待审阅包在 connection 关闭时释放，持久队列由 profile 后台调度器恢复。
+
+## 协作模式
+
+`session/request.startTurn.mode` 与 `queue/enqueue.mode` 选择模式；省略时为 `agent`。公开 `Turn.mode` 独立返回模式，`TurnInstructions.modeInstructions` 保存所选资产；客户端不通过提示词 ID 推断模式。Steer 沿用已接受模式，改变模式的消息启动新 Turn。完整行为、子任务规则和兼容版本见 [五种协作模式](../docs/collaboration-modes.md)。
 
 ## 指令导入
 
@@ -92,4 +96,5 @@
 - 额度结果的 `plan` 可为空。ChatGPT 继续使用 `limits` 和 `credits`；xAI 使用可选的 `xai` 字段，保留小数百分比、上游周期、访问资格和 USD 分字符串。缺失值表示未提供，不推导零用量、余额或允许状态。`xai` 为空时不序列化。
 - 查询只读；取消或登录改变会丢弃旧结果。403/426/429 不刷新凭证，401 最多恢复一次。`account/updated` 发布经当前登录身份检查的资料。
 - 用户输入的 `ThreadItem.clientId` 等于提交该输入的 `session/request.commandId`；同一次发送的文字、上下文、图片和音频共享此 ID，持久历史和实时 transcript 更新均保留它。客户端按 ID 确认本地待发送消息，不按文字匹配；旧历史未包含该字段时不能确认新发送的消息。
+
 - `ThreadItem.reasoning.state` 保存带作用域的加密 Responses 项；重载历史和工具续轮保留完整项，切换账户、模型或端点后不再发送旧项。

@@ -297,6 +297,7 @@ impl ExecConnection for ServerConnection {
                 request: SessionRequest::StartTurn {
                     thread_id,
                     expected_sequence,
+                    mode: ash_protocol::CollaborationMode::Agent,
                     approval_mode,
                     model: None,
                     reasoning_effort: None,

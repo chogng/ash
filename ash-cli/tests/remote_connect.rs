@@ -26,7 +26,7 @@ use tar::EntryType;
 use tar::Header;
 
 #[test]
-fn resolves_a_saved_target_and_checks_the_real_broker() {
+fn resolves_a_saved_target_and_checks_the_shared_remote_backend() {
     let root = test_root("saved-target");
     let dir = root.join("dir");
     let profile_root = root.join("profile");
@@ -73,7 +73,7 @@ fn resolves_a_saved_target_and_checks_the_real_broker() {
             "--check",
         ])
         .env("ASH_HOME", &profile_root)
-        .env("ASH_REMOTE_SERVER_IDLE_TIMEOUT_MILLIS", "200")
+        .env("ASH_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS", "200")
         .output()
         .unwrap();
     assert!(
@@ -217,7 +217,7 @@ fn run_install_case(
             "--check",
         ])
         .env("ASH_HOME", &profile_root)
-        .env("ASH_REMOTE_SERVER_IDLE_TIMEOUT_MILLIS", "200")
+        .env("ASH_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS", "200")
         .output()
         .unwrap();
     assert!(
@@ -255,7 +255,7 @@ fn connect_with_catalog(
             "--check",
         ])
         .env("ASH_HOME", profile_root)
-        .env("ASH_REMOTE_SERVER_IDLE_TIMEOUT_MILLIS", "200")
+        .env("ASH_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS", "200")
         .output()
         .unwrap()
 }

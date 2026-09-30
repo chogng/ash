@@ -225,12 +225,16 @@ impl LoadedThreads {
             return Err(CoreError::NotFound(thread_id.to_string()));
         }
         let mut reader = crate::history::HistoryReader::new(self.store.as_ref(), &[]);
-        events
+        let mut snapshot = events
             .iter()
             .try_fold(None, |snapshot, event| {
                 reader.reduce(snapshot, event).map(Some)
             })?
-            .ok_or_else(|| CoreError::Journal("cannot recover an empty rollout".into()))
+            .ok_or_else(|| CoreError::Journal("cannot recover an empty rollout".into()))?;
+        self.store
+            .execution_binding(thread_id)?
+            .apply(&mut snapshot.execution_target);
+        Ok(snapshot)
     }
 }
 

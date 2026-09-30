@@ -152,6 +152,7 @@ impl Fixture {
     }
     fn submit(&self, text: &str) -> SubmitTurnRequest {
         SubmitTurnRequest {
+            mode: Default::default(),
             advisor: None,
             command_id: CommandId::new("start").unwrap(),
             expected_sequence: SequenceExpectation::Exact(1),
@@ -206,6 +207,29 @@ fn submitted_turn_replays_one_receipt_and_rejects_changed_input() {
             .read_thread(&fixture.thread_id)
             .unwrap()
             .public_thread()
+    );
+}
+
+#[test]
+fn submitted_turn_rejects_replay_with_a_different_collaboration_mode() {
+    let fixture = Fixture::new(Failure::None);
+    let runtime: &dyn AgentRuntime = &fixture.runtime();
+    let mut first_request = fixture.submit("hello");
+    first_request.mode = ash_protocol::CollaborationMode::Plan;
+    runtime
+        .submit_turn(&fixture.thread_id, first_request)
+        .unwrap();
+
+    let mut retry = fixture.submit("hello");
+    retry.mode = ash_protocol::CollaborationMode::Debug;
+    assert!(matches!(
+        runtime.submit_turn(&fixture.thread_id, retry),
+        Err(CoreError::CommandConflict)
+    ));
+    assert_eq!(fixture.backend.starts.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        runtime.read_thread(&fixture.thread_id).unwrap().turns[0].mode,
+        ash_protocol::CollaborationMode::Plan
     );
 }
 

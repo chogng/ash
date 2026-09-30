@@ -604,6 +604,7 @@ fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         goal_budget_limited_turn_id: None,
         context_calibrations: Vec::new(),
         turns: vec![TurnSnapshot {
+            mode: Default::default(),
             advisor: None,
             kind: ash_protocol::TurnKind::Coding,
             instructions: None,

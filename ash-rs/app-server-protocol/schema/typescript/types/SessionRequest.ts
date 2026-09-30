@@ -3,6 +3,7 @@ import type { AdvisorSelection } from './AdvisorSelection.js';
 import type { AgentId } from './AgentId.js';
 import type { AgentResponse } from './AgentResponse.js';
 import type { ApprovalMode } from './ApprovalMode.js';
+import type { CollaborationMode } from './CollaborationMode.js';
 import type { InputItem } from './InputItem.js';
 import type { ItemId } from './ItemId.js';
 import type { MessageBoundary } from './MessageBoundary.js';
@@ -15,7 +16,7 @@ import type { ToolMode } from './ToolMode.js';
 import type { Turn } from './Turn.js';
 import type { TurnId } from './TurnId.js';
 
-export type SessionRequest = { "type": "archive" } | { "type": "restore" } | { "type": "delete" } | { "type": "stop" } | { "type": "createThread", agentId?: AgentId | null, title: string, } | { "type": "replaceThread", sourceThreadId: ThreadId, title: string, } | { "type": "restoreMessage", threadId: ThreadId, itemId: ItemId, boundary: MessageBoundary, title: string, } | { "type": "forkSession", parentThreadId: ThreadId, title: string, } | { "type": "forkThread", parentThreadId: ThreadId, title: string, } | { "type": "rewindThread", parentThreadId: ThreadId, beforeTurnId: TurnId, title: string, } | { "type": "rewriteThread", parentThreadId: ThreadId, beforeTurnId: TurnId, title: string, toolMode?: ToolMode | null, input: Array<InputItem>, } | { "type": "startTurn", threadId: ThreadId, expectedSequence: number, approvalMode: ApprovalMode, model?: ModelRef | null,
+export type SessionRequest = { "type": "archive" } | { "type": "restore" } | { "type": "delete" } | { "type": "stop" } | { "type": "createThread", agentId?: AgentId | null, title: string, } | { "type": "replaceThread", sourceThreadId: ThreadId, title: string, } | { "type": "restoreMessage", threadId: ThreadId, itemId: ItemId, boundary: MessageBoundary, title: string, } | { "type": "forkSession", parentThreadId: ThreadId, title: string, } | { "type": "forkThread", parentThreadId: ThreadId, title: string, } | { "type": "rewindThread", parentThreadId: ThreadId, beforeTurnId: TurnId, title: string, } | { "type": "rewriteThread", parentThreadId: ThreadId, beforeTurnId: TurnId, title: string, toolMode?: ToolMode | null, input: Array<InputItem>, } | { "type": "startTurn", threadId: ThreadId, expectedSequence: number, mode: CollaborationMode, approvalMode: ApprovalMode, model?: ModelRef | null,
 /**
  * Applies only to the accepted Turn; it does not update user model configuration.
  */

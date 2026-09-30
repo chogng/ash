@@ -174,7 +174,7 @@ pub(crate) fn read_frame<T: serde::de::DeserializeOwned>(
     serde_json::from_slice(&bytes).map_err(|_| Error::Protocol)
 }
 pub(crate) fn write_frame<T: serde::Serialize>(
-    stream: &mut TcpStream,
+    stream: &mut impl Write,
     value: &T,
 ) -> Result<(), Error> {
     let mut bytes = serde_json::to_vec(value).map_err(|_| Error::Protocol)?;
@@ -183,5 +183,30 @@ pub(crate) fn write_frame<T: serde::Serialize>(
         return Err(Error::Protocol);
     }
     stream.write_all(&bytes)?;
+    stream.flush()?;
     Ok(())
+}
+
+/// Serves an execution channel after its host has authenticated the peer and selected the grant.
+/// SSH/local endpoint authentication replaces bearer authentication; tokens are forbidden here.
+pub fn serve_authenticated_stream(
+    mut reader: impl BufRead,
+    mut writer: impl Write,
+    environment: &LocalEnvironment,
+) -> Result<(), Error> {
+    loop {
+        let message: Message = read_frame(&mut reader)?;
+        let response = if !message.token.is_empty() {
+            Response::Error(ExecError::Unauthorized)
+        } else if message.version != exec_server_protocol::VERSION {
+            Response::Error(ExecError::IncompatibleVersion)
+        } else if !matches!(message.request, Request::EnvironmentInfo)
+            && message.incarnation.as_deref() != Some(environment.info().incarnation.as_str())
+        {
+            Response::Error(ExecError::StaleEnvironment)
+        } else {
+            environment.request(message.request)
+        };
+        write_frame(&mut writer, &response)?;
+    }
 }

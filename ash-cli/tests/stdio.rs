@@ -148,7 +148,7 @@ fn ash_code_app_server_without_dir_does_not_inherit_its_current_directory() {
 #[cfg(unix)]
 #[test]
 fn remote_runtime_preserves_a_terminal_between_real_connections() {
-    let root = test_root("broker");
+    let root = test_root("shared-backend");
     let dir = root.join("dir");
     let profile = root.join("profile");
     std::fs::create_dir_all(&dir).unwrap();
@@ -157,10 +157,10 @@ fn remote_runtime_preserves_a_terminal_between_real_connections() {
             .with_argument("connect")
             .with_environment_variable("ASH_WORKSPACE_ROOT", dir.clone().into_os_string())
             .with_environment_variable("ASH_HOME", profile.clone().into_os_string())
-            .with_environment_variable("ASH_REMOTE_SERVER_IDLE_TIMEOUT_MILLIS", "200")
+            .with_environment_variable("ASH_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS", "200")
     };
     let client_info = || ClientInfo {
-        name: "ash-code-remote-broker-test".into(),
+        name: "ash-code-remote-backend-test".into(),
         version: "1".into(),
     };
 

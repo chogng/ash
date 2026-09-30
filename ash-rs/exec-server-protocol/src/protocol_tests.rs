@@ -75,3 +75,56 @@ fn process_read_requires_an_explicit_wait_budget() {
         .remove("waitMillis");
     assert!(serde_json::from_value::<Request>(value).is_err());
 }
+
+#[test]
+fn file_ranges_and_upload_states_round_trip_without_extra_authority() {
+    for request in [
+        Request::FileRead {
+            path: "file".into(),
+            offset: 0,
+            expected_revision: None,
+        },
+        Request::FileWriteBegin {
+            operation_id: "upload".into(),
+            path: "file".into(),
+            total_bytes: 3,
+            content_revision: "ab".repeat(32),
+            condition: WriteCondition::MissingOrEmpty,
+        },
+        Request::FileWriteChunk {
+            operation_id: "upload".into(),
+            offset: 0,
+            bytes: vec![0, 1, 255],
+        },
+        Request::FileWriteCommit {
+            operation_id: "upload".into(),
+        },
+        Request::FileWriteAbort {
+            operation_id: "upload".into(),
+        },
+        Request::FileWriteStatus {
+            operation_id: "upload".into(),
+        },
+    ] {
+        let mut value = serde_json::to_value(request).unwrap();
+        let decoded: Request = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(decoded).unwrap(), value);
+        value["params"]["authorization"] = serde_json::json!("unrestricted");
+        assert!(serde_json::from_value::<Request>(value).is_err());
+    }
+    for state in [
+        FileWriteState::Uploading { next_offset: 3 },
+        FileWriteState::Committed {
+            revision: "ab".repeat(32),
+        },
+        FileWriteState::Aborted,
+        FileWriteState::OutcomeUnknown,
+        FileWriteState::Rejected {
+            error: ExecError::Conflict,
+        },
+    ] {
+        let value = serde_json::to_value(Response::FileWrite(state)).unwrap();
+        let decoded: Response = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(decoded).unwrap(), value);
+    }
+}

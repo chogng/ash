@@ -7,10 +7,14 @@ use exec_server_protocol::Request;
 use exec_server_protocol::Response;
 use std::fmt;
 use std::io::BufReader;
+use std::io::Read;
+use std::io::Write;
 use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -18,20 +22,67 @@ use std::time::Instant;
 // discarded and never replayed here; the caller decides whether an observation can be retried.
 const IDLE_TIMEOUT: Duration = Duration::from_secs(2);
 const MAX_IDLE_CONNECTIONS: usize = 4;
+const MAX_ACTIVE_CONNECTIONS: usize = 32;
+
+struct Admission(Arc<AtomicUsize>);
+impl Drop for Admission {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
+    }
+}
 
 struct Connection {
-    reader: BufReader<TcpStream>,
+    reader: BufReader<Stream>,
     used_at: Instant,
 }
 
 impl Connection {
-    fn open(endpoint: &RemoteEndpoint) -> Result<Self, Error> {
-        let stream = TcpStream::connect_timeout(&endpoint.address, Duration::from_secs(5))?;
-        transport::configure(&stream)?;
+    fn open(endpoint: &Endpoint) -> Result<Self, Error> {
+        let stream = match endpoint {
+            Endpoint::Tcp(endpoint) => {
+                let stream = TcpStream::connect_timeout(&endpoint.address, Duration::from_secs(5))?;
+                transport::configure(&stream)?;
+                Stream::Tcp(stream)
+            }
+            Endpoint::Ssh(endpoint) => Stream::Ssh(crate::ssh::SshStream::open(endpoint)?),
+        };
         Ok(Self {
             reader: BufReader::new(stream),
             used_at: Instant::now(),
         })
+    }
+}
+
+#[derive(Clone, Debug)]
+enum Endpoint {
+    Tcp(RemoteEndpoint),
+    Ssh(crate::SshEndpoint),
+}
+
+enum Stream {
+    Tcp(TcpStream),
+    Ssh(crate::ssh::SshStream),
+}
+impl Read for Stream {
+    fn read(&mut self, bytes: &mut [u8]) -> std::io::Result<usize> {
+        match self {
+            Self::Tcp(stream) => stream.read(bytes),
+            Self::Ssh(stream) => stream.read(bytes),
+        }
+    }
+}
+impl Write for Stream {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        match self {
+            Self::Tcp(stream) => stream.write(bytes),
+            Self::Ssh(stream) => stream.write(bytes),
+        }
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            Self::Tcp(stream) => stream.flush(),
+            Self::Ssh(stream) => stream.flush(),
+        }
     }
 }
 
@@ -60,9 +111,10 @@ impl fmt::Debug for RemoteEndpoint {
 /// Pins an environment incarnation. Calls never retry a mutation or silently adopt a restarted host.
 #[derive(Clone)]
 pub struct ExecClient {
-    endpoint: RemoteEndpoint,
+    endpoint: Endpoint,
     info: EnvironmentInfo,
     connections: Arc<Mutex<Vec<Connection>>>,
+    active: Arc<AtomicUsize>,
 }
 impl fmt::Debug for ExecClient {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -74,6 +126,14 @@ impl fmt::Debug for ExecClient {
 }
 impl ExecClient {
     pub fn connect(endpoint: RemoteEndpoint) -> Result<Self, Error> {
+        Self::open(Endpoint::Tcp(endpoint))
+    }
+
+    pub fn connect_ssh(endpoint: crate::SshEndpoint) -> Result<Self, Error> {
+        Self::open(Endpoint::Ssh(endpoint))
+    }
+
+    fn open(endpoint: Endpoint) -> Result<Self, Error> {
         let mut connection = Connection::open(&endpoint)?;
         let response = exchange(&mut connection, &endpoint, None, Request::EnvironmentInfo)?;
         let Response::Environment(info) = response else {
@@ -83,16 +143,56 @@ impl ExecClient {
         if !transport::valid_token(&info.incarnation) || info.root.is_empty() {
             return Err(Error::Protocol);
         }
+        if let Endpoint::Ssh(endpoint) = &endpoint
+            && info.environment_id != endpoint.environment()
+        {
+            return Err(Error::Protocol);
+        }
         Ok(Self {
             endpoint,
             info,
             connections: Arc::new(Mutex::new(vec![connection])),
+            active: Arc::new(AtomicUsize::new(0)),
         })
     }
     pub fn info(&self) -> &EnvironmentInfo {
         &self.info
     }
+    /// Reads a complete revision-pinned file through bounded protocol frames.
+    pub fn read_file(
+        &self,
+        path: &str,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<exec_server_protocol::FileContent, Error> {
+        crate::file_transfer::read_file(|request| self.request(request), path, cancellation)
+    }
+
+    /// Commits an upload once; a lost commit response is reconciled only by observing its receipt.
+    pub fn write_file(
+        &self,
+        operation_id: &str,
+        path: &str,
+        bytes: &[u8],
+        condition: exec_server_protocol::WriteCondition,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<(), Error> {
+        crate::file_transfer::write_file(
+            |request| self.request(request),
+            operation_id,
+            path,
+            bytes,
+            condition,
+            cancellation,
+        )
+    }
+
     pub fn request(&self, request: Request) -> Result<Response, Error> {
+        self.active
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+                (count < MAX_ACTIVE_CONNECTIONS).then_some(count + 1)
+            })
+            .map_err(|_| Error::Remote(ExecError::Busy))?;
+        let _admission = Admission(Arc::clone(&self.active));
         let connection = {
             let mut idle = self.connections.lock().map_err(|_| Error::Protocol)?;
             idle.retain(|connection| connection.used_at.elapsed() < IDLE_TIMEOUT);
@@ -117,7 +217,7 @@ impl ExecClient {
 }
 fn exchange(
     connection: &mut Connection,
-    endpoint: &RemoteEndpoint,
+    endpoint: &Endpoint,
     incarnation: Option<String>,
     request: Request,
 ) -> Result<Response, Error> {
@@ -125,7 +225,10 @@ fn exchange(
         connection.reader.get_mut(),
         &Message {
             version: exec_server_protocol::VERSION,
-            token: endpoint.token.clone(),
+            token: match endpoint {
+                Endpoint::Tcp(endpoint) => endpoint.token.clone(),
+                Endpoint::Ssh(_) => String::new(),
+            },
             incarnation,
             request,
         },

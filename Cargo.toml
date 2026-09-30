@@ -133,6 +133,7 @@ members = [
     "ash-rs/ollama",
     "ash-rs/ash-mcp",
     "ash-rs/action-policy",
+    "ash-rs/collaboration-mode-templates",
     "ash-rs/plugin",
     "ash-rs/prompts",
     "ash-rs/protocol",
@@ -542,6 +543,7 @@ ash-ollama = { path = "ash-rs/ollama" }
 ash-action-policy = { path = "ash-rs/action-policy" }
 ash-plugin = { path = "ash-rs/plugin" }
 ash-prompts = { path = "ash-rs/prompts" }
+ash-collaboration-mode-templates = { path = "ash-rs/collaboration-mode-templates" }
 ash-protocol = { path = "ash-rs/protocol" }
 ash-projects = { path = "ash-rs/projects" }
 ash-product-update = { path = "ash-rs/product-update" }

@@ -35,7 +35,7 @@ impl ModelService for EnvironmentModel {
 }
 
 #[test]
-fn execution_environment_turn_waits_for_approval_and_persists_remote_result() {
+fn execution_environment_turn_waits_for_approval_and_persists_a_large_remote_write() {
     let root = tempfile::tempdir().unwrap();
     let environment = Arc::new(
         exec_server::LocalEnvironment::open(
@@ -57,9 +57,10 @@ fn execution_environment_turn_waits_for_approval_and_persists_remote_result() {
         exec_server::RemoteEndpoint::new(listener.address(), token).unwrap(),
     )
     .unwrap();
+    let content = "approved remote write".repeat(20000);
     let items = run_environment_turn(
         remote,
-        serde_json::json!({"environment":"worker", "operation":{"type":"write","path":"result.txt","content":"approved remote write","expected_revision":null}}),
+        serde_json::json!({"environment":"worker", "operation":{"type":"write","path":"result.txt","content":content,"expected_revision":null}}),
         || {
             assert!(
                 !root.path().join("result.txt").exists(),
@@ -69,7 +70,7 @@ fn execution_environment_turn_waits_for_approval_and_persists_remote_result() {
     );
     assert_eq!(
         std::fs::read_to_string(root.path().join("result.txt")).unwrap(),
-        "approved remote write"
+        content
     );
     assert!(items.iter().any(|item| matches!(item,
         ash_protocol::ThreadItem::ToolResult { text, is_error: false, .. } if text.contains("file written")
@@ -162,10 +163,25 @@ fn execution_environment_recovers_a_lost_read_response_without_losing_output() {
     recover_command_response(LostResponse::Read);
 }
 
+#[test]
 #[cfg(unix)]
+fn execution_environment_observes_a_lost_file_commit_without_republishing() {
+    recover_command_response(LostResponse::FileCommit);
+}
+
+#[test]
+#[cfg(unix)]
+fn execution_environment_reports_an_interrupted_upload_as_not_published() {
+    recover_command_response(LostResponse::FileChunk);
+}
+
+#[cfg(unix)]
+#[derive(Clone, Copy)]
 enum LostResponse {
     Start,
     Read,
+    FileCommit,
+    FileChunk,
 }
 
 #[cfg(unix)]
@@ -219,19 +235,35 @@ fn recover_command_response(lost: LostResponse) {
                 if !matches!(message.request, Request::EnvironmentInfo) {
                     assert_eq!(message.incarnation.as_deref(), Some(incarnation.as_str()));
                 }
-                if matches!(message.request, Request::ProcessStart(_)) {
+                if matches!(
+                    message.request,
+                    Request::ProcessStart(_) | Request::FileWriteCommit { .. }
+                ) {
                     starts += 1;
                 }
                 let lose = connection == 0
                     && match lost {
                         LostResponse::Start => matches!(message.request, Request::ProcessStart(_)),
                         LostResponse::Read => matches!(message.request, Request::ProcessRead(_)),
+                        LostResponse::FileCommit => {
+                            matches!(message.request, Request::FileWriteCommit { .. })
+                        }
+                        LostResponse::FileChunk => {
+                            matches!(message.request, Request::FileWriteChunk { .. })
+                        }
                     };
                 let response = environment.request(message.request);
                 if lose {
+                    if matches!(lost, LostResponse::FileChunk) {
+                        return starts;
+                    }
                     break;
                 }
-                let complete = matches!(&response, Response::Process(snapshot) if snapshot.state != exec_server_protocol::ProcessState::Running);
+                let complete = matches!(&response, Response::Process(snapshot) if snapshot.state != exec_server_protocol::ProcessState::Running)
+                    || matches!(
+                        &response,
+                        Response::FileWrite(exec_server_protocol::FileWriteState::Committed { .. })
+                    );
                 let mut bytes = serde_json::to_vec(&response).unwrap();
                 bytes.push(b'\n');
                 reader.get_mut().write_all(&bytes).unwrap();
@@ -246,17 +278,38 @@ fn recover_command_response(lost: LostResponse) {
         exec_server::RemoteEndpoint::new(address, "a1".repeat(32)).unwrap(),
     )
     .unwrap();
-    let items = run_environment_turn(
-        remote,
+    let file_commit = matches!(lost, LostResponse::FileCommit | LostResponse::FileChunk);
+    let arguments = if file_commit {
+        serde_json::json!({"environment":"worker", "operation":{"type":"write", "path":"count", "content":"x", "expected_revision":null}})
+    } else {
         serde_json::json!({"environment":"worker", "operation":{
             "type":"command", "program":"/bin/sh", "arguments":["-c", "printf x >> count; printf ready; sleep 0.1; printf done"],
             "cwd":".", "timeout_millis":10000
-        }}),
-        || assert!(!root.path().join("count").exists()),
-    );
-    assert_eq!(peer.join().unwrap(), 1, "start must never be replayed");
+        }})
+    };
+    let items = run_environment_turn(remote, arguments, || {
+        assert!(!root.path().join("count").exists())
+    });
+    if matches!(lost, LostResponse::FileChunk) {
+        assert_eq!(
+            peer.join().unwrap(),
+            0,
+            "an incomplete upload never commits"
+        );
+        assert!(!root.path().join("count").exists());
+        assert!(items.iter().any(|item| matches!(item,
+            ash_protocol::ThreadItem::ToolResult { text, is_error: true, .. } if text.contains("file was not published") && !text.contains("outcome is unknown")
+        )), "{items:?}");
+        return;
+    }
+    assert_eq!(peer.join().unwrap(), 1, "mutation must never be replayed");
     assert_eq!(std::fs::read(root.path().join("count")).unwrap(), b"x");
+    let expected = if file_commit {
+        "file written"
+    } else {
+        "readydone"
+    };
     assert!(items.iter().any(|item| matches!(item,
-        ash_protocol::ThreadItem::ToolResult { text, is_error: false, .. } if text.contains("readydone")
+        ash_protocol::ThreadItem::ToolResult { text, is_error: false, .. } if text.contains(expected)
     )), "{items:?}");
 }

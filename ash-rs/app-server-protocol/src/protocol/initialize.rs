@@ -14,7 +14,7 @@ pub const APP_SERVER_PROTOCOL_MAJOR: u32 = 7;
 pub const APP_SERVER_PROTOCOL_REVISION: u32 = 7;
 // Version 10 requires an explicit execution target or null in session/create. An older server
 // interprets this request using its Workspace selector, so clients must reject that contract.
-pub const APP_SERVER_CAPABILITY_VERSION: u32 = 10;
+pub const APP_SERVER_CAPABILITY_VERSION: u32 = 11;
 
 pub const REQUIRED_SESSION_CAPABILITIES: &[CapabilityRequirement] = &[
     CapabilityRequirement::exact("sessions", APP_SERVER_CAPABILITY_VERSION),

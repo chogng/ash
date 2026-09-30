@@ -1780,6 +1780,7 @@ fn fixture_with_approval_mode(
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),

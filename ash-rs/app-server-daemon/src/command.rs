@@ -39,13 +39,27 @@ pub fn run_command(
         Err(std::env::VarError::NotPresent) => crate::ConnectionRole::Workbench,
         _ => return Err("ASH_APP_SERVER_CONNECTION_ROLE must be agents when set".into()),
     };
-    let options = ConnectionOptions::new(
+    let mut options = ConnectionOptions::new(
         ash_utils_home_dir::find_ash_home().map_err(|error| error.to_string())?,
         std::env::var_os("ASH_WORKSPACE_ROOT").map(PathBuf::from),
         grant_source,
         product_services.or_else(discovered_product_services_path),
     )
     .with_role(role);
+    let host = optional_environment("ASH_REMOTE_HOST")?;
+    let root = optional_environment("ASH_REMOTE_ROOT")?;
+    let runtime = optional_environment("ASH_REMOTE_RUNTIME")?;
+    match (host, root, runtime) {
+        (None, None, None) => {}
+        (Some(host), root, Some(runtime)) => {
+            options = options.with_ssh(crate::SshConnectionOptions::new(
+                &host,
+                root.as_deref(),
+                &runtime,
+            )?)?;
+        }
+        _ => return Err("SSH connection requires ASH_REMOTE_HOST and ASH_REMOTE_RUNTIME".into()),
+    }
     match command {
         Command::Connect => crate::connect(options, backend_executable),
         Command::ConnectSelected => crate::client::connect_selected_with_digest(
@@ -72,6 +86,14 @@ pub fn run_command(
             );
             Ok(())
         }
+    }
+}
+
+fn optional_environment(name: &str) -> Result<Option<String>, String> {
+    match std::env::var(name) {
+        Ok(value) => Ok(Some(value)),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(std::env::VarError::NotUnicode(_)) => Err(format!("{name} must be UTF-8")),
     }
 }
 

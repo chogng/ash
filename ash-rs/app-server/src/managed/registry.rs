@@ -23,7 +23,6 @@ use crate::open_app_server;
 
 use ash_app_server_daemon::ConnectionOptions;
 use ash_app_server_daemon::GrantSource;
-use ash_protocol::SessionExecutionTarget;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_remote::RemoteDirPath;
@@ -167,28 +166,33 @@ impl ProfileAppServerRegistry {
             .map_err(|_| "Directory startup worker closed".to_string())?
     }
 
-    pub(crate) fn execution_target_for_session(
+    pub(crate) fn local_session(
         &self,
         session_id: &SessionId,
-    ) -> Result<Option<SessionExecutionTarget>, String> {
-        self.profile_runtime
-            .execution_target_for_session(session_id)
+    ) -> Result<Option<ash_protocol::Session>, String> {
+        self.profile_runtime.local_session(session_id)
     }
 
-    pub(crate) fn execution_target_for_thread(
+    pub(crate) fn local_thread_session(
         &self,
         thread_id: &ThreadId,
-    ) -> Result<Option<SessionExecutionTarget>, String> {
-        self.profile_runtime.execution_target_for_thread(thread_id)
+    ) -> Result<Option<ash_protocol::Session>, String> {
+        self.profile_runtime.local_thread_session(thread_id)
     }
 
     pub(crate) fn remote_profiles(&self) -> Result<Vec<RemoteProfile>, String> {
+        let imported = self.profile_runtime.imported_history_hosts()?;
         RemoteConnectionProfileStore::from_profile_root(self.host.profile_root())
             .connections()
             .map(|records| {
                 records
                     .into_iter()
                     .map(|record| record.active_profile())
+                    .filter(|profile| {
+                        !imported
+                            .iter()
+                            .any(|host| host == profile.target().host().as_str())
+                    })
                     .collect()
             })
             .map_err(|error| error.to_string())

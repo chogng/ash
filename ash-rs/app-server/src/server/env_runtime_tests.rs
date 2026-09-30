@@ -116,6 +116,7 @@ fn clearing_directories_keeps_home_instructions_in_model_requests() {
         .start_turn(
             &thread.thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -173,7 +174,9 @@ fn init_does_not_import_external_instructions_into_agent_input() {
         text: "/init workspace".into(),
     }];
 
-    server.turn_instruction_selection(&mut input);
+    server
+        .turn_instruction_selection(&mut input, ash_protocol::CollaborationMode::Agent)
+        .unwrap();
 
     assert!(!input.iter().any(|item| match item {
         UserInput::Text { text } => text.contains("External-only guidance."),
@@ -1054,6 +1057,7 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
         .start_turn(
             &thread.thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -1321,6 +1325,7 @@ fn active_turn_blocks_directory_root_switch_without_changing_authority() {
         .start_turn(
             &thread.thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -1387,6 +1392,7 @@ fn active_turn_accepts_session_access_changes_and_revokes_old_snapshots() {
         .start_turn(
             &thread.thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),

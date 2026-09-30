@@ -2,14 +2,13 @@ import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { URI } from "../../../base/common/uri.js";
 import { AppServerProtocolIncompatibleError } from "../../app-server/common/appServerProtocolCompatibility.js";
 import type { IAppServerProcessLauncher } from "../../app-server/electron-main/appServerProcessLauncher.js";
+import type { AppServerDaemonLauncher } from "../../app-server-daemon/electron-main/appServerDaemonLauncher.js";
 import { createSshRemoteWorkspaceUri, getRemoteAuthority, getRemoteWorkspacePath, type SshRemoteAuthority } from "../common/remote.js";
 import { isCanonicalAbsolutePosixPath, validLocalCommand } from "./remoteCommand.js";
 
-export interface SpawnSshAppServerOptions {
+interface SshRuntimeProbeOptions {
 	readonly environment: NodeJS.ProcessEnv;
 }
-
-export type SpawnSshAppServer = (executable: string, args: readonly string[], options: SpawnSshAppServerOptions) => ChildProcessWithoutNullStreams;
 
 export interface SshRuntimeProbeResult {
 	readonly exitCode: number | null;
@@ -17,7 +16,7 @@ export interface SshRuntimeProbeResult {
 	readonly stderr: string;
 }
 
-export type ProbeSshRuntime = (executable: string, args: readonly string[], options: SpawnSshAppServerOptions) => Promise<SshRuntimeProbeResult>;
+export type ProbeSshRuntime = (executable: string, args: readonly string[], options: SshRuntimeProbeOptions) => Promise<SshRuntimeProbeResult>;
 
 /** Main-owned provisioning callback bound to a trusted package artifact by the product host. */
 export type ProvisionSshRuntime = (host: string) => Promise<string>;
@@ -26,12 +25,12 @@ export type ActivateSshRuntime = (host: string, workspace: string, runtime: stri
 export type RollbackSshRuntime = (host: string, workspace: string, sshExecutable: string) => Promise<string>;
 export type SettleSshRuntimeProvision = () => void;
 
-export interface SshAppServerProcessLauncherOptions {
+export interface RemoteAppServerProcessLauncherOptions {
 	readonly workspace: URI | SshRemoteAuthority;
 	readonly sshExecutable: string;
 	readonly remoteExecutable: string;
 	readonly localEnvironment: NodeJS.ProcessEnv;
-	readonly spawnProcess?: SpawnSshAppServer;
+	readonly carrier: AppServerDaemonLauncher;
 	readonly probeRuntime?: ProbeSshRuntime;
 	readonly provisionRuntime?: ProvisionSshRuntime;
 	readonly settleRuntimeProvision?: SettleSshRuntimeProvision;
@@ -48,10 +47,9 @@ export class SshRuntimeProbeError extends Error {
 	}
 }
 
-/** Starts an App Server over an OpenSSH stdio channel without exposing credentials to Renderer. */
-export class SshAppServerProcessLauncher implements IAppServerProcessLauncher {
+/** Selects a verified remote runtime for a local shared-backend connection carrier. */
+export class RemoteAppServerProcessLauncher implements IAppServerProcessLauncher {
 	private readonly host: string;
-	private readonly spawnProcess: SpawnSshAppServer;
 	private readonly probeRuntime: ProbeSshRuntime;
 	private workspacePath: string | undefined;
 	// Runtime selection belongs to the connection profile chosen at startup, even after its folder is closed.
@@ -62,7 +60,7 @@ export class SshAppServerProcessLauncher implements IAppServerProcessLauncher {
 
 	readonly description: string;
 
-	constructor(readonly options: SshAppServerProcessLauncherOptions) {
+	constructor(readonly options: RemoteAppServerProcessLauncherOptions) {
 		const authority = options.workspace instanceof URI ? getRemoteAuthority(options.workspace) : options.workspace;
 		if (!authority || authority.type !== "ssh") throw new Error("SSH App Server launcher requires an SSH Remote workspace");
 		if (!validLocalCommand(options.sshExecutable) || !validLocalCommand(options.remoteExecutable)) throw new Error("SSH and Remote Ash executable names must be non-empty and contain no control characters");
@@ -71,7 +69,6 @@ export class SshAppServerProcessLauncher implements IAppServerProcessLauncher {
 		this.profileWorkspacePath = this.workspacePath;
 		this.description = `ssh://${authority.host}`;
 		this.remoteExecutable = options.remoteExecutable;
-		this.spawnProcess = options.spawnProcess ?? defaultSpawn;
 		this.probeRuntime = options.probeRuntime ?? defaultProbe;
 	}
 
@@ -92,6 +89,7 @@ export class SshAppServerProcessLauncher implements IAppServerProcessLauncher {
 	}
 
 	async validate(): Promise<void> {
+		await this.options.carrier.validate();
 		this.provisionAttempted = false;
 		if (!this.profileResolved && this.options.resolveRuntime && this.profileWorkspacePath !== undefined) {
 			const stored = await this.options.resolveRuntime(this.host, this.profileWorkspacePath);
@@ -138,8 +136,13 @@ export class SshAppServerProcessLauncher implements IAppServerProcessLauncher {
 	}
 
 	launch(): ChildProcessWithoutNullStreams {
-		const remoteCommand = remoteRemoteCommand(this.remoteExecutable, this.workspacePath);
-		return this.spawnProcess(this.options.sshExecutable, ["-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", this.host, remoteCommand], { environment: this.options.localEnvironment });
+		const environment: Record<string, string> = { ...this.options.carrier.environment, ASH_REMOTE_HOST: this.host, ASH_REMOTE_RUNTIME: this.remoteExecutable };
+		delete environment.ASH_WORKSPACE_ROOT;
+		delete environment.ASH_DIR_GRANT_SOURCE;
+		if (this.workspacePath === undefined) delete environment.ASH_REMOTE_ROOT;
+		else environment.ASH_REMOTE_ROOT = this.workspacePath;
+		this.options.carrier.replaceEnvironment(environment);
+		return this.options.carrier.launch();
 	}
 
 	private async provision(): Promise<void> {
@@ -174,11 +177,6 @@ export class SshAppServerProcessLauncher implements IAppServerProcessLauncher {
 			{ environment: this.options.localEnvironment },
 		);
 	}
-}
-
-export function remoteRemoteCommand(executable: string, workspacePath: string | undefined): string {
-	const environment = workspacePath === undefined ? ['env', '-u', 'ASH_WORKSPACE_ROOT'] : ['env', `ASH_WORKSPACE_ROOT=${workspacePath}`];
-	return [...environment, executable, 'connect'].map(quotePosixShellArgument).join(' ');
 }
 
 const RUNTIME_FOUND_MARKER = "__ASH_REMOTE_RUNTIME_FOUND__:";
@@ -227,12 +225,8 @@ function runtimeProbeTransportError(result: SshRuntimeProbeResult): SshRuntimePr
 	);
 }
 
-function defaultSpawn(executable: string, args: readonly string[], options: SpawnSshAppServerOptions): ChildProcessWithoutNullStreams {
-	return spawn(executable, [...args], { env: { ...options.environment }, shell: false, stdio: "pipe" });
-}
-
-function defaultProbe(executable: string, args: readonly string[], options: SpawnSshAppServerOptions): Promise<SshRuntimeProbeResult> {
-	const child = defaultSpawn(executable, args, options);
+function defaultProbe(executable: string, args: readonly string[], options: SshRuntimeProbeOptions): Promise<SshRuntimeProbeResult> {
+	const child = spawn(executable, [...args], { env: { ...options.environment }, shell: false, stdio: "pipe" });
 	return new Promise((resolve, reject) => {
 		let stdout = "";
 		let stderr = "";

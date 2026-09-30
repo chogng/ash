@@ -24,6 +24,7 @@ instructions = { package = "ash-instructions", path = "../../instructions" }
 model-provider-config = { package = "ash-model-provider-config", path = "../../model-provider-config" }
 models-manager = { package = "ash-models-manager", path = "../../models-manager" }
 prompts = { package = "ash-prompts", path = "../../prompts" }
+collaboration-mode-templates = { package = "ash-collaboration-mode-templates", path = "../../collaboration-mode-templates" }
 protocol = { package = "ash-protocol", path = "../../protocol" }
 
 [dev-dependencies]

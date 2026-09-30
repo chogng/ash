@@ -383,6 +383,9 @@ pub(crate) fn spawn_backend(
         .env(HOME_ENV, options.profile_root())
         .env_remove(DIR_ROOT_ENV)
         .env_remove(DIR_GRANT_SOURCE_ENV)
+        .env_remove("ASH_REMOTE_HOST")
+        .env_remove("ASH_REMOTE_ROOT")
+        .env_remove("ASH_REMOTE_RUNTIME")
         .stdin(Stdio::null())
         .stdout(Stdio::from(log))
         .stderr(Stdio::from(error_log));

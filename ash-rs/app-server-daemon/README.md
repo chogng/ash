@@ -1,7 +1,7 @@
 # `ash-app-server-daemon`
 
 - 管理独立的 `ash-app-server --managed` 进程，记录其 PID、启动身份、可执行文件摘要和随包 `buildId`。
-- 串行化生命周期操作，初始化探测成功后才返回 ready。普通 start/connect 复用同一 profile 已运行且协议与必需能力兼容的进程；`ensure-selected` 在可执行文件内容变化时更换运行代次，`restart` 总是更换运行代次。
+- 串行化生命周期操作，所选服务探测成功后才返回 ready。Agent 连接验证 initialize 和必需能力；Execution 连接验证执行协议，不打开 Agent 历史。普通 start/connect 复用同一 profile 已运行且协议与必需能力兼容的进程；`ensure-selected` 在可执行文件内容变化时更换运行代次，`restart` 总是更换运行代次。
 - 提供同用户控制端点与 stdio 连接程序；`ManagedEndpoint` 由后台服务进程持有。
 - `ManagedEndpoint` 非阻塞轮询连接握手与控制响应，同时最多保留 32 个待完成握手，每个握手期限为 5 秒；未完成握手不会阻止其他连接或停止命令，也不增加握手线程。
 - 启动失败时终止并回收新子进程，仅清理该代记录；仍存活或已被后继进程替换的记录受到保护。
@@ -21,6 +21,23 @@
 - 包租约覆盖启动交接，后台服务自己持有运行期间的租约。
 
 本地端点按 profile 固定，不随产品包版本、schema hash 或后端文件摘要变化。它使用 [`ash-uds`](../uds/README.md) 的私有目录和同用户校验。不同版本安装通过 initialize 校验协议主版本和必需能力；schema hash 差异只作诊断。普通 start/connect 遇到协议不兼容时连接失败；只有明确的 `ensure-selected` 或 `restart` 会替换后台进程。协议不兼容的旧客户端需要更新后才能使用新后台。控制程序不需要长期驻留；每个窗口保留自己的连接。
+
+## SSH 连接范围
+
+Desktop 的 Remote 窗口同样连接本地共享后端；每个连接通过版本 2 prelude 提交经过校验的
+SSH host、可选远端目录和精确 runtime 路径。远端路径不会成为本机目录授权。本地后端创建并
+持有该连接的 OpenSSH stdio 子进程，Main 只启动本地 connector 并透明转发。
+连接关闭结束对应 SSH 子进程，其他窗口和共享后端继续运行。
+
+命令环境使用 `ASH_REMOTE_HOST`、`ASH_REMOTE_ROOT` 和 `ASH_REMOTE_RUNTIME`；host 与 runtime
+必须同时提供，不能混入本地 `ASH_WORKSPACE_ROOT` 或 Agents role。启动共享后台进程时清除这些
+连接字段，首个窗口不能决定后台进程的执行目标。健康检查始终使用无目录的本地连接，远端不可达
+不会让其他本地窗口失效。
+
+本地连接和控制请求继续发送版本 1 prelude，SSH 范围发送版本 2，执行连接发送版本 3。
+后台控制响应报告版本 3；连接前检查对应范围的最低版本，旧后端明确拒绝不支持的范围。
+App Server initialize 仍在独立协议连接上
+校验业务协议兼容性。
 
 ## 验证
 

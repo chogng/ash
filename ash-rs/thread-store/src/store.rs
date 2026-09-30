@@ -133,12 +133,51 @@ pub struct AppendBatchResult {
     pub event_count: usize,
 }
 
+/// Execution authority recorded separately when immutable history changes profile ownership.
+/// An unbound remote history is readable but cannot start or resume Agent work.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ThreadExecutionBinding {
+    Recorded,
+    Remote { host: String, root: Option<String> },
+}
+
+impl ThreadExecutionBinding {
+    pub fn apply(&self, target: &mut Option<ash_protocol::SessionExecutionTarget>) {
+        match self {
+            Self::Recorded => {}
+            Self::Remote { host, root } => {
+                *target = root
+                    .as_ref()
+                    .map(|root| ash_protocol::SessionExecutionTarget::Ssh {
+                        host: host.clone(),
+                        root: root.clone(),
+                    });
+            }
+        }
+    }
+
+    pub fn require_bound(&self) -> Result<(), ThreadStoreError> {
+        match self {
+            Self::Remote { root: None, .. } => Err(ThreadStoreError::InvalidBatch(
+                "remote history requires an explicit execution directory binding".into(),
+            )),
+            Self::Recorded | Self::Remote { root: Some(_), .. } => Ok(()),
+        }
+    }
+}
+
 /// Loads and atomically extends the authoritative event history for one Thread.
 ///
 /// Implementations must reject stale `expected_sequence` values. `append_batch` commits every
 /// event or none, makes the complete batch durable before returning success, and excludes
 /// uncommitted tail batches from subsequent `load` results.
 pub trait ThreadStore: agent_graph_store::AgentGraphStore {
+    fn execution_binding(
+        &self,
+        _thread_id: &ThreadId,
+    ) -> Result<ThreadExecutionBinding, ThreadStoreError> {
+        Ok(ThreadExecutionBinding::Recorded)
+    }
     fn list_thread_ids(&self) -> Result<Vec<ThreadId>, ThreadStoreError>;
 
     /// Reads one Session's membership through its durable index, without replaying histories.

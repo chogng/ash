@@ -24,6 +24,8 @@ local-sandbox = ["dep:ash-install-context", "dep:mxc-sandbox", "dep:windows-sand
 server = ["local-sandbox", "dep:ash-package-store", "dep:arg0", "dep:process-hardening", "tokio/signal", "tokio/macros"]
 
 [dependencies]
+ash-uds = { workspace = true }
+remote = { package = "ash-remote", path = "../remote" }
 exec-server-protocol = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -61,6 +61,28 @@ enum LaunchState {
     Rejected(ProcessState),
 }
 impl Processes {
+    pub(crate) fn cancel_all(&self) -> Result<(), ExecError> {
+        for record in self.records.lock().map_err(|_| ExecError::Busy)?.values() {
+            record.cancellation.cancel();
+        }
+        Ok(())
+    }
+
+    pub(crate) fn has_active(&self) -> Result<bool, ExecError> {
+        let records = self.records.lock().map_err(|_| ExecError::Busy)?;
+        for record in records.values() {
+            if record
+                .finished
+                .lock()
+                .map_err(|_| ExecError::Busy)?
+                .is_none()
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     pub fn new(
         grant: Grant,
         access: FileAccess,

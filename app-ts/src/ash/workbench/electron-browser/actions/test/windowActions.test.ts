@@ -42,8 +42,8 @@ test('desktop dialog and shell routes reject malformed requests', async () => {
 	assert.throws(() => openAgents.validate({ windowId: 1 }), /Invalid Agents Window options/);
 	assert.throws(() => openAgents.validate({}), /requires a conversation or draft/);
 	assert.throws(() => openAgents.validate({ conversation: { sessionId: '', threadId: 'thread' } }), /Invalid Agents Window conversation/);
-	assert.throws(() => openAgents.validate({ draft: { text: 'Review this', contexts: [{ id: 'file' }] } }), /Invalid Agents Window context/);
-	const handoff = { conversation: { sessionId: 'session', threadId: 'thread' }, draft: { text: 'Review this', contexts: [{ id: 'file', kind: 'file', name: 'file.ts', content: 'const value = 1;' }] } };
+	assert.throws(() => openAgents.validate({ draft: { mode: 'debug', text: 'Review this', contexts: [{ id: 'file' }] } }), /Invalid Agents Window context/);
+	const handoff = { conversation: { sessionId: 'session', threadId: 'thread' }, draft: { mode: 'debug', text: 'Review this', contexts: [{ id: 'file', kind: 'file', name: 'file.ts', content: 'const value = 1;' }] } };
 	await openAgents.invoke(openAgents.validate(handoff));
 	assert.deepEqual(operations.at(-1), handoff);
 	await openAgents.invoke(openAgents.validate(undefined));

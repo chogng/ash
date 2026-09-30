@@ -4076,6 +4076,7 @@ macro_rules! typescript_bindings {
 }
 
 typescript_bindings! {
+    ash_protocol::CollaborationMode,
     ash_protocol::AgentConfiguration,
     ash_protocol::AgentRoleSelection,
     ash_protocol::InstructionText,

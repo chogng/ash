@@ -1,3 +1,4 @@
+import { AppServerDaemonLauncher } from "../../../../platform/app-server-daemon/electron-main/appServerDaemonLauncher.js";
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import type { AppServerConnectionState } from "../../../../platform/app-server/common/appServerApi.js";
@@ -23,7 +24,7 @@ import { REMOTE_TUNNEL_OPEN_CHANNEL } from "../../../../platform/remote/common/r
 import type { IRemoteTunnelService } from "../../../../platform/remote/common/remoteTunnelService.js";
 import type { RemoteTunnelChange } from "../../../../platform/remote/common/remoteTunnelService.js";
 import { RemoteWindowMainContext } from "../../../../platform/remote/electron-main/remoteWindowMainContext.js";
-import { SshAppServerProcessLauncher } from "../../../../platform/remote/electron-main/sshAppServerProcessLauncher.js";
+import { RemoteAppServerProcessLauncher } from "../../../../platform/remote/electron-main/remoteAppServerProcessLauncher.js";
 import { WorkspaceContextMainService } from "../../../../platform/window/electron-main/window.js";
 
 test("Remote window context owns routes, projections, and Workspace tunnel cleanup", async () => {
@@ -117,10 +118,11 @@ test("Remote window context owns routes, projections, and Workspace tunnel clean
 test("Remote window context scopes verified rollback to its own supervisor", async () => {
 	const workspace = URI.parse("ash-remote://ssh+build-linux/workspace/one");
 	const calls: string[] = [];
-	let launcher = new SshAppServerProcessLauncher({
+	let launcher = new RemoteAppServerProcessLauncher({
 		workspace,
 		sshExecutable: "custom-ssh",
 		remoteExecutable: "ash",
+		carrier: new AppServerDaemonLauncher({ executable: "/runtime/ash-app-server-daemon", args: ["connect-selected"], environment: {}, fileExists: () => true }),
 		localEnvironment: {},
 		rollbackRuntime: async (host, remoteWorkspace, sshExecutable) => {
 			calls.push(`rollback:${host}:${remoteWorkspace}:${sshExecutable}`);
@@ -173,10 +175,11 @@ test("Remote window context scopes verified rollback to its own supervisor", asy
 	});
 	try {
 		const nextWorkspace = URI.parse('ash-remote://ssh+build-next/workspace/two');
-		launcher = new SshAppServerProcessLauncher({
+		launcher = new RemoteAppServerProcessLauncher({
 			workspace: nextWorkspace,
 			sshExecutable: 'custom-ssh',
 			remoteExecutable: 'ash',
+			carrier: new AppServerDaemonLauncher({ executable: "/runtime/ash-app-server-daemon", args: ["connect-selected"], environment: {}, fileExists: () => true }),
 			localEnvironment: {},
 			rollbackRuntime: async (host, remoteWorkspace, sshExecutable) => {
 				calls.push(`rollback:${host}:${remoteWorkspace}:${sshExecutable}`);

@@ -170,6 +170,7 @@ fn turn_reasoning_effort_overrides_the_model_default() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 command_id: CommandId::new("override-effort").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
@@ -433,6 +434,7 @@ fn frozen_tool_profile_rejects_definition_drift_before_model_invocation() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
@@ -481,6 +483,7 @@ fn frozen_tool_profile_rejects_definition_drift_before_model_invocation() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
@@ -677,6 +680,7 @@ fn manual_context_compaction_batches_a_prefix_that_exceeds_the_model_window() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
@@ -1121,6 +1125,7 @@ fn compacts_durable_history_then_replans_with_the_verified_checkpoint() {
             .start_turn(
                 &thread_id,
                 StartTurnRequest {
+                    mode: Default::default(),
                     advisor: None,
                     kind: ash_protocol::TurnKind::Coding,
                     instructions: crate::test_turn_instructions(),
@@ -1148,6 +1153,7 @@ fn compacts_durable_history_then_replans_with_the_verified_checkpoint() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
@@ -1213,6 +1219,7 @@ fn provider_preflight_tightens_the_budget_and_rechecks_after_compaction() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
@@ -1296,6 +1303,7 @@ fn explicit_skill_selection_uses_frozen_digest_and_layered_body() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
@@ -1861,6 +1869,7 @@ fn restart_after_overflow_checkpoint_commit_does_not_replay_the_model_call() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
@@ -1887,6 +1896,7 @@ fn restart_after_overflow_checkpoint_commit_does_not_replay_the_model_call() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
@@ -2050,6 +2060,7 @@ fn model_usage_and_goal_projection_are_identical_after_recovery() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
@@ -2269,6 +2280,7 @@ fn per_thread_mailboxes_run_independently_and_interrupt_the_active_turn() {
         .start_turn(
             &fast_thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
@@ -3851,6 +3863,7 @@ fn started_turn_with_store(
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
@@ -3882,6 +3895,7 @@ fn started_turn_with_history() -> (Arc<ThreadController>, ThreadId, TurnId) {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
@@ -4354,6 +4368,7 @@ fn code_mode_thread_values_survive_turn_completion_and_new_turn_authority() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
@@ -4443,6 +4458,7 @@ fn encrypted_reasoning_survives_tool_results_and_reloading_thread_history() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("continue-encrypted").unwrap(),
@@ -4536,6 +4552,7 @@ fn connection_selection_is_frozen_at_turn_start_and_released_for_the_next_turn()
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),

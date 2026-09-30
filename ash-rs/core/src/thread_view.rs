@@ -31,6 +31,7 @@ impl From<crate::ThreadSnapshot> for core_api::ThreadView {
                     started_at_unix_ms: turn.started_at_unix_ms,
                     duration_ms: turn.duration_ms,
                     kind: turn.kind,
+                    mode: turn.mode,
                     instructions: turn.instructions,
                     model: turn.model,
                     reasoning_effort: turn.reasoning_effort,

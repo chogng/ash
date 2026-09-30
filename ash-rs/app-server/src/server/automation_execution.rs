@@ -104,6 +104,7 @@ impl AppServer {
                 },
                 snapshot.thread_id.clone(),
                 ash_protocol::ApprovalMode::default(),
+                ash_protocol::CollaborationMode::Agent,
                 TurnModelSelection::Current,
                 None,
                 None,

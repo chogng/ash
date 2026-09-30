@@ -1,7 +1,7 @@
 import { Emitter, type Event } from "../../base/common/event.js";
 import { isCancellationError } from "../../base/common/errors.js";
 import { Disposable, toDisposable } from "../../base/common/lifecycle.js";
-import type { AgentResponse, ChatAgent, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, TurnChangeSetSummary, TurnInteraction } from "../../workbench/services/chat/common/chatService.js";
+import type { AgentResponse, ChatAgent, ChatMode, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, TurnChangeSetSummary, TurnInteraction } from "../../workbench/services/chat/common/chatService.js";
 import { localize } from "../../nls.js";
 import type { SkillReference } from "../../platform/skills/common/skillApi.js";
 import type { ResolvedChatContext } from "../../workbench/services/chat/common/chatContextService.js";
@@ -46,6 +46,9 @@ export class ChatWidgetModel extends Disposable {
 	private subscriptionPromise: Promise<void> | undefined;
 	private _models: readonly ModelCatalogEntry[] = [];
 	private modelsError: string | undefined;
+	private readonly selectedModes = new Map<string, ChatMode>();
+	private queuedMessages = 0;
+	private queueGeneration = 0;
 	private readonly selectedModels = new Map<ThreadId, ModelRef>();
 	private readonly automaticModels = new Set<ThreadId>();
 	// A New Chat's key is replaced with its Thread ID when the first message materializes it.
@@ -72,6 +75,7 @@ export class ChatWidgetModel extends Disposable {
 		}));
 		this._register(chatService.onDidBecomeReady(() => void this.reconnect()));
 		this._register(chatService.onDidChangeModels(() => void this.loadModels()));
+		this._register(chatService.onDidChangeQueue(() => void this.loadQueue()));
 		this._register(chatService.onDidChangeSkills(() => void this.loadSkillSelectors()));
 		this._register(chatService.onDidUpdateTurnChanges((update) => {
 			if (update.sessionId !== this.sessionId || update.threadId !== this.threadId) return;
@@ -93,6 +97,9 @@ export class ChatWidgetModel extends Disposable {
 
 	get inputState(): ChatInputState {
 		return {
+			mode: this.mode,
+			activeMode: activeTurn(this._thread)?.mode,
+			queuedMessages: this.queuedMessages,
 			phase: this._state,
 			error: this._error,
 			canInterrupt: this.canInterrupt,
@@ -148,6 +155,17 @@ export class ChatWidgetModel extends Disposable {
 
 	get skillSelectors(): readonly SkillSelectorDefinition[] {
 		return this._skillSelectors;
+	}
+
+	get mode(): ChatMode {
+		const key = this.selection.kind === 'untitled' ? this.selection.session.untitledSessionId : this.selection.active.threadId;
+		return this.selectedModes.get(key) ?? 'agent';
+	}
+
+	selectMode(mode: ChatMode): void {
+		const key = this.selection.kind === 'untitled' ? this.selection.session.untitledSessionId : this.selection.active.threadId;
+		this.selectedModes.set(key, mode);
+		this._onDidChange.fire();
 	}
 
 	get selectedModel(): ModelRef | undefined {
@@ -308,7 +326,7 @@ export class ChatWidgetModel extends Disposable {
 		this._onDidChange.fire();
 	}
 
-	async send(text: string, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[]): Promise<void> {
+	async send(text: string, mode: ChatMode = this.mode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[]): Promise<void> {
 		const input = text.trim();
 		if (!input) return;
 		try {
@@ -323,33 +341,26 @@ export class ChatWidgetModel extends Disposable {
 				throw new Error("Chat Thread is not available");
 			}
 			const turn = activeTurn(thread);
-			if (turn) {
-				if (!isSteerableTurn(turn)) {
-					throw new Error(`The active ${turn.status} Turn cannot accept steering`);
-				}
-				if (skills?.length) {
-					throw new Error("Skills can only be selected when starting a new Turn");
-				}
-				await this.chatService.steerTurn({
-					sessionId: active.session.sessionId,
-					threadId: active.threadId,
-					turnId: turn.turnId,
-					expectedSequence: thread.sequence,
-					text: input,
-					contexts,
-				});
+			const submission = {
+				sessionId: active.session.sessionId,
+				threadId: active.threadId,
+				expectedSequence: thread.sequence,
+				text: input,
+				mode,
+				model: this.isAutomaticModel ? undefined : this.selectedModel,
+				reasoningEffort: this.selectedReasoningEffort,
+				contexts,
+				skills,
+			};
+			if (turn && (turn.mode !== mode || skills?.length)) {
+				// A frozen Turn keeps its approach. A new approach gets its own durable submission.
+				await this.chatService.queueTurn(submission);
+				await this.loadQueue();
+			} else if (turn) {
+				if (!isSteerableTurn(turn)) throw new Error(`The active ${turn.status} Turn cannot accept steering`);
+				await this.chatService.steerTurn({ ...submission, turnId: turn.turnId });
 			} else {
-				// Omitting the override lets App Server use the Thread's current model or its configured default.
-				await this.chatService.startTurn({
-					sessionId: active.session.sessionId,
-					threadId: active.threadId,
-					expectedSequence: thread.sequence,
-					text: input,
-					model: this.isAutomaticModel ? undefined : this.selectedModel,
-					reasoningEffort: this.selectedReasoningEffort,
-					contexts,
-					skills,
-				});
+				await this.chatService.startTurn(submission);
 			}
 			await this.refreshThread();
 			this.setState("ready");
@@ -436,7 +447,7 @@ export class ChatWidgetModel extends Disposable {
 		if (turn?.turnId !== turnId || turn.status !== "failed" || turn.error?.retryable !== true) {
 			throw new Error("Only the latest retryable failed Turn can be retried");
 		}
-		await this.send("Try again.");
+		await this.send("Try again.", turn.mode);
 	}
 
 	async interrupt(): Promise<void> {
@@ -580,6 +591,8 @@ export class ChatWidgetModel extends Disposable {
 		this.transcriptEntries = [];
 		this.transcriptRevision = 0;
 		this._changeSets = [];
+		this.queuedMessages = 0;
+		this.queueGeneration++;
 		this.changeDetails.clear();
 		this.changesGeneration++;
 		this.setState("loading");
@@ -590,6 +603,9 @@ export class ChatWidgetModel extends Disposable {
 			const result = await this.chatService.subscribeThread(active.session.sessionId, active.threadId, 0);
 			if (this.isDisposed || generation !== this.generation) return;
 			this._thread = result.thread;
+			if (!this.selectedModes.has(active.threadId)) {
+				this.selectedModes.set(active.threadId, result.thread.turns.at(-1)?.mode ?? 'agent');
+			}
 			if (result.transcript.revision >= this.transcriptRevision) {
 				this.transcriptEntries = result.transcript.entries.map((entry) => cloneTranscriptEntry(entry));
 				this.transcriptRevision = result.transcript.revision;
@@ -601,6 +617,7 @@ export class ChatWidgetModel extends Disposable {
 			}
 			this.setState("ready");
 			void this.loadTurnChanges(generation);
+			void this.loadQueue();
 		} catch (error) {
 			if (this.isDisposed || generation !== this.generation) return;
 			this.setError(error);
@@ -622,6 +639,20 @@ export class ChatWidgetModel extends Disposable {
 			active ? this.subscribe(active) : Promise.resolve(),
 			this.loadCatalogs(),
 		]);
+	}
+
+	private async loadQueue(): Promise<void> {
+		const active = this.activeSession;
+		if (!active) return;
+		const generation = ++this.queueGeneration;
+		try {
+			const count = await this.chatService.queuedMessageCount(active.session.sessionId, active.threadId);
+			if (this.isDisposed || generation !== this.queueGeneration || active.threadId !== this.threadId) return;
+			this.queuedMessages = count;
+			this._onDidChange.fire();
+		} catch (error) {
+			if (!this.isDisposed && generation === this.queueGeneration) this.setError(error);
+		}
 	}
 
 	private async loadTurnChanges(threadGeneration: number): Promise<void> {
@@ -783,6 +814,9 @@ export class ChatWidgetModel extends Disposable {
 			throw new Error("Untitled Chat Session was closed while its durable Session was being created");
 		}
 		this.selection = { kind: "session", active: created };
+		const mode = this.selectedModes.get(untitledSession.untitledSessionId);
+		if (mode) this.selectedModes.set(created.threadId, mode);
+		this.selectedModes.delete(untitledSession.untitledSessionId);
 		const effort = this.selectedReasoningEfforts.get(untitledSession.untitledSessionId);
 		if (effort) this.selectedReasoningEfforts.set(created.threadId, effort);
 		this.selectedReasoningEfforts.delete(untitledSession.untitledSessionId);

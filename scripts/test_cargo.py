@@ -5,10 +5,60 @@ import subprocess
 import unittest
 from unittest.mock import patch
 
-from scripts.cargo import main, prepare_code_mode_host
+from scripts.cargo import main, prepare_test_executable
 
 
 class CodeModeHostTests(unittest.TestCase):
+    @patch.dict("scripts.cargo.os.environ", {}, clear=True)
+    @patch("scripts.cargo.subprocess.run")
+    @patch("scripts.cargo.prepare_test_executable", return_value="/runtime/app-server")
+    @patch(
+        "scripts.cargo.resolve_v8_cargo_env",
+        return_value={"RUSTY_V8_ARCHIVE": "locked"},
+    )
+    @patch("scripts.cargo.cargo_command_uses_v8", return_value=True)
+    @patch("scripts.cargo.cargo_command_uses_package")
+    def test_remote_tests_prepare_the_shared_backend(
+        self, uses_package, uses_v8, resolve_v8, prepare, run
+    ) -> None:
+        uses_package.side_effect = lambda _cargo, _args, _root, package: (
+            package == "ash-remote-server"
+        )
+        run.return_value = subprocess.CompletedProcess([], 0)
+        arguments = ["test", "-p", "ash-remote-server", "--test", "stdio"]
+        self.assertEqual(main(arguments), 0)
+        prepare.assert_called_once()
+        self.assertEqual(prepare.call_args.args[:2], ("cargo", arguments))
+        self.assertEqual(prepare.call_args.args[2]["RUSTY_V8_ARCHIVE"], "locked")
+        self.assertEqual(prepare.call_args.args[3], "ash-app-server")
+        self.assertEqual(
+            run.call_args.kwargs["env"]["ASH_APP_SERVER_PATH"], "/runtime/app-server"
+        )
+
+    @patch("scripts.cargo.subprocess.run")
+    @patch("scripts.cargo.prepare_test_executable")
+    @patch("scripts.cargo.resolve_v8_cargo_env", return_value={})
+    @patch("scripts.cargo.cargo_command_uses_v8", return_value=False)
+    @patch("scripts.cargo.cargo_command_uses_package")
+    def test_remote_compile_only_and_explicit_backend_do_not_prepare(
+        self, uses_package, uses_v8, resolve_v8, prepare, run
+    ) -> None:
+        uses_package.side_effect = lambda _cargo, _args, _root, package: (
+            package == "ash-remote-server"
+        )
+        run.return_value = subprocess.CompletedProcess([], 0)
+        for environment, extra in [
+            ({}, ["--no-run"]),
+            ({"ASH_APP_SERVER_PATH": "/custom/backend"}, []),
+        ]:
+            with (
+                self.subTest(extra=extra),
+                patch.dict("scripts.cargo.os.environ", environment, clear=True),
+            ):
+                self.assertEqual(main(["test", "-p", "ash-remote-server", *extra]), 0)
+                self.assertEqual(run.call_args.kwargs["env"], environment)
+        prepare.assert_not_called()
+
     @patch("scripts.cargo.subprocess.run")
     def test_uses_reported_executable_with_the_test_build_settings(self, run) -> None:
         run.return_value = subprocess.CompletedProcess(
@@ -23,7 +73,7 @@ class CodeModeHostTests(unittest.TestCase):
             ),
         )
         environment = {"RUSTFLAGS": "-D warnings"}
-        executable = prepare_code_mode_host(
+        executable = prepare_test_executable(
             "cargo",
             [
                 "test",
@@ -41,6 +91,7 @@ class CodeModeHostTests(unittest.TestCase):
                 "--exact",
             ],
             environment,
+            "ash-code-mode-host",
         )
         self.assertEqual(executable, "/custom/target/host")
         self.assertEqual(
@@ -78,7 +129,9 @@ class CodeModeHostTests(unittest.TestCase):
         )
         for options in (["-j1"], ["-j", "1"], ["--jobs=1"], ["--jobs", "1"]):
             with self.subTest(options=options):
-                prepare_code_mode_host("cargo", ["test", *options, "--", "-j8"], {})
+                prepare_test_executable(
+                    "cargo", ["test", *options, "--", "-j8"], {}, "ash-code-mode-host"
+                )
                 self.assertEqual(
                     run.call_args.args[0][7:], [*options, "--profile", "test"]
                 )
@@ -87,19 +140,23 @@ class CodeModeHostTests(unittest.TestCase):
     def test_default_uses_test_profile_and_rejects_missing_artifacts(self, run) -> None:
         run.return_value = subprocess.CompletedProcess([], 0, "")
         with self.assertRaisesRegex(RuntimeError, "did not report"):
-            prepare_code_mode_host("cargo", ["test", "-p", "ash-app-server"], {})
+            prepare_test_executable(
+                "cargo", ["test", "-p", "ash-app-server"], {}, "ash-code-mode-host"
+            )
         self.assertEqual(run.call_args.args[0][-2:], ["--profile", "test"])
 
     @patch("scripts.cargo.subprocess.run")
     def test_host_build_failure_stops_preparation(self, run) -> None:
         run.return_value = subprocess.CompletedProcess(["cargo", "build"], 1, "")
         with self.assertRaises(subprocess.CalledProcessError):
-            prepare_code_mode_host("cargo", ["test", "--release"], {})
+            prepare_test_executable(
+                "cargo", ["test", "--release"], {}, "ash-code-mode-host"
+            )
         self.assertNotIn("--profile", run.call_args.args[0])
 
     @patch.dict("scripts.cargo.os.environ", {}, clear=True)
     @patch("scripts.cargo.subprocess.run")
-    @patch("scripts.cargo.prepare_code_mode_host", return_value="/runtime/host")
+    @patch("scripts.cargo.prepare_test_executable", return_value="/runtime/host")
     @patch(
         "scripts.cargo.resolve_v8_cargo_env",
         return_value={"RUSTY_V8_ARCHIVE": "locked"},
@@ -124,7 +181,7 @@ class CodeModeHostTests(unittest.TestCase):
         )
 
     @patch("scripts.cargo.subprocess.run")
-    @patch("scripts.cargo.prepare_code_mode_host")
+    @patch("scripts.cargo.prepare_test_executable")
     @patch("scripts.cargo.resolve_v8_cargo_env")
     @patch("scripts.cargo.cargo_command_uses_v8", return_value=False)
     @patch("scripts.cargo.cargo_command_uses_package", return_value=False)

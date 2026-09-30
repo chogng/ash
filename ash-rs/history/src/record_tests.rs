@@ -92,3 +92,50 @@ fn legacy_creation_keeps_serialized_event_bytes_and_new_creation_requires_identi
     record.schema_version += 1;
     assert!(created_thread_agent_id(&record).is_err());
 }
+
+#[test]
+fn legacy_imported_turns_keep_bytes_without_mode_while_current_turns_expose_it() {
+    let turn: ash_protocol::Turn = serde_json::from_value(serde_json::json!({
+        "turnId":"old-turn", "status":"completed", "items":[]
+    }))
+    .unwrap();
+    for event in [
+        ThreadEvent::HistoryImported {
+            thread_id: ThreadId::new("old").unwrap(),
+            source_thread_id: ThreadId::new("source").unwrap(),
+            before_turn_id: ash_protocol::TurnId::new("before").unwrap(),
+            turns: vec![turn.clone()],
+        },
+        ThreadEvent::ForkHistoryImported {
+            thread_id: ThreadId::new("old").unwrap(),
+            source_thread_id: ThreadId::new("source").unwrap(),
+            source_sequence: 3,
+            turns: vec![turn.clone()],
+        },
+        ThreadEvent::ForkTurnImported {
+            thread_id: ThreadId::new("old").unwrap(),
+            source_thread_id: ThreadId::new("source").unwrap(),
+            source_sequence: 3,
+            turn_index: 0,
+            turn: Box::new(turn.clone()),
+        },
+    ] {
+        let current = StoredEvent {
+            time_context: None,
+            schema_version: 22,
+            event_id: EventId("imported".into()),
+            sequence: 2,
+            thread_id: ThreadId::new("old").unwrap(),
+            recorded_at: Timestamp(1),
+            command: None,
+            event,
+        };
+        let encoded = serde_json::to_string(&current).unwrap();
+        let legacy = encoded
+            .replace("\"schemaVersion\":22", "\"schemaVersion\":21")
+            .replace(",\"mode\":\"agent\"", "");
+        let restored: StoredEvent = serde_json::from_str(&legacy).unwrap();
+        assert_eq!(serde_json::to_string(&restored).unwrap(), legacy);
+        assert!(encoded.contains("\"mode\":\"agent\""));
+    }
+}

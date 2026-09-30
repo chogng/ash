@@ -4,6 +4,130 @@ use std::io::BufReader;
 use std::sync::mpsc;
 
 #[cfg(unix)]
+#[test]
+fn imported_ssh_history_is_read_by_the_local_gateway_without_opening_a_remote_agent() {
+    use ash_core::ThreadStore;
+    let source_profile = tempfile::tempdir().unwrap();
+    let profile = tempfile::tempdir().unwrap();
+    let source = Arc::new(
+        ash_state::SqliteThreadStore::open(source_profile.path().join("state.sqlite3")).unwrap(),
+    );
+    let local = ash_state::SqliteThreadStore::open(profile.path().join("state.sqlite3")).unwrap();
+    let controller = ash_core::ThreadController::with_store(source.clone());
+    for (name, root) in [("known", Some("/recorded/remote/root")), ("unknown", None)] {
+        controller
+            .create_thread(ash_core::CreateThreadRequest {
+                agent_id: ash_protocol::AgentId::new(format!("agent-{name}")).unwrap(),
+                origin: ash_protocol::ThreadOrigin::Root,
+                agent: None,
+                session_id: SessionId::new(name).unwrap(),
+                thread_id: ThreadId::new(name).unwrap(),
+                title: name.into(),
+                execution_target: root
+                    .map(|root| SessionExecutionTarget::Local { root: root.into() }),
+            })
+            .unwrap();
+    }
+    let attachments = attachment_store::MemoryAttachmentStore::default();
+    let mut archive = Vec::new();
+    source
+        .export_history(
+            &local.history_identity().unwrap(),
+            &attachments,
+            &mut archive,
+        )
+        .unwrap();
+    local
+        .import_history("history-host", &attachments, archive.as_slice())
+        .unwrap();
+    let remote_profile = ash_remote::RemoteProfile::new(
+        ash_remote::SshTarget::new(
+            ash_remote::SshHost::parse("history-host").unwrap(),
+            ash_remote::RemoteDirPath::parse("/another/remote/root").unwrap(),
+        ),
+        ash_remote::RemoteRuntime::new("/selected/runtime/ash-remote-server").unwrap(),
+    );
+    ash_remote_profile_store::RemoteConnectionProfileStore::from_profile_root(profile.path())
+        .activate(&remote_profile)
+        .unwrap();
+    let options = ash_app_server_daemon::ConnectionOptions::new(
+        profile.path(),
+        None,
+        ash_app_server_daemon::GrantSource::HostConfiguration,
+        None,
+    );
+    let registry = Arc::new(ProfileAppServerRegistry::open(options.clone()).unwrap());
+    let server = registry.server_for(options).unwrap();
+    assert!(registry.remote_profiles().unwrap().is_empty());
+    assert!(
+        registry
+            .remote_profile("history-host", "/another/remote/root")
+            .is_ok()
+    );
+    // A cached remote catalog entry cannot take ownership of a local historical identity.
+    let stale: RemoteSessionIndex = Arc::new(Mutex::new(BTreeMap::from([(
+        "known".into(),
+        ("wrong-host".into(), "/wrong/root".into()),
+    )])));
+    assert_eq!(
+        selected_execution_target(
+            &registry,
+            &stale,
+            &serde_json::json!({"method":"session/read","params":{"sessionId":"known"}})
+        )
+        .unwrap(),
+        None
+    );
+    assert_eq!(
+        selected_execution_target(
+            &registry,
+            &stale,
+            &serde_json::json!({"method":"session/thread/read","params":{"threadId":"known"}})
+        )
+        .unwrap(),
+        None
+    );
+    let marker = profile.path().join("must-not-spawn-ssh");
+    let (mut client, stream) = crate::server::request_dispatch::tests::Client::pair();
+    let launch = RemoteLaunch {
+        executable: marker.clone().into_os_string(),
+        initialize_timeout: std::time::Duration::from_secs(1),
+    };
+    let served = thread::spawn(move || {
+        let (reader, writer) = ash_app_server_transport::LocalStream::pair(stream).unwrap();
+        let result = serve(registry, server, BufReader::new(reader), writer, launch);
+        assert!(
+            result.is_ok()
+                || result
+                    .as_ref()
+                    .is_err_and(crate::managed::is_peer_disconnect)
+        );
+    });
+    client.initialize();
+    client.send(4, "session/list", serde_json::json!({}));
+    let catalog = client.read();
+    assert_eq!(catalog["id"], 4);
+    assert_eq!(catalog["result"]["sessions"].as_array().unwrap().len(), 2);
+    for (id, session) in [(2, "known"), (3, "unknown")] {
+        client.send(id, "session/read", serde_json::json!({"sessionId":session}));
+        let response = client.read();
+        assert_eq!(response["id"], id);
+        assert!(response.get("error").is_none(), "{response}");
+        assert_eq!(response["result"]["session"]["sessionId"], session);
+        if session == "known" {
+            assert_eq!(
+                response["result"]["session"]["executionTarget"],
+                serde_json::json!({"type":"ssh","host":"history-host","root":"/recorded/remote/root"})
+            );
+        }
+    }
+    client.close();
+    served.join().unwrap();
+    assert!(!marker.exists());
+    assert_eq!(local.list_thread_ids().unwrap().len(), 2);
+}
+
+#[cfg(unix)]
 struct TestGateway {
     client: crate::server::request_dispatch::tests::Client,
     completed: mpsc::Receiver<io::Result<()>>,

@@ -48,9 +48,14 @@ impl AppServer {
                 queue::QueueEdit::Send { turn_id }
             }
             ash_app_server_protocol::protocol::queue::QueueEditAction::Replace { input } => {
-                queue::QueueEdit::Replace {
-                    input: self.normalize_input(&params.session_id, input)?,
-                }
+                let existing = self
+                    .queue_store()?
+                    .get(&params.command_id)
+                    .map_err(error)?
+                    .ok_or_else(|| error(QueueError::NotFound))?;
+                let mut input = self.normalize_input(&params.session_id, input)?;
+                self.turn_instruction_selection(&mut input, existing.request.mode)?;
+                queue::QueueEdit::Replace { input }
             }
         };
         let message = self
@@ -112,8 +117,8 @@ impl AppServer {
         let snapshot = self.read_session_thread(&params.session_id, &params.thread_id)?;
         let store = self.queue_store()?;
         // Retries resolve against the accepted queue request even after a feature is disabled.
-        let existing = store.get(&params.command_id).map_err(error)?.is_some();
-        if !existing
+        let existing = store.get(&params.command_id).map_err(error)?;
+        if existing.is_none()
             && let Some(config) = &self.config
             && !features::Feature::Queue.enabled(
                 &config
@@ -128,7 +133,22 @@ impl AppServer {
         if snapshot.status != ash_protocol::ThreadStatus::Active {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
-        let input = self.normalize_input(&params.session_id, params.input)?;
+        let mut input = self.normalize_input(&params.session_id, params.input)?;
+        self.turn_instruction_selection(&mut input, params.mode)?;
+        let tool_mode = match (params.tool_mode, existing.as_ref()) {
+            (Some(mode), _) => mode,
+            (None, Some(message)) => message.request.tool_mode,
+            (None, None) => match &self.config {
+                Some(config) => {
+                    config
+                        .read_snapshot()
+                        .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?
+                        .values
+                        .tool_mode
+                }
+                None => ash_protocol::ToolMode::Direct,
+            },
+        };
         let directory = self
             .queue_directory
             .clone()
@@ -141,12 +161,15 @@ impl AppServer {
                 thread_id: params.thread_id,
                 directory,
                 input,
-                tool_mode: params.tool_mode,
+                mode: params.mode,
+                model: params.model,
+                reasoning_effort: params.reasoning_effort,
+                tool_mode,
                 approval_mode: params.approval_mode,
                 steer_turn: None,
             })
             .map_err(error)?;
-        if !existing {
+        if existing.is_none() {
             self.analytics.record(analytics::UsageEvent::MessageQueued);
         }
         self.updates.publish_queue_changed();
@@ -194,6 +217,15 @@ impl AppServer {
         if snapshot.session_id != request.session_id {
             return Ok(Delivery::Rejected("sessionMismatch".into()));
         }
+        // A Steer receipt has no separate mode. Check the immutable target before replaying it.
+        if let Some(turn_id) = &request.steer_turn
+            && snapshot
+                .turns
+                .iter()
+                .any(|turn| &turn.turn_id == turn_id && turn.mode != request.mode)
+        {
+            return Ok(Delivery::Rejected("steerModeMismatch".into()));
+        }
         match accepted(&self.agent_runtime(), request) {
             Ok(Some(turn)) => return Ok(Delivery::Started(turn)),
             Err(core_api::CoreError::CommandConflict) => {
@@ -230,7 +262,9 @@ impl AppServer {
         self.bind_session_runtime(&snapshot.session_id)
             .map_err(|error| error.to_string())?;
         let mut input = request.input.clone();
-        let selection = self.turn_instruction_selection(&mut input);
+        let selection = self
+            .turn_instruction_selection(&mut input, request.mode)
+            .map_err(|error| format!("{:?}", error.message))?;
         let start = self.start_agent_turn_request(
             ThreadMutation {
                 connection_id: None,
@@ -240,12 +274,17 @@ impl AppServer {
             },
             request.thread_id.clone(),
             request.approval_mode,
+            request.mode,
             TurnToolModeSelection::Explicit(request.tool_mode),
             input,
             ash_protocol::TurnKind::Coding,
             selection,
-            TurnModelSelection::Current,
-            None,
+            request
+                .model
+                .clone()
+                .map(TurnModelSelection::Explicit)
+                .unwrap_or(TurnModelSelection::Current),
+            request.reasoning_effort,
         );
         let current = self
             .agent_runtime()
@@ -304,6 +343,7 @@ fn accepted(
             turn_id,
         },
         None => core_api::AcceptedCommand::Turn {
+            mode: request.mode,
             input: &request.input,
             tool_mode: request.tool_mode,
             approval_mode: request.approval_mode,

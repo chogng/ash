@@ -192,6 +192,8 @@ pub enum ThreadEvent {
         turn_id: TurnId,
         #[serde(default)]
         kind: TurnKind,
+        #[serde(default, skip_serializing_if = "crate::CollaborationMode::is_agent")]
+        mode: crate::CollaborationMode,
         /// Exact instructions selected before this Turn was durably accepted.
         ///
         /// Historical events written before instruction snapshots omit this field.

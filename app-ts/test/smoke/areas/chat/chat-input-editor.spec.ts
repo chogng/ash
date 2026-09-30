@@ -87,6 +87,51 @@ test('Agent mode picker compacts when the model needs room', async ({ target, wo
 	}
 });
 
+test('Chat can switch from Plan back to Agent without selecting a different Agent', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+	const page = workbench.page;
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	const picker = page.locator('.ash-chat-view-pane .ash-chat:visible [data-action-id="ash.chat.input.mode"] button');
+	await picker.press('ArrowDown');
+	let menu = page.locator('.ash-chat-input-mode-menu');
+	await menu.getByRole('menuitemradio', { name: 'Plan', exact: true }).click();
+	await expect(picker).toHaveText('Plan');
+	await picker.press('ArrowDown');
+	menu = page.locator('.ash-chat-input-mode-menu');
+	await expect(menu.getByRole('menuitemradio', { name: 'Plan', exact: true })).toHaveAttribute('aria-checked', 'true');
+	const agent = menu.getByRole('menuitemradio', { name: 'Agent', exact: true });
+	await expect(agent).toBeEnabled();
+	await agent.click();
+	await expect(picker).toHaveText('Agent');
+	await picker.press('ArrowDown');
+	await expect(menu.getByRole('menuitemradio', { name: 'Agent', exact: true })).toHaveAttribute('aria-checked', 'true');
+	await menu.press('Escape');
+	await expect(picker).toBeFocused();
+});
+
+test('Chat mode picker exposes all five modes with one checked selection', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
+	const page = workbench.page;
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	const picker = page.locator('.ash-chat-view-pane .ash-chat:visible [data-action-id="ash.chat.input.mode"] button');
+	for (const name of ['Agent', 'Plan', 'Debug', 'Multitask', 'Ask']) {
+		await picker.press('ArrowDown');
+		const menu = page.locator('.ash-chat-input-mode-menu');
+		await menu.getByRole('menuitemradio', { name, exact: true }).click();
+		await expect(picker).toHaveText(name);
+		await picker.press('ArrowDown');
+		await expect(menu.getByRole('menuitemradio', { name, exact: true })).toHaveAttribute('aria-checked', 'true');
+		// Agent choices are a separate radio group; the five mode actions have exactly one choice.
+		await expect(menu.getByRole('menuitemradio', { name: /^(Agent|Plan|Debug|Multitask|Ask)$/ }).and(menu.locator('[aria-checked="true"]'))).toHaveCount(1);
+		await menu.press('Escape');
+		await expect(picker).toBeFocused();
+	}
+});
+
 test('Model picker uses free toolbar space before truncating its label', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;

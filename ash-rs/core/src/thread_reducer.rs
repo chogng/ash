@@ -216,6 +216,7 @@ impl ThreadSnapshot {
                     turn_id: turn.turn_id.clone(),
                     status: turn.status,
                     kind: turn.kind,
+                    mode: turn.mode,
                     instructions: turn.instructions.clone(),
                     model: turn.model.clone(),
                     reasoning_effort: turn.reasoning_effort,
@@ -305,6 +306,7 @@ pub struct TurnSnapshot {
     pub started_at_unix_ms: Option<u64>,
     pub duration_ms: Option<u64>,
     pub kind: TurnKind,
+    pub mode: ash_protocol::CollaborationMode,
     pub instructions: Option<TurnInstructions>,
     pub model: Option<ModelRef>,
     pub reasoning_effort: Option<ash_protocol::ReasoningEffort>,
@@ -1058,6 +1060,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
             advisor,
             turn_id,
             kind,
+            mode,
             instructions,
             model,
             reasoning_effort,
@@ -1101,6 +1104,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     started_at_unix_ms: None,
                     duration_ms: None,
                     kind: *kind,
+                    mode: *mode,
                     instructions: instructions.clone(),
                     model: model.clone(),
                     reasoning_effort: *reasoning_effort,
@@ -1124,6 +1128,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
             let matching_start = match &receipt.command {
                 ThreadCommand::StartTurn {
                     kind: command_kind,
+                    mode: command_mode,
                     instructions: command_instructions,
                     model: command_model,
                     reasoning_effort: command_reasoning_effort,
@@ -1136,6 +1141,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     ..
                 } => {
                     command_kind == kind
+                        && command_mode == mode
                         && command_instructions == instructions
                         && command_model == model
                         && command_reasoning_effort == reasoning_effort
@@ -2412,6 +2418,7 @@ fn import_history(
             started_at_unix_ms: None,
             duration_ms: None,
             kind: turn.kind,
+            mode: turn.mode,
             instructions: turn.instructions.clone(),
             model: turn.model.clone(),
             reasoning_effort: turn.reasoning_effort,
@@ -2519,6 +2526,7 @@ fn append_imported_turn(
         started_at_unix_ms: None,
         duration_ms: None,
         kind: turn.kind,
+        mode: turn.mode,
         instructions: turn.instructions.clone(),
         model: turn.model.clone(),
         reasoning_effort: turn.reasoning_effort,

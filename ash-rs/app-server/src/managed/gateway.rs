@@ -797,6 +797,12 @@ fn selected_execution_target(
         .and_then(|params| params.get("sessionId"))
         .and_then(Value::as_str)
     {
+        let local_id = SessionId::new(session_id.to_owned()).map_err(|error| error.to_string())?;
+        if let Some(session) = registry.local_session(&local_id)? {
+            // History lives in this profile even when its execution authority is SSH. Sending
+            // its requests back to that host would reopen the retired Agent owner after import.
+            return Ok(local_history_target(session.execution_target));
+        }
         if let Some((host, root)) = remote_sessions
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -805,14 +811,16 @@ fn selected_execution_target(
         {
             return Ok(Some(SessionExecutionTarget::Ssh { host, root }));
         }
-        let session_id =
-            SessionId::new(session_id.to_owned()).map_err(|error| error.to_string())?;
-        return registry.execution_target_for_session(&session_id);
+        return Ok(None);
     }
     if let Some(thread_id) = params
         .and_then(|params| params.get("threadId"))
         .and_then(Value::as_str)
     {
+        let local_id = ThreadId::new(thread_id.to_owned()).map_err(|error| error.to_string())?;
+        if let Some(session) = registry.local_thread_session(&local_id)? {
+            return Ok(local_history_target(session.execution_target));
+        }
         if let Some((host, root)) = remote_sessions
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -821,10 +829,16 @@ fn selected_execution_target(
         {
             return Ok(Some(SessionExecutionTarget::Ssh { host, root }));
         }
-        let thread_id = ThreadId::new(thread_id.to_owned()).map_err(|error| error.to_string())?;
-        return registry.execution_target_for_thread(&thread_id);
+        return Ok(None);
     }
     Ok(None)
+}
+
+fn local_history_target(target: Option<SessionExecutionTarget>) -> Option<SessionExecutionTarget> {
+    match target {
+        Some(target @ SessionExecutionTarget::Local { .. }) => Some(target),
+        Some(SessionExecutionTarget::Ssh { .. }) | None => None,
+    }
 }
 
 fn local_request_error(id: Value, detail: &io::Error) -> String {

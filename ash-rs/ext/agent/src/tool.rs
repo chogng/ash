@@ -185,6 +185,17 @@ impl MultiAgentToolService {
                         role: selection.role.clone(),
                         base_instructions: prompts::AGENT_INSTRUCTIONS
                             .freeze()
+                            .with_mode(&collaboration_mode_templates::instructions(
+                                parent
+                                    .turns
+                                    .iter()
+                                    .find(|turn| turn.turn_id == *identity.turn_id())
+                                    .ok_or_else(|| {
+                                        CoreError::NotFound(identity.turn_id().to_string())
+                                    })?
+                                    .mode
+                                    .delegated(),
+                            ))
                             .with_model_guidance(
                                 self.model_instructions.resolve(
                                     selection

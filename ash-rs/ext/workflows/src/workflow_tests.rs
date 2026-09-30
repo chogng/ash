@@ -74,6 +74,7 @@ impl Fixture {
     }
     fn request(&self, id: &str, text: &str) -> StartTurnRequest {
         StartTurnRequest {
+            mode: Default::default(),
             command_id: CommandId::new(id).unwrap(),
             expected_sequence: SequenceExpectation::Exact(
                 self.threads.read_thread(&self.root).unwrap().sequence,
@@ -452,6 +453,58 @@ fn command_parser_rejects_malformed_controls_and_leaves_ordinary_text_alone() {
 }
 
 #[test]
+fn workflow_delegation_preserves_debug_and_replaces_multitask_with_agent() {
+    for mode in [
+        protocol::CollaborationMode::Agent,
+        protocol::CollaborationMode::Debug,
+        protocol::CollaborationMode::Multitask,
+    ] {
+        let fixture = Fixture::new(Store::in_memory().unwrap());
+        let mut request = fixture.request("begin", "/team improve search");
+        request.mode = mode;
+        request.instructions = request
+            .instructions
+            .with_mode(&collaboration_mode_templates::instructions(mode));
+        let receipt = fixture
+            .runtime()
+            .execute(
+                &fixture.root,
+                Command::parse("/team improve search").unwrap().unwrap(),
+                request,
+            )
+            .unwrap();
+        assert_eq!(
+            fixture.threads.read_thread(&fixture.root).unwrap().turns[0].mode,
+            mode
+        );
+        let child = fixture
+            .threads
+            .read_thread(&receipt.child.unwrap())
+            .unwrap();
+        let child_turn = child.turns.last().unwrap();
+        assert_eq!(child_turn.mode, mode.delegated());
+        assert_eq!(
+            child_turn
+                .instructions
+                .as_ref()
+                .unwrap()
+                .mode_instructions(),
+            Some(&collaboration_mode_templates::instructions(mode.delegated()).as_text()),
+        );
+        let mut request = fixture.request("begin", "/team improve search");
+        request.mode = protocol::CollaborationMode::Ask;
+        assert!(matches!(
+            fixture.runtime().execute(
+                &fixture.root,
+                Command::parse("/team improve search").unwrap().unwrap(),
+                request,
+            ),
+            Err(CoreError::CommandConflict)
+        ));
+    }
+}
+
+#[test]
 fn prepared_and_accepted_commands_recover_once_with_core_and_workflow_in_the_same_database() {
     for accept_before_restart in [false, true] {
         let directory = tempfile::tempdir().unwrap();
@@ -480,12 +533,18 @@ fn prepared_and_accepted_commands_recover_once_with_core_and_workflow_in_the_sam
             backend: Backend::default(),
             root,
         };
+        let mut request = fixture.request("start", "/develop durable feature");
+        request.mode = protocol::CollaborationMode::Multitask;
+        request.reasoning_effort = Some(protocol::ReasoningEffort::High);
+        request.instructions = request
+            .instructions
+            .with_mode(&collaboration_mode_templates::instructions(request.mode));
         let plan = fixture
             .runtime()
             .prepare(
                 &fixture.root,
                 Command::parse("/develop durable feature").unwrap().unwrap(),
-                fixture.request("start", "/develop durable feature"),
+                request,
             )
             .unwrap();
         assert!(
@@ -507,6 +566,14 @@ fn prepared_and_accepted_commands_recover_once_with_core_and_workflow_in_the_sam
         assert_eq!(fixture.runtime().recover().unwrap(), 0);
         let snapshot = fixture.threads.read_thread(&fixture.root).unwrap();
         assert_eq!(snapshot.turns.len(), 1);
+        assert_eq!(
+            snapshot.turns[0].mode,
+            protocol::CollaborationMode::Multitask
+        );
+        assert_eq!(
+            snapshot.turns[0].reasoning_effort,
+            Some(protocol::ReasoningEffort::High)
+        );
         assert_eq!(snapshot.turns[0].status, TurnStatus::Completed);
         assert_eq!(snapshot.delegations.len(), 1);
         let child = snapshot
@@ -529,6 +596,20 @@ fn prepared_and_accepted_commands_recover_once_with_core_and_workflow_in_the_sam
             1
         );
         assert_eq!(fixture.backend.0.lock().unwrap().len(), 1);
+        let child_snapshot = fixture.threads.read_thread(child).unwrap();
+        let child_turn = child_snapshot.turns.last().unwrap();
+        assert_eq!(child_turn.mode, protocol::CollaborationMode::Agent);
+        assert_eq!(
+            child_turn
+                .instructions
+                .as_ref()
+                .unwrap()
+                .mode_instructions(),
+            Some(
+                &collaboration_mode_templates::instructions(protocol::CollaborationMode::Agent)
+                    .as_text()
+            ),
+        );
         fixture.complete(child, "ready", "durable intent");
         fixture.command("accept", "/develop accept 1").unwrap();
     }

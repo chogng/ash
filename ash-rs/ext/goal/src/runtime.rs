@@ -54,7 +54,13 @@ impl GoalExtension {
         else {
             return Ok(None);
         };
-        if completed_turn.kind != protocol::TurnKind::Coding {
+        // Analysis modes wait for the user's next instruction, even while a Goal remains active.
+        if completed_turn.kind != protocol::TurnKind::Coding
+            || matches!(
+                completed_turn.mode,
+                protocol::CollaborationMode::Plan | protocol::CollaborationMode::Ask
+            )
+        {
             return Ok(None);
         }
         let command_id = CommandId::new(format!("goal_continue_{}", completed_turn.turn_id))
@@ -62,6 +68,7 @@ impl GoalExtension {
         let Some(start) = threads.start_goal_turn(
             thread_id,
             StartGoalTurnRequest {
+                mode: completed_turn.mode,
                 advisor: snapshot.advisor.resolve(completed_turn.advisor.as_ref()),
                 command_id,
                 model: completed_turn.model.clone(),

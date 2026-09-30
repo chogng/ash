@@ -70,6 +70,7 @@ impl Runtime<'_> {
         }
         let request_key = serde_json::to_string(&(
             request.input.clone(),
+            request.mode,
             request.tool_mode,
             request.approval_mode,
         ))
@@ -175,7 +176,9 @@ impl Runtime<'_> {
             Some(AgentConfiguration {
                 role: selected.role,
                 capability_scope: selected.capability_scope,
-                base_instructions: Some(request.instructions.clone()),
+                base_instructions: Some(request.instructions.clone().with_mode(
+                    &collaboration_mode_templates::instructions(request.mode.delegated()),
+                )),
             })
         } else {
             None

@@ -36,6 +36,7 @@ export class ChatService extends Disposable implements IChatService {
 	private readonly _onDidChangeModels = this._register(new Emitter<void>());
 	private readonly _onDidChangeSkills = this._register(new Emitter<void>());
 	private readonly _onDidUpdateTurnChanges = this._register(new Emitter<TurnChangesUpdate>());
+	private readonly _onDidChangeQueue = this._register(new Emitter<void>());
 	private readonly hiddenModels = new Map<string, ModelRef>();
 	private modelCatalog: readonly ModelCatalogEntry[] = [];
 	private modelCatalogLoad: Promise<readonly ModelCatalogEntry[]> | undefined;
@@ -48,10 +49,12 @@ export class ChatService extends Disposable implements IChatService {
 	readonly onDidChangeModels = this._onDidChangeModels.event;
 	readonly onDidChangeSkills = this._onDidChangeSkills.event;
 	readonly onDidUpdateTurnChanges = this._onDidUpdateTurnChanges.event;
+	readonly onDidChangeQueue = this._onDidChangeQueue.event;
 
 	constructor(private readonly options: ChatServiceOptions) {
 		super();
 		const events = options.eventApi.subscribe((event) => {
+			if (event.method === "queue/changed") this._onDidChangeQueue.fire();
 			if (event.method === "session/thread/update") this._onDidUpdateThread.fire(toThreadUpdate(event.params));
 			if (event.method === "session/thread/transcript/update") this._onDidUpdateThreadTranscript.fire(toThreadTranscriptUpdate(event.params));
 			if (event.method === "thread/goal/updated") this._onDidUpdateGoal.fire({ threadId: event.params.threadId, goal: { ...event.params.goal } });
@@ -208,12 +211,17 @@ export class ChatService extends Disposable implements IChatService {
 	}
 
 	async startTurn(options: StartTurnOptions): Promise<void> {
-		const input: InputItem[] = [
-			...(options.skills ?? []).map(skill => ({ type: "skill" as const, skill: skill as SkillRefDto })),
-			...(options.contexts ?? []).map(context => ({ type: "context" as const, name: context.name, content: context.content })),
-			{ type: "text", text: options.text },
-		];
-		await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, approvalMode: "askPermissions", model: options.model, reasoningEffort: options.reasoningEffort, input });
+		const input = turnInput(options);
+		await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, mode: options.mode, approvalMode: "askPermissions", model: options.model, reasoningEffort: options.reasoningEffort, input });
+	}
+
+	async queueTurn(options: StartTurnOptions): Promise<void> {
+		await this.options.turnApi.enqueue({ commandId: commandId("queued-turn"), sessionId: options.sessionId, threadId: options.threadId, mode: options.mode, model: options.model, reasoningEffort: options.reasoningEffort, input: turnInput(options), approvalMode: "askPermissions" });
+	}
+
+	async queuedMessageCount(sessionId: SessionId, threadId: ThreadId): Promise<number> {
+		const result = await this.options.turnApi.listQueued({ sessionId, threadId });
+		return result.messages.filter(message => message.status === "pending" || message.status === "paused" || message.status === "delivering").length;
 	}
 
 	async configureAdvisor(options: ConfigureAdvisorOptions): Promise<void> {
@@ -374,6 +382,7 @@ function toThread(thread: ThreadDto): Thread {
 		turns: thread.turns.map((turn) => ({
 			turnId: turn.turnId,
 			status: turn.status,
+			mode: turn.mode,
 			approvalMode: turn.approvalMode,
 			model: turn.model ? { ...turn.model } : turn.model,
 			reasoningEffort: turn.reasoningEffort,
@@ -393,6 +402,14 @@ function toThread(thread: ThreadDto): Thread {
 			error: turn.error ? { ...turn.error } : turn.error,
 		})),
 	};
+}
+
+function turnInput(options: StartTurnOptions): InputItem[] {
+	return [
+		...(options.skills ?? []).map(skill => ({ type: "skill" as const, skill: skill as SkillRefDto })),
+		...(options.contexts ?? []).map(context => ({ type: "context" as const, name: context.name, content: context.content })),
+		{ type: "text", text: options.text },
+	];
 }
 
 function toThreadUpdate(update: ThreadUpdateEnvelopeDto): ThreadUpdateEnvelope {

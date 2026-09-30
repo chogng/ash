@@ -47,3 +47,25 @@ fn legacy_single_asset_remains_a_single_recorded_asset() {
     assert!(instructions.model_guidance().is_none());
     assert_eq!(instructions.body(), "recorded instructions");
 }
+
+#[test]
+fn replacing_mode_retains_common_rules_and_model_selection() {
+    let shared = TurnInstructions::new("prompts", "common", "v1", "shared rules").unwrap();
+    let parent_mode = TurnInstructions::new("modes", "multitask", "v2", "coordinate").unwrap();
+    let worker_mode = TurnInstructions::new("modes", "agent", "v2", "execute").unwrap();
+    let base = TurnInstructions::new("prompts", "task", "v1", "task rules")
+        .unwrap()
+        .with_shared(&shared)
+        .with_model_guidance(ModelInstructionSelection::Generic { model: None })
+        .with_mode(&parent_mode);
+    let worker = base.clone().with_mode(&worker_mode);
+    assert_eq!(worker.id(), base.id());
+    assert_eq!(worker.body(), base.body());
+    assert_eq!(worker.shared(), base.shared());
+    assert_eq!(worker.model_guidance(), base.model_guidance());
+    assert_eq!(worker.mode_instructions(), Some(&worker_mode.as_text()));
+    let restored: TurnInstructions =
+        serde_json::from_value(serde_json::to_value(&worker).unwrap()).unwrap();
+    assert_eq!(restored, worker);
+    restored.validate().unwrap();
+}

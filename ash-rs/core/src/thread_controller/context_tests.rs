@@ -63,6 +63,7 @@ impl Fixture {
             .start_turn(
                 &self.thread,
                 StartTurnRequest {
+                    mode: Default::default(),
                     advisor: None,
                     command_id: CommandId::new(key).unwrap(),
                     expected_sequence: SequenceExpectation::Any,
@@ -288,4 +289,65 @@ fn checkpoint_continuation_keeps_its_boundary_and_does_not_reinsert_a_covered_re
     assert!(text.contains("continue current task"));
     fixture.controller = ThreadController::with_store(fixture.store.clone());
     assert_eq!(fixture.request(&current), request);
+}
+
+#[test]
+fn frozen_mode_is_present_in_model_input_after_reload() {
+    let mut fixture = Fixture::new();
+    let approach = ash_protocol::TurnInstructions::new(
+        "modes",
+        "ask",
+        "v2",
+        "Explain using recorded evidence.",
+    )
+    .unwrap();
+    let turn = fixture
+        .controller
+        .start_turn(
+            &fixture.thread,
+            StartTurnRequest {
+                command_id: CommandId::new("ask-turn").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                mode: ash_protocol::CollaborationMode::Ask,
+                kind: TurnKind::Coding,
+                model: None,
+                reasoning_effort: None,
+                advisor: None,
+                instructions: ash_prompts::AGENT_INSTRUCTIONS
+                    .freeze()
+                    .with_mode(&approach),
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: ApprovalMode::AskPermissions,
+                tool_mode: ash_protocol::ToolMode::Direct,
+                tool_profile: None,
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text {
+                    text: "Explain this module".into(),
+                }],
+            },
+        )
+        .unwrap()
+        .turn_id;
+    let initial = fixture.request(&turn);
+    assert_eq!(
+        initial
+            .instructions
+            .as_deref()
+            .unwrap()
+            .matches(approach.body())
+            .count(),
+        1
+    );
+    fixture.controller = ThreadController::with_store(fixture.store.clone());
+    assert_eq!(fixture.request(&turn), initial);
+    assert_eq!(
+        fixture
+            .controller
+            .read_thread(&fixture.thread)
+            .unwrap()
+            .public_thread()
+            .turns[0]
+            .mode,
+        ash_protocol::CollaborationMode::Ask
+    );
 }

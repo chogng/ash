@@ -111,6 +111,7 @@ fn run(
         .start_turn(
             thread,
             ash_core::StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 command_id: CommandId::new(label).unwrap(),
                 expected_sequence: core_api::SequenceExpectation::Any,

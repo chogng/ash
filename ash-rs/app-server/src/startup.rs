@@ -21,6 +21,48 @@ const DIR_GRANT_SOURCE: &str = "ASH_DIR_GRANT_SOURCE";
 /// Starts the App Server using explicit process arguments and environment configuration.
 pub fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
     let arguments = arguments.into_iter().collect::<Vec<_>>();
+    match arguments.as_slice() {
+        [command] if command == "history-identity" => {
+            let profile = ash_utils_home_dir::find_ash_home().map_err(|error| error.to_string())?;
+            let store = ash_state::SqliteThreadStore::open(profile.join("state.sqlite3"))
+                .map_err(|error| error.to_string())?;
+            println!(
+                "{}",
+                store
+                    .history_identity()
+                    .map_err(|error| error.to_string())?
+            );
+            return Ok(());
+        }
+        [command, host] if command == "history-import" => {
+            let profile = stop_history_host()?;
+            let store = ash_state::SqliteThreadStore::open(profile.join("state.sqlite3"))
+                .map_err(|error| error.to_string())?;
+            let attachments =
+                attachment_store::FileAttachmentStore::open(profile.join("attachments"))
+                    .map_err(|error| error.to_string())?;
+            let receipt = store
+                .import_history(host, &attachments, std::io::stdin().lock())
+                .map_err(|error| error.to_string())?;
+            println!(
+                "{}",
+                serde_json::to_string(&receipt).map_err(|error| error.to_string())?
+            );
+            return Ok(());
+        }
+        [command, session, root] if command == "history-bind" => {
+            let session =
+                ash_protocol::SessionId::new(session.clone()).map_err(|error| error.to_string())?;
+            let profile = stop_history_host()?;
+            let store = ash_state::SqliteThreadStore::open(profile.join("state.sqlite3"))
+                .map_err(|error| error.to_string())?;
+            store
+                .bind_imported_session(&session, root)
+                .map_err(|error| error.to_string())?;
+            return Ok(());
+        }
+        _ => {}
+    }
     if arguments.as_slice() == [ash_app_server_daemon::MANAGED_PROCESS_ARGUMENT] {
         return crate::managed::run(
             ash_utils_home_dir::find_ash_home().map_err(|error| error.to_string())?,
@@ -53,6 +95,21 @@ pub fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
         }
         Command::WebSocket(websocket) => serve_websocket(open_server(&options)?, websocket),
     }
+}
+
+fn stop_history_host() -> Result<PathBuf, String> {
+    let profile = ash_utils_home_dir::find_ash_home().map_err(|error| error.to_string())?;
+    ash_app_server_daemon::run_lifecycle(
+        ash_app_server_daemon::LifecycleCommand::Stop,
+        ash_app_server_daemon::ConnectionOptions::new(
+            &profile,
+            None,
+            ash_app_server_daemon::GrantSource::HostConfiguration,
+            None,
+        ),
+        &std::env::current_exe().map_err(|error| error.to_string())?,
+    )?;
+    Ok(profile)
 }
 
 fn launch_web(arguments: &[String]) -> Result<(), String> {

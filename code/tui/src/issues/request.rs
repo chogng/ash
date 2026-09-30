@@ -226,6 +226,7 @@ fn start_session<T: ash_app_server_client::JsonRpcTransport>(
         session_id: session_id.clone(),
         request: ash_app_server_protocol::protocol::session::SessionRequest::StartTurn {
             thread_id: root.thread_id.clone(), expected_sequence: created.agent_tree.roots.iter().find(|entry| entry.thread_id == root.thread_id).ok_or("Created root Thread is missing from the Agent tree")?.thread_sequence,
+            mode: ash_protocol::CollaborationMode::default(),
             approval_mode: ash_protocol::ApprovalMode::default(), model: None, reasoning_effort: None, tool_mode: None,
             input: vec![ash_app_server_protocol::protocol::turn::InputItem::Text { text: format!("Resolve these selected Issues using your Issue coordination role. Verify the result of each implementation task.\n{references}") }],
         },

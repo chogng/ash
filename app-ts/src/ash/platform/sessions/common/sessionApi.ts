@@ -1,6 +1,9 @@
-import type { AdvisorConfig, AdvisorConfigureResult, AgentRoleListResult, ModelListResult, ModelRef, SessionCatalogReadResult, SessionCreateParams, SessionListResult, SessionReadParams, SessionRequest, SessionRequestParams, SessionRequestResult, SessionResult, SessionSubscribeParams, SessionSubscribeResult, SessionThreadReadParams, SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeParams, SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams, ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult } from "../../app-server/common/generated/index.js";
+import type { AdvisorConfig, AdvisorConfigureResult, CollaborationMode, AgentRoleListResult, ModelListResult, ModelRef, SessionCatalogReadResult, SessionCreateParams, SessionListResult, SessionReadParams, SessionRequest, SessionRequestParams, SessionRequestResult, SessionResult, SessionSubscribeParams, SessionSubscribeResult, SessionThreadReadParams, SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeParams, SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams, ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult } from "../../app-server/common/generated/index.js";
 import type { ProviderApiKeySetParams, ProviderApiKeySetResult, ProviderListResult } from '../../app-server/common/generated/index.js';
 import type { ReasoningEffort } from '../../app-server/common/generated/index.js';
+import type { QueueEnqueueParams, QueueListParams, QueueListResult, QueuedMessage } from '../../app-server/common/generated/index.js';
+
+export type SessionMode = CollaborationMode;
 
 export type { SessionRequestResult };
 
@@ -87,6 +90,8 @@ export interface IThreadApi {
 }
 
 export interface ITurnApi {
+	enqueue(params: QueueEnqueueParams): Promise<QueuedMessage>;
+	listQueued(params: QueueListParams): Promise<QueueListResult>;
 	consultAdvisor(params: SessionOperationInput<"consultAdvisor">): Promise<TurnStartResult>;
 	start(params: SessionOperationInput<"startTurn">): Promise<TurnStartResult>;
 	compact(params: SessionOperationInput<"compactContext">): Promise<TurnStartResult>;

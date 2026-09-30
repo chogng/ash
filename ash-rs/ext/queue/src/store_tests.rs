@@ -3,6 +3,9 @@ use protocol::UserInput;
 
 fn input(id: &str) -> QueueInput {
     QueueInput {
+        mode: Default::default(),
+        model: None,
+        reasoning_effort: None,
         command_id: CommandId::new(id).unwrap(),
         session_id: SessionId::new("session").unwrap(),
         thread_id: ThreadId::new("thread").unwrap(),
@@ -177,4 +180,29 @@ fn editing_pauses_delivery_and_reordering_is_revision_checked() {
     store.delete_session(&first.request.session_id).unwrap();
     assert!(store.get(&first.request.command_id).unwrap().is_none());
     assert!(!store.needs_host().unwrap());
+}
+
+#[test]
+fn queue_reopen_preserves_mode_and_model_choices_and_rejects_a_different_mode() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("state.sqlite");
+    let mut request = input("mode-choice");
+    request.mode = protocol::CollaborationMode::Multitask;
+    request.model = Some(protocol::ModelRef::new(
+        protocol::ProviderId::new("test").unwrap(),
+        protocol::ModelId::new("model").unwrap(),
+    ));
+    request.reasoning_effort = Some(protocol::ReasoningEffort::High);
+    let accepted = QueueStore::open(&path).unwrap().enqueue(&request).unwrap();
+    let reopened = QueueStore::open(&path).unwrap();
+    assert_eq!(
+        reopened.get(&request.command_id).unwrap(),
+        Some(accepted.clone())
+    );
+    assert_eq!(reopened.enqueue(&request).unwrap(), accepted);
+    request.mode = protocol::CollaborationMode::Agent;
+    assert!(matches!(
+        reopened.enqueue(&request),
+        Err(QueueError::Conflict)
+    ));
 }

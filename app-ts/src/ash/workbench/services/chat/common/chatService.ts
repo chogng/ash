@@ -5,6 +5,7 @@ import type { SkillReference } from "../../../../platform/skills/common/skillApi
 import type { ModelCatalogEntry } from "./modelCatalog.js";
 import type { ModelReasoningEffort } from "./modelCatalog.js";
 import type { ResolvedChatContext } from "./chatContextService.js";
+import type { SessionMode } from '../../../../platform/sessions/common/sessionApi.js';
 
 export type { ModelCatalogEntry } from "./modelCatalog.js";
 
@@ -142,6 +143,7 @@ export interface PlanUpdate {
 export interface Turn {
 	readonly turnId: string;
 	readonly status: TurnStatus;
+	readonly mode: ChatMode;
 	readonly approvalMode: ApprovalMode;
 	readonly model?: ModelRef | null;
 	readonly reasoningEffort?: ModelReasoningEffort | null;
@@ -332,12 +334,15 @@ export interface StartTurnOptions {
 	readonly threadId: ThreadId;
 	readonly expectedSequence: number;
 	readonly text: string;
+	readonly mode: ChatMode;
 	readonly model?: ModelRef;
 	/** Overrides this Turn's model effort without changing the user's model settings. */
 	readonly reasoningEffort?: ModelReasoningEffort;
 	readonly contexts?: readonly ResolvedChatContext[];
 	readonly skills?: readonly SkillReference[];
 }
+
+export type ChatMode = SessionMode;
 export interface ConfigureAdvisorOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly selection: AdvisorSelection }
 export interface ConsultAdvisorOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly question: string }
 export interface CompactContextOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly retentionPrompt?: string }
@@ -408,6 +413,7 @@ export interface IChatService {
 	readonly onDidChangeModels: Event<void>;
 	readonly onDidChangeSkills: Event<void>;
 	readonly onDidUpdateTurnChanges: Event<TurnChangesUpdate>;
+	readonly onDidChangeQueue: Event<void>;
 	listModels(): Promise<readonly ModelCatalogEntry[]>;
 	getDefaultNewChatModel(models: readonly ModelCatalogEntry[]): ModelRef | undefined;
 	rememberSelectedModel(model: ModelRef | undefined): void;
@@ -424,6 +430,8 @@ export interface IChatService {
 	subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number): Promise<ThreadSubscription>;
 	unsubscribeThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
 	startTurn(options: StartTurnOptions): Promise<void>;
+	queueTurn(options: StartTurnOptions): Promise<void>;
+	queuedMessageCount(sessionId: SessionId, threadId: ThreadId): Promise<number>;
 	compactContext(options: CompactContextOptions): Promise<void>;
 	configureAdvisor(options: ConfigureAdvisorOptions): Promise<void>;
 	consultAdvisor(options: ConsultAdvisorOptions): Promise<void>;

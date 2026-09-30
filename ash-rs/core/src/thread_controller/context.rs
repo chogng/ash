@@ -331,6 +331,18 @@ impl ThreadController {
                     .map(crate::context::InstructionFragment::try_from)
                     .collect::<Result<Vec<_>, _>>()?,
             );
+            if let Some(asset) = instructions.mode_instructions() {
+                instruction_fragments.push(crate::context::InstructionFragment::new(
+                    crate::context::InstructionSource::new(
+                        asset.owner.clone(),
+                        asset.id.clone(),
+                        asset.revision.clone(),
+                    ),
+                    crate::context::InstructionPlacement::System,
+                    crate::context::InstructionRetention::Required,
+                    asset.body.clone(),
+                ));
+            }
             let tools = crate::multi_agent::scope_agent_tools(
                 &loaded.snapshot,
                 turn.tool_mode,

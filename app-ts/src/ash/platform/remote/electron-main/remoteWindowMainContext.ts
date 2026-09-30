@@ -14,7 +14,7 @@ import { remoteAgentIpcRoutes } from "./remoteAgentIpc.js";
 import type { IRemoteAgentRecoveryMainService } from "./remoteAgentIpc.js";
 import { remoteConnectionIpcRoutes } from "./remoteConnectionIpc.js";
 import { RemoteConnectionRecoveryCoordinator } from "./remoteConnectionRecoveryCoordinator.js";
-import { SshAppServerProcessLauncher } from "./sshAppServerProcessLauncher.js";
+import { RemoteAppServerProcessLauncher } from "./remoteAppServerProcessLauncher.js";
 import { remoteTunnelIpcRoutes } from "./remoteTunnelIpc.js";
 
 export type RemoteRuntimeRollbackConfirmation = "confirmed" | "cancelled";
@@ -84,7 +84,7 @@ export class RemoteWindowMainContext extends Disposable {
 
 	private createConnectionRecovery(): IRemoteAgentRecoveryMainService | undefined {
 		const launcher = this.options.supervisor.options.enabled ? this.options.supervisor.options.processLauncher : undefined;
-		if (!(launcher instanceof SshAppServerProcessLauncher)) return undefined;
+		if (!(launcher instanceof RemoteAppServerProcessLauncher)) return undefined;
 		const prepareForRuntimeReplacement = (): void => {
 			try {
 				this.options.prepareForRuntimeReplacement?.();

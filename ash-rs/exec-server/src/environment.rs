@@ -6,18 +6,14 @@ use ash_file_access::Grant;
 use ash_file_access::GrantSource;
 use ash_file_access::Permission;
 use ash_file_access::Permissions;
-use ash_file_system::FileSystem;
-use ash_file_system::FileWriteCondition;
 use ash_file_system::LocalFileSystem;
 use ash_sandboxing::SandboxBackend;
 use exec_server_protocol::EnvironmentInfo;
 use exec_server_protocol::ExecError;
 use exec_server_protocol::FileAccess;
-use exec_server_protocol::FileContent;
 use exec_server_protocol::NetworkAccess;
 use exec_server_protocol::Request;
 use exec_server_protocol::Response;
-use exec_server_protocol::WriteCondition;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -26,6 +22,7 @@ use std::sync::Arc;
 pub struct LocalEnvironment {
     info: EnvironmentInfo,
     files: LocalFileSystem,
+    transfers: crate::file_transfer::FileTransfers,
     processes: Processes,
 }
 
@@ -66,12 +63,23 @@ impl LocalEnvironment {
         Ok(Self {
             processes: Processes::new(grant.clone(), access, network, backend),
             files: LocalFileSystem::new(grant),
+            transfers: Default::default(),
             info,
         })
     }
 
     pub fn info(&self) -> &EnvironmentInfo {
         &self.info
+    }
+
+    /// Active commands keep the execution host alive after the last transport disconnects.
+    pub fn has_active_processes(&self) -> Result<bool, Error> {
+        self.processes.has_active().map_err(Error::Remote)
+    }
+
+    /// Explicit host shutdown cancels resources; closing a transport does not.
+    pub fn cancel_processes(&self) -> Result<(), Error> {
+        self.processes.cancel_all().map_err(Error::Remote)
     }
 
     pub fn request(&self, request: Request) -> Response {
@@ -112,60 +120,23 @@ impl LocalEnvironment {
                 .processes
                 .close_input(&operation_id)
                 .map(|()| Response::ProcessUpdated),
-            Request::FileRead { path } => {
-                exec_server_protocol::validate_path(&path)?;
-                let content = self
-                    .files
-                    .read_file_with_revision(Path::new(&path), exec_server_protocol::MAX_FILE_BYTES)
-                    .map_err(file_error)?;
-                Ok(Response::File(FileContent {
-                    bytes: content.bytes,
-                    revision: content.revision,
-                }))
-            }
-            Request::FileWrite {
+            Request::FileRead {
                 path,
-                bytes,
-                condition,
-            } => {
-                exec_server_protocol::validate_path(&path)?;
-                if bytes.len() > exec_server_protocol::MAX_FILE_BYTES {
-                    return Err(ExecError::InvalidInput);
-                }
-                let condition = match condition {
-                    WriteCondition::MissingOrEmpty => FileWriteCondition::MissingOrEmpty,
-                    WriteCondition::ExpectedRevision(value) => {
-                        FileWriteCondition::ExpectedRevision(value)
-                    }
-                };
-                self.files
-                    .write_file_with_condition(
-                        Path::new(&path),
-                        &bytes,
-                        exec_server_protocol::MAX_FILE_BYTES,
-                        &condition,
-                    )
-                    .map_err(file_error)?;
-                Ok(Response::Written)
-            }
+                offset,
+                expected_revision,
+            } => self
+                .transfers
+                .read(&self.files, &path, offset, expected_revision.as_deref())
+                .map(Response::File),
+            request @ (Request::FileWriteBegin { .. }
+            | Request::FileWriteChunk { .. }
+            | Request::FileWriteCommit { .. }
+            | Request::FileWriteAbort { .. }
+            | Request::FileWriteStatus { .. }) => self
+                .transfers
+                .write(&self.files, request)
+                .map(Response::FileWrite),
         }
-    }
-}
-
-fn file_error(error: ash_file_system::FileSystemError) -> ExecError {
-    // The wire exposes stable categories, never host paths or platform error text.
-    match error {
-        ash_file_system::FileSystemError::PermissionDenied(_) => ExecError::PermissionDenied,
-        ash_file_system::FileSystemError::InvalidPath(_)
-        | ash_file_system::FileSystemError::NotFile(_)
-        | ash_file_system::FileSystemError::NotDirectory(_)
-        | ash_file_system::FileSystemError::ReadLimitExceeded { .. }
-        | ash_file_system::FileSystemError::WriteLimitExceeded { .. } => ExecError::InvalidInput,
-        ash_file_system::FileSystemError::RevisionConflict(_)
-        | ash_file_system::FileSystemError::AlreadyExists(_) => ExecError::Conflict,
-        ash_file_system::FileSystemError::NotFound(_) => ExecError::NotFound,
-        ash_file_system::FileSystemError::ReadOnly(_) => ExecError::PermissionDenied,
-        ash_file_system::FileSystemError::Io(_) => ExecError::Io,
     }
 }
 
@@ -182,6 +153,34 @@ impl ExecutionEnvironment {
             Self::Local(local) => local.info(),
             Self::Remote(remote) => remote.info(),
         }
+    }
+
+    /// Reads a complete file without combining bytes from different revisions.
+    pub fn read_file(
+        &self,
+        path: &str,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<exec_server_protocol::FileContent, Error> {
+        crate::file_transfer::read_file(|request| self.request(request), path, cancellation)
+    }
+
+    /// Uploads bounded ranges, then conditionally publishes once. Transport failures never replay a mutation.
+    pub fn write_file(
+        &self,
+        operation_id: &str,
+        path: &str,
+        bytes: &[u8],
+        condition: exec_server_protocol::WriteCondition,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<(), Error> {
+        crate::file_transfer::write_file(
+            |request| self.request(request),
+            operation_id,
+            path,
+            bytes,
+            condition,
+            cancellation,
+        )
     }
 
     pub fn request(&self, request: Request) -> Result<Response, Error> {

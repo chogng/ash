@@ -5,8 +5,9 @@ import type { SshRemoteAuthority } from '../common/remote.js';
 import type { RemoteRuntimeInstallProgress } from "../common/remoteRuntimeInstallProgress.js";
 import { RemoteRuntimeInstallProgressMainService } from "./remoteRuntimeInstallProgressMainService.js";
 import type { RemoteRuntimeInstallProgressOperation } from "./remoteRuntimeInstallProgressMainService.js";
-import { SshAppServerProcessLauncher } from "./sshAppServerProcessLauncher.js";
+import { RemoteAppServerProcessLauncher } from "./remoteAppServerProcessLauncher.js";
 import type { RemoteRuntimeInstallRequestOptions } from "./remoteRuntimeInstaller.js";
+import type { AppServerDaemonLauncher } from '../../app-server-daemon/electron-main/appServerDaemonLauncher.js';
 
 /** Installs one trusted Remote runtime selected entirely by the local product host. */
 export interface IRemoteRuntimeInstaller {
@@ -31,6 +32,7 @@ export interface RemoteRuntimeBootstrapMainServiceOptions {
 	readonly sshExecutable: string;
 	readonly remoteExecutable: string;
 	readonly localEnvironment: NodeJS.ProcessEnv;
+	readonly carrier: AppServerDaemonLauncher;
 	readonly runtimeInstaller: IRemoteRuntimeInstaller;
 	readonly connectionProfiles?: IRemoteRuntimeConnectionProfiles;
 	readonly logProgress?: (progress: RemoteRuntimeInstallProgress) => void;
@@ -42,18 +44,19 @@ export interface RemoteRuntimeBootstrapMainServiceOptions {
  */
 export class RemoteRuntimeBootstrapMainService extends Disposable {
 	readonly installProgress = this._register(new RemoteRuntimeInstallProgressMainService());
-	readonly processLauncher: SshAppServerProcessLauncher;
+	readonly processLauncher: RemoteAppServerProcessLauncher;
 
 	private installOperation: RemoteRuntimeInstallProgressOperation | undefined;
 
 	constructor(private readonly options: RemoteRuntimeBootstrapMainServiceOptions) {
 		super();
 		const profiles = options.workspace instanceof URI ? options.connectionProfiles : undefined;
-		this.processLauncher = new SshAppServerProcessLauncher({
+		this.processLauncher = new RemoteAppServerProcessLauncher({
 			workspace: options.workspace,
 			sshExecutable: options.sshExecutable,
 			remoteExecutable: options.remoteExecutable,
 			localEnvironment: options.localEnvironment,
+			carrier: options.carrier,
 			provisionRuntime: host => this.provisionRuntime(host),
 			settleRuntimeProvision: () => this.settleRuntimeProvision(),
 			resolveRuntime: profiles === undefined ? undefined : async (host, workspace) => (await profiles.get(host, workspace))?.activeRuntime,

@@ -5,7 +5,7 @@ import type { ICommandService } from "../../../../../platform/commands/common/co
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
-import type { AgentResponse, ChatAgent, ModelRef, SessionId, ThreadGoal, ThreadId } from "../../../../services/chat/common/chatService.js";
+import type { AgentResponse, ChatAgent, ChatMode, ModelRef, SessionId, ThreadGoal, ThreadId } from "../../../../services/chat/common/chatService.js";
 import type { ChatInputDelegate } from "./input/chatInput.js";
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
 import { ChatInputPart } from "./input/chatInputPart.js";
@@ -37,7 +37,7 @@ export interface IChatWidgetModel extends IDisposable {
 	readonly goal: ThreadGoal | undefined;
 	readonly items: readonly IChatListItem[];
 	readonly inputState: ChatInputState;
-	send(text: string, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[]): Promise<void>;
+	send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[]): Promise<void>;
 	executeServerCommand(name: string, argumentsText: string): Promise<void>;
 	interrupt(): Promise<void>;
 	selectModel(model: ModelRef): Promise<void>;
@@ -45,6 +45,7 @@ export interface IChatWidgetModel extends IDisposable {
 	selectAutomaticModel(): Promise<void>;
 	listAgents(): Promise<readonly ChatAgent[]>;
 	selectAgent(agent: ChatAgent | undefined): void;
+	selectMode(mode: ChatMode): void;
 	resolveInteraction(response: AgentResponse): Promise<void>;
 	retryFailedTurn(turnId: string): Promise<void>;
 }
@@ -96,7 +97,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			onDidRequestErrorAction: (action) => void this.handleTurnErrorAction(action).catch(() => undefined),
 		}));
 		const inputDelegate: ChatInputDelegate = {
-			send: (text, skills, contexts) => this.send(text, skills, contexts),
+			send: (text, mode, skills, contexts) => this.send(text, mode, skills, contexts),
 			executeCommand: (invocation) => invocation.argumentsText ? commandService.executeCommand(invocation.commandId, invocation.argumentsText) : commandService.executeCommand(invocation.commandId),
 				executeServerCommand: (invocation) => invocation.name === "advisor" && !invocation.argumentsText.trim()
 					? commandService.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID)
@@ -107,6 +108,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			selectAutomaticModel: () => this.model.selectAutomaticModel(),
 			listAgents: () => this.model.listAgents(),
 			selectAgent: agent => this.model.selectAgent(agent),
+			selectMode: mode => this.model.selectMode(mode),
 			openModelSettings: () => commandService.executeCommand(OpenSettingsCommandId, 'models'),
 			resolveInteraction: (response) => this.model.resolveInteraction(response),
 		};
@@ -167,12 +169,12 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		return this.inputPart.acceptInput(value);
 	}
 
-	private async send(text: string, skills?: readonly SkillReference[], contexts: readonly ChatContextAttachment[] = []): Promise<void> {
+	private async send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts: readonly ChatContextAttachment[] = []): Promise<void> {
 		this.submittedMessage = true;
 		this.updateConversationState();
 		try {
 			const resolvedContexts = await Promise.all(contexts.map(context => context.resolve()));
-			await this.model.send(text, skills, resolvedContexts);
+			await this.model.send(text, mode, skills, resolvedContexts);
 		} catch (error) {
 			if (this.model.items.length === 0) {
 				this.submittedMessage = false;

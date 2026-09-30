@@ -788,6 +788,7 @@ pub struct LocalProfileRuntime {
     profile_root: PathBuf,
     state: Arc<ash_state::StateRuntime>,
     threads: Arc<ThreadController>,
+    history: Arc<ash_state::SqliteThreadStore>,
     config: Arc<ConfigStore>,
     network_policy: OutboundNetworkPolicy,
     secrets: Arc<dyn SecretStore>,
@@ -824,27 +825,29 @@ impl From<Option<ash_file_access::DirBinding>> for ProfileUpdateScopeKey {
 }
 
 impl LocalProfileRuntime {
-    pub(crate) fn execution_target_for_session(
+    pub(crate) fn imported_history_hosts(&self) -> Result<Vec<String>, String> {
+        self.history
+            .imported_history_hosts()
+            .map_err(|error| error.to_string())
+    }
+    pub(crate) fn local_session(
         &self,
         session_id: &ash_protocol::SessionId,
-    ) -> Result<Option<ash_protocol::SessionExecutionTarget>, String> {
-        Ok(self
-            .threads
+    ) -> Result<Option<ash_protocol::Session>, String> {
+        self.threads
             .read_session_catalog(session_id)
-            .map_err(|error| error.to_string())?
-            .ok_or_else(|| format!("Session {session_id} was not found"))?
-            .execution_target)
+            .map_err(|error| error.to_string())
     }
 
-    pub(crate) fn execution_target_for_thread(
+    pub(crate) fn local_thread_session(
         &self,
         thread_id: &ash_protocol::ThreadId,
-    ) -> Result<Option<ash_protocol::SessionExecutionTarget>, String> {
-        let thread = self
-            .threads
-            .read_thread(thread_id)
-            .map_err(|error| error.to_string())?;
-        self.execution_target_for_session(&thread.session_id)
+    ) -> Result<Option<ash_protocol::Session>, String> {
+        match self.threads.read_thread(thread_id) {
+            Ok(thread) => self.local_session(&thread.session_id),
+            Err(CoreError::NotFound(_)) => Ok(None),
+            Err(error) => Err(error.to_string()),
+        }
     }
     /// Attaches one trace listener before this profile is shared by Directory runtimes.
     pub fn with_trace_exporter(mut self, exporter: otel_trace_websocket::Exporter) -> Self {
@@ -859,6 +862,7 @@ impl LocalProfileRuntime {
         let profile_root = std::fs::canonicalize(&requested_root).map_err(open_error)?;
         let state = Arc::new(ash_state::StateRuntime::open(&profile_root).map_err(open_error)?);
         let database_path = state.database_path().to_path_buf();
+        let history = Arc::new(require_history_owner(&database_path)?);
         let config = Arc::new(
             ConfigStore::open_with_paths(database_path.clone(), profile_root.join("config.toml"))
                 .map_err(|error| OpenAppServerError(error.0))?,
@@ -894,6 +898,7 @@ impl LocalProfileRuntime {
             queue: Arc::new(queue::QueueStore::open(&database_path).map_err(open_error)?),
             state,
             threads,
+            history,
             config,
             network_policy,
             secrets,
@@ -1037,6 +1042,14 @@ pub fn open_app_server_with_cloud_providers(
     )
 }
 
+fn require_history_owner(path: &Path) -> Result<ash_state::SqliteThreadStore, OpenAppServerError> {
+    let store = ash_state::SqliteThreadStore::open(path).map_err(open_error)?;
+    if store.history_receiver().map_err(open_error)?.is_some() {
+        return Err(open_error("profile history belongs to another host"));
+    }
+    Ok(store)
+}
+
 /// Opens an App Server with semantic model and/or remote index provider adapters.
 pub fn open_app_server_with_codebase_providers(
     mut options: AppServerOptions,
@@ -1101,6 +1114,7 @@ pub fn open_app_server_with_codebase_providers(
         (Some(_), SessionStateMode::Ephemeral) => unreachable!("validated above"),
         (None, SessionStateMode::Durable) => {
             let database_path = state_runtime.database_path().to_path_buf();
+            require_history_owner(&database_path)?;
             let config = Arc::new(
                 ConfigStore::open_with_paths(
                     database_path.clone(),

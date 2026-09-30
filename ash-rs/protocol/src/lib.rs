@@ -3,6 +3,7 @@
 mod agent;
 mod attachment;
 mod automation;
+mod collaboration_mode;
 mod config;
 mod error;
 #[path = "thread/history.rs"]
@@ -59,6 +60,7 @@ pub use automation::AutomationSchedule;
 pub use automation::AutomationSession;
 pub use automation::AutomationStatus;
 pub use automation::UnixMillis;
+pub use collaboration_mode::CollaborationMode;
 pub use config::ApprovalMode;
 pub use config::Patch;
 pub use config::Personality;

@@ -112,6 +112,7 @@ pub struct StartTurnRequest {
     pub reasoning_effort: Option<ash_protocol::ReasoningEffort>,
     pub advisor: Option<ash_protocol::AdvisorConfig>,
     pub kind: TurnKind,
+    pub mode: ash_protocol::CollaborationMode,
     pub instructions: TurnInstructions,
     pub policy_revision: String,
     /// Host-seeded automatic activations. Explicit selections are resolved by extensions.
@@ -128,6 +129,7 @@ pub struct StartTurnRequest {
 /// model-invocation boundary, so the continuation is durable without manufacturing a user
 /// message that was never sent.
 pub struct StartGoalTurnRequest {
+    pub mode: ash_protocol::CollaborationMode,
     pub advisor: Option<ash_protocol::AdvisorConfig>,
     pub command_id: CommandId,
     pub model: Option<ModelRef>,
@@ -922,6 +924,7 @@ impl ThreadController {
         thread_id: &ThreadId,
         request: StartTurnRequest,
     ) -> Result<StartTurnResult, CoreError> {
+        self.store.execution_binding(thread_id)?.require_bound()?;
         validate_command_id(&request.command_id)?;
         if let Some(advisor) = &request.advisor {
             advisor
@@ -959,6 +962,7 @@ impl ThreadController {
         {
             let ThreadCommand::StartTurn {
                 kind,
+                mode,
                 instructions,
                 model,
                 reasoning_effort,
@@ -974,6 +978,7 @@ impl ThreadController {
                 return Err(CoreError::CommandConflict);
             };
             if kind != &request.kind
+                || mode != &request.mode
                 || instructions.as_ref() != Some(&request.instructions)
                 || model != &request.model
                 || reasoning_effort != &request.reasoning_effort
@@ -1050,6 +1055,7 @@ impl ThreadController {
         let validated_input = user_input::validate(&normalized_input, &activated_skills)?;
         let command = ThreadCommand::StartTurn {
             kind: request.kind,
+            mode: request.mode,
             instructions: Some(request.instructions.clone()),
             model: request.model.clone(),
             reasoning_effort: request.reasoning_effort,
@@ -1094,6 +1100,7 @@ impl ThreadController {
                 thread_id: thread_id.clone(),
                 turn_id: turn_id.clone(),
                 kind: request.kind,
+                mode: request.mode,
                 instructions: Some(request.instructions.clone()),
                 policy_revision: request.policy_revision.clone(),
                 approval_mode: request.approval_mode,
@@ -1159,6 +1166,7 @@ impl ThreadController {
             .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
         let command = ThreadCommand::StartTurn {
             kind: TurnKind::Coding,
+            mode: request.mode,
             instructions: Some(request.instructions.clone()),
             model: request.model.clone(),
             reasoning_effort: request.reasoning_effort,
@@ -1217,6 +1225,7 @@ impl ThreadController {
                         thread_id: thread_id.clone(),
                         turn_id: turn_id.clone(),
                         kind: TurnKind::Coding,
+                        mode: request.mode,
                         instructions: Some(request.instructions.clone()),
                         policy_revision: request.policy_revision.clone(),
                         approval_mode: request.approval_mode,
@@ -1516,6 +1525,7 @@ impl ThreadController {
         thread_id: &ThreadId,
         request: StartContextCompactionRequest,
     ) -> Result<StartTurnResult, CoreError> {
+        self.store.execution_binding(thread_id)?.require_bound()?;
         const MAX_RETENTION_PROMPT_BYTES: usize = 8 * 1024;
 
         validate_command_id(&request.command_id)?;
@@ -1578,6 +1588,7 @@ impl ThreadController {
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
                     kind: TurnKind::Coding,
+                    mode: ash_protocol::CollaborationMode::Agent,
                     instructions: None,
                     policy_revision: request.policy_revision.clone(),
                     approval_mode: ApprovalMode::AskPermissions,
@@ -1620,6 +1631,7 @@ impl ThreadController {
         thread_id: &ThreadId,
         request: StartShellTurnRequest,
     ) -> Result<StartTurnResult, CoreError> {
+        self.store.execution_binding(thread_id)?.require_bound()?;
         validate_command_id(&request.command_id)?;
         validate_policy_revision(&request.policy_revision)?;
         let command_text = request.invocation.command.trim();
@@ -1690,6 +1702,7 @@ impl ThreadController {
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
                     kind: TurnKind::Coding,
+                    mode: ash_protocol::CollaborationMode::Agent,
                     instructions: None,
                     policy_revision: request.policy_revision.clone(),
                     approval_mode: request.approval_mode,
@@ -1788,6 +1801,7 @@ impl ThreadController {
         thread_id: &ThreadId,
         request: ResolveTurnInteractionRequest,
     ) -> Result<ResolveTurnInteractionResult, CoreError> {
+        self.store.execution_binding(thread_id)?.require_bound()?;
         validate_command_id(&request.command_id)?;
         validate_request_id(&request.request_id)?;
         let command = resolution_command(&request);
@@ -2483,12 +2497,16 @@ impl ThreadController {
             return Err(CoreError::NotFound(thread_id.to_string()));
         }
         let mut reader = crate::history::HistoryReader::new(self.store.as_ref(), &[]);
-        events
+        let mut snapshot = events
             .iter()
             .try_fold(None, |snapshot, event| {
                 reader.reduce(snapshot, event).map(Some)
             })?
-            .ok_or_else(|| CoreError::Journal("cannot recover an empty rollout".into()))
+            .ok_or_else(|| CoreError::Journal("cannot recover an empty rollout".into()))?;
+        self.store
+            .execution_binding(thread_id)?
+            .apply(&mut snapshot.execution_target);
+        Ok(snapshot)
     }
 
     fn load_snapshot_at_sequence(
@@ -2510,13 +2528,17 @@ impl ThreadController {
             }));
         }
         let mut reader = crate::history::HistoryReader::new(self.store.as_ref(), &[]);
-        events
+        let mut snapshot = events
             .iter()
             .take_while(|event| event.sequence <= sequence)
             .try_fold(None, |snapshot, event| {
                 reader.reduce(snapshot, event).map(Some)
             })?
-            .ok_or_else(|| CoreError::NotFound(thread_id.to_string()))
+            .ok_or_else(|| CoreError::NotFound(thread_id.to_string()))?;
+        self.store
+            .execution_binding(thread_id)?
+            .apply(&mut snapshot.execution_target);
+        Ok(snapshot)
     }
 
     fn transition_turn(
@@ -2564,12 +2586,14 @@ impl ThreadController {
             let snapshot = self.load_snapshot(thread_id)?;
             *loaded = Some(self.loaded_threads.install(snapshot));
         }
-        mutation(
-            &mut loaded
-                .as_mut()
-                .expect("loaded Thread state was installed above")
-                .snapshot,
-        )
+        let snapshot = &mut loaded
+            .as_mut()
+            .expect("loaded Thread state was installed above")
+            .snapshot;
+        self.store
+            .execution_binding(thread_id)?
+            .apply(&mut snapshot.execution_target);
+        mutation(snapshot)
     }
 
     fn with_loaded_thread<R>(
@@ -2586,11 +2610,13 @@ impl ThreadController {
             let snapshot = self.load_snapshot(thread_id)?;
             *loaded = Some(self.loaded_threads.install(snapshot));
         }
-        operation(
-            loaded
-                .as_mut()
-                .expect("loaded Thread state was installed above"),
-        )
+        let loaded = loaded
+            .as_mut()
+            .expect("loaded Thread state was installed above");
+        self.store
+            .execution_binding(thread_id)?
+            .apply(&mut loaded.snapshot.execution_target);
+        operation(loaded)
     }
 
     fn record_batch(

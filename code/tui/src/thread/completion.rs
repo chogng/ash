@@ -434,11 +434,14 @@ fn queue_request(
             let input = super::request::materialize_submission(client, submission)?;
             let tool_mode = client.read_config()?.tool_mode;
             client.enqueue_message(QueueEnqueueParams {
+                mode: Default::default(),
+                model: None,
+                reasoning_effort: None,
                 command_id,
                 session_id: scope.session_id().clone(),
                 thread_id: scope.thread_id().clone(),
                 input,
-                tool_mode,
+                tool_mode: Some(tool_mode),
                 approval_mode,
             })?;
         }

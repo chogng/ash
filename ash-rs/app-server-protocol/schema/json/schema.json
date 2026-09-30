@@ -14524,6 +14524,17 @@
       ],
       "type": "object"
     },
+    "CollaborationMode": {
+      "description": "Selects the approach an Agent should use for one user-requested Turn.",
+      "enum": [
+        "agent",
+        "plan",
+        "debug",
+        "multitask",
+        "ask"
+      ],
+      "type": "string"
+    },
     "CommandId": {
       "description": "Stable caller-supplied identity for one retry-safe product command.",
       "minLength": 1,
@@ -30046,6 +30057,30 @@
           },
           "type": "array"
         },
+        "mode": {
+          "$ref": "#/$defs/CollaborationMode",
+          "default": "agent"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasoningEffort": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReasoningEffort"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "sessionId": {
           "$ref": "#/$defs/SessionId"
         },
@@ -30053,7 +30088,14 @@
           "$ref": "#/$defs/ThreadId"
         },
         "toolMode": {
-          "$ref": "#/$defs/ToolMode"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -30061,7 +30103,6 @@
         "sessionId",
         "threadId",
         "input",
-        "toolMode",
         "approvalMode"
       ],
       "type": "object"
@@ -30084,6 +30125,32 @@
             "$ref": "#/$defs/UserInput"
           },
           "type": "array"
+        },
+        "mode": {
+          "$ref": "#/$defs/CollaborationMode",
+          "default": "agent"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reasoningEffort": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReasoningEffort"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "sessionId": {
           "$ref": "#/$defs/SessionId"
@@ -32226,6 +32293,10 @@
               },
               "minItems": 1,
               "type": "array"
+            },
+            "mode": {
+              "$ref": "#/$defs/CollaborationMode",
+              "default": "agent"
             },
             "model": {
               "anyOf": [
@@ -35783,6 +35854,9 @@
               "$ref": "#/$defs/TurnKind",
               "default": "coding"
             },
+            "mode": {
+              "$ref": "#/$defs/CollaborationMode"
+            },
             "model": {
               "anyOf": [
                 {
@@ -38439,6 +38513,11 @@
           "$ref": "#/$defs/TurnKind",
           "default": "coding"
         },
+        "mode": {
+          "$ref": "#/$defs/CollaborationMode",
+          "default": "agent",
+          "description": "Approach accepted for this Turn, independent of prompt asset identity."
+        },
         "model": {
           "anyOf": [
             {
@@ -39096,6 +39175,16 @@
         },
         "id": {
           "type": "string"
+        },
+        "modeInstructions": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InstructionText"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "modelGuidance": {
           "anyOf": [

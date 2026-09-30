@@ -165,6 +165,7 @@ fn provider_context_overflow_compacts_and_retries_through_the_product_boundary()
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -191,6 +192,7 @@ fn provider_context_overflow_compacts_and_retries_through_the_product_boundary()
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -325,6 +327,7 @@ fn run_provider_failure(failure: ProviderFailure) -> (StableTurnErrorCode, bool,
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),

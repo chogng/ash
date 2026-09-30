@@ -10,8 +10,8 @@ use serde::de::Error;
 use serde::ser::SerializeStruct;
 
 /// Schema version written for newly persisted Thread history records.
-/// Version 21 names the Session execution target independently of the frontend Workspace.
-pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 21;
+/// Version 22 records the selected collaboration approach independently of frozen prompt IDs.
+pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 22;
 
 /// Resolves the identity at the history-version boundary. Legacy branches each receive one
 /// deterministic identity; current records must carry their explicitly allocated identity.
@@ -143,6 +143,57 @@ impl Serialize for StoredThreadEvent<'_> {
     where
         S: Serializer,
     {
+        // Old imported Turns must retain their byte representation: history prefixes are
+        // addressed by a digest of their serialized records, not just their reduced state.
+        if self.0.schema_version < 22 {
+            match &self.0.event {
+                ThreadEvent::HistoryImported {
+                    thread_id,
+                    source_thread_id,
+                    before_turn_id,
+                    turns,
+                } => {
+                    let mut event = serializer.serialize_struct("HistoryImported", 5)?;
+                    event.serialize_field("type", "historyImported")?;
+                    event.serialize_field("threadId", thread_id)?;
+                    event.serialize_field("sourceThreadId", source_thread_id)?;
+                    event.serialize_field("beforeTurnId", before_turn_id)?;
+                    event.serialize_field("turns", &LegacyTurns(turns))?;
+                    return event.end();
+                }
+                ThreadEvent::ForkHistoryImported {
+                    thread_id,
+                    source_thread_id,
+                    source_sequence,
+                    turns,
+                } => {
+                    let mut event = serializer.serialize_struct("ForkHistoryImported", 5)?;
+                    event.serialize_field("type", "forkHistoryImported")?;
+                    event.serialize_field("threadId", thread_id)?;
+                    event.serialize_field("sourceThreadId", source_thread_id)?;
+                    event.serialize_field("sourceSequence", source_sequence)?;
+                    event.serialize_field("turns", &LegacyTurns(turns))?;
+                    return event.end();
+                }
+                ThreadEvent::ForkTurnImported {
+                    thread_id,
+                    source_thread_id,
+                    source_sequence,
+                    turn_index,
+                    turn,
+                } => {
+                    let mut event = serializer.serialize_struct("ForkTurnImported", 6)?;
+                    event.serialize_field("type", "forkTurnImported")?;
+                    event.serialize_field("threadId", thread_id)?;
+                    event.serialize_field("sourceThreadId", source_thread_id)?;
+                    event.serialize_field("sourceSequence", source_sequence)?;
+                    event.serialize_field("turnIndex", turn_index)?;
+                    event.serialize_field("turn", &LegacyTurn(turn))?;
+                    return event.end();
+                }
+                _ => {}
+            }
+        }
         if self.0.schema_version >= 21 {
             return self.0.event.serialize(serializer);
         }
@@ -176,6 +227,52 @@ impl Serialize for StoredThreadEvent<'_> {
             event.serialize_field("workspace", target)?;
         }
         event.end()
+    }
+}
+
+// This representation is fixed to the pre-22 stored schema; readable Turns always expose mode.
+struct LegacyTurn<'a>(&'a ash_protocol::Turn);
+
+impl Serialize for LegacyTurn<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let turn = self.0;
+        let mut record = serializer.serialize_struct("Turn", 17)?;
+        record.serialize_field("turnId", &turn.turn_id)?;
+        record.serialize_field("status", &turn.status)?;
+        record.serialize_field("kind", &turn.kind)?;
+        macro_rules! optional {
+            ($name:literal, $value:expr) => {
+                if let Some(value) = $value {
+                    record.serialize_field($name, value)?;
+                }
+            };
+        }
+        optional!("instructions", &turn.instructions);
+        optional!("model", &turn.model);
+        optional!("reasoningEffort", &turn.reasoning_effort);
+        optional!("advisor", &turn.advisor);
+        optional!("toolProfile", &turn.tool_profile);
+        record.serialize_field("toolMode", &turn.tool_mode)?;
+        record.serialize_field("approvalMode", &turn.approval_mode)?;
+        record.serialize_field("usage", &turn.usage)?;
+        optional!("contextUsage", &turn.context_usage);
+        record.serialize_field("items", &turn.items)?;
+        optional!("plan", &turn.plan);
+        optional!("pendingInteraction", &turn.pending_interaction);
+        optional!("error", &turn.error);
+        record.end()
+    }
+}
+
+struct LegacyTurns<'a>(&'a [ash_protocol::Turn]);
+impl Serialize for LegacyTurns<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeSeq;
+        let mut turns = serializer.serialize_seq(Some(self.0.len()))?;
+        for turn in self.0 {
+            turns.serialize_element(&LegacyTurn(turn))?;
+        }
+        turns.end()
     }
 }
 

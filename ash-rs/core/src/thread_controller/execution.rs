@@ -470,6 +470,7 @@ impl ThreadController {
         turn_id: &TurnId,
         task: impl FnOnce(super::mailbox::ThreadExecutionContext) + Send + 'static,
     ) -> Result<(), CoreError> {
+        self.store.execution_binding(thread_id)?.require_bound()?;
         self.execution_mailboxes.enqueue(thread_id, turn_id, task)
     }
 

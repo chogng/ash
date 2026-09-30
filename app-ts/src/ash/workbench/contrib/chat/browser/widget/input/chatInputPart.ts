@@ -3,6 +3,7 @@ import { ButtonActionViewItem, type ActionViewItem } from "../../../../../../bas
 import { status as announceStatus } from "../../../../../../base/browser/ui/aria/aria.js";
 import { appendIcon } from "../../../../../../base/browser/ui/lxicons/lxicon.js";
 import type { IAction } from "../../../../../../base/common/actions.js";
+import { Separator } from "../../../../../../base/common/actions.js";
 import type { Icon } from "../../../../../../base/common/icon.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../../../base/common/lxicons.js";
@@ -32,6 +33,7 @@ import { ModePickerActionItem, type ChatInputMode } from './modePickerActionItem
 type ChatInputToolbarPresentation = "mode" | "model" | "effort" | "mic" | "voice" | "send" | "interrupt";
 
 interface ChatInputToolbarState {
+	readonly mode: ChatInputMode;
 	readonly canSubmit: boolean;
 	readonly hasInput: boolean;
 	readonly canInterrupt: boolean;
@@ -70,11 +72,11 @@ export class ChatInputPart extends Disposable {
 	private readonly pickerResponsiveLayout: ChatInputPickerResponsiveLayout;
 	private readonly slashCommands = new SlashCommandCatalog(DesktopSlashCommands, []);
 	private readonly skills = new SkillSelectorCatalog();
-	private state: ChatInputState = { phase: "loading", canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
-	private toolbarState: ChatInputToolbarState = { canSubmit: false, hasInput: false, canInterrupt: false, inputKind: "message", models: [], isAutomaticModel: false, canSelectAgent: false };
+	private state: ChatInputState = { mode: "agent", queuedMessages: 0, phase: "loading", canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
+	private toolbarState: ChatInputToolbarState = { mode: "agent", canSubmit: false, hasInput: false, canInterrupt: false, inputKind: "message", models: [], isAutomaticModel: false, canSelectAgent: false };
 	private serverSlashCommands: ChatInputState["slashCommands"] = [];
 	private skillSelectors: ChatInputState["skillSelectors"] = [];
-	private mode: ChatInputMode = "agent";
+	private get mode(): ChatInputMode { return this.state.mode; }
 	private pendingAgentSelection: { readonly agent: ChatAgent | undefined } | undefined;
 	private dictationSession: IDictationSession | undefined;
 	private dictationStarting = false;
@@ -174,6 +176,7 @@ export class ChatInputPart extends Disposable {
 
 	async captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined> {
 		const text = this.input.value;
+		const mode = this.mode;
 		const attachments = [...this.attachments.values()];
 		if (!text && attachments.length === 0) return undefined;
 		const revision = this.draftRevision;
@@ -183,11 +186,11 @@ export class ChatInputPart extends Disposable {
 			name: attachment.name,
 			content: (await attachment.resolve()).content,
 		})));
-		if (this.draftRevision !== revision) throw new Error(localize('chat.draftChangedDuringHandoff', 'The draft changed while opening Agents Window. Try again.'));
+		if (this.draftRevision !== revision || this.mode !== mode) throw new Error(localize('chat.draftChangedDuringHandoff', 'The draft changed while opening Agents Window. Try again.'));
 		return {
-			draft: { text, contexts },
+			draft: { mode, text, contexts },
 			clear: () => {
-				if (this.draftRevision !== revision) return;
+				if (this.draftRevision !== revision || this.mode !== mode) return;
 				this.input.value = '';
 				this.attachments.clear();
 				this.draftRevision++;
@@ -199,6 +202,7 @@ export class ChatInputPart extends Disposable {
 
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void {
 		if (this.input.value || this.attachments.size > 0) throw new Error(localize('chat.draftHandoffConflict', 'The Agents Window already has an unsent draft in this chat.'));
+		this.delegate.selectMode(draft.mode);
 		this.input.value = draft.text;
 		for (const context of draft.contexts) {
 			this.attachments.set(attachmentKey(context), {
@@ -229,7 +233,7 @@ export class ChatInputPart extends Disposable {
 		}
 		const skills = this.skills.referencesIn(inputValue);
 		const contexts = [...this.attachments.values()];
-		await this.submit(inputValue, contexts, this.delegate.send(inputValue, skills.length > 0 ? skills : undefined, contexts));
+		await this.submit(inputValue, contexts, this.delegate.send(inputValue, this.mode, skills.length > 0 ? skills : undefined, contexts));
 	}
 
 	openModelSelector(): void {
@@ -267,6 +271,7 @@ export class ChatInputPart extends Disposable {
 		const input = parseSlashCommandInput(this.input.value, this.slashCommands);
 		const canSubmitIntent = input.kind === "message" ? input.text.trim().length > 0 : this.input.value.trim().length > 0;
 		const state: ChatInputToolbarState = {
+			mode: this.mode,
 			canSubmit: canSubmitIntent && this.state.phase !== "submitting",
 			hasInput: canSubmitIntent,
 			canInterrupt: this.state.canInterrupt,
@@ -280,6 +285,7 @@ export class ChatInputPart extends Disposable {
 			canSelectAgent: this.state.canSelectAgent,
 		};
 		if (
+			state.mode === this.toolbarState.mode &&
 			state.canSubmit === this.toolbarState.canSubmit &&
 			state.hasInput === this.toolbarState.hasInput &&
 			state.canInterrupt === this.toolbarState.canInterrupt &&
@@ -302,7 +308,7 @@ export class ChatInputPart extends Disposable {
 		const modeLabel = this.mode === 'agent' ? this.state.selectedAgent?.name ?? this.state.agentName ?? mode.label : mode.label;
 		const modeTooltip = this.mode === 'agent' && modeLabel !== mode.label
 			? localize('chat.agentPicker.mode', 'Agent: {0}', modeLabel)
-			: `Mode: ${modeLabel}`;
+			: localize('chat.modePicker.mode', 'Mode: {0}', modeLabel);
 		const modeAction = this.toolbarState.inputKind === "command"
 			? new ChatInputAction("ash.chat.input.command", "Command", "Slash command", Lxicon.start, false, "mode", () => {})
 			: new SelectorAction(
@@ -323,27 +329,34 @@ export class ChatInputPart extends Disposable {
 					const options = modeOptions.map(option => new ChatInputAction(
 						`ash.chat.input.mode.${option.id}`,
 						option.label,
-						`Use ${option.label} mode`,
+						localize('chat.modePicker.use', 'Use {0} mode', option.label),
 						option.icon,
-						option.id !== 'agent' || this.state.canSelectAgent,
+						true,
 						"mode",
 						() => {
-							this.mode = option.id;
-							if (this.state.canSelectAgent) this.pendingAgentSelection = { agent: undefined };
+							this.draftRevision++;
+							this.delegate.selectMode(option.id);
 						},
-						option.id === this.mode && !this.state.selectedAgent && !this.state.agentName,
+						option.id === this.mode,
 					));
-					if (this.state.agentName) options.unshift(new ChatInputAction('ash.chat.input.agent.current', this.state.agentName, this.state.agentName, Lxicon.unlimited, false, 'mode', () => {}, true));
-					return [...options, ...agents.map(agent => new ChatInputAction(
+					const agentOptions: IAction[] = [];
+					if (this.state.canSelectAgent) {
+						const label = localize('chat.agentPicker.default', 'Default Agent');
+						agentOptions.push(new ChatInputAction('ash.chat.input.agent.default', label, label, Lxicon.unlimited, true, 'mode', () => { this.pendingAgentSelection = { agent: undefined }; }, !this.state.selectedAgent));
+					} else if (this.state.agentName) {
+						agentOptions.push(new ChatInputAction('ash.chat.input.agent.current', this.state.agentName, this.state.agentName, Lxicon.unlimited, false, 'mode', () => {}, true));
+					}
+					agentOptions.push(...agents.map(agent => new ChatInputAction(
 						`ash.chat.input.agent.${agent.sourceId}.${agent.name}`,
 						agent.name,
 						agent.description,
 						undefined,
 						true,
 						'mode',
-						() => { this.mode = 'agent'; this.pendingAgentSelection = { agent }; },
+						() => { this.pendingAgentSelection = { agent }; },
 						this.state.selectedAgent?.name === agent.name && this.state.selectedAgent.sourceId === agent.sourceId,
-					))];
+					)));
+					return agentOptions.length > 0 ? [...options, new Separator(), ...agentOptions] : options;
 				},
 			);
 		const selectedModel = this.toolbarState.models.find(entry => sameModel(entry.model, this.toolbarState.selectedModel));
@@ -621,6 +634,8 @@ export class ChatInputPart extends Disposable {
 			case "error":
 				return "Chat is unavailable.";
 			case "ready":
+				if (state.queuedMessages > 0) return localize('chat.input.queuedMessages', '{0} messages queued', state.queuedMessages);
+				if (state.activeMode && state.activeMode !== state.mode) return localize('chat.input.modeChangeQueued', 'Working in {0}. The next message will be queued in {1} mode.', state.activeMode, state.mode);
 				return state.canInterrupt ? "Ash is working..." : "";
 		}
 	}

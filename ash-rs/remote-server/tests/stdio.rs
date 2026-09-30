@@ -11,6 +11,7 @@ use ash_app_server_protocol::protocol::common::ClientCapabilities;
 use ash_app_server_protocol::protocol::common::ClientInfo;
 use ash_app_server_protocol::protocol::environment::EnvDirsSetParams;
 use ash_app_server_protocol::protocol::fs::FsReadFileParams;
+use ash_app_server_protocol::protocol::fs::FsWriteFileParams;
 #[cfg(unix)]
 use ash_app_server_protocol::protocol::terminal::TerminalAttachParams;
 use ash_app_server_protocol::protocol::terminal::TerminalCloseParams;
@@ -21,6 +22,146 @@ use ash_app_server_protocol::protocol::terminal::TerminalReadParams;
 use ash_app_server_protocol::protocol::terminal::TerminalWriteParams;
 use base64::Engine;
 use tempfile::tempdir;
+
+#[test]
+fn remote_directories_share_a_backend_with_separate_authorities() {
+    let root = tempdir().unwrap();
+    let profile = root.path().join("profile");
+    let first_dir = root.path().join("first");
+    let second_dir = root.path().join("second");
+    for (dir, content) in [(&first_dir, "first"), (&second_dir, "second")] {
+        std::fs::create_dir(dir).unwrap();
+        std::fs::write(dir.join("file.txt"), content).unwrap();
+    }
+    let connect = |dir: Option<&std::path::Path>| {
+        let mut command = StdioAppServerCommand::new(env!("CARGO_BIN_EXE_ash-remote-server"))
+            .with_argument("connect")
+            .with_environment_variable("ASH_HOME", profile.clone().into_os_string())
+            .with_environment_variable("ASH_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS", "200")
+            .without_environment_variable("ASH_WORKSPACE_ROOT");
+        if let Some(dir) = dir {
+            command = command.with_environment_variable("ASH_WORKSPACE_ROOT", dir.as_os_str());
+        }
+        AppServerSession::start_stdio(
+            command,
+            ClientInfo {
+                name: "remote-profile-test".into(),
+                version: "1".into(),
+            },
+            ClientCapabilities::default(),
+        )
+        .unwrap()
+    };
+    let backend = std::env::var_os("ASH_APP_SERVER_PATH")
+        .expect("the targeted test runner must prepare the packaged App Server executable");
+    let status = || {
+        ash_app_server_daemon::run_lifecycle(
+            ash_app_server_daemon::LifecycleCommand::Version,
+            ash_app_server_daemon::ConnectionOptions::new(
+                &profile,
+                None,
+                ash_app_server_daemon::GrantSource::HostConfiguration,
+                None,
+            ),
+            std::path::Path::new(&backend),
+        )
+        .unwrap()
+    };
+    let first = connect(Some(&first_dir));
+    let initial = status();
+    let second = connect(Some(&second_dir));
+    let empty = connect(None);
+    let shared = status();
+    assert!(initial.pid.is_some());
+    assert_eq!(shared.pid, initial.pid);
+    assert_eq!(shared.instance_id, initial.instance_id);
+
+    let read = |path: std::path::PathBuf| FsReadFileParams {
+        dir_id: None,
+        session_directory: None,
+        path,
+    };
+    let mut first_client = first.client();
+    let mut second_client = second.client();
+    assert_eq!(
+        first_client
+            .read_file(read("file.txt".into()))
+            .unwrap()
+            .content,
+        "first"
+    );
+    assert_eq!(
+        second_client
+            .read_file(read("file.txt".into()))
+            .unwrap()
+            .content,
+        "second"
+    );
+    assert!(
+        first_client
+            .read_file(read(second_dir.join("file.txt")))
+            .is_err()
+    );
+    assert!(
+        empty
+            .client()
+            .read_file(read(first_dir.join("file.txt")))
+            .is_err()
+    );
+
+    // The shared process must preserve exact-revision save conflicts across connections.
+    let same_dir = connect(Some(&first_dir));
+    let before = first_client.read_file(read("file.txt".into())).unwrap();
+    same_dir
+        .client()
+        .write_file(FsWriteFileParams {
+            dir_id: None,
+            session_directory: None,
+            path: "file.txt".into(),
+            content: "changed externally".into(),
+            expected_revision: Some(before.revision.clone()),
+        })
+        .unwrap();
+    assert!(
+        first_client
+            .write_file(FsWriteFileParams {
+                dir_id: None,
+                session_directory: None,
+                path: "file.txt".into(),
+                content: "unsaved editor text".into(),
+                expected_revision: Some(before.revision),
+            })
+            .is_err()
+    );
+    assert_eq!(
+        std::fs::read_to_string(first_dir.join("file.txt")).unwrap(),
+        "changed externally"
+    );
+
+    first.shutdown().unwrap();
+    assert_eq!(status().pid, initial.pid);
+    assert_eq!(
+        second_client
+            .read_file(read("file.txt".into()))
+            .unwrap()
+            .content,
+        "second"
+    );
+    same_dir.shutdown().unwrap();
+    empty.shutdown().unwrap();
+    second.shutdown().unwrap();
+    ash_app_server_daemon::run_lifecycle(
+        ash_app_server_daemon::LifecycleCommand::Stop,
+        ash_app_server_daemon::ConnectionOptions::new(
+            &profile,
+            None,
+            ash_app_server_daemon::GrantSource::HostConfiguration,
+            None,
+        ),
+        std::path::Path::new(&backend),
+    )
+    .unwrap();
+}
 
 #[test]
 fn empty_remote_connection_has_no_directory_authority() {
@@ -34,7 +175,7 @@ fn empty_remote_connection_has_no_directory_authority() {
         let mut command = StdioAppServerCommand::new(env!("CARGO_BIN_EXE_ash-remote-server"))
             .without_environment_variable("ASH_WORKSPACE_ROOT")
             .with_environment_variable("ASH_HOME", root.path().join("profile").into_os_string())
-            .with_environment_variable("ASH_REMOTE_SERVER_IDLE_TIMEOUT_MILLIS", "200");
+            .with_environment_variable("ASH_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS", "200");
         for argument in arguments {
             command = command.with_argument(argument);
         }
@@ -210,7 +351,7 @@ fn assert_shutdown_event(events: &AppServerEvents) {
 
 #[cfg(unix)]
 #[test]
-fn broker_preserves_a_reconnectable_terminal_between_stdio_clients() {
+fn shared_backend_preserves_a_reconnectable_terminal_between_stdio_clients() {
     let root = tempdir().unwrap();
     let dir = root.path().join("dir");
     let profile = root.path().join("profile");
@@ -221,7 +362,7 @@ fn broker_preserves_a_reconnectable_terminal_between_stdio_clients() {
             .with_argument("connect")
             .with_environment_variable("ASH_WORKSPACE_ROOT", dir.clone().into_os_string())
             .with_environment_variable("ASH_HOME", profile.clone().into_os_string())
-            .with_environment_variable("ASH_REMOTE_SERVER_IDLE_TIMEOUT_MILLIS", "200")
+            .with_environment_variable("ASH_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS", "200")
     };
     let client_info = || ClientInfo {
         name: "remote-terminal-reconnect-test".into(),

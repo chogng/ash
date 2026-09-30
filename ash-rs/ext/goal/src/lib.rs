@@ -46,11 +46,14 @@ impl TurnInputContributor for runtime::GoalExtension {
             .iter()
             .find(|turn| &turn.turn_id == input.turn_id())
             .ok_or_else(|| ExtensionError::new("Goal Turn is missing"))?;
-        let Some(goal) = snapshot
-            .goal
-            .as_ref()
-            .filter(|goal| goal.status.is_active() && turn.kind != protocol::TurnKind::Review)
-        else {
+        let Some(goal) = snapshot.goal.as_ref().filter(|goal| {
+            goal.status.is_active()
+                && turn.kind != protocol::TurnKind::Review
+                && !matches!(
+                    turn.mode,
+                    protocol::CollaborationMode::Plan | protocol::CollaborationMode::Ask
+                )
+        }) else {
             return Ok(Vec::new());
         };
         let prompt =

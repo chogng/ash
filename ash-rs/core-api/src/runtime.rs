@@ -41,6 +41,7 @@ pub struct SubmitTurnRequest {
     pub reasoning_effort: Option<ash_protocol::ReasoningEffort>,
     pub advisor: Option<ash_protocol::AdvisorConfig>,
     pub kind: TurnKind,
+    pub mode: ash_protocol::CollaborationMode,
     pub instructions: TurnInstructions,
     pub approval_mode: ApprovalMode,
     pub tool_mode: ToolMode,
@@ -73,6 +74,7 @@ pub struct TurnReceipt {
 pub enum SubmittedCommand<'a> {
     Turn {
         kind: ash_protocol::TurnKind,
+        mode: ash_protocol::CollaborationMode,
         input: &'a [UserInput],
         tool_mode: ToolMode,
     },
@@ -84,6 +86,7 @@ pub enum SubmittedCommand<'a> {
 /// Identity of a durable submission. Acceptance does not imply successful execution.
 pub enum AcceptedCommand<'a> {
     Turn {
+        mode: ash_protocol::CollaborationMode,
         input: &'a [UserInput],
         tool_mode: ToolMode,
         approval_mode: ApprovalMode,

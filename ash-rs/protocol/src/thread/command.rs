@@ -26,6 +26,8 @@ pub enum ThreadCommand {
     StartTurn {
         #[serde(default)]
         kind: TurnKind,
+        #[serde(default, skip_serializing_if = "crate::CollaborationMode::is_agent")]
+        mode: crate::CollaborationMode,
         /// Exact instructions selected by the host before durable Turn acceptance.
         ///
         /// `None` exists only so journals written before instruction snapshots remain readable.

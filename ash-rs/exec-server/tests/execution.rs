@@ -170,15 +170,19 @@ fn file_writes_require_the_current_revision_and_reject_escape() {
     let host = Host::start();
     let client = host.client();
     client
-        .request(Request::FileWrite {
-            path: "file".into(),
-            bytes: vec![0xff, 0, 1],
-            condition: WriteCondition::MissingOrEmpty,
-        })
+        .write_file(
+            "write-1",
+            "file",
+            &(vec![0xff, 0, 1]),
+            WriteCondition::MissingOrEmpty,
+            &ash_async_utils::CancellationSource::new().token(),
+        )
         .unwrap();
     let Response::File(file) = client
         .request(Request::FileRead {
             path: "file".into(),
+            offset: 0,
+            expected_revision: None,
         })
         .unwrap()
     else {
@@ -186,23 +190,29 @@ fn file_writes_require_the_current_revision_and_reject_escape() {
     };
     assert_eq!(file.bytes, [0xff, 0, 1]);
     client
-        .request(Request::FileWrite {
-            path: "file".into(),
-            bytes: b"new".to_vec(),
-            condition: WriteCondition::ExpectedRevision(file.revision.clone()),
-        })
+        .write_file(
+            "write-2",
+            "file",
+            &(b"new".to_vec()),
+            WriteCondition::ExpectedRevision(file.revision.clone()),
+            &ash_async_utils::CancellationSource::new().token(),
+        )
         .unwrap();
     assert!(matches!(
-        client.request(Request::FileWrite {
-            path: "file".into(),
-            bytes: b"stale".to_vec(),
-            condition: WriteCondition::ExpectedRevision(file.revision)
-        }),
+        client.write_file(
+            "write-3",
+            "file",
+            &(b"stale".to_vec()),
+            WriteCondition::ExpectedRevision(file.revision),
+            &ash_async_utils::CancellationSource::new().token()
+        ),
         Err(exec_server::Error::Remote(ExecError::Conflict))
     ));
     assert!(matches!(
         client.request(Request::FileRead {
-            path: "../escape".into()
+            path: "../escape".into(),
+            offset: 0,
+            expected_revision: None
         }),
         Err(exec_server::Error::Remote(ExecError::InvalidInput))
     ));
@@ -212,7 +222,9 @@ fn file_writes_require_the_current_revision_and_reject_escape() {
     assert!(
         client
             .request(Request::FileRead {
-                path: "link/secret".into()
+                path: "link/secret".into(),
+                offset: 0,
+                expected_revision: None
             })
             .is_err()
     );
@@ -258,11 +270,13 @@ fn host_ceiling_blocks_writes_even_for_authenticated_clients() {
     let host = Host::with_access("read-only");
     let client = host.client();
     assert!(matches!(
-        client.request(Request::FileWrite {
-            path: "denied".into(),
-            bytes: b"x".to_vec(),
-            condition: WriteCondition::MissingOrEmpty
-        }),
+        client.write_file(
+            "write-4",
+            "denied",
+            &(b"x".to_vec()),
+            WriteCondition::MissingOrEmpty,
+            &ash_async_utils::CancellationSource::new().token()
+        ),
         Err(exec_server::Error::Remote(ExecError::PermissionDenied))
     ));
     client
@@ -311,9 +325,11 @@ fn rejects_wrong_credential_version_and_incarnation_before_mutation() {
             token,
             version,
             incarnation: Some(incarnation),
-            request: Request::FileWrite {
+            request: Request::FileWriteBegin {
+                operation_id: "forbidden".into(),
                 path: "forbidden".into(),
-                bytes: b"x".to_vec(),
+                total_bytes: 1,
+                content_revision: ash_file_system::file_revision(b"x"),
                 condition: WriteCondition::MissingOrEmpty,
             },
         };

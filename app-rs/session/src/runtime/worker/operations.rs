@@ -366,6 +366,7 @@ pub(super) fn submit_agent_message(
             command_id: next_command_id("turn"),
             session_id: active.session_id.clone(),
             request: SessionRequest::StartTurn {
+                mode: ash_protocol::CollaborationMode::default(),
                 thread_id: active.thread_id.clone(),
                 expected_sequence: active.sequence,
                 approval_mode: active.approval_mode,

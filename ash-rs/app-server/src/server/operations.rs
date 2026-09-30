@@ -472,6 +472,7 @@ impl AppServer {
             SessionRequest::StartTurn {
                 thread_id,
                 expected_sequence,
+                mode,
                 approval_mode,
                 model,
                 reasoning_effort,
@@ -481,6 +482,7 @@ impl AppServer {
                 thread_mutation(mutation, expected_sequence, connection.connection_id),
                 thread_id,
                 approval_mode,
+                mode,
                 model.map_or(TurnModelSelection::Current, TurnModelSelection::Explicit),
                 reasoning_effort,
                 tool_mode,
@@ -576,6 +578,7 @@ impl AppServer {
                     thread_mutation(mutation, expected_sequence, connection.connection_id),
                     thread_id,
                     ash_protocol::ApprovalMode::default(),
+                    ash_protocol::CollaborationMode::Ask,
                     TurnToolModeSelection::Explicit(ash_protocol::ToolMode::Direct),
                     vec![UserInput::Text { text: question }],
                     ash_protocol::TurnKind::Advisor,
@@ -812,7 +815,20 @@ impl AppServer {
         mutation: SessionMutation,
         rewrite: RewriteSessionMutation,
     ) -> Result<SessionRewriteResult, RpcError> {
-        let normalized_input = self.normalize_input(&mutation.session_id, rewrite.input.clone())?;
+        let source = self.read_session_thread(&mutation.session_id, &rewrite.parent_thread_id)?;
+        let mode = source
+            .turns
+            .iter()
+            .find(|turn| turn.turn_id == rewrite.before_turn_id)
+            .ok_or_else(|| {
+                core_error(core_api::CoreError::NotFound(
+                    rewrite.before_turn_id.to_string(),
+                ))
+            })?
+            .mode;
+        let mut normalized_input =
+            self.normalize_input(&mutation.session_id, rewrite.input.clone())?;
+        self.turn_instruction_selection(&mut normalized_input, mode)?;
         let rewound = self
             .agent_runtime()
             .rewind_thread(RewindThreadRequest {
@@ -849,6 +865,7 @@ impl AppServer {
                 },
                 thread_id.clone(),
                 ash_protocol::ApprovalMode::default(),
+                mode,
                 TurnModelSelection::Current,
                 None,
                 rewrite.tool_mode,
@@ -1054,6 +1071,7 @@ impl AppServer {
         mutation: ThreadMutation,
         thread_id: ash_protocol::ThreadId,
         approval_mode: ash_protocol::ApprovalMode,
+        mode: ash_protocol::CollaborationMode,
         model_selection: TurnModelSelection,
         reasoning_effort: Option<ash_protocol::ReasoningEffort>,
         requested_tool_mode: Option<ash_protocol::ToolMode>,
@@ -1064,23 +1082,12 @@ impl AppServer {
             None => TurnToolModeSelection::ConfiguredDefault,
         };
         let mut input = self.normalize_input(&mutation.session_id, input)?;
-        let command = input
-            .iter()
-            .find_map(|item| match item {
-                UserInput::Text { text } => Some(workflows::Command::parse(text)),
-                _ => None,
-            })
-            .transpose()
-            .map_err(core_error)?
-            .flatten();
-        let selection = match command {
-            Some(command) => TurnInstructionSelection::Workflow(command),
-            None => self.turn_instruction_selection(&mut input),
-        };
+        let selection = self.turn_instruction_selection(&mut input, mode)?;
         self.start_agent_turn_request(
             mutation,
             thread_id,
             approval_mode,
+            mode,
             tool_mode,
             input,
             ash_protocol::TurnKind::Coding,
@@ -1093,18 +1100,42 @@ impl AppServer {
     pub(super) fn turn_instruction_selection(
         &self,
         input: &mut Vec<UserInput>,
-    ) -> TurnInstructionSelection {
-        let selection = match product_command(input) {
-            Some("/init") => TurnInstructionSelection::Setup(init_prompt()),
-            _ => return TurnInstructionSelection::Agent,
-        };
-        if let Some(home) = &self.home {
-            input.push(UserInput::Context {
-                name: "ash-home".into(),
-                content: home.root().display().to_string(),
+        mode: ash_protocol::CollaborationMode,
+    ) -> Result<TurnInstructionSelection, RpcError> {
+        if product_command(input) != Some("/init") {
+            // Analysis modes inspect workflow requests without starting their write-producing
+            // orchestration. The selected approach still reaches the ordinary model Turn.
+            if matches!(
+                mode,
+                ash_protocol::CollaborationMode::Plan | ash_protocol::CollaborationMode::Ask
+            ) {
+                return Ok(TurnInstructionSelection::Agent);
+            }
+            let command = input
+                .iter()
+                .find_map(|item| match item {
+                    UserInput::Text { text } => Some(workflows::Command::parse(text)),
+                    _ => None,
+                })
+                .transpose()
+                .map_err(core_error)?
+                .flatten();
+            return Ok(match command {
+                Some(command) => TurnInstructionSelection::Workflow(command),
+                None => TurnInstructionSelection::Agent,
             });
         }
-        selection
+        if let Some(home) = &self.home {
+            let context = UserInput::Context {
+                name: "ash-home".into(),
+                content: home.root().display().to_string(),
+            };
+            // Queue acceptance freezes this same expanded input before eventual delivery.
+            if !input.contains(&context) {
+                input.push(context);
+            }
+        }
+        Ok(TurnInstructionSelection::Setup(init_prompt()))
     }
 
     fn start_review_request(
@@ -1128,6 +1159,7 @@ impl AppServer {
             mutation,
             thread_id,
             ash_protocol::ApprovalMode::default(),
+            ash_protocol::CollaborationMode::Agent,
             TurnToolModeSelection::Explicit(ash_protocol::ToolMode::Direct),
             vec![UserInput::Text { text: prompt }],
             ash_protocol::TurnKind::Review,
@@ -1142,6 +1174,7 @@ impl AppServer {
         mutation: ThreadMutation,
         thread_id: ash_protocol::ThreadId,
         approval_mode: ash_protocol::ApprovalMode,
+        mode: ash_protocol::CollaborationMode,
         tool_mode_selection: TurnToolModeSelection,
         input: Vec<UserInput>,
         kind: ash_protocol::TurnKind,
@@ -1187,6 +1220,7 @@ impl AppServer {
                     core_api::SubmittedCommand::Turn {
                         kind,
                         tool_mode,
+                        mode,
                         input: &input,
                     },
                 )
@@ -1210,7 +1244,10 @@ impl AppServer {
         {
             return Err(core_error(core_api::CoreError::Policy(reason)));
         }
-        if matches!(&selection, TurnInstructionSelection::Setup(_))
+        if !matches!(
+            mode,
+            ash_protocol::CollaborationMode::Plan | ash_protocol::CollaborationMode::Ask
+        ) && matches!(&selection, TurnInstructionSelection::Setup(_))
             && let HookEventDecision::Deny { reason } = self.emit_hook_event(&HookEventRequest {
                 event: HookEvent::Setup,
                 scope: HookEventScope::Session {
@@ -1281,7 +1318,9 @@ impl AppServer {
             TurnInstructionSelection::Setup(prompt) => (None, prompt.with_shared(&base)),
             TurnInstructionSelection::Workflow(command) => (Some(command), base),
         };
-        let instructions = instructions.with_model_guidance(guidance);
+        let instructions = instructions
+            .with_mode(&collaboration_mode_templates::instructions(mode))
+            .with_model_guidance(guidance);
         let advisor_default = self
             .config
             .as_ref()
@@ -1316,6 +1355,7 @@ impl AppServer {
             .browser_host
             .submit_turn(&thread_id, mutation.connection_id, || {
                 let request = core_api::SubmitTurnRequest {
+                    mode,
                     command_id: mutation.command_id,
                     expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
                     model,

@@ -164,6 +164,7 @@ impl Fixture {
             .start_turn(
                 &self.id,
                 StartTurnRequest {
+                    mode: Default::default(),
                     command_id: CommandId::new("start").unwrap(),
                     expected_sequence: SequenceExpectation::Any,
                     model: Some(model("worker")),

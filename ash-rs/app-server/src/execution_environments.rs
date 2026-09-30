@@ -32,6 +32,7 @@ use exec_server_protocol::ProcessState;
 use exec_server_protocol::Request;
 use exec_server_protocol::Response;
 use serde::Deserialize;
+use serde::Serialize;
 use serde_json::json;
 use sha2::Digest;
 use sha2::Sha256;
@@ -41,7 +42,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-const REVISION: &str = "execution-environments-v1";
+const REVISION: &str = "execution-environments-v2";
 const READ_WAIT_MILLIS: u64 = 500;
 const RECOVERY_BUDGET: Duration = Duration::from_secs(5);
 
@@ -70,7 +71,7 @@ impl EnvironmentTools {
         &self,
         call: &ToolCall,
         facts: &ToolExecutionFacts,
-    ) -> Result<(&ExecutionEnvironment, Request), CoreError> {
+    ) -> Result<(&ExecutionEnvironment, PreparedOperation), CoreError> {
         let arguments: Arguments = serde_json::from_value(call.arguments.clone())
             .map_err(|error| CoreError::Policy(error.to_string()))?;
         let environment = self
@@ -84,20 +85,7 @@ impl EnvironmentTools {
                 cwd,
                 timeout_millis,
             } => {
-                let identity = facts.execution_identity().ok_or_else(|| {
-                    CoreError::Policy(
-                        "execution requires a durable Thread and Turn identity".into(),
-                    )
-                })?;
-                let key = serde_json::to_vec(&(
-                    environment.info().incarnation.as_str(),
-                    identity.session_id(),
-                    identity.thread_id(),
-                    identity.turn_id(),
-                    &call.id,
-                ))
-                .map_err(|error| CoreError::Policy(error.to_string()))?;
-                let id = format!("{:x}", Sha256::digest(key));
+                let id = operation_id(environment, call, facts)?;
                 let params = ProcessStart {
                     input: exec_server_protocol::ProcessInput::Closed,
                     operation_id: id,
@@ -109,11 +97,11 @@ impl EnvironmentTools {
                 params.validate().map_err(|error| {
                     CoreError::Policy(format!("invalid process request: {error:?}"))
                 })?;
-                Request::ProcessStart(params)
+                PreparedOperation::Command(params)
             }
             Operation::Read { path } => {
                 validate_path(&path)?;
-                Request::FileRead { path }
+                PreparedOperation::Read { path }
             }
             Operation::Write {
                 path,
@@ -124,7 +112,8 @@ impl EnvironmentTools {
                 if content.len() > exec_server_protocol::MAX_FILE_BYTES {
                     return Err(CoreError::Policy("file content exceeds limit".into()));
                 }
-                Request::FileWrite {
+                PreparedOperation::Write {
+                    operation_id: operation_id(environment, call, facts)?,
                     path,
                     bytes: content.into_bytes(),
                     condition: match expected_revision {
@@ -138,6 +127,40 @@ impl EnvironmentTools {
         };
         Ok((environment, request))
     }
+}
+
+#[derive(Serialize)]
+#[serde(tag = "operation", rename_all = "camelCase")]
+enum PreparedOperation {
+    Command(ProcessStart),
+    Read {
+        path: String,
+    },
+    Write {
+        operation_id: String,
+        path: String,
+        bytes: Vec<u8>,
+        condition: exec_server_protocol::WriteCondition,
+    },
+}
+
+fn operation_id(
+    environment: &ExecutionEnvironment,
+    call: &ToolCall,
+    facts: &ToolExecutionFacts,
+) -> Result<String, CoreError> {
+    let identity = facts.execution_identity().ok_or_else(|| {
+        CoreError::Policy("execution requires a durable Thread and Turn identity".into())
+    })?;
+    let key = serde_json::to_vec(&(
+        environment.info().incarnation.as_str(),
+        identity.session_id(),
+        identity.thread_id(),
+        identity.turn_id(),
+        &call.id,
+    ))
+    .map_err(|error| CoreError::Policy(error.to_string()))?;
+    Ok(format!("{:x}", Sha256::digest(key)))
 }
 
 #[derive(Deserialize)]
@@ -198,9 +221,9 @@ impl ToolService for EnvironmentTools {
     ) -> Result<ActionReviewRequest, CoreError> {
         let (environment, request) = self.materialize(call, facts)?;
         let kind = match &request {
-            Request::FileRead { .. } => CapabilityKind::FileRead,
-            Request::FileWrite { .. } => CapabilityKind::FileWrite,
-            _ => CapabilityKind::ProcessSpawn,
+            PreparedOperation::Read { .. } => CapabilityKind::FileRead,
+            PreparedOperation::Write { .. } => CapabilityKind::FileWrite,
+            PreparedOperation::Command(_) => CapabilityKind::ProcessSpawn,
         };
         let canonical =
             serde_json::to_vec(&json!({"environment":environment.info(),"request":request}))
@@ -210,21 +233,20 @@ impl ToolService for EnvironmentTools {
                 ActionDigest::from_canonical_bytes(&canonical),
                 ActionKind::ExternalServiceMutation,
                 match &request {
-                    Request::ProcessStart(start) => format!(
+                    PreparedOperation::Command(start) => format!(
                         "Run {} in environment {} (directory {})",
                         start.program,
                         environment.info().environment_id,
                         start.cwd
                     ),
-                    Request::FileRead { path } => format!(
+                    PreparedOperation::Read { path } => format!(
                         "Read {path} in environment {}",
                         environment.info().environment_id
                     ),
-                    Request::FileWrite { path, .. } => format!(
+                    PreparedOperation::Write { path, .. } => format!(
                         "Write {path} in environment {}",
                         environment.info().environment_id
                     ),
-                    _ => unreachable!(),
                 },
                 CapabilitySet::new([Capability::new(
                     kind,
@@ -284,20 +306,35 @@ impl ToolService for EnvironmentTools {
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         let (environment, request) = self.materialize(call, facts)?;
-        if let Request::ProcessStart(start) = request {
-            return run_command(environment, start, cancellation, sink);
-        }
-        match environment.request(request) {
-            Ok(Response::File(content)) => match String::from_utf8(content.bytes) {
-                Ok(text) => Ok(ToolExecutionOutput::Success(
-                    json!({"content":text,"revision":content.revision}).to_string(),
-                )),
-                Err(_) => Ok(ToolExecutionOutput::Failure(
-                    "file is not UTF-8 text".into(),
-                )),
+        let outcome = match request {
+            PreparedOperation::Command(start) => {
+                return run_command(environment, start, cancellation, sink);
+            }
+            PreparedOperation::Read { path } => match environment.read_file(&path, cancellation) {
+                Ok(content) => Ok(match String::from_utf8(content.bytes) {
+                    Ok(text) => ToolExecutionOutput::Success(
+                        json!({"content":text,"revision":content.revision}).to_string(),
+                    ),
+                    Err(_) => ToolExecutionOutput::Failure("file is not UTF-8 text".into()),
+                }),
+                Err(error @ exec_server::Error::Cancelled(_)) => Err(error),
+                Err(error) => Ok(ToolExecutionOutput::Failure(error.to_string())),
             },
-            Ok(Response::Written) => Ok(ToolExecutionOutput::Success("file written".into())),
-            Ok(_) => Err(CoreError::Execution("unexpected execution response".into())),
+            PreparedOperation::Write {
+                operation_id,
+                path,
+                bytes,
+                condition,
+            } => environment
+                .write_file(&operation_id, &path, &bytes, condition, cancellation)
+                .map(|()| ToolExecutionOutput::Success("file written".into())),
+        };
+        match outcome {
+            Ok(output) => Ok(output),
+            Err(exec_server::Error::Cancelled(reason)) => Err(CoreError::Cancelled(reason)),
+            Err(error @ exec_server::Error::FileNotPublished(_)) => {
+                Ok(ToolExecutionOutput::Failure(error.to_string()))
+            }
             Err(exec_server::Error::Remote(error)) => Ok(ToolExecutionOutput::Failure(format!(
                 "execution rejected: {error:?}"
             ))),
@@ -460,11 +497,20 @@ impl ActionPolicyService for EnvironmentPolicy {
 
 /// Credential references are host configuration, never model-controlled tool arguments.
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct EndpointConfig {
-    environment: String,
-    address: std::net::SocketAddr,
-    token_file: std::path::PathBuf,
+#[serde(untagged, deny_unknown_fields)]
+enum EndpointConfig {
+    Tcp {
+        environment: String,
+        address: std::net::SocketAddr,
+        token_file: std::path::PathBuf,
+    },
+    Ssh {
+        environment: String,
+        host: String,
+        root: String,
+        runtime: String,
+        ssh_executable: Option<std::path::PathBuf>,
+    },
 }
 
 pub(crate) fn load_environments(path: &Path) -> Result<Vec<ExecutionEnvironment>, String> {
@@ -474,19 +520,43 @@ pub(crate) fn load_environments(path: &Path) -> Result<Vec<ExecutionEnvironment>
     entries
         .into_iter()
         .map(|entry| {
-            let token_path = if entry.token_file.is_absolute() {
-                entry.token_file
-            } else {
-                path.parent()
-                    .unwrap_or(Path::new("."))
-                    .join(entry.token_file)
+            let (environment, client) = match entry {
+                EndpointConfig::Tcp {
+                    environment,
+                    address,
+                    token_file,
+                } => {
+                    let token_path = if token_file.is_absolute() {
+                        token_file
+                    } else {
+                        path.parent()
+                            .ok_or("Execution configuration path has no parent")?
+                            .join(token_file)
+                    };
+                    let token =
+                        std::fs::read_to_string(token_path).map_err(|error| error.to_string())?;
+                    let endpoint = exec_server::RemoteEndpoint::new(address, token.trim().into())
+                        .map_err(|error| error.to_string())?;
+                    (environment, exec_server::ExecClient::connect(endpoint))
+                }
+                EndpointConfig::Ssh {
+                    environment,
+                    host,
+                    root,
+                    runtime,
+                    ssh_executable,
+                } => {
+                    let mut target =
+                        exec_server::SshEndpoint::new(&host, &root, &runtime, &environment)
+                            .map_err(|error| error.to_string())?;
+                    if let Some(executable) = ssh_executable {
+                        target = target.with_executable(executable);
+                    }
+                    (environment, exec_server::ExecClient::connect_ssh(target))
+                }
             };
-            let token = std::fs::read_to_string(token_path).map_err(|error| error.to_string())?;
-            let endpoint = exec_server::RemoteEndpoint::new(entry.address, token.trim().into())
-                .map_err(|error| error.to_string())?;
-            let client =
-                exec_server::ExecClient::connect(endpoint).map_err(|error| error.to_string())?;
-            if client.info().environment_id != entry.environment {
+            let client = client.map_err(|error| error.to_string())?;
+            if client.info().environment_id != environment {
                 return Err("execution environment identity mismatch".into());
             }
             Ok(ExecutionEnvironment::Remote(client))
@@ -502,3 +572,7 @@ pub(crate) fn port(
         Arc::new(EnvironmentPolicy),
     ))
 }
+
+#[cfg(test)]
+#[path = "execution_environment_config_tests.rs"]
+mod config_tests;

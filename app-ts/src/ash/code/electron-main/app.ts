@@ -23,7 +23,6 @@ import { AppServerConnectionRelay } from "../../platform/app-server/electron-mai
 import { DevelopmentAppServerReloader } from "../../platform/app-server-daemon/electron-main/developmentAppServerReloader.js";
 import { AppServerDaemonLauncher, createAppServerDaemonLauncher } from "../../platform/app-server-daemon/electron-main/appServerDaemonLauncher.js";
 import { remoteExecutablePath } from "../../platform/remote/node/remotePackage.js";
-import type { IAppServerProcessLauncher } from '../../platform/app-server/electron-main/appServerProcessLauncher.js';
 import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from "../../platform/ipc/electron-main/trustedIpcRouter.js";
 import { BROWSER_VIEW_EVENT_CHANNEL } from "../../platform/browser/common/browserView.js";
 import { browserViewIpcRoutes } from "../../platform/browser/electron-main/browserViewIpc.js";
@@ -76,7 +75,7 @@ import { RemoteBrowserViewNavigationResolver } from "../../platform/remote/elect
 import { SshRemoteTunnelService } from "../../platform/remote/electron-main/sshRemoteTunnelService.js";
 import { createRemoteRuntimeInstallProgressLogger } from "../../platform/remote/electron-main/remoteRuntimeBootstrapMainService.js";
 import { RemoteRuntimeBootstrapMainService } from "../../platform/remote/electron-main/remoteRuntimeBootstrapMainService.js";
-import { SshAppServerProcessLauncher } from "../../platform/remote/electron-main/sshAppServerProcessLauncher.js";
+import { RemoteAppServerProcessLauncher } from "../../platform/remote/electron-main/remoteAppServerProcessLauncher.js";
 import { ElectronRemoteRuntimeInstallWindow } from "../../platform/remote/electron-main/electronRemoteRuntimeInstallWindow.js";
 import { electronRemoteWindowMainHost } from "../../platform/remote/electron-main/electronRemoteWindowMainHost.js";
 import { RemoteWindowMainContext } from "../../platform/remote/electron-main/remoteWindowMainContext.js";
@@ -556,35 +555,30 @@ export class AshApplication extends Disposable {
 		if (this.appServerStartupMode === "disabled") {
 			return existing ?? new AppServerConnectionRelay({ enabled: false });
 		}
-		let processLauncher: IAppServerProcessLauncher;
-		let generationFile: string | undefined;
-		if (role === 'workbench' && getWorkspaceRemoteAuthority(workspace) !== undefined) {
-			processLauncher = this.createSshAppServerProcessLauncher(workspace, resources);
-		} else {
-			const connection = createAppServerDaemonLauncher({
-				packageLocation: { appPath: app.getAppPath(), expectedVersion: app.getVersion(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath },
-				sourceEnvironment: process.env,
-				profileRoot: this.profileRoot,
-				electronExecutable: process.execPath,
-				workspaceRoot: role === 'workbench' && isSingleFolderWorkspaceIdentifier(workspace) ? workspace.uri.fsPath : undefined,
-				role,
-			});
-			processLauncher = connection.launcher;
-			generationFile = connection.generationFile;
-		}
+		const remote = role === 'workbench' && getWorkspaceRemoteAuthority(workspace) !== undefined;
+		const connection = createAppServerDaemonLauncher({
+			packageLocation: { appPath: app.getAppPath(), expectedVersion: app.getVersion(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath },
+			sourceEnvironment: process.env,
+			profileRoot: this.profileRoot,
+			electronExecutable: process.execPath,
+			workspaceRoot: !remote && role === 'workbench' && isSingleFolderWorkspaceIdentifier(workspace) ? workspace.uri.fsPath : undefined,
+			role,
+		});
+		const processLauncher = remote ? this.createRemoteAppServerProcessLauncher(workspace, resources, connection.launcher) : connection.launcher;
+		const generationFile = connection.generationFile;
 		const supervisor = existing ?? new AppServerConnectionRelay({
 			enabled: true,
 			processLauncher,
 		});
 		if (existing) existing.replaceProcessLauncher(processLauncher);
-		if (generationFile && processLauncher instanceof AppServerDaemonLauncher) {
+		if (generationFile) {
 			if (!this.developmentAppServerReloader.value) this.developmentAppServerReloader.value = new DevelopmentAppServerReloader({ generationFile });
-			resources.add(this.developmentAppServerReloader.value.registerConnection(processLauncher, supervisor));
+			resources.add(this.developmentAppServerReloader.value.registerConnection(connection.launcher, supervisor));
 		}
 		return supervisor;
 	}
 
-	private createSshAppServerProcessLauncher(workspace: IAnyWorkspaceIdentifier, resources: DisposableStore) {
+	private createRemoteAppServerProcessLauncher(workspace: IAnyWorkspaceIdentifier, resources: DisposableStore, carrier: AppServerDaemonLauncher): RemoteAppServerProcessLauncher {
 		const remoteAuthority = getWorkspaceRemoteAuthority(workspace);
 		if (!remoteAuthority) throw new Error("SSH App Server launcher requires a Remote window");
 		const remoteWorkspace = isSingleFolderWorkspaceIdentifier(workspace) ? workspace.uri : createSshRemoteAuthority(remoteAuthority.slice(4));
@@ -624,6 +618,7 @@ export class AshApplication extends Disposable {
 			sshExecutable,
 			remoteExecutable: configuredRuntime ?? "ash-remote-server",
 			localEnvironment: process.env,
+			carrier,
 			runtimeInstaller,
 			connectionProfiles,
 			logProgress: createRemoteRuntimeInstallProgressLogger(),
@@ -876,7 +871,7 @@ export class AshApplication extends Disposable {
 							window.webContents.send('ash:terminal:prepareReplacement');
 							if (this.appServerStartupMode !== 'disabled') {
 								const launcher = supervisor.options.enabled ? supervisor.options.processLauncher : undefined;
-								if (!(launcher instanceof AppServerDaemonLauncher) && !(launcher instanceof SshAppServerProcessLauncher)) throw new Error('Workspace connection has no directory launcher');
+								if (!(launcher instanceof AppServerDaemonLauncher) && !(launcher instanceof RemoteAppServerProcessLauncher)) throw new Error('Workspace connection has no directory launcher');
 								await this.reconnectAppServerWorkspace(supervisor, launcher, undefined, { type: 'config' }, workspace.id, workspaceContext.getWorkspace().id, workspaceHost);
 							}
 							loadingWorkspace = true;
@@ -1315,7 +1310,7 @@ export class AshApplication extends Disposable {
 			};
 		}
 		const launcher = supervisor.options.enabled ? supervisor.options.processLauncher : undefined;
-		if (!(launcher instanceof AppServerDaemonLauncher) && !(launcher instanceof SshAppServerProcessLauncher)) {
+		if (!(launcher instanceof AppServerDaemonLauncher) && !(launcher instanceof RemoteAppServerProcessLauncher)) {
 			throw new Error("Workspace connection has no directory launcher");
 		}
 		const appServerWorkspace = createAppServerWorkspaceTransitionAdapter(supervisor,
@@ -1329,7 +1324,7 @@ export class AshApplication extends Disposable {
 
 	private async reconnectAppServerWorkspace(
 		supervisor: AppServerConnectionRelay,
-		launcher: AppServerDaemonLauncher | SshAppServerProcessLauncher,
+		launcher: AppServerDaemonLauncher | RemoteAppServerProcessLauncher,
 		root: string | undefined,
 		grant: DirGrant,
 		workspaceId: string,

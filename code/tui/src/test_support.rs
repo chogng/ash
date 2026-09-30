@@ -120,6 +120,9 @@ pub(crate) fn queued_message(command: crate::app::AppCommand) -> ::queue::Queued
         .collect();
     ::queue::QueuedMessage {
         request: ::queue::QueueInput {
+            mode: Default::default(),
+            model: None,
+            reasoning_effort: None,
             command_id,
             session_id: ash_protocol::SessionId::new("session").unwrap(),
             thread_id: ash_protocol::ThreadId::new("thread").unwrap(),

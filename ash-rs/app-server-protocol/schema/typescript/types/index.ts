@@ -165,6 +165,7 @@ export type { CodebaseSymbolsSearchParams } from './CodebaseSymbolsSearchParams.
 export type { CodebaseSymbolsSearchResult } from './CodebaseSymbolsSearchResult.js';
 export type { CodebaseSymbolsStateDto } from './CodebaseSymbolsStateDto.js';
 export type { CodebaseSymbolsStatusResult } from './CodebaseSymbolsStatusResult.js';
+export type { CollaborationMode } from './CollaborationMode.js';
 export type { CommandId } from './CommandId.js';
 export type { CommitMessageAuthorizeParams } from './CommitMessageAuthorizeParams.js';
 export type { CommitMessageRevokeParams } from './CommitMessageRevokeParams.js';

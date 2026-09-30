@@ -8,6 +8,7 @@ test("App Server environment keeps safe POSIX session variables and excludes cre
 		LANG: "en_US.UTF-8",
 		LC_ALL: "C.UTF-8",
 		PATH: "/usr/bin",
+		SSH_AUTH_SOCK: '/tmp/ssh-agent.sock',
 		XDG_CONFIG_HOME: "/home/ash/.config",
 		OPENAI_API_KEY: "secret",
 	}, "macos", {
@@ -24,6 +25,7 @@ test("App Server environment keeps safe POSIX session variables and excludes cre
 		HOME: "/home/ash",
 		LANG: "en_US.UTF-8",
 		PATH: "/usr/bin",
+		SSH_AUTH_SOCK: '/tmp/ssh-agent.sock',
 		XDG_CONFIG_HOME: "/home/ash/.config",
 		LC_ALL: "C.UTF-8",
 		ASH_APP_SERVER_PATH: "/opt/Ash/ash-app-server-daemon",

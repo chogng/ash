@@ -660,6 +660,7 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         turns: turn_ids
             .into_iter()
             .map(|turn_id| TurnSnapshot {
+                mode: Default::default(),
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: None,
