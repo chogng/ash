@@ -10,7 +10,7 @@ case "${1-}" in
 		fi
 		exec just ash-desktop
 		;;
-	--reuse-app-server)
+	--connected)
 		if [[ "$OSTYPE" == darwin* ]]; then
 			exec uv run --python 3.12 pnpm --dir app-ts dev:ui:connected
 		fi

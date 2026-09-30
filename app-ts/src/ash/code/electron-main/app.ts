@@ -576,8 +576,8 @@ export class AshApplication extends Disposable {
 			: new LocalAppServerProcessLauncher({
 				executable: packagedExecutable,
 				expectedSha256: expectedPackagedSha256,
-				// Full development selects its backend generation; UI debugging preserves a compatible shared daemon.
-				args: [app.isPackaged || process.env.ASH_DEV_REUSE_APP_SERVER === "1" ? "connect" : "connect-selected"],
+				// Development must select the freshly built backend when the shared daemon runs an older protocol.
+				args: [app.isPackaged ? "connect" : "connect-selected"],
 				environment: {
 					...this.appServerEnvironment(role === 'agents' ? UNKNOWN_EMPTY_WINDOW_WORKSPACE : workspace),
 					...(role === 'agents' ? { ASH_APP_SERVER_CONNECTION_ROLE: 'agents' } : {}),

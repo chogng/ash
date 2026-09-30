@@ -4,6 +4,8 @@ import { JSDOM } from 'jsdom';
 import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
 import { ServiceContainer } from '../../../platform/instantiation/common/instantiation.js';
 import { IRendererHostService, type IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
+import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
+import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../workbench/common/contributions.js';
 import type { MultiDiffEditorInput } from '../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../../workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
@@ -12,6 +14,7 @@ import { IChatSessionNavigationService } from '../../../workbench/services/chat/
 import { IViewsService } from '../../../workbench/services/views/browser/viewsService.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
 import { EditorInputSerializers } from '../../../workbench/services/editor/common/editorInputSerializer.js';
+import { WorkspaceContextService } from '../../../workbench/services/workspaces/browser/workspaceContextService.js';
 import { createTurnMultiDiffEditorInput } from '../../browser/turnMultiDiffSource.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 
@@ -43,6 +46,9 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 	} as unknown as IRendererHost;
 	using services = new ServiceContainer();
 	services.registerInstance(IRendererHostService, api);
+	using workspace = new WorkspaceContextService({ id: 'empty-window' });
+	services.registerInstance(IWorkspaceContextService, workspace);
+	services.registerInstance(IQuickInputService, {} as IQuickInputService);
 	services.registerInstance(IChatService, {} as IChatService);
 	services.registerInstance(IEditorService, {} as IEditorService);
 	services.registerInstance(IViewsService, { openView: () => { throw new Error('Draft capture must not reveal Chat'); }, focusView: () => false, getViewWithId: () => undefined });
@@ -109,14 +115,17 @@ test('Sessions contributes Turn changes and commit actions to the shared multi-d
 	services.registerInstance(ISessionsManagementService, {
 		active: { session, threadId: 'thread' },
 		sessions: [session],
+		initialize: async () => {},
 	} as unknown as ISessionsManagementService);
-	services.registerInstance(IEditorService, {
-		openEditor: async (input: MultiDiffEditorInput) => { opened.push(input); },
-	} as unknown as IEditorService);
 	const resolvers = new MultiDiffSourceResolverService();
 	services.registerInstance(IMultiDiffSourceResolverService, resolvers);
 	using contributions = WorkbenchContributionsRegistry.createHost(services);
 	contributions.advance(WorkbenchPhase.BlockStartup);
+	assert.deepEqual(resolvers.sourceActions(), []);
+	services.registerInstance(IEditorService, {
+		openEditor: async (input: MultiDiffEditorInput) => { opened.push(input); },
+	} as unknown as IEditorService);
+	contributions.advance(WorkbenchPhase.BlockRestore);
 	await resolvers.sourceActions()[1]?.run();
 	const input = opened[0]!;
 	assert.deepEqual({

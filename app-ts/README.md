@@ -26,7 +26,7 @@ VS Code 的 `Ash Desktop (Electron)` F5 配置运行 `just ash-desktop`；在 ma
 `uv run --python 3.12` 选择构建脚本使用的 Python。TypeScript Renderer 和 CSS 改动由 Vite 热更新，
 Main 与 Preload 改动只重启 Electron。后端包输入未变化时直接复用，
 Rust 源码或 Cargo 输入变化时由后端 watcher 构建，并仅在新二进制发布后切换 App Server。
-`Ash Desktop UI (reuse App Server)` 会先准备开发后端包，然后跳过后端监听，连接当前 profile 中兼容的服务。
+`Ash Desktop UI (connected)` 会先准备开发后端包，然后跳过后端监听；已有服务端与当前构建相同时复用，否则切换到当前构建。
 
 只开发桌面界面、但需要检查 Electron 特有的窗口、标题栏、菜单和原生交互时，运行：
 

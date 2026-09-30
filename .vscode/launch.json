@@ -30,12 +30,12 @@
 			}
 		},
 		{
-			"name": "Ash Desktop UI (reuse App Server)",
+			"name": "Ash Desktop UI (connected)",
 			"type": "node-terminal",
 			"request": "launch",
-			"command": "bash ./scripts/ash-desktop.sh --reuse-app-server",
+			"command": "bash ./scripts/ash-desktop.sh --connected",
 			"windows": {
-				"command": "cmd /d /c .\\scripts\\ash-desktop.bat --reuse-app-server"
+				"command": "cmd /d /c .\\scripts\\ash-desktop.bat --connected"
 			},
 			"cwd": "${workspaceFolder}",
 			"presentation": {

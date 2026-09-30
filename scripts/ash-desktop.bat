@@ -3,7 +3,7 @@ setlocal
 pushd "%~dp0.." || exit /b 1
 
 if "%~1"=="" goto full
-if "%~1"=="--reuse-app-server" goto connected
+if "%~1"=="--connected" goto connected
 
 >&2 echo Unknown Ash Desktop launch mode: %~1
 popd

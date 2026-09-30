@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { access, chmod, copyFile, link, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { access, link, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -115,7 +115,7 @@ test('Desktop replaces a daemon started from another package generation', async 
 	}
 });
 
-test('Desktop UI debugging reuses a compatible daemon outside the selected package', async ({ target }) => {
+test('Desktop reuses a daemon from the selected development package', async ({ target }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'This checks the Electron frontend debugging connection.');
 	const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-'));
 	const profile = join(userDataDirectory, 'profile');
@@ -123,14 +123,11 @@ test('Desktop UI debugging reuses a compatible daemon outside the selected packa
 	const packageLocation = { appPath, isPackaged: false, platform: process.platform, resourcesPath: '' };
 	const daemon = appServerDaemonExecutablePath(packageLocation);
 	const selectedBackend = appServerExecutablePath(packageLocation);
-	const existingBackend = join(userDataDirectory, process.platform === 'win32' ? 'existing-app-server.exe' : 'existing-app-server');
-	const environment = { ...process.env, ASH_HOME: profile, ASH_APP_SERVER_PATH: existingBackend };
+	const environment = { ...process.env, ASH_HOME: profile, ASH_APP_SERVER_PATH: selectedBackend };
 	let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
 	try {
-		await copyFile(selectedBackend, existingBackend);
-		if (process.platform !== 'win32') await chmod(existingBackend, 0o700);
 		const started = JSON.parse((await execFileAsync(daemon, ['start'], { env: environment, windowsHide: true })).stdout) as { readonly pid: number };
-		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory, profileDirectory: profile, reuseAppServer: true });
+		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory, profileDirectory: profile });
 		const connected = JSON.parse((await execFileAsync(daemon, ['version'], { env: environment, windowsHide: true })).stdout) as { readonly pid: number };
 		expect(connected.pid).toBe(started.pid);
 		await expect(desktop.driver.workbench.element).toBeVisible();

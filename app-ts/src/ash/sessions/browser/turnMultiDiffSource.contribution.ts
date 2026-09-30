@@ -143,5 +143,6 @@ function turnSourceIdentity(uri: URI): {
 	return { scope, sessionId, threadId, changeSetIds: changes.split(',') };
 }
 
-registerWorkbenchContribution('sessions.contrib.multiDiffSource', WorkbenchPhase.BlockStartup,
+// The resolver needs IEditorService, which the Workbench registers after BlockStartup.
+registerWorkbenchContribution('sessions.contrib.multiDiffSource', WorkbenchPhase.BlockRestore,
 	accessor => accessor.get(IInstantiationService).createInstance(SessionsMultiDiffSourceContribution));
