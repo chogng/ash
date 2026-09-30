@@ -463,7 +463,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(LocalizationServiceId, localizationService);
 	services.registerInstance(GitServiceId, gitService);
 	services.registerInstance(ChatServiceId, chatService);
-	const descriptor = EditorPanes.get(SettingsEditorId);
+	const descriptor = EditorPanes.getEditorPanes().find(candidate => candidate.id === SettingsEditorId);
 	assert.ok(descriptor);
 	assert.throws(() => descriptor.create({ instantiationService: services }), /Unknown service: agentCapabilitiesService/);
 	let capabilityReads = 0;
@@ -489,8 +489,6 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	} as unknown as IDirPermissionsService);
 	const instantiationService = services;
 	const editorPanes = new EditorPaneRegistry();
-	const descriptor = EditorPanes.getEditorPanes().find(candidate => candidate.id === SettingsEditorId);
-	assert.ok(descriptor);
 	disposables.add(editorPanes.registerEditorPane(descriptor));
 	const editor = disposables.add(new EditorPart(root, { registry: editorPanes, instantiationService }));
 	const preferences = disposables.add(new PreferencesService(() => new BrowserEditorService(editor)));

@@ -1475,7 +1475,8 @@ Grammar catalog 由共享 Workbench `ITextMateService` 拥有，声明式 extens
 
 | 能力或 VS Code 文件族 | Ash 所有者 | 当前结论 |
 | --- | --- | --- |
-| `editorPart`、`editorGroupView`、`editorParts`、`auxiliaryEditorPart` | `workbench/browser/parts/editor/{editorPart,editorGroup,editorParts}.ts` + `services/auxiliaryWindow` | 已具备二维 Grid、稳定 group/editor identity、跨窗口活动 part、移动与关闭 veto |
+| `editorPart`、`editorGroupView`、`editorParts`、`auxiliaryEditorPart` | `workbench/browser/parts/editor/{editorPart,editorGroupView,editorParts}.ts` + `services/auxiliaryWindow` | 已具备二维 Grid、跨窗口活动 part、移动与关闭 veto；组装、DOM 和窗格生命周期由 `EditorGroupView` 负责，原 `editorGroup.ts` 已退出 |
+| `common/editor/editorGroupModel` | `workbench/common/editor/editorGroupModel.ts` | 唯一维护 group/editor identity、标签顺序、活动标签、多选、preview/pinned、sticky 和组锁定状态；`EditorGroupView` 在窗格加载完成后提交模型，已为脏文件的标签直接固定，防止下次预览替换 |
 | `editorTabsControl`、multi/single/no tabs | Editor title/tabs controls | 已具备 multiple/single/none、preview/pinned、置顶标签独立行、多行布局、dirty/conflict decoration、reorder、edge split，以及 Ctrl/Shift/键盘标签多选与批量关闭 |
 | `editorQuickAccess`、`editorTypePicker`、`editorsObserver` | `editorQuickAccess.ts`、`editorsObserver.ts`、`EditorParts` | 已具备 Show All Editors、按组关闭结果、Reopen With、跨组 MRU、recently closed 和编辑器前进/后退记录 |
 | `editorWithViewState`、placeholder、drop target、auto save、status | pane capability + group/part contributions | 已具备 JSON-safe view state、retry/close/binary fallback、内部/外部 DnD、自动保存、状态栏和屏幕阅读器模式说明 |

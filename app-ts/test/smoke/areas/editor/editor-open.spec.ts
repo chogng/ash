@@ -151,6 +151,8 @@ test("Show All Editors searches recent editors and restores editor focus", async
 test("Editor tabs support modifier selection and close the selected set", async ({ target, workbench }) => {
 	test.skip(target.appServerMode !== "required" || target.workbenchMode !== "code", "This scenario requires the Code App Server product");
 	const page = workbench.page;
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	await expect(workbench.editors.groupAt(0).tabs).toHaveCount(0);
 	const explorer = page.locator(".ash-explorer .ash-tree-row");
 	await explorer.filter({ hasText: "main.ts" }).dblclick();
 	await explorer.filter({ hasText: "main.rs" }).dblclick();
@@ -237,6 +239,8 @@ test("Sticky and ordinary editors occupy separate tab rows", async ({ target, wo
 		"This scenario requires the Code App Server product",
 	);
 
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	await expect(workbench.editors.groupAt(0).tabs).toHaveCount(0);
 	const explorer = workbench.page.locator(".ash-explorer .ash-tree-row");
 	await explorer.filter({ hasText: "main.ts" }).dblclick();
 	await explorer.filter({ hasText: "main.rs" }).dblclick();

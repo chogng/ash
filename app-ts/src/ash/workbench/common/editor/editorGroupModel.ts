@@ -1,6 +1,6 @@
 import { extUri } from '../../../base/common/resources.js';
 import type { EditorInput } from '../../services/editor/common/editorService.js';
-import type { EditorInstanceId } from '../../services/editor/common/editorState.js';
+import type { EditorGroupId, EditorInstanceId } from '../../services/editor/common/editorState.js';
 
 export interface IEditorGroupModelEntry {
 	readonly input: EditorInput;
@@ -19,6 +19,7 @@ interface EditorEntry {
 export interface IEditorOpenOptions {
 	readonly pinned?: boolean;
 	readonly index?: number;
+	/** Moving a tab keeps its identity across groups; newly opened tabs allocate their own. */
 	readonly instanceId?: EditorInstanceId;
 }
 
@@ -29,11 +30,23 @@ export interface IEditorOpenResult {
 
 /** Owns tab order and selection; panes and their resources belong to the group view. */
 export class EditorGroupModel {
+	public readonly id: EditorGroupId;
 	private readonly editors: EditorEntry[] = [];
 	private readonly selection = new Set<EditorInstanceId>();
 	private active: EditorEntry | undefined;
 	private selectionAnchor: EditorInstanceId | undefined;
 	private locked = false;
+
+	constructor(id?: EditorGroupId) {
+		this.id = id ?? `editor-group-${++editorGroupId}`;
+		const match = /^editor-group-(\d+)$/u.exec(this.id);
+		if (match) {
+			const value = Number(match[1]);
+			if (Number.isSafeInteger(value)) {
+				editorGroupId = Math.max(editorGroupId, value);
+			}
+		}
+	}
 
 	public get entries(): readonly IEditorGroupModelEntry[] {
 		return this.editors;
@@ -41,6 +54,10 @@ export class EditorGroupModel {
 
 	public get activeEditor(): EditorInput | undefined {
 		return this.active?.input;
+	}
+
+	public get previewEditor(): EditorInput | undefined {
+		return this.editors.find(editor => editor.preview)?.input;
 	}
 
 	public get selectedEditors(): readonly EditorInput[] {
@@ -55,7 +72,7 @@ export class EditorGroupModel {
 		return this.locked;
 	}
 
-	public get stickyCount(): number {
+	private get stickyCount(): number {
 		return this.editors.filter(editor => editor.sticky).length;
 	}
 
@@ -199,6 +216,7 @@ export class EditorGroupModel {
 	}
 }
 
+let editorGroupId = 0;
 let editorInstanceId = 0;
 
 function nextEditorInstanceId(): EditorInstanceId {

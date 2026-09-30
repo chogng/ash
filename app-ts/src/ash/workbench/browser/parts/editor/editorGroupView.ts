@@ -4,7 +4,7 @@ import { Dimension, type IDimension } from "../../../../base/browser/dom.js";
 import { CancellationError, isCancellationError } from "../../../../base/common/errors.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { validateJsonValue } from "../../../../base/common/jsonValue.js";
-import { Disposable, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, DisposableMap, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { localize } from "../../../../nls.js";
 import type { URI } from "../../../../base/common/uri.js";
 import { EditorOpenSource, TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
@@ -34,7 +34,7 @@ import { EditorGroupModel, type IEditorGroupModelEntry } from '../../../common/e
 import { EditorGroupWatermark } from './editorGroupWatermark.js';
 import { EditorTitleControl } from './editorTitleControl.js';
 import { ErrorPlaceholderEditor } from "./editorPlaceholder.js";
-import { editorInputKey, type EditorTabDescriptor, type EditorTabsDelegate } from "./editorTabsControl.js";
+import type { EditorTabDescriptor, EditorTabsDelegate } from "./editorTabsControl.js";
 import type { EditorHeaderActions } from "./editorHeaderControl.js";
 import { type LanguageLocation, type LanguageWorkspaceEdit } from "../../../../editor/common/languages.js";
 import type { ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";
@@ -130,14 +130,22 @@ export interface EditorGroupOptions {
 	readonly dragAndDrop?: IEditorTabDragAndDrop;
 }
 
-interface EditorGroupEntry extends EditorTabDescriptor {
-	readonly instanceId: EditorInstanceId;
-	paneInstance: EditorPaneInstance;
-	readonly labelListener: MutableDisposable<IDisposable>;
-	readonly state: IEditorGroupModelEntry;
-	readonly input: EditorInput;
-	readonly preview: boolean;
-	readonly sticky: boolean;
+/** Releases tab-scoped listeners; EditorPanes owns the pane itself. */
+class EditorGroupEntry extends Disposable implements EditorTabDescriptor {
+	public readonly labelListener = this._register(new MutableDisposable<IDisposable>());
+
+	constructor(public readonly state: IEditorGroupModelEntry, public readonly paneInstance: EditorPaneInstance) {
+		super();
+	}
+
+	public get input(): EditorInput { return this.state.input; }
+	public get instanceId(): EditorInstanceId { return this.state.instanceId; }
+	public get preview(): boolean { return this.state.preview; }
+	public get sticky(): boolean { return this.state.sticky; }
+	public get panelId(): string { return this.paneInstance.panelId; }
+	public get tabId(): string { return this.paneInstance.tabId; }
+	public get isDirty(): boolean { return this.paneInstance.pane.workingCopy?.isDirty ?? false; }
+	public get hasExternalChange(): boolean { return this.paneInstance.pane.workingCopy?.hasExternalChange ?? false; }
 }
 
 /**
@@ -179,8 +187,8 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 	private readonly resolveOpenError: EditorGroupOptions["resolveOpenError"];
 	private readonly onWillOpenEditor: EditorGroupOptions["onWillOpenEditor"];
 	private readonly onOpenError: EditorGroupOptions["onOpenError"];
-	private readonly model = new EditorGroupModel();
-	private readonly paneEntries = new Map<EditorInstanceId, EditorGroupEntry>();
+	private readonly model: EditorGroupModel;
+	private readonly paneEntries = this._register(new DisposableMap<EditorInstanceId, EditorGroupEntry>());
 
 	private get entries(): readonly EditorGroupEntry[] {
 		return this.model.entries.map(entry => this.paneEntries.get(entry.instanceId)!);
@@ -190,6 +198,7 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 		const active = this.model.activeEditor;
 		return active ? this.entry(active) : undefined;
 	}
+
 	private ordinaryContent: Element | undefined;
 	private groupDimension: IDimension = Dimension.Zero;
 	private dimension: IDimension = Dimension.Zero;
@@ -197,8 +206,8 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 
 	constructor(container: HTMLElement, options: EditorGroupOptions) {
 		super();
-		this.id = options.id ?? nextEditorGroupId();
-		reserveEditorGroupId(this.id);
+		this.model = new EditorGroupModel(options.id);
+		this.id = this.model.id;
 		this.registry = options.registry;
 		this.onOpenError = options.onOpenError;
 		this.resolveOpenError = options.resolveOpenError;
@@ -299,8 +308,6 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 		this._register(this.titleControl.onDidChangeHeight(() => this.layout(this.groupDimension)));
 		this._register(toDisposable(() => {
 			this.cancelPendingOpen();
-			for (const entry of this.paneEntries.values()) entry.labelListener.dispose();
-			this.paneEntries.clear();
 		}));
 		this.renderChrome();
 	}
@@ -311,7 +318,7 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 			return;
 		}
 		const entry = this.requireEntry(input);
-		const editorIndex = this.entries.indexOf(entry);
+		const editorIndex = this.model.indexOf(entry.input);
 		const context = { groupId: this.id, editorIndex };
 		const anchor = event.type === "contextmenu"
 			? { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY, targetWindow: tab.ownerDocument.defaultView ?? undefined }
@@ -360,7 +367,7 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 	}
 
 	get inputs(): readonly EditorInput[] {
-		return this.entries.map(({ input }) => input);
+		return this.model.getEditors();
 	}
 
 	get selectedInputs(): readonly EditorInput[] {
@@ -415,21 +422,21 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 	}
 
 	isPreview(input: EditorInput): boolean {
-		return this.entry(input)?.preview ?? false;
+		return this.model.findEditor(input) !== undefined && !this.model.isPinned(input);
 	}
 
 	isSticky(input: EditorInput): boolean {
-		return this.entry(input)?.sticky ?? false;
+		return this.model.isSticky(input);
 	}
 
 	toggleSticky(input: EditorInput): void {
 		const entry = this.requireEntry(input);
-		const previousIndex = this.entries.indexOf(entry);
+		const previousIndex = this.model.indexOf(input);
 		const focusedTab = this.domNode.ownerDocument.activeElement?.closest(".ash-tab");
 		const restoreTabFocus = !!focusedTab && this.domNode.contains(focusedTab);
 		if (entry.sticky) this.model.unstick(input);
 		else this.model.stick(input);
-		if (this.entries.indexOf(entry) !== previousIndex) {
+		if (this.model.indexOf(input) !== previousIndex) {
 			this.editorChangeEmitter.fire(Object.freeze({ kind: "editorMoved", editor: this.editorState(entry), previousIndex }));
 		}
 		this.publishEditorState(entry);
@@ -479,7 +486,6 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 				this.editorChangeEmitter.fire(Object.freeze({ kind: "editorMoved", editor: this.editorState(existing), previousIndex }));
 			}
 			existing.labelListener.value = input.onDidChangeLabel?.(() => this.publishEditorState(existing));
-
 			this.activateEntry(existing, false);
 			applyEditorOpenOptions(existing.paneInstance.pane, options);
 			if (wasPreview !== existing.preview) this.publishEditorState(existing);
@@ -564,30 +570,19 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 
 	private commitEditorPane(input: EditorInput, options: EditorOpenOptions, paneInstance: EditorPaneInstance, existing: EditorGroupEntry | undefined, instanceId?: EditorInstanceId): IEditorPane {
 		const pane = paneInstance.pane;
-		// The model commits only after loading succeeds; failed or cancelled opens keep the old tab.
-		const replacement = existing ?? (options.pinned === false ? this.entries.find(entry => entry.preview) : undefined);
+		// Completed panes and error pages can commit; cancelled loads retain the previous tab.
+		const pinned = options.pinned !== false || pane.workingCopy?.isDirty === true;
+		const preview = this.model.previewEditor;
+		const replacement = existing ?? (!pinned && preview ? this.entry(preview) : undefined);
 		const closedState = replacement ? this.editorState(replacement) : undefined;
-		const result = this.model.openEditor(input, { ...options, ...(instanceId === undefined ? {} : { instanceId }) });
+		const result = this.model.openEditor(input, { ...options, pinned, ...(instanceId === undefined ? {} : { instanceId }) });
 		const state = result.editor;
 		const replaced = result.replaced ? this.paneEntries.get(result.replaced.instanceId) : undefined;
 		if (replaced) {
-			replaced.labelListener.dispose();
 			this.panes.disposePane(replaced.paneInstance);
-			this.paneEntries.delete(replaced.instanceId);
+			this.paneEntries.deleteAndDispose(replaced.instanceId);
 		}
-		const entry: EditorGroupEntry = {
-			state,
-			get input() { return state.input; },
-			get preview() { return state.preview; },
-			get sticky() { return state.sticky; },
-			instanceId: state.instanceId,
-			panelId: paneInstance.panelId,
-			tabId: paneInstance.tabId,
-			paneInstance,
-			labelListener: new MutableDisposable<IDisposable>(),
-			get isDirty() { return paneInstance.pane.workingCopy?.isDirty ?? false; },
-			get hasExternalChange() { return paneInstance.pane.workingCopy?.hasExternalChange ?? false; },
-		};
+		const entry = new EditorGroupEntry(state, paneInstance);
 		this.paneEntries.set(entry.instanceId, entry);
 		if (closedState) {
 			this.editorChangeEmitter.fire(Object.freeze({ kind: "editorClosed", editor: closedState, reason: existing ? "replace" : "previewReplace" }));
@@ -639,19 +634,18 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 		const entry = this.entry(input);
 		if (!entry) return false;
 		if (!options.skipConfirmation && entry.paneInstance.pane.workingCopy?.isDirty && !await this.confirmCloseEditor(input)) return false;
-		if (!this.entries.includes(entry)) return true;
+		if (this.paneEntries.get(entry.instanceId) !== entry) return true;
 		this.doCloseEditor(entry, options.reason ?? "close");
 		return true;
 	}
 
 	private doCloseEditor(entry: EditorGroupEntry, reason: EditorCloseReason): void {
-		const index = this.entries.indexOf(entry);
+		const index = this.model.indexOf(entry.input);
 		if (index < 0) return;
 		const closedState = this.editorState(entry, index);
 		const wasActive = this.activeEntry === entry;
 		this.model.closeEditor(entry.input);
-		this.paneEntries.delete(entry.instanceId);
-		entry.labelListener.dispose();
+		this.paneEntries.deleteAndDispose(entry.instanceId);
 		this.panes.disposePane(entry.paneInstance);
 		this.editorChangeEmitter.fire(Object.freeze({ kind: "editorClosed", editor: closedState, reason }));
 		if (wasActive) {
@@ -666,13 +660,11 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 	}
 
 	async replaceEditor(input: EditorInput, replacement: EditorInput): Promise<void> {
-		const index = this.entries.findIndex(
-			(candidate) => editorInputKey(candidate.input) === editorInputKey(input),
-		);
+		const index = this.model.indexOf(input);
 		if (index < 0) throw new RangeError(`Editor is not open in this group: ${input.resource}`);
 		const wasSticky = this.isSticky(input);
 		const previouslyActive = this.activeInput;
-		const wasActive = previouslyActive && editorInputKey(previouslyActive) === editorInputKey(input);
+		const wasActive = this.activeEntry === this.entry(input);
 		await this.openEditor(replacement, { index });
 		if (wasSticky) this.toggleSticky(replacement);
 		await this.closeEditor(input, { skipConfirmation: true, reason: "replace" });
@@ -681,17 +673,13 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 
 	getEditorInsertionIndex(target: EditorInput | undefined, position: EditorTabDropPosition): number {
 		if (!target) return this.entries.length;
-		const index = this.entries.findIndex(
-			(candidate) => editorInputKey(candidate.input) === editorInputKey(target),
-		);
+		const index = this.model.indexOf(target);
 		if (index < 0) return this.entries.length;
 		return position === "before" ? index : index + 1;
 	}
 
 	moveEditor(input: EditorInput, targetIndex: number): void {
-		const sourceIndex = this.entries.findIndex(
-			(candidate) => editorInputKey(candidate.input) === editorInputKey(input),
-		);
+		const sourceIndex = this.model.indexOf(input);
 		if (sourceIndex < 0) return;
 		const entry = this.entries[sourceIndex]!;
 		this.model.moveEditor(input, targetIndex > sourceIndex ? targetIndex - 1 : targetIndex);
@@ -791,12 +779,12 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 	}
 
 	private publishEditorState(entry: EditorGroupEntry): void {
-		if (!this.entries.includes(entry)) return;
+		if (this.paneEntries.get(entry.instanceId) !== entry) return;
 		this.renderChrome();
 		this.editorChangeEmitter.fire(Object.freeze({ kind: "editorStateChanged", editor: this.editorState(entry) }));
 	}
 
-	private editorState(entry: EditorGroupEntry, index = this.entries.indexOf(entry)): EditorInstanceState {
+	private editorState(entry: EditorGroupEntry, index = this.model.indexOf(entry.input)): EditorInstanceState {
 		const workingCopy = entry.paneInstance.pane.workingCopy;
 		return Object.freeze({
 			groupId: this.id,
@@ -814,10 +802,8 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 	}
 
 	private entry(input: EditorInput): EditorGroupEntry | undefined {
-		const key = editorInputKey(input);
-		return this.entries.find(
-			(candidate) => editorInputKey(candidate.input) === key,
-		);
+		const state = this.model.findEditor(input);
+		return state ? this.paneEntries.get(state.instanceId) : undefined;
 	}
 
 	private requireEntry(input: EditorInput): EditorGroupEntry {
@@ -842,19 +828,6 @@ function applyEditorOpenOptions(pane: IEditorPane, options: EditorOpenOptions): 
 		return;
 	}
 	pane.revealRange?.(options.selection);
-}
-
-let editorGroupId = 0;
-
-function nextEditorGroupId(): EditorGroupId {
-	return `editor-group-${++editorGroupId}`;
-}
-
-function reserveEditorGroupId(id: EditorGroupId): void {
-	const match = /^editor-group-(\d+)$/u.exec(id);
-	if (!match) return;
-	const value = Number(match[1]);
-	if (Number.isSafeInteger(value)) editorGroupId = Math.max(editorGroupId, value);
 }
 
 export class EditorOpenSupersededError extends CancellationError {

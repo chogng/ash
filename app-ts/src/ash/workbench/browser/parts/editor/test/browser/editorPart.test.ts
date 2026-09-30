@@ -682,6 +682,30 @@ test("EditorPart saves before closing and pins a dirty preview", async () => {
 	dom.window.close();
 });
 
+test('EditorPart pins an already dirty working copy before opening another preview', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const registry = new EditorPaneRegistry();
+		let created = 0;
+		using registration = registry.registerEditorPane(descriptor('stanza.editor.code', '.ts', () => {
+			const workingCopy = new TestWorkingCopy(URI.file('C:\\project\\current.ts'));
+			if (created++ === 0) workingCopy.markDirty();
+			return new TestEditorPane('stanza.editor.code', workingCopy);
+		}));
+		using editor = new EditorPart(dom.window.document.body, { registry });
+		const dirty = input('C:\\project\\dirty.ts');
+		const clean = input('C:\\project\\clean.ts');
+		await editor.openEditor(dirty, { pinned: false });
+		await editor.openEditor(clean, { pinned: false });
+		assert.deepEqual(editor.activeGroup.editors.map(entry => ({ input: entry.input, preview: entry.isPreview, dirty: entry.isDirty })), [
+			{ input: dirty, preview: false, dirty: true },
+			{ input: clean, preview: true, dirty: false },
+		]);
+	} finally {
+		dom.window.close();
+	}
+});
+
 test("EditorPart opens beside the active group without stealing caller focus", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
