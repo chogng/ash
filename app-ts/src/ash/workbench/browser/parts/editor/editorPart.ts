@@ -1,3 +1,7 @@
+import type { IAction } from '../../../../base/common/actions.js';
+import { localize } from '../../../../nls.js';
+import Severity from '../../../../base/common/severity.js';
+import { createEditorOpenError, isEditorOpenError } from '../../../common/editor.js';
 import "./media/editorpart.css";
 import { isNonEmptyArray } from "../../../../base/common/arrays.js";
 import { basename } from "../../../../base/common/resources.js";
@@ -14,16 +18,16 @@ import { DisposableMap, Disposable, MutableDisposable, type IDisposable } from "
 import { rot } from "../../../../base/common/numbers.js";
 import { Schemas } from "../../../../base/common/network.js";
 import type { IMenuService } from "../../../../platform/actions/common/actions.js";
-import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
+import { EditorOpenSource, TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 import type { IKeybindingsResourceService } from "../../../../platform/keybinding/common/keybindingsResource.js";
 import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import { ConfirmResult, type IDialogService, type IFileDialogService } from "../../../../platform/dialogs/common/dialogs.js";
-import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
-import type { IFileService } from "../../../../platform/files/common/files.js";
+import { ConfirmResult, DialogSeverity, type IDialogService, type IFileDialogService } from "../../../../platform/dialogs/common/dialogs.js";
+import { TextFileBinaryError, TextFileTooLargeError, type ITextFileService } from "../../../services/textfile/common/textFileService.js";
+import { FileNotFoundError, type IFileService } from "../../../../platform/files/common/files.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import type { IDiffService } from "../../../services/diff/common/diffService.js";
 import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
@@ -32,7 +36,7 @@ import type { IDocumentCollaborationApi } from "../../../../platform/collaborati
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import { WorkbenchPart } from "../../part.js";
 import { EditorGroup, type EditorGroupOptions, type IEditorGroup } from "./editorGroup.js";
-import { AutoLockGroupsConfiguration, EditorLargeFileConfirmationConfiguration, type AutoLockGroups } from "./editorConfiguration.js";
+import { AutoLockGroupsConfiguration, DefaultBinaryEditorConfiguration, EditorLargeFileConfirmationConfiguration, type AutoLockGroups } from "./editorConfiguration.js";
 import type { FileElement } from "./breadcrumbsModel.js";
 import type { IBreadcrumbsService } from "./breadcrumbs.js";
 import type { ILanguageFeaturesService } from "../../../../editor/common/services/languageFeatures.js";
@@ -178,6 +182,9 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		this.domNode.setAttribute("aria-label", "Editor");
 		this.groupOptions = {
 			registry: options.registry ?? EditorPanes,
+			resolveOpenError: (error, input, openOptions, open) => this.resolveEditorOpenError(error, input, openOptions, open),
+			onWillOpenEditor: input => this.confirmLargeFileOpen(input),
+			onOpenError: (error, input, openOptions) => this.showEditorOpenErrorDialog(error, input, openOptions),
 			configurationService: options.configurationService,
 			contextKeyService: options.contextKeyService,
 			keybindingService: options.keybindingService,
@@ -231,6 +238,9 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		this.modalEditor = this._register(new ModalEditorPart({
 			container,
 			registry: this.groupOptions.registry,
+			resolveOpenError: this.groupOptions.resolveOpenError,
+			onWillOpenEditor: this.groupOptions.onWillOpenEditor,
+			onOpenError: this.groupOptions.onOpenError,
 			paneCreationOptions: {
 				configurationService: options.configurationService,
 				contextKeyService: options.contextKeyService,
@@ -313,8 +323,6 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	}
 
 	async openEditor(input: EditorInput, options: EditorOpenOptions = {}, target?: EditorOpenTarget): Promise<IEditorPane> {
-		const largeFileConfirmation = this.confirmLargeFileOpen(input);
-		if (largeFileConfirmation) await largeFileConfirmation;
 		if (target === "modalGroup") {
 			const modalInput = this.modalEditor.activeInput;
 			if (modalInput && editorInputKey(modalInput) !== editorInputKey(input) && !await this.closeEditor(modalInput)) {
@@ -350,6 +358,69 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			if (created) this.removeGroup(host);
 			this.setActiveGroup(source);
 			throw error;
+		}
+	}
+
+	private resolveEditorOpenError(error: unknown, input: EditorInput, options: EditorOpenOptions, open: (options: EditorOpenOptions) => Promise<IEditorPane>): unknown {
+		console.error("Could not open editor", error);
+		let displayError = error;
+		if (error instanceof TextFileBinaryError) {
+			const editorId = this.groupOptions.configurationService?.getValue<string>(DefaultBinaryEditorConfiguration) || "ash.editor.binary";
+			const binaryEditor = this.groupOptions.registry.getEditors(input).find(candidate => candidate.id === editorId);
+			const actions: IAction[] = binaryEditor ? [{
+				id: "workbench.editor.openAsBinary",
+				label: localize("workbench.editorOpenAsBinary", "Open as Binary"),
+				tooltip: "",
+				enabled: true,
+				run: () => open({ ...options, preferredEditorId: binaryEditor.id }),
+			}] : [];
+			displayError = createEditorOpenError(localize("workbench.editorOpenBinaryMessage", "This file cannot be displayed as text because it is binary or uses an unsupported text encoding."), actions, {
+				forceMessage: true,
+				forceSeverity: Severity.Warning,
+			});
+		} else if (error instanceof FileNotFoundError) {
+			const files = this.groupOptions.fileService;
+			const actions: IAction[] = files && input.readOnly !== true ? [{
+				id: "workbench.editor.createMissingFile",
+				label: localize("workbench.editorOpenCreateFile", "Create file"),
+				tooltip: "",
+				enabled: true,
+				run: async () => {
+					await files.createFile(input.resource, "error");
+					await open({ ...options, pinned: true });
+				},
+			}] : [];
+			displayError = createEditorOpenError(localize("workbench.editorOpenNotFound", "The file could not be opened because it was not found."), actions, { forceMessage: true, allowDialog: true });
+		} else if (error instanceof TextFileTooLargeError) {
+			displayError = createEditorOpenError(localize("workbench.editorOpenTooLarge", "This file is too large to open as text ({0} MiB).", (error.sizeBytes / 1024 / 1024).toFixed(1)), [], { forceMessage: true, forceSeverity: Severity.Warning });
+		}
+		return displayError;
+	}
+
+	private async showEditorOpenErrorDialog(error: unknown, input: EditorInput, options: EditorOpenOptions): Promise<void> {
+		if (options.source !== EditorOpenSource.USER || !this.dialogService) return;
+		const openError = isEditorOpenError(error) ? error : undefined;
+		if (openError && !openError.allowDialog) return;
+		const title = localize("workbench.editorOpenFailure", "Unable to open {0}", input.label || basename(input.resource));
+		const severity = openError?.forceSeverity === Severity.Warning ? DialogSeverity.Warning
+			: openError?.forceSeverity === Severity.Info ? DialogSeverity.Info : DialogSeverity.Error;
+		const actions = openError?.actions ?? [];
+		const { result } = await this.dialogService.prompt({
+			title,
+			message: openError?.forceMessage ? openError.message : title,
+			detail: openError?.forceMessage ? undefined : error instanceof Error ? error.message : String(error),
+			severity,
+			buttons: actions.length
+				? actions.filter(action => action.enabled).map(action => ({ label: action.label, run: () => action }))
+				: [{ label: localize("workbench.editorOpenDismiss", "Dismiss"), run: () => undefined }],
+			cancelButton: localize("workbench.editorOpenDismiss", "Dismiss"),
+		});
+		if (result) {
+			try {
+				await result.run();
+			} catch (actionError) {
+				await this.dialogService.error(actionError instanceof Error ? actionError.message : String(actionError));
+			}
 		}
 	}
 

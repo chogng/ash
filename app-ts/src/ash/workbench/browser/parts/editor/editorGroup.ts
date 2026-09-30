@@ -1,15 +1,16 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { Separator, type IAction } from "../../../../base/common/actions.js";
 import { Dimension, type IDimension } from "../../../../base/browser/dom.js";
+import { CancellationError, isCancellationError } from "../../../../base/common/errors.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { validateJsonValue } from "../../../../base/common/jsonValue.js";
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { localize } from "../../../../nls.js";
 import type { URI } from "../../../../base/common/uri.js";
-import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
+import { EditorOpenSource, TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
-import { TextFileBinaryError, type ITextFileService } from "../../../services/textfile/common/textFileService.js";
+import type { ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import type { IFileService } from "../../../../platform/files/common/files.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
@@ -47,7 +48,7 @@ import type { ILanguageFeaturesService } from '../../../../editor/common/service
 import type { LanguageDocumentSymbol } from '../../../../editor/common/languages.js';
 import type { Range } from '../../../../editor/common/core/range.js';
 import { isDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
-import { associatedEditorId, DefaultBinaryEditorConfiguration, DiffEditorAssociationsConfiguration, EditorAssociationsConfiguration, type EditorAssociations } from './editorConfiguration.js';
+import { associatedEditorId, DiffEditorAssociationsConfiguration, EditorAssociationsConfiguration, type EditorAssociations } from './editorConfiguration.js';
 
 /** Operations and state owned independently by one EditorGroup. */
 export interface IEditorGroup {
@@ -119,6 +120,9 @@ export interface EditorGroupOptions {
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 	readonly showBreadcrumbSymbolPicker?: (symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => void;
 	readonly onDidActivate?: () => void;
+	readonly resolveOpenError?: (error: unknown, input: EditorInput, options: EditorOpenOptions, open: (options: EditorOpenOptions) => Promise<IEditorPane>) => unknown;
+	readonly onWillOpenEditor?: (input: EditorInput) => Promise<void> | undefined;
+	readonly onOpenError?: (error: unknown, input: EditorInput, options: EditorOpenOptions) => Promise<void>;
 	readonly dragAndDrop?: IEditorTabDragAndDrop;
 }
 
@@ -166,6 +170,9 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 	private readonly onOpenLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined;
 	private readonly onApplyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined;
 	private readonly titleActions: EditorHeaderActions | undefined;
+	private readonly resolveOpenError: EditorGroupOptions["resolveOpenError"];
+	private readonly onWillOpenEditor: EditorGroupOptions["onWillOpenEditor"];
+	private readonly onOpenError: EditorGroupOptions["onOpenError"];
 	private readonly entries: EditorGroupEntry[] = [];
 	private activeEntry: EditorGroupEntry | undefined;
 	private locked = false;
@@ -184,6 +191,9 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		this.id = options.id ?? nextEditorGroupId();
 		reserveEditorGroupId(this.id);
 		this.registry = options.registry;
+		this.onOpenError = options.onOpenError;
+		this.resolveOpenError = options.resolveOpenError;
+		this.onWillOpenEditor = options.onWillOpenEditor;
 		this.configurationService = options.configurationService;
 		this.contextKeyService = options.contextKeyService;
 		this.keybindingService = options.keybindingService;
@@ -395,6 +405,14 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		const sequence = ++this.openSequence;
 		this.cancelPendingOpen();
 		const existing = this.entry(input);
+		try {
+			const confirmation = this.onWillOpenEditor?.(input);
+			if (confirmation) await confirmation;
+		} catch (error) {
+			if (sequence !== this.openSequence) throw new EditorOpenSupersededError(input);
+			return this.showOpenError(input, options, error, existing);
+		}
+		if (sequence !== this.openSequence) throw new EditorOpenSupersededError(input);
 		let descriptor: ReturnType<EditorPaneRegistry["resolve"]>;
 		try {
 			const matchInput = this.languageResolver
@@ -408,8 +426,7 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 				: undefined;
 			descriptor = this.registry.resolve(matchInput, association ? { ...options, preferredEditorId: association } : options);
 		} catch (error) {
-			this.showOpenError(input, options, error, existing);
-			throw error;
+			return this.showOpenError(input, options, error, existing);
 		}
 		if (existing?.paneInstance.pane.id === descriptor.id) {
 			const wasPreview = existing.preview;
@@ -461,8 +478,7 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 				} : {}),
 			});
 		} catch (error) {
-			this.showOpenError(input, options, error, existing);
-			throw error;
+			return this.showOpenError(input, options, error, existing);
 		}
 		createdPane = pane;
 		if (pane.id !== descriptor.id) {
@@ -470,15 +486,13 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 			const error = new TypeError(
 				`Editor pane factory '${descriptor.id}' created '${pane.id}'`,
 			);
-			this.showOpenError(input, options, error, existing);
-			throw error;
+			return this.showOpenError(input, options, error, existing);
 		}
 		let paneInstance: EditorPaneInstance;
 		try {
 			paneInstance = this.panes.create(pane);
 		} catch (error) {
-			this.showOpenError(input, options, error, existing);
-			throw error;
+			return this.showOpenError(input, options, error, existing);
 		}
 		this.panes.setPending(paneInstance);
 		try {
@@ -488,8 +502,7 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 			if (sequence !== this.openSequence) {
 				throw new EditorOpenSupersededError(input);
 			}
-			this.showOpenError(input, options, error, existing);
-			throw error;
+			return this.showOpenError(input, options, error, existing);
 		}
 
 		if (
@@ -553,35 +566,22 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		return pane;
 	}
 
-	private showOpenError(input: EditorInput, options: EditorOpenOptions, error: unknown, existing: EditorGroupEntry | undefined): void {
-		if (existing?.paneInstance.pane instanceof ErrorPlaceholderEditor) {
-			existing.paneInstance.pane.updateError(error);
-			this.activateEntry(existing, false);
-			return;
-		}
-		if (existing || this.activeEntry) return;
-		const binaryEditorId = this.configurationService?.getValue<string>(DefaultBinaryEditorConfiguration) || "ash.editor.binary";
-		const binaryEditor = error instanceof TextFileBinaryError
-			? this.registry.getEditors(input).find(candidate => candidate.id === binaryEditorId)
-			: undefined;
+	private async showOpenError(input: EditorInput, options: EditorOpenOptions, error: unknown, existing: EditorGroupEntry | undefined): Promise<IEditorPane> {
+		if (options.ignoreError || isCancellationError(error)) throw error;
+		const displayError = this.resolveOpenError ? this.resolveOpenError(error, input, options, openOptions => this.openEditor(input, openOptions)) : error;
 		const pane = new ErrorPlaceholderEditor(
-			error,
-			() => {
-				void this.openEditor(input, { ...options, pinned: true }).catch(() => undefined);
-			},
-			() => {
-				void this.closeEditor(input).catch(reportEditorCloseError);
-			},
-			binaryEditor ? {
-				label: localize("workbench.editorOpenAsBinary", "Open as Binary"),
-				run: () => {
-					void this.openEditor(input, { ...options, pinned: true, preferredEditorId: binaryEditor.id }).catch(() => undefined);
-				},
-			} : undefined,
+			displayError,
+			() => this.openEditor(input, { ...options, source: EditorOpenSource.USER }),
+			() => this.closeEditor(input),
 		);
 		const paneInstance = this.panes.create(pane);
 		void pane.setInput(input, paneInstance.signal);
-		this.commitEditorPane(input, options, paneInstance, undefined);
+		// A failed resource owns a tab even when another file is already open.
+		this.commitEditorPane(input, options, paneInstance, existing);
+		await this.onOpenError?.(displayError, input, options);
+		const current = this.entry(input)?.paneInstance.pane;
+		if (!current) throw new CancellationError("The failed editor was closed");
+		return current;
 	}
 
 	activateEditor(input: EditorInput): IEditorPane {
@@ -872,7 +872,7 @@ function nextEditorInstanceId(): EditorInstanceId {
 	return `editor-instance-${++editorInstanceId}`;
 }
 
-export class EditorOpenSupersededError extends Error {
+export class EditorOpenSupersededError extends CancellationError {
 	constructor(readonly input: EditorInput) {
 		super(`Editor opening was superseded: ${input.resource}`);
 		this.name = "EditorOpenSupersededError";

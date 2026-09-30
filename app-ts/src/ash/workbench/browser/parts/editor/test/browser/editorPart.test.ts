@@ -1,3 +1,6 @@
+import Severity from '../../../../../../base/common/severity.js';
+import { CancellationError } from '../../../../../../base/common/errors.js';
+import { DialogService } from '../../../../../services/dialogs/common/dialogService.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
@@ -11,7 +14,7 @@ import { AutoLockGroupsConfiguration, DefaultBinaryEditorConfiguration, DynamicE
 import { createDiffEditorInput } from "../../../../../common/editor/diffEditorInput.js";
 import { InMemoryConfigurationService } from "../../../../../../platform/configuration/common/inMemoryConfigurationService.js";
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
-import type { IFileService } from "../../../../../../platform/files/common/files.js";
+import { FileNotFoundError, type IFileService } from "../../../../../../platform/files/common/files.js";
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../../../../platform/configuration/common/configurationRegistry.js";
 import { Registry } from "../../../../../../platform/registry/common/platform.js";
 import {
@@ -24,8 +27,8 @@ import { Disposable, toDisposable } from "../../../../../../base/common/lifecycl
 import { URI } from "../../../../../../base/common/uri.js";
 import { Position } from "../../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../../editor/common/core/range.js";
-import { TextEditorSelectionSource } from '../../../../../../platform/editor/common/editor.js';
-import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection } from '../../../../../../workbench/common/editor.js';
+import { EditorOpenSource, TextEditorSelectionSource } from '../../../../../../platform/editor/common/editor.js';
+import { createEditorOpenError, EditorPaneSelectionChangeReason, type IEditorPaneWithSelection } from '../../../../../../workbench/common/editor.js';
 import type { LanguageLocation } from "../../../../../../editor/common/languages.js";
 import type {
 	CommandId,
@@ -45,6 +48,7 @@ import {
 } from "../../../../../../platform/keybinding/common/keybinding.js";
 import {
 	ConfirmResult,
+	DialogResult,
 	type IDialogService,
 	type IFileDialogService,
 } from "../../../../../../platform/dialogs/common/dialogs.js";
@@ -1184,7 +1188,7 @@ test("Editor title toolbar splits the active group and owns More Actions", async
 	dom.window.close();
 });
 
-test("EditorPart retains the active pane when a replacement fails", async () => {
+test("EditorPart preserves working tabs and opens a failure in its own tab", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
 	const panes: TestEditorPane[] = [];
@@ -1207,12 +1211,13 @@ test("EditorPart retains the active pane when a replacement fails", async () => 
 	const workingInput = input("C:\\project\\document.ok");
 	const workingPane = await editor.openEditor(workingInput);
 
-	await assert.rejects(
-		editor.openEditor(input("C:\\project\\document.bad")),
-		/Unable to load input/,
-	);
+	const failedInput = input("C:\\project\\document.bad");
+	await editor.openEditor(failedInput);
+	assert.equal(editor.activePane?.id, "workbench.editor.openError");
+	assert.equal(editor.activeInput, failedInput);
+	assert.deepEqual(editor.activeGroup.inputs, [workingInput, failedInput]);
+	editor.activateEditor(workingInput);
 	assert.equal(editor.activePane, workingPane);
-	assert.equal(editor.activeInput, workingInput);
 	assert.equal(panes[1]?.disposed, true);
 
 	editor.dispose();
@@ -1335,7 +1340,7 @@ test("EditorPart shows a retryable placeholder when an editor cannot open", asyn
 	const editor = new EditorPart(dom.window.document.body, { registry });
 	const retryable = input("C:/project/document.retry");
 
-	await assert.rejects(editor.openEditor(retryable), /Temporary decoder failure/);
+	await editor.openEditor(retryable);
 	assert.equal(editor.activeInput, retryable);
 	assert.equal(editor.activePane?.id, "workbench.editor.openError");
 	assert.match(editor.domNode.textContent ?? "", /Unable to open document\.retry/);
@@ -1366,7 +1371,7 @@ test("Editor open error offers a registered Binary Editor for unsafe text conten
 		create: () => new TestEditorPane("ash.editor.binary"),
 	});
 	const editor = new EditorPart(dom.window.document.body, { registry });
-	await assert.rejects(editor.openEditor(input("C:\\project\\unsafe.bin")), TextFileBinaryError);
+	await editor.openEditor(input("C:\\project\\unsafe.bin"));
 	const button = [...editor.domNode.querySelectorAll<HTMLButtonElement>(".ash-editor-open-error-actions button")]
 		.find(candidate => candidate.textContent === "Open as Binary");
 	assert.ok(button);
@@ -1926,3 +1931,162 @@ function deferred<T>(): {
 	});
 	return { promise, resolve: resolvePromise };
 }
+
+
+test('ignored open errors leave the active file intact and report the original error', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const registry = new EditorPaneRegistry();
+	const failure = new Error('Access denied');
+	registry.register(descriptor('test.editor.working', '.ok', () => new TestEditorPane('test.editor.working')));
+	registry.register(descriptor('test.editor.failed', '.bad', () => {
+		const pane = new TestEditorPane('test.editor.failed');
+		pane.inputError = failure;
+		return pane;
+	}));
+	try {
+		using editor = new EditorPart(dom.window.document.body, { registry });
+		const working = input('C:/project/working.ok');
+		await editor.openEditor(working);
+		await assert.rejects(editor.openEditor(input('C:/project/failed.bad'), { ignoreError: true }), error => error === failure);
+		assert.deepEqual(editor.activeGroup.inputs, [working]);
+		assert.equal(editor.domNode.querySelector('.ash-editor-open-error'), null);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('cancelled opens do not create an error page', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const registry = new EditorPaneRegistry();
+	registry.register(descriptor('test.editor.cancelled', '.cancelled', () => {
+		const pane = new TestEditorPane('test.editor.cancelled');
+		pane.inputError = new CancellationError();
+		return pane;
+	}));
+	try {
+		using editor = new EditorPart(dom.window.document.body, { registry });
+		await assert.rejects(editor.openEditor(input('C:/project/document.cancelled')), CancellationError);
+		assert.equal(editor.activeGroup.inputs.length, 0);
+		assert.equal(editor.domNode.querySelector('.ash-editor-open-error'), null);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('error pages render severity and run the supplied action without duplicating a tab', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const registry = new EditorPaneRegistry();
+	let attempts = 0;
+	let editor: InstanceType<typeof EditorPart>;
+	const resource = input('C:/project/document.custom');
+	registry.register(descriptor('test.editor.custom', '.custom', () => {
+		const pane = new TestEditorPane('test.editor.custom');
+		if (attempts++ === 0) {
+			pane.inputError = createEditorOpenError('Choose a compatible viewer', [{
+				id: 'test.openViewer', label: 'Use viewer', tooltip: '', enabled: true,
+				run: () => editor.openEditor(resource),
+			}], { forceMessage: true, forceSeverity: Severity.Info });
+		}
+		return pane;
+	}));
+	try {
+		editor = new EditorPart(dom.window.document.body, { registry });
+		using editorLifetime = editor;
+		await editor.openEditor(resource);
+		const page = editor.domNode.querySelector<HTMLElement>('.ash-editor-open-error');
+		assert.equal(page?.getAttribute('role'), 'status');
+		assert.equal(page?.querySelector('h2')?.textContent, 'Choose a compatible viewer');
+		editor.focus();
+		const action = page?.querySelector<HTMLButtonElement>('button');
+		assert.equal(action, dom.window.document.activeElement);
+		action?.click();
+		await nextTask();
+		assert.deepEqual({ pane: editor.activePane?.id, tabs: editor.activeGroup.inputs.length, attempts }, { pane: 'test.editor.custom', tabs: 1, attempts: 2 });
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('only explicit user opens show an allowed error dialog and execute its selected action', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const registry = new EditorPaneRegistry();
+	let actionRuns = 0;
+	registry.register(descriptor('test.editor.dialog', '.dialog', () => {
+		const pane = new TestEditorPane('test.editor.dialog');
+		pane.inputError = createEditorOpenError('Choose a recovery action', [{
+			id: 'test.recover', label: 'Recover', tooltip: '', enabled: true,
+			run: () => { actionRuns++; },
+		}], { forceMessage: true, forceSeverity: Severity.Warning, allowDialog: true });
+		return pane;
+	}));
+	try {
+		using dialogs = new DialogService();
+		using editor = new EditorPart(dom.window.document.body, { registry, dialogService: dialogs });
+		await editor.openEditor(input('C:/project/restored.dialog'));
+		assert.equal(dialogs.model.dialogs.length, 0);
+		const opening = editor.openEditor(input('C:/project/chosen.dialog'), { source: EditorOpenSource.USER });
+		await nextTask();
+		const dialog = dialogs.model.dialogs[0];
+		assert.equal(dialog?.request.message, 'Choose a recovery action');
+		dialog?.close({ button: DialogResult.Primary, buttonIndex: 0 });
+		await opening;
+		assert.equal(actionRuns, 1);
+		assert.equal(dialogs.model.dialogs.length, 0);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('modal file failures use the same retryable error page', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	dom.window.HTMLElement.prototype.scrollTo = () => undefined;
+	const registry = new EditorPaneRegistry();
+	let attempts = 0;
+	registry.register(descriptor('test.editor.modalRetry', '.retry', () => {
+		const pane = new TestEditorPane('test.editor.modalRetry');
+		if (attempts++ === 0) pane.inputError = new Error('Temporarily unavailable');
+		return pane;
+	}));
+	try {
+		using editor = new EditorPart(dom.window.document.body, { registry });
+		await editor.openEditor(input('C:/project/modal.retry'), {}, 'modalGroup');
+		assert.equal(editor.isModalEditorVisible, true);
+		const error = dom.window.document.querySelector('.ash-modal-editor .ash-editor-open-error');
+		assert.ok(error);
+		error.querySelector<HTMLButtonElement>('button')?.click();
+		await nextTask();
+		assert.equal(editor.activePane?.id, 'test.editor.modalRetry');
+		assert.equal(dom.window.document.querySelector('.ash-modal-editor .ash-editor-open-error'), null);
+	} finally {
+		dom.window.close();
+	}
+});
+
+
+test('a missing file offers creation and retries into the same pinned tab', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const registry = new EditorPaneRegistry();
+	const missing = input('C:/project/missing.txt');
+	let created = false;
+	registry.register(descriptor('test.editor.missing', '.txt', () => {
+		const pane = new TestEditorPane('test.editor.missing');
+		if (!created) pane.inputError = new FileNotFoundError(missing.resource);
+		return pane;
+	}));
+	const files = { createFile: async (resource: URI, existing: string) => {
+		assert.equal(resource.toString(), missing.resource.toString());
+		assert.equal(existing, 'error');
+		created = true;
+	} } as unknown as IFileService;
+	try {
+		using editor = new EditorPart(dom.window.document.body, { registry, fileService: files });
+		await editor.openEditor(missing, { pinned: false });
+		const create = [...editor.domNode.querySelectorAll<HTMLButtonElement>('.ash-editor-open-error button')].find(button => button.textContent === 'Create file');
+		assert.ok(create);
+		create.click();
+		await nextTask();
+		assert.deepEqual({ created, pane: editor.activePane?.id, count: editor.activeGroup.inputs.length, preview: editor.activeGroup.isPreview(missing) }, { created: true, pane: 'test.editor.missing', count: 1, preview: false });
+	} finally {
+		dom.window.close();
+	}
+});

@@ -190,6 +190,13 @@ test("localization lookup falls back to English and formats parameters", async (
 		localization.translate('ash', 'files.saveConflictTitle', 'File changed on disk'),
 		localization.translate('ash', 'files.openBinaryAsText', 'Open as Read-Only Text'),
 	], ['打开的编辑器', '第 2 组', '未保存的更改', '文件嵌套', '在资源管理器中查找文件', '磁盘上的文件已更改', '以只读文本打开']);
+	assert.deepEqual([
+		localization.translate('ash', 'workbench.editorOpenWarning', 'Warning'),
+		localization.translate('ash', 'workbench.editorOpenBinaryMessage', ''),
+		localization.translate('ash', 'workbench.editorOpenNotFound', ''),
+		localization.translate('ash', 'workbench.editorOpenCreateFile', ''),
+		localization.translate('ash', 'workbench.editorOpenTooLarge', '', { '0': '128.0' }),
+	], ['警告', '此文件是二进制文件或使用不支持的文本编码，无法显示为文本。', '找不到此文件，无法打开。', '创建文件', '此文件过大，无法作为文本打开（128.0 MiB）。']);
 	assert.match(localization.translate('ash', 'accessibility.explorerHelp', 'Explorer'), /Option\+Command\+V/);
 	assert.equal(localization.translate('ash', 'accessibility.explorerSystemFilesPasted', 'Files pasted into the selected folder.'), '文件已粘贴到选中的文件夹。');
 });

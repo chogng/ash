@@ -1,3 +1,5 @@
+import { isCancellationError } from '../../../../../base/common/errors.js';
+import { EditorOpenSource } from '../../../../../platform/editor/common/editor.js';
 import { IConfigurationService } from "../../../../../platform/configuration/common/configuration.js";
 import { FileKind, IFileService } from "../../../../../platform/files/common/files.js";
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
@@ -363,13 +365,9 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	private async openFile(event: ResourceOpenEvent<ExplorerItem>): Promise<void> {
 		const node = event.element;
 		try {
-			await this.editorService.openEditor(new FileEditorInput(node.resource, { label: node.name }), event.editorOptions, event.sideBySide ? "sideGroup" : "activeGroup");
+			await this.editorService.openEditor(new FileEditorInput(node.resource, { label: node.name }), { ...event.editorOptions, source: EditorOpenSource.USER }, event.sideBySide ? "sideGroup" : "activeGroup");
 		} catch (error) {
-			if (this.isDisposed) return;
-			this.error = error instanceof Error
-				? error.message
-				: `Unable to open ${node.name}.`;
-			this.render();
+			if (!isCancellationError(error)) throw error;
 		}
 	}
 

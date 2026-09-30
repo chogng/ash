@@ -18,6 +18,14 @@ export interface IEditorOptions {
 	readonly pinned?: boolean;
 	/** Leaves DOM focus with the navigation surface that requested the open. */
 	readonly preserveFocus?: boolean;
+	/** The caller owns reporting the failure; the editor must not display it. */
+	readonly ignoreError?: boolean;
+	readonly source?: EditorOpenSource;
+}
+
+export const enum EditorOpenSource {
+	API,
+	USER,
 }
 
 export const enum TextEditorSelectionSource {

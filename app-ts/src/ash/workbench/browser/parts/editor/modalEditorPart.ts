@@ -1,3 +1,6 @@
+import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
+import { EditorOpenSource } from '../../../../platform/editor/common/editor.js';
+import { ErrorPlaceholderEditor } from './editorPlaceholder.js';
 import './media/modalEditorPart.css';
 import { addDisposableListener, h, isHTMLElement, stopEvent } from '../../../../base/browser/dom.js';
 import { focusFirst, restoreFocus, trapTabFocus } from '../../../../base/browser/focus.js';
@@ -9,7 +12,7 @@ import { DisposableMap, Disposable, MutableDisposable, toDisposable } from '../.
 import { basename } from '../../../../base/common/resources.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import type { EditorInput, EditorOpenOptions } from '../../../services/editor/common/editorService.js';
-import { EditorOpenSupersededError } from './editorGroup.js';
+import { type EditorGroupOptions, EditorOpenSupersededError } from './editorGroup.js';
 import { type EditorPaneCreationOptions, type IEditorPane, EditorPaneVisibility } from './editorPane.js';
 import { EditorPaneRegistry } from './editorRegistry.js';
 import { editorInputKey } from './editorTabsControl.js';
@@ -17,6 +20,9 @@ import { editorInputKey } from './editorTabsControl.js';
 export interface ModalEditorPartOptions {
 	readonly container: HTMLElement;
 	readonly registry: EditorPaneRegistry;
+	readonly resolveOpenError?: EditorGroupOptions['resolveOpenError'];
+	readonly onWillOpenEditor?: EditorGroupOptions['onWillOpenEditor'];
+	readonly onOpenError?: EditorGroupOptions['onOpenError'];
 	readonly paneCreationOptions: Omit<EditorPaneCreationOptions, 'input'>;
 }
 
@@ -113,6 +119,39 @@ export class ModalEditorPart extends Disposable {
 	}
 
 	public async openEditor(input: EditorInput, openOptions: EditorOpenOptions = {}): Promise<IEditorPane> {
+		const sequence = ++this.openSequence;
+		this.cancelPendingOpen();
+		try {
+			const confirmation = this.options.onWillOpenEditor?.(input);
+			if (confirmation) await confirmation;
+			if (sequence !== this.openSequence) throw new EditorOpenSupersededError(input);
+			return await this.doOpenEditor(input, openOptions, sequence);
+		} catch (error) {
+			if (sequence !== this.openSequence) throw new EditorOpenSupersededError(input);
+			if (openOptions.ignoreError || isCancellationError(error)) throw error;
+			const displayError = this.options.resolveOpenError
+				? this.options.resolveOpenError(error, input, openOptions, options => this.openEditor(input, options)) : error;
+			const pane = new ErrorPlaceholderEditor(displayError,
+				() => this.openEditor(input, { ...openOptions, source: EditorOpenSource.USER }),
+				async () => this.closeEditor(input),
+			);
+			const instance = new ModalEditorPaneInstance(this.contentDomNode, pane);
+			pane.create(instance.domNode);
+			void pane.setInput(input, instance.signal);
+			this.active.value?.setVisible(EditorPaneVisibility.Hidden);
+			this.active.value = instance;
+			this.currentEntry = { input, instance };
+			this.contentDomNode.replaceChildren(instance.domNode);
+			this.updateTitle(input);
+			this.show(openOptions.preserveFocus === true);
+			await this.options.onOpenError?.(displayError, input, openOptions);
+			const current = this.activePane;
+			if (!current) throw new CancellationError('The failed editor was closed');
+			return current;
+		}
+	}
+
+	private async doOpenEditor(input: EditorInput, openOptions: EditorOpenOptions, sequence: number): Promise<IEditorPane> {
 		const descriptor = this.options.registry.resolve(input, openOptions);
 		if (this.currentEntry && editorInputKey(this.currentEntry.input) === editorInputKey(input) && this.currentEntry.instance.pane.id === descriptor.id) {
 			this.currentEntry = { input, instance: this.currentEntry.instance };
@@ -121,8 +160,6 @@ export class ModalEditorPart extends Disposable {
 			return this.currentEntry.instance.pane;
 		}
 
-		const sequence = ++this.openSequence;
-		this.cancelPendingOpen();
 		const pane = descriptor.create({ ...this.options.paneCreationOptions, input });
 		if (pane.id !== descriptor.id) {
 			pane.dispose();

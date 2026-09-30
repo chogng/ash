@@ -1026,3 +1026,67 @@ test('Code replaces a selection with multiline text and remains editable', async
 	await input.press(process.platform === 'darwin' ? 'Meta+S' : 'Control+S');
 	await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe(content + '!');
 });
+
+test('file open failures stay in the editor and binary actions work with an existing file open', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.workbenchMode !== 'code' || target.kind === 'electron' && target.appServerMode === 'disabled', 'Requires the browser filesystem or a connected desktop workspace');
+	const page = workbench.page;
+	if (target.kind === 'browser' && target.appServerMode === 'disabled') {
+		await page.evaluate(async () => {
+			const root = await navigator.storage.getDirectory();
+			const folder = await root.getDirectoryHandle(`ash-open-errors-${crypto.randomUUID()}`, { create: true });
+			for (const [name, content] of [['main.ts', 'const value = 1;'], ['unsafe.txt', new Uint8Array([0, 66, 73, 78, 65, 82, 89])]] as const) {
+				const handle = await folder.getFileHandle(name, { create: true });
+				const writable = await handle.createWritable();
+				await writable.write(content);
+				await writable.close();
+			}
+			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
+		});
+		await workbench.editors.groupAt(0).welcome.getByRole('button', { name: 'Open folder', exact: true }).click();
+	} else {
+		await writeFile(join(testWorkspace.directory, 'unsafe.txt'), new Uint8Array([0, 66, 73, 78, 65, 82, 89]));
+	}
+	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+	if (await showSidebar.isVisible()) await showSidebar.click();
+	const explorer = page.locator('.ash-explorer');
+	const main = explorer.getByRole('treeitem', { name: 'main.ts', exact: true });
+	await expect(main).toBeVisible();
+	await main.dblclick();
+	const group = workbench.editors.groupAt(0);
+	await expect(group.content.locator('.stanza-editor')).toBeVisible();
+	const unsafe = explorer.getByRole('treeitem', { name: 'unsafe.txt', exact: true });
+	await expect(unsafe).toBeVisible();
+	await unsafe.click();
+	const errorPage = group.content.locator('.ash-editor-open-error');
+	await expect(errorPage).toBeVisible();
+	await expect(errorPage).toHaveClass(/warning/u);
+	await expect(errorPage.getByRole('heading')).toContainText('binary or uses an unsupported text encoding');
+	await expect(group.tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
+	await expect(group.tabs.filter({ hasText: 'unsafe.txt' })).toHaveCount(1);
+	await expect(explorer.locator('.ash-explorer-error')).toHaveCount(0);
+	await expect(explorer.locator('.ash-tree')).toBeFocused();
+	await expect(errorPage.getByRole('heading')).toHaveCSS('font-size', '18px');
+	await expect(errorPage.getByRole('heading')).toHaveCSS('font-weight', '600');
+	for (const [theme, warningColor] of [
+		['Ash Light', 'rgb(137, 85, 3)'],
+		['Ash High Contrast Dark', 'rgb(255, 255, 0)'],
+		['Ash High Contrast Light', 'rgb(101, 64, 0)'],
+	] as const) {
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+		const search = page.locator('.ash-quick-pick').getByRole('combobox');
+		await search.fill(theme);
+		await search.press('Enter');
+		await expect(page.locator('.ash-quick-pick')).toHaveCount(0);
+		await expect(errorPage.locator('.ash-editor-open-error-severity')).toHaveCSS('color', warningColor);
+	}
+	const action = errorPage.getByRole('button', { name: 'Open as Binary', exact: true });
+	await action.focus();
+	await expect(action).toHaveCSS('outline-style', 'solid');
+	await action.press('Enter');
+	await expect(group.content.locator('.ash-binary-editor')).toBeVisible();
+	await expect(group.content.locator('.ash-binary-editor-content')).toContainText('BINARY');
+	await expect(group.tabs.filter({ hasText: 'unsafe.txt' })).toHaveCount(1);
+	await group.tabs.filter({ hasText: 'main.ts' }).click();
+	await expect(group.content.locator('.stanza-editor')).toBeVisible();
+	await expect(group.content.locator('.stanza-editor-line-text').first()).toContainText('const value = 1;');
+});

@@ -34,6 +34,7 @@ export interface IEditorService {
 	readonly onDidVisibleEditorsChange: Event<void>;
 	readonly activeEditor: EditorInput | undefined;
 	readonly visibleEditors: readonly EditorInput[];
+	/** Resolves after displaying the resource or its error page; ignoreError leaves failures with the caller. */
 	openEditor(input: EditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<void>;
 	focusActiveEditor(): void;
 }

@@ -1,3 +1,4 @@
+import { EditorOpenSource } from '../../../../../platform/editor/common/editor.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -328,13 +329,13 @@ test("ExplorerView opens workspace files on single click", async () => {
 			openedInput?.resource.toString(),
 			URI.file("/project/README.md").toString(),
 		);
-		assert.deepEqual(openedOptions, { pinned: false, preserveFocus: true });
+		assert.deepEqual(openedOptions, { pinned: false, preserveFocus: true, source: EditorOpenSource.USER });
 		assert.equal(openedTarget, "activeGroup");
 		assert.equal(editorFocusCount, 0);
 
 		readme.dispatchEvent(new browser.window.MouseEvent("dblclick", { bubbles: true, button: 0, detail: 2 }));
 		await waitFor(() => editorFocusCount === 1);
-		assert.deepEqual(openedOptions, { pinned: true, preserveFocus: false });
+		assert.deepEqual(openedOptions, { pinned: true, preserveFocus: false, source: EditorOpenSource.USER });
 		const treeElement = pane.element.querySelector<HTMLElement>('.ash-tree');
 		assert.ok(treeElement);
 		treeElement.focus();
