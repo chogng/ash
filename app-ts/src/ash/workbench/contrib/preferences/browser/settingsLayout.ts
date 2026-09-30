@@ -137,6 +137,12 @@ export const SettingsNavigation = [
 		presentation: 'editor',
 		groups: [
 			{
+				id: 'file-opening',
+				get label() { return localize('settings.editor.fileOpening.label', 'File opening'); },
+				get description() { return localize('settings.editor.fileOpening.description', 'Choose how files open and how opening failures are reported.'); },
+				settings: ['workbench.editor.openErrorDialog', 'workbench.editor.defaultBinaryEditor', 'workbench.editorLargeFileConfirmation'],
+			},
+			{
 				id: 'selection',
 				label: 'Editor selection',
 				description: 'Choose which editor opens for new documents.',
@@ -158,7 +164,7 @@ export const SettingsNavigation = [
 				id: 'performance',
 				label: 'Performance',
 				description: 'Configure editor rendering performance.',
-				settings: ['editor.experimentalGpuAcceleration', 'workbench.editorLargeFileConfirmation'],
+				settings: ['editor.experimentalGpuAcceleration'],
 			},
 			{
 				id: 'minimap',

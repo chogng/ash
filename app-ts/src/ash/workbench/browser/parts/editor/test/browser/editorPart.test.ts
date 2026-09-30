@@ -10,7 +10,7 @@ import type {
 import { Emitter, Event } from "../../../../../../base/common/event.js";
 import type { IAccessibilityService } from "../../../../../../platform/accessibility/common/accessibility.js";
 import { BreadcrumbsService } from "../../breadcrumbs.js";
-import { AutoLockGroupsConfiguration, DefaultBinaryEditorConfiguration, DynamicEditorConfigurations, DiffEditorAssociationsConfiguration, EditorAssociationsConfiguration, EditorLargeFileConfirmationConfiguration } from "../../editorConfiguration.js";
+import { AutoLockGroupsConfiguration, DefaultBinaryEditorConfiguration, DynamicEditorConfigurations, DiffEditorAssociationsConfiguration, EditorAssociationsConfiguration, EditorLargeFileConfirmationConfiguration, EditorOpenErrorDialogConfiguration } from "../../editorConfiguration.js";
 import { createDiffEditorInput } from "../../../../../common/editor/diffEditorInput.js";
 import { InMemoryConfigurationService } from "../../../../../../platform/configuration/common/inMemoryConfigurationService.js";
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
@@ -2007,7 +2007,7 @@ test('error pages render severity and run the supplied action without duplicatin
 	}
 });
 
-test('only explicit user opens show an allowed error dialog and execute its selected action', async () => {
+test('the error dialog preference applies immediately and automatic opens remain quiet', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const registry = new EditorPaneRegistry();
 	let actionRuns = 0;
@@ -2021,9 +2021,18 @@ test('only explicit user opens show an allowed error dialog and execute its sele
 	}));
 	try {
 		using dialogs = new DialogService();
-		using editor = new EditorPart(dom.window.document.body, { registry, dialogService: dialogs });
+		using configurationService = new InMemoryConfigurationService();
+		using editor = new EditorPart(dom.window.document.body, { registry, dialogService: dialogs, configurationService });
 		await editor.openEditor(input('C:/project/restored.dialog'));
 		assert.equal(dialogs.model.dialogs.length, 0);
+		await assert.rejects(configurationService.updateValue(EditorOpenErrorDialogConfiguration, 'false'), TypeError);
+		await configurationService.updateValue(EditorOpenErrorDialogConfiguration, false);
+		const quietInput = input('C:/project/quiet.dialog');
+		await editor.openEditor(quietInput, { source: EditorOpenSource.USER });
+		assert.equal(dialogs.model.dialogs.length, 0);
+		assert.equal(editor.activeInput, quietInput);
+		assert.equal(editor.activePane?.id, 'workbench.editor.openError');
+		await configurationService.updateValue(EditorOpenErrorDialogConfiguration, undefined);
 		const opening = editor.openEditor(input('C:/project/chosen.dialog'), { source: EditorOpenSource.USER });
 		await nextTask();
 		const dialog = dialogs.model.dialogs[0];

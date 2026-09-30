@@ -152,6 +152,27 @@ test('empty-editor tips expose translated settings metadata', () => {
 	}
 });
 
+test('file opening preferences have a translated group and correctly typed controls', () => {
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	try {
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		const defaults = new DefaultSettings();
+		const group = createSettingsLayout(defaults.all).find(category => category.id === 'editor')?.groups.find(group => group.id === 'file-opening');
+		assert.equal(group?.title, '文件打开');
+		assert.deepEqual(group?.settings.map(setting => ({ id: setting.id, title: setting.title, valueType: setting.valueType })), [
+			{ id: 'workbench.editor.openErrorDialog', title: '文件打开错误弹窗', valueType: 'boolean' },
+			{ id: 'workbench.editor.defaultBinaryEditor', title: '默认二进制编辑器', valueType: 'select' },
+			{ id: 'workbench.editorLargeFileConfirmation', title: '大文件打开确认（MiB）', valueType: 'number' },
+		]);
+		const binary = defaults.get('workbench.editor.defaultBinaryEditor');
+		assert.equal(binary.valueType === 'select' && binary.options[0]?.label, '默认');
+		assert.match(defaults.get('workbench.editor.openErrorDialog').description, /自动恢复文件时不显示错误弹窗/);
+		assert.throws(() => configurationRegistry.getConfiguration('workbench.editor.openErrorDialog')?.parse('false'), /文件打开错误弹窗必须为 true 或 false/);
+	} finally {
+		resetNlsResolver();
+	}
+});
+
 test('settingsLayout is the single projection from registered settings to categories', () => {
 	const defaults = new DefaultSettings();
 	const layout = createSettingsLayout(defaults.all);

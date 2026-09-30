@@ -132,7 +132,11 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 	await expect(rootDescription).toHaveCount(0);
 	await page.locator('[data-settings-target-id="editor.group.selection"]').click();
 	await expect(page.locator('.ash-settings-page h3')).toHaveText('Editor selection');
-	for (const key of ['workbench.editor.showTabs', 'workbench.editor.defaultBinaryEditor']) {
+	for (const [key, group] of [
+		['workbench.editor.showTabs', 'selection'],
+		['workbench.editor.defaultBinaryEditor', 'file-opening'],
+	] as const) {
+		await page.locator(`[data-settings-target-id="editor.group.${group}"]`).click();
 		const row = page.locator(`[data-settings-item-id="${key}"]`);
 		const control = row.getByRole('combobox');
 		const [rowBounds, controlBounds] = await Promise.all([row.boundingBox(), control.boundingBox()]);
@@ -178,6 +182,45 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 		await expect(page.locator('.ash-notification')).toHaveCount(0);
 		await expect(page.locator('[data-settings-category-id="sessions"]')).toHaveCount(0);
 	}
+});
+
+test('File opening settings save through their controls and survive reloading the window', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'Requires the Code Workbench');
+	const page = workbench.page;
+	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+	const openSettings = async () => {
+		await workbench.quickaccess.runCommand('workbench.action.openSettings');
+		await settings.locator('[data-settings-category-id="editor"]').click();
+		await settings.locator('[data-settings-target-id="editor.group.file-opening"]').click();
+		await expect(settings.getByRole('heading', { name: 'File opening', exact: true })).toBeVisible();
+	};
+	await openSettings();
+	const dialog = settings.getByRole('switch', { name: 'File Open Error Dialog', exact: true });
+	await expect(dialog).toBeChecked();
+	await dialog.focus();
+	await dialog.press('Space');
+	await expect(dialog).not.toBeChecked();
+	await expect(dialog).not.toHaveAttribute('aria-busy', 'true');
+	const binary = settings.getByRole('combobox', { name: 'Default Binary Editor', exact: true });
+	await binary.click();
+	await page.getByRole('option', { name: 'Binary Editor', exact: true }).click();
+	await expect(binary).toHaveText('Binary Editor');
+	const threshold = settings.getByRole('spinbutton', { name: 'Large File Confirmation (MiB)', exact: true });
+	await threshold.fill('16');
+	await threshold.press('Tab');
+	await expect(threshold).toBeEnabled();
+	await settings.locator('.ash-modal-editor-close').click();
+	await page.reload();
+	await workbench.waitForReady();
+	if (target.appServerMode === 'required') {
+		await expect(workbench.element).toHaveAttribute('data-workbench-state', 'folder');
+		await expect(page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true })).toBeAttached();
+		await workbench.waitForUiIdle();
+	}
+	await openSettings();
+	await expect(dialog).not.toBeChecked();
+	await expect(binary).toHaveText('Binary Editor');
+	await expect(threshold).toHaveValue('16');
 });
 
 test('Changing the color theme does not add a modified marker', async ({ target, workbench }) => {

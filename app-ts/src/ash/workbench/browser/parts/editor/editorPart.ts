@@ -36,7 +36,7 @@ import type { IDocumentCollaborationApi } from "../../../../platform/collaborati
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import { WorkbenchPart } from "../../part.js";
 import { EditorGroup, type EditorGroupOptions, type IEditorGroup } from "./editorGroup.js";
-import { AutoLockGroupsConfiguration, DefaultBinaryEditorConfiguration, EditorLargeFileConfirmationConfiguration, type AutoLockGroups } from "./editorConfiguration.js";
+import { AutoLockGroupsConfiguration, DefaultBinaryEditorConfiguration, EditorLargeFileConfirmationConfiguration, EditorOpenErrorDialogConfiguration, type AutoLockGroups } from "./editorConfiguration.js";
 import type { FileElement } from "./breadcrumbsModel.js";
 import type { IBreadcrumbsService } from "./breadcrumbs.js";
 import type { ILanguageFeaturesService } from "../../../../editor/common/services/languageFeatures.js";
@@ -399,6 +399,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 
 	private async showEditorOpenErrorDialog(error: unknown, input: EditorInput, options: EditorOpenOptions): Promise<void> {
 		if (options.source !== EditorOpenSource.USER || !this.dialogService) return;
+		if (this.groupOptions.configurationService?.getValue<boolean>(EditorOpenErrorDialogConfiguration) === false) return;
 		const openError = isEditorOpenError(error) ? error : undefined;
 		if (openError && !openError.allowDialog) return;
 		const title = localize("workbench.editorOpenFailure", "Unable to open {0}", input.label || basename(input.resource));
