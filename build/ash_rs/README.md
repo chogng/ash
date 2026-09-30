@@ -121,11 +121,14 @@ prepared binaries without invoking Cargo. During Rust watch, `develop.py` reads
 the selected resource package and incrementally builds the backend executables in
 the same Cargo cache; it does not assemble, validate, or publish a release package.
 Only changed binary contents are copied into immutable objects. Each development
-runtime links those objects and the prepared resource files into one complete
-`bin/`, `ash-path/`, and `ash-resources/` layout. Hard links keep resources available
-even after their preparation package is removed. These paths must stay on the
-same filesystem. The runtime has `ash-development.json` rather than release package
-metadata, and is never eligible for release installation.
+runtime links those objects and the `ash-path/` tools, and copies `ash-resources/`
+into its complete layout. Declarative extension and Skill readers require resource
+files with one hard link; sharing those files across generations would reject the
+bundled contributions. Both copies and executable links remain available after
+their preparation package is removed. Linked executable paths must stay on the
+same filesystem. The versioned `ash-development.json` identity forces a new
+generation when the resource publication contract changes. The runtime uses it
+rather than release package metadata, and is never eligible for release installation.
 
 After successful assembly, `develop.py` atomically writes
 `.build/app-ts/dev/app-server/current.json` with `version: 3` and a

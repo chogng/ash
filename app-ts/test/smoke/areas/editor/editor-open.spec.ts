@@ -565,7 +565,15 @@ test("Code highlights Rust locally and obtains document symbols asynchronously",
 
 	const group = workbench.editors.groupAt(0);
 	await expect(group.content.locator(".stanza-editor")).toBeVisible();
-	await expect(group.content.locator(".stanza-editor-token.token-keyword").filter({ hasText: "fn" }).first()).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Language rust', exact: true })).toBeVisible();
+	const keyword = group.content.locator('.stanza-editor-token.token-keyword').filter({ hasText: /^fn$/ }).first();
+	const string = group.content.locator('.stanza-editor-token.token-string').filter({ hasText: 'hello' }).first();
+	await expect(keyword).toBeVisible();
+	await expect(string).toBeVisible();
+	const foreground = await group.content.locator('.stanza-editor').evaluate(element => getComputedStyle(element).color);
+	await expect.poll(() => keyword.evaluate(element => getComputedStyle(element).color)).not.toBe(foreground);
+	await expect.poll(() => string.evaluate(element => getComputedStyle(element).color)).not.toBe(foreground);
+	expect(await keyword.evaluate(element => getComputedStyle(element).color)).not.toBe(await string.evaluate(element => getComputedStyle(element).color));
 
 	const input = group.content.locator(".stanza-editor-input");
 	await input.focus();

@@ -338,6 +338,11 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		this.workingCopySlot.value = workingCopy;
 		this.languageId = modelReference.model.getLanguageId();
 		const statusListeners = new DisposableStore();
+		// Declarative language registration can finish after a file has opened.
+		statusListeners.add(modelReference.model.onDidChangeLanguage(() => {
+			this.languageId = modelReference.model.getLanguageId();
+			this.statusChangeEmitter.fire();
+		}));
 		statusListeners.add(part.onDidChangeCursorSelection(event => {
 			this.statusChangeEmitter.fire();
 			this.selectionChangeEmitter.fire(toEditorPaneSelectionChangeReason(event.source));

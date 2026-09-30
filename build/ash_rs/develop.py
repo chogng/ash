@@ -33,7 +33,8 @@ def publish_generation(
         package = Path("\\\\?\\" + str(package.resolve()).removeprefix("\\\\?\\"))
         directory = Path("\\\\?\\" + str(directory.resolve()).removeprefix("\\\\?\\"))
     # Cargo may rewrite its outputs on the next build. Freeze only changed binary contents;
-    # generations share these objects and the prepared resource files through hard links.
+    # generations share executable objects through hard links. Declarative resource readers
+    # require single-link files, so each generation must own copies of ash-resources.
     files = {
         f"bin/{path.name}": path
         for path in (package / "bin").iterdir()
@@ -50,7 +51,8 @@ def publish_generation(
     )
     digests = {name: sha256(path) for name, path in sorted(files.items())}
     identity = json.dumps(
-        {"resources": str(package.resolve()), "binaries": digests}, sort_keys=True
+        {"version": 1, "resources": str(package.resolve()), "binaries": digests},
+        sort_keys=True,
     )
     generation = hashlib.sha256(identity.encode()).hexdigest()
     contents = json.dumps({"version": 3, "runtime": f"generations/{generation}"}) + "\n"
@@ -65,8 +67,10 @@ def publish_generation(
             (staging / "bin").mkdir(parents=True)
             objects = directory / "objects"
             objects.mkdir(exist_ok=True)
-            for name in ("ash-path", "ash-resources"):
-                shutil.copytree(package / name, staging / name, copy_function=os.link)
+            shutil.copytree(
+                package / "ash-path", staging / "ash-path", copy_function=os.link
+            )
+            shutil.copytree(package / "ash-resources", staging / "ash-resources")
             for name, source in files.items():
                 immutable = objects / digests[name]
                 if not immutable.exists():

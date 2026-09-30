@@ -11,7 +11,12 @@ from build.ash_rs import develop
 
 def prepared_package(root: Path) -> Path:
     package = root / "package"
-    for directory in ("bin", "ash-path", "ash-resources/tgrep"):
+    for directory in (
+        "bin",
+        "ash-path",
+        "ash-resources/tgrep",
+        "ash-resources/extensions/rust",
+    ):
         (package / directory).mkdir(parents=True)
     for name, contents in {
         "bin/ash-app-server": "old",
@@ -19,12 +24,33 @@ def prepared_package(root: Path) -> Path:
         "bin/ash-code-mode-host": "host",
         "ash-path/rg": "rg",
         "ash-resources/tgrep/tgrep": "tgrep",
+        "ash-resources/extensions/rust/package.json": '{"name":"rust"}',
     }.items():
         (package / name).write_text(contents)
     return package
 
 
 class DevelopTests(unittest.TestCase):
+    def test_generations_keep_declarative_resources_readable_as_single_link_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = prepared_package(root)
+            directory = root / "development"
+            first = develop.publish_generation(package, {}, directory)
+            binary = root / "ash-app-server"
+            binary.write_text("changed")
+            second = develop.publish_generation(
+                package, {"ash-app-server": binary}, directory
+            )
+            resource = Path("ash-resources/extensions/rust/package.json")
+            for runtime in (
+                package,
+                directory / "generations" / first[1],
+                directory / "generations" / second[1],
+            ):
+                self.assertEqual(1, (runtime / resource).stat().st_nlink)
+                self.assertEqual('{"name":"rust"}', (runtime / resource).read_text())
+
     @unittest.skipUnless(develop.os.name == "nt", "Windows hard-link path boundary")
     def test_resource_links_support_long_windows_paths(self):
         with tempfile.TemporaryDirectory() as temporary:

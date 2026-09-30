@@ -130,6 +130,34 @@ test("Stanza editor pane loads, lays out, focuses, hides, and clears one editor 
 	dom.window.close();
 });
 
+test('Stanza editor pane updates language status when contributions register after opening', async () => {
+	const dom = createTestDom('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using closeWindow = toDisposable(() => dom.window.close());
+	const parent = dom.window.document.querySelector<HTMLElement>('main')!;
+	const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles('fn main() {}'));
+	using languageService = new LanguageService();
+	using languages = languageService.registerLanguages([]);
+	using models = new BrowserTextModelService(resourceStore, { languageService });
+	using services = paneServices(models);
+	using pane = createPane(services, resourceStore, {});
+	pane.create(parent);
+	await pane.setInput({ resource: URI.file('/project/main.rs') }, new AbortController().signal);
+	assert.equal(pane.getStatus().languageId, 'plaintext');
+	const reportedLanguages: Array<string | undefined> = [];
+	using listener = pane.onDidChangeStatus(() => reportedLanguages.push(pane.getStatus().languageId));
+
+	languages.replace([{ description: { id: 'rust', extensions: ['.rs'] } }]);
+	assert.equal(pane.getStatus().languageId, 'rust');
+	assert.deepEqual(reportedLanguages, ['rust']);
+
+	pane.clearInput();
+	reportedLanguages.length = 0;
+	languages.replace([]);
+	assert.equal(pane.getStatus().languageId, undefined);
+	assert.deepEqual(reportedLanguages, []);
+});
+
 test('Stanza editor pane reports cursor navigation and edit locations', async () => {
 	const dom = createTestDom('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
