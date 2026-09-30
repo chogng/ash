@@ -38,6 +38,7 @@ import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { FontMeasurements } from '../../../src/ash/editor/browser/config/fontMeasurements.js';
 import { AccessibilitySupport, IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
+import type { StandaloneEditor } from '../../../src/ash/editor/standalone/browser/standaloneCodeEditor.js';
 
 interface EditorState {
 	readonly value: string | null;
@@ -47,6 +48,18 @@ interface EditorState {
 	readonly mounted: boolean;
 	readonly placeholder: boolean;
 	readonly theme: string | null;
+}
+
+interface RenderOwnershipState {
+	readonly injectedWidth: number;
+	readonly scrollWidth: number;
+	readonly scrollLeft: number;
+	readonly clearedScrollLeft: number;
+	readonly clearedScrollWidth: number;
+	readonly cursorScans: number;
+	readonly resizeScans: number;
+	readonly minimapCanvas: { readonly width: number; readonly height: number };
+	readonly configuredCanvas: { readonly width: number; readonly height: number };
 }
 
 interface CreationEvent {
@@ -304,6 +317,7 @@ interface StandaloneHarness {
 	exerciseMarkerApi(): { readonly first: string[]; readonly second: string[]; readonly afterClear: string[]; readonly events: string[][] };
 	setMinimapColor(color: string): void;
 	readMinimapPixel(): number[];
+	exerciseRenderOwnership(): RenderOwnershipState;
 
 	checkContracts(): Promise<{ wrapping: string; wrapped: boolean; animated: boolean; settled: boolean; top: number; interrupted: boolean; detached: boolean; eventTexts: string[] }>;
 	readonly events: readonly CreationEvent[];
@@ -2404,6 +2418,71 @@ window.ashStandaloneIntegration = {
 		callerEditor.setValue('abcdefghijk');
 		callerEditor.updateOptions({ minimap: { enabled: true } });
 		TokenizationRegistry.setColorMap([Color.fromHex('#000000'), Color.fromHex(color), Color.fromHex('#ffffff')]);
+	},
+	exerciseRenderOwnership: () => {
+		const host = document.createElement('div');
+		host.style.cssText = 'position:relative;width:300px;height:160px';
+		document.body.append(host);
+		const instance = stanza.editor.create(host, {
+			value: 'abc',
+			fontFamily: 'monospace',
+			lineHeight: 20,
+			minimap: { enabled: false },
+			glyphMargin: true,
+			wordWrap: 'off',
+			dimension: { width: 300, height: 160 },
+		}) as StandaloneEditor;
+		const model = instance.getModel()!;
+		const original = model.getAllMarginDecorations;
+		try {
+			const hints = model.deltaDecorations([], [{
+				range: new stanza.Range(1, 4, 1, 4),
+				options: { description: 'wide injected text', after: { content: 'x'.repeat(600) } },
+			}]);
+			instance.view.render(true, false);
+			const injectedWidth = host.querySelector('.stanza-editor-line-text')!.getBoundingClientRect().width;
+			const scrollWidth = instance.view.viewportLayout.contentSize.width;
+			instance.setScrollLeft(10000);
+			instance.view.render(true, false);
+			const scrollLeft = instance.getScrollLeft();
+			model.deltaDecorations(hints, []);
+			instance.view.render(true, false);
+			const clearedScrollLeft = instance.getScrollLeft();
+			const clearedScrollWidth = instance.view.viewportLayout.contentSize.width;
+			instance.setValue(Array.from({ length: 40 }, () => 'abcdef').join('\n'));
+			model.deltaDecorations([], Array.from({ length: 40 }, (_, i) => ({
+				range: new stanza.Range(i + 1, 1, i + 1, 2),
+				options: { description: 'inline decoration', className: 'inline-decoration' },
+			})));
+			instance.view.render(true, false);
+			let scans = 0;
+			model.getAllMarginDecorations = (...args) => { scans++; return original.apply(model, args); };
+			for (let lineNumber = 2; lineNumber <= 6; lineNumber++) {
+				instance.setPosition(new stanza.Position(lineNumber, 1));
+				instance.view.render(true, false);
+			}
+			const cursorScans = scans;
+			scans = 0;
+			for (let offset = 0; offset < 5; offset++) {
+				instance.layout({ width: 301 + offset, height: 160 });
+				instance.view.render(true, false);
+			}
+			const resizeScans = scans;
+			instance.updateOptions({ minimap: { enabled: true, side: 'left', size: 'fill' }, scrollBeyondLastLine: true });
+			instance.layout({ width: 300, height: 160 });
+			instance.view.render(true, false);
+			const canvas = host.querySelector<HTMLCanvasElement>('.minimap canvas')!;
+			const configured = instance.getLayoutInfo().minimap;
+			return {
+				injectedWidth, scrollWidth, scrollLeft, clearedScrollLeft, clearedScrollWidth, cursorScans, resizeScans,
+				minimapCanvas: { width: canvas.width, height: canvas.height },
+				configuredCanvas: { width: configured.minimapCanvasInnerWidth, height: configured.minimapCanvasInnerHeight },
+			};
+		} finally {
+			model.getAllMarginDecorations = original;
+			instance.dispose();
+			host.remove();
+		}
 	},
 	readMinimapPixel: () => {
 		const canvas = callerContainer.querySelector<HTMLCanvasElement>('.minimap canvas')!;

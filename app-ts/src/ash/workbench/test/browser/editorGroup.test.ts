@@ -6,12 +6,12 @@ import type { EditorInput } from "../../browser/parts/editor/editorInput.js";
 import type { IEditorPane } from "../../browser/parts/editor/editorPane.js";
 import type { IEditorPart } from "../../browser/parts/editor/editorPart.js";
 
-test("EditorGroup reorders tabs and moves them between groups", async () => {
+test("EditorGroupView reorders tabs and moves them between groups", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 	Object.defineProperty(globalThis, "window", { configurable: true, value: dom.window });
 	try {
-		const { EditorGroup } = await import("../../browser/parts/editor/editorGroup.js");
+		const { EditorGroupView } = await import("../../browser/parts/editor/editorGroupView.js");
 		const { EditorPaneMatch } = await import("../../browser/parts/editor/editorPane.js");
 		const { EditorPaneRegistry } = await import("../../browser/editor.js");
 		const registry = new EditorPaneRegistry();
@@ -21,8 +21,8 @@ test("EditorGroup reorders tabs and moves them between groups", async () => {
 			canOpen: () => EditorPaneMatch.Default,
 			create: () => new TestEditorPane(),
 		});
-		const source = new EditorGroup(dom.window.document.body, { registry });
-		const target = new EditorGroup(dom.window.document.body, { registry });
+		const source = new EditorGroupView(dom.window.document.body, { registry });
+		const target = new EditorGroupView(dom.window.document.body, { registry });
 		const first = input("first");
 		const second = input("second");
 		await source.openEditor(first);
@@ -46,18 +46,18 @@ test("EditorGroup reorders tabs and moves them between groups", async () => {
 	}
 });
 
-test("EditorGroup selects a range of tabs and resolves close-command targets", async () => {
+test("EditorGroupView selects a range of tabs and resolves close-command targets", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 	Object.defineProperty(globalThis, "window", { configurable: true, value: dom.window });
 	try {
-		const { EditorGroup } = await import("../../browser/parts/editor/editorGroup.js");
+		const { EditorGroupView } = await import("../../browser/parts/editor/editorGroupView.js");
 		const { EditorPaneMatch } = await import("../../browser/parts/editor/editorPane.js");
 		const { EditorPaneRegistry } = await import("../../browser/editor.js");
 		const { resolveCommandsContext } = await import("../../browser/parts/editor/editorCommandsContext.js");
 		const registry = new EditorPaneRegistry();
 		registry.registerEditorPane({ id: "test.editor", name: "Test Editor", canOpen: () => EditorPaneMatch.Default, create: () => new TestEditorPane() });
-		const group = new EditorGroup(dom.window.document.body, { registry });
+		const group = new EditorGroupView(dom.window.document.body, { registry });
 		try {
 			const first = input("first");
 			const second = input("second");

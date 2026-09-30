@@ -16,7 +16,7 @@ import type { IAuxiliaryWindow, IAuxiliaryWindowService } from "../../../service
 import type { IEditorPane } from "./editorPane.js";
 import { editorInputKey } from "./editorTabsControl.js";
 import type { EditorCloseAllOptions, IEditorPart, RecentlyClosedEditor } from "./editorPart.js";
-import type { IEditorGroup } from "./editorGroup.js";
+import type { IEditorGroup } from "./editorGroupView.js";
 import {
 	AuxiliaryEditorPart,
 	type AuxiliaryEditorPartCreation,

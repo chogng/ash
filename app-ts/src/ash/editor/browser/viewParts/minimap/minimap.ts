@@ -22,7 +22,6 @@ export interface MinimapOptions {
 	readonly model: TextModel;
 	readonly semanticTokenSource?: SemanticTokenSource;
 	readonly readLayout: () => EditorViewportLayout;
-	readonly readMinimapLayout: () => EditorMinimapLayoutInfo;
 	readonly readVisualProjection: () => EditorVisualLineProjection;
 	readonly readProjectionRevision: () => number;
 	readonly scrollTo: (position: EditorScrollPosition) => void;
@@ -59,7 +58,6 @@ export class Minimap extends ViewPart {
 		this.slider.className = 'stanza-editor-minimap-slider';
 		this.slider.setAttribute('aria-hidden', 'true');
 		this.domNode.append(this.canvas, this.slider);
-		source.host.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(MinimapTokensColorTracker.getInstance().onDidChange(() => this.invalidateRaster()));
 		this._register(addDisposableListener(this.domNode, 'pointerdown', event => {
@@ -115,7 +113,7 @@ export class Minimap extends ViewPart {
 	}
 
 	render(context: RestrictedRenderingContext): void {
-		const geometry = this.source.readMinimapLayout();
+		const geometry = this._context.configuration.options.get(EditorOption.layoutInfo).minimap;
 		const minimap = this._context.configuration.options.get(EditorOption.minimap);
 		const padding = this._context.configuration.options.get(EditorOption.padding);
 		const visible = minimap.enabled && geometry.renderMinimap !== RenderMinimap.None && geometry.minimapWidth > 0 && context.viewportHeight > 0;

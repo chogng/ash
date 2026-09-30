@@ -10,9 +10,8 @@ import type { URI } from "../../../../base/common/uri.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { CancellationError } from "../../../../base/common/errors.js";
 import { validateJsonValue } from "../../../../base/common/jsonValue.js";
-import { Dimension, type IDimension } from "../../../../base/browser/dom.js";
+import { computeScreenAwareSize, Dimension, type IDimension } from "../../../../base/browser/dom.js";
 import { type IPositionedRectangle } from "../../../../base/browser/geometry.js";
-import { observeElementSize } from "../../../../base/browser/observer.js";
 import { Direction, SerializableGrid, Sizing, type Direction as GridDirection, type GridDescriptor, type ISerializableView as ISerializableGridView } from "../../../../base/browser/ui/grid/grid.js";
 import { DisposableMap, Disposable, MutableDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
@@ -35,7 +34,7 @@ import type { IAccessibilityService } from "../../../../platform/accessibility/c
 import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import { WorkbenchPart } from "../../part.js";
-import { EditorGroup, type EditorGroupOptions, type IEditorGroup } from "./editorGroup.js";
+import { EditorGroupView, type EditorGroupOptions, type IEditorGroup } from "./editorGroupView.js";
 import { AutoLockGroupsConfiguration, DefaultBinaryEditorConfiguration, EditorLargeFileConfirmationConfiguration, EditorOpenErrorDialogConfiguration, type AutoLockGroups } from "./editorConfiguration.js";
 import type { FileElement } from "./breadcrumbsModel.js";
 import type { IBreadcrumbsService } from "./breadcrumbs.js";
@@ -57,11 +56,15 @@ import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetLa
 import { ModalEditorPart } from "./modalEditorPart.js";
 import type { EditorGroupChangeEvent, EditorGroupId, EditorIdentifier, EditorPartChangeEvent, EditorPartState, IEditorStateSource } from "../../../services/editor/common/editorState.js";
 import { editorInputKey } from "./editorTabsControl.js";
+import { WorkbenchConfiguration } from "../../../common/configuration.js";
 
-export { EditorOpenSupersededError } from "./editorGroup.js";
+export { EditorOpenSupersededError } from "./editorGroupView.js";
 
 /** Keep the CSS variable reference so theme changes recolor existing Grid boundaries without restyling the Grid. */
 const EDITOR_GROUP_GRID_STYLES = { separatorBorder: "var(--ash-editor-group-border)" } as const;
+
+// Matches the standard stroke token used by modernUI/browser/media/editorBorder.css.
+const EDITOR_FRAME_BORDER_WIDTH = 1;
 
 /** Editor-region operations available to Workbench contributions. */
 export interface IEditorPart extends IEditorStateSource, IDisposable {
@@ -147,7 +150,7 @@ export interface IEditorPartOptions {
 	readonly inputSerializers?: EditorInputSerializerRegistry;
 }
 
-/** Owns EditorGroup layout and delegates editor behavior to the active group. */
+/** Owns EditorGroupView layout and delegates editor behavior to the active group. */
 export class EditorPart extends WorkbenchPart implements IEditorPart {
 	private readonly editorChangeEmitter = this._register(new Emitter<EditorPartChangeEvent>());
 	readonly onDidChangeEditors: Event<EditorPartChangeEvent> = this.editorChangeEmitter.event;
@@ -157,7 +160,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	private readonly modalEditor: ModalEditorPart;
 	private readonly groupOptions: Omit<EditorGroupOptions, "onDidActivate" | "dragAndDrop">;
 	private readonly _groups: EditorGroupHost[] = [];
-	private _activeGroup: EditorGroup;
+	private _activeGroup: EditorGroupView;
 	private readonly tabDragAndDrop: EditorTabDragAndDropController;
 	private dimension = Dimension.Zero;
 	private readonly saveAsResource: ((defaultName: string) => Promise<URI | undefined>) | undefined;
@@ -175,7 +178,9 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		container: HTMLElement,
 		options: IEditorPartOptions = {},
 	) {
-		super(container, "editor");
+		super(container, "editor", {
+			borderWidth: () => this.getFloatingBorderWidth() * 2,
+		});
 		const ownerDocument = container.ownerDocument;
 		this.titleDomNode.remove();
 		this.domNode.setAttribute("aria-label", "Editor");
@@ -273,7 +278,6 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		this._register(this.modalEditor.onDidRequestClose(input => {
 			void this.closeEditor(input).catch(reportEditorCloseError);
 		}));
-		this._register(observeElementSize(this.contentDomNode, size => this.doLayout(size)));
 	}
 
 	get groups(): readonly IEditorGroup[] {
@@ -587,12 +591,15 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		}
 	}
 
+	protected getFloatingBorderWidth(): number {
+		return this.groupOptions.configurationService?.getValue(WorkbenchConfiguration.layoutStyle) === "modern"
+			? computeScreenAwareSize(this.domNode.ownerDocument.defaultView!, EDITOR_FRAME_BORDER_WIDTH)
+			: 0;
+	}
+
 	override layout(dimension: IDimension): void {
-		// Grid supplies the Part's border box; the content observer supplies its
-		// inner box. Both must reach the editor Grid in the same coordinate space.
-		const borderWidth = this.domNode.offsetWidth - this.domNode.clientWidth;
-		const borderHeight = this.domNode.offsetHeight - this.domNode.clientHeight;
-		this.doLayout(new Dimension(Math.max(0, dimension.width - borderWidth), Math.max(0, dimension.height - borderHeight)));
+		const height = dimension.height - this.getFloatingBorderWidth() * 2;
+		this.doLayout(this.layoutContents(dimension.width, height).contentSize);
 	}
 
 	private doLayout(dimension: IDimension): void {
@@ -652,8 +659,8 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	}
 
 	private createGroup(id?: EditorGroupId): EditorGroupHost {
-		let group: EditorGroup;
-		group = new EditorGroup(this.contentDomNode, {
+		let group: EditorGroupView;
+		group = new EditorGroupView(this.contentDomNode, {
 			...this.groupOptions,
 			...(id ? { id } : {}),
 			onDidActivate: () => {
@@ -678,14 +685,14 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		return host;
 	}
 
-	private resolveSideGroup(source: EditorGroup): { readonly host: EditorGroupHost; readonly created: boolean } {
+	private resolveSideGroup(source: EditorGroupView): { readonly host: EditorGroupHost; readonly created: boolean } {
 		const sourceIndex = this.groupIndex(source);
 		const existing = this._groups[sourceIndex + 1];
 		if (existing) return { host: existing, created: false };
 		return { host: this.insertGroup(source, Direction.Right), created: true };
 	}
 
-	private insertGroup(source: EditorGroup, direction: GridDirection): EditorGroupHost {
+	private insertGroup(source: EditorGroupView, direction: GridDirection): EditorGroupHost {
 		const sourceIndex = this.groupIndex(source);
 		const sourceHost = this._groups[sourceIndex]!;
 		const created = this.createGroup();
@@ -709,9 +716,9 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		this.groupHosts.deleteAndDispose(host.group.id);
 	}
 
-	private groupIndex(group: EditorGroup): number {
+	private groupIndex(group: EditorGroupView): number {
 		const index = this._groups.findIndex((host) => host.group === group);
-		if (index < 0) throw new Error("EditorGroup is not owned by EditorPart");
+		if (index < 0) throw new Error("EditorGroupView is not owned by EditorPart");
 		return index;
 	}
 
@@ -859,7 +866,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		if (this.recentlyClosed.length > 20) this.recentlyClosed.length = 20;
 	}
 
-	private setActiveGroup(group: EditorGroup): void {
+	private setActiveGroup(group: EditorGroupView): void {
 		if (this._activeGroup === group) return;
 		this._activeGroup = group;
 		this.editorChangeEmitter.fire(Object.freeze({ kind: "activeGroupChanged", groupId: group.id }));
@@ -977,7 +984,7 @@ function editorInputLabel(input: Pick<EditorInput, "resource" | "label">): strin
 class EditorGroupHost extends Disposable {
 	readonly view: EditorGroupGridView;
 
-	constructor(readonly group: EditorGroup, listener: IDisposable) {
+	constructor(readonly group: EditorGroupView, listener: IDisposable) {
 		super();
 		this._register(group);
 		this._register(listener);
@@ -991,7 +998,7 @@ class EditorGroupGridView implements ISerializableGridView {
 	readonly minimumHeight = 119;
 	readonly maximumHeight = Infinity;
 
-	constructor(readonly group: EditorGroup) {}
+	constructor(readonly group: EditorGroupView) {}
 
 	get element(): HTMLElement {
 		return this.group.domNode;

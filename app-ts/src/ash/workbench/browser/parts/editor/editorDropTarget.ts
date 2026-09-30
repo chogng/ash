@@ -4,17 +4,17 @@ import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { DndCssClasses } from '../../../../base/browser/ui/dnd/dnd.js';
 import type { Direction } from '../../../../base/browser/ui/grid/grid.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { EditorGroup } from './editorGroup.js';
+import type { EditorGroupView } from './editorGroupView.js';
 import type { IEditorTabDragAndDrop } from './editorTabDragAndDrop.js';
 
 /** Owns the editor area's drop feedback and routes a dropped tab to its group. */
 export class EditorDropTarget extends Disposable {
-	private activeGroup: EditorGroup | undefined;
+	private activeGroup: EditorGroupView | undefined;
 	private splitDirection: Direction | undefined;
 
 	constructor(
 		container: HTMLElement,
-		private readonly findGroup: (target: Node) => EditorGroup | undefined,
+		private readonly findGroup: (target: Node) => EditorGroupView | undefined,
 		private readonly dragAndDrop: IEditorTabDragAndDrop,
 	) {
 		super();
@@ -62,7 +62,7 @@ export class EditorDropTarget extends Disposable {
 		this.dragAndDrop.drop(group, undefined, 'after', direction);
 	}
 
-	private isOverTitle(group: EditorGroup, target: EventTarget | null): boolean {
+	private isOverTitle(group: EditorGroupView, target: EventTarget | null): boolean {
 		return target instanceof Node && !!group.domNode.querySelector('.ash-editor-title-control')?.contains(target);
 	}
 

@@ -1,6 +1,6 @@
 import type { IMouseWheelEvent } from '../../base/browser/mouseEvent.js';
 import { Event } from '../../base/common/event.js';
-import { addDisposableListener, getClientArea, h, runWhenWindowIdle } from '../../base/browser/dom.js';
+import { addDisposableListener, getClientArea, h } from '../../base/browser/dom.js';
 import { FastDomNode } from '../../base/browser/fastDomNode.js';
 import { PixelRatio, type IPixelRatioMonitor } from '../../base/browser/pixelRatio.js';
 import { runAtThisOrScheduleAtNextAnimationFrame } from '../../base/browser/scheduler.js';
@@ -18,7 +18,7 @@ import { type IViewModel, type EditorScrollPosition, type TextMeasurer } from '.
 import { ViewEventHandler } from '../common/viewEventHandler.js';
 import * as viewEvents from '../common/viewEvents.js';
 import { type EditorVisualLineProjection } from '../common/viewModel/modelLineProjection.js';
-import { ComputeOptionsMemory, EditorLayoutInfoComputer, EditorLineWrapping, EditorOption, type EditorLayoutInfo, type EditorMinimapLayoutInfo, type EditorMinimapOptions, type FindComputedEditorOptionValueById, RenderLineNumbersType, isWrappingIndent, WrappingIndent } from '../common/config/editorOptions.js';
+import { EditorLineWrapping, EditorOption, type EditorLayoutInfo, type EditorMinimapOptions, type FindComputedEditorOptionValueById, RenderLineNumbersType, isWrappingIndent, WrappingIndent } from '../common/config/editorOptions.js';
 import { type FontInfo } from '../common/config/fontInfo.js';
 import { type EditorViewportChange, type EditorViewportLayout, ViewLayout } from '../common/viewLayout/viewLayout.js';
 import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind, hitTestStanzaVisualEditorPoint } from '../common/viewModel/pointerHitTest.js';
@@ -55,7 +55,7 @@ import { ViewContext } from '../common/viewModel/viewContext.js';
 import type { IColorTheme } from '../../platform/theme/common/themeService.js';
 import type { IContentWidget, IEditorAriaOptions, IGlyphMarginWidget, IOverlayWidget, IViewZoneChangeAccessor } from './editorBrowser.js';
 import { ContentViewOverlays, MarginViewOverlays } from './view/viewOverlays.js';
-import { LineWidthIndex, ViewLines } from './viewParts/viewLines/viewLines.js';
+import { ViewLines } from './viewParts/viewLines/viewLines.js';
 import { ViewLinesGpu } from './viewParts/viewLinesGpu/viewLinesGpu.js';
 import { ViewGpuContext } from './gpu/viewGpuContext.js';
 import { EditorSemanticHighlightingConfiguration } from '../common/config/editorConfigurationSchema.js';
@@ -169,7 +169,6 @@ export class View extends ViewEventHandler {
 	private readonly decorations: DecorationsOverlay;
 	private readonly viewCursors: ViewCursors;
 	private readonly textMeasurer: TextMeasurer & { refresh?(): boolean };
-	private readonly lineWidths: LineWidthIndex;
 	private readonly viewModel: IViewModel;
 	readonly coordinatesConverter: IViewModel['coordinatesConverter'];
 	readonly cursorConfig: IViewModel['cursorConfig'];
@@ -177,7 +176,6 @@ export class View extends ViewEventHandler {
 	private readonly focusOutlineOwner: EditorFocusOutlineOwner;
 	private readonly padding: EditorViewportPadding;
 	private readonly indentation: ResolvedEditorIndentationOptions;
-	private readonly minimapLayoutMemory = new ComputeOptionsMemory();
 	private readonly textDirection: EditorTextDirection;
 	private readonly editorConfiguration: EditorConfiguration;
 	private readonly pixelRatio: IPixelRatioMonitor;
@@ -187,6 +185,7 @@ export class View extends ViewEventHandler {
 	private projectionRevision = 0;
 	private readonly pendingRender = this._register(new MutableDisposable<IDisposable>());
 	private renderedLayout: EditorViewportLayout | undefined;
+	private glyphMarginLanesDirty = true;
 
 	get currentLayout(): EditorViewportLayout {
 		return this.viewport.layout;
@@ -271,20 +270,6 @@ export class View extends ViewEventHandler {
 		this.textMeasurer.refresh?.();
 		const spaceWidth = this.fontInfo.spaceWidth;
 		this.cursorConfig = this.viewModel.cursorConfig;
-		this.lineWidths = this._register(new LineWidthIndex(
-			this.model,
-			this.textMeasurer,
-			{
-				initialMeasurement: {
-					...(this.model.largeFile.tooLargeForTokenization ? { maximumMeasuredLineCount: 2_048 } : {}),
-					schedule: callback => runWhenWindowIdle(
-						ownerWindow,
-						() => callback(),
-						250,
-					),
-				},
-			},
-		));
 		this.coordinatesConverter = this.viewModel.coordinatesConverter;
 		this.viewport = viewport;
 		this.onDidChangeLayout = viewport.onDidChange;
@@ -342,6 +327,7 @@ export class View extends ViewEventHandler {
 			themeType: options.theme.colorScheme,
 			tabSize: this.indentation.tabSize,
 			typicalHalfwidthCharacterWidth: Math.max(1, this.textMeasurer.measureLineWidth(' ')),
+			textMeasurer: this.textMeasurer,
 			viewGpuContext: this.viewGpuContext,
 		}));
 		this.viewLinesGpu = this.viewGpuContext
@@ -408,7 +394,6 @@ export class View extends ViewEventHandler {
 			model: this.model,
 			semanticTokenSource: options.semanticTokenSource,
 			readLayout: () => this.viewport.layout,
-			readMinimapLayout: () => this.computeMinimapLayout(this.viewport.layout.viewportSize.width, this.viewport.layout.viewportSize.height),
 			readVisualProjection: () => this.visualProjection,
 			readProjectionRevision: () => this.projectionRevision,
 			scrollTo: position => this.scrollTo(position),
@@ -441,13 +426,7 @@ export class View extends ViewEventHandler {
 			this.contentWidgets.overflowingContentWidgetsDomNode.domNode,
 			this.overlayWidgets.overflowingOverlayWidgetsDomNode.domNode,
 		);
-		viewport.setMaxLineWidth(this.measuredContentWidth);
-
 		this._register(MinimapTokensColorTracker.getInstance().onDidChange(() => this.scheduleProjection()));
-		this._register(this.lineWidths.onDidChange(() => {
-			viewport.setMaxLineWidth(this.measuredContentWidth);
-			this.scheduleProjection();
-		}));
 		this._register(addDisposableListener(this.domNode.domNode, "scroll", () => {
 			if (this.domNode.domNode.scrollLeft === this.syncedScrollLeft && this.domNode.domNode.scrollTop === this.syncedScrollTop) return;
 			viewport.setScrollPosition({
@@ -455,10 +434,6 @@ export class View extends ViewEventHandler {
 				scrollTop: this.domNode.domNode.scrollTop,
 			}, ScrollType.Immediate);
 			this.syncScrollPosition(viewport.layout);
-		}));
-		this._register(this.model.onDidChangeContent(change => {
-			this.lineWidths.applyModelChange(change);
-			viewport.setMaxLineWidth(this.measuredContentWidth);
 		}));
 		this.updateAccessibilityStatus();
 		const semanticTokenSource = options.semanticTokenSource;
@@ -545,10 +520,8 @@ export class View extends ViewEventHandler {
 		if (nextSoftWrapping === this.softWrapping) return this.viewport.layout;
 		this.editorConfiguration.updateOptions({ wordWrap: nextSoftWrapping ? 'on' : 'off' });
 		this.domNode.domNode.classList.toggle("word-wrapped", nextSoftWrapping);
-		this.viewport.setMaxLineWidth(this.measuredContentWidth);
-		const layout = this.viewport.layout;
 		this.render(true, false);
-		return layout;
+		return this.viewport.layout;
 	}
 
 	setWrappingIndent(wrappingIndent: WrappingIndent): EditorViewportLayout {
@@ -557,10 +530,8 @@ export class View extends ViewEventHandler {
 		}
 		if (wrappingIndent === this.wrappingIndent) return this.viewport.layout;
 		this.editorConfiguration.updateOptions({ wrappingIndent: rawWrappingIndent(wrappingIndent) });
-		this.viewport.setMaxLineWidth(this.measuredContentWidth);
-		const layout = this.viewport.layout;
 		this.render(true, false);
-		return layout;
+		return this.viewport.layout;
 	}
 
 	/** Returns the current measured visual-row mapping for browser interactions. */
@@ -579,7 +550,6 @@ export class View extends ViewEventHandler {
 
 	resetLineWidthCaches(): void {
 		this.viewLines.resetLineWidthCaches();
-		this.lineWidths.refresh();
 	}
 
 	layout(size: ISize = getClientArea(this.domNode.domNode)): EditorViewportLayout {
@@ -650,8 +620,8 @@ export class View extends ViewEventHandler {
 
 	refreshFontMetrics(force = false): EditorViewportLayout {
 		if (!this.textMeasurer.refresh?.() && !force) return this.viewport.layout;
-		this.lineWidths.refresh();
-		this.viewport.setMaxLineWidth(this.measuredContentWidth);
+		this.viewLines.resetLineWidthCaches();
+		this.viewLines.forceShouldRender();
 		const layout = this.viewport.layout;
 		this.scheduleProjection();
 		return layout;
@@ -712,15 +682,20 @@ export class View extends ViewEventHandler {
 
 	addGlyphMarginWidget(widget: IGlyphMarginWidget): void {
 		this.glyphMarginWidgets.addWidget(widget);
+		this.glyphMarginLanesDirty = true;
 		this.scheduleProjection();
 	}
 
 	layoutGlyphMarginWidget(widget: IGlyphMarginWidget): void {
-		if (this.glyphMarginWidgets.setWidgetPosition(widget, widget.getPosition())) this.scheduleProjection();
+		if (this.glyphMarginWidgets.setWidgetPosition(widget, widget.getPosition())) {
+			this.glyphMarginLanesDirty = true;
+			this.scheduleProjection();
+		}
 	}
 
 	removeGlyphMarginWidget(widget: IGlyphMarginWidget): void {
 		this.glyphMarginWidgets.removeWidget(widget);
+		this.glyphMarginLanesDirty = true;
 		this.scheduleProjection();
 	}
 
@@ -927,15 +902,6 @@ export class View extends ViewEventHandler {
 		return left === undefined ? undefined : this.contentTextLeft + left;
 	}
 
-	private get measuredContentWidth(): number {
-		const textContentWidth = this.softWrapping ? 0 : Math.ceil(
-			this.gutterWidth +
-			this.lineWidths.maximumLineWidth +
-			this.textMeasurer.horizontalPadding,
-		);
-		return textContentWidth;
-	}
-
 	private get gutterWidth(): number {
 		return Math.max(0, this.editorConfiguration.options.get(EditorOption.layoutInfo).contentLeft - this.contentOffsetLeft);
 	}
@@ -954,29 +920,13 @@ export class View extends ViewEventHandler {
 			: 0;
 	}
 
-	private computeMinimapLayout(viewportWidth: number, viewportHeight: number): EditorMinimapLayoutInfo {
-		return EditorLayoutInfoComputer._computeMinimapLayout({
-			outerWidth: viewportWidth,
-			outerHeight: viewportHeight,
-			lineHeight: this.viewport.layout.lineHeight,
-			typicalHalfwidthCharacterWidth: Math.max(1, this.textMeasurer.measureLineWidth('n')),
-			pixelRatio: this.pixelRatio.value,
-			scrollBeyondLastLine: false,
-			paddingTop: this.editorConfiguration.options.get(EditorOption.padding).top,
-			paddingBottom: this.editorConfiguration.options.get(EditorOption.padding).bottom,
-			minimap: this.minimap,
-			verticalScrollbarWidth: this.editorConfiguration.options.get(EditorOption.layoutInfo).verticalScrollbarWidth,
-			viewLineCount: this.visualProjection.visualLineCount,
-			remainingWidth: Math.max(0, viewportWidth - this.gutterWidth),
-			isViewportWrapping: this.softWrapping,
-		}, this.minimapLayoutMemory);
-	}
-
 	private prepareRenderPass(): EditorRenderPass | undefined {
 		if (this.isDisposed) return undefined;
 		if (this.renderedLayout === this.viewport.layout && !this.shouldRender() && !this.viewParts.some(part => part.shouldRender())) return undefined;
-		this.observeRenderedLineWidths(this.viewport.layout);
-		this.computeGlyphMarginLanes();
+		if (this.glyphMarginLanesDirty) {
+			this.glyphMarginLanesDirty = false;
+			this.computeGlyphMarginLanes();
+		}
 		const layout = this.viewport.layout;
 		const startLineNumber = layout.visibleLines.startLineIndex + 1;
 		const endLineNumber = layout.visibleLines.endLineIndexExclusive;
@@ -998,10 +948,6 @@ export class View extends ViewEventHandler {
 		return {
 			owner: this,
 			renderText: () => {
-				this.domNode.domNode.classList.toggle("horizontally-scrollable", layout.maximumScrollPosition.left > 0);
-				this.domNode.domNode.classList.toggle("vertically-scrollable", layout.maximumScrollPosition.top > 0);
-				this.contentNode.setWidth(layout.contentSize.width);
-				this.contentNode.setHeight(layout.contentSize.height);
 				const contentOffsetLeft = this.contentOffsetLeft;
 				this.contentNode.setTransform(contentOffsetLeft > 0 ? `translate3d(${contentOffsetLeft}px, 0, 0)` : '');
 				if (this.viewLines.shouldRender()) {
@@ -1012,6 +958,11 @@ export class View extends ViewEventHandler {
 					this.viewLinesGpu.renderText(viewportData);
 					this.viewLinesGpu.onDidRender();
 				}
+				const textLayout = this.viewport.layout;
+				this.domNode.domNode.classList.toggle("horizontally-scrollable", textLayout.maximumScrollPosition.left > 0);
+				this.domNode.domNode.classList.toggle("vertically-scrollable", textLayout.maximumScrollPosition.top > 0);
+				this.contentNode.setWidth(textLayout.contentSize.width - contentOffsetLeft);
+				this.contentNode.setHeight(textLayout.contentSize.height);
 				// Text rendering can change scroll geometry. Bind the context and
 				// collect invalidated Parts only after those changes have settled.
 				context = this.createRenderingContext(viewportData);
@@ -1057,17 +1008,6 @@ export class View extends ViewEventHandler {
 			this.pendingRender.clear();
 			return this.prepareRenderPass();
 		});
-	}
-
-	private observeRenderedLineWidths(layout: EditorViewportLayout): void {
-		if (this.lineWidths.complete) return;
-		const projection = this.visualProjection;
-		const logicalLineIndexes = new Set<number>();
-		for (let visualLineIndex = layout.renderLines.startLineIndex; visualLineIndex < layout.renderLines.endLineIndexExclusive; visualLineIndex += 1) {
-			const visualLine = projection.lineAt(visualLineIndex);
-			if (visualLine) logicalLineIndexes.add(visualLine.logicalLineIndex);
-		}
-		this.lineWidths.observeLines([...logicalLineIndexes]);
 	}
 
 	private updateAccessibilityStatus(): void {
@@ -1181,7 +1121,13 @@ export class View extends ViewEventHandler {
 
 	public override onFlushed(): boolean {
 		this.projectionRevision += 1;
+		this.glyphMarginLanesDirty = true;
 		return true;
+	}
+
+	public override onDecorationsChanged(event: viewEvents.ViewDecorationsChangedEvent): boolean {
+		if (event.affectsGlyphMargin) this.glyphMarginLanesDirty = true;
+		return false;
 	}
 
 	public override onLineMappingChanged(): boolean {

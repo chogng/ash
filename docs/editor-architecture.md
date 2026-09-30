@@ -261,6 +261,12 @@ soft wrap 与基础 accessibility projection。
 的帧任务；绘制期间新增的请求进入下一批。
 通用帧原语由 `base/browser/scheduler` 提供，跨编辑器协调由
 `editor/browser/view.ts` 拥有。
+Workbench Grid 发布的外部尺寸经过 `WorkbenchPart.layoutContents` 转为内容区
+尺寸。`EditorPart` 按当前布局样式和窗口缩放计算边框，不在拖拽后读取 DOM 尺寸，
+也不再用内容区 observer 重复驱动编辑器 Grid。主窗口与独立编辑器窗口使用同一入口。
+minimap 直接读取 `EditorConfiguration` 已计算的 `layoutInfo.minimap`，不在 View
+中保留第二份布局计算状态。glyph lane 只在 glyph 装饰、控件位置或模型刷新时重算，
+光标移动与视口缩放复用已有结果。
 CodeLens 的可见性判断读取布局中可见的行间区域，不再读取等待重画的 DOM 标记，
 因此命令解析可以在布局发布后立即开始。
 
@@ -272,13 +278,15 @@ tab size 和左右 padding。普通文本段由 Canvas 按当前字体 shaping �
 font-size 派生的 fallback advance；测试和未来专用字体引擎通过小型
 `TextMeasurer` contract 注入。
 
-`StanzaLineWidthIndex` 首先同步测量一个有界行片段，之后通过可取消的 idle
-切片完成其余非换行行；未测量期间最大值只作为下界，完成后恢复精确值。稳定
-后它按 `TextModelChange` 的旧行范围合并同一行多处编辑，只重测事务影响的新
-行组。宽度计数集合维护当前最大值，最长行缩短时无需全文重测即可收缩 content
-width 并夹紧横向滚动。字体加载完成或显式 `refreshFontMetrics()` 会以同一策略
-重建，因为此时每个缓存值都可能失效。随机差分测试覆盖 400 次多区间事务、
-换行变化和 undo/redo，并与逐次全文扫描结果比较。
+`ViewLines` 拥有行宽缓存、测量和向 `ViewLayout` 发布横向范围的职责，提交发生在
+文本绘制阶段，早于控件几何测量。它管理的 `LineWidthIndex` 首先同步估算一个
+有界模型行片段，之后通过可取消的 idle 切片完成其余行；未完成期间最大值只作为
+下界。稳定后按 `TextModelChange` 的旧行范围合并同一行多处编辑，只重测事务
+影响的新行组。实际渲染行宽还包括 injected text 和带样式的文字，后续模型估算
+不能覆盖较大的实际测量值。内容或装饰变化会使这些测量失效；移除宽提示或缩短
+最长行后，横向范围收缩并夹紧滚动位置。字体加载完成或显式 `refreshFontMetrics()`
+会重建缓存。随机差分测试覆盖 400 次多区间事务、换行变化和 undo/redo，并与
+逐次全文扫描结果比较。
 
 ### Current 9：Gutter 与 selection/caret projection
 

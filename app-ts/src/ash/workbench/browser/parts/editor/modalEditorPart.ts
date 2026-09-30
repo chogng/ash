@@ -12,7 +12,7 @@ import { DisposableMap, Disposable, MutableDisposable, toDisposable } from '../.
 import { basename } from '../../../../base/common/resources.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import type { EditorInput, EditorOpenOptions } from '../../../services/editor/common/editorService.js';
-import { type EditorGroupOptions, EditorOpenSupersededError } from './editorGroup.js';
+import { type EditorGroupOptions, EditorOpenSupersededError } from './editorGroupView.js';
 import { type EditorPaneCreationOptions, type IEditorPane, EditorPaneVisibility } from './editorPane.js';
 import type { IEditorPaneRegistry } from '../../editor.js';
 import { editorInputKey } from './editorTabsControl.js';

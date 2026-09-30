@@ -1,5 +1,5 @@
 import { LocalSelectionTransfer } from "../../../../platform/dnd/browser/dnd.js";
-import type { EditorGroup } from "./editorGroup.js";
+import type { EditorGroupView } from "./editorGroupView.js";
 import type { EditorInput } from "./editorInput.js";
 import type { Direction } from "../../../../base/browser/ui/grid/grid.js";
 
@@ -13,25 +13,25 @@ export type EditorTabDropPosition = "before" | "after";
  * the source group, target group, and the resulting Editor lifetime changes.
  */
 export interface IEditorTabDragAndDrop {
-	start(source: EditorGroup, input: EditorInput): void;
+	start(source: EditorGroupView, input: EditorInput): void;
 	isDragging(): boolean;
-	drop(target: EditorGroup, targetInput: EditorInput | undefined, position: EditorTabDropPosition, splitDirection?: Direction): void;
+	drop(target: EditorGroupView, targetInput: EditorInput | undefined, position: EditorTabDropPosition, splitDirection?: Direction): void;
 	end(): void;
 }
 
 /** One editor tab retained as an in-renderer drag payload. */
 export class DraggedEditorIdentifier {
 	constructor(
-		readonly source: EditorGroup,
+		readonly source: EditorGroupView,
 		readonly input: EditorInput,
 	) {}
 }
 
 /** The resolved target of an editor tab drag. */
 export interface EditorTabDropEvent {
-	readonly source: EditorGroup;
+	readonly source: EditorGroupView;
 	readonly input: EditorInput;
-	readonly target: EditorGroup;
+	readonly target: EditorGroupView;
 	readonly targetInput: EditorInput | undefined;
 	readonly position: EditorTabDropPosition;
 	readonly splitDirection?: Direction;
@@ -48,7 +48,7 @@ export class EditorTabDragAndDropController implements IEditorTabDragAndDrop {
 
 	constructor(private readonly onDrop: (event: EditorTabDropEvent) => void) {}
 
-	start(source: EditorGroup, input: EditorInput): void {
+	start(source: EditorGroupView, input: EditorInput): void {
 		this.transfer.setData(
 			[new DraggedEditorIdentifier(source, input)],
 			DraggedEditorIdentifier.prototype,
@@ -59,7 +59,7 @@ export class EditorTabDragAndDropController implements IEditorTabDragAndDrop {
 		return this.transfer.hasData(DraggedEditorIdentifier.prototype);
 	}
 
-	drop(target: EditorGroup, targetInput: EditorInput | undefined, position: EditorTabDropPosition, splitDirection?: Direction): void {
+	drop(target: EditorGroupView, targetInput: EditorInput | undefined, position: EditorTabDropPosition, splitDirection?: Direction): void {
 		const dragged = this.transfer.getData(DraggedEditorIdentifier.prototype)?.[0];
 		this.end();
 		if (!dragged) return;

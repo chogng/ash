@@ -1,5 +1,5 @@
 import './viewLines.css';
-import { isHTMLElement } from '../../../../base/browser/dom.js';
+import { isHTMLElement, runWhenWindowIdle } from '../../../../base/browser/dom.js';
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { CharCode } from '../../../../base/common/charCode.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
@@ -35,6 +35,7 @@ export interface ViewLinesOptions {
 	readonly themeType: ColorScheme;
 	readonly tabSize: number;
 	readonly typicalHalfwidthCharacterWidth: number;
+	readonly textMeasurer: TextMeasurer;
 	readonly viewGpuContext?: ViewGpuContext;
 }
 
@@ -47,6 +48,8 @@ export class ViewLines extends ViewPart implements IViewLines {
 	private readonly _visibleLines: ViewLayer<ViewLine>;
 	private readonly _typicalHalfwidthCharacterWidth: number;
 	private readonly viewGpuContext: ViewGpuContext | undefined;
+	private readonly lineWidths: LineWidthIndex;
+	private readonly textMeasurer: TextMeasurer;
 	private _viewLineOptions: ViewLineOptions;
 	private lastViewportData: ViewportData | undefined;
 	private _maxLineWidth = 0;
@@ -63,6 +66,15 @@ export class ViewLines extends ViewPart implements IViewLines {
 		if (!Number.isFinite(options.typicalHalfwidthCharacterWidth) || options.typicalHalfwidthCharacterWidth <= 0) throw new RangeError('Stanza view-line halfwidth character width must be positive');
 		this._typicalHalfwidthCharacterWidth = options.typicalHalfwidthCharacterWidth;
 		this.viewGpuContext = options.viewGpuContext;
+		this.textMeasurer = options.textMeasurer;
+		this.lineWidths = this._register(new LineWidthIndex(this.model, this.textMeasurer, {
+			initialMeasurement: {
+				...(this.model.largeFile.tooLargeForTokenization ? { maximumMeasuredLineCount: 2_048 } : {}),
+				schedule: callback => runWhenWindowIdle(options.host.ownerDocument.defaultView!, callback, 250),
+			},
+		}));
+		this._register(this.lineWidths.onDidChange(() => this.publishLineWidth()));
+		this._register(this.model.onDidChangeContent(change => this.lineWidths.applyModelChange(change)));
 		this._visibleLines = this._register(new ViewLayer<ViewLine>({
 			host: options.host,
 			readVisualProjection: options.readVisualProjection,
@@ -110,10 +122,10 @@ export class ViewLines extends ViewPart implements IViewLines {
 		this.lastViewportData = viewportData;
 		this._checkMonospaceFontAssumptions();
 		this._visibleLines.render(viewportData);
-		// Horizontal reveal may need a row created in this pass and can change
-		// scroll geometry before the host constructs its RenderingContext.
-		this.applyHorizontalReveal(viewportData);
 		this.updateLineWidths();
+		// Reveal uses the measured extent of the new rows before the host binds
+		// its RenderingContext, including text wider than the model estimate.
+		this.applyHorizontalReveal(viewportData);
 	}
 
 	public render(context: RestrictedRenderingContext): void {
@@ -134,6 +146,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 	public override onDecorationsChanged(_event?: ViewDecorationsChangedEvent): boolean {
 		for (const line of this._visibleLines.renderedLines.values()) line.onDecorationsChanged();
 		this.contentRevision += 1;
+		this._maxLineWidth = 0;
 		return this._visibleLines.renderedLines.size > 0;
 	}
 
@@ -266,11 +279,33 @@ export class ViewLines extends ViewPart implements IViewLines {
 	public resetLineWidthCaches(): void {
 		for (const line of this._visibleLines.renderedLines.values()) line.resetCachedWidth();
 		this._maxLineWidth = 0;
+		this.lineWidths.refresh();
 	}
 
 	public updateLineWidths(): void {
-		this._maxLineWidth = 0;
+		if (!this.lineWidths.complete) {
+			const projection = this.readVisualProjection();
+			const logicalLines = new Set<number>();
+			for (const lineIndex of this._visibleLines.renderedLines.keys()) {
+				const line = projection.lineAt(lineIndex);
+				if (line) logicalLines.add(line.logicalLineIndex);
+			}
+			this.lineWidths.observeLines([...logicalLines]);
+		}
 		for (const line of this._visibleLines.renderedLines.values()) this._ensureMaxLineWidth(line.getWidth(readingContext(line)));
+		this.publishLineWidth();
+	}
+
+	private publishLineWidth(): void {
+		const options = this._context.configuration.options;
+		const width = options.get(EditorOption.wrappingInfo).wrappingColumn > 0 ? 0 : Math.ceil(
+			options.get(EditorOption.layoutInfo).contentLeft
+			+ Math.max(this.lineWidths.maximumLineWidth, this._maxLineWidth)
+			+ this.textMeasurer.horizontalPadding,
+		);
+		// The bounded model scan estimates unseen rows. Rendered widths include
+		// injected text and styled spans and must survive later estimate updates.
+		this._context.viewLayout.setMaxLineWidth(width);
 	}
 
 	public linesVisibleRangesForRange(range: Range, includeNewLines: boolean): LineVisibleRanges[] | null {
@@ -500,7 +535,7 @@ interface ResolvedInitialMeasurement {
 	readonly schedule: LineWidthMeasurementScheduler;
 }
 
-/** Viewport-owned width index used to bound horizontal layout work. */
+/** Text-layer width estimates for model lines not yet measured in the DOM. */
 export class LineWidthIndex extends Disposable {
 	private widths: number[] = [];
 	private readonly widthCounts = new Map<number, number>();

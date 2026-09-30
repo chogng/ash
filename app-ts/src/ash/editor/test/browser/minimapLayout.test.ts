@@ -14,11 +14,11 @@ test('Minimap owns one canvas and removes its DOM node on disposal', () => {
 		host,
 		model,
 		readLayout: () => { throw new Error('not rendered'); },
-		readMinimapLayout: () => { throw new Error('not rendered'); },
 		readVisualProjection: () => { throw new Error('not rendered'); },
 		readProjectionRevision: () => 0,
 		scrollTo: () => { },
 	});
+	host.append(minimap.getDomNode().domNode);
 	assert.equal(host.querySelectorAll('canvas').length, 1);
 	const root = minimap.getDomNode();
 	assert.strictEqual(minimap.getDomNode(), root);

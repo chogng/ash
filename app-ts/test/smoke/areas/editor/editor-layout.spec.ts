@@ -4,6 +4,7 @@ import { expect, test } from "../../../automation/test.js";
 
 interface SashMeasurements {
 	readonly paints: number;
+	readonly editorPartDimensionReads: number;
 	readonly durations: number[];
 	readonly frameIntervals: number[];
 	readonly initialRaster: { width: number; height: number };
@@ -48,6 +49,15 @@ for (const groupCount of [1, 2]) {
 			const frameIntervals: number[] = [];
 			const rasters: { width: number; height: number }[] = [];
 			let paints = 0;
+			let editorPartDimensionReads = 0;
+			const part = canvas.ownerDocument.querySelector<HTMLElement>('[data-part="editor"]')!;
+			const dimensionProperties = ['offsetWidth', 'clientWidth', 'offsetHeight', 'clientHeight'] as const;
+			for (const name of dimensionProperties) {
+				let prototype = Object.getPrototypeOf(part);
+				while (!Object.getOwnPropertyDescriptor(prototype, name)) prototype = Object.getPrototypeOf(prototype);
+				const getter = Object.getOwnPropertyDescriptor(prototype, name)!.get!;
+				Object.defineProperty(part, name, { configurable: true, get() { editorPartDimensionReads++; return getter.call(this); } });
+			}
 			let start = 0;
 			let previousFrame: number | undefined;
 			let frame: number;
@@ -71,8 +81,9 @@ for (const groupCount of [1, 2]) {
 				painter.clearRect = original;
 				window.removeEventListener('pointermove', begin, true);
 				window.removeEventListener('pointermove', measure);
+				for (const name of dimensionProperties) delete (part as unknown as Record<string, unknown>)[name];
 				delete (canvas as HTMLCanvasElement & { finishMeasurement?: unknown }).finishMeasurement;
-				return { paints, durations, frameIntervals, initialRaster, rasters };
+				return { paints, editorPartDimensionReads, durations, frameIntervals, initialRaster, rasters };
 			} });
 		});
 		let metrics: SashMeasurements;
@@ -87,6 +98,7 @@ for (const groupCount of [1, 2]) {
 		}
 		await testInfo.attach('sash-performance', { body: JSON.stringify(metrics), contentType: 'application/json' });
 		expect(metrics.paints).toBeLessThanOrEqual(24);
+		expect(metrics.editorPartDimensionReads).toBe(0);
 		expect(new Set([metrics.initialRaster.height, ...metrics.rasters.map(raster => raster.height)]).size).toBe(1);
 		await expect(editor.locator('.stanza-editor-line-text').first()).toContainText('line 0:');
 		const geometry = await editor.evaluate(element => {

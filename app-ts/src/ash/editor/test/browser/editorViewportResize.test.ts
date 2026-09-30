@@ -10,6 +10,8 @@ import { EditorLineWrapping } from '../../common/config/editorOptions.js';
 import { ContentWidgetPositionPreference } from '../../browser/editorBrowser.js';
 import { Position } from '../../common/core/position.js';
 import { Selection } from '../../common/core/selection.js';
+import { Range } from '../../common/core/range.js';
+import { GlyphMarginLane } from '../../common/model.js';
 
 const { TestView: View } = await import("./viewModel/testViewModel.js");
 
@@ -283,6 +285,102 @@ test("Stanza viewport applies recomputed font configuration", () => {
 	} finally {
 		viewport.dispose();
 		EditorZoom.setZoomLevel(0);
+		dom.window.close();
+	}
+});
+
+test('rendered widths update scroll layout before widget measurements and shrink after hint removal', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const idleTasks = new Map<number, IdleRequestCallback>();
+	let idleHandle = 0;
+	Object.assign(dom.window, {
+		requestIdleCallback: (callback: IdleRequestCallback) => {
+			idleTasks.set(++idleHandle, callback);
+			return idleHandle;
+		},
+		cancelIdleCallback: (handle: number) => { idleTasks.delete(handle); },
+	});
+	using model = new TextModel([...Array<string>(599).fill('abc'), 'x'.repeat(20)].join('\n'));
+	using view = new View({ container: requiredElement(dom.window.document, 'main'), model, minimap: { enabled: false } });
+	try {
+		view.layout({ width: 300, height: 80 });
+		view.render(true, false);
+		const text = requiredElement<HTMLElement>(view.domNode.domNode, '.stanza-editor-line-text');
+		text.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, model.getAllDecorations().length > 0 ? 900 : 24, 20);
+		let measuredScrollRange = 0;
+		view.addContentWidget({
+			getId: () => 'width-observer',
+			getDomNode: () => dom.window.document.createElement('div'),
+			getPosition: () => ({ position: new Position(1, 1), preference: [ContentWidgetPositionPreference.EXACT] }),
+			beforeRender: () => { measuredScrollRange = view.viewportLayout.maximumScrollPosition.left; return { width: 10, height: 10 }; },
+		});
+		const decorations = model.deltaDecorations([], [{ range: new Range(1, 4, 1, 4), options: { description: 'wide hint', after: { content: 'hint'.repeat(100) } } }]);
+		view.render(true, false);
+		const content = requiredElement<HTMLElement>(view.domNode.domNode, '.stanza-editor-content');
+		assert.ok(measuredScrollRange >= 600);
+		assert.equal(content.style.width, `${view.viewportLayout.contentSize.width}px`);
+		assert.ok(idleTasks.size > 0);
+		for (const [handle, callback] of idleTasks) {
+			idleTasks.delete(handle);
+			callback({ didTimeout: false, timeRemaining: () => 50 });
+		}
+		view.render(true, false);
+		assert.ok(view.viewportLayout.maximumScrollPosition.left >= 600, 'Idle estimates must retain rendered hint widths');
+		view.scrollTo({ left: 500, top: 0 });
+		assert.equal(view.viewportLayout.scrollPosition.left, 500);
+		model.deltaDecorations(decorations, []);
+		view.render(true, false);
+		assert.deepEqual({ width: view.viewportLayout.contentSize.width, scrollLeft: view.viewportLayout.scrollPosition.left }, { width: 300, scrollLeft: 0 });
+		view.resetLineWidthCaches();
+		assert.ok(idleTasks.size > 0);
+		view.dispose();
+		assert.equal(idleTasks.size, 0, 'Disposing the text layer cancels its pending width estimates');
+	} finally {
+		view.dispose();
+		dom.window.close();
+	}
+});
+
+test('glyph lanes reuse scans for cursor movement and resize and track margin changes', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('first\nsecond\nthird');
+	using view = new View({ container: requiredElement(dom.window.document, 'main'), model, glyphMargin: true, minimap: { enabled: false } });
+	const original = model.getAllMarginDecorations;
+	let scans = 0;
+	model.getAllMarginDecorations = (...args) => { scans++; return original.apply(model, args); };
+	try {
+		for (let index = 1; index <= 3; index++) {
+			view.controller.setSelection(new Selection(index, 1, index, 1));
+			view.layout({ width: 300 + index, height: 80 });
+			view.render(true, false);
+		}
+		model.deltaDecorations([], [{ range: new Range(1, 1, 1, 2), options: { description: 'inline only', className: 'inline-only' } }]);
+		view.render(true, false);
+		assert.equal(scans, 0);
+		const margin = model.deltaDecorations([], [{ range: new Range(2, 1, 2, 1), options: { description: 'glyph', glyphMarginClassName: 'audit-glyph', glyphMargin: { position: GlyphMarginLane.Right } } }]);
+		view.render(true, false);
+		assert.equal(scans, 1);
+		model.applyEdits([{ range: new Range(1, 1, 1, 1), text: 'new line\n' }]);
+		view.render(true, false);
+		assert.equal(view.testViewModel.glyphLanes.getLanesAtLine(3).includes(GlyphMarginLane.Right), true);
+		model.deltaDecorations(margin, []);
+		view.render(true, false);
+		assert.equal(scans, 3);
+		let lane = GlyphMarginLane.Right;
+		const widget = { getId: () => 'glyph-widget', getDomNode: () => dom.window.document.createElement('div'), getPosition: () => ({ range: new Range(1, 1, 1, 1), lane, zIndex: 0 }) };
+		view.addGlyphMarginWidget(widget);
+		view.render(true, false);
+		lane = GlyphMarginLane.Left;
+		view.layoutGlyphMarginWidget(widget);
+		view.render(true, false);
+		view.removeGlyphMarginWidget(widget);
+		view.render(true, false);
+		assert.equal(scans, 6);
+	} finally {
+		model.getAllMarginDecorations = original;
+		view.dispose();
 		dom.window.close();
 	}
 });

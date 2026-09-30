@@ -97,6 +97,8 @@ const {
 const { EditorContextKeyController } = await import(
 	'../../../../../../workbench/browser/parts/editor/editorContextKeys.js'
 );
+const { WorkbenchConfiguration } = await import('../../../../../common/configuration.js');
+
 const { createTestWorkbenchContextKeysHandler } = await import('../../../../../../workbench/test/common/testWorkbenchContextKeys.js');
 const {
 	EditorGroupWatermarkEntries,
@@ -117,6 +119,30 @@ await import(
 await import('../../../../../../workbench/browser/workbench.contribution.js');
 
 suiteTeardown(() => browserEnvironment.window.close());
+
+test('EditorPart uses presentation borders without reading DOM dimensions', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using configurationService = new InMemoryConfigurationService();
+	await configurationService.updateValue(WorkbenchConfiguration.layoutStyle, 'modern');
+	using editor = new EditorPart(dom.window.document.body, { configurationService });
+	try {
+		for (const name of ['offsetWidth', 'clientWidth', 'offsetHeight', 'clientHeight']) {
+			Object.defineProperty(editor.domNode, name, { configurable: true, get: () => { throw new Error('Layout must use the supplied dimensions'); } });
+		}
+		editor.layout({ width: 800, height: 600 });
+		const grid = editor.domNode.querySelector<HTMLElement>('.ash-grid .ash-split-view-pane')!;
+		assert.deepEqual({ width: grid.style.width, height: grid.style.height }, { width: '798px', height: '598px' });
+		Object.defineProperty(dom.window, 'devicePixelRatio', { configurable: true, value: 1.25 });
+		editor.layout({ width: 800, height: 600 });
+		assert.deepEqual({ width: grid.style.width, height: grid.style.height }, { width: '798.4px', height: '598.4px' });
+		await configurationService.updateValue(WorkbenchConfiguration.layoutStyle, 'flat');
+		editor.layout({ width: 800, height: 600 });
+		assert.deepEqual({ width: grid.style.width, height: grid.style.height }, { width: '800px', height: '600px' });
+	} finally {
+		editor.dispose();
+		dom.window.close();
+	}
+});
 
 test("editor registry resolves defaults and explicit Open With choices", () => {
 	const registry = new EditorPaneRegistry();

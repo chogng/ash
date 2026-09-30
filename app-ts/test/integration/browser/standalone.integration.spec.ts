@@ -1,5 +1,17 @@
 import { expect, test, type Page } from '@playwright/test';
 
+test('rendered hints set horizontal scroll bounds and minimap and glyph lanes reuse their owners', async ({ page }) => {
+	await page.goto('/standalone.html?contributionsOff');
+	const result = await page.evaluate(() => window.ashStandaloneIntegration.exerciseRenderOwnership());
+	expect(result.injectedWidth).toBeGreaterThan(4000);
+	expect(result.scrollWidth).toBeGreaterThanOrEqual(result.injectedWidth);
+	expect(result.scrollLeft).toBeGreaterThan(4000);
+	expect({ left: result.clearedScrollLeft, width: result.clearedScrollWidth }).toEqual({ left: 0, width: 300 });
+	expect({ cursor: result.cursorScans, resize: result.resizeScans }).toEqual({ cursor: 0, resize: 0 });
+	expect(result.minimapCanvas).toEqual(result.configuredCanvas);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
 test('standalone Worker mirrors models, calls its host, and releases its transport', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));

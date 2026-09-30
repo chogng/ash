@@ -1,6 +1,6 @@
 import { URI } from "../../../../base/common/uri.js";
 import type { EditorInput } from "./editorInput.js";
-import type { IEditorGroup } from "./editorGroup.js";
+import type { IEditorGroup } from "./editorGroupView.js";
 import type { IEditorPart } from "./editorPart.js";
 
 export interface IEditorCommandsContext {

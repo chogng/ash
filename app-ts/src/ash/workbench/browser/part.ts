@@ -1,8 +1,17 @@
 import "./media/part.css";
-import { type IDimension } from "../../base/browser/dom.js";
+import { Dimension, type IDimension } from "../../base/browser/dom.js";
 import { Emitter, type Event } from "../../base/common/event.js";
 import { Disposable, toDisposable } from "../../base/common/lifecycle.js";
 import { h } from "../../base/browser/dom.js";
+
+export interface IPartOptions {
+	/** Total horizontal border width, supplied by the Part's presentation owner. */
+	readonly borderWidth?: () => number;
+}
+
+export interface ILayoutContentResult {
+	readonly contentSize: IDimension;
+}
 
 /**
  * Base class for a persistent visual region in the browser workbench shell.
@@ -19,7 +28,7 @@ export abstract class WorkbenchPart extends Disposable {
 	readonly onDidChangeConstraints: Event<void> =
 		this._onDidChangeConstraints.event;
 
-	protected constructor(container: HTMLElement, id: string) {
+	protected constructor(container: HTMLElement, id: string, private readonly partOptions: IPartOptions = {}) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		const domNode = h(ownerDocument, "section");
@@ -42,6 +51,12 @@ export abstract class WorkbenchPart extends Disposable {
 	get preferredWidth(): number | undefined { return undefined; }
 
 	layout(_dimension: IDimension): void {}
+
+	/** Converts Grid border-box dimensions without measuring DOM after Grid writes. */
+	protected layoutContents(width: number, height: number): ILayoutContentResult {
+		const borderWidth = this.partOptions.borderWidth?.() ?? 0;
+		return { contentSize: new Dimension(Math.max(0, width - borderWidth), Math.max(0, height)) };
+	}
 
 	setVisible(visible: boolean): void {
 		this.domNode.hidden = !visible;
