@@ -90,7 +90,7 @@ import { ISessionsManagementService } from "../services/sessions/common/sessions
 import { ISessionsService, SessionsService } from "../services/sessions/browser/sessionsService.js";
 import { SessionsWorkbenchLayout, type SessionsPartId } from "./layoutPolicy.js";
 import { AuxiliaryBarPart } from "./parts/auxiliaryBarPart.js";
-import { ActivityBarPart, type SessionsActivityPage } from './parts/activityBarPart.js';
+import { ActivityBarPart, type SessionsActivityPage } from './parts/activitybar/activityBarPart.js';
 import { SessionsPart } from "./parts/sessionsPart.js";
 import { SidebarPart } from "./parts/sidebarPart.js";
 import { TitlebarPart } from "./parts/titlebar/titlebarPart.js";

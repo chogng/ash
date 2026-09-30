@@ -1,16 +1,15 @@
 import './media/activityBarPart.css';
-import '../../../workbench/browser/parts/activitybar/media/activitybarpart.css';
-import { addDisposableListener, h } from '../../../base/browser/dom.js';
-import { Button } from '../../../base/browser/ui/button/button.js';
-import { SubmenuAction, type IAction } from '../../../base/common/actions.js';
-import type { Icon } from '../../../base/common/icon.js';
-import { Lxicon } from '../../../base/common/lxicons.js';
-import { localize } from '../../../nls.js';
-import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
-import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
-import { ActivityBarPosition } from '../../../workbench/common/configuration.js';
-import { WorkbenchPart } from '../../../workbench/browser/part.js';
-import { SessionsConfiguration } from '../../common/configuration.js';
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
+import { SubmenuAction, type IAction } from '../../../../base/common/actions.js';
+import type { Icon } from '../../../../base/common/icon.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { localize } from '../../../../nls.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
+import { ActivityBarPosition } from '../../../../workbench/common/configuration.js';
+import { WorkbenchPart } from '../../../../workbench/browser/part.js';
+import { SessionsConfiguration } from '../../../common/configuration.js';
 
 export interface ActivityBarPartDelegate {
 	focusList(): void;
@@ -40,7 +39,8 @@ export class ActivityBarPart extends WorkbenchPart {
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 	) {
 		super(container, 'activitybar');
-		this.contentDomNode.classList.add('ash-sessions-activity-content', 'ash-activity-bar-content');
+		this.domNode.classList.replace('ash-workbench-activitybar', 'ash-sessions-activitybar');
+		this.contentDomNode.classList.add('ash-sessions-activity-content');
 		const top = h(container.ownerDocument, 'div');
 		top.className = 'ash-sessions-activity-top';
 		const bottom = h(container.ownerDocument, 'div');

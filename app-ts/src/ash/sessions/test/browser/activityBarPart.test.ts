@@ -18,7 +18,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { Event } = await import('../../../base/common/event.js');
-const { ActivityBarPart } = await import('../../browser/parts/activityBarPart.js');
+const { ActivityBarPart } = await import('../../browser/parts/activitybar/activityBarPart.js');
 const { SessionsConfiguration } = await import('../../common/configuration.js');
 const { ActivityBarPosition, WorkbenchConfiguration } = await import('../../../workbench/common/configuration.js');
 const { WorkbenchConfigurationService } = await import('../../../workbench/services/configuration/browser/configurationService.js');

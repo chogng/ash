@@ -42,6 +42,10 @@ async function returnFromSessions(page: Page): Promise<void> {
 }
 
 async function expectActivityIconSize(navigation: Locator, size: number): Promise<void> {
+	await expect(navigation).toHaveCSS('display', 'flex');
+	await expect(navigation).toHaveCSS('justify-content', 'space-between');
+	const horizontal = await navigation.evaluate(element => element.classList.contains('horizontal'));
+	await expect(navigation).toHaveCSS('flex-direction', horizontal ? 'row' : 'column');
 	const icons = navigation.locator('button svg.ash-icon');
 	await expect(icons).toHaveCount(6);
 	for (const icon of await icons.all()) {
@@ -159,6 +163,8 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	const activityBar = page.locator('[data-part="activitybar"]');
 	await expect(activityBar).toBeVisible();
+	await expect(activityBar).toHaveClass(/ash-sessions-activitybar/u);
+	await expect(page.locator('.ash-workbench-activitybar, .ash-activity-bar-content')).toHaveCount(0);
 	const activityNavigation = page.locator('.ash-sessions-activity-content');
 	await expectActivityIconSize(activityNavigation, 24);
 	await expect(activityNavigation.getByRole('button', { name: 'Chat' }).locator('svg')).toHaveAttribute('data-ash-icon-id', 'chat-2-filled');
@@ -167,7 +173,8 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await expect(activityNavigation.getByRole('button', { name: 'Code' })).not.toHaveAttribute('aria-current', 'page');
 	await expect(page.locator('.ash-sessions-sidebar-tabs')).toHaveCount(0);
 	await page.mouse.move(400, 180);
-	await expect(page.getByRole('button', { name: 'Hide sidebar' })).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	const selectedBackground = await activityNavigation.getByRole('button', { name: 'Chat' }).evaluate(button => getComputedStyle(button).backgroundColor);
+	await expect(page.getByRole('button', { name: 'Hide sidebar' })).toHaveCSS('background-color', selectedBackground);
 	await expect(activityBar.locator('.ash-sessions-activity-top button svg').first()).toHaveAttribute('data-ash-icon-id', 'chat-2-filled');
 	const collaboration = activityBar.getByRole('button', { name: 'Collaboration' });
 	const library = activityBar.getByRole('button', { name: 'Library' });
@@ -455,6 +462,8 @@ test('Electron Code Sessions Activity Bar follows its position and size settings
 	};
 	try {
 		await updateSettings('default', false);
+		await expect(page.locator('[data-part="activitybar"]')).toHaveClass(/ash-sessions-activitybar/u);
+		await expect(page.locator('.ash-workbench-activitybar, .ash-activity-bar-content')).toHaveCount(0);
 		const activityNavigation = page.locator('.ash-sessions-activity-content');
 		await expectActivityIconSize(activityNavigation, 24);
 		const collaboration = page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Collaboration' });
@@ -1148,9 +1157,7 @@ test('Sessions titlebar shares navigation selection and hover colors and respond
 test('Sessions titlebar and navigation keep shared fills and visible outlines in high contrast', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	for (const theme of ['Ash High Contrast Dark', 'Ash High Contrast Light']) {
-		await workbench.page.getByRole('button', { name: 'Manage', exact: true }).click();
-		await workbench.page.getByRole('menu').last().getByRole('menuitem', { name: 'Themes', exact: true }).hover();
-		await workbench.page.getByRole('menu').last().getByRole('menuitem', { name: 'Color Theme', exact: true }).click();
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 		const search = workbench.page.locator('.ash-quick-pick').getByRole('combobox');
 		await search.fill(theme);
 		await search.press('Enter');

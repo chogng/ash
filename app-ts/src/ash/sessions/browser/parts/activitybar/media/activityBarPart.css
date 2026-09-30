@@ -1,12 +1,22 @@
-.ash-sessions-window .ash-workbench-activitybar {
+.ash-sessions-activitybar {
 	border-right: var(--ash-stroke-thickness) solid var(--ash-border);
 	background: var(--ash-side-bar-background);
 }
 
-.ash-sessions-window .ash-workbench-activitybar > .ash-workbench-part-content {
+.ash-sessions-activity-content {
+	/* The navigation content moves into sidebar hosts without its Part root. */
+	--ash-sessions-activity-bar-icon-size: 24px;
+	display: flex;
+	min-height: 0;
+	flex-direction: column;
 	justify-content: space-between;
 	align-items: center;
 	padding: var(--ash-spacing-size80) 0;
+}
+
+.ash-sessions-activity-content.compact,
+.ash-sessions-activity-content.horizontal {
+	--ash-sessions-activity-bar-icon-size: 16px;
 }
 
 .ash-sessions-activity-top,
@@ -62,8 +72,8 @@
 }
 
 .ash-sessions-activity-item .ash-icon {
-	width: var(--ash-activity-bar-icon-size);
-	height: var(--ash-activity-bar-icon-size);
+	width: var(--ash-sessions-activity-bar-icon-size);
+	height: var(--ash-sessions-activity-bar-icon-size);
 }
 
 .ash-workbench[data-color-scheme^="high-contrast-"] .ash-sessions-activity-item:is(.selected, :hover):not(:disabled):not(:focus-visible) {

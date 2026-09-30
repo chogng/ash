@@ -1,4 +1,4 @@
-.ash-sessions-window.modern-ui .ash-workbench-activitybar {
+.ash-sessions-window.modern-ui .ash-sessions-activitybar {
 	border: var(--ash-stroke-thickness) solid var(--ash-border);
 	border-radius: var(--ash-corner-radius-large) 0 0 var(--ash-corner-radius-large);
 	overflow: hidden;
