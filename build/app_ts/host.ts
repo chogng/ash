@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { lstat, mkdir, readFile, realpath, symlink, unlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, realpath, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { appTsBuildPath } from './paths.ts';
@@ -32,7 +32,7 @@ export async function prepareHostOutput(): Promise<void> {
 }
 
 export async function buildHost(): Promise<void> {
-  await prepareHostOutput();
+  await prepareHostBuild();
   await new Promise<void>((done, fail) => {
     const child = spawn(process.execPath, [compiler, '--build', ...projects, '--pretty', 'false'], {
       cwd: sourceRoot, stdio: 'inherit', windowsHide: true,
@@ -47,7 +47,7 @@ export async function buildHost(): Promise<void> {
 }
 
 export async function watchHost(onReady: (ready: boolean) => void): Promise<{ close: () => Promise<void>; done: Promise<void> }> {
-  await prepareHostOutput();
+  await prepareHostBuild();
   const completion = Promise.withResolvers<void>();
   let revision = 0;
   let closing: Promise<void> | undefined;
@@ -105,6 +105,13 @@ export async function watchHost(onReady: (ready: boolean) => void): Promise<{ cl
   }
 
   return { close, done: completion.promise };
+}
+
+async function prepareHostBuild(): Promise<void> {
+  await prepareHostOutput();
+  // TypeScript trusts persisted build info even when outputs have been removed.
+  // Start each compiler with a full emit; subsequent watch builds remain incremental.
+  await Promise.all(['main.tsbuildinfo', 'preload.tsbuildinfo'].map(file => rm(join(outputRoot, file), { force: true })));
 }
 
 async function verifyPreload(): Promise<void> {
