@@ -3,7 +3,7 @@ import { Event } from '../../base/common/event.js';
 import { addDisposableListener, getClientArea, h, runWhenWindowIdle } from '../../base/browser/dom.js';
 import { FastDomNode } from '../../base/browser/fastDomNode.js';
 import { PixelRatio, type IPixelRatioMonitor } from '../../base/browser/pixelRatio.js';
-import { scheduleAtNextAnimationFrame } from '../../base/browser/scheduler.js';
+import { runAtThisOrScheduleAtNextAnimationFrame } from '../../base/browser/scheduler.js';
 import { DisposableMap, MutableDisposable, markAsSingleton, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { onUnexpectedError } from '../../base/common/errors.js';
 import { type ISize } from '../../base/common/layout.js';
@@ -990,9 +990,11 @@ export class View extends ViewEventHandler {
 			for (const part of this.viewParts) part.forceShouldRender();
 		}
 		const viewportData = this.createViewportData();
+		for (const part of this.viewParts) {
+			if (part.shouldRender()) part.onBeforeRender(viewportData);
+		}
 		let context: RenderingContext;
 		let parts: ViewPart[];
-		const renderText = this.viewLines.shouldRender();
 		return {
 			owner: this,
 			renderText: () => {
@@ -1002,10 +1004,7 @@ export class View extends ViewEventHandler {
 				this.contentNode.setHeight(layout.contentSize.height);
 				const contentOffsetLeft = this.contentOffsetLeft;
 				this.contentNode.setTransform(contentOffsetLeft > 0 ? `translate3d(${contentOffsetLeft}px, 0, 0)` : '');
-				for (const part of this.viewParts) {
-					if (part.shouldRender()) part.onBeforeRender(viewportData);
-				}
-				if (renderText) {
+				if (this.viewLines.shouldRender()) {
 					this.viewLines.renderText(viewportData);
 					this.viewLines.onDidRender();
 				}
@@ -1013,14 +1012,10 @@ export class View extends ViewEventHandler {
 					this.viewLinesGpu.renderText(viewportData);
 					this.viewLinesGpu.onDidRender();
 				}
-			},
-			prepareText: () => {
-				// The text layer measures only after every editor has written its rows.
-				// Horizontal reveal can then settle scroll before the frame context is bound.
-				if (renderText) this.viewLines.prepareRender();
+				// Text rendering can change scroll geometry. Bind the context and
+				// collect invalidated Parts only after those changes have settled.
 				context = this.createRenderingContext(viewportData);
 				parts = this.viewParts.filter(part => part !== this.viewLines && part !== this.viewLinesGpu && part.shouldRender());
-				if (this.viewLines.shouldRender()) this.scheduleProjection();
 			},
 			prepareParts: () => {
 				for (const part of parts) part.prepareRender(context);
@@ -1198,34 +1193,32 @@ export class View extends ViewEventHandler {
 interface EditorRenderPass {
 	readonly owner: View;
 	renderText(): void;
-	prepareText(): void;
 	prepareParts(): void;
 	renderParts(): void;
 }
 
-/** Batches editor text writes, measurements and Part writes by window. */
+/** Coordinates editor rendering across windows through one pending batch. */
 class EditorRenderingCoordinator {
-	private readonly pending = new Map<Window, Set<() => EditorRenderPass | undefined>>();
+	private readonly pending = new Set<() => EditorRenderPass | undefined>();
 	private readonly frames = markAsSingleton(new DisposableMap<Window>());
 
 	public schedule(targetWindow: Window, prepare: () => EditorRenderPass | undefined): IDisposable {
-		let requests = this.pending.get(targetWindow);
-		if (!requests) {
-			const batch = new Set<() => EditorRenderPass | undefined>();
-			requests = batch;
-			this.pending.set(targetWindow, batch);
-			this.frames.set(targetWindow, scheduleAtNextAnimationFrame(targetWindow, () => {
-				this.pending.delete(targetWindow);
+		this.pending.add(prepare);
+		if (!this.frames.has(targetWindow)) {
+			this.frames.set(targetWindow, runAtThisOrScheduleAtNextAnimationFrame(targetWindow, () => {
 				this.frames.deleteAndDispose(targetWindow);
+				// Whichever window gets a frame first consumes all queued editors.
+				// Requests created while rendering belong to the next batch.
+				const batch = [...this.pending];
+				this.pending.clear();
 				this.render(batch);
 			}, 100));
 		}
-		requests.add(prepare);
 		return toDisposable(() => {
-			requests.delete(prepare);
-			if (requests.size === 0 && this.pending.get(targetWindow) === requests) {
-				this.pending.delete(targetWindow);
-				this.frames.deleteAndDispose(targetWindow);
+			if (this.pending.delete(prepare) && this.pending.size === 0) {
+				for (const window of this.frames.keys()) {
+					this.frames.deleteAndDispose(window);
+				}
 			}
 		});
 	}
@@ -1240,9 +1233,9 @@ class EditorRenderingCoordinator {
 				onUnexpectedError(error);
 			}
 		}
-		// Text must exist in every editor before any Part measures it. All Part
-		// measurements then finish before any editor starts writing Part geometry.
-		for (const phase of ['renderText', 'prepareText', 'prepareParts', 'renderParts'] as const) {
+		// Finish every editor's text and scroll geometry before measuring Parts;
+		// every Part measurement must then finish before any Part writes geometry.
+		for (const phase of ['renderText', 'prepareParts', 'renderParts'] as const) {
 			for (const pass of passes) {
 				if (pass.owner.isDisposed) {
 					passes.delete(pass);

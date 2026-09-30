@@ -108,19 +108,16 @@ export class ViewLines extends ViewPart implements IViewLines {
 
 	public renderText(viewportData: ViewportData): void {
 		this.lastViewportData = viewportData;
+		this._checkMonospaceFontAssumptions();
 		this._visibleLines.render(viewportData);
+		// Horizontal reveal may need a row created in this pass and can change
+		// scroll geometry before the host constructs its RenderingContext.
+		this.applyHorizontalReveal(viewportData);
+		this.updateLineWidths();
 	}
 
 	public render(context: RestrictedRenderingContext): void {
 		this.renderText(context.viewportData);
-	}
-
-	public override prepareRender(): void {
-		// The coordinator calls this after every editor has written its text;
-		// measuring inside renderText would alternate layout reads and writes.
-		this._checkMonospaceFontAssumptions();
-		this.updateLineWidths();
-		this.applyHorizontalReveal(this.lastViewportData!);
 	}
 
 	public override onConfigurationChanged(_event?: ViewConfigurationChangedEvent): boolean {

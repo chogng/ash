@@ -51,7 +51,7 @@ test('resizing publishes geometry immediately and renders the final size in one 
 	}
 });
 
-test('same-window editors finish text and widget measurements before writing widget positions', async () => {
+test('editors finish text rendering before measuring widgets and writing widget positions', async () => {
 	const dom = new JSDOM('<!doctype html><body><main id="first"></main><main id="second"></main></body>', { pretendToBeVisual: true });
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using firstModel = new TextModel('first');
@@ -79,9 +79,10 @@ test('same-window editors finish text and widget measurements before writing wid
 		}
 		phases.length = 0;
 		measuredText.length = 0;
-		for (const view of [first, second]) {
+		for (const [name, view] of [['first', first], ['second', second]] as const) {
 			const text = requiredElement(view.domNode.domNode, '.stanza-editor-line-text');
 			text.getBoundingClientRect = () => {
+				phases.push(`text ${name}`);
 				lineWidthSnapshots.push([first, second].map(editor => requiredElement(editor.domNode.domNode, '.stanza-editor-line-text').textContent ?? ''));
 				return new dom.window.DOMRect(0, 0, 100, 20);
 			};
@@ -93,11 +94,10 @@ test('same-window editors finish text and widget measurements before writing wid
 		first.layout({ width: 300, height: 100 });
 		await nextEditorFrame(dom.window as unknown as Window);
 		assert.deepEqual({ phases, measuredText }, {
-			phases: ['measure first', 'measure second', 'write first', 'write second'],
+			phases: ['text first', 'text second', 'measure first', 'measure second', 'write first', 'write second'],
 			measuredText: [['first updated', 'second updated'], ['first updated', 'second updated']],
 		});
-		assert.ok(lineWidthSnapshots.length > 0);
-		assert.deepEqual(lineWidthSnapshots, lineWidthSnapshots.map(() => ['first updated', 'second updated']));
+		assert.deepEqual(lineWidthSnapshots, [['first updated', 'second'], ['first updated', 'second updated']]);
 	} finally {
 		first.dispose();
 		second.dispose();
@@ -151,7 +151,7 @@ async function nextEditorFrame(targetWindow: Window): Promise<void> {
 	});
 }
 
-test('rendering one window leaves another window queued until its own frame', () => {
+test('one window frame renders all queued editors and later window frames do not repeat the batch', () => {
 	const firstDom = new JSDOM('<!doctype html><body><main></main></body>', { pretendToBeVisual: true });
 	const secondDom = new JSDOM('<!doctype html><body><main></main></body>', { pretendToBeVisual: true });
 	const frames: FrameRequestCallback[][] = [[], []];
@@ -178,9 +178,22 @@ test('rendering one window leaves another window queued until its own frame', ()
 			view.layout({ width: 300, height: 100 });
 		}
 		frames[0]!.shift()!(0);
-		assert.deepEqual(measurements, [1, 0]);
+		assert.deepEqual(measurements, [1, 1]);
 		frames[1]!.shift()!(0);
 		assert.deepEqual(measurements, [1, 1]);
+
+		first.layout({ width: 320, height: 100 });
+		second.layout({ width: 320, height: 100 });
+		first.dispose();
+		frames[0]!.shift()!(0);
+		assert.deepEqual(measurements, [1, 2]);
+		frames[1]!.shift()!(0);
+		assert.deepEqual(measurements, [1, 2]);
+
+		second.layout({ width: 340, height: 100 });
+		second.dispose();
+		frames[1]!.shift()!(0);
+		assert.deepEqual(measurements, [1, 2]);
 	} finally {
 		first.dispose();
 		second.dispose();
