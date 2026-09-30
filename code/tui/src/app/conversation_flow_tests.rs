@@ -100,6 +100,7 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
     let mut app = app_for_conversation(&mut client, &conversation);
 
     let first = submit_from_input(&mut app, FIRST_PROMPT);
+    let first_command_id = first.command_id.clone();
     crate::tui_assert_snapshot!("conversation_submitted", render(&app));
     let started = submit_prompt(
         &mut client,
@@ -113,14 +114,20 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
 
     model.wait_for_first_delta();
     let streaming = read_thread(&mut client, &conversation);
+    assert!(streaming.transcript.entries.iter().any(|entry| {
+        matches!(entry, ash_app_server_protocol::protocol::transcript::ThreadTranscriptEntry::Item { item, .. }
+            if item.client_id() == Some(&first_command_id))
+    }));
     app.update(ThreadEvent::TranscriptSnapshotReceived(
         streaming.transcript,
     ));
     apply_active_turn_snapshot(&mut app, &streaming.thread.turns);
-    assert!(
+    assert_eq!(
         app.messages()
             .iter()
-            .any(|message| message.text() == FIRST_PROMPT)
+            .filter(|message| message.text() == FIRST_PROMPT)
+            .count(),
+        1
     );
     assert!(
         app.messages()

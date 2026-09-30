@@ -11,6 +11,7 @@ use ash_app_server_protocol::protocol::transcript::ThreadTranscriptChange;
 use ash_app_server_protocol::protocol::transcript::ThreadTranscriptEntry;
 use ash_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
 use ash_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
+use ash_protocol::CommandId;
 use ash_protocol::PlanStepStatus;
 use ash_protocol::PlanUpdate;
 use ash_protocol::ThreadItem;
@@ -62,6 +63,7 @@ pub(super) enum TranscriptCellBody {
 pub(crate) struct TranscriptCell {
     cell_id: TranscriptCellId,
     source_entry_id: Option<String>,
+    client_id: Option<CommandId>,
     turn_id: Option<TurnId>,
     lifecycle: CellLifecycle,
     render_revision: u64,
@@ -136,17 +138,15 @@ impl TranscriptCell {
         }
     }
 
-    fn local_user_text(&self) -> Option<&str> {
-        if self.source_entry_id.is_some() {
-            return None;
-        }
-        match &self.body {
-            TranscriptCellBody::Content(ContentCell {
-                role: MessageRole::User,
-                text,
-            }) => Some(text),
-            _ => None,
-        }
+    fn is_local_user(&self) -> bool {
+        self.source_entry_id.is_none()
+            && matches!(
+                &self.body,
+                TranscriptCellBody::Content(ContentCell {
+                    role: MessageRole::User,
+                    ..
+                })
+            )
     }
 }
 
@@ -167,32 +167,25 @@ impl TranscriptModel {
             .take_while(|cell| {
                 cell.lifecycle() == CellLifecycle::Final
                     && !active.is_some_and(|turn| cell.turn_id() == Some(turn))
-                    && cell.local_user_text().is_none()
+                    && !cell.is_local_user()
             })
             .count();
         &self.cells[..length]
     }
 
     pub(in crate::thread) fn replace(&mut self, snapshot: ThreadTranscriptSnapshot) {
-        let existing_source_ids = self
-            .cells
-            .iter()
-            .flat_map(TranscriptCell::source_ids)
-            .map(str::to_owned)
-            .collect::<BTreeSet<_>>();
-        let mut confirmed_local_users = snapshot
+        let confirmed_local_users = snapshot
             .entries
             .iter()
-            .filter(|entry| !existing_source_ids.contains(entry.entry_id()))
             .filter_map(|entry| match entry {
-                ThreadTranscriptEntry::Item {
-                    entry_id,
-                    item: ThreadItem::UserMessage { text, .. },
-                    ..
-                } => Some((text.clone(), entry_id.clone())),
-                _ => None,
+                ThreadTranscriptEntry::Item { entry_id, item, .. } => {
+                    item.client_id().map(|id| (id.clone(), entry_id.clone()))
+                }
+                ThreadTranscriptEntry::TurnPlan { .. }
+                | ThreadTranscriptEntry::TurnError { .. }
+                | ThreadTranscriptEntry::ToolOutput { .. } => None,
             })
-            .collect::<Vec<_>>();
+            .collect::<BTreeMap<_, _>>();
         let mut local_cells = std::mem::take(&mut self.unloaded_local_cells);
         let mut preceding_source_id = None;
         for cell in std::mem::take(&mut self.cells) {
@@ -209,15 +202,12 @@ impl TranscriptModel {
         }
         let mut confirmed_anchors = BTreeMap::new();
         for (anchor, cell) in local_cells {
-            if let Some(text) = cell.local_user_text()
-                && !confirmed_local_users.is_empty()
+            if let Some(entry_id) = cell
+                .client_id
+                .as_ref()
+                .and_then(|id| confirmed_local_users.get(id))
             {
-                let index = confirmed_local_users
-                    .iter()
-                    .position(|(confirmed, _)| confirmed == text)
-                    .unwrap_or(0);
-                let (_, entry_id) = confirmed_local_users.remove(index);
-                confirmed_anchors.insert(anchor.clone(), entry_id);
+                confirmed_anchors.insert(anchor.clone(), entry_id.clone());
                 continue;
             }
             let effective_anchor = confirmed_anchors
@@ -321,16 +311,20 @@ impl TranscriptModel {
             .and_then(TranscriptCell::details)
     }
 
-    pub(in crate::thread) fn push_message(&mut self, role: MessageRole, text: String) {
+    pub(in crate::thread) fn push_user_message(&mut self, command_id: CommandId, text: String) {
         let cell_id = self.local_id("message");
         let render_revision = self.render_revision();
         self.cells.push(TranscriptCell {
             cell_id,
             source_entry_id: None,
+            client_id: Some(command_id),
             turn_id: None,
             lifecycle: CellLifecycle::Final,
             render_revision,
-            body: TranscriptCellBody::Content(ContentCell { role, text }),
+            body: TranscriptCellBody::Content(ContentCell {
+                role: MessageRole::User,
+                text,
+            }),
         });
     }
 
@@ -340,6 +334,7 @@ impl TranscriptModel {
         self.cells.push(TranscriptCell {
             cell_id,
             source_entry_id: None,
+            client_id: None,
             turn_id: None,
             lifecycle: CellLifecycle::Final,
             render_revision,
@@ -353,6 +348,7 @@ impl TranscriptModel {
         self.cells.push(TranscriptCell {
             cell_id,
             source_entry_id: None,
+            client_id: None,
             turn_id: None,
             lifecycle: CellLifecycle::Final,
             render_revision,
@@ -370,6 +366,7 @@ impl TranscriptModel {
         self.cells.push(TranscriptCell {
             cell_id,
             source_entry_id: None,
+            client_id: None,
             turn_id: None,
             lifecycle: match completion {
                 super::LocalCommandCompletion::Immediate => CellLifecycle::Final,
@@ -409,6 +406,7 @@ impl TranscriptModel {
         self.cells.push(TranscriptCell {
             cell_id,
             source_entry_id: None,
+            client_id: None,
             turn_id: None,
             lifecycle: CellLifecycle::Live,
             render_revision,
@@ -451,6 +449,7 @@ impl TranscriptModel {
         self.cells.push(TranscriptCell {
             cell_id,
             source_entry_id: None,
+            client_id: None,
             turn_id: None,
             lifecycle: CellLifecycle::Final,
             render_revision,
@@ -546,19 +545,12 @@ impl TranscriptModel {
         {
             *existing = cell;
         } else {
-            // A streamed server echo can arrive before the next snapshot reconciles
-            // the optimistic user cell. Replace it in place to keep one message.
-            let confirmed_user = match &cell.body {
-                TranscriptCellBody::Content(ContentCell {
-                    role: MessageRole::User,
-                    text,
-                }) => Some(text.as_str()),
-                _ => None,
-            };
-            if let Some(index) = confirmed_user.and_then(|text| {
-                self.cells
-                    .iter()
-                    .position(|existing| existing.local_user_text() == Some(text))
+            // RPC completion and transcript notifications arrive independently. Only the
+            // submission identity can acknowledge a local row; equal text can be another message.
+            if let Some(index) = cell.client_id.as_ref().and_then(|id| {
+                self.cells.iter().position(|existing| {
+                    existing.source_entry_id.is_none() && existing.client_id.as_ref() == Some(id)
+                })
             }) {
                 self.cells[index] = cell;
             } else {
@@ -604,6 +596,7 @@ impl TranscriptModel {
         self.cells.push(TranscriptCell {
             cell_id: TranscriptCellId::for_tool_call(&tool_call_id),
             source_entry_id: None,
+            client_id: None,
             turn_id: Some(turn_id.clone()),
             lifecycle: CellLifecycle::Live,
             render_revision,
@@ -630,6 +623,7 @@ impl TranscriptModel {
             self.cells.push(TranscriptCell {
                 cell_id: TranscriptCellId::for_tool_call(&tool_call_id),
                 source_entry_id: None,
+                client_id: None,
                 turn_id: Some(turn_id.clone()),
                 lifecycle: CellLifecycle::Live,
                 render_revision,
@@ -659,6 +653,7 @@ impl TranscriptModel {
             self.cells.push(TranscriptCell {
                 cell_id: TranscriptCellId::for_tool_call(&tool_call_id),
                 source_entry_id: None,
+                client_id: None,
                 turn_id: Some(turn_id.clone()),
                 lifecycle: CellLifecycle::Final,
                 render_revision,
@@ -823,6 +818,12 @@ fn cell_from_entry(entry: &ThreadTranscriptEntry, render_revision: u64) -> Trans
     TranscriptCell {
         cell_id: TranscriptCellId::for_entry(&entry_id),
         source_entry_id: Some(entry_id),
+        client_id: match entry {
+            ThreadTranscriptEntry::Item { item, .. } => item.client_id().cloned(),
+            ThreadTranscriptEntry::TurnPlan { .. }
+            | ThreadTranscriptEntry::TurnError { .. }
+            | ThreadTranscriptEntry::ToolOutput { .. } => None,
+        },
         turn_id: Some(entry.turn_id().clone()),
         lifecycle,
         render_revision,

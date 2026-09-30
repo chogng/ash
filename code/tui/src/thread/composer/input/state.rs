@@ -60,6 +60,8 @@ pub(crate) enum ChatInputItem {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ChatSubmission {
+    // Created before the local row is shown; materialization and RPC retries keep this identity.
+    pub(crate) command_id: ash_protocol::CommandId,
     pub(crate) display_text: String,
     pub(crate) input: Vec<ChatInputItem>,
 }
@@ -659,6 +661,7 @@ impl ChatInput {
         );
 
         (!input.is_empty()).then_some(ChatSubmission {
+            command_id: crate::client::new_command_id("input"),
             display_text,
             input,
         })

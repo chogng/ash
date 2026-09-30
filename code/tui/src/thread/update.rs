@@ -6,7 +6,10 @@ pub(crate) enum ThreadPresentationEvent {
     TranscriptSnapshotReceived(ThreadTranscriptSnapshot),
     TranscriptHistoryPageReceived(ThreadTranscriptSnapshot),
     TranscriptUpdateReceived(Box<ThreadTranscriptUpdateEnvelope>),
-    UserSubmitted(String),
+    UserSubmitted {
+        command_id: ash_protocol::CommandId,
+        text: String,
+    },
     CommandSubmitted {
         command: String,
         completion: super::transcript::LocalCommandCompletion,

@@ -36748,6 +36748,16 @@
             "attachment": {
               "$ref": "#/$defs/AudioAttachmentRef"
             },
+            "clientId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CommandId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "itemId": {
               "$ref": "#/$defs/ItemId"
             },
@@ -36769,6 +36779,17 @@
         },
         {
           "properties": {
+            "clientId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CommandId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The submitting command's ID, shared by all input parts of that submission.\nOlder stored items have no ID and cannot acknowledge a pending client submission."
+            },
             "itemId": {
               "$ref": "#/$defs/ItemId"
             },
@@ -36793,6 +36814,16 @@
         },
         {
           "properties": {
+            "clientId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CommandId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "content": {
               "type": "string"
             },
@@ -36821,6 +36852,16 @@
         },
         {
           "properties": {
+            "clientId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CommandId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "itemId": {
               "$ref": "#/$defs/ItemId"
             },
@@ -36847,6 +36888,16 @@
           "properties": {
             "attachment": {
               "$ref": "#/$defs/ImageAttachmentRef"
+            },
+            "clientId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CommandId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "itemId": {
               "$ref": "#/$defs/ItemId"

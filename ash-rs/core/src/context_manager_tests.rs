@@ -113,6 +113,7 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
             context_usage: None,
         }],
         items: vec![ThreadItem::UserMessage {
+            client_id: None,
             item_id: id::<ItemId>("item"),
             turn_id,
             text: "hello".into(),

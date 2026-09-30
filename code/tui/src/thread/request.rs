@@ -134,6 +134,7 @@ pub(crate) fn submit_prompt<T>(
 where
     T: JsonRpcTransport,
 {
+    let command_id = submission.command_id.clone();
     let question = match submission.input.as_slice() {
         [ChatInputItem::Text(text)] => text.trim().strip_prefix("/advisor ").map(str::trim).map(str::to_owned),
         _ if submission.display_text.trim().starts_with("/advisor ") => return Err(ClientError::Protocol("Advisor questions must be text; send attachments to the conversation before consulting.".into())),
@@ -156,7 +157,7 @@ where
         },
     };
     match client.request_session(SessionRequestParams {
-        command_id: new_command_id("turn"),
+        command_id,
         session_id: scope.session_id,
         request,
     })? {
@@ -176,9 +177,10 @@ pub(crate) fn steer_prompt<T>(
 where
     T: JsonRpcTransport,
 {
+    let command_id = submission.command_id.clone();
     let input = materialize_submission(client, submission)?;
     match client.request_session(SessionRequestParams {
-        command_id: new_command_id("steer"),
+        command_id,
         session_id: scope.session_id,
         request: SessionRequest::SteerTurn {
             thread_id: scope.thread_id,

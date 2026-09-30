@@ -89,12 +89,14 @@ fn cancelling_recall_restores_images_large_pastes_and_the_exact_editable_draft()
         .unwrap();
     input.handle_paste("large paste ".repeat(150)).unwrap();
     input.insert_text(" after");
-    let expected = input.prepare_submission();
+    let expected = input.prepare_submission().unwrap();
     let cursor = input.textarea.cursor_display_width();
     input.handle_key(key(KeyCode::Up));
     assert_eq!(input.text(), "recall this");
     input.handle_key(key(KeyCode::Esc));
-    assert_eq!(input.prepare_submission(), expected);
+    let restored = input.prepare_submission().unwrap();
+    assert_eq!(restored.display_text, expected.display_text);
+    assert_eq!(restored.input, expected.input);
     assert_eq!(input.textarea.cursor_display_width(), cursor);
 }
 

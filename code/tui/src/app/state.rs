@@ -497,9 +497,10 @@ impl App {
                 self.follow_latest_transcript();
                 self.thread_presentations.active_mut().queue.finish_edit();
                 let starts_conversation = !self.thread.has_user_message();
-                self.thread.update(ThreadPresentationEvent::UserSubmitted(
-                    submission.display_text.clone(),
-                ));
+                self.thread.update(ThreadPresentationEvent::UserSubmitted {
+                    command_id: submission.command_id.clone(),
+                    text: submission.display_text.clone(),
+                });
                 if starts_conversation {
                     self.chat_panel.show_policy_tip(now);
                 }
@@ -1012,6 +1013,7 @@ impl App {
         }
         self.voice_partial.clear();
         let submission = crate::thread::composer::ChatSubmission {
+            command_id: crate::client::new_command_id("input"),
             display_text: text.to_owned(),
             input: vec![ChatInputItem::Text(text.to_owned())],
         };
@@ -3512,6 +3514,7 @@ impl App {
                     self.close_transient_surfaces();
                     let text = "Prepare and create a pull request for the current changes using the connected GitHub tools. Verify the target branch and checks, and report the pull request link.".to_owned();
                     let submission = crate::thread::composer::ChatSubmission {
+                        command_id: crate::client::new_command_id("input"),
                         display_text: text.clone(),
                         input: vec![crate::thread::composer::ChatInputItem::Text(text)],
                     };
@@ -3664,9 +3667,10 @@ impl App {
             }
             (SlashCommandOrigin::Server, _) => {
                 let submission = invocation.into_forwarded_submission();
-                self.thread.update(ThreadPresentationEvent::UserSubmitted(
-                    submission.display_text.clone(),
-                ));
+                self.thread.update(ThreadPresentationEvent::UserSubmitted {
+                    command_id: submission.command_id.clone(),
+                    text: submission.display_text.clone(),
+                });
                 if self.chat_panel.is_steering() {
                     let steer_id = self.chat_panel.begin_steer(submission.display_text.clone());
                     return Some(

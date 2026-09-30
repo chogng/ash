@@ -49,7 +49,6 @@ use crate::thread::Event as ThreadEvent;
 use crate::thread::TurnActivity;
 use crate::thread::composer::ChatInputItem;
 use crate::thread::composer::ChatInputMode;
-use crate::thread::composer::ChatSubmission;
 use crate::thread::composer::CompletionView;
 use crate::thread::composer::built_in_slash_command_definitions;
 use crate::thread::composer::file_search::FileSearchManager;
@@ -377,6 +376,7 @@ fn selected_rewind_checkpoint_emits_a_typed_rewind_action() {
             usage: ash_protocol::ModelUsageSummary::default(),
             context_usage: None,
             items: vec![ThreadItem::UserMessage {
+                client_id: None,
                 item_id: ItemId::new("item-1").unwrap(),
                 turn_id: turn_id.clone(),
                 text: "restore here".into(),
@@ -2334,14 +2334,13 @@ fn runtime_command_registry_drives_popup_and_submission_consistently() {
     assert_eq!(app.input(), "/diagnose logs");
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
+    let Some(AppCommand::Thread(ThreadCommand::SubmitTurn { submission })) = action else {
+        panic!("expected a Turn submission");
+    };
+    assert_eq!(submission.display_text, "/diagnose logs");
     assert_eq!(
-        action,
-        Some(AppCommand::Thread(ThreadCommand::SubmitTurn {
-            submission: ChatSubmission {
-                display_text: "/diagnose logs".into(),
-                input: vec![ChatInputItem::Text("/diagnose logs".into())],
-            },
-        }))
+        submission.input,
+        vec![ChatInputItem::Text("/diagnose logs".into())]
     );
     assert_eq!(app.status(), &Status::Working);
     assert_eq!(app.messages()[0].role(), MessageRole::User);
@@ -2464,17 +2463,16 @@ fn dollar_skill_selector_submits_exact_skill_ref_with_visible_intent() {
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
+    let Some(AppCommand::Thread(ThreadCommand::SubmitTurn { submission })) = action else {
+        panic!("expected a Turn submission");
+    };
+    assert_eq!(submission.display_text, "$commit staged changes");
     assert_eq!(
-        action,
-        Some(AppCommand::Thread(ThreadCommand::SubmitTurn {
-            submission: ChatSubmission {
-                display_text: "$commit staged changes".into(),
-                input: vec![
-                    ChatInputItem::Skill { skill },
-                    ChatInputItem::Text("$commit staged changes".into()),
-                ],
-            },
-        }))
+        submission.input,
+        vec![
+            ChatInputItem::Skill { skill },
+            ChatInputItem::Text("$commit staged changes".into())
+        ]
     );
     assert_eq!(app.messages()[0].text(), "$commit staged changes");
     let _ = fs::remove_dir_all(dir);

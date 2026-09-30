@@ -509,6 +509,7 @@ fn reducer_rebuilds_a_steer_receipt_from_its_immediately_preceding_items() {
                 thread_id: ThreadId::new("thread_1").unwrap(),
                 turn_id: TurnId::new("turn_1").unwrap(),
                 item: ThreadItem::UserMessage {
+                    client_id: None,
                     item_id: ItemId::new("item_initial").unwrap(),
                     turn_id: TurnId::new("turn_1").unwrap(),
                     text: "initial".into(),
@@ -530,6 +531,7 @@ fn reducer_rebuilds_a_steer_receipt_from_its_immediately_preceding_items() {
                 thread_id: ThreadId::new("thread_1").unwrap(),
                 turn_id: TurnId::new("turn_1").unwrap(),
                 item: ThreadItem::UserMessage {
+                    client_id: None,
                     item_id: ItemId::new("item_steer").unwrap(),
                     turn_id: TurnId::new("turn_1").unwrap(),
                     text: "updated direction".into(),
@@ -840,6 +842,7 @@ fn reducer_verifies_and_rebuilds_a_context_checkpoint() {
                 thread_id: ThreadId::new("thread_1").unwrap(),
                 turn_id: TurnId::new("turn_1").unwrap(),
                 item: ThreadItem::UserMessage {
+                    client_id: None,
                     item_id: ItemId::new("item_1").unwrap(),
                     turn_id: TurnId::new("turn_1").unwrap(),
                     text: "hello".into(),
@@ -1084,6 +1087,7 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
                 item: ThreadItem::UserMessage {
+                    client_id: None,
                     item_id: ItemId::new("item_1").expect("test ID is non-empty"),
                     turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
                     text: "hello".into(),

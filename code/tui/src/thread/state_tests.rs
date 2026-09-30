@@ -22,7 +22,10 @@ use ash_protocol::TurnStatus;
 #[test]
 fn transcript_snapshot_replaces_local_rows_and_preserves_rendering() {
     let mut state = ThreadState::default();
-    state.update(ThreadPresentationEvent::UserSubmitted("optimistic".into()));
+    state.update(ThreadPresentationEvent::UserSubmitted {
+        command_id: ash_protocol::CommandId::new("submitted").unwrap(),
+        text: "optimistic".into(),
+    });
     state.update(ThreadPresentationEvent::TranscriptSnapshotReceived(
         ThreadTranscriptSnapshot::from_thread(&thread_snapshot()),
     ));
@@ -226,6 +229,7 @@ fn thread_snapshot() -> Thread {
             context_usage: None,
             items: vec![
                 ThreadItem::UserMessage {
+                    client_id: Some(ash_protocol::CommandId::new("submitted").unwrap()),
                     item_id: ItemId::new("item_1").unwrap(),
                     turn_id: turn_id.clone(),
                     text: "canonical prompt".into(),
@@ -266,6 +270,7 @@ fn thread_with_item(turn: &str, item: &str, text: &str) -> Thread {
             usage: ash_protocol::ModelUsageSummary::default(),
             context_usage: None,
             items: vec![ThreadItem::UserMessage {
+                client_id: None,
                 item_id: ItemId::new(item).unwrap(),
                 turn_id,
                 text: text.into(),

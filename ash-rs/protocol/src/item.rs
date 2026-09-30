@@ -5,6 +5,7 @@ pub use plan::PlanStepStatus;
 pub use plan::PlanUpdate;
 
 use crate::AudioAttachmentRef;
+use crate::CommandId;
 use crate::ContentPart;
 use crate::ImageAttachmentRef;
 use crate::ItemId;
@@ -26,27 +27,44 @@ use ts_rs::TS;
 )]
 pub enum ThreadItem {
     UserAudioAttachment {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        client_id: Option<CommandId>,
         item_id: ItemId,
         turn_id: TurnId,
         attachment: AudioAttachmentRef,
     },
     UserMessage {
+        /// The submitting command's ID, shared by all input parts of that submission.
+        /// Older stored items have no ID and cannot acknowledge a pending client submission.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        client_id: Option<CommandId>,
         item_id: ItemId,
         turn_id: TurnId,
         text: String,
     },
     UserContext {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        client_id: Option<CommandId>,
         item_id: ItemId,
         turn_id: TurnId,
         name: String,
         content: String,
     },
     UserImage {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        client_id: Option<CommandId>,
         item_id: ItemId,
         turn_id: TurnId,
         url: String,
     },
     UserImageAttachment {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        client_id: Option<CommandId>,
         item_id: ItemId,
         turn_id: TurnId,
         attachment: ImageAttachmentRef,
@@ -89,6 +107,22 @@ pub enum ThreadItem {
 }
 
 impl ThreadItem {
+    /// Identifies the client submission that produced this user input part.
+    pub fn client_id(&self) -> Option<&CommandId> {
+        match self {
+            Self::UserMessage { client_id, .. }
+            | Self::UserContext { client_id, .. }
+            | Self::UserImage { client_id, .. }
+            | Self::UserImageAttachment { client_id, .. }
+            | Self::UserAudioAttachment { client_id, .. } => client_id.as_ref(),
+            Self::AgentMessage { .. }
+            | Self::Reasoning { .. }
+            | Self::Plan { .. }
+            | Self::ToolCall { .. }
+            | Self::ToolResult { .. } => None,
+        }
+    }
+
     pub fn item_id(&self) -> &ItemId {
         match self {
             Self::UserMessage { item_id, .. }

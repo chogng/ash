@@ -5,6 +5,7 @@ use crossterm::event::KeyModifiers;
 
 fn pending(queue: &mut Queue, text: &str) -> (QueueId, ::queue::QueuedMessage) {
     let id = queue.push(QueuedChatInput::from_submission(ChatSubmission {
+        command_id: crate::client::new_command_id("input"),
         display_text: text.into(),
         input: vec![ChatInputItem::Text(text.into())],
     }));
@@ -94,6 +95,7 @@ fn reconnect_rebuilds_queue_and_preserves_unsent_local_drafts() {
     let mut restored = Queue::default();
     let navigation = QueueNavigation::default();
     restored.push(QueuedChatInput::from_submission(ChatSubmission {
+        command_id: crate::client::new_command_id("input"),
         display_text: "not accepted".into(),
         input: vec![ChatInputItem::Text("not accepted".into())],
     }));

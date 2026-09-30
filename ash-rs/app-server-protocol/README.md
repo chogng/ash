@@ -91,4 +91,5 @@
 - `model/list` 在订阅账户就绪时根据当前账户的 `/models-v2` 目录返回 `xai` 模型；订阅不可用时使用已保存的 xAI API 配置。切换账户后旧目录不可用于调用。`account/read` 刷新 xAI 身份与实时套餐；`account/rateLimits/read` 支持 `xai-subscription`，使用同一个登录 ID 校验整个查询。
 - 额度结果的 `plan` 可为空。ChatGPT 继续使用 `limits` 和 `credits`；xAI 使用可选的 `xai` 字段，保留小数百分比、上游周期、访问资格和 USD 分字符串。缺失值表示未提供，不推导零用量、余额或允许状态。`xai` 为空时不序列化。
 - 查询只读；取消或登录改变会丢弃旧结果。403/426/429 不刷新凭证，401 最多恢复一次。`account/updated` 发布经当前登录身份检查的资料。
+- 用户输入的 `ThreadItem.clientId` 等于提交该输入的 `session/request.commandId`；同一次发送的文字、上下文、图片和音频共享此 ID，持久历史和实时 transcript 更新均保留它。客户端按 ID 确认本地待发送消息，不按文字匹配；旧历史未包含该字段时不能确认新发送的消息。
 - `ThreadItem.reasoning.state` 保存带作用域的加密 Responses 项；重载历史和工具续轮保留完整项，切换账户、模型或端点后不再发送旧项。

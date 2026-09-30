@@ -40,17 +40,20 @@ fn timeline_groups_shell_result_under_its_tool_call() {
             context_usage: None,
             items: vec![
                 ThreadItem::UserMessage {
+                    client_id: None,
                     item_id: ItemId::new("user").unwrap(),
                     turn_id: TurnId::new("turn").unwrap(),
                     text: "run the tests".to_owned(),
                 },
                 ThreadItem::UserContext {
+                    client_id: None,
                     item_id: ItemId::new("context").unwrap(),
                     turn_id: TurnId::new("turn").unwrap(),
                     name: "README selection".to_owned(),
                     content: "selected content".to_owned(),
                 },
                 ThreadItem::UserAudioAttachment {
+                    client_id: None,
                     item_id: ItemId::new("audio").unwrap(), turn_id: TurnId::new("turn").unwrap(),
                     attachment: ash_protocol::AudioAttachmentRef {
                         content_digest: ash_protocol::ContentDigest::sha256(b"recording"),

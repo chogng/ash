@@ -7,7 +7,6 @@ use super::transcript::TranscriptCell;
 use super::transcript::TranscriptCellId;
 use super::transcript::TranscriptModel;
 use crate::thread::transcript::CellView;
-use crate::thread::transcript::MessageRole;
 use ash_protocol::ApprovalMode;
 use ash_protocol::ThreadId;
 use ash_protocol::Turn;
@@ -199,8 +198,8 @@ impl ThreadState {
                 self.transcript.apply(*update);
                 self.stream.update(self.transcript.cells(), now);
             }
-            ThreadPresentationEvent::UserSubmitted(text) => {
-                self.transcript.push_message(MessageRole::User, text);
+            ThreadPresentationEvent::UserSubmitted { command_id, text } => {
+                self.transcript.push_user_message(command_id, text);
             }
             ThreadPresentationEvent::CommandSubmitted {
                 command,

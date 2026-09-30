@@ -147,6 +147,7 @@ fn thread_snapshot_preserves_prompt_and_direct_shell_history_order() {
                 usage: Default::default(),
                 context_usage: None,
                 items: vec![ThreadItem::UserMessage {
+                    client_id: None,
                     item_id: ItemId::new("item-user").unwrap(),
                     turn_id: agent_turn_id,
                     text: "fix this".to_owned(),

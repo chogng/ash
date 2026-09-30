@@ -48,6 +48,7 @@ fn archive_request_preserves_all_selected_sessions() {
 #[test]
 fn manager_request_preserves_submission_and_approval_mode() {
     let submission = ChatSubmission {
+        command_id: crate::client::new_command_id("input"),
         display_text: "investigate the failure".into(),
         input: vec![ChatInputItem::Text("investigate the failure".into())],
     };

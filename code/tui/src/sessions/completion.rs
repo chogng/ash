@@ -378,6 +378,7 @@ fn fork_session(
                 client,
                 ThreadRequestScope::new(&session_id, &result.thread_id, thread.sequence),
                 ChatSubmission {
+                    command_id: crate::client::new_command_id("input"),
                     display_text: prompt.into(),
                     input: vec![crate::thread::composer::ChatInputItem::Text(prompt.into())],
                 },

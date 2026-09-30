@@ -63,6 +63,7 @@ fn steer_prompt_uses_the_active_turn_typed_request() {
         ),
         TurnId::new("turn-1").unwrap(),
         ChatSubmission {
+            command_id: ash_protocol::CommandId::new("submission").unwrap(),
             display_text: "change direction".into(),
             input: vec![ChatInputItem::Text("change direction".into())],
         },
@@ -77,6 +78,7 @@ fn steer_prompt_uses_the_active_turn_typed_request() {
         .expect("request is recorded");
     let request: serde_json::Value = serde_json::from_str(&request).unwrap();
     assert_eq!(request["method"], "session/request");
+    assert_eq!(request["params"]["commandId"], "submission");
     assert_eq!(request["params"]["request"]["type"], "steerTurn");
     assert_eq!(request["params"]["request"]["threadId"], "thread-1");
     assert_eq!(request["params"]["request"]["expectedSequence"], 7);
@@ -113,6 +115,7 @@ fn audio_steering_preserves_the_uploaded_attachment_reference() {
         ),
         TurnId::new("turn").unwrap(),
         ChatSubmission {
+            command_id: ash_protocol::CommandId::new("submission").unwrap(),
             display_text: "[Audio]".into(),
             input: vec![ChatInputItem::AudioAttachment(attachment.clone())],
         },

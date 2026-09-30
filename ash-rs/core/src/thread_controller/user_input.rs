@@ -161,28 +161,33 @@ fn validate_skill_activations(
 pub(super) fn thread_items(
     input: &[ValidatedUserInput<'_>],
     turn_id: &TurnId,
+    command_id: &ash_protocol::CommandId,
     mut next_item_id: impl FnMut() -> ItemId,
 ) -> Vec<ThreadItem> {
     input
         .iter()
         .map(|input| match input {
             ValidatedUserInput::Text(text) => ThreadItem::UserMessage {
+                client_id: Some(command_id.clone()),
                 item_id: next_item_id(),
                 turn_id: turn_id.clone(),
                 text: (*text).to_owned(),
             },
             ValidatedUserInput::Context { name, content } => ThreadItem::UserContext {
+                client_id: Some(command_id.clone()),
                 item_id: next_item_id(),
                 turn_id: turn_id.clone(),
                 name: (*name).to_owned(),
                 content: (*content).to_owned(),
             },
             ValidatedUserInput::Audio(attachment) => ThreadItem::UserAudioAttachment {
+                client_id: Some(command_id.clone()),
                 item_id: next_item_id(),
                 turn_id: turn_id.clone(),
                 attachment: (*attachment).clone(),
             },
             ValidatedUserInput::Image(attachment) => ThreadItem::UserImageAttachment {
+                client_id: Some(command_id.clone()),
                 item_id: next_item_id(),
                 turn_id: turn_id.clone(),
                 attachment: (*attachment).clone(),

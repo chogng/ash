@@ -90,6 +90,7 @@ fn inline_user_echo_committed_before_turn_start_is_not_drawn_again() {
         entry_id: "user".into(),
         turn_id: turn_id.clone(),
         item: ThreadItem::UserMessage {
+            client_id: Some(submission.command_id.clone()),
             item_id: ItemId::new("user").unwrap(),
             turn_id: turn_id.clone(),
             text: "rebase".into(),

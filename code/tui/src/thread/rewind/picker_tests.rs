@@ -74,6 +74,7 @@ fn thread(messages: &[&str]) -> Thread {
                     usage: ash_protocol::ModelUsageSummary::default(),
                     context_usage: None,
                     items: vec![ThreadItem::UserMessage {
+                        client_id: None,
                         item_id: ItemId::new(format!("item-{ordinal}")).unwrap(),
                         turn_id,
                         text: (*message).into(),
@@ -111,6 +112,7 @@ fn message_checkpoints_offer_before_and_after_and_keep_unavailable_rows_read_onl
             binding: None,
         },
         ThreadItem::UserMessage {
+            client_id: None,
             item_id: ItemId::new("busy").unwrap(),
             turn_id: turn_id.clone(),
             text: "While a write is running".into(),

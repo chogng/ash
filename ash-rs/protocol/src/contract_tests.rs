@@ -2,6 +2,30 @@ use super::*;
 use serde_json::json;
 
 #[test]
+fn user_input_client_identity_round_trips_and_old_history_remains_readable() {
+    for item in [
+        json!({"type":"userMessage", "itemId":"item", "turnId":"turn", "text":"rebase"}),
+        json!({"type":"userContext", "itemId":"item", "turnId":"turn", "name":"file", "content":"body"}),
+        json!({"type":"userImage", "itemId":"item", "turnId":"turn", "url":"https://example.com/image.png"}),
+    ] {
+        let stored: crate::ThreadItem = serde_json::from_value(item.clone()).unwrap();
+        assert_eq!(stored.client_id(), None);
+        assert_eq!(serde_json::to_value(stored).unwrap(), item);
+        let mut confirmed = item;
+        confirmed["clientId"] = json!("submission");
+        let stored: crate::ThreadItem = serde_json::from_value(confirmed.clone()).unwrap();
+        assert_eq!(
+            stored.client_id(),
+            Some(&crate::CommandId::new("submission").unwrap())
+        );
+        assert_eq!(serde_json::to_value(stored).unwrap(), confirmed);
+        let mut invalid = confirmed;
+        invalid["clientId"] = json!("");
+        assert!(serde_json::from_value::<crate::ThreadItem>(invalid).is_err());
+    }
+}
+
+#[test]
 fn stable_turn_error_categories_serialize_as_public_camel_case_codes() {
     let errors = [
         StableTurnError::policy_circuit_breaker("three actions rejected".into()),

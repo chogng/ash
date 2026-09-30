@@ -90,7 +90,7 @@ fn local_host_notices_remain_available_across_tui_option_clones() {
 #[test]
 fn completed_active_turn_only_updates_lifecycle_after_snapshot_mapping() {
     let turn_id = turn_id();
-    let mut app = working_app();
+    let (mut app, command_id) = working_app_with_command_id();
     app.set_active_turn(turn_id.clone());
     let turn = Turn {
         advisor: None,
@@ -107,6 +107,7 @@ fn completed_active_turn_only_updates_lifecycle_after_snapshot_mapping() {
         context_usage: None,
         items: vec![
             ThreadItem::UserMessage {
+                client_id: Some(command_id),
                 item_id: ItemId::new("item_1").unwrap(),
                 turn_id: turn_id.clone(),
                 text: "prompt".into(),
@@ -478,10 +479,18 @@ fn empty_skill_catalog() -> SkillListResult {
 }
 
 fn working_app() -> App {
+    working_app_with_command_id().0
+}
+
+fn working_app_with_command_id() -> (App, ash_protocol::CommandId) {
     let mut app = App::new();
     app.insert_text("prompt");
-    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    app
+    let Some(crate::app::AppCommand::Thread(ThreadCommand::SubmitTurn { submission, .. })) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("expected submitted prompt");
+    };
+    (app, submission.command_id)
 }
 
 fn turn_id() -> TurnId {

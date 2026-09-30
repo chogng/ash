@@ -224,6 +224,7 @@ impl SlashCommandInvocation {
         }
 
         ChatSubmission {
+            command_id: crate::client::new_command_id("input"),
             display_text,
             input: self.arguments,
         }

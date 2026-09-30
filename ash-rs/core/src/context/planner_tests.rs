@@ -606,6 +606,7 @@ fn budget(context_window: u32) -> ContextBudget {
 
 fn user_item(item_id: &str, turn_id: TurnId, text: &str) -> ThreadItem {
     ThreadItem::UserMessage {
+        client_id: None,
         item_id: id(item_id),
         turn_id,
         text: text.into(),
@@ -802,6 +803,7 @@ fn a_maximum_sized_checkpoint_fits_the_reserved_continuation_space() {
 fn audio_budget_uses_duration_instead_of_encoded_byte_size() {
     let current = id::<TurnId>("current");
     let audio = |duration_ms| ThreadItem::UserAudioAttachment {
+        client_id: None,
         item_id: id::<ItemId>("audio"),
         turn_id: current.clone(),
         attachment: ash_protocol::AudioAttachmentRef {

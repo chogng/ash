@@ -8,6 +8,7 @@ fn history_keeps_author_order_and_never_promotes_an_agent_task() {
     let thread = ThreadId::new("thread").unwrap();
     let items = [
         ThreadItem::UserMessage {
+            client_id: None,
             item_id: ItemId::new("user").unwrap(),
             turn_id: turn.clone(),
             text: "Only inspect".into(),
@@ -18,6 +19,7 @@ fn history_keeps_author_order_and_never_promotes_an_agent_task() {
             text: "I propose publishing".into(),
         },
         ThreadItem::UserMessage {
+            client_id: None,
             item_id: ItemId::new("answer").unwrap(),
             turn_id: turn,
             text: "Do not publish".into(),

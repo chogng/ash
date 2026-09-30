@@ -76,10 +76,11 @@ impl ThreadController {
                     "cannot steer a {status:?} Turn"
                 )));
             }
-            let items = user_input::thread_items(&validated, &request.turn_id, || {
-                ash_protocol::ItemId::new(self.next_identifier("item"))
-                    .expect("generated Item ID is non-empty")
-            });
+            let items =
+                user_input::thread_items(&validated, &request.turn_id, &request.command_id, || {
+                    ash_protocol::ItemId::new(self.next_identifier("item"))
+                        .expect("generated Item ID is non-empty")
+                });
             let item_ids = items
                 .iter()
                 .map(|item| item.item_id().clone())

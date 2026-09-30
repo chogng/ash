@@ -402,6 +402,7 @@ fn submission(input: &[ash_protocol::UserInput]) -> Result<ChatSubmission, Strin
         }
     }
     Ok(ChatSubmission {
+        command_id: crate::client::new_command_id("input"),
         display_text: display.join(" "),
         input: values,
     })

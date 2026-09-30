@@ -66,6 +66,7 @@ fn advisor_question_uses_consult_request_instead_of_worker_turn() {
             conversation.thread_sequence(),
         ),
         ChatSubmission {
+            command_id: crate::client::new_command_id("input"),
             display_text: "/advisor Check cancellation".into(),
             input: vec![ChatInputItem::Text("/advisor Check cancellation".into())],
         },

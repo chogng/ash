@@ -1591,6 +1591,12 @@ fn start_turn_replays_typed_command_without_creating_another_turn() {
     assert_eq!(replayed.disposition, StartTurnDisposition::Replayed);
     assert_eq!(replayed.turn_id, created.turn_id);
     assert_eq!(threads.read_thread(&thread).unwrap().turns.len(), 1);
+    let snapshot = threads.read_thread(&thread).unwrap();
+    assert_eq!(snapshot.items.len(), 1);
+    assert_eq!(
+        snapshot.items[0].client_id(),
+        Some(&CommandId::new("replay").unwrap())
+    );
 }
 
 #[test]
@@ -1995,6 +2001,14 @@ fn steering_is_ordered_retry_safe_and_recovers_without_duplicate_items() {
         })
         .collect::<Vec<_>>();
     assert_eq!(texts, ["hello", "first update", "second update"]);
+    assert_eq!(
+        snapshot
+            .items
+            .iter()
+            .map(|item| item.client_id().unwrap().as_str())
+            .collect::<Vec<_>>(),
+        ["steering-turn", "steer-1", "steer-2"],
+    );
 
     let recovered = ThreadController::with_store(store);
     recovered.recover_thread(&thread).unwrap();
@@ -2002,6 +2016,16 @@ fn steering_is_ordered_retry_safe_and_recovers_without_duplicate_items() {
         .steer_turn(&thread, request("steer-1", "first update"))
         .unwrap();
     assert_eq!(recovered_replay.disposition, SteerTurnDisposition::Replayed);
+    assert_eq!(
+        recovered
+            .read_thread(&thread)
+            .unwrap()
+            .items
+            .iter()
+            .map(|item| item.client_id().unwrap().as_str().to_owned())
+            .collect::<Vec<_>>(),
+        ["steering-turn", "steer-1", "steer-2"],
+    );
     assert_eq!(
         recovered
             .read_thread(&thread)
@@ -2327,6 +2351,12 @@ fn start_turn_persists_ordered_text_and_normalized_image_attachment_items() {
         ThreadItem::UserMessage { turn_id, text, .. }
             if turn_id == &result.turn_id && text == "describe"
     ));
+    assert!(
+        snapshot
+            .items
+            .iter()
+            .all(|item| { item.client_id() == Some(&CommandId::new("image-turn").unwrap()) })
+    );
     assert!(matches!(
         &snapshot.items[1],
         ThreadItem::UserImageAttachment { turn_id, attachment, .. }

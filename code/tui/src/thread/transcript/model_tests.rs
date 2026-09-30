@@ -300,7 +300,10 @@ fn execution_groups_never_merge_across_turns() {
 fn streamed_user_confirmation_replaces_the_optimistic_message() {
     let turn = turn_id("turn");
     let mut model = TranscriptModel::default();
-    model.push_message(MessageRole::User, "same prompt".into());
+    model.push_user_message(
+        ash_protocol::CommandId::new("user").unwrap(),
+        "same prompt".into(),
+    );
     model.apply(ThreadTranscriptUpdateEnvelope {
         session_id: session_id("session"),
         thread_id: thread_id("thread"),
@@ -323,6 +326,91 @@ fn streamed_user_confirmation_replaces_the_optimistic_message() {
 }
 
 #[test]
+fn identical_submissions_are_confirmed_by_id_even_when_receipts_arrive_in_reverse_order() {
+    let mut model = TranscriptModel::default();
+    let command = |id| ash_protocol::CommandId::new(id).unwrap();
+    model.push_user_message(command("first"), "rebase".into());
+    model.push_user_message(command("second"), "rebase".into());
+    let turn = turn_id("turn");
+    let first = message("first", &turn, MessageRole::User, "first canonical prompt");
+    let second = message(
+        "second",
+        &turn,
+        MessageRole::User,
+        "second canonical prompt",
+    );
+    let update = |entry| ThreadTranscriptUpdateEnvelope {
+        session_id: session_id("session"),
+        thread_id: thread_id("thread"),
+        durable_sequence: 1,
+        revision: 1,
+        stream_cursor: None,
+        changes: vec![ThreadTranscriptChange::Upsert { entry }],
+    };
+
+    model.apply(update(second.clone()));
+    assert_eq!(model.cells().len(), 2);
+    assert_eq!(model.cells()[0].source_entry_id, None);
+    assert_eq!(model.cells()[1].source_entry_id.as_deref(), Some("second"));
+    assert_eq!(model.views(&BTreeSet::new(), None)[0].text(), "rebase");
+    assert!(model.history_prefix(None).is_empty());
+
+    model.apply(update(first.clone()));
+    model.apply(update(second.clone()));
+    assert_eq!(model.cells().len(), 2);
+    assert_eq!(model.cells()[0].source_entry_id.as_deref(), Some("first"));
+    assert_eq!(model.cells()[1].source_entry_id.as_deref(), Some("second"));
+    model.replace(snapshot(vec![first, second]));
+    let views = model.views(&BTreeSet::new(), None);
+    assert_eq!(views.len(), 2);
+    assert_eq!(views[0].text(), "first canonical prompt");
+    assert_eq!(views[1].text(), "second canonical prompt");
+}
+
+#[test]
+fn snapshot_confirms_only_its_submission_and_keeps_other_identical_local_messages() {
+    let mut model = TranscriptModel::default();
+    let command = |id| ash_protocol::CommandId::new(id).unwrap();
+    model.push_user_message(command("first"), "rebase".into());
+    model.push_user_message(command("second"), "rebase".into());
+    let turn = turn_id("turn");
+    let first = message("first", &turn, MessageRole::User, "canonical prompt");
+    let other = message("another-client", &turn, MessageRole::User, "rebase");
+    model.replace(snapshot(vec![first.clone(), other.clone()]));
+    model.replace(snapshot(vec![first, other]));
+    assert_eq!(model.cells().len(), 3);
+    let pending = model
+        .cells()
+        .iter()
+        .filter(|cell| cell.source_entry_id.is_none())
+        .collect::<Vec<_>>();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].client_id.as_ref(), Some(&command("second")));
+}
+
+#[test]
+fn attachment_only_receipt_confirms_the_local_submission() {
+    let mut model = TranscriptModel::default();
+    let command_id = ash_protocol::CommandId::new("attachment").unwrap();
+    model.push_user_message(command_id.clone(), "[Image #1]".into());
+    let entry = ThreadTranscriptEntry::Item {
+        entry_id: "image".into(),
+        turn_id: turn_id("turn"),
+        item: ThreadItem::UserImage {
+            client_id: Some(command_id),
+            item_id: item_id("image"),
+            turn_id: turn_id("turn"),
+            url: "https://example.com/image.png".into(),
+        },
+        transient: false,
+    };
+    model.replace(snapshot(vec![entry]));
+    assert_eq!(model.cells().len(), 1);
+    assert_eq!(model.cells()[0].source_entry_id.as_deref(), Some("image"));
+    assert_eq!(model.views(&BTreeSet::new(), None)[0].text(), "[Image]");
+}
+
+#[test]
 fn snapshot_keeps_local_commands_in_order_and_replaces_the_optimistic_user_message() {
     let first = turn_id("first");
     let second = turn_id("second");
@@ -333,7 +421,10 @@ fn snapshot_keeps_local_commands_in_order_and_replaces_the_optimistic_user_messa
     let mut model = TranscriptModel::default();
     model.replace(snapshot(first_entries.clone()));
     model.command_submitted("/status".into(), LocalCommandCompletion::Immediate);
-    model.push_message(MessageRole::User, "second prompt".into());
+    model.push_user_message(
+        ash_protocol::CommandId::new("second-user").unwrap(),
+        "second prompt".into(),
+    );
     model.command_submitted(
         "/status-after-submit".into(),
         LocalCommandCompletion::Immediate,
@@ -468,6 +559,7 @@ fn activity_binding(activity: ToolActivity) -> ash_protocol::ToolCallBinding {
 fn message(entry: &str, turn: &TurnId, role: MessageRole, text: &str) -> ThreadTranscriptEntry {
     let item = match role {
         MessageRole::User => ThreadItem::UserMessage {
+            client_id: Some(ash_protocol::CommandId::new(entry).unwrap()),
             item_id: item_id(entry),
             turn_id: turn.clone(),
             text: text.into(),
@@ -525,6 +617,7 @@ fn audio_history_is_a_user_message_with_a_visible_duration() {
         turn_id: turn_id("turn"),
         transient: false,
         item: ThreadItem::UserAudioAttachment {
+            client_id: None,
             item_id: item_id("audio"),
             turn_id: turn_id("turn"),
             attachment: ash_protocol::AudioAttachmentRef {

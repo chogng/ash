@@ -1084,9 +1084,11 @@ impl ThreadController {
             validate_thread_expectation(request.expected_sequence, snapshot.sequence)?;
             let turn_id =
                 TurnId::new(self.next_identifier("turn")).expect("generated Turn ID is non-empty");
-            let input_items = user_input::thread_items(&validated_input, &turn_id, || {
-                ItemId::new(self.next_identifier("item")).expect("generated Item ID is non-empty")
-            });
+            let input_items =
+                user_input::thread_items(&validated_input, &turn_id, &request.command_id, || {
+                    ItemId::new(self.next_identifier("item"))
+                        .expect("generated Item ID is non-empty")
+                });
             let mut events = Vec::with_capacity(input_items.len() + 2);
             events.push(ThreadEvent::TurnAccepted {
                 thread_id: thread_id.clone(),

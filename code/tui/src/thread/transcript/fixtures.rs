@@ -17,6 +17,7 @@ impl CellView<'static> {
         let cell = TranscriptCell {
             cell_id: TranscriptCellId::from_render_key("fixture"),
             source_entry_id: None,
+            client_id: None,
             turn_id: None,
             lifecycle: CellLifecycle::Final,
             render_revision: 0,
