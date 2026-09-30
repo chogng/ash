@@ -1,0 +1,26 @@
+---
+source: code/tui/src/app/state_tests.rs
+expression: reconnected
+---
+  .                                                                        [— / —] [Dashboard]
+
+            ┌── Config › ChatGPT subscription ─────────────────────────────────[✗]─┐
+            │                                                                      │
+            │> Account  ·  person@example.test                                     │
+            │                                                                      │
+            │  Models ──────────────────────────────────────────────────────────── │
+            │  No models available                                                 │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+  ──────────│  Esc to return  ·  l to sign out                                     │──────────
+  > Build an└──────────────────────────────────────────────────────────────────────┘
+  ─────────────────────────────────────────────────────────────────────────── Automatic model

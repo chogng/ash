@@ -80,11 +80,31 @@ fn advisor_question_uses_consult_request_instead_of_worker_turn() {
 
 #[test]
 fn branch_persists_lineage_switches_threads_and_does_not_call_the_model() {
-    let (mut client, state_root, model) = client_with_model_probe();
-    let mut conversation = ActiveConversation::start(&mut client, "original".into()).unwrap();
+    let _guard = dispatch_test_guard();
+    let directory = tempfile::tempdir().unwrap();
+    let state_root = directory.path().join("profile");
+    let workspace = directory.path().join("workspace");
+    fs::create_dir(&workspace).unwrap();
+    let workspace = workspace.canonicalize().unwrap();
+    let model = Arc::new(OfflineOperationClient::default());
+    let mut client = start_in_process_client(
+        InProcessClientOptions::new(
+            &state_root,
+            ClientInfo {
+                name: "ash-tui-test".into(),
+                version: "1".into(),
+            },
+        )
+        .with_codex_home(state_root.join("codex"))
+        .with_dir_root(&workspace)
+        .with_model_operation_client(model.clone()),
+    )
+    .unwrap();
+    let mut conversation =
+        ActiveConversation::start_at(&mut client, "original".into(), &workspace).unwrap();
     let original_session = conversation.session_id().clone();
     let original_thread = conversation.thread_id().clone();
-    let mut app = App::new();
+    let mut app = App::for_dir(&workspace);
 
     execute(
         &mut conversation,
@@ -140,7 +160,22 @@ fn branch_persists_lineage_switches_threads_and_does_not_call_the_model() {
         invocation(TuiSlashCommandAction::New, "fresh task"),
         &mut app,
     );
-    assert_ne!(conversation.session_id(), &original_session);
+    assert_ne!(
+        conversation.session_id(),
+        &original_session,
+        "{}",
+        app.messages().last().unwrap().text()
+    );
+    assert_eq!(
+        client
+            .read_session(SessionReadParams {
+                session_id: conversation.session_id().clone(),
+            })
+            .unwrap()
+            .session
+            .execution_target,
+        Some(ash_protocol::SessionExecutionTarget::Local { root: workspace })
+    );
     assert_eq!(
         app.messages().last().unwrap().text(),
         "Started a new session."

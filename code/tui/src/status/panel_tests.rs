@@ -156,6 +156,40 @@ fn status_panel_updates_process_rows_without_resetting_each_tab_scroll() {
 }
 
 #[test]
+fn memory_diagnostics_survives_resource_updates_and_is_localized() {
+    let usage = usage();
+    let cost = reference_cost();
+    let mut panel = panel(&usage, &cost);
+    for (status, label) in [
+        (crate::memory::Status::Disabled, "Disabled"),
+        (crate::memory::Status::Starting, "Starting"),
+        (crate::memory::Status::Recording, "Recording"),
+        (crate::memory::Status::Stopping, "Stopping"),
+        (crate::memory::Status::Failed, "Failed"),
+    ] {
+        panel.apply_memory_diagnostics(status);
+        panel.apply_process_resources(ProcessResourcesView::default());
+        assert_eq!(
+            row_value(panel.processes.rows(), "Memory diagnostics"),
+            label
+        );
+    }
+    panel.localize(crate::nls::Language::Japanese);
+    panel.apply_memory_diagnostics(crate::memory::Status::Recording);
+    assert_eq!(row_value(panel.processes.rows(), "メモリ診断"), "記録中");
+    panel.handle_key(
+        KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
+        Rect::new(2, 1, 76, 7),
+    );
+    let mut terminal = Terminal::new(TestBackend::new(80, 15)).unwrap();
+    terminal.draw(|frame| draw_panel(frame, &panel)).unwrap();
+    crate::tui_assert_snapshot!(
+        "status_memory_diagnostics_japanese",
+        terminal.backend().to_string()
+    );
+}
+
+#[test]
 fn process_tab_renders_local_total_and_owned_process_details() {
     let usage = usage();
     let reference_cost = reference_cost();

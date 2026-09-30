@@ -143,7 +143,7 @@ fn actual_tui_queues_restores_and_completes_messages() {
     process.alt_up();
     process.wait_for_screen("> Queue 2: 第三条：稍后恢复到输入框");
     process.enter();
-    process.wait_for_screen("│ > 第三条：稍后恢复到输入框");
+    process.wait_for_screen("> 第三条：稍后恢复到输入框");
 
     first_gate.release();
     process.wait_for_stable_screen("队列中保留的消息已经发送");
@@ -323,6 +323,8 @@ fn actual_tui_sandbox_approval_modes_change_file_tool_authority() {
     bypass.up();
     bypass.space();
     bypass.wait_for_screen("written with permission bypass");
+    bypass.refresh_policy_tip();
+    bypass.wait_for_stable_screen("shift+tab to cycle policy");
     bypass.assert_snapshot("real/03-approval/08-bypass-details");
     let bypassed_thread_path = bypass_fixture.find_file("permission-bypassed.txt").unwrap();
     assert_eq!(

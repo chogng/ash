@@ -1890,7 +1890,9 @@ fn subscription_sign_out_shortcut_uses_each_connection_owner() {
                 models: Some(Ok(vec![])),
             },
         ));
-        assert!(!crate::app::usage_tests::render(&app, 96, 24).contains("Signed in"));
+        let signed_in = crate::app::usage_tests::render(&app, 96, 24);
+        assert!(signed_in.contains("person@example.test"));
+        assert!(!signed_in.contains("Signed in"));
         assert!(
             app.handle_key(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::ALT))
                 .is_none()
@@ -1934,6 +1936,31 @@ fn subscription_sign_out_shortcut_uses_each_connection_owner() {
                 SubscriptionCommand::SignIn,
             )))
         );
+        app.update(ConfigEvent::SubscriptionReply(
+            provider,
+            SubscriptionEvent::Read {
+                account: AccountReadResult {
+                    revision: 3.to_string(),
+                    accounts: vec![AccountDto {
+                        provider: account_provider.into(),
+                        account_id: "account-1".into(),
+                        email: Some("person@example.test".into()),
+                        display_name: None,
+                        organization: None,
+                        plan: None,
+                        status: AccountStatusDto::Ready,
+                        credential_revision: 1.to_string(),
+                    }],
+                },
+                models: Some(Ok(vec![])),
+            },
+        ));
+        let reconnected = crate::app::usage_tests::render(&app, 96, 24);
+        assert!(reconnected.contains("person@example.test"));
+        assert!(reconnected.contains("l to sign out"));
+        if provider == SubscriptionProvider::ChatGpt {
+            crate::tui_assert_snapshot!("chatgpt_subscription_reconnected", reconnected);
+        }
     }
 }
 
@@ -2739,6 +2766,36 @@ fn escape_does_not_exit_the_idle_session_screen() {
         None
     );
     assert_eq!(app.status(), &Status::Ready);
+}
+
+#[test]
+fn status_panel_receives_current_and_live_memory_diagnostics_status() {
+    let mut app = App::new();
+    app.update(StatusEvent::MemoryDiagnosticsChanged(
+        crate::memory::Status::Recording,
+    ));
+    let usage = ash_protocol::ModelUsageSummary::default();
+    let reference_cost = ash_protocol::ModelReferenceCostSummary::default();
+    app.update(StatusEvent::PanelOpened(status_panel(StatusViewData {
+        model: "openai/gpt",
+        full_context_window: None,
+        available_context_window: None,
+        remaining_context_window: crate::status::RemainingContextWindow::Unknown,
+        usage: &usage,
+        reference_cost: &reference_cost,
+        session_id: "session-1",
+        thread_id: "thread-1",
+    })));
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    let recording = render_dictation_frame(&app);
+    assert!(recording.contains("Memory diagnostics:"));
+    assert!(recording.contains("Recording"));
+    app.update(StatusEvent::MemoryDiagnosticsChanged(
+        crate::memory::Status::Disabled,
+    ));
+    let stopped = render_dictation_frame(&app);
+    assert!(stopped.contains("Disabled"));
+    assert!(!stopped.contains("Recording"));
 }
 
 #[test]

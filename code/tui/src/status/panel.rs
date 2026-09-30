@@ -75,6 +75,7 @@ pub(crate) struct StatusPanel {
     session: DetailList,
     processes: DetailList,
     process_resources: ProcessResourcesView,
+    memory_diagnostics: crate::memory::Status,
     scroll: [u16; 2],
     language: crate::nls::Language,
 }
@@ -99,8 +100,16 @@ impl StatusPanel {
         self.rebuild_processes();
     }
 
+    pub(crate) fn apply_memory_diagnostics(&mut self, status: crate::memory::Status) {
+        self.memory_diagnostics = status;
+        self.rebuild_processes();
+    }
+
     fn rebuild_processes(&mut self) {
-        self.processes = DetailList::new("Processes", process_rows(&self.process_resources));
+        self.processes = DetailList::new(
+            "Processes",
+            process_rows(&self.process_resources, self.memory_diagnostics),
+        );
         self.processes.localize(self.language);
     }
 
@@ -266,8 +275,12 @@ pub(crate) fn status_panel(data: StatusViewData<'_>) -> StatusPanel {
         title: "Status".into(),
         tabs: TabListState::new(status_tabs()),
         session: DetailList::new("Thread", base_rows),
-        processes: DetailList::new("Processes", process_rows(&process_resources)),
+        processes: DetailList::new(
+            "Processes",
+            process_rows(&process_resources, crate::memory::Status::Disabled),
+        ),
         process_resources,
+        memory_diagnostics: crate::memory::Status::Disabled,
         scroll: [0, 0],
         language: crate::nls::Language::English,
     }
@@ -286,7 +299,10 @@ fn status_tabs() -> Vec<StatusTab> {
     ]
 }
 
-fn process_rows(resources: &ProcessResourcesView) -> Vec<DetailListRow> {
+fn process_rows(
+    resources: &ProcessResourcesView,
+    memory_diagnostics: crate::memory::Status,
+) -> Vec<DetailListRow> {
     let mut rows = vec![
         detail("Total", format_process_usage(resources.local)),
         detail("TUI", format_process_usage(resources.tui)),
@@ -307,6 +323,16 @@ fn process_rows(resources: &ProcessResourcesView) -> Vec<DetailListRow> {
             rows.push(detail("App Server", "remote — excluded from local totals"));
         }
     }
+    rows.push(detail(
+        "Memory diagnostics",
+        match memory_diagnostics {
+            crate::memory::Status::Disabled => "Disabled",
+            crate::memory::Status::Starting => "Starting",
+            crate::memory::Status::Recording => "Recording",
+            crate::memory::Status::Stopping => "Stopping",
+            crate::memory::Status::Failed => "Failed",
+        },
+    ));
     rows
 }
 

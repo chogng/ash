@@ -326,6 +326,12 @@ impl CommandPanel {
         Self::Usage(ListSelection::new(model, BTreeMap::new()))
     }
 
+    pub(crate) fn apply_memory_diagnostics(&mut self, status: crate::memory::Status) {
+        if let Self::Status(panel) = self {
+            panel.apply_memory_diagnostics(status);
+        }
+    }
+
     pub(crate) fn apply_process_resources(&mut self, resources: ProcessResourcesView) {
         if let Self::Status(panel) = self {
             panel.apply_process_resources(resources);
@@ -434,9 +440,7 @@ impl CommandPanel {
 
     pub(crate) fn localize(&mut self, language: crate::nls::Language) {
         match self {
-            Self::Help(content)
-            | Self::Loading(content)
-            | Self::Usage(content) => {
+            Self::Help(content) | Self::Loading(content) | Self::Usage(content) => {
                 content.state_mut().localize(language);
             }
             Self::GitBranches(content) => content.localize(language),
@@ -813,6 +817,19 @@ impl CommandPanel {
         true
     }
 
+    fn extension_tab(&self) -> Option<crate::extensions::Tab> {
+        if !matches!(
+            self,
+            Self::Skills(_) | Self::Mcp(_) | Self::Hooks(_) | Self::Marketplace(_)
+        ) {
+            return None;
+        }
+        let state = self.list_selection()?;
+        state
+            .show_tabs()
+            .then(|| crate::extensions::Tab::ALL[state.active_tab_index()])
+    }
+
     pub(crate) fn is_connectors(&self) -> bool {
         matches!(self, Self::Connectors(_))
     }
@@ -1150,6 +1167,12 @@ impl Panels {
     pub(crate) fn replace_status_line(&mut self, choices: StatusLineChoices) {
         if let Some(command) = self.command.as_mut() {
             command.replace_status_line(choices);
+        }
+    }
+
+    pub(crate) fn apply_memory_diagnostics(&mut self, status: crate::memory::Status) {
+        if let Some(command) = self.command.as_mut() {
+            command.apply_memory_diagnostics(status);
         }
     }
 

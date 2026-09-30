@@ -92,19 +92,55 @@ impl StagedBinaries {
         // Bazel exposes executable runfiles as symlinks; the daemon requires regular files.
         // Keep one real copy of each binary shared by this test process.
         let directory = tempfile::tempdir().unwrap();
+        let bin = directory.path().join("bin");
+        fs::create_dir(&bin).unwrap();
         let staged = |source: PathBuf| {
-            let destination = directory
-                .path()
-                .join(source.file_name().expect("executable name"));
+            let destination = bin.join(source.file_name().expect("executable name"));
             fs::copy(source, &destination).unwrap();
             destination
         };
-        Self {
+        let binaries = Self {
             ash: staged(ash_executable()),
             daemon: staged(daemon_executable()),
             app_server: staged(app_server_executable()),
             _directory: directory,
+        };
+        // Bazel build directories disappear after compilation. Exercise packaged resource
+        // discovery instead of relying on the app-server's development source directory.
+        let root = binaries._directory.path();
+        fs::create_dir(root.join("ash-path")).unwrap();
+        for (name, contents) in [
+            (
+                "create-instructions",
+                include_str!("../../../ash-rs/skills/assets/create-instructions/SKILL.md"),
+            ),
+            (
+                "skill-creator",
+                include_str!("../../../ash-rs/skills/assets/skill-creator/SKILL.md"),
+            ),
+        ] {
+            let skill = root.join("ash-resources/skills").join(name);
+            fs::create_dir_all(&skill).unwrap();
+            fs::write(skill.join("SKILL.md"), contents).unwrap();
         }
+        use sha2::Digest;
+        let build_id = format!(
+            "sha256:{:x}",
+            sha2::Sha256::digest(fs::read(&binaries.app_server).unwrap())
+        );
+        fs::write(
+            root.join("ash-package.json"),
+            serde_json::to_vec(&serde_json::json!({
+                "version": env!("CARGO_PKG_VERSION"),
+                "buildId": build_id,
+                "buildProfile": "dev-small",
+                "files": {},
+                "javascriptRuntime": { "kind": "systemNode" },
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        binaries
     }
 }
 
@@ -249,23 +285,6 @@ impl Fixture {
         let script = bin.join("gh");
         fs::write(&script, include_str!("issue_provider.py")).unwrap();
         fs::set_permissions(script, fs::Permissions::from_mode(0o700)).unwrap();
-    }
-
-    pub fn install_codex_marker(&self) {
-        let bin = self.root.join("bin");
-        fs::create_dir_all(&bin).unwrap();
-        let marker = bin.join(if cfg!(windows) { "codex.cmd" } else { "codex" });
-        fs::write(
-            &marker,
-            if cfg!(windows) {
-                "@echo off\r\n"
-            } else {
-                "#!/bin/sh\nexit 0\n"
-            },
-        )
-        .unwrap();
-        #[cfg(unix)]
-        fs::set_permissions(marker, fs::Permissions::from_mode(0o700)).unwrap();
     }
 
     pub fn write_config(&self, base_url: &str) {

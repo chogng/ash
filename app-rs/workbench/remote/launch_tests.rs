@@ -449,6 +449,8 @@ fn create_runtime_archive(directory: &Path) -> TestRuntimeArtifact {
     unpacked_size += append_archive_file(&mut builder, "bin/ash-app-server", b"app-server", 0o755);
     unpacked_size += append_archive_file(&mut builder, "ash-path/rg", b"rg", 0o755);
     unpacked_size +=
+        append_archive_file(&mut builder, "ash-resources/tgrep/tgrep", b"tgrep", 0o755);
+    unpacked_size +=
         append_archive_file(&mut builder, "ash-resources/node/bin/node", b"node", 0o755);
     builder.into_inner().unwrap().finish().unwrap();
     let bytes = fs::read(path).unwrap();

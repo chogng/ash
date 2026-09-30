@@ -24,7 +24,10 @@ rust_test(
         "tests/support/tui_process.rs",
         "tests/tui_real_scenarios.rs",
     ],
-    compile_data = ["tests/support/issue_provider.py"],
+    compile_data = [
+        "tests/support/issue_provider.py",
+        "//ash-rs/skills:built-in-skills",
+    ],
     data = [
         ":ash",
         "//ash-rs/app-server:ash-app-server",

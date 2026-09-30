@@ -1431,7 +1431,10 @@ fn primary_presentation_publishes_current_control_semantics_and_focus() {
         .unwrap();
 
     assert_eq!(key_hint_bar.role, AccessibilityRole::Group);
-    assert_eq!(key_hint_bar.label, "/ for commands");
+    assert_eq!(
+        key_hint_bar.label,
+        "/ for commands, Up and Down to recall inputs, Control R to search history"
+    );
     let inspected_key_hint_bar = presentation
         .frame()
         .scene()

@@ -773,7 +773,9 @@ fn actual_tui_opens_a_worktree_before_starting_a_new_session() {
     assert!(fixture.sessions().is_empty());
     assert_eq!(server.request_count(), 0);
 
-    process.submit("WORKTREE-TASK");
+    process.type_text("WORKTREE-TASK");
+    process.wait_for_stable_screen("> WORKTREE-TASK");
+    process.enter();
     process.wait_for_stable_screen("WORKTREE-SESSION-REPLY");
     assert_eq!(server.request_count(), 1);
     assert_eq!(fixture.sessions().len(), 1);

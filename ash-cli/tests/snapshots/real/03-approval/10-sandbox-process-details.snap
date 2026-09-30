@@ -9,7 +9,7 @@ expression: screen
 
 ● Thought
 
-● shell-command failed
+● Command failed
 └─ shell-command [call-sandbox]
    {
      "program": "/bin/sh",
@@ -29,8 +29,8 @@ not permitted
 
                                       Jump to bottom (click) ↓
                                                                          shift+tab to cycle policy
-  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
-  │ > Build anything                                                                             │
-  ╰────────────────────────────────────────────────────────────────────────── ash-real-scenario ─╯
+  ────────────────────────────────────────────────────────────────────────────────────────────────
+  > Build anything
+  ───────────────────────────────────────────────────────────────────────────── ash-real-scenario
 
   Space to expand · Enter to view details · Esc to return to input

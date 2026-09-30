@@ -21,6 +21,9 @@ use std::time::SystemTime;
 
 const REQUEST_CAPACITY: usize = 64;
 const CONTROL_CAPACITY: usize = 16;
+// Request workers synchronously poll Git worktree provisioning. Its nested futures
+// exceed the platform's default stack in unoptimized builds, including Bazel scenarios.
+const REQUEST_WORKER_STACK_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Clone)]
 pub(crate) struct IncomingRequest {
@@ -237,6 +240,7 @@ impl<'scope, 'env: 'scope> RequestDispatcher<'scope, 'env> {
                 workers.push(
                     thread::Builder::new()
                         .name(format!("ash-request-{}-{index}", lane.index()))
+                        .stack_size(REQUEST_WORKER_STACK_BYTES)
                         .spawn_scoped(scope, move || {
                             loop {
                                 let Ok(ready) = receiver.lock().unwrap().recv() else {

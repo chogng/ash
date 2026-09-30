@@ -1,6 +1,6 @@
 use crate::app_server::AppServerRequestHandle;
+use crate::app_server::MemoryRecording;
 use crate::workbench_event::WorkbenchEvent;
-use ash_app_server_client::MemoryRecording;
 use ash_commands::AppCommandId;
 use ash_memory_diagnostics::MemoryMetric;
 use ash_memory_diagnostics::MemoryMetricKind;

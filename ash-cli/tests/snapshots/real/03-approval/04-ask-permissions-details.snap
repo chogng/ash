@@ -6,7 +6,7 @@ expression: screen
 
 > 请创建 approved-by-tui.txt
 
-● Ran write_file
+● Updated file
 └─ write_file [call-approve]
    {
      "path": "approved-by-tui.txt",
@@ -29,8 +29,8 @@ expression: screen
 
 
                                                                          shift+tab to cycle policy
-  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
-  │ > Build anything                                                                             │
-  ╰────────────────────────────────────────────────────────────────────────── ash-real-scenario ─╯
+  ────────────────────────────────────────────────────────────────────────────────────────────────
+  > Build anything
+  ───────────────────────────────────────────────────────────────────────────── ash-real-scenario
 
   Space to expand · Enter to view details · Esc to return to input

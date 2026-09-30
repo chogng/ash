@@ -805,6 +805,15 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "{0} outils terminés",
     ),
     translation("Starting", "開始中", "正在启动", "Démarrage"),
+    translation("Recording", "記録中", "正在记录", "Enregistrement"),
+    translation("Stopping", "停止中", "正在停止", "Arrêt en cours"),
+    translation("Failed", "失敗", "失败", "Échec"),
+    translation(
+        "Memory diagnostics",
+        "メモリ診断",
+        "内存诊断",
+        "Diagnostics mémoire",
+    ),
     translation(
         "Waiting for approval",
         "承認待ち",

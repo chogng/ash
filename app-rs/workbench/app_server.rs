@@ -14,6 +14,7 @@ pub(crate) use host::local_app_server_command;
 
 pub(crate) use ash_app_server_client::AppServerRequestHandle;
 pub(crate) use ash_app_server_client::ClientError;
+pub(crate) use ash_app_server_client::MemoryRecording;
 pub(crate) use ash_app_server_client::ServerNotification;
 
 #[cfg(test)]

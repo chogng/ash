@@ -6,7 +6,8 @@ expression: screen
 
 > 请尝试创建 declined-by-tui.txt
 
-● write_file failed
+● Failed to update file
+└─ Failed to update file — user declined the requested one-time tool authorization
 
 ● 工具调用被用户拒绝。没有写入文件。
 
@@ -27,10 +28,9 @@ expression: screen
 
 
 
-
   ⏸ ask permissions on                                                   shift+tab to cycle policy
-  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
-  │ >                                                                                            │
-  ╰────────────────────────────────────────────────────────────────────────── ash-real-scenario ─╯
+  ────────────────────────────────────────────────────────────────────────────────────────────────
+  >
+  ───────────────────────────────────────────────────────────────────────────── ash-real-scenario
 
   Enter send  ·  shift+tab permissions

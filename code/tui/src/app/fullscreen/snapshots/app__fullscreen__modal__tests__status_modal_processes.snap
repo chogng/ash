@@ -9,10 +9,10 @@ expression: frame_text(&app)
             │                                                                         │             
             │   Thread    Processes                                                   │             
             │                                                                         │             
-            │  Total:      collecting                                                 │             
-            │  TUI:        collecting                                                 │             
-            │  App Server: included in the TUI process                                │             
-            │                                                                         │             
+            │  Total:              collecting                                         │             
+            │  TUI:                collecting                                         │             
+            │  App Server:         included in the TUI process                        │             
+            │  Memory diagnostics: Disabled                                           │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             

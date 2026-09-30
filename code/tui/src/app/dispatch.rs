@@ -118,19 +118,11 @@ where
         }
         TuiSlashCommandAction::Marketplace | TuiSlashCommandAction::Plugins => {
             let request = if command == TuiSlashCommandAction::Plugins {
-                crate::marketplace::Command::Browse(
-                    ash_app_server_protocol::protocol::marketplace::MarketplaceSearchParams {
-                        package_type: Some("plugin".into()),
-                        ..Default::default()
-                    },
-                )
+                crate::marketplace::Command::Plugins
             } else {
                 crate::marketplace::Command::Browse(
                     ash_app_server_protocol::protocol::marketplace::MarketplaceSearchParams {
                         query: arguments,
-                        capability_kind: Some(
-                            ash_app_server_protocol::protocol::marketplace::MarketplaceCapabilityKindDto::Skill,
-                        ),
                         ..Default::default()
                     },
                 )

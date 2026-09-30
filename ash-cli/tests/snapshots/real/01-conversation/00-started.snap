@@ -10,8 +10,8 @@ expression: screen
   │  ▗█▛██▜█▖                                                                                    │
   │  ▝▜████▛▘    Start a task below, or continue a previous session.                             │
   │    ▝  ▘                                                                                      │
+  │              New worktree                                                                    │
   │              Resume session                                                                  │
-  │              Dashboard                                                                       │
   │              Settings                                                                        │
   │              Help and shortcuts                                                              │
   │              Quit                                                                            │
@@ -29,8 +29,8 @@ expression: screen
 
 
   ⏸ ask permissions on                       Type a task to begin, or use Tab to choose an action.
-  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
-  │ >                                                                                            │
-  ╰────────────────────────────────────────────────────────────────────────── ash-real-scenario ─╯
+  ────────────────────────────────────────────────────────────────────────────────────────────────
+  >
+  ───────────────────────────────────────────────────────────────────────────── ash-real-scenario
 
   Enter send  ·  Tab actions  ·  / commands

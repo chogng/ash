@@ -419,11 +419,13 @@ fn production_components_do_not_reintroduce_manual_component_inspection() {
 fn production_composition_does_not_register_inspection_nodes_directly() {
     let dir_root = app_root();
     let registration_owner = dir_root.join("zui/src/ui/presentation/scene.rs");
+    let registration_modules = dir_root.join("zui/src/ui/presentation/scene");
     let mut violations = Vec::new();
     for crate_root in workspace_crate_roots(dir_root) {
         visit_rust_sources(&crate_source_root(&crate_root), &mut |path, source| {
             if is_test_source(path)
                 || path == registration_owner
+                || path.starts_with(&registration_modules)
                 || !source.contains("with_inspection_node(")
             {
                 return;
