@@ -1,7 +1,7 @@
 # 无界面 Agent 执行
 
 > 目标物理位置：`ash-rs/exec/`  
-> 当前状态：阶段 1–2 已实现；远程执行环境的进程/文件通路已实现，可靠自动化与远程 Agent worker 仍是 Proposed
+> 当前状态：阶段 1–2 已实现；远程进程/文件执行平面已实现；可靠自动化与远程 Agent worker 仍在计划中
 > 当前 crate 实现契约：[`ash-rs/exec/README.md`](../ash-rs/exec/README.md)
 > App Server Client：[`app-server-client.md`](app-server-client.md)  
 > App Server contract：[`ash-app-server-api.md`](ash-app-server-api.md)  
@@ -111,8 +111,9 @@ ash-exec-server-protocol
 
 执行库、本地调用和独立服务共享进程资源所有者。Workspace 的索引、搜索、Git 与监听仍贴近
 代码运行；App Server 在内部区分 Workspace 资源、交互式执行资源与 Agent 装配。执行协议的
-连接复用、等待上限和恢复语义由上述 crate README 维护。当前 Remote 仍运行完整 App Server，
-不将内部职责分组描述为已经完成跨宿主的 Agent 与 Workspace 部署分离。
+连接复用、等待上限和恢复语义由上述 crate README 维护。远程 `ash-exec-server` 已承载进程、PTY
+和文件操作；这只分离了进程执行平面。远程 Agent worker 尚未实现，未来 worker 仍需连接完整
+App Server，不能据此描述为 Agent、Workspace 与 App Server 已跨宿主分离。
 
 不能直接把当前 `ToolExecutor` 扩张为远程 Agent scheduler，否则 scheduler job、Agent lifecycle、
 process lifecycle 和 sandbox authority 会混在同一 crate。
@@ -493,6 +494,8 @@ ash-scheduler-protocol
 
 ## 15. 实施阶段
 
+阶段编号用于区分能力轨道，不表示严格的先后依赖；远程进程执行可以先于远程 Agent worker 独立落地。
+
 ### 阶段 1：消除命名冲突（当前状态）
 
 - 已将原 process `ash-exec` 迁移为 `ash-tool-executor`；
@@ -515,20 +518,24 @@ ash-scheduler-protocol
 - reconnect/read/subscribe resync；
 - integration fixtures。
 
-### 阶段 4：远程工作进程（计划）
+### 阶段 4：远程进程执行环境（已实现）
+
+- 独立 `ash-exec-server-protocol` 与进程、PTY、文件处理器；
+- 本地进程内调用和鉴权 TCP 服务共用执行处理器；
+- App Server 在工具审批后可把进程或文件操作路由到配置的远程执行环境；
+- 连接恢复窗口内可继续观察原操作，不重发进程启动或文件写入。
+
+服务重启后的进程恢复、远端 App Server 部署以及远程 Agent 执行不属于当前已实现能力；具体边界见
+[`ash-exec-server`](../ash-rs/exec-server/README.md) 和
+[`ash-exec-server-protocol`](../ash-rs/exec-server-protocol/README.md)。
+
+### 阶段 5：远程 Agent 工作进程（计划）
 
 - scheduler protocol；
 - Job/Attempt/lease/fencing；
 - worker registration、heartbeat 和 draining；
 - event cursor/ack 与 reconnect；
 - tenant/workspace isolation。
-
-### 阶段 5：远程执行环境（潜在方向）
-
-- 独立 exec-server protocol；
-- process/PTY/filesystem handlers；
-- authenticated transport；
-- 与 Agent scheduler 分开的 reliability 与 security model。
 
 ## 16. 验证要求
 
@@ -544,7 +551,8 @@ ash-scheduler-protocol
 - Ctrl-C 发送 typed `session/request` `InterruptTurn`；
 - headless approval 不会永久等待不存在的 UI；
 
-阶段 3–5 尚需满足：
+远程进程执行环境的验证由 [`ash-exec-server`](../ash-rs/exec-server/README.md) 的 crate 检查与测试覆盖。
+阶段 3 可靠自动化和阶段 5 远程 Agent worker 尚需满足：
 
 - durable gap 可在断线后通过 reconnect/read/subscribe 恢复；
 - remote cancel 同样发送 typed `session/request` `InterruptTurn`；
