@@ -278,23 +278,12 @@ export class Workbench extends Disposable {
 		));
 		const accountMenu = this._register(new SessionsAccountMenu(accountService, contextMenus, preferences, options.returnToWorkbench));
 
-		let activityPage: SessionsActivityPage = 'chat';
-		let mode: 'chat' | 'code' = 'chat';
 		let auxiliarybar: AuxiliaryBarPart | undefined;
-		let titlebar: TitlebarPart;
-		const selectMode = (selectedMode: 'chat' | 'code'): void => {
-			mode = selectedMode;
-			titlebar.updateMode(mode);
-			if (mode === 'code') sessionsPart?.setPage('code');
-			else sessionsPart?.setPage(activityPage === 'chat' ? 'chat' : 'empty');
-			auxiliarybar?.setEmptyPage(mode === 'code' || activityPage !== 'chat');
-		};
-		titlebar = this._register(new TitlebarPart(this.domNode, view, menus, contextMenus, {
+		const titlebar = this._register(new TitlebarPart(this.domNode, view, menus, contextMenus, {
 			toggleSidebar: () => {
 				if (layout!.isPartVisible('sidebar')) layout!.hidePart('sidebar');
 				else layout!.showPart('sidebar');
 			},
-			selectMode,
 		}));
 		const sidebar = this._register(new SidebarPart(this.domNode, sessions, view, teams, quickInputService, async () => {
 			const catalog = await options.api.session.listAgents();
@@ -306,10 +295,11 @@ export class Workbench extends Disposable {
 		}));
 		let activitybar: ActivityBarPart;
 		const selectActivityPage = (page: SessionsActivityPage): void => {
-			activityPage = page;
 			activitybar.selectPage(page);
-			sidebar.setEmptyPage(page !== 'chat');
-			selectMode('chat');
+			sidebar.setEmptyPage(page === 'colab' || page === 'library');
+			if (page === 'chat' || page === 'code') sessionsPart?.setPage(page);
+			else sessionsPart?.setPage('empty');
+			auxiliarybar?.setEmptyPage(page !== 'chat');
 		};
 		this.showChat = () => selectActivityPage('chat');
 		activitybar = this._register(services.createInstance(ActivityBarPart, this.domNode, {
@@ -332,7 +322,7 @@ export class Workbench extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsActivityBar,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to move between available buttons. Press Enter or Space to activate a button. Use the Context Menu key or Shift+F10 for position and size options. Chat focuses the sessions list. Collaboration and Library open empty pages. Accounts opens the account menu, which includes Return to Workbench. Mobile devices is not available yet.'),
+					() => localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to move between available buttons. Press Enter or Space to activate a button. Use the Context Menu key or Shift+F10 for position and size options. Chat focuses the sessions list. Code opens the Code page without losing the Chat draft. Collaboration and Library open empty pages. Accounts opens the account menu, which includes Return to Workbench. Mobile devices is not available yet.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsActivityBar,
 				);

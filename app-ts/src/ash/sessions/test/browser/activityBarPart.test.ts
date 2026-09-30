@@ -23,7 +23,7 @@ const { SessionsConfiguration } = await import('../../common/configuration.js');
 const { ActivityBarPosition, WorkbenchConfiguration } = await import('../../../workbench/common/configuration.js');
 const { WorkbenchConfigurationService } = await import('../../../workbench/services/configuration/browser/configurationService.js');
 
-test('Sessions Activity Bar selects Chat, Collaboration, and Library pages', async () => {
+test('Sessions Activity Bar selects Chat, Collaboration, Library, and Code pages', async () => {
 	const ownerDocument = browser.window.document;
 	ownerDocument.body.replaceChildren();
 	let listFocuses = 0;
@@ -50,12 +50,13 @@ test('Sessions Activity Bar selects Chat, Collaboration, and Library pages', asy
 			{ icon: 'chat-2-filled', disabled: false },
 			{ icon: 'colab', disabled: false },
 			{ icon: 'library', disabled: false },
+			{ icon: 'code', disabled: false },
 			{ icon: 'device-mobile', disabled: true },
 			{ icon: 'account', disabled: false },
 		]);
 		assert.deepEqual([...bar.domNode.querySelectorAll('.ash-sessions-activity-top, .ash-sessions-activity-bottom')].map(group =>
 			[...group.querySelectorAll('button')].map(button => button.getAttribute('aria-label')),
-		), [['Chat', 'Collaboration', 'Library'], ['Mobile devices (coming soon)', 'Accounts']]);
+		), [['Chat', 'Collaboration', 'Library', 'Code'], ['Mobile devices (coming soon)', 'Accounts']]);
 		assert.ok(buttons.every(button => button.classList.contains('icon-only')));
 		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
 		buttons[1]?.click();
@@ -68,14 +69,20 @@ test('Sessions Activity Bar selects Chat, Collaboration, and Library pages', asy
 		assert.deepEqual([buttons[0], buttons[1], buttons[2]].map(button => [button?.querySelector('svg')?.getAttribute('data-ash-icon-id'), button?.getAttribute('aria-current')]), [
 			['chat-2', null], ['colab', null], ['library-filled', 'page'],
 		]);
+		buttons[3]?.click();
+		bar.selectPage('code');
+		assert.deepEqual(buttons.slice(0, 4).map(button => [button.classList.contains('selected'), button.getAttribute('aria-current')]), [
+			[false, null], [false, null], [false, null], [true, 'page'],
+		]);
 		buttons[0]?.click();
 		bar.selectPage('chat');
-		assert.deepEqual(selectedPages, ['colab', 'library', 'chat']);
+		assert.deepEqual(selectedPages, ['colab', 'library', 'code', 'chat']);
 		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
+		assert.equal(buttons[3]?.getAttribute('aria-current'), null);
 		assert.equal(listFocuses, 1);
-		buttons[4]?.click();
+		buttons[5]?.click();
 		await Promise.resolve();
-		assert.equal(accountAnchor, buttons[4]);
+		assert.equal(accountAnchor, buttons[5]);
 	} finally {
 		bar.dispose();
 		configuration.dispose();

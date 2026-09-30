@@ -94,10 +94,10 @@ test("localization lookup falls back to English and formats parameters", async (
 		localization.translate('ash', 'sessions.navigation.menu', 'Session menu'),
 		localization.translate('ash', 'sessions.navigation.showSidebar', 'Show sidebar'),
 		localization.translate('ash', 'sessions.navigation.hideSidebar', 'Hide sidebar'),
-		localization.translate('ash', 'sessions.mode.switch', 'Chat and Code'),
-		localization.translate('ash', 'sessions.mode.chat', 'Chat'),
+		localization.translate('ash', 'sessions.activity.chat', 'Chat'),
 		localization.translate('ash', 'sessions.mode.code', 'Code'),
-	], ['会话窗口操作', '会话菜单', '显示侧边栏', '隐藏侧边栏', '聊天与代码', '聊天', '代码']);
+	], ['会话窗口操作', '会话菜单', '显示侧边栏', '隐藏侧边栏', '聊天', '代码']);
+	assert.match(localization.translate('ash', 'sessions.activity.help', ''), /代码将打开代码页面并保留聊天草稿/u);
 	assert.equal(localization.translate('ash', 'chat.modelPicker.context', '{0} context tokens', { '0': '128,000' }), '上下文：128,000 个词元');
 	assert.equal(localization.translate('ash', 'chat.defaultModel.title', 'Default chat model'), '默认聊天模型');
 	assert.deepEqual([

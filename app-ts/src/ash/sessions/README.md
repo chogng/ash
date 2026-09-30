@@ -58,11 +58,11 @@ model supplied by Sessions and does not create or select Sessions itself.
 4. `SessionsWorkbenchLayout` deserializes the fixed Part grid. Titlebar,
    activitybar, sidebar, and sessions Parts are registered; the sidebar and auxiliary Parts can be toggled,
    and Activity Bar visibility follows `sessions.activityBar.location`.
-   The Activity Bar selects Chat, Collaboration, and Library; the latter two currently show empty pages.
+   The Activity Bar selects Chat, Collaboration, Library, and Code; Collaboration and Library currently show empty pages.
    Mobile devices remains unavailable. Its right-click menu moves the
    controls to the sidebar top or bottom, hides them, or selects the side rail size through
-   `sessions.activityBar.compact`. The titlebar uses the shared application menu control with Sessions-owned menu contributions and owns sidebar visibility,
-   session history, and a Chat / Code switch. Code shows an empty page in the primary Part; the sidebar owns the new-session control.
+   `sessions.activityBar.compact`. The titlebar uses the shared application menu control with Sessions-owned menu contributions and owns sidebar visibility
+   and session history. Code shows an empty page in the primary Part; the sidebar owns the new-session control.
    Its spacing follows `sessions.layoutStyle`, independently of the IDE's
    `workbench.layoutStyle`. Both preferences use the same profile settings
    resource; changing either one updates its own window without changing

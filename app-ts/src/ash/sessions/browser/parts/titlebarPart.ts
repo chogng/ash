@@ -11,17 +11,14 @@ import { WorkbenchPart } from '../../../workbench/browser/part.js';
 import { WorkbenchWindowBarHeight } from '../../../workbench/browser/parts/workbenchPartDimensions.js';
 import { BrowserMenubarControl } from '../../../workbench/browser/parts/titlebar/menubarControl.js';
 import type { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
-import { ChatCodeSwitchWidget } from '../widget/chatCodeSwitchWidget.js';
 
 export interface TitlebarPartDelegate {
 	toggleSidebar(): void;
-	selectMode(mode: 'chat' | 'code'): void;
 }
 
 /** Window chrome and primary product actions for the dedicated Sessions Workbench. */
 export class TitlebarPart extends WorkbenchPart {
 	private readonly menubar: BrowserMenubarControl;
-	private readonly modeSwitch: ChatCodeSwitchWidget;
 	private sidebarVisible = true;
 
 	override get minimumHeight(): number { return WorkbenchWindowBarHeight; }
@@ -42,10 +39,7 @@ export class TitlebarPart extends WorkbenchPart {
 		this.menubar = this._register(new BrowserMenubarControl(left, menuService, contextMenus));
 		this._register(viewService.onDidChange(() => this.updateActions()));
 		this.updateActions();
-		this.modeSwitch = this._register(new ChatCodeSwitchWidget(left, mode => this.delegate.selectMode(mode)));
 	}
-
-	public updateMode(mode: 'chat' | 'code'): void { this.modeSwitch.setMode(mode); }
 
 	public updateSidebarVisibility(visible: boolean): void {
 		this.sidebarVisible = visible;
