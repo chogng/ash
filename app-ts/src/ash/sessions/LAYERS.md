@@ -76,28 +76,28 @@ Service layer sits alongside core. Provides shared service interfaces and implem
 
 ### `sessions/contrib/*/~` — Contributions (non-provider)
 
-**Path:** `src/vs/sessions/contrib/*/{browser,common}/**` (excluding `contrib/providers/`)
+**Path:** `src/ash/sessions/contrib/*/{browser,common}/**` (excluding `contrib/providers/`)
 
 Feature contributions like `chat`, `sessions`, `changes`, `terminal`, etc.
 
 **Can import from:**
 - Everything `sessions/services/*/~` can import, plus:
-- `vs/sessions/contrib/*/~` (sibling contributions)
+- `ash/sessions/contrib/*/~` (sibling contributions)
 
 **Cannot import from:**
-- ❌ `vs/sessions/contrib/providers/*/~` — **providers are isolated from non-provider contribs**
+- ❌ `ash/sessions/contrib/providers/*/~` — **providers are isolated from non-provider contribs**
 
 ---
 
 ### `sessions/contrib/providers/*/~` — Session Providers
 
-**Path:** `src/vs/sessions/contrib/providers/*/{browser,common}/**`
+**Path:** `src/ash/sessions/contrib/providers/*/{browser,common}/**`
 
 Provider implementations (`agentHost`, `copilotChatSessions`, `remoteAgentHost`). These are the compute backends that register with `ISessionsProvidersService`.
 
 **Can import from:**
 - Everything `sessions/contrib/*/~` can import, plus:
-- `vs/sessions/contrib/providers/*/~` (sibling providers)
+- `ash/sessions/contrib/providers/*/~` (sibling providers)
 
 This is the **most permissive** contrib layer — providers can reach into non-provider contribs and sibling providers, but not vice versa.
 
@@ -122,6 +122,6 @@ Entry points can import from all sessions layers: `sessions/~`, `services/*/~`, 
 contrib/*  ──✕──▶  contrib/providers/*
 ```
 
-Non-provider contributions **must not** import from provider code. If a provider exposes a symbol needed by non-provider code, that symbol should be extracted to a shared location (`vs/sessions/services/`, `vs/sessions/common/`, or a shared contrib module).
+Non-provider contributions **must not** import from provider code. If a provider exposes a symbol needed by non-provider code, that symbol should be extracted to a shared location (`ash/sessions/services/`, `ash/sessions/common/`, or a shared contrib module).
 
 Providers **can** import from non-provider contributions and from sibling providers.
