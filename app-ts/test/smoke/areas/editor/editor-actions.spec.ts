@@ -1,5 +1,47 @@
 import { expect, test } from '../../../automation/test.js';
 
+test('editor breadcrumbs use the base widget for keyboard focus and activation', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const breadcrumbs = workbench.editors.groupAt(0).title.getByRole('navigation', { name: 'Editor breadcrumbs' });
+	const current = breadcrumbs.getByRole('button').last();
+	await expect(breadcrumbs.locator('.ash-breadcrumbs-widget')).toBeVisible();
+	await current.focus();
+	await current.press('Home');
+	await page.keyboard.press('End');
+	await expect(current).toBeFocused();
+	await expect(current).toHaveClass(/focused/u);
+	await current.press('Enter');
+	await expect(current).toHaveAttribute('aria-pressed', 'true');
+	await expect(current).toHaveClass(/selected/u);
+	const focusStyle = await current.evaluate(element => ({
+		outline: getComputedStyle(element).outlineStyle,
+		color: getComputedStyle(element).color,
+	}));
+	expect(focusStyle.outline).toBe('solid');
+	expect(focusStyle.color).not.toBe('rgba(0, 0, 0, 0)');
+	for (const [theme, outlineColor] of [
+		['Ash Light', 'rgb(0, 120, 212)'],
+		['Ash High Contrast Dark', 'rgb(255, 255, 255)'],
+		['Ash High Contrast Light', 'rgb(0, 0, 0)'],
+	] as const) {
+		await page.getByRole('button', { name: 'Manage', exact: true }).click();
+		await page.getByRole('menu').last().getByRole('menuitem', { name: 'Themes', exact: true }).hover();
+		await page.getByRole('menu').last().getByRole('menuitem', { name: 'Color Theme', exact: true }).click();
+		const search = page.locator('.ash-quick-pick').getByRole('combobox');
+		await search.fill(theme);
+		await search.press('Enter');
+		await expect(page.locator('.ash-quick-pick')).toHaveCount(0);
+		await current.focus();
+		await current.press('End');
+		await expect(current).toHaveCSS('outline-color', outlineColor);
+		await expect(current).toHaveCSS('outline-style', 'solid');
+	}
+	await page.keyboard.press('ControlOrMeta+W');
+	await expect(breadcrumbs).toBeHidden();
+});
+
 test('Code exposes editor view actions in the command palette', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 

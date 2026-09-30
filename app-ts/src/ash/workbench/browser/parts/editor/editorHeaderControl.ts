@@ -173,7 +173,7 @@ export class EditorHeaderControl extends Disposable {
 
 	private updateBreadcrumbVisibility(): void {
 		const wasVisible = this.titleContainer.classList.contains("ash-editor-title-with-breadcrumbs");
-		const visible = this.breadcrumbsEnabled && !!this.activeInput && this.activeInput.showBreadcrumbs !== false && this.breadcrumbs.domNode.childElementCount > 0;
+		const visible = this.breadcrumbsEnabled && !!this.activeInput && this.activeInput.showBreadcrumbs !== false && !this.breadcrumbs.domNode.classList.contains("empty");
 		this.breadcrumbs.domNode.hidden = !visible;
 		this.titleContainer.classList.toggle("ash-editor-title-with-breadcrumbs", visible);
 		if (visible !== wasVisible) this.heightEmitter.fire();

@@ -183,7 +183,27 @@ test("Editor breadcrumbs open sibling and nested files", async ({ target, testWo
 	const breadcrumbs = group.title.getByRole("navigation", { name: "Editor breadcrumbs" });
 	const pathItems = breadcrumbs.getByRole("button");
 	await expect(pathItems.last()).toHaveText("main.ts");
-	await pathItems.nth(-2).focus();
+	await breadcrumbs.evaluate(element => { (element as HTMLElement).style.width = '180px'; });
+	await pathItems.last().focus();
+	await page.keyboard.press("ArrowLeft");
+	await expect(pathItems.nth(-2)).toBeFocused();
+	await page.keyboard.press("ArrowRight");
+	await expect(pathItems.last()).toBeFocused();
+	await page.keyboard.press("Home");
+	await expect(pathItems.first()).toBeFocused();
+	await page.keyboard.press("End");
+	await expect(pathItems.last()).toBeFocused();
+	const geometry = await pathItems.last().evaluate(element => {
+		const viewport = element.closest('.ash-breadcrumbs-widget')!.querySelector('.ash-scrollbar-viewport')!;
+		const itemBounds = element.getBoundingClientRect();
+		const viewportBounds = viewport.getBoundingClientRect();
+		return { visible: itemBounds.left >= viewportBounds.left - 1 && itemBounds.right <= viewportBounds.right + 1, scrollWidth: viewport.scrollWidth, width: viewport.clientWidth, scrollLeft: viewport.scrollLeft };
+	});
+	expect(geometry.visible).toBe(true);
+	expect(geometry.scrollWidth).toBeGreaterThan(geometry.width);
+	expect(geometry.scrollLeft).toBeGreaterThan(0);
+	await breadcrumbs.evaluate(element => { (element as HTMLElement).style.removeProperty('width'); });
+	await page.keyboard.press("ArrowLeft");
 	await page.keyboard.press("Enter");
 
 	const picker = page.locator(".ash-quick-pick");
@@ -195,7 +215,8 @@ test("Editor breadcrumbs open sibling and nested files", async ({ target, testWo
 	await expect(picker).toHaveCount(0);
 	await expect(group.tabs.filter({ hasText: "main.rs" })).toHaveCount(1);
 	await expect(group.content.getByRole("textbox", { name: "main.rs" })).toBeFocused();
-	await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText("main.rs");
+	await expect(breadcrumbs.getByRole('button', { name: 'main.rs', exact: true })).toBeVisible();
+	await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText("main");
 
 	const nestedDirectory = join(testWorkspace.directory, "breadcrumb-folder");
 	await mkdir(nestedDirectory);

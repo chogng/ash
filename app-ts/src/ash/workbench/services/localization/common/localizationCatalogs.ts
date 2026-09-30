@@ -9,6 +9,7 @@ const english: LanguagePackCatalog = {
 	catalogVersion: ASH_LOCALIZATION_CATALOG_VERSION,
 	bundles: {
 		ash: {
+			'breadcrumbs.editorLabel': 'Editor breadcrumbs',
 			'sessions.activity.chat': 'Chat',
 			'sessions.activity.colab': 'Collaboration',
 			'sessions.activity.library': 'Library',
@@ -1019,6 +1020,7 @@ const chinese: LanguagePackCatalog = {
 	catalogVersion: ASH_LOCALIZATION_CATALOG_VERSION,
 	bundles: {
 		ash: {
+			'breadcrumbs.editorLabel': '编辑器面包屑',
 			'sessions.activity.chat': '聊天',
 			'sessions.activity.colab': '协作',
 			'sessions.activity.library': '资料库',

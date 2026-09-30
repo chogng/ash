@@ -19,6 +19,24 @@ import { EditorTabsModeConfiguration } from "../../services/editor/common/editor
 import { BreadcrumbsEnabledConfiguration, BreadcrumbsFilePathConfiguration, BreadcrumbsSymbolPathConfiguration } from "../../browser/parts/editor/breadcrumbs.js";
 import type { IEditorPane } from "../../browser/parts/editor/editorPane.js";
 import { WorkbenchConfiguration } from '../../common/configuration.js';
+import { EditorBreadcrumbsControl } from '../../browser/parts/editor/breadcrumbsControl.js';
+import { setNlsResolver, resetNlsResolver } from '../../../nls.js';
+import { builtinLanguagePackCatalogs } from '../../services/localization/common/localizationCatalogs.js';
+
+test('Editor breadcrumbs localize their navigation label when the language changes', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using control = new EditorBreadcrumbsControl(dom.window.document.body);
+		control.setInput(input('folder/file.ts'));
+		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
+		assert.equal(control.domNode.getAttribute('aria-label'), '编辑器面包屑');
+		assert.equal(control.domNode.querySelector('.ash-breadcrumbs-widget') !== null, true);
+	} finally {
+		resetNlsResolver();
+		dom.window.close();
+	}
+});
 
 test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion point", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");

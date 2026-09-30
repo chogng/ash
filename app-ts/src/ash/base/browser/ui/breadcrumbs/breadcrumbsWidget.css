@@ -1,0 +1,74 @@
+.ash-breadcrumbs-widget {
+	height: 100%;
+	width: 100%;
+	min-width: 0;
+	color: var(--ash-breadcrumbs-widget-foreground, var(--ash-description-foreground));
+	background: var(--ash-breadcrumbs-widget-background, transparent);
+}
+
+.ash-breadcrumbs-list {
+	display: flex;
+	align-items: center;
+	width: max-content;
+	min-width: 100%;
+	height: 100%;
+	gap: var(--ash-spacing-size40);
+	white-space: nowrap;
+}
+
+.ash-breadcrumb-entry {
+	display: flex;
+	align-items: center;
+	flex: 0 0 auto;
+	gap: var(--ash-spacing-size40);
+	min-width: 0;
+}
+
+.ash-breadcrumb-item {
+	font: inherit;
+	color: inherit;
+	background: transparent;
+	border: 0;
+	border-radius: var(--ash-corner-radius-small);
+	padding: 0 var(--ash-spacing-size40);
+	height: 20px;
+	max-width: 40ch;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.ash-breadcrumb-item:hover {
+	color: var(--ash-breadcrumbs-widget-hover, var(--ash-foreground));
+	background: var(--ash-button-hover-background);
+}
+
+.ash-breadcrumb-item.current,
+.ash-breadcrumb-item.focused {
+	color: var(--ash-breadcrumbs-widget-focus, var(--ash-foreground));
+}
+
+.ash-breadcrumb-item.selected {
+	color: var(--ash-breadcrumbs-widget-selection, var(--ash-foreground));
+}
+
+.ash-breadcrumb-item:focus-visible {
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
+}
+
+.ash-breadcrumb-item:disabled {
+	cursor: default;
+	background: transparent;
+	color: inherit;
+}
+
+.ash-breadcrumb-separator {
+	display: flex;
+	color: inherit;
+}
+
+.ash-breadcrumb-entry:last-child > .ash-breadcrumb-separator {
+	display: none;
+}
