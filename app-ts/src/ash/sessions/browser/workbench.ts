@@ -363,10 +363,10 @@ export class Workbench extends Disposable {
 			accessibleViewService,
 			notifications: notificationService,
 			commandService,
-			createInputPart: (container, delegate, model) => {
+			createInputPart: (container, delegate, model, presentation) => {
 				const draft = model.untitledSessionId && restoreNewChatDraft ? readNewChatDraftState(storage) : undefined;
 				if (model.untitledSessionId) restoreNewChatDraft = false;
-				return services.createInstance(NewChatInputWidget, container, delegate, model, options.api.dictation, draft);
+				return services.createInstance(NewChatInputWidget, container, delegate, model, options.api.dictation, draft, presentation);
 			},
 			activateSelection: selection => view.activateSelection(selection),
 			closeSelection: selection => view.closeVisibleSelection(selection),

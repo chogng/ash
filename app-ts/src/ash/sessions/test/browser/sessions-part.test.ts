@@ -52,6 +52,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	dom.window.document.body.replaceChildren();
 	const onDidChange = new Emitter<void>();
 	let untitledSessions: readonly IUntitledChatSession[] = [];
+	let nextUntitledSessionId = 0;
 	let activeUntitledSessionId: string | undefined;
 	const sessionService: ISessionsManagementService = {
 		onDidChange: onDidChange.event,
@@ -67,7 +68,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		selectThread() {},
 		async interruptThread() {},
 		createUntitledSession() {
-			const untitledSession = { untitledSessionId: `untitled-${untitledSessions.length + 1}`, title: "New code session", model: undefined, agent: undefined, workspace: { type: 'current' as const } };
+			const untitledSession = { untitledSessionId: `untitled-${++nextUntitledSessionId}`, title: "New code session", model: undefined, agent: undefined, workspace: { type: 'current' as const } };
 			untitledSessions = [...untitledSessions, untitledSession];
 			activeUntitledSessionId = untitledSession.untitledSessionId;
 			onDidChange.fire();
@@ -184,6 +185,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	services.registerInstance(IStorageService, storage);
 	services.registerInstance(IChatTipService, resources.add(services.createInstance(ChatTipService)));
 	services.registerInstance(ILifecycleService, resources.add(new BrowserLifecycleService({ ownerWindow: dom.window as unknown as Window, onError: error => { throw error; } })));
+	const inputs: InstanceType<typeof NewChatInputWidget>[] = [];
 	const part = new SessionsPart(dom.window.document.body, {
 		sessionService,
 		chatService,
@@ -192,7 +194,11 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		accessibleViewService: { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService,
 		notifications,
 		commandService,
-		createInputPart: (container, delegate, model) => services.createInstance(NewChatInputWidget, container, delegate, model, undefined, undefined),
+		createInputPart: (container, delegate, model, presentation) => {
+			const input = services.createInstance(NewChatInputWidget, container, delegate, model, undefined, undefined, presentation);
+			inputs.push(input);
+			return input;
+		},
 		activateSelection: selection => viewService.activateSelection(selection),
 		closeSelection: selection => viewService.closeVisibleSelection(selection),
 	});
@@ -233,6 +239,30 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	(part.domNode.querySelector(".ash-sessions-chat-slot-close") as HTMLButtonElement).click();
 	assert.equal(part.domNode.querySelectorAll(".ash-sessions-chat-slot").length, 1);
 	assert.ok(part.domNode.querySelector('.ash-sessions-chat-view.single-chat'));
+	const retainedInput = part.domNode.querySelector('.ash-chat-input-part');
+	const draft = { mode: 'plan' as const, text: 'Keep this Code draft', contexts: [] };
+	part.restoreDraft(draft);
+	part.setPage('code');
+	assert.equal(part.domNode.querySelector('.ash-sessions-code-page .ash-chat-input-part'), retainedInput);
+	assert.equal(part.domNode.querySelector('.ash-sessions-code-page')?.getAttribute('aria-label'), 'Code');
+	assert.equal(part.domNode.querySelector('.ash-sessions-chat-view')?.hasAttribute('hidden'), false);
+	assert.equal(retainedInput?.classList.contains('code-composer'), true);
+	assert.equal(retainedInput?.classList.contains('chat-composer'), false);
+	assert.equal(inputs.length, 2);
+	const codeDraft = await inputs[1]!.captureDraft();
+	assert.ok(codeDraft);
+	assert.deepEqual(codeDraft.draft, draft);
+	viewService.openNewSession('Another Code draft');
+	assert.equal(part.domNode.querySelectorAll('.code-composer').length, 2);
+	part.setPage('empty');
+	assert.equal(part.domNode.querySelector('.ash-sessions-chat-view')?.hasAttribute('hidden'), true);
+	part.setPage('chat');
+	assert.equal(part.domNode.querySelector('.ash-sessions-chat-view .ash-chat-input-part'), retainedInput);
+	assert.equal(part.domNode.querySelectorAll('.chat-composer').length, 2);
+	assert.equal(part.domNode.querySelectorAll('.code-composer').length, 0);
+	const chatDraft = await inputs[1]!.captureDraft();
+	assert.ok(chatDraft);
+	assert.deepEqual(chatDraft.draft, draft);
 
 	partListener.dispose();
 	part.dispose();

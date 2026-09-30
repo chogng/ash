@@ -1,4 +1,5 @@
-.ash-chat > .ash-chat-input-part.ash-sessions-chat-input {
+/* Chat appearance. Keep visual changes here scoped to chat-composer. */
+.ash-chat > .ash-chat-input-part.ash-sessions-chat-input.chat-composer {
   --ash-chat-input-min-height: 112px;
   --ash-chat-input-padding: var(--ash-spacing-size160);
   --ash-chat-input-border: var(--ash-border);
@@ -14,11 +15,11 @@
   padding: 0 var(--ash-spacing-size240) var(--ash-spacing-size240);
 }
 
-.ash-chat > .ash-chat-input-part.ash-sessions-chat-input.has-conversation {
+.ash-chat > .ash-chat-input-part.ash-sessions-chat-input.chat-composer.has-conversation {
   margin-bottom: 0;
 }
 
-.ash-sessions-chat-welcome-heading {
+.chat-composer .ash-sessions-chat-welcome-heading {
   flex: 0 0 auto;
   margin: 0 0 var(--ash-spacing-size240);
   color: var(--ash-foreground);
@@ -28,7 +29,61 @@
   text-align: center;
 }
 
-.ash-sessions-chat-welcome-heading[hidden] {
+.chat-composer .ash-sessions-chat-input-footer > button {
+  border: 0;
+  border-radius: var(--ash-corner-radius-small);
+  padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+  background: transparent;
+  color: var(--ash-description-foreground);
+  font: inherit;
+  font-size: var(--ash-font-size-label1);
+  cursor: pointer;
+}
+
+/* Code appearance is deliberately independent, even where today's values match Chat. */
+.ash-chat > .ash-chat-input-part.ash-sessions-chat-input.code-composer {
+  --ash-chat-input-min-height: 112px;
+  --ash-chat-input-padding: var(--ash-spacing-size160);
+  --ash-chat-input-border: var(--ash-border);
+  --ash-chat-input-radius: var(--ash-corner-radius-x-large);
+  --ash-chat-input-focus-outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  --ash-chat-input-outline-offset: 2px;
+  --ash-chat-input-toolbar-gap: var(--ash-spacing-size80);
+  --ash-toolbar-action-size: 28px;
+  width: 100%;
+  max-width: 728px;
+  align-self: center;
+  margin-block: auto;
+  padding: 0 var(--ash-spacing-size240) var(--ash-spacing-size240);
+}
+
+.ash-chat > .ash-chat-input-part.ash-sessions-chat-input.code-composer.has-conversation {
+  margin-bottom: 0;
+}
+
+.code-composer .ash-sessions-chat-welcome-heading {
+  flex: 0 0 auto;
+  margin: 0 0 var(--ash-spacing-size240);
+  color: var(--ash-foreground);
+  font-size: var(--ash-font-size-heading1);
+  font-weight: var(--ash-font-weight-semi-bold);
+  line-height: 1.4;
+  text-align: center;
+}
+
+.code-composer .ash-sessions-chat-input-footer > button {
+  border: 0;
+  border-radius: var(--ash-corner-radius-small);
+  padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+  background: transparent;
+  color: var(--ash-description-foreground);
+  font: inherit;
+  font-size: var(--ash-font-size-label1);
+  cursor: pointer;
+}
+
+/* Shared operational elements: visibility, file-drop positioning, and keyboard focus. */
+.ash-sessions-chat-input .ash-sessions-chat-welcome-heading[hidden] {
   display: none;
 }
 
@@ -56,17 +111,6 @@
 .ash-sessions-chat-input-footer {
   display: flex;
   padding-top: var(--ash-spacing-size80);
-}
-
-.ash-sessions-chat-input-footer > button {
-  border: 0;
-  border-radius: var(--ash-corner-radius-small);
-  padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
-  background: transparent;
-  color: var(--ash-description-foreground);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
 }
 
 .ash-sessions-chat-input-footer > button:focus-visible {

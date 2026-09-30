@@ -47,6 +47,11 @@ input factory. Sessions selects its embedded `CodeEditorWidget` adapter per
 composer; it does not change the Workbench editor registry. Its CSS styles only
 its own root and configures the shared input through component properties.
 Sessions-only input behavior and appearance stay in this contribution.
+`SessionsPart` owns the observable Chat/Code presentation choice. The composer
+projects it into mutually exclusive `chat-composer` and `code-composer` classes;
+each has its own appearance rules in `media/chatInput.css`. Page-specific visual
+changes must stay within their variant. Switching pages retains the same input,
+draft, attachments, conversation model, and Thread subscription.
 
 The shared `ChatAttachmentModel` owns each composer's attachment collection.
 Sessions file acquisition resolves UTF-8 text or supported image data before
@@ -84,7 +89,7 @@ before flushing storage.
    The Activity Bar selects Chat, Collaboration, Library, and Code; Collaboration and Library currently show empty pages.
    Mobile devices remains unavailable. Its right-click menu moves the
    controls to the sidebar top or bottom, hides them, or selects the side rail size through
-   `sessions.activityBar.compact`. The Sessions titlebar composes the shared BrowserMenubarControl with Sessions menu IDs and visual tokens. Layout actions derive menu context keys from the layout and window Sessions service; the titlebar keeps no separate sidebar or history state. Code shows an empty page in the primary Part; the sidebar owns the new-session control.
+   `sessions.activityBar.compact`. The Sessions titlebar composes the shared BrowserMenubarControl with Sessions menu IDs and visual tokens. Layout actions derive menu context keys from the layout and window Sessions service; the titlebar keeps no separate sidebar or history state. Code hosts the retained conversation with a centered new-session composer; after the first message, the input stays below the conversation. The sidebar owns the new-session control.
    Its spacing follows `sessions.layoutStyle`, independently of the IDE's
    `workbench.layoutStyle`. Both preferences use the same profile settings
    resource; changing either one updates its own window without changing

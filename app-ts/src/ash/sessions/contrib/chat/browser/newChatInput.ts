@@ -26,6 +26,8 @@ import { ILifecycleService } from '../../../../workbench/services/lifecycle/comm
 import { readNewChatDraftState, writeNewChatDraftState } from '../common/newChatDraftState.js';
 import { status as announceStatus } from '../../../../base/browser/ui/aria/aria.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { autorun, type IObservable } from '../../../../base/common/observable.js';
+import type { SessionsComposerPresentation } from '../../../browser/parts/sessionsPart.js';
 
 /** Sessions owns its composer layout and editor policy while sharing input operations. */
 export class NewChatInputWidget extends ChatInputPart {
@@ -47,6 +49,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		private readonly model: IChatWidgetModel,
 		dictation: IDictationService | undefined,
 		initialDraft: IOpenAgentsWindowOptions['draft'],
+		presentation: IObservable<SessionsComposerPresentation>,
 		@IContextMenuService contextMenus: IContextMenuService,
 		@IContextViewService contextViews: IContextViewService,
 		@IAccessibleViewService accessibleViews: IAccessibleViewService,
@@ -87,6 +90,13 @@ export class NewChatInputWidget extends ChatInputPart {
 		}]);
 		this.draftNotifications = notifications;
 		this.element.classList.add('ash-sessions-chat-input');
+		// Chat and Code share input operations and the current draft, but each owns its appearance.
+		// Keep page-specific CSS under these variants; Workbench must remain unaware of Sessions pages.
+		this._register(autorun(reader => {
+			const page = presentation.read(reader);
+			this.element.classList.toggle('chat-composer', page === 'chat');
+			this.element.classList.toggle('code-composer', page === 'code');
+		}));
 		this.contextAttachments = this._register(instantiationService.createInstance(NewChatContextAttachments, this.inputContainer, this.attachmentModel));
 		this._register(new NewChatInputPasteTarget(this.inputContainer, this.contextAttachments));
 		const dragAndDrop = this._register(new ChatDragAndDrop(files => this.contextAttachments.attachFiles(files)));

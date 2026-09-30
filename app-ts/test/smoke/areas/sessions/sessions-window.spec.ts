@@ -164,7 +164,17 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 	}
 	const navigation = page.locator('.ash-sessions-activity-content');
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
-	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
+	await expect(chat.locator('.code-composer')).toBeVisible();
+	await editor.waitForEditorContents(contents => contents === 'Keep this draft');
+	await replaceChatInput(editor, Array.from({ length: 50 }, (_, index) => `Code line ${index + 1}`).join('\n'));
+	await expect(chat.locator('.ash-chat-input-editor')).toHaveCSS('height', '240px');
+	await replaceChatInput(editor, 'Keep this draft');
+	for (const colorScheme of ['light', 'dark'] as const) {
+		await page.emulateMedia({ colorScheme });
+		await expect(page.locator('#app')).toHaveAttribute('data-color-theme', `ash-${colorScheme}`);
+		await input.focus();
+		await expect(card).toHaveCSS('outline-style', 'solid');
+	}
 	await editor.waitForEditorContents(contents => contents === 'Keep this draft');
 	await page.setViewportSize({ width: 760, height: 600 });
 	await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
@@ -174,6 +184,9 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 	expect(narrowBounds!.x + narrowBounds!.width).toBeLessThanOrEqual(760);
 	await input.focus();
 	await page.keyboard.press('Shift+Enter');
+	await editor.waitForEditorContents(contents => contents === 'Keep this draft\n');
+	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
+	await expect(chat.locator('.chat-composer')).toBeVisible();
 	await editor.waitForEditorContents(contents => contents === 'Keep this draft\n');
 });
 
@@ -195,15 +208,18 @@ test('Sessions input card keeps a visible border and focus in high contrast', as
 			page = await opened;
 		}
 		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', theme.endsWith('Dark') ? 'high-contrast-dark' : 'high-contrast-light');
-		const card = page.locator('.ash-sessions-chat-input .ash-chat-input-container').first();
-		await expect(card).toHaveCSS('border-width', '1px');
-		await expect(card).toHaveCSS('border-style', 'solid');
-		await page.getByRole('button', { name: 'Hide sidebar', exact: true }).focus();
-		await expect(card).toHaveCSS('outline-style', 'none');
-		await card.getByRole('textbox', { name: 'Chat message' }).focus();
-		await expect(card).toHaveClass(/focused/u);
-		await expect(card).toHaveCSS('outline-style', 'solid');
-		await expect(card).toHaveCSS('outline-width', '1px');
+		for (const presentation of ['Chat', 'Code'] as const) {
+			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: new RegExp(`^${presentation}(?:\\.|$)`, 'u') }).click();
+			const card = page.locator(`.${presentation.toLowerCase()}-composer .ash-chat-input-container`).first();
+			await expect(card).toHaveCSS('border-width', '1px');
+			await expect(card).toHaveCSS('border-style', 'solid');
+			await page.getByRole('button', { name: 'Hide sidebar', exact: true }).focus();
+			await expect(card).toHaveCSS('outline-style', 'none');
+			await card.getByRole('textbox', { name: 'Chat message' }).focus();
+			await expect(card).toHaveClass(/focused/u);
+			await expect(card).toHaveCSS('outline-style', 'solid');
+			await expect(card).toHaveCSS('outline-width', '1px');
+		}
 		const closed = target.kind === 'electron' ? page.waitForEvent('close') : undefined;
 		await returnFromSessions(page);
 		await closed;
@@ -1502,6 +1518,13 @@ test('Sessions Activity Bar switches Chat and Code with the keyboard without los
 	await expect(page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Code', exact: true })).toHaveCount(0);
 	const editor = new Editor(page.locator('.ash-sessions-chat-slot.active'));
 	await replaceChatInput(editor, 'Keep this draft');
+	const originalInput = await editor.input.elementHandle();
+	const composer = page.locator('.ash-sessions-chat-input').first();
+	const card = composer.locator('.ash-chat-input-container');
+	await expect(composer).toHaveClass(/chat-composer/u);
+	// Exercise the public presentation boundary with a Chat-only style change.
+	const chatStyle = await page.addStyleTag({ content: '.ash-chat > .ash-chat-input-part.ash-sessions-chat-input.chat-composer { --ash-chat-input-radius: 4px; --ash-chat-input-min-height: 180px; }' });
+	await expect(card).toHaveCSS('border-radius', '4px');
 	await expect(activityNavigation.getByRole('button', { name: 'Chat' })).toHaveAttribute('aria-current', 'page');
 	await activityNavigation.getByRole('button', { name: 'Library' }).focus();
 	await page.keyboard.press('Tab');
@@ -1512,13 +1535,35 @@ test('Sessions Activity Bar switches Chat and Code with the keyboard without los
 	await expect(activityNavigation.getByRole('button', { name: 'Chat' })).not.toHaveAttribute('aria-current', 'page');
 	await expect(activityNavigation.locator('[aria-current="page"]')).toHaveCount(1);
 	await expect(page.getByRole('region', { name: 'Code' })).toBeVisible();
+	await expect(composer).toHaveClass(/code-composer/u);
+	await expect(composer).not.toHaveClass(/chat-composer/u);
+	await expect(card).toHaveCSS('border-radius', '12px');
+	await expect(card).toHaveCSS('min-height', '112px');
+	await editor.waitForEditorContents(contents => contents === 'Keep this draft');
+	expect(await editor.input.evaluate((element, original) => element === original, originalInput)).toBe(true);
+	const codeBounds = await page.getByRole('region', { name: 'Code' }).boundingBox();
+	const inputBounds = await card.boundingBox();
+	expect(Math.abs(inputBounds!.x + inputBounds!.width / 2 - codeBounds!.x - codeBounds!.width / 2)).toBeLessThanOrEqual(1);
+	expect(Math.abs(inputBounds!.y + inputBounds!.height / 2 - codeBounds!.y - codeBounds!.height / 2)).toBeLessThan(80);
+	await composer.locator('input[type="file"]').setInputFiles({ name: 'code-context.ts', mimeType: 'text/plain', buffer: Buffer.from('export const code = true;') });
+	await expect(composer.getByRole('button', { name: 'Remove code-context.ts', exact: true })).toBeVisible();
+	await replaceChatInput(editor, 'Edited from Code');
+	await expect(composer.locator('[data-action-id="ash.chat.input.send"] button')).toBeEnabled();
+	await page.keyboard.press('Alt+F1');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Attachments can be sent without text/u);
+	await page.keyboard.press('Escape');
+	await expect(editor.input).toBeFocused();
 	await expect(page.locator('.ash-sessions-surface-header')).toBeHidden();
 	await expect(page.locator('.ash-sessions-list')).toBeVisible();
 	await activityNavigation.getByRole('button', { name: 'Chat' }).focus();
 	await page.keyboard.press('Space');
 	await expect(activityNavigation.getByRole('button', { name: 'Chat' })).toHaveAttribute('aria-current', 'page');
 	await expect(page.locator('.ash-sessions-surface-header')).toBeVisible();
-	await editor.waitForEditorContents(contents => contents === 'Keep this draft');
+	await expect(composer).toHaveClass(/chat-composer/u);
+	await expect(composer).not.toHaveClass(/code-composer/u);
+	await expect(card).toHaveCSS('border-radius', '4px');
+	await expect(composer.getByRole('button', { name: 'Remove code-context.ts', exact: true })).toBeVisible();
+	await editor.waitForEditorContents(contents => contents === 'Edited from Code');
 	await expect(activityNavigation.getByRole('button', { name: 'Code' })).not.toHaveAttribute('aria-current', 'page');
 	await activityNavigation.getByRole('button', { name: 'Collaboration' }).click();
 	await activityNavigation.getByRole('button', { name: 'Code' }).click();
@@ -1526,7 +1571,9 @@ test('Sessions Activity Bar switches Chat and Code with the keyboard without los
 	await expect(page.locator('.ash-sessions-list')).toBeVisible();
 	await expect(activityNavigation.getByRole('button', { name: 'Collaboration' })).not.toHaveAttribute('aria-current', 'page');
 	await activityNavigation.getByRole('button', { name: 'Chat' }).click();
-	await editor.waitForEditorContents(contents => contents === 'Keep this draft');
+	await editor.waitForEditorContents(contents => contents === 'Edited from Code');
+	await chatStyle.evaluate(element => (element as HTMLStyleElement).remove());
+	await originalInput?.dispose();
 });
 
 test('closing the Workbench keeps Sessions usable and Return to Workbench reopens the workspace', async ({ target }) => {

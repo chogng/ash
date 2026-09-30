@@ -8,12 +8,18 @@ import type { IChatService } from "../../../workbench/services/chat/common/chatS
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import { WorkbenchPart } from "../../../workbench/browser/part.js";
 import type { SessionsViewSelection } from "../../services/sessions/browser/sessionsService.js";
-import { SessionsChatView, type SessionsChatViewOptions } from "./sessionsChatView.js";
+import { SessionsChatView } from "./sessionsChatView.js";
+import { observableValue, type IObservable } from '../../../base/common/observable.js';
+import type { ChatInputPart } from '../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
+import type { ChatInputDelegate } from '../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
+import type { ChatWidgetModel } from '../chatWidgetModel.js';
 import { h } from "../../../base/browser/dom.js";
 import { localize } from '../../../nls.js';
 import type { IDictationService } from '../../../platform/dictation/common/dictationService.js';
 import type { INotificationService } from '../../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../../platform/native/common/nativeHost.js';
+
+export type SessionsComposerPresentation = 'chat' | 'code';
 
 export interface SessionsPartOptions {
 	readonly sessionService: ISessionsManagementService;
@@ -24,7 +30,7 @@ export interface SessionsPartOptions {
 	readonly accessibleViewService: IAccessibleViewService;
 	readonly notifications: INotificationService;
 	readonly commandService: ICommandService;
-	readonly createInputPart: SessionsChatViewOptions['createInputPart'];
+	readonly createInputPart: (container: HTMLElement, delegate: ChatInputDelegate, model: ChatWidgetModel, presentation: IObservable<SessionsComposerPresentation>) => ChatInputPart;
 	readonly activateSelection: (selection: SessionsViewSelection) => void;
 	readonly closeSelection: (selection: SessionsViewSelection) => void;
 }
@@ -36,6 +42,7 @@ export class SessionsPart extends WorkbenchPart {
 	private readonly codePage: HTMLDivElement;
 	private readonly heading: HTMLHeadingElement;
 	private readonly description: HTMLParagraphElement;
+	private readonly inputPresentation = observableValue<SessionsComposerPresentation>(this, 'chat');
 
 	override get minimumWidth(): number { return 420; }
 
@@ -56,11 +63,11 @@ export class SessionsPart extends WorkbenchPart {
 			accessibleViewService: options.accessibleViewService,
 			notifications: options.notifications,
 			commandService: options.commandService,
-			createInputPart: options.createInputPart,
+			createInputPart: (container, delegate, model) => options.createInputPart(container, delegate, model, this.inputPresentation),
 			activateSelection: options.activateSelection,
 			closeSelection: options.closeSelection,
 		}));
-		// Keep Chat mounted while Code is shown so drafts and session panes survive the switch.
+		// Page navigation retains the conversation owner; it must not create a second draft or Thread subscription.
 		this.contentDomNode.prepend(this.header);
 		this.codePage = h(ownerDocument, 'div');
 		this.codePage.className = 'ash-sessions-code-page';
@@ -77,10 +84,15 @@ export class SessionsPart extends WorkbenchPart {
 
 	setPage(page: 'chat' | 'code' | 'empty'): void {
 		this.contentDomNode.classList.toggle('empty-page', page === 'empty');
-		this.header.hidden = page === 'code';
-		this.chat.domNode.hidden = page === 'code';
+		this.header.hidden = page !== 'chat';
+		this.chat.domNode.hidden = page === 'empty';
 		this.codePage.hidden = page !== 'code';
-		if (page === 'chat') this.layout(new Dimension(this.contentDomNode.clientWidth, this.contentDomNode.clientHeight));
+		if (page !== 'empty') {
+			// The input owns its named appearance. Hosts only select it and position the retained view root.
+			this.inputPresentation.set(page);
+			(page === 'code' ? this.codePage : this.contentDomNode).append(this.chat.domNode);
+			this.layout(new Dimension(this.contentDomNode.clientWidth, this.contentDomNode.clientHeight));
+		}
 	}
 
 	updateVisibleSelections(selections: readonly SessionsViewSelection[], active: SessionsViewSelection | undefined): void {

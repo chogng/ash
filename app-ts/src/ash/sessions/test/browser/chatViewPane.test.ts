@@ -6,6 +6,7 @@ import type { SessionMutationParams, SessionOperationInput } from "../../../plat
 import type { IRendererHost } from "../../../platform/renderer/common/rendererHost.js";
 import type { IAction } from "../../../base/common/actions.js";
 import { Emitter, Event } from "../../../base/common/event.js";
+import { constObservable } from '../../../base/common/observable.js';
 import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { TAB_CLOSE_ACTION_ID } from "../../../base/browser/ui/tablist/tabList.js";
@@ -686,7 +687,7 @@ test("Turn error cards invoke their typed action without interpreting message te
 	dom.window.close();
 });
 
-test('A centered chat keeps its input when the first message creates the conversation', async () => {
+test('A centered Code composer keeps its input when the first message creates the conversation', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using domLifetime = toDisposable(() => dom.window.close());
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -724,12 +725,13 @@ test('A centered chat keeps its input when the first message creates the convers
 		undefined,
 		undefined,
 		undefined,
-		(container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, widgetModel, undefined, undefined),
+		(container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, widgetModel, undefined, undefined, constObservable('code')),
 	);
 	widget.setVisible(true);
 	const input = widget.element.querySelector<HTMLElement>('.ash-chat-input-part');
 	const heading = widget.element.querySelector<HTMLHeadingElement>('.ash-sessions-chat-welcome-heading');
 	assert.equal(heading?.hidden, false);
+	assert.equal(input?.classList.contains('code-composer'), true);
 	await widgetModel.initialize();
 	await widget.acceptInput('Start this work');
 	assert.equal(heading?.hidden, true);
