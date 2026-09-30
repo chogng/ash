@@ -6,11 +6,11 @@ Before changing a file, identify its owner and read every matching scoped instru
 
 | Change surface | Required instruction |
 | --- | --- |
-| TypeScript frontend | [`coding-guidelines.instructions.md`](instructions/coding-guidelines.instructions.md), [`frontend-architecture.instructions.md`](instructions/frontend-architecture.instructions.md), and [`source-code-organization.instructions.md`](instructions/source-code-organization.instructions.md) |
+| TypeScript frontend | [`typescript-coding-guidelines.instructions.md`](instructions/typescript-coding-guidelines.instructions.md), [`frontend-architecture.instructions.md`](instructions/frontend-architecture.instructions.md), and [`source-code-organization.instructions.md`](instructions/source-code-organization.instructions.md) |
 | Editor implementation | [`editor.instructions.md`](instructions/editor.instructions.md) |
 | Browser UI or CSS | [`browser-ui.instructions.md`](instructions/browser-ui.instructions.md) |
 | Any implementation or test | [`testing.instructions.md`](instructions/testing.instructions.md) |
-| Rust, Cargo manifests/lockfile, `.cargo/`, or Rust build checks | [`rust.instructions.md`](instructions/rust.instructions.md) and [`rust-testing.instructions.md`](instructions/rust-testing.instructions.md) |
+| Rust, Cargo manifests/lockfile, `.cargo/`, or Rust build checks | [`rust-coding-guidelines.instructions.md`](instructions/rust-coding-guidelines.instructions.md) and [`rust-testing.instructions.md`](instructions/rust-testing.instructions.md) |
 | TypeScript tests and validation | [`typescript-testing.instructions.md`](instructions/typescript-testing.instructions.md) |
 | `ash-rs/native` or `app-rs` | [`native.instructions.md`](instructions/native.instructions.md) |
 | Markdown documentation | [`documentation.instructions.md`](instructions/documentation.instructions.md) |

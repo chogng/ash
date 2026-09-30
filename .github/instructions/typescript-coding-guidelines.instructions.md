@@ -1,9 +1,9 @@
 ---
-description: Ash coding guidelines — naming, style, types, strings, and code quality rules. Reference when writing or reviewing code.
-applyTo: src/ash/**
+description: Ash TypeScript coding guidelines — naming, style, types, strings, and code quality rules. Reference when writing or reviewing TypeScript code.
+applyTo: "**/src/ash/**"
 ---
 
-# Coding Guidelines
+# TypeScript Coding Guidelines
 
 Canonical reference: https://github.com/microsoft/vscode/wiki/Coding-Guidelines
 
@@ -74,6 +74,7 @@ private visible = false;
 - Use `import type` when an entire import is type-only.
 - Add a type only to remove ambiguity, exclude invalid states, or define shared semantics.
 - Use an interface for a stable structural contract and a class when the abstraction owns behavior or state.
+- Prefer string enums with explicit values for shared business states, error codes, and modes; use discriminated unions when variants carry different data.
 - Keep one-off constructor options private and only when named fields make the call clearer.
 - Use an options object when positional arguments are unclear. Prefer enums, named methods, or options fields over boolean and ambiguous `undefined` arguments.
 

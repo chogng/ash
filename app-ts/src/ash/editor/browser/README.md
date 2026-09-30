@@ -25,7 +25,7 @@ Glyph-margin features contribute model decorations or caller-owned `IGlyphMargin
 
 Pure text, history, selection, decoration identity, composition transaction semantics, and DOM-independent layout math remain in `editor/common`. Workbench parts may host the browser editor and own its external box, but must not reach through its component internals. Visual rules follow [`docs/ui-styling-ownership.md`](../../../../../docs/ui-styling-ownership.md).
 
-Browser implementation follows the frontend-wide [`coding-guidelines.instructions.md`](../../../../../.github/instructions/coding-guidelines.instructions.md), editor-scoped [`editor.instructions.md`](../../../../../.github/instructions/editor.instructions.md), and browser UI [`browser-ui.instructions.md`](../../../../../.github/instructions/browser-ui.instructions.md).
+Browser implementation follows the frontend-wide [`typescript-coding-guidelines.instructions.md`](../../../../../.github/instructions/typescript-coding-guidelines.instructions.md), editor-scoped [`editor.instructions.md`](../../../../../.github/instructions/editor.instructions.md), and browser UI [`browser-ui.instructions.md`](../../../../../.github/instructions/browser-ui.instructions.md).
 
 The structured Document Engine is a sibling domain inside Stanza. Line-editor contracts must not import or expose document node, schema, profile, or transaction types.
 

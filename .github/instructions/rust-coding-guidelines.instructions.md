@@ -1,23 +1,31 @@
 ---
-description: Ash Rust APIs, dependency ownership, dependency checks, and measured build costs.
+description: Ash Rust coding guidelines — style, types, APIs, dependency ownership, and measured build costs.
 applyTo: "**/*.rs,**/Cargo.toml,Cargo.toml,Cargo.lock,.cargo/**,justfile,scripts/dependencies.py,scripts/benchmark.py,scripts/test_dependencies.py,scripts/test_benchmark.py,.github/workflows/rust-build-health.yml"
 ---
 
 # Rust Coding Guidelines
 
+Reference: [Codex Rust guidance](../../../codex/AGENTS.md). Ash ownership, dependency, and validation rules remain authoritative.
+
+## Formatting and control flow
+
+- Inline variables in format strings when possible: `format!("{value}")`.
+- Collapse nested `if` statements when their conditions can be combined clearly.
+- Prefer method references over closures that only call the same method.
+- Make `match` exhaustive for closed enums; avoid wildcard arms that hide newly added variants.
+
+## Types and APIs
+
 - Newly added traits include doc comments explaining their role and how implementations use them.
 - Avoid boolean and ambiguous `Option` parameters. Prefer enums, named methods, or newtypes.
+- Use enums for closed business states, error codes, and modes; keep variant-specific data on the corresponding variant.
+- Generate protocol schemas and client types from the owning Rust definitions; do not maintain duplicate protocol value lists or edit generated files.
+- For statically dispatched async traits, prefer RPITIT methods with explicit future bounds, including `Send` when required; do not suppress `async_fn_in_trait` to leave the future contract implicit.
 - Default modules and implementation details to private and explicitly re-export the public crate API.
 - Prefer one Rust import per line over brace-grouped imports.
-- Use file-based module roots: `foo.rs` and `foo/bar.rs`. Do not introduce `foo/mod.rs` without an external constraint.
+- Use file-based module roots: `foo.rs` and `foo/bar.rs`. Do not introduce `mod.rs`.
 
-For new test modules, use a separate sibling file and an explicit descriptive path:
-
-```rust
-#[cfg(test)]
-#[path = "parser_tests.rs"]
-mod tests;
-```
+Test layout, validation commands, warning gates, and protocol regeneration are defined in [Rust testing guidelines](rust-testing.instructions.md).
 
 ## Dependencies and build costs
 
