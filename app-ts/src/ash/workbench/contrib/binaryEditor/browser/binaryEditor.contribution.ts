@@ -7,12 +7,12 @@ import { IQuickInputService, type IQuickPickItem } from "../../../../platform/qu
 import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
 import { binaryDiffEditorDescriptor, createBinaryDiffEditorInput } from "../../../browser/parts/editor/binaryDiffEditor.js";
 import { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
-import { EditorPanes } from "../../../browser/parts/editor/editorRegistry.js";
+import { EditorPanes } from "../../../browser/editor.js";
 import { binaryFileEditorDescriptor } from '../../files/browser/editors/binaryFileEditor.js';
 import type { EditorInput } from "../../../browser/parts/editor/editorInput.js";
 
-EditorPanes.register(binaryFileEditorDescriptor());
-EditorPanes.register(binaryDiffEditorDescriptor());
+EditorPanes.registerEditorPane(binaryFileEditorDescriptor());
+EditorPanes.registerEditorPane(binaryDiffEditorDescriptor());
 
 interface BinaryComparisonItem extends IQuickPickItem {
 	readonly input: EditorInput;

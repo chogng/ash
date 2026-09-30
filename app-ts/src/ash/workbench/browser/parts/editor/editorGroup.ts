@@ -26,7 +26,7 @@ import { isEditorPaneWithSelection } from '../../../common/editor.js';
 import { isEditorPaneWithViewState } from "./editorWithViewState.js";
 import { EditorPanes, type EditorPaneInstance } from './editorPanes.js';
 import { extractExternalEditorInputs } from "./editorDropData.js";
-import { EditorPaneRegistry } from "./editorRegistry.js";
+import type { IEditorPaneDescriptor, IEditorPaneRegistry } from "../../editor.js";
 import type { IEditorTabDragAndDrop, EditorTabDropPosition } from "./editorTabDragAndDrop.js";
 import { EditorGroupView } from './editorGroupView.js';
 import { ErrorPlaceholderEditor } from "./editorPlaceholder.js";
@@ -93,7 +93,7 @@ export interface EditorCloseOptions {
 /** Construction inputs for one independently navigable EditorGroup. */
 export interface EditorGroupOptions {
 	readonly id?: EditorGroupId;
-	readonly registry: EditorPaneRegistry;
+	readonly registry: IEditorPaneRegistry;
 	readonly configurationService?: IConfigurationService;
 	readonly contextKeyService?: IContextKeyService;
 	readonly keybindingService?: IKeybindingService;
@@ -147,7 +147,7 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 	readonly onDidChangeEditors: Event<EditorGroupChangeEvent> = this.editorChangeEmitter.event;
 	private readonly view: EditorGroupView;
 	private readonly panes: EditorPanes;
-	private readonly registry: EditorPaneRegistry;
+	private readonly registry: IEditorPaneRegistry;
 	private readonly configurationService: IConfigurationService | undefined;
 	private readonly contextKeyService: IContextKeyService | undefined;
 	private readonly scopedContextKeyService: IScopedContextKeyService | undefined;
@@ -413,7 +413,7 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 			return this.showOpenError(input, options, error, existing);
 		}
 		if (sequence !== this.openSequence) throw new EditorOpenSupersededError(input);
-		let descriptor: ReturnType<EditorPaneRegistry["resolve"]>;
+		let descriptor: IEditorPaneDescriptor;
 		try {
 			const matchInput = this.languageResolver
 				? { ...input, languageId: this.languageResolver.resolveLanguageId({ resource: input.resource, ...(input.contentType === undefined ? {} : { contentType: input.contentType }) }) }
@@ -424,7 +424,11 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 					this.configurationService.getValue<EditorAssociations>(isDiffEditorInput(input) ? DiffEditorAssociationsConfiguration : EditorAssociationsConfiguration),
 				)
 				: undefined;
-			descriptor = this.registry.resolve(matchInput, association ? { ...options, preferredEditorId: association } : options);
+			const selected = this.registry.getEditorPane(matchInput, association ? { ...options, preferredEditorId: association } : options);
+			if (!selected) {
+				throw new RangeError(`No editor can open ${input.resource}`);
+			}
+			descriptor = selected;
 		} catch (error) {
 			return this.showOpenError(input, options, error, existing);
 		}

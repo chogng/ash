@@ -1,7 +1,7 @@
 import { getBrowserTextModelService } from '../../../services/textmodelResolver/browser/browserTextModelService.js';
 import { registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
-import { registerEditorPane } from '../../../browser/parts/editor/editorRegistry.js';
+import { registerEditorPane } from '../../../browser/editor.js';
 import { getBrowserTextResourceStore } from '../../codeEditor/browser/browserTextResourceStore.js';
 import { CodeEditorConfiguration } from '../../codeEditor/common/editorConfiguration.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';

@@ -14,12 +14,12 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import type { EditorInput, EditorOpenOptions } from '../../../services/editor/common/editorService.js';
 import { type EditorGroupOptions, EditorOpenSupersededError } from './editorGroup.js';
 import { type EditorPaneCreationOptions, type IEditorPane, EditorPaneVisibility } from './editorPane.js';
-import { EditorPaneRegistry } from './editorRegistry.js';
+import type { IEditorPaneRegistry } from '../../editor.js';
 import { editorInputKey } from './editorTabsControl.js';
 
 export interface ModalEditorPartOptions {
 	readonly container: HTMLElement;
-	readonly registry: EditorPaneRegistry;
+	readonly registry: IEditorPaneRegistry;
 	readonly resolveOpenError?: EditorGroupOptions['resolveOpenError'];
 	readonly onWillOpenEditor?: EditorGroupOptions['onWillOpenEditor'];
 	readonly onOpenError?: EditorGroupOptions['onOpenError'];
@@ -152,7 +152,10 @@ export class ModalEditorPart extends Disposable {
 	}
 
 	private async doOpenEditor(input: EditorInput, openOptions: EditorOpenOptions, sequence: number): Promise<IEditorPane> {
-		const descriptor = this.options.registry.resolve(input, openOptions);
+		const descriptor = this.options.registry.getEditorPane(input, openOptions);
+		if (!descriptor) {
+			throw new RangeError(`No editor can open ${input.resource}`);
+		}
 		if (this.currentEntry && editorInputKey(this.currentEntry.input) === editorInputKey(input) && this.currentEntry.instance.pane.id === descriptor.id) {
 			this.currentEntry = { input, instance: this.currentEntry.instance };
 			this.updateTitle(input);

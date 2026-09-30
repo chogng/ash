@@ -23,7 +23,7 @@ import { IChatContextPickService } from "../../../services/chat/common/chatConte
 import "../common/scmConfiguration.js";
 import "./quickDiff.contribution.js";
 import { localize } from '../../../../nls.js';
-import { registerEditorPane } from '../../../browser/parts/editor/editorRegistry.js';
+import { registerEditorPane } from '../../../browser/editor.js';
 import { TextFileEditor } from '../../files/browser/editors/textFileEditor.js';
 import type { EditorPanePartOptions } from '../../../browser/parts/editor/textResourceEditor.js';
 import { getBrowserTextResourceStore } from '../../codeEditor/browser/browserTextResourceStore.js';

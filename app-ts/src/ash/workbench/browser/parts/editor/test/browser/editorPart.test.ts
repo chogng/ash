@@ -59,13 +59,9 @@ import {
 	EditorPaneMatch,
 	EditorPaneVisibility,
 	type IEditorPane,
-	type IEditorPaneDescriptor,
 } from "../../../../../../workbench/browser/parts/editor/editorPane.js";
 import type { IEditorPaneWithViewState } from "../../../../../../workbench/browser/parts/editor/editorWithViewState.js";
-import {
-	EditorPaneRegistry,
-	EditorPanes,
-} from "../../../../../../workbench/browser/parts/editor/editorRegistry.js";
+import { EditorPaneRegistry, EditorPanes, type IEditorPaneDescriptor } from "../../../../editor.js";
 import { ActiveEditorContext } from "../../../../../../workbench/common/contextkeys.js";
 import { h, isHTMLElement } from "../../../../../../base/browser/dom.js";
 import type { IWorkingCopy } from "../../../../../../workbench/services/workingCopy/common/workingCopyService.js";
@@ -134,38 +130,38 @@ test("editor registry resolves defaults and explicit Open With choices", () => {
 		".md",
 		() => new TestEditorPane("ash.editor.codeBlockEditorWidget"),
 	);
-	const alphaRegistration = registry.register(alpha);
-	const codeBlockEditorWidgetRegistration = registry.register(codeBlockEditorWidget);
+	const alphaRegistration = registry.registerEditorPane(alpha);
+	const codeBlockEditorWidgetRegistration = registry.registerEditorPane(codeBlockEditorWidget);
 
 	const typescript = input("C:\\project\\main.ts");
 	const markdown = input("C:\\project\\paper.md");
-	assert.equal(registry.resolve(typescript), alpha);
-	assert.equal(registry.resolve(markdown), codeBlockEditorWidget);
-	assert.deepEqual(registry.getEditors(markdown), [
+	assert.equal(registry.getEditorPane(typescript), alpha);
+	assert.equal(registry.getEditorPane(markdown), codeBlockEditorWidget);
+	assert.deepEqual(registry.getEditorPanesForInput(markdown), [
 		codeBlockEditorWidget,
 		alpha,
 	]);
 	assert.equal(
-		registry.resolve(markdown, {
+		registry.getEditorPane(markdown, {
 			preferredEditorId: "stanza.editor.code",
 		}),
 		alpha,
 	);
 	assert.throws(
-		() => registry.resolve(markdown, {
+		() => registry.getEditorPane(markdown, {
 			preferredEditorId: "ash.editor.unknown",
 		}),
 		/Unknown editor pane/,
 	);
 	assert.throws(
-		() => registry.register(alpha),
+		() => registry.registerEditorPane(alpha),
 		/already registered/,
 	);
 
 	codeBlockEditorWidgetRegistration.dispose();
-	assert.equal(registry.resolve(markdown), alpha);
+	assert.equal(registry.getEditorPane(markdown), alpha);
 	alphaRegistration.dispose();
-	assert.throws(() => registry.resolve(markdown), /No editor can open/);
+	assert.equal(registry.getEditorPane(markdown), undefined);
 });
 
 test("registered editors update binary editor choices", () => {
@@ -173,17 +169,38 @@ test("registered editors update binary editor choices", () => {
 	const configuration = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(DefaultBinaryEditorConfiguration);
 	const options = configuration?.setting?.valueType === "select" ? configuration.setting.options : undefined;
 	assert.ok(options);
-	using registration = EditorPanes.register(descriptor("ash.test.dynamicBinary", ".bin", () => new TestEditorPane("ash.test.dynamicBinary")));
+	using registration = EditorPanes.registerEditorPane(descriptor("ash.test.dynamicBinary", ".bin", () => new TestEditorPane("ash.test.dynamicBinary")));
 	assert.ok(options.some(option => option.value === "ash.test.dynamicBinary"));
 	registration.dispose();
 	assert.equal(options.some(option => option.value === "ash.test.dynamicBinary"), false);
 });
 
+for (const target of ['activeGroup', 'modalGroup'] as const) {
+	test(`unregistered inputs report an open error in ${target}`, async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		dom.window.HTMLElement.prototype.scrollTo = () => undefined;
+		const registry = new EditorPaneRegistry();
+		const resource = input('C:/project/unregistered.txt');
+		try {
+			using editor = new EditorPart(dom.window.document.body, { registry });
+			await assert.rejects(editor.openEditor(resource, { ignoreError: true }, target), /No editor can open/);
+			assert.equal(editor.activeInput, undefined);
+
+			const pane = await editor.openEditor(resource, {}, target);
+			assert.equal(pane.id, 'workbench.editor.openError');
+			assert.equal(editor.activeInput, resource);
+			assert.match(dom.window.document.querySelector('.ash-editor-open-error')?.textContent ?? '', /No editor can open/);
+		} finally {
+			dom.window.close();
+		}
+	});
+}
+
 test("EditorPart chooses a registered editor from file associations", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
-	registry.register(descriptor("ash.test.default", ".ts", () => new TestEditorPane("ash.test.default")));
-	registry.register(descriptor("ash.test.associated", ".other", () => new TestEditorPane("ash.test.associated")));
+	registry.registerEditorPane(descriptor("ash.test.default", ".ts", () => new TestEditorPane("ash.test.default")));
+	registry.registerEditorPane(descriptor("ash.test.associated", ".other", () => new TestEditorPane("ash.test.associated")));
 	using configuration = new InMemoryConfigurationService();
 	await configuration.updateValue(EditorAssociationsConfiguration, { "*.ts": "ash.test.associated" });
 	const editor = new EditorPart(dom.window.document.body, { registry, configurationService: configuration });
@@ -199,8 +216,8 @@ test("EditorPart chooses a registered editor from file associations", async () =
 test("EditorPart applies diff editor associations to the modified resource", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
-	registry.register(descriptor("ash.test.defaultDiff", ".unused", () => new TestEditorPane("ash.test.defaultDiff")));
-	registry.register(descriptor("ash.test.associatedDiff", ".other", () => new TestEditorPane("ash.test.associatedDiff")));
+	registry.registerEditorPane(descriptor("ash.test.defaultDiff", ".unused", () => new TestEditorPane("ash.test.defaultDiff")));
+	registry.registerEditorPane(descriptor("ash.test.associatedDiff", ".other", () => new TestEditorPane("ash.test.associatedDiff")));
 	using configuration = new InMemoryConfigurationService();
 	await configuration.updateValue(DiffEditorAssociationsConfiguration, { "*.ts": "ash.test.associatedDiff" });
 	const editor = new EditorPart(dom.window.document.body, { registry, configurationService: configuration });
@@ -213,7 +230,7 @@ test("EditorPart applies diff editor associations to the modified resource", asy
 test("EditorPart routes implicit opens away from automatically locked groups", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
-	registry.register(descriptor("ash.test.locked", ".ts", () => new TestEditorPane("ash.test.locked")));
+	registry.registerEditorPane(descriptor("ash.test.locked", ".ts", () => new TestEditorPane("ash.test.locked")));
 	using configuration = new InMemoryConfigurationService();
 	await configuration.updateValue(AutoLockGroupsConfiguration, { "ash.test.locked": true });
 	const editor = new EditorPart(dom.window.document.body, { registry, configurationService: configuration });
@@ -242,7 +259,7 @@ test("EditorPart routes implicit opens away from automatically locked groups", a
 test("EditorPart confirms a large file before changing the active editor", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
-	registry.register(descriptor("ash.test.large", ".ts", () => new TestEditorPane("ash.test.large")));
+	registry.registerEditorPane(descriptor("ash.test.large", ".ts", () => new TestEditorPane("ash.test.large")));
 	using configuration = new InMemoryConfigurationService();
 	await configuration.updateValue(EditorLargeFileConfirmationConfiguration, 1);
 	const fileService = {
@@ -279,7 +296,7 @@ test("EditorPart passes Workbench file services to pane factories", async () => 
 	const fileService = {} as never;
 	let observedTextFileService: unknown;
 	let observedFileService: unknown;
-	registry.register({
+	registry.registerEditorPane({
 		id: "ash.editor.text-service-test",
 		name: "Text Service Test",
 		canOpen: () => EditorPaneMatch.Default,
@@ -306,7 +323,7 @@ test("EditorPart passes Workbench file services to pane factories", async () => 
 test("EditorPart applies empty-editor tips changes without showing them over an editor", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
-	registry.register(descriptor(
+	registry.registerEditorPane(descriptor(
 		"stanza.editor.code",
 		".ts",
 		() => new TestEditorPane("stanza.editor.code"),
@@ -364,7 +381,7 @@ test("EditorPart saves the active pane through the editor contract", async () =>
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
 	const pane = new TestEditorPane("ash.editor.save-test");
-	registry.register(descriptor(
+	registry.registerEditorPane(descriptor(
 		"ash.editor.save-test",
 		".save",
 		() => pane,
@@ -384,7 +401,7 @@ test("EditorPart opens cross-resource language targets and reveals their selecti
 	const registry = new EditorPaneRegistry();
 	const panes: TestEditorPane[] = [];
 	let openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined;
-	registry.register({
+	registry.registerEditorPane({
 		id: "ash.editor.navigation-test",
 		name: "Navigation Test",
 		canOpen: () => EditorPaneMatch.Default,
@@ -413,12 +430,12 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
 	const panes: TestEditorPane[] = [];
-	registry.register(descriptor(
+	registry.registerEditorPane(descriptor(
 		"stanza.editor.code",
 		".ts",
 		() => trackPane(panes, "stanza.editor.code"),
 	));
-	registry.register(descriptor(
+	registry.registerEditorPane(descriptor(
 		"ash.editor.codeBlockEditorWidget",
 		".md",
 		() => trackPane(panes, "ash.editor.codeBlockEditorWidget"),
@@ -546,7 +563,7 @@ test("EditorPart replaces preview tabs and preserves pinned tabs", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
 	const panes: TestEditorPane[] = [];
-	registry.register(descriptor(
+	registry.registerEditorPane(descriptor(
 		"stanza.editor.code",
 		".ts",
 		() => trackPane(panes, "stanza.editor.code"),
@@ -584,7 +601,7 @@ test("EditorPart requires an explicit dirty-close decision", async () => {
 	const registry = new EditorPaneRegistry();
 	const workingCopy = new TestWorkingCopy(URI.file("C:/project/dirty.ts"));
 	workingCopy.markDirty();
-	registry.register(descriptor(
+	registry.registerEditorPane(descriptor(
 		"stanza.editor.code",
 		".ts",
 		() => new TestEditorPane("stanza.editor.code", workingCopy),
@@ -610,7 +627,7 @@ test("EditorPart saves before closing and pins a dirty preview", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
 	const copies = new Map<string, TestWorkingCopy>();
-	registry.register(descriptor(
+	registry.registerEditorPane(descriptor(
 		"stanza.editor.code",
 		".ts",
 		() => {
@@ -643,7 +660,7 @@ test("EditorPart opens beside the active group without stealing caller focus", a
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
 	const panes: TestEditorPane[] = [];
-	registry.register(descriptor("stanza.editor.code", ".ts", () => trackPane(panes, "stanza.editor.code")));
+	registry.registerEditorPane(descriptor("stanza.editor.code", ".ts", () => trackPane(panes, "stanza.editor.code")));
 	const editor = new EditorPart(dom.window.document.body, { registry });
 	dom.window.document.body.append(editor.domNode);
 	const sourceInput = input("C:\\project\\source.ts");
@@ -686,7 +703,7 @@ test("EditorPart saves and restores groups, tabs, previews, active state, and pa
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
 	const panes: TestEditorPane[] = [];
-	registry.register(descriptor("stanza.editor.code", ".ts", () => trackPane(panes, "stanza.editor.code")));
+	registry.registerEditorPane(descriptor("stanza.editor.code", ".ts", () => trackPane(panes, "stanza.editor.code")));
 	const editor = new EditorPart(dom.window.document.body, { registry });
 	dom.window.document.body.append(editor.domNode);
 	editor.layout({ width: 900, height: 600 });
@@ -728,7 +745,7 @@ test("EditorPart saves and restores groups, tabs, previews, active state, and pa
 test("Editor tabs keep sticky editors in their own row across working-set restore", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
-	registry.register(descriptor("stanza.editor.code", ".ts", () => new TestEditorPane("stanza.editor.code")));
+	registry.registerEditorPane(descriptor("stanza.editor.code", ".ts", () => new TestEditorPane("stanza.editor.code")));
 	const editor = new EditorPart(dom.window.document.body, { registry });
 	const first = input("C:\\project\\first.ts");
 	const second = input("C:\\project\\second.ts");
@@ -770,7 +787,7 @@ test("EditorPart publishes stable editor identities and working-copy state chang
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
 	const workingCopies: TestWorkingCopy[] = [];
-	registry.register(descriptor("stanza.editor.code", ".ts", () => {
+	registry.registerEditorPane(descriptor("stanza.editor.code", ".ts", () => {
 		const workingCopy = new TestWorkingCopy(URI.file(`C:\\project\\state-${workingCopies.length}.ts`));
 		workingCopies.push(workingCopy);
 		return new TestEditorPane("stanza.editor.code", workingCopy);
@@ -806,8 +823,8 @@ test("EditorPart publishes stable editor identities and working-copy state chang
 test("EditorPart tracks MRU editors, reopens closed inputs, and reopens with another pane", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
-	registry.register(descriptor("test.editor.default", ".ts", () => new TestEditorPane("test.editor.default")));
-	registry.register(descriptor("test.editor.alternate", ".ts", () => new TestEditorPane("test.editor.alternate")));
+	registry.registerEditorPane(descriptor("test.editor.default", ".ts", () => new TestEditorPane("test.editor.default")));
+	registry.registerEditorPane(descriptor("test.editor.alternate", ".ts", () => new TestEditorPane("test.editor.alternate")));
 	const editor = new EditorPart(dom.window.document.body, { registry });
 	const first = input("C:\\project\\first.ts");
 	const second = input("C:\\project\\second.ts");
@@ -837,7 +854,7 @@ test("EditorPart tracks MRU editors, reopens closed inputs, and reopens with ano
 test('EditorPart does not reopen discarded untitled template content', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const registry = new EditorPaneRegistry();
-	registry.register(descriptor('test.editor.default', '', () => new TestEditorPane('test.editor.default')));
+	registry.registerEditorPane(descriptor('test.editor.default', '', () => new TestEditorPane('test.editor.default')));
 	const editor = new EditorPart(dom.window.document.body, { registry });
 	const template: EditorInput = { resource: URI.parse('untitled:/Untitled-1'), label: 'Untitled-1', initialText: 'template body' };
 	await editor.openEditor(template);
@@ -850,7 +867,7 @@ test('EditorPart does not reopen discarded untitled template content', async () 
 test('EditorPart refreshes the tab when an input changes its label', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const registry = new EditorPaneRegistry();
-	registry.register(descriptor('test.editor.default', '', () => new TestEditorPane('test.editor.default')));
+	registry.registerEditorPane(descriptor('test.editor.default', '', () => new TestEditorPane('test.editor.default')));
 	const editor = new EditorPart(dom.window.document.body, { registry });
 	using labelChanges = new Emitter<void>();
 	let label = 'Untitled-1';
@@ -866,7 +883,7 @@ test('EditorPart refreshes the tab when an input changes its label', async () =>
 test("EditorPart keeps MRU order across groups and removes closed editors", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
-	registry.register(descriptor("test.editor.default", ".ts", () => new TestEditorPane("test.editor.default")));
+	registry.registerEditorPane(descriptor("test.editor.default", ".ts", () => new TestEditorPane("test.editor.default")));
 	const editor = new EditorPart(dom.window.document.body, { registry });
 	const first = input("C:\\project\\first.ts");
 	const second = input("C:\\project\\second.ts");
@@ -889,7 +906,7 @@ test("EditorPart persists JSON-safe pane view state in working sets", async () =
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
 	const panes: TestViewStateEditorPane[] = [];
-	registry.register(descriptor("stanza.editor.code", ".ts", () => {
+	registry.registerEditorPane(descriptor("stanza.editor.code", ".ts", () => {
 		const pane = new TestViewStateEditorPane("stanza.editor.code");
 		panes.push(pane);
 		return pane;
@@ -917,7 +934,7 @@ test("EditorPart persists JSON-safe pane view state in working sets", async () =
 test("EditorPart registers and releases focusable breadcrumbs for its group", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
-	registry.register(descriptor("stanza.editor.code", ".ts", () => new TestEditorPane("stanza.editor.code")));
+	registry.registerEditorPane(descriptor("stanza.editor.code", ".ts", () => new TestEditorPane("stanza.editor.code")));
 	const breadcrumbs = new BreadcrumbsService();
 	const editor = new EditorPart(dom.window.document.body, {
 		registry,
@@ -941,7 +958,7 @@ test("EditorPart registers and releases focusable breadcrumbs for its group", as
 test("HistoryService navigates backward and forward through opened editors", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
-	registry.register(descriptor("ash.test.history", ".ts", () => new TestEditorPane("ash.test.history")));
+	registry.registerEditorPane(descriptor("ash.test.history", ".ts", () => new TestEditorPane("ash.test.history")));
 	const editor = new EditorPart(dom.window.document.body, { registry });
 	const contextKeys = new ContextKeyService();
 	const history = new HistoryService(editor, contextKeys);
@@ -973,7 +990,7 @@ test('HistoryService restores cursor, edit, and navigation locations', async () 
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const registry = new EditorPaneRegistry();
 	let pane: TestSelectionPane | undefined;
-	registry.register(descriptor('ash.test.selectionHistory', '.ts', () => pane = new TestSelectionPane('ash.test.selectionHistory')));
+	registry.registerEditorPane(descriptor('ash.test.selectionHistory', '.ts', () => pane = new TestSelectionPane('ash.test.selectionHistory')));
 	const editor = new EditorPart(dom.window.document.body, { registry });
 	const contextKeys = new ContextKeyService();
 	const history = new HistoryService(editor, contextKeys);
@@ -1038,7 +1055,7 @@ test('HistoryService restores cursor, edit, and navigation locations', async () 
 test("EditorPart restores nested horizontal and vertical Grid layouts", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
-	registry.register(descriptor("stanza.editor.code", ".ts", () => new TestEditorPane("stanza.editor.code")));
+	registry.registerEditorPane(descriptor("stanza.editor.code", ".ts", () => new TestEditorPane("stanza.editor.code")));
 	const editor = new EditorPart(dom.window.document.body, { registry });
 	editor.layout({ width: 960, height: 640 });
 	await editor.openEditor(input("C:\\project\\left.ts"));
@@ -1074,7 +1091,7 @@ test("EditorPart restores nested horizontal and vertical Grid layouts", async ()
 test("EditorPart validates Grid layouts before closing current editors", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
-	registry.register(descriptor("stanza.editor.code", ".ts", () => new TestEditorPane("stanza.editor.code")));
+	registry.registerEditorPane(descriptor("stanza.editor.code", ".ts", () => new TestEditorPane("stanza.editor.code")));
 	const editor = new EditorPart(dom.window.document.body, { registry });
 	const current = input("C:\\project\\safe.ts");
 	await editor.openEditor(current);
@@ -1110,7 +1127,7 @@ test("Editor title toolbar splits the active group and owns More Actions", async
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
 	const panes: TestEditorPane[] = [];
-	registry.register(descriptor(
+	registry.registerEditorPane(descriptor(
 		"stanza.editor.code",
 		".ts",
 		() => trackPane(panes, "stanza.editor.code"),
@@ -1192,12 +1209,12 @@ test("EditorPart preserves working tabs and opens a failure in its own tab", asy
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
 	const panes: TestEditorPane[] = [];
-	registry.register(descriptor(
+	registry.registerEditorPane(descriptor(
 		"ash.editor.working",
 		".ok",
 		() => trackPane(panes, "ash.editor.working"),
 	));
-	registry.register(descriptor(
+	registry.registerEditorPane(descriptor(
 		"ash.editor.failing",
 		".bad",
 		() => {
@@ -1230,7 +1247,7 @@ test('editor context keys follow preview, readonly, dirty, and close transitions
 	const registry = new EditorPaneRegistry();
 	const resource = URI.file('C:\\project\\readonly.ts');
 	let workingCopy: TestWorkingCopy | undefined;
-	registry.register(descriptor(
+	registry.registerEditorPane(descriptor(
 		'stanza.editor.code',
 		'.ts',
 		() => {
@@ -1327,7 +1344,7 @@ test("EditorPart shows a retryable placeholder when an editor cannot open", asyn
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
 	let attempts = 0;
-	registry.register(descriptor(
+	registry.registerEditorPane(descriptor(
 		"ash.editor.retryable",
 		".retry",
 		() => {
@@ -1359,12 +1376,12 @@ test("EditorPart shows a retryable placeholder when an editor cannot open", asyn
 test("Editor open error offers a registered Binary Editor for unsafe text content", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
-	registry.register(descriptor("ash.editor.text", ".bin", () => {
+	registry.registerEditorPane(descriptor("ash.editor.text", ".bin", () => {
 		const pane = new TestEditorPane("ash.editor.text");
 		pane.inputError = new TextFileBinaryError(URI.file("C:\\project\\unsafe.bin"));
 		return pane;
 	}));
-	registry.register({
+	registry.registerEditorPane({
 		id: "ash.editor.binary",
 		name: "Binary Editor",
 		canOpen: () => EditorPaneMatch.Optional,
@@ -1388,7 +1405,7 @@ test("EditorPart rejects an open superseded by ordinary content", async () => {
 	const registry = new EditorPaneRegistry();
 	const pending = deferred<void>();
 	let slowPane: TestEditorPane | undefined;
-	registry.register(descriptor(
+	registry.registerEditorPane(descriptor(
 		"ash.editor.slow",
 		".slow",
 		() => {
@@ -1422,7 +1439,7 @@ test("EditorParts moves an editor to an auxiliary window without changing its in
 	const dom = new JSDOM("<!doctype html><body></body>", { url: 'http://localhost' });
 	const registry = new EditorPaneRegistry();
 	const workingCopy = new TestWorkingCopy(URI.file("C:\\project\\detached.ts"));
-	registry.register(descriptor("stanza.editor.code", ".ts", () => new TestEditorPane("stanza.editor.code", workingCopy)));
+	registry.registerEditorPane(descriptor("stanza.editor.code", ".ts", () => new TestEditorPane("stanza.editor.code", workingCopy)));
 	const main = new EditorPart(dom.window.document.body, { registry });
 	const windows = new TestAuxiliaryWindowService();
 	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, applicationId: 'editor-parts-test', workspaceId: 'workspace', flushInterval: 0 });
@@ -1475,7 +1492,7 @@ test("EditorParts moves an editor to an auxiliary window without changing its in
 
 test('EditorParts restores main and auxiliary editor windows with their active part', async () => {
 	const registry = new EditorPaneRegistry();
-	registry.register(descriptor('test.editor.default', '', () => new TestEditorPane('test.editor.default')));
+	registry.registerEditorPane(descriptor('test.editor.default', '', () => new TestEditorPane('test.editor.default')));
 	const accessibility = {
 		onDidChangeScreenReaderOptimized: Event.None,
 		isScreenReaderOptimized: () => false,
@@ -1516,7 +1533,7 @@ test('EditorParts restores main and auxiliary editor windows with their active p
 test('EditorParts replaces an untitled resource in every group and window', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
 	const registry = new EditorPaneRegistry();
-	registry.register(descriptor('test.editor.default', '', () => new TestEditorPane('test.editor.default')));
+	registry.registerEditorPane(descriptor('test.editor.default', '', () => new TestEditorPane('test.editor.default')));
 	const main = new EditorPart(dom.window.document.body, { registry });
 	using windows = new TestAuxiliaryWindowService();
 	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, applicationId: 'editor-parts-test', workspaceId: 'workspace', flushInterval: 0 });
@@ -1625,7 +1642,7 @@ test('workspace shutdown saves an untitled editor through Save As before accepti
 	using copy = new TestWorkingCopy(untitled.resource);
 	copy.markDirty();
 	let savedTo: URI | undefined;
-	registry.register({
+	registry.registerEditorPane({
 		id: 'test.save-as', name: 'Save As', canOpen: () => EditorPaneMatch.Default,
 		create: () => Object.assign(new TestEditorPane('test.save-as', copy), { saveAs: async (target: URI) => { savedTo = target; await copy.saveAs(); } }),
 	});
@@ -1937,8 +1954,8 @@ test('ignored open errors leave the active file intact and report the original e
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const registry = new EditorPaneRegistry();
 	const failure = new Error('Access denied');
-	registry.register(descriptor('test.editor.working', '.ok', () => new TestEditorPane('test.editor.working')));
-	registry.register(descriptor('test.editor.failed', '.bad', () => {
+	registry.registerEditorPane(descriptor('test.editor.working', '.ok', () => new TestEditorPane('test.editor.working')));
+	registry.registerEditorPane(descriptor('test.editor.failed', '.bad', () => {
 		const pane = new TestEditorPane('test.editor.failed');
 		pane.inputError = failure;
 		return pane;
@@ -1958,7 +1975,7 @@ test('ignored open errors leave the active file intact and report the original e
 test('cancelled opens do not create an error page', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const registry = new EditorPaneRegistry();
-	registry.register(descriptor('test.editor.cancelled', '.cancelled', () => {
+	registry.registerEditorPane(descriptor('test.editor.cancelled', '.cancelled', () => {
 		const pane = new TestEditorPane('test.editor.cancelled');
 		pane.inputError = new CancellationError();
 		return pane;
@@ -1979,7 +1996,7 @@ test('error pages render severity and run the supplied action without duplicatin
 	let attempts = 0;
 	let editor: InstanceType<typeof EditorPart>;
 	const resource = input('C:/project/document.custom');
-	registry.register(descriptor('test.editor.custom', '.custom', () => {
+	registry.registerEditorPane(descriptor('test.editor.custom', '.custom', () => {
 		const pane = new TestEditorPane('test.editor.custom');
 		if (attempts++ === 0) {
 			pane.inputError = createEditorOpenError('Choose a compatible viewer', [{
@@ -2011,7 +2028,7 @@ test('the error dialog preference applies immediately and automatic opens remain
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const registry = new EditorPaneRegistry();
 	let actionRuns = 0;
-	registry.register(descriptor('test.editor.dialog', '.dialog', () => {
+	registry.registerEditorPane(descriptor('test.editor.dialog', '.dialog', () => {
 		const pane = new TestEditorPane('test.editor.dialog');
 		pane.inputError = createEditorOpenError('Choose a recovery action', [{
 			id: 'test.recover', label: 'Recover', tooltip: '', enabled: true,
@@ -2051,7 +2068,7 @@ test('modal file failures use the same retryable error page', async () => {
 	dom.window.HTMLElement.prototype.scrollTo = () => undefined;
 	const registry = new EditorPaneRegistry();
 	let attempts = 0;
-	registry.register(descriptor('test.editor.modalRetry', '.retry', () => {
+	registry.registerEditorPane(descriptor('test.editor.modalRetry', '.retry', () => {
 		const pane = new TestEditorPane('test.editor.modalRetry');
 		if (attempts++ === 0) pane.inputError = new Error('Temporarily unavailable');
 		return pane;
@@ -2077,7 +2094,7 @@ test('a missing file offers creation and retries into the same pinned tab', asyn
 	const registry = new EditorPaneRegistry();
 	const missing = input('C:/project/missing.txt');
 	let created = false;
-	registry.register(descriptor('test.editor.missing', '.txt', () => {
+	registry.registerEditorPane(descriptor('test.editor.missing', '.txt', () => {
 		const pane = new TestEditorPane('test.editor.missing');
 		if (!created) pane.inputError = new FileNotFoundError(missing.resource);
 		return pane;

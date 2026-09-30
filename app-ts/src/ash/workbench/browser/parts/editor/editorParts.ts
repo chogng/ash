@@ -1,3 +1,4 @@
+import type { IEditorPaneDescriptor } from '../../editor.js';
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import type { IDimension } from "../../../../base/browser/dom.js";
 import type { Direction as GridDirection } from "../../../../base/browser/ui/grid/grid.js";
@@ -12,7 +13,7 @@ import type { EditorInput, EditorOpenOptions, EditorOpenTarget } from "../../../
 import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetTarget } from "../../../services/editor/common/editorWorkingSet.js";
 import type { EditorIdentifier, EditorPartChangeEvent, EditorPartState } from "../../../services/editor/common/editorState.js";
 import type { IAuxiliaryWindow, IAuxiliaryWindowService } from "../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js";
-import type { IEditorPane, IEditorPaneDescriptor } from "./editorPane.js";
+import type { IEditorPane } from "./editorPane.js";
 import { editorInputKey } from "./editorTabsControl.js";
 import type { EditorCloseAllOptions, IEditorPart, RecentlyClosedEditor } from "./editorPart.js";
 import type { IEditorGroup } from "./editorGroup.js";

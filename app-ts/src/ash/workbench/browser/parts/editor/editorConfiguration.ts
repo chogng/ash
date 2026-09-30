@@ -4,7 +4,7 @@ import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } fr
 import { Registry } from "../../../../platform/registry/common/platform.js";
 import { localize } from "../../../../nls.js";
 import type { IWorkbenchContribution } from "../../../common/contributions.js";
-import { EditorPanes, type EditorPaneRegistry } from "./editorRegistry.js";
+import { EditorPanes, type IEditorPaneRegistry } from "../../editor.js";
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 const binaryEditorOptions: { value: string; label: string }[] = [{ value: "", get label() { return localize("workbench.editor.defaultBinaryEditor.default", "Default"); } }];
@@ -98,14 +98,14 @@ function parseEditorAssociations(value: unknown): EditorAssociations {
 export class DynamicEditorConfigurations extends Disposable implements IWorkbenchContribution {
 	static readonly ID = "workbench.contrib.dynamicEditorConfigurations";
 
-	constructor(registry: EditorPaneRegistry = EditorPanes) {
+	constructor(registry: IEditorPaneRegistry = EditorPanes) {
 		super();
 		this._register(registry.onDidChange(() => this.update(registry)));
 		this.update(registry);
 	}
 
-	private update(registry: EditorPaneRegistry): void {
-		binaryEditorOptions.splice(1, binaryEditorOptions.length - 1, ...registry.getAll().map(descriptor => ({
+	private update(registry: IEditorPaneRegistry): void {
+		binaryEditorOptions.splice(1, binaryEditorOptions.length - 1, ...registry.getEditorPanes().map(descriptor => ({
 			value: descriptor.id,
 			label: descriptor.name,
 		})));

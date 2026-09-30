@@ -49,7 +49,7 @@ import type { EditorInput, EditorOpenOptions, EditorOpenTarget } from "../../../
 import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IEditorPane } from "./editorPane.js";
-import { EditorPaneRegistry, EditorPanes } from "./editorRegistry.js";
+import { EditorPanes, type IEditorPaneDescriptor, type IEditorPaneRegistry } from "../../editor.js";
 import type { IBulkEditService } from "../../../../editor/browser/services/bulkEditService.js";
 import type { ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";
 import { EditorInputSerializers, type EditorInputSerializerRegistry, isSerializedEditorInput } from "../../../services/editor/common/editorInputSerializer.js";
@@ -57,7 +57,6 @@ import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetLa
 import { ModalEditorPart } from "./modalEditorPart.js";
 import type { EditorGroupChangeEvent, EditorGroupId, EditorIdentifier, EditorPartChangeEvent, EditorPartState, IEditorStateSource } from "../../../services/editor/common/editorState.js";
 import { editorInputKey } from "./editorTabsControl.js";
-import type { IEditorPaneDescriptor } from "./editorPane.js";
 
 export { EditorOpenSupersededError } from "./editorGroup.js";
 
@@ -134,7 +133,7 @@ export interface IEditorPartOptions {
 	readonly dialogService?: IDialogService;
 	readonly fileDialogService?: IFileDialogService;
 	readonly bulkEditService?: IBulkEditService;
-	readonly registry?: EditorPaneRegistry;
+	readonly registry?: IEditorPaneRegistry;
 	readonly titleActions?: {
 		readonly menuService: IMenuService;
 		readonly contextMenuProvider: IContextMenuProvider;
@@ -366,7 +365,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		let displayError = error;
 		if (error instanceof TextFileBinaryError) {
 			const editorId = this.groupOptions.configurationService?.getValue<string>(DefaultBinaryEditorConfiguration) || "ash.editor.binary";
-			const binaryEditor = this.groupOptions.registry.getEditors(input).find(candidate => candidate.id === editorId);
+			const binaryEditor = this.groupOptions.registry.getEditorPanesForInput(input).find(candidate => candidate.id === editorId);
 			const actions: IAction[] = binaryEditor ? [{
 				id: "workbench.editor.openAsBinary",
 				label: localize("workbench.editorOpenAsBinary", "Open as Binary"),
@@ -563,7 +562,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	}
 
 	getEditorPaneChoices(input: EditorInput | undefined = this.activeInput): readonly IEditorPaneDescriptor[] {
-		return input ? this.groupOptions.registry.getEditors(input) : [];
+		return input ? this.groupOptions.registry.getEditorPanesForInput(input) : [];
 	}
 
 	async reopenActiveEditorWith(preferredEditorId: string): Promise<IEditorPane | undefined> {
@@ -576,7 +575,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		const closed = this.recentlyClosed.shift();
 		if (!closed) return false;
 		try {
-			const choices = this.groupOptions.registry.getEditors(closed.input);
+			const choices = this.groupOptions.registry.getEditorPanesForInput(closed.input);
 			const preferredEditorId = choices.some(choice => choice.id === closed.preferredEditorId)
 				? closed.preferredEditorId
 				: undefined;

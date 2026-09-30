@@ -7,7 +7,7 @@ import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { ServiceConstructionDescriptor, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
-import { registerEditorPane } from '../../../browser/parts/editor/editorRegistry.js';
+import { registerEditorPane } from '../../../browser/editor.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { TraceEditor, traceEditorId } from './traceEditor.js';

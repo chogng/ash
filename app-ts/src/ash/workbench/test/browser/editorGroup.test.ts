@@ -13,9 +13,9 @@ test("EditorGroup reorders tabs and moves them between groups", async () => {
 	try {
 		const { EditorGroup } = await import("../../browser/parts/editor/editorGroup.js");
 		const { EditorPaneMatch } = await import("../../browser/parts/editor/editorPane.js");
-		const { EditorPaneRegistry } = await import("../../browser/parts/editor/editorRegistry.js");
+		const { EditorPaneRegistry } = await import("../../browser/editor.js");
 		const registry = new EditorPaneRegistry();
-		registry.register({
+		registry.registerEditorPane({
 			id: "test.editor",
 			name: "Test Editor",
 			canOpen: () => EditorPaneMatch.Default,
@@ -53,10 +53,10 @@ test("EditorGroup selects a range of tabs and resolves close-command targets", a
 	try {
 		const { EditorGroup } = await import("../../browser/parts/editor/editorGroup.js");
 		const { EditorPaneMatch } = await import("../../browser/parts/editor/editorPane.js");
-		const { EditorPaneRegistry } = await import("../../browser/parts/editor/editorRegistry.js");
+		const { EditorPaneRegistry } = await import("../../browser/editor.js");
 		const { resolveCommandsContext } = await import("../../browser/parts/editor/editorCommandsContext.js");
 		const registry = new EditorPaneRegistry();
-		registry.register({ id: "test.editor", name: "Test Editor", canOpen: () => EditorPaneMatch.Default, create: () => new TestEditorPane() });
+		registry.registerEditorPane({ id: "test.editor", name: "Test Editor", canOpen: () => EditorPaneMatch.Default, create: () => new TestEditorPane() });
 		const group = new EditorGroup(dom.window.document.body, { registry });
 		try {
 			const first = input("first");

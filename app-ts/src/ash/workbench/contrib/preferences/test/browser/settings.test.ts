@@ -71,7 +71,7 @@ const { IDirPermissionsService: DirPermissionsServiceId } = await import('../../
 const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(ConfigurationExtensions.Configuration);
 const { EditorPart } = await import('../../../../../workbench/browser/parts/editor/editorPart.js');
 const { EditorPaneMatch } = await import('../../../../../workbench/browser/parts/editor/editorPane.js');
-const { EditorPaneRegistry } = await import('../../../../../workbench/browser/parts/editor/editorRegistry.js');
+const { EditorPaneRegistry } = await import('../../../../browser/editor.js');
 const { SettingsSearchQuery } = await import('../../../../../workbench/contrib/preferences/browser/settingsSearch.js');
 const { createSettingsLayout, SettingsCategories, SettingsLayout } = await import('../../../../../workbench/contrib/preferences/browser/settingsLayout.js');
 const { SettingsEditor, SettingsEditorId } = await import('../../../../../workbench/contrib/preferences/browser/settingsEditor.js');
@@ -486,7 +486,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	} as unknown as IDirPermissionsService);
 	const instantiationService = services;
 	const editorPanes = new EditorPaneRegistry();
-	disposables.add(editorPanes.register({
+	disposables.add(editorPanes.registerEditorPane({
 		id: SettingsEditorId,
 		name: 'Settings',
 		canOpen: input => isSettingsEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,

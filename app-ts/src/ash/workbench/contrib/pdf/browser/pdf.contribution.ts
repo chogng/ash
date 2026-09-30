@@ -1,6 +1,6 @@
 import "../common/pdfColors.js";
 import "./media/pdfEditor.css";
-import { registerEditorPane } from "../../../browser/parts/editor/editorRegistry.js";
+import { registerEditorPane } from "../../../browser/editor.js";
 import { PdfEditorPane } from "./pdfEditorPane.js";
 import { WorkspacePdfAnnotationStore } from "./pdfAnnotationStore.js";
 import { PDF_EDITOR_ID, matchPdfEditor } from "./pdfEditorInput.js";

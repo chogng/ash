@@ -17,7 +17,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorPaneRegistry } = await import("../../../../browser/parts/editor/editorRegistry.js");
+const { EditorPaneRegistry } = await import("../../../../browser/editor.js");
 const { binaryEditorDescriptor, BINARY_EDITOR_ID } = await import("../../../../browser/parts/editor/binaryEditor.js");
 const { matchPdfEditor, PDF_EDITOR_ID } = await import("../../../pdf/browser/pdfEditorInput.js");
 const { EditorPaneMatch } = await import("../../../../browser/parts/editor/editorPane.js");
@@ -74,14 +74,14 @@ test("Stanza diff inputs have one stable tab identity and select only the diff p
 
 test('files select the text editor before language extensions load while specialized editors keep priority', () => {
 	const registry = new EditorPaneRegistry();
-	using binary = registry.register(binaryEditorDescriptor());
-	using code = registry.register({
+	using binary = registry.registerEditorPane(binaryEditorDescriptor());
+	using code = registry.registerEditorPane({
 		id: CODE_EDITOR_ID,
 		name: 'Code',
 		canOpen: matchCodeEditor,
 		create: () => { throw new Error('Only editor selection is exercised'); },
 	});
-	using pdf = registry.register({
+	using pdf = registry.registerEditorPane({
 		id: PDF_EDITOR_ID,
 		name: 'PDF',
 		canOpen: matchPdfEditor,
@@ -90,9 +90,9 @@ test('files select the text editor before language extensions load while special
 
 	for (const filename of ['main.ts', 'main.rs', 'custom.unknown', 'README', 'sample.bin']) {
 		const input = { resource: URI.file(`/project/${filename}`) };
-		assert.equal(registry.resolve(input).id, CODE_EDITOR_ID, filename);
-		assert.equal(registry.resolve(input, { preferredEditorId: BINARY_EDITOR_ID }).id, BINARY_EDITOR_ID);
+		assert.equal(registry.getEditorPane(input)?.id, CODE_EDITOR_ID, filename);
+		assert.equal(registry.getEditorPane(input, { preferredEditorId: BINARY_EDITOR_ID })?.id, BINARY_EDITOR_ID);
 	}
-	assert.equal(registry.resolve({ resource: URI.file('/project/paper.pdf') }).id, PDF_EDITOR_ID);
-	assert.equal(registry.resolve({ resource: URI.file('/project/sample.bin'), contentType: 'application/octet-stream' }).id, BINARY_EDITOR_ID);
+	assert.equal(registry.getEditorPane({ resource: URI.file('/project/paper.pdf') })?.id, PDF_EDITOR_ID);
+	assert.equal(registry.getEditorPane({ resource: URI.file('/project/sample.bin'), contentType: 'application/octet-stream' })?.id, BINARY_EDITOR_ID);
 });

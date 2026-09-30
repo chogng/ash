@@ -4,7 +4,7 @@ import { IContextMenuService } from '../../../../platform/contextview/browser/co
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { ServiceConstructionDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
-import { registerEditorPane } from '../../../browser/parts/editor/editorRegistry.js';
+import { registerEditorPane } from '../../../browser/editor.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { IGitService } from '../../../contrib/git/common/gitService.js';

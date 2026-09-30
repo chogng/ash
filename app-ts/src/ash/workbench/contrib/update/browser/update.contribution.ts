@@ -4,7 +4,7 @@ import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/c
 import { ServiceConstructionDescriptor, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IOpenerService } from '../../../../platform/opener/common/openerService.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
-import { registerEditorPane } from '../../../browser/parts/editor/editorRegistry.js';
+import { registerEditorPane } from '../../../browser/editor.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { ILocaleService } from '../../../services/localization/common/locale.js';
 import { IOnboardingTryoutService } from '../../onboarding/common/onboardingTryout.js';

@@ -1,3 +1,4 @@
+import type { IEditorPaneDescriptor } from '../../editor.js';
 import { h } from "../../../../base/browser/dom.js";
 import type { IDimension } from "../../../../base/browser/dom.js";
 import { raceCancellationError } from "../../../../base/common/async.js";
@@ -6,7 +7,7 @@ import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IFileService } from "../../../../platform/files/common/files.js";
 import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
 import type { EditorInput } from "./editorInput.js";
-import { EditorPaneMatch, EditorPaneVisibility, type IEditorPane, type IEditorPaneDescriptor } from "./editorPane.js";
+import { EditorPaneMatch, EditorPaneVisibility, type IEditorPane } from "./editorPane.js";
 
 export const BINARY_EDITOR_ID = "ash.editor.binary";
 const MAX_BINARY_EDITOR_BYTES = 128 * 1024 * 1024;

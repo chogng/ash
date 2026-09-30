@@ -1,9 +1,9 @@
+import type { IEditorPaneDescriptor } from '../../../../browser/editor.js';
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { type URI } from '../../../../../base/common/uri.js';
 import { localize, onDidChangeNls } from '../../../../../nls.js';
 import { DialogSeverity, IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { type IFileService } from '../../../../../platform/files/common/files.js';
-import { type IEditorPaneDescriptor } from '../../../../browser/parts/editor/editorPane.js';
 import { BINARY_EDITOR_ID, BaseBinaryResourceEditor, binaryEditorDescriptor } from '../../../../browser/parts/editor/binaryEditor.js';
 import { CODE_EDITOR_ID } from '../../../../common/editor/codeEditorId.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';

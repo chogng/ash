@@ -1404,7 +1404,8 @@ Stanza 已从独立内核演进为由真实 `IEditorPane` 宿主的编辑器能�
 编辑器域负责模型和交互语义”的单向依赖。Code 与 Academic 产品通过 Workbench contribution 注册 Stanza 为
 普通文本的默认 editor；document、diff 和 PDF 继续通过各自明确的 pane descriptor 参与选择。
 
-`IEditorPart.openEditor` 是产品调用面，`EditorPaneRegistry` 是实现选择边界，`IEditorPane` 是
+`IEditorPart.openEditor` 是产品调用面，`workbench/browser/editor.ts` 中的 `IEditorPaneDescriptor` 和
+`IEditorPaneRegistry` 定义声明与选择边界，`EditorPaneRegistry` 是唯一实现，`IEditorPane` 是
 被选实现的生命周期 contract。产品调用方不选择 parser、analysis service 或 transport；descriptor
 只绑定当前受支持的 code、document、diff、PDF 等资源视图，App Server 不知道最终选择了哪个 pane。
 

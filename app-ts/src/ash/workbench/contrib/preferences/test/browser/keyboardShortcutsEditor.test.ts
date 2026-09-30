@@ -25,11 +25,14 @@ const { OperatingSystem } = await import('../../../../../base/common/platform.js
 const { CommandsRegistry } = await import('../../../../../platform/commands/common/commands.js');
 const { ContextKeyService } = await import('../../../../../platform/contextkey/browser/contextKeyService.js');
 const { ServiceContainer } = await import('../../../../../platform/instantiation/common/instantiation.js');
+const { IConfigurationService } = await import('../../../../../platform/configuration/common/configuration.js');
+const { InMemoryConfigurationService } = await import('../../../../../platform/configuration/common/inMemoryConfigurationService.js');
+const { IKeybindingService } = await import('../../../../../platform/keybinding/common/keybinding.js');
 const { NotificationService } = await import('../../../../../workbench/services/notification/common/notificationService.js');
 const { KeybindingsRegistry } = await import('../../../../../platform/keybinding/common/keybindingsRegistry.js');
 const { EditorPart } = await import('../../../../../workbench/browser/parts/editor/editorPart.js');
 const { EditorPaneMatch } = await import('../../../../../workbench/browser/parts/editor/editorPane.js');
-const { EditorPaneRegistry } = await import('../../../../../workbench/browser/parts/editor/editorRegistry.js');
+const { EditorPaneRegistry } = await import('../../../../browser/editor.js');
 const { KeyboardShortcutsEditor, KeyboardShortcutsEditorId } = await import('../../../../../workbench/contrib/preferences/browser/keyboardShortcutsEditor.js');
 const { CommandService } = await import('../../../../../workbench/services/commands/common/commandService.js');
 const { BrowserEditorService } = await import('../../../../../workbench/services/editor/browser/browserEditorService.js');
@@ -74,14 +77,18 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 		contextKeyService: contextKeys,
 		keyboardLayoutService: keyboardLayout,
 	}, disposables.add(new NotificationService())));
+	const configuration = disposables.add(new InMemoryConfigurationService());
+	const services = disposables.add(new ServiceContainer());
+	services.registerInstance(IKeybindingService, keybindings);
+	services.registerInstance(IConfigurationService, configuration);
 	const registry = new EditorPaneRegistry();
-	registry.register({
+	registry.registerEditorPane({
 		id: 'test.settings',
 		name: 'Settings',
 		canOpen: input => isSettingsEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
 		create: () => new TestSettingsEditor(),
 	});
-	registry.register({
+	registry.registerEditorPane({
 		id: KeyboardShortcutsEditorId,
 		name: 'Keyboard Shortcuts',
 		canOpen: input => isKeyboardShortcutsEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
@@ -94,6 +101,7 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 	});
 	const editor = disposables.add(new EditorPart(ownerDocument.body, {
 		registry,
+		instantiationService: services,
 		contextKeyService: contextKeys,
 		keybindingService: keybindings,
 		keybindingsResourceService: resources,

@@ -120,16 +120,3 @@ export enum EditorPaneMatch {
 	Builtin,
 	Default,
 }
-
-/**
- * Declares how one editor implementation is matched and constructed.
- *
- * Descriptors must keep `canOpen` pure. Product contribution modules register
- * descriptors before the Workbench creates its Editor Part.
- */
-export interface IEditorPaneDescriptor {
-	readonly id: string;
-	readonly name: string;
-	canOpen(input: EditorInput): EditorPaneMatch;
-	create(options: EditorPaneCreationOptions): IEditorPane;
-}

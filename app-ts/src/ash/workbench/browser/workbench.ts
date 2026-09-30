@@ -159,7 +159,7 @@ import { BreadcrumbsService, IBreadcrumbsService } from "./parts/editor/breadcru
 import { EditorParts, IEditorPartsService } from "./parts/editor/editorParts.js";
 import { HistoryService } from '../services/history/browser/historyService.js';
 import { IHistoryService } from '../services/history/common/history.js';
-import { EditorPanes } from './parts/editor/editorRegistry.js';
+import { EditorPanes } from './editor.js';
 import { PanelPart } from "./parts/panel/panelPart.js";
 import { SidebarPart } from "./parts/sidebar/sidebarPart.js";
 import { ActivitybarPart } from "./parts/activitybar/activitybarPart.js";

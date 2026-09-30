@@ -1,4 +1,4 @@
-import { registerEditorPane } from "../../../browser/parts/editor/editorRegistry.js";
+import { registerEditorPane } from "../../../browser/editor.js";
 import { DocumentEditorPane } from "../../documentEditor/browser/documentEditorPane.js";
 import { createDocumentEditorPaneOptions, findEditorProfile, matchEditorProfiles } from "../../documentEditor/browser/editorProfile.js";
 import { AppServerDocumentCollaborationService } from "../../../services/documentCollaboration/browser/appServerDocumentCollaborationService.js";

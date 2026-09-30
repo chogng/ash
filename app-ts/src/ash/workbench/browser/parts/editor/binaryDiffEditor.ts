@@ -1,10 +1,11 @@
+import type { IEditorPaneDescriptor } from '../../editor.js';
 import { URI } from "../../../../base/common/uri.js";
 import type { IFileService } from "../../../../platform/files/common/files.js";
 import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
 import { EditorInputSerializers, requireRecord, requireSerializedEditorInput } from "../../../services/editor/common/editorInputSerializer.js";
 import { BaseBinaryResourceEditor } from "./binaryEditor.js";
 import type { EditorInput } from "./editorInput.js";
-import { EditorPaneMatch, type IEditorPaneDescriptor } from "./editorPane.js";
+import { EditorPaneMatch } from "./editorPane.js";
 import { SideBySideEditor, type SideBySideEditorInput } from "./sideBySideEditor.js";
 
 export const BINARY_DIFF_EDITOR_ID = "ash.editor.binaryDiff";

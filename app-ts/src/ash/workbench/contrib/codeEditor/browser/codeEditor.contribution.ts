@@ -4,7 +4,7 @@ import './toggleRenderWhitespace.js';
 import './toggleRenderControlCharacter.js';
 import './toggleWordWrap.js';
 import { getBrowserTextModelService } from "../../../services/textmodelResolver/browser/browserTextModelService.js";
-import { registerEditorPane } from "../../../browser/parts/editor/editorRegistry.js";
+import { registerEditorPane } from "../../../browser/editor.js";
 import { getBrowserTextResourceStore } from "./browserTextResourceStore.js";
 import { createBrowserEditorPart } from "./browserEditorPart.js";
 import { matchCodeEditor, matchDiffEditor } from "./codeEditorInput.js";

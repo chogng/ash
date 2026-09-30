@@ -5,7 +5,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IBrowserViewApi, type IBrowserViewState } from '../../../../platform/browser/common/browserView.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
-import { EditorPanes } from '../../../browser/parts/editor/editorRegistry.js';
+import { EditorPanes } from '../../../browser/editor.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import type { EditorInput } from '../../../services/editor/common/editorService.js';
@@ -57,7 +57,7 @@ registerWorkbenchContribution('workbench.contrib.browserView', WorkbenchPhase.Bl
 	const editors = services.get(IEditorService);
 	const editorPart = services.get(IEditorPart);
 	const instantiation = services.get(IInstantiationService);
-	store.add(EditorPanes.register({
+	store.add(EditorPanes.registerEditorPane({
 		id: BrowserEditor.ID, name: 'Browser',
 		canOpen: input => input.resource.scheme === BROWSER_RESOURCE_SCHEME ? EditorPaneMatch.Default : EditorPaneMatch.None,
 		create: () => instantiation.createInstance(BrowserEditor),

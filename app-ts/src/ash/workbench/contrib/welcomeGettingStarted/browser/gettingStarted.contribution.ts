@@ -6,7 +6,7 @@ import { AccessibleViewRegistry } from '../../../../platform/accessibility/brows
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
-import { registerEditorPane } from '../../../browser/parts/editor/editorRegistry.js';
+import { registerEditorPane } from '../../../browser/editor.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { GettingStartedFocusedContext, GettingStartedPage, GettingStartedPageId } from './gettingStarted.js';

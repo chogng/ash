@@ -23,9 +23,10 @@ test("App Server workspace files open in Stanza and save through the editor regi
 	await fileRow.locator(".ash-icon-label-icon").click();
 
 	const group = workbench.editors.groupAt(0);
-	await expect(group.tabs).toHaveCount(1);
-	await expect(group.tabs.first()).toContainText("main.ts");
-	const tab = group.title.locator('.ash-tab').first();
+	await expect(group.tabs).toHaveCount(2);
+	await expect(group.tabs.filter({ hasText: "Welcome" })).toHaveCount(1);
+	await expect(group.tabs.filter({ hasText: "main.ts" })).toHaveAttribute("aria-selected", "true");
+	const tab = group.title.locator('.ash-tab').filter({ hasText: "main.ts" });
 	await expect(tab).toHaveClass(/preview/);
 	await expect(explorer.locator('.ash-explorer-error')).toHaveCount(0);
 	await expect(explorer.locator('.ash-tree')).toBeFocused();

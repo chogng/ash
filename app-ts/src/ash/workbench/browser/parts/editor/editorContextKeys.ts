@@ -8,7 +8,7 @@ import type { EditorInput } from '../../../services/editor/common/editorService.
 import type { EditorGroupChangeEvent, EditorGroupState, IEditorStateSource } from '../../../services/editor/common/editorState.js';
 import type { IWorkingCopy } from '../../../services/workingCopy/common/workingCopyService.js';
 import type { IEditorPane } from './editorPane.js';
-import type { EditorPaneRegistry } from './editorRegistry.js';
+import type { IEditorPaneRegistry } from '../../editor.js';
 
 export interface EditorContextKeySource extends IEditorStateSource {
 	readonly activeInput: EditorInput | undefined;
@@ -29,7 +29,7 @@ export class EditorContextKeyController extends Disposable {
 	constructor(
 		private readonly contextKeyService: IContextKeyService,
 		private readonly source: EditorContextKeySource,
-		private readonly editorRegistry: EditorPaneRegistry,
+		private readonly editorRegistry: IEditorPaneRegistry,
 		private readonly languageResolver: TextResourceLanguageResolver | undefined,
 	) {
 		super();
@@ -88,7 +88,7 @@ export class EditorGroupContextKeyController extends Disposable {
 	constructor(
 		private readonly contextKeyService: IContextKeyService,
 		private readonly source: EditorGroupContextKeySource,
-		private readonly editorRegistry: EditorPaneRegistry,
+		private readonly editorRegistry: IEditorPaneRegistry,
 		private readonly languageResolver: TextResourceLanguageResolver | undefined,
 	) {
 		super();
@@ -160,7 +160,7 @@ interface EditorContextKeyProjection {
 function applyEditorContextKeys(
 	contextKeyService: IContextKeyService,
 	keys: EditorContextKeyBindings,
-	editorRegistry: EditorPaneRegistry,
+	editorRegistry: IEditorPaneRegistry,
 	languageResolver: TextResourceLanguageResolver | undefined,
 	projection: EditorContextKeyProjection,
 ): void {
@@ -175,7 +175,7 @@ function applyEditorContextKeys(
 		keys.activeEditorLastInGroup.set(projection.index >= 0 && projection.index === projection.groupEditorCount - 1);
 		keys.activeEditorReadonly.set(projection.input?.readOnly === true);
 		keys.activeEditorCanRevert.set(projection.canRevert);
-		keys.activeEditorAvailableEditorIds.set(projection.input ? editorRegistry.getEditors(projection.input).map(editor => editor.id).join(',') : '');
+		keys.activeEditorAvailableEditorIds.set(projection.input ? editorRegistry.getEditorPanesForInput(projection.input).map(editor => editor.id).join(',') : '');
 		keys.editorGroupEditorsCount.set(projection.groupEditorCount);
 		keys.editorPartModalVisible.set(projection.isModal);
 		keys.resource.set(resource?.toString());

@@ -1,7 +1,7 @@
+import type { IEditorPaneDescriptor } from '../../editor.js';
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import { localize } from "../../../../nls.js";
 import type { IQuickInputService, IQuickPickItem } from "../../../../platform/quickinput/common/quickInput.js";
-import type { IEditorPaneDescriptor } from "./editorPane.js";
 import type { IEditorPart } from "./editorPart.js";
 
 interface EditorTypeItem extends IQuickPickItem {
