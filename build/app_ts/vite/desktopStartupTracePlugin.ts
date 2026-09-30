@@ -62,15 +62,17 @@ export function desktopStartupTracePlugin(desktopRoot: string): Plugin {
 			const path = id.split('?')[0]!.replaceAll('\\', '/');
 			const marks = marksByPath.get(path);
 			if (!marks) return;
+			// Checkout line endings must not change startup measurement boundaries or insertion offsets.
+			const source = code.replaceAll('\r\n', '\n');
 			const insertions = marks.map(mark => {
-				const start = code.indexOf(mark.anchor);
-				if (start < 0 || code.indexOf(mark.anchor, start + 1) >= 0) {
+				const start = source.indexOf(mark.anchor);
+				if (start < 0 || source.indexOf(mark.anchor, start + 1) >= 0) {
 					throw new Error(`Desktop startup trace anchor is missing or ambiguous: ${path} ${mark.name}`);
 				}
 				const offset = start + (mark.position === 'after' ? mark.anchor.length : 0);
 				return { offset, text: mark.position === 'before' ? `performance.mark('${mark.name}');\n` : `\nperformance.mark('${mark.name}');` };
 			});
-			let transformed = code;
+			let transformed = source;
 			for (const insertion of insertions.sort((left, right) => right.offset - left.offset)) {
 				transformed = transformed.slice(0, insertion.offset) + insertion.text + transformed.slice(insertion.offset);
 			}
