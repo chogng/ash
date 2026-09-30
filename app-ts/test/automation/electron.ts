@@ -9,6 +9,8 @@ export interface ElectronLaunchOptions {
 	readonly workspaceDirectory?: string;
 	readonly workspacePermissions?: "development";
 	readonly workbenchMode?: DesktopWorkbenchMode;
+	/** Keeps the backend generation owned by another client of the shared profile. */
+	readonly reuseAppServer?: boolean;
 	readonly extraArgs?: readonly string[];
 	readonly recordVideo?: {
 		readonly directory: string;
@@ -36,6 +38,11 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 		environment.ASH_DESKTOP_UI_ONLY = "1";
 	} else {
 		delete environment.ASH_DESKTOP_UI_ONLY;
+	}
+	if (options.reuseAppServer) {
+		environment.ASH_DEV_REUSE_APP_SERVER = "1";
+	} else {
+		delete environment.ASH_DEV_REUSE_APP_SERVER;
 	}
 	environment.ASH_WORKBENCH_MODE = options.workbenchMode ?? "code";
 	environment.ASH_HOME = options.profileDirectory ?? resolve(options.userDataDirectory, "profile");
