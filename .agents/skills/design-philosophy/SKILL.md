@@ -5,7 +5,7 @@ description: The Ash design philosophy — a shared Values→Principles→Moves 
 
 # Ash Design Philosophy
 
-This skill is the **canonical Ash design philosophy** — the single source of truth for how we reason about UI, for both developers and agents.
+This skill is the **canonical Ash workbench design philosophy** — the single source of truth for how we reason about UI, for both developers and agents.
 
 As more and more of the UI is implemented via agents and tooling, the pixels increasingly take care of themselves, and the scarce, human part becomes the design judgment behind them.
 
