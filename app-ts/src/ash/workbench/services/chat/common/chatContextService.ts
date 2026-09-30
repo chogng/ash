@@ -5,6 +5,8 @@ import type { IQuickInputService } from '../../../../platform/quickinput/common/
 export interface ResolvedChatContext {
 	readonly name: string;
 	readonly content: string;
+	/** Image content is a URL accepted by the Turn API, rather than text context. */
+	readonly kind?: 'image';
 }
 
 export interface ChatContextAttachment {

@@ -10,6 +10,8 @@ import type { ISessionsManagementService } from "../services/sessions/common/ses
 import { chatTranscriptListItems, type IChatListItem } from "../../workbench/contrib/chat/browser/widget/chatListItems.js";
 import type { ChatInputState } from '../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { modelRefIdentity, type ModelReasoningEffort } from '../../workbench/services/chat/common/modelCatalog.js';
+import type { ApprovalMode } from '../../workbench/services/chat/common/chatService.js';
+import { observableValue } from '../../base/common/observable.js';
 
 export type ChatWidgetState =
 	| "loading"
@@ -50,6 +52,7 @@ export class ChatWidgetModel extends Disposable {
 	private queuedMessages = 0;
 	private queueGeneration = 0;
 	private readonly selectedModels = new Map<ThreadId, ModelRef>();
+	private readonly selectedApprovalModes = observableValue<ReadonlyMap<string, ApprovalMode>>(this, new Map());
 	private readonly automaticModels = new Set<ThreadId>();
 	// A New Chat's key is replaced with its Thread ID when the first message materializes it.
 	private readonly selectedReasoningEfforts = new Map<string, { model: string; effort: ModelReasoningEffort | undefined }>();
@@ -103,6 +106,7 @@ export class ChatWidgetModel extends Disposable {
 			phase: this._state,
 			error: this._error,
 			canInterrupt: this.canInterrupt,
+			approvalMode: this.selectedApprovalModes.get().get(this.composerIdentity) ?? this._thread?.turns.at(-1)?.approvalMode ?? 'askPermissions',
 			models: this._models,
 			modelsError: this.modelsError,
 			slashCommands: this._slashCommands,
@@ -328,7 +332,7 @@ export class ChatWidgetModel extends Disposable {
 
 	async send(text: string, mode: ChatMode = this.mode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[]): Promise<void> {
 		const input = text.trim();
-		if (!input) return;
+		if (!input && !contexts?.length) return;
 		try {
 			await this.initialize();
 			this.setState("submitting");
@@ -347,6 +351,7 @@ export class ChatWidgetModel extends Disposable {
 				expectedSequence: thread.sequence,
 				text: input,
 				mode,
+				approvalMode: this.inputState.approvalMode,
 				model: this.isAutomaticModel ? undefined : this.selectedModel,
 				reasoningEffort: this.selectedReasoningEffort,
 				contexts,
@@ -372,6 +377,15 @@ export class ChatWidgetModel extends Disposable {
 			this.setError(error);
 			throw error;
 		}
+	}
+
+	selectApprovalMode(mode: ApprovalMode): void {
+		this.selectedApprovalModes.set(new Map(this.selectedApprovalModes.get()).set(this.composerIdentity, mode));
+		this._onDidChange.fire();
+	}
+
+	private get composerIdentity(): string {
+		return this.selection.kind === 'untitled' ? this.selection.session.untitledSessionId : this.selection.active.threadId;
 	}
 
 	async executeServerCommand(name: string, argumentsText: string): Promise<void> {
@@ -818,6 +832,11 @@ export class ChatWidgetModel extends Disposable {
 		if (mode) this.selectedModes.set(created.threadId, mode);
 		this.selectedModes.delete(untitledSession.untitledSessionId);
 		const effort = this.selectedReasoningEfforts.get(untitledSession.untitledSessionId);
+		const approvalModes = new Map(this.selectedApprovalModes.get());
+		const approvalMode = approvalModes.get(untitledSession.untitledSessionId);
+		if (approvalMode) approvalModes.set(created.threadId, approvalMode);
+		approvalModes.delete(untitledSession.untitledSessionId);
+		this.selectedApprovalModes.set(approvalModes);
 		if (effort) this.selectedReasoningEfforts.set(created.threadId, effort);
 		this.selectedReasoningEfforts.delete(untitledSession.untitledSessionId);
 		if (untitledSession.model) this.selectedModels.set(created.threadId, untitledSession.model);

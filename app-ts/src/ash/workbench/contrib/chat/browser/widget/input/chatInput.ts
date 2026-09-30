@@ -1,4 +1,4 @@
-import type { AgentResponse, ChatAgent, ChatMode, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction } from "../../../../../services/chat/common/chatService.js";
+import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction } from "../../../../../services/chat/common/chatService.js";
 import type { SkillReference } from "../../../../../../platform/skills/common/skillApi.js";
 import type { ModelRef } from "../../../../../services/chat/common/chatService.js";
 import type { ModelReasoningEffort } from "../../../../../services/chat/common/modelCatalog.js";
@@ -24,6 +24,7 @@ export interface ChatInputState {
 	readonly phase: ChatInputPhase;
 	readonly error?: string;
 	readonly canInterrupt: boolean;
+	readonly approvalMode?: ApprovalMode;
 	readonly models: readonly ModelCatalogEntry[];
 	readonly modelsError?: string;
 	readonly slashCommands: readonly SlashCommandDefinition[];

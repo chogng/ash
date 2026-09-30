@@ -5,7 +5,7 @@ import type { ICommandService } from "../../../../../platform/commands/common/co
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
-import type { AgentResponse, ChatAgent, ChatMode, ModelRef, SessionId, ThreadGoal, ThreadId } from "../../../../services/chat/common/chatService.js";
+import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelRef, SessionId, ThreadGoal, ThreadId } from "../../../../services/chat/common/chatService.js";
 import type { ChatInputDelegate } from "./input/chatInput.js";
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
 import { ChatInputPart } from "./input/chatInputPart.js";
@@ -46,6 +46,7 @@ export interface IChatWidgetModel extends IDisposable {
 	listAgents(): Promise<readonly ChatAgent[]>;
 	selectAgent(agent: ChatAgent | undefined): void;
 	selectMode(mode: ChatMode): void;
+	selectApprovalMode(mode: ApprovalMode): void;
 	resolveInteraction(response: AgentResponse): Promise<void>;
 	retryFailedTurn(turnId: string): Promise<void>;
 }

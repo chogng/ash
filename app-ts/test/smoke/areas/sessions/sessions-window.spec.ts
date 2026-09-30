@@ -13,6 +13,66 @@ async function replaceChatInput(editor: Editor, text: string): Promise<void> {
 	await editor.input.page().keyboard.insertText(text);
 }
 
+test('Sessions composer attaches files, chooses permissions, and restores the unsent draft', async ({ application, target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code');
+	let page = workbench.page;
+	if (target.kind === 'browser') {
+		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+	} else {
+		if (!('windows' in application)) throw new Error('Expected Electron windows');
+		const opened = application.waitForEvent('window');
+		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
+		page = await opened;
+	}
+	const composer = page.locator('.ash-sessions-chat-input').first();
+	const editor = new Editor(composer);
+	await expect(composer.locator('[data-action-id="ash.chat.input.attach"] button')).toHaveAccessibleName('Attach files');
+	await composer.locator('input[type="file"]').setInputFiles({ name: 'context.ts', mimeType: 'text/plain', buffer: Buffer.from('export const value = 42;') });
+	await expect(composer.getByRole('button', { name: 'Remove context.ts', exact: true })).toBeVisible();
+	await expect(composer.locator('[data-action-id="ash.chat.input.send"] button')).toBeEnabled();
+	const permissions = composer.getByRole('button', { name: 'Permissions: Ask permissions', exact: true });
+	await permissions.press('ArrowDown');
+	await page.getByRole('menuitemradio', { name: 'Automatic review', exact: true }).click();
+	await expect(composer.getByRole('button', { name: 'Permissions: Automatic review', exact: true })).toBeFocused();
+	await replaceChatInput(editor, 'Keep the attached draft');
+	await page.keyboard.press('Alt+F1');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Attachments can be sent without text/u);
+	await page.keyboard.press('Escape');
+	await expect(editor.input).toBeFocused();
+	await composer.locator('.ash-chat-input-container').evaluate(element => {
+		const clipboard = new DataTransfer();
+		const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a5ZkAAAAASUVORK5CYII='), character => character.charCodeAt(0));
+		clipboard.items.add(new File([bytes], 'clipboard.png', { type: 'image/png' }));
+		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: clipboard }));
+	});
+	await expect(composer.getByRole('button', { name: 'Remove clipboard.png', exact: true })).toBeVisible();
+	await editor.waitForEditorContents(contents => contents === 'Keep the attached draft');
+	await composer.locator('.ash-chat-input-container').evaluate(element => {
+		const transfer = new DataTransfer();
+		transfer.items.add(new File(['# Context'], 'dropped.md', { type: 'text/plain' }));
+		element.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: transfer }));
+	});
+	await expect(composer.locator('.ash-chat-drop-overlay')).toBeVisible();
+	await composer.locator('.ash-chat-input-container').evaluate(element => {
+		const transfer = new DataTransfer();
+		transfer.items.add(new File(['# Context'], 'dropped.md', { type: 'text/plain' }));
+		element.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer }));
+	});
+	await expect(composer.getByRole('button', { name: 'Remove dropped.md', exact: true })).toBeVisible();
+	await expect(composer.locator('.ash-chat-drop-overlay')).toBeHidden();
+	await composer.getByRole('button', { name: 'Remove dropped.md', exact: true }).click();
+	await expect(composer.getByRole('button', { name: 'Remove dropped.md', exact: true })).toHaveCount(0);
+	await composer.getByRole('button', { name: 'Dismiss tip', exact: true }).click();
+	await expect(composer.locator('.ash-chat-input-tip')).toHaveCount(0);
+	await editor.waitForEditorFocus();
+	await page.reload({ waitUntil: 'domcontentloaded' });
+	await new Editor(composer).waitForEditorContents(contents => contents === 'Keep the attached draft');
+	await expect(composer.getByRole('button', { name: 'Remove context.ts', exact: true })).toBeVisible();
+	await expect(composer.getByRole('button', { name: 'Remove clipboard.png', exact: true })).toBeVisible();
+	await expect(composer.locator('.ash-chat-input-tip')).toHaveCount(0);
+	await returnFromSessions(page);
+});
+
 test('Sessions composer configuration leaves Workbench input defaults unchanged', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	const parent = workbench.page;

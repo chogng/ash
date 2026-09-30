@@ -4,6 +4,20 @@ import { Extensions, type IConfigurationRegistry } from '../../../../platform/co
 import { Registry } from '../../../../platform/registry/common/platform.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.Chat,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError('Chat accessibility verbosity must be boolean');
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		title: localize('accessibility.chatVerbosityTitle', 'Chat accessibility help'),
+		description: localize('accessibility.chatVerbosityDescription', 'Announce how to open accessibility help when the Chat input receives focus.'),
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.ChatModelConfiguration,
 	defaultValue: true,
 	parse(value: unknown): boolean {

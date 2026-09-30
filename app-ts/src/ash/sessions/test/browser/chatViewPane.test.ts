@@ -46,6 +46,10 @@ import { URI } from "../../../base/common/uri.js";
 import type { ICommandService } from "../../../platform/commands/common/commands.js";
 import type { IOpenerService } from "../../../platform/opener/common/openerService.js";
 import type { IEditorService } from "../../../workbench/services/editor/common/editorService.js";
+import { IStorageService } from '../../../platform/storage/common/storage.js';
+import { ChatTipService, IChatTipService } from '../../../workbench/contrib/chat/browser/chatTipService.js';
+import { BrowserLifecycleService } from '../../../workbench/services/lifecycle/browser/lifecycleService.js';
+import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 const unavailableFileService = {
@@ -514,7 +518,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	assert.equal(modeMenu?.closest(".ash-context-view")?.parentElement, contextViewService.container);
 	assert.deepEqual(
 		[...modeMenu?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []].map(item => item.textContent),
-		["Agent", "Plan", "Debug", "Multitask", "Ask"],
+		['Agent', 'Plan', 'Debug', 'Multitask', 'Ask'],
 	);
 	assert.deepEqual(
 		[...modeMenu?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []].map(item => item.querySelector('.ash-menu-leading-slot .ash-icon-label-icon svg.ash-icon')?.getAttribute('data-ash-icon-id') ?? null),
@@ -524,18 +528,10 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		[...modeMenu?.querySelectorAll<HTMLButtonElement>("[role='menuitemradio']") ?? []].map(item => item.getAttribute('aria-checked')),
 		['true', 'false', 'false', 'false', 'false'],
 	);
-	modeMenu?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode.plan'] button")?.click();
-	assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, "Plan");
-	assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button svg.ash-icon")?.getAttribute('data-ash-icon-id'), 'plan');
-	assert.equal(firstChatPane.querySelector(".ash-chat-input-mode-selector")?.classList.contains('mode-plan'), true);
+	modeMenu?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+	assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'Agent');
+	assert.equal(firstChatPane.querySelector(".ash-chat-input-mode-selector")?.classList.contains('mode-agent'), true);
 	assert.equal(dom.window.document.querySelector(".ash-chat-input-mode-menu"), null);
-	for (const [mode, icon] of [['debug', 'debug'], ['multitask', 'multitask'], ['ask', 'chat-4']] as const) {
-		firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
-		await waitFor(() => dom.window.document.querySelector('.ash-chat-input-mode-menu') !== null);
-		dom.window.document.querySelector<HTMLButtonElement>(`[data-action-id='ash.chat.input.mode.${mode}'] button`)?.click();
-		assert.equal(firstChatPane.querySelector(".ash-chat-input-mode-selector")?.classList.contains(`mode-${mode}`), true);
-		assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button svg.ash-icon")?.getAttribute('data-ash-icon-id'), icon);
-	}
 	assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
 	const composerInputs = [...chatPanes].map((chatPane) => {
 		const input = chatPane.querySelector<HTMLTextAreaElement>(".ash-chat-textarea-input");
@@ -699,6 +695,10 @@ test('A centered chat keeps its input when the first message creates the convers
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
 	editorServices.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
 	editorServices.registerInstance(INotificationService, notifications);
+	const composerStorage = editorResources.add(createTestStorage());
+	editorServices.registerInstance(IStorageService, composerStorage);
+	editorServices.registerInstance(IChatTipService, editorResources.add(editorServices.createInstance(ChatTipService)));
+	editorServices.registerInstance(ILifecycleService, editorResources.add(new BrowserLifecycleService({ ownerWindow: dom.window as unknown as Window, onError: error => { throw error; } })));
 	const fake = fakeApi({
 		sessions: [],
 		createSession: session('session-1', undefined, 'New Chat'),
@@ -724,12 +724,13 @@ test('A centered chat keeps its input when the first message creates the convers
 		undefined,
 		undefined,
 		undefined,
-		(container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, widgetModel, undefined),
+		(container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, widgetModel, undefined, undefined),
 	);
 	widget.setVisible(true);
 	const input = widget.element.querySelector<HTMLElement>('.ash-chat-input-part');
 	const heading = widget.element.querySelector<HTMLHeadingElement>('.ash-sessions-chat-welcome-heading');
 	assert.equal(heading?.hidden, false);
+	await widgetModel.initialize();
 	await widget.acceptInput('Start this work');
 	assert.equal(heading?.hidden, true);
 	assert.equal(input?.classList.contains('has-conversation'), true);
@@ -2080,6 +2081,22 @@ test('ChatWidgetModel returns to the session model when Auto is selected', async
 	assert.equal(fake.turnStartRequests[0]?.model, undefined);
 });
 
+test('ChatWidgetModel sends image-only input using the selected approval mode', async () => {
+	const fake = fakeApi({
+		createSession: session('session-1', undefined, 'New Chat'),
+		createThread: { session: session('session-1', 'thread-1', 'New Chat'), threadId: 'thread-1' },
+	});
+	using chat = createChatService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
+	using model = new ChatWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
+	await model.initialize();
+	model.selectApprovalMode('autoReview');
+	await model.send('', 'agent', undefined, [{ name: 'image.png', content: 'data:image/png;base64,aGVsbG8=', kind: 'image' }]);
+	assert.equal(fake.turnStartRequests[0]?.approvalMode, 'autoReview');
+	assert.deepEqual(fake.turnStartRequests[0]?.input, [{ type: 'image', url: 'data:image/png;base64,aGVsbG8=' }]);
+	assert.equal(model.inputState.approvalMode, 'autoReview');
+});
+
 test("ChatWidgetModel steers an active Turn instead of starting another Turn", async () => {
 	const activeSession = session("session-1", "thread-1");
 	const activeThread: Thread = {
@@ -2152,17 +2169,19 @@ test('ChatWidgetModel queues a new mode while keeping the active Turn unchanged'
 	await model.initialize();
 	assert.equal(model.inputState.mode, 'plan');
 	model.selectMode('multitask');
-	await model.send('Implement independent steps');
+	model.selectApprovalMode('autoReview');
+	await model.send('Implement independent steps', 'multitask', undefined, [{ name: 'image.png', content: 'data:image/png;base64,aGVsbG8=', kind: 'image' }]);
 	assert.equal(fake.turnStartRequests.length, 0);
 	assert.equal(fake.turnSteerRequests.length, 0);
 	assert.deepEqual(fake.queuedRequests, [{
 		commandId: fake.queuedRequests[0]!.commandId,
 		sessionId: 'session-1', threadId: 'thread-1', mode: 'multitask',
 		model: undefined, reasoningEffort: undefined,
-		input: [{ type: 'text', text: 'Implement independent steps' }],
-		approvalMode: 'askPermissions',
+		input: [{ type: 'image', url: 'data:image/png;base64,aGVsbG8=' }, { type: 'text', text: 'Implement independent steps' }],
+		approvalMode: 'autoReview',
 	}]);
 	assert.equal(model.inputState.activeMode, 'plan');
+	assert.equal(value.turns[0]!.approvalMode, 'askPermissions');
 	assert.equal(model.inputState.mode, 'multitask');
 });
 

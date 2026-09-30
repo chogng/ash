@@ -6,8 +6,9 @@ import type { IAction } from "../../../../../../base/common/actions.js";
 import { Separator } from "../../../../../../base/common/actions.js";
 import type { Icon } from "../../../../../../base/common/icon.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../../../base/common/lifecycle.js";
+import { Emitter } from '../../../../../../base/common/event.js';
 import { Lxicon } from "../../../../../../base/common/lxicons.js";
-import { localize } from "../../../../../../nls.js";
+import { localize, onDidChangeNls } from "../../../../../../nls.js";
 import { WorkbenchToolBar } from "../../../../../../platform/actions/browser/toolbar.js";
 import type { IAccessibleViewService } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import type { IDictationService, IDictationSession } from "../../../../../../platform/dictation/common/dictationService.js";
@@ -17,6 +18,7 @@ import type { IContextMenuService } from "../../../../../../platform/contextview
 import type { IContextViewService } from "../../../../../../platform/contextview/browser/contextView.js";
 import type { ModelCatalogEntry } from "../../../../../services/chat/common/chatService.js";
 import type { ChatAgent } from '../../../../../services/chat/common/chatService.js';
+import { ChatAttachmentModel } from '../../attachments/chatAttachmentModel.js';
 import type { ModelReasoningEffort } from '../../../../../services/chat/common/modelCatalog.js';
 import type { ChatContextAttachment } from "../../../../../services/chat/common/chatContextService.js";
 import type { ModelRef } from "../../../../../services/chat/common/chatService.js";
@@ -58,16 +60,18 @@ const modeOptions: readonly { readonly id: ChatInputMode; readonly label: string
 /** Owns the complete input region and all user-facing interactions for one Chat pane. */
 export class ChatInputPart extends Disposable {
 	readonly element: HTMLElement;
+	private readonly inputChanges = this._register(new Emitter<void>());
+	protected readonly onDidChangeInput = this.inputChanges.event;
 	private readonly delegate: ChatInputDelegate;
 	private readonly interactionListeners = this._register(new DisposableStore());
 	private readonly attachmentListeners = this._register(new DisposableStore());
-	private readonly attachments = new Map<string, ChatContextAttachment>();
+	protected readonly attachmentModel = this._register(new ChatAttachmentModel());
 	private readonly status: HTMLDivElement;
 	private readonly dictationPreview: HTMLDivElement;
 	private readonly interaction: HTMLDivElement;
 	private readonly attachmentList: HTMLDivElement;
-	private readonly inputContainer: HTMLFormElement;
-	private readonly input: IChatInputEditor;
+	protected readonly inputContainer: HTMLFormElement;
+	protected readonly input: IChatInputEditor;
 	private readonly inputToolbar: WorkbenchToolBar;
 	private readonly pickerResponsiveLayout: ChatInputPickerResponsiveLayout;
 	private readonly slashCommands = new SlashCommandCatalog(DesktopSlashCommands, []);
@@ -83,8 +87,9 @@ export class ChatInputPart extends Disposable {
 	private dictationCancelStart = false;
 	private visible = true;
 	private draftRevision = 0;
+	private submitting = false;
 
-	constructor(container: HTMLElement, delegate: ChatInputDelegate, contextMenuService: IContextMenuService, contextViewService: IContextViewService, private readonly accessibleViewService: IAccessibleViewService, private readonly notifications: INotificationService, private readonly dictation?: IDictationService, editorProvider: Pick<IChatInputEditorProvider, 'create'> = ChatInputEditors) {
+	constructor(container: HTMLElement, delegate: ChatInputDelegate, contextMenuService: IContextMenuService, contextViewService: IContextViewService, private readonly accessibleViewService: IAccessibleViewService, private readonly notifications: INotificationService, private readonly dictation?: IDictationService, editorProvider: Pick<IChatInputEditorProvider, 'create'> = ChatInputEditors, private readonly additionalActions: readonly IAction[] = []) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.delegate = delegate;
@@ -134,12 +139,23 @@ export class ChatInputPart extends Disposable {
 		}));
 		this._register(this.input.onDidChange(() => {
 			this.draftRevision++;
+			this.inputChanges.fire();
 			this.status.textContent = this.statusText(this.state);
 			this.renderToolbar();
 		}));
 		this._register(this.input.onDidSubmit(() => this.inputContainer.requestSubmit()));
+		this._register(this.attachmentModel.onDidChange(() => {
+			this.draftRevision++;
+			this.renderAttachments();
+			this.renderToolbar();
+			this.inputChanges.fire();
+		}));
 		this.renderToolbarActions();
 		this.renderAttachments();
+		this._register(onDidChangeNls(() => {
+			this.renderToolbarActions();
+			this.renderAttachments();
+		}));
 		this._register(toDisposable(() => this.element.remove()));
 		this._register(toDisposable(() => { void this.stopDictation(); }));
 	}
@@ -150,8 +166,7 @@ export class ChatInputPart extends Disposable {
 		try {
 			await operation;
 			for (const context of contexts) {
-				const key = attachmentKey(context);
-				if (this.attachments.get(key) === context) this.attachments.delete(key);
+				if (this.attachmentModel.attachments.includes(context)) this.attachmentModel.delete(context.id);
 			}
 			this.renderAttachments();
 		} catch (error) {
@@ -168,16 +183,13 @@ export class ChatInputPart extends Disposable {
 	}
 
 	addContext(attachment: ChatContextAttachment): void {
-		if (!attachment.id.trim() || !attachment.kind.trim() || !attachment.name.trim()) throw new TypeError("Chat context attachment requires an ID, kind, and name");
-		this.attachments.set(attachmentKey(attachment), attachment);
-		this.draftRevision++;
-		this.renderAttachments();
+		this.attachmentModel.addContext(attachment);
 	}
 
 	async captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined> {
 		const text = this.input.value;
 		const mode = this.mode;
-		const attachments = [...this.attachments.values()];
+		const attachments = this.attachmentModel.attachments;
 		if (!text && attachments.length === 0) return undefined;
 		const revision = this.draftRevision;
 		const contexts = await Promise.all(attachments.map(async attachment => ({
@@ -192,48 +204,59 @@ export class ChatInputPart extends Disposable {
 			clear: () => {
 				if (this.draftRevision !== revision || this.mode !== mode) return;
 				this.input.value = '';
-				this.attachments.clear();
+				this.attachmentModel.clear();
 				this.draftRevision++;
 				this.renderAttachments();
 				this.renderToolbar();
+				this.inputChanges.fire();
 			},
 		};
 	}
 
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void {
-		if (this.input.value || this.attachments.size > 0) throw new Error(localize('chat.draftHandoffConflict', 'The Agents Window already has an unsent draft in this chat.'));
+		if (this.input.value || this.attachmentModel.size > 0) throw new Error(localize('chat.draftHandoffConflict', 'The Agents Window already has an unsent draft in this chat.'));
 		this.delegate.selectMode(draft.mode);
 		this.input.value = draft.text;
 		for (const context of draft.contexts) {
-			this.attachments.set(attachmentKey(context), {
+			this.attachmentModel.addContext({
 				id: context.id,
 				kind: context.kind,
 				name: context.name,
-				resolve: async () => ({ name: context.name, content: context.content }),
+				resolve: async () => context.kind === 'image' ? { name: context.name, content: context.content, kind: 'image' } : { name: context.name, content: context.content },
 			});
 		}
 		this.draftRevision++;
 		this.renderAttachments();
 		this.renderToolbar();
+		this.inputChanges.fire();
 	}
 
 	async acceptInput(value?: string): Promise<void> {
+		if (this.submitting || this.state.phase === 'loading' || this.state.phase === 'submitting') return;
 		if (value !== undefined) this.input.value = value;
-		if (this.dictationSession || this.dictationStarting) await this.stopDictation();
-		const inputValue = this.input.value;
-		if (!inputValue.trim()) return;
-		const input = parseSlashCommandInput(inputValue, this.slashCommands);
-		if (input.kind === "command" && input.binding.origin === "local") {
-			await this.submit(inputValue, [], this.delegate.executeCommand({ commandId: input.binding.actionId, argumentsText: input.argumentsText }));
-			return;
+		if (!this.input.value.trim() && this.attachmentModel.size === 0) return;
+		this.submitting = true;
+		this.renderToolbar();
+		try {
+			if (this.dictationSession || this.dictationStarting) await this.stopDictation();
+			const inputValue = this.input.value;
+			const input = parseSlashCommandInput(inputValue, this.slashCommands);
+			if (input.kind === "command" && input.binding.origin === "local") {
+				await this.submit(inputValue, [], this.delegate.executeCommand({ commandId: input.binding.actionId, argumentsText: input.argumentsText }));
+				return;
+			}
+			if (input.kind === "command" && input.binding.origin === "server") {
+				await this.submit(inputValue, [], this.delegate.executeServerCommand({ name: input.command.name, argumentsText: input.argumentsText }));
+				return;
+			}
+			const skills = this.skills.referencesIn(inputValue);
+			const contexts = this.attachmentModel.attachments;
+			await this.submit(inputValue, contexts, this.delegate.send(inputValue, this.mode, skills.length > 0 ? skills : undefined, contexts));
+		} finally {
+			this.submitting = false;
+			this.renderToolbar();
+			this.inputChanges.fire();
 		}
-		if (input.kind === "command" && input.binding.origin === "server") {
-			await this.submit(inputValue, [], this.delegate.executeServerCommand({ name: input.command.name, argumentsText: input.argumentsText }));
-			return;
-		}
-		const skills = this.skills.referencesIn(inputValue);
-		const contexts = [...this.attachments.values()];
-		await this.submit(inputValue, contexts, this.delegate.send(inputValue, this.mode, skills.length > 0 ? skills : undefined, contexts));
 	}
 
 	openModelSelector(): void {
@@ -269,10 +292,10 @@ export class ChatInputPart extends Disposable {
 
 	private renderToolbar(): void {
 		const input = parseSlashCommandInput(this.input.value, this.slashCommands);
-		const canSubmitIntent = input.kind === "message" ? input.text.trim().length > 0 : this.input.value.trim().length > 0;
+		const canSubmitIntent = input.kind === "message" ? input.text.trim().length > 0 || this.attachmentModel.size > 0 : this.input.value.trim().length > 0;
 		const state: ChatInputToolbarState = {
 			mode: this.mode,
-			canSubmit: canSubmitIntent && this.state.phase !== "submitting",
+			canSubmit: canSubmitIntent && !this.submitting && (this.state.phase === 'ready' || this.state.phase === 'error'),
 			hasInput: canSubmitIntent,
 			canInterrupt: this.state.canInterrupt,
 			inputKind: input.kind === "message" ? "message" : "command",
@@ -404,7 +427,7 @@ export class ChatInputPart extends Disposable {
 				new ChatInputAction("ash.chat.input.interrupt", "Stop", "Stop response", Lxicon.close, true, "interrupt", () => void this.delegate.interrupt()),
 			]
 			: [sendAction];
-		const inputActions = this.toolbarState.inputKind === "command" ? [modeAction] : [modeAction, modelAction, ...(effortAction ? [effortAction] : []), micAction];
+		const inputActions = this.toolbarState.inputKind === "command" ? [modeAction] : [...this.additionalActions, modeAction, modelAction, ...(effortAction ? [effortAction] : []), micAction];
 		this.inputToolbar.setActions([...inputActions, ...trailingActions]);
 		this.pickerResponsiveLayout.layout();
 	}
@@ -478,7 +501,7 @@ export class ChatInputPart extends Disposable {
 	private renderAttachments(): void {
 		this.attachmentListeners.clear();
 		const children: HTMLElement[] = [];
-		for (const attachment of this.attachments.values()) {
+		for (const attachment of this.attachmentModel.attachments) {
 			const item = h(this.element.ownerDocument, "div");
 			item.className = "ash-chat-input-attachment-item";
 			const label = h(this.element.ownerDocument, "span");
@@ -487,12 +510,10 @@ export class ChatInputPart extends Disposable {
 			const remove = h(this.element.ownerDocument, "button");
 			remove.type = "button";
 			remove.className = "ash-chat-input-attachment-remove";
-			remove.setAttribute("aria-label", `Remove ${attachment.name}`);
+			remove.setAttribute('aria-label', localize('chat.attach.remove', 'Remove {0}', attachment.name));
 			appendIcon(Lxicon.close, remove);
 			this.attachmentListeners.add(addDisposableListener(remove, "click", () => {
-				this.attachments.delete(attachmentKey(attachment));
-				this.draftRevision++;
-				this.renderAttachments();
+				this.attachmentModel.delete(attachment.id);
 			}));
 			item.append(label, remove);
 			children.push(item);
@@ -639,10 +660,6 @@ export class ChatInputPart extends Disposable {
 				return state.canInterrupt ? "Ash is working..." : "";
 		}
 	}
-}
-
-function attachmentKey(attachment: Pick<ChatContextAttachment, 'id' | 'kind'>): string {
-	return `${attachment.kind}\0${attachment.id}`;
 }
 
 class ChatInputAction implements IAction {

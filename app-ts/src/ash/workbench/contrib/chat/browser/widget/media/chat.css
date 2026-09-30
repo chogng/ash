@@ -149,6 +149,32 @@
   display: none;
 }
 
+.ash-chat-input-part .ash-chat-input-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ash-spacing-size80);
+  margin-bottom: var(--ash-spacing-size80);
+  padding-inline: var(--ash-spacing-size80);
+  color: var(--ash-description-foreground);
+  font-size: 12px;
+}
+
+.ash-chat-input-tip > .ash-markdown {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ash-chat-input-tip .ash-markdown p {
+  margin: 0;
+}
+
+.ash-chat-input-tip > .ash-button {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+}
+
 .ash-chat-input-attachment-item {
   display: flex;
   align-items: center;

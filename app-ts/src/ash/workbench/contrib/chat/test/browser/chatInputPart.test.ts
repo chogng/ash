@@ -25,14 +25,48 @@ for (const [name, value] of Object.entries({
 const sharedNotifications = new NotificationService();
 suiteTeardown(() => sharedNotifications.dispose());
 
-function inputPart(notifications: NotificationService, dictation?: IDictationService, mode: ChatInputState['mode'] = 'agent'): ChatInputPart {
+function inputPart(notifications: NotificationService, dictation?: IDictationService, mode: ChatInputState['mode'] = 'agent', delegate: Partial<ChatInputDelegate> = {}): ChatInputPart {
 	const container = document.createElement('div');
 	document.body.append(container);
 	let state: ChatInputState = { mode, queuedMessages: 0, phase: 'loading', canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
-	const part = new ChatInputPart(container, { selectMode: selected => { state = { ...state, mode: selected }; part.render(state); } } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, dictation);
+	const part = new ChatInputPart(container, { ...delegate, selectMode: selected => { state = { ...state, mode: selected }; part.render(state); } } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, dictation);
 	part.render(state);
 	return part;
 }
+
+test('Chat input sends attachments without text and rejects duplicate submissions while pending', async () => {
+	let complete!: () => void;
+	const sent: string[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'debug', {
+		send: async (text, mode, _skills, contexts) => {
+			sent.push(text);
+			assert.equal(mode, 'debug');
+			assert.equal(contexts?.[0]?.name, 'file.ts');
+			await new Promise<void>(resolve => { complete = resolve; });
+		},
+	});
+	part.render({ mode: 'debug', queuedMessages: 0, phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.addContext({ id: 'file', kind: 'file', name: 'file.ts', resolve: async () => ({ name: 'file.ts', content: 'let value = 1;' }) });
+	assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.send"] button')?.disabled, false);
+	const pending = part.acceptInput();
+	await part.acceptInput();
+	edit(part, 'Next draft');
+	complete();
+	await pending;
+	assert.deepEqual(sent, ['']);
+	assert.equal(part.element.querySelector('textarea')?.value, 'Next draft');
+	assert.equal(part.element.querySelector('.ash-chat-input-attachments')?.textContent, '');
+});
+
+test('Chat input keeps failed attachments and restores text for retry', async () => {
+	using part = inputPart(sharedNotifications, undefined, 'agent', { send: async () => { throw new Error('Request failed'); } });
+	part.render({ mode: 'agent', queuedMessages: 0, phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.addContext({ id: 'image', kind: 'image', name: 'image.png', resolve: async () => ({ name: 'image.png', content: 'data:image/png;base64,aGVsbG8=', kind: 'image' }) });
+	await assert.rejects(part.acceptInput('Review image'), /Request failed/u);
+	const captured = await part.captureDraft();
+	assert.equal(captured?.draft.text, 'Review image');
+	assert.equal(captured?.draft.contexts[0]?.kind, 'image');
+});
 
 function edit(part: ChatInputPart, text: string): void {
 	const input = part.element.querySelector('textarea');

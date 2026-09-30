@@ -335,6 +335,7 @@ export interface StartTurnOptions {
 	readonly expectedSequence: number;
 	readonly text: string;
 	readonly mode: ChatMode;
+	readonly approvalMode?: ApprovalMode;
 	readonly model?: ModelRef;
 	/** Overrides this Turn's model effort without changing the user's model settings. */
 	readonly reasoningEffort?: ModelReasoningEffort;

@@ -27,7 +27,9 @@ is canonical for the renderer implementation and extension points.
 | Provider and management | `contrib/providers/appServer/browser/workbenchSessionsService.contribution.ts`, `services/sessions/common/sessionsManagement.ts`, and `services/sessions/browser/sessionsManagementService.ts` | the App Server provider adapts transport data; management owns catalog, drafts, and operations; the contribution registers and starts it in the regular Workbench |
 | Regular Workbench Chat | `browser/workbenchChat.contribution.ts`, `browser/chatViewPane.ts`, and `browser/chatWidgetModel.ts` | registers the Session-backed Chat view, actions, and navigation service; one model owns selection, draft materialization, and Thread subscriptions for each shared `ChatWidget` |
 | Main conversation | `browser/parts/sessionsChatView.ts` | renders visible durable and untitled Sessions as retained full `ChatWidget` Grid leaves |
-| Sessions composer | `contrib/chat/browser/newChatInput.ts` and `contrib/chat/browser/media/chatInput.css` | owns the welcome layout, first-send placement, appearance, and embedded-editor sizing; reuses shared input operations without changing Workbench defaults |
+| Sessions composer | `contrib/chat/browser/newChatInput.ts`, `newChatContextAttachments.ts`, and `media/chatInput.css` | owns the welcome layout, embedded-editor sizing, file acquisition, paste/drop entry points, and per-composer permission menu; shared input operations and attachment state remain in Workbench |
+| Composer persistence | `contrib/chat/common/newChatDraftState.ts` | owns workspace-scoped serialized drafts; new sessions restore the most recently visible draft, while durable Threads use separate keys |
+| Welcome tips | `workbench/contrib/chat/browser/chatTipService.ts` and `widget/input/chatInputTipPresenter.ts` | the service owns profile-scoped dismissal; the presenter renders only while the Sessions composer is empty and ready, and yields to approval or error state |
 | Turn review | `browser/turnMultiDiffSource.ts` and `browser/turnMultiDiffSource.contribution.ts` | compose Turn changes and register their source resolver and commit action with `workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.ts` |
 | Parts | `browser/parts/` | owns product chrome, window navigation, list, primary surface, and typed active context |
 | Activity Bar | `browser/parts/activitybar/` | owns Sessions page navigation, account entry, DOM, and presentation; reuses shared Parts, controls, configuration, and menu services without importing Workbench Activity Bar styles |
@@ -45,6 +47,20 @@ input factory. Sessions selects its embedded `CodeEditorWidget` adapter per
 composer; it does not change the Workbench editor registry. Its CSS styles only
 its own root and configures the shared input through component properties.
 Sessions-only input behavior and appearance stay in this contribution.
+
+The shared `ChatAttachmentModel` owns each composer's attachment collection.
+Sessions file acquisition resolves UTF-8 text or supported image data before
+adding it. `ChatService` converts resolved images to image input items and omits
+empty text when sending attachments alone. Approval choice remains in the Chat
+model and is applied to a new Turn through the existing backend contract.
+Changing it does not change the approval mode of a running Turn.
+
+Unsent composer content is window/workspace UI state, separate from the Session
+catalog's untitled identities. The first new composer in a window claims the
+saved new-session draft; later new composers start empty. Once materialized,
+the new-session storage entry is removed. Thread changes save and restore the
+corresponding draft, and renderer shutdown joins pending attachment resolution
+before flushing storage.
 
 ## Execution path
 

@@ -23,6 +23,8 @@ import { ILanguageConfigurationService, LanguageConfigurationService } from '../
 import { ILanguageFeaturesService } from '../../editor/common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../editor/common/services/languageFeaturesService.js';
 import { NewChatInputWidget } from '../contrib/chat/browser/newChatInput.js';
+import { ChatTipService, IChatTipService } from '../../workbench/contrib/chat/browser/chatTipService.js';
+import { readNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
 import { IAccessibilityService } from '../../platform/accessibility/common/accessibility.js';
 import { AccessibilityService } from '../../platform/accessibility/browser/accessibilityService.js';
 import { ILogService } from '../../platform/log/common/log.js';
@@ -204,6 +206,7 @@ export class Workbench extends Disposable {
 		const accountService = this._register(new AppServerAccountService(options.api.accounts, options.api.events));
 		services.registerInstance(IAccountService, accountService);
 		services.registerInstance(IStorageService, storage);
+		services.registerInstance(IChatTipService, this._register(services.createInstance(ChatTipService)));
 		this.lifecycleService = this._register(options.lifecycleService);
 		services.registerInstance(ILifecycleService, this.lifecycleService);
 		this._register(this.lifecycleService.onWillShutdown(event => {
@@ -350,6 +353,7 @@ export class Workbench extends Disposable {
 			if (event.affectsConfiguration(AccessibilityVerbositySettingId.SessionsActivityBar)) updateActivityBarHelpHint();
 		}));
 		updateActivityBarHelpHint();
+		let restoreNewChatDraft = true;
 		sessionsPart = this.sessionsPart = this._register(new SessionsPart(this.domNode, {
 			sessionService: sessions,
 			chatService: chat,
@@ -359,7 +363,11 @@ export class Workbench extends Disposable {
 			accessibleViewService,
 			notifications: notificationService,
 			commandService,
-			createInputPart: (container, delegate, model) => services.createInstance(NewChatInputWidget, container, delegate, model, options.api.dictation),
+			createInputPart: (container, delegate, model) => {
+				const draft = model.untitledSessionId && restoreNewChatDraft ? readNewChatDraftState(storage) : undefined;
+				if (model.untitledSessionId) restoreNewChatDraft = false;
+				return services.createInstance(NewChatInputWidget, container, delegate, model, options.api.dictation, draft);
+			},
 			activateSelection: selection => view.activateSelection(selection),
 			closeSelection: selection => view.closeVisibleSelection(selection),
 		}));

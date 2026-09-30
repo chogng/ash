@@ -6,6 +6,33 @@ import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from "../../../work
 import type { SessionId, ThreadId } from "../../services/sessions/common/session.js";
 import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
+import { localizedString } from '../../../platform/action/common/action.js';
+import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
+import type { ApprovalMode } from '../../../workbench/services/chat/common/chatService.js';
+import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/widget/chatWidget.js';
+import { Menus } from '../menus.js';
+
+for (const [mode, key, label] of [
+	['askPermissions', 'sessions.chat.permission.ask', 'Ask permissions'],
+	['autoReview', 'sessions.chat.permission.auto', 'Automatic review'],
+	['bypassPermissions', 'sessions.chat.permission.full', 'Full access'],
+] as const satisfies readonly (readonly [ApprovalMode, string, string])[]) {
+	registerAction2(class SelectSessionApprovalMode extends Action2 {
+		constructor() {
+			super({
+				id: `sessions.chat.permission.${mode}`,
+				title: localizedString('ash', key, label),
+				toggled: ContextKeyExpr.equals('sessionsChatApprovalMode', mode),
+				menu: { id: Menus.NewSessionControl, group: 'navigation' },
+			});
+		}
+
+		override run(_accessor: ServicesAccessor, model: IChatWidgetModel): void {
+			// The menu carries its own composer model, including when another pane is active.
+			model.selectApprovalMode(mode);
+		}
+	});
+}
 
 // ChatWidget shares these command IDs with the regular Workbench; this window owns their Sessions behavior.
 registerAction2(class NewSessionsChatAction extends Action2 {

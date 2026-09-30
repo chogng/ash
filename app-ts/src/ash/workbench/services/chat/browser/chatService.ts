@@ -11,6 +11,7 @@ import type { ITurnChangesApi } from "../../../../platform/turnChanges/common/tu
 import type { ModelRef, SessionId, ThreadId } from "../common/chatService.js";
 import type { AdvisorConfig, ConfigureAdvisorOptions, ConsultAdvisorOptions, CompactContextOptions, IChatService, InterruptTurnOptions, ModelCatalogEntry, ResolveInteractionOptions, SkillSelectorDefinition, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope, TurnChangeDetails, TurnChangeSetSummary, TurnChangesUpdate } from "../common/chatService.js";
 import type { ModelProviderCredentialStatus } from '../common/chatService.js';
+import type { ResolvedChatContext } from '../common/chatContextService.js';
 import { ModelCatalogConfiguration, modelRefIdentity } from "../common/modelCatalog.js";
 
 export interface ChatServiceOptions {
@@ -212,11 +213,11 @@ export class ChatService extends Disposable implements IChatService {
 
 	async startTurn(options: StartTurnOptions): Promise<void> {
 		const input = turnInput(options);
-		await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, mode: options.mode, approvalMode: "askPermissions", model: options.model, reasoningEffort: options.reasoningEffort, input });
+		await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, mode: options.mode, approvalMode: options.approvalMode ?? "askPermissions", model: options.model, reasoningEffort: options.reasoningEffort, input });
 	}
 
 	async queueTurn(options: StartTurnOptions): Promise<void> {
-		await this.options.turnApi.enqueue({ commandId: commandId("queued-turn"), sessionId: options.sessionId, threadId: options.threadId, mode: options.mode, model: options.model, reasoningEffort: options.reasoningEffort, input: turnInput(options), approvalMode: "askPermissions" });
+		await this.options.turnApi.enqueue({ commandId: commandId("queued-turn"), sessionId: options.sessionId, threadId: options.threadId, mode: options.mode, model: options.model, reasoningEffort: options.reasoningEffort, input: turnInput(options), approvalMode: options.approvalMode ?? "askPermissions" });
 	}
 
 	async queuedMessageCount(sessionId: SessionId, threadId: ThreadId): Promise<number> {
@@ -258,8 +259,8 @@ export class ChatService extends Disposable implements IChatService {
 			turnId: options.turnId,
 			expectedSequence: options.expectedSequence,
 			input: [
-				...(options.contexts ?? []).map(context => ({ type: "context" as const, name: context.name, content: context.content })),
-				{ type: "text", text: options.text },
+				...(options.contexts ?? []).map(toContextInput),
+				...(options.text.trim() ? [{ type: "text" as const, text: options.text }] : []),
 			],
 		});
 	}
@@ -341,6 +342,12 @@ export class ChatService extends Disposable implements IChatService {
 	}
 }
 
+function toContextInput(context: ResolvedChatContext): InputItem {
+	return context.kind === 'image'
+		? { type: 'image', url: context.content }
+		: { type: 'context', name: context.name, content: context.content };
+}
+
 function sameModelCatalog(left: readonly ModelCatalogEntry[], right: readonly ModelCatalogEntry[]): boolean {
 	return left.length === right.length && left.every((entry, index) => {
 		const candidate = right[index];
@@ -407,8 +414,8 @@ function toThread(thread: ThreadDto): Thread {
 function turnInput(options: StartTurnOptions): InputItem[] {
 	return [
 		...(options.skills ?? []).map(skill => ({ type: "skill" as const, skill: skill as SkillRefDto })),
-		...(options.contexts ?? []).map(context => ({ type: "context" as const, name: context.name, content: context.content })),
-		{ type: "text", text: options.text },
+		...(options.contexts ?? []).map(toContextInput),
+		...(options.text.trim() ? [{ type: "text" as const, text: options.text }] : []),
 	];
 }
 
