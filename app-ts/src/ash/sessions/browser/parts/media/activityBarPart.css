@@ -65,3 +65,8 @@
 	width: var(--ash-activity-bar-icon-size);
 	height: var(--ash-activity-bar-icon-size);
 }
+
+.ash-workbench[data-color-scheme^="high-contrast-"] .ash-sessions-activity-item:is(.selected, :hover):not(:disabled):not(:focus-visible) {
+	outline: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
+	outline-offset: -1px;
+}

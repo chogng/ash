@@ -1,0 +1,52 @@
+.ash-sessions-titlebar {
+  background: var(--ash-title-bar-background);
+}
+
+.ash-sessions-titlebar > .ash-workbench-part-content {
+  display: flex;
+  width: 100%;
+  flex-direction: row;
+  align-items: center;
+  padding: 0 var(--ash-spacing-size160) 0 var(--ash-spacing-size20);
+}
+
+.ash-sessions-titlebar-left {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.ash-sessions-titlebar-left { align-self: stretch; }
+
+.ash-workbench[data-runtime="electron"] .ash-sessions-titlebar { -webkit-app-region: drag; }
+.ash-workbench[data-runtime="electron"] .ash-sessions-titlebar-actions { -webkit-app-region: no-drag; }
+
+.ash-sessions-window-controls-spacer {
+  flex: 0 0 max(70px, calc(70px * var(--ash-sessions-inverse-zoom-factor)));
+  align-self: stretch;
+}
+
+.ash-workbench.ash-sessions-fullscreen .ash-sessions-window-controls-spacer { display: none; }
+
+.ash-sessions-titlebar-actions {
+  --ash-action-bar-gap: var(--ash-spacing-size80);
+  --ash-toolbar-action-size: var(--ash-spacing-size280);
+  /* Sessions uses the same fill for pointer intent and persistent selection. */
+  --ash-toolbar-hover-background: var(--ash-sessions-selection-background);
+  --ash-action-bar-toggled-background: var(--ash-sessions-selection-background);
+  color: var(--ash-title-bar-foreground);
+}
+
+.ash-sessions-titlebar-actions .ash-button {
+  border-radius: var(--ash-corner-radius-large);
+}
+
+.ash-sessions-titlebar-actions .ash-button:not(:disabled):hover,
+.ash-sessions-titlebar-actions .ash-button.active {
+  background: var(--ash-sessions-selection-background);
+}
+
+.ash-workbench[data-color-scheme^="high-contrast-"] .ash-sessions-titlebar-actions .ash-button:is(.checked, .active, :hover):not(:disabled):not(:focus-visible) {
+  outline: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
+  outline-offset: -1px;
+}

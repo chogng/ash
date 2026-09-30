@@ -93,7 +93,7 @@ import { AuxiliaryBarPart } from "./parts/auxiliaryBarPart.js";
 import { ActivityBarPart, type SessionsActivityPage } from './parts/activityBarPart.js';
 import { SessionsPart } from "./parts/sessionsPart.js";
 import { SidebarPart } from "./parts/sidebarPart.js";
-import { TitlebarPart } from "./parts/titlebarPart.js";
+import { TitlebarPart } from "./parts/titlebar/titlebarPart.js";
 
 export interface IWorkbenchOptions {
 	readonly modeId: WorkbenchModeId;

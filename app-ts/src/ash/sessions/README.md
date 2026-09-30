@@ -29,7 +29,7 @@ is canonical for the renderer implementation and extension points.
 | Main conversation | `browser/parts/sessionsChatView.ts` | renders visible durable and untitled Sessions as retained full `ChatWidget` Grid leaves |
 | Turn review | `browser/turnMultiDiffSource.ts` and `browser/turnMultiDiffSource.contribution.ts` | compose Turn changes and register their source resolver and commit action with `workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.ts` |
 | Parts | `browser/parts/` | owns product chrome, window navigation, list, primary surface, and typed active context |
-| Application menu | `browser/parts/menubar.contribution.ts` | registers the Sessions window's menu sections and window actions; the titlebar uses the shared Workbench menu control |
+| Application menu | `browser/parts/menubar.contribution.ts` and `browser/parts/titlebar/` | the contribution registers Sessions menu sections and window actions; the Sessions titlebar owns menu interaction and presentation using the shared Toolbar and menu services |
 | Session chat commands | `browser/actions/sessionsChatActions.ts` | maps the reused ChatWidget New Chat and History commands to the Sessions window's draft and active-chat selection |
 | Open Agents Window | `code/browser/workbench/modes/code.ts`, `workbench/contrib/chat/electron-browser/`, `contrib/openAgentsWindow/electron-browser/`, and `workbench/browser/parts/titlebar/` | the Code browser mode owns page navigation; the Chat desktop contribution owns the titlebar action, hover label, and window command; the Sessions desktop contribution owns system-wide shortcut synchronization; the Workbench titlebar owns the shared mark and motion. Shared shortcut selection lives in `workbench/contrib/keybindings/`, while `platform/globalKeybindings/` owns operating-system registrations |
 
@@ -61,7 +61,7 @@ model supplied by Sessions and does not create or select Sessions itself.
    The Activity Bar selects Chat, Collaboration, Library, and Code; Collaboration and Library currently show empty pages.
    Mobile devices remains unavailable. Its right-click menu moves the
    controls to the sidebar top or bottom, hides them, or selects the side rail size through
-   `sessions.activityBar.compact`. The titlebar uses the shared application menu control with Sessions-owned menu contributions and owns sidebar visibility
+   `sessions.activityBar.compact`. The Sessions-owned titlebar composes shared Toolbar and menu services with Sessions menu contributions and owns sidebar visibility
    and session history. Code shows an empty page in the primary Part; the sidebar owns the new-session control.
    Its spacing follows `sessions.layoutStyle`, independently of the IDE's
    `workbench.layoutStyle`. Both preferences use the same profile settings
