@@ -1,4 +1,4 @@
-import { WorkbenchModeRegistry, type WorkbenchModeId } from "../common/workbenchMode.js";
+import type { WorkbenchModeId } from "../common/workbenchMode.js";
 import type { RendererCapabilityContribution } from "../../platform/app-server/browser/webRendererApi.js";
 import { BrowserClipboardService } from "../../platform/clipboard/browser/clipboardService.js";
 import { startWebWorkbench } from "./web.factory.js";
@@ -8,7 +8,6 @@ import { connectBrowserWorkbenchHost } from './web.host.js';
 
 /** Starts a Workbench mode after resolving its optional development host. */
 export function startBrowserWorkbench(modeId: WorkbenchModeId, rendererCapabilities: readonly RendererCapabilityContribution[] = []): void {
-	document.title = WorkbenchModeRegistry.get(modeId).title;
 	void startBrowserWorkbenchAsync(modeId, rendererCapabilities);
 }
 

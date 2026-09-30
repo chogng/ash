@@ -11,9 +11,11 @@ import { WorkbenchWindowBarHeight } from "../workbenchPartDimensions.js";
 import { BrowserMenubarControl, type IMenubarControl } from "./menubarControl.js";
 import type { ILocalizationService } from "../../../services/localization/common/localizationService.js";
 import { CommandCenterControl } from "./commandCenterControl.js";
+import type { WindowTitle } from './windowTitle.js';
 
 /** Inputs shared by web and Electron titlebar factories. */
 export interface ITitlebarPartFactoryOptions {
+	readonly windowTitle: Pick<WindowTitle, 'value' | 'onDidChange'>;
 	readonly menuService: IMenuService;
 	readonly contextMenuService: IContextMenuService;
 	readonly localizationService: ILocalizationService;
@@ -57,7 +59,7 @@ export class BrowserTitlebarPart extends WorkbenchPart {
 		const centerDomNode = h(ownerDocument, "div");
 		centerDomNode.className = "ash-titlebar-center";
 		this.contentDomNode.before(centerDomNode);
-		this._register(instantiationService.createInstance(CommandCenterControl, centerDomNode, options.localizationService));
+		this._register(instantiationService.createInstance(CommandCenterControl, centerDomNode, options.windowTitle, options.localizationService));
 		const centerAdjacentActionsDomNode = h(ownerDocument, "div");
 		centerAdjacentActionsDomNode.className = "ash-titlebar-center-adjacent-actions ash-titlebar-interactive-region";
 		centerDomNode.append(centerAdjacentActionsDomNode);

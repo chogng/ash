@@ -157,7 +157,6 @@ class BrowserAuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 		if (id === undefined) throw new Error("Auxiliary window registration did not produce an identity");
 		this.id = id;
 		this.whenStylesHaveLoaded = this._register(cloneDocumentStyles(sourceWindow.document, window.document)).whenStylesHaveLoaded;
-		window.document.title = title;
 		window.document.documentElement.lang = sourceWindow.document.documentElement.lang;
 		window.document.documentElement.dir = sourceWindow.document.documentElement.dir;
 		window.document.body.replaceChildren();

@@ -1560,7 +1560,7 @@ test("BrowserAuxiliaryWindowService opens, registers, mirrors styles, and releas
 	const service = services.createInstance(BrowserAuxiliaryWindowService, opener.window as unknown as Window, root);
 	const auxiliary = await service.open({ title: "Detached Editor", width: 640, height: 480 });
 
-	assert.equal(auxiliary.window.document.title, "Detached Editor");
+	assert.equal(auxiliary.container.getAttribute('aria-label'), "Detached Editor");
 	assert.equal(auxiliary.window.document.documentElement.lang, "zh-Hans");
 	assert.equal(auxiliary.container.ownerDocument, popup.window.document);
 	assert.ok(auxiliary.container instanceof opener.window.HTMLElement);

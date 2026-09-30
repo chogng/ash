@@ -15,11 +15,13 @@ import "./style.js";
 import { IAutomationService } from '../../platform/automation/common/automationService.js';
 import { bindResizableLayout } from "../../base/browser/ui/resizable/resizable.js";
 import { disposableWindowTimeout } from "../../base/browser/scheduler.js";
+import { getWindow } from '../../base/browser/dom.js';
 import { mainWindow } from "../../base/browser/window.js";
 import { PixelRatio } from '../../base/browser/pixelRatio.js';
 import {
 	type IDisposable,
 	Disposable,
+	DisposableStore,
 	toDisposable,
 } from "../../base/common/lifecycle.js";
 import { CancellationError, getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from "../../base/common/errors.js";
@@ -286,6 +288,7 @@ import { IChatContextPickService } from "../services/chat/common/chatContextServ
 import type { IUserKeyboardLayoutApi } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
 import { WorkbenchModeService } from "../services/workbenchMode/browser/workbenchModeService.js";
 import { IWorkbenchModeService } from "../services/workbenchMode/common/workbenchModeService.js";
+import { WindowTitle } from './parts/titlebar/windowTitle.js';
 import { BrowserClipboardService } from "../../platform/clipboard/browser/clipboardService.js";
 import { IClipboardService } from "../../platform/clipboard/common/clipboardService.js";
 
@@ -797,11 +800,6 @@ export class Workbench extends Disposable {
 		this.contributions = contributions;
 		contributions.advance(WorkbenchPhase.BlockStartup);
 
-		const titlebar = this._register(createTitlebarPart(workbenchRoot, {
-			menuService: menus,
-			contextMenuService: contextMenus,
-			localizationService,
-		}, services));
 		const sidebar = this._register(new SidebarPart(workbenchRoot, {
 			viewDescriptorService: viewDescriptors,
 			compositeBarContextMenuProvider: contextMenus,
@@ -821,9 +819,6 @@ export class Workbench extends Disposable {
 		const activitybar = this._register(services.createInstance(ActivitybarPart, workbenchRoot, sidebar.compositeBar, globalCompositeBar));
 		const initialActivityBarLocation = configuration.getValue<ActivityBarPosition>(WorkbenchConfiguration.activityBarLocation);
 		sidebar.setActivityBarLocation(initialActivityBarLocation);
-		if (initialActivityBarLocation === ActivityBarPosition.TOP || initialActivityBarLocation === ActivityBarPosition.BOTTOM) {
-			titlebar.setActivityActions({ bar: globalCompositeBar, showContextMenu: event => activitybar.showContextMenu(event) });
-		}
 		sidebar.domNode.classList.toggle('sidebar-right', configuration.getValue(WorkbenchConfiguration.sideBarLocation) === 'right');
 		const activityService = this._register(new ActivityService(sidebar.compositeBar));
 		services.registerInstance(IActivityService, activityService);
@@ -898,13 +893,18 @@ export class Workbench extends Disposable {
 		const auxiliaryWindows = this._register(services.createInstance(BrowserAuxiliaryWindowService, ownerWindow, workbenchRoot));
 		services.registerInstance(IAuxiliaryWindowService, auxiliaryWindows);
 		const editorParts = this._register(new EditorParts(editor, auxiliaryWindows, container => {
-			const contextKeyService = contextKeys.createScoped(container);
+			const resources = new DisposableStore();
+			const contextKeyService = resources.add(contextKeys.createScoped(container));
+			const part = new EditorPart(container, {
+				...editorOptions,
+				contextKeyService,
+			});
+			const windowServices = resources.add(services.createChild());
+			windowServices.registerSingleton(IEditorService, () => new BrowserEditorService(part));
+			resources.add(windowServices.createInstance(WindowTitle, getWindow(container)));
 			return {
-				part: new EditorPart(container, {
-					...editorOptions,
-					contextKeyService,
-				}),
-				resources: [contextKeyService],
+				part,
+				resources: [resources],
 			};
 		}, accessibilityService, storage));
 		services.registerInstance(IEditorPartsService, editorParts);
@@ -915,6 +915,19 @@ export class Workbench extends Disposable {
 		const editorService = this._register(new BrowserEditorService(editorParts));
 		services.registerInstance(IEditorService, editorService);
 		services.registerInstance(IEditorGroupsService, editorService);
+		// Commands follow focus across windows; each window title follows only that window's EditorPart.
+		const mainWindowServices = this._register(services.createChild());
+		mainWindowServices.registerSingleton(IEditorService, () => new BrowserEditorService(editor));
+		const windowTitle = this._register(mainWindowServices.createInstance(WindowTitle, ownerWindow));
+		const titlebar = this._register(createTitlebarPart(workbenchRoot, {
+			windowTitle,
+			menuService: menus,
+			contextMenuService: contextMenus,
+			localizationService,
+		}, services));
+		if (initialActivityBarLocation === ActivityBarPosition.TOP || initialActivityBarLocation === ActivityBarPosition.BOTTOM) {
+			titlebar.setActivityActions({ bar: globalCompositeBar, showContextMenu: event => activitybar.showContextMenu(event) });
+		}
 		const createPaneComposite = (parent: HTMLElement, options: PaneCompositeOptions): PaneComposite => {
 			const descriptor = options.viewContainer.ctorDescriptor;
 			if (!descriptor) {

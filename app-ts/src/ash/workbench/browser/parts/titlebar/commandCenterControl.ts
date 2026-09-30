@@ -9,6 +9,7 @@ import { IMenuService, MenuId } from '../../../../platform/actions/common/action
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IQuickAccessController } from '../../../../platform/quickinput/common/quickAccess.js';
 import { localize, type ILocalizationService } from '../../../services/localization/common/localizationService.js';
+import type { WindowTitle } from './windowTitle.js';
 
 export class CommandCenterControl extends Disposable {
 	public readonly domNode: HTMLElement;
@@ -16,6 +17,7 @@ export class CommandCenterControl extends Disposable {
 
 	constructor(
 		container: HTMLElement,
+		windowTitle: Pick<WindowTitle, 'value' | 'onDidChange'>,
 		localizationService: ILocalizationService | undefined,
 		@IQuickAccessController private readonly quickAccess: IQuickAccessController,
 		@IMenuService menuService: IMenuService,
@@ -43,6 +45,12 @@ export class CommandCenterControl extends Disposable {
 			},
 		}));
 		this.button.toggleClassName('ash-titlebar-command-center-button', true);
+		const updateTitle = (): void => {
+			this.button.setTitle(windowTitle.value);
+			this.button.domNode.setAttribute('aria-description', windowTitle.value);
+		};
+		this._register(windowTitle.onDidChange(updateTitle));
+		updateTitle();
 		setAriaAttribute(this.button.domNode, 'haspopup', 'dialog');
 		setAriaAttribute(this.button.domNode, 'expanded', false);
 		this._register(this.quickAccess.onDidChangeVisibility(visible => {

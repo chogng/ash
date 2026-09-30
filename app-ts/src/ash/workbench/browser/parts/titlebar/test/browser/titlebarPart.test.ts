@@ -105,6 +105,7 @@ test("titlebar owns a menu-driven actions container", async () => {
 		},
 	};
 	const titlebar = disposables.add(services.createInstance(BrowserTitlebarPart, ownerDocument.body, {
+		windowTitle: { value: 'Ash Code', onDidChange: Event.None },
 		menuService,
 		contextMenuService,
 		localizationService: { onDidChange: Event.None, whenReady: Promise.resolve(), translate: (_bundle: string, _key: string, fallback: string) => fallback },
@@ -197,7 +198,10 @@ test("titlebar renders its product icon, command center, and application menu", 
 		order: 2,
 	}));
 	const menubar = new BrowserMenubarControl(ownerDocument.body, menuService, contextMenuService);
+	const titleChanged = disposables.add(new Emitter<void>());
+	const windowTitle = { value: '研究项目 — Ash Code', onDidChange: titleChanged.event };
 	const titlebar = disposables.add(services.createInstance(BrowserTitlebarPart, ownerDocument.body, {
+		windowTitle,
 		menuService,
 		contextMenuService,
 		localizationService,
@@ -228,6 +232,12 @@ test("titlebar renders its product icon, command center, and application menu", 
 	assert.equal(navigation?.nextElementSibling, commandCenter);
 	assert.equal(commandCenter?.textContent, "Search commands");
 	assert.equal(commandCenter?.getAttribute("aria-label"), "Search commands");
+	assert.equal(commandCenter?.title, windowTitle.value);
+	assert.equal(commandCenter?.getAttribute('aria-description'), windowTitle.value);
+	windowTitle.value = '● 草稿.ts — 研究项目 — Ash Code';
+	titleChanged.fire();
+	assert.equal(commandCenter?.title, windowTitle.value);
+	assert.equal(commandCenter?.getAttribute('aria-description'), windowTitle.value);
 	assert.equal(commandCenter?.type, "button");
 	assert.equal(commandCenter?.getAttribute('aria-haspopup'), 'dialog');
 	assert.equal(commandCenter?.getAttribute('aria-expanded'), 'false');
@@ -237,6 +247,8 @@ test("titlebar renders its product icon, command center, and application menu", 
 	localeChanged.fire();
 	assert.equal(commandCenter?.textContent, "搜索命令");
 	assert.equal(commandCenter?.getAttribute("aria-label"), "搜索命令");
+	titlebar.dispose();
+	assert.equal(titleChanged.hasListeners(), false);
 });
 
 test("browser titlebar hosts the application menu in an ActionBar", () => {

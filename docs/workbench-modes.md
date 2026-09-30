@@ -48,11 +48,14 @@ flowchart TD
 | 最近选择的默认模式 | 共享 profile `configuration.json` 中的 `workbench.mode` | 应用启动和后续新窗口的默认值 |
 | 当前窗口模式 | Electron Main 的 Workbench window record 与 Renderer URL | 一个 Renderer 生命周期内 immutable |
 | 模式定义 | `WorkbenchModeRegistry` | 唯一拥有模式 ID、显示名、存储命名空间和可选独立入口 |
+| 普通 Workbench 与独立编辑器窗口的标题 | 每个窗口自己的 `WindowTitle` | 读取该窗口的当前编辑器、Working Copy 未保存状态、工作区与模式定义，统一更新 `document.title` |
 | 模式能力 | `modes/code` 或 `modes/academic` | 只在入口启动时注册，不支持运行中卸载 |
 | Workbench 布局与视图状态 | mode-specific `storageNamespace` | Code 与 Academic 分开恢复 |
 | 应用身份与 Chromium 数据 | `code/common/application.ts` 与 Electron Main 应用路径 | 两个模式共享同一个安装和用户数据根 |
 
 URL 查询参数 `ash-workbench-mode` 把 Main 已选择的窗口模式 ID 交给共享 Workbench 入口。入口根据它动态导入一个模式 bundle；查询参数不是用户配置的第二份 authority，持久默认值仍由配置服务拥有。
+
+窗口标题按“当前文件 — 工作区 — 模式产品名”显示，未保存的当前文件带 `●` 标记。关闭当前文件后标题移除文件段，空工作区只显示模式产品名。命令中心的悬浮提示和辅助描述读取同一个标题控制器。命令服务随焦点切换编辑器窗口；标题控制器绑定各自窗口的 EditorPart，不随另一个窗口的焦点变化。Browser 与 Electron 启动入口、独立窗口服务不再写运行中的标题，标题订阅随对应窗口 UI 一起释放。
 
 除 `WorkbenchModeRegistry` 外，各层只传递 `WorkbenchModeId`，不缓存或复制完整定义。Settings、构建输入、可信入口 URL 和可选 Sessions 页面从注册表派生；Browser 与 Electron 的模式 loader 使用以 `WorkbenchModeId` 为键的完整映射。新增 ID 但没有补齐任一模式定义或 loader 时，TypeScript 编译失败，而不是在运行时落入默认分支。
 

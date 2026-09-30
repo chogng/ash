@@ -12,7 +12,7 @@ import { createElectronRendererApi, type ElectronRendererCapabilityContribution 
 import { parseWorkspace } from '../../platform/workspace/common/workspace.js';
 import { showStartupError } from '../browser/startupError.js';
 import { startWorkbench, type Workbench } from '../browser/workbench.js';
-import { WorkbenchModeRegistry, type WorkbenchModeId } from '../common/workbenchMode.js';
+import type { WorkbenchModeId } from '../common/workbenchMode.js';
 import { createElectronWorkbenchContextMenuService } from '../services/contextmenu/electron-browser/contextMenuService.js';
 import { loadUserThemes } from '../services/themes/browser/workbenchThemeService.js';
 import { switchElectronWorkbenchMode } from '../services/workbenchMode/electron-browser/electronWorkbenchModeHost.js';
@@ -35,7 +35,6 @@ export class DesktopMain extends Disposable {
 			throw new Error('Desktop startup has already begun');
 		}
 		this.opened = true;
-		document.title = WorkbenchModeRegistry.get(this.modeId).title;
 		installBaseUiStyles();
 		const tracker = import.meta.env.DEV ? new DisposableTracker() : undefined;
 		const tracking = tracker ? installDisposableTracker(tracker) : undefined;
