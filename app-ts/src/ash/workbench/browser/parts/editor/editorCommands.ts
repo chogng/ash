@@ -16,8 +16,9 @@ registerAction2(class CloseActiveEditorAction extends Action2 {
 			id: CLOSE_EDITOR_COMMAND_ID,
 			title: localizedString("ash", "workbench.closeEditor", "Close Editor"),
 			f1: true,
+			precondition: EditorsVisibleContext.isEqualTo(true),
 			menu: [
-				{ id: MenuId.MenubarFileMenu, when: EditorsVisibleContext.isEqualTo(true), group: "4_close", order: 1 },
+				{ id: MenuId.MenubarFileMenu, group: "4_close", order: 1 },
 				{ id: MenuId.EditorTitleContext, group: "4_close", order: 1 },
 			],
 			keybinding: { primary: Keybinding.single(logicalKey("w", { primaryKey: true })) },

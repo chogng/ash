@@ -177,6 +177,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 					folderOpens += 1;
 				},
 				openWorkspace: async () => {},
+				closeWorkspace: async () => {},
 				pickFolder: async () => undefined,
 			},
 		);

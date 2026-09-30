@@ -6,7 +6,8 @@
   color: var(--ash-description-foreground);
 }
 
-.ash-editor-group-watermark-shortcuts:empty {
+.ash-editor-group-watermark-shortcuts:empty,
+.ash-editor-group-watermark-shortcuts[hidden] {
   display: none;
 }
 

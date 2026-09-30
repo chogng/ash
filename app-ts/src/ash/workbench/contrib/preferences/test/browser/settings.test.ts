@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
+import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import type { IAction } from '../../../../../base/common/actions.js';
 import type { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import type { IContextMenuService as ContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
@@ -138,6 +139,19 @@ test('DefaultSettings projects only Configuration Registry metadata', () => {
 	assert.equal(defaults.get('editor.test.patterns').valueType, 'stringMap');
 });
 
+test('empty-editor tips expose translated settings metadata', () => {
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	try {
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		const defaults = new DefaultSettings();
+		const tips = defaults.get('workbench.tips.enabled');
+		assert.equal(tips.title, '空编辑器提示');
+		assert.equal(tips.description, '没有打开编辑器时显示命令快捷键提示。');
+	} finally {
+		resetNlsResolver();
+	}
+});
+
 test('settingsLayout is the single projection from registered settings to categories', () => {
 	const defaults = new DefaultSettings();
 	const layout = createSettingsLayout(defaults.all);
@@ -167,6 +181,9 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'general');
 	assert.equal(findSettingCategory(layout, 'chat.defaultModel'), 'models');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.colorTheme), 'appearance');
+	assert.equal(findSettingCategory(layout, 'workbench.tips.enabled'), 'appearance');
+	assert.equal(defaults.get('workbench.tips.enabled').valueType, 'boolean');
+	assert.equal(configurationRegistry.getConfiguration('workbench.tips.enabled')?.defaultValue, true);
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.layoutStyle), 'layout');
 	assert.equal(findSettingCategory(layout, StartupEditorConfigurationKey), 'startup');
 	assert.equal(findSettingCategory(layout, 'window.restoreWindows'), 'startup');
@@ -176,6 +193,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(chinese?.bundles.ash?.['settings.workbench.startup.group.label'], '启动时的编辑器');
 	assert.equal(chinese?.bundles.ash?.['window.restoreWindows.all'], '全部窗口');
 	assert.equal(chinese?.bundles.ash?.['workbench.editor.restoreEditors.title'], '恢复编辑器');
+	assert.equal(chinese?.bundles.ash?.['workbench.tips.enabled.title'], '空编辑器提示');
 	assert.equal(chinese?.bundles.ash?.['settings.dictation.group'], '语音输入');
 	assert.equal(defaults.all.some(setting => Object.values(SessionsConfiguration).includes(setting.id)), false);
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.activityBarLocation), 'layout');

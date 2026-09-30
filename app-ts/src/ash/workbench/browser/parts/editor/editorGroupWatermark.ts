@@ -3,7 +3,8 @@ import { KeybindingLabel } from "../../../../base/browser/ui/keybindinglabel/key
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, type IDisposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { CommandId } from "../../../../platform/commands/common/commands.js";
-import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
+import { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
+import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { h } from "../../../../base/browser/dom.js";
 import { localize } from "../../../../nls.js";
 import { ShowAllCommandsCommandId } from "../../quickaccess.js";
@@ -53,23 +54,28 @@ EditorGroupWatermarkEntries.register({
 
 /** Renders command shortcuts when an editor group has no active editor. */
 export class EditorGroupWatermark extends Disposable {
+	private static readonly SETTINGS_KEY = 'workbench.tips.enabled';
 	readonly domNode: HTMLElement;
 	private readonly rendered = this._register(new DisposableStore());
-	private readonly keybindingService: IKeybindingService;
 
 	constructor(
 		container: HTMLElement,
-		keybindingService: IKeybindingService,
+		@IKeybindingService private readonly keybindingService: IKeybindingService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
-		this.keybindingService = keybindingService;
 		this.domNode = h(ownerDocument, "div");
 		this.domNode.className = "ash-editor-group-watermark-shortcuts";
-		this.domNode.setAttribute("aria-label", "Editor shortcuts");
+		this.domNode.setAttribute("aria-label", localize('workbench.editor.shortcuts', 'Editor shortcuts'));
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(EditorGroupWatermarkEntries.onDidChange(() => this.render()));
+		this._register(this.configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(EditorGroupWatermark.SETTINGS_KEY)) {
+				this.render();
+			}
+		}));
 		this._register(
 			this.keybindingService.onDidUpdateKeybindings(() => this.render()),
 		);
@@ -78,6 +84,10 @@ export class EditorGroupWatermark extends Disposable {
 
 	private render(): void {
 		this.rendered.clear();
+		if (!this.configurationService.getValue<boolean>(EditorGroupWatermark.SETTINGS_KEY)) {
+			this.domNode.replaceChildren();
+			return;
+		}
 		const ownerDocument = this.domNode.ownerDocument;
 		const rows = EditorGroupWatermarkEntries.getEntries()
 			.flatMap((entry) => {

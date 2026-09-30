@@ -56,9 +56,12 @@ export class EditorGroupView extends Disposable {
 		this.contentDomNode = h(ownerDocument, 'div');
 		this.contentDomNode.className = 'ash-editor-group-content';
 		this.panes = this._register(new EditorPanes(this.contentDomNode));
-		this.watermark = options.keybindingService
-			? this._register(new EditorGroupWatermark(this.contentDomNode, options.keybindingService))
-			: undefined;
+		if (options.keybindingService) {
+			if (!options.instantiationService) {
+				throw new Error('Editor shortcuts require the Instantiation Service');
+			}
+			this.watermark = this._register(options.instantiationService.createInstance(EditorGroupWatermark, this.contentDomNode));
+		}
 		this.domNode.append(this.titleControl.domNode, this.contentDomNode);
 	}
 

@@ -92,6 +92,11 @@ export const SettingsNavigation = [
 					label: 'Color theme',
 					description: 'Choose the colors used by the Workbench.',
 					settings: ['workbench.colorTheme', 'workbench.iconTheme', 'workbench.productIconTheme'],
+				}, {
+					id: 'editor-tips',
+					get label() { return localize('settings.workbench.editorTips.label', 'Editor tips'); },
+					get description() { return localize('workbench.tips.enabled.description', 'Show command shortcuts when no editor is open.'); },
+					settings: ['workbench.tips.enabled'],
 				}],
 			},
 			{

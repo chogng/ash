@@ -21,6 +21,27 @@ test.describe('startup layout defaults', () => {
 		await expect(workbench.editors.groupAt(0).welcome).toBeVisible();
 	});
 
+	test('opening a browser folder shows Welcome before and after reload', async ({ target, workbench }) => {
+		test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'Requires the standalone browser folder picker.');
+		const page = workbench.page;
+		const group = workbench.editors.groupAt(0);
+		await expect(group.welcome).toBeVisible();
+		await page.evaluate(async () => {
+			const root = await navigator.storage.getDirectory();
+			const folder = await root.getDirectoryHandle(`ash-welcome-${crypto.randomUUID()}`, { create: true });
+			await folder.getFileHandle('startup.txt', { create: true });
+			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
+		});
+		await group.welcome.getByRole('button', { name: 'Open folder', exact: true }).click();
+		await expect(page.locator('.ash-explorer').getByRole('treeitem', { name: 'startup.txt', exact: true })).toHaveCount(1);
+		await expect(group.welcome).toBeVisible();
+		await expect(group.tabs).toHaveCount(1);
+		await page.reload();
+		await workbench.waitForReady();
+		await expect(group.welcome).toBeVisible();
+		await expect(group.tabs).toHaveCount(1);
+	});
+
 	test('Git explains that an empty window needs a folder', async ({ workbench }) => {
 		const page = workbench.page;
 		await page.getByRole('tab', { name: 'Git', exact: true }).click();
@@ -111,6 +132,58 @@ test.describe('welcome brand', () => {
 		await expect(group.tabs).toHaveCount(1);
 		await expect(group.welcome).toBeVisible();
 		await expect(group.title.getByRole('button', { name: 'Reveal in File Explorer' })).toHaveCount(0);
+	});
+
+	test('Settings persists empty-editor tips independently of Welcome', async ({ workbench }) => {
+		const page = workbench.page;
+		const group = workbench.editors.groupAt(0);
+		const shortcuts = group.content.locator('.ash-editor-group-watermark-shortcuts');
+		await group.tabs.first().hover();
+		await group.element.locator('.ash-tab-close-action button').click();
+		await expect(shortcuts).toBeVisible();
+
+		await page.keyboard.press('F1');
+		await page.locator('.ash-quick-pick').getByRole('combobox').fill('Ash Settings');
+		await page.keyboard.press('Enter');
+		const settings = page.locator('.ash-settings-editor');
+		await settings.locator('[data-settings-group-id="workbench"]').click();
+		await settings.locator('[data-settings-category-id="appearance"]').click();
+		const tips = settings.getByRole('switch', { name: 'Empty editor tips', exact: true });
+		await expect(tips).toBeChecked();
+		await tips.focus();
+		await page.keyboard.press('Space');
+		await expect(tips).not.toBeChecked();
+		await expect(tips).not.toHaveAttribute('aria-busy', 'true');
+		await page.locator('.ash-modal-editor-close').click();
+		await expect(shortcuts).toBeHidden();
+		await expect(shortcuts.locator('.ash-editor-group-watermark-entry')).toHaveCount(0);
+
+		await page.reload();
+		await workbench.waitForReady();
+		await expect(group.welcome).toBeVisible();
+		await group.tabs.first().hover();
+		await group.element.locator('.ash-tab-close-action button').click();
+		await expect(shortcuts).toBeHidden();
+		await page.keyboard.press('F1');
+		await page.locator('.ash-quick-pick').getByRole('combobox').fill('Welcome');
+		await page.keyboard.press('Enter');
+		await expect(group.welcome).toBeVisible();
+		await page.keyboard.press('F1');
+		await page.locator('.ash-quick-pick').getByRole('combobox').fill('Ash Settings');
+		await page.keyboard.press('Enter');
+		await settings.locator('[data-settings-group-id="workbench"]').click();
+		await settings.locator('[data-settings-category-id="appearance"]').click();
+		await expect(tips).not.toBeChecked();
+		await tips.focus();
+		await page.keyboard.press('Space');
+		await expect(tips).toBeChecked();
+		await expect(tips).not.toHaveAttribute('aria-busy', 'true');
+		await page.locator('.ash-modal-editor-close').click();
+		await expect(group.welcome).toBeVisible();
+		await expect(shortcuts).toBeHidden();
+		await group.tabs.first().hover();
+		await group.element.locator('.ash-tab-close-action button').click();
+		await expect(shortcuts).toBeVisible();
 	});
 
 	test('Welcome provides keyboard accessibility help', async ({ workbench }) => {
