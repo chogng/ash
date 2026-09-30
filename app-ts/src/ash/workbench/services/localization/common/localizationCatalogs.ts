@@ -10,6 +10,8 @@ const english: LanguagePackCatalog = {
 	bundles: {
 		ash: {
 			'breadcrumbs.editorLabel': 'Editor breadcrumbs',
+			'workbench.editor.showIcons.title': 'Workbench › Editor: Show Icons',
+			'workbench.editor.showIcons.description': 'Show file icons in editor tabs.',
 			'sessions.activity.chat': 'Chat',
 			'sessions.activity.colab': 'Collaboration',
 			'sessions.activity.library': 'Library',
@@ -1065,6 +1067,8 @@ const chinese: LanguagePackCatalog = {
 	bundles: {
 		ash: {
 			'breadcrumbs.editorLabel': '编辑器面包屑',
+			'workbench.editor.showIcons.title': '工作台 › 编辑器：显示图标',
+			'workbench.editor.showIcons.description': '在编辑器标签中显示文件图标。',
 			'sessions.activity.chat': '聊天',
 			'sessions.activity.colab': '协作',
 			'sessions.activity.library': '资料库',

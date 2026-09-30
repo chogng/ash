@@ -76,7 +76,7 @@ export class TabActionViewItem<T> extends ActionViewItem {
 		if (item.ariaDescription) tab.setAttribute("aria-description", item.ariaDescription);
 		if (item.panelId) tab.setAttribute("aria-controls", item.panelId);
 		this.setupHover(tab, this.tabAction.tooltip);
-		const label = this._register(new IconLabel(tab, {
+		this._register(item.renderLabel ? item.renderLabel(tab) : new IconLabel(tab, {
 			label: item.label,
 			icon: item.icon,
 			description: item.description,

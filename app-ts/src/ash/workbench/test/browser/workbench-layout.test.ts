@@ -1,3 +1,4 @@
+import { createTestEditorServices } from '../common/testEditorServices.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -156,11 +157,12 @@ function createLayoutHarness(
 	ownerDocument.body.append(container);
 	disposables.add(toDisposable(() => container.remove()));
 
+	const services = disposables.add(createTestEditorServices());
 	const parts = new Map<WorkbenchPartId, WorkbenchPartInstance>();
 	let editor: EditorPartInstance | undefined;
 	for (const partId of workbenchPartIds) {
 		const part = partId === "editor"
-			? new EditorPart(container)
+			? services.createInstance(EditorPart, container, {})
 			: partId === "sidebar" && sidebarPart
 			? sidebarPart
 			: new TestPart(partId, container);

@@ -2,7 +2,7 @@ import "./tablist.css";
 import { addDisposableListener } from "../../dom.js";
 import type { Icon } from "../../../common/icon.js";
 import type { IAction } from "../../../common/actions.js";
-import { Disposable } from "../../../common/lifecycle.js";
+import { Disposable, type IDisposable } from "../../../common/lifecycle.js";
 import { ActionBar, type ActionBarDragAndDrop, type ActionBarDropPosition, type ActionBarOrientation } from "../actionbar/actionbar.js";
 import { ScrollableElement } from "../scrollbar/scrollableElement.js";
 import { TabAction, TabActionViewItem } from "./tabActionViewItem.js";
@@ -25,6 +25,8 @@ export interface TabListItem<T> {
 	readonly ariaDescription?: string;
 	readonly tooltip?: string;
 	readonly icon?: Icon;
+	/** Replaces the default icon and text; the action view owns the returned content. */
+	readonly renderLabel?: (container: HTMLElement) => IDisposable;
 	readonly state?: string;
 	/** Presents transient preview content without changing tab selection semantics. */
 	readonly preview?: boolean;

@@ -861,7 +861,6 @@ export class Workbench extends Disposable {
 			textMateService,
 			languageResolver: languageService,
 			diffService,
-			instantiationService,
 			accessibilityService,
 			languageDiagnosticsService,
 			documentCollaborationApi: api.documentCollaboration,
@@ -886,7 +885,7 @@ export class Workbench extends Disposable {
 				});
 			},
 		};
-		const editor = this._register(new EditorPart(workbenchRoot, editorOptions));
+		const editor = this._register(instantiationService.createInstance(EditorPart, workbenchRoot, editorOptions));
 		if (nativeHostApi) {
 			this._register(editor.onDidChangeModalVisibility(visible => {
 				void nativeHostApi.setWindowDimmed(visible).catch(error => console.error('Failed to update window controls', error));
@@ -897,7 +896,7 @@ export class Workbench extends Disposable {
 		const editorParts = this._register(new EditorParts(editor, auxiliaryWindows, container => {
 			const resources = new DisposableStore();
 			const contextKeyService = resources.add(contextKeys.createScoped(container));
-			const part = new EditorPart(container, {
+			const part = instantiationService.createInstance(EditorPart, container, {
 				...editorOptions,
 				contextKeyService,
 			});

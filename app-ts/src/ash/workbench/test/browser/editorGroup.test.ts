@@ -1,3 +1,4 @@
+import { createTestEditorServices } from '../common/testEditorServices.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -21,8 +22,9 @@ test("EditorGroupView reorders tabs and moves them between groups", async () => 
 			canOpen: () => EditorPaneMatch.Default,
 			create: () => new TestEditorPane(),
 		});
-		const source = new EditorGroupView(dom.window.document.body, { registry });
-		const target = new EditorGroupView(dom.window.document.body, { registry });
+		using services = createTestEditorServices();
+		const source = services.createInstance(EditorGroupView,dom.window.document.body, { registry });
+		const target = services.createInstance(EditorGroupView,dom.window.document.body, { registry });
 		const first = input("first");
 		const second = input("second");
 		await source.openEditor(first);
@@ -57,7 +59,8 @@ test("EditorGroupView selects a range of tabs and resolves close-command targets
 		const { resolveCommandsContext } = await import("../../browser/parts/editor/editorCommandsContext.js");
 		const registry = new EditorPaneRegistry();
 		registry.registerEditorPane({ id: "test.editor", name: "Test Editor", canOpen: () => EditorPaneMatch.Default, create: () => new TestEditorPane() });
-		const group = new EditorGroupView(dom.window.document.body, { registry });
+		using services = createTestEditorServices();
+		const group = services.createInstance(EditorGroupView,dom.window.document.body, { registry });
 		try {
 			const first = input("first");
 			const second = input("second");

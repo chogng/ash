@@ -27,6 +27,8 @@ import { localize } from "../../../../nls.js";
 import { WorkbenchConfiguration, type WorkbenchLayoutStyle } from '../../../common/configuration.js';
 import type { EditorGroupModel } from '../../../common/editor/editorGroupModel.js';
 
+import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+
 /** Hosts one group's Editor tabs and header in their shared title layout. */
 export class EditorTitleControl extends Disposable {
 	static readonly HEIGHT = 35;
@@ -50,13 +52,14 @@ export class EditorTitleControl extends Disposable {
 		container: HTMLElement,
 		delegate: EditorTabsDelegate,
 		private readonly model: EditorGroupModel,
-		titleActions?: EditorHeaderActions,
-		configurationService?: IConfigurationService,
-		onSelectBreadcrumb?: (element: FileElement) => void,
-		group?: EditorGroupId,
-		breadcrumbsService?: IBreadcrumbsService,
-		languageFeatures?: ILanguageFeaturesService,
-		showSymbolPicker?: (symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => void,
+		titleActions: EditorHeaderActions | undefined,
+		configurationService: IConfigurationService | undefined,
+		onSelectBreadcrumb: ((element: FileElement) => void) | undefined,
+		group: EditorGroupId | undefined,
+		breadcrumbsService: IBreadcrumbsService | undefined,
+		languageFeatures: ILanguageFeaturesService | undefined,
+		showSymbolPicker: ((symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => void) | undefined,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
 		this.delegate = delegate;
@@ -128,10 +131,10 @@ export class EditorTitleControl extends Disposable {
 	private createTabsControl(mode: EditorTabsMode): EditorTabsControl {
 		const firstAction = this.tabsAndActionsDomNode.querySelector(":scope > .ash-editor-title-actions");
 		const control = mode === "single"
-			? new SingleEditorTabsControl(this.tabsAndActionsDomNode, this.delegate)
+			? this.instantiationService.createInstance(SingleEditorTabsControl, this.tabsAndActionsDomNode, this.delegate)
 			: mode === "none"
 				? new NoEditorTabsControl(this.tabsAndActionsDomNode)
-				: new MultiRowEditorControl(this.tabsAndActionsDomNode, this.delegate, this.model);
+				: this.instantiationService.createInstance(MultiRowEditorControl, this.tabsAndActionsDomNode, this.delegate, this.model);
 		this.rowsListener.value = control instanceof MultiRowEditorControl
 			? control.onDidChangeRows(() => {
 				this.domNode.style.setProperty("--ash-editor-tab-rows", String(control.rowCount));

@@ -1,3 +1,4 @@
+import { localize } from "../../../../nls.js";
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
 import { Registry } from "../../../../platform/registry/common/platform.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
@@ -22,6 +23,17 @@ export const EditorTabsModeConfiguration = configurationRegistry.registerConfigu
 			{ value: "single", label: "Single" },
 			{ value: "none", label: "None" },
 		],
+	},
+});
+
+export const EditorShowIconsConfiguration = configurationRegistry.registerConfiguration<boolean>({
+	key: "workbench.editor.showIcons",
+	defaultValue: true,
+	parse: value => typeof value === "boolean" ? value : true,
+	setting: {
+		get title() { return localize('workbench.editor.showIcons.title', 'Workbench › Editor: Show Icons'); },
+		get description() { return localize('workbench.editor.showIcons.description', 'Show file icons in editor tabs.'); },
+		valueType: "boolean",
 	},
 });
 

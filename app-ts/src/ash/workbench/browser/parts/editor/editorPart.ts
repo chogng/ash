@@ -29,7 +29,7 @@ import { TextFileBinaryError, TextFileTooLargeError, type ITextFileService } fro
 import { FileNotFoundError, type IFileService } from "../../../../platform/files/common/files.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import type { IDiffService } from "../../../services/diff/common/diffService.js";
-import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
@@ -127,7 +127,6 @@ export interface IEditorPartOptions {
 	readonly textMateService?: ITextMateService;
 	readonly languageResolver?: TextResourceLanguageResolver;
 	readonly diffService?: IDiffService;
-	readonly instantiationService?: IInstantiationService;
 	readonly accessibilityService?: IAccessibilityService;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
 	readonly documentCollaborationApi?: IDocumentCollaborationApi;
@@ -176,7 +175,8 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 
 	constructor(
 		container: HTMLElement,
-		options: IEditorPartOptions = {},
+		options: IEditorPartOptions,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super(container, "editor", {
 			borderWidth: () => this.getFloatingBorderWidth() * 2,
@@ -199,7 +199,6 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			textMateService: options.textMateService,
 			languageResolver: options.languageResolver,
 			diffService: options.diffService,
-			instantiationService: options.instantiationService,
 			accessibilityService: options.accessibilityService,
 			languageDiagnosticsService: options.languageDiagnosticsService,
 			documentCollaborationApi: options.documentCollaborationApi,
@@ -246,6 +245,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			onWillOpenEditor: this.groupOptions.onWillOpenEditor,
 			onOpenError: this.groupOptions.onOpenError,
 			paneCreationOptions: {
+				instantiationService,
 				configurationService: options.configurationService,
 				contextKeyService: options.contextKeyService,
 				keybindingService: options.keybindingService,
@@ -256,7 +256,6 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 				textMateService: options.textMateService,
 				languageResolver: options.languageResolver,
 				diffService: options.diffService,
-				instantiationService: options.instantiationService,
 				accessibilityService: options.accessibilityService,
 				languageDiagnosticsService: options.languageDiagnosticsService,
 				documentCollaborationApi: options.documentCollaborationApi,
@@ -660,7 +659,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 
 	private createGroup(id?: EditorGroupId): EditorGroupHost {
 		let group: EditorGroupView;
-		group = new EditorGroupView(this.contentDomNode, {
+		group = this.instantiationService.createInstance(EditorGroupView, this.contentDomNode, {
 			...this.groupOptions,
 			...(id ? { id } : {}),
 			onDidActivate: () => {
@@ -672,7 +671,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 				drop: (target, targetInput, position, splitDirection) => this.tabDragAndDrop.drop(target, targetInput, position, splitDirection),
 				end: () => this.tabDragAndDrop.end(),
 			},
-		});
+		} satisfies EditorGroupOptions);
 		const host = new EditorGroupHost(group, group.onDidChangeEditors(event => {
 			this.handleEditorGroupChange(event);
 			this.editorChangeEmitter.fire(Object.freeze({ kind: "groupChanged", groupId: group.id, event }));

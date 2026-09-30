@@ -129,3 +129,34 @@ test('macOS Electron editor tab menu targets mouse and keyboard actions', async 
 	await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashEditorTabMenuProbe?: { menus: string[][] } }).ashEditorTabMenuProbe?.menus.length)).toBe(2);
 	await expect(remaining).toHaveAttribute('aria-description', /Pinned tab/u);
 });
+
+
+test('editor icon setting updates existing tabs and survives pinning', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'Requires the Code product');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const group = workbench.editors.groupAt(0);
+	const tab = group.tabs.filter({ hasText: /Untitled-/u });
+	const icon = tab.locator('.ash-icon-label-icon');
+	await expect(icon).toHaveAttribute('aria-hidden', 'true');
+	await expect(icon).toHaveClass(/is-reserved/u);
+	const tabId = await tab.getAttribute('id');
+	await workbench.quickaccess.runCommand('workbench.action.openSettings');
+	const settings = page.locator('.ash-settings-editor');
+	await settings.locator('[data-settings-category-id="editor"]').click();
+	await settings.getByRole('searchbox', { name: 'Search settings' }).fill('workbench.editor.showIcons');
+	const toggle = settings.locator('[data-configuration-key="workbench.editor.showIcons"]');
+	await expect(toggle).toBeChecked();
+	await toggle.focus();
+	await toggle.press('Space');
+	await expect(toggle).not.toBeChecked();
+	await expect(icon).not.toHaveClass(/is-reserved/u);
+	await expect(icon).toBeHidden();
+	await expect(tab).toHaveAttribute('id', tabId!);
+	await toggle.press('Space');
+	await expect(toggle).toBeChecked();
+	await expect(icon).toHaveClass(/is-reserved/u);
+	await page.locator('.ash-modal-editor-close').click();
+	await tab.press('Alt+Enter');
+	await expect(group.title.locator('.ash-sticky-editor-tabs-row .ash-tab-label .ash-icon-label-icon')).toHaveClass(/is-reserved/u);
+});

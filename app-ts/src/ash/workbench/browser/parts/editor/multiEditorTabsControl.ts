@@ -2,6 +2,7 @@ import "./media/multiEditorTabsControl.css";
 import { DataTransfers } from "../../../../base/browser/dnd.js";
 import { addDisposableListener, isElement } from "../../../../base/browser/dom.js";
 import { observeResize } from "../../../../base/browser/observer.js";
+import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { assertDefined } from "../../../../base/common/types.js";
 import { TabList, type TabListPresentation } from "../../../../base/browser/ui/tablist/tabList.js";
@@ -11,6 +12,9 @@ import { clearConnectedTabClipping, updateConnectedTabClipping } from "./connect
 import { CONNECTED_EDITOR_TABS_CLASS } from "./editor.js";
 import type { EditorInput } from "./editorInput.js";
 import { EditorTabsControl, editorInputKey, type EditorTabDescriptor, type EditorTabsDelegate } from "./editorTabsControl.js";
+import { IResourceLabelService } from "../../labels.js";
+import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
+import { EditorShowIconsConfiguration } from "../../../services/editor/common/editorConfiguration.js";
 
 const DRAG_OVER_ACTIVATE_DELAY = 1500;
 const DOUBLE_CLICK_MAX_INTERVAL = 500;
@@ -25,7 +29,12 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 	private editors: readonly EditorTabDescriptor[] = [];
 	private previousLabelClick: { readonly tabId: string; readonly time: number } | undefined;
 
-	constructor(container: HTMLElement, private readonly delegate: EditorTabsDelegate) {
+	constructor(
+		container: HTMLElement,
+		private readonly delegate: EditorTabsDelegate,
+		@IResourceLabelService private readonly resourceLabels: IResourceLabelService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
+	) {
 		super(container);
 		this.domNode.classList.add("ash-multi-editor-tabs-control");
 		this.tabList = this._register(new TabList(this.domNode, {
@@ -134,6 +143,23 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 				value: editor,
 				label: label.name,
 				description: label.description,
+				renderLabel: container => {
+					const disposables = new DisposableStore();
+					const resourceLabel = disposables.add(this.resourceLabels.create(container));
+					const update = (): void => resourceLabel.setResource({
+						resource: editor.input.resource,
+						name: label.name,
+						description: label.description,
+					}, {
+						forceLabel: true,
+						hideIcon: !this.configurationService.getValue<boolean>(EditorShowIconsConfiguration),
+					});
+					update();
+					disposables.add(this.configurationService.onDidChangeConfiguration(event => {
+						if (event.affectsConfiguration(EditorShowIconsConfiguration)) update();
+					}));
+					return disposables;
+				},
 				tooltip: stateLabel ? `${editor.input.resource.toString()} — ${stateLabel}` : editor.input.resource.toString(),
 				ariaLabel: stateLabel ? `${label.name}, ${stateLabel}` : label.name,
 				ariaDescription: editor.sticky

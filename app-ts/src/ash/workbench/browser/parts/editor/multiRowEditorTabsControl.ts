@@ -6,6 +6,8 @@ import { MultiEditorTabsControl } from "./multiEditorTabsControl.js";
 import type { EditorGroupModel } from '../../../common/editor/editorGroupModel.js';
 import { StickyEditorGroupModel, UnstickyEditorGroupModel } from '../../../common/editor/filteredEditorGroupModel.js';
 
+import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+
 /** Keeps sticky editors above ordinary editors while both rows share one group. */
 export class MultiRowEditorControl extends EditorTabsControl {
 	private readonly rowsEmitter = this._register(new Emitter<void>());
@@ -16,14 +18,14 @@ export class MultiRowEditorControl extends EditorTabsControl {
 	private readonly stickyModel: StickyEditorGroupModel;
 	private readonly ordinaryModel: UnstickyEditorGroupModel;
 
-	constructor(container: HTMLElement, delegate: EditorTabsDelegate, model: EditorGroupModel) {
+	constructor(container: HTMLElement, delegate: EditorTabsDelegate, model: EditorGroupModel, @IInstantiationService instantiationService: IInstantiationService) {
 		super(container);
 		this.stickyModel = new StickyEditorGroupModel(model);
 		this.ordinaryModel = new UnstickyEditorGroupModel(model);
 		this.domNode.classList.add("ash-multi-row-editor-tabs-control");
-		this.stickyRow = this._register(new MultiEditorTabsControl(this.domNode, delegate));
+		this.stickyRow = this._register(instantiationService.createInstance(MultiEditorTabsControl, this.domNode, delegate));
 		this.stickyRow.domNode.classList.add("ash-sticky-editor-tabs-row");
-		this.ordinaryRow = this._register(new MultiEditorTabsControl(this.domNode, delegate));
+		this.ordinaryRow = this._register(instantiationService.createInstance(MultiEditorTabsControl, this.domNode, delegate));
 		this.ordinaryRow.domNode.classList.add("ash-ordinary-editor-tabs-row");
 		this.stickyRow.domNode.hidden = true;
 		this.ordinaryRow.domNode.hidden = true;

@@ -2,7 +2,7 @@ import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
-test('Seti extension fonts render in Explorer and file icons can be switched off', async ({ application, target, workbench }) => {
+test('Seti extension fonts render in Explorer and editor tabs and can be switched off', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires extension resources from App Server');
 	if (!('windows' in application)) { return; }
 	const home = await application.evaluate(() => process.env.ASH_HOME!);
@@ -18,6 +18,31 @@ test('Seti extension fonts render in Explorer and file icons can be switched off
 		await document.fonts.load('16px ' + family);
 		return family.startsWith('ash-file-icon-') && document.fonts.check('16px ' + family);
 	})).toBe(true);
+	await row.click();
+	const tab = workbench.editors.groupAt(0).tabs.filter({ hasText: 'main.ts' });
+	const tabIcon = tab.locator('.ash-icon-label-icon');
+	await expect(tabIcon).toHaveClass(/ash-file-icon/u);
+	await expect(tabIcon).toHaveAttribute('aria-hidden', 'true');
+	await expect.poll(async () => tabIcon.textContent()).toBe(await icon.textContent());
+	const geometry = await tabIcon.evaluate(element => {
+		const bounds = element.getBoundingClientRect();
+		const text = element.parentElement!.querySelector('.ash-icon-label-text')!.getBoundingClientRect();
+		return { width: bounds.width, height: bounds.height, beforeText: bounds.right <= text.left };
+	});
+	expect(geometry).toEqual({ width: 16, height: 16, beforeText: true });
+	await expect.poll(() => tabIcon.evaluate(async element => {
+		const family = getComputedStyle(element).fontFamily;
+		await document.fonts.load('16px ' + family);
+		return document.fonts.check('16px ' + family);
+	})).toBe(true);
+	const tabId = await tab.getAttribute('id');
+	await tab.focus();
+	for (const scheme of ['dark', 'light'] as const) {
+		await workbench.page.emulateMedia({ colorScheme: scheme });
+		await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-' + scheme);
+		await expect.poll(async () => (await tabIcon.evaluate(element => getComputedStyle(element).color)) === (await icon.evaluate(element => getComputedStyle(element).color))).toBe(true);
+		await expect(tab).toBeFocused();
+	}
 	for (const id of [null, 'vs-seti']) {
 		await workbench.page.evaluate(async id => {
 			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
@@ -27,6 +52,9 @@ test('Seti extension fonts render in Explorer and file icons can be switched off
 			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(values) } });
 		}, id);
 		await expect(icon).toHaveCount(id === null ? 0 : 1);
+		if (id === null) await expect(tabIcon).toBeEmpty();
+		else await expect.poll(() => tabIcon.textContent()).not.toBe('');
+		await expect(tab).toHaveAttribute('id', tabId!);
 	}
 });
 

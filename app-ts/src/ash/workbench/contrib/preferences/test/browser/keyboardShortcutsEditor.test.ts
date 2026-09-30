@@ -1,3 +1,4 @@
+import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -99,9 +100,9 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 			keyboardLayoutService: keyboardLayout,
 		}),
 	});
-	const editor = disposables.add(new EditorPart(ownerDocument.body, {
+	const editorServices = disposables.add(createTestEditorServices(undefined, services));
+	const editor = disposables.add(editorServices.createInstance(EditorPart, ownerDocument.body, {
 		registry,
-		instantiationService: services,
 		contextKeyService: contextKeys,
 		keybindingService: keybindings,
 		keybindingsResourceService: resources,

@@ -1,3 +1,4 @@
+import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -487,10 +488,10 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		onDidChangePermissions: Event.None,
 		list: async () => ({ revision: 1, entries: [{ dir: 'dir-1', path: '/workspace', permissions: ['readFiles'] }] }),
 	} as unknown as IDirPermissionsService);
-	const instantiationService = services;
 	const editorPanes = new EditorPaneRegistry();
 	disposables.add(editorPanes.registerEditorPane(descriptor));
-	const editor = disposables.add(new EditorPart(root, { registry: editorPanes, instantiationService }));
+	const editorServices = disposables.add(createTestEditorServices(undefined, services));
+	const editor = disposables.add(editorServices.createInstance(EditorPart, root, { registry: editorPanes }));
 	const preferences = disposables.add(new PreferencesService(() => new BrowserEditorService(editor)));
 
 	await preferences.openSettings();

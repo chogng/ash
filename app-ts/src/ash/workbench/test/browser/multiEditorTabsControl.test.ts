@@ -1,3 +1,8 @@
+import { ServiceContainer } from '../../../platform/instantiation/common/instantiation.js';
+import { Registry } from '../../../platform/registry/common/platform.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
+import { EditorShowIconsConfiguration } from '../../services/editor/common/editorConfiguration.js';
+import { createTestEditorServices } from '../common/testEditorServices.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -32,6 +37,8 @@ test('Editor breadcrumbs localize their navigation label when the language chang
 		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
 		assert.equal(control.domNode.getAttribute('aria-label'), '编辑器面包屑');
+		const setting = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(EditorShowIconsConfiguration)?.setting;
+		assert.deepEqual([setting?.title, setting?.description], ['工作台 › 编辑器：显示图标', '在编辑器标签中显示文件图标。']);
 		assert.equal(control.domNode.querySelector('.ash-breadcrumbs-widget') !== null, true);
 	} finally {
 		resetNlsResolver();
@@ -45,7 +52,8 @@ test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion 
 	const previews: EditorInput[] = [];
 	const stickyToggles: EditorInput[] = [];
 	let dragging = false;
-	const control = new MultiEditorTabsControl(dom.window.document.body, {
+	using services = createTestEditorServices();
+	const control = services.createInstance(MultiEditorTabsControl,dom.window.document.body, {
 		activate: () => undefined,
 		preview: (input) => previews.push(input),
 		close: () => undefined,
@@ -95,7 +103,8 @@ test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion 
 test("MultiEditorTabsControl forwards external resource drops to the target tab", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const drops: Array<{ target: EditorInput | undefined; position: "before" | "after" }> = [];
-	const control = new MultiEditorTabsControl(dom.window.document.body, {
+	using services = createTestEditorServices();
+	const control = services.createInstance(MultiEditorTabsControl,dom.window.document.body, {
 		activate: () => undefined,
 		preview: () => undefined,
 		close: () => undefined,
@@ -105,7 +114,7 @@ test("MultiEditorTabsControl forwards external resource drops to the target tab"
 		drop: () => undefined,
 		dropExternal: (_event, target, position) => drops.push({ target, position }),
 		endDrag: () => undefined,
-	});
+	} satisfies EditorTabsDelegate);
 	const target = input("target");
 	control.setEditors([descriptor(target)], target);
 	const tab = control.domNode.querySelector<HTMLElement>(".ash-tab");
@@ -153,7 +162,8 @@ test("EditorTitleControl switches tab modes and breadcrumbs from configuration",
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const configuration = new InMemoryConfigurationService();
 	const group = new EditorGroupModel();
-	const control = new EditorTitleControl(dom.window.document.body, inertDelegate, group, undefined, configuration);
+	using services = createTestEditorServices(configuration);
+	const control = services.createInstance(EditorTitleControl, dom.window.document.body, inertDelegate, group, undefined, configuration, undefined, undefined, undefined, undefined, undefined);
 	const first = input("folder/first");
 	const second = input("folder/second");
 	group.openEditor(first);
@@ -214,8 +224,9 @@ test("EditorTitleControl follows nested document symbols and opens outline selec
 		revealRange: (range: Range) => { revealed = range; },
 	} as unknown as IEditorPane;
 	const group = new EditorGroupModel();
-	const control = new EditorTitleControl(dom.window.document.body, inertDelegate, group, undefined, configuration, undefined, undefined, undefined, features,
-		(_symbols, selected, reveal) => { chosen = selected; reveal(selected.selectionRange); });
+	using services = createTestEditorServices(configuration);
+	const control = services.createInstance(EditorTitleControl, dom.window.document.body, inertDelegate, group, undefined, configuration, undefined, undefined, undefined, features,
+		(_symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => { chosen = selected; reveal(selected.selectionRange); });
 	const resource = input("folder/symbols.ts");
 	group.openEditor(resource);
 	control.setEditors([descriptor(resource)], resource, pane);
@@ -275,3 +286,15 @@ function externalDataTransfer(): DataTransfer {
 		getData: () => "file:///C:/project/dropped.ts",
 	} as unknown as DataTransfer;
 }
+
+
+test('Editor tabs require the window resource label service before rendering', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using services = new ServiceContainer();
+		assert.throws(() => services.createInstance(MultiEditorTabsControl, dom.window.document.body, inertDelegate), /Unknown service: resourceLabelService/u);
+		assert.equal(dom.window.document.body.childElementCount, 0);
+	} finally {
+		dom.window.close();
+	}
+});

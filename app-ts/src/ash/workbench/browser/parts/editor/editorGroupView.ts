@@ -15,7 +15,7 @@ import type { IFileService } from "../../../../platform/files/common/files.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IDiffService } from "../../../services/diff/common/diffService.js";
-import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
@@ -108,7 +108,6 @@ export interface EditorGroupOptions {
 	readonly textMateService?: ITextMateService;
 	readonly languageResolver?: TextResourceLanguageResolver;
 	readonly diffService?: IDiffService;
-	readonly instantiationService?: IInstantiationService;
 	readonly accessibilityService?: IAccessibilityService;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
 	readonly documentCollaborationApi?: IDocumentCollaborationApi;
@@ -173,7 +172,7 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 	private readonly textMateService: ITextMateService | undefined;
 	private readonly languageResolver: TextResourceLanguageResolver | undefined;
 	private readonly diffService: IDiffService | undefined;
-	private readonly instantiationService: IInstantiationService | undefined;
+	private readonly instantiationService: IInstantiationService;
 	private readonly accessibilityService: IAccessibilityService | undefined;
 	private readonly languageDiagnosticsService: ILanguageDiagnosticsService | undefined;
 	private readonly documentCollaborationApi: IDocumentCollaborationApi | undefined;
@@ -204,7 +203,7 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 	private dimension: IDimension = Dimension.Zero;
 	private openSequence = 0;
 
-	constructor(container: HTMLElement, options: EditorGroupOptions) {
+	constructor(container: HTMLElement, options: EditorGroupOptions, @IInstantiationService instantiationService: IInstantiationService) {
 		super();
 		this.model = new EditorGroupModel(options.id);
 		this.id = this.model.id;
@@ -222,7 +221,7 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 		this.textMateService = options.textMateService;
 		this.languageResolver = options.languageResolver;
 		this.diffService = options.diffService;
-		this.instantiationService = options.instantiationService;
+		this.instantiationService = instantiationService;
 		this.accessibilityService = options.accessibilityService;
 		this.languageDiagnosticsService = options.languageDiagnosticsService;
 		this.documentCollaborationApi = options.documentCollaborationApi;
@@ -268,7 +267,7 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 		this.scopedContextKeyService = options.contextKeyService
 			? this._register(options.contextKeyService.createScoped(this.domNode))
 			: undefined;
-		this.titleControl = this._register(new EditorTitleControl(
+		this.titleControl = this._register(instantiationService.createInstance(EditorTitleControl,
 			this.domNode,
 			titleDelegate,
 			this.model,
@@ -287,10 +286,7 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 		this.contentDomNode.className = 'ash-editor-group-content';
 		this.panes = this._register(new EditorPanes(this.contentDomNode));
 		if (options.keybindingService) {
-			if (!options.instantiationService) {
-				throw new Error('Editor shortcuts require the Instantiation Service');
-			}
-			this.watermark = this._register(options.instantiationService.createInstance(EditorGroupWatermark, this.contentDomNode));
+			this.watermark = this._register(instantiationService.createInstance(EditorGroupWatermark, this.contentDomNode));
 		}
 		this.domNode.append(this.titleControl.domNode, this.contentDomNode);
 		if (this.scopedContextKeyService) {
