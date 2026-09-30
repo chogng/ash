@@ -2,6 +2,110 @@ import type { Locator } from "@playwright/test";
 import { parseWorkspace } from "../../../../src/ash/platform/workspace/common/workspace.js";
 import { expect, test } from "../../../automation/test.js";
 
+interface SashMeasurements {
+	readonly paints: number;
+	readonly durations: number[];
+	readonly frameIntervals: number[];
+	readonly initialRaster: { width: number; height: number };
+	readonly rasters: { width: number; height: number }[];
+}
+
+for (const groupCount of [1, 2]) {
+	test(`sash dragging reuses document rendering with ${groupCount} editor groups`, async ({ driver, workbench }, testInfo) => {
+		const page = workbench.page;
+		await driver.setWindowSize({ width: 1500, height: 900 });
+		const sidebar = page.locator('[data-part="sidebar"]');
+		if (await sidebar.isHidden()) {
+			await page.locator('[data-action-id="workbench.action.toggleSideBar"] button').click();
+		}
+		await page.keyboard.press('ControlOrMeta+N');
+		const editor = workbench.editors.groupAt(0).content.locator('.stanza-editor');
+		await editor.locator('.stanza-editor-input').focus();
+		await page.keyboard.insertText(Array.from({ length: 100 }, (_, index) => `line ${index}: resize`).join('\n'));
+		await page.keyboard.press('ControlOrMeta+Home');
+		await expect(editor.locator('.stanza-editor-line-text').first()).toContainText('line 0:');
+		if (groupCount === 2) {
+			await workbench.quickaccess.runCommand('workbench.action.splitEditorHorizontal');
+			await expect(workbench.editors.groups).toHaveCount(2);
+			await expect(workbench.editors.groupAt(1).content.locator('.stanza-editor-line-text').first()).toContainText('line 0:');
+		}
+		const canvas = editor.locator('.minimap canvas');
+		await expect(canvas).toBeVisible();
+		const before = await sidebar.boundingBox();
+		const sash = sidebar.locator('xpath=../../..').locator(':scope > .ash-sash').first();
+		const bounds = await sash.boundingBox();
+		if (!before || !bounds) throw new Error('Sash drag requires visible sidebar bounds');
+		const x = bounds.x + bounds.width / 2;
+		const y = bounds.y + bounds.height / 2;
+		await page.mouse.move(x, y);
+		await page.mouse.down();
+		await canvas.evaluate(element => {
+			const canvas = element as HTMLCanvasElement;
+			const painter = canvas.getContext('2d')!;
+			const original = painter.clearRect;
+			const initialRaster = { width: canvas.width, height: canvas.height };
+			const durations: number[] = [];
+			const frameIntervals: number[] = [];
+			const rasters: { width: number; height: number }[] = [];
+			let paints = 0;
+			let start = 0;
+			let previousFrame: number | undefined;
+			let frame: number;
+			const sampleFrame = (time: number): void => {
+				if (previousFrame !== undefined) frameIntervals.push(time - previousFrame);
+				previousFrame = time;
+				frame = requestAnimationFrame(sampleFrame);
+			};
+			frame = requestAnimationFrame(sampleFrame);
+			const begin = (): void => { start = performance.now(); };
+			const measure = (): void => { durations.push(performance.now() - start); };
+			painter.clearRect = function (...args): void {
+				paints += 1;
+				rasters.push({ width: canvas.width, height: canvas.height });
+				original.apply(this, args);
+			};
+			window.addEventListener('pointermove', begin, true);
+			window.addEventListener('pointermove', measure);
+			Object.assign(canvas, { finishMeasurement: () => {
+				cancelAnimationFrame(frame);
+				painter.clearRect = original;
+				window.removeEventListener('pointermove', begin, true);
+				window.removeEventListener('pointermove', measure);
+				delete (canvas as HTMLCanvasElement & { finishMeasurement?: unknown }).finishMeasurement;
+				return { paints, durations, frameIntervals, initialRaster, rasters };
+			} });
+		});
+		let metrics: SashMeasurements;
+		try {
+			await page.mouse.move(x + 120, y, { steps: 24 });
+			await page.mouse.up();
+			await expect.poll(async () => (await sidebar.boundingBox())!.width).toBeCloseTo(before.width + 120, 0);
+			await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+		} finally {
+			await page.mouse.up();
+			metrics = await canvas.evaluate(element => (element as HTMLCanvasElement & { finishMeasurement(): typeof metrics }).finishMeasurement());
+		}
+		await testInfo.attach('sash-performance', { body: JSON.stringify(metrics), contentType: 'application/json' });
+		expect(metrics.paints).toBeLessThanOrEqual(24);
+		expect(new Set([metrics.initialRaster.height, ...metrics.rasters.map(raster => raster.height)]).size).toBe(1);
+		await expect(editor.locator('.stanza-editor-line-text').first()).toContainText('line 0:');
+		const geometry = await editor.evaluate(element => {
+			const editorBounds = element.getBoundingClientRect();
+			const contentBounds = element.closest('.ash-editor-group-content')!.getBoundingClientRect();
+			return { width: Math.round(editorBounds.width), contentWidth: Math.round(contentBounds.width), scrollTop: element.scrollTop };
+		});
+		expect(geometry).toEqual({ width: geometry.contentWidth, contentWidth: geometry.contentWidth, scrollTop: 0 });
+		for (let index = 0; index < groupCount; index += 1) {
+			const resizedEditor = workbench.editors.groupAt(index).content.locator('.stanza-editor');
+			await expect(resizedEditor.locator('.stanza-editor-line-text').first()).toContainText('line 0:');
+			await expect.poll(async () => resizedEditor.evaluate(element => Math.round(element.getBoundingClientRect().width - element.closest('.ash-editor-group-content')!.getBoundingClientRect().width))).toBe(0);
+		}
+		await sash.focus();
+		await page.keyboard.press('ArrowRight');
+		await expect.poll(async () => (await sidebar.boundingBox())!.width).toBeCloseTo(before.width + 130, 0);
+	});
+}
+
 test.describe('startup layout defaults', () => {
 	test.use({ openWorkspace: false });
 

@@ -15,6 +15,7 @@ import { ViewPart, PartFingerprint, PartFingerprints } from '../../view/viewPart
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { Range } from '../../../common/core/range.js';
 import { type EditorScrollPosition } from '../../../common/viewModel.js';
+import type * as viewEvents from '../../../common/viewEvents.js';
 
 export interface MinimapOptions {
 	readonly host: HTMLElement;
@@ -38,6 +39,9 @@ export class Minimap extends ViewPart {
 	private contentHeight = 0;
 	private sliderHeight = 0;
 	private sliderTop = 0;
+	private rasterKey: string | undefined;
+	private rasterDirty = true;
+	private foreground = '';
 
 	constructor(context: ViewContext, private readonly source: MinimapOptions) {
 		super(context);
@@ -57,6 +61,7 @@ export class Minimap extends ViewPart {
 		this.domNode.append(this.canvas, this.slider);
 		source.host.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
+		this._register(MinimapTokensColorTracker.getInstance().onDidChange(() => this.invalidateRaster()));
 		this._register(addDisposableListener(this.domNode, 'pointerdown', event => {
 			if (event.button !== 0) return;
 			const localY = event.clientY - this.domNode.getBoundingClientRect().top;
@@ -87,8 +92,26 @@ export class Minimap extends ViewPart {
 		return this.root;
 	}
 
-	public override onConfigurationChanged(): boolean {
+	public override onConfigurationChanged(event: viewEvents.ViewConfigurationChangedEvent): boolean {
+		if (event.hasChanged(EditorOption.minimap) || event.hasChanged(EditorOption.fontInfo) || event.hasChanged(EditorOption.lineHeight) || event.hasChanged(EditorOption.padding)) {
+			this.invalidateRaster();
+		}
 		return true;
+	}
+
+	public override onFlushed(): boolean { return this.invalidateRaster(); }
+	public override onLineMappingChanged(): boolean { return this.invalidateRaster(); }
+	public override onTokensChanged(): boolean { return this.invalidateRaster(); }
+	public override onTokensColorsChanged(): boolean { return this.invalidateRaster(); }
+	public override onThemeChanged(): boolean { return this.invalidateRaster(); }
+	public override onDecorationsChanged(event: viewEvents.ViewDecorationsChangedEvent): boolean {
+		return event.affectsMinimap ? this.invalidateRaster() : false;
+	}
+
+	public override prepareRender(): void {
+		if (this.rasterDirty) {
+			this.foreground = this.source.host.ownerDocument.defaultView!.getComputedStyle(this.source.host).color;
+		}
 	}
 
 	render(context: RestrictedRenderingContext): void {
@@ -117,9 +140,36 @@ export class Minimap extends ViewPart {
 		this.slider.style.height = `${this.sliderHeight}px`;
 		this.canvas.style.width = `${geometry.minimapCanvasOuterWidth}px`;
 		this.canvas.style.height = `${geometry.minimapCanvasOuterHeight}px`;
-		this.canvas.width = Math.max(1, Math.round(geometry.minimapCanvasInnerWidth));
-		this.canvas.height = Math.max(1, Math.round(geometry.minimapCanvasInnerHeight));
-		this.paint(context, geometry);
+		const width = Math.max(1, Math.round(geometry.minimapCanvasInnerWidth));
+		const height = Math.max(1, Math.round(geometry.minimapCanvasInnerHeight));
+		// Placement and the slider change during sash drags and scrolling without
+		// changing the document raster. Setting canvas dimensions also clears it.
+		const rasterKey = [
+			width,
+			height,
+			geometry.minimapScale,
+			geometry.minimapLineHeight,
+			this.contentHeight,
+			context.viewportHeight,
+			padding.top,
+			padding.bottom,
+			this.source.model.version,
+			this.source.model.getOptions().tabSize,
+			this.source.readProjectionRevision(),
+		].join(':');
+		if (this.rasterDirty || this.rasterKey !== rasterKey) {
+			if (this.canvas.width !== width) this.canvas.width = width;
+			if (this.canvas.height !== height) this.canvas.height = height;
+			this.paint(context, geometry);
+			this.rasterKey = rasterKey;
+			this.rasterDirty = false;
+		}
+	}
+
+	private invalidateRaster(): boolean {
+		this.rasterDirty = true;
+		this.setShouldRender();
+		return true;
 	}
 
 	private paint(context: RestrictedRenderingContext, geometry: EditorMinimapLayoutInfo): void {
@@ -136,7 +186,6 @@ export class Minimap extends ViewPart {
 		const scaleY = this.contentHeight * height / context.viewportHeight / Math.max(1, projection.visualLineCount + (padding.top + padding.bottom) / lineHeight);
 		const rowHeight = Math.max(1, scaleY);
 		const charWidth = Math.max(1, geometry.minimapScale);
-		const foreground = this.source.host.ownerDocument.defaultView!.getComputedStyle(this.source.host).color;
 		const colors = MinimapTokensColorTracker.getInstance();
 		const hasTokenColors = (TokenizationRegistry.getColorMap()?.length ?? 0) > 2;
 		painter.globalAlpha = 0.55;
@@ -146,7 +195,7 @@ export class Minimap extends ViewPart {
 			const visibleWidth = Math.max(1, Math.min(width - indentation * charWidth, (text.length - indentation) * charWidth));
 			const y = Math.floor((line.visualLineIndex + paddingRows) * scaleY);
 			if (!hasTokenColors) {
-				painter.fillStyle = foreground;
+				painter.fillStyle = this.foreground;
 				painter.fillRect(indentation * charWidth, y, visibleWidth, rowHeight);
 				continue;
 			}

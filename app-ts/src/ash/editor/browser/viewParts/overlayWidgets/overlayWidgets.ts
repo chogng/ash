@@ -101,11 +101,15 @@ export class ViewOverlayWidgets extends ViewPart {
 			viewDomNode: this._viewDomNode,
 			canOverflow: candidate => this._widgetCanOverflow(candidate),
 			usesFixedPosition: () => this._context.configuration.options.get(EditorOption.fixedOverflowWidgets),
-			requestRender: this.options.requestRender,
+			requestRender: () => {
+				this.setShouldRender();
+				this.options.requestRender();
+			},
 		}, widget));
 		const container = this._widgetCanOverflow(widget) ? this.overflowingOverlayWidgetsDomNode : this._domNode;
 		container.domNode.append(overlayWidget.domNode.domNode);
 		this._updateMaxMinWidth();
+		this.setShouldRender();
 	}
 
 	public setWidgetPosition(widget: IOverlayWidget, position: IOverlayWidgetPosition | null): boolean {
@@ -113,6 +117,7 @@ export class ViewOverlayWidgets extends ViewPart {
 		if (candidate?.actual !== widget) return false;
 		const changed = candidate.setPosition(position);
 		this._updateMaxMinWidth();
+		if (changed) this.setShouldRender();
 		return changed;
 	}
 
@@ -122,10 +127,16 @@ export class ViewOverlayWidgets extends ViewPart {
 		if (candidate?.actual !== widget) return;
 		this._widgets.deleteAndDispose(id);
 		this._updateMaxMinWidth();
+		this.setShouldRender();
+	}
+
+	public override onBeforeRender(): void {
+		for (const [, widget] of this._widgets) widget.onBeforeRender();
 	}
 
 	public override prepareRender(): void {
 		this._viewDomNodeRect = getDomNodePagePosition(this._viewDomNode);
+		for (const [, widget] of this._widgets) widget.prepareRender();
 	}
 
 	public render(context: RestrictedRenderingContext): void {
@@ -176,6 +187,7 @@ class OverlayWidget extends Disposable {
 	public readonly actual: IOverlayWidget;
 	public position: IOverlayWidgetPosition | null;
 	public height = 0;
+	private width = 0;
 
 	constructor(private readonly host: OverlayWidgetHost, actual: IOverlayWidget) {
 		super();
@@ -207,17 +219,24 @@ class OverlayWidget extends Disposable {
 		this.domNode.setPosition(this.host.canOverflow(this.actual) && this.host.usesFixedPosition() ? 'fixed' : 'absolute');
 	}
 
-	public render(context: RestrictedRenderingContext, viewPagePosition: IDomNodePagePosition | null, stackOffset: number, layout: OverlayWidgetLayout): void {
+	public onBeforeRender(): void {
 		const preference = this.position?.preference;
 		// A positioned widget still owns its visibility, including the hidden attribute.
 		this.domNode.setDisplay(preference === null || preference === undefined ? 'none' : '');
-		if (preference === null || preference === undefined) return;
+	}
+
+	public prepareRender(): void {
 		const rectangle = this.domNode.domNode.getBoundingClientRect();
-		const width = rectangle.width || this.domNode.domNode.offsetWidth;
+		this.width = rectangle.width || this.domNode.domNode.offsetWidth;
 		this.height = rectangle.height || this.domNode.domNode.offsetHeight;
+	}
+
+	public render(context: RestrictedRenderingContext, viewPagePosition: IDomNodePagePosition | null, stackOffset: number, layout: OverlayWidgetLayout): void {
+		const preference = this.position?.preference;
+		if (preference === null || preference === undefined) return;
 		const coordinates = isCoordinates(preference)
 			? this.coordinatePosition(preference, context, viewPagePosition)
-			: this.preferredPosition(preference, context, width, this.height, stackOffset, viewPagePosition, layout);
+			: this.preferredPosition(preference, context, this.width, this.height, stackOffset, viewPagePosition, layout);
 		this.domNode.setLeft(coordinates.left);
 		this.domNode.setTop(coordinates.top);
 	}

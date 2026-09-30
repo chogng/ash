@@ -50,6 +50,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 	private _viewLineOptions: ViewLineOptions;
 	private lastViewportData: ViewportData | undefined;
 	private _maxLineWidth = 0;
+	private contentRevision = 0;
 	private horizontalRevealRequest: { readonly range: Range; readonly minimalReveal: boolean; readonly scrollType: ScrollType } | undefined;
 
 	constructor(context: ViewContext, options: ViewLinesOptions) {
@@ -65,7 +66,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 		this._visibleLines = this._register(new ViewLayer<ViewLine>({
 			host: options.host,
 			readVisualProjection: options.readVisualProjection,
-			readProjectionRevision: options.readProjectionRevision,
+			readProjectionRevision: () => options.readProjectionRevision() + this.contentRevision,
 			lineRenderer: {
 				createLine: visualLineIndex => new ViewLine(this.domNode.domNode, visualLineIndex, this._viewLineOptions, options.tabSize),
 				getDomNode: line => line.getDomNode(),
@@ -93,13 +94,10 @@ export class ViewLines extends ViewPart implements IViewLines {
 		const next = new ViewLineOptions(configuration, themeType);
 		if (this._viewLineOptions.equals(next)) return false;
 		this._viewLineOptions = next;
-		const semanticTokens = this.resolveSemanticTokenRange(this._visibleLines.renderedLineRange);
-		const visualProjection = this.readVisualProjection();
-		for (const [visualLineIndex, line] of this._visibleLines.renderedLines) {
+		for (const line of this._visibleLines.renderedLines.values()) {
 			line.onOptionsChanged(next);
-			const visualLine = visualProjection.lineAt(visualLineIndex);
-			if (visualLine && !this.isGpuLine(visualLineIndex + 1)) this.projectLineText(line, visualLine, semanticTokens.get(visualLine.logicalLineIndex) ?? []);
 		}
+		this.contentRevision += 1;
 		this.resetLineWidthCaches();
 		return true;
 	}
@@ -111,16 +109,18 @@ export class ViewLines extends ViewPart implements IViewLines {
 	public renderText(viewportData: ViewportData): void {
 		this.lastViewportData = viewportData;
 		this._visibleLines.render(viewportData);
-		this.applyHorizontalReveal(viewportData);
-		this.updateLineWidths();
 	}
 
 	public render(context: RestrictedRenderingContext): void {
 		this.renderText(context.viewportData);
 	}
 
-	public override prepareRender(_context: RestrictedRenderingContext): void {
+	public override prepareRender(): void {
+		// The coordinator calls this after every editor has written its text;
+		// measuring inside renderText would alternate layout reads and writes.
 		this._checkMonospaceFontAssumptions();
+		this.updateLineWidths();
+		this.applyHorizontalReveal(this.lastViewportData!);
 	}
 
 	public override onConfigurationChanged(_event?: ViewConfigurationChangedEvent): boolean {
@@ -136,9 +136,8 @@ export class ViewLines extends ViewPart implements IViewLines {
 
 	public override onDecorationsChanged(_event?: ViewDecorationsChangedEvent): boolean {
 		for (const line of this._visibleLines.renderedLines.values()) line.onDecorationsChanged();
-		if (this._visibleLines.renderedLines.size === 0) return false;
-		this.onTokensChanged();
-		return true;
+		this.contentRevision += 1;
+		return this._visibleLines.renderedLines.size > 0;
 	}
 
 	public override onFlushed(_event?: ViewFlushedEvent): boolean {
@@ -341,19 +340,15 @@ export class ViewLines extends ViewPart implements IViewLines {
 
 	/** Reprojects semantic tokens without rebuilding the visible row window. */
 	public override onTokensChanged(_event?: ViewTokensChangedEvent): boolean {
-		const semanticTokens = this.resolveSemanticTokenRange(this._visibleLines.renderedLineRange);
-		const visualProjection = this.readVisualProjection();
-		for (const [visualLineIndex, line] of this._visibleLines.renderedLines) {
-			const visualLine = visualProjection.lineAt(visualLineIndex);
-			if (visualLine) {
-				line.onTokensChanged();
-				this.projectLineText(line, visualLine, semanticTokens.get(visualLine.logicalLineIndex) ?? []);
-			}
-		}
+		// Events invalidate retained rows; only the render pass writes text. This
+		// also lets several token/decorations updates share one frame snapshot.
+		for (const line of this._visibleLines.renderedLines.values()) line.onTokensChanged();
+		this.contentRevision += 1;
 		return true;
 	}
 
 	private invalidateContent(): boolean {
+		this.contentRevision += 1;
 		this.lastViewportData = undefined;
 		for (const line of this._visibleLines.renderedLines.values()) line.onContentChanged();
 		this._maxLineWidth = 0;
@@ -373,7 +368,10 @@ export class ViewLines extends ViewPart implements IViewLines {
 			line.onMonospaceAssumptionsInvalidated();
 			invalid = true;
 		}
-		if (invalid) this.onTokensChanged();
+		if (invalid) {
+			this.onTokensChanged();
+			this.setShouldRender();
+		}
 	}
 
 	private _ensureMaxLineWidth(lineWidth: number): void {
@@ -396,18 +394,6 @@ export class ViewLines extends ViewPart implements IViewLines {
 			lineData.inlineDecorations,
 			viewLineNumber,
 		);
-	}
-
-	private resolveSemanticTokenRange(range: EditorLineRange): ReadonlyMap<number, readonly ResolvedSemanticToken[]> {
-		const source = this.semanticTokenSource;
-		if (!source) return new Map();
-		const tokens = new Map<number, readonly ResolvedSemanticToken[]>();
-		const projection = this.readVisualProjection();
-		for (let visualLineIndex = range.startLineIndex; visualLineIndex < range.endLineIndexExclusive; visualLineIndex += 1) {
-			const visualLine = projection.lineAt(visualLineIndex);
-			if (visualLine && !tokens.has(visualLine.logicalLineIndex)) tokens.set(visualLine.logicalLineIndex, source.getLineTokens(visualLine.logicalLineIndex));
-		}
-		return tokens;
 	}
 
 	private applyHorizontalReveal(viewportData: ViewportData): void {

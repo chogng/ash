@@ -82,7 +82,7 @@ export class CodeLensWidget extends Disposable {
 	}
 
 	public isVisible(): boolean {
-		return this.computedHeight > 0 && this.domNode.dataset.visibleViewZone === 'true';
+		return this.computedHeight > 0 && this.viewport.isViewZoneVisible(this.viewZoneId);
 	}
 
 	private get afterLineNumber(): number {

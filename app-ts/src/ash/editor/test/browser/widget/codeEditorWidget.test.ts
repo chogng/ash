@@ -351,6 +351,7 @@ test('editor configuration updates rerender line-number, selection, whitespace, 
 		minimap: { enabled: false },
 	});
 	editor.layout({ width: 280, height: 60 });
+	editor.view.render(true, false);
 
 	const lineNumber = (lineIndex: number): string => requiredElement<HTMLElement>(
 		editor.getDomNode(),
@@ -358,10 +359,12 @@ test('editor configuration updates rerender line-number, selection, whitespace, 
 	).textContent ?? '';
 	assert.equal(lineNumber(0), '1');
 	editor.setPosition(new Position(3, 1));
+	editor.view.render(true, false);
 	assert.equal(lineNumber(0), '2');
 	assert.equal(lineNumber(2), '3');
 
 	editor.setSelection(new Selection(2, 1, 2, 5));
+	editor.view.render(true, false);
 	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-selection').length, 1);
 	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-whitespace').length, 4);
 	assert.equal(editor.getDomNode().querySelectorAll('.view-overlay-line[data-line-index="1"] .stanza-editor-indent-guide').length, 1);
@@ -374,6 +377,7 @@ test('editor configuration updates rerender line-number, selection, whitespace, 
 		renderWhitespace: 'all',
 		guides: { indentation: false },
 	});
+	editor.view.render(true, false);
 	assert.equal(configurationChanges, 1);
 	assert.equal(editor.getOption(EditorOption.lineNumbers).renderType, RenderLineNumbersType.Off);
 	assert.equal(editor.getOptions().get(EditorOption.renderWhitespace), 'all');
@@ -400,18 +404,23 @@ test('indent guides use model indentation units and include blank lines in the a
 		minimap: { enabled: false },
 	});
 	editor.layout({ width: 300, height: 140 });
+	editor.view.render(true, false);
 	editor.setPosition(new Position(3, 1));
+	editor.view.render(true, false);
 	const guides = (line: number) => [...editor.getDomNode().querySelectorAll<HTMLElement>(`.view-overlay-line[data-line-index="${line}"] .stanza-editor-indent-guide`)];
 	assert.deepEqual([0, 1, 2, 3, 4].map(line => guides(line).length), [0, 2, 2, 2, 0]);
 	assert.deepEqual(guides(2).map(guide => guide.classList.contains('active')), [false, true]);
 	assert.deepEqual(guides(1).map(guide => guide.style.left), guides(2).map(guide => guide.style.left));
 	assert.deepEqual(guides(3).map(guide => guide.style.left), guides(2).map(guide => guide.style.left));
 	model.updateOptions({ indentSize: 4 });
+	editor.view.render(true, false);
 	assert.deepEqual([1, 2, 3].map(line => guides(line).length), [1, 1, 1]);
 	assert.equal(guides(2)[0]?.classList.contains('active'), true);
 	editor.updateOptions({ guides: { highlightActiveIndentation: false } });
+	editor.view.render(true, false);
 	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-indent-guide.active').length, 0);
 	model.setValue('root\nplain\n\nplain\nroot');
+	editor.view.render(true, false);
 	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-indent-guide').length, 0);
 });
 
@@ -504,6 +513,7 @@ test('CodeEditorWidget owns content and glyph margin widget layout through the s
 		glyphMargin: true,
 	});
 	editor.layout({ width: 240, height: 60 });
+	editor.view.render(true, false);
 
 	const contentNode = h(dom.window.document, 'div');
 	const contentWidget: IContentWidget = {
@@ -513,6 +523,7 @@ test('CodeEditorWidget owns content and glyph margin widget layout through the s
 		getPosition: () => ({ position: new Position(2, 2), preference: [ContentWidgetPositionPreference.EXACT] }),
 	};
 	editor.addContentWidget(contentWidget);
+	editor.view.render(true, false);
 	assert.equal(contentNode.getAttribute('widgetId'), 'test.content.widget');
 	assert.equal(contentNode.style.display, 'block');
 	const pointerDown = new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0 });
@@ -527,12 +538,14 @@ test('CodeEditorWidget owns content and glyph margin widget layout through the s
 		getPosition: () => glyphPosition,
 	};
 	editor.addGlyphMarginWidget(glyphWidget);
+	editor.view.render(true, false);
 	assert.equal(glyphNode.getAttribute('widgetId'), 'test.glyph.widget');
 	assert.equal(glyphNode.style.display, 'block');
 	assert.equal(glyphNode.style.top, '0px');
 
 	glyphPosition = { lane: GlyphMarginLane.Center, zIndex: 2, range: new Range(2, 1, 2, 1) };
 	editor.layoutGlyphMarginWidget(glyphWidget);
+	editor.view.render(true, false);
 	assert.equal(glyphNode.style.top, '20px');
 	editor.removeGlyphMarginWidget(glyphWidget);
 	assert.equal(glyphNode.isConnected, false);
@@ -625,6 +638,7 @@ test("CodeEditorWidget owns padding, placeholder, and current-line presentation 
 	});
 
 	editor.layout({ width: 320, height: 40 });
+	editor.view.render(true, false);
 
 	assert.equal(editor.getDomNode().querySelector(".view-line.active"), null);
 	assert.ok(editor.getDomNode().querySelector(".stanza-editor-caret"));
@@ -652,8 +666,10 @@ test('ViewCursors follows view positions, configuration, focus, composition, and
 		overtypeCursorStyle: 'block',
 	});
 	editor.layout({ width: 90, height: 100 });
+	editor.view.render(true, false);
 	const targetPosition = editor._getViewModel()!.coordinatesConverter.convertViewPositionToModelPosition(new Position(3, 1));
 	editor.setPosition(targetPosition);
+	editor.view.render(true, false);
 
 	const layer = requiredElement<HTMLElement>(editor.getDomNode(), '.cursors-layer');
 	const primary = requiredElement<HTMLElement>(layer, '.cursor');
@@ -665,22 +681,28 @@ test('ViewCursors follows view positions, configuration, focus, composition, and
 	assert.equal(primary.style.visibility, 'hidden');
 
 	editor.focus();
+	editor.view.render(true, false);
 	assert.equal(primary.style.visibility, 'inherit');
 	editor.setSelections([new Selection(1, 1, 1, 2), new Selection(1, 3, 1, 3)]);
+	editor.view.render(true, false);
 	assert.equal(layer.classList.contains('has-selection'), true);
 	assert.equal(layer.querySelectorAll('.cursor').length, 2);
 	assert.ok(layer.querySelector('.cursor-primary'));
 	assert.ok(layer.querySelector('.cursor-secondary'));
 
 	editor.controller.textArea!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Insert' }));
+	editor.view.render(true, false);
 	assert.equal(editor.getDomNode().classList.contains('overtype'), true);
 	assert.equal(layer.classList.contains('cursor-block-style'), true);
 
 	editor._getViewModel()!.onCompositionStart();
+	editor.view.render(true, false);
 	assert.equal(primary.style.visibility, 'hidden');
 	editor._getViewModel()!.onCompositionEnd();
+	editor.view.render(true, false);
 	assert.equal(primary.style.visibility, 'inherit');
 	editor.controller.textArea!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Insert' }));
+	editor.view.render(true, false);
 	assert.equal(editor.getDomNode().classList.contains('overtype'), false);
 	assert.equal(layer.classList.contains('cursor-line-style'), true);
 
@@ -704,11 +726,12 @@ test("PlaceholderTextContribution follows model emptiness and editor layout", ()
 	});
 
 	editor.layout({ width: 320, height: 80 });
+	editor.view.render(true, false);
 	const placeholder = requiredElement<HTMLElement>(editor.getDomNode(), ".stanza-editor-placeholder-text");
 	const layout = editor.getLayoutInfo();
 	assert.strictEqual(PlaceholderTextContribution.get(editor), editor.getContribution(PlaceholderTextContribution.ID));
 	assert.deepEqual({
-		display: placeholder.style.display,
+		display: dom.window.getComputedStyle(placeholder).display,
 		left: placeholder.style.left,
 		top: placeholder.style.top,
 		width: placeholder.style.width,
@@ -722,9 +745,11 @@ test("PlaceholderTextContribution follows model emptiness and editor layout", ()
 	});
 
 	model.reset("alpha");
-	assert.equal(placeholder.style.display, "none");
+	editor.view.render(true, false);
+	assert.equal(dom.window.getComputedStyle(placeholder).display, "none");
 	model.reset("");
-	assert.equal(placeholder.style.display, "block");
+	editor.view.render(true, false);
+	assert.equal(dom.window.getComputedStyle(placeholder).display, "block");
 	dom.window.close();
 });
 

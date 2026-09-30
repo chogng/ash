@@ -41,6 +41,7 @@ import { ViewLayout } from '../viewLayout/viewLayout.js';
 import { GlyphMarginLanesModel } from './glyphLanesModel.js';
 import { ViewModelDecorations } from './viewModelDecorations.js';
 import { type IViewModelLines, ViewModelLinesFromModelAsIs, ViewModelLinesFromProjectedModel } from './viewModelLines.js';
+import { type EditorVisualLineProjection } from './modelLineProjection.js';
 import { type TextModelEditSource } from '../textModelEditSource.js';
 
 
@@ -219,6 +220,10 @@ export class ViewModel extends Disposable implements IViewModel {
 
 	getViewLineData(lineNumber: number): ViewLineData {
 		return this.lines.getViewLineData(lineNumber);
+	}
+
+	getVisualLineProjection(): EditorVisualLineProjection {
+		return this.lines.projection;
 	}
 
 	getMinimapLinesRenderingData(startLineNumber: number, endLineNumber: number, needed: boolean[]): MinimapLinesRenderingData {

@@ -16,6 +16,7 @@ import { ViewLineData, type EditorViewportLineSource } from '../viewModel.js';
 import { EditorVisualLineProjection, type EditorVisualLine } from './modelLineProjection.js';
 
 export interface IViewModelLines extends IDisposable {
+	readonly projection: EditorVisualLineProjection;
 	createCoordinatesConverter(): ICoordinatesConverter;
 	setWrappingSettings(fontInfo: FontInfo, wrappingStrategy: 'simple' | 'advanced', wrappingColumn: number, wrappingIndent: WrappingIndent, wordBreak: 'normal' | 'keepAll'): boolean;
 	setTabSize(tabSize: number): boolean;
@@ -139,7 +140,7 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 
 	/** The current wrapping-plus-visibility projection. */
 	get projection(): EditorVisualLineProjection {
-		return this.currentProjection;
+		return this.ensureCurrent();
 	}
 
 	get lineCount(): number {
@@ -153,7 +154,9 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 	setWrappingSettings(fontInfo: FontInfo, _wrappingStrategy: 'simple' | 'advanced', wrappingColumn: number, wrappingIndent: WrappingIndent, wordBreak: 'normal' | 'keepAll'): boolean {
 		const nextWrapping = wrappingColumn > 0 ? EditorLineWrapping.On : EditorLineWrapping.Off;
 		const nextWidth = Math.max(0, wrappingColumn) * fontInfo.typicalHalfwidthCharacterWidth;
-		const changed = this.fontInfo !== fontInfo || this.wrapping !== nextWrapping || this.wrapWidth !== nextWidth || this.currentWrappingIndent !== wrappingIndent || this.currentWordBreak !== wordBreak;
+		// Resizing can recompute an equivalent FontInfo object. Its identity must
+		// not trigger document-wide line-break measurement when metrics are unchanged.
+		const changed = !this.fontInfo.equals(fontInfo) || this.wrapping !== nextWrapping || this.wrapWidth !== nextWidth || this.currentWrappingIndent !== wrappingIndent || this.currentWordBreak !== wordBreak;
 		if (!changed) return false;
 		this.fontInfo = fontInfo;
 		this.wrapping = nextWrapping;
@@ -502,8 +505,18 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 }
 
 export class ViewModelLinesFromModelAsIs extends Disposable implements IViewModelLines {
-	constructor(private readonly model: ITextModel) {
+	private currentProjection: EditorVisualLineProjection;
+
+	constructor(private readonly model: TextModel) {
 		super();
+		this.currentProjection = EditorVisualLineProjection.identity(model);
+	}
+
+	get projection(): EditorVisualLineProjection {
+		if (this.currentProjection.modelVersion !== this.model.version) {
+			this.currentProjection = EditorVisualLineProjection.identity(this.model);
+		}
+		return this.currentProjection;
 	}
 
 	createCoordinatesConverter(): ICoordinatesConverter {

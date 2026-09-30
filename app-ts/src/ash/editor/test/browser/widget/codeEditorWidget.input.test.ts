@@ -383,12 +383,14 @@ test('editor focus updates the view overlay presentation', () => {
 		renderLineHighlightOnlyWhenFocus: true,
 	});
 	editor.layout({ width: 120, height: 100 });
+	editor.view.render(true, false);
 	const overlays = requiredElement(editor.getDomNode(), '.view-overlays');
 
 	assert.equal(overlays.classList.contains('focused'), false);
 	assert.equal(editor.getDomNode().querySelector('.view-overlays .current-line'), null);
 	assert.equal(editor.getDomNode().querySelector('.margin-view-overlays .current-line-margin'), null);
 	editor.focus();
+	editor.view.render(true, false);
 	assert.equal(overlays.classList.contains('focused'), true);
 	assert.deepEqual(
 		[...requiredElement(editor.getDomNode(), '.view-overlays .current-line').classList],
@@ -401,10 +403,12 @@ test('editor focus updates the view overlay presentation', () => {
 	assert.ok(editor.getDomNode().querySelectorAll('.view-overlays .current-line').length > 1);
 	assert.equal(editor.getDomNode().querySelectorAll('.view-overlays .current-line-exact').length, 1);
 	editor.setSelection(new Selection(1, 1, 1, 2));
+	editor.view.render(true, false);
 	assert.equal(editor.getDomNode().querySelector('.view-overlays .current-line'), null);
 	assert.ok(editor.getDomNode().querySelector('.margin-view-overlays .current-line-margin'));
 	editor.setSelection(Selection.fromPositions(new Position(1, 1)));
 	editor.controller.editContext.domNode.domNode.blur();
+	editor.view.render(true, false);
 	assert.equal(overlays.classList.contains('focused'), false);
 	assert.equal(editor.getDomNode().querySelector('.view-overlays .current-line'), null);
 	assert.equal(editor.getDomNode().querySelector('.margin-view-overlays .current-line-margin'), null);

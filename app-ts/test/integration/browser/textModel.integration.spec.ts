@@ -766,6 +766,7 @@ test("glyph margin, line numbers, and folding controls keep VS Code gutter order
 	await page.keyboard.type("x".repeat(200));
 	await expect.poll(() => editor.evaluate(element => element.scrollWidth - element.clientWidth)).toBeGreaterThan(0);
 	await page.evaluate(() => window.ashTextModelIntegration.setScrollLeft(160));
+	await expect.poll(async () => (await glyphMargin.boundingBox())?.x).toBe(glyphMarginBox.x);
 	const editorBox = await editor.boundingBox();
 	const scrolledGlyphMarginBox = await glyphMargin.boundingBox();
 	const scrolledFoldingBox = await foldingControl.boundingBox();

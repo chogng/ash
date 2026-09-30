@@ -22,6 +22,7 @@ import { ISelection, Selection } from './core/selection.js';
 import { TextModelEditSource } from './textModelEditSource.js';
 import { type Event } from '../../base/common/event.js';
 import { type TextModelChange } from './core/textChange.js';
+import { type EditorVisualLineProjection } from './viewModel/modelLineProjection.js';
 
 export interface IViewModel extends ICursorSimpleModel, ISimpleModel {
 
@@ -57,6 +58,8 @@ export interface IViewModel extends ICursorSimpleModel, ISimpleModel {
 	getViewportViewLineRenderingData(visibleRange: Range, lineNumber: number): ViewLineRenderingData;
 	getViewLineRenderingData(lineNumber: number): ViewLineRenderingData;
 	getViewLineData(lineNumber: number): ViewLineData;
+	/** Shares the current model-owned mapping with rendering and hit testing. */
+	getVisualLineProjection(): EditorVisualLineProjection;
 	getMinimapLinesRenderingData(startLineNumber: number, endLineNumber: number, needed: boolean[]): MinimapLinesRenderingData;
 	getCompletelyVisibleViewRange(): Range;
 	getCompletelyVisibleViewRangeAtScrollTop(scrollTop: number): Range;

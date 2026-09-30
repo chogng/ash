@@ -35,6 +35,7 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 	widget.create();
 
 	widget.show(new Position((1) + 1, (2) + 1), 2);
+	viewport.render(true, false);
 
 	assert.deepEqual({
 		position: widget.position,
@@ -60,6 +61,7 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 		revealedRanges: [Range.fromPositions(new Position((1) + 1, (2) + 1))],
 	});
 	editor.layout({ width: 240, height: 100 });
+	viewport.render(true, false);
 	assert.deepEqual({ height: widget.domNode.style.height, layout: widget.layouts.at(-1) }, {
 		height: '40px',
 		layout: { heightInPixels: 22, widthInPixels: 193 },
@@ -67,12 +69,14 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 	editor.layout({ width: 200, height: 100 });
 
 	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: 'new\n' }]);
+	viewport.render(true, false);
 	assert.deepEqual({ position: widget.position, top: widget.domNode.style.top }, {
 		position: new Position((2) + 1, (2) + 1),
 		top: '60px',
 	});
 
 	widget.updatePositionAndHeight(new Position((0) + 1, (1) + 1), 1);
+	viewport.render(true, false);
 	assert.deepEqual({
 		position: widget.position,
 		top: widget.domNode.style.top,
@@ -128,6 +132,7 @@ test('ZoneWidget preserves selection on request and exposes an enabled resize sa
 	});
 	widget.create();
 	widget.show(new Position((0) + 1, (0) + 1), 6);
+	viewport.render(true, false);
 
 	const sash = requiredElement<HTMLElement>(widget.domNode, '.ash-sash-horizontal');
 	assert.deepEqual({
@@ -147,6 +152,7 @@ test('ZoneWidget preserves selection on request and exposes an enabled resize sa
 	});
 
 	widget.resizeTo(8);
+	viewport.render(true, false);
 	assert.deepEqual({ height: widget.domNode.style.height, layout: widget.layouts.at(-1) }, {
 		height: '160px',
 		layout: { heightInPixels: 160, widthInPixels: 160 },
@@ -173,6 +179,7 @@ test('ZoneWidget places an anchor after its wrapped visual line', () => {
 	widget.create();
 
 	widget.show(anchor, 1);
+	viewport.render(true, false);
 
 	assert.equal(widget.domNode.style.top, `${(visualLineIndex + 1) * 20}px`);
 	dom.window.close();

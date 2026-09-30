@@ -51,6 +51,7 @@ test('Folding contribution projects model ranges through FoldingDecorationProvid
 		lineHeight: 20,
 	});
 	editor.layout({ width: 320, height: 120 });
+	editor.view.render(true, false);
 
 	const initial = model.getAllDecorations().find(decoration => decoration.options.description === 'folding-expanded');
 	assert.ok(initial);
@@ -59,10 +60,12 @@ test('Folding contribution projects model ranges through FoldingDecorationProvid
 	assert.equal(expandedMarker?.querySelectorAll('svg.ash-icon').length, 1);
 	expandedMarker?.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, buttons: 1 }));
 	assert.ok(model.getAllDecorations().some(decoration => decoration.options.description === 'folding-collapsed'));
+	editor.view.render(true, false);
 	const pointerCollapsedMarker = editor.getDomNode().querySelector<HTMLElement>('.ash-icon-folding-collapsed');
 	pointerCollapsedMarker?.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, buttons: 1 }));
 	assert.ok(model.getAllDecorations().some(decoration => decoration.options.description === 'folding-expanded'));
 	await editor.getAction('editor.fold')!.run();
+	editor.view.render(true, false);
 	const collapsed = model.getAllDecorations().find(decoration => decoration.options.description === 'folding-collapsed');
 	assert.equal(collapsed?.options.afterContentClassName, 'inline-folded');
 	const collapsedMarker = editor.getDomNode().querySelector<HTMLElement>('.ash-icon-folding-collapsed');

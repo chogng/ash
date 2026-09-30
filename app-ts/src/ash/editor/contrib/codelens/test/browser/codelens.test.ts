@@ -110,6 +110,7 @@ test('CodeLens contribution groups one stable widget per line and refreshes prov
 	using contribution = new CodeLensContribution(editorFor(viewport), viewport, providers, undefined, executeCommand, error => contributionErrors.push(error));
 
 	await contribution.getModel();
+	viewport.render(true, false);
 	let widget = requiredElement<HTMLElement>(viewport.domNode.domNode, '.stanza-editor-codelens');
 	const initialWidget = widget;
 	assert.equal(viewport.domNode.domNode.querySelectorAll('.stanza-editor-codelens').length, 1);
@@ -123,6 +124,7 @@ test('CodeLens contribution groups one stable widget per line and refreshes prov
 	widget.querySelector('button')!.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 2, buttons: 2, clientX: 80 }));
 	assert.equal(mouseDown?.target.type, MouseTargetType.CONTENT_VIEW_ZONE);
 	viewport.layout({ width: 320, height: 60 });
+	viewport.render(true, false);
 	await Promise.resolve();
 	assert.equal(resolveCount, 1);
 	widget.querySelectorAll('button')[1]!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
@@ -264,6 +266,7 @@ test('CodeLens cache persists workspace line positions without command data', ()
 		});
 		restoredViewport.layout({ width: 300, height: 20 });
 		using restoredContribution = new CodeLensContribution(editorFor(restoredViewport), restoredViewport, restoredProviders, restoredResource, undefined);
+		restoredViewport.render(true, false);
 		const restoredWidget = requiredElement<HTMLElement>(restoredViewport.domNode.domNode, '.stanza-editor-codelens');
 		assert.deepEqual({
 			hidden: restoredWidget.hidden,

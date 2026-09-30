@@ -58,6 +58,7 @@ test("Model decorations project, update, and follow tracked ranges", async () =>
 		textMeasurer: new FixedTextMeasurer(),
 	});
 	viewport.layout({ width: 300, height: 60 });
+	viewport.render(true, false);
 	viewport.scrollTo({ left: 0, top: 0 });
 
 	assert.deepEqual(decorationElements(viewport.domNode.domNode).map(element => ({
@@ -85,7 +86,7 @@ test("Model decorations project, update, and follow tracked ranges", async () =>
 		},
 		metadata: "warning",
 	});
-	await Promise.resolve();
+	viewport.render(true, false);
 	const warning = requiredElement<HTMLElement>(viewport.domNode.domNode, '.cdr.squiggly-warning');
 	assert.equal(warning.parentElement?.dataset.lineIndex, "1");
 
@@ -93,7 +94,7 @@ test("Model decorations project, update, and follow tracked ranges", async () =>
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
 		text: "X\n",
 	}]);
-	await Promise.resolve();
+	viewport.render(true, false);
 
 	const trackedMatch = decorationElements(viewport.domNode.domNode).filter(element => element.classList.contains('findMatch'));
 	assert.deepEqual(
@@ -116,6 +117,7 @@ test('Model glyph margin decorations use standard lanes and z-index ownership', 
 	using model = new TextModel('first\nsecond');
 	using viewport = new View({ container, model, glyphMargin: true, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	viewport.layout({ width: 240, height: 40 });
+	viewport.render(true, false);
 	const [lower, higher] = model.deltaDecorations([], [{
 		range: new Range(1, 1, 1, 1),
 		options: { description: 'lower glyph', glyphMarginClassName: 'test-glyph-lower', glyphMargin: { position: GlyphMarginLane.Center }, zIndex: 1 },
@@ -169,6 +171,7 @@ test("Line and block decoration parts project standard model options", () => {
 		textMeasurer: new FixedTextMeasurer(),
 	});
 	viewport.layout({ width: 200, height: 60 });
+	viewport.render(true, false);
 
 	const firstLine = requiredElement<HTMLElement>(viewport.domNode.domNode, '.margin-view-overlays .view-overlay-line[data-line-index="0"]');
 	const secondLine = requiredElement<HTMLElement>(viewport.domNode.domNode, '.margin-view-overlays .view-overlay-line[data-line-index="1"]');
@@ -195,6 +198,7 @@ test("Line and block decoration parts project standard model options", () => {
 	assert.equal(block.style.height, "64px");
 
 	viewport.layout({ width: 240, height: 60 });
+	viewport.render(true, false);
 	const resizedBlock = requiredElement<HTMLElement>(viewport.domNode.domNode, ".stanza-editor-block-decoration");
 	assert.strictEqual(resizedBlock, block);
 	const resizedLayoutInfo = viewport.getLayoutInfo();
@@ -239,6 +243,7 @@ test("Quick Diff decorations project into the overview ruler and minimap gutter"
 		textMeasurer: new FixedTextMeasurer(),
 	});
 	viewport.layout({ width: 300, height: 80 });
+	viewport.render(true, false);
 
 	assert.deepEqual(overviewMarkerColors(minimapPaint), ['#cca700', '#f48771']);
 	assert.deepEqual(overviewCursorColors(minimapPaint), [darkColorTheme.getColor(editorCursorForeground)!.transparent(0.7).toString()]);
@@ -263,6 +268,7 @@ test('Overview ruler omits cursor markers when hideCursorInOverviewRuler is enab
 		cursorOptions: { hideCursorInOverviewRuler: true },
 	});
 	viewport.layout({ width: 240, height: 40 });
+	viewport.render(true, false);
 
 	assert.deepEqual(overviewCursorColors(paint), []);
 	dom.window.close();
@@ -299,6 +305,7 @@ test("Decoration overlays use browser range rectangles for RTL text", async () =
 		textDirection: EditorTextDirection.RightToLeft,
 	});
 	viewport.layout({ width: 200, height: 40 });
+	viewport.render(true, false);
 	const line = requiredElement<HTMLElement>(viewport.domNode.domNode, ".view-line");
 	Object.defineProperty(line, "getBoundingClientRect", {
 		configurable: true,
@@ -310,7 +317,7 @@ test("Decoration overlays use browser range rectangles for RTL text", async () =
 		options: { description: 'rtl match', className: 'findMatch' },
 		metadata: undefined,
 	});
-	await Promise.resolve();
+	viewport.render(true, false);
 
 	assert.deepEqual(decorationElements(viewport.domNode.domNode).map(element => ({ left: element.style.left, width: element.style.width })), [
 		{ left: "20px", width: "15px" },
@@ -341,6 +348,7 @@ test("Decoration overlays split at soft-wrapped visual line boundaries", () => {
 		minimap: { enabled: false },
 	});
 	viewport.layout({ width: 70, height: 60 });
+	viewport.render(true, false);
 	assert.deepEqual(decorationElements(viewport.domNode.domNode).map(element => ({
 		lineIndex: element.parentElement?.dataset.lineIndex,
 		left: element.style.left,
@@ -375,6 +383,7 @@ test("Versioned diagnostics project named severity underlines and invalidate", a
 		textMeasurer: new FixedTextMeasurer(),
 	});
 	viewport.layout({ width: 200, height: 80 });
+	viewport.render(true, false);
 	assert.equal(store.accept({
 		requestId: 1,
 		textModel: model,
@@ -406,7 +415,7 @@ test("Versioned diagnostics project named severity underlines and invalidate", a
 			],
 		},
 		}), LanguageResultAcceptance.Applied);
-	await Promise.resolve();
+	viewport.render(true, false);
 
 	assert.deepEqual(decorationElements(viewport.domNode.domNode).map(element => ({
 		className: decorationClassName(element),
@@ -435,7 +444,7 @@ test("Versioned diagnostics project named severity underlines and invalidate", a
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
 		text: "X",
 	}]);
-	await Promise.resolve();
+	viewport.render(true, false);
 	assert.deepEqual(decorationElements(viewport.domNode.domNode), []);
 	assert.equal(store.result, undefined);
 

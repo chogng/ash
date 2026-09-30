@@ -273,7 +273,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		this._register(this.modalEditor.onDidRequestClose(input => {
 			void this.closeEditor(input).catch(reportEditorCloseError);
 		}));
-		this._register(observeElementSize(this.contentDomNode, size => this.layout(size)));
+		this._register(observeElementSize(this.contentDomNode, size => this.doLayout(size)));
 	}
 
 	get groups(): readonly IEditorGroup[] {
@@ -588,6 +588,15 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	}
 
 	override layout(dimension: IDimension): void {
+		// Grid supplies the Part's border box; the content observer supplies its
+		// inner box. Both must reach the editor Grid in the same coordinate space.
+		const borderWidth = this.domNode.offsetWidth - this.domNode.clientWidth;
+		const borderHeight = this.domNode.offsetHeight - this.domNode.clientHeight;
+		this.doLayout(new Dimension(Math.max(0, dimension.width - borderWidth), Math.max(0, dimension.height - borderHeight)));
+	}
+
+	private doLayout(dimension: IDimension): void {
+		if (Dimension.equals(this.dimension, dimension)) return;
 		this.dimension = new Dimension(dimension.width, dimension.height);
 		this.editorGrid.layout(
 			this.dimension.width,

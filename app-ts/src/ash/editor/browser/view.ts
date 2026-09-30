@@ -3,7 +3,9 @@ import { Event } from '../../base/common/event.js';
 import { addDisposableListener, getClientArea, h, runWhenWindowIdle } from '../../base/browser/dom.js';
 import { FastDomNode } from '../../base/browser/fastDomNode.js';
 import { PixelRatio, type IPixelRatioMonitor } from '../../base/browser/pixelRatio.js';
-import { toDisposable } from '../../base/common/lifecycle.js';
+import { scheduleAtNextAnimationFrame } from '../../base/browser/scheduler.js';
+import { DisposableMap, MutableDisposable, markAsSingleton, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
+import { onUnexpectedError } from '../../base/common/errors.js';
 import { type ISize } from '../../base/common/layout.js';
 import { clamp, isFiniteNumber } from '../../base/common/numbers.js';
 import { resolveEditorIndentationOptions, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from '../common/core/misc/indentation.js';
@@ -15,7 +17,7 @@ import { TextModel } from '../common/model/textModel.js';
 import { type IViewModel, type EditorScrollPosition, type TextMeasurer } from '../common/viewModel.js';
 import { ViewEventHandler } from '../common/viewEventHandler.js';
 import * as viewEvents from '../common/viewEvents.js';
-import { EditorVisualLineProjection } from '../common/viewModel/modelLineProjection.js';
+import { type EditorVisualLineProjection } from '../common/viewModel/modelLineProjection.js';
 import { ComputeOptionsMemory, EditorLayoutInfoComputer, EditorLineWrapping, EditorOption, type EditorLayoutInfo, type EditorMinimapLayoutInfo, type EditorMinimapOptions, type FindComputedEditorOptionValueById, RenderLineNumbersType, isWrappingIndent, WrappingIndent } from '../common/config/editorOptions.js';
 import { type FontInfo } from '../common/config/fontInfo.js';
 import { type EditorViewportChange, type EditorViewportLayout, ViewLayout } from '../common/viewLayout/viewLayout.js';
@@ -183,7 +185,8 @@ export class View extends ViewEventHandler {
 	private syncedScrollLeft = 0;
 	private syncedScrollTop = 0;
 	private projectionRevision = 0;
-	private projectionScheduled = false;
+	private readonly pendingRender = this._register(new MutableDisposable<IDisposable>());
+	private renderedLayout: EditorViewportLayout | undefined;
 
 	get currentLayout(): EditorViewportLayout {
 		return this.viewport.layout;
@@ -265,6 +268,7 @@ export class View extends ViewEventHandler {
 			new BrowserTextMeasurer(this.textMetricsElement);
 		this._fontInfo = this.editorConfiguration.options.get(EditorOption.fontInfo);
 		applyFontInfo(this.domNode.domNode, this.fontInfo);
+		this.textMeasurer.refresh?.();
 		const spaceWidth = this.fontInfo.spaceWidth;
 		this.cursorConfig = this.viewModel.cursorConfig;
 		this.lineWidths = this._register(new LineWidthIndex(
@@ -326,9 +330,7 @@ export class View extends ViewEventHandler {
 		this.contentWidgets = this.registerViewPart(new ViewContentWidgets(this.viewContext, this.domNode));
 		this.overlayWidgets = this.registerViewPart(new ViewOverlayWidgets(this.viewContext, {
 			viewDomNode: this.domNode.domNode,
-			requestRender: () => {
-				if (!this.isDisposed) this.project(this.viewport.layout);
-			},
+			requestRender: () => this.scheduleProjection(),
 		}));
 		this.viewLines = this.registerViewPart(new ViewLines(this.viewContext, {
 			host: this.contentElement,
@@ -441,7 +443,7 @@ export class View extends ViewEventHandler {
 		);
 		viewport.setMaxLineWidth(this.measuredContentWidth);
 
-		this._register(MinimapTokensColorTracker.getInstance().onDidChange(() => this.project(viewport.layout)));
+		this._register(MinimapTokensColorTracker.getInstance().onDidChange(() => this.scheduleProjection()));
 		this._register(this.lineWidths.onDidChange(() => {
 			viewport.setMaxLineWidth(this.measuredContentWidth);
 			this.scheduleProjection();
@@ -463,7 +465,10 @@ export class View extends ViewEventHandler {
 		if (semanticTokenSource) {
 			this._register(semanticTokenSource.onDidChange(() => {
 				this.viewLines.onTokensChanged();
+				this.viewLines.forceShouldRender();
+				this.viewLinesGpu?.forceShouldRender();
 				this.viewCursors.forceShouldRender();
+				minimapPart.onTokensChanged();
 				minimapPart.forceShouldRender();
 				this.scheduleProjection();
 			}));
@@ -493,11 +498,11 @@ export class View extends ViewEventHandler {
 				this.scheduleProjection();
 			}
 		}));
-		this._register(this.pixelRatio.onDidChange(() => this.project(viewport.layout)));
+		this._register(this.pixelRatio.onDidChange(() => this.render(false, true)));
 		this.viewModel.addViewEventHandler(this);
 		this._register(toDisposable(() => this.viewModel.removeViewEventHandler(this)));
 		this.layout(options.dimension ?? getClientArea(this.domNode.domNode));
-		this.onDidRender();
+		this.render(true, false);
 	}
 
 	private get softWrapping(): boolean {
@@ -542,7 +547,7 @@ export class View extends ViewEventHandler {
 		this.domNode.domNode.classList.toggle("word-wrapped", nextSoftWrapping);
 		this.viewport.setMaxLineWidth(this.measuredContentWidth);
 		const layout = this.viewport.layout;
-		this.project(layout);
+		this.render(true, false);
 		return layout;
 	}
 
@@ -554,7 +559,7 @@ export class View extends ViewEventHandler {
 		this.editorConfiguration.updateOptions({ wrappingIndent: rawWrappingIndent(wrappingIndent) });
 		this.viewport.setMaxLineWidth(this.measuredContentWidth);
 		const layout = this.viewport.layout;
-		this.project(layout);
+		this.render(true, false);
 		return layout;
 	}
 
@@ -612,20 +617,26 @@ export class View extends ViewEventHandler {
 		this.controller.editContext.setAriaOptions(options);
 	}
 
-	render(_now: boolean, everything: boolean): void {
+	render(now: boolean, everything: boolean): void {
 		if (everything) {
 			this.forceShouldRender();
 			for (const viewPart of this.viewParts) viewPart.forceShouldRender();
 		}
-		this.project(this.viewport.layout);
+		if (now) {
+			this.pendingRender.clear();
+			editorRenderingCoordinator.render([() => this.prepareRenderPass()]);
+		} else {
+			this.scheduleProjection();
+		}
 	}
 
 	private layoutViewport(size: ISize): EditorViewportLayout {
 		this.domNode.setWidth(size.width);
 		this.domNode.setHeight(size.height);
-		this.refreshFontMetrics();
 		const layout = this.viewport.layout;
-		this.project(layout);
+		// Grid layout and ResizeObserver may report the same resize before a frame.
+		// Geometry stays synchronous; text and canvas rendering consume the final size.
+		this.scheduleProjection();
 		return layout;
 	}
 
@@ -642,7 +653,7 @@ export class View extends ViewEventHandler {
 		this.lineWidths.refresh();
 		this.viewport.setMaxLineWidth(this.measuredContentWidth);
 		const layout = this.viewport.layout;
-		this.project(layout);
+		this.scheduleProjection();
 		return layout;
 	}
 
@@ -658,7 +669,12 @@ export class View extends ViewEventHandler {
 	}
 
 	changeViewZones(callback: (accessor: IViewZoneChangeAccessor) => void): void {
-		if (this.viewZones.changeViewZones(callback)) this.project(this.viewport.layout);
+		if (this.viewZones.changeViewZones(callback)) this.scheduleProjection();
+	}
+
+	/** Layout visibility is current even when the zone's DOM is awaiting a frame. */
+	isViewZoneVisible(id: string): boolean {
+		return this.viewport.getWhitespaceViewportData().some(whitespace => whitespace.id === id && whitespace.height > 0);
 	}
 
 	createOverviewRuler(cssClassName: string): OverviewRuler {
@@ -672,7 +688,7 @@ export class View extends ViewEventHandler {
 
 	layoutContentWidget(widget: IContentWidget): void {
 		this.contentWidgets.setWidgetPosition(widget, widget.getPosition());
-		this.project(this.viewport.layout);
+		this.scheduleProjection();
 	}
 
 	removeContentWidget(widget: IContentWidget): void {
@@ -686,32 +702,32 @@ export class View extends ViewEventHandler {
 
 	layoutOverlayWidget(widget: IOverlayWidget): void {
 		this.overlayWidgets.setWidgetPosition(widget, widget.getPosition());
-		this.project(this.viewport.layout);
+		this.scheduleProjection();
 	}
 
 	removeOverlayWidget(widget: IOverlayWidget): void {
 		this.overlayWidgets.removeWidget(widget);
-		this.project(this.viewport.layout);
+		this.scheduleProjection();
 	}
 
 	addGlyphMarginWidget(widget: IGlyphMarginWidget): void {
 		this.glyphMarginWidgets.addWidget(widget);
-		this.project(this.viewport.layout);
+		this.scheduleProjection();
 	}
 
 	layoutGlyphMarginWidget(widget: IGlyphMarginWidget): void {
-		if (this.glyphMarginWidgets.setWidgetPosition(widget, widget.getPosition())) this.project(this.viewport.layout);
+		if (this.glyphMarginWidgets.setWidgetPosition(widget, widget.getPosition())) this.scheduleProjection();
 	}
 
 	removeGlyphMarginWidget(widget: IGlyphMarginWidget): void {
 		this.glyphMarginWidgets.removeWidget(widget);
-		this.project(this.viewport.layout);
+		this.scheduleProjection();
 	}
 
 	scrollTo(position: EditorScrollPosition): EditorViewportLayout {
 		this.viewport.setScrollPosition({ scrollLeft: position.left, scrollTop: position.top }, ScrollType.Immediate);
 		const layout = this.viewport.layout;
-		this.project(layout);
+		this.render(true, false);
 		return layout;
 	}
 
@@ -814,7 +830,7 @@ export class View extends ViewEventHandler {
 			dispatchTextAreaEvent: event => this.controller.element.dispatchEvent(event),
 			getLastRenderData: () => new PointerHandlerLastRenderData(this.viewCursors.getLastRenderData(), this.controller.editContext.getLastRenderData()),
 			renderNow: () => {
-				if (!this.isDisposed) this.project(this.viewport.layout);
+				if (!this.isDisposed) this.render(true, false);
 			},
 			shouldSuppressMouseDownOnViewZone: id => this.viewZones.shouldSuppressMouseDownOnViewZone(id),
 			shouldSuppressMouseDownOnWidget: id => this.contentWidgets.shouldSuppressMouseDownOnWidget(id),
@@ -956,44 +972,69 @@ export class View extends ViewEventHandler {
 		}, this.minimapLayoutMemory);
 	}
 
-	private project(layout: EditorViewportLayout): void {
-		this.observeRenderedLineWidths(layout);
-		if (layout !== this.viewport.layout) return;
+	private prepareRenderPass(): EditorRenderPass | undefined {
+		if (this.isDisposed) return undefined;
+		if (this.renderedLayout === this.viewport.layout && !this.shouldRender() && !this.viewParts.some(part => part.shouldRender())) return undefined;
+		this.observeRenderedLineWidths(this.viewport.layout);
 		this.computeGlyphMarginLanes();
+		const layout = this.viewport.layout;
 		const startLineNumber = layout.visibleLines.startLineIndex + 1;
 		const endLineNumber = layout.visibleLines.endLineIndexExclusive;
 		if (startLineNumber <= endLineNumber) {
 			this.viewModel.setViewport(startLineNumber, endLineNumber, Math.floor((startLineNumber + endLineNumber) / 2));
 			this.viewModel.visibleLinesStabilized();
 		}
+		// Every Part consumes viewport geometry, including Parts whose own event
+		// handlers only invalidate content. Geometry changes invalidate the whole view.
+		if (layout !== this.renderedLayout) {
+			for (const part of this.viewParts) part.forceShouldRender();
+		}
 		const viewportData = this.createViewportData();
-		const context = this.createRenderingContext(viewportData);
-		this.domNode.domNode.classList.toggle("horizontally-scrollable", layout.maximumScrollPosition.left > 0);
-		this.domNode.domNode.classList.toggle("vertically-scrollable", layout.maximumScrollPosition.top > 0);
-		this.contentNode.setWidth(layout.contentSize.width);
-		this.contentNode.setHeight(layout.contentSize.height);
-		const contentOffsetLeft = this.contentOffsetLeft;
-		this.contentNode.setTransform(contentOffsetLeft > 0 ? `translate3d(${contentOffsetLeft}px, 0, 0)` : '');
-		for (const part of this.viewParts) part.onBeforeRender(context.viewportData);
-		// Text rows must exist before overlays measure their visible horizontal ranges.
-		// This is the same render boundary used by VS Code's coordinated renderer.
-		this.viewLines.render(context);
-		this.viewLines.onDidRender();
-		if (this.viewLinesGpu) {
-			this.viewLinesGpu.render(context);
-			this.viewLinesGpu.onDidRender();
-		}
-		for (const part of this.viewParts) {
-			if (part === this.viewLines || part === this.viewLinesGpu) continue;
-			part.prepareRender(context);
-		}
-		for (const part of this.viewParts) {
-			if (part === this.viewLines || part === this.viewLinesGpu) continue;
-			part.render(context);
-			part.onDidRender();
-		}
-		this.syncScrollPosition(layout);
-		this.onDidRender();
+		let context: RenderingContext;
+		let parts: ViewPart[];
+		const renderText = this.viewLines.shouldRender();
+		return {
+			owner: this,
+			renderText: () => {
+				this.domNode.domNode.classList.toggle("horizontally-scrollable", layout.maximumScrollPosition.left > 0);
+				this.domNode.domNode.classList.toggle("vertically-scrollable", layout.maximumScrollPosition.top > 0);
+				this.contentNode.setWidth(layout.contentSize.width);
+				this.contentNode.setHeight(layout.contentSize.height);
+				const contentOffsetLeft = this.contentOffsetLeft;
+				this.contentNode.setTransform(contentOffsetLeft > 0 ? `translate3d(${contentOffsetLeft}px, 0, 0)` : '');
+				for (const part of this.viewParts) {
+					if (part.shouldRender()) part.onBeforeRender(viewportData);
+				}
+				if (renderText) {
+					this.viewLines.renderText(viewportData);
+					this.viewLines.onDidRender();
+				}
+				if (this.viewLinesGpu?.shouldRender()) {
+					this.viewLinesGpu.renderText(viewportData);
+					this.viewLinesGpu.onDidRender();
+				}
+			},
+			prepareText: () => {
+				// The text layer measures only after every editor has written its rows.
+				// Horizontal reveal can then settle scroll before the frame context is bound.
+				if (renderText) this.viewLines.prepareRender();
+				context = this.createRenderingContext(viewportData);
+				parts = this.viewParts.filter(part => part !== this.viewLines && part !== this.viewLinesGpu && part.shouldRender());
+				if (this.viewLines.shouldRender()) this.scheduleProjection();
+			},
+			prepareParts: () => {
+				for (const part of parts) part.prepareRender(context);
+			},
+			renderParts: () => {
+				for (const part of parts) {
+					part.render(context);
+					part.onDidRender();
+				}
+				this.syncScrollPosition(this.viewport.layout);
+				this.renderedLayout = layout;
+				this.onDidRender();
+			},
+		};
 	}
 
 	private computeGlyphMarginLanes(): void {
@@ -1016,11 +1057,10 @@ export class View extends ViewEventHandler {
 	}
 
 	private scheduleProjection(): void {
-		if (this.projectionScheduled || this.isDisposed) return;
-		this.projectionScheduled = true;
-		queueMicrotask(() => {
-			this.projectionScheduled = false;
-			if (!this.isDisposed) this.project(this.viewport.layout);
+		if (this.isDisposed || this.pendingRender.value) return;
+		this.pendingRender.value = editorRenderingCoordinator.schedule(this.domNode.domNode.ownerDocument.defaultView!, () => {
+			this.pendingRender.clear();
+			return this.prepareRenderPass();
 		});
 	}
 
@@ -1083,7 +1123,9 @@ export class View extends ViewEventHandler {
 	}
 
 	private get visualProjection(): EditorVisualLineProjection {
-		return createVisualProjection(this.model, this.viewModel, this.fontInfo.spaceWidth);
+		// The mapping owner updates it before publishing view events, so every
+		// consumer sees the same rows even while those events are being delivered.
+		return this.viewModel.getVisualLineProjection();
 	}
 
 	private registerViewPart<T extends ViewPart>(part: T): T {
@@ -1106,15 +1148,17 @@ export class View extends ViewEventHandler {
 		super.handleEvents(events);
 		if (this.changingLayout || this.isDisposed) return;
 		if (!this.shouldRender() && !this.viewParts.some(part => part.shouldRender())) return;
-		this.project(this.viewport.layout);
+		this.scheduleProjection();
 	}
 
-	public override onConfigurationChanged(): boolean {
+	public override onConfigurationChanged(event: viewEvents.ViewConfigurationChangedEvent): boolean {
 		this.domNode.domNode.classList.toggle(
 			'hide-line-numbers',
 			this.editorConfiguration.options.get(EditorOption.lineNumbers).renderType === RenderLineNumbersType.Off,
 		);
-		this.projectionRevision += 1;
+		if (event.hasChanged(EditorOption.fontInfo)) {
+			this.projectionRevision += 1;
+		}
 		return true;
 	}
 
@@ -1132,6 +1176,14 @@ export class View extends ViewEventHandler {
 		return true;
 	}
 
+	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean {
+		if (!event.scrollLeftChanged && !event.scrollTopChanged) return false;
+		// Immediate wheel input and interrupted animations publish their physical
+		// scroll position synchronously; repainting the visible rows can share a frame.
+		this.syncScrollPosition(this.viewport.layout);
+		return true;
+	}
+
 	public override onFlushed(): boolean {
 		this.projectionRevision += 1;
 		return true;
@@ -1142,6 +1194,72 @@ export class View extends ViewEventHandler {
 		return true;
 	}
 }
+
+interface EditorRenderPass {
+	readonly owner: View;
+	renderText(): void;
+	prepareText(): void;
+	prepareParts(): void;
+	renderParts(): void;
+}
+
+/** Batches editor text writes, measurements and Part writes by window. */
+class EditorRenderingCoordinator {
+	private readonly pending = new Map<Window, Set<() => EditorRenderPass | undefined>>();
+	private readonly frames = markAsSingleton(new DisposableMap<Window>());
+
+	public schedule(targetWindow: Window, prepare: () => EditorRenderPass | undefined): IDisposable {
+		let requests = this.pending.get(targetWindow);
+		if (!requests) {
+			const batch = new Set<() => EditorRenderPass | undefined>();
+			requests = batch;
+			this.pending.set(targetWindow, batch);
+			this.frames.set(targetWindow, scheduleAtNextAnimationFrame(targetWindow, () => {
+				this.pending.delete(targetWindow);
+				this.frames.deleteAndDispose(targetWindow);
+				this.render(batch);
+			}, 100));
+		}
+		requests.add(prepare);
+		return toDisposable(() => {
+			requests.delete(prepare);
+			if (requests.size === 0 && this.pending.get(targetWindow) === requests) {
+				this.pending.delete(targetWindow);
+				this.frames.deleteAndDispose(targetWindow);
+			}
+		});
+	}
+
+	public render(requests: Iterable<() => EditorRenderPass | undefined>): void {
+		const passes = new Set<EditorRenderPass>();
+		for (const prepare of requests) {
+			try {
+				const pass = prepare();
+				if (pass) passes.add(pass);
+			} catch (error) {
+				onUnexpectedError(error);
+			}
+		}
+		// Text must exist in every editor before any Part measures it. All Part
+		// measurements then finish before any editor starts writing Part geometry.
+		for (const phase of ['renderText', 'prepareText', 'prepareParts', 'renderParts'] as const) {
+			for (const pass of passes) {
+				if (pass.owner.isDisposed) {
+					passes.delete(pass);
+					continue;
+				}
+				try {
+					pass[phase]();
+				} catch (error) {
+					passes.delete(pass);
+					onUnexpectedError(error);
+				}
+			}
+		}
+	}
+}
+
+const editorRenderingCoordinator = new EditorRenderingCoordinator();
 
 function validateEditorViewportOptions(options: EditorViewportOptions): void {
 	if (!(options.viewModel.model instanceof TextModel)) throw new TypeError('Editor view requires the editor text model implementation');
@@ -1154,26 +1272,6 @@ function validateEditorViewportOptions(options: EditorViewportOptions): void {
 	if (options.semanticTokenSource && options.semanticTokenSource.textModel !== options.viewModel.model) {
 		throw new TypeError('Stanza viewport and semantic token source must share one text model');
 	}
-}
-
-function createVisualProjection(model: TextModel, viewModel: IViewModel, spaceWidth: number): EditorVisualLineProjection {
-	const lines = Array.from({ length: viewModel.getLineCount() }, (_, index) => {
-		const lineNumber = index + 1;
-		const data = viewModel.getViewLineData(lineNumber);
-		const start = viewModel.coordinatesConverter.convertViewPositionToModelPosition(new Position(lineNumber, data.minColumn));
-		const end = viewModel.coordinatesConverter.convertViewPositionToModelPosition(new Position(lineNumber, data.maxColumn));
-		return {
-			visualLineIndex: index,
-			logicalLineIndex: start.lineNumber - 1,
-			startColumn: start.column - 1,
-			endColumn: end.column - 1,
-			firstForLogicalLine: index === 0 || viewModel.coordinatesConverter.convertViewPositionToModelPosition(new Position(index, viewModel.getLineMaxColumn(index))).lineNumber !== start.lineNumber,
-			lastForLogicalLine: !data.continuesWithWrappedLine,
-			...(data.minColumn > 1 ? { wrappedTextIndentWidth: (data.minColumn - 1) * spaceWidth } : {}),
-		};
-	});
-	const anchors = Array.from({ length: model.lineCount }, (_, index) => viewModel.coordinatesConverter.getViewLineNumberOfModelPosition(index + 1, 1) - 1);
-	return EditorVisualLineProjection.fromVisibleLines(model.version, model.lineCount, lines, anchors);
 }
 
 type EditorEditContextOptions = EditContextOptions & Partial<Pick<NativeEditContextOptions, 'logService'>>;
