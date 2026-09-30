@@ -210,6 +210,7 @@ export class AshApplication extends Disposable {
 	private readonly globalKeybindings: GlobalKeybindingsMainService;
 	private readonly nativeMenubar: NativeMenubarMainService | undefined;
 	private readonly profileRoot: string;
+	private readonly developmentAppServerReloader = this._register(new MutableDisposable<DevelopmentAppServerReloader>());
 	private readonly windowIconPath: string | undefined;
 
 	private readonly workbenchWindows = new WorkbenchWindowRegistry<WorkbenchWindowRecord>();
@@ -330,6 +331,10 @@ export class AshApplication extends Disposable {
 
 	private async openStartupWindows(workspaces: WorkspacesManagementMainService, wasUpdated: boolean): Promise<void> {
 		const launch = await this.resolveWorkspace();
+		if (!app.isPackaged && process.env.ASH_DEV_AGENTS_WINDOW === '1') {
+			await this.openSessionsWindow(launch.workspace, await workspaces.resolveWorkspace(launch.workspace), this.defaultModeId);
+			return;
+		}
 		await this.restoreWindowSession(workspaces, launch.explicit, wasUpdated);
 		if (launch.explicit) {
 			await this.openWorkspace(launch.workspace, workspaces);
@@ -573,7 +578,8 @@ export class AshApplication extends Disposable {
 		});
 		if (existing) existing.replaceProcessLauncher(processLauncher);
 		if (generationFile && processLauncher instanceof AppServerDaemonLauncher) {
-			resources.add(new DevelopmentAppServerReloader({ generationFile, launcher: processLauncher, supervisor }));
+			if (!this.developmentAppServerReloader.value) this.developmentAppServerReloader.value = new DevelopmentAppServerReloader({ generationFile });
+			resources.add(this.developmentAppServerReloader.value.registerConnection(processLauncher, supervisor));
 		}
 		return supervisor;
 	}

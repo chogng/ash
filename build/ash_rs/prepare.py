@@ -16,7 +16,7 @@ from urllib.parse import urlsplit
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from build.download.artifacts import sha256
-from build.lib.targets import TARGETS, default_target
+from build.lib.targets import TARGETS, TargetSpec, default_target
 from build.ash_rs.bubblewrap import BubblewrapResolution, load_vendored_source
 from build.ash_rs.cargo import build_binaries
 from build.ash_rs.layout import LAYOUT, build_package_directory, load_protocol_metadata
@@ -309,6 +309,26 @@ def publish_package(store: Path, package_store: Path, build) -> Path:
             shutil.rmtree(staging)
 
 
+def development_binary_inputs(spec: TargetSpec) -> dict[str, None]:
+    binaries = dict.fromkeys(
+        [
+            "ash-app-server",
+            "ash-remote",
+            "ash-remote-server",
+            "ash-exec-server",
+            "ash-app-server-daemon",
+            "ash-code-mode-host",
+            "ash-voice-host",
+            "ash-collaboration-server",
+        ]
+    )
+    if spec.is_windows:
+        binaries["ash-windows-sandbox"] = None
+    if spec.is_linux:
+        binaries["bwrap"] = None
+    return binaries
+
+
 def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) -> Path:
     """Reuse a current package, then build and publish only when its inputs changed."""
     target = default_target()
@@ -326,21 +346,7 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
             f"Reused Ash development package ({args.javascript_runtime}) at {existing}"
         )
         return existing
-    requested_binaries = {
-        "ash-package-store": None,
-        "ash-app-server": None,
-        "ash-remote": None,
-        "ash-remote-server": None,
-        "ash-exec-server": None,
-        "ash-app-server-daemon": None,
-        "ash-code-mode-host": None,
-        "ash-voice-host": None,
-        "ash-collaboration-server": None,
-    }
-    if spec.is_windows:
-        requested_binaries["ash-windows-sandbox"] = None
-    if spec.is_linux:
-        requested_binaries["bwrap"] = None
+    requested_binaries = {"ash-package-store": None, **development_binary_inputs(spec)}
     binaries = build_binaries(
         root,
         spec,

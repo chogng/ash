@@ -3,6 +3,44 @@ use std::fs;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[test]
+fn declared_development_runtime_owns_resources_and_excludes_host_search_paths() {
+    let directory = TestDirectory::new();
+    let root = directory.path().join("runtime");
+    fs::create_dir_all(root.join("ash-resources/skills")).unwrap();
+    fs::write(root.join("ash-resources/grammar.json"), b"grammar").unwrap();
+    let mut context = InstallContext::detect(
+        Some(Path::new("unrelated/bin/ash-app-server")),
+        None,
+        None,
+        Some(OsString::from("untrusted-host-path")),
+    );
+    context.select_development_runtime(root.clone());
+    assert_eq!(context.method(), InstallMethod::Development);
+    assert_eq!(
+        context.bundled_resource("grammar.json"),
+        Some(root.join("ash-resources/grammar.json"))
+    );
+    assert_eq!(
+        context.bundled_resource_directory("skills"),
+        Some(root.join("ash-resources/skills"))
+    );
+    assert_eq!(
+        context.executable_candidates(ManagedExecutable::Ripgrep),
+        ExecutableCandidates::SearchPaths(expected_ripgrep_candidates([&root.join("ash-path")]))
+    );
+    assert_eq!(
+        context.executable_candidates(ManagedExecutable::Tgrep),
+        ExecutableCandidates::SearchPaths(vec![
+            root.join("ash-resources/tgrep").join(if cfg!(windows) {
+                "tgrep.exe"
+            } else {
+                "tgrep"
+            })
+        ])
+    );
+}
+
+#[test]
 fn windows_sandbox_uses_the_product_binary_directory_without_searching_path() {
     let directory = TestDirectory::new();
     let binary = directory.path().join("bin/ash-app-server.exe");

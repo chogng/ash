@@ -3,7 +3,7 @@
 This directory owns the shared Ash package for development and release:
 
 - `prepare.py` resolves development inputs and publishes packages; `build/app_ts/runtimeStore.ts` reads published selections for Electron and Web.
-- `develop.py` builds the development App Server and call helpers, then publishes its executable generation.
+- `develop.py` uses `prepare.py` to publish a complete development package, then notifies Desktop reloaders of that package selection.
 - `protocol.py` runs the Rust protocol fixture generator; `build/protocol/` synchronizes TypeScript consumers.
 - `build.py` resolves release binaries and resources.
 - `layout.py` assembles and validates both development and release packages using `layout.json`.
@@ -116,6 +116,27 @@ invalidate the Electron backend package; none of those sources are inputs to its
 executables or package layout.
 If the executable and asset inputs remain unchanged, the selected package is
 reused; otherwise the assembler validates and publishes a new package.
+Desktop preparation then runs `develop.py --select-prepared`, which selects the
+prepared binaries without invoking Cargo. During Rust watch, `develop.py` reads
+the selected resource package and incrementally builds the backend executables in
+the same Cargo cache; it does not assemble, validate, or publish a release package.
+Only changed binary contents are copied into immutable objects. Each development
+runtime links those objects and the prepared resource files into one complete
+`bin/`, `ash-path/`, and `ash-resources/` layout. Hard links keep resources available
+even after their preparation package is removed. These paths must stay on the
+same filesystem. The runtime has `ash-development.json` rather than release package
+metadata, and is never eligible for release installation.
+
+After successful assembly, `develop.py` atomically writes
+`.build/app-ts/dev/app-server/current.json` with `version: 3` and a
+`runtime: generations/<sha256>` path relative to its directory. Desktop declares
+that directory through `ASH_DEV_RUNTIME_ROOT`; managed resources resolve only
+inside it. One profile-wide reloader stops local connections, restarts the daemon
+once, and reconnects live windows. Custom development launchers may select an
+absolute pointer path with `ASH_DEV_APP_SERVER_GENERATION`. Resource or tool-lock
+changes require running Desktop preparation again. Development runtime objects
+and generations are retained under `.build/app-ts/dev/app-server`; removing them
+is an offline build-output cleanup operation after development processes stop.
 The Python release builder calls the same `layout.py` assembler with resolved inputs. It also honors `CARGO_TARGET_DIR`,
 and retains its refusal to replace an explicit output directory.
 

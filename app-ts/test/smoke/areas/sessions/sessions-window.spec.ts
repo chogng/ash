@@ -1065,9 +1065,12 @@ test('Sessions titlebar aligns its application menu and actions', async ({ appli
 	await closed;
 });
 
-test('Sessions titlebar sidebar toggle stays transparent at rest and responds to pointer and keyboard', async ({ application, target, workbench }) => {
+test('Sessions titlebar shares navigation selection and hover colors and responds to pointer and keyboard', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
-	await expect(workbench.page.locator('.ash-titlebar-left-actions [data-action-id="workbench.action.toggleSideBar"] button')).toHaveCSS('border-radius', '4px');
+	const workbenchToggle = workbench.page.locator('.ash-titlebar-left-actions [data-action-id="workbench.action.toggleSideBar"] button');
+	await expect(workbenchToggle).toHaveCSS('border-radius', '4px');
+	await workbench.page.mouse.move(400, 180);
+	await expect(workbenchToggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 	let page = workbench.page;
 	if (target.kind === 'browser') {
 		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
@@ -1079,15 +1082,25 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 	}
 	const sidebar = page.locator('[data-part="sidebar"]');
 	const toggle = page.locator('[data-action-id="ash.sessions.toggleSidebar"] button');
+	const navigation = page.locator('.ash-sessions-activity-content');
+	const chat = navigation.getByRole('button', { name: 'Chat' });
+	const library = navigation.getByRole('button', { name: 'Library' });
+	const menu = page.getByRole('button', { name: 'Application menu', exact: true });
 	for (const colorScheme of ['light', 'dark'] as const) {
 		await page.emulateMedia({ colorScheme });
 		await expect(page.locator('#app')).toHaveAttribute('data-color-theme', `ash-${colorScheme}`);
 		await page.mouse.move(400, 180);
 		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-		await expect.poll(() => page.locator('[data-part="titlebar"] .ash-menubar button').evaluateAll(buttons => buttons.map(button => getComputedStyle(button).borderRadius))).toEqual(['8px', '8px', '8px', '8px']);
+		const selectedBackground = await chat.evaluate(button => getComputedStyle(button).backgroundColor);
+		expect(selectedBackground).not.toBe('rgba(0, 0, 0, 0)');
+		await expect(toggle).toHaveCSS('background-color', selectedBackground);
+		await expect.poll(() => page.locator('.ash-sessions-titlebar-actions button').evaluateAll(buttons => buttons.map(button => getComputedStyle(button).borderRadius))).toEqual(['8px', '8px', '8px', '8px']);
+		await library.hover();
+		await expect(library).toHaveCSS('background-color', selectedBackground);
+		await menu.hover();
+		await expect(menu).toHaveCSS('background-color', selectedBackground);
 		await toggle.hover();
-		await expect(toggle).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(toggle).toHaveCSS('background-color', selectedBackground);
 		await toggle.click();
 		await expect(sidebar).toBeHidden();
 		await expect(toggle).toHaveAttribute('aria-pressed', 'false');
@@ -1095,12 +1108,12 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 		await page.mouse.move(400, 180);
 		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		await toggle.hover();
-		await expect(toggle).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(toggle).toHaveCSS('background-color', selectedBackground);
 		await toggle.click();
 		await expect(sidebar).toBeVisible();
 		await page.mouse.move(400, 180);
 		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(toggle).toHaveCSS('background-color', selectedBackground);
 		await page.keyboard.press('Tab');
 		await toggle.focus();
 		await expect(toggle).toHaveCSS('outline-style', 'solid');
@@ -1113,6 +1126,66 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 		await expect(toggle).toHaveAccessibleName('Hide sidebar');
 		await expect(toggle).toHaveCSS('border-radius', '8px');
 		await expect(toggle.locator('svg[data-ash-icon-id="layout-sidebar-left-2"]')).toBeVisible();
+		await page.keyboard.press('ArrowLeft');
+		await expect(menu).toBeFocused();
+		await page.keyboard.press('ArrowDown');
+		await expect(menu).toHaveAttribute('aria-expanded', 'true');
+		await expect(menu).toHaveCSS('background-color', selectedBackground);
+		await page.keyboard.press('Escape');
+		await expect(menu).toHaveAttribute('aria-expanded', 'false');
+		await expect(menu).toBeFocused();
+		await page.mouse.move(400, 180);
+		await expect(menu).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await page.keyboard.press('ArrowRight');
+		await expect(toggle).toBeFocused();
+	}
+	if (target.kind === 'electron') {
+		await expect(workbenchToggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(workbenchToggle).toHaveCSS('border-radius', '4px');
+	}
+});
+
+test('Sessions titlebar and navigation keep shared fills and visible outlines in high contrast', async ({ application, target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code');
+	for (const theme of ['Ash High Contrast Dark', 'Ash High Contrast Light']) {
+		await workbench.page.getByRole('button', { name: 'Manage', exact: true }).click();
+		await workbench.page.getByRole('menu').last().getByRole('menuitem', { name: 'Themes', exact: true }).hover();
+		await workbench.page.getByRole('menu').last().getByRole('menuitem', { name: 'Color Theme', exact: true }).click();
+		const search = workbench.page.locator('.ash-quick-pick').getByRole('combobox');
+		await search.fill(theme);
+		await search.press('Enter');
+		await expect(workbench.page.locator('.ash-quick-pick')).toHaveCount(0);
+		let page = workbench.page;
+		if (target.kind === 'browser') {
+			await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+		} else {
+			if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
+			const opened = application.waitForEvent('window');
+			await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
+			page = await opened;
+		}
+		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', theme.endsWith('Dark') ? 'high-contrast-dark' : 'high-contrast-light');
+		const navigation = page.locator('.ash-sessions-activity-content');
+		const chat = navigation.getByRole('button', { name: 'Chat' });
+		const library = navigation.getByRole('button', { name: 'Library' });
+		const toggle = page.locator('[data-action-id="ash.sessions.toggleSidebar"] button');
+		await page.mouse.move(400, 180);
+		const selectedBackground = await chat.evaluate(button => getComputedStyle(button).backgroundColor);
+		await expect(toggle).toHaveCSS('background-color', selectedBackground);
+		await expect(toggle).toHaveCSS('outline-style', 'solid');
+		await expect(chat).toHaveCSS('outline-style', 'solid');
+		await library.hover();
+		await expect(library).toHaveCSS('background-color', selectedBackground);
+		await expect(library).toHaveCSS('outline-style', 'solid');
+		await toggle.hover();
+		await expect(toggle).toHaveCSS('background-color', selectedBackground);
+		await page.keyboard.press('Tab');
+		await toggle.focus();
+		await expect(toggle).toHaveCSS('outline-style', 'solid');
+		const closed = target.kind === 'electron' ? page.waitForEvent('close') : undefined;
+		await returnFromSessions(page);
+		await closed;
+		await expect(workbench.page.locator('.ash-workbench')).toBeVisible();
 	}
 });
 

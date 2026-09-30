@@ -2,6 +2,25 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			"label": "Prepare Ash Backend",
+			"type": "shell",
+			"command": "pnpm --dir app-ts prepare:backend",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"clear": true
+			},
+			"runOptions": {
+				"instanceLimit": 1
+			},
+			"osx": {
+				"command": "uv run --python 3.12 pnpm --dir app-ts prepare:backend"
+			}
+		},
+		{
 			"label": "Run Ash App (Rust)",
 			"type": "shell",
 			"command": "just app",

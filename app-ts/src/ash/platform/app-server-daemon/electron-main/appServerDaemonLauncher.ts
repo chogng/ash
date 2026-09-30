@@ -1,11 +1,12 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream, existsSync } from "node:fs";
-import { isAbsolute } from "node:path";
+import { isAbsolute, join } from "node:path";
+import { type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { buildAppServerEnvironment, isAllowedAppServerEnvironmentKey, type AppServerHostPlatform } from '../../app-server/common/appServerEnvironment.js';
 import type { IAppServerProcessLauncher } from '../../app-server/electron-main/appServerProcessLauncher.js';
 import { appServerDaemonExecutablePath, appServerExecutablePath, developmentAppServerGenerationPath, packagedAppServerDaemonSha256, packagedAppServerSha256, type AppServerDaemonPackageLocation } from '../node/appServerDaemonPackage.js';
-import { readDevelopmentAppServerGenerationSync, selectDevelopmentAppServerExecutable } from './developmentAppServerReloader.js';
+import { readDevelopmentAppServerGenerationSync } from './developmentAppServerReloader.js';
 
 interface AppServerDaemonConnectionOptions {
 	readonly packageLocation: AppServerDaemonPackageLocation;
@@ -20,22 +21,18 @@ interface AppServerDaemonConnectionOptions {
 export function createAppServerDaemonLauncher(options: AppServerDaemonConnectionOptions): { readonly launcher: AppServerDaemonLauncher; readonly generationFile: string | undefined } {
 	const { packageLocation, sourceEnvironment } = options;
 	const generationFile = !packageLocation.isPackaged && sourceEnvironment.ASH_DEV_APP_SERVER_RELOAD === '1'
-		? developmentAppServerGenerationPath(packageLocation.appPath)
+		? sourceEnvironment.ASH_DEV_APP_SERVER_GENERATION ?? developmentAppServerGenerationPath(packageLocation.appPath)
 		: undefined;
-	let developmentExecutable: string | undefined;
-	if (generationFile) {
-		try {
-			developmentExecutable = readDevelopmentAppServerGenerationSync(generationFile);
-		} catch (error) {
-			console.error('[app-server] Ignoring invalid development generation', error);
-		}
-	}
+	if (generationFile && !isAbsolute(generationFile)) throw new Error('Development generation path must be absolute');
+	const developmentRuntime = generationFile ? readDevelopmentAppServerGenerationSync(generationFile) : undefined;
+	if (generationFile && !developmentRuntime) throw new Error('Development runtime is not prepared. Run pnpm --dir app-ts prepare:backend.');
 	const backendSha256 = packagedAppServerSha256(packageLocation);
 	const productEnvironment: Record<string, string> = {
 		ASH_ELECTRON_RUN_AS_NODE_PATH: options.electronExecutable,
-		ASH_APP_SERVER_PATH: selectDevelopmentAppServerExecutable(appServerExecutablePath(packageLocation), developmentExecutable),
+		ASH_APP_SERVER_PATH: developmentRuntime ? join(developmentRuntime, 'bin', packageLocation.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server') : appServerExecutablePath(packageLocation),
 		ASH_HOME: options.profileRoot,
 	};
+	if (developmentRuntime) productEnvironment.ASH_DEV_RUNTIME_ROOT = developmentRuntime;
 	for (const key of ['ASH_RG_PATH', 'ASH_SSH_PATH', 'ASH_PRODUCT_SERVICES_PATH'] as const) {
 		const value = sourceEnvironment[key];
 		if (value) {
@@ -61,7 +58,7 @@ export function createAppServerDaemonLauncher(options: AppServerDaemonConnection
 	}
 	return {
 		launcher: new AppServerDaemonLauncher({
-			executable: appServerDaemonExecutablePath(packageLocation),
+			executable: developmentRuntime ? join(developmentRuntime, 'bin', packageLocation.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon') : appServerDaemonExecutablePath(packageLocation),
 			expectedSha256: packagedAppServerDaemonSha256(packageLocation),
 			// Development selects the current build; released clients reuse the profile's selected backend.
 			args: [packageLocation.isPackaged ? 'connect' : 'connect-selected'],
@@ -93,6 +90,7 @@ export class AppServerDaemonLauncher implements IAppServerProcessLauncher {
 	private readonly fileExists: (path: string) => boolean;
 	private readonly fileSha256: (path: string) => Promise<string>;
 	private environmentValue: Readonly<Record<string, string>>;
+	private developmentStartupBarrier?: () => Promise<void>;
 
 	constructor(readonly options: AppServerDaemonLauncherOptions) {
 		validateExecutable(options.executable);
@@ -105,11 +103,12 @@ export class AppServerDaemonLauncher implements IAppServerProcessLauncher {
 	}
 
 	get description(): string {
-		return this.options.executable;
+		return this.executable;
 	}
 
 	get executable(): string {
-		return this.options.executable;
+		const runtime = this.environmentValue.ASH_DEV_RUNTIME_ROOT;
+		return runtime ? join(runtime, 'bin', process.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon') : this.options.executable;
 	}
 
 	get environment(): Readonly<Record<string, string>> {
@@ -123,11 +122,18 @@ export class AppServerDaemonLauncher implements IAppServerProcessLauncher {
 	}
 
 	async validate(): Promise<void> {
+		await this.developmentStartupBarrier?.();
 		if (!this.fileExists(this.executable)) throw new Error(`Packaged Ash binary is missing: ${this.executable}`);
 		if (this.options.expectedSha256 !== undefined) {
 			const actual = await this.fileSha256(this.executable);
 			if (actual !== this.options.expectedSha256) throw new Error(`Packaged Ash binary failed integrity validation: ${this.executable}`);
 		}
+	}
+
+	/** Gates connection startup while the profile-wide development daemon is restarting. */
+	setDevelopmentStartupBarrier(barrier: () => Promise<void>): IDisposable {
+		this.developmentStartupBarrier = barrier;
+		return toDisposable(() => { this.developmentStartupBarrier = undefined; });
 	}
 
 	launch(): ChildProcessWithoutNullStreams {

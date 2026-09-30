@@ -9,6 +9,31 @@ import { appServerDaemonExecutablePath, appServerExecutablePath } from '../../..
 
 const execFileAsync = promisify(execFile);
 
+test('Desktop development startup opens Agents with prepared runtime resources', async ({ target, testWorkspace }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'This checks development startup with the Desktop backend.');
+	const directory = await mkdtemp(join(tmpdir(), 'ash-'));
+	const previousReload = process.env.ASH_DEV_APP_SERVER_RELOAD;
+	let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
+	try {
+		process.env.ASH_DEV_APP_SERVER_RELOAD = '1';
+		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory: directory, workspaceDirectory: testWorkspace.directory, workspacePermissions: 'development' });
+		const page = desktop.driver.workbench.page;
+		const opened = desktop.application.waitForEvent('window');
+		await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
+		const agents = await opened;
+		await expect(agents.locator('.ash-sessions-window')).toBeVisible();
+		await expect(agents.getByRole('heading', { name: 'Unable to start Ash' })).toHaveCount(0);
+	} finally {
+		try {
+			await desktop?.close();
+		} finally {
+			if (previousReload === undefined) delete process.env.ASH_DEV_APP_SERVER_RELOAD;
+			else process.env.ASH_DEV_APP_SERVER_RELOAD = previousReload;
+			await rm(directory, { force: true, recursive: true, maxRetries: 10, retryDelay: 100 });
+		}
+	}
+});
+
 test('Desktop uses the selected Ash home for UI and backend startup', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron', 'This scenario verifies process startup on the desktop host.');
 	if (target.kind !== 'electron' || !('windows' in application)) {

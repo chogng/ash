@@ -11,6 +11,10 @@ const watch = args[0] === '--watch';
 if (watch) args.shift();
 const environment = { ...process.env };
 delete environment.ELECTRON_RUN_AS_NODE;
+if (watch) {
+  environment.ASH_HOME ??= resolve(sourceRoot, '../.build/app-ts/dev/profile');
+  if (!args.some(argument => argument.startsWith('--user-data-dir='))) args.push(`--user-data-dir=${resolve(sourceRoot, '../.build/app-ts/dev/user-data')}`);
+}
 
 let electron: ChildProcess | undefined;
 let watcher: Awaited<ReturnType<typeof watchHost>> | undefined;

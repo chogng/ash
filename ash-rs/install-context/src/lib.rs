@@ -23,12 +23,15 @@ const TGREP_OVERRIDE: &str = "ASH_TGREP_PATH";
 const RIPGREP_OVERRIDE: &str = "ASH_RG_PATH";
 const BUBBLEWRAP_OVERRIDE: &str = "ASH_BWRAP_PATH";
 const WINDOWS_SANDBOX_OVERRIDE: &str = "ASH_WINDOWS_SANDBOX_BIN";
+const DEVELOPMENT_RUNTIME_ROOT: &str = "ASH_DEV_RUNTIME_ROOT";
 
 /// Installation shape detected for the running Ash executable.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InstallMethod {
     /// A package root containing `bin/` and at least one managed resource directory.
     Package,
+    /// A host-declared development runtime with separately prepared resources.
+    Development,
     /// A development build, custom launcher, or otherwise unrecognized layout.
     Other,
 }
@@ -168,6 +171,9 @@ impl InstallContext {
                 );
                 context.tgrep_override = env::var_os(TGREP_OVERRIDE);
                 context.windows_sandbox_override = env::var_os(WINDOWS_SANDBOX_OVERRIDE);
+                if let Some(root) = env::var_os(DEVELOPMENT_RUNTIME_ROOT) {
+                    context.select_development_runtime(PathBuf::from(root));
+                }
                 context
             })
             .clone()
@@ -175,6 +181,19 @@ impl InstallContext {
 
     pub fn method(&self) -> InstallMethod {
         self.method
+    }
+
+    fn select_development_runtime(&mut self, root: PathBuf) {
+        // The Desktop build publishes this complete layout before declaring it. It is
+        // authoritative even when resources are missing: do not search the host PATH.
+        self.method = InstallMethod::Development;
+        self.package_layout = Some(PackageLayout {
+            metadata_file: root.join("ash-development.json"),
+            binary_directory: root.join(PACKAGE_BIN_DIRECTORY),
+            path_directory: root.join(PACKAGE_PATH_DIRECTORY),
+            resources_directory: root.join(PACKAGE_RESOURCES_DIRECTORY),
+            package_directory: root,
+        });
     }
 
     pub fn package_layout(&self) -> Option<&PackageLayout> {
@@ -250,6 +269,9 @@ impl InstallContext {
                 ManagedExecutable::WindowsSandbox => &layout.binary_directory,
             };
             push_executable_candidates(&mut paths, directory, executable);
+        }
+        if self.method == InstallMethod::Development {
+            return ExecutableCandidates::SearchPaths(paths);
         }
         if matches!(
             executable,

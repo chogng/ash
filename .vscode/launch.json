@@ -44,6 +44,20 @@
 			}
 		},
 		{
+			"name": "Ash (Electron, Agents)",
+			"type": "node-terminal",
+			"request": "launch",
+			"command": "pnpm --dir app-ts dev:agents",
+			"cwd": "${workspaceFolder}",
+			"presentation": {
+				"group": "1_ash_desktop",
+				"order": 3
+			},
+			"osx": {
+				"command": "uv run --python 3.12 pnpm --dir app-ts dev:agents"
+			}
+		},
+		{
 			"name": "Ash Web (Chrome, UI Only)",
 			"type": "chrome",
 			"request": "launch",

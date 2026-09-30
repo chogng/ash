@@ -9,6 +9,7 @@
 | 用途 | 命令 | F5 配置 |
 | --- | --- | --- |
 | 完整 Electron 桌面端，监听前后端变化 | `pnpm dev:desktop`，等同于 `just ash-desktop` | `Ash (Electron)` |
+| 直接开发 Agents 窗口，监听前后端变化 | `pnpm --dir app-ts dev:agents` | `Ash (Electron, Agents)` |
 | 完整 Electron 桌面端，仅监听前端和 Electron 宿主变化 | `pnpm --dir app-ts dev:ui:connected` | `Ash (Electron, Frontend Watch Only)` |
 | Electron 界面，不构建或启动后端 | `pnpm dev:desktop:ui` | — |
 | 浏览器前端，不构建或启动后端 | `pnpm dev:web` | `Ash Web (Chrome, UI Only)` |
@@ -29,13 +30,15 @@ F5 配置见 [launch.json](../.vscode/launch.json)。macOS 的 Electron 入口�
 | --- | --- |
 | Renderer 与 CSS | Vite 热更新；符合条件的 UI 方法修改保留现有实例 |
 | Electron Main / Preload | 编译和 preload 沙箱依赖校验通过后重启 Electron |
-| Rust 后端 | 完整桌面开发命令监听后端，构建并发布新程序后切换 App Server |
+| Rust 后端 | 完整桌面开发命令监听后端，增量编译后发布开发运行目录，所有本地窗口共用一次后端重启 |
 
 Renderer 中，`Part`、`ViewPane`、`Widget` 的普通方法和 getter/setter 可修改现有实例；构造器、字段、静态状态、模块副作用或继承关系变化会重载页面。其他仅修改原型方法的 UI 类可用 `@ash-hot-reload patch-prototype` 加入。运行时实现见 `base/common/hotReload.ts`、`hotReloadHelpers.ts`，开发转换见 `build/app_ts/vite/hotReloadPlugin.ts`。
 
-Electron 启动前并行准备键盘模块、前端生成资源和后端包；后端输入未变化时复用已有包。Main/Preload 编译或校验失败会保留当前进程。后端构建失败时当前 App Server 继续运行，初始化失败时回滚到上一版本；监听器忽略 Cargo 输出，避免构建再次触发自己。
+Electron 启动前并行准备键盘模块、前端生成资源和后端资源；输入未变化时复用已有结果。运行期间 Rust 保存只增量编译并发布程序，复用准备好的资源文件，不走完整包验证和发布。`ASH_DEV_RUNTIME_ROOT` 由启动器提供，统一定位搜索工具、语言服务、内置 Skills 和辅助程序。Workbench 与 Agents 共用一个重启协调者：先停连接，重启一次后端，再连接仍打开的窗口。新窗口在重启期间等待；关闭窗口会注销监听。Main/Preload 编译或校验失败会保留当前进程，Rust 构建失败不切换运行版本；启动失败会报告错误。监听器忽略 Cargo 输出，避免构建再次触发自己。
 
-需要单独监听后端时，在仓库根目录执行 `pnpm dev:desktop:rust`。仅 UI、`dev:ui:connected` 和普通 Web 模式不监听后端。后端开发包和下载规则见 [共享包构建](../build/ash_rs/README.md)。
+开发启动器使用 `.build/app-ts/dev/profile` 和 `.build/app-ts/dev/user-data`，Workbench 与 Agents 共享开发数据；设置 `ASH_HOME` 可以指定其他开发配置。资源或运行工具锁文件修改后执行 VS Code 任务 `Prepare Ash Backend`，或 `pnpm --dir app-ts prepare:backend`，准备完成后已运行的完整开发窗口会切换到新版本。
+
+需要单独监听后端时，先执行 `pnpm --dir app-ts prepare:backend`，再在仓库根目录执行 `pnpm dev:desktop:rust`。仅 UI、`dev:ui:connected` 和普通 Web 模式不监听后端。后端开发包和下载规则见 [共享包构建](../build/ash_rs/README.md)。
 
 ### 打开工作区
 

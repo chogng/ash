@@ -40,6 +40,8 @@ export class AppServerConnectionRelay extends Disposable {
 		if (!this.options.enabled) { throw new Error('App Server is disabled'); }
 		await this.options.processLauncher.validate();
 		if (this.transport.value) { await this.stop(); }
+		// Development validation can wait for a shared restart while this window closes.
+		this.assertNotDisposed();
 		this.transport.value = new ChildProcessJsonlTransport(this.options.processLauncher.launch());
 		this.setState('starting');
 		if (this.renderer && !this.renderer.isDestroyed()) {
