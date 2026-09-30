@@ -173,8 +173,7 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await expect(activityNavigation.getByRole('button', { name: 'Code' })).not.toHaveAttribute('aria-current', 'page');
 	await expect(page.locator('.ash-sessions-sidebar-tabs')).toHaveCount(0);
 	await page.mouse.move(400, 180);
-	const selectedBackground = await activityNavigation.getByRole('button', { name: 'Chat' }).evaluate(button => getComputedStyle(button).backgroundColor);
-	await expect(page.getByRole('button', { name: 'Hide sidebar' })).toHaveCSS('background-color', selectedBackground);
+	await expect(page.getByRole('button', { name: 'Hide sidebar' })).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 	await expect(activityBar.locator('.ash-sessions-activity-top button svg').first()).toHaveAttribute('data-ash-icon-id', 'chat-2-filled');
 	const collaboration = activityBar.getByRole('button', { name: 'Collaboration' });
 	const library = activityBar.getByRole('button', { name: 'Library' });
@@ -1074,7 +1073,7 @@ test('Sessions titlebar aligns its application menu and actions', async ({ appli
 	await closed;
 });
 
-test('Sessions titlebar shares navigation selection and hover colors and responds to pointer and keyboard', async ({ application, target, workbench }) => {
+test('Sessions titlebar sidebar toggle stays transparent at rest and responds to pointer and keyboard', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	const workbenchToggle = workbench.page.locator('.ash-titlebar-left-actions [data-action-id="workbench.action.toggleSideBar"] button');
 	await expect(workbenchToggle).toHaveCSS('border-radius', '4px');
@@ -1106,7 +1105,7 @@ test('Sessions titlebar shares navigation selection and hover colors and respond
 		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 		const selectedBackground = await chat.evaluate(button => getComputedStyle(button).backgroundColor);
 		expect(selectedBackground).not.toBe('rgba(0, 0, 0, 0)');
-		await expect(toggle).toHaveCSS('background-color', selectedBackground);
+		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		await expect.poll(() => page.locator('.ash-sessions-titlebar-actions button').evaluateAll(buttons => buttons.map(button => getComputedStyle(button).borderRadius))).toEqual(['8px', '8px', '8px', '8px']);
 		await library.hover();
 		await expect(library).toHaveCSS('background-color', selectedBackground);
@@ -1129,7 +1128,7 @@ test('Sessions titlebar shares navigation selection and hover colors and respond
 		await expect(sidebar).toBeVisible();
 		await page.mouse.move(400, 180);
 		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-		await expect(toggle).toHaveCSS('background-color', selectedBackground);
+		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		await page.keyboard.press('Tab');
 		await toggle.focus();
 		await expect(toggle).toHaveCSS('outline-style', 'solid');
@@ -1140,6 +1139,7 @@ test('Sessions titlebar shares navigation selection and hover colors and respond
 		await expect(sidebar).toBeVisible();
 		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 		await expect(toggle).toHaveAccessibleName('Hide sidebar');
+		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		await expect(toggle).toHaveCSS('border-radius', '8px');
 		await expect(toggle.locator('svg[data-ash-icon-id="layout-sidebar-left-2"]')).toBeVisible();
 		await page.keyboard.press('ArrowLeft');
@@ -1161,7 +1161,7 @@ test('Sessions titlebar shares navigation selection and hover colors and respond
 	}
 });
 
-test('Sessions titlebar and navigation keep shared fills and visible outlines in high contrast', async ({ application, target, workbench }) => {
+test('Sessions titlebar sidebar toggle stays transparent at rest with hover and keyboard outlines in high contrast', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	for (const theme of ['Ash High Contrast Dark', 'Ash High Contrast Light']) {
 		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
@@ -1185,17 +1185,32 @@ test('Sessions titlebar and navigation keep shared fills and visible outlines in
 		const toggle = page.locator('[data-action-id="ash.sessions.toggleSidebar"] button');
 		await page.mouse.move(400, 180);
 		const selectedBackground = await chat.evaluate(button => getComputedStyle(button).backgroundColor);
-		await expect(toggle).toHaveCSS('background-color', selectedBackground);
-		await expect(toggle).toHaveCSS('outline-style', 'solid');
+		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(toggle).toHaveCSS('outline-style', 'none');
 		await expect(chat).toHaveCSS('outline-style', 'solid');
 		await library.hover();
 		await expect(library).toHaveCSS('background-color', selectedBackground);
 		await expect(library).toHaveCSS('outline-style', 'solid');
 		await toggle.hover();
 		await expect(toggle).toHaveCSS('background-color', selectedBackground);
+		await expect(toggle).toHaveCSS('outline-style', 'solid');
+		await toggle.click();
+		await page.mouse.move(400, 180);
+		await expect(page.locator('[data-part="sidebar"]')).toBeHidden();
+		await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(toggle).toHaveCSS('outline-style', 'none');
+		await toggle.click();
+		await page.mouse.move(400, 180);
+		await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
+		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(toggle).toHaveCSS('outline-style', 'none');
 		await page.keyboard.press('Tab');
 		await toggle.focus();
 		await expect(toggle).toHaveCSS('outline-style', 'solid');
+		await expect(toggle).toHaveCSS('outline-width', '1px');
 		const closed = target.kind === 'electron' ? page.waitForEvent('close') : undefined;
 		await returnFromSessions(page);
 		await closed;

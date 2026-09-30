@@ -5,9 +5,7 @@
 .ash-sessions-titlebar-actions {
 	--ash-action-bar-gap: var(--ash-spacing-size80);
 	--ash-toolbar-action-size: var(--ash-spacing-size280);
-	/* Sessions uses the same fill for pointer intent and persistent selection. */
 	--ash-toolbar-hover-background: var(--ash-sessions-selection-background);
-	--ash-action-bar-toggled-background: var(--ash-sessions-selection-background);
 	color: var(--ash-title-bar-foreground);
 }
 
@@ -20,7 +18,7 @@
 	background: var(--ash-sessions-selection-background);
 }
 
-.ash-workbench[data-color-scheme^="high-contrast-"] .ash-sessions-titlebar-actions .ash-button:is(.checked, .active, :hover):not(:disabled):not(:focus-visible) {
+.ash-workbench[data-color-scheme^="high-contrast-"] .ash-sessions-titlebar-actions .ash-button:is(.active, :hover):not(:disabled):not(:focus-visible) {
 	outline: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
 	outline-offset: -1px;
 }

@@ -33,7 +33,8 @@ export class MenubarControl extends Disposable {
 		this.toolbar = this._register(new MenuWorkbenchToolBar(container, menuService, contextMenus, MenuId.TitleBarLeft, {
 			ariaLabel: localize({ bundle: 'ash.regions', key: 'titleBarLeftActions' }, 'Title bar left actions'),
 			presentation: 'inherit-foreground',
-			highlightToggledItems: true,
+			// Layout visibility is exposed through the icon and ARIA state, not a persistent selection fill.
+			highlightToggledItems: false,
 			leadingActions: [applicationMenuAction],
 			actionViewItemProvider: action => {
 				if (action !== applicationMenuAction) { return undefined; }
