@@ -20,6 +20,11 @@ export default defineConfig(() => {
   const sourceRoot = resolve(desktopRoot, "src/ash/code");
   const browserEntry = "browser/workbench/workbench";
   const electronEntry = "electron-browser/workbench/workbench";
+  const mode = WorkbenchModeRegistry.get(workbenchModeId);
+  const developmentEntries = [browserEntry, electronEntry];
+  if (mode.dedicatedSessions) {
+    developmentEntries.push(`browser/sessions/${mode.dedicatedSessions.rendererEntry}`, `electron-browser/sessions/${mode.dedicatedSessions.rendererEntry}`);
+  }
   const dedicatedSessionsEntries = WorkbenchModeRegistry.definitions.flatMap(mode => mode.dedicatedSessions ? [mode.dedicatedSessions.rendererEntry] : []);
   const sessionsInputs = Object.fromEntries(dedicatedSessionsEntries.flatMap(rendererEntry => [
     [`browser/sessions/${rendererEntry}`, resolve(sourceRoot, `browser/sessions/${rendererEntry}.html`)],
@@ -66,6 +71,8 @@ export default defineConfig(() => {
       host: "127.0.0.1",
       port: developmentPort,
       strictPort: true,
+      // Transform the current mode's entry graphs while the host starts, before its first navigation.
+      warmup: { clientFiles: developmentEntries.map(entry => resolve(sourceRoot, `${entry}.html`)) },
     },
     build: {
       outDir: appTsBuildPath(repositoryRoot, "renderer", AshRendererDirectory),

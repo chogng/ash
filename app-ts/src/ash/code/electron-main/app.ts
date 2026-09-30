@@ -1020,6 +1020,8 @@ export class AshApplication extends Disposable {
 					let sessionsRelay: AppServerConnectionRelay;
 					try {
 						sessionsRelay = windowDisposables.add(this.createAppServerConnectionRelay(session.workspaceContext.getWorkspace(), runtimeResources, undefined, 'agents'));
+						// Start before routes bind the renderer so daemon selection overlaps page loading.
+						if (this.appServerStartupMode === 'required') await sessionsRelay.start();
 					} catch (error) {
 						runtimeResources.dispose();
 						throw error;
