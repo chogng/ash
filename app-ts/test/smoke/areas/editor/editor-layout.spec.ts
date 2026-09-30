@@ -74,24 +74,23 @@ test('Git explains when the open folder has no repository', async ({ target, wor
 	await expect(page.locator('.ash-scm-change')).toHaveCount(0);
 });
 
-test("empty editor distinguishes an empty window from an open workspace", async ({ target, workbench }) => {
+test("startup shows Welcome in both empty windows and open workspaces", async ({ workbench }) => {
 	const editors = workbench.editors;
 	const group = editors.groupAt(0);
-	const welcomeVisible = target.kind === 'browser' && target.appServerMode === 'disabled';
 
 	await expect(editors.element).toBeVisible();
 	await expect(group.element).toBeVisible();
 	await expect(group.title).toBeVisible();
 	await expect(group.content).toBeVisible();
-	await expect(group.welcome).toBeVisible({ visible: welcomeVisible });
-	await expect(group.tabs).toHaveCount(welcomeVisible ? 1 : 0);
+	await expect(group.welcome).toBeVisible();
+	await expect(group.tabs).toHaveCount(1);
 
 	await expect.poll(async () => editorGeometry(editors.element, group.element, group.title, group.content, group.welcome)).toEqual({
 		groupFillsEditorClient: true,
 		titleAboveContent: true,
 		titleHasHeight: true,
 		contentHasArea: true,
-		welcomeInsideContent: welcomeVisible ? true : null,
+		welcomeInsideContent: true,
 	});
 });
 
@@ -104,6 +103,8 @@ test.describe('welcome brand', () => {
 		await group.tabs.first().hover();
 		await group.element.locator('.ash-tab-close-action button').click();
 		await expect(group.tabs).toHaveCount(0);
+		await expect(group.welcome).toHaveCount(0);
+		await expect(group.content.locator('.ash-editor-group-watermark-shortcuts')).toBeVisible();
 		await workbench.page.keyboard.press('F1');
 		await workbench.page.locator('.ash-quick-pick').getByRole('combobox').fill('Welcome');
 		await workbench.page.keyboard.press('Enter');
@@ -317,11 +318,10 @@ test('recent projects align with the welcome action cards', async ({ target, wor
 	await expect(recent.locator('.ash-getting-started-recent-path')).toHaveCSS('text-align', 'right');
 });
 
-test("editor layout remains valid across workbench window sizes", async ({ target, driver, workbench }) => {
+test("editor layout remains valid across workbench window sizes", async ({ driver, workbench }) => {
 	const editors = workbench.editors;
 	const group = editors.groupAt(0);
 	const observedSizes = new Set<string>();
-	const welcomeVisible = target.kind === 'browser' && target.appServerMode === 'disabled';
 
 	for (const size of [{ width: 900, height: 700 }, { width: 1200, height: 800 }, { width: 1494, height: 1104 }]) {
 		const actualSize = await driver.setWindowSize(size);
@@ -331,7 +331,7 @@ test("editor layout remains valid across workbench window sizes", async ({ targe
 			titleAboveContent: true,
 			titleHasHeight: true,
 			contentHasArea: true,
-			welcomeInsideContent: welcomeVisible ? true : null,
+			welcomeInsideContent: true,
 		});
 	}
 
@@ -388,7 +388,7 @@ async function editorGeometry(editor: Locator, group: Locator, title: Locator, c
 		content.boundingBox(),
 		welcome.count(),
 	]);
-	// The Welcome editor exists only in empty windows; open workspaces render no welcome content.
+	// A closed Welcome editor has no geometry to compare with its content area.
 	const welcomeBox = welcomeCount > 0 ? await welcome.boundingBox() : null;
 	if (!editorBox || !groupBox || !titleBox || !contentBox) {
 		return null;

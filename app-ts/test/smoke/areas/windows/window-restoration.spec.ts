@@ -105,13 +105,17 @@ test('Desktop restores open Workbench and Agents windows and honors startup inte
 test('Workbench restores editor tabs unless editor restoration is disabled', async ({}, testInfo) => {
 	test.setTimeout(90_000);
 	const userDataDirectory = testInfo.outputPath('user-data');
+	const folder = testInfo.outputPath('folder');
 	await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
-	await writeFile(join(userDataDirectory, 'profile', 'settings.json'), '{"workbench.startupEditor":"none"}\n');
+	await mkdir(folder, { recursive: true });
 	let application: ElectronApplication | undefined;
 	try {
-		application = await launch(userDataDirectory);
+		application = await launch(userDataDirectory, folder);
 		const page = await application.firstWindow();
 		await new Workbench(page).waitForReady();
+		await expect(page.locator('.ash-getting-started')).toBeVisible();
+		await page.locator('.ash-tab').hover();
+		await page.locator('.ash-tab-close-action button').click();
 		await page.keyboard.press(process.platform === 'darwin' ? 'Meta+N' : 'Control+N');
 		await page.keyboard.press(process.platform === 'darwin' ? 'Meta+N' : 'Control+N');
 		await expect(page.locator('.ash-tab')).toHaveCount(2);
@@ -123,6 +127,7 @@ test('Workbench restores editor tabs unless editor restoration is disabled', asy
 		const restored = await application.firstWindow();
 		await new Workbench(restored).waitForReady();
 		await expect(restored.locator('.ash-tab')).toHaveCount(2);
+		await expect(restored.locator('.ash-getting-started')).toHaveCount(0);
 		await writeFile(join(userDataDirectory, 'profile', 'settings.json'), '{"workbench.startupEditor":"none","workbench.editor.restoreEditors":false}\n');
 		await application.close();
 		application = undefined;

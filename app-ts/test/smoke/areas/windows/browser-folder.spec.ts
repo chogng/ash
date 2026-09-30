@@ -43,6 +43,7 @@ test('Explorer selection stays beneath its scrollbar', async ({ target, workbenc
 test('browser opens an authorized local folder and saves its files', async ({ target, workbench }) => {
 	test.skip(target.kind !== 'browser' || target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');
 	const page = workbench.page;
+	await expect(workbench.editors.groupAt(0).welcome).toBeVisible();
 	const folderName = await page.evaluate(async () => {
 		const root = await navigator.storage.getDirectory();
 		const name = `ash-browser-%中-${crypto.randomUUID()}`;
@@ -67,6 +68,8 @@ test('browser opens an authorized local folder and saves its files', async ({ ta
 	const explorer = page.locator('.ash-explorer');
 	const fileRow = explorer.getByRole('treeitem', { name: 'hello %中.txt', exact: true });
 	await expect(fileRow).toHaveCount(1);
+	await expect(workbench.editors.groupAt(0).welcome).toBeVisible();
+	await expect(workbench.editors.groupAt(0).tabs).toHaveCount(1);
 	if (await showSidebar.isVisible()) await showSidebar.click();
 	await expect(explorer).toBeVisible();
 	await expect(fileRow).toBeVisible();

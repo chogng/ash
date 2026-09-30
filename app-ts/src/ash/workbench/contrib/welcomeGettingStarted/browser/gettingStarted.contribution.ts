@@ -15,7 +15,7 @@ import { StartupEditorConfigurationKey, StartupPageRunnerContribution, type Star
 
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration<StartupEditor>({
 	key: StartupEditorConfigurationKey,
-	defaultValue: 'welcomePageInEmptyWorkbench',
+	defaultValue: 'welcomePage',
 	parse(value: unknown): StartupEditor {
 		if (value === 'none' || value === 'welcomePage' || value === 'welcomePageInEmptyWorkbench') return value;
 		throw new TypeError(`Unknown startup editor: ${String(value)}`);
