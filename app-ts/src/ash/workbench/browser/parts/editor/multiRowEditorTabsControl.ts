@@ -3,6 +3,8 @@ import type { TabListPresentation } from "../../../../base/browser/ui/tablist/ta
 import type { EditorInput } from "./editorInput.js";
 import { EditorTabsControl, type EditorTabDescriptor, type EditorTabsDelegate } from "./editorTabsControl.js";
 import { MultiEditorTabsControl } from "./multiEditorTabsControl.js";
+import type { EditorGroupModel } from '../../../common/editor/editorGroupModel.js';
+import { StickyEditorGroupModel, UnstickyEditorGroupModel } from '../../../common/editor/filteredEditorGroupModel.js';
 
 /** Keeps sticky editors above ordinary editors while both rows share one group. */
 export class MultiRowEditorControl extends EditorTabsControl {
@@ -11,9 +13,13 @@ export class MultiRowEditorControl extends EditorTabsControl {
 	private readonly stickyRow: MultiEditorTabsControl;
 	private readonly ordinaryRow: MultiEditorTabsControl;
 	private currentRows = 1;
+	private readonly stickyModel: StickyEditorGroupModel;
+	private readonly ordinaryModel: UnstickyEditorGroupModel;
 
-	constructor(container: HTMLElement, delegate: EditorTabsDelegate) {
+	constructor(container: HTMLElement, delegate: EditorTabsDelegate, model: EditorGroupModel) {
 		super(container);
+		this.stickyModel = new StickyEditorGroupModel(model);
+		this.ordinaryModel = new UnstickyEditorGroupModel(model);
 		this.domNode.classList.add("ash-multi-row-editor-tabs-control");
 		this.stickyRow = this._register(new MultiEditorTabsControl(this.domNode, delegate));
 		this.stickyRow.domNode.classList.add("ash-sticky-editor-tabs-row");
@@ -28,8 +34,9 @@ export class MultiRowEditorControl extends EditorTabsControl {
 	}
 
 	setEditors(editors: readonly EditorTabDescriptor[], activeInput: EditorInput | undefined, selectedIds?: ReadonlySet<string>): void {
-		const sticky = editors.filter(editor => editor.sticky);
-		const ordinary = editors.filter(editor => !editor.sticky);
+		const descriptors = new Map(editors.map(editor => [editor.input, editor]));
+		const sticky = this.stickyModel.getEditors().map(input => descriptors.get(input)!);
+		const ordinary = this.ordinaryModel.getEditors().map(input => descriptors.get(input)!);
 		this.stickyRow.setEditors(sticky, activeInput, selectedIds);
 		this.ordinaryRow.setEditors(ordinary, activeInput, selectedIds);
 		this.stickyRow.domNode.hidden = sticky.length === 0;

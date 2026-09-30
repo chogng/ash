@@ -5,6 +5,8 @@ import { URI } from '../../../../../base/common/uri.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import { Range } from '../../../../../editor/common/core/range.js';
+import { TextModel } from '../../../../../editor/common/model/textModel.js';
+import { TextResourceEditorModel } from '../../../../common/editor/textResourceEditorModel.js';
 import type { LanguageDocumentSymbol } from '../../../../../editor/common/languages.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
@@ -55,6 +57,39 @@ test('document symbol command resolves a closed Workbench resource and releases 
 	assert.equal(disposalEvents, 1);
 	assert.equal(reference.object.isDisposed(), true);
 	assert.equal(reopened.model.isDisposed(), false);
+});
+
+test('provider references share text and release it after the last editor model closes', async () => {
+	using models = new BrowserTextModelService({
+		onDidChange: () => ({ dispose() {}, [Symbol.dispose]() {} }),
+		resolve: async request => ({ resource: request.resource, text: '', revision: '1' }),
+		save: async () => ({ revision: '1' }),
+	});
+	using services = new ServiceContainer();
+	services.registerInstance(ITextModelResourceService, models);
+	const resolver = services.createInstance(TextModelResolverService);
+	using text = new TextModel('shared provider content', { languageId: 'typescript' });
+	using provider = resolver.registerTextModelContentProvider('review', { provideTextContent: async () => text });
+	using first = await resolver.createModelReference(URI.parse('review:/content'));
+	using second = await resolver.createModelReference(URI.parse('review:/content'));
+	assert.ok(first.object instanceof TextResourceEditorModel);
+	assert.equal(first.object.textEditorModel, second.object.textEditorModel);
+	assert.equal(first.object.createSnapshot().read(), 'shared provider content');
+	assert.equal(first.object.getLanguageId(), 'typescript');
+	assert.equal(first.object.isReadonly(), true);
+	let notifications = 0;
+	using listener = first.object.onWillDispose(() => {
+		notifications++;
+		first.dispose();
+	});
+	first.dispose();
+	assert.equal(notifications, 1);
+	assert.equal(first.object.isResolved(), false);
+	assert.equal(text.isDisposed(), false);
+	assert.equal(second.object.isResolved(), true);
+	second.dispose();
+	assert.equal(text.isDisposed(), true);
+	assert.equal(second.object.isResolved(), false);
 });
 
 function symbol(name: string, startColumn: number, endColumn: number): LanguageDocumentSymbol {

@@ -210,6 +210,72 @@ test("Stanza diff pane acquires both models, lays out the review view, and relea
 	dom.window.close();
 });
 
+test('Diff pane honors a readonly modified resource and preserves shared text when closed', async () => {
+	const dom = createTestDom();
+	try {
+		const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
+		using models = new BrowserTextModelService(resourceStore);
+		using services = new DisposableStore();
+		const container = createCodeEditorServices(services);
+		using pane = container.createInstance(DiffEditorPane, resourceStore, {
+			modelService: models,
+			createComputationService: () => new PaneTestDiffComputationService(),
+		});
+		const modified = { resource: URI.file('/readonly-after.ts'), initialText: 'after', readOnly: true };
+		using shared = await models.acquire(modified, new AbortController().signal);
+		pane.create(requiredElement<HTMLElement>(dom.window.document, 'main'));
+		await pane.setInput(createDiffEditorInput(
+			{ resource: URI.file('/readonly-before.ts'), initialText: 'before' }, modified,
+		), new AbortController().signal);
+		const widget = pane.getControl();
+		assert.ok(widget);
+		assert.equal(widget.modifiedEditor.getOption(EditorOption.readOnly), true);
+		assert.equal(widget.modifiedEditor.getModel(), shared.model);
+		pane.clearInput();
+		assert.equal(shared.model.isDisposed(), false);
+		shared.dispose();
+		assert.equal(shared.model.isDisposed(), true);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('Diff pane releases both references when loading is cancelled after acquisition', async () => {
+	const dom = createTestDom();
+	try {
+		const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
+		using models = new BrowserTextModelService(resourceStore);
+		using services = new DisposableStore();
+		const container = createCodeEditorServices(services);
+		const cancellation = new AbortController();
+		const acquired: ITextModel[] = [];
+		using pane = container.createInstance(DiffEditorPane, resourceStore, {
+			modelService: {
+				acquire: async (input: EditorInput, signal: AbortSignal) => {
+					const reference = await models.acquire(input, signal);
+					acquired.push(reference.model);
+					if (acquired.length === 2) {
+						cancellation.abort();
+					}
+					return reference;
+				},
+				dispose() {},
+				[Symbol.dispose]() {},
+			},
+			createComputationService: () => new PaneTestDiffComputationService(),
+		});
+		pane.create(requiredElement<HTMLElement>(dom.window.document, 'main'));
+		await assert.rejects(pane.setInput(createDiffEditorInput(
+			{ resource: URI.file('/cancelled-before.ts'), initialText: 'before' },
+			{ resource: URI.file('/cancelled-after.ts'), initialText: 'after' },
+		), cancellation.signal), { name: 'CancellationError' });
+		assert.deepEqual(acquired.map(model => model.isDisposed()), [true, true]);
+		assert.equal(pane.getControl(), undefined);
+	} finally {
+		dom.window.close();
+	}
+});
+
 test('Diff pane recomputes an open comparison when ignore-trim-whitespace changes', async () => {
 	const dom = createTestDom();
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');

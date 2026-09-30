@@ -25,6 +25,7 @@ import { SingleEditorTabsControl } from "./singleEditorTabsControl.js";
 import { h } from "../../../../base/browser/dom.js";
 import { localize } from "../../../../nls.js";
 import { WorkbenchConfiguration, type WorkbenchLayoutStyle } from '../../../common/configuration.js';
+import type { EditorGroupModel } from '../../../common/editor/editorGroupModel.js';
 
 /** Hosts one group's Editor tabs and header in their shared title layout. */
 export class EditorTitleControl extends Disposable {
@@ -48,6 +49,7 @@ export class EditorTitleControl extends Disposable {
 	constructor(
 		container: HTMLElement,
 		delegate: EditorTabsDelegate,
+		private readonly model: EditorGroupModel,
 		titleActions?: EditorHeaderActions,
 		configurationService?: IConfigurationService,
 		onSelectBreadcrumb?: (element: FileElement) => void,
@@ -129,7 +131,7 @@ export class EditorTitleControl extends Disposable {
 			? new SingleEditorTabsControl(this.tabsAndActionsDomNode, this.delegate)
 			: mode === "none"
 				? new NoEditorTabsControl(this.tabsAndActionsDomNode)
-				: new MultiRowEditorControl(this.tabsAndActionsDomNode, this.delegate);
+				: new MultiRowEditorControl(this.tabsAndActionsDomNode, this.delegate, this.model);
 		this.rowsListener.value = control instanceof MultiRowEditorControl
 			? control.onDidChangeRows(() => {
 				this.domNode.style.setProperty("--ash-editor-tab-rows", String(control.rowCount));

@@ -355,9 +355,9 @@ test("Binary content shows an editor error with a working alternative", async ({
 
 	const content = workbench.editors.groupAt(0).content;
 	const error = content.getByRole("alert");
-	await expect(error).toContainText("Unable to open main.ts");
-	await expect(error).toContainText("binary");
-	await expect(error.getByRole("button", { name: "Retry" })).toBeVisible();
+	await expect(error.getByRole('heading')).toHaveText('This file cannot be displayed as text because it is binary or uses an unsupported text encoding.');
+	await expect(error).toHaveClass(/warning/u);
+	await expect(error.getByRole("button", { name: "Retry" })).toHaveCount(0);
 	const alternative = error.getByRole("button", { name: "Open as Binary" });
 	await expect(alternative).toBeVisible();
 	const styles = await error.evaluate(element => ({

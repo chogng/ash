@@ -1,6 +1,6 @@
 import type { IEditorPaneDescriptor } from '../../editor.js';
 import { URI } from "../../../../base/common/uri.js";
-import type { IFileService } from "../../../../platform/files/common/files.js";
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
 import { EditorInputSerializers, requireRecord, requireSerializedEditorInput } from "../../../services/editor/common/editorInputSerializer.js";
 import { BaseBinaryResourceEditor } from "./binaryEditor.js";
@@ -39,8 +39,12 @@ export function isBinaryDiffEditorInput(input: EditorInput): input is BinaryDiff
 
 /** Keeps each side's file-size metadata visible to comparison commands and status UI. */
 export class BinaryResourceDiffEditor extends SideBySideEditor {
-	constructor(files: IFileService) {
-		super(BINARY_DIFF_EDITOR_ID, new BaseBinaryResourceEditor(files), new BaseBinaryResourceEditor(files));
+	constructor(@IInstantiationService instantiationService: IInstantiationService) {
+		super(
+			BINARY_DIFF_EDITOR_ID,
+			instantiationService.createInstance(BaseBinaryResourceEditor),
+			instantiationService.createInstance(BaseBinaryResourceEditor),
+		);
 	}
 
 	override async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
@@ -63,8 +67,8 @@ export function binaryDiffEditorDescriptor(): IEditorPaneDescriptor {
 		name: "Binary Diff Editor",
 		canOpen: input => isBinaryDiffEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
 		create: options => {
-			if (!options.fileService) throw new Error("Binary diff editor requires the Workbench file service");
-			return new BinaryResourceDiffEditor(options.fileService);
+			if (!options.instantiationService) throw new Error("Binary diff editor requires Workbench instantiation services");
+			return options.instantiationService.createInstance(BinaryResourceDiffEditor);
 		},
 	};
 }

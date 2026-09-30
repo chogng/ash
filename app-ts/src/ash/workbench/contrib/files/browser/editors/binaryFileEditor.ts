@@ -3,7 +3,8 @@ import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { type URI } from '../../../../../base/common/uri.js';
 import { localize, onDidChangeNls } from '../../../../../nls.js';
 import { DialogSeverity, IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
-import { type IFileService } from '../../../../../platform/files/common/files.js';
+import { IFileService } from '../../../../../platform/files/common/files.js';
+import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { BINARY_EDITOR_ID, BaseBinaryResourceEditor, binaryEditorDescriptor } from '../../../../browser/parts/editor/binaryEditor.js';
 import { CODE_EDITOR_ID } from '../../../../common/editor/codeEditorId.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
@@ -14,8 +15,13 @@ const MAX_TEXT_PREVIEW_BYTES = 64 * 1024;
 export class BinaryFileEditor extends BaseBinaryResourceEditor {
 	private resource: URI | undefined;
 
-	constructor(files: IFileService, private readonly editors: IEditorService, private readonly dialogs: IDialogService) {
-		super(files);
+	constructor(
+		@IFileService files: IFileService,
+		@IEditorService private readonly editors: IEditorService,
+		@IDialogService private readonly dialogs: IDialogService,
+		@IInstantiationService instantiationService: IInstantiationService,
+	) {
+		super(files, instantiationService);
 	}
 
 	override create(parent: HTMLElement): void {
@@ -70,12 +76,8 @@ export function binaryFileEditorDescriptor(): IEditorPaneDescriptor {
 		...base,
 		id: BINARY_EDITOR_ID,
 		create: options => {
-			if (!options.fileService || !options.instantiationService) throw new Error('Binary file editor requires file and editor services');
-			return new BinaryFileEditor(
-				options.fileService,
-				options.instantiationService.get(IEditorService),
-				options.instantiationService.get(IDialogService),
-			);
+			if (!options.instantiationService) throw new Error('Binary file editor requires Workbench instantiation services');
+			return options.instantiationService.createInstance(BinaryFileEditor);
 		},
 	};
 }

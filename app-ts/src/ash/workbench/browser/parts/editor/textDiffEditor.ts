@@ -9,6 +9,8 @@ import { EditorPaneVisibility } from "../../../browser/parts/editor/editorPane.j
 import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection } from '../../../common/editor.js';
 import { type EditorInput } from "../../../browser/parts/editor/editorInput.js";
 import { DIFF_EDITOR_ID, isDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
+import { BaseTextEditorModel } from '../../../common/editor/textEditorModel.js';
+import { TextDiffEditorModel } from '../../../common/editor/textDiffEditorModel.js';
 import { type ITextResourceStore } from "../../../services/textmodelResolver/common/textResourceStore.js";
 import { DiffModel } from "../../../../editor/common/diff/diffModel.js";
 import { type HideUnchangedRegionsOptions } from '../../../../editor/common/config/diffEditor.js';
@@ -108,7 +110,7 @@ export class TextDiffEditor extends Disposable implements IEditorPaneWithSelecti
 			throwIfCancelled(signal, "Diff editor input loading was cancelled");
 			next = this.instantiationService.createInstance(
 				DiffEditorPaneSession, container, original, modified,
-				input.original.label, input.modified.label, this.options,
+				input.original.label, input.modified.label, input.modified.readOnly === true, this.options,
 			);
 			throwIfCancelled(signal, "Diff editor input loading was cancelled");
 		} catch (error) {
@@ -172,6 +174,7 @@ class DiffEditorPaneSession extends Disposable {
 		modified: TextModelReference,
 		originalLabel: string | undefined,
 		modifiedLabel: string | undefined,
+		readOnly: boolean,
 		options: DiffEditorPaneOptions,
 		@IConfigurationService configuration: IConfigurationService,
 		@IInstantiationService instantiationService: IInstantiationService,
@@ -179,14 +182,19 @@ class DiffEditorPaneSession extends Disposable {
 		super();
 		this._register(original);
 		this._register(modified);
+		const originalEditorModel = this._register(new BaseTextEditorModel(original.model));
+		const modifiedEditorModel = this._register(new BaseTextEditorModel(modified.model, readOnly));
+		const editorModel = this._register(new TextDiffEditorModel(originalEditorModel, modifiedEditorModel));
+		const textModels = editorModel.textDiffEditorModel;
+		assertDefined(textModels, new ReferenceError('Diff editor requires two resolved text models'));
 		const computationService = options.createComputationService();
 		if (!computationService || typeof computationService.computeDiff !== "function") {
 			throw new TypeError("Diff editor pane factory returned an invalid Workbench diff computation service");
 		}
 		this._register(computationService);
 		const model = this.model = this._register(new DiffModel({
-			original: original.model,
-			modified: modified.model,
+			original: textModels.original,
+			modified: textModels.modified,
 			diffProvider: computationService,
 			diffOptions: getDiffComputationOptions(configuration, modified.model.getLanguageId()),
 		}));
@@ -231,6 +239,7 @@ class DiffEditorPaneSession extends Disposable {
 		this.editor = this._register(instantiationService.createInstance(DiffEditorWidget, {
 			container,
 			model,
+			readOnly: editorModel.isReadonly(),
 			wordWrap: getDiffWordWrap(configuration),
 			renderSideBySide: configuration.getValue('diffEditor.renderSideBySide'),
 			useInlineViewWhenSpaceIsLimited: configuration.getValue('diffEditor.useInlineViewWhenSpaceIsLimited'),

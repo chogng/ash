@@ -22,6 +22,7 @@ import { WorkbenchConfiguration } from '../../common/configuration.js';
 import { EditorBreadcrumbsControl } from '../../browser/parts/editor/breadcrumbsControl.js';
 import { setNlsResolver, resetNlsResolver } from '../../../nls.js';
 import { builtinLanguagePackCatalogs } from '../../services/localization/common/localizationCatalogs.js';
+import { EditorGroupModel } from '../../common/editor/editorGroupModel.js';
 
 test('Editor breadcrumbs localize their navigation label when the language changes', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -151,9 +152,12 @@ test("Connected tab clipping follows the visible tab strip", () => {
 test("EditorTitleControl switches tab modes and breadcrumbs from configuration", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const configuration = new InMemoryConfigurationService();
-	const control = new EditorTitleControl(dom.window.document.body, inertDelegate, undefined, configuration);
+	const group = new EditorGroupModel();
+	const control = new EditorTitleControl(dom.window.document.body, inertDelegate, group, undefined, configuration);
 	const first = input("folder/first");
 	const second = input("folder/second");
+	group.openEditor(first);
+	group.openEditor(second);
 	control.setEditors([descriptor(first), descriptor(second)], second);
 
 	assert.equal(control.domNode.querySelectorAll(".ash-tab").length, 2);
@@ -166,8 +170,14 @@ test("EditorTitleControl switches tab modes and breadcrumbs from configuration",
 	assert.equal(control.domNode.querySelector('.ash-tab-list')?.classList.contains('ash-tab-list-inset'), true);
 	assert.match(control.domNode.querySelector(".ash-editor-breadcrumbs")?.textContent ?? "", /folder.*second/);
 	assert.equal(control.height, 57);
+	group.stick(first);
 	control.setEditors([{ ...descriptor(first), sticky: true }, descriptor(second)], second);
 	assert.equal(control.height, 92);
+	assert.equal(control.domNode.querySelector('.ash-sticky-editor-tabs-row .ash-tab-label')?.textContent, 'folder/first');
+	group.unstick(first);
+	control.setEditors([descriptor(first), descriptor(second)], second);
+	assert.equal(control.height, 57);
+	assert.equal((control.domNode.querySelector('.ash-sticky-editor-tabs-row') as HTMLElement).hidden, true);
 
 	await configuration.updateValue(EditorTabsModeConfiguration, "single");
 	assert.equal(control.height, 57);
@@ -203,9 +213,11 @@ test("EditorTitleControl follows nested document symbols and opens outline selec
 		getControl: () => ({ getModel: () => model, getPosition: () => position, onDidChangeCursorSelection: cursorChanges.event }),
 		revealRange: (range: Range) => { revealed = range; },
 	} as unknown as IEditorPane;
-	const control = new EditorTitleControl(dom.window.document.body, inertDelegate, undefined, configuration, undefined, undefined, undefined, features,
+	const group = new EditorGroupModel();
+	const control = new EditorTitleControl(dom.window.document.body, inertDelegate, group, undefined, configuration, undefined, undefined, undefined, features,
 		(_symbols, selected, reveal) => { chosen = selected; reveal(selected.selectionRange); });
 	const resource = input("folder/symbols.ts");
+	group.openEditor(resource);
 	control.setEditors([descriptor(resource)], resource, pane);
 	for (let attempt = 0; attempt < 50 && !control.domNode.textContent?.includes("Beta"); attempt++) {
 		await new Promise(resolve => setTimeout(resolve, 0));

@@ -3,9 +3,13 @@ import { h } from "../../../../base/browser/dom.js";
 import type { IDimension } from "../../../../base/browser/dom.js";
 import { raceCancellationError } from "../../../../base/common/async.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { IFileService } from "../../../../platform/files/common/files.js";
+import { Disposable, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { basename } from '../../../../base/common/resources.js';
+import { IFileService } from "../../../../platform/files/common/files.js";
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
+import { BinaryEditorModel } from '../../../common/editor/binaryEditorModel.js';
+import { localize, onDidChangeNls } from '../../../../nls.js';
 import type { EditorInput } from "./editorInput.js";
 import { EditorPaneMatch, EditorPaneVisibility, type IEditorPane } from "./editorPane.js";
 
@@ -20,8 +24,12 @@ export class BaseBinaryResourceEditor extends Disposable implements IEditorPane 
 	private content: HTMLPreElement | undefined;
 	private summary: HTMLElement | undefined;
 	private metadata: string | undefined;
+	private readonly model = this._register(new MutableDisposable<BinaryEditorModel>());
 
-	constructor(protected readonly files: IFileService) {
+	constructor(
+		@IFileService protected readonly files: IFileService,
+		@IInstantiationService protected readonly instantiationService: IInstantiationService,
+	) {
 		super();
 	}
 
@@ -31,7 +39,7 @@ export class BaseBinaryResourceEditor extends Disposable implements IEditorPane 
 		container.className = "ash-binary-editor";
 		container.tabIndex = 0;
 		container.setAttribute("role", "region");
-		container.setAttribute("aria-label", "Binary editor");
+		this._register(onDidChangeNls(() => this.updateAriaLabel()));
 		const summary = h(parent.ownerDocument, "div");
 		summary.className = "ash-binary-editor-summary";
 		const content = h(parent.ownerDocument, "pre");
@@ -39,6 +47,7 @@ export class BaseBinaryResourceEditor extends Disposable implements IEditorPane 
 		container.append(summary, content);
 		parent.append(container);
 		this.container = container;
+		this.updateAriaLabel();
 		this.summary = summary;
 		this.content = content;
 		this._register(toDisposable(() => container.remove()));
@@ -48,20 +57,31 @@ export class BaseBinaryResourceEditor extends Disposable implements IEditorPane 
 		const summary = this.requireSummary();
 		const content = this.requireContent();
 		throwIfCancelled(signal, "Binary editor loading was cancelled");
-		const stat = await raceCancellationError(this.files.stat(input.resource), signal, "Binary editor loading was cancelled");
-		if (stat.sizeBytes > MAX_BINARY_EDITOR_BYTES) {
-			throw new Error(`Binary file is too large to preview (${formatByteCount(stat.sizeBytes)})`);
+		const model = this.instantiationService.createInstance(BinaryEditorModel, input.resource, input.label ?? basename(input.resource));
+		try {
+			await raceCancellationError(model.resolve(), signal, "Binary editor loading was cancelled");
+			const size = model.getSize();
+			if (size !== undefined && size > MAX_BINARY_EDITOR_BYTES) {
+				throw new Error(`Binary file is too large to preview (${formatByteCount(size)})`);
+			}
+			const resolved = await raceCancellationError(this.files.readFileBytes(input.resource), signal, "Binary editor loading was cancelled");
+			throwIfCancelled(signal, "Binary editor loading was cancelled");
+			const visible = resolved.bytes.subarray(0, MAX_RENDERED_BYTES);
+			this.model.value = model;
+			this.metadata = formatByteCount(resolved.bytes.length);
+			this.updateAriaLabel();
+			summary.textContent = `${formatByteCount(resolved.bytes.length)} · read-only hexadecimal preview${resolved.bytes.length > visible.length ? ` · first ${formatByteCount(visible.length)}` : ""}`;
+			content.textContent = renderHexDump(visible);
+		} catch (error) {
+			model.dispose();
+			throw error;
 		}
-		const resolved = await raceCancellationError(this.files.readFileBytes(input.resource), signal, "Binary editor loading was cancelled");
-		throwIfCancelled(signal, "Binary editor loading was cancelled");
-		const visible = resolved.bytes.subarray(0, MAX_RENDERED_BYTES);
-		this.metadata = formatByteCount(resolved.bytes.length);
-		summary.textContent = `${formatByteCount(resolved.bytes.length)} · read-only hexadecimal preview${resolved.bytes.length > visible.length ? ` · first ${formatByteCount(visible.length)}` : ""}`;
-		content.textContent = renderHexDump(visible);
 	}
 
 	clearInput(): void {
+		this.model.clear();
 		this.metadata = undefined;
+		this.updateAriaLabel();
 		if (this.summary) this.summary.textContent = "";
 		if (this.content) this.content.textContent = "";
 	}
@@ -75,6 +95,13 @@ export class BaseBinaryResourceEditor extends Disposable implements IEditorPane 
 	focus(): void { this.container?.focus(); }
 
 	getMetadata(): string | undefined { return this.metadata; }
+
+	private updateAriaLabel(): void {
+		const model = this.model.value;
+		this.container?.setAttribute('aria-label', model
+			? localize('binaryEditor.resourceLabel', 'Binary editor: {0}', model.getName())
+			: localize('binaryEditor.label', 'Binary editor'));
+	}
 
 	private requireSummary(): HTMLElement {
 		if (!this.summary) throw new ReferenceError("Binary editor pane has not been created");
@@ -96,8 +123,8 @@ export function binaryEditorDescriptor(): IEditorPaneDescriptor {
 			return input.contentType?.toLowerCase().startsWith("application/octet-stream") ? EditorPaneMatch.Default : EditorPaneMatch.Optional;
 		},
 		create: options => {
-			if (!options.fileService) throw new Error("Binary editor requires the Workbench file service");
-			return new BaseBinaryResourceEditor(options.fileService);
+			if (!options.instantiationService) throw new Error("Binary editor requires Workbench instantiation services");
+			return options.instantiationService.createInstance(BaseBinaryResourceEditor);
 		},
 	};
 }

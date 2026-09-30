@@ -2,11 +2,12 @@ import { toDisposable, type IDisposable, type IReference } from '../../../../bas
 import type { URI } from '../../../../base/common/uri.js';
 import type { ITextModel } from '../../../../editor/common/model.js';
 import {
-	createResolvedTextEditorModelReference,
 	ITextModelService,
 	type IResolvedTextEditorModel,
 	type ITextModelContentProvider,
 } from '../../../../editor/common/services/resolverService.js';
+import { BaseTextEditorModel } from '../../../common/editor/textEditorModel.js';
+import { TextResourceEditorModel } from '../../../common/editor/textResourceEditorModel.js';
 import {
 	ITextModelResourceService,
 	type ITextModelResourceService as ITextModelResourceServiceContract,
@@ -26,10 +27,29 @@ export class TextModelResolverService implements ITextModelService {
 			const model = await provider.provideTextContent(resource);
 			if (!model) throw new ReferenceError(`Text model not found: ${resource.toString()}`);
 			this.providerModelReferences.set(model, (this.providerModelReferences.get(model) ?? 0) + 1);
-			return createResolvedTextEditorModelReference(model, () => this.releaseProviderModel(model));
+			const release = toDisposable(() => this.releaseProviderModel(model));
+			const object = new TextResourceEditorModel({ object: model, ...release });
+			return this.createReference(object);
 		}
 		const reference = await this.models.acquire({ resource }, new AbortController().signal);
-		return createResolvedTextEditorModelReference(reference.model, () => reference.dispose());
+		const object = new BaseTextEditorModel(reference.model, false);
+		return this.createReference(object, reference);
+	}
+
+	private createReference(object: BaseTextEditorModel, backing?: IDisposable): IReference<IResolvedTextEditorModel> {
+		if (!object.isResolved()) {
+			backing?.dispose();
+			object.dispose();
+			throw new ReferenceError('Resolved text model was disposed before it could be acquired');
+		}
+		const release = toDisposable(() => {
+			try {
+				object.dispose();
+			} finally {
+				backing?.dispose();
+			}
+		});
+		return { object, ...release };
 	}
 
 	registerTextModelContentProvider(scheme: string, provider: ITextModelContentProvider): IDisposable {

@@ -1477,17 +1477,22 @@ Grammar catalog 由共享 Workbench `ITextMateService` 拥有，声明式 extens
 | --- | --- | --- |
 | `editorPart`、`editorGroupView`、`editorParts`、`auxiliaryEditorPart` | `workbench/browser/parts/editor/{editorPart,editorGroupView,editorParts}.ts` + `services/auxiliaryWindow` | 已具备二维 Grid、跨窗口活动 part、移动与关闭 veto；组装、DOM 和窗格生命周期由 `EditorGroupView` 负责，原 `editorGroup.ts` 已退出 |
 | `common/editor/editorGroupModel` | `workbench/common/editor/editorGroupModel.ts` | 唯一维护 group/editor identity、标签顺序、活动标签、多选、preview/pinned、sticky 和组锁定状态；`EditorGroupView` 在窗格加载完成后提交模型，已为脏文件的标签直接固定，防止下次预览替换 |
+| `common/editor/filteredEditorGroupModel` | 同名公共文件 + `MultiRowEditorControl` | 置顶与普通标签行直接读取同一个 `EditorGroupModel`；公共模型负责筛选，浏览器行控件仅将输入映射到标签描述并渲染，没有第二份标签状态 |
+| `common/editor/{editorModel,textEditorModel,textResourceEditorModel}` | 同名公共文件 + `TextModelResolverService` | 编辑器模型拥有解析状态与关闭通知；普通文本视图借用现有文本模型，provider 视图持有一个共享引用，最后一个引用关闭才释放内容。文本、版本、脏状态和保存仍由现有模型服务负责 |
+| `common/editor/{diffEditorModel,textDiffEditorModel}` | 同名公共文件 + `TextDiffEditor` | 比较模型只借用两侧模型，窗格会话拥有引用与计算器。修改侧的只读状态传入真实编辑器；取消加载与关闭释放会话引用，不销毁其他窗格仍引用的文本 |
 | `editorTabsControl`、multi/single/no tabs | Editor title/tabs controls | 已具备 multiple/single/none、preview/pinned、置顶标签独立行、多行布局、dirty/conflict decoration、reorder、edge split，以及 Ctrl/Shift/键盘标签多选与批量关闭 |
 | `editorQuickAccess`、`editorTypePicker`、`editorsObserver` | `editorQuickAccess.ts`、`editorsObserver.ts`、`EditorParts` | 已具备 Show All Editors、按组关闭结果、Reopen With、跨组 MRU、recently closed 和编辑器前进/后退记录 |
 | `editorWithViewState`、placeholder、drop target、auto save、status | pane capability + group/part contributions | 已具备 JSON-safe view state、retry/close/binary fallback、内部/外部 DnD、自动保存、状态栏和屏幕阅读器模式说明 |
 | breadcrumbs model/picker/service | `breadcrumbs.ts`、`breadcrumbsModel.ts`、`breadcrumbsControl.ts`、`breadcrumbsPicker.ts` | 已具备文件与符号路径计算、显示、目录和文档符号选择器、按组注册及聚焦；符号会随光标与文档版本更新 |
 | `textEditor`、`textCodeEditor`、`textResourceEditor` | `workbench/browser/parts/editor` + `src/ash/editor` | Workbench pane 职责和调用方已迁入对应路径；模型、selection、undo、viewport 与 language runtime 继续由 editor 域负责 |
-| binary editor/diff | `workbench/browser/parts/editor/{binaryEditor,binaryDiffEditor}.ts` | 已具备有界只读 hex/ascii 预览及双侧二进制差异输入、布局与切换 |
+| binary editor/diff | `common/editor/binaryEditorModel.ts` + `browser/parts/editor/{binaryEditor,binaryDiffEditor}.ts` | 公共模型经注入的 `IFileService` 读取文件信息，窗格负责有界只读 hex/ascii 预览及双侧布局。超过 128 MiB 时先拒绝，再读字节；模型与窗格均通过现有实例化容器创建 |
 | side-by-side/text diff | `workbench/browser/parts/editor/{sideBySideEditor,textDiffEditor}.ts` 与 diff model/service | 已具备双侧/行内显示、差异命令和版本 gate；不复制 VS Code 继承树 |
 | editor commands/context/configuration | `editorCommandsContext.ts`、`editorConfiguration.ts`、action registry | 已具备资源/组参数及标签选中集合定向关闭、动态二进制编辑器选项、普通与差异文件关联、自动锁定分组与锁定状态恢复、大文件打开确认 |
 | Touch Bar navigation | `editorActions.ts`、Electron menu service 与 `media/{back,forward}-tb.png` | macOS 窗口的前进/后退按钮已接入命令与编辑器历史；仍需在 macOS 设备上验证实际显示与触发 |
 
 Workbench editor 宿主负责资源视图的“在哪个 group/window、以哪个 pane、何时激活或关闭”；具体 pane 负责“如何解释和编辑内容”。跨窗口服务只注册同源 UI 窗口、镜像样式并提供布局/卸载事件，不获得文件或模型权限。Binary Pane 只消费 `IFileService.readFileBytes`，TextFile service 只向文本模型发布经过验证的 UTF-8，二者不会共享可写模型。
+
+`common/editor` 的对应职责尚未全部迁入：`editorInput.ts`、`resourceEditorInput.ts`、`textResourceEditorInput.ts`、`sideBySideEditorInput.ts` 所需的输入解析与生命周期，目前仍由资源值对象、文件输入、解析服务和窗格承担。要继续迁移，需先统一资源请求到编辑器输入的创建与引用边界，不能同时引入两套输入 owner。`editorOptions.ts` 的选区操作还受下层契约阻塞：`CodeEditorWidget` 实现的是当前 `ICodeEditor`，尚不满足标准 `IEditor`。这些差异保持待处理，不能用文件存在或类型断言标为完成。已有 Ash 专属 `codeEditorId.ts` 本轮保留。
 
 新增 VS Code 对应能力前必须先判断基座所有者：需要稳定布局与事件时扩展 EditorPart/Group state；需要窗口时扩展 auxiliary-window service 与 scoped services；需要格式解释时新增 contribution/pane；需要 transaction、selection 或 language 状态时进入 `src/ash/editor`。只有出现至少两个真实调用方时，才把领域无关 DOM、Grid、取消或生命周期原语下沉到 `base`。
 

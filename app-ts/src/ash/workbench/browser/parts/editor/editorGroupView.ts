@@ -271,6 +271,7 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 		this.titleControl = this._register(new EditorTitleControl(
 			this.domNode,
 			titleDelegate,
+			this.model,
 			options.titleActions ? {
 				...options.titleActions,
 				contextKeyService: this.scopedContextKeyService,
