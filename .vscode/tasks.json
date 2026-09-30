@@ -2,7 +2,7 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"label": "Run app",
+			"label": "Run Ash App (Rust)",
 			"type": "shell",
 			"command": "just app",
 			"osx": {
@@ -24,7 +24,7 @@
 			}
 		},
 		{
-			"label": "Launch Ash Browser Vite",
+			"label": "Run Ash Web (UI Only)",
 			"type": "shell",
 			"command": "pnpm --dir app-ts dev:web",
 			"isBackground": true,
@@ -59,7 +59,7 @@
 			}
 		},
 		{
-			"label": "Launch Ash Browser with App Server",
+			"label": "Run Ash Server (Web)",
 			"type": "shell",
 			"command": "pnpm --dir app-ts dev:web:full",
 			"osx": {

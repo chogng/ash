@@ -16,7 +16,7 @@
 			}
 		},
 		{
-			"name": "Ash Desktop (Electron)",
+			"name": "Ash (Electron)",
 			"type": "node-terminal",
 			"request": "launch",
 			"command": "bash ./scripts/ash-desktop.sh",
@@ -30,7 +30,7 @@
 			}
 		},
 		{
-			"name": "Ash Desktop UI (connected)",
+			"name": "Ash (Electron, Frontend Watch Only)",
 			"type": "node-terminal",
 			"request": "launch",
 			"command": "bash ./scripts/ash-desktop.sh --connected",
@@ -44,19 +44,19 @@
 			}
 		},
 		{
-			"name": "Ash Browser UI (TypeScript only)",
+			"name": "Ash Web (Chrome, UI Only)",
 			"type": "chrome",
 			"request": "launch",
 			"url": "http://127.0.0.1:5173/",
 			"webRoot": "${workspaceFolder}/app-ts/src/ash/code",
-			"preLaunchTask": "Launch Ash Browser Vite",
+			"preLaunchTask": "Run Ash Web (UI Only)",
 			"presentation": {
 				"group": "1_ash_desktop",
 				"order": 3
 			}
 		},
 		{
-			"name": "App (Rust Desktop)",
+			"name": "Ash App (Rust)",
 			"type": "node-terminal",
 			"request": "launch",
 			"command": "just app",

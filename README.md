@@ -74,8 +74,10 @@ just ash exec "summarize the current changes"
 just ash-desktop
 ```
 
-In VS Code, select `Ash Desktop (Electron)` and press F5 to run the same command. The three
-product groups are `Ash Code (TUI)`, `Ash Desktop (Electron)`, and `App (Rust Desktop)`.
+In VS Code, select `Ash (Electron)` and press F5 to run the same command. The three
+product groups are `Ash Code (TUI)`, `Ash (Electron)`, and `Ash App (Rust)`.
+`Ash (Electron, Frontend Watch Only)` also runs the Rust backend but only watches frontend
+and Electron host changes. `Ash Web (Chrome, UI Only)` runs the browser frontend without a backend.
 
 The Desktop command is shared by both Workbench build modes. The default mode is `code`; build
 matrix checks can set `ASH_WORKBENCH_MODE=academic` without changing the command name.

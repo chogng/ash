@@ -22,11 +22,11 @@ pnpm install
 pnpm dev:desktop
 ```
 
-VS Code 的 `Ash Desktop (Electron)` F5 配置运行 `just ash-desktop`；在 macOS 上先由
+VS Code 的 `Ash (Electron)` F5 配置运行 `just ash-desktop`；在 macOS 上先由
 `uv run --python 3.12` 选择构建脚本使用的 Python。TypeScript Renderer 和 CSS 改动由 Vite 热更新，
 Main 与 Preload 改动只重启 Electron。后端包输入未变化时直接复用，
 Rust 源码或 Cargo 输入变化时由后端 watcher 构建，并仅在新二进制发布后切换 App Server。
-`Ash Desktop UI (connected)` 会先准备开发后端包，然后跳过后端监听；已有服务端与当前构建相同时复用，否则切换到当前构建。
+`Ash (Electron, Frontend Watch Only)` 同样启动完整桌面端并连接 Rust 后端，但只监听前端及 Electron 宿主变化，不监听后端源码；已有服务端与当前构建相同时复用，否则切换到当前构建。
 
 只开发桌面界面、但需要检查 Electron 特有的窗口、标题栏、菜单和原生交互时，运行：
 
@@ -42,6 +42,7 @@ pnpm dev:desktop:ui
 pnpm dev:web
 ```
 
+VS Code 的 `Ash Web (Chrome, UI Only)` F5 配置会执行同一条命令并打开 Chrome。
 该命令只同步生成资源并启动监听 `127.0.0.1:5173` 的 Vite 开发服务器；打开
 `http://127.0.0.1:5173/` 即会进入当前产品版本的 Browser Workbench。该模式不编译或启动 Rust。
 Browser Workbench 使用 disconnected API，因此 UI 可以独立开发；Chat、Explorer、Git、
