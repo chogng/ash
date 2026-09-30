@@ -419,16 +419,7 @@ fn shared_directory_waiters_do_not_occupy_workers_needed_by_other_directories() 
         None,
     ))
     .unwrap();
-    let shared = Arc::new(DirRuntime::default());
-    shared.opening.lock().unwrap().running = true;
-    registry.servers.lock().unwrap().insert(
-        DirRuntimeKey {
-            dir_root: Some(dunce::canonicalize(blocked.path()).unwrap()),
-            dir_grant_source: GrantSource::UserConfig,
-            product_services_identity: None,
-        },
-        Arc::clone(&shared),
-    );
+    let shared = blocked_directory(&registry, blocked.path());
     let cancellation = CancellationSource::new();
     let token = cancellation.token();
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -445,7 +436,144 @@ fn shared_directory_waiters_do_not_occupy_workers_needed_by_other_directories() 
         cancellation.cancel();
         assert!(tokio::time::timeout(Duration::from_secs(3), waits).await.unwrap().iter().all(Result::is_err));
         assert_eq!(registry.startup.waiters.load(Ordering::Acquire), 0);
+        assert!(matches!(&*shared.opening.lock().unwrap(), DirectoryOpening::Running { waiters } if waiters.is_empty()));
         assert!(Arc::ptr_eq(&found, &registry.server_for(registry.local_options(other.path())).unwrap()));
     });
     assert!(finish_directory(&shared, Err("fixture initialization finished".into())).is_err());
+}
+
+fn blocked_directory(registry: &ProfileAppServerRegistry, root: &Path) -> Arc<DirRuntime> {
+    let directory = Arc::new(DirRuntime::default());
+    *directory.opening.lock().unwrap() = DirectoryOpening::Running {
+        waiters: BTreeMap::new(),
+    };
+    registry.servers.lock().unwrap().insert(
+        DirRuntimeKey {
+            dir_root: Some(dunce::canonicalize(root).unwrap()),
+            dir_grant_source: GrantSource::UserConfig,
+            product_services_identity: None,
+        },
+        Arc::clone(&directory),
+    );
+    directory
+}
+
+async fn wait_for_directory_waiters(directory: &DirRuntime, count: usize) {
+    tokio::time::timeout(Duration::from_secs(3), async {
+        while !matches!(&*directory.opening.lock().unwrap(), DirectoryOpening::Running { waiters } if waiters.len() == count) {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("directory requests did not register");
+}
+
+#[tokio::test]
+async fn cancelling_directory_wait_removes_registration_without_further_traffic() {
+    let profile = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let registry = ProfileAppServerRegistry::open(ConnectionOptions::new(
+        profile.path(),
+        None,
+        GrantSource::HostConfiguration,
+        None,
+    ))
+    .unwrap();
+    let directory = blocked_directory(&registry, root.path());
+    let cancellation = ash_async_utils::CancellationSource::new();
+    let token = cancellation.token();
+    let mut wait = Box::pin(registry.open_local_session(root.path(), &token));
+    tokio::select! {
+        _ = &mut wait => panic!("initialization completed before release"),
+        () = wait_for_directory_waiters(&directory, 1) => {}
+    }
+
+    cancellation.cancel();
+    assert_eq!(
+        wait.await.err().as_deref(),
+        Some("Directory connection closed")
+    );
+
+    let opening = directory.opening.lock().unwrap();
+    assert!(matches!(&*opening, DirectoryOpening::Running { waiters } if waiters.is_empty()));
+    assert_eq!(registry.startup.waiters.load(Ordering::Acquire), 0);
+}
+
+#[tokio::test]
+async fn dropping_directory_wait_removes_registration_and_preserves_other_waiters() {
+    let profile = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let registry = ProfileAppServerRegistry::open(ConnectionOptions::new(
+        profile.path(),
+        None,
+        GrantSource::HostConfiguration,
+        None,
+    ))
+    .unwrap();
+    let directory = blocked_directory(&registry, root.path());
+    let cancellation = ash_async_utils::CancellationSource::new();
+    let token = cancellation.token();
+    let mut abandoned = Box::pin(registry.open_local_session(root.path(), &token));
+    let mut remaining = Box::pin(registry.open_local_session(root.path(), &token));
+    tokio::select! {
+        _ = &mut abandoned => panic!("initialization completed before release"),
+        _ = &mut remaining => panic!("initialization completed before release"),
+        () = wait_for_directory_waiters(&directory, 2) => {}
+    }
+
+    drop(abandoned);
+
+    assert!(
+        matches!(&*directory.opening.lock().unwrap(), DirectoryOpening::Running { waiters } if waiters.len() == 1)
+    );
+    assert_eq!(registry.startup.waiters.load(Ordering::Acquire), 1);
+    let server = Arc::new(crate::server::request_dispatch::tests::server());
+    finish_directory(&directory, Ok(Arc::clone(&server))).unwrap();
+    assert!(Arc::ptr_eq(&remaining.await.unwrap(), &server));
+    assert_eq!(registry.startup.waiters.load(Ordering::Acquire), 0);
+}
+
+#[tokio::test]
+async fn failed_directory_initialization_completes_waiters_and_allows_a_new_attempt() {
+    let profile = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let registry = ProfileAppServerRegistry::open(ConnectionOptions::new(
+        profile.path(),
+        None,
+        GrantSource::HostConfiguration,
+        None,
+    ))
+    .unwrap();
+    let directory = blocked_directory(&registry, root.path());
+    let cancellation = ash_async_utils::CancellationSource::new();
+    let token = cancellation.token();
+    let mut wait = Box::pin(registry.open_local_session(root.path(), &token));
+    tokio::select! {
+        _ = &mut wait => panic!("initialization completed before release"),
+        () = wait_for_directory_waiters(&directory, 1) => {}
+    }
+
+    assert!(finish_directory(&directory, Err("initialization failed".into())).is_err());
+    assert_eq!(wait.await.err().as_deref(), Some("initialization failed"));
+    assert!(
+        matches!(&*directory.opening.lock().unwrap(), DirectoryOpening::Failed(error) if error == "initialization failed")
+    );
+    assert_eq!(registry.startup.waiters.load(Ordering::Acquire), 0);
+
+    let server = tokio::time::timeout(
+        Duration::from_secs(3),
+        registry.open_local_session(root.path(), &token),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert!(matches!(
+        *directory.opening.lock().unwrap(),
+        DirectoryOpening::Idle
+    ));
+    let found = registry
+        .server_for(registry.local_options(root.path()))
+        .unwrap();
+    assert!(Arc::ptr_eq(&server, &found));
+    assert_eq!(registry.ready_servers().unwrap().len(), 1);
 }

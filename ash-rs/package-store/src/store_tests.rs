@@ -10,6 +10,32 @@ use tempfile::TempDir;
 use super::PackageLease;
 use super::PackageStore;
 use super::acquire_package_lease_for_executable;
+use super::package_build_id;
+
+#[test]
+fn package_build_id_preserves_existing_hash_for_nested_reordered_objects() {
+    // This digest pins the existing package identity format, including JSON escaping,
+    // Unicode, nested objects in arrays, and the separators around file identities.
+    let identity: serde_json::Value = serde_json::from_str(
+        r#"{"z":[{"β":"前\n\"\\","a":true},{"z":null,"a":[-3,1.5]}],"a":{"z":"last","a":"first"}}"#,
+    )
+    .unwrap();
+    let reordered: serde_json::Value = serde_json::from_str(
+        r#"{"a":{"a":"first","z":"last"},"z":[{"a":true,"β":"前\n\"\\"},{"a":[-3,1.5],"z":null}]}"#,
+    )
+    .unwrap();
+    let files = BTreeMap::from([("artifact".to_string(), "0123456789abcdef".to_string())]);
+    let expected = "sha256:8023fb146ce312b95eacb742c430d7898a20e55f7d31a7bafdb99ab4a2835dc2";
+
+    assert_eq!(
+        package_build_id(identity.clone(), &files).unwrap(),
+        expected
+    );
+    assert_eq!(package_build_id(reordered, &files).unwrap(), expected);
+    let mut reordered_array = identity;
+    reordered_array["z"].as_array_mut().unwrap().reverse();
+    assert_ne!(package_build_id(reordered_array, &files).unwrap(), expected);
+}
 
 #[test]
 fn publishes_numbered_manifests_and_retains_current_and_rollback_packages() {

@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
 use std::sync::OnceLock;
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
@@ -25,7 +26,10 @@ use ash_app_server_daemon::GrantSource;
 use ash_protocol::SessionExecutionTarget;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
-use ash_remote::{RemoteDirPath, RemoteProfile, SshHost, SshTarget};
+use ash_remote::RemoteDirPath;
+use ash_remote::RemoteProfile;
+use ash_remote::SshHost;
+use ash_remote::SshTarget;
 use ash_remote_profile_store::RemoteConnectionProfileStore;
 
 const MAX_PRODUCT_SERVICES_IDENTITY_BYTES: u64 = 1024 * 1024;
@@ -45,16 +49,38 @@ struct DirRuntime {
 }
 
 #[derive(Default)]
-struct DirectoryOpening {
-    running: bool,
-    failure: Option<String>,
-    waiters: Vec<tokio::sync::oneshot::Sender<Result<Arc<AppServer>, String>>>,
+enum DirectoryOpening {
+    #[default]
+    Idle,
+    Running {
+        waiters: BTreeMap<u64, tokio::sync::oneshot::Sender<Result<Arc<AppServer>, String>>>,
+    },
+    Failed(String),
 }
 
-struct DirectoryAdmission(Arc<AtomicUsize>);
+enum DirectoryWaiter {
+    Queued(tokio::sync::oneshot::Sender<Result<Arc<AppServer>, String>>),
+    Registered { directory: Arc<DirRuntime>, id: u64 },
+    Released,
+}
+
+struct DirectoryAdmission {
+    count: Arc<AtomicUsize>,
+    waiter: Arc<Mutex<DirectoryWaiter>>,
+}
+
 impl Drop for DirectoryAdmission {
     fn drop(&mut self) {
-        self.0.fetch_sub(1, Ordering::AcqRel);
+        let waiter =
+            std::mem::replace(&mut *self.waiter.lock().unwrap(), DirectoryWaiter::Released);
+        // Release the registration lock before acquiring the directory lock. Admission
+        // takes them in the opposite order, so dropping a wait cannot deadlock startup.
+        if let DirectoryWaiter::Registered { directory, id } = waiter
+            && let DirectoryOpening::Running { waiters } = &mut *directory.opening.lock().unwrap()
+        {
+            waiters.remove(&id);
+        }
+        self.count.fetch_sub(1, Ordering::AcqRel);
     }
 }
 
@@ -118,15 +144,20 @@ impl ProfileAppServerRegistry {
                 (count < 64).then_some(count + 1)
             })
             .map_err(|_| "Directory startup waiter capacity exhausted".to_string())?;
-        let _admission = DirectoryAdmission(Arc::clone(&self.startup.waiters));
         let (response, received) = tokio::sync::oneshot::channel();
+        let waiter = Arc::new(Mutex::new(DirectoryWaiter::Queued(response)));
+        let _admission = DirectoryAdmission {
+            count: Arc::clone(&self.startup.waiters),
+            waiter: Arc::clone(&waiter),
+        };
         self.startup
             .input
             .as_ref()
             .expect("registry owns startup sender")
             .try_send(DirectoryRequest {
                 options: self.local_options(root),
-                response,
+                waiter,
+                id: self.startup.next_waiter_id.fetch_add(1, Ordering::Relaxed),
             })
             .map_err(|_| "Directory startup capacity exhausted".to_string())?;
         received
@@ -244,7 +275,8 @@ impl ProfileAppServerRegistry {
 
 struct DirectoryRequest {
     options: ConnectionOptions,
-    response: tokio::sync::oneshot::Sender<Result<Arc<AppServer>, String>>,
+    waiter: Arc<Mutex<DirectoryWaiter>>,
+    id: u64,
 }
 
 /// Initialization belongs to the profile; a renderer owns only its cancellable wait. This
@@ -253,6 +285,7 @@ struct DirectoryStartup {
     input: Option<mpsc::SyncSender<DirectoryRequest>>,
     workers: Vec<thread::JoinHandle<()>>,
     waiters: Arc<AtomicUsize>,
+    next_waiter_id: AtomicU64,
 }
 
 impl DirectoryStartup {
@@ -267,6 +300,7 @@ impl DirectoryStartup {
             input: Some(input),
             workers: Vec::new(),
             waiters: Arc::new(AtomicUsize::new(0)),
+            next_waiter_id: AtomicU64::new(0),
         };
         for index in 0..4 {
             let incoming = Arc::clone(&incoming);
@@ -281,7 +315,8 @@ impl DirectoryStartup {
                             let Ok(request) = incoming.lock().unwrap().recv() else {
                                 break;
                             };
-                            if request.response.is_closed() {
+                            if matches!(*request.waiter.lock().unwrap(), DirectoryWaiter::Released)
+                            {
                                 continue;
                             }
                             open_queued_directory(&host, &profile, &servers, request);
@@ -343,13 +378,20 @@ fn finish_directory(
     result: Result<Arc<AppServer>, String>,
 ) -> Result<Arc<AppServer>, String> {
     let mut opening = runtime.opening.lock().unwrap();
+    let DirectoryOpening::Running { waiters } =
+        std::mem::replace(&mut *opening, DirectoryOpening::Idle)
+    else {
+        unreachable!("only an active directory initialization can complete");
+    };
+    // The attempt state owns pending subscribers. A successful service is published
+    // once separately, so profile queries never wait for a cold directory's startup.
     let result = result.map(|server| Arc::clone(runtime.server.get_or_init(|| server)));
-    opening.running = false;
-    opening.failure = result.as_ref().err().cloned();
-    let waiters = std::mem::take(&mut opening.waiters);
+    if let Err(error) = &result {
+        *opening = DirectoryOpening::Failed(error.clone());
+    }
     runtime.changed.notify_all();
     drop(opening);
-    for waiter in waiters {
+    for waiter in waiters.into_values() {
         let _ = waiter.send(result.clone());
     }
     result
@@ -366,18 +408,20 @@ fn server_for(
         .opening
         .lock()
         .map_err(|_| "Directory startup lock poisoned".to_string())?;
-    if opening.running {
-        while opening.running {
+    if matches!(*opening, DirectoryOpening::Running { .. }) {
+        while matches!(*opening, DirectoryOpening::Running { .. }) {
             opening = runtime.changed.wait(opening).unwrap();
         }
-        if let Some(error) = &opening.failure {
+        if let DirectoryOpening::Failed(error) = &*opening {
             return Err(error.clone());
         }
     }
     if let Some(server) = runtime.server.get() {
         return Ok(Arc::clone(server));
     }
-    opening.running = true;
+    *opening = DirectoryOpening::Running {
+        waiters: BTreeMap::new(),
+    };
     drop(opening);
     finish_directory(
         &runtime,
@@ -394,27 +438,53 @@ fn open_queued_directory(
     let (runtime, options) = match resolve_directory(host, servers, request.options) {
         Ok(resolved) => resolved,
         Err(error) => {
-            let _ = request.response.send(Err(error));
+            let waiter = std::mem::replace(
+                &mut *request.waiter.lock().unwrap(),
+                DirectoryWaiter::Released,
+            );
+            if let DirectoryWaiter::Queued(response) = waiter {
+                let _ = response.send(Err(error));
+            }
             return;
         }
     };
     let mut opening = runtime.opening.lock().unwrap();
+    let mut waiter = request.waiter.lock().unwrap();
+    let response = match std::mem::replace(&mut *waiter, DirectoryWaiter::Released) {
+        DirectoryWaiter::Queued(response) => response,
+        DirectoryWaiter::Released => return,
+        DirectoryWaiter::Registered { .. } => unreachable!("directory request registers once"),
+    };
     if let Some(server) = runtime.server.get() {
-        let _ = request.response.send(Ok(Arc::clone(server)));
+        let _ = response.send(Ok(Arc::clone(server)));
         return;
     }
-    opening.waiters.retain(|waiter| !waiter.is_closed());
-    opening.waiters.push(request.response);
-    if opening.running {
-        return;
-    }
-    // Same-directory subscribers attach to its result; they never occupy startup workers.
-    opening.running = true;
+    let start = match &mut *opening {
+        DirectoryOpening::Running { waiters } => {
+            waiters.insert(request.id, response);
+            false
+        }
+        DirectoryOpening::Idle | DirectoryOpening::Failed(_) => {
+            *opening = DirectoryOpening::Running {
+                waiters: BTreeMap::from([(request.id, response)]),
+            };
+            true
+        }
+    };
+    *waiter = DirectoryWaiter::Registered {
+        directory: Arc::clone(&runtime),
+        id: request.id,
+    };
+    drop(waiter);
     drop(opening);
-    let _ = finish_directory(
-        &runtime,
-        open_server_with_profile_runtime(&options, Arc::clone(profile_runtime)).map(Arc::new),
-    );
+    // Initialization belongs to the profile even after its first subscriber leaves;
+    // subsequent subscribers attach without occupying additional startup workers.
+    if start {
+        let _ = finish_directory(
+            &runtime,
+            open_server_with_profile_runtime(&options, Arc::clone(profile_runtime)).map(Arc::new),
+        );
+    }
 }
 
 impl ash_automation::AutomationExecutor for ProfileAppServerRegistry {

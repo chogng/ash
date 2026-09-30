@@ -377,11 +377,11 @@ fn validate_package(root: &Path) -> io::Result<PackageMetadata> {
     let metadata_bytes = read_bounded_file(&root.join(METADATA_FILE), MAX_METADATA_BYTES)?;
     let metadata: PackageMetadata = serde_json::from_slice(&metadata_bytes).map_err(invalid)?;
     let mut identity: Value = serde_json::from_slice(&metadata_bytes).map_err(invalid)?;
-    let identity = identity
+    let fields = identity
         .as_object_mut()
         .ok_or_else(|| invalid("package metadata is not an object"))?;
-    identity.remove("buildId");
-    identity.remove("files");
+    fields.remove("buildId");
+    fields.remove("files");
     validate_version(&metadata.version)?;
     validate_segment(&metadata.target, "target")?;
     validate_segment(&metadata.javascript_runtime.kind, "runtime kind")?;
@@ -417,7 +417,7 @@ fn validate_package(root: &Path) -> io::Result<PackageMetadata> {
             )));
         }
     }
-    let expected_build_id = package_build_id(&Value::Object(identity.clone()), &metadata.files)?;
+    let expected_build_id = package_build_id(identity, &metadata.files)?;
     if metadata.build_id != expected_build_id {
         return Err(invalid(
             "package build identity does not match its complete file manifest",
@@ -426,12 +426,11 @@ fn validate_package(root: &Path) -> io::Result<PackageMetadata> {
     Ok(metadata)
 }
 
-fn package_build_id(identity: &Value, files: &BTreeMap<String, String>) -> io::Result<String> {
+fn package_build_id(mut identity: Value, files: &BTreeMap<String, String>) -> io::Result<String> {
     let mut digest = Sha256::new();
     digest.update(b"ash-package-build-v2\0");
-    let mut canonical = Vec::new();
-    write_canonical_json(identity, &mut canonical)?;
-    digest.update(canonical);
+    identity.sort_all_objects();
+    digest.update(serde_json::to_vec(&identity).map_err(invalid)?);
     digest.update(b"\0");
     for (path, file_digest) in files {
         update_field(&mut digest, path);
@@ -443,37 +442,6 @@ fn package_build_id(identity: &Value, files: &BTreeMap<String, String>) -> io::R
 fn update_field(digest: &mut Sha256, value: &str) {
     digest.update(value.as_bytes());
     digest.update(b"\0");
-}
-
-fn write_canonical_json(value: &Value, output: &mut Vec<u8>) -> io::Result<()> {
-    match value {
-        Value::Array(values) => {
-            output.push(b'[');
-            for (index, value) in values.iter().enumerate() {
-                if index > 0 {
-                    output.push(b',');
-                }
-                write_canonical_json(value, output)?;
-            }
-            output.push(b']');
-        }
-        Value::Object(values) => {
-            output.push(b'{');
-            let mut entries = values.iter().collect::<Vec<_>>();
-            entries.sort_by(|(left, _), (right, _)| left.cmp(right));
-            for (index, (key, value)) in entries.into_iter().enumerate() {
-                if index > 0 {
-                    output.push(b',');
-                }
-                serde_json::to_writer(&mut *output, key).map_err(invalid)?;
-                output.push(b':');
-                write_canonical_json(value, output)?;
-            }
-            output.push(b'}');
-        }
-        _ => serde_json::to_writer(output, value).map_err(invalid)?,
-    }
-    Ok(())
 }
 
 fn regular_files(root: &Path) -> io::Result<BTreeMap<String, PathBuf>> {
