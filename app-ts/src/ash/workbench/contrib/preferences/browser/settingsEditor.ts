@@ -5,21 +5,23 @@ import type { IDimension } from '../../../../base/browser/dom.js';
 import type { IContextViewProvider } from '../../../../base/browser/ui/contextview/contextview.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
-import type { IDirPermissionsService } from '../../../../platform/dirPermissions/common/dirPermissionsService.js';
-import type { IRendererHost } from '../../../../platform/renderer/common/rendererHost.js';
-import { ConfigurationTarget, type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
+import { IDirPermissionsService } from '../../../../platform/dirPermissions/common/dirPermissionsService.js';
+import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
+import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import type { IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { DESKTOP_UPDATE_POLICY_SETTING, type DesktopUpdatePolicy } from '../../../../platform/update/common/updateService.js';
 import { localize } from '../../../../nls.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
-import type { IChatService } from '../../../services/chat/common/chatService.js';
+import { IChatService } from '../../../services/chat/common/chatService.js';
+import { IRemoteAgentService } from '../../../services/remote/common/remoteAgentService.js';
 import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import { GitConfiguration, type GitAutofetch } from '../../../contrib/git/common/gitConfiguration.js';
-import type { IGitService } from '../../../contrib/git/common/gitService.js';
-import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
+import { IGitService } from '../../../contrib/git/common/gitService.js';
+import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import type { ISetting, ISettingsEditorModel } from '../../../services/preferences/common/preferences.js';
 import { isSettingsEditorInput } from '../../../services/preferences/common/settingsEditorInput.js';
 import { DefaultSettings, SettingsEditorModel } from '../../../services/preferences/common/settingsModels.js';
@@ -64,15 +66,16 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 	private visible = false;
 
 	constructor(
-		clipboardService: IClipboardService,
-		configurationService: IConfigurationService,
-		contextMenuProvider: IContextMenuProvider,
-		contextViewProvider: IContextViewProvider,
-		localizationService: ILocalizationService,
-		gitService: IGitService,
-		private readonly chatService: IChatService,
-		private readonly rendererHost: IRendererHost,
-		private readonly dirPermissionsService: IDirPermissionsService,
+		@IClipboardService clipboardService: IClipboardService,
+		@IConfigurationService configurationService: IConfigurationService,
+		@IContextMenuService contextMenuProvider: IContextMenuProvider,
+		@IContextViewService contextViewProvider: IContextViewProvider,
+		@ILocalizationService localizationService: ILocalizationService,
+		@IGitService gitService: IGitService,
+		@IChatService private readonly chatService: IChatService,
+		@IAgentCapabilitiesService private readonly agentCapabilitiesService: IAgentCapabilitiesService,
+		@IRemoteAgentService private readonly remoteAgentService: IRemoteAgentService,
+		@IDirPermissionsService private readonly dirPermissionsService: IDirPermissionsService,
 	) {
 		super();
 		this.configurationService = configurationService;
@@ -193,7 +196,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 			contextMenuProvider: this.contextMenuProvider,
 			contextViewProvider: this.contextViewProvider,
 		}));
-		this.agentCapabilitiesSettings = this._register(new AgentCapabilitiesSettings(settingsContent, this.rendererHost.agentCapabilities, this.rendererHost.appServer, this.dirPermissionsService, this.localizationService));
+		this.agentCapabilitiesSettings = this._register(new AgentCapabilitiesSettings(settingsContent, this.agentCapabilitiesService, this.remoteAgentService, this.dirPermissionsService, this.localizationService));
 		this.renderCategory(initialCategory);
 
 		this._register(this.localizationService.onDidChange(() => this.updateLocalizedChrome()));

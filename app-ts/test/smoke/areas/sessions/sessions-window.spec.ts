@@ -1078,6 +1078,10 @@ test('Sessions titlebar shares navigation selection and hover colors and respond
 	test.skip(target.workbenchMode !== 'code');
 	const workbenchToggle = workbench.page.locator('.ash-titlebar-left-actions [data-action-id="workbench.action.toggleSideBar"] button');
 	await expect(workbenchToggle).toHaveCSS('border-radius', '4px');
+	await workbenchToggle.hover();
+	await expect(workbench.page.getByRole('tooltip')).toBeVisible();
+	await expect(workbench.page.locator('.ash-context-view-hover')).toHaveCSS('border-radius', '6px');
+	await expect.poll(() => workbench.page.locator('.ash-context-view-hover').evaluate(element => getComputedStyle(element, '::before').content)).toBe('""');
 	await workbench.page.mouse.move(400, 180);
 	await expect(workbenchToggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 	let page = workbench.page;
@@ -1110,6 +1114,9 @@ test('Sessions titlebar shares navigation selection and hover colors and respond
 		await expect(menu).toHaveCSS('background-color', selectedBackground);
 		await toggle.hover();
 		await expect(toggle).toHaveCSS('background-color', selectedBackground);
+		await expect(page.getByRole('tooltip')).toHaveText('Hide sidebar');
+		await expect(page.locator('.ash-context-view-hover')).toHaveCSS('border-radius', '12px');
+		await expect.poll(() => page.locator('.ash-context-view-hover').evaluate(element => getComputedStyle(element, '::before').content)).toBe('none');
 		await toggle.click();
 		await expect(sidebar).toBeHidden();
 		await expect(toggle).toHaveAttribute('aria-pressed', 'false');

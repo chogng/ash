@@ -8,7 +8,8 @@ import type { IContextMenuService as ContextMenuService } from '../../../../../p
 import type { ILocalizationService } from '../../../../../workbench/services/localization/common/localizationService.js';
 import type { IGitService } from '../../../../../workbench/contrib/git/common/gitService.js';
 import type { IChatService } from '../../../../../workbench/services/chat/common/chatService.js';
-import type { IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
+import type { IRemoteAgentService } from '../../../../../workbench/services/remote/common/remoteAgentService.js';
+import type { RemoteConnectionState } from '../../../../../platform/remote/common/remote.js';
 import type { IDirPermissionsService } from '../../../../../platform/dirPermissions/common/dirPermissionsService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>', {
@@ -48,7 +49,7 @@ const { IConfigurationService: ConfigurationServiceId } = await import('../../..
 const { IContextMenuService } = await import('../../../../../platform/contextview/browser/contextView.js');
 const { IContextViewService } = await import('../../../../../platform/contextview/browser/contextView.js');
 const { BrowserContextViewService } = await import('../../../../../platform/contextview/browser/contextViewService.js');
-const { ServiceContainer, ServiceConstructionDescriptor } = await import('../../../../../platform/instantiation/common/instantiation.js');
+const { ServiceContainer } = await import('../../../../../platform/instantiation/common/instantiation.js');
 const { Registry } = await import('../../../../../platform/registry/common/platform.js');
 const { darkColorTheme } = await import('../../../../../platform/theme/common/colorTheme.js');
 const { AccessibilityConfiguration } = await import('../../../../../platform/accessibility/common/accessibility.js');
@@ -66,22 +67,21 @@ const { ScmConfiguration } = await import('../../../../../workbench/contrib/scm/
 const { IGitService: GitServiceId } = await import('../../../../../workbench/contrib/git/common/gitService.js');
 const { IChatService: ChatServiceId } = await import('../../../../../workbench/services/chat/common/chatService.js');
 await import('../../../../../workbench/services/chat/common/modelCatalog.js');
-const { IRendererHostService } = await import('../../../../../platform/renderer/common/rendererHost.js');
+const { IAgentCapabilitiesService } = await import('../../../../../platform/agentCapabilities/common/agentCapabilitiesService.js');
+const { IRemoteAgentService: RemoteAgentServiceId } = await import('../../../../../workbench/services/remote/common/remoteAgentService.js');
 const { IDirPermissionsService: DirPermissionsServiceId } = await import('../../../../../platform/dirPermissions/common/dirPermissionsService.js');
 const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(ConfigurationExtensions.Configuration);
 const { EditorPart } = await import('../../../../../workbench/browser/parts/editor/editorPart.js');
-const { EditorPaneMatch } = await import('../../../../../workbench/browser/parts/editor/editorPane.js');
-const { EditorPaneRegistry } = await import('../../../../browser/editor.js');
+const { EditorPaneRegistry, EditorPanes } = await import('../../../../browser/editor.js');
 const { SettingsSearchQuery } = await import('../../../../../workbench/contrib/preferences/browser/settingsSearch.js');
 const { createSettingsLayout, SettingsCategories, SettingsLayout } = await import('../../../../../workbench/contrib/preferences/browser/settingsLayout.js');
-const { SettingsEditor, SettingsEditorId } = await import('../../../../../workbench/contrib/preferences/browser/settingsEditor.js');
+const { SettingsEditorId } = await import('../../../../../workbench/contrib/preferences/browser/settingsEditor.js');
 const { ModelsSettings } = await import('../../../../../workbench/contrib/preferences/browser/modelsSettings.js');
 const { SettingsTree } = await import('../../../../../workbench/contrib/preferences/browser/settingsTree.js');
 const { SettingsTreeModel } = await import('../../../../../workbench/contrib/preferences/browser/settingsTreeModels.js');
 const { PreferencesService } = await import('../../../../../workbench/services/preferences/browser/preferencesService.js');
 const { BrowserEditorService } = await import('../../../../../workbench/services/editor/browser/browserEditorService.js');
 const { ILocalizationService: LocalizationServiceId } = await import('../../../../../workbench/services/localization/common/localizationService.js');
-const { isSettingsEditorInput } = await import('../../../../../workbench/services/preferences/common/settingsEditorInput.js');
 const { DefaultSettings, SettingsEditorModel } = await import('../../../../../workbench/services/preferences/common/settingsModels.js');
 const { WorkbenchConfigurationService } = await import('../../../../../workbench/services/configuration/browser/configurationService.js');
 const { builtinLanguagePackCatalogs } = await import('../../../../../workbench/services/localization/common/localizationCatalogs.js');
@@ -463,37 +463,35 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(LocalizationServiceId, localizationService);
 	services.registerInstance(GitServiceId, gitService);
 	services.registerInstance(ChatServiceId, chatService);
+	const descriptor = EditorPanes.get(SettingsEditorId);
+	assert.ok(descriptor);
+	assert.throws(() => descriptor.create({ instantiationService: services }), /Unknown service: agentCapabilitiesService/);
 	let capabilityReads = 0;
-	services.registerInstance(IRendererHostService, {
-		agentCapabilities: {
-			read: async () => {
-				capabilityReads++;
-				return {
-					tools: [{ name: 'read_file', description: 'Read a file.', source: 'local', sourceDetails: ['ash-app-server'], exposure: 'direct', authority: 'directoryRead' }],
-					localProcessSandboxConfigured: true,
-					sandboxBackends: ['mxc'],
-					directoryGrantsReadable: true,
-				};
-			},
+	services.registerInstance(IAgentCapabilitiesService, {
+		read: async () => {
+			capabilityReads++;
+			return {
+				tools: [{ name: 'read_file', description: 'Read a file.', source: 'local', sourceDetails: ['ash-app-server'], exposure: 'direct', authority: 'directoryRead' }],
+				localProcessSandboxConfigured: true,
+				sandboxBackends: ['mxc'],
+				directoryGrantsReadable: true,
+			};
 		},
-		appServer: {
-			onConnectionState: () => ({ dispose() {} }),
-		},
-	} as unknown as IRendererHost);
+	});
+	assert.throws(() => descriptor.create({ instantiationService: services }), /Unknown service: remoteAgentService/);
+	const connectionChanged = disposables.add(new Emitter<RemoteConnectionState>());
+	services.registerInstance(RemoteAgentServiceId, {
+		onDidChangeConnectionState: connectionChanged.event,
+	} as IRemoteAgentService);
 	services.registerInstance(DirPermissionsServiceId, {
 		onDidChangePermissions: Event.None,
 		list: async () => ({ revision: 1, entries: [{ dir: 'dir-1', path: '/workspace', permissions: ['readFiles'] }] }),
 	} as unknown as IDirPermissionsService);
 	const instantiationService = services;
 	const editorPanes = new EditorPaneRegistry();
-	disposables.add(editorPanes.registerEditorPane({
-		id: SettingsEditorId,
-		name: 'Settings',
-		canOpen: input => isSettingsEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
-		create: () => instantiationService.createInstance(new ServiceConstructionDescriptor(SettingsEditor, {
-			serviceDependencies: [ClipboardServiceId, ConfigurationServiceId, IContextMenuService, IContextViewService, LocalizationServiceId, GitServiceId, ChatServiceId, IRendererHostService, DirPermissionsServiceId],
-		})),
-	}));
+	const descriptor = EditorPanes.getEditorPanes().find(candidate => candidate.id === SettingsEditorId);
+	assert.ok(descriptor);
+	disposables.add(editorPanes.registerEditorPane(descriptor));
 	const editor = disposables.add(new EditorPart(root, { registry: editorPanes, instantiationService }));
 	const preferences = disposables.add(new PreferencesService(() => new BrowserEditorService(editor)));
 
@@ -589,6 +587,13 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	root.querySelector<HTMLElement>('[data-settings-category-id="tools"]')?.click();
 	await nextTurn();
 	assert.equal(capabilityReads, 3);
+	connectionChanged.fire('disconnected');
+	assert.equal(root.querySelector('.ash-agent-capabilities-status')?.textContent, 'App Server is disconnected.');
+	assert.equal(root.querySelector('.ash-agent-capabilities-list'), null);
+	connectionChanged.fire('connected');
+	await nextTurn();
+	assert.equal(capabilityReads, 4);
+	assert.match(root.querySelector('.ash-agent-capabilities-settings')?.textContent ?? '', /read_file/);
 	root.querySelector<HTMLElement>('[data-settings-category-id="models"]')?.click();
 	await nextTurn();
 	assert.equal(root.querySelector('[data-settings-container]')?.getAttribute('data-active-settings-category'), 'models');

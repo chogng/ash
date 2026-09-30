@@ -38,6 +38,7 @@ import { IDebugAdapterProcessService } from "../../platform/debug/common/debugAd
 import { IExtensionHostApi } from "../../platform/extensionHost/common/extensionHostApi.js";
 import { ISyntaxApi } from "../../platform/syntax/common/syntaxApi.js";
 import { IRendererHostService, type IRendererHost } from "../../platform/renderer/common/rendererHost.js";
+import { IAgentCapabilitiesService } from '../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IBrowserViewApi } from '../../platform/browser/common/browserView.js';
 import { IRemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
 import { UnavailableRemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
@@ -424,6 +425,7 @@ export class Workbench extends Disposable {
 		this.registerErrorHandler(logService);
 		services.registerInstance(ILogService, logService);
 		services.registerInstance(IRendererHostService, api);
+		services.registerInstance(IAgentCapabilitiesService, api.agentCapabilities);
 		services.registerInstance(IExtensionHostApi, api.extensionHost);
 		services.registerInstance(ICodebaseSymbolsApi, api.codebaseSymbols);
 		services.registerInstance(ISyntaxApi, api.syntax);

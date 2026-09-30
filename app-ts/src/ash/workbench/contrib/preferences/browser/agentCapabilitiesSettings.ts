@@ -1,10 +1,10 @@
 import './media/agentCapabilitiesSettings.css';
 import { h } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { AgentCapabilitiesSnapshot, AgentToolCapability, IAgentCapabilitiesApi } from '../../../../platform/agentCapabilities/common/agentCapabilitiesApi.js';
-import type { IAppServerApi } from '../../../../platform/app-server/common/appServerApi.js';
+import type { AgentCapabilitiesSnapshot, AgentToolCapability, IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import type { DirPermission, DirPermissionsEntry, IDirPermissionsService } from '../../../../platform/dirPermissions/common/dirPermissionsService.js';
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
+import type { IRemoteAgentService } from '../../../services/remote/common/remoteAgentService.js';
 
 type View = 'tools' | 'sandbox';
 
@@ -18,7 +18,7 @@ export class AgentCapabilitiesSettings extends Disposable {
 	private directories: readonly DirPermissionsEntry[] = [];
 	private loadVersion = 0;
 
-	constructor(container: HTMLElement, private readonly capabilities: IAgentCapabilitiesApi, private readonly appServer: IAppServerApi, private readonly dirPermissions: IDirPermissionsService, private readonly localization: ILocalizationService) {
+	constructor(container: HTMLElement, private readonly capabilities: IAgentCapabilitiesService, remoteAgentService: IRemoteAgentService, private readonly dirPermissions: IDirPermissionsService, private readonly localization: ILocalizationService) {
 		super();
 		const document = container.ownerDocument;
 		this.domNode = h(document, 'section');
@@ -34,17 +34,16 @@ export class AgentCapabilitiesSettings extends Disposable {
 		this._register(this.dirPermissions.onDidChangePermissions(() => {
 			if (this.view === 'sandbox') void this.refresh();
 		}));
-		const connection = this.appServer.onConnectionState(state => {
-			if (state === 'ready' && this.view) void this.refresh();
-			if (state !== 'ready') {
+		this._register(remoteAgentService.onDidChangeConnectionState(state => {
+			if (state === 'connected' && this.view) void this.refresh();
+			if (state !== 'connected') {
 				this.loadVersion++;
 				this.catalog = undefined;
 				this.directories = [];
 				this.status.textContent = this.label('capabilities.disconnected', 'App Server is disconnected.');
 				this.render();
 			}
-		});
-		this._register(toDisposable(() => connection.dispose()));
+		}));
 		this._register(this.localization.onDidChange(() => this.render()));
 	}
 

@@ -2,9 +2,9 @@ import type { AppServerProtocolClient } from '../../app-server/browser/appServer
 import { appServerRequest } from '../../app-server/browser/appServerRequest.js';
 import type { ToolSourceProvenance } from '../../app-server/common/generated/index.js';
 import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
-import type { AgentCapabilitiesSnapshot, IAgentCapabilitiesApi } from '../common/agentCapabilitiesApi.js';
+import type { AgentCapabilitiesSnapshot, IAgentCapabilitiesService } from '../common/agentCapabilitiesService.js';
 
-export function createAppServerAgentCapabilitiesApi(connection: AppServerProtocolClient): IAgentCapabilitiesApi {
+export function createAppServerAgentCapabilitiesApi(connection: AppServerProtocolClient): IAgentCapabilitiesService {
 	return {
 		read: async (): Promise<AgentCapabilitiesSnapshot> => {
 			const result = await appServerRequest(connection, 'agent/capabilities/read', {});
@@ -25,7 +25,7 @@ export function createAppServerAgentCapabilitiesApi(connection: AppServerProtoco
 	};
 }
 
-export function createDisconnectedAgentCapabilitiesApi(unavailable: UnavailableOperation): IAgentCapabilitiesApi {
+export function createDisconnectedAgentCapabilitiesApi(unavailable: UnavailableOperation): IAgentCapabilitiesService {
 	return { read: () => unavailable('agentCapabilities.read') };
 }
 

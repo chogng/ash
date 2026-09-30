@@ -33,6 +33,14 @@ button, input, textarea { font: inherit; }
   background: var(--ash-workbench-background);
 }
 
+.ash-sessions-window .ash-context-view-hover {
+  border-radius: var(--ash-corner-radius-x-large);
+}
+
+.ash-sessions-window .ash-context-view-hover::before {
+  content: none;
+}
+
 .ash-sessions-workbench-layout {
   position: relative;
   width: 100%;

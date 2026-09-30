@@ -1,3 +1,5 @@
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
+
 export type ToolAuthority = 'directoryRead' | 'directoryWrite' | 'processExecution' | 'productService' | 'providerDefined';
 export type ToolSource = 'environment' | 'dynamic' | 'extension' | 'host' | 'local' | 'mcp';
 export type ToolExposure = 'direct' | 'deferred' | 'modelOnly' | 'hidden';
@@ -19,6 +21,8 @@ export interface AgentCapabilitiesSnapshot {
 }
 
 /** Read-only view of the current Agent tool and sandbox configuration. */
-export interface IAgentCapabilitiesApi {
+export interface IAgentCapabilitiesService {
 	read(): Promise<AgentCapabilitiesSnapshot>;
 }
+
+export const IAgentCapabilitiesService = createServiceIdentifier<IAgentCapabilitiesService>('agentCapabilitiesService');
