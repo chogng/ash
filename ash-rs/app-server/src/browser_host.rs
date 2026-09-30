@@ -87,6 +87,20 @@ struct PendingRequest {
     sender: mpsc::SyncSender<Result<Value, BrowserError>>,
 }
 
+// A response removes the registration before waking the caller. Every other exit must retire
+// it so late responses remain valid and the client receives cancellation exactly once.
+struct PendingRequestGuard<'a> {
+    host: &'a BrowserHost,
+    owner: u64,
+    request_id: &'a str,
+}
+
+impl Drop for PendingRequestGuard<'_> {
+    fn drop(&mut self) {
+        self.host.cancel_request(self.owner, self.request_id);
+    }
+}
+
 /// Routes semantic Core browser requests to the exact capable client connection and target owner.
 pub(crate) struct BrowserHost {
     state: Arc<Mutex<BrowserHostState>>,
@@ -276,6 +290,8 @@ impl BrowserHost {
         cancellation
             .check()
             .map_err(|signal| BrowserError::Cancelled(signal.reason().to_string()))?;
+        let params = serde_json::to_value(params)
+            .map_err(|error| BrowserError::Failed(error.to_string()))?;
         let (sender, receiver) = mpsc::sync_channel(1);
         let (request_id, outbound) = {
             let mut state = self
@@ -301,11 +317,15 @@ impl BrowserHost {
             );
             (request_id, outbound)
         };
+        let _registration = PendingRequestGuard {
+            host: self,
+            owner,
+            request_id: &request_id,
+        };
         let request = JsonRpcRequest::new(
             JsonRpcId::String(request_id.clone()),
             method.as_str().into(),
-            serde_json::to_value(params)
-                .map_err(|error| BrowserError::Failed(error.to_string()))?,
+            params,
         );
         outbound.push(
             serde_json::to_value(request)
@@ -322,11 +342,9 @@ impl BrowserHost {
                 Err(mpsc::RecvTimeoutError::Timeout) => {}
             }
             if let Err(signal) = cancellation.check() {
-                self.cancel_request(owner, &request_id);
                 return Err(BrowserError::Cancelled(signal.reason().to_string()));
             }
             if Instant::now() >= deadline {
-                self.cancel_request(owner, &request_id);
                 return Err(BrowserError::TimedOut);
             }
         };
@@ -341,9 +359,10 @@ impl BrowserHost {
                 .state
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if state.pending.remove(request_id).is_some() {
-                state.retire(request_id.to_owned(), RetiredRequest::Abandoned);
+            if state.pending.remove(request_id).is_none() {
+                return;
             }
+            state.retire(request_id.to_owned(), RetiredRequest::Abandoned);
             state.owners.get(&owner).map(|owner| owner.outbound.clone())
         };
         if let Some(outbound) = outbound {

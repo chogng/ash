@@ -14,6 +14,15 @@ pub struct StableTurnError {
 }
 
 impl StableTurnError {
+    pub fn policy_circuit_breaker(reason: String) -> Self {
+        Self {
+            code: StableTurnErrorCode::PolicyCircuitBreaker,
+            message: reason,
+            retryable: false,
+            http_status: None,
+        }
+    }
+
     pub fn model_invocation_failed() -> Self {
         Self {
             code: StableTurnErrorCode::ModelInvocationFailed,
@@ -166,6 +175,7 @@ impl StableTurnError {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum StableTurnErrorCode {
+    PolicyCircuitBreaker,
     ModelInvocationFailed,
     ModelConfiguration,
     ProviderCredentials,

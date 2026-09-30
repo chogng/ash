@@ -319,6 +319,10 @@ pub enum ThreadEvent {
     TurnInterrupted {
         thread_id: ThreadId,
         turn_id: TurnId,
+        /// Policy stops retain their cause across replay; user cancellation has no error.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        error: Option<StableTurnError>,
     },
     DelegationRequested {
         thread_id: ThreadId,

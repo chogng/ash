@@ -1770,13 +1770,13 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 recorded_at_unix_ms(envelope)?,
             )?;
         }
-        ThreadEvent::TurnInterrupted { turn_id, .. } => {
+        ThreadEvent::TurnInterrupted { turn_id, error, .. } => {
             require_no_command(envelope)?;
             transition_turn(
                 &mut snapshot,
                 turn_id,
                 TurnStatus::Interrupted,
-                None,
+                error.clone(),
                 recorded_at_unix_ms(envelope)?,
             )?;
             record_turn_duration(&mut snapshot, turn_id, envelope)?;

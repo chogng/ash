@@ -33542,6 +33542,7 @@
     },
     "StableTurnErrorCode": {
       "enum": [
+        "policyCircuitBreaker",
         "modelInvocationFailed",
         "modelConfiguration",
         "providerCredentials",
@@ -36286,6 +36287,17 @@
         },
         {
           "properties": {
+            "error": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/StableTurnError"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Policy stops retain their cause across replay; user cancellation has no error."
+            },
             "threadId": {
               "$ref": "#/$defs/ThreadId"
             },

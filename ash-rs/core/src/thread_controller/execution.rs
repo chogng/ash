@@ -16,6 +16,7 @@ use ash_protocol::ModelInvocationRecord;
 use ash_protocol::ModelRef;
 use ash_protocol::ModelUsage;
 use ash_protocol::RequestId;
+use ash_protocol::StableTurnError;
 use ash_protocol::StreamInstanceId;
 use ash_protocol::ThreadEvent;
 use ash_protocol::ThreadId;
@@ -476,7 +477,14 @@ impl ThreadController {
         &self,
         thread_id: &ThreadId,
         turn_id: &TurnId,
+        reason: super::TurnInterruption,
     ) -> Result<(), CoreError> {
+        let error = match reason {
+            super::TurnInterruption::Cancelled => None,
+            super::TurnInterruption::PolicyCircuitBreaker(reason) => {
+                Some(StableTurnError::policy_circuit_breaker(reason))
+            }
+        };
         self.mutate_thread(thread_id, |snapshot| {
             let status = snapshot
                 .turns
@@ -497,11 +505,13 @@ impl ThreadController {
                     ThreadEvent::TurnInterrupted {
                         thread_id: thread_id.clone(),
                         turn_id: turn_id.clone(),
+                        error: error.clone(),
                     },
                 ],
                 crate::TurnStatus::Cancelling => vec![ThreadEvent::TurnInterrupted {
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
+                    error: error.clone(),
                 }],
                 crate::TurnStatus::Completed
                 | crate::TurnStatus::Failed

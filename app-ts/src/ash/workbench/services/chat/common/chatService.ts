@@ -122,7 +122,7 @@ export type ThreadItem =
 export type TurnStatus = "created" | "running" | "waitingForApproval" | "waitingForUserInput" | "waitingForCapability" | "cancelling" | "completed" | "failed" | "interrupted";
 
 export interface TurnError {
-	readonly code: "modelConfiguration" | "providerCredentials" | "rateLimited" | "connectionFailed" | "providerUnavailable" | "providerHttp" | "modelInvocationFailed" | "contextOverflow" | "providerAuth" | "invalidRequest" | "invalidResponse" | "completionPersistenceFailed" | "interactionDeadlineElapsed" | "toolRepetition" | "usageLimited" | "worktreeCaptureFailed";
+	readonly code: "policyCircuitBreaker" | "modelConfiguration" | "providerCredentials" | "rateLimited" | "connectionFailed" | "providerUnavailable" | "providerHttp" | "modelInvocationFailed" | "contextOverflow" | "providerAuth" | "invalidRequest" | "invalidResponse" | "completionPersistenceFailed" | "interactionDeadlineElapsed" | "toolRepetition" | "usageLimited" | "worktreeCaptureFailed";
 	readonly message: string;
 	readonly retryable: boolean;
 }

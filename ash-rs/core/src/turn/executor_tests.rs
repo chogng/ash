@@ -3708,6 +3708,77 @@ impl ToolService for FailingWeatherTool {
 
 struct SandboxActionPolicyService;
 
+struct RejectingReviewPolicy;
+
+impl ActionPolicyService for RejectingReviewPolicy {
+    fn revision(&self) -> String {
+        "test-policy-v1".into()
+    }
+
+    fn decide(
+        &self,
+        _: &ActionReviewRequest,
+        _: &CancellationToken,
+    ) -> Result<ExecutionDecision, CoreError> {
+        Ok(ExecutionDecision::Block(
+            ash_action_policy::BlockReason::ReviewerDenied {
+                assessment_id: ash_action_policy::AssessmentId::new("rejected-action"),
+                reason: "review denied".into(),
+            },
+        ))
+    }
+}
+
+#[test]
+fn repeated_review_rejections_persist_a_non_retryable_policy_interruption() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let (threads, thread_id, turn_id) =
+        started_turn_with_store(ash_protocol::ToolMode::Direct, store.clone());
+    let model = Arc::new(ScriptedModel::new((1..=4).map(|attempt| {
+        Ok(ModelResponse {
+            output: vec![ResponseItem::ToolCall(ToolCall {
+                id: ToolCallId::new(format!("rejected-{attempt}")).unwrap(),
+                name: ToolName::new("weather").unwrap(),
+                arguments: json!({"city": format!("city-{attempt}")}),
+            })],
+            usage: None,
+            billing: None,
+            stop_reason: StopReason::ToolUse,
+        })
+    })));
+    let executor = TurnExecutor::new(
+        threads.clone(),
+        model.clone(),
+        Arc::new(WeatherTool),
+        Arc::new(RejectingReviewPolicy),
+    );
+    assert!(matches!(
+        executor.execute(&thread_id, &turn_id, &CancellationSource::new().token()),
+        Err(CoreError::PolicyCircuitBreaker(_))
+    ));
+    assert_eq!(model.requests().len(), 3);
+    let live = threads.read_thread(&thread_id).unwrap();
+    let restored = ThreadController::with_store(store)
+        .read_thread(&thread_id)
+        .unwrap();
+    assert_eq!(restored.turns, live.turns);
+    let turn = restored.turns.last().unwrap();
+    assert_eq!(turn.status, TurnStatus::Interrupted);
+    let failure = turn.failure.as_ref().unwrap();
+    assert_eq!(failure.code, StableTurnErrorCode::PolicyCircuitBreaker);
+    assert!(!failure.retryable);
+    assert!(failure.message.contains("3 consecutive"));
+    assert_eq!(
+        restored
+            .items
+            .iter()
+            .filter(|item| matches!(item, ThreadItem::ToolResult { is_error: true, .. }))
+            .count(),
+        3
+    );
+    assert!(restored.started_tool_calls.is_empty());
+}
+
 impl ActionPolicyService for SandboxActionPolicyService {
     fn revision(&self) -> String {
         "test-policy-v1".into()

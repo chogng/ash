@@ -100,6 +100,11 @@ mod user_input;
 pub use agent::CreateAgentThreadRequest;
 pub use mailbox::ThreadExecutionContext;
 
+pub(crate) enum TurnInterruption {
+    Cancelled,
+    PolicyCircuitBreaker(String),
+}
+
 pub struct StartTurnRequest {
     pub command_id: CommandId,
     pub expected_sequence: SequenceExpectation,
@@ -2091,6 +2096,7 @@ impl ThreadController {
                 ThreadEvent::TurnInterrupted {
                     thread_id: thread_id.clone(),
                     turn_id: request.turn_id,
+                    error: None,
                 },
             ]);
             let (next_snapshot, batch) = self.project_batch(
@@ -2458,6 +2464,7 @@ impl ThreadController {
                 recovery_events.push(ThreadEvent::TurnInterrupted {
                     thread_id: thread_id.clone(),
                     turn_id: turn.turn_id,
+                    error: None,
                 });
             }
         }

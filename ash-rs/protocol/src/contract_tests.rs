@@ -4,6 +4,7 @@ use serde_json::json;
 #[test]
 fn stable_turn_error_categories_serialize_as_public_camel_case_codes() {
     let errors = [
+        StableTurnError::policy_circuit_breaker("three actions rejected".into()),
         StableTurnError::context_overflow(),
         StableTurnError::provider_auth(),
         StableTurnError::invalid_request(),
@@ -18,6 +19,7 @@ fn stable_turn_error_categories_serialize_as_public_camel_case_codes() {
             .map(|error| serde_json::to_value(error).unwrap()["code"].clone())
             .collect::<Vec<_>>(),
         vec![
+            json!("policyCircuitBreaker"),
             json!("contextOverflow"),
             json!("providerAuth"),
             json!("invalidRequest"),
@@ -25,6 +27,29 @@ fn stable_turn_error_categories_serialize_as_public_camel_case_codes() {
             json!("toolRepetition"),
             json!("usageLimited"),
         ]
+    );
+}
+
+#[test]
+fn interruption_events_preserve_policy_causes_and_read_existing_cancellations() {
+    let cancelled = json!({"type": "turnInterrupted", "threadId": "thread_1", "turnId": "turn_1"});
+    let event: ThreadEvent = serde_json::from_value(cancelled.clone()).unwrap();
+    assert!(matches!(
+        &event,
+        ThreadEvent::TurnInterrupted { error: None, .. }
+    ));
+    assert_eq!(serde_json::to_value(event).unwrap(), cancelled);
+    let error = StableTurnError::policy_circuit_breaker("three actions rejected".into());
+    let event = ThreadEvent::TurnInterrupted {
+        thread_id: ThreadId::new("thread_1").unwrap(),
+        turn_id: TurnId::new("turn_1").unwrap(),
+        error: Some(error.clone()),
+    };
+    let encoded = serde_json::to_value(event).unwrap();
+    assert_eq!(encoded["error"]["code"], "policyCircuitBreaker");
+    assert_eq!(encoded["error"]["retryable"], false);
+    assert!(
+        matches!(serde_json::from_value::<ThreadEvent>(encoded).unwrap(), ThreadEvent::TurnInterrupted { error: Some(restored), .. } if restored == error)
     );
 }
 

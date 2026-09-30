@@ -76,6 +76,21 @@ fn tool_call_output_and_result_form_one_exec_cell() {
 }
 
 #[test]
+fn policy_stop_transcript_keeps_the_reason_without_a_retry_suggestion() {
+    let mut model = TranscriptModel::default();
+    model.replace(snapshot(vec![ThreadTranscriptEntry::TurnError {
+        entry_id: "turn-error:policy-stop".into(),
+        turn_id: turn_id("policy-stop"),
+        error: ash_protocol::StableTurnError::policy_circuit_breaker(
+            "Automatic review rejected three consecutive actions.".into(),
+        ),
+    }]));
+    let views = model.views(&BTreeSet::new(), None);
+    assert_eq!(views[0].role(), MessageRole::Error);
+    insta::assert_snapshot!(views[0].text(), @"Automatic review rejected three consecutive actions.");
+}
+
+#[test]
 fn grouped_history_failure_names_the_failed_call_and_command_completion_stays_neutral() {
     let turn = turn_id("turn");
     let call = |name: &str, activity: ToolActivity| ThreadTranscriptEntry::Item {

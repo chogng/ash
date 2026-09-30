@@ -500,6 +500,70 @@ fn failed_child_is_reconciled_to_one_terminal_result() {
 }
 
 #[test]
+fn interrupted_children_distinguish_policy_stops_from_cancellation() {
+    for policy_stop in [false, true] {
+        let fixture = fixture();
+        let spawned = fixture.coordinator.spawn(spawn_request(&fixture)).unwrap();
+        fixture
+            .threads
+            .record_agent_message(
+                &spawned.child_thread_id,
+                &spawned.child_turn_id,
+                "Work is still progressing".into(),
+            )
+            .unwrap();
+        let reason = if policy_stop {
+            crate::thread_controller::TurnInterruption::PolicyCircuitBreaker(
+                "three actions rejected by automatic review".into(),
+            )
+        } else {
+            crate::thread_controller::TurnInterruption::Cancelled
+        };
+        fixture
+            .threads
+            .interrupt_execution(&spawned.child_thread_id, &spawned.child_turn_id, reason)
+            .unwrap();
+        let result = fixture
+            .coordinator
+            .reconcile_terminal_delegation(&spawned.child_thread_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            result.status,
+            if policy_stop {
+                DelegationResultStatus::PolicyDenied
+            } else {
+                DelegationResultStatus::Cancelled
+            }
+        );
+        if policy_stop {
+            assert!(result.summary.contains("three actions rejected"));
+            assert!(result.summary.contains("Inform the user"));
+            assert!(result.summary.contains("Do not resume"));
+        }
+        assert_eq!(
+            fixture
+                .coordinator
+                .reconcile_terminal_delegation(&spawned.child_thread_id)
+                .unwrap()
+                .unwrap(),
+            result
+        );
+        let parent = fixture
+            .threads
+            .read_thread(&fixture.parent_thread_id)
+            .unwrap();
+        assert_eq!(parent.received_delegation_results.len(), 1);
+        assert_eq!(
+            parent
+                .received_delegation_results
+                .get(&spawned.context_seed.delegation_id),
+            Some(&result)
+        );
+    }
+}
+
+#[test]
 fn structural_agent_budget_rejects_a_second_live_child_without_partial_delegation() {
     let fixture = fixture();
     let coordinator = MultiAgentCoordinator::new(

@@ -121,6 +121,56 @@ fn deltas_emit_complete_upserts_and_committed_item_replaces_transient() {
 }
 
 #[test]
+fn policy_interruption_publishes_its_reason_while_cancellation_only_clears_transients() {
+    for policy_stop in [false, true] {
+        let mut accumulator = TranscriptAccumulator::new(session_id(), thread_id());
+        apply(
+            &mut accumulator,
+            transient(
+                1,
+                ThreadUpdate::ItemDelta {
+                    turn_id: turn_id(),
+                    item_id: item_id("in-progress"),
+                    delta: ItemDelta::AgentMessage {
+                        text: "still working".into(),
+                    },
+                },
+            ),
+        );
+        let error = policy_stop.then(|| {
+            ash_protocol::StableTurnError::policy_circuit_breaker("three actions rejected".into())
+        });
+        let update = apply(
+            &mut accumulator,
+            durable(
+                1,
+                ThreadEvent::TurnInterrupted {
+                    thread_id: thread_id(),
+                    turn_id: turn_id(),
+                    error: error.clone(),
+                },
+            ),
+        );
+        let TranscriptApplyResult::Applied(update) = update else {
+            panic!("terminal event must update transcript")
+        };
+        let mut expected = vec![ThreadTranscriptChange::Remove {
+            entry_ids: vec!["item:in-progress".into()],
+        }];
+        if let Some(error) = error {
+            expected.push(ThreadTranscriptChange::Upsert {
+                entry: ThreadTranscriptEntry::TurnError {
+                    entry_id: "turn-error:turn-1".into(),
+                    turn_id: turn_id(),
+                    error,
+                },
+            });
+        }
+        assert_eq!(update.changes, expected);
+    }
+}
+
+#[test]
 fn scope_mismatch_and_duplicate_cursor_are_ignored() {
     let mut accumulator = TranscriptAccumulator::new(session_id(), thread_id());
     let wrong = ThreadUpdateEnvelope {

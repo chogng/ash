@@ -11,6 +11,86 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
 
+struct UnserializableParams;
+
+impl Serialize for UnserializableParams {
+    fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
+        Err(serde::ser::Error::custom("invalid browser params"))
+    }
+}
+
+#[test]
+fn parameter_serialization_failure_does_not_register_or_publish_a_request() {
+    let host = BrowserHost::new(Arc::new(Mutex::new(ResourceStore::default())));
+    let outbound = NotificationQueue::default();
+    host.register(
+        7,
+        ClientBrowserCapability {
+            version: 1,
+            observe: true,
+            input: true,
+        },
+        outbound.clone(),
+    );
+    let result = host.request::<_, Value>(
+        7,
+        HostMethod::BrowserCreate,
+        &UnserializableParams,
+        &CancellationSource::new().token(),
+    );
+    assert!(
+        matches!(result, Err(BrowserError::Failed(message)) if message == "invalid browser params")
+    );
+    let state = host.state.lock().unwrap();
+    assert!(state.pending.is_empty());
+    assert!(state.retired.is_empty());
+    assert_eq!(state.next_request_id, 0);
+    assert!(outbound.listener().drain().is_empty());
+}
+
+#[test]
+fn terminal_errors_release_registration_without_sending_cancellation() {
+    for response in [
+        json!({"error": {"code": -32603, "message": "browser failed", "data": null}}),
+        json!({"result": {"targetId": 42}}),
+    ] {
+        let mut host = BrowserHost::new(Arc::new(Mutex::new(ResourceStore::default())));
+        host.owner = Some(7);
+        let host = Arc::new(host);
+        let outbound = NotificationQueue::default();
+        host.register(
+            7,
+            ClientBrowserCapability {
+                version: 1,
+                observe: true,
+                input: true,
+            },
+            outbound.clone(),
+        );
+        let worker_host = Arc::clone(&host);
+        let worker = thread::spawn(move || {
+            worker_host.create_target(
+                CreateBrowserTargetRequest {
+                    url: "about:blank".into(),
+                },
+                &CancellationSource::new().token(),
+            )
+        });
+        let request = next_request(&outbound);
+        let mut response = response;
+        response["jsonrpc"] = json!("2.0");
+        response["id"] = request["id"].clone();
+        host.handle_response(7, response).unwrap();
+        assert!(worker.join().unwrap().is_err());
+        let state = host.state.lock().unwrap();
+        assert!(state.pending.is_empty());
+        assert!(
+            state.retired.get(request["id"].as_str().unwrap()) == Some(&RetiredRequest::Completed)
+        );
+        assert!(outbound.listener().drain().is_empty());
+    }
+}
+
 #[test]
 fn browser_requests_bind_targets_and_resources_to_the_exact_connection() {
     let resources = Arc::new(Mutex::new(ResourceStore::default()));
@@ -75,6 +155,8 @@ fn browser_requests_bind_targets_and_resources_to_the_exact_connection() {
         .is_err()
     );
     let target = create.join().unwrap().unwrap().target_id;
+    assert!(host.state.lock().unwrap().pending.is_empty());
+    assert!(outbound.listener().drain().is_empty());
 
     let observe_host = Arc::clone(&host);
     let observe_target = target.clone();
@@ -163,6 +245,8 @@ fn disconnect_fails_pending_requests_and_forgets_target_ownership() {
         request.join().unwrap(),
         Err(BrowserError::CapabilityUnavailable)
     );
+    assert!(host.state.lock().unwrap().pending.is_empty());
+    assert!(outbound.listener().drain().is_empty());
 }
 
 #[test]
@@ -203,6 +287,7 @@ fn cancellation_retires_the_request_and_accepts_its_late_terminal_response() {
     let cancellation = next_request(&outbound);
     assert_eq!(cancellation["method"], "$/cancelRequest");
     assert_eq!(cancellation["params"]["id"], request_id);
+    assert!(host.state.lock().unwrap().pending.is_empty());
     assert!(
         host.handle_response(
             11,

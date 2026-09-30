@@ -40,6 +40,7 @@ use crate::thread_controller::CommitContextCheckpointRequest;
 use crate::thread_controller::CommitModelInvocationItemsResult;
 use crate::thread_controller::CompleteModelInvocationResult;
 use crate::thread_controller::PrepareModelInvocationRequest;
+use crate::thread_controller::TurnInterruption;
 use crate::turn::TurnExecutionBackend;
 use crate::turn_policy::UnavailableActionPolicyService;
 use ash_async_utils::Cancellation;
@@ -653,9 +654,20 @@ impl TurnExecutor {
                     (Ok(completion), None)
                 }
                 Ok(completion) => (Ok(completion), Some(TurnExecutionTerminalState::Completed)),
-                Err(ExecutionFailure::Cancelled(error))
-                | Err(ExecutionFailure::Interrupted(error)) => {
-                    self.threads.interrupt_execution(thread_id, turn_id)?;
+                Err(ExecutionFailure::Cancelled(error)) => {
+                    self.threads.interrupt_execution(
+                        thread_id,
+                        turn_id,
+                        TurnInterruption::Cancelled,
+                    )?;
+                    (Err(error), Some(TurnExecutionTerminalState::Interrupted))
+                }
+                Err(ExecutionFailure::Interrupted { error, reason }) => {
+                    self.threads.interrupt_execution(
+                        thread_id,
+                        turn_id,
+                        TurnInterruption::PolicyCircuitBreaker(reason),
+                    )?;
                     (Err(error), Some(TurnExecutionTerminalState::Interrupted))
                 }
                 Err(ExecutionFailure::Failed { error, stable }) => {
@@ -790,11 +802,19 @@ impl TurnExecutor {
             | Ok(completion @ TurnExecutionOutcome::WaitingForCapability) => (Ok(completion), None),
             Ok(completion) => (Ok(completion), Some(TurnExecutionTerminalState::Completed)),
             Err(ExecutionFailure::Cancelled(error)) => {
-                self.threads.interrupt_execution(thread_id, turn_id)?;
+                self.threads.interrupt_execution(
+                    thread_id,
+                    turn_id,
+                    TurnInterruption::Cancelled,
+                )?;
                 (Err(error), Some(TurnExecutionTerminalState::Interrupted))
             }
-            Err(ExecutionFailure::Interrupted(error)) => {
-                self.threads.interrupt_execution(thread_id, turn_id)?;
+            Err(ExecutionFailure::Interrupted { error, reason }) => {
+                self.threads.interrupt_execution(
+                    thread_id,
+                    turn_id,
+                    TurnInterruption::PolicyCircuitBreaker(reason),
+                )?;
                 (Err(error), Some(TurnExecutionTerminalState::Interrupted))
             }
             Err(ExecutionFailure::Failed { error, stable }) => {
@@ -1982,7 +2002,10 @@ fn final_text(response: &ModelResponse, stream: &InvocationStream) -> String {
 
 enum ExecutionFailure {
     Cancelled(CoreError),
-    Interrupted(CoreError),
+    Interrupted {
+        error: CoreError,
+        reason: String,
+    },
     Failed {
         error: CoreError,
         stable: StableTurnError,
@@ -2008,7 +2031,10 @@ impl ExecutionFailure {
                 error,
             },
             CoreError::Cancelled(_) => Self::Cancelled(error),
-            CoreError::PolicyCircuitBreaker(_) => Self::Interrupted(error),
+            CoreError::PolicyCircuitBreaker(ref reason) => Self::Interrupted {
+                reason: reason.clone(),
+                error,
+            },
             error @ CoreError::ModelContextOverflow => Self::Failed {
                 error,
                 stable: StableTurnError::context_overflow(),

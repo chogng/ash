@@ -201,7 +201,12 @@ impl TranscriptAccumulator {
                     },
                 });
             }
-            ThreadEvent::TurnFailed { turn_id, error, .. } => {
+            ThreadEvent::TurnFailed { turn_id, error, .. }
+            | ThreadEvent::TurnInterrupted {
+                turn_id,
+                error: Some(error),
+                ..
+            } => {
                 let removed = self.remove_turn_transient(turn_id);
                 if !removed.is_empty() {
                     changes.push(ThreadTranscriptChange::Remove { entry_ids: removed });
@@ -215,7 +220,11 @@ impl TranscriptAccumulator {
                 });
             }
             ThreadEvent::TurnCompleted { turn_id, .. }
-            | ThreadEvent::TurnInterrupted { turn_id, .. } => {
+            | ThreadEvent::TurnInterrupted {
+                turn_id,
+                error: None,
+                ..
+            } => {
                 let removed = self.remove_turn_transient(turn_id);
                 if !removed.is_empty() {
                     changes.push(ThreadTranscriptChange::Remove { entry_ids: removed });

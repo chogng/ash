@@ -39,6 +39,7 @@ use ash_protocol::DelegationResultDigest;
 use ash_protocol::DelegationResultStatus;
 use ash_protocol::HookEvent;
 use ash_protocol::SessionId;
+use ash_protocol::StableTurnErrorCode;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadSequenceRange;
 use ash_protocol::TurnId;
@@ -403,19 +404,33 @@ impl MultiAgentCoordinator {
             .turns
             .last()
             .expect("non-empty child turn list checked above");
+        let policy_stop = latest.failure.as_ref().filter(|failure| {
+            latest.status == TurnStatus::Interrupted
+                && failure.code == StableTurnErrorCode::PolicyCircuitBreaker
+        });
         let status = match latest.status {
             TurnStatus::Completed => DelegationResultStatus::Completed,
             TurnStatus::Failed => DelegationResultStatus::Failed,
+            TurnStatus::Interrupted if policy_stop.is_some() => {
+                DelegationResultStatus::PolicyDenied
+            }
             TurnStatus::Interrupted => DelegationResultStatus::Cancelled,
             _ => unreachable!("terminal status checked above"),
         };
-        let summary = child
-            .items
-            .iter()
-            .rev()
-            .find_map(|item| match item {
-                ash_protocol::ThreadItem::AgentMessage { text, .. } => Some(text.clone()),
-                _ => None,
+        // Earlier progress text must not hide why policy stopped this delegation.
+        let summary = policy_stop
+            .map(|failure| {
+                format!(
+                    "{}\nInform the user that this delegation was stopped by automatic review. \
+                     Do not resume the blocked work or delegate the same outcome through a workaround.",
+                    failure.message,
+                )
+            })
+            .or_else(|| {
+                child.items.iter().rev().find_map(|item| match item {
+                    ash_protocol::ThreadItem::AgentMessage { text, .. } => Some(text.clone()),
+                    _ => None,
+                })
             })
             .or_else(|| {
                 latest

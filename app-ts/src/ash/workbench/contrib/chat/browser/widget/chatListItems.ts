@@ -1,4 +1,5 @@
 import type { PlanUpdate, ThreadItem, ThreadTranscriptEntry, Turn, TurnError } from "../../../../services/chat/common/chatService.js";
+import { localize } from "../../../../../nls.js";
 
 export type ChatTurnErrorAction =
 	| { readonly type: "retry"; readonly label: string; readonly turnId: string }
@@ -123,8 +124,13 @@ export function chatTurnErrorListItem(turn: Turn, options: ChatTurnErrorListItem
 	};
 }
 
-function turnErrorPresentation(turnId: string, error: TurnError): { readonly label: string; readonly detail: string; readonly action: ChatTurnErrorAction } {
+function turnErrorPresentation(turnId: string, error: TurnError): { readonly label: string; readonly detail: string; readonly action?: ChatTurnErrorAction } {
 	switch (error.code) {
+		case "policyCircuitBreaker":
+			return {
+				label: localize('chat.policyCircuitBreaker.label', "Automatic review stopped this turn"),
+				detail: localize('chat.policyCircuitBreaker.detail', "Repeated actions were rejected. Review the reason before requesting a safer approach."),
+			};
 		case "connectionFailed":
 		case "providerUnavailable":
 		case "providerHttp":

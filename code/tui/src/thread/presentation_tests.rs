@@ -31,6 +31,7 @@ fn recovery_does_not_reopen_terminal_turns() {
 #[test]
 fn every_stable_turn_error_has_a_user_facing_message() {
     let errors = [
+        StableTurnError::policy_circuit_breaker("three actions rejected".into()),
         StableTurnError::model_invocation_failed(),
         StableTurnError::context_overflow(),
         StableTurnError::provider_auth(),
