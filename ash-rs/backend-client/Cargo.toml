@@ -9,10 +9,10 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+backend-models = { package = "ash-backend-models", path = "../backend-models" }
 async-utils = { package = "ash-async-utils", path = "../async-utils" }
 client = { package = "ash-client", path = "../ash-client" }
 http-client = { package = "ash-http-client", path = "../http-client" }
-chrono = { workspace = true, features = ["serde"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 url = { workspace = true }

@@ -911,13 +911,22 @@ name = "ash-backend-client"
 version = "0.1.0"
 dependencies = [
  "ash-async-utils",
+ "ash-backend-models",
  "ash-client",
  "ash-http-client",
  "ash-http-test-support",
- "chrono",
  "serde",
  "serde_json",
  "url",
+]
+
+[[package]]
+name = "ash-backend-models"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

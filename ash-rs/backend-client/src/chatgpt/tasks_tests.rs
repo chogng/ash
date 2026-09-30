@@ -41,7 +41,7 @@ fn failed_task_fixture_preserves_error_without_inventing_content() {
         .unwrap()
         .read_task("failed", &CancellationSource::new().token())
         .unwrap();
-    assert!(details.task.archived);
+    assert!(details.data.task.archived);
     assert_eq!(details.user_text_prompt(), None);
     assert!(details.assistant_text_messages().is_empty());
     assert_eq!(details.unified_diff(), None);
@@ -146,29 +146,36 @@ fn task_details_and_attempts_preserve_metadata_used_for_display_and_ordering() {
         let client = Transport::response(200, &body.to_string());
         let backend = Client::new(&client, &target, route).unwrap();
         let details = backend.read_task("task-1", &token).unwrap();
-        assert_eq!(details.task.title, "Review parser");
-        assert_eq!(details.task.created_at, Some(1750000000.125));
-        assert_eq!(details.task.updated_at, Some(1750000020.5));
-        assert_eq!(details.task.environment_id.as_deref(), Some("env-1"));
-        assert_eq!(details.task.is_review, Some(true));
+        assert_eq!(details.data.task.title, "Review parser");
+        assert_eq!(details.data.task.created_at, Some(1750000000.125));
+        assert_eq!(details.data.task.updated_at, Some(1750000020.5));
+        assert_eq!(details.data.task.environment_id.as_deref(), Some("env-1"));
+        assert_eq!(details.data.task.is_review, Some(true));
         assert_eq!(
-            details.task.denormalized_metadata.as_ref().unwrap()["branch"],
+            details.data.task.denormalized_metadata.as_ref().unwrap()["branch"],
             "main"
         );
         assert_eq!(
-            details.task.external_pull_requests[0].pull_request.number,
+            details.data.task.external_pull_requests[0]
+                .pull_request
+                .number,
             42
         );
         assert_eq!(
-            details.task.task_status_display.as_ref().unwrap()["environment_label"],
+            details.data.task.task_status_display.as_ref().unwrap()["environment_label"],
             "workspace"
         );
         assert_eq!(
-            details.task_status_display.as_ref().unwrap()["latest_turn_status_display"]["turn_status"],
+            details.data.task_status_display.as_ref().unwrap()["latest_turn_status_display"]["turn_status"],
             "completed"
         );
         assert_eq!(
-            details.current_assistant_turn.as_ref().unwrap().created_at,
+            details
+                .data
+                .current_assistant_turn
+                .as_ref()
+                .unwrap()
+                .created_at,
             Some(1750000010.25)
         );
 

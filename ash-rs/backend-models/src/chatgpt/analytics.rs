@@ -225,3 +225,37 @@ pub struct WorkspaceUsageGroup {
     pub turns: i64,
     pub cost_usd: Option<String>,
 }
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct PlanLimitHistory {
+    pub data_as_of: Option<String>,
+    pub coverage_start: Option<String>,
+    pub coverage_complete: bool,
+    pub approximate: Option<bool>,
+    pub boundary_tolerance_seconds: Option<u32>,
+    pub periods: Vec<PlanLimitPeriod>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct PlanLimitPeriod {
+    pub id: String,
+    pub window_minutes: u32,
+    pub plan_type: String,
+    pub starts_at: String,
+    pub ends_at: String,
+    pub accounting_complete: bool,
+    pub used_basis_points: Option<f64>,
+    pub breakdowns: Option<Vec<PlanLimitBreakdown>>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct PlanLimitBreakdown {
+    pub dimension: String,
+    pub rows: Vec<PlanLimitValue>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct PlanLimitValue {
+    pub key: String,
+    pub basis_points: f64,
+}

@@ -10,8 +10,8 @@ pub mod supergrok;
 #[path = "zai/client.rs"]
 pub mod zai;
 
+pub use backend_models::coding_plan::QuotaLimit;
 pub use client::RequestError;
-pub use coding_plan::QuotaLimit;
 
 #[cfg(test)]
 mod test_support;

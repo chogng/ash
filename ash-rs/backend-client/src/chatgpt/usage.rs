@@ -1,9 +1,16 @@
 use super::Client;
 use crate::RequestError;
 use async_utils::CancellationToken;
+use backend_models::chatgpt::LimitDetails;
+use backend_models::chatgpt::RateLimitReached;
+use backend_models::chatgpt::RedeemRequest;
+use backend_models::chatgpt::ResetCreditResult;
+use backend_models::chatgpt::ResetCredits;
+use backend_models::chatgpt::ResetCreditsSummary;
+use backend_models::chatgpt::SpendControl;
+use backend_models::chatgpt::UsageResponse;
+use backend_models::chatgpt::Window;
 use http_client::HttpHeader;
-use serde::Deserialize;
-use serde::Serialize;
 
 /// Usage response with account identity and subscription limits.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -13,68 +20,6 @@ pub struct RateLimitStatus {
     pub reset_credits: Option<ResetCreditsSummary>,
     pub spend_control: Option<SpendControl>,
     pub reached_type: Option<RateLimitReached>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct SpendControl {
-    pub reached: bool,
-    pub individual_limit: Option<SpendLimit>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct SpendLimit {
-    pub source: Option<String>,
-    pub limit: String,
-    pub used: String,
-    pub remaining: String,
-    pub used_percent: i32,
-    pub remaining_percent: i32,
-    pub reset_after_seconds: i64,
-    pub reset_at: i64,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct RateLimitReached {
-    #[serde(rename = "type")]
-    pub kind: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct ResetCreditsSummary {
-    pub available_count: u64,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct ResetCredits {
-    pub credits: Vec<ResetCredit>,
-    pub available_count: u64,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct ResetCredit {
-    pub id: String,
-    pub reset_type: String,
-    pub status: String,
-    pub granted_at: String,
-    pub expires_at: Option<String>,
-    pub title: Option<String>,
-    pub description: Option<String>,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum ResetCreditCode {
-    Reset,
-    NothingToReset,
-    NoCredit,
-    AlreadyRedeemed,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct ResetCreditResult {
-    pub code: ResetCreditCode,
-    #[serde(default)]
-    pub windows_reset: u64,
 }
 
 /// Select a credit explicitly or let the backend select an available credit.
@@ -142,15 +87,9 @@ impl Client<'_> {
         if request_id.trim().is_empty() || credit_id.is_some_and(|id| id.trim().is_empty()) {
             return Err(RequestError::InvalidRequest);
         }
-        #[derive(Serialize)]
-        struct Redeem<'a> {
-            redeem_request_id: &'a str,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            credit_id: Option<&'a str>,
-        }
         self.http.post(
             self.endpoint(&["rate-limit-reset-credits", "consume"])?,
-            &Redeem {
+            &RedeemRequest {
                 redeem_request_id: request_id,
                 credit_id,
             },
@@ -192,49 +131,6 @@ pub struct CreditBalance {
     pub has_credits: bool,
     pub unlimited: bool,
     pub balance: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct UsageResponse {
-    account_id: Option<String>,
-    plan_type: String,
-    rate_limit: Option<LimitDetails>,
-    additional_rate_limits: Option<Vec<AdditionalLimit>>,
-    credits: Option<Credits>,
-    user_id: Option<String>,
-    rate_limit_reset_credits: Option<ResetCreditsSummary>,
-    spend_control: Option<SpendControl>,
-    rate_limit_reached_type: Option<RateLimitReached>,
-}
-
-#[derive(Deserialize)]
-struct LimitDetails {
-    allowed: bool,
-    limit_reached: bool,
-    primary_window: Option<Window>,
-    secondary_window: Option<Window>,
-}
-
-#[derive(Deserialize)]
-struct Window {
-    used_percent: u32,
-    limit_window_seconds: u32,
-    reset_at: u64,
-}
-
-#[derive(Deserialize)]
-struct AdditionalLimit {
-    metered_feature: String,
-    limit_name: String,
-    normal_model_slug: Option<String>,
-    rate_limit: Option<LimitDetails>,
-}
-
-#[derive(Deserialize)]
-struct Credits {
-    has_credits: bool,
-    unlimited: bool,
-    balance: Option<String>,
 }
 
 fn status(payload: UsageResponse) -> RateLimitStatus {

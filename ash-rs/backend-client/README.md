@@ -1,6 +1,6 @@
 # Backend client
 
-- 封装各供应商的后台业务 HTTP API，按供应商模块组织路由和响应类型。
+- 封装各供应商的后台业务 HTTP API，按供应商模块组织路由、校验与解释；请求和响应的 JSON 合约由 [`backend-models`](../backend-models/README.md) 维护。
 - `chatgpt` 提供账号、额度、账单、配置、统计与云任务接口。
 - `kimi` 提供 Kimi Code 账户与额度查询。
 - `supergrok` 提供订阅模型目录、账号、访问设置、订阅额度、余额和用量历史查询。
@@ -23,7 +23,7 @@
 - `ash-chatgpt`、`ash-supergrok` 认证 crate 依赖本 crate；本 crate 不依赖登录、凭据存储或模型运行时。
 - 各供应商客户端独立接收 `OperationClient` 与已解析的 `ResolvedApiTarget`；不同供应商不共享认证状态。
 - 生产 transport 必须拒绝重定向；Ash 默认 HTTP 配置满足此要求。
-- 新供应商在本 crate 内增加模块，只有真实接口需要时才增加子文件；后台请求不抽象成统一套餐或云任务模型。
+- 新供应商在本 crate 内增加客户端模块，在 `backend-models` 增加对应的接口类型；只有真实接口需要时才增加子文件。后台请求不抽象成统一套餐或云任务模型。
 - Kimi 由 `ash-kimi` 管理登录与续期，本 crate 读取账户与额度；BigModel 与 Z.AI Coding Plan 分别由 `ash-glm` 管理账号登录，本 crate 处理其后台凭据接口，用户无需录入 Coding Plan Key。
 - 原根级 `BackendClient`、`RouteStyle` 和 ChatGPT 响应类型已迁到 `chatgpt`，调用方直接使用新路径。
 
@@ -103,8 +103,10 @@
 
 ## 实现与验证
 
-- 根级 `client.rs` 统一 URL、认证头传递、JSON 编解码和错误脱敏；取消令牌交给 `ash-client` 执行。供应商路由留在各自模块。
-- ChatGPT 的业务文件和测试已由 `src/*.rs` 迁至 `src/chatgpt/`；`chatgpt.rs` 汇总公开接口。
+- 根级 `client.rs` 统一 URL、认证头传递、JSON 请求执行和错误脱敏；取消令牌交给 `ash-client` 执行。供应商路由、业务状态校验和解释留在各自模块；数据类型及其 JSON 编解码规则由 `backend-models` 唯一维护。
+- ChatGPT 的业务文件与测试位于 `src/chatgpt/`；`chatgpt.rs` 汇总客户端公开接口和返回值类型。原 `chatgpt/analytics_types.rs` 已迁入 `backend-models/src/chatgpt/analytics.rs`。
+- 云任务原始字段通过 `TaskDetails.data` 读取，对应 `backend-models::chatgpt::TaskDetailsResponse`；文本、差异和错误提取方法仍由客户端提供。
+- Coding Plan 以类型化业务响应读取额度、机构、项目、请求密钥与密钥内容；Z.AI 业务令牌交换使用独立类型。业务码、范围选择和凭据有效性由客户端检查。
 - `supergrok/models.rs` 负责订阅模型目录的 HTTP 请求和解析；`supergrok/models_tests.rs` 覆盖目录行为，认证恢复测试位于 `ash-supergrok`。
 - `transport_tests.rs` 贯穿 `chatgpt::Client / supergrok::Client → AshClient → UreqHttpClient`，验证业务路由、认证、JSON、任务创建不重发和后端错误映射。
 - 传输重定向、超时与原始响应读取由 `http-client` 验证；取消与重试执行由 `ash-client` 验证。两个下层 crate 的测试使用通用请求，不依赖后端业务类型。

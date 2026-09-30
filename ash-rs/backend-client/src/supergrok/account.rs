@@ -1,42 +1,9 @@
 use super::Client;
 use crate::RequestError;
 use async_utils::CancellationToken;
+use backend_models::supergrok::Account;
+use backend_models::supergrok::Settings;
 use http_client::HttpHeader;
-use serde::Deserialize;
-use serde::Serialize;
-
-/// Account metadata from `/user?include=subscription`, including live subscription state.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Account {
-    pub user_id: String,
-    pub email: Option<String>,
-    pub first_name: Option<String>,
-    pub last_name: Option<String>,
-    pub profile_image_asset_id: Option<String>,
-    pub principal_type: Option<String>,
-    pub principal_id: Option<String>,
-    pub team_id: Option<String>,
-    pub team_name: Option<String>,
-    pub team_role: Option<String>,
-    pub organization_id: Option<String>,
-    pub organization_name: Option<String>,
-    pub organization_role: Option<String>,
-    pub user_blocked_reason: Option<String>,
-    pub team_blocked_reasons: Option<Vec<String>>,
-    pub coding_data_retention_opt_out: Option<bool>,
-    pub subscription_tier: Option<String>,
-}
-
-/// Account access and billing settings, without Grok application feature switches.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct Settings {
-    pub subscription_tier: Option<String>,
-    pub subscription_tier_display: Option<String>,
-    pub allow_access: Option<bool>,
-    pub gate_message: Option<String>,
-    pub on_demand_enabled: Option<bool>,
-}
 
 impl Client<'_> {
     pub fn read_account(&self, cancellation: &CancellationToken) -> Result<Account, RequestError> {

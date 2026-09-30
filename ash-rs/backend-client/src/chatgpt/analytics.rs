@@ -1,13 +1,13 @@
 use super::Client;
-use super::analytics_types::CreditUsageEventsResponse;
-use super::analytics_types::CurrentUserCreditUsageResponse;
-use super::analytics_types::DailyProductSurfaceUsageResponse;
-use super::analytics_types::DailySkillUsageMetricsResponse;
-use super::analytics_types::DailyWorkspaceUsageCountResponse;
-use super::analytics_types::PluginUsageMetricsResponse;
 use crate::RequestError;
 use async_utils::CancellationToken;
-use serde::Deserialize;
+use backend_models::chatgpt::CreditUsageEventsResponse;
+use backend_models::chatgpt::CurrentUserCreditUsageResponse;
+use backend_models::chatgpt::DailyProductSurfaceUsageResponse;
+use backend_models::chatgpt::DailySkillUsageMetricsResponse;
+use backend_models::chatgpt::DailyWorkspaceUsageCountResponse;
+use backend_models::chatgpt::PlanLimitHistory;
+use backend_models::chatgpt::PluginUsageMetricsResponse;
 
 /// Endpoint-specific account reports; dates are inclusive UTC dates supplied by the caller.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -30,40 +30,6 @@ pub enum AnalyticsResponse {
     Messages(DailyWorkspaceUsageCountResponse),
     Plugins(PluginUsageMetricsResponse),
     Skills(DailySkillUsageMetricsResponse),
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct PlanLimitHistory {
-    pub data_as_of: Option<String>,
-    pub coverage_start: Option<String>,
-    pub coverage_complete: bool,
-    pub approximate: Option<bool>,
-    pub boundary_tolerance_seconds: Option<u32>,
-    pub periods: Vec<PlanLimitPeriod>,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct PlanLimitPeriod {
-    pub id: String,
-    pub window_minutes: u32,
-    pub plan_type: String,
-    pub starts_at: String,
-    pub ends_at: String,
-    pub accounting_complete: bool,
-    pub used_basis_points: Option<f64>,
-    pub breakdowns: Option<Vec<PlanLimitBreakdown>>,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct PlanLimitBreakdown {
-    pub dimension: String,
-    pub rows: Vec<PlanLimitValue>,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct PlanLimitValue {
-    pub key: String,
-    pub basis_points: f64,
 }
 
 impl Client<'_> {

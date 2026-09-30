@@ -63,6 +63,7 @@ members = [
     "ash-rs/chatgpt",
     "ash-rs/glm",
     "ash-rs/backend-client",
+    "ash-rs/backend-models",
     "ash-rs/apply-patch",
     "ash-rs/async-utils",
     "ash-rs/ext/guardian-reviewer",

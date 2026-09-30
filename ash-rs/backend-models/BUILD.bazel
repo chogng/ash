@@ -1,0 +1,7 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "backend-models",
+    crate_name = "ash_backend_models",
+    data = glob(["tests/fixtures/*.json"]),
+)

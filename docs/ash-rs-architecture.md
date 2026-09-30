@@ -81,7 +81,8 @@ ash-rs/
 ├── config/
 ├── secrets/              # provider-neutral secret persistence primitives
 ├── login/                # target interactive account-login control plane
-├── backend-client/       # OpenAI/Codex 账号、额度、云任务、配置与用量统计 HTTP API
+├── backend-models/       # 各供应商后台 HTTP 请求与响应合约，保留各自字段和单位
+├── backend-client/       # 各供应商后台 HTTP 路由、校验与解释
 ├── chatgpt/              # native ChatGPT subscription OAuth and authenticated target
 ├── model-provider-config/
 ├── model-provider/

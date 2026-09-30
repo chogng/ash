@@ -2,9 +2,11 @@
 
 use crate::RequestError;
 use async_utils::CancellationToken;
+use backend_models::coding_plan::BusinessResponse;
+use backend_models::zai::LoginRequest;
+use backend_models::zai::LoginResponse;
 use client::OperationClient;
 use client::ResolvedApiTarget;
-use serde_json::Value;
 
 use crate::QuotaLimit;
 
@@ -34,17 +36,18 @@ pub fn issue_api_key(
     }
     let target = ResolvedApiTarget::new(BUSINESS_URL, vec![]);
     let http = crate::client::Client::new(transport, &target)?;
-    let response: Value = http.post(
+    let response: BusinessResponse<LoginResponse> = http.post(
         http.endpoint(["api", "auth", "z", "login"])?,
-        &serde_json::json!({"token": oauth_access_token}),
+        &LoginRequest {
+            token: oauth_access_token,
+        },
         cancellation,
     )?;
-    let data = crate::coding_plan::data(&response)?;
-    let business_token = data["access_token"]
-        .as_str()
-        .or_else(|| data["accessToken"].as_str())
-        .filter(|token| !token.trim().is_empty())
-        .ok_or(RequestError::InvalidResponse)?;
+    let data = crate::coding_plan::data(response)?;
+    if data.access_token.trim().is_empty() {
+        return Err(RequestError::InvalidResponse);
+    }
+    let business_token = data.access_token;
     let business_target = ResolvedApiTarget::new(
         BUSINESS_URL,
         vec![http_client::HttpHeader::new(

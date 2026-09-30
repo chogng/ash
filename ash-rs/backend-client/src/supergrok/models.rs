@@ -1,6 +1,7 @@
 use super::Client;
 use crate::RequestError;
 use async_utils::CancellationToken;
+use backend_models::supergrok::ModelsResponse;
 use http_client::HttpHeader;
 use serde_json::Value;
 /// Subscription models returned by the authenticated models-v2 endpoint.
@@ -27,21 +28,17 @@ impl Client<'_> {
 }
 
 // These spellings and _meta locations follow grok-build's parse_remote_model_value.
-fn field<'a>(entry: &'a Value, names: &[&str]) -> Option<&'a Value> {
-    names.iter().find_map(|name| entry.get(name)).or_else(|| {
+fn field<'a>(entry: &'a serde_json::Map<String, Value>, names: &[&str]) -> Option<&'a Value> {
+    names.iter().find_map(|name| entry.get(*name)).or_else(|| {
         entry
             .get("_meta")
             .and_then(|meta| names.iter().find_map(|name| meta.get(name)))
     })
 }
 
-fn parse_models(value: Value) -> Result<Vec<CatalogModel>, RequestError> {
-    let entries = value
-        .get("data")
-        .and_then(Value::as_array)
-        .ok_or_else(|| RequestError::InvalidResponse)?;
+fn parse_models(value: ModelsResponse) -> Result<Vec<CatalogModel>, RequestError> {
     let mut models = Vec::new();
-    for entry in entries {
+    for entry in &value.data {
         if field(entry, &["hidden"]).and_then(Value::as_bool) == Some(true)
             || field(entry, &["apiBackend", "api_backend"]).and_then(Value::as_str)
                 != Some("responses")

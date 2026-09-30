@@ -196,3 +196,58 @@ fn coding_plan_selects_only_the_exact_default_scope() {
             .contains("/organization/org/projects/project/api_keys")
     );
 }
+
+#[test]
+fn coding_plan_quota_checks_business_status_and_requires_typed_data() {
+    let target = ResolvedApiTarget::new("https://bigmodel.cn", Vec::new());
+    let token = CancellationSource::new().token();
+    for body in [
+        r#"{"code":0,"data":{"limits":[]}}"#,
+        r#"{"code":"200","data":{"limits":[]}}"#,
+        r#"{"code":null,"data":{"limits":[]}}"#,
+        r#"{"data":{"limits":[]}}"#,
+    ] {
+        let client = ScriptedClient::new([body]);
+        assert!(
+            crate::coding_plan::read_quota(&client, &target, &token)
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(client.requests.lock().unwrap().len(), 1);
+    }
+    for body in [
+        r#"{"code":401,"data":{"limits":[]}}"#,
+        r#"{"code":"403","data":{"limits":[]}}"#,
+        r#"{"code":true,"data":{"limits":[]}}"#,
+        r#"{"code":200}"#,
+        r#"{"code":200,"data":null}"#,
+        r#"{"code":200,"data":{"limits":[{"type":5}]}}"#,
+        r#"{"code":200,"data":{"limits":[{"type":"CREDIT_LIMIT","nextResetTime":"tomorrow"}]}}"#,
+    ] {
+        let client = ScriptedClient::new([body]);
+        assert_eq!(
+            crate::coding_plan::read_quota(&client, &target, &token),
+            Err(RequestError::InvalidResponse)
+        );
+        assert_eq!(client.requests.lock().unwrap().len(), 1);
+    }
+}
+
+#[test]
+fn malformed_coding_plan_identity_stops_before_credential_requests() {
+    let target = ResolvedApiTarget::new("https://bigmodel.cn", Vec::new());
+    let token = CancellationSource::new().token();
+    for body in [
+        r#"{"code":200,"data":{"organizations":[{"organizationId":17,"projects":[]}]}}"#,
+        r#"{"code":200,"data":{"organizations":[{"organizationId":"","projects":[]}]}}"#,
+        r#"{"code":200,"data":{"organizations":[{"organizationId":"org","projects":[{"projectId":""}]}]}}"#,
+        r#"{"code":200,"data":{"organizations":[{"organizationId":"org","projects":[{"projectId":null}]}]}}"#,
+    ] {
+        let client = ScriptedClient::new([body]);
+        assert_eq!(
+            crate::bigmodel::issue_api_key(&client, &target, &token),
+            Err(RequestError::InvalidResponse)
+        );
+        assert_eq!(client.requests.lock().unwrap().len(), 1);
+    }
+}

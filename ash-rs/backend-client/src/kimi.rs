@@ -1,42 +1,16 @@
 //! Kimi Code account and quota APIs with caller-owned authentication.
 
+pub use backend_models::kimi::Account;
+pub use backend_models::kimi::QuotaWindow;
+pub use backend_models::kimi::QuotaWindows;
+pub use backend_models::kimi::Usage;
+
 use crate::RequestError;
 use crate::client::Client as HttpClient;
 use async_utils::CancellationToken;
-use chrono::DateTime;
-use chrono::FixedOffset;
 use client::OperationClient;
 use client::ResolvedApiTarget;
 use http_client::HttpHeader;
-use serde::Deserialize;
-
-/// The account fields displayed by the official Kimi Code client.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct Account {
-    pub user_id: String,
-    pub nickname: Option<String>,
-    pub email: Option<String>,
-    pub user_level_name: Option<String>,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct QuotaWindow {
-    pub used_ratio: f64,
-    pub reset_time: Option<DateTime<FixedOffset>>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
-pub struct QuotaWindows {
-    pub limit_5h: Option<QuotaWindow>,
-    pub limit_7d: Option<QuotaWindow>,
-    pub limit_month_total: Option<QuotaWindow>,
-    pub limit_month_code: Option<QuotaWindow>,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct Usage {
-    pub usages: QuotaWindows,
-}
 
 pub struct Client<'a> {
     http: HttpClient<'a>,
