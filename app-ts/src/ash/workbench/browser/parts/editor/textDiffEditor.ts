@@ -3,6 +3,7 @@ import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { Emitter } from '../../../../base/common/event.js';
 import type { Range } from '../../../../editor/common/core/range.js';
+import { ScrollType } from '../../../../editor/common/editorCommon.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import { assertDefined } from "../../../../base/common/types.js";
 import { EditorPaneVisibility } from "../../../browser/parts/editor/editorPane.js";
@@ -11,6 +12,7 @@ import { type EditorInput } from "../../../browser/parts/editor/editorInput.js";
 import { DIFF_EDITOR_ID, isDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
 import { BaseTextEditorModel } from '../../../common/editor/textEditorModel.js';
 import { TextDiffEditorModel } from '../../../common/editor/textDiffEditorModel.js';
+import { applyTextEditorOptions } from '../../../common/editor/editorOptions.js';
 import { type ITextResourceStore } from "../../../services/textmodelResolver/common/textResourceStore.js";
 import { DiffModel } from "../../../../editor/common/diff/diffModel.js";
 import { type HideUnchangedRegionsOptions } from '../../../../editor/common/config/diffEditor.js';
@@ -58,8 +60,7 @@ export class TextDiffEditor extends Disposable implements IEditorPaneWithSelecti
 	restoreSelection(selection: Range, source: TextEditorSelectionSource): void {
 		const editor = this.session.value?.editor.modifiedEditor;
 		if (!editor) return;
-		editor.setSelection(selection, source);
-		editor.revealRange(selection);
+		applyTextEditorOptions({ selection, selectionSource: source }, editor, ScrollType.Smooth);
 	}
 
 	constructor(
@@ -147,7 +148,16 @@ export class TextDiffEditor extends Disposable implements IEditorPaneWithSelecti
 	setVisible(visibility: EditorPaneVisibility): void {
 		if (!this.container) return;
 		this.container.hidden = visibility === EditorPaneVisibility.Hidden;
-		if (visibility === EditorPaneVisibility.Visible) this.session.value?.layout(this.dimension);
+		const session = this.session.value;
+		if (!session) return;
+		if (visibility === EditorPaneVisibility.Visible) {
+			session.editor.originalEditor.onVisible();
+			session.editor.modifiedEditor.onVisible();
+			session.layout(this.dimension);
+		} else {
+			session.editor.originalEditor.onHide();
+			session.editor.modifiedEditor.onHide();
+		}
 	}
 
 	focus(): void {

@@ -10,7 +10,7 @@ import { type IModelDeltaDecoration } from '../common/model.js';
 import { type IModelContentChangedEvent, type IModelDecorationsChangedEvent } from '../common/textModelEvents.js';
 import { type InjectedText } from '../common/modelLineProjectionData.js';
 import { type ConfigurationChangedEvent, type EditorLayoutInfo, type EditorOption, type FindComputedEditorOptionValueById, type IComputedEditorOptions, type IEditorOptions, type OverviewRulerPosition } from '../common/config/editorOptions.js';
-import { type ICommand, type IEditorAction, type IEditorContribution, type IEditorDecorationsCollection, type IModelChangedEvent, type INewScrollPosition, type ScrollType } from '../common/editorCommon.js';
+import { type ICodeEditorViewState, type ICommand, type IEditor, type IEditorAction, type IEditorContribution, type IEditorDecorationsCollection, type IModelChangedEvent, type INewScrollPosition, type ScrollType } from '../common/editorCommon.js';
 import { type ITextModel } from '../common/model.js';
 import { type ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
 import { type IClipboardCopyEvent, type IClipboardPasteEvent } from './controller/editContext/clipboardUtils.js';
@@ -159,7 +159,7 @@ export interface IOverviewRuler {
 }
 
 /** Browser-facing contract shared by editor services and contributions. */
-export interface ICodeEditor {
+export interface ICodeEditor extends IEditor {
 	readonly isSimpleWidget: boolean;
 	readonly contextMenuId: MenuId;
 	readonly onDidDispose: Event<void>;
@@ -203,9 +203,11 @@ export interface ICodeEditor {
 	hasWidgetFocus(): boolean;
 	getModel(): ITextModel | null;
 	setModel(model: ITextModel | null): void;
+	saveViewState(): ICodeEditorViewState | null;
+	restoreViewState(state: ICodeEditorViewState | null): void;
 	hasModel(): boolean;
 	_getViewModel(): IViewModel | null;
-	getPosition(): IPosition | null;
+	getPosition(): Position | null;
 	getScrollTop(): number;
 	getScrollLeft(): number;
 	getContentHeight(): number;
@@ -257,7 +259,7 @@ export interface ICodeEditor {
 	layoutGlyphMarginWidget(widget: IGlyphMarginWidget): void;
 	removeGlyphMarginWidget(widget: IGlyphMarginWidget): void;
 	changeViewZones(callback: (accessor: IViewZoneChangeAccessor) => void): void;
-	revealRange(range: Range, scrollType?: ScrollType): void;
+	revealRange(range: IRange, scrollType?: ScrollType): void;
 }
 
 export interface PastePayload {

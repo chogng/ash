@@ -67,6 +67,7 @@ interface WorkbenchSwitchResult {
 
 interface IntegrationHarness {
 	readonly apiText: string;
+	getControl(): ReturnType<typeof createBrowserEditorPart>;
 	getValue(): string;
 	setValue(value: string): void;
 	save(): Promise<void>;
@@ -192,6 +193,7 @@ await pane.setInput({ resource, label: "main.rs" }, new AbortController().signal
 
 window.ashTextModelIntegration = {
 	apiText: apiModel.getText(),
+	getControl: () => requiredEditorPart(),
 	getValue: () => pane.getValue(),
 	setValue: value => requiredEditorPart().setValue(value),
 	save: () => pane.save(),

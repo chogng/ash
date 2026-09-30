@@ -15,7 +15,7 @@ import { TextModel } from "../../../common/model/textModel.js";
 import { SyntaxProviderRegistry } from '../../../common/languageFeatureRegistry.js';
 import { GlyphMarginLane } from '../../../common/model.js';
 import { EditorLineWrapping, EditorOption, RenderLineNumbersType } from '../../../common/config/editorOptions.js';
-import { ScrollType } from '../../../common/editorCommon.js';
+import { EditorType, ScrollType, type IEditor } from '../../../common/editorCommon.js';
 import { VerticalRevealType } from '../../../common/viewEvents.js';
 import { IContextKeyService, ContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { AccessibilitySupport, IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
@@ -316,12 +316,13 @@ test('CodeEditorWidget actions keep their editor context across read-only change
 		other.focus();
 		assert.equal(editor.getAction('missing.action'), null);
 		assert.equal(action.isSupported(), false);
+		assert.equal(editor.getSupportedActions().some(candidate => candidate.id === action.id), false);
 		assert.equal(other.getAction(action.id)!.isSupported(), true);
 		await action.run();
 		assert.deepEqual([first.getValue(), second.getValue()], ['first\nkeep', 'second\nkeep']);
 		editor.updateOptions({ readOnly: false });
 		assert.equal(action.isSupported(), true);
-		await action.run();
+		await editor.getSupportedActions().find(candidate => candidate.id === action.id)!.run();
 		assert.deepEqual([first.getValue(), second.getValue()], ['keep', 'second\nkeep']);
 		editor.setModel(null);
 		await action.run();
@@ -444,6 +445,102 @@ test('CodeEditorWidget exposes editor-owned scroll geometry', () => {
 	assert.equal(editor.getBottomForLineNumber(3), 60);
 	assert.deepEqual(editor.getVisibleRanges(), [new Range(3, 1, 4, 5)]);
 	dom.window.close();
+});
+
+test('common editor reveal modes scroll without changing selection or borrowing model ownership', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using closeWindow = toDisposable(() => dom.window.close());
+	using model = new TextModel(Array.from({ length: 60 }, () => 'line').join('\n'));
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, lineHeight: 20 });
+	const control: IEditor = editor;
+	control.layout({ width: 300, height: 100 });
+	control.setPosition(new Position(2, 2));
+	const selection = control.getSelection();
+	const range = { startLineNumber: 20, startColumn: 2, endLineNumber: 20, endColumn: 3 };
+	const position = { lineNumber: 20, column: 2 };
+	const cases: readonly [() => void, number][] = [
+		[() => control.revealLine(20, ScrollType.Immediate), 300],
+		[() => control.revealLineInCenter(20, ScrollType.Immediate), 340],
+		[() => control.revealLineInCenterIfOutsideViewport(20, ScrollType.Immediate), 340],
+		[() => control.revealLineNearTop(20, ScrollType.Immediate), 280],
+		[() => control.revealPosition(position, ScrollType.Immediate), 300],
+		[() => control.revealPositionInCenter(position, ScrollType.Immediate), 340],
+		[() => control.revealPositionInCenterIfOutsideViewport(position, ScrollType.Immediate), 340],
+		[() => control.revealPositionNearTop(position, ScrollType.Immediate), 280],
+		[() => control.revealLines(20, 21, ScrollType.Immediate), 320],
+		[() => control.revealLinesInCenter(20, 21, ScrollType.Immediate), 350],
+		[() => control.revealLinesInCenterIfOutsideViewport(20, 21, ScrollType.Immediate), 350],
+		[() => control.revealLinesNearTop(20, 21, ScrollType.Immediate), 280],
+		[() => control.revealRange(range, ScrollType.Immediate), 300],
+		[() => control.revealRangeInCenter(range, ScrollType.Immediate), 340],
+		[() => control.revealRangeAtTop(range, ScrollType.Immediate), 380],
+		[() => control.revealRangeInCenterIfOutsideViewport(range, ScrollType.Immediate), 340],
+		[() => control.revealRangeNearTop(range, ScrollType.Immediate), 280],
+		[() => control.revealRangeNearTopIfOutsideViewport(range, ScrollType.Immediate), 280],
+	];
+	for (const [reveal, expectedTop] of cases) {
+		editor.setScrollTop(0);
+		reveal();
+		assert.equal(editor.getScrollTop(), expectedTop);
+		assert.deepEqual(control.getSelection(), selection);
+	}
+	editor.setScrollTop(330);
+	control.revealRangeInCenterIfOutsideViewport(range, ScrollType.Immediate);
+	assert.equal(editor.getScrollTop(), 330);
+	control.revealRangeNearTopIfOutsideViewport(range, ScrollType.Immediate);
+	assert.equal(editor.getScrollTop(), 330);
+	control.setModel(null);
+	for (const [reveal] of cases) reveal();
+	assert.deepEqual([control.getModel(), control.getSelection(), model.isDisposed()], [null, null, false]);
+});
+
+test('common editor visibility notifications settle focus before the next input', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main><button id="outside">outside</button></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using closeWindow = toDisposable(() => dom.window.close());
+	using model = new TextModel('text');
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model });
+	const control: IEditor = editor;
+	control.focus();
+	assert.deepEqual([control.hasTextFocus(), editor.hasWidgetFocus()], [true, true]);
+	requiredElement<HTMLButtonElement>(dom.window.document, '#outside').focus();
+	control.onHide();
+	assert.deepEqual([control.hasTextFocus(), editor.hasWidgetFocus()], [false, false]);
+	control.onVisible();
+	assert.equal(dom.window.document.activeElement?.id, 'outside');
+	control.focus();
+	control.onVisible();
+	assert.deepEqual([control.hasTextFocus(), editor.hasWidgetFocus()], [true, true]);
+	control.setModel(null);
+	control.onHide();
+	control.onVisible();
+	assert.deepEqual([control.hasTextFocus(), model.isDisposed()], [false, false]);
+});
+
+test('common editor columns follow tabs and Unicode after replacing and detaching its model', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using closeWindow = toDisposable(() => dom.window.close());
+	using model = new TextModel('\t中😀é');
+	model.updateOptions({ tabSize: 4 });
+	using replacement = new TextModel('\tab');
+	replacement.updateOptions({ tabSize: 8 });
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model });
+	const control: IEditor = editor;
+	assert.equal(control.getEditorType(), EditorType.ICodeEditor);
+	assert.deepEqual([2, 3, 5, 7].map(column => [control.getVisibleColumnFromPosition({ lineNumber: 1, column }), control.getStatusbarColumn({ lineNumber: 1, column })]), [[5, 5], [7, 6], [9, 7], [10, 9]]);
+	control.setPosition(new Position(1, 3));
+	const state = control.saveViewState();
+	control.setPosition(new Position(1, 1));
+	control.restoreViewState(state);
+	assert.deepEqual(control.getPosition(), new Position(1, 3));
+	control.restoreViewState({ original: null, modified: null });
+	assert.deepEqual(control.getPosition(), new Position(1, 3));
+	control.setModel(replacement);
+	assert.deepEqual([control.getVisibleColumnFromPosition({ lineNumber: 1, column: 2 }), control.getStatusbarColumn({ lineNumber: 1, column: 2 })], [9, 9]);
+	control.setModel(null);
+	assert.deepEqual([control.getVisibleColumnFromPosition({ lineNumber: 1, column: 2 }), control.getStatusbarColumn({ lineNumber: 1, column: 2 })], [2, 2]);
 });
 
 test('CodeEditorWidget isolates model decorations by editor lifetime', () => {

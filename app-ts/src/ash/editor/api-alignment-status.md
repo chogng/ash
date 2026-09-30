@@ -1,5 +1,23 @@
 # Editor API 对齐状态
 
+## 公共 IEditor 基座（2026-09-30）
+
+本批闭合的生产链：差异窗格恢复历史选区 → `TextDiffEditor.restoreSelection` → `applyTextEditorOptions` → `CodeEditorWidget` 的公共 `IEditor` 契约 → 原 `ViewModel` 选区与 reveal 事件 → 原 `View` 滚动。窗格改变显隐后通知两侧 Widget，复用原输入与 widget 焦点 tracker；没有新增选区、滚动、DOM 或生命周期 owner。
+
+| 本批生产路径（均在 `src/ash` 下，双方都有） | 调用方与唯一 owner | 局部改动与验证 |
+| --- | --- | --- |
+| `editor/browser/editorBrowser.ts` | 服务和贡献消费 `ICodeEditor`，基础能力由 `IEditor` 声明 | 建立继承，位置使用 `Position`，保留代码编辑器的模型与视图状态类型；生产类型检查 |
+| `editor/browser/widget/codeEditor/codeEditorWidget.ts` | 公共选区操作、差异窗格通知；Widget 连接原 `ViewModel`、`View`、焦点 tracker 和动作注册表 | 实现继承所需的定位、列计算、动作查询与显隐入口；Widget 行为测试和 Chromium 换行/折叠几何测试 |
+| `platform/editor/common/editor.ts` | 公共文本选项，由窗格传递来源 | `selectionSource` 使用现有枚举或调用方字符串，不建立另一份导航状态 |
+| `workbench/common/editor/editorOptions.ts` | `TextDiffEditor.restoreSelection`，选区与滚动由传入的 `IEditor` 持有 | 接通生产调用并传递选区来源；差异窗格导航和跳转测试 |
+| `workbench/browser/parts/editor/textDiffEditor.ts` | Workbench 窗格生命周期与选区历史 | 用公共操作恢复选区，显隐后通知两侧原编辑器；窗格行为测试 |
+
+`CodeEditorWidget` 可直接赋给 `IEditor`，没有类型断言或额外适配器。定位测试覆盖全部行、位置与范围入口、可见范围内保持滚动、无模型状态和不移动选区；列计算覆盖 Tab、全角字符、emoji、组合字符及模型替换；动作测试执行受编辑器只读上下文约束的删除命令。这里没有将完整 Widget 或 `editorOptions` 标为全部对齐：公共选项目前接通选区操作，其他打开选项与整套 Widget 公开能力仍按实际消费者继续处理。
+
+验证结果：Widget、模型生命周期、输入、差异窗格和 Editor 架构共 100 项定向单测通过；Chromium 的公共定位、输入/撤销/保存、文件切换共 3 个场景通过；生产 Web 和 Electron UI 各 2 个输入/折叠/分组场景通过；连接 App Server 的 Electron 3 个打开/保存/滚动/替换场景通过。生产构建、Renderer 类型检查及专用入口的结构、CSS、台账和 Stanza 类型检查通过，构建没有 warning。
+
+完整 `check-editor-alignment.mjs --test=all` 未通过：Editor 单测为 243/250 个文件通过，其余失败位于 Copy/Paste、Drop、Semantic Tokens、Multi Diff Widget/Pane、App Server Diagnostics/Providers，涉及文件粘贴行为、token 字段、缺失图标及 Windows 资源路径；本批没有修改这些职责。浏览器完整编译入口另有 Academic、Marketplace、Terminal 测试契约错误，完整 fixture 构建还引用已不存在的 Sessions CSS。本次 Chromium 场景用原配置的编译选项和 Vite 输出规则，仅选择受影响的 text-model fixture 检查与构建；没有跳过该场景的类型检查，也没有将完整检查记为通过。
+
 ## 文件图标类与主题接线（2026-09-25）
 
 `common/services/getIconClasses.ts` 已按同路径补入：根据资源、文件类型、已打开模型与语言关联生成文件名、复合扩展名和语言类名；数据 URI 元数据由 `base/common/resources.ts` 的 `DataUri` 解析，纯文本语言 ID 由 `common/languages/modesRegistry.ts` 提供。语言注册仍由每个 `LanguageService` 持有，不增加全局注册源。Editor 补全列表的 File/Folder 项现在使用这些类名；普通编辑器和 Chat 输入框均通过依赖注入创建补全控制器。Workbench 主题数据将同一组类名生成补全图标样式，并匹配资源标签的文件名、扩展名及语言关联；语言注册变化会通知已有资源标签重绘。当前 Workbench 未提供 `IModelService`，资源标签按已注册的文件语言关联选择图标；工具函数的模型优先语义由 Editor 单测验证。下文较早的“没有消费者”和缺失文件清单是当时的审计记录。

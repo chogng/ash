@@ -192,9 +192,12 @@ test("Stanza diff pane acquires both models, lays out the review view, and relea
 	diffWidget.modifiedEditor.setSelection(new Range(1, 2, 1, 2), 'keyboard');
 	pane.restoreSelection(new Range(1, 5, 1, 5), TextEditorSelectionSource.NAVIGATION);
 	assert.equal(pane.getSelection()?.startColumn, 5);
+	pane.restoreSelection(new Range(1, 4, 1, 4), TextEditorSelectionSource.JUMP);
+	assert.equal(pane.getSelection()?.startColumn, 4);
 	diffWidget.modifiedEditor.executeEdits('keyboard', [{ range: new Range(1, 5, 1, 5), text: 'x' }]);
 	assert.ok(selectionReasons.includes(EditorPaneSelectionChangeReason.USER));
 	assert.ok(selectionReasons.includes(EditorPaneSelectionChangeReason.NAVIGATION));
+	assert.ok(selectionReasons.includes(EditorPaneSelectionChangeReason.JUMP));
 	assert.ok(selectionReasons.includes(EditorPaneSelectionChangeReason.EDIT));
 	assert.match(parent.querySelector(".stanza-diff-editor")?.getAttribute("aria-label") ?? "", /before\.ts/);
 	assert.equal(codeEditorService.listDiffEditors().length, 1);

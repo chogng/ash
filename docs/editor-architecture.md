@@ -1492,7 +1492,9 @@ Grammar catalog 由共享 Workbench `ITextMateService` 拥有，声明式 extens
 
 Workbench editor 宿主负责资源视图的“在哪个 group/window、以哪个 pane、何时激活或关闭”；具体 pane 负责“如何解释和编辑内容”。跨窗口服务只注册同源 UI 窗口、镜像样式并提供布局/卸载事件，不获得文件或模型权限。Binary Pane 只消费 `IFileService.readFileBytes`，TextFile service 只向文本模型发布经过验证的 UTF-8，二者不会共享可写模型。
 
-`common/editor` 的对应职责尚未全部迁入：`editorInput.ts`、`resourceEditorInput.ts`、`textResourceEditorInput.ts`、`sideBySideEditorInput.ts` 所需的输入解析与生命周期，目前仍由资源值对象、文件输入、解析服务和窗格承担。要继续迁移，需先统一资源请求到编辑器输入的创建与引用边界，不能同时引入两套输入 owner。`editorOptions.ts` 的选区操作还受下层契约阻塞：`CodeEditorWidget` 实现的是当前 `ICodeEditor`，尚不满足标准 `IEditor`。这些差异保持待处理，不能用文件存在或类型断言标为完成。已有 Ash 专属 `codeEditorId.ts` 本轮保留。
+`common/editor` 的对应职责尚未全部迁入：`editorInput.ts`、`resourceEditorInput.ts`、`textResourceEditorInput.ts`、`sideBySideEditorInput.ts` 所需的输入解析与生命周期，目前仍由资源值对象、文件输入、解析服务和窗格承担。要继续迁移，需先统一资源请求到编辑器输入的创建与引用边界，不能同时引入两套输入 owner。已有 Ash 专属 `codeEditorId.ts` 本轮保留。
+
+`ICodeEditor` 已继承公共 `IEditor`，`CodeEditorWidget` 补齐通用定位、列计算、动作查询和显隐通知。定位只向现有 `ViewModel` 提交模型范围，换行、折叠、滚动和渲染仍由现有视图负责；动作继续使用原注册表和编辑器上下文，显隐通知只刷新原焦点 owner。`TextDiffEditor.restoreSelection` 已通过 `common/editor/editorOptions.ts` 恢复选区并滚动，保留导航与跳转来源；窗格显隐在修改容器可见性后通知两侧编辑器。此处接通的是选区操作，尚未补齐 `editorOptions` 的视图状态与其他打开选项。
 
 新增 VS Code 对应能力前必须先判断基座所有者：需要稳定布局与事件时扩展 EditorPart/Group state；需要窗口时扩展 auxiliary-window service 与 scoped services；需要格式解释时新增 contribution/pane；需要 transaction、selection 或 language 状态时进入 `src/ash/editor`。只有出现至少两个真实调用方时，才把领域无关 DOM、Grid、取消或生命周期原语下沉到 `base`。
 

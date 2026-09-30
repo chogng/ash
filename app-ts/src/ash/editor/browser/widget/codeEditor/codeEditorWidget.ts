@@ -8,12 +8,13 @@ import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type IDimension } from '../../../common/core/2d/dimension.js';
 import { Selection, type ISelection } from "../../../common/core/selection.js";
-import { Position } from "../../../common/core/position.js";
+import { Position, type IPosition } from "../../../common/core/position.js";
+import { CursorColumns } from '../../../common/core/cursorColumns.js';
 import { Range, type IRange } from "../../../common/core/range.js";
 import { TextModel } from "../../../common/model/textModel.js";
 import { type ICursorStateComputer, type IIdentifiedSingleEditOperation, type IModelDecoration, type IModelDecorationsChangeAccessor, type IModelDeltaDecoration, type ITextModel } from '../../../common/model.js';
 import { type IModelContentChangedEvent, type IModelDecorationsChangedEvent } from '../../../common/textModelEvents.js';
-import { Handler, ScrollType, type CompositionTypePayload, type ICommand, type IEditorAction, type ICodeEditorViewState, type IEditorDecorationsCollection, type IModelChangedEvent, type INewScrollPosition, type ReplacePreviousCharPayload, type TypePayload } from '../../../common/editorCommon.js';
+import { EditorType, Handler, ScrollType, type CompositionTypePayload, type ICommand, type IEditorAction, type ICodeEditorViewState, type IEditorDecorationsCollection, type IEditorModel, type IEditorViewState, type IModelChangedEvent, type INewScrollPosition, type ReplacePreviousCharPayload, type TypePayload } from '../../../common/editorCommon.js';
 import { VerticalRevealType } from '../../../common/viewEvents.js';
 import type { ICodeEditor, IContentWidget, IEditorMouseEvent, IGlyphMarginWidget, IOverlayWidget, IOverviewRuler, IPartialEditorMouseEvent, PastePayload, IViewZoneChangeAccessor } from '../../editorBrowser.js';
 import { View, type EditorTextDirection, type EditorViewportPresentation } from '../../view.js';
@@ -22,7 +23,7 @@ import { IInstantiationService } from "../../../../platform/instantiation/common
 import { CodeEditorContributions } from "./codeEditorContributions.js";
 import { EditorConfiguration, type IEditorConstructionOptions } from '../../config/editorConfiguration.js';
 import { migrateOptions } from '../../config/migrateOptions.js';
-import { EditorExtensionsRegistry, type EditorCommandEvent, type EditorContributionRegistration, type TextEditorContributionContext } from '../../editorExtensions.js';
+import { EditorExtensionsRegistry, type EditorAction, type EditorCommandEvent, type EditorContributionRegistration, type TextEditorContributionContext } from '../../editorExtensions.js';
 import { IVersionedEditorWorkerClient, VersionedEditorWorkerClient, type VersionedEditorWorkerFactory } from '../../services/editorWorkerService.js';
 import { EditorWorker } from '../../../common/services/editorWebWorker.js';
 import { ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
@@ -491,7 +492,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		return this.rootDomNode;
 	}
 
-	setModel(model: ITextModel | null): void {
+	setModel(model: IEditorModel | null): void {
 		this.assertNotDisposed();
 		if (model === this.currentModel) return;
 		if (model !== null && (!(model instanceof TextModel) || model.isDisposed())) {
@@ -561,6 +562,20 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	focus(): void {
 		if (this.currentModel) this.view.focus();
 		else this.rootDomNode.focus();
+	}
+
+	onVisible(): void {
+		this.refreshFocusState();
+	}
+
+	onHide(): void {
+		this.refreshFocusState();
+	}
+
+	private refreshFocusState(): void {
+		// The host changes visibility before notifying us; retain the existing focus owners.
+		if (this.currentModel) this.view.refreshFocusState();
+		this.widgetFocus.refreshState();
 	}
 
 	addContentWidget(widget: IContentWidget): void {
@@ -671,11 +686,82 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		this.currentModel.setValue(value);
 	}
 
-	revealRange(range: Range, scrollType: ScrollType = ScrollType.Smooth): void {
+	revealLine(lineNumber: number, scrollType?: ScrollType): void {
+		this.revealLines(lineNumber, lineNumber, scrollType);
+	}
+
+	revealLineInCenter(lineNumber: number, scrollType?: ScrollType): void {
+		this.revealLinesInCenter(lineNumber, lineNumber, scrollType);
+	}
+
+	revealLineInCenterIfOutsideViewport(lineNumber: number, scrollType?: ScrollType): void {
+		this.revealLinesInCenterIfOutsideViewport(lineNumber, lineNumber, scrollType);
+	}
+
+	revealLineNearTop(lineNumber: number, scrollType?: ScrollType): void {
+		this.revealLinesNearTop(lineNumber, lineNumber, scrollType);
+	}
+
+	revealPosition(position: IPosition, scrollType?: ScrollType): void {
+		this.revealRange(Range.fromPositions(Position.lift(position)), scrollType);
+	}
+
+	revealPositionInCenter(position: IPosition, scrollType?: ScrollType): void {
+		this.revealRangeInCenter(Range.fromPositions(Position.lift(position)), scrollType);
+	}
+
+	revealPositionInCenterIfOutsideViewport(position: IPosition, scrollType?: ScrollType): void {
+		this.revealRangeInCenterIfOutsideViewport(Range.fromPositions(Position.lift(position)), scrollType);
+	}
+
+	revealPositionNearTop(position: IPosition, scrollType?: ScrollType): void {
+		this.revealRangeNearTop(Range.fromPositions(Position.lift(position)), scrollType);
+	}
+
+	revealLines(startLineNumber: number, endLineNumber: number, scrollType?: ScrollType): void {
+		this.revealModelRange(new Range(startLineNumber, 1, endLineNumber, 1), VerticalRevealType.Simple, scrollType, false);
+	}
+
+	revealLinesInCenter(startLineNumber: number, endLineNumber: number, scrollType?: ScrollType): void {
+		this.revealModelRange(new Range(startLineNumber, 1, endLineNumber, 1), VerticalRevealType.Center, scrollType, false);
+	}
+
+	revealLinesInCenterIfOutsideViewport(startLineNumber: number, endLineNumber: number, scrollType?: ScrollType): void {
+		this.revealModelRange(new Range(startLineNumber, 1, endLineNumber, 1), VerticalRevealType.CenterIfOutsideViewport, scrollType, false);
+	}
+
+	revealLinesNearTop(startLineNumber: number, endLineNumber: number, scrollType?: ScrollType): void {
+		this.revealModelRange(new Range(startLineNumber, 1, endLineNumber, 1), VerticalRevealType.NearTop, scrollType, false);
+	}
+
+	revealRange(range: IRange, scrollType?: ScrollType): void {
+		this.revealModelRange(range, VerticalRevealType.Simple, scrollType);
+	}
+
+	revealRangeInCenter(range: IRange, scrollType?: ScrollType): void {
+		this.revealModelRange(range, VerticalRevealType.Center, scrollType);
+	}
+
+	revealRangeAtTop(range: IRange, scrollType?: ScrollType): void {
+		this.revealModelRange(range, VerticalRevealType.Top, scrollType);
+	}
+
+	revealRangeInCenterIfOutsideViewport(range: IRange, scrollType?: ScrollType): void {
+		this.revealModelRange(range, VerticalRevealType.CenterIfOutsideViewport, scrollType);
+	}
+
+	revealRangeNearTop(range: IRange, scrollType?: ScrollType): void {
+		this.revealModelRange(range, VerticalRevealType.NearTop, scrollType);
+	}
+
+	revealRangeNearTopIfOutsideViewport(range: IRange, scrollType?: ScrollType): void {
+		this.revealModelRange(range, VerticalRevealType.NearTopIfOutsideViewport, scrollType);
+	}
+
+	private revealModelRange(range: IRange, verticalType: VerticalRevealType, scrollType = ScrollType.Smooth, revealHorizontal = true): void {
 		if (!this.currentModel) return;
-		this.view.textModel.offsetAt(range.getStartPosition());
-		this.view.textModel.offsetAt(range.getEndPosition());
-		this.viewModel.revealRange('api', true, range, VerticalRevealType.Simple, scrollType);
+		// ViewModel converts model coordinates through wrapping and hidden lines exactly once.
+		this.viewModel.revealRange('api', revealHorizontal, this.currentModel.validateRange(range), verticalType, scrollType);
 	}
 
 	saveViewState(): CodeEditorViewState | null {
@@ -687,8 +773,8 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		});
 	}
 
-	restoreViewState(state: CodeEditorViewState | null): void {
-		if (!this.currentModel || !state) return;
+	restoreViewState(state: IEditorViewState | null): void {
+		if (!this.currentModel || !state || !('cursorState' in state)) return;
 		this.viewModel.restoreCursorState(state.cursorState);
 		const scroll = this.viewModel.reduceRestoreState(state.viewState);
 		this.view.scrollTo({ left: scroll.scrollLeft, top: scroll.scrollTop });
@@ -697,6 +783,22 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 
 	getId(): string {
 		return this.ownerId;
+	}
+
+	getEditorType(): string {
+		return EditorType.ICodeEditor;
+	}
+
+	getVisibleColumnFromPosition(position: IPosition): number {
+		if (!this.currentModel) return position.column;
+		const valid = this.currentModel.validatePosition(position);
+		return CursorColumns.visibleColumnFromColumn(this.currentModel.getLineContent(valid.lineNumber), valid.column, this.currentModel.getOptions().tabSize) + 1;
+	}
+
+	getStatusbarColumn(position: IPosition): number {
+		if (!this.currentModel) return position.column;
+		const valid = this.currentModel.validatePosition(position);
+		return CursorColumns.toStatusbarColumn(this.currentModel.getLineContent(valid.lineNumber), valid.column, this.currentModel.getOptions().tabSize);
 	}
 
 	hasTextFocus(): boolean {
@@ -894,21 +996,27 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	getAction(id: string): IEditorAction | null {
 		this.assertNotDisposed();
 		for (const action of EditorExtensionsRegistry.getEditorActions()) {
-			if (action.id !== id) {
-				continue;
-			}
-			return new InternalEditorAction(
-				action.id, action.label, action.alias, action.metadata, action.precondition,
-				async args => {
-					this.assertNotDisposed();
-					if (this.currentModel) {
-						await this.invokeWithinContext(accessor => action.runEditorCommand(accessor, this, args));
-					}
-				},
-				this.contextKeyService,
-			);
+			if (action.id === id) return this.createEditorAction(action);
 		}
 		return null;
+	}
+
+	getSupportedActions(): IEditorAction[] {
+		this.assertNotDisposed();
+		return Array.from(EditorExtensionsRegistry.getEditorActions(), action => this.createEditorAction(action)).filter(action => action.isSupported());
+	}
+
+	private createEditorAction(action: EditorAction): IEditorAction {
+		return new InternalEditorAction(
+			action.id, action.label, action.alias, action.metadata, action.precondition,
+			async args => {
+				this.assertNotDisposed();
+				if (this.currentModel) {
+					await this.invokeWithinContext(accessor => action.runEditorCommand(accessor, this, args));
+				}
+			},
+			this.contextKeyService,
+		);
 	}
 
 	invokeWithinContext<T>(fn: (accessor: import('../../../../platform/instantiation/common/instantiation.js').ServicesAccessor) => T): T {

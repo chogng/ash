@@ -14,7 +14,7 @@ export function applyTextEditorOptions(options: ITextEditorOptions, editor: IEdi
 		selection.endLineNumber ?? selection.startLineNumber,
 		selection.endColumn ?? selection.startColumn,
 	);
-	editor.setSelection(range, TextEditorSelectionSource.NAVIGATION);
+	editor.setSelection(range, options.selectionSource ?? TextEditorSelectionSource.NAVIGATION);
 	editor.revealRange(range, scrollType);
 	return true;
 }

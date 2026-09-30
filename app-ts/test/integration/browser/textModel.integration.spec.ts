@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { getAxeResults, injectAxe } from "axe-playwright";
+import { ScrollType, type IEditor } from '../../../src/ash/editor/common/editorCommon.js';
 
 const pageErrors = new WeakMap<object, string[]>();
 
@@ -42,6 +43,43 @@ test("text-model editor public API, pane, undo, save, and browser worker", async
 	await page.evaluate(() => window.ashTextModelIntegration.save());
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSavedText())).toBe("fn main() {\n  answer();\n}\n");
 	await expect.poll(() => workers.length).toBeGreaterThan(0);
+});
+
+test('common editor navigation uses wrapped and folded coordinates and retains keyboard focus', async ({ page }) => {
+	await openEditor(page);
+	const result = await page.evaluate((scrollType: ScrollType) => {
+		const widget = window.ashTextModelIntegration.getControl();
+		const editor: IEditor = widget;
+		widget.setValue(['long '.repeat(100), ...Array.from({ length: 79 }, (_, index) => `row ${index + 2}`)].join('\n'));
+		editor.updateOptions({ wordWrap: 'wordWrapColumn', wordWrapColumn: 20, smoothScrolling: false });
+		widget.setHiddenAreas([widget.getModel()!.validateRange({ startLineNumber: 2, startColumn: 1, endLineNumber: 10, endColumn: 1 })]);
+		editor.setPosition({ lineNumber: 3, column: 2 });
+		editor.revealPositionInCenter({ lineNumber: 40, column: 2 }, scrollType);
+		widget.view.render(true, false);
+		const top = widget.getScrollTop();
+		const caretTop = widget.getTopForLineNumber(40) - top;
+		const height = widget.getLayoutInfo().height;
+		editor.revealRangeInCenterIfOutsideViewport({ startLineNumber: 40, startColumn: 1, endLineNumber: 40, endColumn: 3 }, scrollType);
+		const unchangedTop = widget.getScrollTop();
+		editor.revealRangeAtTop({ startLineNumber: 40, startColumn: 1, endLineNumber: 40, endColumn: 3 }, scrollType);
+		return { top, caretTop, height, unchangedTop, atTop: widget.getTopForLineNumber(40) - widget.getScrollTop(), position: editor.getPosition() };
+	}, ScrollType.Immediate);
+	expect(result.top).toBeGreaterThan(0);
+	expect(Math.abs(result.caretTop - result.height / 2)).toBeLessThan(25);
+	expect(result.unchangedTop).toBe(result.top);
+	expect(result.atTop).toBe(0);
+	expect(result.position).toEqual({ lineNumber: 3, column: 2 });
+	await page.locator('.stanza-editor-input').focus();
+	await page.evaluate((scrollType: ScrollType) => {
+		const editor: IEditor = window.ashTextModelIntegration.getControl();
+		editor.onHide();
+		editor.onVisible();
+		editor.setPosition({ lineNumber: 40, column: 2 });
+		editor.revealLineInCenter(40, scrollType);
+	}, ScrollType.Immediate);
+	await expect(page.locator('.stanza-editor-input')).toBeFocused();
+	await page.keyboard.type('!');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getModel()?.getLineContent(40))).toBe('r!ow 40');
 });
 
 test('switching a Workbench file keeps keyboard input on the new editor and releases the old one', async ({ page }) => {
