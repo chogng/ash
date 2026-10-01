@@ -63,6 +63,7 @@ fn styled_segments(
                     StatusLineSegmentKind::Inserted => context.inserted_marker(),
                     StatusLineSegmentKind::Removed => context.removed_marker(),
                     StatusLineSegmentKind::Progress => context.accent(),
+                    StatusLineSegmentKind::Mode(mode) => context.mode_color(mode),
                 };
                 Span::styled(text, surface.patch(Style::default().fg(color)))
             })

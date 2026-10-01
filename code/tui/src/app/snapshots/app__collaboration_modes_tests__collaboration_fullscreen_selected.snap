@@ -1,0 +1,28 @@
+---
+source: code/tui/src/app/collaboration_modes_tests.rs
+expression: render(&app)
+---
+  .                                                        [— / —] [Dashboard]  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                          Next mode: Multitask  
+  ────────────────────────────────────────────────────────────────────────────  
+  > draft behind selector                                                       
+  ─────────────────────────────────────────────── Automatic model · Multitask   
+                                                                                
+  Enter send  ·  shift+tab mode  ·  alt+r effort

@@ -21,6 +21,7 @@ use std::time::Instant;
 fn context() -> AppKeymapContext {
     AppKeymapContext {
         accepts_input: true,
+        chat_input_focused: true,
         has_selection: false,
         chat_input_empty: true,
         is_press: true,
@@ -48,7 +49,7 @@ fn crossterm_adapter_normalizes_backtab_and_character_case() {
             &KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT),
             context(),
         ),
-        Some(AppKeymapAction::CycleApprovalMode)
+        Some(AppKeymapAction::CycleCollaborationMode)
     );
     assert_eq!(
         keymap.resolve_single(
@@ -64,6 +65,22 @@ fn root_conditions_preserve_input_selection_and_press_boundaries() {
     let keymap = AppKeymap::default();
     let backtab = KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT);
     let escape = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+
+    for key in [
+        backtab,
+        KeyEvent::new(KeyCode::Char('r'), KeyModifiers::ALT),
+    ] {
+        assert_eq!(
+            keymap.resolve_single(
+                &key,
+                AppKeymapContext {
+                    chat_input_focused: false,
+                    ..context()
+                }
+            ),
+            None
+        );
+    }
 
     assert_eq!(
         keymap.resolve_single(

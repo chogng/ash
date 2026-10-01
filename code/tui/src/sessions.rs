@@ -53,6 +53,7 @@ pub(crate) enum Event {
 pub(crate) enum Command {
     Fork {
         prompt: String,
+        mode: ash_protocol::CollaborationMode,
     },
     Preview {
         generation: u64,

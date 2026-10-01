@@ -37,6 +37,70 @@ fn initial_turn_failure_enters_error_state() {
 }
 
 #[test]
+fn collaboration_effort_completion_preserves_the_running_turn_and_draft() {
+    let mut app = App::new();
+    app.set_active_turn(TurnId::new("running").unwrap());
+    app.update(crate::thread::Event::TurnActivityChanged(
+        crate::thread::TurnActivity::Working,
+    ));
+    app.set_collaboration_mode(ash_protocol::CollaborationMode::Plan);
+    app.insert_text("next task draft");
+    let rows = app.messages().len();
+    let config = crate::test_support::empty_config_snapshot();
+    let origin = crate::app::requests::RequestOrigin {
+        mode: crate::terminal::ScreenMode::Fullscreen,
+        panel_generation: app.panels().generation(),
+    };
+    super::apply_request_completion(
+        super::Completion::ModelUpdated {
+            command: crate::models::Command::CycleEffort,
+            result: Ok(crate::models::ModelUpdate {
+                summary: crate::models::ModelSummary::from_catalog(
+                    Some(ash_app_server_protocol::protocol::config::ModelRefDto {
+                        provider: "openai".into(),
+                        model: "test-model".into(),
+                    }),
+                    Some(ash_protocol::ReasoningEffort::High),
+                    None,
+                ),
+                notice: crate::models::ModelNotice::ThinkingEffort(
+                    ash_protocol::ReasoningEffort::High,
+                ),
+                picker: None,
+                config,
+            }),
+        },
+        origin,
+        &mut None,
+        &mut app,
+        &ash_app_server_protocol::protocol::model::ModelListResult { models: vec![] },
+    );
+    assert_eq!(app.status(), &Status::Working);
+    assert!(app.steers_active_turn());
+    assert_eq!(
+        app.collaboration_mode(),
+        ash_protocol::CollaborationMode::Plan
+    );
+    assert_eq!(app.input(), "next task draft");
+    assert_eq!(app.messages().len(), rows);
+    assert_eq!(app.status_line().model_label(), "test-model (high)");
+    super::apply_request_completion(
+        super::Completion::ModelUpdated {
+            command: crate::models::Command::CycleEffort,
+            result: Err("This model does not support thinking effort".into()),
+        },
+        origin,
+        &mut None,
+        &mut app,
+        &ash_app_server_protocol::protocol::model::ModelListResult { models: vec![] },
+    );
+    assert_eq!(app.status(), &Status::Working);
+    assert!(app.steers_active_turn());
+    assert_eq!(app.input(), "next task draft");
+    assert_eq!(app.messages().len(), rows + 1);
+}
+
+#[test]
 fn status_line_context_follows_thread_snapshots() {
     use ash_protocol::ModelContextUsage;
     use ash_protocol::ModelContextUsageSource;
@@ -62,6 +126,7 @@ fn status_line_context_follows_thread_snapshots() {
         reference_cost: Default::default(),
         goal: None,
         turns: vec![ash_protocol::Turn {
+            mode: Default::default(),
             advisor: None,
             turn_id: TurnId::new("turn").unwrap(),
             status: ash_protocol::TurnStatus::Completed,

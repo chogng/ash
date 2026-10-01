@@ -36,6 +36,29 @@ fn configured_order_controls_status_line_order() {
 }
 
 #[test]
+fn collaboration_mode_is_optional_and_round_trips_after_the_model() {
+    let defaults = StatusLineSettings::default();
+    assert!(!defaults.items().any(|item| item == StatusLineItem::Mode));
+    let mut settings = StatusLineSettings::from_tui(&FrontendConfigDto(BTreeMap::from([(
+        "statusLine".into(),
+        json!(["model", "mode"]),
+    )])))
+    .unwrap();
+    let written = settings.write_to_tui(&FrontendConfigDto(BTreeMap::from([(
+        "theme".into(),
+        json!("dark"),
+    )])));
+    assert_eq!(written.0["statusLine"], json!(["model", "mode"]));
+    assert_eq!(written.0["theme"], json!("dark"));
+    assert_eq!(StatusLineSettings::from_tui(&written).unwrap(), settings);
+    settings.set(StatusLineItem::Mode, false);
+    assert_eq!(
+        settings.items().collect::<Vec<_>>(),
+        vec![StatusLineItem::Model]
+    );
+}
+
+#[test]
 fn writing_status_line_preserves_other_tui_values() {
     let section = FrontendConfigDto(BTreeMap::from([("theme".into(), json!("system"))]));
     let mut settings = StatusLineSettings::default();

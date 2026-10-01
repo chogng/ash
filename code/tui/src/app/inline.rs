@@ -187,6 +187,7 @@ fn draw_content(
         panel::draw(panel, frame, areas.session.composer, context);
     } else {
         ChatComposerSurface {
+            chrome: chat_input::ChatInputChrome::Standard,
             view: &input_view,
             cursor,
             focus,

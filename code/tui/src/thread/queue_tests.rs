@@ -5,6 +5,7 @@ use crossterm::event::KeyModifiers;
 
 fn pending(queue: &mut Queue, text: &str) -> (QueueId, ::queue::QueuedMessage) {
     let id = queue.push(QueuedChatInput::from_submission(ChatSubmission {
+        mode: Default::default(),
         command_id: crate::client::new_command_id("input"),
         display_text: text.into(),
         input: vec![ChatInputItem::Text(text.into())],
@@ -44,10 +45,12 @@ fn restore_and_replace_keep_identity_and_do_not_start_a_turn() {
     let mut queue = Queue::default();
     let (id, mut message) = pending(&mut queue, "first");
     message.status = ::queue::QueueStatus::Paused;
+    message.request.mode = ash_protocol::CollaborationMode::Debug;
     queue.apply(vec![message.clone()]).unwrap();
     let mut input = ChatInput::new();
     queue.restore(id, &mut input).unwrap();
     assert_eq!(input.text(), "first");
+    assert_eq!(input.mode(), ash_protocol::CollaborationMode::Debug);
     input.insert_text(" updated");
     let crate::thread::composer::ChatInputQueueOutcome::Queued(updated) = input.queue_current()
     else {
@@ -63,6 +66,7 @@ fn restore_and_replace_keep_identity_and_do_not_start_a_turn() {
     };
     assert_eq!(target.command_id, message.request.command_id);
     assert_eq!(submission.display_text, "first updated");
+    assert_eq!(submission.mode, ash_protocol::CollaborationMode::Debug);
 }
 
 #[test]
@@ -95,6 +99,7 @@ fn reconnect_rebuilds_queue_and_preserves_unsent_local_drafts() {
     let mut restored = Queue::default();
     let navigation = QueueNavigation::default();
     restored.push(QueuedChatInput::from_submission(ChatSubmission {
+        mode: Default::default(),
         command_id: crate::client::new_command_id("input"),
         display_text: "not accepted".into(),
         input: vec![ChatInputItem::Text("not accepted".into())],

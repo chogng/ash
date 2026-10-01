@@ -93,10 +93,16 @@ fn input_hints(app: &App) -> KeyHints {
         },
     );
     if let Some(keys) = app.app_keymap.action_hint(
-        crate::keymap::AppKeymapAction::CycleApprovalMode,
+        crate::keymap::AppKeymapAction::CycleCollaborationMode,
         app.app_keymap_context(true),
     ) {
-        hints = hints.with_compact_action(keys, "permissions");
+        hints = hints.with_compact_action(keys, "mode");
+    }
+    if let Some(keys) = app.app_keymap.action_hint(
+        crate::keymap::AppKeymapAction::CycleReasoningEffort,
+        app.app_keymap_context(true),
+    ) {
+        hints = hints.with_compact_action(keys, "effort");
     }
     hints
 }

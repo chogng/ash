@@ -47,7 +47,7 @@ fn composer_keeps_its_prompt_wrapped_text_and_cursor_between_rules() {
 }
 
 #[test]
-fn composer_focus_changes_border_and_placeholder_without_moving_the_input() {
+fn composer_focus_keeps_mode_color_and_changes_placeholder_without_moving_the_input() {
     let mut app = App::new();
     app.open_home();
     let area = Rect::new(0, 0, 80, 20);
@@ -56,14 +56,17 @@ fn composer_focus_changes_border_and_placeholder_without_moving_the_input() {
     assert_eq!(cursor, Position::new(4, input.y + 1));
     assert_eq!(
         focused[(2, input.y)].fg,
-        app.render_context().chat_input_chrome()
+        app.render_context().mode_color(app.collaboration_mode())
     );
     assert!(!text(&focused).contains("Build anything"));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     assert!(!app.chat_input_focused());
     let (blurred, _) = render(&app, 80);
     assert_eq!(super::super::layout(&app, area).input, input);
-    assert_eq!(blurred[(2, input.y)].fg, app.render_context().border());
+    assert_eq!(
+        blurred[(2, input.y)].fg,
+        app.render_context().mode_color(app.collaboration_mode())
+    );
     assert_eq!(blurred[(2, input.y + 1)].symbol(), ">");
     assert_eq!(blurred[(4, input.y + 1)].symbol(), "B");
     assert_eq!(blurred[(4, input.y + 1)].fg, app.render_context().muted());
@@ -77,7 +80,8 @@ fn composer_model_label_preserves_the_bottom_rule_and_right_margin() {
     let app = App::new();
     let (buffer, _) = render(&app, 80);
     let input = super::super::layout(&app, Rect::new(0, 0, 80, 20)).input;
-    for x in 2..58 {
+    let labels = super::labels(&app, input, app.render_context()).unwrap();
+    for x in 2..labels.model_area.x {
         assert_eq!(buffer[(x, input.bottom() - 1)].symbol(), "─");
     }
     assert_eq!(buffer[(77, input.bottom() - 1)].symbol(), " ");
@@ -86,4 +90,76 @@ fn composer_model_label_preserves_the_bottom_rule_and_right_margin() {
         assert_eq!(buffer[(79, y)].symbol(), " ");
     }
     crate::tui_assert_snapshot!("composer_focused", text(&buffer));
+}
+
+#[test]
+fn composer_collaboration_modes_color_both_rules_prompt_and_selector() {
+    use ash_protocol::CollaborationMode;
+    use ratatui::style::Color;
+    for (mode, expected) in [
+        (
+            CollaborationMode::Agent,
+            crate::render::test_context().mode_color(CollaborationMode::Agent),
+        ),
+        (CollaborationMode::Plan, Color::Rgb(209, 134, 22)),
+        (CollaborationMode::Debug, Color::Rgb(244, 135, 113)),
+        (CollaborationMode::Multitask, Color::Rgb(177, 128, 215)),
+        (CollaborationMode::Ask, Color::Rgb(137, 209, 133)),
+    ] {
+        let mut app = App::new();
+        app.set_collaboration_mode(mode);
+        let (buffer, _) = render(&app, 80);
+        let input = super::super::layout(&app, Rect::new(0, 0, 80, 20)).input;
+        assert_eq!(buffer[(2, input.y)].fg, expected);
+        assert_eq!(buffer[(2, input.bottom() - 1)].fg, expected);
+        assert_eq!(buffer[(2, input.y + 1)].fg, expected);
+        let labels = super::labels(&app, input, app.render_context()).unwrap();
+        assert!(labels.model_area.right() <= labels.mode_area.x);
+        if mode == CollaborationMode::Agent {
+            let row = text(&buffer)
+                .lines()
+                .nth(usize::from(input.bottom() - 1))
+                .unwrap()
+                .to_owned();
+            assert!(row.contains(" Automatic model "));
+            assert!(!row.contains("Agent"));
+            assert!(!row.contains('·'));
+            assert_eq!(labels.mode_area.width, 0);
+            for x in input.x..input.right() {
+                assert_eq!(
+                    super::target_at(&app, input, Position::new(x, labels.mode_area.y)),
+                    None
+                );
+            }
+            app.open_mode_picker();
+        } else {
+            assert_eq!(
+                buffer[(labels.mode_area.x + 1, labels.mode_area.y)].fg,
+                expected
+            );
+            assert!(text(&buffer).contains(&format!(
+                "Automatic model · {}",
+                crate::thread::composer::options::mode_label(mode)
+            )));
+            for x in labels.mode_area.x..labels.mode_area.right() {
+                assert_eq!(
+                    super::target_at(&app, input, Position::new(x, labels.mode_area.y)),
+                    Some(super::Target::Mode)
+                );
+            }
+            super::activate(&mut app, super::Target::Mode);
+        }
+        assert_eq!(
+            app.list_selection().unwrap().selected_visible_index(),
+            Some(
+                crate::thread::composer::options::MODES
+                    .iter()
+                    .position(|value| *value == mode)
+                    .unwrap()
+            )
+        );
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(app.collaboration_mode(), mode);
+        assert!(app.chat_input_focused());
+    }
 }

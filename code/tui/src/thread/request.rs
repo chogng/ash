@@ -149,7 +149,7 @@ where
         None => SessionRequest::StartTurn {
             thread_id: scope.thread_id,
             expected_sequence: scope.expected_sequence,
-            mode: ash_protocol::CollaborationMode::default(),
+            mode: submission.mode,
             approval_mode,
             model: None,
             reasoning_effort: None,

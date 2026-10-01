@@ -29,6 +29,7 @@ fn setup_lists_each_item_with_a_searchable_description_and_toggle_action() {
         vec![
             ("Permissions", "Current permission mode on"),
             ("Model", "Configured model on"),
+            ("Mode", "Mode for the next task off"),
             (
                 "Cache hit rate",
                 "Cached input as a share of total input off"
@@ -52,7 +53,7 @@ fn setup_lists_each_item_with_a_searchable_description_and_toggle_action() {
     );
     assert!(matches!(
         view.actions
-            .get(state.visible_items()[7].id().unwrap())
+            .get(state.visible_items()[8].id().unwrap())
             .unwrap(),
         StatusLineSelectionAction::SetEnabled(edit)
             if edit.expected_revision == 7

@@ -54,6 +54,7 @@ fn layout_with_minimum(app: &App, terminal_area: Rect, min_transcript_rows: u16)
     }
     let input_view = app.chat_composer_view();
     let input_rows = ChatComposerSurface {
+        chrome: chat_input::ChatInputChrome::Standard,
         view: &input_view,
         cursor: chat_input::ChatInputCursor::Hidden,
         focus: chat_input::ChatInputFocus::Blurred,

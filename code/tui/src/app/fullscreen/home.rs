@@ -283,7 +283,10 @@ pub(super) fn handle_key(app: &mut App, key: KeyEvent) -> Option<Option<AppComma
                 _ => None,
             };
         }
-        (_, KeyCode::BackTab) => return None,
+        (_, KeyCode::BackTab) => match selected {
+            Some(index) => app.fullscreen.home.selected = index.checked_sub(1),
+            None => return None,
+        },
         (KeyModifiers::NONE, KeyCode::Up | KeyCode::Down) if selected.is_some() => {
             let index = selected.unwrap();
             app.fullscreen.home.selected = if key.code == KeyCode::Up {

@@ -84,6 +84,7 @@ fn actual_tui_runs_three_complete_conversation_turns() {
     process.wait_for_screen("第三轮最终结论");
     third.release();
     process.wait_for_stable_screen("连续多轮对话已完成");
+    process.refresh_policy_tip();
     process.assert_snapshot("real/01-conversation/02-third-turn-complete");
 
     let bodies = server.request_bodies();
@@ -138,7 +139,7 @@ fn actual_tui_queues_restores_and_completes_messages() {
     process.type_text("第三条：稍后恢复到输入框");
     process.enter();
     process.wait_for_screen("第三条：稍后恢复到输入框");
-    process.wait_for_screen("shift+tab to cycle policy");
+    process.wait_for_screen("shift+tab mode");
 
     process.alt_up();
     process.wait_for_screen("> Queue 2: 第三条：稍后恢复到输入框");
@@ -272,13 +273,13 @@ fn actual_tui_sandbox_approval_modes_change_file_tool_authority() {
     auto.wait_for_screen("Start a task below, or continue a previous session.");
     auto.submit("start a session before automatic review");
     auto.wait_for_stable_screen("AUTO-SETUP-DONE");
-    auto.back_tab();
+    auto.submit("/policy auto-review");
     auto.wait_for_screen("auto review on");
     auto.submit("请通过自动审查创建 auto-reviewed.txt");
     auto.wait_for_screen("自动审查拒绝了工具");
     auto_gate.wait_until_reached();
     assert!(auto_fixture.find_file("auto-reviewed.txt").is_none());
-    auto.back_tab();
+    auto.submit("/policy bypass-permissions");
     auto.wait_for_screen("current: auto review on");
     // Inspect the review result after the follow-up turn can finish.
     auto_gate.release();
@@ -311,8 +312,7 @@ fn actual_tui_sandbox_approval_modes_change_file_tool_authority() {
     bypass.wait_for_screen("Start a task below, or continue a previous session.");
     bypass.submit("start a session before permission bypass");
     bypass.wait_for_stable_screen("BYPASS-SETUP-DONE");
-    bypass.back_tab();
-    bypass.back_tab();
+    bypass.submit("/policy bypass-permissions");
     bypass.wait_for_screen("bypass permissions on");
     bypass.submit("请直接创建 permission-bypassed.txt");
     bypass.wait_for_stable_screen("文件直接写入完成");
@@ -324,7 +324,7 @@ fn actual_tui_sandbox_approval_modes_change_file_tool_authority() {
     bypass.space();
     bypass.wait_for_screen("written with permission bypass");
     bypass.refresh_policy_tip();
-    bypass.wait_for_stable_screen("shift+tab to cycle policy");
+    bypass.wait_for_stable_screen("/policy to change permissions");
     bypass.assert_snapshot("real/03-approval/08-bypass-details");
     let bypassed_thread_path = bypass_fixture.find_file("permission-bypassed.txt").unwrap();
     assert_eq!(

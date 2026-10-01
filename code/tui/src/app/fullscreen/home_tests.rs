@@ -2,7 +2,6 @@ use crate::app::App;
 use crate::app::AppCommand;
 use crate::app::fullscreen::pointer::PointerTarget;
 use crate::sessions::Command as SessionCommand;
-use crate::thread::Command as ThreadCommand;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -136,36 +135,37 @@ fn home_keeps_actions_above_the_fixed_composer() {
 }
 
 #[test]
-fn home_shift_tab_cycles_permissions_without_changing_focus() {
+fn home_shift_tab_cycles_mode_only_while_editing() {
     let mut app = unstarted_app();
     app.open_home();
-
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)),
-        Some(AppCommand::Thread(ThreadCommand::CycleNextApprovalMode))
+        None
+    );
+    assert_eq!(
+        app.collaboration_mode(),
+        ash_protocol::CollaborationMode::Plan
     );
     assert!(app.fullscreen.input_focused());
     assert_eq!(app.fullscreen.home.selected, None);
     crate::tui_assert_snapshot!("home_after_shift_tab", text(&render(&app, 80, 24)));
-
     app.handle_key(key(KeyCode::Tab));
     assert_eq!(app.fullscreen.home.selected, Some(0));
+    app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
     assert_eq!(
-        app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)),
-        Some(AppCommand::Thread(ThreadCommand::CycleNextApprovalMode))
+        app.collaboration_mode(),
+        ash_protocol::CollaborationMode::Plan
     );
-    assert!(!app.fullscreen.input_focused());
-    assert_eq!(app.fullscreen.home.selected, Some(0));
-
+    assert!(app.fullscreen.input_focused());
+    assert_eq!(app.fullscreen.home.selected, None);
     app.handle_key(key(KeyCode::Esc));
     app.handle_key(key(KeyCode::F(6)));
-    let selected = app.fullscreen.header.selected();
-    assert!(selected.is_some());
+    assert!(app.fullscreen.header.selected().is_some());
+    app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
     assert_eq!(
-        app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)),
-        Some(AppCommand::Thread(ThreadCommand::CycleNextApprovalMode))
+        app.collaboration_mode(),
+        ash_protocol::CollaborationMode::Plan
     );
-    assert_eq!(app.fullscreen.header.selected(), selected);
 }
 
 #[test]
@@ -309,7 +309,7 @@ fn clicking_empty_home_space_keeps_the_composer_ready() {
     let input = crate::thread::composer::content_area(areas.input);
     assert_eq!(
         buffer[(input.x, areas.input.y)].fg,
-        app.render_context().chat_input_chrome()
+        app.render_context().foreground()
     );
     crate::tui_assert_snapshot!("home_empty_click_keeps_input", text(&buffer));
 

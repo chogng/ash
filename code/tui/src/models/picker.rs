@@ -152,6 +152,12 @@ impl ModelPickerData {
         self.config = config;
     }
 
+    pub(crate) fn effort_choices(
+        &self,
+    ) -> Result<crate::thread::composer::options::ComposerOptions, String> {
+        super::request::effort_choices(&self.config, &self.catalog)
+    }
+
     pub(crate) fn choices(&self) -> Result<ModelChoices, String> {
         model_choices(&self.catalog, &self.config)
     }

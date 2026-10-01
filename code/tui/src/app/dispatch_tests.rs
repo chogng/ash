@@ -66,6 +66,7 @@ fn advisor_question_uses_consult_request_instead_of_worker_turn() {
             conversation.thread_sequence(),
         ),
         ChatSubmission {
+            mode: Default::default(),
             command_id: crate::client::new_command_id("input"),
             display_text: "/advisor Check cancellation".into(),
             input: vec![ChatInputItem::Text("/advisor Check cancellation".into())],
@@ -999,6 +1000,7 @@ fn product_commands_reject_image_arguments_instead_of_silently_dropping_them() {
     let mut conversation = ActiveConversation::start(&mut client, "images".into()).unwrap();
     let mut app = App::new();
     let invocation = SlashCommandInvocation {
+        mode: Default::default(),
         command: built_in_catalog_command(TuiSlashCommandAction::Model),
         origin: ash_slash_commands::SlashCommandOrigin::Local,
         display_arguments: "[Image #1]".into(),
@@ -1025,6 +1027,7 @@ fn product_commands_reject_image_arguments_instead_of_silently_dropping_them() {
 
 fn invocation(command: TuiSlashCommandAction, arguments: &str) -> SlashCommandInvocation {
     SlashCommandInvocation {
+        mode: Default::default(),
         command: built_in_catalog_command(command),
         origin: ash_slash_commands::SlashCommandOrigin::Local,
         display_arguments: arguments.into(),

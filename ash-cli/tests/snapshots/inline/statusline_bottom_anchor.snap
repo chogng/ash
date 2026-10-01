@@ -20,11 +20,11 @@ expression: screen
 
 
 
-
 ─ Status line ──────────────────────────────────────────────────────────────────────────────────────
 
 > Permissions                                                                                 on
   Model                                                                                       on
+  Mode                                                                                       off
   Cache hit rate                                                                             off
   Reference cost                                                                             off
   Memory                                                                                     off

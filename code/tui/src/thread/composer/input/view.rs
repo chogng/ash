@@ -21,6 +21,12 @@ pub(crate) enum ChatInputCursor {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ChatInputChrome {
+    Standard,
+    Mode(ash_protocol::CollaborationMode),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ChatInputFocus {
     Blurred,
     Focused,
@@ -60,8 +66,20 @@ pub(crate) fn draw(
     focus: ChatInputFocus,
     placeholder: Option<&str>,
     argument_hint: Option<&str>,
+    chrome: ChatInputChrome,
     context: RenderContext<'_>,
 ) {
+    let prompt_color = match chrome {
+        ChatInputChrome::Standard => context.foreground(),
+        ChatInputChrome::Mode(mode) => context.mode_color(mode),
+    };
+    let border_color = match chrome {
+        ChatInputChrome::Mode(mode) => context.mode_color(mode),
+        ChatInputChrome::Standard => match focus {
+            ChatInputFocus::Blurred => context.border(),
+            ChatInputFocus::Focused => context.chat_input_chrome(),
+        },
+    };
     let wrapped = wrap_input(input, cursor_line, cursor_width, area.width);
     let mut lines = wrapped
         .lines
@@ -73,7 +91,7 @@ pub(crate) fn draw(
             let mut spans = vec![Span::styled(
                 prompt,
                 Style::default()
-                    .fg(context.foreground())
+                    .fg(prompt_color)
                     .add_modifier(Modifier::BOLD),
             )];
             if let Some(range) = selection
@@ -112,7 +130,7 @@ pub(crate) fn draw(
             Span::styled(
                 prompt,
                 Style::default()
-                    .fg(context.foreground())
+                    .fg(prompt_color)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
@@ -133,10 +151,7 @@ pub(crate) fn draw(
         .block(
             Block::default()
                 .borders(Borders::TOP | Borders::BOTTOM)
-                .border_style(Style::default().fg(match focus {
-                    ChatInputFocus::Blurred => context.border(),
-                    ChatInputFocus::Focused => context.chat_input_chrome(),
-                })),
+                .border_style(Style::default().fg(border_color)),
         );
     frame.render_widget(chat_input, area);
 

@@ -37,6 +37,48 @@ impl JsonRpcTransport for RecordingTransport {
 }
 
 #[test]
+fn submit_prompt_carries_every_collaboration_mode_to_the_app_server() {
+    use ash_app_server_protocol::protocol::session::SessionRequest;
+    use ash_app_server_protocol::protocol::session::SessionRequestParams;
+    use ash_app_server_protocol::protocol::turn::TurnStartResult;
+    for mode in crate::thread::composer::options::MODES {
+        let recorded = Arc::new(Mutex::new(None));
+        let result = SessionRequestResult::Turn(TurnStartResult {
+            turn_id: TurnId::new("turn").unwrap(),
+            sequence: 8,
+        });
+        let mut client = AppServerClient::new(RecordingTransport {
+            request: Arc::clone(&recorded),
+            response: serde_json::json!({"jsonrpc":"2.0","id":1,"result":result}).to_string(),
+        });
+        super::submit_prompt(
+            &mut client,
+            ThreadRequestScope::new(
+                &SessionId::new("session").unwrap(),
+                &ThreadId::new("thread").unwrap(),
+                7,
+            ),
+            ChatSubmission {
+                mode,
+                command_id: ash_protocol::CommandId::new("submission").unwrap(),
+                display_text: "work".into(),
+                input: vec![ChatInputItem::Text("work".into())],
+            },
+            ash_protocol::ApprovalMode::AskPermissions,
+        )
+        .unwrap();
+        let request: serde_json::Value =
+            serde_json::from_str(recorded.lock().unwrap().as_ref().unwrap()).unwrap();
+        let params: SessionRequestParams =
+            serde_json::from_value(request["params"].clone()).unwrap();
+        let SessionRequest::StartTurn { mode: actual, .. } = params.request else {
+            panic!("expected a start turn request")
+        };
+        assert_eq!(actual, mode);
+    }
+}
+
+#[test]
 fn steer_prompt_uses_the_active_turn_typed_request() {
     let recorded = Arc::new(Mutex::new(None));
     let result = SessionRequestResult::TurnSteer(TurnSteerResult {
@@ -63,6 +105,7 @@ fn steer_prompt_uses_the_active_turn_typed_request() {
         ),
         TurnId::new("turn-1").unwrap(),
         ChatSubmission {
+            mode: Default::default(),
             command_id: ash_protocol::CommandId::new("submission").unwrap(),
             display_text: "change direction".into(),
             input: vec![ChatInputItem::Text("change direction".into())],
@@ -115,6 +158,7 @@ fn audio_steering_preserves_the_uploaded_attachment_reference() {
         ),
         TurnId::new("turn").unwrap(),
         ChatSubmission {
+            mode: Default::default(),
             command_id: ash_protocol::CommandId::new("submission").unwrap(),
             display_text: "[Audio]".into(),
             input: vec![ChatInputItem::AudioAttachment(attachment.clone())],

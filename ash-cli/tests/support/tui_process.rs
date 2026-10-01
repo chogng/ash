@@ -537,10 +537,12 @@ impl TuiProcess {
     }
 
     pub fn refresh_policy_tip(&mut self) {
-        // A full cycle preserves the selected mode and restarts its transient hint.
-        for _ in 0..3 {
-            self.back_tab();
-        }
+        // Confirming the current policy refreshes the hint without changing its value.
+        self.wait_for_clipboard_tip_to_expire();
+        self.submit("/policy");
+        self.wait_for_stable_screen("bypass-permissions");
+        self.enter();
+        self.wait_for_stable_screen("/policy to change permissions");
     }
 
     pub fn up(&mut self) {
@@ -723,8 +725,18 @@ impl TuiProcess {
     }
 
     pub fn assert_snapshot(&self, name: &str) {
+        self.wait_for_clipboard_tip_to_expire();
         let screen = normalize_snapshot(self.screen(), &self.snapshot_paths);
         assert_named_snapshot(name, screen);
+    }
+
+    fn wait_for_clipboard_tip_to_expire(&self) {
+        // The host clipboard belongs to the user, not these conversation fixtures.
+        let deadline = Instant::now() + STATE_TIMEOUT;
+        while self.screen().contains("image in clipboard") {
+            assert!(Instant::now() < deadline, "clipboard tip did not expire");
+            thread::sleep(Duration::from_millis(20));
+        }
     }
 
     pub fn quit(&mut self) {

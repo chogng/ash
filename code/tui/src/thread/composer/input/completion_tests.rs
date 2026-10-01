@@ -365,6 +365,7 @@ fn queue_restore_rebuilds_skill_and_context_bindings_without_duplicate_selectors
         SkillName::new("commit").unwrap(),
     ));
     let submission = ChatSubmission {
+        mode: Default::default(),
         command_id: crate::client::new_command_id("input"),
         display_text: "$commit inspect".into(),
         input: vec![

@@ -24,6 +24,7 @@ fn border(focus: ChatInputFocus) -> ratatui::style::Color {
                 focus,
                 None,
                 None,
+                super::ChatInputChrome::Standard,
                 test_context(),
             )
         })
@@ -60,6 +61,7 @@ fn argument_hint_renders_after_cursor_with_muted_style() {
                 ChatInputFocus::Focused,
                 None,
                 Some("<path>"),
+                super::ChatInputChrome::Standard,
                 test_context(),
             )
         })

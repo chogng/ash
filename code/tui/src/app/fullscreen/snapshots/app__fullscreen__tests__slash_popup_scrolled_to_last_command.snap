@@ -10,7 +10,7 @@ expression: rendered
                                                                                 
                                                                                 
                                                                                 
-  ───────────────────────────────────────────────────────────────────── 33/33   
+  ───────────────────────────────────────────────────────────────────── 36/36   
   /pr                        ask the Agent to create or inspect a pull request │
   /marketplace               find and install Marketplace packages             │
   /plugins                   manage installed packages and exact versions      │
@@ -21,4 +21,4 @@ expression: rendered
   > /                                                                           
   ─────────────────────────────────────────────────────────── Automatic model   
                                                                                 
-  Enter send  ·  shift+tab permissions
+  Enter send  ·  shift+tab mode  ·  alt+r effort

@@ -53,6 +53,7 @@ pub(crate) enum SessionCompletion {
 pub(crate) enum CommandRequest {
     Fork {
         prompt: String,
+        mode: ash_protocol::CollaborationMode,
         approval_mode: ApprovalMode,
     },
     Preview {
@@ -85,7 +86,7 @@ pub(crate) enum CommandRequest {
 impl Command {
     pub(crate) fn command_line(&self) -> Option<String> {
         match self {
-            Self::Fork { prompt } => Some(fork_command(prompt)),
+            Self::Fork { prompt, .. } => Some(fork_command(prompt)),
             Self::Resume { session_id, .. } => Some(format!("/resume {session_id}")),
             Self::Preview { .. }
             | Self::Restore { .. }
@@ -120,13 +121,20 @@ impl CommandRequest {
         match self {
             Self::Fork {
                 prompt,
+                mode,
                 approval_mode,
             } => SessionCompletion::Forked {
                 command: fork_command(&prompt),
                 result: current
                     .ok_or_else(|| "No active session".to_owned())
                     .and_then(|current| {
-                        fork_session(&mut client, &current.conversation, &prompt, approval_mode)
+                        fork_session(
+                            &mut client,
+                            &current.conversation,
+                            &prompt,
+                            mode,
+                            approval_mode,
+                        )
                     }),
             },
             Self::Preview { generation, params } => SessionCompletion::Preview {
@@ -206,8 +214,9 @@ impl CommandRequest {
 
 pub(crate) fn prepare_command(approval_mode: ApprovalMode, command: Command) -> CommandRequest {
     match command {
-        Command::Fork { prompt } => CommandRequest::Fork {
+        Command::Fork { prompt, mode } => CommandRequest::Fork {
             prompt,
+            mode,
             approval_mode,
         },
         Command::Preview { generation, params } => CommandRequest::Preview { generation, params },
@@ -347,6 +356,7 @@ fn fork_session(
     client: &mut AppServerRequestHandle,
     source: &ActiveConversation,
     prompt: &str,
+    mode: ash_protocol::CollaborationMode,
     approval_mode: ApprovalMode,
 ) -> Result<ForkCompletion, String> {
     use ash_app_server_protocol::protocol::session::SessionRequest;
@@ -378,6 +388,7 @@ fn fork_session(
                 client,
                 ThreadRequestScope::new(&session_id, &result.thread_id, thread.sequence),
                 ChatSubmission {
+                    mode,
                     command_id: crate::client::new_command_id("input"),
                     display_text: prompt.into(),
                     input: vec![crate::thread::composer::ChatInputItem::Text(prompt.into())],

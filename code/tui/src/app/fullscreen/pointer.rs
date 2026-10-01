@@ -116,6 +116,7 @@ pub(crate) enum PointerTarget {
     AgentThread(ash_protocol::ThreadId),
     Modal(super::modal::Target),
     Composer(ChatComposerPointerTarget),
+    ComposerSetting(super::composer::Target),
     Transcript(ChatHistoryPointerTarget),
 }
 
@@ -194,6 +195,9 @@ pub(crate) fn target_at(
         && !areas.input.is_empty()
         && areas.input.contains(position)
     {
+        if let Some(target) = super::composer::target_at(app, areas.input, position) {
+            return Some(PointerTarget::ComposerSetting(target));
+        }
         return Some(PointerTarget::Composer(ChatComposerPointerTarget::Input));
     }
     if app.fullscreen.welcome_visible() {
@@ -622,6 +626,10 @@ pub(super) fn activate_pointer_item(
             target,
             crate::widgets::list_selection::ListSelectionClick::Single,
         ),
+        PointerTarget::ComposerSetting(target) => {
+            super::composer::activate(app, target);
+            None
+        }
         PointerTarget::Composer(
             ChatComposerPointerTarget::Input | ChatComposerPointerTarget::CompletionSurface,
         ) => {

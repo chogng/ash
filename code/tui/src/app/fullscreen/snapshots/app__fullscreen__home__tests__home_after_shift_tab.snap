@@ -20,9 +20,9 @@ expression: "text(&render(&app, 80, 24))"
                                                                                 
                                                                                 
                                                                                 
-  ⏸ ask permissions on   Type a task to begin, or use Tab to choose an action.  
+                                                               Next mode: Plan  
   ────────────────────────────────────────────────────────────────────────────  
   >                                                                             
-  ─────────────────────────────────────────────────────────── Automatic model   
+  ──────────────────────────────────────────────────── Automatic model · Plan   
                                                                                 
   Enter send  ·  Tab actions  ·  / commands

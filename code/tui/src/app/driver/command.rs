@@ -256,8 +256,17 @@ impl AppDriver {
             }
             AppCommand::Models(command) => {
                 let command_line = command.command_line();
-                self.app
-                    .update(ThreadEvent::CommandStarted(command_line.clone()));
+                match &command {
+                    crate::models::Command::SetModel { .. }
+                    | crate::models::Command::Pin { .. } => self
+                        .app
+                        .update(ThreadEvent::CommandStarted(command_line.clone())),
+                    crate::models::Command::CycleEffort
+                    | crate::models::Command::SetEffort { .. } => {}
+                    crate::models::Command::OpenEffortPicker => {
+                        unreachable!("effort picker is opened before scheduling")
+                    }
+                }
                 let name = command.request_name();
                 let mut client = self.client.clone();
                 let catalog = self.model_picker.catalog().clone();
@@ -265,8 +274,8 @@ impl AppDriver {
                     request_key,
                     name,
                     move || Completion::ModelUpdated {
-                        command: command_line,
-                        result: crate::models::execute(&mut client, command, &catalog),
+                        result: crate::models::execute(&mut client, command.clone(), &catalog),
+                        command,
                     },
                     &mut self.app,
                     origin,

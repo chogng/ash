@@ -88,6 +88,9 @@ fn builtins_follow_enum_presentation_order() {
                 "shortcuts",
                 "export",
                 "model",
+                "mode",
+                "effort",
+                "policy",
                 "theme",
                 "new",
                 "quit",
@@ -104,7 +107,7 @@ fn builtins_follow_enum_presentation_order() {
             names
         }
     );
-    assert_eq!(definitions.len(), 33);
+    assert_eq!(definitions.len(), 36);
 }
 
 #[test]

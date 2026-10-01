@@ -19,6 +19,7 @@ pub(crate) struct ChatComposerSurface<'a, 'view> {
     pub(crate) view: &'view ChatComposerView<'a>,
     pub(crate) cursor: ChatInputCursor,
     pub(crate) focus: ChatInputFocus,
+    pub(crate) chrome: chat_input::ChatInputChrome,
     pub(crate) placeholder: Option<&'static str>,
 }
 
@@ -45,6 +46,7 @@ impl Renderable for ChatComposerSurface<'_, '_> {
             self.focus,
             self.placeholder,
             self.view.argument_hint(),
+            self.chrome,
             context,
         );
         if let Some(status) = self.view.history_status() {

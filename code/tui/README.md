@@ -131,6 +131,12 @@ CLI 将已初始化的 `AppServerSession` 和 `TuiOptions` 交给 `run`：
 | 等待批准或回答 | 对应面板处理输入；仍可明确中断 |
 | 取消中 | 抑制重复中断 |
 
+五种任务模式使用 `/mode` 选择，也支持 `/mode agent|plan|debug|multitask|ask`。输入框聚焦时，Shift+Tab 按 Agent、Plan、Debug、Multitask、Ask 的顺序循环；模式跟随各个 Thread 的草稿，首次加载已有聊天时取最近 Turn 的模式。切换只影响下一条消息；运行中跨模式的 Ctrl+Enter 也排队。fullscreen 在模型与推理强度后显示非默认模式的可点击名称，上下边线和输入符号使用对应模式色。inline 可在 `/statusline` 开启 `Mode`，对应 `[tui].statusLine` 的 `mode` 项，默认关闭。两种呈现均隐藏默认 Agent 的模式名称。
+
+`/mode` 参数使用协议中的稳定模式 ID，不随界面语言或显示名称变化；命令输入不区分 ASCII 大小写。模式在请求、队列和历史中继续使用 `CollaborationMode` 强类型保存，界面名称与颜色由各端负责。默认 Agent 的名称隐藏只影响显示，其模式身份仍为 `agent`。
+
+`/policy` 选择下一轮的权限策略，也支持 `ask-permissions`、`auto-review`、`bypass-permissions` 参数。权限策略不再占用 Shift+Tab；已有用户自定义的权限快捷键仍可使用。
+
 运行中 Steer 不能改变 Skill；遇到这种草稿应保留输入，让用户排队或下一轮提交。权限模式的选择用于下一次 Turn，不直接改变当前任务或 Session 权限。
 
 Queue 保存完整草稿，包括图片、长粘贴和绑定的 Skill。恢复编辑保留条目身份，重新排队时替换原条目；不能覆盖非空输入，也不能把编辑后的条目重复追加。发送成功后才移除，失败时保留可恢复内容。当前任务结束后，才将本地队列提交到后端。
@@ -158,6 +164,8 @@ Queue 保存完整草稿，包括图片、长粘贴和绑定的 Skill。恢复�
 `/resume`、`/rewind`、`/add-dir`、`/branch`、`/fork`、`/model`、`/theme` 和 `/new` 支持行内参数；产品命令拒绝图片参数。命令后输入空格且参数尚为空时，光标后方以置灰样式（`context.muted()`）显示行内虚提示（如 `<path>`、`<model>`、`<theme>` 等），提示用户后续参数含义；用户输入非空白参数字符或光标移开时虚提示自动消失。命令回显和结果始终更新同一正文单元。
 
 `/model` 无参数时列出内置目录模型；本机 Kimi Desktop 或 Kimi Code CLI 连接就绪时，还会向对应端点查询当前型号。有离散推理档位的模型显示方块并可用左右键切换，没有推理档位的模型只显示名称。可搜索并用 `P` 固定或取消固定，固定模型排在列表顶部。没有候选时提示在 `/config` 配置提供商。模型出现在目录中不保证凭据或远端权限有效，实际调用仍由运行时校验。各型号可选档位见[内置模型表](../../docs/models/ash-host-models.md#推理档位)。
+
+`/effort` 选择当前明确选中模型支持的推理强度，也接受档位参数。Alt+R 循环这些档位，保留模型和其他配置；Ctrl+R 继续搜索输入历史。快捷键可通过 `/shortcuts` 重绑。未明确选择模型或模型不支持推理强度时显示说明。弹层保留自己的按键处理。
 
 文件补全只识别空白分隔的 `@token`，不处理邮箱中的 `@`。扫描遵守 Git 忽略规则、不跟随符号链接，并跳过 `.git`、`.ash`、`node_modules` 和 `target`；结果按匹配分数与路径稳定排序，最多 50 项。请求同时校验查询文本和版本，关闭补全后释放搜索句柄。
 
@@ -289,7 +297,7 @@ dictationShortcut = "ctrl+g"
 }
 ```
 
-可覆盖字段为 `accent`、`accentSurfaceBackground`、`accentSurfaceForeground`、`actionForeground`、`background`、`border`、`chatInputChrome`、`danger`、`disabledForeground`、`focus`、`foreground`、`function`、`hoverBackground`、`hoverForeground`、`insertedBackground`、`insertedMarker`、`keyword`、`modalBorder`、`muted`、`pressedBackground`、`pressedForeground`、`quickViewBackground`、`removedBackground`、`removedMarker`、`segmentedActive`、`segmentedInactive`、`selectionBackground`、`selectionForeground`、`screenSelectionBackground`、`screenSelectionForeground`、`string`、`success`、`transcriptJumpBackground`、`type`、`userMessageBackground`、`variable` 与 `warning`。未写字段继承所选 `appearance` 的内置调色板；该格式不接受图形界面 token、别名、透明色或颜色变换。
+可覆盖字段为 `accent`、`accentSurfaceBackground`、`accentSurfaceForeground`、`actionForeground`、`background`、`border`、`chatInputChrome`、`modePlan`、`modeDebug`、`modeMultitask`、`modeAsk`、`danger`、`disabledForeground`、`focus`、`foreground`、`function`、`hoverBackground`、`hoverForeground`、`insertedBackground`、`insertedMarker`、`keyword`、`modalBorder`、`muted`、`pressedBackground`、`pressedForeground`、`quickViewBackground`、`removedBackground`、`removedMarker`、`segmentedActive`、`segmentedInactive`、`selectionBackground`、`selectionForeground`、`screenSelectionBackground`、`screenSelectionForeground`、`string`、`success`、`transcriptJumpBackground`、`type`、`userMessageBackground`、`variable` 与 `warning`。未写字段继承所选 `appearance` 的内置调色板；该格式不接受图形界面 token、别名、透明色或颜色变换。
 
 推理档位条的已填充格使用 `segmentedActive`，未填充格使用 `segmentedInactive`；列表获得焦点时，选中项的已填充格、文字和箭头使用 `focus`。
 

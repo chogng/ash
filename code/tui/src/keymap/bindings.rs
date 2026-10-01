@@ -26,6 +26,8 @@ use std::sync::LazyLock;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum AppKeymapAction {
     CycleApprovalMode,
+    CycleCollaborationMode,
+    CycleReasoningEffort,
     ScreenEscape,
     OpenRewind,
     ReadClipboardImage,
@@ -38,6 +40,8 @@ impl AppKeymapAction {
     pub(crate) const fn command_id(self) -> Option<&'static str> {
         match self {
             Self::CycleApprovalMode => Some("ashCode.action.cycleApprovalMode"),
+            Self::CycleCollaborationMode => Some("ashCode.action.cycleCollaborationMode"),
+            Self::CycleReasoningEffort => Some("ashCode.action.cycleReasoningEffort"),
             Self::ScreenEscape => None,
             Self::OpenRewind => Some("ashCode.action.openRewind"),
             Self::ReadClipboardImage => Some("ashCode.action.attachClipboardImage"),
@@ -53,8 +57,10 @@ impl AppKeymapAction {
             .find(|action| action.command_id() == Some(id))
     }
 
-    const USER_BINDABLE: [Self; 6] = [
+    const USER_BINDABLE: [Self; 8] = [
         Self::CycleApprovalMode,
+        Self::CycleCollaborationMode,
+        Self::CycleReasoningEffort,
         Self::OpenRewind,
         Self::ReadClipboardImage,
         Self::InterruptOrQuit,
@@ -65,6 +71,8 @@ impl AppKeymapAction {
     const fn label(self) -> &'static str {
         match self {
             Self::CycleApprovalMode => "Cycle approval mode",
+            Self::CycleCollaborationMode => "Cycle task mode",
+            Self::CycleReasoningEffort => "Cycle thinking effort",
             Self::ScreenEscape => "Rewind escape gesture",
             Self::OpenRewind => "Open rewind checkpoints",
             Self::ReadClipboardImage => "Attach clipboard image",
@@ -95,7 +103,7 @@ pub(crate) enum AppKeymapCondition {
     AcceptsInput,
     EmptyChatInput,
     PressWithEmptyInput,
-    PressWithInputWithoutSelection,
+    PressWithComposerWithoutSelection,
     Expression(ContextExpression),
 }
 
@@ -103,6 +111,7 @@ pub(crate) enum AppKeymapCondition {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct AppKeymapContext {
     pub(crate) accepts_input: bool,
+    pub(crate) chat_input_focused: bool,
     pub(crate) has_selection: bool,
     pub(crate) chat_input_empty: bool,
     pub(crate) is_press: bool,
@@ -136,9 +145,14 @@ pub(super) struct AppKeybindingSpec {
 
 const APP_KEYBINDINGS: &[AppKeybindingSpec] = &[
     AppKeybindingSpec {
+        keybinding: "alt+r",
+        action: AppKeymapAction::CycleReasoningEffort,
+        condition: AppKeymapCondition::PressWithComposerWithoutSelection,
+    },
+    AppKeybindingSpec {
         keybinding: "shift+tab",
-        action: AppKeymapAction::CycleApprovalMode,
-        condition: AppKeymapCondition::PressWithInputWithoutSelection,
+        action: AppKeymapAction::CycleCollaborationMode,
+        condition: AppKeymapCondition::PressWithComposerWithoutSelection,
     },
     AppKeybindingSpec {
         keybinding: "escape",
@@ -455,8 +469,11 @@ pub(super) fn condition_matches(
         AppKeymapCondition::PressWithEmptyInput => {
             context.is_press && context.accepts_input && context.chat_input_empty
         }
-        AppKeymapCondition::PressWithInputWithoutSelection => {
-            context.is_press && context.accepts_input && !context.has_selection
+        AppKeymapCondition::PressWithComposerWithoutSelection => {
+            context.is_press
+                && context.accepts_input
+                && context.chat_input_focused
+                && !context.has_selection
         }
         AppKeymapCondition::Expression(expression) => expression.evaluate(|key| context.value(key)),
     }
@@ -752,9 +769,8 @@ fn app_keys(action: AppKeymapAction) -> &'static str {
         .keybinding
 }
 
-pub(crate) static POLICY_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
-    KeyHints::compact().with_action(app_keys(AppKeymapAction::CycleApprovalMode), "cycle policy")
-});
+pub(crate) static POLICY_HINTS: LazyLock<KeyHints> =
+    LazyLock::new(|| KeyHints::compact().with_action("/policy", "change permissions"));
 pub(crate) static CLIPBOARD_HINTS: LazyLock<KeyHints> = LazyLock::new(|| {
     KeyHints::compact()
         .with_note("image in clipboard")

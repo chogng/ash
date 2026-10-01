@@ -98,6 +98,7 @@ pub(crate) enum CommandPanel {
     Hooks(crate::hooks::Panel),
     Memories(crate::memories::Panel),
     Model(ListSelection<ModelSelectionAction>),
+    ComposerOptions(ListSelection<crate::thread::composer::options::ComposerOption>),
     ProjectRoots(ListSelection<RootSelectionAction>),
     Rewind(ListSelection<RewindSelectionAction>),
     Sessions(ListSelection<SessionSelectionAction>),
@@ -123,6 +124,7 @@ pub(crate) enum CommandPanelOutcome {
     Hooks(crate::hooks::Outcome),
     Memories(crate::memories::Command),
     Model(ModelSelectionAction),
+    ComposerOption(crate::thread::composer::options::ComposerOption),
     ProjectRoot(RootSelectionAction),
     Rewind(RewindSelectionAction),
     Sessions(SessionSelectionAction),
@@ -294,6 +296,12 @@ impl CommandPanel {
         Self::Mcp(ListSelection::new(spec.model, spec.actions))
     }
 
+    pub(crate) fn composer_options(
+        spec: crate::thread::composer::options::ComposerOptions,
+    ) -> Self {
+        Self::ComposerOptions(ListSelection::new(spec.model, spec.actions))
+    }
+
     pub(crate) fn model(spec: ModelChoices) -> Self {
         Self::Model(ListSelection::new(spec.model, spec.actions))
     }
@@ -378,6 +386,9 @@ impl CommandPanel {
             Self::Lsp(content) => CommandPanelOutcome::Lsp(content.handle_key(key)),
             Self::Mcp(content) => map_selection(content.handle_key(key), CommandPanelOutcome::Mcp),
             Self::Hooks(content) => CommandPanelOutcome::Hooks(content.handle_key(key)),
+            Self::ComposerOptions(content) => {
+                map_selection(content.handle_key(key), CommandPanelOutcome::ComposerOption)
+            }
             Self::Model(content) => {
                 map_selection(content.handle_model_key(key), CommandPanelOutcome::Model)
             }
@@ -427,6 +438,7 @@ impl CommandPanel {
             Self::Lsp(content) => content.handle_paste(pasted),
             Self::Mcp(content) => content.handle_paste(pasted),
             Self::Hooks(content) => content.handle_paste(pasted),
+            Self::ComposerOptions(content) => content.handle_paste(pasted),
             Self::Model(content) => content.handle_paste(pasted),
             Self::ProjectRoots(content) => content.handle_paste(pasted),
             Self::Rewind(content) => content.handle_paste(pasted),
@@ -450,6 +462,7 @@ impl CommandPanel {
             Self::Lsp(content) => content.localize(language),
             Self::Mcp(content) => content.state_mut().localize(language),
             Self::Hooks(content) => content.localize(language),
+            Self::ComposerOptions(content) => content.state_mut().localize(language),
             Self::Model(content) => content.state_mut().localize(language),
             Self::ProjectRoots(content) => content.state_mut().localize(language),
             Self::Rewind(content) => content.state_mut().localize(language),
@@ -494,6 +507,7 @@ impl CommandPanel {
                 crate::hooks::PageView::Selection(selection) => Some(selection),
                 crate::hooks::PageView::Prompt(_) => None,
             },
+            Self::ComposerOptions(selection) => Some(selection.state()),
             Self::Model(selection) => Some(selection.state()),
             Self::ProjectRoots(selection) => Some(selection.state()),
             Self::Rewind(selection) => Some(selection.state()),
@@ -521,6 +535,7 @@ impl CommandPanel {
             Self::Lsp(selection) => Some(selection.state_mut()),
             Self::Mcp(selection) => Some(selection.state_mut()),
             Self::Hooks(panel) => panel.selection_mut(),
+            Self::ComposerOptions(selection) => Some(selection.state_mut()),
             Self::Model(selection) => Some(selection.state_mut()),
             Self::ProjectRoots(selection) => Some(selection.state_mut()),
             Self::Rewind(selection) => Some(selection.state_mut()),
@@ -613,6 +628,7 @@ impl CommandPanel {
                 }
                 crate::hooks::PageView::Prompt(prompt) => CommandPanelBody::Prompt(prompt),
             },
+            Self::ComposerOptions(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Model(selection) => CommandPanelBody::Selection(selection.state()),
             Self::ProjectRoots(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Rewind(selection) => CommandPanelBody::Selection(selection.state()),
@@ -664,6 +680,7 @@ impl CommandPanel {
             Self::Lsp(content) => content.key_hints(),
             Self::Mcp(content) => content.key_hints(),
             Self::Hooks(content) => content.key_hints(),
+            Self::ComposerOptions(content) => content.key_hints(),
             Self::Model(content) => content.model_key_hints(),
             Self::ProjectRoots(content) => content.key_hints(),
             Self::Rewind(content) => content.key_hints(),

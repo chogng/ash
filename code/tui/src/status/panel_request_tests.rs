@@ -72,6 +72,7 @@ fn thread(model: ModelRef) -> Thread {
         reference_cost: ash_protocol::ModelReferenceCostSummary::default(),
         goal: None,
         turns: vec![Turn {
+            mode: Default::default(),
             advisor: None,
             turn_id: TurnId::new("turn-1").unwrap(),
             status: TurnStatus::Completed,

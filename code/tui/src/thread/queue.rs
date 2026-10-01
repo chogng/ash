@@ -121,7 +121,7 @@ impl Queue {
         let messages = messages
             .into_iter()
             .map(|message| {
-                let submission = submission(&message.request.input)?;
+                let submission = submission(&message.request.input, message.request.mode)?;
                 Ok((message, submission))
             })
             .collect::<Result<Vec<_>, String>>()?;
@@ -361,7 +361,10 @@ impl QueueNavigation {
     }
 }
 
-fn submission(input: &[ash_protocol::UserInput]) -> Result<ChatSubmission, String> {
+fn submission(
+    input: &[ash_protocol::UserInput],
+    mode: ash_protocol::CollaborationMode,
+) -> Result<ChatSubmission, String> {
     let mut values = Vec::new();
     let mut display = Vec::new();
     for item in input {
@@ -402,6 +405,7 @@ fn submission(input: &[ash_protocol::UserInput]) -> Result<ChatSubmission, Strin
         }
     }
     Ok(ChatSubmission {
+        mode,
         command_id: crate::client::new_command_id("input"),
         display_text: display.join(" "),
         input: values,

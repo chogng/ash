@@ -52,6 +52,8 @@ fn expressive_status_line_renders_emoji_bars_and_permission_text() {
     model.apply_settings(settings);
     model.apply_model_label("model");
     let runtime = StatusLineRuntime {
+        mode: Default::default(),
+        language: Default::default(),
         plan: Some((1, 3)),
         ..Default::default()
     };

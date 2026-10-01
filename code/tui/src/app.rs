@@ -2,6 +2,9 @@ mod chat_panel;
 #[cfg(test)]
 #[path = "app/chat_panel_tests.rs"]
 mod chat_panel_tests;
+#[cfg(test)]
+#[path = "app/collaboration_modes_tests.rs"]
+mod collaboration_modes_tests;
 mod command;
 mod command_panel;
 mod completion;

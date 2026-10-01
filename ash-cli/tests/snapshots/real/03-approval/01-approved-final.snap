@@ -28,9 +28,9 @@ expression: screen
 
 
 
-  ⏸ ask permissions on                                                   shift+tab to cycle policy
+  ⏸ ask permissions on                                               /policy to change permissions
   ────────────────────────────────────────────────────────────────────────────────────────────────
   >
   ───────────────────────────────────────────────────────────────────────────── ash-real-scenario
 
-  Enter send  ·  shift+tab permissions
+  Enter send  ·  shift+tab mode  ·  alt+r effort

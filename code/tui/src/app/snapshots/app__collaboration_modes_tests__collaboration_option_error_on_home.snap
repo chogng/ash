@@ -1,0 +1,28 @@
+---
+source: code/tui/src/app/collaboration_modes_tests.rs
+expression: render(&app)
+---
+  .                                                        [— / —] [Dashboard]  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                      Use /mode agent|plan|debug|multitask|ask  
+  ────────────────────────────────────────────────────────────────────────────  
+  >                                                                             
+  ───────────────────────────────────────────────────── Automatic model · Ask   
+                                                                                
+  Enter send  ·  / commands

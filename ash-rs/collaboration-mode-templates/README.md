@@ -5,3 +5,5 @@ This crate owns the default model-facing approach text for Agent, Plan, Debug, M
 Update the corresponding file under `templates/` when changing a mode's behavior. Mode identity and serialization belong to `ash-protocol`; shared Agent rules belong to `ash-prompts`; role duties and tool limits belong to `ash-agent-roles`.
 
 The five modes, Turn persistence, queue behavior, and delegated worker rules are documented together in [Collaboration modes](../docs/collaboration-modes.md).
+
+[Custom modes candidate](custom-modes-candidate.md) records a possible extension based on stable mode IDs and backend-owned definitions. It is a design candidate; custom modes are not implemented or scheduled.

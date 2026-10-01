@@ -25,4 +25,4 @@ expression: "crate::app::usage_tests::render(&app, 96, 24)"
   >
   ────────────────────────────────────────────────────────────────────────────────── 自动模型
 
-  Enter 发送  ·  shift+tab 权限
+  Enter 发送  ·  shift+tab 模式  ·  alt+r 推理档位

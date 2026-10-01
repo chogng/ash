@@ -52,7 +52,7 @@ pub(super) enum Completion {
     },
     Presentation(Result<AppEvent, String>),
     ModelUpdated {
-        command: String,
+        command: models::Command,
         result: Result<models::ModelUpdate, String>,
     },
     Skills(Result<SkillRefreshCompletion, String>),
@@ -354,13 +354,27 @@ pub(super) fn apply_request_completion(
                     ModelEvent::SummaryReceived(update.summary),
                 );
             }
-            app.update_for_panel(
-                panel_generation,
-                ThreadEvent::CommandCompleted {
-                    command,
-                    result: update.notice,
-                },
-            );
+            match update.notice {
+                models::ModelNotice::ThinkingEffort(effort) => {
+                    let mut notice = crate::nls::Text::template(
+                        "Thinking effort: {0}",
+                        vec![models::reasoning_effort_label(effort).into()],
+                    );
+                    notice.localize(app.language());
+                    app.chat_panel
+                        .show_notice(notice.to_string(), Instant::now());
+                }
+                models::ModelNotice::Command(mut notice) => {
+                    notice.localize(app.language());
+                    app.update_for_panel(
+                        panel_generation,
+                        ThreadEvent::CommandCompleted {
+                            command: command.command_line(),
+                            result: notice.to_string(),
+                        },
+                    );
+                }
+            }
             if let Some(picker) = picker {
                 app.update_for_panel(panel_generation, ModelEvent::PickerUpdated(picker));
             } else {
@@ -370,10 +384,23 @@ pub(super) fn apply_request_completion(
         Completion::ModelUpdated {
             command,
             result: Err(error),
-        } => app.update_for_panel(
-            panel_generation,
-            ThreadEvent::CommandFailed { command, error },
-        ),
+        } => match command {
+            models::Command::CycleEffort | models::Command::SetEffort { .. } => {
+                app.report_composer_option_error(error);
+            }
+            models::Command::SetModel { .. } | models::Command::Pin { .. } => {
+                app.update_for_panel(
+                    panel_generation,
+                    ThreadEvent::CommandFailed {
+                        command: command.command_line(),
+                        error: crate::nls::localize_owned(app.language(), error),
+                    },
+                );
+            }
+            models::Command::OpenEffortPicker => {
+                unreachable!("effort picker does not start a request")
+            }
+        },
         Completion::Theme(Ok(crate::theme::CommandCompletion::Presentation(event))) => {
             app.update_for_panel(panel_generation, event);
         }

@@ -80,7 +80,9 @@ fn keymap_choices_lists_keys_before_responsibilities() {
     assert_eq!(
         labels,
         vec![
+            "unbound",
             "shift+tab",
+            "alt+r",
             "unbound",
             "ctrl+v",
             "ctrl+c",

@@ -40,6 +40,9 @@ pub(crate) enum TuiSlashCommandAction {
     Shortcuts,
     Export,
     Model,
+    Mode,
+    Effort,
+    Policy,
     Theme,
     New,
     Quit,
@@ -109,6 +112,9 @@ impl TuiSlashCommandAction {
             Self::Shortcuts => "browse and customize terminal shortcuts",
             Self::Export => "export this conversation as Markdown",
             Self::Model => "show or set the preferred provider/model",
+            Self::Mode => "choose how the next task is handled",
+            Self::Effort => "choose the thinking effort for the current model",
+            Self::Policy => "choose permissions for the next Turn",
             Self::Theme => "show or set the terminal color theme",
             Self::New => "start a new chat",
             Self::Quit => "quit Ash",
@@ -135,6 +141,9 @@ impl TuiSlashCommandAction {
             | Self::Fork
             | Self::Export
             | Self::Model
+            | Self::Mode
+            | Self::Effort
+            | Self::Policy
             | Self::Theme
             | Self::New => SlashCommandArgumentMode::Optional,
             _ => SlashCommandArgumentMode::None,
@@ -145,6 +154,9 @@ impl TuiSlashCommandAction {
         match self {
             Self::Cd | Self::AddDir | Self::Export => Some("<path>"),
             Self::Model => Some("<model> [effort]"),
+            Self::Mode => Some("<agent|plan|debug|multitask|ask>"),
+            Self::Effort => Some("<effort>"),
+            Self::Policy => Some("<ask-permissions|auto-review|bypass-permissions>"),
             Self::Theme => Some("<theme>"),
             Self::Resume => Some("<session-id>"),
             Self::Rewind => Some("<checkpoint>"),
@@ -174,6 +186,7 @@ pub(crate) fn built_in_slash_command_definitions() -> Vec<SlashCommandDefinition
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct SlashCommandInvocation {
+    pub(crate) mode: ash_protocol::CollaborationMode,
     pub(crate) command: SlashCommandDefinition,
     pub(crate) origin: SlashCommandOrigin,
     pub(crate) display_arguments: String,
@@ -224,6 +237,7 @@ impl SlashCommandInvocation {
         }
 
         ChatSubmission {
+            mode: self.mode,
             command_id: crate::client::new_command_id("input"),
             display_text,
             input: self.arguments,
@@ -250,6 +264,7 @@ pub(super) fn into_command_invocation(
     }
 
     Ok(SlashCommandInvocation {
+        mode: submission.mode,
         command: parsed.command,
         origin: parsed.origin,
         display_arguments: submission.display_text[parsed.arguments_range].to_owned(),

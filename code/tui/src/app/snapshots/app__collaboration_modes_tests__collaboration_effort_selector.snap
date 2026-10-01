@@ -1,0 +1,26 @@
+---
+source: code/tui/src/app/collaboration_modes_tests.rs
+expression: render(&app)
+---
+  .                                                        [— / —] [Dashboard]  
+                                                                                
+        ┌── Thinking effort ───────────────────────────────────────[✗]─┐        
+        │                                                              │        
+        │  low                                                         │        
+        │> high                                                Current │        
+        │  max                                                         │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+  ──────│  Esc to close                                                │──────  
+  > Buil└──────────────────────────────────────────────────────────────┘        
+  ─────────────────────────────────────────────────────────── Automatic model

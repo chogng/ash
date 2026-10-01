@@ -494,6 +494,18 @@ impl App {
                     ));
                     return queue.submit(id).map(Into::into);
                 }
+                if self.chat_panel.is_steering()
+                    && self
+                        .thread
+                        .current_mode()
+                        .is_some_and(|mode| mode != submission.mode)
+                {
+                    let queue = &mut self.thread_presentations.active_mut().queue;
+                    let id = queue.push(crate::thread::composer::QueuedChatInput::from_submission(
+                        submission,
+                    ));
+                    return queue.submit(id).map(Into::into);
+                }
                 self.follow_latest_transcript();
                 self.thread_presentations.active_mut().queue.finish_edit();
                 let starts_conversation = !self.thread.has_user_message();
@@ -580,6 +592,7 @@ impl App {
         match outcome {
             CommandPanelOutcome::ExtensionTab(tab) => Some(
                 ThreadCommand::ExecuteProductCommand(SlashCommandInvocation {
+                    mode: self.collaboration_mode(),
                     command: tab.command().definition(),
                     origin: ash_slash_commands::SlashCommandOrigin::Local,
                     display_arguments: String::new(),
@@ -640,6 +653,22 @@ impl App {
             CommandPanelOutcome::Hooks(HooksOutcome::Dismiss) => {
                 self.close_command_panel();
                 None
+            }
+            CommandPanelOutcome::ComposerOption(option) => {
+                self.close_command_panel();
+                match option {
+                    crate::thread::composer::options::ComposerOption::Mode(mode) => {
+                        self.set_collaboration_mode(mode);
+                        None
+                    }
+                    crate::thread::composer::options::ComposerOption::Policy(policy) => {
+                        self.set_next_approval_mode(policy);
+                        None
+                    }
+                    crate::thread::composer::options::ComposerOption::Effort(effort) => {
+                        Some(ModelCommand::SetEffort { effort }.into())
+                    }
+                }
             }
             CommandPanelOutcome::Model(ModelSelectionAction::Select {
                 preference, effort, ..
@@ -1013,6 +1042,7 @@ impl App {
         }
         self.voice_partial.clear();
         let submission = crate::thread::composer::ChatSubmission {
+            mode: self.collaboration_mode(),
             command_id: crate::client::new_command_id("input"),
             display_text: text.to_owned(),
             input: vec![ChatInputItem::Text(text.to_owned())],
@@ -2101,6 +2131,9 @@ impl App {
         turns: &[Turn],
     ) -> Vec<crate::thread::ActiveTurnUpdate> {
         let updates = self.thread.sync_active_turn(turns);
+        if let Some(turn) = turns.last() {
+            self.input_state_mut().initialize_mode(turn.mode);
+        }
         if let Some(turn_id) = self.thread.active_turn() {
             self.thread_presentations
                 .active_mut()
@@ -2234,6 +2267,35 @@ impl App {
         Some(ThreadCommand::RefreshQueue.into())
     }
 
+    pub(crate) fn collaboration_mode(&self) -> ash_protocol::CollaborationMode {
+        self.input_state().mode()
+    }
+
+    pub(super) fn open_mode_picker(&mut self) {
+        self.open_command_panel(CommandPanel::composer_options(
+            crate::thread::composer::options::mode_choices(self.collaboration_mode()),
+        ));
+    }
+
+    pub(super) fn set_collaboration_mode(&mut self, mode: ash_protocol::CollaborationMode) {
+        self.input_state_mut().set_mode(mode);
+        let mut notice = crate::nls::Text::template(
+            "Next mode: {0}",
+            vec![crate::thread::composer::options::mode_label(mode).into()],
+        );
+        notice.localize(self.language());
+        self.chat_panel
+            .show_notice(notice.to_string(), Instant::now());
+    }
+
+    pub(super) fn report_composer_option_error(&mut self, error: String) {
+        // Editing next-turn options cannot change the lifecycle of an accepted Turn.
+        let error = crate::nls::localize_owned(self.language(), error);
+        self.chat_panel.show_notice(error.clone(), Instant::now());
+        self.thread
+            .update(ThreadPresentationEvent::FailureReported(error));
+    }
+
     pub(crate) fn approval_mode_status(&self) -> TurnApprovalModes {
         self.thread.approval_modes()
     }
@@ -2251,9 +2313,9 @@ impl App {
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn set_next_approval_mode(&mut self, approval_mode: ApprovalMode) {
         self.thread.set_next_approval_mode(approval_mode);
+        self.chat_panel.show_policy_tip(Instant::now());
     }
 
     pub(crate) fn set_current_approval_mode(&mut self, approval_mode: Option<ApprovalMode>) {
@@ -2307,6 +2369,8 @@ impl App {
             })
             .unwrap_or(0);
         StatusLineRuntime {
+            mode: self.collaboration_mode(),
+            language: self.language(),
             plan,
             subagents,
             process_resources: self.process_resources.view().local,
@@ -2835,8 +2899,10 @@ impl App {
             ThreadEvent::CommandCompleted { command, result } => {
                 self.thread
                     .update(ThreadPresentationEvent::CommandCompleted { command, result });
-                self.set_status(Status::Ready);
-                self.chat_panel.start_input();
+                if matches!(self.status, Status::Ready | Status::Error) {
+                    self.set_status(Status::Ready);
+                    self.chat_panel.start_input();
+                }
             }
             ThreadEvent::FailureReported(error) => {
                 self.thread
@@ -3362,6 +3428,7 @@ impl App {
     pub(super) fn app_keymap_context(&self, is_press: bool) -> AppKeymapContext {
         AppKeymapContext {
             accepts_input: self.accepts_input(),
+            chat_input_focused: self.chat_input_focused(),
             has_selection: self.list_selection().is_some(),
             chat_input_empty: self.input().is_empty(),
             is_press,
@@ -3417,6 +3484,13 @@ impl App {
     ) -> Option<AppCommand> {
         match action {
             AppKeymapAction::CycleApprovalMode => Some(ThreadCommand::CycleNextApprovalMode.into()),
+            AppKeymapAction::CycleCollaborationMode => {
+                self.set_collaboration_mode(crate::thread::composer::options::next_mode(
+                    self.collaboration_mode(),
+                ));
+                None
+            }
+            AppKeymapAction::CycleReasoningEffort => Some(ModelCommand::CycleEffort.into()),
             AppKeymapAction::ScreenEscape => match self.escape_mut().press(now) {
                 ScreenEscapeOutcome::WaitingForSecondPress => None,
                 ScreenEscapeOutcome::OpenRewind => Some(ThreadCommand::OpenRewindPicker.into()),
@@ -3495,13 +3569,71 @@ impl App {
             .ok();
         if invocation.origin == SlashCommandOrigin::Local
             && let Some(action) = local
-            && action != TuiSlashCommandAction::Quit
+            && !matches!(
+                action,
+                TuiSlashCommandAction::Quit
+                    | TuiSlashCommandAction::Mode
+                    | TuiSlashCommandAction::Policy
+                    | TuiSlashCommandAction::Effort
+            )
         {
             self.thread
                 .update(ThreadPresentationEvent::CommandSubmitted {
                     command: invocation.display_text(),
                     completion: action.completion(&invocation.arguments),
                 });
+        }
+        if invocation.origin == SlashCommandOrigin::Local {
+            use crate::thread::composer::options;
+            if matches!(
+                local,
+                Some(TuiSlashCommandAction::Mode | TuiSlashCommandAction::Policy)
+            ) {
+                let arguments = match invocation.text_arguments() {
+                    Ok(arguments) => arguments,
+                    Err(error) => {
+                        self.report_composer_option_error(error);
+                        return None;
+                    }
+                };
+                if arguments.is_empty() {
+                    let choices = if local == Some(TuiSlashCommandAction::Mode) {
+                        options::mode_choices(self.collaboration_mode())
+                    } else {
+                        options::policy_choices(self.approval_mode())
+                    };
+                    self.open_command_panel(CommandPanel::composer_options(choices));
+                } else {
+                    let result = if local == Some(TuiSlashCommandAction::Mode) {
+                        options::parse_mode(&arguments)
+                            .map(|mode| self.set_collaboration_mode(mode))
+                    } else {
+                        options::parse_policy(&arguments)
+                            .map(|policy| self.set_next_approval_mode(policy))
+                    };
+                    if let Err(error) = result {
+                        self.report_composer_option_error(error);
+                    }
+                }
+                return None;
+            }
+            if local == Some(TuiSlashCommandAction::Effort) {
+                if invocation.arguments.is_empty() {
+                    return Some(ModelCommand::OpenEffortPicker.into());
+                }
+                let effort = invocation.text_arguments().and_then(|value| {
+                    value
+                        .parse::<ash_protocol::ReasoningEffort>()
+                        .map_err(|_| "Use /effort to choose a supported thinking effort".to_owned())
+                });
+                return match effort {
+                    Ok(effort) => Some(ModelCommand::SetEffort { effort }.into()),
+                    Err(error) => {
+                        self.report_composer_option_error(error);
+                        None
+                    }
+                };
+            }
         }
         if invocation.origin == SlashCommandOrigin::Local && invocation.arguments.is_empty() {
             match local {
@@ -3514,6 +3646,7 @@ impl App {
                     self.close_transient_surfaces();
                     let text = "Prepare and create a pull request for the current changes using the connected GitHub tools. Verify the target branch and checks, and report the pull request link.".to_owned();
                     let submission = crate::thread::composer::ChatSubmission {
+                        mode: self.collaboration_mode(),
                         command_id: crate::client::new_command_id("input"),
                         display_text: text.clone(),
                         input: vec![crate::thread::composer::ChatInputItem::Text(text)],
@@ -3576,7 +3709,13 @@ impl App {
             }
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Fork)) => {
                 match invocation.text_arguments() {
-                    Ok(prompt) => Some(SessionCommand::Fork { prompt }.into()),
+                    Ok(prompt) => Some(
+                        SessionCommand::Fork {
+                            prompt,
+                            mode: invocation.mode,
+                        }
+                        .into(),
+                    ),
                     Err(error) => {
                         self.thread.update(ThreadPresentationEvent::CommandFailed {
                             command: invocation.display_text(),
@@ -3667,6 +3806,18 @@ impl App {
             }
             (SlashCommandOrigin::Server, _) => {
                 let submission = invocation.into_forwarded_submission();
+                if self.chat_panel.is_steering()
+                    && self
+                        .thread
+                        .current_mode()
+                        .is_some_and(|mode| mode != submission.mode)
+                {
+                    let queue = &mut self.thread_presentations.active_mut().queue;
+                    let id = queue.push(crate::thread::composer::QueuedChatInput::from_submission(
+                        submission,
+                    ));
+                    return queue.submit(id).map(Into::into);
+                }
                 self.thread.update(ThreadPresentationEvent::UserSubmitted {
                     command_id: submission.command_id.clone(),
                     text: submission.display_text.clone(),

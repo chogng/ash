@@ -28,7 +28,7 @@ the exact call was not retried; reason: the process reported an access restricti
 
 
 
-                                                                         shift+tab to cycle policy
+                                                                     /policy to change permissions
   ────────────────────────────────────────────────────────────────────────────────────────────────
   > Build anything
   ───────────────────────────────────────────────────────────────────────────── ash-real-scenario

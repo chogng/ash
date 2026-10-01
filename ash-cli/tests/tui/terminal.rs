@@ -10,6 +10,43 @@ use std::time::Duration;
 use std::time::Instant;
 
 #[test]
+fn collaboration_shortcuts_decode_shift_tab_and_alt_r_without_changing_the_draft() {
+    let fixture = Fixture::new();
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_stable_screen("Automatic model");
+    process.type_text("BOUND-DRAFT");
+    process.back_tab();
+    process.wait_for_stable_screen("Next mode: Plan");
+    assert!(process.screen().contains("BOUND-DRAFT"));
+    process.send(b"\x1br");
+    process.wait_for_stable_screen("Select a model with /model before changing thinking effort");
+    assert!(process.screen().contains("BOUND-DRAFT"));
+    assert!(!process.screen().contains("BOUND-DRAFTr"));
+    process.back_tab();
+    process.wait_for_stable_screen("Next mode: Debug");
+    process.assert_snapshot("real/02-terminal/collaboration-shortcuts");
+    process.quit();
+
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_stable_screen("Automatic model");
+    process.submit("/model openai/gpt-6-luna high");
+    process.wait_for_stable_screen("GPT-6 Luna (high)");
+    process.type_text("BOUND-DRAFT");
+    process.send(b"\x1br");
+    process.wait_for_stable_screen("Thinking effort: extra high");
+    assert!(process.screen().contains("BOUND-DRAFT"));
+    assert!(process.screen().contains("GPT-6 Luna (extra high)"));
+    assert!(!process.screen().contains("/effort"));
+    assert!(
+        fixture
+            .config_source()
+            .contains("modelReasoningEffort = \"extraHigh\"")
+    );
+    process.assert_snapshot("real/02-terminal/effort-shortcut");
+    process.quit();
+}
+
+#[test]
 fn inline_submitted_message_appears_once_while_working_and_after_completion() {
     let fixture = Fixture::new();
     let gate = Gate::new();
@@ -300,7 +337,7 @@ fn actual_tui_multiple_commands_preserve_internal_history_and_fixed_input() {
             ScenarioServer::start(REPLIES.map(|reply| HttpResponse::streaming([reply], None)));
         fixture.write_config(&server.base_url());
         let mut process = TuiProcess::start_in_vscode(&fixture, &[], size);
-        process.wait_for_stable_screen("ask permissions on");
+        process.wait_for_stable_screen("Enter send");
         for _ in 0..12 {
             process.submit("/status");
             process.wait_for_screen("Full context window");
@@ -337,7 +374,8 @@ fn actual_tui_input_keeps_its_row_without_blank_line_growth() {
         let server = ScenarioServer::start([HttpResponse::streaming(["ISSUE13-REPLY"], None)]);
         fixture.write_config(&server.base_url());
         let mut process = TuiProcess::start_in_vscode(&fixture, &[], size);
-        process.wait_for_stable_screen("ask permissions on");
+        process.wait_for_stable_screen("Enter send");
+        process.refresh_policy_tip();
         assert_input_surface_visible(&process);
         let hint_row = |process: &TuiProcess| {
             process
@@ -366,7 +404,7 @@ fn actual_tui_input_keeps_its_row_without_blank_line_growth() {
             loop {
                 let screen = process.screen();
                 if !screen.contains("image in clipboard")
-                    && !screen.contains("shift+tab to cycle policy")
+                    && !screen.contains("/policy to change permissions")
                 {
                     break;
                 }
@@ -529,8 +567,7 @@ fn actual_tui_sandbox_process_details_show_enforcement() {
     process.wait_for_screen("Start a task below, or continue a previous session.");
     process.submit("start a session before changing permissions");
     process.wait_for_stable_screen("SANDBOX-SETUP-DONE");
-    process.back_tab();
-    process.back_tab();
+    process.submit("/policy bypass-permissions");
     process.wait_for_screen("bypass permissions on");
     process.submit("尝试在工作区外创建 sandbox-must-not-write.txt");
     process.wait_for_stable_screen("目标文件没有生成");
@@ -673,10 +710,10 @@ fn actual_tui_markdown_links_survive_terminal_output_and_resize() {
     )]);
     fixture.write_config(&server.base_url());
     let mut process = TuiProcess::start_in_vscode(&fixture, &[], LARGE_SIZE);
-    process.wait_for_stable_screen("ask permissions on");
+    process.wait_for_stable_screen("Enter send");
     process.submit("show links");
     process.wait_for_screen("LINK-CHECK");
-    process.wait_for_stable_screen("ask permissions on");
+    process.wait_for_stable_screen("Enter send");
     // ConPTY supplies its own OSC 8 id parameter; assert the destination, not its generated id.
     let raw = process.raw_text();
     let destinations = raw
@@ -711,7 +748,7 @@ fn actual_tui_streaming_queue_drains_while_provider_waits_and_input_continues() 
     )]);
     fixture.write_config(&server.base_url());
     let mut process = TuiProcess::start_in_vscode(&fixture, &[], LARGE_SIZE);
-    process.wait_for_stable_screen("ask permissions on");
+    process.wait_for_stable_screen("Enter send");
     process.submit("show the queued lines");
     gate.wait_until_reached();
     process.wait_for_screen("COMMIT-ONE");

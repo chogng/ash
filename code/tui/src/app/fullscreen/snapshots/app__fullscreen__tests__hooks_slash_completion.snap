@@ -14,11 +14,11 @@ expression: rendered
                                                                                 
                                                                                 
                                                                                 
-                                                                                
-  ─────────────────────────────────────────────────────────────────────── 1/1   
+  ─────────────────────────────────────────────────────────────────────── 1/2   
   /hooks                     browse and manage Hooks                            
+  /mode                      choose how the next task is handled                
   ────────────────────────────────────────────────────────────────────────────  
   > /hooks                                                                      
   ─────────────────────────────────────────────────────────── Automatic model   
                                                                                 
-  Enter send  ·  shift+tab permissions
+  Enter send  ·  shift+tab mode  ·  alt+r effort

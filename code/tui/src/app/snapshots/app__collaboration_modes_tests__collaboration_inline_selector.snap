@@ -1,0 +1,28 @@
+---
+source: code/tui/src/app/collaboration_modes_tests.rs
+expression: render(&app)
+---
+                                                                                
+    ▄  ▄     Ash Code v0.1.0                                                    
+  ▗█▛██▜█▖   Automatic model                                                    
+  ▝▜████▛▘   .                                                                  
+    ▝  ▘                                                                        
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+─ Mode ─────────────────────────────────────────────────────────────────────────
+                                                                                
+  Agent        Complete the task                                                
+  Plan         Analyze and plan without editing                                 
+> Debug        Investigate and fix a problem                           Current  
+  Multitask    Delegate work and combine results                                
+  Ask          Answer questions without editing                                 
+                                                                                
+  Esc to close

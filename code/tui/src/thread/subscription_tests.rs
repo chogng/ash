@@ -445,6 +445,7 @@ fn thread(session_id: &str, thread_id: &str, sequence: u64) -> Thread {
 
 fn turn(turn_id: &str) -> Turn {
     Turn {
+        mode: Default::default(),
         advisor: None,
         turn_id: TurnId::new(turn_id).unwrap(),
         status: TurnStatus::Completed,

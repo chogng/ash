@@ -178,7 +178,7 @@ fn conversation_chrome_keeps_home_and_input_visible_without_a_welcome_message() 
     );
     assert_eq!(
         rendered.lines().last().unwrap().trim_end(),
-        "  Enter send  ·  shift+tab permissions"
+        "  Enter send  ·  shift+tab mode  ·  alt+r effort"
     );
 }
 
@@ -982,7 +982,7 @@ fn ruled_input_aligns_with_the_transcript_and_renders_the_prompt() {
     assert_eq!(buffer[(0, input.y)].symbol(), " ");
     assert_eq!(buffer[(2, input.y)].symbol(), "─");
     assert_eq!(buffer[(77, input.y)].symbol(), "─");
-    assert_eq!(buffer[(2, input.y)].fg, test_context().chat_input_chrome());
+    assert_eq!(buffer[(2, input.y)].fg, test_context().foreground());
     assert_eq!(buffer[(0, input.y + 1)].symbol(), " ");
     assert_eq!(buffer[(2, input.y + 1)].symbol(), ">");
     assert_eq!(buffer[(2, input.y + 1)].fg, test_context().foreground());
@@ -1027,10 +1027,10 @@ fn policy_tip_appears_after_first_submission_and_each_policy_change() {
 
     let buffer = render_buffer(&app, 80, 20);
     let bottom_row = layout(&app, terminal_area).session.bottom.bottom() - 1;
-    let hint_column = 78 - "shift+tab to cycle policy".width() as u16;
+    let hint_column = 78 - "/policy to change permissions".width() as u16;
     let hint = &buffer[(hint_column, top_tip_row)];
 
-    assert_eq!(hint.symbol(), "s");
+    assert_eq!(hint.symbol(), "/");
     assert_eq!(hint.fg, test_context().muted());
     assert!(hint.modifier.contains(Modifier::ITALIC));
     assert_eq!(buffer[(2, top_tip_row)].symbol(), "⏸");
@@ -1049,7 +1049,7 @@ fn policy_tip_appears_after_first_submission_and_each_policy_change() {
     let after = render(&app, 80, 20);
     let after_tip = after.lines().nth(usize::from(top_tip_row)).unwrap();
     assert!(!after_tip.contains("← Dashboard"));
-    assert!(!after_tip.contains("shift+tab"));
+    assert!(!after_tip.contains("/policy"));
 
     let policy_changed = first_tip_expired + Duration::from_secs(1);
     app.cycle_next_approval_mode(policy_changed);
@@ -1060,7 +1060,7 @@ fn policy_tip_appears_after_first_submission_and_each_policy_change() {
             .lines()
             .nth(usize::from(top_tip_row))
             .unwrap()
-            .contains("shift+tab to cycle policy")
+            .contains("/policy to change permissions")
     );
 
     assert!(app.handle_tick(policy_changed + Duration::from_secs(4))); // Active status animates.
@@ -1279,7 +1279,7 @@ fn policy_change_shows_the_new_mode_before_the_first_submission() {
     let rendered = render(&app, 80, 20);
     assert!(!rendered.contains("← Dashboard"));
     assert!(rendered.contains("auto review on"));
-    assert!(rendered.contains("shift+tab to cycle policy"));
+    assert!(rendered.contains("/policy to change permissions"));
 }
 
 #[test]

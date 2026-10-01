@@ -386,6 +386,18 @@ impl AppDriver {
             ));
         }
         let command = command.and_then(|command| {
+            if matches!(
+                command,
+                AppCommand::Models(crate::models::Command::OpenEffortPicker)
+            ) {
+                match self.model_picker.effort_choices() {
+                    Ok(choices) => self.app.open_command_panel(
+                        super::command_panel::CommandPanel::composer_options(choices),
+                    ),
+                    Err(error) => self.app.report_composer_option_error(error),
+                }
+                return None;
+            }
             if let AppCommand::Thread(ThreadCommand::ExecuteProductCommand(invocation)) = &command
                 && invocation.command.name == "model"
                 && invocation.arguments.is_empty()

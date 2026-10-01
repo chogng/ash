@@ -55,6 +55,7 @@ pub(in crate::app) fn layout(app: &App, terminal_area: Rect) -> Layout {
     }
     let input_view = app.chat_composer_view();
     let input_rows = ChatComposerSurface {
+        chrome: chat_input::ChatInputChrome::Mode(app.collaboration_mode()),
         view: &input_view,
         cursor: chat_input::ChatInputCursor::Hidden,
         focus: chat_input::ChatInputFocus::Blurred,

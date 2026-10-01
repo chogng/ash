@@ -111,3 +111,144 @@ fn context_capacity_comes_only_from_the_matching_catalog_entry() {
     );
     assert_eq!(other.context_capacity(), None);
 }
+
+#[derive(Clone)]
+struct ConfigTransport {
+    state: std::sync::Arc<
+        std::sync::Mutex<(
+            ash_app_server_protocol::protocol::config::ConfigReadResult,
+            Vec<ash_app_server_protocol::protocol::config::ConfigUpdateParams>,
+        )>,
+    >,
+}
+
+impl ash_app_server_client::JsonRpcTransport for ConfigTransport {
+    fn round_trip(&mut self, request: &str) -> Result<String, ash_app_server_client::ClientError> {
+        use ash_app_server_protocol::protocol::config::ConfigCommandDispositionDto;
+        use ash_app_server_protocol::protocol::config::ConfigCommandResult;
+        use ash_app_server_protocol::protocol::config::ConfigUpdateParams;
+        let request: serde_json::Value = serde_json::from_str(request).unwrap();
+        let mut state = self.state.lock().unwrap();
+        let result = match request["method"].as_str().unwrap() {
+            "config/read" => serde_json::to_value(&state.0).unwrap(),
+            "config/update" => {
+                let params: ConfigUpdateParams =
+                    serde_json::from_value(request["params"].clone()).unwrap();
+                assert_eq!(params.expected_revision, state.0.revision);
+                assert!(matches!(params.model, ash_protocol::Patch::Missing));
+                assert!(matches!(params.tui, ash_protocol::Patch::Missing));
+                assert!(matches!(
+                    params.approval_review_model,
+                    ash_protocol::Patch::Missing
+                ));
+                assert!(matches!(params.tool_mode, ash_protocol::Patch::Missing));
+                let ash_protocol::Patch::Value(effort) = params.model_reasoning_effort else {
+                    panic!("expected an effort patch")
+                };
+                state.0.model_reasoning_effort = Some(effort);
+                state.0.revision += 1;
+                state.1.push(params);
+                serde_json::to_value(ConfigCommandResult {
+                    revision: state.0.revision,
+                    generation: state.0.generation,
+                    disposition: ConfigCommandDispositionDto::Updated,
+                })
+                .unwrap()
+            }
+            method => panic!("unexpected method: {method}"),
+        };
+        Ok(serde_json::json!({"jsonrpc":"2.0","id":request["id"],"result":result}).to_string())
+    }
+}
+
+#[test]
+fn collaboration_effort_cycle_uses_only_supported_values_and_preserves_model() {
+    let mut selected = entry("openai", "test-model", ModelAccess::ApiKey);
+    selected.supported_reasoning_efforts = vec![
+        ReasoningEffort::Low,
+        ReasoningEffort::High,
+        ReasoningEffort::Max,
+    ];
+    selected.model_reasoning_effort = Some(ReasoningEffort::High);
+    let catalog = ModelListResult {
+        models: vec![selected],
+    };
+    let mut config = crate::test_support::empty_config_snapshot();
+    let model = ModelRefDto {
+        provider: "openai".into(),
+        model: "test-model".into(),
+    };
+    config.model = Some(model.clone());
+    let transport = ConfigTransport {
+        state: std::sync::Arc::new(std::sync::Mutex::new((config, vec![]))),
+    };
+    let mut client = ash_app_server_client::AppServerClient::new(transport.clone());
+    for expected in [
+        ReasoningEffort::Max,
+        ReasoningEffort::Low,
+        ReasoningEffort::High,
+    ] {
+        let update = super::execute(&mut client, super::Command::CycleEffort, &catalog).unwrap();
+        assert_eq!(update.summary.model(), Some(&model));
+        assert_eq!(update.summary.model_reasoning_effort(), Some(expected));
+        assert_eq!(update.config.model_reasoning_effort, Some(expected));
+    }
+    assert!(
+        super::execute(
+            &mut client,
+            super::Command::SetEffort {
+                effort: ReasoningEffort::Medium
+            },
+            &catalog
+        )
+        .is_err()
+    );
+    assert_eq!(transport.state.lock().unwrap().1.len(), 3);
+    transport.state.lock().unwrap().0.model_reasoning_effort = Some(ReasoningEffort::Medium);
+    assert!(super::execute(&mut client, super::Command::CycleEffort, &catalog).is_err());
+    assert_eq!(transport.state.lock().unwrap().1.len(), 3);
+    let update = super::execute(
+        &mut client,
+        super::Command::SetEffort {
+            effort: ReasoningEffort::Low,
+        },
+        &catalog,
+    )
+    .unwrap();
+    assert_eq!(
+        update.summary.model_reasoning_effort(),
+        Some(ReasoningEffort::Low)
+    );
+    let choices = super::request::effort_choices(&update.config, &catalog).unwrap();
+    let selection = crate::widgets::list_selection::ListSelectionState::new(choices.model);
+    assert_eq!(selection.selected_visible_index(), Some(0));
+    assert_eq!(selection.visible_items().len(), 3);
+}
+
+#[test]
+fn collaboration_effort_unsupported_models_do_not_write_config() {
+    for has_model in [false, true] {
+        let mut config = crate::test_support::empty_config_snapshot();
+        config.model = has_model.then(|| ModelRefDto {
+            provider: "custom".into(),
+            model: "model".into(),
+        });
+        let catalog = ModelListResult {
+            models: vec![entry("custom", "model", ModelAccess::ApiKey)],
+        };
+        let transport = ConfigTransport {
+            state: std::sync::Arc::new(std::sync::Mutex::new((config, vec![]))),
+        };
+        let mut client = ash_app_server_client::AppServerClient::new(transport.clone());
+        let error = super::execute(&mut client, super::Command::CycleEffort, &catalog).unwrap_err();
+        assert!(
+            error.contains(if has_model {
+                "does not support"
+            } else {
+                "Select a model"
+            }),
+            "{error}"
+        );
+        assert!(transport.state.lock().unwrap().1.is_empty());
+    }
+}

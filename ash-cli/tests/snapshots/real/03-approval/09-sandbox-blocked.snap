@@ -28,9 +28,9 @@ the exact call was not retried; reason: the process reported an access restricti
 
 
 
-  ▶ bypass permissions on                                                shift+tab to cycle policy
+  ▶ bypass permissions on                                            /policy to change permissions
   ────────────────────────────────────────────────────────────────────────────────────────────────
   >
   ───────────────────────────────────────────────────────────────────────────── ash-real-scenario
 
-  Enter send  ·  shift+tab permissions
+  Enter send  ·  shift+tab mode  ·  alt+r effort

@@ -11,6 +11,9 @@ pub(crate) enum Event {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
     SetModel { preference: String },
+    OpenEffortPicker,
+    CycleEffort,
+    SetEffort { effort: ReasoningEffort },
     Pin { preference: String, pinned: bool },
 }
 
@@ -22,6 +25,7 @@ pub(crate) use picker::ModelChoices;
 pub(crate) use picker::ModelPickerData;
 pub(crate) use picker::ModelSelectionAction;
 pub(crate) use picker::model_choices;
+pub(crate) use request::ModelNotice;
 pub(crate) use request::ModelUpdate;
 pub(crate) use request::execute;
 pub(crate) use request::remove_provider_pins;
@@ -99,7 +103,7 @@ impl ModelSummary {
     }
 }
 
-const fn reasoning_effort_label(effort: ReasoningEffort) -> &'static str {
+pub(crate) const fn reasoning_effort_label(effort: ReasoningEffort) -> &'static str {
     match effort {
         ReasoningEffort::None => "none",
         ReasoningEffort::Minimal => "minimal",

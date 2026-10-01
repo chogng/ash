@@ -35,6 +35,43 @@ use crossterm::event::MouseEventKind;
 use ratatui::layout::Rect;
 
 #[test]
+fn collaboration_mode_label_opens_the_keyboard_selector_without_hover_changing_mode() {
+    use ash_protocol::CollaborationMode;
+    use ratatui::layout::Position;
+    for (width, language) in [
+        (80, crate::nls::Language::English),
+        (24, crate::nls::Language::Chinese),
+    ] {
+        let mut app = App::new();
+        let mut settings = crate::config::TerminalSettings::default();
+        settings.set_language(language);
+        app.update(crate::config::Event::SettingsReceived(settings));
+        app.set_collaboration_mode(CollaborationMode::Multitask);
+        let area = Rect::new(0, 0, width, 20);
+        let input = crate::app::fullscreen::layout(&app, area).input;
+        let position = Position::new(input.right() - 2, input.bottom() - 1);
+        assert_eq!(
+            super::target_at(&app, area, position.x, position.y),
+            Some(PointerTarget::ComposerSetting(
+                crate::app::fullscreen::composer::Target::Mode
+            ))
+        );
+        update_pointer_hover(&mut app, area, position.x, position.y);
+        assert_eq!(app.collaboration_mode(), CollaborationMode::Multitask);
+        assert!(app.command_panel().is_none());
+        activate_pointer_item(&mut app, area, position.x, position.y);
+        assert_eq!(
+            app.list_selection().unwrap().selected_visible_index(),
+            Some(3)
+        );
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.collaboration_mode(), CollaborationMode::Ask);
+        assert!(app.chat_input_focused());
+    }
+}
+
+#[test]
 fn clearing_fullscreen_cancels_the_drag_before_a_fresh_click_at_the_new_size() {
     let mut app = App::new();
     app.insert_text("/q");
@@ -460,7 +497,7 @@ fn input_focus_follows_clicks_and_clicking_modal_backdrop_closes_modal() {
         Some(PointerTarget::Composer(ChatComposerPointerTarget::Input))
     );
     assert!(app.chat_input_focused());
-    assert_eq!(input_border(&app), app.render_context().chat_input_chrome());
+    assert_eq!(input_border(&app), app.render_context().foreground());
 
     handle_mouse(
         &mut app,
@@ -473,7 +510,7 @@ fn input_focus_follows_clicks_and_clicking_modal_backdrop_closes_modal() {
         mouse(MouseEventKind::Up(MouseButton::Left), page_position),
     );
     assert!(!app.chat_input_focused());
-    assert_eq!(input_border(&app), app.render_context().border());
+    assert_eq!(input_border(&app), app.render_context().foreground());
     app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE));
     app.handle_paste("ignored".into());
     assert_eq!(app.input(), "draft");
@@ -489,7 +526,7 @@ fn input_focus_follows_clicks_and_clicking_modal_backdrop_closes_modal() {
         mouse(MouseEventKind::Up(MouseButton::Left), input_position),
     );
     assert!(app.chat_input_focused());
-    assert_eq!(input_border(&app), app.render_context().chat_input_chrome());
+    assert_eq!(input_border(&app), app.render_context().foreground());
 
     app.update(AppEvent::HelpOpened(ListSelectionModel::new(
         "Help",
@@ -579,6 +616,7 @@ fn assert_base_pointer_targets(app: &mut App, area: Rect) {
             ));
             match super::target_at(app, area, column, row) {
                 Some(PointerTarget::Header(_))
+                | Some(PointerTarget::ComposerSetting(super::super::composer::Target::Mode))
                 | Some(PointerTarget::Composer(ChatComposerPointerTarget::Input)) => {}
                 None => assert_eq!(activate_pointer_item(app, area, column, row), None),
                 target => panic!("unexpected base pointer target: {target:?}"),

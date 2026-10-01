@@ -1,19 +1,18 @@
 //! Interactive terminal client for Ash's App Server product boundary.
 
 mod app;
-mod voice;
 mod client;
 mod config;
 mod connectors;
 mod dirs;
+mod extensions;
 mod git;
-mod host;
 mod hooks;
+mod host;
 mod issues;
 mod keymap;
 mod keymap_setup;
 mod lsp;
-mod extensions;
 mod marketplace;
 mod mcp;
 mod memories;
@@ -28,6 +27,7 @@ mod status;
 mod terminal;
 #[cfg(test)]
 mod test_support;
+mod voice;
 #[cfg(test)]
 // Keep the owning Rust module in each filename while omitting the crate name from TUI baselines.
 #[macro_export]

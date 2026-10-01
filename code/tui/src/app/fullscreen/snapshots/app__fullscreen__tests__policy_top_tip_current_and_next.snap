@@ -16,9 +16,9 @@ expression: visible
                                                                                                                         
                                                                                                                         
                                                                                                                         
-  ⏸ current: ask permissions on · ⏩  next: auto review on                                    shift+tab to cycle policy  
+  ⏸ current: ask permissions on · ⏩  next: auto review on                                /policy to change permissions  
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  
   >                                                                                                                     
   ─────────────────────────────────────────────────────────────────────────────────────────────────── Automatic model   
                                                                                                                         
-  Enter send  ·  shift+tab permissions
+  Enter send  ·  shift+tab mode  ·  alt+r effort

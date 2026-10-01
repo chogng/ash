@@ -59,6 +59,11 @@ pub(crate) struct ThemePalette {
     pub(crate) background: ThemeRgb,
     pub(crate) border: ThemeRgb,
     pub(crate) chat_input_chrome: ThemeRgb,
+    // The default mode colours follow the desktop selector's chart colours.
+    pub(crate) mode_plan: ThemeRgb,
+    pub(crate) mode_debug: ThemeRgb,
+    pub(crate) mode_multitask: ThemeRgb,
+    pub(crate) mode_ask: ThemeRgb,
     pub(crate) danger: ThemeRgb,
     pub(crate) disabled_foreground: ThemeRgb,
     pub(crate) focus: ThemeRgb,
@@ -101,6 +106,10 @@ impl ThemePalette {
             background: ThemeRgb::from_hex("#0d1117"),
             border: ThemeRgb::from_hex("#2b2b2b"),
             chat_input_chrome: ThemeRgb::from_hex("#8b949e"),
+            mode_plan: ThemeRgb::from_hex("#d18616"),
+            mode_debug: ThemeRgb::from_hex("#f48771"),
+            mode_multitask: ThemeRgb::from_hex("#b180d7"),
+            mode_ask: ThemeRgb::from_hex("#89d185"),
             danger: ThemeRgb::from_hex("#f85149"),
             disabled_foreground: ThemeRgb::from_hex("#8b949e"),
             focus: ThemeRgb::from_hex("#9a91eb"),
@@ -143,6 +152,10 @@ impl ThemePalette {
             background: ThemeRgb::from_hex("#ffffff"),
             border: ThemeRgb::from_hex("#e5e5e5"),
             chat_input_chrome: ThemeRgb::from_hex("#57606a"),
+            mode_plan: ThemeRgb::from_hex("#a65b00"),
+            mode_debug: ThemeRgb::from_hex("#a1260d"),
+            mode_multitask: ThemeRgb::from_hex("#652d90"),
+            mode_ask: ThemeRgb::from_hex("#107c10"),
             danger: ThemeRgb::from_hex("#cf222e"),
             disabled_foreground: ThemeRgb::from_hex("#57606a"),
             focus: ThemeRgb::from_hex("#6658c7"),
@@ -195,6 +208,10 @@ impl ThemePalette {
             selection_foreground: ThemeRgb::from_hex("#ddf4ff"),
             screen_selection_background: ThemeRgb::from_hex("#80ccff"),
             variable: ThemeRgb::from_hex("#fdac54"),
+            mode_plan: ThemeRgb::from_hex("#fdac54"),
+            mode_debug: ThemeRgb::from_hex("#d47616"),
+            mode_multitask: ThemeRgb::from_hex("#d2a8ff"),
+            mode_ask: ThemeRgb::from_hex("#58a6ff"),
             warning: ThemeRgb::from_hex("#fdac54"),
             ..Self::dark()
         }
@@ -220,6 +237,10 @@ impl ThemePalette {
             selection_foreground: ThemeRgb::from_hex("#034b7a"),
             screen_selection_background: ThemeRgb::from_hex("#80ccff"),
             variable: ThemeRgb::from_hex("#8a4600"),
+            mode_plan: ThemeRgb::from_hex("#8a4600"),
+            mode_debug: ThemeRgb::from_hex("#b35900"),
+            mode_multitask: ThemeRgb::from_hex("#8250df"),
+            mode_ask: ThemeRgb::from_hex("#0969da"),
             warning: ThemeRgb::from_hex("#8a4600"),
             ..Self::light()
         }
@@ -257,6 +278,10 @@ pub(crate) struct RenderTheme {
     background: Color,
     border: Color,
     chat_input_chrome: Color,
+    mode_plan: Color,
+    mode_debug: Color,
+    mode_multitask: Color,
+    mode_ask: Color,
     danger: Color,
     disabled_foreground: Color,
     focus: Color,
@@ -303,6 +328,10 @@ impl RenderTheme {
             background: projected(palette.background),
             border: projected(palette.border),
             chat_input_chrome: projected(palette.chat_input_chrome),
+            mode_plan: projected(palette.mode_plan),
+            mode_debug: projected(palette.mode_debug),
+            mode_multitask: projected(palette.mode_multitask),
+            mode_ask: projected(palette.mode_ask),
             danger: projected(palette.danger),
             disabled_foreground: projected(palette.disabled_foreground),
             focus: projected(palette.focus),
@@ -358,6 +387,10 @@ impl RenderTheme {
             background: hex("#0d1117"),
             border: hex("#808080"),
             chat_input_chrome: hex("#9b9b9b"),
+            mode_plan: hex("#d18616"),
+            mode_debug: hex("#f48771"),
+            mode_multitask: hex("#b180d7"),
+            mode_ask: hex("#89d185"),
             danger: hex("#f56969"),
             disabled_foreground: hex("#808080"),
             focus: hex("#9a91eb"),
@@ -625,6 +658,16 @@ impl<'a> RenderContext<'a> {
     }
     pub(crate) const fn chat_input_chrome(self) -> Color {
         self.theme.chat_input_chrome()
+    }
+
+    pub(crate) const fn mode_color(self, mode: ash_protocol::CollaborationMode) -> Color {
+        match mode {
+            ash_protocol::CollaborationMode::Agent => self.theme.foreground,
+            ash_protocol::CollaborationMode::Plan => self.theme.mode_plan,
+            ash_protocol::CollaborationMode::Debug => self.theme.mode_debug,
+            ash_protocol::CollaborationMode::Multitask => self.theme.mode_multitask,
+            ash_protocol::CollaborationMode::Ask => self.theme.mode_ask,
+        }
     }
     pub(crate) const fn danger(self) -> Color {
         self.theme.danger()

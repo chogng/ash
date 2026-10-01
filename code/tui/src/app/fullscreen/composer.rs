@@ -8,10 +8,10 @@ use crate::thread::interaction::approval;
 use crate::thread::interaction::query;
 use crate::thread::plan;
 use crate::thread::queue;
+use ash_protocol::CollaborationMode;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
-use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 
 pub(super) fn draw(
@@ -52,24 +52,25 @@ pub(super) fn draw(
         );
     } else {
         ChatComposerSurface {
+            chrome: chat_input::ChatInputChrome::Mode(app.collaboration_mode()),
             view: &input_view,
             cursor,
             focus,
             placeholder: Some("Build anything"),
         }
         .render(frame, areas.input, context);
-        let input = areas.input;
-        if input.height >= 3 && input.width >= 8 {
-            let model = crate::render::truncate_with_ellipsis(
-                &context.localize(app.status_line().model_label()),
-                usize::from(input.width.saturating_sub(6)),
-            );
-            let label = Line::from(format!(" {model} "));
-            let width = label.width() as u16;
+        if let Some(labels) = labels(app, areas.input, context) {
             frame.render_widget(
-                Paragraph::new(label).style(Style::default().fg(context.muted())),
-                Rect::new(input.right() - width, input.bottom() - 1, width, 1),
+                Paragraph::new(labels.model).style(Style::default().fg(context.muted())),
+                labels.model_area,
             );
+            let interaction = app.fullscreen.pointer.interaction_state(
+                &super::pointer::PointerTarget::ComposerSetting(Target::Mode),
+            );
+            let style = Style::default()
+                .fg(context.mode_color(app.collaboration_mode()))
+                .patch(crate::render::interaction_style(context, interaction));
+            frame.render_widget(Paragraph::new(labels.mode).style(style), labels.mode_area);
         }
     }
     if let Some(query) = app.query_view() {
@@ -135,6 +136,81 @@ pub(super) fn draw(
         indicator.draw(frame, areas.session.status_indicator, context);
     }
     super::footer::draw_tip(frame, areas.session.top_tip, app, context);
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::app) enum Target {
+    Mode,
+}
+
+struct Labels {
+    model: String,
+    mode: String,
+    model_area: Rect,
+    mode_area: Rect,
+}
+
+// Drawing and pointer input share these boundaries, including localized and narrow labels.
+fn labels(app: &App, input: Rect, context: crate::render::RenderContext<'_>) -> Option<Labels> {
+    if input.height < 3 || input.width < 8 {
+        return None;
+    }
+    let mode = match app.collaboration_mode() {
+        CollaborationMode::Agent => String::new(),
+        mode @ (CollaborationMode::Plan
+        | CollaborationMode::Debug
+        | CollaborationMode::Multitask
+        | CollaborationMode::Ask) => {
+            format!(
+                " {} ",
+                context.localize(chat_input::options::mode_label(mode))
+            )
+        }
+    };
+    let mode_width = crate::render::display_width(&mode) as u16;
+    if mode_width + 4 > input.width {
+        return None;
+    }
+    let model = crate::render::truncate_with_ellipsis(
+        &context.localize(app.status_line().model_label()),
+        usize::from(input.width.saturating_sub(mode_width + 6)),
+    );
+    let model = if model.is_empty() {
+        String::new()
+    } else if mode.is_empty() {
+        format!(" {model} ")
+    } else {
+        format!(" {model} ·")
+    };
+    let model_width = crate::render::display_width(&model) as u16;
+    let mode_area = Rect::new(
+        input.right() - mode_width,
+        input.bottom() - 1,
+        mode_width,
+        1,
+    );
+    Some(Labels {
+        model,
+        mode,
+        model_area: Rect::new(mode_area.x - model_width, mode_area.y, model_width, 1),
+        mode_area,
+    })
+}
+
+pub(super) fn target_at(
+    app: &App,
+    input: Rect,
+    position: ratatui::layout::Position,
+) -> Option<Target> {
+    labels(app, input, app.render_context())
+        .filter(|labels| labels.mode_area.contains(position))
+        .map(|_| Target::Mode)
+}
+
+pub(super) fn activate(app: &mut App, target: Target) {
+    match target {
+        Target::Mode => app.open_mode_picker(),
+    }
 }
 
 #[cfg(test)]

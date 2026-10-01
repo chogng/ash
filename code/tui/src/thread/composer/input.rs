@@ -31,6 +31,7 @@ pub(crate) use state::ChatInputQueueOutcome;
 pub(crate) use state::ChatSubmission;
 pub(crate) use state::QueuedChatInput;
 pub(crate) use state::UnknownSlashCommand;
+pub(crate) use view::ChatInputChrome;
 pub(crate) use view::ChatInputCursor;
 pub(crate) use view::ChatInputFocus;
 pub(crate) use view::content_area;

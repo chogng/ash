@@ -26,6 +26,8 @@ const SEPARATOR: &str = " · ";
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct StatusLineRuntime {
+    pub(crate) mode: ash_protocol::CollaborationMode,
+    pub(crate) language: crate::nls::Language,
     pub(crate) plan: Option<(usize, usize)>,
     pub(crate) subagents: usize,
     pub(crate) process_resources: ProcessUsageView,
@@ -96,6 +98,7 @@ pub(super) enum StatusLineSegmentKind {
     Inserted,
     Removed,
     Progress,
+    Mode(ash_protocol::CollaborationMode),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -357,7 +360,6 @@ impl StatusLineModel {
         runtime: StatusLineRuntime,
         location: StatusLineLocation,
     ) -> StatusLineLayout {
-        let process_resources = runtime.process_resources;
         let mut values = Vec::new();
         if self.settings.style() == StatusLineStyle::Rich {
             if let Some((completed, total)) = runtime.plan {
@@ -381,7 +383,7 @@ impl StatusLineModel {
                 values.push(DisplayValue::plain(text.clone(), text));
             }
         }
-        values.extend(self.configured_values(process_resources, location));
+        values.extend(self.configured_values(runtime, location));
         let fitted = fit_values(&values, width);
         let process_resources = values[..fitted.visible_values]
             .iter()
@@ -406,15 +408,19 @@ impl StatusLineModel {
 
     fn configured_values(
         &self,
-        resources: ProcessUsageView,
+        runtime: StatusLineRuntime,
         location: StatusLineLocation,
     ) -> Vec<DisplayValue> {
+        let resources = runtime.process_resources;
         let mut values = Vec::new();
         for item in self.settings.items() {
             if matches!(location, StatusLineLocation::Header)
                 && matches!(
                     item,
-                    StatusLineItem::Model | StatusLineItem::GitBranch | StatusLineItem::Context
+                    StatusLineItem::Model
+                        | StatusLineItem::Mode
+                        | StatusLineItem::GitBranch
+                        | StatusLineItem::Context
                 )
             {
                 continue;
@@ -424,6 +430,24 @@ impl StatusLineModel {
                 StatusLineItem::Context => values.push(self.context_display()),
                 StatusLineItem::Permissions => {}
                 StatusLineItem::Model => values.extend(self.model.iter().cloned()),
+                StatusLineItem::Mode => {
+                    if runtime.mode == ash_protocol::CollaborationMode::Agent {
+                        continue;
+                    }
+                    let segment = StatusLineSegment {
+                        text: crate::nls::localize(
+                            runtime.language,
+                            crate::thread::composer::options::mode_label(runtime.mode),
+                        )
+                        .into_owned(),
+                        kind: StatusLineSegmentKind::Mode(runtime.mode),
+                    };
+                    values.push(DisplayValue {
+                        full: vec![segment.clone()],
+                        compact: vec![segment],
+                        process_resources: None,
+                    });
+                }
                 StatusLineItem::CacheHitRate => values.extend(self.cache_hit_rate.iter().cloned()),
                 StatusLineItem::ReferenceCost => values.extend(self.reference_cost.iter().cloned()),
                 StatusLineItem::Memory => values.push(DisplayValue::process_resource(
@@ -439,9 +463,12 @@ impl StatusLineModel {
                 StatusLineItem::GitBranch => values.extend(self.git_branch.iter().cloned()),
                 StatusLineItem::GitChanges => values.extend(self.git_changes_display().into_iter()),
             }
-            if self.settings.style() == StatusLineStyle::Rich && item != StatusLineItem::Context {
+            if self.settings.style() == StatusLineStyle::Rich
+                && !matches!(item, StatusLineItem::Context | StatusLineItem::Mode)
+            {
                 let icon = match item {
                     StatusLineItem::Model => "🤖",
+                    StatusLineItem::Mode => "",
                     StatusLineItem::CacheHitRate => "⚡",
                     StatusLineItem::ReferenceCost => "💰",
                     StatusLineItem::Memory => "💾",

@@ -76,7 +76,6 @@ use ash_memory_diagnostics::ProcessResourceDemand;
 use ash_memory_diagnostics::ProcessResourceRequest;
 use ash_memory_diagnostics::ProcessResourceUsage;
 use ash_memory_diagnostics::ProcessResourcesReading;
-use ash_protocol::ApprovalMode;
 use ash_protocol::ContentDigest;
 use ash_protocol::ItemId;
 use ash_protocol::Session;
@@ -363,6 +362,7 @@ fn selected_rewind_checkpoint_emits_a_typed_rewind_action() {
         reference_cost: ash_protocol::ModelReferenceCostSummary::default(),
         goal: None,
         turns: vec![Turn {
+            mode: Default::default(),
             advisor: None,
             turn_id: turn_id.clone(),
             status: TurnStatus::Completed,
@@ -3489,25 +3489,6 @@ fn assert_text_submission(action: Option<AppCommand>, expected: &str) {
     assert_eq!(
         submission.input,
         vec![ChatInputItem::Text(expected.to_owned())]
-    );
-}
-
-#[test]
-fn backtab_cycles_the_next_turn_approval_mode() {
-    let mut app = App::new();
-
-    let action = app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
-    assert_eq!(
-        action,
-        Some(AppCommand::Thread(ThreadCommand::CycleNextApprovalMode))
-    );
-    assert_eq!(app.approval_mode(), ApprovalMode::AskPermissions);
-
-    app.set_next_approval_mode(ApprovalMode::AutoReview);
-    let action = app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
-    assert_eq!(
-        action,
-        Some(AppCommand::Thread(ThreadCommand::CycleNextApprovalMode))
     );
 }
 

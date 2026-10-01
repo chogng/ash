@@ -17,6 +17,7 @@ use crate::keymap::AppKeymapContext;
 fn context() -> AppKeymapContext {
     AppKeymapContext {
         accepts_input: true,
+        chat_input_focused: true,
         has_selection: false,
         chat_input_empty: true,
         is_press: true,
