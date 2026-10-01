@@ -81,6 +81,143 @@ async function expectFloatingComposerHover(card: Locator, input: Locator, blurTa
 	await expect(card).toHaveCSS('box-shadow', raisedShadow);
 }
 
+test('Sessions Design canvas keeps grid and cursor readable across themes', async ({ application, target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code');
+	for (const [theme, scheme] of [
+		['Ash Light', 'light'],
+		['Ash Dark', 'dark'],
+		['Ash High Contrast Dark', 'high-contrast-dark'],
+		['Ash High Contrast Light', 'high-contrast-light'],
+	]) {
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+		const picker = workbench.page.locator('.ash-quick-pick');
+		await picker.getByRole('combobox').fill(theme);
+		await picker.getByRole('combobox').press('Enter');
+		await expect(picker).toHaveCount(0);
+		let page = workbench.page;
+		if (target.kind === 'browser') {
+			await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+		} else {
+			if (!('windows' in application)) {
+				throw new Error('Expected Electron windows');
+			}
+			const opened = application.waitForEvent('window');
+			await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
+			page = await opened;
+		}
+		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', scheme);
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
+		const canvas = page.getByRole('region', { name: 'Design canvas' });
+		const viewport = canvas.locator('.ash-sessions-design-viewport');
+		await expect(viewport).toHaveCSS('background-image', /linear-gradient[\s\S]*linear-gradient/u);
+		const colors = await viewport.evaluate(element => {
+			const styles = getComputedStyle(element);
+			const cursor = decodeURIComponent(styles.cursor);
+			const probe = document.createElement('span');
+			element.append(probe);
+			probe.style.color = cursor.match(/stroke="([^"]+)"/u)![1];
+			const cursorColor = getComputedStyle(probe).color;
+			probe.style.color = 'var(--ash-foreground)';
+			const foreground = getComputedStyle(probe).color;
+			probe.remove();
+			return { cursorColor, foreground, grid: styles.getPropertyValue('--ash-sessions-design-grid-line').trim(), contrast: styles.getPropertyValue('--ash-contrast-border').trim() };
+		});
+		expect(colors.cursorColor).toBe(colors.foreground);
+		if (scheme.startsWith('high-contrast')) {
+			expect(colors.grid).toBe(colors.contrast);
+		}
+		await canvas.focus();
+		await page.keyboard.press('ArrowLeft');
+		await expect(viewport).toHaveCSS('outline-style', 'solid');
+		const closed = target.kind === 'electron' ? page.waitForEvent('close') : undefined;
+		await returnFromSessions(page);
+		await closed;
+		await workbench.waitForReady();
+	}
+});
+
+test('Sessions Design contribution keeps its viewport and applies canvas cursor settings', async ({ application, target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code');
+	let page = workbench.page;
+	if (target.kind === 'browser') {
+		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+	} else {
+		if (!('windows' in application)) {
+			throw new Error('Expected Electron windows');
+		}
+		const opened = application.waitForEvent('window');
+		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
+		page = await opened;
+	}
+	const navigation = page.locator('.ash-sessions-activity-content');
+	const design = navigation.getByRole('button', { name: 'Design', exact: true });
+	const canvas = page.getByRole('region', { name: 'Design canvas' });
+	const world = canvas.locator('.ash-sessions-design-world');
+	const transform = () => world.evaluate(element => (element as HTMLElement).style.transform);
+	await design.click();
+	await expect(canvas).toBeVisible();
+	await expect(canvas).toHaveCSS('display', 'flex');
+	const viewport = canvas.locator('.ash-sessions-design-viewport');
+	await expect(viewport).toHaveCSS('background-image', /linear-gradient[\s\S]*linear-gradient/u);
+	await expect(viewport).toHaveCSS('background-size', '12px 12px, 12px 12px');
+	await expect(viewport).toHaveCSS('cursor', /url\("data:image\/svg\+xml,/u);
+	await canvas.focus();
+	await page.keyboard.press('ArrowLeft');
+	await page.keyboard.press('+');
+	await expect.poll(transform).toMatch(/scale\(1\.2\)$/u);
+	await expect(viewport).toHaveCSS('background-size', '14.4px 14.4px, 14.4px 14.4px');
+	const retainedTransform = await transform();
+	await page.keyboard.press('Alt+F1');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Design canvas[\s\S]*Press 0 to reset the view/u);
+	await page.keyboard.press('Escape');
+	await expect(canvas).toBeFocused();
+	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
+	await expect(canvas).toBeHidden();
+	await design.click();
+	await expect(canvas).toBeVisible();
+	await expect(canvas).toHaveCount(1);
+	await expect.poll(transform).toBe(retainedTransform);
+	await canvas.focus();
+	await page.keyboard.press('0');
+	await expect.poll(transform).toBe('translate(0px, 0px) scale(1)');
+	const bounds = await canvas.boundingBox();
+	expect(bounds).not.toBeNull();
+	expect(bounds!.width).toBeGreaterThan(400);
+	expect(bounds!.height).toBeGreaterThan(200);
+	await viewport.hover();
+	await page.mouse.down();
+	await expect(viewport).toHaveCSS('cursor', 'grabbing');
+	await page.mouse.up();
+	await expect(viewport).toHaveCSS('cursor', /url\("data:image\/svg\+xml,/u);
+
+	const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+	const openDesignSettings = async (): Promise<void> => {
+		await navigation.getByRole('button', { name: 'Accounts', exact: true }).click();
+		await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
+		await settings.getByRole('navigation', { name: 'Settings categories' }).getByRole('button', { name: 'Design', exact: true }).click();
+	};
+	await openDesignSettings();
+	const pointerSwitch = settings.getByRole('switch', { name: 'Use pointer cursor on the canvas', exact: true });
+	await expect(pointerSwitch).toBeChecked();
+	await pointerSwitch.focus();
+	await page.keyboard.press('Space');
+	await expect(pointerSwitch).not.toBeChecked();
+	await expect(canvas).not.toHaveClass(/pointer-cursor/u);
+	await expect(settings.locator('[data-configuration-key="accessibility.verbosity.designCanvas"]')).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(viewport).toHaveCSS('cursor', 'grab');
+	await page.reload();
+	await design.click();
+	await expect(canvas).toBeVisible();
+	await expect(viewport).toHaveCSS('cursor', 'grab');
+	await openDesignSettings();
+	await expect(pointerSwitch).not.toBeChecked();
+	await settings.locator('[data-settings-item-id="sessions.design.usePointerCursor"] .ash-switch-track').click();
+	await expect(canvas).toHaveClass(/pointer-cursor/u);
+	await page.keyboard.press('Escape');
+	await expect(viewport).toHaveCSS('cursor', /url\("data:image\/svg\+xml,/u);
+});
+
 test('Sessions composer attaches files, chooses permissions, and restores the unsent draft', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	let page = workbench.page;
@@ -393,7 +530,7 @@ async function expectActivityIconSize(navigation: Locator, size: number): Promis
 	const horizontal = await navigation.evaluate(element => element.classList.contains('horizontal'));
 	await expect(navigation).toHaveCSS('flex-direction', horizontal ? 'row' : 'column');
 	const icons = navigation.locator('button svg.ash-icon');
-	await expect(icons).toHaveCount(6);
+	await expect(icons).toHaveCount(7);
 	for (const icon of await icons.all()) {
 		await expect(icon).toHaveCSS('width', `${size}px`);
 		await expect(icon).toHaveCSS('height', `${size}px`);
@@ -568,7 +705,7 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	const navigation = settings.getByRole('navigation', { name: 'Settings categories' });
 	for (const [section, categories] of [
 		['Basics', ['General', 'Account', 'Appearance', 'Voice', 'Personalization']],
-		['Development', ['Agents', 'Models', 'Git & PRs', 'Worktree', 'Browser', 'Tab', 'Code Intelligence', 'Environment']],
+		['Development', ['Agents', 'Design', 'Models', 'Git & PRs', 'Worktree', 'Browser', 'Tab', 'Code Intelligence', 'Environment']],
 		['Management', ['Plugins', 'Keyboard Shortcuts', 'Archived Chats']],
 	] as const) {
 		const group = navigation.getByRole('group', { name: section });

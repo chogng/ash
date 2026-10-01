@@ -40,6 +40,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 const { SessionsPart } = await import("../../../sessions/browser/parts/sessionsPart.js");
+await import('../../contrib/design/browser/design.contribution.js');
 const { NewChatInputWidget } = await import('../../contrib/chat/browser/newChatInput.js');
 const { createCodeEditorServices } = await import('../../../editor/test/browser/testCodeEditor.js');
 
@@ -293,8 +294,28 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	assert.equal(part.domNode.querySelector('.code-composer'), codeInput);
 	assert.deepEqual((await inputs[2]!.captureDraft())?.draft, separateDraft);
 
+	part.setPage('design');
+	const designPage = part.domNode.querySelector<HTMLElement>('[data-sessions-page="design"]')!;
+	const designCanvas = part.domNode.querySelector<HTMLElement>('.ash-sessions-design-view')!;
+	assert.equal(designPage.hidden, false);
+	assert.equal(part.domNode.querySelector('.ash-sessions-design-view')?.getAttribute('aria-label'), 'Design canvas');
+	assert.equal(part.domNode.querySelector('.ash-sessions-chat-view')?.hasAttribute('hidden'), true);
+	designCanvas.querySelector('.ash-sessions-design-viewport')!
+		.dispatchEvent(new dom.window.WheelEvent('wheel', { deltaY: 120, cancelable: true, bubbles: true }));
+	assert.match(designCanvas.querySelector<HTMLElement>('.ash-sessions-design-world')!.style.transform, /translate\(0px, -120px\) scale\(1\)/u);
+	part.focus();
+	assert.equal(dom.window.document.activeElement, designCanvas);
+	part.setPage('chat');
+	assert.equal(designPage.hidden, true);
+	part.setPage('design');
+	assert.match(designCanvas.querySelector<HTMLElement>('.ash-sessions-design-world')!.style.transform, /translate\(0px, -120px\) scale\(1\)/u);
+	assert.equal(designPage.hidden, false);
+
 	partListener.dispose();
 	part.dispose();
+	const disposedTransform = designCanvas.querySelector<HTMLElement>('.ash-sessions-design-world')!.style.transform;
+	designCanvas.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: '0', bubbles: true }));
+	assert.equal(designCanvas.querySelector<HTMLElement>('.ash-sessions-design-world')!.style.transform, disposedTransform);
 	viewService.dispose();
 	contextMenuEvents.dispose();
 	commandEvents.dispose();

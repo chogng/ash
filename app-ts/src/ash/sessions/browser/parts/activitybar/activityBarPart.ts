@@ -19,7 +19,7 @@ export interface ActivityBarPartDelegate {
 	showAccountMenu(anchor: HTMLElement): void;
 }
 
-export type SessionsActivityPage = 'chat' | 'colab' | 'library' | 'code';
+export type SessionsActivityPage = 'chat' | 'colab' | 'library' | 'code' | 'design';
 
 /** Primary view selector and account entry for the Sessions window. */
 export class ActivityBarPart extends WorkbenchPart {
@@ -27,6 +27,7 @@ export class ActivityBarPart extends WorkbenchPart {
 	private readonly colabButton: Button;
 	private readonly libraryButton: Button;
 	private readonly codeButton: Button;
+	private readonly designButton: Button;
 
 	private compact = false;
 
@@ -94,6 +95,16 @@ export class ActivityBarPart extends WorkbenchPart {
 			onClick: () => delegate.selectPage('code'),
 		});
 		this.codeButton.domNode.classList.add('ash-sessions-activity-item');
+		const designLabel = localize('sessions.activity.design', 'Design');
+		this.designButton = this.createActivityButton(top, {
+			label: designLabel,
+			icon: Lxicon.symbolColor,
+			iconOnly: true,
+			ariaLabel: designLabel,
+			title: designLabel,
+			onClick: () => delegate.selectPage('design'),
+		});
+		this.designButton.domNode.classList.add('ash-sessions-activity-item');
 		this.addUnavailableButton(bottom, Lxicon.deviceMobile, localize('sessions.activity.mobile', 'Mobile devices'));
 
 		const accountLabel = localize('workbench.accounts', 'Accounts');
@@ -121,6 +132,7 @@ export class ActivityBarPart extends WorkbenchPart {
 			[this.colabButton, page === 'colab', page === 'colab' ? Lxicon.colabFilled : Lxicon.colab],
 			[this.libraryButton, page === 'library', page === 'library' ? Lxicon.libraryFilled : Lxicon.library],
 			[this.codeButton, page === 'code', Lxicon.code],
+			[this.designButton, page === 'design', page === 'design' ? Lxicon.symbolColorFilled : Lxicon.symbolColor],
 		] as const) {
 			button.icon = icon;
 			button.toggleClassName('selected', selected);

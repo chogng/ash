@@ -19,6 +19,7 @@ test('Sessions Models switches control the model picker visibility preference', 
 		this.dispatchEvent(new window.Event('close'));
 	};
 	await import('../../browser/activityBarAccessibility.js');
+	await import('../../contrib/design/browser/design.contribution.js');
 	const [{ SessionsPreferences }, { WorkbenchConfigurationService }, { ContextKeyService }] = await Promise.all([
 		import('../../contrib/preferences/browser/sessionsPreferences.js'),
 		import('../../../workbench/services/configuration/browser/configurationService.js'),
@@ -66,6 +67,18 @@ test('Sessions Models switches control the model picker visibility preference', 
 	services.registerInstance(AccessibleView, accessibleView);
 	using preferences = services.createInstance(SessionsPreferences, window.document.body);
 	const opened = preferences.open();
+	const designButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Design');
+	assert.ok(designButton);
+	designButton.click();
+	const pointerSwitch = window.document.querySelector<HTMLInputElement>('input[data-configuration-key="sessions.design.usePointerCursor"][role="switch"]');
+	assert.ok(pointerSwitch);
+	assert.equal(pointerSwitch.getAttribute('aria-label'), 'Use pointer cursor on the canvas');
+	assert.equal(pointerSwitch.checked, true);
+	pointerSwitch.checked = false;
+	pointerSwitch.dispatchEvent(new window.Event('change', { bubbles: true }));
+	await Promise.resolve();
+	assert.equal(configuration.getValue('sessions.design.usePointerCursor'), false);
+	assert.ok(window.document.querySelector('[data-configuration-key="accessibility.verbosity.designCanvas"]'));
 	const modelsButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent?.includes('Models'));
 	assert.ok(modelsButton);
 	modelsButton.click();
@@ -123,6 +136,25 @@ test('Sessions Models switches control the model picker visibility preference', 
 	assert.equal(switchInput.getAttribute('aria-checked'), 'false');
 	window.document.querySelector<HTMLDialogElement>('dialog')?.close();
 	await opened;
+	const { builtinLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	try {
+		const reopened = preferences.open();
+		const translatedDesign = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === '设计');
+		assert.ok(translatedDesign);
+		translatedDesign.click();
+		const restoredSwitch = window.document.querySelector<HTMLInputElement>('input[data-configuration-key="sessions.design.usePointerCursor"][role="switch"]');
+		assert.ok(restoredSwitch);
+		assert.equal(restoredSwitch.getAttribute('aria-label'), '在画布中使用指针光标');
+		assert.equal(restoredSwitch.checked, false);
+		await assert.rejects(configuration.updateValue('sessions.design.usePointerCursor', 'false'), /必须是布尔值/u);
+		window.document.querySelector<HTMLDialogElement>('dialog')?.close();
+		await reopened;
+	} finally {
+		resetNlsResolver();
+	}
 	changed.dispose();
 	browser.window.close();
 });

@@ -33,6 +33,7 @@ import type { SettingWidgetOptions } from '../../../../workbench/contrib/prefere
 import type { ISetting } from '../../../../workbench/services/preferences/common/preferences.js';
 import { DefaultSettings } from '../../../../workbench/services/preferences/common/settingsModels.js';
 import { SessionsConfiguration } from '../../../common/configuration.js';
+import { DesignConfiguration } from '../../design/common/designConfiguration.js';
 
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.SessionsSettings,
@@ -320,6 +321,19 @@ export class SessionsPreferences extends Disposable {
 			registeredSettings.get(DictationConfiguration.cloudProvider),
 			registeredSettings.get(DictationConfiguration.localModel),
 		];
+		const designSettings: readonly ISetting[] = [{
+			id: DesignConfiguration.usePointerCursor,
+			valueType: 'boolean',
+			configuration: configuration<boolean>(DesignConfiguration.usePointerCursor),
+			title: localize('sessions.design.usePointerCursor.title', 'Use pointer cursor on the canvas'),
+			description: localize('sessions.design.usePointerCursor.description', 'Show the cursor icon on the Design canvas. Turn this off to use a hand cursor. Dragging shows a grabbing hand.'),
+		}, {
+			id: AccessibilityVerbositySettingId.DesignCanvas,
+			valueType: 'boolean',
+			configuration: configuration<boolean>(AccessibilityVerbositySettingId.DesignCanvas),
+			title: localize('sessions.design.verbosityTitle', 'Design canvas accessibility help'),
+			description: localize('sessions.design.verbosityDescription', 'Announce how to open accessibility help when the Design canvas receives focus.'),
+		}];
 		return [{
 			title: localize('sessions.settings.section.basics', 'Basics'),
 			categories: [
@@ -333,6 +347,7 @@ export class SessionsPreferences extends Disposable {
 			title: localize('sessions.settings.section.development', 'Development'),
 			categories: [
 				{ title: localize('sessions.settings.agents', 'Agents'), icon: Lxicon.agent, settings: [] },
+				{ title: localize('sessions.settings.design', 'Design'), icon: Lxicon.symbolColor, settings: designSettings },
 				{ title: localize('sessions.settings.models', 'Models'), icon: Lxicon.model, settings: [], content: modelContent },
 				{ title: localize('sessions.settings.gitPrs', 'Git & PRs'), icon: Lxicon.git, settings: [] },
 				{ title: localize('sessions.settings.worktree', 'Worktree'), icon: Lxicon.gitBranch, settings: [] },

@@ -35,6 +35,8 @@ is canonical for the renderer implementation and extension points.
 | Turn review | `browser/turnMultiDiffSource.ts` and `browser/turnMultiDiffSource.contribution.ts` | compose Turn changes and register their source resolver and commit action with `workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.ts` |
 | Parts | `browser/parts/` | owns product chrome, window navigation, list, primary surface, and typed active context |
 | Activity Bar | `browser/parts/activitybar/` | owns Sessions page navigation, account entry, DOM, and presentation; reuses shared Parts, controls, configuration, and menu services without importing Workbench Activity Bar styles |
+| Contributed pages | `browser/pages.ts` and `browser/parts/sessionsPart.ts` | contributions register page descriptors; the Part creates and retains one instance per window, hosts its root, forwards layout and focus, and disposes it with the Part |
+| Design | `contrib/design/` | owns the canvas, viewport state, interaction, styles, scoped context keys, accessibility help, and configuration; loads through `sessions.common.main.ts`. Sessions Settings exposes its profile-scoped cursor and accessibility preferences in Design. |
 | Application menu and titlebar actions | `browser/menus.ts`, `browser/parts/menubar.contribution.ts`, and `browser/layoutActions.ts` | Sessions owns its menu root, File menu, and layout action menu; common sections are explicitly shared. The Workbench BrowserMenubarControl owns menu interaction; the layout and Sessions service own sidebar visibility and history |
 | Session chat commands | `browser/actions/sessionsChatActions.ts` | maps the reused ChatWidget New Chat and History commands to the Sessions window's draft and active-chat selection |
 | Open Agents Window | `code/browser/workbench/modes/code.ts`, `workbench/contrib/chat/electron-browser/`, `contrib/openAgentsWindow/electron-browser/`, and `workbench/browser/parts/titlebar/` | the Code browser mode owns page navigation; the Chat desktop contribution owns the titlebar action, hover label, and window command; the Sessions desktop contribution owns system-wide shortcut synchronization; the Workbench titlebar owns the shared mark and motion. Shared shortcut selection lives in `workbench/contrib/keybindings/`, while `platform/globalKeybindings/` owns operating-system registrations |
@@ -93,7 +95,8 @@ before flushing storage.
 4. `SessionsWorkbenchLayout` deserializes the fixed Part grid. Titlebar,
    activitybar, sidebar, sessions, editor, and auxiliary Parts are registered; the sidebar and auxiliary Parts can be toggled,
    and Activity Bar visibility follows `sessions.activityBar.location`.
-   The Activity Bar selects Chat, Collaboration, Library, and Code; Collaboration and Library currently show empty pages.
+   The Activity Bar selects Chat, Collaboration, Library, Code, and Design; Collaboration and Library currently show empty pages.
+   Design contributes an infinite pan and zoom canvas (`contrib/design/browser/`) through the Sessions page registry. The Part retains the canvas while pages switch, so its viewport survives navigation; the canvas owns no session state. Core hosts consume the page contract and never import its implementation.
    Chat hides the auxiliary bar. Code exposes Files and Changes; opening a file or comparison reveals the retained Workbench editor beside the conversation. Switching pages hides and restores that editor without closing its files. Session details has been removed.
    Mobile devices remains unavailable. Its right-click menu moves the
    controls to the sidebar top or bottom, hides them, or selects the side rail size through

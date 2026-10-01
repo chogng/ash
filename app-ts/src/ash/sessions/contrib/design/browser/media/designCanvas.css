@@ -1,0 +1,56 @@
+.ash-sessions-design-view {
+	--ash-sessions-design-grid-size: 12px;
+	--ash-sessions-design-grid-line: color-mix(in srgb, var(--ash-foreground) 8%, transparent);
+
+	display: flex;
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	outline: none;
+}
+
+.ash-sessions-design-viewport {
+	position: relative;
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	cursor: grab;
+	user-select: none;
+	background-color: color-mix(in srgb, var(--ash-foreground) 3%, var(--ash-editor-background));
+	background-image: linear-gradient(to right, var(--ash-sessions-design-grid-line) var(--ash-stroke-thickness), transparent var(--ash-stroke-thickness)), linear-gradient(to bottom, var(--ash-sessions-design-grid-line) var(--ash-stroke-thickness), transparent var(--ash-stroke-thickness));
+	background-size: calc(var(--ash-sessions-design-grid-size) * var(--ash-sessions-design-scale, 1)) calc(var(--ash-sessions-design-grid-size) * var(--ash-sessions-design-scale, 1));
+	background-position: var(--ash-sessions-design-pan-x, 0px) var(--ash-sessions-design-pan-y, 0px);
+}
+
+.ash-sessions-design-view.pointer-cursor .ash-sessions-design-viewport {
+	cursor: var(--ash-sessions-design-pointer-cursor);
+}
+
+[data-color-scheme="high-contrast-dark"] .ash-sessions-design-view,
+[data-color-scheme="high-contrast-light"] .ash-sessions-design-view {
+	--ash-sessions-design-grid-line: var(--ash-contrast-border);
+}
+
+[data-color-scheme="high-contrast-dark"] .ash-sessions-design-viewport,
+[data-color-scheme="high-contrast-light"] .ash-sessions-design-viewport {
+	background-color: var(--ash-editor-background);
+}
+
+.ash-sessions-design-view.panning .ash-sessions-design-viewport {
+	cursor: grabbing;
+}
+
+.ash-sessions-design-view:focus-visible .ash-sessions-design-viewport {
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: calc(-1 * var(--ash-stroke-thickness));
+}
+
+.ash-sessions-design-world {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 0;
+	height: 0;
+	transform-origin: 0 0;
+}
