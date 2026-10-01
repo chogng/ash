@@ -7,6 +7,8 @@ import { Disposable, MutableDisposable, type IDisposable } from '../../../../bas
 import { type EditorVisualLine, type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
+import { editorSelectionForeground } from '../../../common/core/editorColorRegistry.js';
+import { InlineDecoration, InlineDecorationType } from '../../../common/viewModel/inlineDecorations.js';
 import { type TextModelChange } from '../../../common/core/textChange.js';
 import { type ViewportData } from '../../../common/viewLayout/viewLinesViewportData.js';
 import { type TextModel } from '../../../common/model/textModel.js';
@@ -137,6 +139,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 	}
 
 	public override onCursorStateChanged(_event?: ViewCursorStateChangedEvent): boolean {
+		if (this._context.theme.value.getColor(editorSelectionForeground)) return this.invalidateContent();
 		let changed = false;
 		for (const line of this._visibleLines.renderedLines.values()) changed = line.onSelectionChanged() || changed;
 		if (changed) this.onTokensChanged();
@@ -227,7 +230,8 @@ export class ViewLines extends ViewPart implements IViewLines {
 	}
 
 	public override onThemeChanged(event: ViewThemeChangedEvent): boolean {
-		return this._onOptionsMaybeChanged(this._context.configuration, event.theme.colorScheme);
+		this._onOptionsMaybeChanged(this._context.configuration, event.theme.colorScheme);
+		return this.invalidateContent();
 	}
 
 	public override onZonesChanged(_event?: ViewZonesChangedEvent): boolean {
@@ -416,11 +420,21 @@ export class ViewLines extends ViewPart implements IViewLines {
 		const viewLineNumber = visualLine.visualLineIndex + 1;
 		const lineData = this._context.viewModel.getViewLineRenderingData(viewLineNumber);
 		const hasInjectedText = !!visualLine.projectionData?.injectionOffsets;
+		const inlineDecorations = [...lineData.inlineDecorations];
+		if (this._context.theme.value.getColor(editorSelectionForeground)) {
+			const lineRange = new Range(viewLineNumber, 1, viewLineNumber, lineData.content.length + 1);
+			for (const state of this._context.viewModel.getCursorStates()) {
+				const selectedRange = Range.intersectRanges(lineRange, state.viewState.selection);
+				if (selectedRange && !selectedRange.isEmpty()) {
+					inlineDecorations.push(new InlineDecoration(selectedRange, 'stanza-editor-selected-text', InlineDecorationType.Regular));
+				}
+			}
+		}
 		line.renderLine(
 			lineData.content,
 			hasInjectedText ? [] : clipSemanticTokens(tokens, visualLine.startColumn, visualLine.endColumn),
 			0,
-			lineData.inlineDecorations,
+			inlineDecorations,
 			viewLineNumber,
 		);
 	}

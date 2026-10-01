@@ -21,18 +21,24 @@ export interface IColorThemeOptions {
 	readonly label: string;
 	readonly colorScheme: ColorScheme;
 	readonly colorOverrides?: Readonly<Record<string, ColorValue>>;
+	readonly baseTheme?: IColorTheme;
 	readonly allowUnregisteredColorOverrides?: boolean;
 	readonly tokenColors?: IColorTheme['tokenColors'];
 	readonly semanticHighlighting?: boolean;
 	readonly semanticTokenRules?: IColorTheme['semanticTokenRules'];
 }
 
+// Retain authored values so layered overrides re-resolve aliases instead of freezing resolved defaults.
+const themeColorOverrides = new WeakMap<IColorTheme, Readonly<Record<string, ColorValue>>>();
+
 /** Keeps color resolution current without giving each theme its own registry listener. */
 export function createColorTheme(options: IColorThemeOptions): IColorTheme {
 	if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(options.id)) throw new TypeError(`Invalid color theme ID '${options.id}'`);
 	Sizes.seal();
 	const colorScheme = options.colorScheme;
-	const overrides = Object.freeze({ ...options.colorOverrides });
+	const baseOverrides = options.baseTheme ? themeColorOverrides.get(options.baseTheme) : undefined;
+	if (options.baseTheme && !baseOverrides) throw new TypeError('Base themes must be created by the color theme factory');
+	const overrides = Object.freeze({ ...baseOverrides, ...options.colorOverrides });
 	let catalog = Colors.getColors();
 	let resolved = resolveThemeColors(colorScheme, overrides, options.allowUnregisteredColorOverrides === true);
 	const currentColors = (): typeof resolved => {
@@ -63,6 +69,7 @@ export function createColorTheme(options: IColorThemeOptions): IColorTheme {
 	}
 	if (options.semanticHighlighting !== undefined) Object.assign(theme, { semanticHighlighting: options.semanticHighlighting });
 	if (options.semanticTokenRules) Object.assign(theme, { semanticTokenRules: options.semanticTokenRules });
+	themeColorOverrides.set(theme, overrides);
 	return Object.freeze(theme);
 }
 

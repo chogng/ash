@@ -91,7 +91,7 @@ export const SettingsNavigation = [
 					id: 'theme',
 					label: 'Color theme',
 					description: 'Choose the colors used by the Workbench.',
-					settings: ['workbench.colorTheme', 'workbench.iconTheme', 'workbench.productIconTheme'],
+					settings: ['workbench.colorTheme', 'workbench.colorCustomizations', 'workbench.iconTheme', 'workbench.productIconTheme'],
 				}, {
 					id: 'editor-tips',
 					get label() { return localize('settings.workbench.editorTips.label', 'Editor tips'); },

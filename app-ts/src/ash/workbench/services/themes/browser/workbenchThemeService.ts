@@ -13,6 +13,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { FileKind, FileNotFoundError, FileRevisionConflictError, IFileService, type IFileContent } from '../../../../platform/files/common/files.js';
 import { type IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { Colors } from '../../../../platform/theme/common/colorRegistry.js';
+import { createColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 import { noFileIconTheme, defaultProductIconTheme, semanticTokenRuleSpecificity, type IFileIconTheme, type IColorTheme, type IProductIconTheme, type IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { getIconDefinition } from '../../../../platform/theme/common/iconRegistry.js';
 import { bindColorTheme } from '../../../../platform/theme/browser/themeStyles.js';
@@ -73,7 +74,7 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 		this._register(toDisposable(() => semanticStyles.remove()));
 		this._register(registerColorThemeSchemas());
 		this._register(this.configurationService.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(WorkbenchConfiguration.colorTheme)) {
+			if (event.affectsConfiguration(WorkbenchConfiguration.colorTheme) || event.affectsConfiguration(WorkbenchConfiguration.colorCustomizations)) {
 				this.updateColorTheme();
 			}
 			if (event.affectsConfiguration(EditorSemanticHighlightingConfiguration)) { this.updateSemanticStyles(); }
@@ -86,7 +87,11 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 		setIconResolver(this.container.ownerDocument, icon => getIconDefinition(icon, defaultProductIconTheme.icons));
 		this._register(toDisposable(() => setIconResolver(this.container.ownerDocument, icon => getIconDefinition(icon, defaultProductIconTheme.icons))));
 		this._register(WorkbenchThemesRegistry.onDidChange(() => this.updateColorTheme()));
-		this._register(Colors.onDidChange(() => this.colorThemeChange.fire(this.colorTheme)));
+		this._register(Colors.onDidChange(() => {
+			const previous = this.colorTheme;
+			this.updateColorTheme();
+			if (previous === this.colorTheme) this.colorThemeChange.fire(this.colorTheme);
+		}));
 		const updateSystemTheme = (): void => this.updateColorTheme();
 		this.systemDarkQuery.addEventListener('change', updateSystemTheme);
 		this._register(toDisposable(() => this.systemDarkQuery.removeEventListener('change', updateSystemTheme)));
@@ -107,7 +112,15 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 	private resolveColorTheme(): IColorTheme {
 		const preference = this.configurationService.getValue<string>(WorkbenchConfiguration.colorTheme);
 		const registeredTheme = WorkbenchThemesRegistry.getColorTheme(preference);
-		return registeredTheme ?? resolveWorkbenchColorTheme(SystemColorThemePreference, this.systemDarkQuery.matches);
+		const theme = registeredTheme ?? resolveWorkbenchColorTheme(SystemColorThemePreference, this.systemDarkQuery.matches);
+		const customizations = this.configurationService.getValue<Record<string, string>>(WorkbenchConfiguration.colorCustomizations);
+		if (Object.keys(customizations).length === 0) return theme;
+		return createColorTheme({
+			...theme,
+			baseTheme: theme,
+			colorOverrides: customizations,
+			allowUnregisteredColorOverrides: true,
+		});
 	}
 
 	private updateColorTheme(): void {

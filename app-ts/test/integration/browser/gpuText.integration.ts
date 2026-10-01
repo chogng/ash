@@ -35,6 +35,7 @@ interface GpuTextIntegrationHarness {
 	resetGpuFrameTrace(): void;
 	readGpuFrameTrace(): readonly GpuRenderPassTrace[];
 	setBracketColor(color: string): void;
+	setSelectionColor(color: string): void;
 	prepareBracketText(length: number): void;
 	prepareSemanticText(): void;
 	countGlyphPixels(red: number, green: number, blue: number): number;
@@ -109,6 +110,11 @@ window.ashGpuTextIntegration = {
 		}));
 		editor.updateOptions({ wordWrap: 'off' });
 		editor.setValue('sample');
+	},
+	setSelectionColor: color => {
+		stanzaApi.editor.defineNamedTheme('gpu-selection', { label: 'GPU selection', colorScheme: stanzaApi.ColorScheme.Dark, colors: { 'editor.selectionForeground': color } });
+		stanzaApi.editor.setTheme('gpu-selection');
+		editor.setSelection(new stanzaApi.Range(1, 2, 1, 7));
 	},
 	setBracketColor: color => {
 		stanzaApi.editor.defineNamedTheme('gpu-brackets', {

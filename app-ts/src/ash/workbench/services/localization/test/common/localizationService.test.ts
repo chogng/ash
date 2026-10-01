@@ -56,6 +56,8 @@ test("localization lookup falls back to English and formats parameters", async (
 	assert.equal(localization.translate("ash.missing", "missing", "Hello {name}", { name: "Ada" }), "Hello Ada");
 	await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
 	assert.equal(localization.translate('ash', 'sessions.chat.welcome', 'What can we work on?'), '今天想做些什么？');
+	assert.equal(localization.translate('ash', 'workbench.colorCustomizations.title', 'Color Customizations'), '自定义颜色');
+	assert.equal(localization.translate('ash', 'color.editor.selectionForeground', 'Foreground'), '编辑器选中文字的颜色。未设置时保留语法高亮颜色。');
 	assert.deepEqual([
 		localization.translate('ash', 'scm.history.actions', 'History actions'),
 		localization.translate('ash', 'scm.history.references', 'History references'),

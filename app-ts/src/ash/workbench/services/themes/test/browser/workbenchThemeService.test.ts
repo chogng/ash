@@ -67,6 +67,45 @@ const document = {
 	tokenColors: [{ scope: 'comment, string.quoted', settings: { foreground: '#123456', fontStyle: 'italic bold' } }],
 };
 
+test('persisted color customizations override themes, update live, and restore themed colors when removed', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	try {
+		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }) });
+		const theme = parseUserColorTheme(JSON.stringify({ ...document, colors: { 'editor.selectionBackground': '#123456', 'editor.selectionForeground': '#abcdef' } }), 'selection-colors');
+		using registration = WorkbenchThemesRegistry.registerColorThemes([theme]);
+		using configuration = new WorkbenchConfigurationService({ initialSnapshot: {
+			revision: 1,
+			document: { version: 1, source: `// user colors\n${JSON.stringify({ 'workbench.colorTheme': theme.id, 'workbench.colorCustomizations': { 'editor.selectionBackground': '#456789', 'editor.selectionForeground': '#112233' } })}` },
+		} });
+		using services = new ServiceContainer();
+		services.registerInstance(IConfigurationService, configuration);
+		using languages = new LanguageService();
+		services.registerInstance(ILanguageService, languages);
+		using active = services.createInstance(WorkbenchThemeService, browser.window.document.body);
+		active.initialize();
+		assert.deepEqual([
+			active.getColorTheme().getColorCss('editor.selectionBackground'),
+			active.getColorTheme().getColorCss('editor.selectionForeground'),
+			active.getColorTheme().getColor('editor.inactiveSelectionBackground')?.rgba.a,
+			active.getColorTheme().tokenColors,
+		], ['#456789', '#112233', 0.65, theme.tokenColors]);
+		assert.equal(active.getColorTheme().getColor('editor.inactiveSelectionBackground')?.rgba.r, 69);
+		await configuration.updateValue(WorkbenchConfiguration.colorCustomizations, { 'editor.inactiveSelectionBackground': '#765432' });
+		assert.equal(browser.window.document.body.style.getPropertyValue('--ash-editor-inactive-selection-background'), '#765432');
+		assert.equal(active.getColorTheme().getColorCss('editor.selectionForeground'), '#abcdef');
+		await configuration.updateValue(WorkbenchConfiguration.colorCustomizations, undefined);
+		assert.equal(active.getColorTheme(), theme);
+		await configuration.updateValue(WorkbenchConfiguration.colorTheme, 'ash-light');
+		assert.equal(active.getColorTheme().getColor('editor.selectionForeground'), undefined);
+		for (const invalid of [[], null, { 'editor.selectionBackground': 'blue' }, { 'editor.selectionForeground': '#12345' }, { 'bad color': '#ffffff' }]) {
+			await assert.rejects(configuration.updateValue(WorkbenchConfiguration.colorCustomizations, invalid));
+		}
+		assert.deepEqual(configuration.getValue(WorkbenchConfiguration.colorCustomizations), {});
+	} finally {
+		browser.window.close();
+	}
+});
+
 test('user and extension themes share colors and TextMate rules', () => {
 	const source = `// authored theme\n${JSON.stringify(document).replace(/}$/, ',}')}`;
 	const user = parseUserColorTheme(source, 'test-user-aurora');

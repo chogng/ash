@@ -128,6 +128,56 @@ test('text editor automation follows input, replacement, and folding in its grou
 	await expect(editor.input).toBeFocused();
 });
 
+test('theme color settings update selected text and restore defaults when removed', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText('prefix selected suffix');
+	await workbench.quickaccess.runCommand('workbench.action.openSettings');
+	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+	await settings.locator('[data-settings-group-id="workbench"]').click();
+	await settings.locator('[data-settings-category-id="appearance"]').click();
+	const colors = settings.locator('[data-configuration-key="workbench.colorCustomizations"]');
+	await expect(colors).toBeVisible();
+	for (const [id, color, cssVariable] of [
+		['editor.selectionBackground', '#123456', '--ash-editor-selection-background'],
+		['editor.inactiveSelectionBackground', '#654321', '--ash-editor-inactive-selection-background'],
+		['editor.selectionForeground', '#fedcba', '--ash-editor-selection-foreground'],
+	] as const) {
+		await colors.getByRole('button', { name: 'Add Color', exact: true }).click();
+		const row = colors.locator('.ash-string-map-row').last();
+		await row.locator('[data-pattern-part="key"]').fill(id);
+		await row.locator('[data-pattern-part="value"]').fill(color);
+		await row.locator('[data-pattern-part="value"]').press('Tab');
+		await expect.poll(() => editor.element.evaluate((element, token) =>
+			getComputedStyle(element).getPropertyValue(token).trim(), cssVariable)).toBe(color);
+	}
+	await settings.locator('.ash-modal-editor-close').click();
+	await editor.waitForEditorFocus();
+	await page.keyboard.press('Home');
+	for (let index = 0; index < 7; index++) await page.keyboard.press('ArrowRight');
+	for (let index = 0; index < 8; index++) await page.keyboard.press('Shift+ArrowRight');
+	const selected = editor.element.locator('.view-lines .stanza-editor-selected-text');
+	await expect(selected).toHaveText('selected');
+	await expect(selected).toHaveCSS('color', 'rgb(254, 220, 186)');
+	await expect(editor.element.locator('.stanza-editor-selection')).toHaveCSS('background-color', 'rgb(18, 52, 86)');
+	await editor.input.blur();
+	await expect(editor.element.locator('.stanza-editor-selection')).toHaveCSS('background-color', 'rgb(101, 67, 33)');
+	await workbench.quickaccess.runCommand('workbench.action.openSettings');
+	await settings.locator('[data-settings-group-id="workbench"]').click();
+	await settings.locator('[data-settings-category-id="appearance"]').click();
+	await expect(colors.locator('.ash-string-map-row')).toHaveCount(3);
+	for (let count = 3; count > 0; count--) {
+		await colors.locator('.ash-string-map-row').last().getByRole('button').click();
+		await expect(colors.locator('.ash-string-map-row')).toHaveCount(count - 1);
+	}
+	await settings.locator('.ash-modal-editor-close').click();
+	await expect(selected).toHaveCount(0);
+	await expect(editor.lines.first()).toHaveText('prefix selected suffix');
+});
+
 test('text editor automation keeps split group inputs and contents separate', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;

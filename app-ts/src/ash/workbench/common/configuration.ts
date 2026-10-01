@@ -7,6 +7,7 @@ import { isMacintosh, isWeb } from "../../base/common/platform.js";
 import { MenuSettings, TitleBarSetting, parseMenuStyle, parseTitleBarStyle, type MenuStyleConfiguration, type TitleBarStyleConfiguration } from "../../platform/window/common/window.js";
 import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry } from "./workbenchMode.js";
 import { defaultWorkbenchColorThemePreference, SystemColorThemePreference, WorkbenchThemesRegistry } from "./theme.js";
+import { validateTokenId } from '../../platform/theme/common/colorRegistry.js';
 
 export type WorkbenchLayoutStyle = "modern" | "flat";
 export const enum ActivityBarPosition {
@@ -98,6 +99,39 @@ export const WorkbenchConfiguration = Object.freeze({
 		setting: {
 			valueType: 'select', title: 'Product icon theme', description: 'Choose the SVG artwork for controls and other product icons.',
 			get options() { return [{ value: 'default', label: 'Default' }, ...WorkbenchProductIconThemesRegistry.getThemes().map(theme => ({ value: theme.id, label: theme.label }))]; },
+		},
+	}),
+	colorCustomizations: configurationRegistry.registerConfiguration<Record<string, string>>({
+		key: 'workbench.colorCustomizations',
+		defaultValue: {},
+		parse(value: unknown): Record<string, string> {
+			if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+				throw new TypeError(localize('workbench.colorCustomizations.invalidObject', 'Color customizations must be an object.'));
+			}
+			const colors: Record<string, string> = {};
+			for (const [id, color] of Object.entries(value)) {
+				try {
+					validateTokenId(id, 'color');
+				} catch {
+					throw new TypeError(localize('workbench.colorCustomizations.invalidColor', 'Invalid theme color or hex value: {0}', id));
+				}
+				if (typeof color !== 'string' || !/^#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})$/iu.test(color)) {
+					throw new TypeError(localize('workbench.colorCustomizations.invalidColor', 'Invalid theme color or hex value: {0}', id));
+				}
+				colors[id] = color;
+			}
+			return colors;
+		},
+		setting: {
+			valueType: 'stringMap',
+			get title() { return localize('workbench.colorCustomizations.title', 'Color Customizations'); },
+			get description() { return localize('workbench.colorCustomizations.description', 'Override colors from the current theme, including editor selections. Use #RGB, #RGBA, #RRGGBB, or #RRGGBBAA.'); },
+			get keyLabel() { return localize('workbench.colorCustomizations.key', 'Theme Color'); },
+			get valueLabel() { return localize('workbench.colorCustomizations.value', 'Hex Color'); },
+			get addLabel() { return localize('workbench.colorCustomizations.add', 'Add Color'); },
+			get removeLabel() { return localize('workbench.colorCustomizations.remove', 'Remove Color'); },
+			get incompleteMessage() { return localize('workbench.colorCustomizations.incomplete', 'Enter a theme color name and a hex color.'); },
+			get duplicateMessage() { return localize('workbench.colorCustomizations.duplicate', 'Each theme color name must be unique.'); },
 		},
 	}),
 	colorTheme: configurationRegistry.registerConfiguration<string>({

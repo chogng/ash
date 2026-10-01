@@ -18,7 +18,7 @@ import '../../../src/ash/workbench/contrib/codeEditor/browser/toggleWordWrap.js'
 import { h } from '../../../src/ash/base/browser/dom.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
-import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
+import { createColorTheme, darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { URI } from "../../../src/ash/base/common/uri.js";
 import { DisposableStore, toDisposable } from "../../../src/ash/base/common/lifecycle.js";
 import { Event } from "../../../src/ash/base/common/event.js";
@@ -86,6 +86,7 @@ interface IntegrationHarness {
 	runWorkbenchCommand(id: string): Promise<void>;
 	getViewSettings(): { readonly minimap: boolean; readonly renderWhitespace: string; readonly renderControlCharacters: boolean; readonly wordWrap: string; readonly wordWrapOverride: string; readonly wrappingColumn: number };
 	setTheme(theme: 'dark' | 'light' | 'contrast' | 'contrastLight'): void;
+	setSelectionColors(colors: Record<string, string>): void;
 	setRenderRichScreenReaderContent(enabled: boolean): void;
 	showViewZone(): void;
 	removeViewZone(): void;
@@ -247,6 +248,9 @@ window.ashTextModelIntegration = {
 		wrappingColumn: requiredEditorPart().getOption(EditorOption.wrappingInfo).wrappingColumn,
 	}),
 	setTheme: theme => themeService.setColorTheme({ dark: darkColorTheme, light: lightColorTheme, contrast: highContrastDarkColorTheme, contrastLight: highContrastLightColorTheme }[theme]),
+	setSelectionColors: colors => themeService.setColorTheme(createColorTheme({
+		...themeService.getColorTheme(), id: 'text-model-selection', baseTheme: themeService.getColorTheme(), colorOverrides: colors,
+	})),
 	setRenderRichScreenReaderContent: enabled => requiredEditorPart().updateOptions({ renderRichScreenReaderContent: enabled }),
 	showViewZone: () => {
 		removeViewZone();

@@ -105,6 +105,38 @@ for (const theme of ['light', 'dark', 'contrast', 'contrastLight'] as const) {
 	});
 }
 
+test('selection foreground applies only to selected characters and clears when selections or themes change', async ({ page }) => {
+	await openEditor(page);
+	await page.evaluate(() => {
+		window.ashTextModelIntegration.setValue('prefix selected suffix\nsecond selected line');
+		window.ashTextModelIntegration.updateOptions({ wordWrap: 'wordWrapColumn', wordWrapColumn: 16, cursorBlinking: 'solid' });
+	});
+	for (const theme of ['light', 'dark', 'contrast', 'contrastLight'] as const) {
+		await page.evaluate(theme => {
+			const harness = window.ashTextModelIntegration;
+			harness.setTheme(theme);
+			harness.setSelectionColors({ 'editor.selectionBackground': '#123456', 'editor.inactiveSelectionBackground': '#654321', 'editor.selectionForeground': '#fedcba' });
+			harness.getControl().setSelections([{ selectionStartLineNumber: 1, selectionStartColumn: 8, positionLineNumber: 2, positionColumn: 7 }]);
+			harness.getControl().focus();
+		}, theme);
+		const selectedText = page.locator('.view-lines .stanza-editor-selected-text');
+		await expect.poll(async () => (await selectedText.allTextContents()).join('')).toBe('selected suffixsecond');
+		for (const span of await selectedText.all()) await expect(span).toHaveCSS('color', 'rgb(254, 220, 186)');
+		await expect(page.locator('.stanza-editor-selection').first()).toHaveCSS('background-color', 'rgb(18, 52, 86)');
+		await page.locator('.stanza-editor-input').blur();
+		await expect(page.locator('.stanza-editor-selection').first()).toHaveCSS('background-color', 'rgb(101, 67, 33)');
+		await expect(selectedText.first()).toHaveCSS('color', 'rgb(254, 220, 186)');
+		await page.evaluate(() => window.ashTextModelIntegration.getControl().setPosition({ lineNumber: 1, column: 1 }));
+		await expect(selectedText).toHaveCount(0);
+	}
+	await page.evaluate(() => {
+		window.ashTextModelIntegration.setTheme('light');
+		window.ashTextModelIntegration.getControl().setSelection({ startLineNumber: 1, startColumn: 8, endLineNumber: 1, endColumn: 16 });
+	});
+	await expect(page.locator('.stanza-editor-selection').first()).toBeVisible();
+	await expect(page.locator('.view-lines .stanza-editor-selected-text')).toHaveCount(0);
+});
+
 for (const proportional of [false, true]) {
 	test(`pointer insertion and caret share rendered text coordinates with proportional=${proportional}`, async ({ page }) => {
 		await openEditor(page);

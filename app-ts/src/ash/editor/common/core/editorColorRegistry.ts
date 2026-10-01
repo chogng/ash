@@ -1,7 +1,7 @@
 import { registerColor, transparent } from '../../../platform/theme/common/colorUtils.js';
 import { editorBackground, editorForeground } from '../../../platform/theme/common/colors/editorColors.js';
 
-import { descriptionForeground, mutedForeground, selectionBackground } from '../../../platform/theme/common/colors/baseColors.js';
+import { descriptionForeground, mutedForeground, selectionBackground, selectionForeground } from '../../../platform/theme/common/colors/baseColors.js';
 
 const owner = 'editor.presentation';
 const alias = (id: string, value: string, description: string): string => registerColor(id, {
@@ -13,9 +13,12 @@ function editorColor(id: string, value: string, description: string): string {
 }
 
 export const editorSelectionBackground = editorColor('editor.selectionBackground', selectionBackground, 'Background of editor text selections.');
+export const editorSelectionForeground = registerColor('editor.selectionForeground', {
+	dark: null, light: null, highContrastDark: selectionForeground, highContrastLight: selectionForeground,
+}, { description: 'Foreground of selected editor text. Unset colors preserve syntax highlighting.', owner });
 export const editorInactiveSelection = registerColor('editor.inactiveSelectionBackground', {
-	dark: transparent(selectionBackground, 0.65), light: transparent(selectionBackground, 0.65),
-	highContrastDark: selectionBackground, highContrastLight: selectionBackground,
+	dark: transparent(editorSelectionBackground, 0.65), light: transparent(editorSelectionBackground, 0.65),
+	highContrastDark: editorSelectionBackground, highContrastLight: editorSelectionBackground,
 }, { description: 'Background of selections in an unfocused editor.', owner });
 export const editorGutter = editorColor('editorGutter.background', editorBackground, 'Background of the editor gutter.');
 export const editorWhitespace = editorColor('editorWhitespace.foreground', mutedForeground, 'Foreground of visible editor whitespace.');

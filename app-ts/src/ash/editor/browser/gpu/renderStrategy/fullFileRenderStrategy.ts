@@ -1,5 +1,6 @@
 import { Color } from '../../../../base/common/color.js';
 import { CursorColumns } from '../../../common/core/cursorColumns.js';
+import { editorSelectionForeground } from '../../../common/core/editorColorRegistry.js';
 import { type ViewConfigurationChangedEvent, type ViewDecorationsChangedEvent, type ViewLineMappingChangedEvent, type ViewLinesChangedEvent, type ViewLinesDeletedEvent, type ViewLinesInsertedEvent, type ViewScrollChangedEvent, type ViewThemeChangedEvent, type ViewTokensChangedEvent, type ViewZonesChangedEvent } from '../../../common/viewEvents.js';
 import { type ViewportData } from '../../../common/viewLayout/viewLinesViewportData.js';
 import { type InlineDecoration } from '../../../common/viewModel/inlineDecorations.js';
@@ -25,6 +26,7 @@ function writeCells(
 	target: Float32Array,
 	targetStartLineNumber: number,
 	maximumColumns: number,
+	selectionForeground: number | undefined,
 ): number {
 	const devicePixelRatio = viewGpuContext.devicePixelRatio.get();
 	for (let lineNumber = viewportData.startLineNumber; lineNumber <= viewportData.endLineNumber; lineNumber++) {
@@ -64,7 +66,11 @@ function writeCells(
 			}
 			const semanticToken = semanticTokens[semanticIndex];
 			const style = viewGpuContext.resolveSemanticStyle(semanticToken && semanticToken.startColumn <= columnIndex ? semanticToken : undefined, tokens.getCount() > 0 ? tokens.getMetadata(tokenIndex) : 0);
-			const styleSetId = decorationStyleSetId(viewGpuContext, lineNumber, columnIndex, lineData.inlineDecorations, style.color);
+			const isSelected = selectionForeground !== undefined && viewportData.selections.some(selection =>
+				!selection.isEmpty() && selection.containsPosition({ lineNumber, column: columnIndex + 1 })
+				&& (selection.endLineNumber !== lineNumber || columnIndex + 1 < selection.endColumn),
+			);
+			const styleSetId = decorationStyleSetId(viewGpuContext, lineNumber, columnIndex, lineData.inlineDecorations, style.color, isSelected ? selectionForeground : undefined);
 			const glyph = viewGpuContext.atlas.getGlyph(glyphRasterizer, chars, style.tokenMetadata, styleSetId, absoluteOffsetX);
 			const baseline = Math.round(
 				lineTop + Math.floor((viewportData.lineHeight * devicePixelRatio - glyph.fontBoundingBoxAscent - glyph.fontBoundingBoxDescent) / 2) + glyph.fontBoundingBoxAscent,
@@ -81,7 +87,7 @@ function writeCells(
 	return (viewportData.endLineNumber - viewportData.startLineNumber + 1) * maximumColumns;
 }
 
-function decorationStyleSetId(viewGpuContext: ViewGpuContext, lineNumber: number, columnIndex: number, decorations: readonly InlineDecoration[], semanticColor: number | undefined): number {
+function decorationStyleSetId(viewGpuContext: ViewGpuContext, lineNumber: number, columnIndex: number, decorations: readonly InlineDecoration[], semanticColor: number | undefined, selectionColor: number | undefined): number {
 	let color = semanticColor;
 	let bold: boolean | undefined;
 	let opacity: number | undefined;
@@ -107,7 +113,7 @@ function decorationStyleSetId(viewGpuContext: ViewGpuContext, lineNumber: number
 			}
 		}
 	}
-	return ViewGpuContext.decorationStyleCache.getOrCreateEntry(color, bold, opacity, strikethrough, strikethroughThickness, strikethroughColor);
+	return ViewGpuContext.decorationStyleCache.getOrCreateEntry(selectionColor ?? color, bold, opacity, strikethrough, strikethroughThickness, strikethroughColor);
 }
 
 function parseFontWeight(value: string): number {
@@ -191,7 +197,7 @@ export class FullFileRenderStrategy extends BaseRenderStrategy {
 		this.onScrollChanged();
 		const lineCount = viewportData.endLineNumber - viewportData.startLineNumber + 1;
 		const cells = new Float32Array(lineCount * FullFileRenderStrategy.maxSupportedColumns * FLOATS_PER_CELL);
-		this._visibleObjectCount = writeCells(this._viewGpuContext, this.glyphRasterizer, viewportData, viewLineOptions, cells, viewportData.startLineNumber, FullFileRenderStrategy.maxSupportedColumns);
+		this._visibleObjectCount = writeCells(this._viewGpuContext, this.glyphRasterizer, viewportData, viewLineOptions, cells, viewportData.startLineNumber, FullFileRenderStrategy.maxSupportedColumns, this._context.theme.value.getColor(editorSelectionForeground)?.toNumber32Bit());
 		const rowByteLength = FullFileRenderStrategy.maxSupportedColumns * FLOATS_PER_CELL * Float32Array.BYTES_PER_ELEMENT;
 		for (let lineOffset = 0; lineOffset < lineCount; lineOffset++) {
 			this._device.queue.writeBuffer(
