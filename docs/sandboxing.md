@@ -82,7 +82,7 @@ flowchart TD
 
 - 保留 `Denied`、`Managed`、`Allowed` 作为产品的常用选择；完整请求分别表达外连、入站、宿主回环及本地进程通信。后端能力耦合不能成为修改授权的理由。
 - `Managed` 的目标授权由 Ash 代理实施。MXC 负责使代理可达并限制其他出口，不会替外部代理安装域名规则，也不会把任意 TCP/UDP 客户端透明转换成 HTTP 代理客户端。
-- Windows PSEC 的代理身份、私有网络双向能力与 Ash 默认禁止入站存在接入约束；当前 Windows 补丁生成的回环 IP 允许规则不等于 MXC 的代理模式。具体处理与未完成项见 [Windows 代理接入](../ash-rs/docs/mxc-sandbox-windows-fallback.md#windows-代理接入)。
+- Windows PSEC 的代理身份、私有网络双向能力与 Ash 默认禁止入站存在接入约束；适配器在准备阶段拒绝不能保持禁止未授权入站的 Managed 组合。具体处理与未完成项见 [Windows 代理接入](../ash-rs/docs/mxc-sandbox-windows-fallback.md#windows-代理接入)。
 - Unix socket 是独立的 IPC 权限，不再用 IP 网络是否受限决定全部禁止。目标是在本次执行的私有临时目录中允许构建工具需要的 socket，并显式拒绝 Docker、SSH/GPG agent 及其他任务的 socket；不得通过授予整个共享临时目录来取得兼容性。
 - macOS 没有私有 TCP 回环；Seatbelt 的宿主回环限制也会影响同一任务的 TCP 服务。后台开发服务器须带明确监听授权，或采用可实施的 IPC/转发方案；不支持的入站组合应拒绝。
 
@@ -106,7 +106,7 @@ flowchart TD
 
 ## MXC 接入边界
 
-- 保留固定 revision 的 SDK、独立 ACL 授权、文件对象身份检查、目录例外及进程生命周期补丁。
+- SDK 固定 `46ce71d0da7b97bb531a33e175bf4166ffa730c0`，请求直接使用发布的 1.0 类型；保留独立 ACL 授权、文件对象身份检查、目录例外及进程生命周期补丁。Linux 网络监控丢失提供进程时终止工作负载，进程树清理后才回收 PID。
 - Windows 的 Ash 请求要求 MXC 只使用 PSEC；内部其他 ProcessContainer 实现不能代替它。准备阶段必须区分确定的能力不足与运行故障，不能把任意探测错误转换成 `UnsupportedPolicy`。
 - 按运行时能力检查 PSEC，不能用“24H2 以上”代替检查。
 - Linux 与 macOS 继续通过同一适配器接入 Bubblewrap 和 Seatbelt。

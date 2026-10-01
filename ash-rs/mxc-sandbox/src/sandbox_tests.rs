@@ -125,7 +125,7 @@ fn managed_psec_rejection_keeps_the_policy_unchanged_for_the_account_candidate()
 #[test]
 fn processcontainer_requires_its_proxy_constraints_without_relaxing_the_request() {
     let config = serde_json::json!({
-        "version": "0.8.0-alpha",
+        "version": "1.0.0",
         "containment": "processcontainer",
         "process": {"commandLine": "cmd.exe /c exit 0"},
         "network": {"egress": {"default": "deny"}, "ingress": {"default": "deny", "hostLoopback": "deny"}},

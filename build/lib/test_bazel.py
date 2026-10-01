@@ -399,6 +399,24 @@ class BazelTestProfileTests(unittest.TestCase):
         documentation = (REPOSITORY_ROOT / "docs/build.md").read_text(encoding="utf-8")
         self.assertIn("bazelisk test --config=ci //app-rs:app_ci", documentation)
 
+    def test_failure_artifacts_use_the_configured_bazel_testlogs_directory(self):
+        bazelrc = (REPOSITORY_ROOT / ".bazelrc").read_text(encoding="utf-8")
+        prefixes = [
+            line.removeprefix("common --symlink_prefix=")
+            for line in bazelrc.splitlines()
+            if line.startswith("common --symlink_prefix=")
+        ]
+        self.assertEqual(1, len(prefixes))
+        workflow = (REPOSITORY_ROOT / ".github/workflows/bazel-boundary.yml").read_text(
+            encoding="utf-8"
+        )
+        for filename in ("test.log", "test.xml"):
+            self.assertIn(
+                f"{prefixes[0]}testlogs/ash-cli/tui-real-scenarios/{filename}",
+                workflow,
+            )
+        self.assertIn("include-hidden-files: true", workflow)
+
 
 class BazelDependencyContractFixtureTests(unittest.TestCase):
     def setUp(self):

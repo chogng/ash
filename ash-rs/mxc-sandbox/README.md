@@ -32,7 +32,7 @@ Core / action-policy → tool-executor → exec-server → sandboxing
 | 目录读写、隐藏存储和授权例外 | 转换为 SDK 文件策略；适配器在启动前重新检查规范路径 |
 | 保护元数据 | 构造请求时，将已存在的 `.git`、`.agents`、`.codex`、`.ash` 文件或目录设为只读；不存在的路径不创建，其他检查错误拒绝请求 |
 | 宿主 ACL | MXC 路径始终禁止改动宿主 ACL；账户候选独立检查 `HostAclChanges`，由 `windows-sandbox` 负责改动和恢复 |
-| 网络禁止 / 允许 | 传入 schema 0.8 的明确网络要求，由 SDK 判断后端能否完整实施 |
+| 网络禁止 / 允许 | 传入发布的 1.0 契约，明确出口、入站与宿主回环要求，由 SDK 判断后端能否完整实施 |
 | 受管网络 | 一个执行专属端口承载 HTTP、CONNECT、SOCKS；保持禁止直连及其他入站要求 |
 | Windows 后端 | MXC 只接受具备完整策略能力的 PSEC；其他实现由 Ash 沙箱层分别评估和选择 |
 | Windows 严格受管网络 | 当前适配器在启动前拒绝；尚不能同时满足代理端点与禁止未授权入站要求 |
@@ -42,6 +42,8 @@ App Server 的固定沙箱配置允许策略范围内的宿主 ACL 改动，命�
 本轮账户原型及 `mxc-user.exe` 已退出源码和产品包。适配器不配置账户或持久网络规则。
 Windows 账户候选的 ACL 恢复由独立后端维护；异常退出仍需实机验收。
 子进程退出码不再经过私有运行器重映射。输出中的权限错误只产生“可能已有副作用”的诊断，不能证明进程未启动或授权重跑。
+启动失败保留 SDK 错误类别、说明与扩展系统错误；PTY helper 传回实际启动和等待错误。所有启动失败均关闭本次执行，不重新选择后端。
+Linux 网络提供进程退出时，SDK 监控终止工作负载并报告网络丢失；监控与退出观察均不提前回收进程，进程树关闭后才释放 PID。
 
 ## PTY 启动
 
@@ -57,24 +59,27 @@ Windows 账户候选的 ACL 恢复由独立后端维护；异常退出仍需实�
 
 ## SDK 依赖
 
-固定 Microsoft MXC `ca7ea12ac6bd9f5420d6adecb37e32a8158da476`。
+固定 Microsoft MXC `46ce71d0da7b97bb531a33e175bf4166ffa730c0`。
 为承接 Ash 的现有契约，部分上游 crate 以可审查源码补丁保存在
 [vendor/mxc](../vendor/mxc/README.md)，由根 Cargo patch 配置和 Bazel 使用。
-适配器直接依赖 `wxc_common` 及对应平台 crate，不再依赖 `mxc-sdk` 或维护 `mxc_engine` 副本。请求使用已发布的 `0.8.0-alpha` 契约；上游 `0.9.0-alpha` 仍是开发契约。
+适配器直接依赖 `mxc_config_contract`、`wxc_common` 及对应平台 crate，不再依赖 `mxc-sdk` 或维护 `mxc_engine` 副本。请求直接构造已发布的 `1.0.0` Rust 类型，再交给 SDK 的契约转换入口；上游 `1.1.0-alpha` 仍是开发契约，crate 版本 `0.9.0` 不等于配置版本。
 
 升级在 Ash 内维护：核对上游 release/stable 变更，固定 commit，复核必要补丁，再通过平台与打包验证。当前 pin 是本次审查的源码快照，不将其称为稳定发行版，也不自动追踪 HEAD。
 
 上游仍将此版本标为早期预览，接线与测试不代表生产隔离资格。
-[上游说明](https://github.com/microsoft/mxc/tree/ca7ea12ac6bd9f5420d6adecb37e32a8158da476)
+[上游说明](https://github.com/microsoft/mxc/tree/46ce71d0da7b97bb531a33e175bf4166ffa730c0)
 
 ## 验证
+
+2026-10-02 在 Windows 11 23H2（build 22631）完成适配器、执行器、执行服务与账户后端的活动测试、执行服务 Cargo 构建、依赖检查和 warning 门禁。另显式运行 PSEC 不可用用例，确认执行前拒绝。Linux x64 与 macOS ARM64 的适配器及 SDK 测试目标编译通过；这些平台的实际隔离执行、PSEC 成功路径与 Bazel 打包本轮未验证。
 
 ```sh
 just test ash-mxc-sandbox
 just test ash-mxc-sandbox --test pty
 just test ash-tool-executor
 just check ash-mxc-sandbox --target x86_64-pc-windows-msvc --tests
-just check ash-mxc-sandbox --target aarch64-unknown-linux-gnu --tests
+just check ash-mxc-sandbox --target x86_64-unknown-linux-gnu --tests
+just check ash-mxc-sandbox --target aarch64-apple-darwin --tests
 ```
 
 Linux 受管网络由 SDK 使用 `bwrap`、`slirp4netns`、`unshare`、`nsenter`、iptables/ip6tables 及其 restore 工具实施。

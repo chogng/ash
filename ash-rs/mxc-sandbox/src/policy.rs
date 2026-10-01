@@ -6,6 +6,8 @@ use ash_sandboxing::SandboxCommand;
 use ash_sandboxing::SandboxError;
 use ash_sandboxing::SandboxPolicy;
 use ash_sandboxing::SandboxScope;
+use mxc_config_contract::published::v1_0_0 as contract;
+use mxc_config_contract::published::v1_0_0::OptionalField;
 use std::path::Path;
 #[cfg(target_os = "macos")]
 use std::time::{Duration, Instant};
@@ -46,25 +48,7 @@ pub(super) fn request(
     } else {
         script
     };
-    let action = if policy.network() == NetworkAccess::Allowed {
-        "allow"
-    } else {
-        "deny"
-    };
-    let mut config = serde_json::json!({
-        "version": "0.8.0-alpha",
-        "containment": if cfg!(windows) { "processcontainer" } else if cfg!(target_os = "linux") { "bubblewrap" } else { "seatbelt" },
-        "process": { "commandLine": script, "cwd": text(command.working_directory())? },
-        "lifecycle": { "destroyOnExit": true, "preservePolicy": false },
-        "filesystem": {
-            "readwritePaths": filesystem.readwrite_paths,
-            "readonlyPaths": filesystem.readonly_paths,
-            "deniedPaths": filesystem.denied_paths,
-        },
-        "network": { "egress": { "default": action }, "ingress": { "default": action, "hostLoopback": action } },
-        "fallback": { "allowDaclMutation": false },
-    });
-    match (policy.network(), command.network_proxy()) {
+    let runtime_config = match (policy.network(), command.network_proxy()) {
         (NetworkAccess::Managed, Some(proxy)) if proxy.ports()[0] == proxy.ports()[1] => {
             #[cfg(windows)]
             return Err(SandboxError::UnsupportedPolicy(
@@ -72,41 +56,110 @@ pub(super) fn request(
             ));
             #[cfg(not(windows))]
             {
-                config["runtimeConfig"] = serde_json::json!({"networkProxy": format!("http://127.0.0.1:{}", proxy.ports()[0])});
+                OptionalField::present(contract::RuntimeConfig {
+                    network_proxy: OptionalField::present(format!(
+                        "http://127.0.0.1:{}",
+                        proxy.ports()[0]
+                    )),
+                })
             }
         }
-        (NetworkAccess::Allowed | NetworkAccess::Denied, None) => {}
+        (NetworkAccess::Allowed | NetworkAccess::Denied, None) => OptionalField::default(),
         _ => {
             return Err(unavailable(
                 "managed networking requires one execution-owned HTTP/SOCKS endpoint",
             ));
         }
-    }
-    #[cfg(windows)]
-    {
-        config["ui"] =
-            serde_json::json!({"disable": false, "clipboard": "none", "injection": false});
-        config["processContainer"] = serde_json::json!({
-            "capabilities": ["registryRead"],
-            "ui": {"isolation": "desktop", "desktopSystemControl": false, "systemSettings": "none", "ime": false}
-        });
-    }
-    let mut logger = wxc_common::logger::Logger::new(wxc_common::logger::Mode::Buffer);
-    let parsed =
-        wxc_common::config_parser::load_mxc_request_from_json(&config.to_string(), &mut logger)
-            .map_err(|error| {
-                use wxc_common::config_parser::ParseError;
-                match error {
-                    ParseError::Decode(error)
-                    | ParseError::Version(error)
-                    | ParseError::OneShot(error)
-                    | ParseError::OneShotMalformed(error) => unavailable(error.to_string()),
-                    ParseError::StateAware(error) => unavailable(error.to_string()),
-                }
-            })?;
-    let wxc_common::state_aware_request::MxcRequest::OneShot(inner) = parsed else {
-        return Err(unavailable("expected a process execution request"));
     };
+    let action = || match policy.network() {
+        NetworkAccess::Allowed => contract::NetworkAction::Allow,
+        NetworkAccess::Denied | NetworkAccess::Managed => contract::NetworkAction::Deny,
+    };
+    #[cfg(windows)]
+    let (ui, process_container) = (
+        OptionalField::present(contract::Ui {
+            disable: OptionalField::present(false),
+            clipboard: OptionalField::present(contract::UiClipboard::None),
+            injection: OptionalField::present(false),
+        }),
+        OptionalField::present(contract::ProcessContainer {
+            least_privilege: OptionalField::default(),
+            learning_mode: OptionalField::default(),
+            capabilities: OptionalField::present(vec![
+                contract::ProcessContainerCapability::new("registryRead".into())
+                    .map_err(unavailable)?,
+            ]),
+            capture_denials: OptionalField::default(),
+            ui: OptionalField::present(contract::ProcessContainerUi {
+                isolation: OptionalField::present(contract::ProcessContainerUiIsolation::Desktop),
+                desktop_system_control: OptionalField::present(false),
+                system_settings: OptionalField::present("none".into()),
+                ime: OptionalField::present(false),
+            }),
+            filesystem: OptionalField::default(),
+            network: OptionalField::default(),
+        }),
+    );
+    #[cfg(not(windows))]
+    let (ui, process_container) = (OptionalField::default(), OptionalField::default());
+    let config = contract::OneShotRequest {
+        schema: OptionalField::default(),
+        comment: OptionalField::default(),
+        version: contract::Version::V1_0_0,
+        container_id: OptionalField::default(),
+        containment: OptionalField::present(if cfg!(windows) {
+            contract::OneShotContainment::ProcessContainer
+        } else if cfg!(target_os = "linux") {
+            contract::OneShotContainment::Bubblewrap
+        } else {
+            contract::OneShotContainment::Seatbelt
+        }),
+        process: contract::Process {
+            command_line: contract::NonEmptyString::new(script).map_err(unavailable)?,
+            cwd: OptionalField::present(text(command.working_directory())?),
+            env: OptionalField::default(),
+            inherit_default_env: OptionalField::present(false),
+            timeout: OptionalField::default(),
+        },
+        lifecycle: OptionalField::present(contract::Lifecycle {
+            destroy_on_exit: OptionalField::present(true),
+            preserve_policy: OptionalField::present(false),
+        }),
+        filesystem: OptionalField::present(contract::Filesystem {
+            readwrite_paths: OptionalField::present(filesystem.readwrite_paths),
+            readonly_paths: OptionalField::present(filesystem.readonly_paths),
+            denied_paths: OptionalField::present(filesystem.denied_paths),
+        }),
+        network: OptionalField::present(contract::Network {
+            egress: OptionalField::present(contract::NetworkEgress {
+                default: OptionalField::present(action()),
+                allow: OptionalField::default(),
+                deny: OptionalField::default(),
+            }),
+            ingress: OptionalField::present(contract::NetworkIngress {
+                default: OptionalField::present(action()),
+                host_loopback: OptionalField::present(action()),
+            }),
+        }),
+        // Ash selects the isolation model before launch. The SDK may not
+        // authorize host ACL changes or choose a different implementation.
+        fallback: OptionalField::present(contract::Fallback {
+            allow_dacl_mutation: OptionalField::present(false),
+        }),
+        runtime_config,
+        ui,
+        process_container,
+        seatbelt: OptionalField::default(),
+        lxc: OptionalField::default(),
+        wslc: OptionalField::default(),
+        telemetry: OptionalField::default(),
+    };
+    let mut logger = wxc_common::logger::Logger::new(wxc_common::logger::Mode::Buffer);
+    let inner = wxc_common::config_parser::load_one_shot_request_from_contract(
+        wxc_common::config_parser::ExactOneShotContract::V1_0(Box::new(config)),
+        &mut logger,
+    )
+    .map_err(|error| unavailable(error.to_string()))?;
     let mut request = crate::request::Request::new(inner)?;
     if resolved_filesystem.host_read() == HostReadScope::Host {
         #[cfg(windows)]

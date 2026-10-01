@@ -4,6 +4,37 @@ use ash_sandboxing::{
     FileSystemAccess, HostReadScope, NetworkAccess, SandboxCommand, SandboxPolicy, SandboxScope,
 };
 
+#[test]
+fn startup_diagnostics_keep_sdk_categories_and_system_errors_without_authorizing_replay() {
+    use ash_sandboxing::SandboxDenialTiming;
+    use ash_sandboxing::SandboxError;
+    use wxc_common::models::FailurePhase;
+    use wxc_common::models::ScriptResponse;
+
+    for (phase, code) in [
+        (FailurePhase::Rejected, "policy_validation"),
+        (FailurePhase::BackendUnavailable, "backend_unavailable"),
+        (FailurePhase::LaunchFailed, "backend_error"),
+        (FailurePhase::PostLaunchFailed, "backend_error"),
+    ] {
+        let error = super::spawn_error(ScriptResponse {
+            failure_phase: phase,
+            error_message: "sandbox creation failed".into(),
+            extended_error: "CreateProcessSecurityEnvironment: 0x80070005".into(),
+            ..Default::default()
+        });
+        assert_eq!(
+            error,
+            SandboxError::StartFailed {
+                timing: SandboxDenialTiming::ProcessMayHaveStarted,
+                message: format!(
+                    "{code}: sandbox creation failed (CreateProcessSecurityEnvironment: 0x80070005)"
+                ),
+            }
+        );
+    }
+}
+
 fn request(dir: &Dir) -> Request {
     crate::policy::request(
         &SandboxCommand::new(
@@ -30,6 +61,18 @@ fn terminal_handoff_preserves_explicit_environment_and_filesystem_identity() {
     let decoded: Request = serde_json::from_str(&encoded).unwrap();
     assert_eq!(decoded.inner.env, Some(vec!["ASH_TEST=a=b 中文".into()]));
     assert!(!decoded.inner.inherit_default_env);
+    assert_eq!(
+        decoded.inner.source_contract,
+        Some(mxc_config_contract::ContractVersion::V1_0_0)
+    );
+    assert_eq!(
+        decoded.inner.network_enforcement_compatibility,
+        wxc_common::models::NetworkEnforcementCompatibility::Strict
+    );
+    assert_eq!(
+        decoded.inner.default_env_compatibility,
+        wxc_common::models::DefaultEnvCompatibility::DefaultBlock
+    );
     assert!(decoded.inner.lifecycle.destroy_on_exit);
     assert!(!decoded.inner.lifecycle.preserve_policy);
     assert_eq!(decoded.inner.script_code, prepared.inner.script_code);
@@ -54,6 +97,29 @@ fn explicit_empty_environment_stays_empty_after_terminal_handoff() {
         serde_json::from_str(&serde_json::to_string(&prepared).unwrap()).unwrap();
     assert_eq!(decoded.inner.env, Some(Vec::new()));
     assert!(!decoded.inner.inherit_default_env);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn backend_launch_failure_reaches_the_caller_with_the_sdk_diagnosis() {
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let mut prepared = request(&dir);
+    prepared.set_bubblewrap_executable(&temp.path().join("missing-bwrap"));
+    let error = match prepared.spawn(wxc_common::sandbox_process::StdioMode::Pipes) {
+        Ok(_) => panic!("an unavailable selected executable must never start a workload"),
+        Err(error) => error,
+    };
+    let ash_sandboxing::SandboxError::StartFailed { timing, message } = error else {
+        panic!("a launch failure must not reopen backend selection: {error}");
+    };
+    assert_eq!(
+        timing,
+        ash_sandboxing::SandboxDenialTiming::ProcessMayHaveStarted
+    );
+    assert!(message.starts_with("backend_error: "), "{message}");
+    assert!(message.contains("Bubblewrap"), "{message}");
+    assert!(message.contains("not installed"), "{message}");
 }
 
 #[cfg(unix)]

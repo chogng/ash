@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { installClock } from '../../automation/clock.js';
 
 test('standalone text preserves leading, internal, and trailing whitespace across themes', async ({ page }) => {
 	await page.goto('/standalone.html');
@@ -4907,9 +4908,9 @@ for (const inputKind of ['editContext', 'textarea'] as const) {
 		if (inputKind === 'textarea') {
 			await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
 		}
-		await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+		const pauseClock = await installClock(page);
 		await page.goto('/standalone.html');
-		await page.clock.pauseAt(new Date('2026-01-01T00:01:00Z'));
+		await pauseClock();
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareInlineRequests());
 		await page.keyboard.type('abc');
 		await page.clock.runFor(49);
@@ -4938,9 +4939,9 @@ for (const inputKind of ['editContext', 'textarea'] as const) {
 		if (inputKind === 'textarea') {
 			await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
 		}
-		await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+		const pauseClock = await installClock(page);
 		await page.goto('/standalone.html');
-		await page.clock.pauseAt(new Date('2026-01-01T00:01:00Z'));
+		await pauseClock();
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareInlineRequests());
 		await page.keyboard.type('abc');
 		await page.evaluate(() => {
@@ -4962,9 +4963,9 @@ for (const inputKind of ['editContext', 'textarea'] as const) {
 }
 
 test('inline completion uses the new language after cancelling an old request', async ({ page }) => {
-	await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+	const pauseClock = await installClock(page);
 	await page.goto('/standalone.html');
-	await page.clock.pauseAt(new Date('2026-01-01T00:01:00Z'));
+	await pauseClock();
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareInlineRequests());
 	await page.keyboard.type('a');
 	await page.clock.runFor(50);
@@ -4979,9 +4980,9 @@ test('inline completion uses the new language after cancelling an old request', 
 });
 
 test('inline completion ignores late responses after more typing', async ({ page }) => {
-	await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+	const pauseClock = await installClock(page);
 	await page.goto('/standalone.html');
-	await page.clock.pauseAt(new Date('2026-01-01T00:01:00Z'));
+	await pauseClock();
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareInlineRequests());
 	await page.keyboard.type('a');
 	await page.clock.runFor(200);
@@ -5004,9 +5005,9 @@ for (const reason of ['position', 'provider', 'snooze', 'dispose', 'model', 'blu
 		test(`inline completion ${queued ? 'queued' : 'running'} request is cancelled on ${reason}`, async ({ page }) => {
 			const errors: string[] = [];
 			page.on('pageerror', error => errors.push(error.message));
-			await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+			const pauseClock = await installClock(page);
 			await page.goto('/standalone.html');
-			await page.clock.pauseAt(new Date('2026-01-01T00:01:00Z'));
+			await pauseClock();
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareInlineRequests());
 			await page.keyboard.type('abc');
 			if (!queued) {
@@ -5112,9 +5113,9 @@ test('color picker retains one widget, applies one undoable edit and releases it
 });
 
 test('hover options control requests, delay and keyboard modifiers', async ({ page }) => {
-	await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+	const pauseClock = await installClock(page);
 	await page.goto('/standalone.html');
-	await page.clock.pauseAt(new Date('2026-01-01T00:01:00Z'));
+	await pauseClock();
 	await page.evaluate(() => {
 		window.ashStandaloneIntegration.updateContributionOptions({ hover: { enabled: 'off', delay: 900 } });
 		window.ashStandaloneIntegration.prepareLanguageRequest('hover');
@@ -5202,8 +5203,8 @@ test.describe('folding command routing', () => {
 	});
 
 	test('default and custom chords share timeout, escape and focus cancellation', async ({ page }) => {
-		await page.goto('/standalone.html');
 		await page.clock.install();
+		await page.goto('/standalone.html');
 		await page.evaluate(text => {
 			window.ashStandaloneIntegration.prepareClipboard(text, [[1, 1, 1, 1]]);
 			window.ashStandaloneIntegration.prepareFoldingKeybinding();

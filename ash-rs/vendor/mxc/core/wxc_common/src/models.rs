@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 
 use crate::error::WxcError;
+use crate::mxc_error::MxcErrorCode;
 
 /// Selects which containment backend to use for script execution.
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -35,7 +36,7 @@ pub enum ContainmentBackend {
     Hyperlight,
     /// Windows Sandbox — full VM isolation (experimental, requires --experimental flag).
     WindowsSandbox,
-    /// Isolation Session — process isolation via the IsolationSession API (experimental).
+    /// Isolation Session — process isolation via the IsolationSession API.
     #[serde(rename = "isolation_session")]
     IsolationSession,
     /// macOS Seatbelt sandbox backend.
@@ -73,12 +74,12 @@ impl ContainmentBackend {
         match self {
             ContainmentBackend::ProcessContainer => Some("processContainer"),
             ContainmentBackend::Lxc => Some("lxc"),
-            ContainmentBackend::WindowsSandbox => Some("experimental.windows_sandbox"),
-            ContainmentBackend::Wslc => Some("experimental.wslc"),
+            ContainmentBackend::WindowsSandbox => Some("windowsSandbox"),
+            ContainmentBackend::Wslc => Some("wslc"),
             ContainmentBackend::Seatbelt => Some("seatbelt"),
-            ContainmentBackend::IsolationSession => Some("experimental.isolation_session"),
+            ContainmentBackend::IsolationSession => Some("isolationSession"),
+            ContainmentBackend::Hyperlight => Some("hyperlight"),
             ContainmentBackend::Bubblewrap
-            | ContainmentBackend::Hyperlight
             | ContainmentBackend::MicroVm
             | ContainmentBackend::Vm => None,
         }
@@ -91,8 +92,9 @@ impl From<crate::wire::Containment> for ContainmentBackend {
     /// The abstract intents resolve per host: `process` → the OS-native process
     /// sandbox, `vm` → the host's VM-class backend. Concrete backends map
     /// verbatim. Deprecated spellings (`appcontainer`, `macos_sandbox`) are
-    /// accepted via `#[serde(alias)]` on the wire enum and arrive here already
-    /// mapped to the canonical variant.
+    /// normalized before this conversion, either by exact-contract
+    /// deserialization or by explicit internal string classification through
+    /// `wire::Containment::parse_wire_name`.
     fn from(c: crate::wire::Containment) -> Self {
         use crate::wire::Containment as W;
         match c {
@@ -264,10 +266,9 @@ impl Default for WindowsSandboxConfig {
 }
 
 /// State-aware provision-phase config for the Isolation Session backend.
-/// Nested under `experimental.isolation_session.provision`. The one-shot
+/// Nested under `isolationSession.provision`. The one-shot
 /// surface takes no backend configuration.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct IsolationSessionProvisionConfig {
     /// Optional identifier for the calling application, associating the
     /// provisioned agent user with its owning app.
@@ -282,8 +283,7 @@ pub struct IsolationSessionProvisionConfig {
     ///
     /// On an unpackaged host an explicitly-supplied empty string is a
     /// **distinct** value from an absent one and round-trips as such. The exact
-    /// JSON contract rejects `null`; the retained legacy deserializer treats it
-    /// as absent only for compatibility characterization.
+    /// JSON contract rejects `null`.
     pub app_id: Option<String>,
 }
 
@@ -291,27 +291,12 @@ pub struct IsolationSessionProvisionConfig {
 ///
 /// Image selection and defaulting remain backend responsibilities. Conversion
 /// preserves absent fields and explicitly supplied empty strings unchanged.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WslcProvisionConfig {
     /// Container image reference. The backend selects its default when absent.
     pub image: Option<String>,
     /// Local image tarball to import instead of pulling an image.
     pub image_tar_path: Option<String>,
-}
-
-#[cfg(test)]
-impl From<crate::wire::WslcProvisionPhase> for WslcProvisionConfig {
-    fn from(config: crate::wire::WslcProvisionPhase) -> Self {
-        let crate::wire::WslcProvisionPhase {
-            image,
-            image_tar_path,
-        } = config;
-        Self {
-            image,
-            image_tar_path,
-        }
-    }
 }
 
 /// Configuration specific to the LXC container backend.
@@ -974,19 +959,6 @@ impl TestFeatureConfig {
     }
 }
 
-/// Container for all experimental feature configs.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(default)]
-pub struct ExperimentalConfig {
-    /// Placeholder feature for testing experimental infrastructure.
-    pub test: Option<TestFeatureConfig>,
-    /// Windows Sandbox backend (experimental).
-    #[serde(rename = "windows_sandbox")]
-    pub windows_sandbox: Option<WindowsSandboxConfig>,
-    /// WSL Container (WSLC SDK) backend (experimental).
-    pub wslc: Option<WslcConfig>,
-}
-
 /// Telemetry configuration parsed from the top-level JSON config `telemetry` section.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -1000,14 +972,97 @@ pub struct TelemetryConfig {
     pub requested_sandbox_kind: Option<&'static str>,
 }
 
+/// Guest runtime for the Hyperlight backend: what `process.commandLine`
+/// is source for.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum HyperlightRuntime {
+    /// CPython with the data-science stack preloaded.
+    #[default]
+    Agent,
+    /// CPython.
+    Python,
+    /// CPython with a BusyBox shell.
+    #[serde(rename = "python-shell")]
+    PythonShell,
+    /// Node.js.
+    Node,
+    /// Bash with BusyBox.
+    Bash,
+    /// .NET with the JIT.
+    #[serde(rename = "dotnet-jit")]
+    DotnetJit,
+}
+
+impl HyperlightRuntime {
+    /// Every runtime the backend can install and run.
+    pub const ALL: [HyperlightRuntime; 6] = [
+        HyperlightRuntime::Agent,
+        HyperlightRuntime::Python,
+        HyperlightRuntime::PythonShell,
+        HyperlightRuntime::Node,
+        HyperlightRuntime::Bash,
+        HyperlightRuntime::DotnetJit,
+    ];
+
+    /// The wire spelling: the upstream image's name, also the runtime's
+    /// directory in an image home.
+    pub fn name(self) -> &'static str {
+        match self {
+            HyperlightRuntime::Agent => "agent",
+            HyperlightRuntime::Python => "python",
+            HyperlightRuntime::PythonShell => "python-shell",
+            HyperlightRuntime::Node => "node",
+            HyperlightRuntime::Bash => "bash",
+            HyperlightRuntime::DotnetJit => "dotnet-jit",
+        }
+    }
+}
+
+impl std::str::FromStr for HyperlightRuntime {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        HyperlightRuntime::ALL
+            .into_iter()
+            .find(|runtime| runtime.name() == s)
+            .ok_or_else(|| {
+                let known: Vec<&str> = HyperlightRuntime::ALL.iter().map(|r| r.name()).collect();
+                format!(
+                    "unknown hyperlight runtime {s:?}; expected one of {}",
+                    known.join(", ")
+                )
+            })
+    }
+}
+
+/// Hyperlight backend configuration (`hyperlight`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct HyperlightConfig {
+    /// Guest runtime for the run.
+    pub runtime: HyperlightRuntime,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ExecutionRequest {
+    /// Exact external contract that produced this request.
+    ///
+    /// Direct typed SDK construction has no external contract attribution.
+    #[serde(
+        serialize_with = "serialize_source_contract",
+        deserialize_with = "deserialize_source_contract"
+    )]
+    pub source_contract: Option<mxc_config_contract::ContractVersion>,
+    /// Whether backends preserve pre-v0.8 network compatibility behavior or
+    /// enforce the current strict posture.
+    pub network_enforcement_compatibility: NetworkEnforcementCompatibility,
+    /// Whether backends supply the default `process.env` block.
+    pub default_env_compatibility: DefaultEnvCompatibility,
     /// Host-resolved executable; unavailable to untrusted serialized requests.
     #[serde(skip)]
     pub bubblewrap_executable: Option<std::path::PathBuf>,
-    /// Schema version for the config format.
-    pub schema_version: String,
     /// Externally assigned container identifier.
     pub container_id: String,
     /// Environment variables as "KEY=VALUE" strings (from `process.env`).
@@ -1015,26 +1070,34 @@ pub struct ExecutionRequest {
     /// Three states, deliberately distinct:
     ///
     /// * `None` — the caller supplied no environment. Backends provide a
-    ///   default: on Windows, the user's profile block.
-    /// * `Some(vec![])` — the caller asked for an *empty* environment. This is
-    ///   not the same as `None`, and on the Windows process container it is
-    ///   expected to fail at process creation, because the OS requires certain
-    ///   names to be present (see `REQUIRED_CHILD_ENV_VARS`).
+    ///   default: on Windows, the user's profile block; on LXC, Bubblewrap, and
+    ///   Seatbelt, `PATH` + `TERM`, plus `HOME` naming the directory the child
+    ///   is started in. Those three omit `HOME` when no working directory
+    ///   resolves, having no private directory to point it at. On WSLc it is
+    ///   the container image's own `ENV`.
+    /// * `Some(vec![])` — the caller asked for an *empty* environment, unless
+    ///   [`ExecutionRequest::inherit_default_env`] layers it over the default
+    ///   and so asks for the default itself. This is not the same as `None`,
+    ///   and on the Windows process container an empty block is rejected before
+    ///   launch, because the OS requires certain names to be present (see
+    ///   `REQUIRED_CHILD_ENV_VARS`).
     /// * `Some(entries)` — the caller's environment, used verbatim. MXC does
-    ///   not add to it; callers that want the profile block or the calling
-    ///   process's variables must merge them in themselves.
+    ///   not add to it; callers that want the default block or the calling
+    ///   process's variables must merge them in themselves, or set
+    ///   [`ExecutionRequest::inherit_default_env`].
     ///
-    /// The distinction is currently honored only by the Windows process
-    /// container. The LXC, Bubblewrap, Seatbelt, and WSLc backends treat `None`
-    /// and `Some(vec![])` alike, as they did before the field became optional.
+    /// The Windows process container honors the distinction at every schema
+    /// version; LXC, Bubblewrap, Seatbelt, and WSLc honor it from 0.9, and
+    /// below 0.9 treat `None` and `Some(vec![])` alike. IsolationSession starts
+    /// every process from the agent user's default environment, so it rejects
+    /// `Some` without [`ExecutionRequest::inherit_default_env`].
     pub env: Option<Vec<String>>,
 
     /// Layer [`ExecutionRequest::env`] on top of the backend's default
     /// environment instead of replacing it (from `process.inheritDefaultEnv`).
     ///
     /// Only meaningful when `env` is `Some`: with `None` the child already gets
-    /// the default. Only the Windows process container has a non-empty default
-    /// (the user's profile block), so elsewhere this is inert.
+    /// the default. Rejected below schema 0.9 by the config parser.
     pub inherit_default_env: bool,
     pub script_code: String,
     pub working_directory: String,
@@ -1047,10 +1110,18 @@ pub struct ExecutionRequest {
     pub policy: ContainerPolicy,
     /// LXC-specific configuration (used when containment == Lxc).
     pub lxc_config: LxcConfig,
+    /// WSLC-specific configuration (used when containment == Wslc).
+    pub wslc: Option<WslcConfig>,
     /// Seatbelt (macOS) backend configuration (used when containment == Seatbelt).
     pub seatbelt: Option<SeatbeltConfig>,
     /// Per-invocation telemetry configuration.
     pub telemetry: Option<TelemetryConfig>,
+    /// Placeholder feature for testing experimental infrastructure.
+    pub test_feature: Option<TestFeatureConfig>,
+    /// Windows Sandbox backend configuration.
+    pub windows_sandbox: Option<WindowsSandboxConfig>,
+    /// Hyperlight backend configuration (used when containment == Hyperlight).
+    pub hyperlight: Option<HyperlightConfig>,
     /// Whether the --experimental flag was passed.
     pub experimental_enabled: bool,
     /// Whether the --allow-testing-features flag was passed. Gates testing-only,
@@ -1059,11 +1130,75 @@ pub struct ExecutionRequest {
     /// axis from `experimental_enabled`: "experimental" means unstable/new, whereas
     /// this means "not-for-production testing scaffolding".
     pub testing_features_enabled: bool,
-    /// Experimental feature configs (only applied when experimental_enabled is true).
-    pub experimental: ExperimentalConfig,
     /// Dry-run mode: validate config and runner setup then return success
     /// without executing the sandboxed process.
     pub dry_run: bool,
+}
+
+/// Backend network behavior after exact contract normalization.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum NetworkEnforcementCompatibility {
+    /// Preserve compatibility behavior required by exact v0.6 and v0.7 JSON.
+    LegacyCompatible,
+    /// Enforce the current network posture without legacy leniency.
+    #[default]
+    Strict,
+}
+
+/// Backend `process.env` behavior after exact contract normalization.
+///
+/// Normalized from the contract version rather than read back from
+/// [`ExecutionRequest::source_contract`], which is external-JSON attribution
+/// and is cleared for typed SDK requests. A typed request built against an
+/// exact pre-0.9 contract keeps the pre-0.9 environment behavior.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DefaultEnvCompatibility {
+    /// Preserve behavior required by exact v0.6, v0.7, and v0.8 JSON: the
+    /// caller's entries pass through untouched, and each backend's own
+    /// baseline is the only default.
+    LegacyCompatible,
+    /// Supply the default block introduced by v0.9, which also makes the four
+    /// states of `process.env` distinct.
+    #[default]
+    DefaultBlock,
+}
+
+fn serialize_source_contract<S>(
+    value: &Option<mxc_config_contract::ContractVersion>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    value
+        .map(mxc_config_contract::ContractVersion::as_str)
+        .serialize(serializer)
+}
+
+fn deserialize_source_contract<'de, D>(
+    deserializer: D,
+) -> Result<Option<mxc_config_contract::ContractVersion>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Option::<String>::deserialize(deserializer)?
+        .map(|value| {
+            mxc_config_contract::ContractVersion::parse_exact(&value)
+                .ok_or_else(|| serde::de::Error::custom("unsupported MXC source contract"))
+        })
+        .transpose()
+}
+
+impl NetworkEnforcementCompatibility {
+    /// Stable diagnostic spelling for policy identity and tests.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::LegacyCompatible => "legacy-compatible",
+            Self::Strict => "strict",
+        }
+    }
 }
 
 /// Where a [`ResolvedWorkingDirectory`] came from.
@@ -1085,19 +1220,56 @@ pub struct ResolvedWorkingDirectory<'a> {
     pub source: WorkingDirectorySource,
 }
 
+/// Normalize `path` to an absolute, lexically clean path inside a sandbox whose
+/// root is `/`.
+///
+/// Backends that start the child with a `chdir` relative to the guest root use
+/// this so the directory the child lands in and the `HOME` naming it cannot
+/// disagree. `.` segments are dropped and `..` pops the previous segment
+/// without escaping the root. Purely lexical: no symlink resolution, and the
+/// path is not probed.
+pub fn sandbox_absolute_path(path: &str) -> String {
+    let mut segments: Vec<&str> = Vec::new();
+    for segment in path.split('/') {
+        match segment {
+            "" | "." => {}
+            ".." => {
+                segments.pop();
+            }
+            other => segments.push(other),
+        }
+    }
+    format!("/{}", segments.join("/"))
+}
+
 impl ExecutionRequest {
+    /// Exact external contract spelling for diagnostics and telemetry.
+    ///
+    /// Direct typed SDK requests return an empty string because they have no
+    /// external JSON contract attribution.
+    pub fn source_contract_version(&self) -> &'static str {
+        self.source_contract
+            .map(mxc_config_contract::ContractVersion::as_str)
+            .unwrap_or_default()
+    }
+
+    /// Whether this request's contract supplies the backend default
+    /// environment block, introduced by `0.9.0-alpha`.
+    pub fn supplies_default_env(&self) -> bool {
+        self.default_env_compatibility == DefaultEnvCompatibility::DefaultBlock
+    }
+
     /// The caller's environment entries, with "not supplied" and "supplied but
     /// empty" flattened to the same empty slice.
     ///
-    /// For backends that build the child's environment additively from a
-    /// cleared base — LXC, Bubblewrap, Seatbelt, WSLc — the two cases are
-    /// already indistinguishable in the result, so they use this and keep the
-    /// behavior they had before [`ExecutionRequest::env`] became optional.
-    ///
-    /// The Windows process container must *not* use this: there, `None` means
-    /// "give the child the user's profile block" and `Some(vec![])` means "give
-    /// the child nothing", which are very different outcomes. It matches on
-    /// [`ExecutionRequest::env`] directly.
+    /// Only for backends that have no default environment to distinguish them
+    /// against — every backend below schema 0.9. A backend with a default block
+    /// must match on [`ExecutionRequest::env`] directly, since `None` means
+    /// "give the child the default" and `Some(vec![])` means "give the child
+    /// nothing". A backend whose default MXC cannot enumerate takes the state
+    /// from `env` and the entries from here: WSLc, whose default is the
+    /// container image's `ENV`, and IsolationSession, which starts every
+    /// process from the agent user's default environment.
     pub fn env_entries(&self) -> &[String] {
         self.env.as_deref().unwrap_or(&[])
     }
@@ -1186,6 +1358,21 @@ pub enum FailurePhase {
     /// [`LaunchFailed`] so callers can fall back to a lower tier rather than
     /// hard-fail.
     BackendUnavailable,
+}
+
+impl FailurePhase {
+    /// The wire error code a failure in this phase is reported as.
+    ///
+    /// [`Rejected`](FailurePhase::Rejected) is the one phase a caller can act on
+    /// by changing the request, so it is the only one that earns a code of its
+    /// own; every other failure is an infrastructure problem the caller cannot
+    /// distinguish usefully and stays `backend_error`.
+    pub fn error_code(&self) -> MxcErrorCode {
+        match self {
+            FailurePhase::Rejected => MxcErrorCode::PolicyValidation,
+            _ => MxcErrorCode::BackendError,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1279,6 +1466,25 @@ impl ScriptResponse {
             ..Default::default()
         }
     }
+
+    /// Create a response for a request the backend refuses.
+    ///
+    /// Exits 1 and reports `policy_validation`, matching a parser-side
+    /// rejection, so a caller can tell a refused policy from a crash, a launch
+    /// failure, or a timeout — all of which exit -1.
+    ///
+    /// Unlike [`ScriptResponse::error`] the message is not also copied into
+    /// `standard_err`: nothing ran, so there is no workload output to relay, and
+    /// copying it would print the message bare and then again inside the JSON
+    /// envelope.
+    pub fn rejected(msg: &str) -> Self {
+        ScriptResponse {
+            exit_code: 1,
+            error_message: msg.to_string(),
+            failure_phase: FailurePhase::Rejected,
+            ..Default::default()
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1286,100 +1492,54 @@ mod tests {
     use super::*;
 
     #[test]
-    fn wslc_provision_config_from_wire_preserves_requested_fields() {
-        let cases = [
-            (
-                crate::wire::WslcProvisionPhase {
-                    image: None,
-                    image_tar_path: None,
-                },
-                None,
-                None,
-            ),
-            (
-                crate::wire::WslcProvisionPhase {
-                    image: Some(String::new()),
-                    image_tar_path: None,
-                },
-                Some(""),
-                None,
-            ),
-            (
-                crate::wire::WslcProvisionPhase {
-                    image: None,
-                    image_tar_path: Some(String::new()),
-                },
-                None,
-                Some(""),
-            ),
-            (
-                crate::wire::WslcProvisionPhase {
-                    image: Some(String::new()),
-                    image_tar_path: Some(String::new()),
-                },
-                Some(""),
-                Some(""),
-            ),
-            (
-                crate::wire::WslcProvisionPhase {
-                    image: Some("custom/image:tag".to_string()),
-                    image_tar_path: None,
-                },
-                Some("custom/image:tag"),
-                None,
-            ),
-            (
-                crate::wire::WslcProvisionPhase {
-                    image: None,
-                    image_tar_path: Some("C:\\images\\custom.tar".to_string()),
-                },
-                None,
-                Some("C:\\images\\custom.tar"),
-            ),
-            (
-                crate::wire::WslcProvisionPhase {
-                    image: Some("custom/image:tag".to_string()),
-                    image_tar_path: Some("C:\\images\\custom.tar".to_string()),
-                },
-                Some("custom/image:tag"),
-                Some("C:\\images\\custom.tar"),
-            ),
-        ];
-        for (wire, expected_image, expected_tar_path) in cases {
-            let config = WslcProvisionConfig::from(wire);
-            assert_eq!(config.image.as_deref(), expected_image);
-            assert_eq!(config.image_tar_path.as_deref(), expected_tar_path);
+    fn only_rejection_earns_a_caller_actionable_error_code() {
+        assert_eq!(
+            FailurePhase::Rejected.error_code(),
+            MxcErrorCode::PolicyValidation
+        );
+        for phase in [
+            FailurePhase::None,
+            FailurePhase::LaunchFailed,
+            FailurePhase::PostLaunchFailed,
+            FailurePhase::ProcessExited,
+            FailurePhase::Timeout,
+            FailurePhase::BackendUnavailable,
+        ] {
+            assert_eq!(
+                phase.error_code(),
+                MxcErrorCode::BackendError,
+                "phase {phase:?}"
+            );
         }
     }
 
     #[test]
-    fn wslc_provision_config_deserializes_intermediate_dispatch_payloads() {
-        for (json, expected_image, expected_tar_path) in [
-            ("{}", None, None),
-            (r#"{"image":null,"imageTarPath":null}"#, None, None),
-            (r#"{"image":"","imageTarPath":""}"#, Some(""), Some("")),
-            (
-                r#"{"image":"custom/image:tag","imageTarPath":"C:\\images\\custom.tar"}"#,
-                Some("custom/image:tag"),
-                Some("C:\\images\\custom.tar"),
-            ),
-            (r#"{"futureField":true}"#, None, None),
+    fn rejection_exits_one_and_leaves_stderr_to_the_envelope() {
+        let rejected = ScriptResponse::rejected("policy not supported");
+
+        assert_eq!(rejected.exit_code, 1);
+        assert_eq!(rejected.failure_phase, FailurePhase::Rejected);
+        assert_eq!(rejected.error_message, "policy not supported");
+        // The envelope carries the message; duplicating it into standard_err
+        // would print it twice, unseparated, ahead of the JSON.
+        assert!(rejected.standard_err.is_empty());
+    }
+
+    #[test]
+    fn sandbox_paths_normalize_against_the_root() {
+        for (input, expected) in [
+            ("/workspace", "/workspace"),
+            ("work", "/work"),
+            ("./work", "/work"),
+            ("a/../b", "/b"),
+            ("/x/../y/./z", "/y/z"),
+            ("/a//b/", "/a/b"),
+            ("../../etc", "/etc"),
+            ("", "/"),
+            ("/", "/"),
         ] {
-            let config: WslcProvisionConfig = serde_json::from_str(json).unwrap();
-            assert_eq!(config.image.as_deref(), expected_image, "{json}");
-            assert_eq!(
-                config.image_tar_path.as_deref(),
-                expected_tar_path,
-                "{json}"
-            );
+            assert_eq!(sandbox_absolute_path(input), expected, "input {input:?}");
         }
-        assert_eq!(
-            WslcProvisionConfig::default(),
-            WslcProvisionConfig {
-                image: None,
-                image_tar_path: None,
-            }
-        );
     }
 
     #[test]

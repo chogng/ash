@@ -1,18 +1,15 @@
 [package]
-name = "bwrap_common"
-version = "0.8.0"
-edition = "2021"
-license = "MIT"
+"name" = "bwrap_common"
+"version" = "0.9.0"
+"edition" = "2021"
+"license" = "MIT"
 
 [dependencies]
-wxc_common = { "path" = "../../../core/wxc_common" }
-lxc_common = { "git" = "https://github.com/microsoft/mxc", "rev" = "ca7ea12ac6bd9f5420d6adecb37e32a8158da476" }
-nix = { "version" = "0.29", "features" = ["fs", "mount", "sched", "signal", "net", "process", "user", "term"] }
-semver = "1"
-serde = { "version" = "1", "features" = ["derive"] }
-serde_json = { "version" = "1" }
-tempfile = { "version" = "3" }
-thiserror = { "version" = "2" }
-url = { "version" = "2" }
-
-[dev-dependencies]
+"wxc_common" = { "path" = "../../../core/wxc_common" }
+"lxc_common" = { "git" = "https://github.com/microsoft/mxc", "rev" = "46ce71d0da7b97bb531a33e175bf4166ffa730c0" }
+"nix" = { "version" = "0.29", "features" = ["fs", "mount", "sched", "signal", "net", "process", "user", "term"] }
+"serde" = { "version" = "1", "features" = ["derive"] }
+"serde_json" = { "version" = "1", "features" = ["raw_value"] }
+"tempfile" = { "version" = "3" }
+"thiserror" = { "version" = "2" }
+"url" = { "version" = "2" }

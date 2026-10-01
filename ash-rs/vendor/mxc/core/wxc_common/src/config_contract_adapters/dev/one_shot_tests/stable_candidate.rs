@@ -1,19 +1,17 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-use super::common::{
-    adapt, assert_matches_current_wire_deserialization, request_with_containment, ContainmentCase,
-};
+use super::common::{adapt, request_with_containment, ContainmentCase};
 
 const MINIMAL_REQUEST_JSON: &str = r#"{
-    "version": "0.9.0-alpha",
+    "version": "1.1.0-alpha",
     "process": {
         "commandLine": "echo hello"
     }
 }"#;
 
 const PROCESS_CONTAINER_REQUEST_JSON: &str = r#"{
-    "version": "0.9.0-alpha",
+    "version": "1.1.0-alpha",
     "containerId": "container-id",
     "containment": "processcontainer",
     "lifecycle": {
@@ -59,7 +57,7 @@ const PROCESS_CONTAINER_REQUEST_JSON: &str = r#"{
 }"#;
 
 const PROCESS_CONTAINER_ADDITIONS_REQUEST_JSON: &str = r#"{
-    "version": "0.9.0-alpha",
+    "version": "1.1.0-alpha",
     "containment": "processcontainer",
     "process": {
         "commandLine": "echo hello"
@@ -75,7 +73,7 @@ const PROCESS_CONTAINER_ADDITIONS_REQUEST_JSON: &str = r#"{
 }"#;
 
 const LXC_REQUEST_JSON: &str = r#"{
-    "version": "0.9.0-alpha",
+    "version": "1.1.0-alpha",
     "containerId": "container-id",
     "containment": "lxc",
     "lifecycle": {
@@ -111,7 +109,7 @@ const LXC_REQUEST_JSON: &str = r#"{
 }"#;
 
 const SEATBELT_REQUEST_JSON: &str = r#"{
-    "version": "0.9.0-alpha",
+    "version": "1.1.0-alpha",
     "containment": "seatbelt",
     "process": {
         "commandLine": "echo hello",
@@ -140,7 +138,7 @@ const SEATBELT_REQUEST_JSON: &str = r#"{
 }"#;
 
 const EMPTY_OPTIONAL_SECTIONS_REQUEST_JSON: &str = r#"{
-    "version": "0.9.0-alpha",
+    "version": "1.1.0-alpha",
     "process": {
         "commandLine": "echo hello"
     },
@@ -152,7 +150,7 @@ const EMPTY_OPTIONAL_SECTIONS_REQUEST_JSON: &str = r#"{
 }"#;
 
 const EMPTY_PROCESS_CONTAINER_SECTION_REQUEST_JSON: &str = r#"{
-    "version": "0.9.0-alpha",
+    "version": "1.1.0-alpha",
     "containment": "processcontainer",
     "process": {
         "commandLine": "echo hello"
@@ -161,7 +159,7 @@ const EMPTY_PROCESS_CONTAINER_SECTION_REQUEST_JSON: &str = r#"{
 }"#;
 
 const EMPTY_PROCESS_CONTAINER_UI_SECTION_REQUEST_JSON: &str = r#"{
-    "version": "0.9.0-alpha",
+    "version": "1.1.0-alpha",
     "containment": "processcontainer",
     "process": {
         "commandLine": "echo hello"
@@ -172,39 +170,12 @@ const EMPTY_PROCESS_CONTAINER_UI_SECTION_REQUEST_JSON: &str = r#"{
 }"#;
 
 const EMPTY_SEATBELT_SECTION_REQUEST_JSON: &str = r#"{
-    "version": "0.9.0-alpha",
+    "version": "1.1.0-alpha",
     "containment": "seatbelt",
     "process": {
         "commandLine": "echo hello"
     },
     "seatbelt": {}
-}"#;
-
-const APP_CONTAINER_SECTION_ALIAS_REQUEST_JSON: &str = r#"{
-    "version": "0.9.0-alpha",
-    "containment": "processcontainer",
-    "process": {
-        "commandLine": "echo hello"
-    },
-    "appContainer": {
-        "leastPrivilege": true,
-        "capabilities": ["internetClient"]
-    }
-}"#;
-
-const MACOS_SANDBOX_SECTION_ALIAS_REQUEST_JSON: &str = r#"{
-    "version": "0.9.0-alpha",
-    "containment": "seatbelt",
-    "process": {
-        "commandLine": "echo hello"
-    },
-    "macos_sandbox": {
-        "profileOverride": "custom-profile.sb",
-        "guiAccess": true,
-        "nestedPty": true,
-        "keychainAccess": true,
-        "extraMachLookups": ["com.example.service"]
-    }
 }"#;
 
 struct ProxyCase {
@@ -237,10 +208,6 @@ const STABLE_CONTAINMENT_CASES: &[ContainmentCase] = &[
         expected: "processcontainer",
     },
     ContainmentCase {
-        input: "appcontainer",
-        expected: "processcontainer",
-    },
-    ContainmentCase {
         input: "lxc",
         expected: "lxc",
     },
@@ -253,8 +220,12 @@ const STABLE_CONTAINMENT_CASES: &[ContainmentCase] = &[
         expected: "seatbelt",
     },
     ContainmentCase {
-        input: "macos_sandbox",
-        expected: "seatbelt",
+        input: "wslc",
+        expected: "wslc",
+    },
+    ContainmentCase {
+        input: "isolation_session",
+        expected: "isolation_session",
     },
 ];
 
@@ -271,7 +242,7 @@ const CAPTURE_DENIALS_MODE_CASES: &[&str] = &["block", "allow"];
 fn request_with_comment(comment: &str) -> String {
     format!(
         r#"{{
-            "version": "0.9.0-alpha",
+            "version": "1.1.0-alpha",
             "_comment": {comment},
             "process": {{"commandLine": "echo hello"}}
         }}"#
@@ -281,7 +252,7 @@ fn request_with_comment(comment: &str) -> String {
 fn request_with_proxy(proxy_json: &str) -> String {
     format!(
         r#"{{
-            "version": "0.9.0-alpha",
+            "version": "1.1.0-alpha",
             "process": {{"commandLine": "echo hello"}},
             "runtimeConfig": {{"networkProxy": {proxy_json}}}
         }}"#
@@ -291,7 +262,7 @@ fn request_with_proxy(proxy_json: &str) -> String {
 fn request_with_default_network_policy(default_policy: &str) -> String {
     format!(
         r#"{{
-            "version": "0.9.0-alpha",
+            "version": "1.1.0-alpha",
             "process": {{"commandLine": "echo hello"}},
             "network": {{"egress": {{"default": "{default_policy}"}}}}
         }}"#
@@ -301,7 +272,7 @@ fn request_with_default_network_policy(default_policy: &str) -> String {
 fn request_with_network_enforcement_mode(enforcement_mode: &str) -> String {
     format!(
         r#"{{
-            "version": "0.9.0-alpha",
+            "version": "1.1.0-alpha",
             "process": {{"commandLine": "echo hello"}},
             "network": {{"ingress": {{"default": "{enforcement_mode}"}}}}
         }}"#
@@ -311,7 +282,7 @@ fn request_with_network_enforcement_mode(enforcement_mode: &str) -> String {
 fn request_with_ui_clipboard(clipboard: &str) -> String {
     format!(
         r#"{{
-            "version": "0.9.0-alpha",
+            "version": "1.1.0-alpha",
             "process": {{"commandLine": "echo hello"}},
             "ui": {{"clipboard": "{clipboard}"}}
         }}"#
@@ -321,7 +292,7 @@ fn request_with_ui_clipboard(clipboard: &str) -> String {
 fn request_with_process_container_ui_isolation(isolation: &str) -> String {
     format!(
         r#"{{
-            "version": "0.9.0-alpha",
+            "version": "1.1.0-alpha",
             "process": {{"commandLine": "echo hello"}},
             "processContainer": {{"ui": {{"isolation": "{isolation}"}}}}
         }}"#
@@ -331,7 +302,7 @@ fn request_with_process_container_ui_isolation(isolation: &str) -> String {
 fn request_with_capture_denials_mode(mode: &str) -> String {
     format!(
         r#"{{
-        "version": "0.9.0-alpha",
+        "version": "1.1.0-alpha",
         "containment": "processcontainer",
         "process": {{"commandLine": "echo"}},
         "processContainer": {{
@@ -349,7 +320,10 @@ fn minimal_request_maps_expected_wire_fields() {
 
     assert!(wire.schema.is_none());
     assert!(wire.comment.is_none());
-    assert_eq!(wire.version, Some("0.9.0-alpha".to_string()));
+    assert_eq!(
+        wire.source_contract,
+        mxc_config_contract::ContractVersion::V1_1_0Alpha
+    );
     assert!(wire.phase.is_none());
     assert!(wire.sandbox_id.is_none());
     assert!(wire.container_id.is_none());
@@ -370,7 +344,8 @@ fn minimal_request_maps_expected_wire_fields() {
     assert!(wire.ui.is_none());
     assert!(wire.seatbelt.is_none());
     assert!(wire.telemetry.is_none());
-    assert!(wire.experimental.is_none());
+    assert!(wire.test_feature.is_none());
+    assert!(wire.windows_sandbox.is_none());
 }
 
 #[test]
@@ -381,7 +356,10 @@ fn process_container_request_maps_expected_wire_fields() {
 
     assert!(wire.schema.is_none());
     assert!(wire.comment.is_none());
-    assert_eq!(wire.version, Some("0.9.0-alpha".to_string()));
+    assert_eq!(
+        wire.source_contract,
+        mxc_config_contract::ContractVersion::V1_1_0Alpha
+    );
     assert!(wire.phase.is_none());
     assert!(wire.sandbox_id.is_none());
     assert_eq!(wire.container_id.as_deref(), Some("container-id"));
@@ -480,7 +458,10 @@ fn lxc_request_maps_expected_wire_fields() {
 
     assert!(wire.schema.is_none());
     assert!(wire.comment.is_none());
-    assert_eq!(wire.version, Some("0.9.0-alpha".to_string()));
+    assert_eq!(
+        wire.source_contract,
+        mxc_config_contract::ContractVersion::V1_1_0Alpha
+    );
     assert!(wire.phase.is_none());
     assert!(wire.sandbox_id.is_none());
     assert_eq!(wire.container_id.as_deref(), Some("container-id"));
@@ -550,7 +531,10 @@ fn seatbelt_request_maps_expected_wire_fields() {
 
     assert!(wire.schema.is_none());
     assert!(wire.comment.is_none());
-    assert_eq!(wire.version, Some("0.9.0-alpha".to_string()));
+    assert_eq!(
+        wire.source_contract,
+        mxc_config_contract::ContractVersion::V1_1_0Alpha
+    );
     assert!(wire.phase.is_none());
     assert!(wire.sandbox_id.is_none());
     assert!(wire.container_id.is_none());
@@ -695,7 +679,7 @@ fn annotations_map_expected_wire_fields() {
     let json = r#"{
         "$schema": "https://example.com/schema.json",
         "_comment": "This is a comment",
-        "version": "0.9.0-alpha",
+        "version": "1.1.0-alpha",
         "process": {"commandLine": "echo hello"}
     }"#;
 
@@ -884,42 +868,6 @@ fn enum_variants_map_expected_wire_values() {
 }
 
 #[test]
-fn app_container_section_alias_maps_expected_wire_fields() {
-    let wire = adapt(APP_CONTAINER_SECTION_ALIAS_REQUEST_JSON);
-    let process_container = wire
-        .process_container
-        .expect("appContainer should map to process_container");
-
-    assert_eq!(process_container.least_privilege, Some(true));
-    assert_eq!(
-        process_container.capabilities.unwrap().as_slice(),
-        &["internetClient"]
-    );
-    assert!(process_container.learning_mode.is_none());
-    assert!(process_container.capture_denials.is_none());
-    assert!(process_container.ui.is_none());
-}
-
-#[test]
-fn macos_sandbox_section_alias_maps_expected_wire_fields() {
-    let wire = adapt(MACOS_SANDBOX_SECTION_ALIAS_REQUEST_JSON);
-    let seatbelt = wire.seatbelt.expect("macos_sandbox should map to seatbelt");
-
-    assert_eq!(
-        seatbelt.profile_override.as_deref(),
-        Some("custom-profile.sb")
-    );
-    assert_eq!(seatbelt.gui_access, Some(true));
-    assert!(seatbelt.launch_method.is_none());
-    assert_eq!(seatbelt.nested_pty, Some(true));
-    assert_eq!(seatbelt.keychain_access, Some(true));
-    assert_eq!(
-        seatbelt.extra_mach_lookups.unwrap().as_slice(),
-        &["com.example.service"]
-    );
-}
-
-#[test]
 fn process_container_additions_map_expected_wire_fields() {
     let wire = adapt(PROCESS_CONTAINER_ADDITIONS_REQUEST_JSON);
 
@@ -948,124 +896,8 @@ fn process_container_additions_map_expected_wire_fields() {
     assert_eq!(capture.output_path.as_deref(), Some(r"C:\denials.json"));
     assert_eq!(capture.retain_etl, Some(true));
 }
-
-#[test]
-fn minimal_request_matches_current_wire_deserialization() {
-    let json = MINIMAL_REQUEST_JSON;
-    assert_matches_current_wire_deserialization(json);
-}
-
-#[test]
-fn process_container_request_matches_current_wire_deserialization() {
-    let json = PROCESS_CONTAINER_REQUEST_JSON;
-    assert_matches_current_wire_deserialization(json);
-}
-
-#[test]
-fn lxc_request_matches_current_wire_deserialization() {
-    let json = LXC_REQUEST_JSON;
-    assert_matches_current_wire_deserialization(json);
-}
-
-#[test]
-fn capture_denials_mode_variants_match_current_wire_deserialization() {
-    for case in CAPTURE_DENIALS_MODE_CASES {
-        let json = request_with_capture_denials_mode(case);
-        assert_matches_current_wire_deserialization(&json);
-    }
-}
-
-#[test]
-fn process_container_additions_match_current_wire_deserialization() {
-    assert_matches_current_wire_deserialization(PROCESS_CONTAINER_ADDITIONS_REQUEST_JSON);
-}
-
-#[test]
-fn seatbelt_request_matches_current_wire_deserialization() {
-    let json = SEATBELT_REQUEST_JSON;
-    assert_matches_current_wire_deserialization(json);
-}
-
-#[test]
-fn empty_optional_sections_match_current_wire_deserialization() {
-    assert_matches_current_wire_deserialization(EMPTY_OPTIONAL_SECTIONS_REQUEST_JSON);
-}
-
-#[test]
-fn empty_process_container_section_matches_current_wire_deserialization() {
-    assert_matches_current_wire_deserialization(EMPTY_PROCESS_CONTAINER_SECTION_REQUEST_JSON);
-}
-
-#[test]
-fn empty_process_container_ui_section_matches_current_wire_deserialization() {
-    assert_matches_current_wire_deserialization(EMPTY_PROCESS_CONTAINER_UI_SECTION_REQUEST_JSON);
-}
-
-#[test]
-fn empty_seatbelt_section_matches_current_wire_deserialization() {
-    assert_matches_current_wire_deserialization(EMPTY_SEATBELT_SECTION_REQUEST_JSON);
-}
-
-#[test]
-fn proxy_variants_match_current_wire_deserialization() {
-    for case in PROXY_CASES {
-        let json = request_with_proxy(case.json);
-        assert_matches_current_wire_deserialization(&json);
-    }
-}
-
-#[test]
-fn enum_variants_match_current_wire_deserialization() {
-    for case in STABLE_CONTAINMENT_CASES {
-        let json = request_with_containment(case.input);
-        assert_matches_current_wire_deserialization(&json);
-    }
-
-    for default_policy in DEFAULT_NETWORK_POLICY_CASES {
-        let json = request_with_default_network_policy(default_policy);
-        assert_matches_current_wire_deserialization(&json);
-    }
-
-    for enforcement_mode in NETWORK_ENFORCEMENT_MODE_CASES {
-        let json = request_with_network_enforcement_mode(enforcement_mode);
-        assert_matches_current_wire_deserialization(&json);
-    }
-
-    for clipboard in UI_CLIPBOARD_CASES {
-        let json = request_with_ui_clipboard(clipboard);
-        assert_matches_current_wire_deserialization(&json);
-    }
-
-    for isolation in PROCESS_CONTAINER_UI_ISOLATION_CASES {
-        let json = request_with_process_container_ui_isolation(isolation);
-        assert_matches_current_wire_deserialization(&json);
-    }
-}
-
-#[test]
-fn app_container_section_alias_matches_current_wire_deserialization() {
-    assert_matches_current_wire_deserialization(APP_CONTAINER_SECTION_ALIAS_REQUEST_JSON);
-}
-
-#[test]
-fn macos_sandbox_section_alias_matches_current_wire_deserialization() {
-    assert_matches_current_wire_deserialization(MACOS_SANDBOX_SECTION_ALIAS_REQUEST_JSON);
-}
-
-#[test]
-fn annotations_match_current_wire_deserialization() {
-    let json = r#"{
-            "$schema": "https://example.com/schema.json",
-            "_comment": "This is a comment",
-            "version": "0.9.0-alpha",
-            "process": {"commandLine": "echo hello"}
-        }"#;
-
-    assert_matches_current_wire_deserialization(json);
-}
-
 const DIRECTIONAL_NETWORK_REQUEST_JSON: &str = r#"{
-    "version": "0.9.0-alpha",
+    "version": "1.1.0-alpha",
     "containment": "processcontainer",
     "process": {"commandLine": "echo hello"},
     "runtimeConfig": {"networkProxy": "http://127.0.0.1:8080"},
@@ -1197,19 +1029,13 @@ fn directional_network_request_maps_expected_wire_fields() {
     assert!(network.enforcement_mode.is_none());
     assert!(network.proxy.is_none());
 }
-
-#[test]
-fn directional_network_request_matches_current_wire_deserialization() {
-    assert_matches_current_wire_deserialization(DIRECTIONAL_NETWORK_REQUEST_JSON);
-}
-
 #[test]
 fn every_network_action_maps_to_the_expected_wire_value() {
     for declared in ["allow", "deny"] {
         let expected = declared;
         let json = format!(
             r#"{{
-                "version": "0.9.0-alpha",
+                "version": "1.1.0-alpha",
                 "process": {{"commandLine": "echo hello"}},
                 "network": {{
                     "egress": {{"default": "{declared}"}},
@@ -1233,8 +1059,6 @@ fn every_network_action_maps_to_the_expected_wire_value() {
             serde_json::to_value(ingress.host_loopback).unwrap(),
             serde_json::json!(expected)
         );
-
-        assert_matches_current_wire_deserialization(&json);
     }
 }
 
@@ -1244,7 +1068,7 @@ fn every_network_protocol_maps_to_the_expected_wire_value() {
         let expected = declared;
         let json = format!(
             r#"{{
-                "version": "0.9.0-alpha",
+                "version": "1.1.0-alpha",
                 "process": {{"commandLine": "echo hello"}},
                 "network": {{
                     "egress": {{"allow": [{{"ports": [{{"protocol": "{declared}"}}]}}]}}
@@ -1259,8 +1083,6 @@ fn every_network_protocol_maps_to_the_expected_wire_value() {
             serde_json::to_value(ports[0].protocol).unwrap(),
             serde_json::json!(expected)
         );
-
-        assert_matches_current_wire_deserialization(&json);
     }
 }
 

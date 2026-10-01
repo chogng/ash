@@ -58,8 +58,8 @@ pub fn run_pty_helper() -> Result<i32, String> {
         serde_json::from_str(&encoded).map_err(|_| "invalid PTY launch request")?;
     let mut child = request
         .spawn(wxc_common::sandbox_process::StdioMode::Inherit)
-        .map_err(|_| "PTY sandbox launch failed")?;
-    let status = child.wait().map_err(|_| "PTY sandbox wait failed")?;
+        .map_err(|error| error.to_string())?;
+    let status = child.wait().map_err(|error| error.to_string())?;
     Ok(if status < 0 { 1 } else { status })
 }
 

@@ -5,12 +5,11 @@ test.use({ openWorkspace: false });
 
 test('editor title scrollbars preserve overflow, focus and clipping through size and visibility changes', async ({ workbench }) => {
 	const page = workbench.page;
-	for (let i = 0; i < 9; i++) await page.keyboard.press('ControlOrMeta+N');
 	const group = workbench.editors.groupAt(0);
-	// New commands are queued; capture identity only after the final editor has opened and focused.
-	await expect(group.tabs).toHaveCount(9);
-	await expect(group.element.getByRole('tab', { name: 'Untitled-9', exact: true })).toHaveAttribute('aria-selected', 'true');
-	await expect(group.content.getByRole('textbox', { name: 'Untitled-9', exact: true })).toBeFocused();
+	const previousIds = await group.getTabIds();
+	// Keep the commands concurrent with editor loading; a retained startup tab is not a new document.
+	for (let i = 0; i < 9; i++) await page.keyboard.press('ControlOrMeta+N');
+	await group.waitForNewTextEditors(previousIds, 9);
 	const tabs = group.title.locator('.ash-ordinary-editor-tabs-row .ash-tab-list');
 	const breadcrumbs = group.title.locator('.ash-breadcrumbs-widget');
 	await tabs.evaluate(element => { (element as HTMLElement).style.width = '220px'; });

@@ -103,13 +103,12 @@ test('tab command groups close and split the clicked tabs from mouse and keyboar
 
 test('editor tabs distinguish the active document from the tab strip across themes', async ({ workbench }) => {
 	const page = workbench.page;
+	const group = workbench.editors.groupAt(0);
+	const previousIds = await group.getTabIds();
 	// Deliberately issue consecutive commands to cover the product's queued creation behavior.
 	await page.keyboard.press('ControlOrMeta+N');
 	await page.keyboard.press('ControlOrMeta+N');
-	const group = workbench.editors.groupAt(0);
-	await expect(group.tabs).toHaveCount(2);
-	await expect(group.element.getByRole('tab', { name: 'Untitled-2', exact: true })).toHaveAttribute('aria-selected', 'true');
-	await expect(group.content.getByRole('textbox', { name: 'Untitled-2', exact: true })).toBeFocused();
+	await group.waitForNewTextEditors(previousIds, 2);
 	const strip = group.title.locator('.ash-editor-tabs-and-actions');
 	const active = strip.locator('.ash-tab.checked');
 	const inactive = strip.locator('.ash-tab:not(.checked):not(.selected)').first();

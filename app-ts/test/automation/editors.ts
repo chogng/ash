@@ -26,6 +26,16 @@ export class EditorGroup {
 		await this.title.waitFor({ state: "visible" });
 		await this.content.waitFor({ state: "visible" });
 	}
+
+	async getTabIds(): Promise<string[]> {
+		return this.tabs.evaluateAll(elements => elements.map(element => element.id));
+	}
+
+	/** Observes a batch without issuing or serializing the commands under test. */
+	async waitForNewTextEditors(previousIds: readonly string[], count: number): Promise<Locator[]> {
+		const ids = await waitForNewTextEditorIds(this.tabs, previousIds, count);
+		return ids.map(id => this.element.locator(`[id=${JSON.stringify(id)}]`));
+	}
 }
 
 /** Product-level automation surface for the Workbench editor region. */
@@ -48,20 +58,7 @@ export class Editors {
 		const previousIds = await tabs.evaluateAll(elements => elements.map(element => element.id));
 		await open();
 
-		// A replaced Welcome tab can leave the count unchanged; the previous input can remain focused while loading.
-		let openedId = '';
-		await expect.poll(async () => {
-			openedId = await tabs.evaluateAll((elements, previous) => {
-				const opened = elements.find(tab => {
-					if (previous.includes(tab.id) || tab.getAttribute('aria-selected') !== 'true') return false;
-					const panel = tab.ownerDocument.getElementById(tab.getAttribute('aria-controls') ?? '');
-					const focused = tab.ownerDocument.activeElement;
-					return panel !== null && !panel.hidden && focused !== null && panel.contains(focused) && focused.matches('.stanza-editor-input');
-				});
-				return opened?.id ?? '';
-			}, previousIds);
-			return openedId;
-		}, { message: 'new untitled tab is selected and its text editor is focused' }).not.toBe('');
+		const [openedId] = await waitForNewTextEditorIds(tabs, previousIds, 1);
 		return this.element.locator(`[id=${JSON.stringify(openedId)}]`);
 	}
 
@@ -69,4 +66,29 @@ export class Editors {
 		await this.element.waitFor({ state: "visible" });
 		await this.groupAt(0).waitForReady();
 	}
+}
+
+async function waitForNewTextEditorIds(tabs: Locator, previousIds: readonly string[], count: number): Promise<string[]> {
+	let openedIds: string[] = [];
+	await expect.poll(async () => {
+		// Startup editors may remain or be replaced. Only new identities count toward this action.
+		const opened = await tabs.evaluateAll((elements, previous) => elements.filter(tab => !previous.includes(tab.id)).map(tab => {
+			const panel = tab.ownerDocument.getElementById(tab.getAttribute('aria-controls') ?? '');
+			const focused = tab.ownerDocument.activeElement;
+			return {
+				id: tab.id,
+				selected: tab.getAttribute('aria-selected') === 'true',
+				visible: panel !== null && !panel.hidden,
+				hasInput: panel !== null && panel.querySelector('.stanza-editor-input') !== null,
+				inputFocused: panel !== null && focused !== null && panel.contains(focused) && focused.matches('.stanza-editor-input'),
+			};
+		}), previousIds);
+		openedIds = opened.map(tab => tab.id);
+		return opened;
+	}, { message: `exactly ${count} new text editors are open and the final editor owns focus` }).toMatchObject(
+		Array.from({ length: count }, (_, index) => index === count - 1
+			? { hasInput: true, selected: true, visible: true, inputFocused: true }
+			: { hasInput: true }),
+	);
+	return openedIds;
 }

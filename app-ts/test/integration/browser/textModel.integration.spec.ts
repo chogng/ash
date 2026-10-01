@@ -3,6 +3,7 @@ import { getAxeResults, injectAxe } from "axe-playwright";
 import { ScrollType, type IEditor } from '../../../src/ash/editor/common/editorCommon.js';
 import { fileURLToPath } from 'node:url';
 import { measureRenderedTextRanges } from '../../automation/editor.js';
+import { installClock } from '../../automation/clock.js';
 
 const pageErrors = new WeakMap<object, string[]>();
 
@@ -1134,6 +1135,7 @@ test('editor scrollbar uses wheel policy, slider dimensions and page clicks from
 });
 
 test('smooth scrolling keeps continuous and subpixel wheel input immediate', async ({ page }) => {
+	const pauseClock = await installClock(page);
 	await openEditor(page);
 	await page.evaluate(() => {
 		window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'x'.repeat(200)).join('\n'));
@@ -1141,8 +1143,7 @@ test('smooth scrolling keeps continuous and subpixel wheel input immediate', asy
 	});
 	const editor = page.locator('.stanza-editor');
 	await expect(editor.getByRole('scrollbar', { name: 'Vertical scrollbar' })).toBeVisible();
-	await page.clock.install();
-	await page.clock.pauseAt(new Date());
+	await pauseClock();
 	for (const [deltaY, expected] of [[12, 12], [0.2, 13], [-0.2, 12]]) {
 		await editor.dispatchEvent('wheel', { deltaY, deltaMode: 0 });
 		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(expected);
@@ -1222,14 +1223,14 @@ test('editor scrollbar arrows support click, hold, keyboard and runtime removal'
 });
 
 test('editor inertial scrolling decays and stops on reversal, direct input and configuration changes', async ({ page }) => {
+	const pauseClock = await installClock(page);
 	await openEditor(page);
 	await page.evaluate(() => {
 		window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'x'.repeat(200)).join('\n'));
 		window.ashTextModelIntegration.updateOptions({ inertialScroll: true, smoothScrolling: false });
 	});
 	const editor = page.locator('.stanza-editor');
-	await page.clock.install();
-	await page.clock.pauseAt(new Date());
+	await pauseClock();
 	await editor.dispatchEvent('wheel', { deltaY: 12, deltaMode: 0 });
 	await page.clock.runFor(160);
 	const forward = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
@@ -1278,13 +1279,13 @@ test('editor inertial scrolling decays and stops on reversal, direct input and c
 });
 
 test('editor distinguishes accelerating pixel input from fixed wheel steps before applying sensitivity', async ({ page }) => {
+	const pauseClock = await installClock(page);
 	await openEditor(page);
 	await page.evaluate(() => {
 		window.ashTextModelIntegration.setValue(Array.from({ length: 1000 }, () => 'x'.repeat(200)).join('\n'));
 		window.ashTextModelIntegration.updateOptions({ inertialScroll: true, smoothScrolling: false, mouseWheelScrollSensitivity: 2 });
 	});
-	await page.clock.install();
-	await page.clock.pauseAt(new Date());
+	await pauseClock();
 	const editor = page.locator('.stanza-editor');
 	// At the top edge the same unconsumed event reaches both wheel listeners.
 	await editor.dispatchEvent('wheel', { deltaY: -60, deltaMode: 0 });

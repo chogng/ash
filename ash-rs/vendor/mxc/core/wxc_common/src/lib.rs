@@ -5,8 +5,10 @@
 // and every backend crate).
 pub mod audit;
 pub mod cmdline;
+mod common_request_ir;
 mod config_deserialize;
 pub mod config_parser;
+pub mod default_env;
 pub mod encoding;
 pub mod error;
 pub mod exec_stream;
@@ -14,6 +16,7 @@ pub mod filesystem_access;
 pub mod filesystem_canonical;
 pub mod filesystem_object;
 pub mod filesystem_resolve;
+pub mod hashing;
 pub mod host_changes;
 pub mod id;
 pub mod log_symbols;
@@ -22,36 +25,39 @@ pub mod logger;
 pub mod microvm_staging;
 pub mod models;
 pub mod mxc_error;
+pub mod network_blocks;
 mod network_parser;
 pub mod policy_identity;
-pub use network_parser::directional_network_support;
 pub use network_parser::host_is_canonical_loopback;
-pub use network_parser::supports_directional_network;
 pub mod proxy_env;
 pub mod sandbox_process;
 pub mod script_runner;
+#[doc(hidden)]
+pub mod sdk_input;
 pub(crate) mod splice;
 pub mod state_aware_backend;
 pub mod state_aware_binding;
 pub mod state_aware_dispatch;
+pub(crate) mod state_aware_input;
 pub mod state_aware_operation;
 pub mod state_aware_request;
-pub(crate) mod state_aware_wire;
 pub mod telemetry;
 pub mod ui_policy;
 pub mod validator;
 
-// Dedicated well-typed wire model. It is the parser's deserialization target;
-// the JSON Schema is generated from it under the `schema-gen` feature.
-pub mod wire;
+// Reusable DTOs shared by exact-contract adapters and typed SDK builders.
+// Public only for the cross-crate Rust SDK adapter; not an external wire API.
+pub(crate) mod wire;
 
-// Adapters that map between specific JSON contracts and the 'wire' model.
+// Adapters that map specific JSON contracts into the internal config input.
 pub(crate) mod config_contract_adapters;
 
 // Thin Windows-only helpers that are not backend-specific. Backend
 // runners live in dedicated crates under `backends/`; only utilities
 // shared across host tools (e.g. wxc_host_prep, mxc_diagnostic_console)
 // and ≥1 backend stay here.
+#[cfg(target_os = "windows")]
+pub mod api_set;
 #[cfg(target_os = "windows")]
 pub mod diagnostic;
 #[cfg(target_os = "windows")]

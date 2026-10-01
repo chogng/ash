@@ -132,3 +132,15 @@ jobs:
           bazel test --config=ci //ash-cli:tui-real-scenarios --test_output=errors
           --test_env=PATH --test_env=ASH_RG_PATH --test_env=ASH_TGREP_PATH
           --test_arg=--test-threads=4 --test_arg=--skip --test_arg=actual_tui_sandbox_
+
+      - name: Upload TUI failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: bazel-tui-scenarios-${{ github.run_attempt }}
+          path: |
+            .build/bazel-testlogs/ash-cli/tui-real-scenarios/test.log
+            .build/bazel-testlogs/ash-cli/tui-real-scenarios/test.xml
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
