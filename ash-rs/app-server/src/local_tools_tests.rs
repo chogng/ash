@@ -562,29 +562,30 @@ fn apply_patch_reviewer_selects_the_session_dir() {
     assert!(!rewritten.contains(&absolute.display().to_string()));
 }
 
-#[test]
-fn local_tool_port_exposes_one_canonical_coding_tool_surface() {
-    let dir = TestDir::new();
+fn local_composition(
+    dir: &TestDir,
+    dir_grants: Arc<crate::dir_grants::DirGrants>,
+) -> LocalToolComposition {
     let authorization = dir.authorization();
     let ripgrep = RipgrepExecutable::from_path(dir.ripgrep()).unwrap();
-    let environment_id = ash_tools::EnvId::new("local-dir").unwrap();
+    let environment_id = ash_tools::EnvId::local();
     let reviewer: Arc<dyn ToolExecutorReviewer> = Arc::new(LocalExecutorReviewer {
         shell_policy: shell_sandbox(),
         authorization: authorization.clone(),
         ripgrep: ripgrep.clone(),
         action_policy_revision: local_policy_revision(),
-        dir_grants: Arc::new(crate::dir_grants::DirGrants::default()),
+        dir_grants: Arc::clone(&dir_grants),
     });
     let shell =
         LocalShellToolService::new(authorization.clone(), ripgrep.clone(), PassThroughBackend)
             .unwrap();
     let grep = Arc::new(grep::Service::new(grep::Backend::Tgrep, ripgrep.clone(), None).unwrap());
-    let composition = LocalToolComposition {
+    LocalToolComposition {
         tools: Arc::new(LocalToolSuite::new(
             shell,
             Arc::clone(&grep),
             Arc::new(file_search::Service),
-            Arc::new(crate::dir_grants::DirGrants::default()),
+            dir_grants,
             dir.grant(),
         )),
         policy: Arc::new(LocalShellPolicy::default()),
@@ -620,7 +621,13 @@ fn local_tool_port_exposes_one_canonical_coding_tool_surface() {
                 reviewer,
             },
         ],
-    };
+    }
+}
+
+#[test]
+fn local_tool_port_exposes_one_canonical_coding_tool_surface() {
+    let dir = TestDir::new();
+    let composition = local_composition(&dir, Arc::new(crate::dir_grants::DirGrants::default()));
     let combined =
         crate::tool_composition::combine_tool_ports(vec![composition.tool_port().unwrap()])
             .unwrap()
@@ -647,6 +654,244 @@ fn local_tool_port_exposes_one_canonical_coding_tool_surface() {
             "write_file"
         ]
     );
+}
+
+#[test]
+fn agent_commands_and_sessions_use_the_selected_repository_through_the_tool_port() {
+    let default_dir = TestDir::new();
+    let selected_dir = TestDir::new();
+    let session_id = SessionId::new("command-session").unwrap();
+    let thread_id = ash_protocol::ThreadId::new("command-thread").unwrap();
+    let dir_grants = Arc::new(crate::dir_grants::DirGrants::default());
+    let grant = selected_dir.grant();
+    dir_grants
+        .add_dir(
+            session_id.clone(),
+            Grant::for_session_tree(
+                session_id.clone(),
+                grant.dir().clone(),
+                grant.source(),
+                grant.permissions().clone(),
+            ),
+        )
+        .unwrap();
+    let mut composition = local_composition(&default_dir, dir_grants);
+    composition.policy = Arc::new(CommandWorkflowPolicy);
+    let combined =
+        crate::tool_composition::combine_tool_ports(vec![composition.tool_port().unwrap()])
+            .unwrap()
+            .unwrap();
+    let threads = Arc::new(ash_core::ThreadController::with_store(Arc::new(
+        ash_core::InMemoryThreadStore::default(),
+    )));
+    threads
+        .create_thread(ash_core::CreateThreadRequest {
+            execution_target: None,
+            agent_id: ash_protocol::AgentId::new("command-agent").unwrap(),
+            origin: Default::default(),
+            agent: None,
+            session_id,
+            thread_id: thread_id.clone(),
+            title: "command workflow".into(),
+        })
+        .unwrap();
+    let turn_id = threads
+        .start_turn(
+            &thread_id,
+            ash_core::StartTurnRequest {
+                mode: Default::default(),
+                advisor: None,
+                kind: ash_protocol::TurnKind::Coding,
+                instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
+                command_id: ash_protocol::CommandId::new("command-start").unwrap(),
+                expected_sequence: core_api::SequenceExpectation::Exact(1),
+                model: None,
+                reasoning_effort: None,
+                policy_revision: combined.policy.revision(),
+                approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                tool_mode: ash_protocol::ToolMode::Direct,
+                tool_profile: None,
+                activated_skills: Vec::new(),
+                input: vec![ash_protocol::UserInput::Text {
+                    text: "run commands in the selected repository".into(),
+                }],
+            },
+        )
+        .unwrap()
+        .turn_id;
+    let model = Arc::new(CommandWorkflowModel {
+        directory: selected_dir.root().canonical_path().to_path_buf(),
+        results: std::sync::Mutex::new(Vec::new()),
+    });
+    let executor = ash_core::TurnExecutor::new(
+        threads.clone(),
+        model.clone(),
+        combined.tools,
+        combined.policy,
+    );
+    executor.start(&thread_id, &turn_id).unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        let snapshot = threads.read_thread(&thread_id).unwrap();
+        if snapshot.turns[0].status == ash_protocol::TurnStatus::Completed {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "agent did not complete: status={:?}, failure={:?}",
+            snapshot.turns[0].status,
+            snapshot.turns[0].failure,
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
+    let results = model.results.lock().unwrap();
+    assert_eq!(results.len(), 5);
+    let values = results
+        .iter()
+        .map(command_workflow_result)
+        .collect::<Vec<_>>();
+    assert_eq!(values[0]["result"]["exit_code"], 0);
+    assert_eq!(values[1]["status"], "running");
+    assert_eq!(values[2]["status"], "running");
+    assert_eq!(values[4]["status"], "exited");
+    let stdout = [1, 2, 4]
+        .map(|i| values[i]["stdout"]["text"].as_str().unwrap())
+        .join("");
+    let stderr = [1, 2, 4]
+        .map(|i| values[i]["stderr"]["text"].as_str().unwrap())
+        .join("");
+    assert_eq!(stdout, "readydone:test");
+    assert_eq!(stderr, "warning");
+    assert!(!default_dir.path().join(".git").exists());
+    assert_eq!(
+        fs::read_to_string(selected_dir.path().join(".git/HEAD")).unwrap(),
+        "ref: refs/heads/agent-test\n"
+    );
+}
+
+struct CommandWorkflowModel {
+    directory: PathBuf,
+    results: std::sync::Mutex<Vec<ash_protocol::ToolResult>>,
+}
+
+impl core_api::ModelService for CommandWorkflowModel {
+    fn invoke(
+        &self,
+        _: core_api::ModelSelection<'_>,
+        request: &ash_protocol::ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ash_protocol::ModelResponse, CoreError> {
+        let results = request
+            .input
+            .iter()
+            .filter_map(|item| match item {
+                ash_protocol::InputItem::ToolResult(result) => Some(result.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let step = results.len();
+        let (name, arguments) = match step {
+            0 => (
+                "shell-command",
+                json!({
+                    "program": "git", "arguments": ["init", "--quiet"],
+                    "working_directory": self.directory,
+                }),
+            ),
+            1 => {
+                assert_eq!(
+                    command_workflow_result(&results[0])["result"]["exit_code"],
+                    0
+                );
+                (
+                    "shell-session",
+                    json!({
+                        "action": "start", "program": "/bin/sh",
+                        "arguments": ["-c", "printf ready; printf warning >&2; read line; git symbolic-ref HEAD refs/heads/agent-$line; printf 'done:%s' \"$line\""],
+                        "working_directory": self.directory, "wait_ms": 0, "timeout_ms": 5000,
+                    }),
+                )
+            }
+            2..=4 => {
+                let started = command_workflow_result(&results[1]);
+                let mut arguments = json!({"session_id": started["session_id"]});
+                match step {
+                    2 => {
+                        arguments["action"] = json!("read");
+                        arguments["stdout_cursor"] = started["stdout"]["next_cursor"].clone();
+                        arguments["stderr_cursor"] = started["stderr"]["next_cursor"].clone();
+                        arguments["wait_ms"] = json!(100);
+                    }
+                    3 => {
+                        arguments["action"] = json!("write");
+                        arguments["input"] = json!("test\n");
+                    }
+                    4 => {
+                        let progress = command_workflow_result(&results[2]);
+                        arguments["action"] = json!("wait");
+                        arguments["stdout_cursor"] = progress["stdout"]["next_cursor"].clone();
+                        arguments["stderr_cursor"] = progress["stderr"]["next_cursor"].clone();
+                        arguments["wait_ms"] = json!(5000);
+                    }
+                    _ => unreachable!(),
+                }
+                ("shell-session", arguments)
+            }
+            5 => {
+                assert!(results.iter().all(|result| !result.is_error), "{results:?}");
+                *self.results.lock().unwrap() = results;
+                return Ok(command_workflow_response(ash_protocol::ResponseItem::Text(
+                    "done".into(),
+                )));
+            }
+            _ => panic!("unexpected command workflow step {step}"),
+        };
+        Ok(command_workflow_response(
+            ash_protocol::ResponseItem::ToolCall(ToolCall {
+                id: ToolCallId::new(format!("command-step-{step}")).unwrap(),
+                name: ToolName::new(name).unwrap(),
+                arguments,
+            }),
+        ))
+    }
+}
+
+fn command_workflow_result(result: &ash_protocol::ToolResult) -> serde_json::Value {
+    assert!(!result.is_error, "{result:?}");
+    let [ash_protocol::ContentPart::Text(text)] = result.content.as_slice() else {
+        panic!("expected one text tool result: {result:?}");
+    };
+    if result.call_id.as_str() == "command-step-3" {
+        assert_eq!(text, "input accepted");
+        return serde_json::Value::Null;
+    }
+    serde_json::from_str(text).unwrap()
+}
+
+fn command_workflow_response(item: ash_protocol::ResponseItem) -> ash_protocol::ModelResponse {
+    ash_protocol::ModelResponse {
+        output: vec![item],
+        usage: None,
+        billing: None,
+        stop_reason: ash_protocol::StopReason::Completed,
+    }
+}
+
+struct CommandWorkflowPolicy;
+
+impl ActionPolicyService for CommandWorkflowPolicy {
+    fn revision(&self) -> String {
+        local_policy_revision().as_str().to_owned()
+    }
+
+    fn decide(
+        &self,
+        _: &ActionReviewRequest,
+        _: &CancellationToken,
+    ) -> Result<ExecutionDecision, CoreError> {
+        Ok(ExecutionDecision::RunSandboxed(shell_sandbox()))
+    }
 }
 
 #[test]

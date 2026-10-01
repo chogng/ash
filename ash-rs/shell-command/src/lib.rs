@@ -113,27 +113,7 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
         scope: Option<&SandboxScope>,
         network_policy: Option<&network_proxy::NetworkPolicyHandle>,
     ) -> Result<CommandExecutionOutcome, ExecutionError> {
-        let dir = request
-            .dir_root()
-            .map(Dir::open_local)
-            .transpose()
-            .map_err(|error| ExecutionError::Spawn(error.to_string()))?;
-        if scope.is_some() && dir.is_none() {
-            return Err(ExecutionError::Spawn(
-                "sandbox scope requires an exact command directory".into(),
-            ));
-        }
-        if let (Some(dir), Some(scope)) = (&dir, scope)
-            && dir != scope.command_dir()
-        {
-            return Err(ExecutionError::Spawn(
-                "sandbox command directory does not match the materialized request".into(),
-            ));
-        }
-        let owned_scope = scope
-            .is_none()
-            .then(|| dir.clone().map(SandboxScope::single))
-            .flatten();
+        let scope = request.materialized_scope(scope)?;
         self.executor.execute_scoped_with_network(
             CommandRequest {
                 program: request.program,
@@ -143,7 +123,7 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
             },
             authority,
             cancellation,
-            scope.or(owned_scope.as_ref()),
+            scope.as_ref(),
             network_policy,
         )
     }
@@ -158,18 +138,7 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
         owner: CommandSessionOwner,
         options: ash_tool_executor::CommandSessionOptions,
     ) -> Result<CommandSessionStart, ExecutionError> {
-        let dir = request
-            .dir_root()
-            .map(Dir::open_local)
-            .transpose()
-            .map_err(|error| ExecutionError::Spawn(error.to_string()))?;
-        if let (Some(dir), Some(scope)) = (&dir, scope)
-            && dir != scope.command_dir()
-        {
-            return Err(ExecutionError::Spawn(
-                "sandbox command directory does not match the materialized request".into(),
-            ));
-        }
+        let scope = request.materialized_scope(scope)?;
         self.executor.start_session_scoped_with_network(
             CommandRequest {
                 program: request.program,
@@ -179,7 +148,7 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
             },
             authority,
             cancellation,
-            scope,
+            scope.as_ref(),
             network_policy,
             owner,
             options,
@@ -405,6 +374,30 @@ impl ShellCommandRequest {
     pub fn with_working_directory(mut self, working_directory: impl Into<PathBuf>) -> Self {
         self.working_directory = working_directory.into();
         self
+    }
+
+    /// The scope also selects the process directory when execution is unrestricted. Both
+    /// one-shot commands and persistent sessions must use the host-materialized root.
+    fn materialized_scope(
+        &self,
+        scope: Option<&SandboxScope>,
+    ) -> Result<Option<SandboxScope>, ExecutionError> {
+        let dir = self
+            .dir_root()
+            .map(Dir::open_local)
+            .transpose()
+            .map_err(|error| ExecutionError::Spawn(error.to_string()))?;
+        match (dir, scope) {
+            (None, Some(_)) => Err(ExecutionError::Spawn(
+                "sandbox scope requires an exact command directory".into(),
+            )),
+            (Some(dir), Some(scope)) if &dir != scope.command_dir() => Err(ExecutionError::Spawn(
+                "sandbox command directory does not match the materialized request".into(),
+            )),
+            (_, Some(scope)) => Ok(Some(scope.clone())),
+            (Some(dir), None) => Ok(Some(SandboxScope::single(dir))),
+            (None, None) => Ok(None),
+        }
     }
 
     pub(crate) fn replace_program_and_arguments(

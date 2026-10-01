@@ -41,6 +41,126 @@ impl ApprovalPolicy for AllowAll {
 
 struct MustNotPrepare;
 
+#[cfg(unix)]
+#[test]
+fn unrestricted_session_uses_the_materialized_directory() {
+    let default_dir = TestDir::new();
+    let selected_dir = TestDir::new();
+    let tool = ShellCommandTool::new(
+        environment_id(),
+        default_dir.root(),
+        ash_sandboxing::SandboxBackends::new(Vec::new()),
+        AllowAll,
+        ShellCommandLimits {
+            timeout: Duration::from_secs(5),
+            max_output_bytes: 1024,
+        },
+    )
+    .unwrap();
+    let request = ShellCommandRequest::new("/bin/pwd", Vec::<String>::new(), ".")
+        .unwrap()
+        .with_dir_root(selected_dir.root().canonical_path());
+    let cancellation = CancellationSource::new();
+    let owner = CommandSessionOwner::new("caller", "thread", environment_id().as_str());
+    let result = tool
+        .start_authorized_session_with_network(
+            request,
+            CommandExecutionAuthority::Unrestricted,
+            &cancellation.token(),
+            None,
+            None,
+            owner.clone(),
+            CommandSessionOptions {
+                execution_timeout: Duration::from_secs(5),
+                wait_budget: Duration::from_secs(5),
+                terminal: None,
+            },
+        )
+        .unwrap();
+    let stdout = match result {
+        CommandSessionStart::Completed(CommandExecutionOutcome::Completed(output)) => output.stdout,
+        CommandSessionStart::Running(mut update) => {
+            let mut stdout = update.stdout.text.clone();
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            while update.status == CommandSessionStatus::Running {
+                assert!(std::time::Instant::now() < deadline, "pwd did not exit");
+                update = tool
+                    .read_session(
+                        &owner,
+                        &update.session_id,
+                        CommandSessionCursor {
+                            stdout: update.stdout.next_cursor,
+                            stderr: update.stderr.next_cursor,
+                        },
+                        Duration::from_secs(1),
+                    )
+                    .unwrap();
+                stdout.push_str(&update.stdout.text);
+            }
+            assert_eq!(
+                update.status,
+                CommandSessionStatus::Exited(ProcessExitStatus::Code(0))
+            );
+            stdout
+        }
+        other => panic!("pwd must complete successfully: {other:?}"),
+    };
+    assert_eq!(
+        stdout.trim(),
+        selected_dir.root().canonical_path().to_str().unwrap()
+    );
+}
+
+#[test]
+fn session_rejects_a_scope_without_a_materialized_directory() {
+    assert_session_scope_rejected(None, "requires an exact command directory");
+}
+
+#[test]
+fn session_rejects_a_scope_for_a_different_directory() {
+    let other = TestDir::new();
+    assert_session_scope_rejected(
+        Some(other.root().canonical_path().to_path_buf()),
+        "does not match the materialized request",
+    );
+}
+
+fn assert_session_scope_rejected(root: Option<PathBuf>, message: &str) {
+    let dir = TestDir::new();
+    let tool = ShellCommandTool::new(
+        environment_id(),
+        dir.root(),
+        MustNotPrepare,
+        AllowAll,
+        ShellCommandLimits {
+            timeout: Duration::from_secs(1),
+            max_output_bytes: 1024,
+        },
+    )
+    .unwrap();
+    let mut request =
+        ShellCommandRequest::new("must-not-start", Vec::<String>::new(), ".").unwrap();
+    if let Some(root) = root {
+        request = request.with_dir_root(root);
+    }
+    let error = tool
+        .start_authorized_session_with_network(
+            request,
+            CommandExecutionAuthority::Unrestricted,
+            &CancellationSource::new().token(),
+            Some(&SandboxScope::single(dir.root())),
+            None,
+            CommandSessionOwner::new("caller", "thread", environment_id().as_str()),
+            CommandSessionOptions {
+                execution_timeout: Duration::from_secs(1),
+                wait_budget: Duration::ZERO,
+                terminal: None,
+            },
+        )
+        .unwrap_err();
+    assert!(matches!(error, ExecutionError::Spawn(text) if text.contains(message)));
+}
+
 impl SandboxBackend for MustNotPrepare {
     fn kind(&self) -> SandboxKind {
         SandboxKind::Unrestricted

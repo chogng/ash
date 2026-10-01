@@ -15,7 +15,7 @@ materialization。安装布局与候选位置由 [`ash-install-context`](../inst
 | --- | --- |
 | `src/lib.rs` | `ShellCommandTool`、`ShellCommandRequest`、definition 与 executor bridge |
 | `src/ripgrep.rs` | `RipgrepExecutable` candidate validation/identity freeze 与 `BuiltInRipgrepPolicy` 参数约束 |
-| `src/shell_command_tests.rs` | binding、authority、sandbox denial 与 validation |
+| `src/shell_command_tests.rs` | binding、authority、sandbox denial、session 工作目录与 validation |
 | `src/ripgrep_tests.rs` | executable discovery 和 unsafe flag rejection |
 
 ## 公共契约与调用路径
@@ -42,6 +42,12 @@ App Server local adapter
 `ShellCommandRequest` 始终是显式 `program + arguments + relative working_directory`；没有 quoting、
 globbing、environment expansion 或 shell parsing。`ShellCommandTool::execute_authorized` 只供已经
 完成 host materialization 和 Core policy decision 的 adapter 使用。
+
+App Server 的 `shell-session` 使用同一个执行器启动长任务，并按 Session、Thread、Environment
+绑定进程；后续读取输出、写入 stdin、等待退出和终止操作都作用于该进程。
+短命令和长任务共用目录校验：host 选定的 `dir_root` 决定相对工作目录的起点，即使 Core 批准
+免沙箱执行也不会切回执行器构造时的目录。显式 sandbox scope 必须与该 root 一致；缺少 root
+或目录不匹配时，在进程启动前拒绝请求。
 
 ## 只读 `rg` 配置档案
 
