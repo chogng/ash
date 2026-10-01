@@ -33,7 +33,11 @@
 	left: var(--stanza-editor-gutter-width);
 	right: 0;
 	cursor: text;
-	white-space: nowrap;
+}
+
+.stanza-editor .view-line > .stanza-editor-line-text {
+	/* The view model owns line breaks; DOM text must retain source whitespace for column geometry. */
+	white-space: pre;
 }
 
 .stanza-editor .view-line {

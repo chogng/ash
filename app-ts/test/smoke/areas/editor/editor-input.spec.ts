@@ -1,6 +1,114 @@
 import { expect, test } from '../../../automation/test.js';
 import type { ElectronApplication } from '@playwright/test';
 
+test('editor preserves space and tab indentation and places input at the rendered text', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	const lines = ['plain', '    spaces', '\ttab', ' \t mixed  text ', '\t\tnested'];
+	await page.keyboard.insertText(lines.join('\n'));
+	await expect.poll(() => editor.lines.allTextContents()).toEqual(lines);
+	const measurements = await editor.lines.evaluateAll(elements => {
+		return elements.map(element => {
+			const text = element.textContent!;
+			const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+			const nodes: Text[] = [];
+			for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+				nodes.push(node as Text);
+			}
+			const boundsAt = (offset: number) => {
+				let remaining = offset;
+				for (const node of nodes) {
+					if (remaining <= node.length) {
+						const range = document.createRange();
+						range.setStart(node, remaining);
+						range.collapse(true);
+						return range.getBoundingClientRect();
+					}
+					remaining -= node.length;
+				}
+				throw new Error(`Missing rendered offset ${offset}`);
+			};
+			const start = boundsAt(0);
+			const content = boundsAt(text.search(/\S/u));
+			const last = boundsAt(text.length - 1);
+			const end = boundsAt(text.length);
+			return {
+				indent: content.left - start.left,
+				width: end.left - start.left,
+				lastWidth: end.left - last.left,
+				x: content.left + 0.25,
+				y: content.top + content.height / 2,
+				tabSize: Number(getComputedStyle(element).tabSize),
+			};
+		});
+	});
+	const characterWidth = measurements[0]!.lastWidth;
+	const tabSize = measurements[0]!.tabSize;
+	const columns = [5, 10, tabSize + 3, tabSize + 13, tabSize * 2 + 6];
+	const indentation = [0, 4, tabSize, tabSize + 1, tabSize * 2];
+	for (let index = 0; index < lines.length; index++) {
+		expect(Math.abs(measurements[index]!.indent - indentation[index]! * characterWidth)).toBeLessThan(1);
+		expect(Math.abs(measurements[index]!.width - columns[index]! * characterWidth)).toBeLessThan(1);
+	}
+	const point = measurements[4]!;
+	await page.mouse.click(point.x, point.y);
+	await expect.poll(() => editor.element.locator('.stanza-editor-caret.primary').evaluate((element, point) => {
+		const bounds = element.getBoundingClientRect();
+		return Math.abs(bounds.left + parseFloat(getComputedStyle(element).paddingLeft) - point.x);
+	}, point)).toBeLessThan(1);
+	await page.keyboard.insertText('!');
+	await expect.poll(() => editor.lines.allTextContents()).toEqual([...lines.slice(0, 4), '\t\t!nested']);
+	await editor.input.press('ControlOrMeta+z');
+	await expect.poll(() => editor.lines.allTextContents()).toEqual(lines);
+	await expect(editor.input).toBeFocused();
+});
+
+test('line numbers stay aligned while scrolling and gutter clicks edit the visible line', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText(Array.from({ length: 160 }, (_, index) => `line-${index + 1} ${'text '.repeat(40)}`).join('\n'));
+	await editor.input.press('ControlOrMeta+Home');
+	const scrollContainer = editor.element.locator(':scope > .ash-smooth-scrollable');
+	await expect.poll(() => scrollContainer.evaluate(element => element.scrollTop)).toBe(0);
+	await editor.element.hover();
+	await page.mouse.wheel(0, 600);
+	await expect.poll(() => scrollContainer.evaluate(element => element.scrollTop)).toBe(600);
+	await expect.poll(() => editor.element.evaluate(root => {
+		const bounds = root.getBoundingClientRect();
+		const rows = [...root.querySelectorAll<HTMLElement>('.view-lines > .view-line')]
+			.filter(row => row.getBoundingClientRect().top >= bounds.top && row.getBoundingClientRect().bottom <= bounds.bottom);
+		return {
+			hasVisibleLines: rows.length > 0,
+			aligned: rows.every(row => {
+				const number = root.querySelector<HTMLElement>(`.margin-view-overlays > .view-overlay-line[data-line-index="${row.dataset.lineIndex}"]`)!;
+				return number.querySelector('.line-numbers')!.textContent === String(Number(row.dataset.lineIndex) + 1)
+					&& number.getBoundingClientRect().top === row.getBoundingClientRect().top;
+			}),
+			scrollTop: root.scrollTop,
+		};
+	})).toEqual({ hasVisibleLines: true, aligned: true, scrollTop: 0 });
+	const lineIndex = await editor.element.evaluate(root => {
+		const bounds = root.getBoundingClientRect();
+		return [...root.querySelectorAll<HTMLElement>('.view-lines > .view-line')]
+			.find(row => row.getBoundingClientRect().top >= bounds.top)!.dataset.lineIndex!;
+	});
+	// Gutter overlays ignore pointer events; the editor resolves the clicked
+	// position through its hit-test controller rather than a number element handler.
+	const numberBounds = (await editor.element.locator(`.margin-view-overlays > .view-overlay-line[data-line-index="${lineIndex}"] .line-numbers`).boundingBox())!;
+	await page.mouse.click(numberBounds.x + numberBounds.width / 2, numberBounds.y + numberBounds.height / 2);
+	await page.keyboard.press('Home');
+	await page.keyboard.insertText('!');
+	await expect(editor.element.locator(`.view-lines > .view-line[data-line-index="${lineIndex}"] .stanza-editor-line-text`))
+		.toHaveText(`!line-${Number(lineIndex) + 1} ${'text '.repeat(40)}`);
+	await expect(editor.input).toBeFocused();
+});
+
 test('multiline text input is restored by one undo in the editor', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;

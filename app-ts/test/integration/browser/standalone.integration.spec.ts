@@ -1,5 +1,26 @@
 import { expect, test, type Page } from '@playwright/test';
 
+test('standalone text preserves leading, internal, and trailing whitespace across themes', async ({ page }) => {
+	await page.goto('/standalone.html');
+	const lines = ['xxxxxxxxxx', '    xxxxxx', '\txxxxxx', '\t\txx', ' \t xxxxx', 'xx  xxxxxx', 'xxxxxxxxx '];
+	await page.evaluate(value => window.ashStandaloneIntegration.prepareGuides(value), lines.join('\n'));
+	const renderedLines = page.locator('#caller .view-line .stanza-editor-line-text');
+	for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+		await page.evaluate(theme => window.ashStandaloneIntegration.setStickyTheme(theme), theme);
+		await expect.poll(() => renderedLines.allTextContents()).toEqual(lines);
+		const widths = await renderedLines.evaluateAll(elements => elements.map(element => {
+			const range = document.createRange();
+			range.selectNodeContents(element);
+			return range.getBoundingClientRect().width;
+		}));
+		expect(widths[0]).toBeGreaterThan(0);
+		for (const width of widths) {
+			expect(Math.abs(width - widths[0]!)).toBeLessThan(1);
+		}
+	}
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
 test('rendered hints set horizontal scroll bounds and minimap and glyph lanes reuse their owners', async ({ page }) => {
 	await page.goto('/standalone.html?contributionsOff');
 	const result = await page.evaluate(() => window.ashStandaloneIntegration.exerciseRenderOwnership());

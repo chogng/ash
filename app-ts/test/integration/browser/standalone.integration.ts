@@ -2511,7 +2511,7 @@ window.ashStandaloneIntegration = {
 			const settled = !instance.hasPendingScrollAnimation();
 			const top = instance.getScrollTop();
 			instance.setScrollTop(900, ScrollType.Smooth);
-			const root = instance.getDomNode()!;
+			const root = instance.getDomNode()!.querySelector<HTMLElement>(':scope > .ash-smooth-scrollable')!;
 			root.scrollTop = 200;
 			root.dispatchEvent(new Event('scroll'));
 			const interrupted = !instance.hasPendingScrollAnimation() && instance.getScrollTop() === 200;

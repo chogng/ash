@@ -9,6 +9,26 @@ test.afterEach(async ({ page }) => {
 	await page.evaluate(() => window.ashDiffIntegration?.dispose());
 });
 
+test('diff editors preserve source indentation on both sides', async ({ page }) => {
+	await openDiffPage(page);
+	const lines = ['xxxxxxxxxx', '    xxxxxx', '\txxxxxx', '\t\txx'];
+	await page.evaluate(value => window.ashDiffIntegration.setComparisonText(value, `${value}\nchanged`), lines.join('\n'));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	for (const side of ['original', 'modified']) {
+		const renderedLines = page.locator(`#single .stanza-diff-editor-side.${side} .view-line .stanza-editor-line-text`);
+		await expect.poll(async () => (await renderedLines.allTextContents()).slice(0, 4)).toEqual(lines);
+		const widths = await renderedLines.evaluateAll(elements => elements.slice(0, 4).map(element => {
+			const range = document.createRange();
+			range.selectNodeContents(element);
+			return range.getBoundingClientRect().width;
+		}));
+		expect(widths[0]).toBeGreaterThan(0);
+		for (const width of widths) {
+			expect(Math.abs(width - widths[0]!)).toBeLessThan(1);
+		}
+	}
+});
+
 test('editable diff renders Unicode changes and shares models with Multi Diff', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
