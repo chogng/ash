@@ -24,6 +24,7 @@ export interface AbstractTreeOptions<T, TNode extends AbstractTreeNode<T>> {
 	readonly findMode?: TreeFindMode;
 	readonly findMatchType?: TreeFindMatchType;
 	readonly selectionPresentation?: TreeSelectionPresentation;
+	readonly multipleSelectionSupport?: boolean;
 	readonly enableStickyScroll?: boolean;
 	readonly stickyScrollMaxItemCount?: number;
 	readonly renderElement: (element: TNode) => HTMLElement;
@@ -84,6 +85,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 			scrolling: options.scrolling,
 			loopNavigation: false,
 			keyboardNavigation: true,
+			multipleSelectionSupport: options.multipleSelectionSupport,
 			focusOnMouseMove: false,
 			acceptOnClick: false,
 			domFocusable: true,

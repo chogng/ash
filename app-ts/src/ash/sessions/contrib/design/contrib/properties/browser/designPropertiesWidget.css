@@ -1,10 +1,10 @@
 .ash-sessions-design-properties {
 	display: none;
 	min-height: 0;
-	max-height: 40%;
+	flex: 1;
 	overflow: auto;
-	flex-wrap: wrap;
-	align-items: center;
+	flex-direction: column;
+	align-items: stretch;
 	gap: var(--ash-spacing-size120);
 	padding: var(--ash-spacing-size80);
 	font-size: var(--ash-fontSize-label1);
@@ -18,11 +18,12 @@
 	display: flex;
 	align-items: center;
 	gap: var(--ash-spacing-size40);
+	justify-content: space-between;
 }
 
 .ash-sessions-design-properties input {
 	box-sizing: border-box;
-	width: 80px;
+	width: 96px;
 	min-height: 28px;
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
@@ -38,8 +39,8 @@
 
 .ash-sessions-design-special-properties {
 	display: none;
-	flex-wrap: wrap;
-	align-items: center;
+	flex-direction: column;
+	align-items: stretch;
 	gap: var(--ash-spacing-size120);
 	width: 100%;
 }
@@ -75,4 +76,3 @@
 	width: var(--ash-spacing-size160);
 	min-height: var(--ash-spacing-size160);
 }
-

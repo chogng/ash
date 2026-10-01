@@ -2,6 +2,7 @@ import { addDisposableListener, stopEvent } from "../../dom.js";
 import { Emitter, type Event } from "../../../common/event.js";
 import { Disposable } from "../../../common/lifecycle.js";
 import { rot } from "../../../common/numbers.js";
+import { isMacintosh } from "../../../common/platform.js";
 import { setAriaAttribute } from "../aria/aria.js";
 import type { ListAccessibilityProvider, ListDragAndDrop, ListScrolling } from "./list.js";
 import { ListView } from "./listView.js";
@@ -12,6 +13,7 @@ export interface ListOptions<T> {
 	readonly scrolling?: ListScrolling;
 	readonly loopNavigation?: boolean;
 	readonly keyboardNavigation?: boolean;
+	readonly multipleSelectionSupport?: boolean;
 	readonly focusOnMouseMove?: boolean;
 	readonly acceptOnClick?: boolean;
 	readonly domFocusable?: boolean;
@@ -63,6 +65,7 @@ export class List<T> extends Disposable {
 	private readonly _onDidAccept = this._register(new Emitter<ListAcceptEvent<T>>());
 	private _activeIndex = -1;
 	private _selectionIndexes: readonly number[] = [];
+	private selectionAnchor: number | undefined;
 
 	readonly onDidChangeActive: Event<ListActiveChangeEvent<T>> = this._onDidChangeActive.event;
 	readonly onDidChangeFocus: Event<ListActiveChangeEvent<T>> = this._onDidChangeActive.event;
@@ -99,6 +102,7 @@ export class List<T> extends Disposable {
 		}));
 		this.element = this.view.element;
 		this.domNode = this.view.domNode;
+		if (options.multipleSelectionSupport) this.element.setAttribute("aria-multiselectable", "true");
 		this.onDidScroll = this.view.onDidScroll;
 		this._register(this.view.onDidRenderRows(() => this.syncActiveDescendant()));
 		this._register(addDisposableListener(this.element, "mousemove", (event: MouseEvent) => {
@@ -126,10 +130,13 @@ export class List<T> extends Disposable {
 	splice(start: number, deleteCount: number, elements: readonly T[] = []): void {
 		const focusedId = this.activeItem === undefined ? undefined : this.itemId(this.activeItem, this._activeIndex);
 		const selectedIds = this._selectionIndexes.map((index) => this.itemId(this.items[index], index));
+		const anchorId = this.selectionAnchor === undefined ? undefined : this.itemId(this.items[this.selectionAnchor], this.selectionAnchor);
 		this.view.splice(start, deleteCount, elements);
 		const nextActive = focusedId === undefined ? -1 : this.indexOfId(focusedId);
 		this._activeIndex = nextActive >= 0 ? nextActive : this.items.length > 0 ? 0 : -1;
 		this._selectionIndexes = selectedIds.map((id) => this.indexOfId(id)).filter((index) => index >= 0);
+		const nextAnchor = anchorId === undefined ? -1 : this.indexOfId(anchorId);
+		this.selectionAnchor = nextAnchor >= 0 ? nextAnchor : undefined;
 		this.syncRows();
 		const nextFocusedId = this.activeItem === undefined ? undefined : this.itemId(this.activeItem, this._activeIndex);
 		const nextSelectedIds = this._selectionIndexes.map((index) => this.itemId(this.items[index], index));
@@ -152,6 +159,7 @@ export class List<T> extends Disposable {
 		const normalized = [...new Set(indexes)].filter((index) => Number.isInteger(index) && index >= 0 && index < this.items.length);
 		if (sameNumbers(this._selectionIndexes, normalized)) return;
 		this._selectionIndexes = normalized;
+		this.selectionAnchor ??= normalized[0];
 		this.syncRows();
 		this.emitSelection(browserEvent);
 	}
@@ -177,8 +185,8 @@ export class List<T> extends Disposable {
 		const index = this.view.getRowIndex(event);
 		if (index === undefined) return;
 		this.domFocus();
+		this.selectFromInput(index, event);
 		this.setActiveIndex(index, event);
-		this.setSelection([index], event);
 		this._onPointer.fire({ item: this.items[index]!, index, browserEvent: event });
 		if (this.options.acceptOnClick !== false) this.acceptActive(event);
 	}
@@ -205,7 +213,23 @@ export class List<T> extends Disposable {
 		else if (event.key === "End") index = this.items.length > 0 ? this.items.length - 1 : undefined;
 		if (index === undefined) return;
 		stopEvent(event);
+		this.selectFromInput(index, event);
 		this.setActiveIndex(index, event);
+	}
+
+	private selectFromInput(index: number, event: MouseEvent | KeyboardEvent): void {
+		if (this.options.multipleSelectionSupport && event.shiftKey) {
+			this.selectionAnchor ??= this._activeIndex >= 0 ? this._activeIndex : index;
+			const start = Math.min(this.selectionAnchor, index);
+			const end = Math.max(this.selectionAnchor, index);
+			this.setSelection(Array.from({ length: end - start + 1 }, (_, offset) => start + offset), event);
+			return;
+		}
+		this.selectionAnchor = index;
+		if (this.options.multipleSelectionSupport && (isMacintosh ? event.metaKey : event.ctrlKey)) {
+			if (event.type === "click") this.setSelection(this._selectionIndexes.includes(index) ? this._selectionIndexes.filter(selected => selected !== index) : [...this._selectionIndexes, index], event);
+			return;
+		}
 		this.setSelection([index], event);
 	}
 

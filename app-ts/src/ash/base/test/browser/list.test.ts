@@ -6,6 +6,49 @@ import { ListDragOverPosition, ListDragTargetSector } from "../../browser/ui/lis
 import { ListView } from "../../browser/ui/list/listView.js";
 import { List } from "../../browser/ui/list/listWidget.js";
 import { h } from "../../browser/dom.js";
+import { isMacintosh } from "../../common/platform.js";
+
+test("List range selection retains its anchor through pointer, keyboard and row changes", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	try {
+		using list = new List<string>(dom.window.document.body, {
+			getId: item => item,
+			multipleSelectionSupport: true,
+			keyboardNavigation: true,
+			focusOnMouseMove: false,
+			renderItem: item => h(dom.window.document, "span", undefined, item),
+		});
+		list.items = ["First", "Second", "Third", "Fourth"];
+		const click = (index: number, options: MouseEventInit = {}): void => {
+			list.row(index)!.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, ...options }));
+		};
+		click(1);
+		click(3, { shiftKey: true });
+		assert.deepEqual(list.selection, ["Second", "Third", "Fourth"]);
+		click(2, { shiftKey: true });
+		assert.deepEqual(list.selection, ["Second", "Third"]);
+		list.element.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "ArrowUp", shiftKey: true, bubbles: true }));
+		assert.deepEqual(list.selection, ["Second"]);
+		list.splice(0, 0, ["Inserted"]);
+		click(4, { shiftKey: true });
+		assert.deepEqual(list.selection, ["Second", "Third", "Fourth"]);
+		click(3, isMacintosh ? { metaKey: true } : { ctrlKey: true });
+		assert.deepEqual(list.selection, ["Second", "Fourth"]);
+		assert.equal(list.element.getAttribute("aria-multiselectable"), "true");
+	} finally { dom.window.close(); }
+});
+
+test("List keeps single selection unless multiple selection is enabled", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	try {
+		using list = new List<string>(dom.window.document.body, { renderItem: item => h(dom.window.document, "span", undefined, item) });
+		list.items = ["First", "Second"];
+		list.row(0)!.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+		list.row(1)!.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, shiftKey: true }));
+		assert.deepEqual(list.selection, ["Second"]);
+		assert.equal(list.element.hasAttribute("aria-multiselectable"), false);
+	} finally { dom.window.close(); }
+});
 
 test("ListView owns flat rows and sizing without Widget selection policy", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");

@@ -1,13 +1,15 @@
 import './designEditorWidget.css';
 import { addDisposableListener, h, type IDimension } from '../../../../../base/browser/dom.js';
-import type { IAction } from '../../../../../base/common/actions.js';
+import { Separator, type IAction } from '../../../../../base/common/actions.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Emitter } from '../../../../../base/common/event.js';
 import { localize } from '../../../../../nls.js';
-import { WorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { DesignMode, DesignTool } from '../../common/config/editorConfiguration.js';
 import type { DesignShape } from '../../common/model/document.js';
+import { hitTestDesignShapes } from '../../common/model/hitTest.js';
+import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
 import type { DesignPoint } from '../../common/core/geometry.js';
 import { DocumentCommands } from '../../common/commands/documentCommands.js';
 import { DesignSelection } from '../../common/selection.js';
@@ -26,14 +28,16 @@ const focusedViews = new WeakMap<Element, DesignEditorWidget>();
 export class DesignEditorWidget extends Disposable {
 	public readonly domNode: HTMLElement;
 	private readonly commands: DocumentCommands;
-	private readonly selection = new DesignSelection();
+	public readonly selection = new DesignSelection();
+	private readonly viewChange = this._register(new Emitter<void>());
+	public readonly onDidChangeView = this.viewChange.event;
 	private readonly camera = new DesignViewport();
 	private readonly canvas: DesignView;
 	private readonly properties: IDesignPropertiesContribution;
 	private readonly contentDomNode: HTMLElement;
 	private readonly messageDomNode: HTMLElement;
 	private readonly zoomDomNode: HTMLElement;
-	private readonly toolbar: WorkbenchToolBar;
+	private contextMenuVisible = false;
 	private readonly toolsWidget: DesignToolsWidget;
 	private readonly drawing: IDesignDrawingContribution;
 	private readonly motion: IDesignMotionContribution;
@@ -45,10 +49,10 @@ export class DesignEditorWidget extends Disposable {
 
 	constructor(
 		ownerDocument: Document,
-		private readonly documentController: DesignDocumentController,
+		public readonly documentController: DesignDocumentController,
 		createContributions: DesignEditorContributionFactory,
 		@IContextKeyService contextKeys: IContextKeyService,
-		@IContextMenuService contextMenus: IContextMenuService,
+		@IContextMenuService private readonly contextMenus: IContextMenuService,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
@@ -58,11 +62,9 @@ export class DesignEditorWidget extends Disposable {
 		this._register(toDisposable(() => {
 			this.cancelGesture();
 			focusedViews.delete(this.domNode);
+			if (this.contextMenuVisible) { this.contextMenus.hideContextMenu(); }
 		}));
-		const toolbarDomNode = h(ownerDocument, 'div', { className: 'ash-sessions-design-tools' });
-		this.toolbar = this._register(new WorkbenchToolBar(toolbarDomNode, contextMenus, { ariaLabel: localize('sessions.design.tools', 'Design tools') }));
 		this.zoomDomNode = h(ownerDocument, 'span', { className: 'ash-sessions-design-zoom' });
-		toolbarDomNode.append(this.zoomDomNode);
 		this.canvas = this._register(instantiationService.createInstance(DesignView, ownerDocument));
 		this.canvas.setTool(this.tool);
 		const stage = h(ownerDocument, 'div', { className: 'ash-sessions-design-stage' });
@@ -74,7 +76,7 @@ export class DesignEditorWidget extends Disposable {
 			selection: this.selection,
 			getTool: () => this.tool,
 			getMode: () => this.mode,
-			selectShape: id => { this.select([id]); this.render(); },
+			selectShape: id => this.selectShape(id),
 			renderCanvas: () => this.renderShapes(),
 			runFileOperation: operation => this.runFileOperation(operation),
 		}));
@@ -86,7 +88,9 @@ export class DesignEditorWidget extends Disposable {
 
 		this.contentDomNode = h(ownerDocument, 'div', { className: 'ash-sessions-design-content', attributes: { 'aria-hidden': 'true' } });
 		this.messageDomNode = h(ownerDocument, 'div', { className: 'ash-sessions-design-message', attributes: { role: 'status', 'aria-live': 'polite' } });
-		this.domNode.append(toolbarDomNode, stage, this.properties.domNode, this.messageDomNode, this.contentDomNode);
+		const statusDomNode = h(ownerDocument, 'div', { className: 'ash-sessions-design-status' });
+		statusDomNode.append(this.messageDomNode, this.zoomDomNode);
+		this.domNode.append(stage, statusDomNode, this.contentDomNode);
 		const scopedContext = this._register(contextKeys.createScoped(this.domNode));
 		scopedContext.createKey('sessionsDesignCanvasFocused', true);
 		const active = scopedContext.createKey<boolean>('sessionsDesignCanvasActive', false);
@@ -116,6 +120,7 @@ export class DesignEditorWidget extends Disposable {
 			selectionChanged: () => this.announceSelection(),
 		}, documentController, this.commands, this.selection, this.camera, this.drawing));
 		this._register(addDisposableListener(this.domNode, 'keydown', event => this.handleKeyDown(event)));
+		this._register(addDisposableListener(this.canvas.domNode, 'contextmenu', event => this.handleContextMenu(event)));
 	}
 
 	public initialize(): void {
@@ -125,6 +130,25 @@ export class DesignEditorWidget extends Disposable {
 
 	public focus(): void { this.domNode.focus(); }
 	public layout(dimension: IDimension): void { this.dimension = dimension; }
+	public focusProperties(): void { this.properties.focus(); }
+	public get propertiesDomNode(): HTMLElement { return this.properties.domNode; }
+	public get hasEditableProperties(): boolean { return this.selectedShape !== undefined && (this.mode === DesignMode.Design || this.mode === DesignMode.Draw); }
+	public selectShape(id: string): void {
+		this.selectShapes([id]);
+	}
+	public selectShapes(ids: readonly string[]): void {
+		if (this.documentController.isBusy) return;
+		this.cancelGesture();
+		this.select(ids);
+		this.render();
+	}
+	public setVisible(visible: boolean): void {
+		if (!visible) {
+			this.cancelGesture();
+			if (this.contextMenuVisible) this.contextMenus.hideContextMenu();
+		}
+		this.motion.setActive(visible && this.mode === DesignMode.Motion);
+	}
 
 	public static getFocused(element: HTMLElement): DesignEditorWidget | undefined {
 		const root = element.closest('.ash-sessions-design-view');
@@ -197,6 +221,52 @@ export class DesignEditorWidget extends Disposable {
 		});
 		const showProperties = this.mode === DesignMode.Design || this.mode === DesignMode.Draw;
 		this.properties.update(showProperties && selected.length === 1 ? selected[0] : undefined, showProperties);
+		this.viewChange.fire();
+	}
+
+	private handleContextMenu(event: MouseEvent): void {
+		event.preventDefault();
+		event.stopPropagation();
+		this.cancelGesture();
+		const bounds = this.canvas.domNode.getBoundingClientRect();
+		const point = this.camera.toWorld({ x: event.clientX - bounds.left, y: event.clientY - bounds.top });
+		const shapes = this.mode === DesignMode.Motion ? this.motion.getScene().shapes : this.documentController.model.value.shapes;
+		const shape = hitTestDesignShapes(shapes, point);
+		// Keep a multi-selection when opening its menu, including on empty canvas space.
+		if (!this.documentController.isBusy && shape && !this.selection.ids.has(shape.id)) {
+			this.select([shape.id]);
+			this.render();
+		}
+		this.showContextMenu({ x: event.clientX, y: event.clientY, targetWindow: this.domNode.ownerDocument.defaultView! });
+	}
+
+	private showContextMenu(anchor: ContextMenuAnchor): void {
+		this.cancelGesture();
+		this.focus();
+		this.contextMenus.showContextMenu({
+			getAnchor: () => anchor,
+			getActions: () => this.getContextMenuActions(),
+			onHide: () => { this.contextMenuVisible = false; },
+		});
+		this.contextMenuVisible = true;
+	}
+
+	private getContextMenuActions(): readonly IAction[] {
+		const shapes = this.documentController.model.value.shapes;
+		const selected = this.selectedShape;
+		return [
+			this.action('undo', localize('sessions.design.undo', 'Undo'), () => this.undo(), !this.documentController.isBusy && this.documentController.model.canUndo),
+			this.action('redo', localize('sessions.design.redo', 'Redo'), () => this.redo(), !this.documentController.isBusy && this.documentController.model.canRedo),
+			new Separator(),
+			this.action('delete', localize('sessions.design.delete', 'Delete'), () => this.deleteSelected(), !this.documentController.isBusy && this.selection.ids.size > 0),
+			this.action('selectAll', localize('sessions.design.selectAll', 'Select all'), () => this.selectAll(), !this.documentController.isBusy && shapes.length > 0),
+			this.action('group', localize('sessions.design.group', 'Group'), () => this.groupSelected(), !this.documentController.isBusy && this.selection.ids.size > 1),
+			this.action('ungroup', localize('sessions.design.ungroup', 'Ungroup'), () => this.ungroupSelected(), !this.documentController.isBusy && selected?.kind === 'group' && !selected.motion),
+			...this.properties.getActions(),
+			new Separator(),
+			this.action('export', localize('sessions.design.export', 'Export SVG'), () => this.runFileOperation(() => this.documentController.exportDocument()), !this.documentController.isBusy && shapes.length > 0),
+			this.action('open', localize('sessions.design.open', 'Open design'), () => this.runFileOperation(() => this.documentController.openDocument()), !this.documentController.isBusy),
+		];
 	}
 
 	private render(): void {
@@ -206,18 +276,7 @@ export class DesignEditorWidget extends Disposable {
 		this.toolsWidget.update(this.tool, this.mode, this.documentController.isBusy);
 		this.motion.update(selected, this.documentController.isBusy);
 		this.code.update(this.documentController.model.value, this.mode === DesignMode.Code, this.documentController.isBusy);
-		this.toolbar.setActions([
-			this.action('undo', localize('sessions.design.undo', 'Undo'), () => this.undo(), !this.documentController.isBusy && this.documentController.model.canUndo),
-			this.action('redo', localize('sessions.design.redo', 'Redo'), () => this.redo(), !this.documentController.isBusy && this.documentController.model.canRedo),
-			this.action('delete', localize('sessions.design.delete', 'Delete'), () => this.deleteSelected(), !this.documentController.isBusy && this.selection.ids.size > 0),
-			this.action('selectAll', localize('sessions.design.selectAll', 'Select all'), () => this.selectAll(), !this.documentController.isBusy && shapes.length > 0),
-			this.action('group', localize('sessions.design.group', 'Group'), () => this.groupSelected(), !this.documentController.isBusy && this.selection.ids.size > 1),
-			this.action('ungroup', localize('sessions.design.ungroup', 'Ungroup'), () => this.ungroupSelected(), !this.documentController.isBusy && selected?.kind === 'group' && !selected.motion),
-			...this.properties.getActions(),
-			this.action('export', localize('sessions.design.export', 'Export SVG'), () => this.runFileOperation(() => this.documentController.exportDocument()), !this.documentController.isBusy && shapes.length > 0),
-			this.action('open', localize('sessions.design.open', 'Open design'), () => this.runFileOperation(() => this.documentController.openDocument()), !this.documentController.isBusy),
-			this.action('save', localize('sessions.design.save', 'Save design'), () => this.saveDocument(), !this.documentController.isBusy),
-		]);
+
 		const describe = (shape: DesignShape, index: number): string => {
 			const labels = {
 				rectangle: localize('sessions.design.rectangle', 'Rectangle'),
@@ -266,7 +325,13 @@ export class DesignEditorWidget extends Disposable {
 
 	private handleKeyDown(event: KeyboardEvent): void {
 		if (event.target === this.domNode) { this.canvas.setFocused(true); }
-		if (event.defaultPrevented || event.target !== this.domNode || this.documentController.isBusy || this.mode === DesignMode.Code) { return; }
+		if (event.defaultPrevented || event.target !== this.domNode) { return; }
+		if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+			event.preventDefault();
+			this.showContextMenu(this.canvas.domNode);
+			return;
+		}
+		if (this.documentController.isBusy || this.mode === DesignMode.Code) { return; }
 		if (event.key === 'Escape') { this.cancelGesture(); this.select([]); this.render(); event.preventDefault(); return; }
 		if (this.input.isGesturing) { return; }
 		if (event.ctrlKey || event.metaKey) {

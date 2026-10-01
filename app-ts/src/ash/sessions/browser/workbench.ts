@@ -16,6 +16,12 @@ import { Emitter, type Event } from '../../base/common/event.js';
 import { WorkbenchPartView } from '../../workbench/browser/workbenchPartView.js';
 import { SessionsLayoutPolicy } from './layoutPolicy.js';
 import { SessionsViewRegistry } from '../common/views.js';
+import { ViewContainerLocation } from '../../workbench/common/views.js';
+import { DesignEditorService, IDesignEditorService, DESIGN_LAYERS_CONTAINER_ID, DESIGN_PROPERTIES_CONTAINER_ID } from '../contrib/design/browser/designEditorService.js';
+import { DESIGN_EDITOR_RESOURCE } from '../contrib/design/browser/designDocumentController.js';
+import { EditorPaneVisibility } from '../../workbench/browser/parts/editor/editorPane.js';
+import type { EditorInput } from '../../workbench/services/editor/common/editorService.js';
+import { SESSIONS_FILES_CONTAINER_ID } from '../contrib/files/browser/files.contribution.js';
 import { sessionsPartIds, SESSION_SIDEBAR_DEFAULT_WIDTH, SESSION_AUXILIARYBAR_DEFAULT_WIDTH, type SessionsPartId } from '../common/layoutConstants.js';
 import { Disposable, toDisposable, type IDisposable } from "../../base/common/lifecycle.js";
 import { ILanguageService } from "../../editor/common/languages/language.js";
@@ -397,7 +403,10 @@ export class Workbench extends Disposable {
 
 		let auxiliarybar: AuxiliaryBarPart | undefined;
 		const titlebar = this._register(new TitlebarPart(this.domNode, menus, contextMenus));
-		const sidebar = this._register(new SidebarPart(this.domNode, sessions, view, teams, quickInputService, async () => {
+		const viewDescriptors = this._register(new ViewDescriptorService({ contextKeyService: contextKeys, registry: SessionsViewRegistry }));
+		services.registerInstance(IViewDescriptorService, viewDescriptors);
+		services.registerSingleton(IDesignEditorService, () => services.createInstance(DesignEditorService));
+		const sidebar = this._register(services.createInstance(SidebarPart, this.domNode, sessions, view, teams, quickInputService, async () => {
 			const catalog = await options.api.session.listAgents();
 			return catalog.agents.map(agent => ({
 				name: agent.name,
@@ -406,18 +415,42 @@ export class Workbench extends Disposable {
 			}));
 		}));
 		let activitybar: ActivityBarPart;
+		let activityPage: SessionsActivityPage = view.page.get();
+		let codeEditor: EditorInput | undefined;
+		let codeComposite = SESSIONS_FILES_CONTAINER_ID;
+		let openingDesign = false;
 		const selectActivityPage = (page: SessionsActivityPage): void => {
+			activityPage = page;
 			activitybar.selectPage(page);
 			sidebar.setEmptyPage(page === 'colab' || page === 'library');
 			if (page === 'chat' || page === 'code') {
 				view.selectPage(page);
 				sessionsPart?.setPage(page);
+				if (sidebar.currentView === 'views') sidebar.selectView('chats');
+			} else sessionsPart?.setPage('empty');
+			layout.setPartAvailable('sidebar', page === 'chat' || page === 'code' || page === 'design');
+			layout.setPartAvailable('auxiliarybar', page === 'code' || page === 'design');
+			// Attach the replacement center before hiding Sessions so panel widths stay stable.
+			if (page === 'design') { layout.setPartAvailable('editor', true); layout.showPart('editor'); }
+			layout.setPartAvailable('sessions', page !== 'design');
+			layout.setPartAvailable('editor', page === 'design' || (page === 'code' && editor.activeInput?.resource.toString() !== DESIGN_EDITOR_RESOURCE.toString()));
+			if (page === 'design') {
+				if (auxiliarybar!.activeCompositeId && auxiliarybar!.activeCompositeId !== DESIGN_PROPERTIES_CONTAINER_ID) codeComposite = auxiliarybar!.activeCompositeId;
+				sidebar.showComposite(DESIGN_LAYERS_CONTAINER_ID);
+				auxiliarybar!.showComposite(DESIGN_PROPERTIES_CONTAINER_ID);
+				layout.showPart('editor');
+				if (!openingDesign && editor.activeInput?.resource.toString() !== DESIGN_EDITOR_RESOURCE.toString()) {
+					openingDesign = true;
+					void editors.openEditor(services.get(IDesignEditorService).input, { pinned: true, preserveFocus: true }).then(() => {
+						openingDesign = false;
+						selectActivityPage(activityPage);
+						if (activityPage === 'design') editor.focus();
+					}).catch(error => { openingDesign = false; notificationService.error(String(error)); });
+				}
+			} else if (page === 'code') {
+				if (auxiliarybar!.activeCompositeId === DESIGN_PROPERTIES_CONTAINER_ID) auxiliarybar!.showComposite(codeComposite);
+				if (codeEditor && editor.activeInput?.resource.toString() === DESIGN_EDITOR_RESOURCE.toString()) editor.activateEditor(codeEditor);
 			}
-			else if (page === 'design') sessionsPart?.setPage('design');
-			else sessionsPart?.setPage('empty');
-			layout.setPartAvailable('sidebar', page === 'chat' || page === 'code');
-			layout.setPartAvailable('auxiliarybar', page === 'code');
-			layout.setPartAvailable('editor', page === 'code');
 		};
 		this.showChat = () => selectActivityPage('chat');
 		activitybar = this._register(services.createInstance(ActivityBarPart, this.domNode, {
@@ -497,6 +530,7 @@ export class Workbench extends Disposable {
 			workingCopyService: workingCopies,
 			accessibilityService: services.get(IAccessibilityService),
 			dialogService: dialogs,
+			fileDialogService: services.get(IFileDialogService),
 			titleActions: { menuService: menus, contextMenuProvider: contextMenus },
 		}));
 		services.registerInstance(IEditorPart, editor);
@@ -510,19 +544,20 @@ export class Workbench extends Disposable {
 		});
 		services.registerInstance(IEditorGroupsService, editors);
 		this._register(services.createInstance(TextFileEditorTracker, ownerWindow));
-		const viewDescriptors = this._register(new ViewDescriptorService({ contextKeyService: contextKeys, registry: SessionsViewRegistry }));
-		services.registerInstance(IViewDescriptorService, viewDescriptors);
 		auxiliarybar = this._register(services.createInstance(AuxiliaryBarPart, this.domNode));
 		services.registerInstance(IViewsService, new ViewsService({
 			viewDescriptorService: viewDescriptors,
-			getViewContainer: container => auxiliarybar?.getComposite(container.id),
+			getViewContainer: container => container.location === ViewContainerLocation.Sidebar ? sidebar.getComposite(container.id) : auxiliarybar?.getComposite(container.id),
 			openViewContainer: container => {
-				selectActivityPage('code');
-				layout.showPart('auxiliarybar');
-				auxiliarybar!.showComposite(container.id);
-				return auxiliarybar!.getComposite(container.id);
+				const design = container.id === DESIGN_LAYERS_CONTAINER_ID || container.id === DESIGN_PROPERTIES_CONTAINER_ID;
+				selectActivityPage(design ? 'design' : 'code');
+				const part = container.location === ViewContainerLocation.Sidebar ? sidebar : auxiliarybar!;
+				layout.showPart(container.location === ViewContainerLocation.Sidebar ? 'sidebar' : 'auxiliarybar');
+				part.showComposite(container.id);
+				return part.getComposite(container.id);
 			},
 		}));
+		sidebar.initialize();
 		auxiliarybar.initialize();
 		const parts = new Map<SessionsPartId, WorkbenchPart>([
 			["titlebar", titlebar],
@@ -535,9 +570,28 @@ export class Workbench extends Disposable {
 		layout.createWorkbenchLayout(parts);
 		layout.setPartAvailable('auxiliarybar', view.page.get() === 'code');
 		layout.setPartAvailable('editor', view.page.get() === 'code');
+		this._register(editors.onDidActiveEditorChange(() => {
+			const input = editors.activeEditor;
+			if (input && input.resource.toString() !== DESIGN_EDITOR_RESOURCE.toString()) codeEditor = input;
+			else if (codeEditor && !editor.groups.some(group => group.inputs.some(candidate => candidate.resource.toString() === codeEditor!.resource.toString()))) codeEditor = undefined;
+			if (!openingDesign && input && (activityPage === 'code' || activityPage === 'design')) selectActivityPage(input.resource.toString() === DESIGN_EDITOR_RESOURCE.toString() ? 'design' : 'code');
+		}));
 		this._register(editors.onDidVisibleEditorsChange(() => {
-			if (editors.visibleEditors.length) { layout.showPart('editor'); }
-			else { layout.hidePart('editor'); }
+			if (editors.visibleEditors.length || activityPage === 'design') layout.showPart('editor');
+			else layout.hidePart('editor');
+		}));
+		this._register(layout.onDidChangePartVisibility(event => {
+			if (event.partId !== 'editor') return;
+			const visibility = event.visible ? EditorPaneVisibility.Visible : EditorPaneVisibility.Hidden;
+			for (const group of editor.groups) {
+				if (group.activeInput?.resource.toString() === DESIGN_EDITOR_RESOURCE.toString()) group.activePane!.setVisible(visibility);
+			}
+			// Split panes resume together; the panels still follow the active group's selection.
+			if (event.visible && editor.activeInput?.resource.toString() === DESIGN_EDITOR_RESOURCE.toString()) editor.activePane!.setVisible(visibility);
+		}));
+		this._register(auxiliarybar.onDidSelectComposite(event => {
+			if (event.compositeId !== DESIGN_PROPERTIES_CONTAINER_ID) codeComposite = event.compositeId;
+			selectActivityPage(event.compositeId === DESIGN_PROPERTIES_CONTAINER_ID ? 'design' : 'code');
 		}));
 		this._register(this.lifecycleService.onBeforeShutdown(event => {
 			event.veto(editor.confirmCloseAllEditors().then(confirmed => !confirmed), 'Sessions unsaved files');
@@ -785,11 +839,18 @@ export interface SessionsWorkbenchLayoutOptions {
 }
 
 /** Owns the fixed Part topology and mutable geometry of one dedicated Sessions window. */
+class SessionsWorkbenchPartView extends WorkbenchPartView<SessionsPartId> {
+	constructor(partId: SessionsPartId, part: WorkbenchPart, private readonly isEditorPrimary: () => boolean) { super(partId, part); }
+	public get priority(): 'high' | 'normal' {
+		return this.partId === 'sessions' || (this.partId === 'editor' && this.isEditorPrimary()) ? 'high' : 'normal';
+	}
+}
+
 export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAgentWorkbenchLayoutService {
 	private readonly views = new Map<SessionsPartId, WorkbenchPartView<SessionsPartId>>();
 	private grid!: SerializableGrid<WorkbenchPartView<SessionsPartId>>;
 	private readonly unavailableParts = new Set<SessionsPartId>();
-	private readonly desiredVisibility: { sidebar: boolean; auxiliarybar: boolean; editor: boolean };
+	private readonly desiredVisibility: { sessions: boolean; sidebar: boolean; auxiliarybar: boolean; editor: boolean };
 	private titlebarHeight = 0;
 	private readonly initialDimension: Dimension;
 	private readonly stateModel: SessionsWorkbenchLayoutStateModel;
@@ -818,7 +879,7 @@ export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAg
 		this.domNode.append(this.cardDomNode);
 		this.stateModel = new SessionsWorkbenchLayoutStateModel(storageService, options.initialState ?? createDefaultSessionsWorkbenchLayoutState());
 		const state = this.stateModel.state;
-		this.desiredVisibility = { sidebar: state.sidebar.visible, auxiliarybar: state.auxiliarybar.visible, editor: false };
+		this.desiredVisibility = { sessions: true, sidebar: state.sidebar.visible, auxiliarybar: state.auxiliarybar.visible, editor: false };
 		this._register(storageService.onWillSaveState(() => this.saveState()));
 	}
 
@@ -828,7 +889,7 @@ export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAg
 			throw new Error('Sessions Parts are already attached');
 		}
 		for (const partId of sessionsPartIds) {
-			this.views.set(partId, new WorkbenchPartView(partId, requiredPart(parts, partId)));
+			this.views.set(partId, new SessionsWorkbenchPartView(partId, requiredPart(parts, partId), () => this.unavailableParts.has('sessions')));
 		}
 		this.titlebarHeight = this.view('titlebar').minimumHeight;
 		this._register(this.view('activitybar').part.onDidChangeConstraints(() => this.projectFrameInsets()));
@@ -905,16 +966,18 @@ export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAg
 		this.layout(new Dimension(this.grid.width, this.grid.height));
 	}
 
-	public setPartAvailable(partId: 'sidebar' | 'auxiliarybar' | 'editor', available: boolean): void {
+	public setPartAvailable(partId: 'sessions' | 'sidebar' | 'auxiliarybar' | 'editor', available: boolean): void {
 		if (available === !this.unavailableParts.has(partId)) {
 			return;
 		}
 		if (available) {
+			// The outgoing center absorbs the restored center's cached width before priorities switch.
+			this.grid.setViewVisible(this.view(partId), this.desiredVisibility[partId]);
 			this.unavailableParts.delete(partId);
 		} else {
 			this.unavailableParts.add(partId);
+			this.grid.setViewVisible(this.view(partId), false);
 		}
-		this.grid.setViewVisible(this.view(partId), available && this.desiredVisibility[partId]);
 		this.projectFrameInsets();
 		this.layout(new Dimension(this.grid.width, this.grid.height));
 	}
@@ -929,12 +992,13 @@ export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAg
 		this.view('activitybar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: 0 });
 		const sidebarVisible = this.desiredVisibility.sidebar && !this.unavailableParts.has('sidebar');
 		const editorVisible = this.desiredVisibility.editor && !this.unavailableParts.has('editor');
+		const sessionsVisible = !this.unavailableParts.has('sessions');
 		const contentLeftEdge = this.activityBarLocation === ActivityBarPosition.DEFAULT ? 0 : leftEdge;
 		this.view('sidebar').setFrameInsets({ top: 0, right: 0, bottom: rightEdge, left: contentLeftEdge });
 		this.view('sessions').setFrameInsets({ top: 0, right: auxiliarybarVisible || editorVisible ? 0 : rightEdge, bottom: rightEdge, left: sidebarVisible ? 0 : contentLeftEdge });
 		this.view('auxiliarybar').setFrameInsets({ top: 0, right: rightEdge, bottom: rightEdge, left: 0 });
-		this.view('editor').setFrameInsets({ top: 0, right: auxiliarybarVisible ? 0 : rightEdge, bottom: rightEdge, left: 0 });
-		const firstPart = sidebarVisible ? 'sidebar' : 'sessions';
+		this.view('editor').setFrameInsets({ top: 0, right: auxiliarybarVisible ? 0 : rightEdge, bottom: rightEdge, left: !sidebarVisible && !sessionsVisible ? contentLeftEdge : 0 });
+		const firstPart = sidebarVisible ? 'sidebar' : sessionsVisible ? 'sessions' : 'editor';
 		let lastPart: SessionsPartId = 'sessions';
 		if (editorVisible) lastPart = 'editor';
 		if (auxiliarybarVisible) lastPart = 'auxiliarybar';

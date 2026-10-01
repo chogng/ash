@@ -277,6 +277,38 @@ test('Sessions page availability preserves user visibility and cached widths dur
 	dom.window.close();
 });
 
+test('Design replaces Sessions with a flexible Editor and preserves both side panel sizes', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const parts = createParts(dom.window.document);
+	using layout = createLayout(dom.window.document.body, parts);
+	layout.layout(new Dimension(1400, 900));
+	layout.resizePart('sidebar', new Dimension(260, 900));
+	layout.resizePart('auxiliarybar', new Dimension(280, 900));
+	const sidebarWidth = layout.getPartSize('sidebar').width;
+	const auxiliaryWidth = layout.getPartSize('auxiliarybar').width;
+	layout.showPart('editor');
+	layout.setPartAvailable('sessions', false);
+	assert.equal(layout.isPartVisible('sessions'), false);
+	assert.equal(layout.isPartVisible('editor'), true);
+	assert.equal(layout.getPartSize('sidebar').width, sidebarWidth);
+	assert.equal(layout.getPartSize('auxiliarybar').width, auxiliaryWidth);
+	const editorWidth = layout.getPartSize('editor').width;
+	layout.layout(new Dimension(1600, 900));
+	assert.equal(layout.getPartSize('editor').width, editorWidth + 200);
+	assert.equal(layout.getPartSize('sidebar').width, sidebarWidth);
+	assert.equal(layout.getPartSize('auxiliarybar').width, auxiliaryWidth);
+	layout.hidePart('sidebar');
+	assert.equal(parts.get('editor')!.domNode.classList.contains('ash-sessions-frame-start'), true);
+	layout.showPart('sidebar');
+	layout.setPartAvailable('sessions', true);
+	layout.hidePart('editor');
+	assert.equal(layout.isPartVisible('sessions'), true);
+	assert.equal(layout.getPartSize('sidebar').width, sidebarWidth);
+	assert.equal(layout.getPartSize('auxiliarybar').width, auxiliaryWidth);
+	for (const part of parts.values()) part.dispose();
+	dom.window.close();
+});
+
 test('Sessions layout creation requires the registered storage service', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using services = new InstantiationService();

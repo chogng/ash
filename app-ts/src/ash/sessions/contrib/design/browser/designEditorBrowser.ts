@@ -37,6 +37,7 @@ export interface IDesignMotionContribution {
 }
 
 export interface IDesignPropertiesContribution {
+	focus(): void;
 	readonly domNode: HTMLElement;
 	update(shape: DesignShape | undefined, isVisible: boolean): void;
 	getActions(): readonly IAction[];

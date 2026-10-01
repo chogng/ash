@@ -1,34 +1,62 @@
 import { addDisposableListener, getWindow, type IDimension } from '../../../../base/browser/dom.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
+import type { URI } from '../../../../base/common/uri.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
-import type { ISessionsPageView } from '../../../browser/pages.js';
-import { DesignDocumentController } from './designDocumentController.js';
+import { EditorPaneVisibility, type IEditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
+import type { EditorInput } from '../../../../workbench/services/editor/common/editorService.js';
+import { type DesignDocumentController, DESIGN_EDITOR_RESOURCE } from './designDocumentController.js';
+import { IDesignEditorService } from './designEditorService.js';
 import { DesignEditorWidget } from './widget/designEditorWidget.js';
 import { createDesignEditorContributions } from '../design.main.js';
 
-/** Sessions owns the page lifetime; the editor owns its DOM and editing state. */
-export class DesignEditorPage extends Disposable implements ISessionsPageView {
-	public readonly domNode: HTMLElement;
-	private readonly editor: DesignEditorWidget;
+/** EditorPart owns Design panes and their editing state; the window Design service owns the shared document. */
+export class DesignEditorPage extends Disposable implements IEditorPane {
+	public static readonly ID = 'sessions.design.editor';
+	public readonly id = DesignEditorPage.ID;
+	public readonly workingCopy: DesignDocumentController;
+	public domNode!: HTMLElement;
+	private editor!: DesignEditorWidget;
 
 	constructor(
-		ownerDocument: Document,
-		@IInstantiationService instantiationService: IInstantiationService,
-		@ILifecycleService lifecycle: ILifecycleService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@ILifecycleService private readonly lifecycle: ILifecycleService,
+		@IDesignEditorService private readonly designEditors: IDesignEditorService,
 	) {
 		super();
-		const document = this._register(instantiationService.createInstance(DesignDocumentController));
-		this.editor = this._register(instantiationService.createInstance(DesignEditorWidget, ownerDocument, document, createDesignEditorContributions));
+		this.workingCopy = designEditors.document;
+	}
+
+	public create(parent: HTMLElement): void {
+		this.editor = this._register(this.instantiationService.createInstance(DesignEditorWidget, parent.ownerDocument, this.workingCopy, createDesignEditorContributions));
 		this.domNode = this.editor.domNode;
+		parent.append(this.domNode);
 		this.editor.initialize();
-		this._register(lifecycle.onBeforeShutdown(event => event.veto(document.isBusy || (document.isDirty && document.confirmDiscard()), 'designDocument')));
-		// Browser unload cannot await a save dialog. Its synchronous prompt preserves the unsaved document.
+		this._register(addDisposableListener(this.domNode, 'focusin', () => this.designEditors.setActiveEditor(this.editor)));
+		// Browser unload cannot await EditorPart's asynchronous save confirmation.
 		this._register(addDisposableListener(getWindow(this.domNode), 'beforeunload', (event: BeforeUnloadEvent) => {
-			if (document.isDirty && !lifecycle.willShutdown) { event.preventDefault(); event.returnValue = ''; }
+			if (this.workingCopy.isDirty && !this.lifecycle.willShutdown) { event.preventDefault(); event.returnValue = ''; }
 		}));
 	}
 
+	public async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
+		signal.throwIfAborted();
+		if (input.resource.toString() !== DESIGN_EDITOR_RESOURCE.toString()) throw new TypeError('Unsupported Design editor input');
+	}
+	public clearInput(): void { this.setVisible(EditorPaneVisibility.Hidden); }
+	public setVisible(visibility: EditorPaneVisibility): void {
+		const visible = visibility === EditorPaneVisibility.Visible;
+		this.editor.setVisible(visible);
+		if (visible) this.designEditors.setActiveEditor(this.editor);
+		else if (this.designEditors.activeEditor.get() === this.editor) this.designEditors.setActiveEditor(undefined);
+	}
+	protected override disposeCore(): void {
+		if (this.editor) this.clearInput();
+		super.disposeCore();
+		this.domNode?.remove();
+	}
 	public focus(): void { this.editor.focus(); }
 	public layout(dimension: IDimension): void { this.editor.layout(dimension); }
+	public async save(): Promise<void> { await this.editor.saveDocument(); }
+	public async saveAs(resource: URI): Promise<void> { await this.workingCopy.saveAs(resource, new AbortController().signal); }
 }

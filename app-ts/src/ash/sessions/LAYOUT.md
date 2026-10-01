@@ -31,10 +31,12 @@ The workbench omits the standard Activity Bar, Status Bar, and Banner. Part posi
 | Title bar | Window navigation and window-scoped actions |
 | Sidebar | Sessions list and Sessions-owned sidebar views |
 | Sessions Part | One or more visible session surfaces |
-| Editor | File, browser, diff, and other editor inputs |
-| Auxiliary Bar | Session details such as changes and files |
+| Editor | File, browser, diff, Design canvas, and other editor inputs |
+| Auxiliary Bar | Code files and changes, or the active Design editor's properties |
 | Panel | Terminal and other panel views |
 | Custom View Grid | Full-surface contributed views that replace session content |
+
+Design uses the fixed `SidebarPart | EditorPart | AuxiliaryBarPart` chain. Its registered Layers view belongs to SidebarPart, the registered canvas pane belongs to EditorPart, and Shape properties belongs to AuxiliaryBarPart. SessionsPart remains the conversation owner and is hidden in Design. The two panel views consume the active design editor's state rather than creating a document or selection of their own. Activity-page switches retain editor panes; closing a Design tab uses the shared working-copy save/discard/cancel lifecycle.
 
 The Sessions Part contains its own nested two-dimensional split grid. Its leaves are not workbench editor groups, nor the chat groups inside an individual session.
 
@@ -42,7 +44,7 @@ The Sessions Part contains its own nested two-dimensional split grid. Its leaves
 
 The main workbench grid is non-proportional. The Sessions Part is the flexible surface that absorbs container resize and part-visibility deltas. The Sidebar, Editor, Auxiliary Bar, and Panel preserve user-established sizes within their constraints.
 
-At most one high-priority surface is visible in the main horizontal chain: normally the Sessions Part, or the Custom View Grid while a custom view is active. This prevents fixed side parts from absorbing general window resize.
+The primary surface absorbs general window resize: SessionsPart for conversation pages, or EditorPart while Design replaces the conversation region. Design preserves both side-panel widths as the editor expands and shrinks. This prevents fixed side parts from absorbing general window resize.
 
 The desktop presentation may place the Auxiliary Bar inside the Editor's grid node. Consumers must distinguish the actual Editor content area from the shared grid node when interpreting visibility or size.
 

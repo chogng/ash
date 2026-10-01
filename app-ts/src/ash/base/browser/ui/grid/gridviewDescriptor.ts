@@ -11,6 +11,8 @@ export interface IView {
 	readonly minimumHeight: number;
 	readonly maximumHeight: number;
 	readonly preferredWidth?: number;
+	/** Views with higher priority absorb layout size changes first. May depend on the current composition. */
+	readonly priority?: SplitViewLayoutPriority;
 	/** Whether the view can snap closed along its primary Grid axis. */
 	readonly snap?: boolean;
 	readonly onDidChange?: Event<void>;

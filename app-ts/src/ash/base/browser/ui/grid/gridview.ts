@@ -282,7 +282,9 @@ class AxisView implements ISplitViewView {
 	) {}
 
 	get element(): HTMLElement { return this.node.element; }
-	get priority(): SplitViewLayoutPriority { return this.node.priority; }
+	get priority(): SplitViewLayoutPriority {
+		return this.node instanceof LeafNode ? this.node.view.priority ?? this.node.priority : this.node.priority;
+	}
 	get minimumSize(): number {
 		return this.orientation === "horizontal"
 			? this.node.minimumWidth
