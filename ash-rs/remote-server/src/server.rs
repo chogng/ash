@@ -70,7 +70,7 @@ pub fn run_from_environment_with_product_services(
     if arguments.as_slice() == ["--version"] {
         println!(
             "{}",
-            serde_json::to_string(&build_info::BuildInfo::current())
+            serde_json::to_string(&build_identity::current())
                 .map_err(|error| RemoteServerError::new(error.to_string()))?
         );
         return Ok(());

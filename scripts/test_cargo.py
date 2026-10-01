@@ -11,6 +11,32 @@ from scripts.cargo import main, prepare_test_executable
 class CodeModeHostTests(unittest.TestCase):
     @patch.dict("scripts.cargo.os.environ", {}, clear=True)
     @patch("scripts.cargo.subprocess.run")
+    @patch(
+        "scripts.cargo.resolve_sherpa_cargo_env",
+        return_value={"SHERPA_ONNX_LIB_DIR": "/locked/libs"},
+    )
+    @patch("scripts.cargo.cargo_command_uses_v8", return_value=False)
+    @patch("scripts.cargo.cargo_command_uses_package")
+    def test_speech_resources_are_prepared_only_for_the_selected_graph(
+        self, uses_package, uses_v8, speech, run
+    ) -> None:
+        run.return_value = subprocess.CompletedProcess([], 0)
+        uses_package.side_effect = lambda _cargo, _args, _root, package: (
+            package == "sherpa-onnx-sys"
+        )
+        self.assertEqual(main(["check", "-p", "ash-tui"]), 0)
+        self.assertEqual(
+            run.call_args.kwargs["env"]["SHERPA_ONNX_LIB_DIR"], "/locked/libs"
+        )
+        speech.assert_called_once()
+        speech.reset_mock()
+        uses_package.side_effect = lambda *_args: False
+        self.assertEqual(main(["check", "-p", "ash-build-info"]), 0)
+        speech.assert_not_called()
+        self.assertNotIn("SHERPA_ONNX_LIB_DIR", run.call_args.kwargs["env"])
+
+    @patch.dict("scripts.cargo.os.environ", {}, clear=True)
+    @patch("scripts.cargo.subprocess.run")
     @patch("scripts.cargo.prepare_test_executable", return_value="/runtime/app-server")
     @patch(
         "scripts.cargo.resolve_v8_cargo_env",

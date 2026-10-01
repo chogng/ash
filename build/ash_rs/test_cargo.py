@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from build.lib.targets import TARGETS
-from build.ash_rs.cargo import build_binaries
+from build.ash_rs.cargo import build_binaries, cargo_environment
 from build.ash_rs.cargo import resolve_windows_sandbox_binary
 
 
@@ -25,6 +25,26 @@ class CargoBuildTests(unittest.TestCase):
         path.write_bytes(name.encode())
         path.chmod(0o755)
         return path
+
+    @patch.dict("build.ash_rs.cargo.os.environ", {"CARGO_BUILD_JOBS": "4"}, clear=True)
+    @patch(
+        "build.ash_rs.cargo.resolve_v8_cargo_env",
+        return_value={"RUSTY_V8_ARCHIVE": "/locked/v8"},
+    )
+    @patch(
+        "build.ash_rs.cargo.resolve_sherpa_cargo_env",
+        return_value={"SHERPA_ONNX_LIB_DIR": "/locked/speech"},
+    )
+    def test_shared_runtime_prepares_locked_speech_inputs(self, speech, v8) -> None:
+        self.assertEqual(
+            cargo_environment(self.spec),
+            {
+                "CARGO_BUILD_JOBS": "4",
+                "RUSTY_V8_ARCHIVE": "/locked/v8",
+                "SHERPA_ONNX_LIB_DIR": "/locked/speech",
+            },
+        )
+        self.assertEqual(speech.call_args.args, (self.spec,))
 
     def test_prebuilt_inputs_skip_cargo_and_v8_resolution(self) -> None:
         inputs = {"ash-app-server": self.executable("prebuilt")}

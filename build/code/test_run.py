@@ -119,6 +119,11 @@ class SourceRunnerTests(unittest.TestCase):
                 build, "default_target", return_value="x86_64-pc-windows-msvc"
             ),
             patch.object(build, "resolve_v8_cargo_env", return_value={}),
+            patch.object(
+                build,
+                "resolve_sherpa_cargo_env",
+                return_value={"SHERPA_ONNX_LIB_DIR": "/locked/speech"},
+            ),
             patch.object(build.subprocess, "Popen") as subprocess_popen,
             patch("sys.stderr", new_callable=io.StringIO) as stderr,
         ):
@@ -197,6 +202,7 @@ class SourceRunnerTests(unittest.TestCase):
             cwd=build.REPOSITORY_ROOT,
             env={
                 "CARGO_BUILD_JOBS": "4",
+                "SHERPA_ONNX_LIB_DIR": "/locked/speech",
                 "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER": "rust-lld",
             },
             stdout=build.subprocess.PIPE,
@@ -208,6 +214,11 @@ class SourceRunnerTests(unittest.TestCase):
         with (
             patch.object(build, "default_target", return_value="aarch64-apple-darwin"),
             patch.object(build, "resolve_v8_cargo_env", return_value={}),
+            patch.object(
+                build,
+                "resolve_sherpa_cargo_env",
+                return_value={"SHERPA_ONNX_LIB_DIR": "/locked/speech"},
+            ),
             patch.object(build.subprocess, "Popen") as subprocess_popen,
             patch("sys.stderr", new_callable=io.StringIO) as stderr,
         ):

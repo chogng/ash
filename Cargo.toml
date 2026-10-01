@@ -27,6 +27,7 @@ members = [
     "ash-rs/config-schema",
     "ash-rs/process-hardening",
     "ash-rs/build-info",
+    "ash-rs/build-identity",
     "ash-rs/livekit-client",
     "ash-rs/voice-agent",
     "ash-rs/livekit-api",
@@ -302,6 +303,7 @@ feedback-contract = { package = "ash-feedback-contract", path = "ash-rs/feedback
 features = { package = "ash-features", path = "ash-rs/features" }
 process-hardening = { package = "ash-process-hardening", path = "ash-rs/process-hardening" }
 build-info = { package = "ash-build-info", path = "ash-rs/build-info" }
+build-identity = { package = "ash-build-identity", path = "ash-rs/build-identity" }
 mxc-sandbox = { package = "ash-mxc-sandbox", path = "ash-rs/mxc-sandbox" }
 windows-sandbox = { package = "ash-windows-sandbox", path = "ash-rs/windows-sandbox" }
 network-proxy = { package = "ash-network-proxy", path = "ash-rs/network-proxy" }
@@ -371,7 +373,7 @@ pkg-config = "0.3"
 p256 = { version = "0.13", default-features = false, features = ["arithmetic", "pkcs8", "std"] }
 pretty_assertions = "1"
 prost = "0.14.3"
-sherpa-onnx = "1.13.8"
+sherpa-onnx = "=1.13.8"
 crossterm = "0.28.1"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 pulldown-cmark = { version = "0.13.4", default-features = false }
@@ -381,7 +383,7 @@ ratex-svg = { version = "0.1.14", features = ["embed-fonts"] }
 ratex-types = "0.1.14"
 ratatui = "0.29.0"
 regex = "1"
-reqwest = { version = "0.13.4", default-features = false, features = ["rustls"] }
+reqwest = { version = "0.13.4", default-features = false, features = ["rustls-no-provider"] }
 rust-stemmers = "1"
 resvg = { version = "0.47", default-features = false }
 schemars = "1.2.1"
@@ -395,6 +397,7 @@ sys-locale = "0.3"
 sysinfo = { version = "0.39.6", default-features = false, features = ["system"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 rustls-native-certs = "0.7"
+rustls-platform-verifier = "0.7.0"
 rustix = "1.1.4"
 rmcp = { version = "=3.0.0-beta.3", default-features = false }
 rusqlite = { version = "0.40.1", features = ["bundled"] }
@@ -408,7 +411,7 @@ typst-assets = { version = "=0.15.1", features = ["fonts"] }
 typst-pdf = "=0.15.1"
 tokio = { version = "1", features = ["net", "rt", "time"] }
 v8 = "=150.4.0"
-tokio-rustls = "0.26.4"
+tokio-rustls = { version = "0.26.4", default-features = false, features = ["logging", "tls12"] }
 tokio-tungstenite = { version = "0.28.0", default-features = false, features = ["handshake"] }
 thiserror = "2"
 tempfile = "3"

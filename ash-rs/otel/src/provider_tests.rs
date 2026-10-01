@@ -19,10 +19,15 @@ fn production_sdk_exports_to_bounded_diagnostics() {
     let diagnostics = Diagnostics::default();
     let telemetry = Telemetry::new(diagnostics.clone());
     let span = telemetry.start(Activity::Model);
-    assert!(diagnostics.snapshot(Default::default()).recent.is_empty());
+    assert!(
+        diagnostics
+            .snapshot(build_info::BuildInfo::new(None, None), Default::default())
+            .recent
+            .is_empty()
+    );
     span.finish(Outcome::Failed);
     telemetry.flush().unwrap();
-    let snapshot = diagnostics.snapshot(Default::default());
+    let snapshot = diagnostics.snapshot(build_info::BuildInfo::new(None, None), Default::default());
     assert_eq!(snapshot.recent.len(), 1);
     assert_eq!(snapshot.recent[0].activity, Activity::Model);
     assert_eq!(snapshot.recent[0].outcome, Outcome::Failed);
@@ -54,7 +59,13 @@ fn rpc_span_includes_admission_time_and_exports_wait_durations() {
             .attributes
             .contains(&KeyValue::new("rpc.execution_queue_wait_ms", 25_i64))
     );
-    assert!(diagnostics.snapshot(Default::default()).recent[0].elapsed_ms >= 75);
+    assert!(
+        diagnostics
+            .snapshot(build_info::BuildInfo::new(None, None), Default::default())
+            .recent[0]
+            .elapsed_ms
+            >= 75
+    );
     assert!(!Context::current().span().span_context().is_valid());
 }
 

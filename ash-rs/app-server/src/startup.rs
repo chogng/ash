@@ -72,8 +72,7 @@ pub fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
     if arguments.as_slice() == ["--version"] {
         println!(
             "{}",
-            serde_json::to_string(&build_info::BuildInfo::current())
-                .map_err(|error| error.to_string())?
+            serde_json::to_string(&build_identity::current()).map_err(|error| error.to_string())?
         );
         return Ok(());
     }

@@ -593,6 +593,7 @@ dependencies = [
  "ash-attachment-store",
  "ash-attachments",
  "ash-automation",
+ "ash-build-identity",
  "ash-build-info",
  "ash-call",
  "ash-chatgpt",
@@ -934,6 +935,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-build-identity"
+version = "0.1.0"
+dependencies = [
+ "ash-build-info",
+]
+
+[[package]]
 name = "ash-build-info"
 version = "0.1.0"
 dependencies = [
@@ -1004,6 +1012,7 @@ dependencies = [
  "ash-app-server-daemon",
  "ash-app-server-protocol",
  "ash-arg0",
+ "ash-build-identity",
  "ash-build-info",
  "ash-core-plugins",
  "ash-exec",
@@ -1496,6 +1505,7 @@ name = "ash-feedback"
 version = "0.1.0"
 dependencies = [
  "ash-async-utils",
+ "ash-build-info",
  "ash-client",
  "ash-diagnostics",
  "ash-feedback-contract",
@@ -1794,6 +1804,7 @@ dependencies = [
  "reqwest 0.13.4",
  "rustls",
  "rustls-native-certs 0.7.3",
+ "rustls-platform-verifier",
  "tokio",
  "tokio-rustls",
  "ureq",
@@ -2277,6 +2288,7 @@ name = "ash-otel"
 version = "0.1.0"
 dependencies = [
  "ash-async-utils",
+ "ash-build-info",
  "ash-client",
  "ash-diagnostics",
  "ash-http-client",
@@ -2467,7 +2479,7 @@ dependencies = [
  "ash-arg0",
  "ash-async-utils",
  "ash-attachment-store",
- "ash-build-info",
+ "ash-build-identity",
  "ash-core",
  "ash-core-api",
  "ash-exec-server",
@@ -2499,6 +2511,8 @@ dependencies = [
 name = "ash-rmcp-client"
 version = "0.1.0"
 dependencies = [
+ "ash-http-client",
+ "reqwest 0.13.4",
  "rmcp",
  "thiserror 2.0.19",
  "tokio",
@@ -10649,7 +10663,6 @@ version = "0.11.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2f4bfc015262b9df63c8845072ce59068853ff5872180c2ce2f13038b970e560"
 dependencies = [
- "aws-lc-rs",
  "bytes",
  "getrandom 0.4.3",
  "lru-slab",
@@ -11253,7 +11266,6 @@ dependencies = [
  "log",
  "percent-encoding",
  "pin-project-lite",
- "quinn",
  "rustls",
  "rustls-pki-types",
  "rustls-platform-verifier",

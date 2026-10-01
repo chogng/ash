@@ -2,6 +2,8 @@
 
 `ash-realtime-voice` 管理听写会话。App Server 校验发起连接的权限和麦克风占用，把转写通知送回该连接；`voice-host` 进程采集 16 kHz 或 24 kHz PCM 音频。一次听写从持续输入音频、接收临时文本，到结束输入、收齐最终文本并回写，构成完整的一轮。`src/local.rs` 和 `src/cloud.rs` 各自负责这一轮的输入与返回结果。
 
+默认 feature 只包含本地识别。App Server 显式启用 `cloud`，引入云端转写所需的模型供应商和 WebSocket 依赖；TUI 的本地麦克风路径不引入这些依赖。
+
 Ash Code TUI 的 `/voice` 使用 `LocalSpeechSession` 在终端所在机器上采集和识别，按停顿产出完整话语并交给 TUI 发送到当前 Thread。模型回复在终端显示为文字；`/dictate` 则把识别文字填入草稿。TUI 连接远端 App Server 时，`/voice` 的麦克风和音频处理仍留在本机。
 
 双向音频语音对话的每轮还要关联用户音频、模型音频、输入与输出转写，以及完成或打断。现有 `voice-agent` 负责持续的双向传输；模型事件尚无响应 ID，停止播报后需要新建模型会话，双向音频的产品入口尚未接通。
@@ -16,4 +18,4 @@ Ash Code TUI 的 `/voice` 使用 `LocalSpeechSession` 在终端所在机器上�
 
 代码入口按职责分开：`src/lib.rs` 管会话归属、启停和最终文本；`src/local.rs` 管本地流式识别；`src/cloud.rs` 管 OpenAI 云端转写；`src/xai.rs` 管 xAI 云端转写；`src/models.rs` 管连接所属的模型操作及取消；`src/model_package.rs` 管模型安装、文件校验与识别器加载。准备状态按检查、每文件真实下载字节数、加载和最终结果报告，模型准备本身不获取麦克风。
 
-验证入口：`just check ash-realtime-voice`、`just test ash-realtime-voice`、`just rust-warnings ash-realtime-voice`。设置 `ASH_TEST_DICTATION_CACHE_DIR` 可运行被忽略的默认模型下载和加载测试。设置 `ASH_TEST_DICTATION_MODEL_DIR` 与 `ASH_TEST_DICTATION_WAV` 可验证实际导入后的识别，WAV 为 16 kHz，断言文本包含“了解这个项目的进度”。设置 `ASH_TEST_DICTATION_MODEL_DIR` 与 `ASH_TEST_VOICE_HOST_PATH` 可运行真实麦克风采集及会话释放测试，测试不保存录音；这项只验收设备采集和生命周期，不能代替口述识别质量测试。代理和云端账户仍需要目标环境验收。
+验证入口：`just check ash-realtime-voice`、`just test ash-realtime-voice`、`just rust-warnings ash-realtime-voice`；云端实现另运行 `just test ash-realtime-voice --features cloud` 与 `just rust-warnings ash-realtime-voice --features cloud`。设置 `ASH_TEST_DICTATION_CACHE_DIR` 可运行被忽略的默认模型下载和加载测试。设置 `ASH_TEST_DICTATION_MODEL_DIR` 与 `ASH_TEST_DICTATION_WAV` 可验证实际导入后的识别，WAV 为 16 kHz，断言文本包含“了解这个项目的进度”。设置 `ASH_TEST_DICTATION_MODEL_DIR` 与 `ASH_TEST_VOICE_HOST_PATH` 可运行真实麦克风采集及会话释放测试，测试不保存录音；这项只验收设备采集和生命周期，不能代替口述识别质量测试。代理和云端账户仍需要目标环境验收。

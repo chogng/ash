@@ -14,7 +14,8 @@ impl ash_client::OperationClient for Client {
 }
 
 fn snapshot() -> DiagnosticSnapshot {
-    diagnostics::Diagnostics::default().snapshot(Default::default())
+    diagnostics::Diagnostics::default()
+        .snapshot(build_info::BuildInfo::new(None, None), Default::default())
 }
 
 #[test]

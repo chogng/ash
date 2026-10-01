@@ -27,7 +27,11 @@ impl AppServer {
     pub(super) fn diagnostics_read(&self) -> Result<Value, RpcError> {
         self.refresh_analytics()?;
         self.telemetry.flush().map_err(internal)?;
-        result(&self.diagnostics.snapshot(self.analytics.snapshot()))
+        result(
+            &self
+                .diagnostics
+                .snapshot(build_identity::current(), self.analytics.snapshot()),
+        )
     }
 
     pub(super) fn feedback_prepare(
@@ -43,7 +47,8 @@ impl AppServer {
             .prepare(
                 connection.connection_id,
                 &params.endpoint,
-                self.diagnostics.snapshot(self.analytics.snapshot()),
+                self.diagnostics
+                    .snapshot(build_identity::current(), self.analytics.snapshot()),
             )
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
         result(&prepared)

@@ -157,7 +157,14 @@ impl RmcpClient {
         if let HttpAuthorization::Bearer(token) = authorization {
             transport_config = transport_config.auth_header(token.into_inner());
         }
-        let transport = StreamableHttpClientTransport::from_config(transport_config);
+        // Preserve the SDK's OS trust, no redirects, and disabled idle pooling.
+        let client = ash_http_client::ReqwestHttpClient::sdk_client_builder()
+            .map_err(|error| RmcpClientError::TransportStart(std::io::Error::other(error)))?
+            .pool_max_idle_per_host(0)
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|error| RmcpClientError::TransportStart(std::io::Error::other(error)))?;
+        let transport = StreamableHttpClientTransport::with_client(client, transport_config);
         Self::connect(transport, options).await
     }
 

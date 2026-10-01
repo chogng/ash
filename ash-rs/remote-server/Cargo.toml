@@ -25,7 +25,7 @@ serde_json = { workspace = true }
 ash-package-store = { workspace = true }
 arg0 = { workspace = true }
 process-hardening = { workspace = true }
-build-info = { workspace = true }
+build-identity = { workspace = true }
 ash-app-server = { workspace = true }
 ash-app-server-daemon = { workspace = true }
 

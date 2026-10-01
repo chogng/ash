@@ -8,7 +8,9 @@ fn retains_bounded_facts_without_losing_totals() {
             elapsed_ms: 2,
         });
     }
-    let snapshot = diagnostics.snapshot(Default::default());
+    let build = build_info::BuildInfo::new(None, Some("diagnostics-test"));
+    let snapshot = diagnostics.snapshot(build.clone(), Default::default());
+    assert_eq!(snapshot.build, build);
     assert_eq!(snapshot.recent.len(), 256);
     assert_eq!(snapshot.activities[&super::Activity::Rpc].count, 300);
     assert_eq!(snapshot.activities[&super::Activity::Rpc].elapsed_ms, 600);
@@ -34,14 +36,14 @@ fn response_evidence_is_bounded_and_snapshots_are_immutable() {
         record.attempts = attempts;
         diagnostics.record_response(record);
     }
-    let snapshot = diagnostics.snapshot(Default::default());
+    let snapshot = diagnostics.snapshot(build_info::BuildInfo::new(None, None), Default::default());
     assert_eq!(snapshot.responses.len(), 64);
     assert_eq!(snapshot.responses[0].attempts, 6);
     diagnostics.record_response(ResponseDiagnostic::new(ResponseOperation::ModelCatalog));
     assert_eq!(snapshot.responses.last().unwrap().attempts, 69);
     assert_eq!(
         diagnostics
-            .snapshot(Default::default())
+            .snapshot(build_info::BuildInfo::new(None, None), Default::default())
             .responses
             .last()
             .unwrap()

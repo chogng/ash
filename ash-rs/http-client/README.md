@@ -9,6 +9,8 @@ body 和 safe telemetry。上层通过 `HttpClient` 执行一个已经完整构�
 
 它还公开构造时冻结的 `OutboundNetworkSnapshot`，供独立
 [`ash-websocket-client`](../websocket-client/README.md) 复用 proxy、TLS/mTLS、connect timeout 与 target filtering。
+`ReqwestHttpClient::sdk_client_builder` 为必须使用 reqwest 的 SDK 显式选择 ring，并保留 reqwest 原有的系统证书验证器；RMCP 使用此入口，SDK 继续拥有 HTTP framing 与其客户端设置。纯 HTTP 不提前读取系统证书。普通 Ash 调用仍通过 `HttpClient`，不接触后端 TLS 类型。
+
 它不解释 provider JSON，不拥有 model operation retry，也不实现 SSE/NDJSON/WebSocket framing。
 
 ## 当前实现边界
@@ -220,7 +222,7 @@ cross-origin sensitive-header stripping、scheme-downgrade rule 或 body replay 
 - Provider JSON/status semantics 进入本 crate：wire protocol ownership 下沉；
 - 通过提高 `ResponseBodyLimit` 支持无限流：bounded unary contract 被绕过；
 - telemetry 增加 URL、header value、body 或 exact provider/model：低敏感 contract 漂移；
-- public API 暴露 `ureq`/`rustls` type：backend replaceability 消失；异步 TLS 只返回 crate-owned `OutboundTlsStream`。
+- 通用 HTTP API 暴露 `ureq`/`rustls` type：backend replaceability 消失；异步 TLS 只返回 crate-owned `OutboundTlsStream`。SDK 的 reqwest builder 适配限定在 `sdk_client_builder`。
 
 修改 config field 时同步检查 `HttpClientConfig` builder/getter/default、`build_agent` 或
 `build_tls_config`、debug redaction 与 tests。修改 request/response shape 时同步检查

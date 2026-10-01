@@ -91,10 +91,15 @@ impl Diagnostics {
         state.recent.push_back(observation);
     }
 
-    pub fn snapshot(&self, usage: analytics::UsageSnapshot) -> DiagnosticSnapshot {
+    /// The product supplies its identity so collecting facts does not embed a Git revision.
+    pub fn snapshot(
+        &self,
+        build: build_info::BuildInfo,
+        usage: analytics::UsageSnapshot,
+    ) -> DiagnosticSnapshot {
         let state = self.state.lock().expect("diagnostics lock poisoned");
         DiagnosticSnapshot {
-            build: build_info::BuildInfo::current(),
+            build,
             activities: state.summaries.clone(),
             recent: state.recent.iter().cloned().collect(),
             usage,
