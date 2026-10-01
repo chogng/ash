@@ -1,6 +1,6 @@
 import { ShiftCommand } from '../commands/shiftCommand.js';
 import { CompositionSurroundSelectionCommand } from '../commands/surroundSelectionCommand.js';
-import { ReplaceCommand } from '../commands/replaceCommand.js';
+import { ReplaceCommandWithOffsetSelection } from '../commands/replaceCommand.js';
 import { Position } from '../core/position.js';
 import { Range } from '../core/range.js';
 import { EditorIndentationKind, getEditorIndentationUnit, getLeadingIndentation, normalizeEditorIndentation, normalizeEditorIndentationText, resolveEditorIndentationOptions, unshiftEditorIndentation, type ResolvedEditorIndentationOptions } from '../core/misc/indentation.js';
@@ -11,7 +11,7 @@ import { IndentAction, StandardAutoClosingPairConditional, type EnterAction, typ
 import { type ResolvedLanguageConfiguration } from '../languages/languageConfigurationRegistry.js';
 import { StandardTokenType } from '../encodedTokenAttributes.js';
 import { CursorConfiguration, EditOperationResult, EditOperationType, isQuote, type ICursorSimpleModel } from '../cursorCommon.js';
-import { type ICommand, type ICursorStateComputerData } from '../editorCommon.js';
+import { type ICommand } from '../editorCommon.js';
 import { type ITextModel } from '../model.js';
 
 interface PairTypeEdit {
@@ -115,7 +115,7 @@ export class TypeOperations {
 			});
 			const commands = edits.map(result => result.pair
 				? new BaseTypeWithAutoClosingCommand(result.edit.range, result.edit.text, result.edit.anchorOffsetInText, result.edit.activeOffsetInText, result.pair.open, result.pair.close)
-				: new LanguageSelectionEditCommand(result.edit.range, result.edit.text, result.edit.anchorOffsetInText, result.edit.activeOffsetInText));
+				: new ReplaceCommandWithOffsetSelection(result.edit.range, result.edit.text, result.edit.anchorOffsetInText, result.edit.activeOffsetInText));
 			return new EditOperationResult(EditOperationType.TypingOther, commands, {
 				shouldPushStackElementBefore: prevEditOperationType !== EditOperationType.TypingOther,
 				shouldPushStackElementAfter: false,
@@ -286,7 +286,7 @@ function languageEnter(config: CursorConfiguration, model: ITextModel, selection
 	const indentation = indentationOptions(config);
 	const commands = selections.map(selection => {
 		const edit = enterEdit(model, selection, languageConfigurationAt(config, model, selection.getPosition()), indentation);
-		return new LanguageSelectionEditCommand(edit.range, edit.text, edit.anchorOffsetInText, edit.activeOffsetInText);
+		return new ReplaceCommandWithOffsetSelection(edit.range, edit.text, edit.anchorOffsetInText, edit.activeOffsetInText);
 	});
 	return new EditOperationResult(EditOperationType.TypingOther, commands, {
 		shouldPushStackElementBefore: true,
@@ -322,17 +322,6 @@ function shouldSurround(config: CursorConfiguration, text: string): boolean {
 	if (config.autoSurround === 'quotes') return isQuote(text);
 	if (config.autoSurround === 'brackets') return !isQuote(text);
 	return false;
-}
-
-class LanguageSelectionEditCommand extends ReplaceCommand {
-	constructor(range: Range, text: string, private readonly anchorOffsetInText: number, private readonly activeOffsetInText: number) {
-		super(range, text);
-	}
-
-	public override computeCursorState(model: ITextModel, helper: ICursorStateComputerData): Selection {
-		const start = helper.getInverseEditOperations()[0]!.range.getStartPosition();
-		return Selection.fromPositions(model.modifyPosition(start, this.anchorOffsetInText), model.modifyPosition(start, this.activeOffsetInText));
-	}
 }
 
 function inferStandardTokenType(line: string, offset: number): StandardTokenType {

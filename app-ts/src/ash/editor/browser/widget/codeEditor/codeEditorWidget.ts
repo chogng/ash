@@ -16,7 +16,7 @@ import { type ICursorStateComputer, type IIdentifiedSingleEditOperation, type IM
 import { type IModelContentChangedEvent, type IModelDecorationsChangedEvent } from '../../../common/textModelEvents.js';
 import { EditorType, Handler, ScrollType, type CompositionTypePayload, type ICommand, type IEditorAction, type ICodeEditorViewState, type IEditorDecorationsCollection, type IEditorModel, type IEditorViewState, type IModelChangedEvent, type INewScrollPosition, type ReplacePreviousCharPayload, type TypePayload } from '../../../common/editorCommon.js';
 import { VerticalRevealType } from '../../../common/viewEvents.js';
-import type { ICodeEditor, IContentWidget, IEditorMouseEvent, IGlyphMarginWidget, IOverlayWidget, IOverviewRuler, IPartialEditorMouseEvent, PastePayload, IViewZoneChangeAccessor } from '../../editorBrowser.js';
+import type { ICodeEditor, IContentWidget, IEditorMouseEvent, IGlyphMarginWidget, IOverlayWidget, IOverviewRuler, IPartialEditorMouseEvent, IPasteEvent, PastePayload, IViewZoneChangeAccessor } from '../../editorBrowser.js';
 import { View, type EditorTextDirection, type EditorViewportPresentation } from '../../view.js';
 import { KeyboardNavigationController, ViewController } from "../../view/viewController.js";
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
@@ -51,6 +51,7 @@ import { IContextKeyService } from "../../../../platform/contextkey/browser/cont
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import { InternalEditorAction } from '../../../common/editorAction.js';
 import { type ICursorPositionChangedEvent, type ICursorSelectionChangedEvent } from '../../../common/cursorEvents.js';
+import { ReplaceCommand } from '../../../common/commands/replaceCommand.js';
 
 export interface EditorSectionHeaderOptions {
 	readonly showRegionSectionHeaders?: boolean;
@@ -143,7 +144,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	private readonly compositionStartEmitter = this._register(new Emitter<void>());
 	private readonly compositionEndEmitter = this._register(new Emitter<void>());
 	private readonly typeEmitter = this._register(new Emitter<string>());
-	private readonly pasteEmitter = this._register(new Emitter<IClipboardPasteEvent>());
+	private readonly pasteEmitter = this._register(new Emitter<IPasteEvent>());
 	private readonly willCopyEmitter = this._register(new Emitter<IClipboardCopyEvent>());
 	private readonly willCutEmitter = this._register(new Emitter<IClipboardCopyEvent>());
 	private readonly willPasteEmitter = this._register(new Emitter<IClipboardPasteEvent>());
@@ -395,6 +396,14 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				container: options.container,
 				rootDomNode: this.rootDomNode,
 				viewModel,
+				commandDelegate: {
+					type: text => this.type('keyboard', text),
+					paste: (text, pasteOnNewLine, multicursorText, mode) => this.paste('keyboard', text, pasteOnNewLine, multicursorText, mode),
+					compositionType: (text, replacePrevCharCnt, replaceNextCharCnt, positionDelta) => this.viewModel.compositionType(text, replacePrevCharCnt, replaceNextCharCnt, positionDelta, 'keyboard'),
+					startComposition: () => this.viewModel.startComposition(),
+					endComposition: () => this.viewModel.endComposition('keyboard'),
+					cut: () => this.viewModel.cut('keyboard'),
+				},
 				configuration: this.configuration,
 				theme: themeService.getColorTheme(),
 				ariaLabel,
@@ -419,9 +428,8 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			modelStore.add(this.controller.editContext.onDidCompositionStart(() => this.compositionStartEmitter.fire()));
 			modelStore.add(this.controller.editContext.onDidCompositionEnd(() => this.compositionEndEmitter.fire()));
 			modelStore.add(this.controller.onDidEdit(event => {
-				if (event.insertedText !== undefined) this.typeEmitter.fire(event.insertedText);
+				if (event.insertedText !== undefined && (event.inputType === 'insertText' || event.inputType === 'insertReplacementText')) this.typeEmitter.fire(event.insertedText);
 			}));
-			modelStore.add(this.controller.editContext.onWillPaste(event => this.pasteEmitter.fire(event)));
 			modelStore.add(this.view.onWillCopy(event => this.willCopyEmitter.fire(event)));
 			modelStore.add(this.view.onWillCut(event => this.willCutEmitter.fire(event)));
 			modelStore.add(this.view.onWillPaste(event => this.willPasteEmitter.fire(event)));
@@ -945,36 +953,65 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		return true;
 	}
 
+	private type(source: string | null | undefined, text: string): void {
+		if (text.length === 0) return;
+		const viewModel = this.viewModel;
+		// A multiline keyboard transfer is one edit, without Enter rules or
+		// paste distribution. Programmatic input already uses the plain type path.
+		if (source === 'keyboard' && text.length > 1 && /[\r\n]/u.test(text)) {
+			this.pushUndoStop();
+			viewModel.executeCommands(viewModel.getSelections().map(selection => new ReplaceCommand(selection, text)), source);
+			this.pushUndoStop();
+		} else {
+			viewModel.type(text, source);
+		}
+		viewModel.revealPrimaryCursor(source, true);
+		if (source === 'keyboard') this.typeEmitter.fire(text);
+	}
+
+	private paste(source: string | null | undefined, text: string, pasteOnNewLine: boolean, multicursorText: string[] | null, mode: string | null, clipboardEvent?: ClipboardEvent): void {
+		const viewModel = this.viewModel;
+		const start = viewModel.getSelection().getStartPosition();
+		viewModel.paste(text, pasteOnNewLine, multicursorText, source);
+		viewModel.revealPrimaryCursor(source, true);
+		if (source === 'keyboard') {
+			this.pasteEmitter.fire({ range: Range.fromPositions(start, viewModel.getSelection().getStartPosition()), languageId: mode, clipboardEvent });
+		}
+	}
+
 	trigger(source: string | null | undefined, handlerId: string, payload: unknown): void {
 		if (!this.currentModel) return;
 		const args = (payload ?? {}) as Record<string, unknown>;
 		switch (handlerId) {
 			case Handler.CompositionStart:
-				this.controller.compositionStart();
+				this.viewModel.startComposition();
 				return;
 			case Handler.CompositionEnd:
-				this.controller.compositionEnd();
+				this.viewModel.endComposition(source);
 				return;
 			case Handler.Type:
-				this.controller.type((args as Partial<TypePayload>).text ?? '');
+				this.type(source, (args as Partial<TypePayload>).text ?? '');
 				return;
 			case Handler.ReplacePreviousChar: {
 				const replacement = args as Partial<ReplacePreviousCharPayload>;
-				this.controller.compositionType(replacement.text ?? '', replacement.replaceCharCnt ?? 0, 0, 0);
+				this.viewModel.compositionType(replacement.text ?? '', replacement.replaceCharCnt ?? 0, 0, 0, source);
+				this.viewModel.revealPrimaryCursor(source, true);
 				return;
 			}
 			case Handler.CompositionType: {
 				const composition = args as Partial<CompositionTypePayload>;
-				this.controller.compositionType(composition.text ?? '', composition.replacePrevCharCnt ?? 0, composition.replaceNextCharCnt ?? 0, composition.positionDelta ?? 0);
+				this.viewModel.compositionType(composition.text ?? '', composition.replacePrevCharCnt ?? 0, composition.replaceNextCharCnt ?? 0, composition.positionDelta ?? 0, source);
+				this.viewModel.revealPrimaryCursor(source, true);
 				return;
 			}
 			case Handler.Paste: {
 				const paste = args as Partial<PastePayload>;
-				this.controller.paste(paste.text ?? '', paste.pasteOnNewLine ?? false, paste.multicursorText ?? null, paste.mode ?? null);
+				this.paste(source, paste.text ?? '', paste.pasteOnNewLine ?? false, paste.multicursorText ?? null, paste.mode ?? null, paste.clipboardEvent);
 				return;
 			}
 			case Handler.Cut:
-				this.controller.cut();
+				this.viewModel.cut(source);
+				this.viewModel.revealPrimaryCursor(source, true);
 				return;
 		}
 		try {

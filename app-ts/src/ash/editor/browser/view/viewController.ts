@@ -4,7 +4,7 @@ import { addDisposableListener } from '../../../base/browser/dom.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { isLinux, operatingSystem, OperatingSystem } from '../../../base/common/platform.js';
-import { ReplaceCommand } from '../../common/commands/replaceCommand.js';
+import { ReplaceCommand, ReplaceCommandWithOffsetSelection } from '../../common/commands/replaceCommand.js';
 import { EditorLineWrapping, EditorOption } from '../../common/config/editorOptions.js';
 import { ColumnSelection } from '../../common/cursor/cursorColumnSelection.js';
 import { CursorMove, CursorMoveCommands } from '../../common/cursor/cursorMoveCommands.js';
@@ -51,6 +51,16 @@ export interface ViewControllerOptions {
 	readonly logService?: ILogService;
 	readonly ariaLabel?: string;
 	readonly semanticTokenSource?: SemanticTokenSource;
+}
+
+/** Routes view input to the widget that owns its source and public edit events. */
+export interface ICommandDelegate {
+	paste(text: string, pasteOnNewLine: boolean, multicursorText: string[] | null, mode: string | null): void;
+	type(text: string): void;
+	compositionType(text: string, replacePrevCharCnt: number, replaceNextCharCnt: number, positionDelta: number): void;
+	startComposition(): void;
+	endComposition(): void;
+	cut(): void;
 }
 
 export interface IMouseDispatchData {
@@ -113,6 +123,7 @@ export class ViewController extends Disposable {
 		readonly viewport: View,
 		private readonly viewModel: IViewModel,
 		options: ViewControllerOptions,
+		private readonly commandDelegate: ICommandDelegate,
 		createEditContext: (viewController: ViewController) => AbstractEditContext,
 	) {
 		super();
@@ -291,24 +302,24 @@ export class ViewController extends Disposable {
 		return this.executeType(this.viewModel.getSelections(), text, inputType);
 	}
 
-	public paste(text: string, pasteOnNewLine: boolean, multicursorText: string[] | null, _mode: string | null = null): void {
-		this.runViewModelEdit('insertFromPaste', undefined, () => this.viewModel.paste(text, pasteOnNewLine, multicursorText, 'keyboard'));
+	public paste(text: string, pasteOnNewLine: boolean, multicursorText: string[] | null, mode: string | null = null): void {
+		this.runViewModelEdit('insertFromPaste', undefined, () => this.commandDelegate.paste(text, pasteOnNewLine, multicursorText, mode));
 	}
 
 	public compositionType(text: string, replacePrevCharCnt: number, replaceNextCharCnt: number, positionDelta: number): void {
-		this.runViewModelEdit('insertCompositionText', text, () => this.viewModel.compositionType(text, replacePrevCharCnt, replaceNextCharCnt, positionDelta, 'keyboard'));
+		this.runViewModelEdit('insertCompositionText', text, () => this.commandDelegate.compositionType(text, replacePrevCharCnt, replaceNextCharCnt, positionDelta));
 	}
 
 	public compositionStart(): void {
-		this.viewModel.startComposition();
+		this.commandDelegate.startComposition();
 	}
 
 	public compositionEnd(): void {
-		this.viewModel.endComposition('keyboard');
+		this.commandDelegate.endComposition();
 	}
 
 	public cut(): void {
-		this.runViewModelEdit('deleteByCut', undefined, () => this.viewModel.cut('keyboard'));
+		this.runViewModelEdit('deleteByCut', undefined, () => this.commandDelegate.cut());
 	}
 
 	public enter(inputType = 'insertLineBreak'): TextModelChange | undefined {
@@ -365,18 +376,12 @@ export class ViewController extends Disposable {
 			model.getPositionAt(model.getOffsetAt(selection.getStartPosition()) + update.updateRangeStart - primaryStart),
 			model.getPositionAt(model.getOffsetAt(selection.getEndPosition()) + update.updateRangeEnd - primaryEnd),
 		)) : [Range.fromPositions(model.getPositionAt(update.updateRangeStart), model.getPositionAt(update.updateRangeEnd))];
-		const commands: ICommand[] = ranges.map(range => ({
-			getEditOperations: (_model, builder): void => builder.addTrackedEditOperation(range, update.text),
-			computeCursorState: (editedModel, helper): Selection => {
-				const start = editedModel.getOffsetAt(helper.getInverseEditOperations()[0]!.range.getStartPosition());
-				// Inverse ranges are in the committed model, including shifts from
-				// other cursors. Browser selection offsets refer to its single edit.
-				return Selection.fromPositions(
-					editedModel.getPositionAt(start + update.selectionStart - update.updateRangeStart),
-					editedModel.getPositionAt(start + update.selectionEnd - update.updateRangeStart),
-				);
-			},
-		}));
+		const commands = ranges.map(range => new ReplaceCommandWithOffsetSelection(
+			range,
+			update.text,
+			update.selectionStart - update.updateRangeStart,
+			update.selectionEnd - update.updateRangeStart,
+		));
 		model.pushStackElement();
 		const change = this.runViewModelEdit(inputType, update.text, () => this.viewModel.executeCommands(commands, inputType));
 		model.pushStackElement();
@@ -397,20 +402,12 @@ export class ViewController extends Disposable {
 
 	private executeType(selections: readonly Selection[], text: string, inputType: string): TextModelChange | undefined {
 		this.viewModel.setSelections(inputType, selections);
-		// A multiline input event is one transfer; typing it character by character
-		// would apply Enter rules and split its undo history at each line break.
-		if (text.length > 1 && /[\r\n]/u.test(text)) {
-			this.viewport.textModel.pushStackElement();
-			const change = this.runViewModelEdit(inputType, text, () => this.viewModel.executeCommands(selections.map(selection => new ReplaceCommand(selection, text)), inputType));
-			this.viewport.textModel.pushStackElement();
-			return change;
-		}
-		return this.runViewModelEdit(inputType, text, () => this.viewModel.type(text, 'keyboard'));
+		return this.runViewModelEdit(inputType, text, () => this.commandDelegate.type(text), false);
 	}
 
 	private executeEnter(selections: readonly Selection[], inputType: string, text = '\n'): TextModelChange | undefined {
 		this.viewModel.setSelections(inputType, selections);
-		return this.runViewModelEdit(inputType, undefined, () => this.viewModel.type(text, 'keyboard'));
+		return this.runViewModelEdit(inputType, undefined, () => this.commandDelegate.type(text), false);
 	}
 
 	private executeDelete(direction: 'left' | 'right', selections: readonly Selection[], inputType: string): TextModelChange | undefined {
@@ -428,19 +425,12 @@ export class ViewController extends Disposable {
 	}
 
 	private executeCommands(commands: readonly (ICommand | null)[], inputType: string, type: EditOperationType, pushBefore: boolean, pushAfter: boolean): TextModelChange | undefined {
-		if (pushBefore) this.viewport.textModel.pushStackElement();
-		let change: TextModelChange | undefined;
-		const capture = this.viewport.textModel.onDidChangeContent(event => { change = event; });
-		try {
+		return this.runViewModelEdit(inputType, undefined, () => {
+			if (pushBefore) this.viewport.textModel.pushStackElement();
 			this.viewModel.executeCommands([...commands], inputType);
-		} finally {
-			capture.dispose();
-		}
-		this.viewModel.setPrevEditOperationType(type);
-		if (pushAfter) this.viewport.textModel.pushStackElement();
-		this.revealPrimary();
-		if (change) this.didEditEmitter.fire(Object.freeze({ inputType, insertedText: undefined, change }));
-		return change;
+			this.viewModel.setPrevEditOperationType(type);
+			if (pushAfter) this.viewport.textModel.pushStackElement();
+		});
 	}
 
 	private runViewModelEdit(inputType: string, insertedText: string | undefined, edit: () => void, emitDidEdit = true): TextModelChange | undefined {

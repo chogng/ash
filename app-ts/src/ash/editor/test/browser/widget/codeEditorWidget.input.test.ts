@@ -944,6 +944,51 @@ for (const edit of ['type', 'paste', 'executeEdits'] as const) {
 	});
 }
 
+test('programmatic typing preserves its source and skips keyboard rules and events', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	try {
+		using model = new TextModel('', { languageId: 'typescript' });
+		using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model });
+		const typed: string[] = [];
+		using listener = editor.onDidType(text => typed.push(text));
+		editor.trigger('test-api', 'type', { text: '(' });
+		assert.deepEqual({ value: model.getValue(), typed }, { value: '(', typed: [] });
+		editor.setValue('');
+		editor.trigger('keyboard', 'type', { text: '(' });
+		assert.deepEqual({ value: model.getValue(), typed }, { value: '()', typed: ['('] });
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('paste interception precedes the edit and the public paste event follows it', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	try {
+		using model = new TextModel('alpha');
+		using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model });
+		const order: string[] = [];
+		using before = editor.onWillPaste(() => order.push(`will:${model.getValue()}`));
+		using after = editor.onDidPaste(event => order.push(`did:${model.getValue()}:${event.range.toString()}:${event.languageId}`));
+		editor.focus();
+		const data = new TestClipboardData();
+		data.setData('text/plain', 'X');
+		editor.controller.editContext.domNode.domNode.dispatchEvent(testClipboardEvent(dom.window, 'paste', data));
+		assert.deepEqual(order, ['will:alpha', 'did:Xalpha:[1,1 -> 1,2]:null']);
+		editor.trigger('test-api', 'paste', { text: 'Y' });
+		assert.deepEqual({ value: model.getValue(), order }, { value: 'XYalpha', order: ['will:alpha', 'did:Xalpha:[1,1 -> 1,2]:null'] });
+		using intercept = editor.onWillPaste(event => event.setHandled());
+		editor.controller.editContext.domNode.domNode.dispatchEvent(testClipboardEvent(dom.window, 'paste', data));
+		assert.deepEqual({ value: model.getValue(), order }, {
+			value: 'XYalpha',
+			order: ['will:alpha', 'did:Xalpha:[1,1 -> 1,2]:null', 'will:XYalpha'],
+		});
+	} finally {
+		dom.window.close();
+	}
+});
+
 for (const scenario of [
 	{ name: 'replacement before the caret', original: 'hello world', before: [5, 5], range: [0, 5], text: 'hi', after: [2, 2], expected: 'hi world' },
 	{ name: 'replacement inside a selection', original: 'abcdef', before: [0, 6], range: [1, 4], text: 'X', after: [1, 2], expected: 'aXef' },

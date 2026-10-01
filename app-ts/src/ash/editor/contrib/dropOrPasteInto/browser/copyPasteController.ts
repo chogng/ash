@@ -63,7 +63,7 @@ export class CopyPasteController extends Disposable implements IEditorContributi
 		super();
 		this.postEditWidget = this._register(new PostEditWidgetManager(editor, bulkEdits, notifications,
 			'editor.widget.postPasteSelector', localize('dropOrPaste.pasteOptions', 'Paste options'), pasteWidgetVisibleCtx, contextKeys));
-		this._register(editor.onDidPaste(event => this.handlePaste(event)));
+		this._register(editor.onWillPaste(event => this.handlePaste(event)));
 		this._register(editor.onWillCopy(event => this.prepareCopy(event)));
 		this._register(editor.onWillCut(event => this.prepareCopy(event)));
 		this._register(toDisposable(() => this.currentOperation?.dispose(true)));

@@ -158,6 +158,13 @@ export interface IOverviewRuler {
 	setLayout(position: OverviewRulerPosition): void;
 }
 
+/** A completed keyboard paste; clipboard interception uses onWillPaste. */
+export interface IPasteEvent {
+	readonly range: Range;
+	readonly languageId: string | null;
+	readonly clipboardEvent?: ClipboardEvent;
+}
+
 /** Browser-facing contract shared by editor services and contributions. */
 export interface ICodeEditor extends IEditor {
 	readonly isSimpleWidget: boolean;
@@ -180,7 +187,7 @@ export interface ICodeEditor extends IEditor {
 	readonly onDidCompositionStart: Event<void>;
 	readonly onDidCompositionEnd: Event<void>;
 	readonly onDidType: Event<string>;
-	readonly onDidPaste: Event<IClipboardPasteEvent>;
+	readonly onDidPaste: Event<IPasteEvent>;
 	readonly onWillCopy: Event<IClipboardCopyEvent>;
 	readonly onWillCut: Event<IClipboardCopyEvent>;
 	readonly onWillPaste: Event<IClipboardPasteEvent>;

@@ -17,8 +17,7 @@ import { LineRange } from '../common/core/ranges/lineRange.js';
 import { Selection } from '../common/core/selection.js';
 import { EditorOption, type EditorLayoutInfo, type FindComputedEditorOptionValueById } from '../common/config/editorOptions.js';
 import { type IModelDeltaDecoration, type ITextModel } from '../common/model.js';
-import { type IClipboardPasteEvent } from './controller/editContext/clipboardUtils.js';
-import { type ICodeEditor, type IContentWidget, type IContentWidgetPosition, type IEditorMouseEvent, type IOverlayWidget, type IOverlayWidgetPosition } from './editorBrowser.js';
+import { type ICodeEditor, type IPasteEvent, type IContentWidget, type IContentWidgetPosition, type IEditorMouseEvent, type IOverlayWidget, type IOverlayWidgetPosition } from './editorBrowser.js';
 import { OffsetRange } from '../common/core/ranges/offsetRange.js';
 
 /** Returns the observable facade for one canonical Stanza code editor widget. */
@@ -43,7 +42,7 @@ export class ObservableCodeEditor extends Disposable {
 	private readonly compositionState: ObservableState<boolean>;
 	private readonly layoutState: ObservableState<EditorLayoutInfo>;
 	private readonly typeChannel: ObservableChannel<string>;
-	private readonly pasteChannel: ObservableChannel<IClipboardPasteEvent | undefined>;
+	private readonly pasteChannel: ObservableChannel<IPasteEvent | undefined>;
 	private currentTransaction: ITransaction | undefined;
 
 	public readonly editor: ICodeEditor;
@@ -64,8 +63,8 @@ export class ObservableCodeEditor extends Disposable {
 	/** The primary cursor's one-based line number. */
 	public readonly cursorLineNumber: IObservable<number | null>;
 	public readonly onDidType: IObservable<string>;
-	/** The latest normalized paste event; Ash exposes it at the EditContext boundary. */
-	public readonly onDidPaste: IObservable<IClipboardPasteEvent | undefined>;
+	/** The latest completed keyboard paste, including its inserted range. */
+	public readonly onDidPaste: IObservable<IPasteEvent | undefined>;
 	public readonly layoutInfo: IObservable<EditorLayoutInfo>;
 	public readonly layoutInfoContentLeft: IObservable<number>;
 	public readonly layoutInfoDecorationsLeft: IObservable<number>;
@@ -105,7 +104,7 @@ export class ObservableCodeEditor extends Disposable {
 		this.compositionState = this._register(new ObservableState(editor.inComposition));
 		this.layoutState = this._register(new ObservableState(editor.getLayoutInfo()));
 		this.typeChannel = this._register(new ObservableChannel(''));
-		this.pasteChannel = this._register(new ObservableChannel<IClipboardPasteEvent | undefined>(undefined));
+		this.pasteChannel = this._register(new ObservableChannel<IPasteEvent | undefined>(undefined));
 
 		this.model = this.modelState;
 		this.isReadonly = constObservable(editor.getOption(EditorOption.readOnly));

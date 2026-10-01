@@ -13,7 +13,7 @@ import { ViewModel } from '../../../common/viewModel/viewModelImpl.js';
 import { TestLanguageConfigurationService } from '../../common/modes/testLanguageConfigurationService.js';
 import { createTestConfiguration } from '../config/testConfiguration.js';
 
-export type TestViewOptions = Omit<EditorViewportOptions, 'configuration' | 'theme' | 'viewModel' | 'padding'> & Omit<IEditorOptions, 'padding' | 'wrappingIndent'> & {
+export type TestViewOptions = Omit<EditorViewportOptions, 'configuration' | 'theme' | 'viewModel' | 'padding' | 'commandDelegate'> & Omit<IEditorOptions, 'padding' | 'wrappingIndent'> & {
 	readonly lineWrapping?: EditorLineWrapping;
 	readonly wrappingIndent?: WrappingIndent;
 	readonly cursorOptions?: IEditorOptions;
@@ -36,6 +36,14 @@ export class TestView extends View {
 			configuration: setup.configuration,
 			theme: setup.theme,
 			viewModel: setup.viewModel,
+			commandDelegate: {
+				type: text => setup.viewModel.type(text, 'keyboard'),
+				paste: (text, pasteOnNewLine, multicursorText) => setup.viewModel.paste(text, pasteOnNewLine, multicursorText, 'keyboard'),
+				compositionType: (text, replacePrevCharCnt, replaceNextCharCnt, positionDelta) => setup.viewModel.compositionType(text, replacePrevCharCnt, replaceNextCharCnt, positionDelta, 'keyboard'),
+				startComposition: () => setup.viewModel.startComposition(),
+				endComposition: () => setup.viewModel.endComposition('keyboard'),
+				cut: () => setup.viewModel.cut('keyboard'),
+			},
 		});
 		this.setupStore = setup.store;
 		this.testConfiguration = setup.configuration;

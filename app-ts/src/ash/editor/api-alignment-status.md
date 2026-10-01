@@ -1,5 +1,17 @@
 # Editor API 对齐状态
 
+## 输入来源、替换命令与粘贴事件（2026-09-30）
+
+键盘输入经 `ViewController → ICommandDelegate → CodeEditorWidget`，程序输入从 `CodeEditorWidget.trigger` 保留调用方的 `source`；两者使用原有 `ViewModel → CursorsController → ICommand → TextModel` 编辑和撤销链。程序键入不再被当作键盘键入触发自动括号及 `onDidType`。多行键盘传入仍作为一次替换提交，各光标插入完整文本，保持一次撤销。
+
+语言键入与浏览器范围更新共用现有 `common/commands/replaceCommand.ts` 内的 `ReplaceCommandWithOffsetSelection`。这是本次用户确认的 Ash 扩展：使用逆向编辑范围作为插入起点，按 UTF-16 偏移恢复有方向的选区；不声称该类是上游同名契约。跨行、emoji 和其他光标导致的位置变化都经过原命令基座处理。Controller 的命令编辑共用已有结果捕获、监听释放与编辑通知路径。
+
+`onWillPaste` 保留剪贴板拦截契约，`CopyPasteController` 迁到该入口；`onDidPaste` 使用上游 `IPasteEvent` 完成事件契约，返回已插入范围、语言和可选剪贴板事件，Observable Editor 同步消费完成事件。被拦截的默认粘贴不发布完成事件，程序粘贴不发布键盘粘贴事件。
+
+本批 58 项定向单测、19 项 Chromium 编辑与粘贴 provider 场景通过。生产构建通过；生产 Web、Electron UI、连接 App Server 的 Electron 各 3 项多行输入、范围替换及粘贴撤销/重做场景通过。额外粘贴控制器单测为 12 通过、1 失败：文件名粘贴未插入文件名，与此前完整检查的同一断言结果一致，未将该文件测试计为全部通过。
+
+专用完整浏览器检查为 665 通过、41 失败，结构、CSS、台账和 Stanza 类型检查通过。40 个失败与本批修改前的完整检查相同，涉及 Find、剪贴板、括号、GPU 和触屏场景；本次另一个滚动用例失败，定向复跑 3 次均通过。复跑时原有指针用例仍间歇失败（2 次通过、1 次失败）；本批 19 个相关场景各复跑 3 次全部通过。完整检查保持未通过，不将这些结果写成整组 Editor 已完成对齐。
+
 ## 公共 IEditor 基座（2026-09-30）
 
 本批闭合的生产链：差异窗格恢复历史选区 → `TextDiffEditor.restoreSelection` → `applyTextEditorOptions` → `CodeEditorWidget` 的公共 `IEditor` 契约 → 原 `ViewModel` 选区与 reveal 事件 → 原 `View` 滚动。窗格改变显隐后通知两侧 Widget，复用原输入与 widget 焦点 tracker；没有新增选区、滚动、DOM 或生命周期 owner。
@@ -2057,7 +2069,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | 文件 | 声明 | 结果 |
 | --- | --- | --- |
 | `browser/controller/editContext/native/debugEditContext.ts` | `DebugEditContext` | 构造入口、状态代理、事件包装、调试开关和边界标记职责与上游一致；该类型只用于手动诊断，明确不进入生产输入创建链，所有标记使用调用方 document 并从无障碍树隐藏，定向测试覆盖状态、事件、开关与清理 |
-| `browser/controller/editContext/clipboardUtils.ts` | `IClipboardPasteEvent` | 字段、构造行为和外部数据转换与上游一致；生产调用由 TextArea/Native EditContext 默认消费并保留 `onWillPaste` 拦截点，Observable Editor 继续发布同一事件；浏览器测试覆盖 metadata、外部数据转换和默认粘贴 |
+| `browser/controller/editContext/clipboardUtils.ts` | `IClipboardPasteEvent` | 字段、构造行为和外部数据转换与上游一致；生产调用由两种 EditContext 默认消费并保留 `onWillPaste` 拦截点，CopyPasteController 在该入口拦截剪贴板，Observable Editor 消费完成后的 `IPasteEvent`；浏览器测试覆盖 metadata、外部数据转换和默认粘贴 |
 | `browser/controller/editContext/clipboardUtils.ts` | `IClipboardCopyEvent` | 公开成员与上游归零；事件在输入上下文中生成选区文本、来源范围、富文本和内存元数据，TextArea/Native EditContext 在拦截器未处理时写入标准数据并执行剪切；浏览器测试覆盖复制、剪切、多选区、整行和系统剪贴板回退 |
 | `browser/controller/editContext/clipboardUtils.ts` | `createClipboardCopyEvent` | 五参数入口与上游一致；由 `ViewContext` 读取配置和选区并负责标准剪贴板数据及元数据写入，旧的无模型事件入口已删除，生产调用只经过两个输入实现 |
 | `browser/controller/editContext/textArea/textAreaEditContextInput.ts` | `TextAreaInput` | 标准 `ITextAreaInputHost`、焦点、键盘、type、composition、selection 和 clipboard 事件均由唯一 textarea DOM owner 发布，普通文本与组合替换统一进入 `ITypeData`，系统选区与屏幕阅读器状态仍由同一 owner 映射并释放。失焦后不可取消的 `beforeinput` 不再发出 type，迟到的 `compositionstart` 不重建组合状态，copy/cut/paste 不再读取旧选区或提交编辑；上游 `_initializeFromTest` 没有生产职责，`dispose` 由 `Disposable` 基类继承，不添加空包装；本地 wrapper 方法和 raw before/input 事件服务于现有单 owner，不为形似上游另拆私有 wrapper 类图 |

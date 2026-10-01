@@ -27,6 +27,20 @@ export class ReplaceCommand implements ICommand {
 	}
 }
 
+/** Restores an explicit selection in UTF-16 offsets relative to the inserted text. */
+export class ReplaceCommandWithOffsetSelection extends ReplaceCommand {
+	constructor(range: Range, text: string, private readonly anchorOffset: number, private readonly activeOffset: number) {
+		super(range, text);
+	}
+
+	public override computeCursorState(model: ITextModel, helper: ICursorStateComputerData): Selection {
+		// The inverse range includes shifts caused by the other cursors in this
+		// transaction; offsets describe the selection in this insertion alone.
+		const start = helper.getInverseEditOperations()[0]!.range.getStartPosition();
+		return Selection.fromPositions(model.modifyPosition(start, this.anchorOffset), model.modifyPosition(start, this.activeOffset));
+	}
+}
+
 export class ReplaceOvertypeCommand implements ICommand {
 
 	private readonly _range: Range;

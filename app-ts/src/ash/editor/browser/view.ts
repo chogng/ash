@@ -63,7 +63,7 @@ import type { IConfigurationService } from '../../platform/configuration/common/
 import { ViewZones } from './viewParts/viewZones/viewZones.js';
 import { type HorizontalPosition, RenderingContext } from './view/renderingContext.js';
 import { ViewportData } from '../common/viewLayout/viewLinesViewportData.js';
-import { ViewController, type ViewControllerOptions } from './view/viewController.js';
+import { ViewController, type ICommandDelegate, type ViewControllerOptions } from './view/viewController.js';
 import { type AbstractEditContext, type EditContextCharacterBounds, type EditContextOptions } from './controller/editContext/editContext.js';
 import { type IClipboardCopyEvent, type IClipboardPasteEvent } from './controller/editContext/clipboardUtils.js';
 import { NativeEditContext, type NativeEditContextOptions } from './controller/editContext/native/nativeEditContext.js';
@@ -109,6 +109,7 @@ export interface EditorViewportOptions {
 	/** Reused by the Widget across model attachments; View owns its children. */
 	readonly rootDomNode?: HTMLDivElement;
 	readonly viewModel: IViewModel;
+	readonly commandDelegate: ICommandDelegate;
 	readonly controller?: ViewControllerOptions;
 	readonly configuration: EditorConfiguration;
 	readonly theme: IColorTheme;
@@ -296,7 +297,7 @@ export class View extends ViewEventHandler {
 				this.scheduleProjection();
 			}));
 		}
-		this.controller = this._register(new ViewController(this, options.viewModel, options.controller ?? {}, controller => {
+		this.controller = this._register(new ViewController(this, options.viewModel, options.controller ?? {}, options.commandDelegate, controller => {
 			const input = createEditContext(this.viewContext, this.domNode.domNode, {
 				...options.controller,
 				readOnly: options.viewModel.cursorConfig.readOnly,
