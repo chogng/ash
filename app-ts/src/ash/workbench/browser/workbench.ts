@@ -307,6 +307,7 @@ export interface IStartWorkbenchOptions {
 	readonly workspace: IWorkspace;
 	/** The host selects its implementation; the Workbench supplies initialized window services. */
 	readonly createLifecycleService: (services: IInstantiationService) => ILifecycleService & IDisposable;
+	readonly createWindow?: (services: IInstantiationService) => IDisposable;
 	readonly configurationApi?: IConfigurationApi;
 	readonly initialConfigurationSnapshot?: IConfigurationSnapshot;
 	readonly keybindingsResourceApi?: IKeybindingsResourceApi;
@@ -332,6 +333,7 @@ export async function startWorkbench({
 	container,
 	workspace,
 	createLifecycleService,
+	createWindow,
 	configurationApi,
 	initialConfigurationSnapshot,
 	keybindingsResourceApi,
@@ -374,6 +376,7 @@ export async function startWorkbench({
 			browserFileSystemProvider,
 			webWorkspaceClient,
 			themes,
+			createWindow,
 		);
 	} catch (error) {
 		themes.dispose();
@@ -426,6 +429,7 @@ export class Workbench extends Disposable {
 		browserFileSystemProvider: HTMLFileSystemProvider | undefined,
 		webWorkspaceClient: IWebWorkspaceClient | undefined,
 		themes: ExtensionColorThemeService,
+		createWindow?: (services: IInstantiationService) => IDisposable,
 	) {
 		super();
 		this._register(themes);
@@ -1211,6 +1215,9 @@ export class Workbench extends Disposable {
 		contributions.advance(WorkbenchPhase.BlockRestore);
 		layoutService.layout();
 		this.whenRestored = this.completeStartupRestoration([extensionReady, ...serviceContributionReady], workingCopyBackups, editor, editorParts, contributions);
+		if (createWindow) {
+			this._register(createWindow(services));
+		}
 		void lifecycleService.when(LifecyclePhase.Restored).then(() => {
 			if (this.isDisposed) return;
 			this._register(disposableWindowTimeout(this.ownerWindow, () => {

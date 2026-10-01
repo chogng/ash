@@ -13,6 +13,6 @@ const configuredModeId = !app.isPackaged && process.env.ASH_WORKBENCH_MODE !== u
 	? WorkbenchModeRegistry.resolveModeId(process.env.ASH_WORKBENCH_MODE)
 	: readPersistedWorkbenchModeId(join(profileRoot, 'settings.json'), WorkbenchModeRegistry.defaultModeId);
 
-startElectronApplication({
+await startElectronApplication({
 	initialModeId: configuredModeId,
 });

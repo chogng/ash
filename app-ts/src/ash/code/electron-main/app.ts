@@ -88,6 +88,10 @@ import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOp
 import { WorkspacesManagementMainService } from '../../platform/workspaces/electron-main/workspacesManagementMainService.js';
 import { WorkspaceOpenTargetKind } from '../../platform/environment/common/argv.js';
 import { parseWorkspaceLaunchArguments } from '../../platform/environment/node/argvHelper.js';
+import { parseLaunchArguments } from '../../platform/environment/node/argvHelper.js';
+import { IWindowsMainService } from '../../platform/windows/electron-main/windows.js';
+import { LaunchMainService, type IStartArguments } from '../../platform/launch/electron-main/launchMainService.js';
+import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
 import type { IWorkbenchWindowRecord } from "./workbenchWindowRegistry.js";
 import { WorkbenchWindowRegistry } from "./workbenchWindowRegistry.js";
 import { LocalizationConfiguration } from '../../workbench/services/localization/common/locale.js';
@@ -127,6 +131,7 @@ interface WorkbenchWindowRecord extends IWorkbenchWindowRecord {
 	windowsStateHandler: WindowsStateHandler;
 	windowStateTracking: IDisposable;
 	openWorkspace?: (root: string) => Promise<void>;
+	replaceWorkspace?: (workspace: IAnyWorkspaceIdentifier) => Promise<boolean>;
 }
 
 class SessionsWindowRecord extends Disposable {
@@ -177,11 +182,6 @@ class SessionsWindowRecord extends Disposable {
 	}
 }
 
-interface PendingWindowLaunch {
-	readonly arguments: readonly string[];
-	readonly cwd: string;
-}
-
 type WindowSessionEntry =
 	| { readonly kind: 'workbench'; readonly workspace: IAnyWorkspaceIdentifier }
 	| { readonly kind: 'sessions'; readonly workspace: IAnyWorkspaceIdentifier; readonly modeId: WorkbenchModeId };
@@ -217,12 +217,20 @@ export class AshApplication extends Disposable {
 	private readonly workbenchWindows = new WorkbenchWindowRegistry<WorkbenchWindowRecord>();
 	private readonly sessionsWindow = this._register(new MutableDisposable<SessionsWindowRecord>());
 	private sessionsWindowOpenQueue: Promise<void> = Promise.resolve();
-	private readonly windowsMainService = this._register(new WindowsMainService(
+	private readonly windowsMainService: WindowsMainService<BrowserWindow> = this._register(new WindowsMainService<BrowserWindow>(
 		() => this.workbenchWindows.values().map(record => record.window),
-		async () => {
+		async (configuration, reuseWindow): Promise<BrowserWindow | undefined> => {
 			const workspaces = this.workspaces;
 			if (!workspaces) throw new Error('Workspace service is not initialized');
-			return (await this.openWorkspace(createEmptyWorkspaceIdentifier(), workspaces))?.window;
+			const workspace = await this.windowsMainService.resolveWorkspaceOpenTarget(configuration?.workspace, configuration?.cwd ?? process.cwd());
+			if (reuseWindow) {
+				if (configuration?.workspace) {
+					const record = this.workbenchWindows.values().find(record => record.window === reuseWindow)!;
+					if (!await record.replaceWorkspace!(workspace)) return undefined;
+				}
+				return reuseWindow;
+			}
+			return (await this.openWorkspace(workspace, workspaces, configuration?.forceNewWindow))?.window;
 		},
 		process.platform,
 	));
@@ -234,7 +242,8 @@ export class AshApplication extends Disposable {
 	private themeMainService!: ThemeMainService;
 	private lifecycleMainService!: LifecycleMainService<BrowserWindow>;
 	private windowSessionStateHandler!: WindowSessionStateHandler<WindowSessionEntry>;
-	private readonly pendingWindowLaunches: PendingWindowLaunch[] = [];
+	private readonly pendingWindowLaunches: IStartArguments[] = [];
+	private launchMainService!: LaunchMainService;
 	private workspaces: WorkspacesManagementMainService | undefined;
 	private persistentServices: PersistentServices | undefined;
 	private closePersistentServicesPromise: Promise<void> | undefined;
@@ -319,6 +328,9 @@ export class AshApplication extends Disposable {
 		const wasUpdated = this.lifecycleMainService.wasRestarted;
 		const workspaces = new WorkspacesManagementMainService();
 		this.workspaces = workspaces;
+		const launchServices = this._register(new InstantiationService());
+		launchServices.registerInstance(IWindowsMainService, this.windowsMainService);
+		this.launchMainService = this._register(launchServices.createInstance(LaunchMainService));
 		{
 			using restoration = this.windowSessionStateHandler.beginRestoration();
 			await this.openStartupWindows(workspaces, wasUpdated);
@@ -333,6 +345,14 @@ export class AshApplication extends Disposable {
 	}
 
 	private async openStartupWindows(workspaces: WorkspacesManagementMainService, wasUpdated: boolean): Promise<void> {
+		const args = parseLaunchArguments(this.workspaceLaunchArguments(process.argv));
+		if (args.paths.length > 0 || args.newWindow || args.reuseWindow || args.wait || args.workspace) {
+			if (app.isPackaged || process.env.ASH_DEV_AGENTS_WINDOW !== '1') {
+				await this.restoreWindowSession(workspaces, true, wasUpdated);
+				await this.launchMainService.start({ args, cwd: process.cwd() });
+				return;
+			}
+		}
 		const launch = await this.resolveWorkspace();
 		if (!app.isPackaged && process.env.ASH_DEV_AGENTS_WINDOW === '1') {
 			await this.openSessionsWindow(launch.workspace, await workspaces.resolveWorkspace(launch.workspace), this.defaultModeId);
@@ -410,12 +430,22 @@ export class AshApplication extends Disposable {
 
 	/** Opens a second-instance Workspace in its own window, or focuses the active window when no target was supplied. */
 	handleSecondInstance(arguments_: readonly string[], cwd: string): void {
-		const launch = { arguments: arguments_, cwd };
+		this.handleLaunchArguments(this.workspaceLaunchArguments(arguments_), cwd);
+	}
+
+	handleLaunchArguments(arguments_: readonly string[], cwd: string): void {
+		let launch: IStartArguments;
+		try {
+			launch = { args: parseLaunchArguments(arguments_), cwd };
+		} catch (error) {
+			void this.reportWindowOpenFailure(error);
+			return;
+		}
 		if (!this.persistentServices || !this.workspaces) {
 			this.pendingWindowLaunches.push(launch);
 			return;
 		}
-		void this.openWindowLaunch(launch).catch(error => this.reportWindowOpenFailure(error));
+		void this.launchMainService.start(launch).catch(error => this.reportWindowOpenFailure(error));
 	}
 
 	/** Focuses a live window, or recreates an empty Workbench when none remains. */
@@ -496,37 +526,25 @@ export class AshApplication extends Disposable {
 		});
 	}
 
-	private async openWindowLaunch(launch: PendingWindowLaunch): Promise<void> {
-		const workspaces = this.workspaces;
-		if (!workspaces) throw new Error("Workspace service is not initialized");
-		const arguments_ = this.workspaceLaunchArguments(launch.arguments);
-		const target = parseWorkspaceLaunchArguments(arguments_);
-		if (!target) {
-			this.handleActivate();
-			return;
-		}
-		const workspace = await this.windowsMainService.resolveWorkspaceOpenTarget(target, launch.cwd);
-		await this.openWorkspace(workspace, workspaces);
-	}
-
 	private async drainPendingWindowLaunches(): Promise<void> {
 		while (this.pendingWindowLaunches.length > 0 && !this.quitRequested) {
 			const launch = this.pendingWindowLaunches.shift()!;
 			try {
-				await this.openWindowLaunch(launch);
+				void this.launchMainService.start(launch).catch(error => this.reportWindowOpenFailure(error));
 			} catch (error) {
 				await this.reportWindowOpenFailure(error);
 			}
 		}
 	}
 
-	private openWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService): Promise<WorkbenchWindowRecord | undefined> {
+	private openWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService, forceNewWindow = false): Promise<WorkbenchWindowRecord | undefined> {
+		if (forceNewWindow) return this.performOpenWorkspace(workspace, workspaces, true);
 		return this.workbenchWindows.openWorkspace(workspace, () => this.performOpenWorkspace(workspace, workspaces));
 	}
 
-	private async performOpenWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService): Promise<WorkbenchWindowRecord | undefined> {
+	private async performOpenWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService, forceNewWindow = false): Promise<WorkbenchWindowRecord | undefined> {
 		const existing = this.workbenchWindows.findWorkspace(workspace);
-		if (existing) {
+		if (existing && !forceNewWindow) {
 			existing.focus();
 			return existing;
 		}
@@ -846,6 +864,50 @@ export class AshApplication extends Disposable {
 			return operation;
 		};
 		record.openWorkspace = (root) => transitionToFolder(root, true);
+		const replaceWorkspace = (workspace: IAnyWorkspaceIdentifier, replyBeforeLoad: boolean): Promise<boolean> => {
+			let accepted = false;
+			let rendererLoad: Promise<void> | undefined;
+			const operation = workspaceOpenQueue.then(async () => {
+				if (workspace.id === workspaceContext.getWorkspace().id) {
+					accepted = true;
+					return;
+				}
+				if (getWorkspaceRemoteAuthority(workspace) !== getWorkspaceRemoteAuthority(workspaceContext.getWorkspace())) {
+					throw new Error('Reusing a window must preserve its Remote authority');
+				}
+				const resolvedWorkspace = await workspaces.resolveWorkspace(workspace);
+				const root = isSingleFolderWorkspaceIdentifier(workspace) ? workspace.uri.fsPath : undefined;
+				const grant = root ? await this.resolveDirGrant(workspaceHost, root) : { type: 'config' as const };
+				if (!grant || !await this.lifecycleMainService.unload(window)) return;
+				await record.windowsStateHandler.saveWindowState(window);
+				window.webContents.send('ash:terminal:prepareReplacement');
+				if (this.appServerStartupMode !== 'disabled') {
+					const launcher = supervisor.options.enabled ? supervisor.options.processLauncher : undefined;
+					if (!(launcher instanceof AppServerDaemonLauncher) && !(launcher instanceof RemoteAppServerProcessLauncher)) throw new Error('Workspace connection has no directory launcher');
+					await this.reconnectAppServerWorkspace(supervisor, launcher, root, grant, workspace.id, workspaceContext.getWorkspace().id, workspaceHost);
+				}
+				loadingWorkspace = true;
+				workspaceContext.updateWorkspace(workspace, resolvedWorkspace);
+				accepted = true;
+				const load = async (): Promise<void> => {
+					try {
+						await this.loadRendererEntry(window, this.resolveRendererEntry('workbench', record.modeId));
+					} finally {
+						loadingWorkspace = false;
+					}
+				};
+				// An IPC caller must receive its reply before its renderer is replaced.
+				if (replyBeforeLoad) {
+					rendererLoad = new Promise<void>((resolve, reject) => setImmediate(() => { void load().then(resolve, reject); }));
+				} else {
+					await load();
+				}
+			});
+			workspaceOpenQueue = operation.then(async () => { await rendererLoad; }, async () => { await rendererLoad; });
+			void workspaceOpenQueue.catch(error => this.reportWindowOpenFailure(error));
+			return operation.then(() => accepted);
+		};
+		record.replaceWorkspace = workspace => replaceWorkspace(workspace, false);
 
 		windowDisposables.add(toDisposable(() => this.dialogs.cancelWindow(window)));
 		windowDisposables.add(this.themeMainService.onDidChangeColorScheme(scheme => window.webContents.send(NATIVE_HOST_COLOR_SCHEME_CHANGED_CHANNEL, scheme)));
@@ -863,6 +925,7 @@ export class AshApplication extends Disposable {
 			...windowResourceIpcRoutes(windowResources),
 			windowOperationIpcRoute(this.windowsMainService, window),
 			windowCloseResponseIpcRoute(this.lifecycleMainService, window),
+			this.windowsMainService.fileOpenResponseIpcRoute(window),
 			...nativeHostIpcRoutes({
 				openWindow: async options => {
 					const workspace = { ...createEmptyWorkspaceIdentifier(), ...(options.remoteAuthority ? { remoteAuthority: options.remoteAuthority } : {}) };
@@ -871,31 +934,7 @@ export class AshApplication extends Disposable {
 						return;
 					}
 					if (options.remoteAuthority !== getWorkspaceRemoteAuthority(workspaceContext.getWorkspace())) throw new Error('Reusing a window must preserve its Remote authority');
-					let rendererLoad: Promise<void> | undefined;
-					const operation = workspaceOpenQueue.then(async () => {
-						if (!await this.lifecycleMainService.unload(window)) return;
-						try {
-							await record.windowsStateHandler.saveWindowState(window);
-							window.webContents.send('ash:terminal:prepareReplacement');
-							if (this.appServerStartupMode !== 'disabled') {
-								const launcher = supervisor.options.enabled ? supervisor.options.processLauncher : undefined;
-								if (!(launcher instanceof AppServerDaemonLauncher) && !(launcher instanceof RemoteAppServerProcessLauncher)) throw new Error('Workspace connection has no directory launcher');
-								await this.reconnectAppServerWorkspace(supervisor, launcher, undefined, { type: 'config' }, workspace.id, workspaceContext.getWorkspace().id, workspaceHost);
-							}
-							loadingWorkspace = true;
-							workspaceContext.updateWorkspace(workspace);
-						} finally {
-							// Reply to the caller before replacing the renderer that owns the IPC request.
-							rendererLoad = new Promise<void>(resolve => {
-								setImmediate(() => {
-									void this.loadRendererEntry(window, this.resolveRendererEntry('workbench', record.modeId))
-										.catch(error => this.reportWindowOpenFailure(error)).finally(() => { loadingWorkspace = false; resolve(); });
-								});
-							});
-						}
-					});
-					workspaceOpenQueue = operation.then(async () => { await rendererLoad; }, async () => { await rendererLoad; });
-					await operation;
+					await replaceWorkspace(workspace, true);
 				},
 				performDialogOperation: operation => this.dialogs.perform(window, operation),
 				performShellCommand: operation => this.performShellCommand(operation),

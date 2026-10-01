@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { DeferredPromise } from '../../../base/common/async.js';
 import { AbstractDisposable, Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { CONFIGURATION_CHANGED_CHANNEL } from '../../configuration/common/configurationIpc.js';
@@ -18,7 +19,8 @@ import { createEmptyWorkspaceIdentifier, getSingleFolderWorkspaceIdentifier, get
 import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL, parseRestoreWindowsSetting, validateWindowCloseResponse, validateWindowOperation, type WindowCloseResponse, type WindowOperation, type IWorkbenchWindowInfo, type RestoreWindowsSetting } from '../../window/common/window.js';
 import { focusWindow, type IFocusableWindow, type WorkspaceContextMainService } from '../../window/electron-main/window.js';
 import { CodeWindow, type IWindowCreationOptions } from './windowImpl.js';
-import type { IWindowConstructorOptions, IWindowWebPreferences } from './windows.js';
+import type { IWindowConstructorOptions, IWindowWebPreferences, IOpenConfiguration, IWindowsMainService } from './windows.js';
+import { WINDOW_OPEN_FILES_CHANNEL, WINDOW_OPEN_FILES_RESPONSE_CHANNEL, validateWindowFilesResponse, type IWindowFilesRequest, type WindowFilesResponse } from '../../window/common/window.js';
 import type { IWindowState } from '../../window/electron-main/window.js';
 
 export interface IWorkbenchWindow<TWindow> extends IFocusableWindow {
@@ -33,7 +35,7 @@ export interface IWorkbenchWindow<TWindow> extends IFocusableWindow {
 		setZoomLevel(level: number): void;
 		on(event: 'zoom-changed' | 'did-start-loading' | 'render-process-gone', listener: () => void): unknown;
 		off(event: 'zoom-changed' | 'did-start-loading' | 'render-process-gone', listener: () => void): unknown;
-		send(channel: string, value: number | boolean): void;
+		send(channel: string, value: unknown): void;
 		once(event: 'render-process-gone', listener: () => void): unknown;
 	};
 	once(event: 'ready-to-show' | 'closed', listener: () => void): this;
@@ -163,16 +165,106 @@ class AuxiliaryWindowHost<TWindow extends IWorkbenchWindow<TWindow>> extends Abs
 }
 
 /** Owns window operations for the live Workbench windows of one Electron app. */
-export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> extends Disposable {
+export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> extends Disposable implements IWindowsMainService {
 	private readonly workbenchWindows = this._register(new DisposableMap<number, CodeWindow<TWindow>>());
 	private readonly auxiliaryWindows = this._register(new DisposableMap<number, AuxiliaryWindowHost<TWindow>>());
 	private readonly managedWindows = this._register(new DisposableMap<string, ManagedWindowHost<TWindow>>());
+	private readonly fileRequests = this._register(new DisposableMap<number, WindowFileRequest>());
+	private readonly rendererReadiness = new Map<number, DeferredPromise<void>>();
+	private readonly closedWindows = new WeakMap<TWindow, Promise<void>>();
+	private nextFileRequest = 0;
 	constructor(
 		private readonly getWindows: () => readonly TWindow[],
-		private readonly createEmptyWindow: () => Promise<TWindow | undefined>,
+		private readonly createEmptyWindow: (configuration?: IOpenConfiguration, reuseWindow?: TWindow) => Promise<TWindow | undefined>,
 		private readonly platform: NodeJS.Platform = process.platform,
 		private readonly workspacePaths: IWorkspacePathService = nodeWorkspacePathService,
-	) { super(); }
+	) {
+		super();
+		this._register(toDisposable(() => {
+			for (const readiness of this.rendererReadiness.values()) {
+				void readiness.complete();
+			}
+			this.rendererReadiness.clear();
+		}));
+	}
+
+	/** Workspace callbacks also need a restored renderer because that renderer owns the backend client. */
+	public async whenReady(window: TWindow): Promise<void> {
+		this.assertNotDisposed();
+		while (!window.isDestroyed()) {
+			const readiness = this.rendererReadiness.get(window.id);
+			if (!readiness) {
+				throw new Error('Window has no Workbench renderer');
+			}
+			await readiness.p;
+			this.assertNotDisposed();
+			if (!window.isDestroyed() && this.rendererReadiness.get(window.id) === readiness) {
+				return;
+			}
+		}
+		throw new Error('Window closed before its renderer was ready');
+	}
+
+	public async open(configuration: IOpenConfiguration): Promise<{ whenClosed: Promise<void>; whenFilesClosed: Promise<void> }> {
+		this.assertNotDisposed();
+		const windows = this.getWindows().filter(window => !window.isDestroyed());
+		const active = windows.find(window => window.isFocused()) ?? windows.at(-1) ?? (!configuration.workspace && configuration.files.length === 0 ? this.managedWindowValues()[0] : undefined);
+		const reuse = !configuration.forceNewWindow && (configuration.forceReuseWindow || !configuration.workspace) ? active : undefined;
+		const window = await this.createEmptyWindow(configuration, reuse);
+		if (!window) {
+			throw new Error('The launch request did not open a window');
+		}
+		focusWindow(window);
+		let whenClosed = this.closedWindows.get(window);
+		if (!whenClosed) {
+			whenClosed = new Promise<void>(resolve => window.once('closed', resolve));
+			this.closedWindows.set(window, whenClosed);
+		}
+		if (configuration.files.length === 0) {
+			return { whenClosed, whenFilesClosed: whenClosed };
+		}
+		const request = new WindowFileRequest(window.id, { id: ++this.nextFileRequest, files: configuration.files, wait: configuration.waitForFiles });
+		this.fileRequests.set(request.request.id, request);
+		if (this.rendererReadiness.get(window.id)?.isResolved) {
+			window.webContents.send(WINDOW_OPEN_FILES_CHANNEL, request.request);
+		}
+		await request.whenOpened;
+		return { whenClosed, whenFilesClosed: request.whenClosed };
+	}
+
+	public respondToFileOpen(window: TWindow, response: WindowFilesResponse): void {
+		if (response.kind === 'ready') {
+			let readiness = this.rendererReadiness.get(window.id);
+			if (!readiness) {
+				readiness = new DeferredPromise<void>();
+				this.rendererReadiness.set(window.id, readiness);
+			}
+			void readiness.complete();
+			for (const [, request] of this.fileRequests) {
+				if (request.windowId === window.id) {
+					window.webContents.send(WINDOW_OPEN_FILES_CHANNEL, request.request);
+				}
+			}
+			return;
+		}
+		const request = this.fileRequests.get(response.id);
+		if (!request || request.windowId !== window.id) {
+			throw new Error('File open request does not belong to this window');
+		}
+		if (response.kind === 'failed') {
+			request.fail(new Error(response.message));
+			this.fileRequests.deleteAndDispose(response.id);
+		} else if (response.kind === 'opened') {
+			request.opened();
+			if (!request.request.wait) this.fileRequests.deleteAndDispose(response.id);
+		} else {
+			this.fileRequests.deleteAndDispose(response.id);
+		}
+	}
+
+	public fileOpenResponseIpcRoute(window: TWindow): IpcRoute<unknown, unknown> {
+		return { channel: WINDOW_OPEN_FILES_RESPONSE_CHANNEL, validate: validateWindowFilesResponse, invoke: response => this.respondToFileOpen(window, response as WindowFilesResponse) };
+	}
 
 	public createWindow(
 		createWindow: (options: IWindowConstructorOptions & Pick<IWindowCreationOptions, 'title' | 'icon' | 'tabbingIdentifier'>) => TWindow,
@@ -183,9 +275,30 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 		const host = new CodeWindow(createWindow, options, resources);
 		const window = host.win;
 		this.workbenchWindows.set(window.id, host);
+		this.rendererReadiness.set(window.id, new DeferredPromise<void>());
 		window.once('closed', () => {
+			void this.rendererReadiness.get(window.id)?.complete();
+			this.rendererReadiness.delete(window.id);
+			for (const [id, request] of this.fileRequests) {
+				if (request.windowId === window.id) {
+					this.fileRequests.deleteAndDispose(id);
+				}
+			}
 			if (this.workbenchWindows.get(window.id) === host) this.workbenchWindows.deleteAndDispose(window.id);
 		});
+		const loading = (): void => {
+			void this.rendererReadiness.get(window.id)?.complete();
+			this.rendererReadiness.set(window.id, new DeferredPromise<void>());
+			for (const [id, request] of this.fileRequests) {
+				if (request.windowId === window.id) {
+					this.fileRequests.deleteAndDispose(id);
+				}
+			}
+		};
+		window.webContents.on('did-start-loading', loading);
+		resources.add(toDisposable(() => {
+			if (!window.isDestroyed()) window.webContents.off('did-start-loading', loading);
+		}));
 		return host;
 	}
 
@@ -365,6 +478,37 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 		}
 		const unhandled: never = operation;
 		return unhandled;
+	}
+}
+
+class WindowFileRequest extends AbstractDisposable {
+	public readonly whenOpened: Promise<void>;
+	public readonly whenClosed: Promise<void>;
+	private resolveOpened!: () => void;
+	private rejectOpened!: (error: Error) => void;
+	private resolveClosed!: () => void;
+	private isOpened = false;
+
+	constructor(public readonly windowId: number, public readonly request: IWindowFilesRequest) {
+		super();
+		this.whenOpened = new Promise<void>((resolve, reject) => { this.resolveOpened = resolve; this.rejectOpened = reject; });
+		this.whenClosed = new Promise<void>(resolve => { this.resolveClosed = resolve; });
+	}
+
+	public opened(): void {
+		this.isOpened = true;
+		this.resolveOpened();
+	}
+
+	public fail(error: Error): void {
+		this.rejectOpened(error);
+	}
+
+	protected override disposeCore(): void {
+		if (!this.isOpened) {
+			this.rejectOpened(new Error('Window closed before opening the requested files'));
+		}
+		this.resolveClosed();
 	}
 }
 

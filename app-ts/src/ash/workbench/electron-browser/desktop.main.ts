@@ -6,7 +6,7 @@ import { URI } from '../../base/common/uri.js';
 import { IFileService } from '../../platform/files/common/files.js';
 import { ElectronRendererClipboardService } from '../../platform/clipboard/electron-browser/electronRendererClipboardService.js';
 import { validateConfigurationSnapshot } from '../../platform/configuration/common/configurationIpc.js';
-import { invoke } from '../../platform/ipc/electron-browser/rendererIpc.js';
+import { invoke, subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
 import { createElectronRendererApi, type ElectronRendererCapabilityContribution } from '../../platform/native/electron-browser/rendererApi.js';
 import { parseWorkspace } from '../../platform/workspace/common/workspace.js';
@@ -21,6 +21,7 @@ import { ElectronLifecycleService } from '../services/lifecycle/electron-browser
 import { createElectronTitlebarPartFactory } from './parts/titlebar/titlebarPart.js';
 import { NativeDialogHandler } from './parts/dialogs/dialogHandler.js';
 import { DirectoryPermissionDialog } from './parts/dialogs/directoryPermissionDialog.js';
+import { ElectronWindow } from './window.js';
 
 /** Owns desktop startup and the resources of one renderer window. */
 export class DesktopMain extends Disposable {
@@ -49,6 +50,7 @@ export class DesktopMain extends Disposable {
 			const workspace = parseWorkspace(await api.workspace.getWorkspace());
 			const initialConfigurationSnapshot = validateConfigurationSnapshot(await api.configuration.read());
 			let lifecycleService!: ElectronLifecycleService;
+			let desktopWindow!: ElectronWindow;
 			const hostColorScheme = await api.nativeHost.getOSColorScheme();
 			const workbench = this._register(await startWorkbench({
 				modeId: this.modeId,
@@ -57,6 +59,7 @@ export class DesktopMain extends Disposable {
 				container,
 				workspace,
 				createLifecycleService: services => lifecycleService = services.createInstance(ElectronLifecycleService, { ownerWindow: window, onError: onUnexpectedError }),
+				createWindow: services => desktopWindow = services.createInstance(ElectronWindow, { invoke, subscribe }),
 				configurationApi: api.configuration,
 				initialConfigurationSnapshot,
 				keybindingsResourceApi: api.keybindings,
@@ -90,6 +93,8 @@ export class DesktopMain extends Disposable {
 				});
 			}, { once: true }));
 			await lifecycleService.initialize();
+			await workbench.whenRestored;
+			await desktopWindow.initialize();
 		} catch (error) {
 			try {
 				this.dispose();

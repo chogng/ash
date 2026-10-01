@@ -1,8 +1,60 @@
-import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
 import { onUnexpectedError } from '../../base/common/errors.js';
 import type { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import type { INativeHostApi } from '../../platform/native/common/nativeHost.js';
 import { WINDOW_ZOOM_LEVEL_SETTING } from '../../platform/window/common/window.js';
+import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
+import { URI } from '../../base/common/uri.js';
+import { extUriBiasedIgnorePathCase } from '../../base/common/resources.js';
+import { Range } from '../../editor/common/core/range.js';
+import { WINDOW_OPEN_FILES_CHANNEL, WINDOW_OPEN_FILES_RESPONSE_CHANNEL, validateWindowFilesRequest, type IWindowFilesRequest } from '../../platform/window/common/window.js';
+import { IEditorService } from '../services/editor/common/editorService.js';
+import { IEditorGroupsService } from '../services/editor/common/editorGroupsService.js';
+
+/** The renderer owns file completion because it owns every editor group, including moved tabs. */
+export class ElectronWindow extends Disposable {
+	private readonly waiting = new Map<number, IWindowFilesRequest>();
+	private opening: Promise<void> = Promise.resolve();
+
+	constructor(private readonly ipc: Pick<typeof import('../../platform/ipc/electron-browser/rendererIpc.js'), 'invoke' | 'subscribe'>, @IEditorService private readonly editors: IEditorService, @IEditorGroupsService private readonly groups: IEditorGroupsService) {
+		super();
+	}
+
+	public async initialize(): Promise<void> {
+		const subscription = this.ipc.subscribe<unknown>(WINDOW_OPEN_FILES_CHANNEL, value => {
+			const request = validateWindowFilesRequest(value);
+			const operation = this.opening.then(() => this.openFiles(request));
+			this.opening = operation.catch(error => console.error('Failed to acknowledge a file open request', error));
+		});
+		this._register(toDisposable(() => subscription.dispose()));
+		this._register(this.groups.onDidChangeGroups(() => this.completeClosedFiles()));
+		await this.ipc.invoke<void>(WINDOW_OPEN_FILES_RESPONSE_CHANNEL, { kind: 'ready' });
+	}
+
+	private async openFiles(request: IWindowFilesRequest): Promise<void> {
+		try {
+			for (const file of request.files) {
+				const selection = file.line === undefined ? undefined : new Range(file.line, file.column ?? 1, file.line, file.column ?? 1);
+				await this.editors.openEditor({ resource: URI.parse(file.uri) }, { pinned: true, selection, ignoreError: true });
+			}
+			if (request.wait) this.waiting.set(request.id, request);
+			await this.ipc.invoke<void>(WINDOW_OPEN_FILES_RESPONSE_CHANNEL, { kind: 'opened', id: request.id });
+			this.completeClosedFiles();
+		} catch (error) {
+			await this.ipc.invoke<void>(WINDOW_OPEN_FILES_RESPONSE_CHANNEL, { kind: 'failed', id: request.id, message: error instanceof Error ? error.message : String(error) });
+		}
+	}
+
+	private completeClosedFiles(): void {
+		const open = new Set(this.groups.groups.flatMap(group => group.inputs.map(input => extUriBiasedIgnorePathCase.getComparisonKey(input.resource))));
+		for (const [id, request] of this.waiting) {
+			if (request.files.every(file => !open.has(extUriBiasedIgnorePathCase.getComparisonKey(URI.parse(file.uri))))) {
+				this.waiting.delete(id);
+				void this.ipc.invoke<void>(WINDOW_OPEN_FILES_RESPONSE_CHANNEL, { kind: 'closed', id }).catch(error => console.error('Failed to acknowledge closed launch files', error));
+			}
+		}
+	}
+}
+
 
 /** Keeps one desktop window's zoom level in sync with its profile setting. */
 export class NativeWindow extends Disposable {

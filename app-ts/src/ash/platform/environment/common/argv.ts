@@ -18,3 +18,14 @@ export interface IRemoteFolderWorkspaceOpenTarget {
 }
 
 export type IWorkspaceOpenTarget = ILocalWorkspaceOpenTarget | IRemoteFolderWorkspaceOpenTarget;
+
+/** Validated desktop requests, independent of Electron's process arguments. */
+export interface IParsedLaunchArguments {
+	readonly paths: readonly string[];
+	readonly workspace?: IWorkspaceOpenTarget;
+	readonly newWindow: boolean;
+	readonly reuseWindow: boolean;
+	readonly goto: boolean;
+	readonly wait: boolean;
+	readonly waitMarkerFilePath?: string;
+}

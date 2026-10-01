@@ -1,6 +1,8 @@
 import { isMacintosh, isWeb } from '../../../base/common/platform.js';
 import type { IConfigurationService } from '../../configuration/common/configuration.js';
 import { createSshRemoteAuthority } from '../../remote/common/remote.js';
+import { isRecord } from '../../../base/common/types.js';
+import { URI } from '../../../base/common/uri.js';
 
 export interface IColorScheme { readonly dark: boolean; readonly highContrast: boolean; }
 
@@ -86,6 +88,70 @@ export const WINDOW_FULLSCREEN_CHANGED_CHANNEL = 'ash:window:fullscreen-changed'
 export const WINDOW_PREPARE_CLOSE_CHANNEL = 'ash:window:prepare-close';
 export const WINDOW_PREPARE_LOAD_CHANNEL = 'ash:window:prepare-load';
 export const WINDOW_CLOSE_RESPONSE_CHANNEL = 'ash:window:close-response';
+export const WINDOW_OPEN_FILES_CHANNEL = 'ash:window:open-files';
+export const WINDOW_OPEN_FILES_RESPONSE_CHANNEL = 'ash:window:open-files-response';
+
+export interface IWindowFileOpen {
+	readonly uri: string;
+	readonly line?: number;
+	readonly column?: number;
+}
+
+export interface IWindowFilesRequest {
+	readonly id: number;
+	readonly files: readonly IWindowFileOpen[];
+	readonly wait: boolean;
+}
+
+export type WindowFilesResponse =
+	| { readonly kind: 'ready' }
+	| { readonly kind: 'opened' | 'closed'; readonly id: number }
+	| { readonly kind: 'failed'; readonly id: number; readonly message: string };
+
+export function validateWindowFilesRequest(value: unknown): IWindowFilesRequest {
+	if (!isRecord(value)) {
+		throw new TypeError('Invalid file open request');
+	}
+	if (Object.keys(value).sort().join(',') !== 'files,id,wait' || !Number.isSafeInteger(value.id) || (value.id as number) <= 0 || typeof value.wait !== 'boolean' || !Array.isArray(value.files) || value.files.length === 0) {
+		throw new TypeError('Invalid file open request');
+	}
+	for (const file of value.files) {
+		if (!isRecord(file) || typeof file.uri !== 'string' || Object.keys(file).some(key => key !== 'uri' && key !== 'line' && key !== 'column')) {
+			throw new TypeError('Invalid launch file');
+		}
+		const uri = URI.parse(file.uri, true);
+		if (uri.scheme !== 'file' || !uri.path.startsWith('/') || uri.query || uri.fragment) {
+			throw new TypeError('Launch files must use absolute file URIs');
+		}
+		for (const position of [file.line, file.column]) {
+			if (position !== undefined && (!Number.isSafeInteger(position) || (position as number) < 1)) {
+				throw new TypeError('File positions must be positive integers');
+			}
+		}
+	}
+	return value as unknown as IWindowFilesRequest;
+}
+
+export function validateWindowFilesResponse(value: unknown): WindowFilesResponse {
+	if (!isRecord(value)) {
+		throw new TypeError('Invalid file open response');
+	}
+	const keys = Object.keys(value).sort().join(',');
+	if (value.kind === 'ready' && keys === 'kind') {
+		return value as WindowFilesResponse;
+	}
+	if (!Number.isSafeInteger(value.id) || (value.id as number) <= 0) {
+		throw new TypeError('Invalid file open response');
+	}
+	if ((value.kind === 'opened' || value.kind === 'closed') && keys === 'id,kind') {
+		return value as WindowFilesResponse;
+	}
+	if (value.kind === 'failed' && keys === 'id,kind,message' && typeof value.message === 'string' && value.message.length > 0) {
+		return value as WindowFilesResponse;
+	}
+	throw new TypeError('Invalid file open response');
+}
+
 export const WINDOW_ZOOM_LEVEL_SETTING = 'window.zoomLevel';
 
 export type WindowCloseResponse =

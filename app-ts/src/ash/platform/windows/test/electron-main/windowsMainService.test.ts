@@ -7,6 +7,8 @@ import { LifecycleMainService } from '../../../lifecycle/electron-main/lifecycle
 import { WindowMode } from '../../../window/electron-main/window.js';
 import { createEmptyWorkspaceIdentifier, getSingleFolderWorkspaceIdentifier } from '../../../workspaces/node/workspaces.js';
 import { WindowsMainService, windowOperationIpcRoute, type IWorkbenchWindow } from '../../electron-main/windowsMainService.js';
+import type { IOpenConfiguration } from '../../electron-main/windows.js';
+import { WINDOW_OPEN_FILES_CHANNEL, validateWindowFilesRequest, validateWindowFilesResponse } from '../../../window/common/window.js';
 
 test('window restoration selection respects the setting, explicit target, and update restart', () => {
 	using service = new WindowsMainService<TestWindow>(() => [], async () => undefined);
@@ -24,7 +26,7 @@ test('window restoration selection respects the setting, explicit target, and up
 
 class TestWindow implements IWorkbenchWindow<TestWindow> {
 	public readonly calls: string[] = [];
-	public readonly messages: { readonly channel: string; readonly level: number | boolean }[] = [];
+	public readonly messages: { readonly channel: string; readonly level: unknown }[] = [];
 	private readonly zoomListeners = new Set<() => void>();
 	private readonly closeListeners = new Set<(event: { preventDefault(): void }) => void>();
 	private readonly fullscreenListeners = new Map<string, Set<() => void>>();
@@ -36,7 +38,7 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 		setZoomLevel: (level: number): void => { this.zoomLevel = level; },
 		on: (event: 'zoom-changed' | 'did-start-loading' | 'render-process-gone', listener: () => void): void => { const listeners = event === 'zoom-changed' ? this.zoomListeners : this.rendererListeners.get(event) ?? new Set<() => void>(); listeners.add(listener); if (event !== 'zoom-changed') this.rendererListeners.set(event, listeners); },
 		off: (event: 'zoom-changed' | 'did-start-loading' | 'render-process-gone', listener: () => void): void => { if (this.destroyed) throw new Error('Object has been destroyed'); (event === 'zoom-changed' ? this.zoomListeners : this.rendererListeners.get(event))?.delete(listener); },
-		send: (channel: string, level: number | boolean): void => { this.messages.push({ channel, level }); },
+		send: (channel: string, level: unknown): void => { this.messages.push({ channel, level }); },
 		once: (event: 'render-process-gone', listener: () => void): void => { const listeners = this.rendererListeners.get(event) ?? new Set<() => void>(); listeners.add(listener); this.rendererListeners.set(event, listeners); },
 	};
 	public destroyed = false;
@@ -98,6 +100,104 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 	public emitFullscreenChanged(fullscreen: boolean): void { this.fullscreen = fullscreen; for (const listener of this.fullscreenListeners.get(fullscreen ? 'enter-full-screen' : 'leave-full-screen') ?? []) listener(); }
 	public emitRendererEvent(event: 'did-start-loading' | 'render-process-gone'): void { for (const listener of this.rendererListeners.get(event) ?? []) listener(); }
 }
+
+test('file launches wait for renderer readiness, reject replies from another window and retain wait requests until close', async () => {
+	const window = new TestWindow(1, 'Workbench');
+	const other = new TestWindow(2, 'Other');
+	using service = new WindowsMainService(() => [window], async () => window);
+	const configuration: IOpenConfiguration = { cwd: 'C:\\project', files: [{ uri: 'file:///C:/project/file.ts' }], forceNewWindow: false, forceReuseWindow: true, waitForFiles: true };
+	const opening = service.open(configuration);
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.deepEqual(window.messages, []);
+	service.respondToFileOpen(window, { kind: 'ready' });
+	assert.deepEqual(window.messages, [{ channel: WINDOW_OPEN_FILES_CHANNEL, level: { id: 1, files: configuration.files, wait: true } }]);
+	assert.throws(() => service.respondToFileOpen(other, { kind: 'opened', id: 1 }), /does not belong/);
+	service.respondToFileOpen(window, { kind: 'opened', id: 1 });
+	const result = await opening;
+	let finished = false;
+	void result.whenFilesClosed.then(() => { finished = true; });
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(finished, false);
+	service.respondToFileOpen(window, { kind: 'closed', id: 1 });
+	await result.whenFilesClosed;
+	assert.equal(finished, true);
+	assert.throws(() => service.respondToFileOpen(window, { kind: 'closed', id: 1 }), /does not belong/);
+});
+
+test('new window launches bypass the active window while reuse requests select it', async () => {
+	const active = new TestWindow(1, 'Active');
+	active.focused = true;
+	const created = new TestWindow(2, 'Created');
+	const selected: (TestWindow | undefined)[] = [];
+	using service = new WindowsMainService(() => [active], async (_configuration, reuse) => {
+		selected.push(reuse);
+		return reuse ?? created;
+	});
+	const configuration: IOpenConfiguration = { cwd: 'C:\\project', files: [], forceNewWindow: true, forceReuseWindow: false, waitForFiles: false };
+	await service.open(configuration);
+	await service.open({ ...configuration, forceNewWindow: false, forceReuseWindow: true });
+	assert.deepEqual(selected, [undefined, active]);
+});
+
+test('file requests fail on renderer errors and settle when their window reloads or closes', async () => {
+	let window!: TestWindow;
+	using service = new WindowsMainService(() => [window], async () => window);
+	window = service.createWindow(options => new TestWindow(1, options.title), {
+		title: 'Workbench',
+		state: { mode: WindowMode.Normal, width: 1000, height: 700 },
+		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
+	}, new DisposableStore()).win;
+	const configuration: IOpenConfiguration = { cwd: 'C:\\project', files: [{ uri: 'file:///C:/project/file.ts' }], forceNewWindow: false, forceReuseWindow: true, waitForFiles: true };
+	const failed = service.open(configuration);
+	const rejected = assert.rejects(failed, /Permission denied/);
+	await new Promise<void>(resolve => setImmediate(resolve));
+	service.respondToFileOpen(window, { kind: 'ready' });
+	service.respondToFileOpen(window, { kind: 'failed', id: 1, message: 'Permission denied' });
+	await rejected;
+	const opening = service.open(configuration);
+	await new Promise<void>(resolve => setImmediate(resolve));
+	service.respondToFileOpen(window, { kind: 'opened', id: 2 });
+	const opened = await opening;
+	window.emitRendererEvent('did-start-loading');
+	await opened.whenFilesClosed;
+	const pending = service.open(configuration);
+	const closed = assert.rejects(pending, /Window closed before opening/);
+	await new Promise<void>(resolve => setImmediate(resolve));
+	window.destroy();
+	await closed;
+});
+
+test('renderer readiness follows the latest load and rejects a window that closes during startup', async () => {
+	using service = new WindowsMainService<TestWindow>(() => [], async () => undefined);
+	const window = service.createWindow(options => new TestWindow(1, options.title), {
+		title: 'Workbench',
+		state: { mode: WindowMode.Normal, width: 1000, height: 700 },
+		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
+	}, new DisposableStore()).win;
+	let ready = false;
+	const restored = service.whenReady(window).then(() => { ready = true; });
+	window.emitRendererEvent('did-start-loading');
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(ready, false);
+	service.respondToFileOpen(window, { kind: 'ready' });
+	await restored;
+	assert.equal(ready, true);
+	window.emitRendererEvent('did-start-loading');
+	const closed = assert.rejects(service.whenReady(window), /Window closed before its renderer/);
+	window.destroy();
+	await closed;
+});
+
+test('file launch IPC rejects extra fields, invalid positions, invalid resource schemes and malformed responses', () => {
+	const request = { id: 1, wait: true, files: [{ uri: 'file:///C:/project/file.ts', line: 2, column: 3 }] };
+	assert.deepEqual(validateWindowFilesRequest(request), request);
+	assert.throws(() => validateWindowFilesRequest({ ...request, files: [{ uri: 'https://example.com/file' }] }), /absolute file URIs/);
+	assert.throws(() => validateWindowFilesRequest({ ...request, files: [{ uri: request.files[0]!.uri, line: 0 }] }), /positive integers/);
+	assert.throws(() => validateWindowFilesRequest({ ...request, extra: true }), /Invalid file open request/);
+	assert.throws(() => validateWindowFilesResponse({ kind: 'ready', id: 1 }), /Invalid file open response/);
+	assert.throws(() => validateWindowFilesResponse({ kind: 'opened', id: -1 }), /Invalid file open response/);
+	assert.throws(() => validateWindowFilesResponse({ kind: 'failed', id: 1, message: '' }), /Invalid file open response/);
+});
 
 test('WindowsMainService lists, focuses, and closes only live Workbench windows', () => {
 	const first = new TestWindow(1, 'First');

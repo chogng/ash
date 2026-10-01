@@ -1,17 +1,24 @@
 import { AshApplication, type AppServerStartupMode } from "./app.js";
 import { app } from 'electron/main';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { AshApplicationId, AshApplicationName, AshRendererDirectory } from '../common/application.js';
 import { developmentArtifactsPath } from '../../platform/environment/node/developmentArtifacts.js';
 import type { WorkbenchModeId } from '../../workbench/common/workbenchMode.js';
 import { resolveApplicationDataPaths, resolvePackagedRendererRoot } from './applicationPaths.js';
+import { electronWorkspaceLaunchArguments } from './electronWindowLaunch.js';
+import { parseLaunchArguments } from '../../platform/environment/node/argvHelper.js';
+import { tmpdir } from 'node:os';
+import { randomUUID } from 'node:crypto';
+import { watch } from 'node:fs';
+import { access, writeFile } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
 
 export interface StartElectronApplicationOptions {
 	readonly initialModeId: WorkbenchModeId;
 }
 
 /** Starts the shared Electron application with one selected initial Workbench mode. */
-export function startElectronApplication(options: StartElectronApplicationOptions): void {
+export async function startElectronApplication(options: StartElectronApplicationOptions): Promise<void> {
 	const rendererBase = app.isPackaged
 		? join(app.getAppPath(), 'dist', 'renderer')
 		: developmentArtifactsPath(app.getAppPath(), 'renderer');
@@ -24,8 +31,20 @@ export function startElectronApplication(options: StartElectronApplicationOption
 
 	app.setName(AshApplicationName);
 	configureApplicationDataPaths();
+	const args = parseLaunchArguments(electronWorkspaceLaunchArguments({ arguments: process.argv, packaging: app.isPackaged ? 'packaged' : 'development', appPath: app.getAppPath() }));
+	if (args.wait && !args.waitMarkerFilePath) {
+		const marker = join(tmpdir(), `ash-wait-${randomUUID()}`);
+		await writeFile(marker, '', { flag: 'wx' });
+		const separator = process.argv.indexOf('--');
+		process.argv.splice(separator < 0 ? process.argv.length : separator, 0, `--waitMarkerFilePath=${marker}`);
+	}
 
-	if (!app.requestSingleInstanceLock()) {
+	const launchArguments = electronWorkspaceLaunchArguments({ arguments: process.argv, packaging: app.isPackaged ? 'packaged' : 'development', appPath: app.getAppPath() });
+	if (!app.requestSingleInstanceLock({ launchArguments })) {
+		const marker = parseLaunchArguments(launchArguments).waitMarkerFilePath;
+		if (marker) {
+			await waitForMarkerDeletion(marker);
+		}
 		app.quit();
 		return;
 	}
@@ -36,10 +55,53 @@ export function startElectronApplication(options: StartElectronApplicationOption
 		appServerStartupMode,
 	});
 
-	app.on('second-instance', (_event, arguments_, cwd) => application.handleSecondInstance(arguments_, cwd));
+	app.on('second-instance', (_event, arguments_, cwd, data) => {
+		if (data && typeof data === 'object' && 'launchArguments' in data) {
+			if (!Array.isArray(data.launchArguments) || !data.launchArguments.every((argument: unknown) => typeof argument === 'string')) {
+				throw new TypeError('Invalid launch arguments from another process');
+			}
+			application.handleLaunchArguments(data.launchArguments, cwd);
+		} else {
+			application.handleSecondInstance(arguments_, cwd);
+		}
+	});
+	app.on('open-file', (event, file) => {
+		event.preventDefault();
+		application.handleLaunchArguments([`--file-uri=${pathToFileURL(file)}`], process.cwd());
+	});
+	app.on('open-url', (event, url) => {
+		event.preventDefault();
+		application.handleLaunchArguments([`--open-url=${url}`], process.cwd());
+	});
 	app.on('activate', () => application.handleActivate());
 	app.on('window-all-closed', () => application.handleWindowAllClosed());
 	void startup(application);
+}
+
+async function waitForMarkerDeletion(marker: string): Promise<void> {
+	await new Promise<void>((resolve, reject) => {
+		const check = (): void => {
+			void access(marker).catch(error => {
+				watcher.close();
+				if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+					resolve();
+				} else {
+					reject(error);
+				}
+			});
+		};
+		const watcher = watch(dirname(marker), (_event, name) => {
+			if (name?.toString() === basename(marker)) {
+				check();
+			}
+		});
+		watcher.on('error', error => {
+			watcher.close();
+			reject(error);
+		});
+		// Subscribe first, then check: the primary may already have completed the request.
+		check();
+	});
 }
 
 async function startup(application: AshApplication): Promise<void> {
