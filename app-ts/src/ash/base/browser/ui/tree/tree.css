@@ -71,19 +71,25 @@
   z-index: 1;
   top: 0;
   bottom: 0;
-  left: calc(8px + var(--ash-tree-indent, 14px) / 2);
+  /* The guide continues through the center of its ancestor's 16px twistie. */
+  left: 16px;
   pointer-events: none;
 }
 
 .ash-tree-indent-guide {
-  width: var(--ash-tree-indent, 14px);
+  width: var(--ash-tree-indent, 8px);
   box-sizing: border-box;
-  flex: 0 0 var(--ash-tree-indent, 14px);
+  flex: 0 0 var(--ash-tree-indent, 8px);
   border-left: var(--ash-stroke-thickness) solid transparent;
 }
 
 .ash-tree-indent-guides-always .ash-tree-indent-guide,
 .ash-tree-indent-guides-onHover:hover .ash-tree-indent-guide {
+  border-left-color: var(--ash-tree-inactive-indent-guides-stroke);
+}
+
+.ash-tree-indent-guides-always .ash-tree-indent-guide.active,
+.ash-tree-indent-guides-onHover .ash-tree-indent-guide.active {
   border-left-color: var(--ash-tree-indent-guides-stroke);
 }
 
@@ -122,6 +128,12 @@
   flex: 0 0 16px;
   align-items: center;
   justify-content: center;
+}
+
+.ash-tree-twistie.ash-tree-twistie-hidden {
+  width: 0;
+  flex-basis: 0;
+  visibility: hidden;
 }
 
 .ash-tree-twistie .ash-icon {

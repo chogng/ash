@@ -130,12 +130,11 @@ test("ExplorerView opens workspace files on single click", async () => {
 	};
 	using configurationService = new InMemoryConfigurationService();
 	await configurationService.updateValue(ListConfiguration.openMode, "doubleClick");
+	using iconChanges = new Emitter<void>();
+	let fileIconTheme = { ...noFileIconTheme, hasFileIcons: true };
 	const resourceIconRenderer: IResourceIconRenderer = {
-		onDidChangeResourceIcons: () => ({
-			dispose() {},
-			[Symbol.dispose]() {},
-		}),
-		getFileIconTheme: () => ({ ...noFileIconTheme, hasFileIcons: true }),
+		onDidChangeResourceIcons: iconChanges.event,
+		getFileIconTheme: () => fileIconTheme,
 		renderFileIcon: (resource, container) => {
 			container.classList.add("ash-seti-file-icon");
 			container.textContent = resource.path.endsWith(".ts") ? "T" : "F";
@@ -251,7 +250,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 			).length,
 			1,
 		);
-		assert.ok(pane.element.querySelector(".ash-tree-indent-guides-always"));
+		assert.ok(pane.element.querySelector(".ash-tree-indent-guides-onHover"));
 		assert.equal(
 			pane.element.querySelectorAll(".ash-seti-file-icon").length,
 			1,
@@ -270,6 +269,19 @@ test("ExplorerView opens workspace files on single click", async () => {
 		assert.ok(mainRow);
 		const readmeRow = [...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => rowLabel(row) === 'README.md');
 		assert.ok(readmeRow);
+		assert.equal(readmeRow.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-hidden'), true);
+		assert.equal(mainRow.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-hidden'), true);
+		assert.equal(sourceFolder.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-hidden'), false);
+		fileIconTheme = { ...noFileIconTheme };
+		iconChanges.fire();
+		assert.equal(readmeRow.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-hidden'), false);
+		fileIconTheme = { ...noFileIconTheme, hasFileIcons: true, hidesExplorerArrows: true };
+		iconChanges.fire();
+		assert.equal(sourceFolder.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-hidden'), true);
+		fileIconTheme = { ...noFileIconTheme, hasFileIcons: true };
+		iconChanges.fire();
+		assert.equal(sourceFolder.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-hidden'), false);
+		assert.equal(readmeRow.isConnected, true);
 		mainRow.dispatchEvent(new browser.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 12, clientY: 24 }));
 		assert.equal(contextMenu?.menuId?.id, 'ExplorerContext');
 		assert.equal((contextMenu?.menuActionOptions?.arg as URI).toString(), URI.file('/project/src/main.ts').toString());

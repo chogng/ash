@@ -15,6 +15,7 @@ interface AsyncDataTreeCommonOptions<T> {
 	readonly scrolling?: ListScrolling;
 	readonly indent?: number;
 	readonly indentGuides?: TreeIndentGuides;
+	readonly twistieAdditionalCssClass?: (element: T) => string | undefined;
 	readonly expandOnDoubleClick?: boolean;
 	readonly identityProvider?: ObjectTreeIdentityProvider<T>;
 	readonly sorter?: TreeSorter<T>;
@@ -93,6 +94,7 @@ interface AsyncTreeCollapseEvent<T> {
 }
 
 interface AsyncTreeView<T> extends IDisposable {
+	updateOptions(options: Pick<AsyncDataTreeCommonOptions<T>, "indent" | "indentGuides" | "twistieAdditionalCssClass">): void;
 	readonly element: HTMLDivElement;
 	readonly domNode: HTMLDivElement;
 	readonly onPointer: Event<AsyncTreePointerEvent<T>>;
@@ -170,6 +172,9 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 	protected abstract createTree(container: HTMLElement, options: TOptions): AsyncTreeView<T>;
 
 	getInput(): TInput | undefined { return this.input; }
+	public updateOptions(options: Pick<AsyncDataTreeCommonOptions<T>, "indent" | "indentGuides" | "twistieAdditionalCssClass">): void {
+		this.tree.updateOptions(options);
+	}
 	get focus(): T | undefined { return this.tree.focus; }
 	get selection(): readonly T[] { return this.tree.selection; }
 	getVisibleElements(): readonly T[] { return this.tree.getVisibleElements(); }
@@ -327,6 +332,7 @@ export class AsyncDataTree<TInput, T> extends AbstractAsyncDataTree<TInput, T, A
 			scrolling: options.scrolling,
 			indent: options.indent,
 			indentGuides: options.indentGuides,
+			twistieAdditionalCssClass: options.twistieAdditionalCssClass,
 			expandOnDoubleClick: options.expandOnDoubleClick,
 			expandOnlyOnTwistieClick: options.expandOnlyOnTwistieClick,
 			getHeight: options.getHeight,
@@ -366,6 +372,7 @@ export class CompressibleAsyncDataTree<TInput, T> extends AbstractAsyncDataTree<
 			scrolling: options.scrolling,
 			indent: options.indent,
 			indentGuides: options.indentGuides,
+			twistieAdditionalCssClass: options.twistieAdditionalCssClass ? elements => options.twistieAdditionalCssClass!(last(elements)) : undefined,
 			expandOnDoubleClick: options.expandOnDoubleClick,
 			expandOnlyOnTwistieClick: options.expandOnlyOnTwistieClick,
 			getHeight: options.getHeight,
@@ -400,6 +407,7 @@ function objectTreeView<T>(tree: ObjectTree<T>, getId: (element: T) => string): 
 		setSelection: (elements, browserEvent) => tree.setSelection(elements.map(getId), browserEvent),
 		getVisibleElements: () => tree.getVisibleElements(),
 		domFocus: () => tree.domFocus(),
+		updateOptions: options => tree.updateOptions(options),
 		setChildren: (children) => tree.setChildren(children),
 		setNodeChildren: (element, children) => tree.setNodeChildren(getId(element), children),
 		collapse: (element) => tree.collapse(getId(element)),
@@ -432,6 +440,7 @@ function compressibleTreeView<T>(tree: CompressibleObjectTree<T>): AsyncTreeView
 		setSelection: (elements, browserEvent) => tree.setSelection(elements, browserEvent),
 		getVisibleElements: () => tree.getVisibleElements(),
 		domFocus: () => tree.domFocus(),
+		updateOptions: options => tree.updateOptions({ ...options, twistieAdditionalCssClass: options.twistieAdditionalCssClass ? elements => options.twistieAdditionalCssClass!(last(elements)) : undefined }),
 		setChildren: (children) => tree.setChildren(children),
 		setNodeChildren: (element, children) => tree.setNodeChildren(element, children),
 		collapse: (element) => tree.collapse(element),

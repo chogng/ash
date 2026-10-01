@@ -1,0 +1,157 @@
+import { cp, mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { expect, test } from '../../../automation/test.js';
+
+test.beforeEach(async ({ target, testWorkspace }) => {
+	if (target.kind !== 'electron' || target.appServerMode !== 'required') return;
+	await mkdir(join(testWorkspace.directory, 'tree-parent', 'tree-child'), { recursive: true });
+	await writeFile(join(testWorkspace.directory, 'root.txt'), 'root');
+	await writeFile(join(testWorkspace.directory, 'tree-parent', 'tree-child', 'leaf.txt'), 'leaf');
+	await mkdir(join(testWorkspace.directory, 'tree-other'));
+	await writeFile(join(testWorkspace.directory, 'tree-other', 'other.txt'), 'other');
+});
+
+test('Explorer tree guides align with ancestor arrows and settings update without replacing rows', async ({ application, target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'Requires the Code Explorer');
+	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Directory reads require App Server on desktop');
+	const page = workbench.page;
+	const hasFileIcons = target.kind === 'electron';
+	if (target.kind === 'electron' && 'windows' in application) {
+		const home = await application.evaluate(() => process.env.ASH_HOME!);
+		await cp('../extensions/theme-seti', join(home, 'extensions', 'theme-seti'), { recursive: true });
+		await page.reload();
+		await workbench.waitForReady();
+	}
+	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+	if (await showSidebar.isVisible()) await showSidebar.click();
+	if (target.kind === 'browser') {
+		await page.evaluate(async () => {
+			const root = await navigator.storage.getDirectory();
+			const workspace = await root.getDirectoryHandle(`tree-guides-${crypto.randomUUID()}`, { create: true });
+			await workspace.getFileHandle('root.txt', { create: true });
+			const parent = await workspace.getDirectoryHandle('tree-parent', { create: true });
+			const child = await parent.getDirectoryHandle('tree-child', { create: true });
+			await child.getFileHandle('leaf.txt', { create: true });
+			const other = await workspace.getDirectoryHandle('tree-other', { create: true });
+			await other.getFileHandle('other.txt', { create: true });
+			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => workspace });
+		});
+		await page.getByRole('button', { name: 'Open Folder', exact: true }).click();
+	}
+	const explorer = page.locator('.ash-explorer');
+	const parent = explorer.getByRole('treeitem', { name: 'tree-parent', exact: true });
+	const child = explorer.getByRole('treeitem').filter({ has: page.getByText('tree-child', { exact: true }) });
+	const leaf = explorer.getByRole('treeitem').filter({ has: page.getByText('leaf.txt', { exact: true }) });
+	const other = explorer.getByRole('treeitem', { name: 'tree-other', exact: true });
+	await parent.locator('.ash-tree-twistie').click();
+	await child.locator('.ash-tree-twistie').click();
+	await other.locator('.ash-tree-twistie').click();
+	const rootFile = explorer.getByRole('treeitem').filter({ has: page.getByText('root.txt', { exact: true }) });
+	const guide = leaf.locator('.ash-tree-indent-guide').first();
+	await page.mouse.move(0, 0);
+	await expect(guide).toHaveCSS('border-left-color', 'rgba(0, 0, 0, 0)');
+	await leaf.hover();
+	await expect(guide).not.toHaveCSS('border-left-color', 'rgba(0, 0, 0, 0)');
+	const geometry = async () => {
+		const arrow = await parent.locator('.ash-tree-twistie').boundingBox();
+		const childArrow = await child.locator('.ash-tree-twistie').boundingBox();
+		const line = await guide.boundingBox();
+		const rootContent = await rootFile.locator('.ash-tree-contents').boundingBox();
+		const leafContent = await leaf.locator('.ash-tree-contents').boundingBox();
+		return { alignment: line!.x - arrow!.x - arrow!.width / 2, indent: childArrow!.x - arrow!.x, rootContent: rootContent!.x - arrow!.x, leafContent: leafContent!.x - childArrow!.x };
+	};
+	const reservedTwistieWidth = hasFileIcons ? 0 : 16;
+	if (hasFileIcons) await expect(rootFile.locator('.ash-file-icon')).toBeVisible();
+	expect(await geometry()).toEqual({ alignment: 0, indent: 8, rootContent: reservedTwistieWidth, leafContent: 8 + reservedTwistieWidth });
+	const leafRow = await leaf.elementHandle();
+	await leaf.locator('.ash-tree-contents').click();
+	await expect(leaf.locator('.ash-tree-indent-guide.active')).toHaveCount(1);
+	await page.mouse.move(0, 0);
+	await expect(leaf.locator('.ash-tree-indent-guide.active')).not.toHaveCSS('border-left-color', 'rgba(0, 0, 0, 0)');
+
+	await workbench.quickaccess.runCommand('workbench.action.openSettings');
+	await page.locator('[data-settings-group-id="workbench"]').click();
+	await page.locator('[data-settings-category-id="layout"]').click();
+	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+	const search = settings.getByRole('searchbox', { name: 'Search settings' });
+	await search.fill('@id:workbench.tree.indent');
+	const indent = settings.getByRole('spinbutton', { name: 'Tree indentation', exact: true });
+	await expect(indent).toHaveValue('8');
+	await expect(indent).toHaveAttribute('min', '4');
+	await expect(indent).toHaveAttribute('max', '40');
+	for (const value of [4, 5, 6, 16, 40, 20]) {
+		await indent.fill(String(value));
+		await indent.press('Tab');
+		await expect(indent).toHaveValue(String(value));
+		await expect.poll(geometry).toEqual({ alignment: 0, indent: value, rootContent: reservedTwistieWidth, leafContent: value + reservedTwistieWidth });
+	}
+	await indent.fill('6');
+	for (const value of [5, 4]) {
+		await indent.press('ArrowDown');
+		await indent.press('Tab');
+		await expect(indent).toHaveValue(String(value));
+		await expect.poll(geometry).toEqual({ alignment: 0, indent: value, rootContent: reservedTwistieWidth, leafContent: value + reservedTwistieWidth });
+	}
+	await search.fill('@id:workbench.tree.renderIndentGuides');
+	const mode = settings.locator('[data-configuration-key="workbench.tree.renderIndentGuides"]').getByRole('combobox');
+	await mode.click();
+	await page.getByRole('option', { name: 'None', exact: true }).click();
+	await expect(explorer.getByRole('tree')).toHaveClass(/ash-tree-indent-guides-none/u);
+	await expect(leaf.locator('.ash-tree-indent-guide.active')).toHaveCSS('border-left-color', 'rgba(0, 0, 0, 0)');
+	await mode.click();
+	await page.getByRole('option', { name: 'Always', exact: true }).click();
+	await settings.locator('.ash-modal-editor-close').click();
+	await page.mouse.move(0, 0);
+	await expect(guide).not.toHaveCSS('border-left-color', 'rgba(0, 0, 0, 0)');
+	expect(await leafRow!.evaluate(row => row.isConnected)).toBe(true);
+	await leaf.locator('.ash-tree-contents').click();
+	await page.keyboard.press('ArrowLeft');
+	await page.keyboard.press('ArrowLeft');
+	await expect(child).toHaveAttribute('aria-expanded', 'false');
+	await page.keyboard.press('ArrowRight');
+	await expect(leaf).toBeVisible();
+	if (hasFileIcons) {
+		for (const id of [null, 'vs-seti']) {
+			await page.evaluate(async id => {
+				const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+				const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { source: string } };
+				const values = JSON.parse(snapshot.document.source);
+				values['workbench.iconTheme'] = id;
+				await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(values) } });
+			}, id);
+			await expect.poll(geometry).toEqual({ alignment: 0, indent: 4, rootContent: id === null ? 16 : 0, leafContent: id === null ? 20 : 4 });
+			expect(await leafRow!.evaluate(row => row.isConnected)).toBe(true);
+		}
+	}
+
+});
+
+test('Tree settings controls persist their values across a window reload', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Settings reload is covered by the standalone UI projects');
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('workbench.action.openSettings');
+	await page.locator('[data-settings-group-id="workbench"]').click();
+	await page.locator('[data-settings-category-id="layout"]').click();
+	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+	const search = settings.getByRole('searchbox', { name: 'Search settings' });
+	await search.fill('@id:workbench.tree.indent');
+	const indent = settings.getByRole('spinbutton', { name: 'Tree indentation', exact: true });
+	await expect(indent).toHaveValue('8');
+	await indent.fill('16');
+	await indent.press('Tab');
+	await search.fill('@id:workbench.tree.renderIndentGuides');
+	const mode = settings.locator('[data-configuration-key="workbench.tree.renderIndentGuides"]').getByRole('combobox');
+	await mode.click();
+	await page.getByRole('option', { name: 'Always', exact: true }).click();
+	await settings.locator('.ash-modal-editor-close').click();
+	await page.reload();
+	await workbench.waitForReady();
+
+	await workbench.quickaccess.runCommand('workbench.action.openSettings');
+	await page.locator('[data-settings-group-id="workbench"]').click();
+	await page.locator('[data-settings-category-id="layout"]').click();
+	await search.fill('@id:workbench.tree.indent');
+	await expect(indent).toHaveValue('16');
+	await search.fill('@id:workbench.tree.renderIndentGuides');
+	await expect(mode).toHaveText('Always');
+});

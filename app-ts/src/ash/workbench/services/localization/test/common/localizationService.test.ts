@@ -16,6 +16,27 @@ import { QuickInputController } from '../../../../../platform/quickinput/browser
 import { JsonSchemasRegistry } from '../../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
 import { colorThemeSchemaId, registerColorThemeSchemas } from '../../../themes/common/colorThemeSchema.js';
 import '../../../../common/theme.js';
+import { DefaultSettings } from '../../../preferences/common/settingsModels.js';
+import { ListConfiguration } from '../../../../../platform/list/common/listConfiguration.js';
+
+test('Tree settings use Chinese titles and guide options', async () => {
+	using configuration = new InMemoryConfigurationService();
+	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
+	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
+	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
+	try {
+		await localization.whenReady;
+		await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
+		const settings = new DefaultSettings();
+		assert.equal(settings.get(ListConfiguration.treeIndent).title, '树缩进');
+		const guides = settings.get(ListConfiguration.treeRenderIndentGuides);
+		assert.equal(guides.title, '树缩进引导线');
+		assert.equal(guides.valueType, 'select');
+		if (guides.valueType === 'select') assert.deepEqual(guides.options.map(option => option.label), ['不显示', '悬停时显示', '始终显示']);
+	} finally {
+		resetNlsResolver();
+	}
+});
 
 test("locale selection resolves installed variants and falls back to English", async () => {
 	assert.equal(normalizeLocale("ZH_cn"), "zh-CN");

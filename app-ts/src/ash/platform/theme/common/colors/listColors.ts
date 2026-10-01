@@ -1,4 +1,4 @@
-import { registerColor } from "../colorUtils.js";
+import { registerColor, transparent } from "../colorUtils.js";
 
 const owner = "platform.theme.list";
 const color = (id: string, dark: string, light: string, highContrastDark: string, highContrastLight: string, description: string): string =>
@@ -9,3 +9,9 @@ export const listActiveSelectionForeground = color("list.activeSelectionForegrou
 export const listActiveSelectionBackground = color("list.activeSelectionBackground", "#04395e", "#0060c0", "#ffffff", "#000000", "Active list selection background.");
 export const listInactiveSelectionBackground = color("list.inactiveSelectionBackground", "#37373d", "#e4e6f1", "#333333", "#dddddd", "Inactive list selection background.");
 export const treeIndentGuidesStroke = color("tree.indentGuidesStroke", "#585858", "#a9a9a9", "#ffffff", "#000000", "Tree indentation guide stroke.");
+export const treeInactiveIndentGuidesStroke = registerColor("tree.inactiveIndentGuidesStroke", {
+	dark: transparent(treeIndentGuidesStroke, 0.4),
+	light: transparent(treeIndentGuidesStroke, 0.4),
+	highContrastDark: "#ffffff",
+	highContrastLight: "#000000",
+}, { description: "Inactive tree indentation guide stroke.", owner });

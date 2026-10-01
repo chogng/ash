@@ -1,6 +1,6 @@
 import { AsyncDataTree, type AsyncDataTreeOptions } from "../../../base/browser/ui/tree/asyncDataTree.js";
 import { ObjectTree, type ObjectTreeAcceptEvent, type ObjectTreeOptions, type ObjectTreePointerEvent, type ObjectTreeSelectionChangeEvent } from "../../../base/browser/ui/tree/objectTree.js";
-import type { AsyncTreeDataSource } from "../../../base/browser/ui/tree/tree.js";
+import type { AsyncTreeDataSource, TreeIndentGuides } from "../../../base/browser/ui/tree/tree.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable } from "../../../base/common/lifecycle.js";
 import type { IConfigurationService } from "../../configuration/common/configuration.js";
@@ -31,7 +31,15 @@ export class WorkbenchObjectTree<T> extends ObjectTree<T> {
 
 	constructor(container: HTMLElement, options: WorkbenchObjectTreeOptions<T>) {
 		const { configurationService, openOnSingleClick, ...treeOptions } = options;
-		super(container, treeOptions);
+		super(container, {
+			...treeOptions,
+			indent: treeOptions.indent ?? configurationService.getValue<number>(ListConfiguration.treeIndent),
+			indentGuides: treeOptions.indentGuides ?? configurationService.getValue<TreeIndentGuides>(ListConfiguration.treeRenderIndentGuides),
+		});
+		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(ListConfiguration.treeIndent) && options.indent === undefined) this.updateOptions({ indent: configurationService.getValue<number>(ListConfiguration.treeIndent) });
+			if (event.affectsConfiguration(ListConfiguration.treeRenderIndentGuides) && options.indentGuides === undefined) this.updateOptions({ indentGuides: configurationService.getValue<TreeIndentGuides>(ListConfiguration.treeRenderIndentGuides) });
+		}));
 		this.navigator = this._register(new TreeResourceNavigator(this, configurationService, openOnSingleClick));
 		this.onDidOpen = this.navigator.onDidOpen;
 	}
@@ -47,7 +55,15 @@ export class WorkbenchAsyncDataTree<TInput, T> extends AsyncDataTree<TInput, T> 
 
 	constructor(container: HTMLElement, dataSource: AsyncTreeDataSource<TInput, T>, options: WorkbenchAsyncDataTreeOptions<T>) {
 		const { configurationService, openOnSingleClick, ...treeOptions } = options;
-		super(container, dataSource, treeOptions);
+		super(container, dataSource, {
+			...treeOptions,
+			indent: treeOptions.indent ?? configurationService.getValue<number>(ListConfiguration.treeIndent),
+			indentGuides: treeOptions.indentGuides ?? configurationService.getValue<TreeIndentGuides>(ListConfiguration.treeRenderIndentGuides),
+		});
+		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(ListConfiguration.treeIndent) && options.indent === undefined) this.updateOptions({ indent: configurationService.getValue<number>(ListConfiguration.treeIndent) });
+			if (event.affectsConfiguration(ListConfiguration.treeRenderIndentGuides) && options.indentGuides === undefined) this.updateOptions({ indentGuides: configurationService.getValue<TreeIndentGuides>(ListConfiguration.treeRenderIndentGuides) });
+		}));
 		this.navigator = this._register(new TreeResourceNavigator(this, configurationService, openOnSingleClick));
 		this.onDidOpen = this.navigator.onDidOpen;
 	}

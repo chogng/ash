@@ -11,6 +11,7 @@ export interface ObjectTreeOptions<TNode> {
 	readonly scrolling?: ListScrolling;
 	readonly indent?: number;
 	readonly indentGuides?: TreeIndentGuides;
+	readonly twistieAdditionalCssClass?: (element: TNode) => string | undefined;
 	readonly expandOnDoubleClick?: boolean;
 	readonly expandOnlyOnTwistieClick?: boolean | ((element: TNode) => boolean);
 	readonly getHeight?: (element: TNode) => number;
@@ -100,6 +101,10 @@ export class ObjectTree<TNode> extends Disposable {
 	readonly onDidActivate: Event<ObjectTreeActivateEvent<TNode>> = this._onDidActivate.event;
 	readonly onDidChangeFind: Event<ObjectTreeFindResult<TNode>> = this._onDidChangeFind.event;
 
+	public updateOptions(options: Pick<ObjectTreeOptions<TNode>, "indent" | "indentGuides" | "twistieAdditionalCssClass">): void {
+		this.tree.updateOptions({ ...options, twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element) : undefined });
+	}
+
 	constructor(container: HTMLElement, options: ObjectTreeOptions<TNode>) {
 		super();
 		const expandOnlyOnTwistieClick = options.expandOnlyOnTwistieClick;
@@ -110,6 +115,7 @@ export class ObjectTree<TNode> extends Disposable {
 			scrolling: options.scrolling,
 			indent: options.indent,
 			indentGuides: options.indentGuides,
+			twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element) : undefined,
 			expandOnDoubleClick: options.expandOnDoubleClick,
 			expandOnlyOnTwistieClick: typeof expandOnlyOnTwistieClick === "function" ? (node) => expandOnlyOnTwistieClick(node.element) : expandOnlyOnTwistieClick,
 			getHeight: options.getHeight ? (node) => options.getHeight!(node.element) : undefined,
@@ -267,6 +273,7 @@ export interface CompressibleObjectTreeOptions<T> {
 	readonly scrolling?: ListScrolling;
 	readonly indent?: number;
 	readonly indentGuides?: TreeIndentGuides;
+	readonly twistieAdditionalCssClass?: (elements: readonly T[]) => string | undefined;
 	readonly expandOnDoubleClick?: boolean;
 	readonly expandOnlyOnTwistieClick?: boolean | ((elements: readonly T[]) => boolean);
 	readonly getHeight?: (elements: readonly T[]) => number;
@@ -328,6 +335,10 @@ export class CompressibleObjectTree<T> extends Disposable {
 	readonly onDidChangeSelection: Event<CompressibleTreeSelectionChangeEvent<T>> = this._onDidChangeSelection.event;
 	readonly onDidChangeCollapseState: Event<{ readonly element: T; readonly elements: readonly T[]; readonly collapsed: boolean; readonly browserEvent: MouseEvent | KeyboardEvent | undefined }> = this._onDidChangeCollapseState.event;
 
+	public updateOptions(options: Pick<CompressibleObjectTreeOptions<T>, "indent" | "indentGuides" | "twistieAdditionalCssClass">): void {
+		this.tree.updateOptions({ ...options, twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element.elements) : undefined });
+	}
+
 	constructor(container: HTMLElement, private readonly options: CompressibleObjectTreeOptions<T>) {
 		super();
 		const expandOnlyOnTwistieClick = options.expandOnlyOnTwistieClick;
@@ -337,6 +348,7 @@ export class CompressibleObjectTree<T> extends Disposable {
 			scrolling: options.scrolling,
 			indent: options.indent,
 			indentGuides: options.indentGuides,
+			twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element.elements) : undefined,
 			expandOnDoubleClick: options.expandOnDoubleClick,
 			expandOnlyOnTwistieClick: typeof expandOnlyOnTwistieClick === "function" ? (node) => expandOnlyOnTwistieClick(node.element.elements) : expandOnlyOnTwistieClick,
 			getHeight: options.getHeight ? (node) => options.getHeight!(node.element.elements) : undefined,

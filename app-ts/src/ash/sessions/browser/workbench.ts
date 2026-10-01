@@ -76,6 +76,7 @@ import { DiffService } from '../../workbench/services/diff/browser/diffService.j
 import { EditorPart, IEditorPart } from '../../workbench/browser/parts/editor/editorPart.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
 import { BrowserEditorService } from '../../workbench/services/editor/browser/browserEditorService.js';
+import { IEditorService } from '../../workbench/services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../../workbench/services/editor/common/editorGroupsService.js';
 import { IViewDescriptorService, ViewDescriptorService } from '../../workbench/services/views/common/viewDescriptorService.js';
 import { IViewsService, ViewsService } from '../../workbench/services/views/browser/viewsService.js';

@@ -27,6 +27,45 @@ test("Platform List owns and validates its shared interaction configuration", ()
 	assert.equal(treeExpandMode.defaultValue, "singleClick");
 	assert.equal(treeExpandMode.parse("doubleClick"), "doubleClick");
 	assert.throws(() => treeExpandMode.parse("hover"), /Unknown tree expand mode/);
+	const indent = configurationRegistry.getConfiguration(ListConfiguration.treeIndent)!;
+	assert.equal(indent.defaultValue, 8);
+	for (const invalid of [3, 41, NaN, Infinity, "8"]) assert.throws(() => indent.parse(invalid), /between 4 and 40/);
+	const guides = configurationRegistry.getConfiguration(ListConfiguration.treeRenderIndentGuides)!;
+	assert.equal(guides.defaultValue, "onHover");
+	assert.throws(() => guides.parse("hover"), /Unknown tree indent guide mode/);
+});
+
+test("Workbench tree settings update retained rows and highlight only the selected branch", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	using configuration = new InMemoryConfigurationService();
+	using tree = new WorkbenchObjectTree<TestItem>(dom.window.document.body, {
+		configurationService: configuration,
+		modelOptions: { identityProvider: { getId: item => item.id } },
+		reuseRows: true,
+		renderElement: item => {
+			const label = h(dom.window.document, "span");
+			label.textContent = item.id;
+			return label;
+		},
+	});
+	tree.setChildren([
+		{ element: { id: "first" }, collapsed: false, children: [{ element: { id: "child" } }] },
+		{ element: { id: "second" }, collapsed: false, children: [{ element: { id: "other" } }] },
+	]);
+	const child = tree.domNode.querySelector<HTMLElement>('[data-tree-id="child"].ash-tree-row')!;
+	tree.setSelection(["child"]);
+	assert.deepEqual([...tree.domNode.querySelectorAll<HTMLElement>('.ash-tree-indent-guide.active')].map(guide => guide.dataset.treeParentId), ["first"]);
+	await configuration.updateValue(ListConfiguration.treeIndent, 20);
+	await configuration.updateValue(ListConfiguration.treeRenderIndentGuides, "none");
+	assert.equal(tree.domNode.style.getPropertyValue("--ash-tree-indent"), "20px");
+	assert.ok(tree.domNode.classList.contains("ash-tree-indent-guides-none"));
+	assert.equal(tree.domNode.querySelector('[data-tree-id="child"].ash-tree-row'), child);
+	assert.equal(tree.selection[0]?.id, "child");
+	tree.setFocus("second");
+	assert.equal(tree.domNode.querySelectorAll('.ash-tree-indent-guide.active').length, 2);
+	tree.collapse("second");
+	assert.deepEqual([...tree.domNode.querySelectorAll<HTMLElement>('.ash-tree-indent-guide.active')].map(guide => guide.dataset.treeParentId), ["first"]);
+	dom.window.close();
 });
 
 test("WorkbenchObjectTree derives preview, pinned, and side-by-side open intent", async () => {

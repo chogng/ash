@@ -102,7 +102,6 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			scrolling: "managed",
 			configurationService,
 			getHeight: () => 22,
-			indentGuides: "always",
 			collapseByDefault: item => item.kind !== FileKind.File,
 			expandOnlyOnTwistieClick: () => configurationService.getValue<TreeExpandMode>(ListConfiguration.treeExpandMode) === "doubleClick",
 			identityProvider: { getId: (node) => node.resource.toString() },
@@ -119,6 +118,20 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 				} else if (state.collapsible) appendIcon(state.expanded ? Lxicon.chevronDown : Lxicon.chevronRight, twistie);
 			},
 		}));
+		const updateTwistieLayout = () => {
+			const theme = resourceIconRenderer.getFileIconTheme();
+			// Without folder icons, a file icon occupies the same column as a folder arrow.
+			this.tree.updateOptions({ twistieAdditionalCssClass: item => {
+				// Nested file groups keep their arrow even when the theme hides directory arrows.
+				if (item.kind !== FileKind.Directory && item.children?.length) {
+					return undefined;
+				}
+				const hideTwistie = theme.hidesExplorerArrows || theme.hasFileIcons && !theme.hasFolderIcons && item.kind !== FileKind.Directory;
+				return hideTwistie ? 'ash-tree-twistie-hidden' : undefined;
+			} });
+		};
+		updateTwistieLayout();
+		this._register(resourceIconRenderer.onDidChangeResourceIcons(updateTwistieLayout));
 		this._register(new ExplorerFindProvider(this.tree, this.headerElement));
 		this.scopedContext = this._register(contextKeyService.createScoped(this.element));
 		ExplorerFocusedContext.bindTo(this.scopedContext).set(true);
