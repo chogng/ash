@@ -14,10 +14,9 @@ test('window title follows the active editor, unsaved changes, restored content 
 	const page = workbench.page;
 	const workspaceTitle = await page.title();
 	expect(workspaceTitle).toMatch(/Ash Code$/u);
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	await expect(page).toHaveTitle(`Untitled-1 — ${workspaceTitle}`);
 	const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
-	await input.focus();
 	await input.type('window title draft');
 	await expect(page).toHaveTitle(`● Untitled-1 — ${workspaceTitle}`);
 	const commandCenter = page.getByRole('button', { name: 'Search commands', exact: true });
@@ -30,7 +29,7 @@ test('window title follows the active editor, unsaved changes, restored content 
 	await input.press('ControlOrMeta+A');
 	await input.press('Backspace');
 	await expect(page).toHaveTitle(`Untitled-1 — ${workspaceTitle}`);
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	await expect(page).toHaveTitle(`Untitled-2 — ${workspaceTitle}`);
 	await page.keyboard.press('ControlOrMeta+W');
 	await expect(page).toHaveTitle(`Untitled-1 — ${workspaceTitle}`);
@@ -42,9 +41,9 @@ test('detached editor titles follow their own window when focus and dirty state 
 	test.skip(target.workbenchMode !== 'code', 'This scenario uses Code text editors');
 	const page = workbench.page;
 	const workspaceTitle = await page.title();
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	await expect(page).toHaveTitle(`Untitled-1 — ${workspaceTitle}`);
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	await expect(page).toHaveTitle(`Untitled-2 — ${workspaceTitle}`);
 	await page.keyboard.press('F1');
 	const command = page.locator('.ash-quick-pick').getByRole('combobox');
@@ -70,7 +69,7 @@ test('detached editor titles follow their own window when focus and dirty state 
 		await expect(popup).toHaveTitle(`Untitled-2 — ${workspaceTitle}`);
 		await popup.close();
 		await expect(workbench.editors.groupAt(0).tabs).toHaveCount(2);
-		await page.keyboard.press('ControlOrMeta+N');
+		await workbench.editors.newUntitledFile();
 		await expect(page).toHaveTitle(`Untitled-3 — ${workspaceTitle}`);
 	} finally {
 		if (!popup.isClosed()) {

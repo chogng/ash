@@ -27,7 +27,11 @@ use tempfile::TempDir;
 const PROCESS_TIMEOUT: Duration = Duration::from_secs(20);
 const STATE_TIMEOUT: Duration = Duration::from_secs(30);
 const REDRAW_QUIET_PERIOD: Duration = Duration::from_millis(40);
+const SCREEN_QUIET_PERIOD: Duration = Duration::from_millis(250);
 const OUTPUT_LIMIT: usize = 512 * 1024;
+
+#[path = "tui_process_tests.rs"]
+mod synchronization_tests;
 pub const LARGE_SIZE: PtySize = PtySize {
     rows: 32,
     cols: 100,
@@ -618,35 +622,13 @@ impl TuiProcess {
     fn send_input(&mut self, bytes: &[u8]) {
         let revision = self.capture.lock().unwrap().revision();
         self.send(bytes);
-        self.wait_for_redraw_after(revision);
+        self.wait_for_output_after(revision);
     }
 
-    fn wait_for_redraw_after(&mut self, revision: u64) {
-        let deadline = Instant::now() + STATE_TIMEOUT;
-        let mut observed_revision = None;
-        loop {
-            assert!(
-                Instant::now() < deadline,
-                "TUI did not settle after input; screen:\n{}",
-                self.screen()
-            );
-            let current_revision = self.capture.lock().unwrap().revision();
-            if current_revision > revision {
-                if observed_revision == Some(current_revision) {
-                    return;
-                }
-                observed_revision = Some(current_revision);
-                thread::sleep(REDRAW_QUIET_PERIOD);
-                continue;
-            }
-            if let Some(status) = self.child.try_wait().unwrap() {
-                panic!("TUI exited before redrawing after input: {status:?}");
-            }
-            if Instant::now() >= deadline {
-                panic!("TUI did not redraw after input");
-            }
-            thread::sleep(Duration::from_millis(20));
-        }
+    fn wait_for_output_after(&mut self, revision: u64) {
+        // Pace separate input writes, but do not interpret an animation frame as an input
+        // acknowledgement. Callers must wait for their screen state or protocol/side effect.
+        self.wait_for_terminal(TerminalWaitFor::OutputAfter(revision));
     }
 
     pub fn resize(&mut self, size: PtySize) {
@@ -663,61 +645,18 @@ impl TuiProcess {
             .expect("running PTY")
             .resize(size)
             .unwrap();
-        self.wait_for_redraw_after(revision);
+        self.wait_for_output_after(revision);
     }
 
+    /// Observe a business marker immediately, including a short-lived hint during animation.
+    /// The marker must distinguish the target from the screen before the action.
     pub fn wait_for_screen(&mut self, expected: &str) {
-        let deadline = Instant::now() + STATE_TIMEOUT;
-        loop {
-            let screen = self.screen();
-            if screen.contains(expected) {
-                return;
-            }
-            if let Some(status) = self.child.try_wait().unwrap() {
-                self.close_terminal();
-                panic!(
-                    "TUI exited before drawing {expected:?}: {status:?}; raw:\n{}",
-                    self.raw_text()
-                );
-            }
-            if Instant::now() >= deadline {
-                panic!(
-                    "TUI screen did not contain {expected:?}; screen:\n{screen}\nraw:\n{}",
-                    self.raw_text()
-                );
-            }
-            thread::sleep(Duration::from_millis(20));
-        }
+        self.wait_for_terminal(TerminalWaitFor::ScreenContains(expected));
     }
 
+    /// Wait for the target state and stable visible text; raw ANSI activity is irrelevant.
     pub fn wait_for_stable_screen(&mut self, expected: &str) {
-        let deadline = Instant::now() + STATE_TIMEOUT;
-        loop {
-            let (screen, revision) = {
-                let capture = self.capture.lock().unwrap();
-                (capture.screen(), capture.text_revision())
-            };
-            if screen.contains(expected) {
-                thread::sleep(Duration::from_millis(250));
-                let capture = self.capture.lock().unwrap();
-                if capture.text_revision() == revision && capture.screen().contains(expected) {
-                    return;
-                }
-            }
-            if let Some(status) = self.child.try_wait().unwrap() {
-                panic!(
-                    "TUI exited before stabilizing {expected:?}: {status:?}; raw:\n{}",
-                    self.raw_text()
-                );
-            }
-            if Instant::now() >= deadline {
-                panic!(
-                    "TUI screen did not stabilize with {expected:?}; screen:\n{}",
-                    self.screen()
-                );
-            }
-            thread::sleep(Duration::from_millis(20));
-        }
+        self.wait_for_terminal(TerminalWaitFor::StableScreenContains(expected));
     }
 
     pub fn screen(&self) -> String {
@@ -725,32 +664,19 @@ impl TuiProcess {
     }
 
     pub fn wait_for_screen_to_omit(&mut self, unexpected: &str) {
-        let deadline = Instant::now() + STATE_TIMEOUT;
+        self.wait_for_terminal(TerminalWaitFor::StableScreenOmits(unexpected));
+    }
+
+    fn wait_for_terminal(&mut self, condition: TerminalWaitFor<'_>) -> String {
+        let mut wait = TerminalWait::new(condition, Instant::now());
         loop {
-            let (screen, revision) = {
-                let capture = self.capture.lock().unwrap();
-                (capture.screen(), capture.text_revision())
-            };
-            if !screen.contains(unexpected) {
-                thread::sleep(Duration::from_millis(250));
-                let capture = self.capture.lock().unwrap();
-                if capture.text_revision() == revision && !capture.screen().contains(unexpected) {
-                    return;
-                }
+            let exited = self.child.try_wait().unwrap();
+            let result = wait.observe(&self.capture.lock().unwrap(), exited, Instant::now());
+            match result {
+                Ok(Some(screen)) => return screen,
+                Ok(None) => thread::sleep(Duration::from_millis(20)),
+                Err(error) => panic!("{error}"),
             }
-            if let Some(status) = self.child.try_wait().unwrap() {
-                panic!(
-                    "TUI exited before removing {unexpected:?}: {status:?}; raw:\n{}",
-                    self.raw_text()
-                );
-            }
-            if Instant::now() >= deadline {
-                panic!(
-                    "TUI screen did not stabilize without {unexpected:?}; screen:\n{}",
-                    self.screen()
-                );
-            }
-            thread::sleep(Duration::from_millis(20));
         }
     }
 
@@ -771,18 +697,19 @@ impl TuiProcess {
             .join("\n")
     }
 
-    pub fn assert_snapshot(&self, name: &str) {
+    /// Snapshot only a settled target state. Animated states belong in fixed-clock App tests.
+    pub fn assert_snapshot(&mut self, name: &str, expected: &str) {
         self.wait_for_clipboard_tip_to_expire();
-        let screen = normalize_snapshot(self.screen(), &self.snapshot_paths);
+        let screen = self.wait_for_terminal(TerminalWaitFor::StableScreenContains(expected));
+        // Use the exact frame that satisfied the predicate and stability check, not a later read.
+        let screen = normalize_snapshot(screen, &self.snapshot_paths);
         assert_named_snapshot(name, screen);
     }
 
-    fn wait_for_clipboard_tip_to_expire(&self) {
+    fn wait_for_clipboard_tip_to_expire(&mut self) {
         // The host clipboard belongs to the user, not these conversation fixtures.
-        let deadline = Instant::now() + STATE_TIMEOUT;
-        while self.screen().contains("image in clipboard") {
-            assert!(Instant::now() < deadline, "clipboard tip did not expire");
-            thread::sleep(Duration::from_millis(20));
+        if self.screen().contains("image in clipboard") {
+            self.wait_for_screen_to_omit("image in clipboard");
         }
     }
 
@@ -836,6 +763,84 @@ impl TuiProcess {
             if let Err(error) = reader.join() {
                 if !thread::panicking() {
                     std::panic::resume_unwind(error);
+                }
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum TerminalWaitFor<'a> {
+    OutputAfter(u64),
+    ScreenContains(&'a str),
+    StableScreenContains(&'a str),
+    StableScreenOmits(&'a str),
+}
+
+struct TerminalWait<'a> {
+    condition: TerminalWaitFor<'a>,
+    deadline: Instant,
+    matching_text: Option<(u64, Instant)>,
+}
+
+impl<'a> TerminalWait<'a> {
+    fn new(condition: TerminalWaitFor<'a>, now: Instant) -> Self {
+        Self {
+            condition,
+            deadline: now + STATE_TIMEOUT,
+            matching_text: None,
+        }
+    }
+
+    fn observe(
+        &mut self,
+        capture: &TerminalCapture,
+        exited: Option<ExitStatus>,
+        now: Instant,
+    ) -> Result<Option<String>, String> {
+        // A matching last frame cannot turn an exited process into a successful interaction.
+        if let Some(status) = exited {
+            return Err(format!(
+                "TUI exited while waiting for {:?}: {status:?}; screen:\n{}\nraw:\n{}",
+                self.condition,
+                capture.screen(),
+                capture.raw_text(),
+            ));
+        }
+        if now >= self.deadline {
+            return Err(format!(
+                "TUI timed out waiting for {:?}; screen:\n{}\nraw:\n{}",
+                self.condition,
+                capture.screen(),
+                capture.raw_text(),
+            ));
+        }
+        let screen = capture.screen();
+        let matches = match self.condition {
+            TerminalWaitFor::OutputAfter(revision) => capture.revision() > revision,
+            TerminalWaitFor::ScreenContains(expected)
+            | TerminalWaitFor::StableScreenContains(expected) => screen.contains(expected),
+            TerminalWaitFor::StableScreenOmits(unexpected) => !screen.contains(unexpected),
+        };
+        if !matches {
+            self.matching_text = None;
+            return Ok(None);
+        }
+        match self.condition {
+            TerminalWaitFor::OutputAfter(_) | TerminalWaitFor::ScreenContains(_) => {
+                Ok(Some(screen))
+            }
+            TerminalWaitFor::StableScreenContains(_) | TerminalWaitFor::StableScreenOmits(_) => {
+                let revision = capture.text_revision();
+                match self.matching_text {
+                    Some((observed, since)) if observed == revision => {
+                        Ok((now.duration_since(since) >= SCREEN_QUIET_PERIOD).then_some(screen))
+                    }
+                    _ => {
+                        // Revision, rather than text equality, catches A→B→A between polls.
+                        self.matching_text = Some((revision, now));
+                        Ok(None)
+                    }
                 }
             }
         }

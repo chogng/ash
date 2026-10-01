@@ -332,7 +332,7 @@ test('File opening settings save through their controls and survive reloading th
 	if (target.appServerMode === 'required') {
 		await expect(workbench.element).toHaveAttribute('data-workbench-state', 'folder');
 		await expect(page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true })).toBeAttached();
-		await workbench.waitForUiIdle();
+		await workbench.waitForAnimationFrames();
 	}
 	await openSettings();
 	await expect(dialog).not.toBeChecked();

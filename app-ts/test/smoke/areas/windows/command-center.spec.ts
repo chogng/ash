@@ -942,12 +942,9 @@ test('titlebar navigation moves through editor history beside Quick Access', asy
 	}
 	await page.setViewportSize(originalViewport);
 
-	const openUntitled = async () => {
-		await page.keyboard.press('ControlOrMeta+N');
-	};
-	await openUntitled();
-	await openUntitled();
-	await openUntitled();
+	await workbench.editors.newUntitledFile();
+	await workbench.editors.newUntitledFile();
+	await workbench.editors.newUntitledFile();
 	await expect(page.locator('.ash-tab.checked')).toContainText('Untitled-3');
 	await expect(back).toBeEnabled();
 	await expect(forward).toBeDisabled();
@@ -962,16 +959,15 @@ test('titlebar navigation moves through editor history beside Quick Access', asy
 	const backShortcut = process.platform === 'darwin' ? 'Control+-' : process.platform === 'linux' ? 'Control+Alt+-' : 'Alt+ArrowLeft';
 	await page.keyboard.press(backShortcut);
 	await expect(page.locator('.ash-tab.checked')).toContainText('Untitled-2');
-	await openUntitled();
+	await workbench.editors.newUntitledFile();
 	await expect(forward).toBeDisabled();
 });
 
 test('titlebar navigation restores a cursor location in the same editor', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
-	await input.focus();
 	await page.keyboard.insertText(Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join('\n'));
 	const cursor = page.locator('[data-statusbar-item-id="ash.status.editor.cursor"]');
 	const start = process.platform === 'darwin' ? 'Meta+ArrowUp' : 'Control+Home';

@@ -4,9 +4,8 @@ import type { ElectronApplication } from '@playwright/test';
 test('editor preserves space and tab indentation and places input at the rendered text', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const editor = workbench.editors.groupAt(0).editor;
-	await editor.waitForEditorFocus();
 	const lines = ['plain', '    spaces', '\ttab', ' \t mixed  text ', '\t\tnested'];
 	await page.keyboard.insertText(lines.join('\n'));
 	await expect.poll(() => editor.lines.allTextContents()).toEqual(lines);
@@ -69,9 +68,8 @@ test('editor preserves space and tab indentation and places input at the rendere
 test('line numbers stay aligned while scrolling and gutter clicks edit the visible line', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const editor = workbench.editors.groupAt(0).editor;
-	await editor.waitForEditorFocus();
 	await page.keyboard.insertText(Array.from({ length: 160 }, (_, index) => `line-${index + 1} ${'text '.repeat(40)}`).join('\n'));
 	await editor.input.press('ControlOrMeta+Home');
 	const scrollContainer = editor.element.locator(':scope > .ash-smooth-scrollable');
@@ -112,9 +110,8 @@ test('line numbers stay aligned while scrolling and gutter clicks edit the visib
 test('multiline text input is restored by one undo in the editor', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const editor = workbench.editors.groupAt(0).editor;
-	await editor.waitForEditorFocus();
 	await page.keyboard.insertText('one\ntwo\nthree');
 	await editor.waitForEditorContents(contents => contents === 'one\ntwo\nthree');
 	await editor.input.press('ControlOrMeta+z');
@@ -127,9 +124,8 @@ test('multiline text input is restored by one undo in the editor', async ({ targ
 test('browser range replacement restores its text and selection through undo and redo', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const editor = workbench.editors.groupAt(0).editor;
-	await editor.waitForEditorFocus();
 	await page.keyboard.insertText('hello\nworld');
 	await editor.input.press('ControlOrMeta+Home');
 	await editor.input.press('End');
@@ -157,9 +153,8 @@ test('browser range replacement restores its text and selection through undo and
 test('multiline paste undo and redo preserve the final editor line', async ({ target, workbench, application }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const editor = workbench.editors.groupAt(0).editor;
-	await editor.waitForEditorFocus();
 	const original = 'alpha\nbravo\nlast';
 	await page.keyboard.insertText(original);
 	await editor.waitForEditorContents(contents => contents === original);
@@ -193,9 +188,8 @@ test('multiline paste undo and redo preserve the final editor line', async ({ ta
 test('minimap reflects equal-length text edits in the workbench', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const editor = workbench.editors.groupAt(0).editor;
-	await editor.waitForEditorFocus();
 	await page.keyboard.insertText('iiii\n\n \t \niiii');
 	await expect(editor.lines).toHaveText(['iiii', '', ' \t ', 'iiii']);
 	const canvas = editor.element.locator('.minimap canvas');
@@ -221,9 +215,8 @@ test('minimap reflects equal-length text edits in the workbench', async ({ targe
 test('built-in themes apply scrollbar and minimap colors through hover and dragging', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const editor = workbench.editors.groupAt(0).editor;
-	await editor.waitForEditorFocus();
 	await page.keyboard.insertText(Array.from({ length: 120 }, () => 'long text '.repeat(100)).join('\n'));
 	await page.keyboard.press('ControlOrMeta+Home');
 	const vertical = editor.element.locator('.ash-scrollbar-track-vertical');
@@ -282,9 +275,8 @@ test('built-in themes apply scrollbar and minimap colors through hover and dragg
 test('editor scrollbar track background follows the theme through hover and dragging', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const editor = workbench.editors.groupAt(0).editor;
-	await editor.waitForEditorFocus();
 	await page.keyboard.insertText(Array.from({ length: 120 }, () => 'long text '.repeat(100)).join('\n'));
 	await page.keyboard.press('ControlOrMeta+Home');
 	const tracks = editor.element.locator('.ash-scrollbar-track');
@@ -323,9 +315,8 @@ test('editor scrollbar track background follows the theme through hover and drag
 test('minimap shadow indicates content beyond the right edge', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const editor = workbench.editors.groupAt(0).editor;
-	await editor.waitForEditorFocus();
 	const minimap = editor.element.locator('.minimap');
 	const scrollable = editor.element.locator(':scope > .ash-smooth-scrollable');
 	const readShadow = () => minimap.evaluate(element => {
@@ -359,9 +350,8 @@ test('minimap shadow indicates content beyond the right edge', async ({ target, 
 test('minimap slider has modern corners and reaches the scrollbar bottom', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const editor = workbench.editors.groupAt(0).editor;
-	await editor.waitForEditorFocus();
 	await page.keyboard.insertText(Array.from({ length: 1_200 }, () => 'long text '.repeat(100)).join('\n'));
 	const minimap = editor.element.locator('.minimap');
 	const slider = minimap.locator('.stanza-editor-minimap-slider');
@@ -392,9 +382,8 @@ test('minimap slider has modern corners and reaches the scrollbar bottom', async
 test('clicking inside editor text places insertion at the clicked character', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const editor = workbench.editors.groupAt(0).editor;
-	await editor.waitForEditorFocus();
 	const text = 'mode switcher > radiogroup';
 	await page.keyboard.insertText(`${'context\n'.repeat(9)}${text}\n${'wide '.repeat(100)}`);
 	await page.keyboard.press('ControlOrMeta+Home');
@@ -436,9 +425,8 @@ test('clicking inside editor text places insertion at the clicked character', as
 test('dragging editor text after horizontal scrolling replaces the selected characters', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const editor = workbench.editors.groupAt(0).editor;
-	await editor.waitForEditorFocus();
 	const text = 'mode switcher > radiogroup';
 	await page.keyboard.insertText(`${'wide '.repeat(100)}\n${text}`);
 	const line = editor.lines.nth(1);
@@ -493,9 +481,8 @@ test('dragging editor text after horizontal scrolling replaces the selected char
 test('Chinese drag selection does not jump when pointer capture starts or ends', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const editor = workbench.editors.groupAt(0).editor;
-	await editor.waitForEditorFocus();
 	const text = '是否带个电饭锅电饭锅的方法蛋糕';
 	await page.keyboard.insertText(text);
 	await expect(editor.lines.first()).toHaveText(text);
@@ -533,9 +520,8 @@ test('Chinese drag selection does not jump when pointer capture starts or ends',
 test('text editor automation follows input, replacement, and folding in its group', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const editor = workbench.editors.groupAt(0).editor;
-	await editor.waitForEditorFocus();
 	const text = 'section\n    alpha beta\n    gamma\nend';
 	await editor.waitForTypeInEditor('section');
 	await editor.input.press('Enter');
@@ -560,9 +546,8 @@ test('text editor automation follows input, replacement, and folding in its grou
 test('theme color settings update editor colors and restore defaults when removed', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const editor = workbench.editors.groupAt(0).editor;
-	await editor.waitForEditorFocus();
 	await page.keyboard.insertText('prefix selected suffix');
 	const overrides = [
 		['editor.selectionBackground', '#123456', '--ash-editor-selection-background'],
@@ -594,7 +579,7 @@ test('theme color settings update editor colors and restore defaults when remove
 			getComputedStyle(element).getPropertyValue(token).trim(), cssVariable)).toBe(color);
 	}
 	await settings.locator('.ash-modal-editor-close').click();
-	await editor.waitForEditorFocus();
+	await editor.focus();
 	await page.keyboard.press('Home');
 	for (let index = 0; index < 7; index++) await page.keyboard.press('ArrowRight');
 	for (let index = 0; index < 8; index++) await page.keyboard.press('Shift+ArrowRight');
@@ -621,19 +606,17 @@ test('theme color settings update editor colors and restore defaults when remove
 test('text editor automation keeps split group inputs and contents separate', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const first = workbench.editors.groupAt(0).editor;
-	await first.waitForEditorFocus();
 	await first.waitForTypeInEditor('first group');
 	await workbench.quickaccess.runCommand('workbench.action.splitEditorHorizontal');
 	await expect(workbench.editors.groups).toHaveCount(2);
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const second = workbench.editors.groupAt(1).editor;
-	await second.waitForEditorFocus();
 	await second.waitForTypeInEditor('second group');
 	await first.waitForEditorContents(contents => contents === 'first group');
 	await second.waitForEditorContents(contents => contents === 'second group');
-	await first.waitForEditorFocus();
+	await first.focus();
 	await expect(second.input).not.toBeFocused();
 	await first.waitForTypeInEditor('!');
 	await first.waitForEditorContents(contents => contents === 'first group!');

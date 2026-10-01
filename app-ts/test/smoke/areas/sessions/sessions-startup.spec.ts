@@ -39,13 +39,13 @@ test('Agents starts its connection before loading the page and reconnects on rel
 		const input = agents.getByRole('textbox', { name: 'Chat message', exact: true });
 		await expect(input).toBeEditable();
 		const editor = new Editor(agents.locator('.ash-sessions-chat-input').first());
-		await editor.waitForEditorFocus();
+		await editor.focus();
 		await agents.keyboard.insertText('Keep this draft after reload');
 		await editor.waitForEditorContents(value => value === 'Keep this draft after reload');
 		expect(await application.evaluate(({ app }) => (app as StartupProbeApp).sessionsStartupProbe.events)).toEqual(['connection-started', 'page-loading']);
 		await agents.reload();
 		await expect(input).toBeEditable();
-		await editor.waitForEditorFocus();
+		await editor.focus();
 		await agents.keyboard.press('ControlOrMeta+A');
 		await agents.keyboard.press('Backspace');
 		await agents.keyboard.insertText('Connection reinitialized');

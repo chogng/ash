@@ -10,9 +10,9 @@ test('Quick Access runs an exact command ID and can reopen for another command',
 	const quickaccess = workbench.quickaccess;
 	const tabs = workbench.editors.groupAt(0).tabs;
 
-	await quickaccess.runCommand('workbench.action.files.newUntitledFile');
+	await workbench.editors.newUntitledFile(() => quickaccess.runCommand('workbench.action.files.newUntitledFile'));
 	await expect(tabs.filter({ hasText: 'Untitled-1' })).toHaveAttribute('aria-selected', 'true');
-	await quickaccess.runCommand('workbench.action.files.newUntitledFile');
+	await workbench.editors.newUntitledFile(() => quickaccess.runCommand('workbench.action.files.newUntitledFile'));
 	await expect(tabs.filter({ hasText: 'Untitled-2' })).toHaveAttribute('aria-selected', 'true');
 	await expect(tabs.filter({ hasText: /Untitled-[12]/u })).toHaveCount(2);
 	await expect(quickaccess.element).toHaveCount(0);

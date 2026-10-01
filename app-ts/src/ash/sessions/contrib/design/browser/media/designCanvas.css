@@ -70,7 +70,7 @@
 }
 
 .ash-sessions-design-zoom {
-	font-size: var(--ash-fontSize-label1);
+	font-size: var(--ash-font-size-label1);
 	color: var(--ash-description-foreground);
 }
 
@@ -104,7 +104,7 @@
 	align-items: center;
 	gap: var(--ash-spacing-size120);
 	padding: var(--ash-spacing-size80);
-	font-size: var(--ash-fontSize-label1);
+	font-size: var(--ash-font-size-label1);
 }
 
 .ash-sessions-design-properties.visible {
@@ -124,7 +124,7 @@
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
 	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-cornerRadius-small);
+	border-radius: var(--ash-corner-radius-small);
 	font: inherit;
 }
 
@@ -134,7 +134,7 @@
 }
 
 .ash-sessions-design-message {
-	font-size: var(--ash-fontSize-label1);
+	font-size: var(--ash-font-size-label1);
 	padding: 0 var(--ash-spacing-size80);
 }
 

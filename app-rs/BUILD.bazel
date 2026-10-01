@@ -7,7 +7,7 @@ app_rust_binary(
     name = "app",
     crate_name = "app",
     crate_root = "main.rs",
-    package_name = "app",
+    package_name = "app-rs",
     source_globs = ["*.rs"],
 )
 

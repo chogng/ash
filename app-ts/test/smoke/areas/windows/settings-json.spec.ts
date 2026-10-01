@@ -147,7 +147,7 @@ test('Settings JSON rejects invalid values and preserves dirty edits during a co
 			await invalid.getByRole('button', { name: 'OK', exact: true }).click();
 		}
 		await expect(tab.locator('..')).toHaveAttribute('data-state', /dirty|conflict/u);
-		await group.editor.waitForEditorFocus();
+		await group.editor.focus();
 		await group.editor.input.press('ControlOrMeta+A');
 		await expect(group.content.locator('.stanza-editor-accessibility-status')).toContainText('characters selected');
 		await pasteJson(group.editor.input, '{ "editor.fontSize": 18 }');
@@ -162,7 +162,7 @@ test('Settings JSON rejects invalid values and preserves dirty edits during a co
 		await font.press('Tab');
 		await expect(settings.locator('[data-settings-item-id="editor.fontSize"] .ash-settings-indicators')).toBeHidden();
 		await settings.locator('.ash-modal-editor-close').click();
-		await group.editor.waitForEditorFocus();
+		await group.editor.focus();
 		await group.editor.input.press('ControlOrMeta+S');
 		if (electron) {
 			await expect.poll(() => electron.evaluate(() => JSON.stringify((globalThis as typeof globalThis & { ashSettingsSaveDialogs?: { messages: MessageBoxOptions[] } }).ashSettingsSaveDialogs?.messages))).toContain('file changed on disk');

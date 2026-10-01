@@ -15,7 +15,7 @@ import zipfile
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator, Protocol
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
@@ -115,6 +115,8 @@ def download_and_verify(
             ssl.SSLError,
             URLError,
         ) as error:
+            if isinstance(error, HTTPError):
+                error.close()
             if not retryable_download_error(error):
                 raise
             if attempt == 2:
@@ -125,6 +127,9 @@ def download_and_verify(
 
 
 def retryable_download_error(error: BaseException) -> bool:
+    # HTTPError is also a URLError, but its reason is a status message.
+    if isinstance(error, HTTPError):
+        return error.code in {408, 429, 500, 502, 503, 504}
     if isinstance(error, URLError):
         return isinstance(error.reason, BaseException) and retryable_download_error(
             error.reason

@@ -28,6 +28,7 @@ rust_test(
     srcs = glob(["tests/tui/*.rs"]) + [
         "tests/support/scenario_http.rs",
         "tests/support/tui_process.rs",
+        "tests/support/tui_process_tests.rs",
         "tests/tui_real_scenarios.rs",
     ],
     compile_data = [

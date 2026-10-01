@@ -33,7 +33,7 @@ test('production loading baseline', async ({ target, workbench }, testInfo) => {
 		const before = await metrics(cdp);
 		const start = performance.now();
 		await action();
-		await workbench.waitForUiIdle();
+		await workbench.waitForAnimationFrames();
 		const elapsedMs = performance.now() - start;
 		const after = await metrics(cdp);
 		samples.push({ stage, elapsedMs, scriptMs: (after.ScriptDuration - before.ScriptDuration) * 1000, taskMs: (after.TaskDuration - before.TaskDuration) * 1000, resources: [...requests.values()].filter(request => request.stage === stage).map(request => ({ ...request })) });

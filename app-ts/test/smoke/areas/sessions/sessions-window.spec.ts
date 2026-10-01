@@ -7,7 +7,7 @@ import { launchElectron } from '../../../automation/playwrightElectron.js';
 import { Editor } from '../../../automation/editor.js';
 
 async function replaceChatInput(editor: Editor, text: string): Promise<void> {
-	await editor.waitForEditorFocus();
+	await editor.focus();
 	await editor.input.page().keyboard.press('ControlOrMeta+A');
 	await editor.input.page().keyboard.press('Backspace');
 	await editor.input.page().keyboard.insertText(text);
@@ -447,7 +447,7 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 	await expect(composer.getByRole('button', { name: 'Remove dropped.md', exact: true })).toHaveCount(0);
 	await composer.getByRole('button', { name: 'Dismiss tip', exact: true }).click();
 	await expect(composer.locator('.ash-chat-input-tip')).toHaveCount(0);
-	await editor.waitForEditorFocus();
+	await editor.focus();
 	await page.reload({ waitUntil: 'domcontentloaded' });
 	await new Editor(composer).waitForEditorContents(contents => contents === 'Keep the attached draft');
 	await expect(composer.getByRole('button', { name: 'Remove context.ts', exact: true })).toBeVisible();

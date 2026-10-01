@@ -41,9 +41,9 @@ test('tab command groups close and split the clicked tabs from mouse and keyboar
 		const source = workbench.editors.groupAt(0);
 		const names: string[] = [];
 		for (let index = 0; index < 3; index++) {
-			await page.keyboard.press('ControlOrMeta+N');
+			const opened = await workbench.editors.newUntitledFile();
 			await expect(source.tabs).toHaveCount(index + 1);
-			names.push((await source.tabs.last().getAttribute('aria-label'))!);
+			names.push((await opened.getAttribute('aria-label'))!);
 		}
 		const first = source.element.getByRole('tab', { name: names[0], exact: true });
 		const second = source.element.getByRole('tab', { name: names[1], exact: true });
@@ -78,13 +78,10 @@ test('tab command groups close and split the clicked tabs from mouse and keyboar
 		await expect(source.tabs).toHaveCount(2);
 		await choose(first, 'Pin Editor', true);
 		await expect(first).toHaveAttribute('aria-description', /Pinned tab/u);
-		await page.keyboard.press('ControlOrMeta+N');
+		const dirty = await workbench.editors.newUntitledFile();
 		await expect(source.tabs).toHaveCount(3);
-		const dirty = source.tabs.last();
 		const dirtyName = (await dirty.getAttribute('aria-label'))!;
 		const dirtyInput = source.content.getByRole('textbox', { name: dirtyName, exact: true });
-		await expect(dirtyInput).toBeVisible();
-		await dirtyInput.focus();
 		await expect(dirtyInput).toBeFocused();
 		await page.keyboard.insertText('unsaved text');
 		await expect(dirty).toHaveAttribute('aria-label', /unsaved changes/u);
@@ -106,6 +103,7 @@ test('tab command groups close and split the clicked tabs from mouse and keyboar
 
 test('editor tabs distinguish the active document from the tab strip across themes', async ({ workbench }) => {
 	const page = workbench.page;
+	// Deliberately issue consecutive commands to cover the product's queued creation behavior.
 	await page.keyboard.press('ControlOrMeta+N');
 	await page.keyboard.press('ControlOrMeta+N');
 	const group = workbench.editors.groupAt(0);
@@ -175,12 +173,12 @@ test('pin commands follow the focused inactive tab and preserve editor selection
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
 	const group = workbench.editors.groupAt(0);
-	await page.keyboard.press('ControlOrMeta+N');
+	const firstOpened = await workbench.editors.newUntitledFile();
 	const untitled = group.tabs.filter({ hasText: /Untitled-/u });
-	const firstName = await untitled.first().getAttribute('aria-label');
-	await page.keyboard.press('ControlOrMeta+N');
+	const firstName = await firstOpened.getAttribute('aria-label');
+	const secondOpened = await workbench.editors.newUntitledFile();
 	await expect(untitled).toHaveCount(2);
-	const secondName = await untitled.last().getAttribute('aria-label');
+	const secondName = await secondOpened.getAttribute('aria-label');
 	const first = group.element.getByRole('tab', { name: firstName!, exact: true });
 	const second = group.element.getByRole('tab', { name: secondName!, exact: true });
 	await first.focus();
@@ -205,7 +203,7 @@ test('pin commands follow the focused inactive tab and preserve editor selection
 test('pinned editor action stays Unpin on hover and returns the editor to the ordinary row', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 
 	const ordinary = page.locator('.ash-ordinary-editor-tabs-row .ash-tab.checked');
 	await expect(ordinary).toHaveCount(1);
@@ -262,18 +260,18 @@ test('editor tab menu targets the clicked tab and opens from the keyboard', asyn
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	test.skip(target.kind === 'electron' && process.platform === 'darwin', 'macOS displays this menu through Electron');
 	const page = workbench.page;
-	const createUntitled = async (): Promise<void> => {
+	const createUntitled = (): Promise<Locator> => workbench.editors.newUntitledFile(async () => {
 		await page.getByRole('button', { name: 'Application menu' }).click();
 		await page.getByRole('menu').first().getByRole('menuitem', { name: 'File' }).hover();
 		await page.getByRole('menu').last().getByRole('menuitem', { name: 'New Untitled Text Editor' }).click();
-	};
-	await createUntitled();
+	});
+	const firstOpened = await createUntitled();
 	const group = workbench.editors.groupAt(0);
 	const untitledTabs = group.tabs.filter({ hasText: /Untitled-/u });
-	const firstName = await untitledTabs.last().getAttribute('aria-label');
-	await createUntitled();
+	const firstName = await firstOpened.getAttribute('aria-label');
+	const remainingOpened = await createUntitled();
 	await expect(untitledTabs).toHaveCount(2);
-	const remainingName = await untitledTabs.last().getAttribute('aria-label');
+	const remainingName = await remainingOpened.getAttribute('aria-label');
 	const first = group.element.getByRole('tab', { name: firstName! });
 	const remaining = group.element.getByRole('tab', { name: remainingName! });
 	await first.click({ button: 'right' });
@@ -300,12 +298,12 @@ test('macOS Electron editor tab menu targets mouse and keyboard actions', async 
 	const electron = application as ElectronApplication;
 	const page = workbench.page;
 	const group = workbench.editors.groupAt(0);
-	await page.keyboard.press('ControlOrMeta+N');
+	const firstOpened = await workbench.editors.newUntitledFile();
 	const untitledTabs = group.tabs.filter({ hasText: /Untitled-/u });
-	const firstName = await untitledTabs.last().getAttribute('aria-label');
-	await page.keyboard.press('ControlOrMeta+N');
+	const firstName = await firstOpened.getAttribute('aria-label');
+	const remainingOpened = await workbench.editors.newUntitledFile();
 	await expect(untitledTabs).toHaveCount(2);
-	const remainingName = await untitledTabs.last().getAttribute('aria-label');
+	const remainingName = await remainingOpened.getAttribute('aria-label');
 
 	// Electron menus are outside the renderer DOM; capture the popup and select its actions in the main process.
 	await electron.evaluate(({ Menu }) => {
@@ -342,7 +340,7 @@ test('macOS Electron editor tab menu targets mouse and keyboard actions', async 
 test('editor icon setting updates existing tabs and survives pinning', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'Requires the Code product');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const group = workbench.editors.groupAt(0);
 	await expect(group.tabs.filter({ hasText: /Untitled-/u }).locator('.ash-icon-label-icon')).toBeHidden();
 	await workbench.quickaccess.runCommand('workbench.action.openWelcome');

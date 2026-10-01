@@ -67,6 +67,7 @@ def app_rust_binary(
     """Defines the app binary from the root workspace dependency graph."""
     rust_binary(
         name = name,
+        aliases = aliases(package_name = package_name),
         crate_name = crate_name,
         compile_data = data,
         crate_root = crate_root,

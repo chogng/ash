@@ -1,8 +1,11 @@
-"""Keep first-party Cargo path dependencies resolvable by Bazel."""
+"""Keep first-party Cargo dependency declarations consistent with Bazel."""
 
 import ast
 from pathlib import Path
+import tempfile
+import textwrap
 import tomllib
+from types import SimpleNamespace
 import unittest
 
 
@@ -14,31 +17,207 @@ LIBRARY_RULES = {
     "rust_proc_macro",
     "alias",
 }
+BINARY_RULES = {"ash_rust_binary", "app_rust_binary", "rust_binary"}
+
+
+def workspace_manifests(root):
+    workspace = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))[
+        "workspace"
+    ]
+    members = {
+        (root / member).resolve(): tomllib.loads(
+            (root / member / "Cargo.toml").read_text(encoding="utf-8")
+        )
+        for member in workspace["members"]
+    }
+    return workspace, members
+
+
+def dependency_spec(root, member, workspace, name, spec):
+    if not isinstance(spec, dict):
+        return member, {}
+    if not spec.get("workspace"):
+        return member, spec
+    inherited = workspace["dependencies"][name]
+    if not isinstance(inherited, dict):
+        return root, {}
+    return root, {
+        **inherited,
+        **spec,
+        # Cargo adds consumer features to workspace dependency features.
+        "features": inherited.get("features", []) + spec.get("features", []),
+    }
+
+
+def literal_attribute(call, attribute, default, build_file):
+    value = next((key.value for key in call.keywords if key.arg == attribute), None)
+    if value is None:
+        return default
+    if isinstance(value, ast.Name):
+        assignments = [
+            statement.value
+            for statement in ast.parse(build_file.read_text(encoding="utf-8")).body
+            if isinstance(statement, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == value.id
+                for target in statement.targets
+            )
+        ]
+        if len(assignments) == 1:
+            value = assignments[0]
+    try:
+        return ast.literal_eval(value)
+    except (ValueError, TypeError) as error:
+        raise AssertionError(
+            f"{build_file}:{call.lineno}: {attribute} must be statically readable "
+            "by the Cargo/Bazel declaration check"
+        ) from error
+
+
+def build_targets(member, rules=LIBRARY_RULES):
+    build_file = member / "BUILD.bazel"
+    if not build_file.is_file():
+        return {}
+    tree = ast.parse(build_file.read_text(encoding="utf-8"), filename=str(build_file))
+    return {
+        literal_attribute(node, "name", None, build_file): node
+        for statement in tree.body
+        if isinstance(statement, ast.Expr)
+        and isinstance(node := statement.value, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in rules
+    }
+
+
+def resolve_library(root, member, name):
+    visited = set()
+    while (member, name) not in visited:
+        visited.add((member, name))
+        build_file = member / "BUILD.bazel"
+        call = build_targets(member).get(name)
+        if call is None:
+            raise AssertionError(f"{build_file}: missing library target {name!r}")
+        if call.func.id != "alias":
+            return build_file, call
+        actual = literal_attribute(call, "actual", "", build_file)
+        if actual.startswith(":"):
+            name = actual[1:]
+        elif actual.startswith("//"):
+            package, _, target = actual[2:].partition(":")
+            member = (root / package).resolve()
+            name = target or member.name
+        else:
+            raise AssertionError(f"{build_file}: unsupported library alias {actual!r}")
+    raise AssertionError(f"{build_file}: library alias cycle at {name!r}")
+
+
+def dependency_contract_errors(root):
+    """Check unconditional edges without guessing Cargo cfg resolution.
+
+    rules_rs 0.0.96 workspace_dep_data emits path aliases from the package name
+    (or explicit rename), not the dependency's lib.name. Our library/binary macros
+    use those aliases; ash macros can override them with extra_aliases. Features
+    are manual BUILD attributes even though from_cargo generates feature metadata.
+
+    Check explicit features on normal, non-optional, non-target-specific edges.
+    Defaults, feature forwarding, dev/build edges and conditional activation need
+    the real Cargo/Bazel resolver; treating their union as required here would
+    reject intentional feature variants such as voice-host and sprite.
+    """
+    workspace, members = workspace_manifests(root)
+    errors = []
+    for member, manifest in members.items():
+        consumer = (member / "Cargo.toml").relative_to(root).as_posix()
+        own_build = member / "BUILD.bazel"
+        own_targets = build_targets(member, LIBRARY_RULES | BINARY_RULES)
+        for own_target in own_targets.values():
+            if own_target.func.id in {"app_rust_library", "app_rust_binary"}:
+                package = literal_attribute(own_target, "package_name", None, own_build)
+                if package != member.relative_to(root).as_posix():
+                    errors.append(
+                        f"{own_build.relative_to(root).as_posix()}: package_name "
+                        f"{package!r} does not identify Cargo metadata path "
+                        f"{member.relative_to(root).as_posix()!r} for {consumer}"
+                    )
+        for name, original in manifest.get("dependencies", {}).items():
+            base, spec = dependency_spec(root, member, workspace, name, original)
+            if "path" not in spec or spec.get("optional"):
+                continue
+            dependency = (base / spec["path"]).resolve()
+            if dependency not in members:
+                continue
+            if not any(call.func.id != "alias" for call in own_targets.values()):
+                raise AssertionError(
+                    f"{own_build}: no statically readable Rust consumer target "
+                    f"for {consumer} dependency {name!r}"
+                )
+            build_file, target = resolve_library(root, dependency, dependency.name)
+            features = literal_attribute(target, "crate_features", [], build_file)
+            missing = set(spec.get("features", [])) - set(features)
+            if missing:
+                errors.append(
+                    f"{consumer}: dependency {name!r} requests features "
+                    f"{sorted(missing)!r} missing from {build_file.relative_to(root).as_posix()} "
+                    f"target {literal_attribute(target, 'name', None, build_file)!r} "
+                    "crate_features"
+                )
+
+            dependency_manifest = members[dependency]
+            package_name = dependency_manifest["package"]["name"]
+            renamed = "package" in spec
+            expected = (
+                name
+                if renamed
+                else dependency_manifest.get("lib", {}).get("name", package_name)
+            ).replace("-", "_")
+            generated = name.replace("-", "_")
+            label = "//" + dependency.relative_to(root).as_posix()
+            for own_target in own_targets.values():
+                rule = own_target.func.id
+                if rule == "alias":
+                    continue
+                if rule in {"app_rust_library", "app_rust_binary"}:
+                    actual = generated
+                    overrides = {}
+                elif rule in {"ash_rust_crate", "ash_rust_binary"}:
+                    actual = generated
+                    overrides = literal_attribute(
+                        own_target, "extra_aliases", {}, own_build
+                    )
+                else:
+                    default_name = literal_attribute(
+                        target, "name", None, build_file
+                    ).replace("-", "_")
+                    actual = literal_attribute(
+                        target, "crate_name", default_name, build_file
+                    )
+                    overrides = literal_attribute(own_target, "aliases", {}, own_build)
+                actual = overrides.get(
+                    label, overrides.get(label + ":" + dependency.name, actual)
+                )
+                if actual != expected:
+                    errors.append(
+                        f"{consumer}: dependency {name!r} imports {expected!r}, but "
+                        f"{own_build.relative_to(root).as_posix()} target "
+                        f"{literal_attribute(own_target, 'name', None, own_build)!r} "
+                        f"aliases {label} as {actual!r}; dependency library is "
+                        f"{(dependency / 'Cargo.toml').relative_to(root).as_posix()}"
+                    )
+    return errors
 
 
 class BazelWorkspaceDependencyTests(unittest.TestCase):
     def test_cargo_path_dependencies_have_default_bazel_library_targets(self):
-        workspace = tomllib.loads(
-            (REPOSITORY_ROOT / "Cargo.toml").read_text(encoding="utf-8")
-        )["workspace"]
-        members = {
-            (REPOSITORY_ROOT / member).resolve() for member in workspace["members"]
-        }
+        workspace, members = workspace_manifests(REPOSITORY_ROOT)
         dependencies = set()
-        for member in members:
-            manifest = tomllib.loads(
-                (member / "Cargo.toml").read_text(encoding="utf-8")
-            )
+        for member, manifest in members.items():
             for section in [manifest, *manifest.get("target", {}).values()]:
                 for kind in ("dependencies", "dev-dependencies", "build-dependencies"):
                     for name, spec in section.get(kind, {}).items():
-                        if not isinstance(spec, dict):
-                            continue
-                        base = member
-                        if spec.get("workspace"):
-                            spec = workspace["dependencies"][name]
-                            base = REPOSITORY_ROOT
-                        if isinstance(spec, dict) and "path" in spec:
+                        base, spec = dependency_spec(
+                            REPOSITORY_ROOT, member, workspace, name, spec
+                        )
+                        if "path" in spec:
                             dependency = (base / spec["path"]).resolve()
                             if dependency in members:
                                 dependencies.add(dependency)
@@ -46,21 +225,352 @@ class BazelWorkspaceDependencyTests(unittest.TestCase):
         self.assertTrue(dependencies)
         for dependency in sorted(dependencies):
             with self.subTest(package=dependency.relative_to(REPOSITORY_ROOT)):
-                build_file = dependency / "BUILD.bazel"
-                self.assertTrue(build_file.is_file(), f"missing {build_file}")
-                tree = ast.parse(build_file.read_text(encoding="utf-8"))
-                targets = {
-                    keyword.value.value
-                    for node in ast.walk(tree)
-                    if isinstance(node, ast.Call)
-                    and isinstance(node.func, ast.Name)
-                    and node.func.id in LIBRARY_RULES
-                    for keyword in node.keywords
-                    if keyword.arg == "name" and isinstance(keyword.value, ast.Constant)
+                # rules_rs emits //path; Bazel expands it to //path:basename.
+                resolve_library(REPOSITORY_ROOT, dependency, dependency.name)
+
+    def test_cargo_dependency_aliases_and_direct_features_match_bazel(self):
+        self.assertEqual([], dependency_contract_errors(REPOSITORY_ROOT))
+
+
+class BazelMacroContractTests(unittest.TestCase):
+    def macro_calls(self, path, macro, **arguments):
+        calls = []
+        metadata_aliases = {
+            "//provider": "metadata_name",
+            "//test-provider": "test_name",
+        }
+
+        def aliases(package_name):
+            self.assertEqual("fixture", package_name)
+            return metadata_aliases
+
+        # These macros are Python-compatible Starlark. Execute their real bodies;
+        # only Bazel primitives are stubbed, so dropping alias/feature forwarding
+        # or reversing an override fails without fetching a compiler toolchain.
+        namespace = {
+            "load": lambda *args: None,
+            "DEP_DATA": {
+                "fixture": {
+                    "aliases": metadata_aliases,
+                    "deps": ["//provider"],
+                    "dev_deps": ["//test-provider"],
                 }
-                # rules_rs 0.0.96 cargo_workspace_graph.bzl emits //path for
-                # local dependencies; Bazel expands that to //path:basename.
-                self.assertIn(dependency.name, targets)
+            },
+            "aliases": aliases,
+            "all_crate_deps": lambda **kwargs: [],
+            "select": lambda branches: branches["//conditions:default"],
+            "native": SimpleNamespace(
+                package_name=lambda: "fixture",
+                glob=lambda *args, **kwargs: [],
+                filegroup=lambda **kwargs: None,
+            ),
+            "rust_library": lambda **kwargs: calls.append(kwargs),
+            "rust_binary": lambda **kwargs: calls.append(kwargs),
+            "rust_test": lambda **kwargs: calls.append(kwargs),
+        }
+        source = REPOSITORY_ROOT / path
+        exec(
+            compile(source.read_text(encoding="utf-8"), str(source), "exec"), namespace
+        )
+        namespace[macro](name="fixture", crate_name="fixture", **arguments)
+        return calls
+
+    def test_app_library_and_binary_forward_metadata_aliases(self):
+        for macro, arguments in (
+            ("app_rust_library", {"crate_features": ["cloud"]}),
+            ("app_rust_binary", {"crate_root": "src/main.rs"}),
+        ):
+            with self.subTest(macro=macro):
+                calls = self.macro_calls(
+                    "app-rs/defs.bzl", macro, package_name="fixture", **arguments
+                )
+                self.assertEqual(
+                    {"//provider": "metadata_name", "//test-provider": "test_name"},
+                    calls[0]["aliases"],
+                )
+                if "crate_features" in arguments:
+                    self.assertEqual(["cloud"], calls[0]["crate_features"])
+
+    def test_ash_library_and_binary_preserve_overrides_without_dev_only_edges(self):
+        for macro, arguments in (
+            ("ash_rust_crate", {"crate_features": ["cloud"]}),
+            ("ash_rust_binary", {"crate_root": "src/main.rs", "deps": []}),
+        ):
+            with self.subTest(macro=macro):
+                calls = self.macro_calls(
+                    "defs.bzl",
+                    macro,
+                    extra_aliases={"//provider": "caller_name"},
+                    **arguments,
+                )
+                self.assertEqual({"//provider": "caller_name"}, calls[0]["aliases"])
+                if "crate_features" in arguments:
+                    self.assertEqual(["cloud"], calls[0]["crate_features"])
+                    self.assertEqual(
+                        {"//provider": "caller_name", "//test-provider": "test_name"},
+                        calls[1]["aliases"],
+                    )
+
+
+class BazelDependencyContractFixtureTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name).resolve()
+        self.write(
+            "Cargo.toml",
+            """
+            [workspace]
+            members = ["consumer", "provider"]
+            [workspace.dependencies]
+            provider-package = { path = "provider", features = ["cloud"] }
+            """,
+        )
+        self.write(
+            "consumer/Cargo.toml",
+            """
+            [package]
+            name = "consumer"
+            [dependencies]
+            provider-package = { workspace = true, features = ["stream"] }
+            """,
+        )
+        self.write(
+            "provider/Cargo.toml",
+            """
+            [package]
+            name = "provider-package"
+            [lib]
+            name = "provider_api"
+            [features]
+            cloud = []
+            stream = []
+            """,
+        )
+        self.write(
+            "consumer/BUILD.bazel",
+            """
+            ash_rust_crate(
+                name = "consumer",
+                crate_name = "consumer",
+                extra_aliases = {"//provider": "provider_api"},
+            )
+            """,
+        )
+        self.write_provider_build(["cloud", "stream"])
+
+    def write(self, path, contents):
+        destination = self.root / path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(textwrap.dedent(contents), encoding="utf-8")
+
+    def write_provider_build(self, features):
+        self.write(
+            "provider/BUILD.bazel",
+            f"ash_rust_crate(name='provider', crate_name='provider_api', "
+            f"crate_features={features!r})",
+        )
+
+    def test_workspace_and_consumer_features_with_library_alias_pass(self):
+        self.assertEqual([], dependency_contract_errors(self.root))
+
+    def test_each_missing_inherited_or_consumer_feature_reports_both_paths(self):
+        for feature in ("cloud", "stream"):
+            with self.subTest(feature=feature):
+                self.write_provider_build([feature])
+                missing = "stream" if feature == "cloud" else "cloud"
+                self.assertEqual(
+                    [
+                        f"consumer/Cargo.toml: dependency 'provider-package' requests "
+                        f"features ['{missing}'] missing from provider/BUILD.bazel "
+                        "target 'provider' crate_features"
+                    ],
+                    dependency_contract_errors(self.root),
+                )
+
+    def test_missing_or_wrong_alias_reports_consumer_and_library(self):
+        for aliases, actual in (
+            ({}, "provider_package"),
+            ({"//provider": "stale"}, "stale"),
+        ):
+            with self.subTest(aliases=aliases):
+                self.write(
+                    "consumer/BUILD.bazel",
+                    f"ash_rust_crate(name='consumer', crate_name='consumer', "
+                    f"extra_aliases={aliases!r})",
+                )
+                self.assertEqual(
+                    [
+                        "consumer/Cargo.toml: dependency 'provider-package' imports "
+                        "'provider_api', but consumer/BUILD.bazel target 'consumer' "
+                        f"aliases //provider as '{actual}'; dependency library is "
+                        "provider/Cargo.toml"
+                    ],
+                    dependency_contract_errors(self.root),
+                )
+
+    def test_explicit_dependency_rename_takes_precedence_over_library_name(self):
+        self.write(
+            "consumer/Cargo.toml",
+            """
+            [package]
+            name = "consumer"
+            [dependencies]
+            client-api = { package = "provider-package", path = "../provider", features = ["cloud"] }
+            """,
+        )
+        self.write(
+            "consumer/BUILD.bazel",
+            "ash_rust_crate(name='consumer', crate_name='consumer')",
+        )
+        self.assertEqual([], dependency_contract_errors(self.root))
+
+    def test_explicit_same_package_name_still_overrides_library_name(self):
+        self.write(
+            "Cargo.toml",
+            """
+            [workspace]
+            members = ["consumer", "provider"]
+            [workspace.dependencies]
+            provider-package = { package = "provider-package", path = "provider" }
+            """,
+        )
+        self.write(
+            "consumer/BUILD.bazel",
+            "ash_rust_crate(name='consumer', crate_name='consumer')",
+        )
+        self.assertEqual([], dependency_contract_errors(self.root))
+
+    def test_binary_alias_override_is_checked_and_shared_constants_are_read(self):
+        self.write(
+            "consumer/BUILD.bazel",
+            """
+            _ALIASES = {"//provider": "provider_api"}
+            ash_rust_binary(name="consumer", crate_name="consumer", crate_root="src/main.rs",
+                            deps=[], extra_aliases=_ALIASES)
+            """,
+        )
+        self.assertEqual([], dependency_contract_errors(self.root))
+        self.write(
+            "consumer/BUILD.bazel",
+            """
+            ash_rust_binary(name="consumer", crate_name="consumer", crate_root="src/main.rs", deps=[])
+            """,
+        )
+        errors = dependency_contract_errors(self.root)
+        self.assertEqual(1, len(errors))
+        self.assertIn(
+            "consumer/BUILD.bazel target 'consumer' aliases //provider as 'provider_package'",
+            errors[0],
+        )
+
+    def test_app_metadata_key_must_be_the_cargo_member_path(self):
+        self.write(
+            "consumer/Cargo.toml",
+            """
+            [package]
+            name = "consumer-package"
+            [dependencies]
+            provider-package = { package = "provider-package", path = "../provider" }
+            """,
+        )
+        for package, expected in (
+            ("consumer", []),
+            (
+                "consumer-package",
+                [
+                    "consumer/BUILD.bazel: package_name 'consumer-package' does not identify "
+                    "Cargo metadata path 'consumer' for consumer/Cargo.toml"
+                ],
+            ),
+        ):
+            with self.subTest(package=package):
+                self.write(
+                    "consumer/BUILD.bazel",
+                    f'app_rust_binary(name="consumer", crate_name="consumer", '
+                    f'package_name={package!r}, crate_root="src/main.rs")',
+                )
+                self.assertEqual(expected, dependency_contract_errors(self.root))
+
+    def test_dynamic_required_attributes_are_reported_instead_of_skipped(self):
+        self.write(
+            "provider/BUILD.bazel",
+            """
+            ash_rust_crate(name="provider", crate_name="provider_api",
+                           crate_features=select({"//conditions:default": ["cloud", "stream"]}))
+            """,
+        )
+        with self.assertRaisesRegex(
+            AssertionError, "crate_features must be statically readable"
+        ) as error:
+            dependency_contract_errors(self.root)
+        self.assertIn(str(self.root / "provider/BUILD.bazel"), str(error.exception))
+
+    def test_unknown_consumer_macro_is_reported_instead_of_skipped(self):
+        self.write("consumer/BUILD.bazel", 'custom_rust_binary(name="consumer")')
+        with self.assertRaisesRegex(
+            AssertionError, "no statically readable Rust consumer target"
+        ) as error:
+            dependency_contract_errors(self.root)
+        self.assertIn(str(self.root / "consumer/BUILD.bazel"), str(error.exception))
+
+    def test_raw_library_default_crate_name_matches_cargo(self):
+        self.write("consumer/BUILD.bazel", 'rust_library(name="consumer")')
+        self.write(
+            "provider/BUILD.bazel",
+            'rust_library(name="provider", crate_features=["cloud", "stream"])',
+        )
+        self.write(
+            "provider/Cargo.toml",
+            '[package]\nname="provider-package"\n[lib]\nname="provider"\n',
+        )
+        self.assertEqual([], dependency_contract_errors(self.root))
+
+    def test_features_on_another_variant_do_not_satisfy_default_target(self):
+        self.write(
+            "provider/BUILD.bazel",
+            """
+            ash_rust_crate(name="provider", crate_name="provider_api")
+            ash_rust_crate(name="enabled", crate_name="provider_api", crate_features=["cloud", "stream"])
+            """,
+        )
+        errors = dependency_contract_errors(self.root)
+        self.assertEqual(1, len(errors))
+        self.assertIn("features ['cloud', 'stream']", errors[0])
+        self.assertIn("target 'provider' crate_features", errors[0])
+
+    def test_bazel_alias_resolves_the_selected_library_variant(self):
+        self.write(
+            "provider/BUILD.bazel",
+            """
+            alias(name="provider", actual=":enabled")
+            ash_rust_crate(name="enabled", crate_name="provider_api", crate_features=["cloud", "stream"])
+            """,
+        )
+        self.assertEqual([], dependency_contract_errors(self.root))
+        self.write("provider/BUILD.bazel", 'alias(name="provider", actual=":missing")')
+        with self.assertRaises(AssertionError) as error:
+            dependency_contract_errors(self.root)
+        self.assertEqual(
+            f"{self.root / 'provider/BUILD.bazel'}: missing library target 'missing'",
+            str(error.exception),
+        )
+
+    def test_conditional_and_test_features_are_not_assumed_always_enabled(self):
+        self.write_provider_build([])
+        for section, spec in (
+            ("dependencies", 'path="../provider", optional=true'),
+            ("dev-dependencies", 'path="../provider"'),
+            ("build-dependencies", 'path="../provider"'),
+            ("target.'cfg(windows)'.dependencies", 'path="../provider"'),
+        ):
+            with self.subTest(section=section):
+                self.write(
+                    "consumer/Cargo.toml",
+                    f'[package]\nname="consumer"\n[{section}]\n'
+                    f'provider-package = {{ {spec}, features=["cloud"] }}\n',
+                )
+                self.assertEqual([], dependency_contract_errors(self.root))
 
 
 if __name__ == "__main__":

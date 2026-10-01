@@ -19,9 +19,8 @@ for (const groupCount of [1, 2]) {
 		if (await sidebar.isHidden()) {
 			await page.locator('[data-action-id="workbench.action.toggleSideBar"] button').click();
 		}
-		await page.keyboard.press('ControlOrMeta+N');
+		await workbench.editors.newUntitledFile();
 		const editor = workbench.editors.groupAt(0).content.locator('.stanza-editor');
-		await editor.locator('.stanza-editor-input').focus();
 		await page.keyboard.insertText(Array.from({ length: 100 }, (_, index) => `line ${index}: resize`).join('\n'));
 		await page.keyboard.press('ControlOrMeta+Home');
 		await expect(editor.locator('.stanza-editor-line-text').first()).toContainText('line 0:');

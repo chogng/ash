@@ -9,6 +9,11 @@ Before modifying this repository:
 3. 修改代码前必须阅读并执行 [公共测试规范](.github/instructions/testing.instructions.md)，即使本次没有修改测试文件；同步检查测试覆盖，并完成受影响行为与构建的验证。
 4. 修改 Rust、Cargo 清单/锁文件、`.cargo/` 或 Rust 构建检查时，同时阅读 [Rust 规范](.github/instructions/rust-coding-guidelines.instructions.md)和 [Rust 测试规范](.github/instructions/rust-testing.instructions.md)。
 
+## 测试可靠性
+
+- 编写或修改测试前，按 [公共测试规范](.github/instructions/testing.instructions.md#完成契约与测试辅助-api) 明确本次动作的完成信号、并发边界和资源隔离；动作已发出不等于完成。
+- 测试和共享 automation helper 必须遵守该规范；不得通过削弱断言、隐藏真实竞态或反向修改规范来迁就当前实现。
+
 # Communication
 
 - Lead with the conclusion and use surrounding prose only for important boundaries or caveats.

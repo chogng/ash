@@ -178,7 +178,7 @@ test('file tab copy and reveal actions target inactive and selected files', asyn
 	await expect(file).toHaveAttribute('aria-selected', 'true');
 	await expect(explorer.locator('.ash-tree')).toBeFocused();
 	await expect(clicked).toHaveAttribute('aria-selected', 'false');
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const untitled = group.tabs.filter({ hasText: /Untitled-/u });
 	await expect(untitled).toHaveAttribute('aria-selected', 'true');
 	await clicked.focus();
@@ -1251,20 +1251,18 @@ test("Code restores an untitled draft and opens the next document separately", a
 	const group = workbench.editors.groupAt(0);
 	expect(await hasWorkingCopyBackup(page, "recovered untitled draft")).toBe(false);
 	expect(await page.evaluate(async () => (await indexedDB.databases()).some(database => database.name === "ash-working-copy-backups"))).toBe(false);
-	await page.keyboard.press("ControlOrMeta+N");
+	await workbench.editors.newUntitledFile();
 	const input = group.content.locator(".stanza-editor-input");
-	await expect(input).toBeVisible();
-	await input.focus();
 	await input.type("recovered untitled draft");
 	await expect.poll(() => hasWorkingCopyBackup(page, "recovered untitled draft"), { message: "untitled draft reaches IndexedDB" }).toBe(true);
 
 	await page.reload({ waitUntil: "domcontentloaded" });
-	await expect(page.locator(".ash-workbench")).toBeVisible();
+	await workbench.waitForReady();
 	const restoredTab = group.tabs.filter({ hasText: "Untitled-1" });
 	await expect(restoredTab).toHaveCount(1);
 	await expect(group.content.locator(".stanza-editor-line-text").first()).toContainText("recovered untitled draft");
 
-	await page.keyboard.press("ControlOrMeta+N");
+	await workbench.editors.newUntitledFile();
 	await expect(group.tabs).toHaveCount(2);
 	await expect(group.tabs.filter({ hasText: "Untitled-2" })).toHaveCount(1);
 	await restoredTab.click();

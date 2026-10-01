@@ -2,7 +2,7 @@ import { expect, test } from '../../../automation/test.js';
 
 test('detached editor window inherits workbench theme and accessibility state', async ({ workbench }) => {
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	await expect(workbench.editors.groupAt(0).tabs.last()).toContainText('Untitled');
 
 	await page.keyboard.press('F1');

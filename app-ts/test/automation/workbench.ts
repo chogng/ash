@@ -19,10 +19,11 @@ export class Workbench {
 		await this.element.waitFor({ state: "visible" });
 		await expect(this.element).toHaveAttribute('aria-busy', 'false');
 		await this.editors.waitForReady();
-		await this.waitForUiIdle();
+		await this.waitForAnimationFrames();
 	}
 
-	async waitForUiIdle(): Promise<void> {
+	/** Allows pending rendering frames to run; this does not await asynchronous command completion. */
+	async waitForAnimationFrames(): Promise<void> {
 		await this.page.evaluate(() => new Promise<void>(resolve => {
 			requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
 		}));

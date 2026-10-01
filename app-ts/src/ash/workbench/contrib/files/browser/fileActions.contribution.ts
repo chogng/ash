@@ -61,7 +61,7 @@ registerAction2(class NewUntitledTextEditorAction extends Action2 {
 
 	override run(accessor: ServicesAccessor): Promise<void> {
 		const service = accessor.get(IUntitledTextEditorService);
-		const editorPart = accessor.get(IEditorPart);
+		const editors = accessor.get(IEditorService);
 		const untitled = service.create();
 		let queue = this.openQueues.get(service);
 		if (!queue) {
@@ -72,7 +72,7 @@ registerAction2(class NewUntitledTextEditorAction extends Action2 {
 		return queue.schedule(async () => {
 			// Workspace reset and window disposal release these identities, even if their URI is reused.
 			if (service.get(untitled.resource) !== untitled) throw canceled();
-			await editorPart.openEditor(untitled);
+			await editors.openEditor(untitled);
 		});
 	}
 });

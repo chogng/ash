@@ -26,7 +26,7 @@ export class PlaywrightDriver {
 			requestedSize => window.innerWidth === requestedSize.width && window.innerHeight === requestedSize.height,
 			size,
 		);
-		await this.workbench.waitForUiIdle();
+		await this.workbench.waitForAnimationFrames();
 		return size;
 	}
 }

@@ -60,9 +60,8 @@ test('token inspection handles plaintext, Chinese labels, keyboard close and foc
 	const picker = page.getByRole('dialog', { name: 'Select Display Language' });
 	await picker.getByRole('combobox').fill('简体中文');
 	await picker.getByRole('combobox').press('Enter');
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const editor = workbench.editors.groupAt(0).editor;
-	await editor.waitForEditorFocus();
 	await page.keyboard.insertText('plain text');
 	await workbench.quickaccess.runCommand('editor.action.inspectTMScopes');
 	const dialog = page.getByRole('dialog', { name: '编辑器词法单元和作用域', exact: true });

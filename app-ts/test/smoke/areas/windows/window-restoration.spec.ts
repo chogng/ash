@@ -112,12 +112,13 @@ test('Workbench restores editor tabs unless editor restoration is disabled', asy
 	try {
 		application = await launch(userDataDirectory, folder);
 		const page = await application.firstWindow();
-		await new Workbench(page).waitForReady();
+		const workbench = new Workbench(page);
+		await workbench.waitForReady();
 		await expect(page.locator('.ash-getting-started')).toBeVisible();
 		await page.locator('[data-part="editor"] .ash-tab').hover();
 		await page.locator('[data-part="editor"] .ash-tab-close-action button').click();
-		await page.keyboard.press(process.platform === 'darwin' ? 'Meta+N' : 'Control+N');
-		await page.keyboard.press(process.platform === 'darwin' ? 'Meta+N' : 'Control+N');
+		await workbench.editors.newUntitledFile();
+		await workbench.editors.newUntitledFile();
 		await expect(page.locator('[data-part="editor"] .ash-tab')).toHaveCount(2);
 		await expect.poll(() => page.evaluate(() => Object.values(localStorage).some(value => value.includes('editorparts.state')))).toBe(true);
 		await application.close();
@@ -134,11 +135,11 @@ test('Workbench restores editor tabs unless editor restoration is disabled', asy
 
 		application = await launch(userDataDirectory);
 		const disabled = await application.firstWindow();
-		await new Workbench(disabled).waitForReady();
+		const disabledWorkbench = new Workbench(disabled);
+		await disabledWorkbench.waitForReady();
 		await expect(disabled.locator('[data-part="editor"] .ash-tab')).toHaveCount(0);
-		await disabled.keyboard.press(process.platform === 'darwin' ? 'Meta+N' : 'Control+N');
+		await disabledWorkbench.editors.newUntitledFile();
 		const input = disabled.locator('[data-part="editor"] .stanza-editor-input');
-		await input.focus();
 		await input.type('unsaved after restart');
 		await application.close();
 		application = undefined;
@@ -162,8 +163,9 @@ test('Workbench reopens detached editor windows with their tabs', async ({}, tes
 	try {
 		application = await launch(userDataDirectory);
 		const page = await application.firstWindow();
-		await new Workbench(page).waitForReady();
-		await page.keyboard.press(process.platform === 'darwin' ? 'Meta+N' : 'Control+N');
+		const workbench = new Workbench(page);
+		await workbench.waitForReady();
+		await workbench.editors.newUntitledFile();
 		await expect(page.locator('.ash-tab')).toHaveCount(1);
 		await page.keyboard.press('F1');
 		const command = page.locator('.ash-quick-pick').getByRole('combobox');

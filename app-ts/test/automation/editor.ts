@@ -13,9 +13,15 @@ export class Editor {
 		this.lines = this.element.locator('.view-lines > .view-line .stanza-editor-line-text');
 	}
 
-	async waitForEditorFocus(): Promise<void> {
+	async focus(): Promise<void> {
 		await expect(this.element).toBeVisible();
 		await this.input.focus();
+		await this.waitForEditorFocus();
+	}
+
+	/** Observes focus without changing which editor or control owns it. */
+	async waitForEditorFocus(): Promise<void> {
+		await expect(this.element).toBeVisible();
 		await expect(this.input).toBeFocused();
 	}
 
