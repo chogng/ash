@@ -308,3 +308,33 @@ test('browser Save As applies the chosen filter and custom dialog labels', async
 	assert.equal(messages.length, 1);
 	await assert.rejects(service.showOpenDialog({ canSelectFiles: true, availableFileSystems: ['other'] }), /file scheme only/);
 });
+
+test('browser document open chooses an authorized folder without replacing the workspace', async () => {
+	const root = URI.file('/@browser/chosen');
+	const paper = root.joinPathSegment('design.ash-design.json');
+	const handle = { name: 'chosen' } as FileSystemDirectoryHandle;
+	const provider = {
+		registerDirectoryHandle: async () => root,
+		getDirectoryHandle: async (resource: URI) => { assert.deepEqual(resource, root); return handle; },
+	} as unknown as HTMLFileSystemProvider;
+	const files = {
+		stat: async (resource: URI) => ({ resource, kind: resource.toString() === paper.toString() ? FileKind.File : FileKind.Directory }),
+		readDirectory: async () => [{ resource: paper, name: 'design.ash-design.json', kind: FileKind.File }],
+	} as unknown as IFileService;
+	const quickInput = {
+		createQuickPick() {
+			const accepted = new Emitter<IQuickPickItem>();
+			const hidden = new Emitter<void>();
+			const triggered = new Emitter<{ item: IQuickPickItem; button: { id: string; label: string } }>();
+			return {
+				items: [] as IQuickPickItem[], onDidAccept: accepted.event, onDidHide: hidden.event, onDidTriggerItemButton: triggered.event,
+				show() { accepted.fire(this.items[0]); },
+				dispose() { accepted.dispose(); hidden.dispose(); triggered.dispose(); },
+				[Symbol.dispose]() { accepted.dispose(); hidden.dispose(); triggered.dispose(); },
+			};
+		},
+	} as unknown as IQuickInputService;
+	const service = new FileDialogService({ kind: 'local', provider, pickDirectory: async () => handle, quickInput: () => quickInput, fileService: () => files, workspaceRoot: () => undefined }, () => { throw new Error('Unexpected message'); });
+	assert.deepEqual(await service.showOpenDialog({ canSelectFiles: true, filters: [{ name: 'Ash design', extensions: ['ash-design.json'] }] }), [paper]);
+	assert.deepEqual(await service.showOpenDialog({ canSelectFiles: true, defaultUri: paper, filters: [{ name: 'Ash design', extensions: ['json'] }] }), [paper]);
+});

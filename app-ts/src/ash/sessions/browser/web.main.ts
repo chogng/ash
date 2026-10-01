@@ -1,3 +1,9 @@
+import { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
+import { IFileService } from '../../platform/files/common/files.js';
+import { IDialogService } from '../../platform/dialogs/common/dialogs.js';
+import { IQuickInputService } from '../../platform/quickinput/common/quickInput.js';
+import { IWorkspaceContextService } from '../../platform/workspace/common/workspace.js';
+import { FileDialogService } from '../../workbench/services/dialogs/browser/fileDialogService.js';
 import './parts/menubar.contribution.js';
 import '../sessions.common.main.js';
 import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
@@ -41,6 +47,7 @@ async function mountBrowserSessions(modeId: WorkbenchModeId, profile: SessionsPr
 		const configurationApi = sessions.add(new IndexedDbConfigurationApi());
 		const initialConfigurationSnapshot = await configurationApi.read();
 		const host = globalThis.ashWebWorkbenchHost;
+		const browserFiles = host?.webWorkspaceClient ? undefined : sessions.add(new HTMLFileSystemProvider(window.indexedDB));
 		const container = host?.container ?? document.querySelector<HTMLElement>("#app");
 		if (!container) throw new Error("Sessions renderer requires an #app container");
 		const ownerWindow = container.ownerDocument.defaultView;
@@ -53,6 +60,19 @@ async function mountBrowserSessions(modeId: WorkbenchModeId, profile: SessionsPr
 			workspace: () => host?.workspace ? workspaceFromIdentifier(host.workspace) : { id: 'sessions', folders: [] },
 			configurationApi,
 			initialConfigurationSnapshot,
+			browserFileSystemProvider: browserFiles,
+			createFileDialogService: services => {
+				const common = {
+					quickInput: () => services.get(IQuickInputService),
+					fileService: () => services.get(IFileService),
+					workspaceRoot: () => services.get(IWorkspaceContextService).getWorkspace().folders[0]?.uri,
+				};
+				const dialogs = () => services.get(IDialogService);
+				if (host?.webWorkspaceClient) {
+					return new FileDialogService({ ...common, kind: 'server', client: host.webWorkspaceClient }, dialogs);
+				}
+				return new FileDialogService({ ...common, kind: 'local', provider: browserFiles!, pickDirectory: startIn => (ownerWindow as unknown as Window & { showDirectoryPicker: (options?: { startIn?: FileSystemDirectoryHandle }) => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker(startIn ? { startIn } : undefined) }, dialogs);
+			},
 			createLifecycleService: services => services.createInstance(BrowserLifecycleService, { ownerWindow, onError: onUnexpectedError }),
 			returnToWorkbench: () => {
 				const location = container.ownerDocument.location;

@@ -1,3 +1,4 @@
+import { FileDialogService } from '../../workbench/services/dialogs/electron-browser/fileDialogService.js';
 import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
 import { URI } from "../../base/common/uri.js";
 import { IFileService } from "../../platform/files/common/files.js";
@@ -112,6 +113,7 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 		api,
 		workspaceSelection: () => workspaceSelection,
 		workspace: () => workspace,
+		createFileDialogService: services => services.createInstance(FileDialogService),
 		createLifecycleService: services => lifecycleService = services.createInstance(ElectronLifecycleService, { ownerWindow: window, onError: onUnexpectedError }),
 		nativeHostApi: api.nativeHost,
 		returnToWorkbench: () => { void invoke<void>(RETURN_TO_WORKBENCH_CHANNEL).catch(onUnexpectedError); },

@@ -3,13 +3,20 @@ import type { IPositionedRectangle } from '../../../base/browser/geometry.js';
 import type { IView } from '../../../base/browser/ui/grid/grid.js';
 import type { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { SessionGridLayout } from '../../browser/parts/sessionGridLayout.js';
+import { IFileService } from '../../../platform/files/common/files.js';
+import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
+import { WorkspaceContextService } from '../../../workbench/services/workspaces/browser/workspaceContextService.js';
+import { IDialogService, IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
+import { DialogService } from '../../../workbench/services/dialogs/common/dialogService.js';
+import { FileDialogService } from '../../../workbench/services/dialogs/browser/fileDialogService.js';
+import type { IWebWorkspaceClient } from '../../../workbench/services/workspaces/browser/workspaceOpenService.js';
 import { IDictationService } from '../../../platform/dictation/common/dictationService.js';
 import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { observableValue } from '../../../base/common/observable.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
-import { Emitter } from "../../../base/common/event.js";
+import { Emitter, Event } from "../../../base/common/event.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import type { ICommandEvent, ICommandService } from "../../../platform/commands/common/commands.js";
 import { IContextMenuService, IContextViewService } from "../../../platform/contextview/browser/contextView.js";
@@ -195,6 +202,13 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	using notifications = new NotificationService();
 	services.registerInstance(IContextMenuService, contextMenuService);
 	services.registerInstance(IContextViewService, contextViewService);
+	const dialogs = resources.add(new DialogService());
+	services.registerInstance(IDialogService, dialogs);
+	const unexpectedFileOperation = async (): Promise<never> => { throw new Error('Unexpected file operation'); };
+	services.registerInstance(IFileService, { onDidChangeFiles: Event.None, stat: unexpectedFileOperation, readDirectory: unexpectedFileOperation, readFile: unexpectedFileOperation, readFileBytes: unexpectedFileOperation, writeFile: unexpectedFileOperation, writeFileBytes: unexpectedFileOperation, createFile: unexpectedFileOperation, createDirectory: unexpectedFileOperation, copy: unexpectedFileOperation, rename: unexpectedFileOperation, delete: unexpectedFileOperation });
+	services.registerInstance(IWorkspaceContextService, resources.add(new WorkspaceContextService({ id: 'sessions-test', folders: [] })));
+
+	services.registerInstance(IFileDialogService, new FileDialogService({ kind: 'server', client: {} as IWebWorkspaceClient, quickInput: () => { throw new Error('Unexpected picker'); }, fileService: () => { throw new Error('Unexpected files'); }, workspaceRoot: () => undefined }, () => dialogs));
 	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 	services.registerInstance(INotificationService, notifications);
 	const storage = resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, applicationId: 'test', workspaceId: 'test', flushInterval: 0 }));
@@ -412,6 +426,12 @@ test('Sessions page changes restore asymmetric grids only after side-part layout
 	using resources = new DisposableStore();
 	const services = resources.add(createCodeEditorServices(resources).createChild());
 	services.registerInstance(IStorageService, storage);
+	const dialogs = resources.add(new DialogService());
+	services.registerInstance(IDialogService, dialogs);
+	const unexpectedFileOperation = async (): Promise<never> => { throw new Error('Unexpected file operation'); };
+	services.registerInstance(IFileService, { onDidChangeFiles: Event.None, stat: unexpectedFileOperation, readDirectory: unexpectedFileOperation, readFile: unexpectedFileOperation, readFileBytes: unexpectedFileOperation, writeFile: unexpectedFileOperation, writeFileBytes: unexpectedFileOperation, createFile: unexpectedFileOperation, createDirectory: unexpectedFileOperation, copy: unexpectedFileOperation, rename: unexpectedFileOperation, delete: unexpectedFileOperation });
+	services.registerInstance(IFileDialogService, new FileDialogService({ kind: 'server', client: {} as IWebWorkspaceClient, quickInput: () => { throw new Error('Unexpected picker'); }, fileService: () => { throw new Error('Unexpected files'); }, workspaceRoot: () => undefined }, () => dialogs));
+	services.registerInstance(ILifecycleService, resources.add(services.createInstance(BrowserLifecycleService, { ownerWindow: browserEnvironment.window as unknown as Window, onError: (error: unknown) => { throw error; } })));
 	class Pane implements IView {
 		readonly element = createDomElement(document, 'div');
 		readonly minimumWidth = 100;

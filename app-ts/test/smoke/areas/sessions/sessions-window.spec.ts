@@ -1,6 +1,6 @@
 import { expect, test } from "../../../automation/test.js";
 import type { Locator, Page } from '@playwright/test';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import { launchElectron } from '../../../automation/playwrightElectron.js';
@@ -192,8 +192,23 @@ test('Sessions Design contribution keeps its viewport and applies canvas cursor 
 
 	const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
 	const openDesignSettings = async (): Promise<void> => {
+		if (target.kind === 'electron' && process.platform === 'darwin') {
+			if (!('windows' in application)) { throw new Error('Expected Electron application'); }
+			// Select the real system-menu item through Main; it is outside the page's DOM.
+			await application.evaluate(({ Menu }) => {
+				const popup = Menu.prototype.popup;
+				Menu.prototype.popup = function (options) {
+					Menu.prototype.popup = popup;
+					const item = this.items.find(item => item.label === 'Settings')!;
+					item.click(item, options?.window, { shiftKey: false, ctrlKey: false, altKey: false, metaKey: false, triggeredByAccelerator: false });
+					options?.callback?.();
+				};
+			});
+		}
 		await navigation.getByRole('button', { name: 'Accounts', exact: true }).click();
-		await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
+		if (target.kind === 'browser' || process.platform !== 'darwin') {
+			await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
+		}
 		await settings.getByRole('navigation', { name: 'Settings categories' }).getByRole('button', { name: 'Design', exact: true }).click();
 	};
 	await openDesignSettings();
@@ -216,6 +231,169 @@ test('Sessions Design contribution keeps its viewport and applies canvas cursor 
 	await expect(canvas).toHaveClass(/pointer-cursor/u);
 	await page.keyboard.press('Escape');
 	await expect(viewport).toHaveCSS('cursor', /url\("data:image\/svg\+xml,/u);
+});
+
+test('Sessions Design edits vector geometry and preserves a complete undo gesture', async ({ application, target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code');
+	let page = workbench.page;
+	if (target.kind === 'browser') {
+		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+	} else {
+		if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
+		const opened = application.waitForEvent('window');
+		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
+		page = await opened;
+	}
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
+	const canvas = page.getByRole('region', { name: 'Design canvas' });
+	const viewport = canvas.locator('.ash-sessions-design-viewport');
+	await canvas.getByRole('button', { name: 'Rectangle', exact: true }).click();
+	const rectangle = canvas.locator('rect[data-shape-id]');
+	await expect(rectangle).toHaveAttribute('width', '120');
+	const width = canvas.getByRole('spinbutton', { name: 'Width', exact: true });
+	await width.fill('120.5');
+	await width.press('Tab');
+	await expect(rectangle).toHaveAttribute('width', '120.5');
+	const rotation = canvas.getByRole('spinbutton', { name: 'Rotation', exact: true });
+	await rotation.fill('30');
+	await rotation.press('Tab');
+	await expect(rectangle).toHaveAttribute('transform', /^rotate\(30 /u);
+	await canvas.focus();
+	await page.keyboard.press('+');
+	await page.keyboard.press('+');
+	const before = Number(await rectangle.getAttribute('x'));
+	const rect = await rectangle.boundingBox();
+	expect(rect).not.toBeNull();
+	await page.mouse.move(rect!.x + rect!.width / 2, rect!.y + rect!.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(rect!.x + rect!.width / 2 + 72, rect!.y + rect!.height / 2 + 36, { steps: 4 });
+	await page.mouse.up();
+	await expect.poll(async () => Number(await rectangle.getAttribute('x'))).toBeCloseTo(before + 50, 5);
+	await page.keyboard.press('ControlOrMeta+z');
+	await expect.poll(async () => Number(await rectangle.getAttribute('x'))).toBe(before);
+	await page.keyboard.press('ControlOrMeta+Shift+z');
+	await expect.poll(async () => Number(await rectangle.getAttribute('x'))).toBeCloseTo(before + 50, 5);
+	const moved = await rectangle.boundingBox();
+	await page.mouse.move(moved!.x + moved!.width / 2, moved!.y + moved!.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(moved!.x + moved!.width / 2 + 72, moved!.y + moved!.height / 2);
+	await page.keyboard.press('Escape');
+	await page.mouse.up();
+	await expect.poll(async () => Number(await rectangle.getAttribute('x'))).toBeCloseTo(before + 50, 5);
+	await canvas.getByRole('button', { name: 'Ellipse', exact: true }).click();
+	await expect(canvas.locator('ellipse[data-shape-id]')).toHaveCount(1);
+	await canvas.focus();
+	await page.keyboard.press('Alt+F2');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Rectangle[\s\S]*Ellipse/u);
+	await page.keyboard.press('Escape');
+	await expect(canvas).toBeFocused();
+	await page.keyboard.press('Escape');
+	await page.keyboard.press('Tab');
+	await page.keyboard.press('Delete');
+	await expect(rectangle).toHaveCount(0);
+	await canvas.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(rectangle).toHaveCount(1);
+	await expect(viewport).toHaveCSS('background-size', /17\.28px/u);
+	await expect(canvas.locator('.ash-sessions-design-zoom')).toContainText('Unsaved changes');
+});
+
+test('Sessions Design saves and reopens an editable file through App Server', async ({ application, target, testWorkspace, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires desktop file operations through App Server');
+	if (!('windows' in application)) { throw new Error('Expected Electron application'); }
+	const filePath = join(await realpath(testWorkspace.directory), 'design.ash-design.json');
+	// Only replace the OS picker; the renderer, IPC and authorized file service stay in the workflow.
+	await application.evaluate(({ dialog }, path) => {
+		dialog.showSaveDialog = async () => ({ canceled: false, filePath: path });
+		dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
+	}, filePath);
+	const opened = application.waitForEvent('window');
+	await workbench.page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
+	const page = await opened;
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
+	const canvas = page.getByRole('region', { name: 'Design canvas' });
+	await canvas.getByRole('button', { name: 'Rectangle', exact: true }).click();
+	const width = canvas.getByRole('spinbutton', { name: 'Width', exact: true });
+	await width.fill('120.5');
+	await width.press('Tab');
+	await canvas.focus();
+	await page.keyboard.press('ControlOrMeta+s');
+	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Saved design.ash-design.json');
+	const saved = JSON.parse(await readFile(filePath, 'utf8'));
+	expect(saved).toMatchObject({ version: 1, shapes: [{ kind: 'rectangle', width: 120.5 }] });
+	await expect(canvas.locator('.ash-sessions-design-zoom')).not.toContainText('Unsaved changes');
+	await canvas.getByRole('button', { name: 'Ellipse', exact: true }).click();
+	await page.keyboard.press('ControlOrMeta+z');
+	await canvas.getByRole('button', { name: 'Open design', exact: true }).click();
+	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Opened design.ash-design.json');
+	await expect(canvas.locator('rect[data-shape-id]')).toHaveAttribute('width', '120.5');
+	await expect(canvas.locator('ellipse[data-shape-id]')).toHaveCount(0);
+	await canvas.focus();
+	await page.keyboard.press('Tab');
+	await width.fill('240.5');
+	await width.press('Tab');
+	await canvas.getByRole('button', { name: 'Save design', exact: true }).click();
+	await expect(canvas.locator('.ash-sessions-design-zoom')).not.toContainText('Unsaved changes');
+	expect(JSON.parse(await readFile(filePath, 'utf8')).shapes[0].width).toBe(240.5);
+	await writeFile(filePath, JSON.stringify(saved));
+	await width.fill('360.5');
+	await width.press('Tab');
+	await canvas.getByRole('button', { name: 'Save design', exact: true }).click();
+	const error = page.getByRole('dialog');
+	await expect(error).toContainText('Could not save the design. Your changes are still in the canvas.');
+	await error.getByRole('button', { name: 'OK', exact: true }).click();
+	await expect(canvas.locator('rect[data-shape-id]')).toHaveAttribute('width', '360.5');
+	await expect(canvas.locator('.ash-sessions-design-zoom')).toContainText('Unsaved changes');
+	expect(JSON.parse(await readFile(filePath, 'utf8'))).toEqual(saved);
+	const closeSessions = () => application.evaluate(({ BrowserWindow }) => {
+		BrowserWindow.getAllWindows().find(window => window.getTitle().includes('Sessions'))!.close();
+	});
+	await closeSessions();
+	const savePrompt = page.getByRole('dialog', { name: 'Save Changes', exact: true });
+	await expect(savePrompt).toContainText('design.ash-design.json');
+	await savePrompt.getByRole('button', { name: 'Cancel', exact: true }).click();
+	await expect(savePrompt).toHaveCount(0);
+	await expect(canvas.locator('rect[data-shape-id]')).toHaveAttribute('width', '360.5');
+	await closeSessions();
+	const closed = page.waitForEvent('close');
+	await savePrompt.getByRole('button', { name: "Don't Save", exact: true }).click();
+	await closed;
+});
+
+test('Sessions Design saves and opens a browser folder without replacing the workspace', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled' || target.workbenchMode !== 'code', 'Requires the standalone browser file picker');
+	const page = workbench.page;
+	await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
+	const folderName = await page.evaluate(async () => {
+		const name = `ash-design-${crypto.randomUUID()}`;
+		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name, { create: true });
+		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
+		return name;
+	});
+	const canvas = page.getByRole('region', { name: 'Design canvas' });
+	await canvas.getByRole('button', { name: 'Ellipse', exact: true }).click();
+	await canvas.focus();
+	await page.keyboard.press('ControlOrMeta+s');
+	const dialog = page.getByRole('dialog', { name: 'Save design', exact: true });
+	await dialog.getByRole('textbox', { name: 'File name, field 1' }).fill('design.ash-design.json');
+	await dialog.getByRole('button', { name: 'OK', exact: true }).click();
+	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Saved design.ash-design.json');
+	const saved = await page.evaluate(async name => {
+		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+		return JSON.parse(await (await (await folder.getFileHandle('design.ash-design.json')).getFile()).text());
+	}, folderName);
+	expect(saved).toMatchObject({ version: 1, shapes: [{ kind: 'ellipse', width: 120, height: 80 }] });
+	await canvas.getByRole('button', { name: 'Rectangle', exact: true }).click();
+	await page.keyboard.press('ControlOrMeta+z');
+	await expect(canvas.locator('.ash-sessions-design-zoom')).not.toContainText('Unsaved changes');
+	await canvas.getByRole('button', { name: 'Open design', exact: true }).click();
+	const file = page.locator('.ash-quick-pick-row-label').filter({ hasText: /^design\.ash-design\.json$/u });
+	await expect(file).toBeVisible();
+	await file.click();
+	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Opened design.ash-design.json');
+	await expect(canvas.locator('ellipse[data-shape-id]')).toHaveCount(1);
+	await expect(canvas.locator('rect[data-shape-id]')).toHaveCount(0);
+	await expect(canvas.locator('.ash-sessions-design-zoom')).not.toContainText('Unsaved changes');
 });
 
 test('Sessions composer attaches files, chooses permissions, and restores the unsent draft', async ({ application, target, workbench }) => {
@@ -513,7 +691,7 @@ async function returnFromSessions(page: Page): Promise<void> {
 	const accountButton = page.getByRole('button', { name: 'Accounts' });
 	await accountButton.click();
 	await expect(accountButton).toHaveAttribute('aria-expanded', 'true');
-	if (process.platform === 'darwin') {
+	if (process.platform === 'darwin' && page.url().includes('/electron-browser/')) {
 		// macOS renders this menu outside the web page, so Playwright cannot select its item by role.
 		await page.evaluate(() => {
 			const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;

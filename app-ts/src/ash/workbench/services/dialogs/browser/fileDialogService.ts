@@ -172,7 +172,16 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 	}
 
 	private async pickWorkspaceFiles(options: IOpenDialogOptions): Promise<readonly URI[] | undefined> {
-		const root = this.host.workspaceRoot();
+		let root = this.host.workspaceRoot();
+		// Standalone document editors choose a browser folder without changing the workspace.
+		if (!root && this.host.kind === 'local') {
+			let defaultDirectory = options.defaultUri;
+			if (defaultDirectory && (await this.host.fileService().stat(defaultDirectory)).kind !== FileKind.Directory) {
+				defaultDirectory = dirname(defaultDirectory);
+			}
+			root = (await this.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, defaultUri: defaultDirectory }))?.[0];
+			if (!root) { return undefined; }
+		}
 		if (!root) {
 			await this.dialogs().showMessage({
 				severity: DialogSeverity.Warning,

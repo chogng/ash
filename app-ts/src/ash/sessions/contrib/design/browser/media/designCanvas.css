@@ -3,6 +3,7 @@
 	--ash-sessions-design-grid-line: color-mix(in srgb, var(--ash-foreground) 8%, transparent);
 
 	display: flex;
+	flex-direction: column;
 	flex: 1 1 auto;
 	min-width: 0;
 	min-height: 0;
@@ -17,6 +18,7 @@
 	overflow: hidden;
 	cursor: grab;
 	user-select: none;
+	touch-action: none;
 	background-color: color-mix(in srgb, var(--ash-foreground) 3%, var(--ash-editor-background));
 	background-image: linear-gradient(to right, var(--ash-sessions-design-grid-line) var(--ash-stroke-thickness), transparent var(--ash-stroke-thickness)), linear-gradient(to bottom, var(--ash-sessions-design-grid-line) var(--ash-stroke-thickness), transparent var(--ash-stroke-thickness));
 	background-size: calc(var(--ash-sessions-design-grid-size) * var(--ash-sessions-design-scale, 1)) calc(var(--ash-sessions-design-grid-size) * var(--ash-sessions-design-scale, 1));
@@ -53,4 +55,89 @@
 	width: 0;
 	height: 0;
 	transform-origin: 0 0;
+}
+
+.ash-sessions-design-tools {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80);
+}
+
+.ash-sessions-design-tools .ash-action-bar {
+	flex-wrap: wrap;
+}
+
+.ash-sessions-design-zoom {
+	font-size: var(--ash-fontSize-label1);
+	color: var(--ash-description-foreground);
+}
+
+.ash-sessions-design-shapes {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: visible;
+	pointer-events: none;
+}
+
+.ash-sessions-design-selection {
+	display: none;
+	fill: none;
+	stroke: var(--ash-focus-border);
+	stroke-width: 2px;
+	vector-effect: non-scaling-stroke;
+}
+
+.ash-sessions-design-selection.visible {
+	display: block;
+}
+
+.ash-sessions-design-view.moving .ash-sessions-design-viewport {
+	cursor: move;
+}
+
+.ash-sessions-design-properties {
+	display: none;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size80);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-sessions-design-properties.visible {
+	display: flex;
+}
+
+.ash-sessions-design-properties label {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-sessions-design-properties input {
+	box-sizing: border-box;
+	width: 80px;
+	min-height: 28px;
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-small);
+	font: inherit;
+}
+
+.ash-sessions-design-properties input:focus-visible {
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
+}
+
+.ash-sessions-design-message {
+	font-size: var(--ash-fontSize-label1);
+	padding: 0 var(--ash-spacing-size80);
+}
+
+.ash-sessions-design-content {
+	display: none;
 }

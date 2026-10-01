@@ -56,7 +56,9 @@ import { SessionFileService } from '../contrib/providers/appServer/browser/sessi
 import { IFileService } from '../../platform/files/common/files.js';
 import { ISystemFileTransferService } from '../../platform/files/common/systemFileTransferService.js';
 import { IClipboardService } from '../../platform/clipboard/common/clipboardService.js';
-import { IDialogService } from '../../platform/dialogs/common/dialogs.js';
+import { IDialogService, IFileDialogService } from '../../platform/dialogs/common/dialogs.js';
+import type { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
+import { MultiplexFileService } from '../../platform/files/browser/multiplexFileService.js';
 import { DialogService } from '../../workbench/services/dialogs/common/dialogService.js';
 import { BrowserDialogHandler } from '../../workbench/browser/parts/dialogs/dialog.js';
 import { DialogHandlerContribution } from '../../workbench/browser/parts/dialogs/dialog.web.contribution.js';
@@ -159,6 +161,8 @@ export interface IWorkbenchOptions {
 	readonly api: IRendererHost;
 	readonly workspaceSelection: () => SessionWorkspaceSelection;
 	readonly workspace: () => IWorkspace;
+	readonly browserFileSystemProvider?: HTMLFileSystemProvider;
+	readonly createFileDialogService: (services: IInstantiationService) => IFileDialogService;
 	readonly createLifecycleService: (services: IInstantiationService) => ILifecycleService & IDisposable;
 	readonly nativeHostApi?: INativeHostApi;
 	readonly returnToWorkbench: () => void;
@@ -265,7 +269,11 @@ export class Workbench extends Disposable {
 		const workspace = this._register(services.createInstance(SessionsWorkspaceContextService, options.workspace));
 		services.registerInstance(IWorkspaceContextService, workspace);
 		const files = this._register(services.createInstance(SessionFileService, options.api));
-		services.registerInstance(IFileService, files);
+		const fileService = this._register(new MultiplexFileService(files));
+		if (options.browserFileSystemProvider) {
+			this._register(fileService.registerProvider('file', options.browserFileSystemProvider));
+		}
+		services.registerInstance(IFileService, fileService);
 		services.registerInstance(ISystemFileTransferService, files);
 		services.registerInstance(ILabelService, this._register(new LabelService(workspace)));
 		services.registerInstance(IResourceIconRenderer, themeService);
@@ -372,6 +380,7 @@ export class Workbench extends Disposable {
 			notificationService,
 		}));
 		services.registerInstance(IContextMenuService, contextMenus);
+		services.registerInstance(IFileDialogService, options.createFileDialogService(services));
 		const hoverService = this._register(new HoverService(configurationService, contextViews, contextMenus));
 		services.registerInstance(IHoverService, hoverService);
 		this._register(setHoverDelegate(hoverService));
