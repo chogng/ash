@@ -109,7 +109,6 @@ export class StickyScrollWidget extends Disposable {
 		this.domNode.classList.toggle('folding-on-hover', foldingControls === 'mouseover');
 		this.domNode.style.tabSize = String(this.model.getOptions().tabSize);
 		this.domNode.style.setProperty('--stanza-sticky-line-height', `${lineHeight}px`);
-		this.domNode.style.transform = `translate(${this.editor.getScrollLeft()}px, ${this.editor.getScrollTop()}px)`;
 		this.domNode.style.width = `${layout.width - layout.verticalScrollbarWidth}px`;
 		const focused = this.domNode.ownerDocument.activeElement;
 		const hadFocus = this.domNode.contains(focused);

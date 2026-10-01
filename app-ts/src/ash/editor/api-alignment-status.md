@@ -2143,7 +2143,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `browser/viewParts/rulers/rulers.ts` | `Rulers` | 公开成员差异归零；配置与字体变化从 `ViewContext` 读取，滚动尺寸变化触发重绘，DOM 标尺节点按数量稳定复用并随 Part 释放；CSS 使用 Ash 类名与主题 token，定向测试覆盖配置、几何、颜色、节点复用和释放 |
 | `browser/viewParts/rulersGpu/rulersGpu.ts` | `RulersGpu` | 公开成员差异归零；CPU 与 GPU 路径共享同一标尺配置和主题颜色，GPU 矩形按设备像素比与文字起点更新、按数量复用并随 Part 释放，定向测试覆盖配置、主题切换、缓存和释放 |
 | `browser/viewParts/blockDecorations/blockDecorations.ts` | `BlockDecorations` | 公开成员差异归零；独立 Part 读取可见装饰并持有稳定块级 DOM，配置、滚动、装饰和 View Zone 事件进入统一渲染链，组件 CSS 使用实际 Ash 类名且不拦截输入；测试覆盖块级几何、节点复用、可访问性属性和布局变化 |
-| `browser/viewParts/margin/margin.ts` | `Margin` | 构造器和公开成员与上游一致；只从 `EditorLayoutInfo` 读取 content、glyph、line-number 与 decoration 几何，`View` 不再维护第二份 gutter 测量。Ash 宿主的横向滚动补偿和 CSS 变量由同一布局快照写入，真实 Chromium 验证滚动后 margin 仍固定 |
+| `browser/viewParts/margin/margin.ts` | `Margin` | 构造器和公开成员与上游一致；只从 `EditorLayoutInfo` 读取 content、glyph、line-number 与 decoration 几何，`View` 不再维护第二份 gutter 测量。Margin 与正文滚动 wrapper 并列挂载在固定视口，横向坐标为零，纵向从同一帧布局应用一次滚动和大文件坐标偏移；真实 Chromium 用例覆盖行号、glyph 与正文的滚动对齐，以及大文件正文和侧栏 View Zone 的坐标一致性 |
 | `contrib/middleScroll/browser/middleScrollController.ts` | `MiddleScrollController` | 构造入口恢复为 `ICodeEditor`，由标准 editor contribution 注册表在首次交互前安装；滚动只通过编辑器公开位置 API，配置在触发与动画帧读取，窗口监听、动画帧和装饰节点随 contribution 释放，定向测试覆盖首次交互实例化、横纵滚动、键盘/指针结束和无障碍隐藏 |
 | `browser/view/viewOverlays.ts` | `ViewOverlays` | 公开成员差异归零；动态 overlay 由同一 `Disposable` 链持有，释放时子层先释放再清除引用，真实 Widget 创建与销毁测试覆盖 DOM 和 Part 生命周期 |
 | `browser/viewParts/lineNumbers/lineNumbers.ts` | `LineNumbersOverlay` | 公开成员差异归零；配置、主光标、文本行、滚动、View Zone 和行号装饰事件均进入 margin overlay 失效链，行号配置不再保留构造时快照；真实 Widget 测试覆盖相对行号随光标变化以及运行时关闭行号后的内容和 gutter 几何 |

@@ -256,8 +256,6 @@ export class View extends ViewEventHandler {
 		if (options.rootDomNode) {
 			this._register(toDisposable(() => {
 				this.domNode.domNode.replaceChildren();
-				this.domNode.domNode.scrollLeft = 0;
-				this.domNode.domNode.scrollTop = 0;
 			}));
 		} else {
 			options.container.append(this.domNode.domNode);

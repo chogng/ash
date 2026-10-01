@@ -77,6 +77,7 @@ test("localization lookup falls back to English and formats parameters", async (
 	assert.equal(localization.translate("ash.missing", "missing", "Hello {name}", { name: "Ada" }), "Hello Ada");
 	await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
 	assert.equal(localization.translate('ash', 'sessions.chat.welcome', 'What can we work on?'), '今天想做些什么？');
+	assert.equal(commandActionLabel(localizedString('ash', 'files.revealInExplorer', 'Reveal in Explorer View')), '在资源管理器视图中显示');
 	assert.equal(localization.translate('ash', 'workbench.colorCustomizations.title', 'Color Customizations'), '自定义颜色');
 	assert.equal(localization.translate('ash', 'color.editor.selectionForeground', 'Foreground'), '编辑器选中文字的颜色。未设置时保留语法高亮颜色。');
 	assert.deepEqual([
@@ -364,6 +365,15 @@ test('editor action labels use the selected Chinese language catalog', async () 
 		assert.equal(localize('workspaceTrust.restrictedStatusDetail', 'Some workspace features are limited by directory permissions.'), '目录权限限制了部分工作区功能。');
 		assert.equal(localize({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path'), '复制路径');
 		assert.equal(localize({ bundle: 'ash', key: 'workbench.copyRelativePath' }, 'Copy Relative Path'), '复制相对路径');
+		assert.equal(commandActionLabel(localizedString('ash', 'workbench.closeEditorsToTheRight', 'Close to the Right')), '关闭右侧编辑器');
+		assert.equal(commandActionLabel(localizedString('ash', 'workbench.closeSavedEditors', 'Close Saved')), '关闭已保存的编辑器');
+		assert.equal(commandActionLabel(localizedString('ash', 'workbench.closeEditorsInGroup', 'Close All in Group')), '关闭组内所有编辑器');
+		assert.equal(commandActionLabel(localizedString('ash', 'workbench.splitEditorUp', 'Split Up')), '向上拆分');
+		assert.equal(commandActionLabel(localizedString('ash', 'workbench.splitEditorDown', 'Split Down')), '向下拆分');
+		assert.equal(commandActionLabel(localizedString('ash', 'workbench.splitEditorLeft', 'Split Left')), '向左拆分');
+		assert.equal(commandActionLabel(localizedString('ash', 'workbench.splitEditorRight', 'Split Right')), '向右拆分');
+		assert.equal(commandActionLabel(localizedString('ash', 'workbench.splitEditorHorizontal', 'Split Editor Horizontal')), '水平拆分编辑器');
+		assert.equal(commandActionLabel(localizedString('ash', 'workbench.splitEditorVertical', 'Split Editor Vertical')), '垂直拆分编辑器');
 		assert.equal(localize({ bundle: 'ash', key: 'workbench.newFile' }, 'New File...'), '新建文件...');
 		assert.equal(localize({ bundle: 'ash', key: 'workbench.newFileName' }, 'New File Name'), '新建文件名称');
 		assert.equal(localize({ bundle: 'ash', key: 'files.newFolder' }, 'New Folder...'), '新建文件夹...');

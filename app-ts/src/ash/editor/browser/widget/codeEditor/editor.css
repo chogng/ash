@@ -5,16 +5,19 @@
 .stanza-editor {
 	position: relative;
 	box-sizing: border-box;
-	overflow: hidden;
-	overscroll-behavior: none;
-	scrollbar-width: none;
+	overflow: clip;
 	-webkit-text-size-adjust: 100%;
 	text-spacing-trim: space-all;
 	color: var(--ash-editor-foreground);
 	background-color: var(--ash-editor-background);
 	overflow-wrap: initial;
 }
-.stanza-editor::-webkit-scrollbar {
+.stanza-editor > .ash-smooth-scrollable {
+	overflow: hidden;
+	overscroll-behavior: none;
+	scrollbar-width: none;
+}
+.stanza-editor > .ash-smooth-scrollable::-webkit-scrollbar {
 	display: none;
 }
 .stanza-editor-content {

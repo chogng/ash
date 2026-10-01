@@ -52,7 +52,6 @@ export class ScrollDecorationViewPart extends ViewPart {
 	public render(context: RestrictedRenderingContext): void {
 		this.root.setWidth(this.width);
 		this.root.setHeight(context.viewportHeight);
-		this.root.setTransform(`translate3d(${context.scrollLeft}px, ${context.scrollTop}px, 0)`);
 		this.topShadow.setClassName(this.shadowClassName('top', this.useShadows && context.scrollTop > 0));
 		this.bottomShadow.setClassName(this.shadowClassName('bottom', this.useShadows && context.scrollTop < context.scrollHeight - context.viewportHeight));
 	}

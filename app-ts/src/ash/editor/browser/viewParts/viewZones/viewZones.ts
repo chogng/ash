@@ -133,6 +133,9 @@ export class ViewZones extends ViewPart {
 	public prepareRender(_context: RenderingContext): void { }
 
 	public render(context: RestrictedRenderingContext): void {
+		// Body zones use document coordinates inside the scroll container; the margin
+		// already restores this origin on its parent before applying the viewport offset.
+		this.domNode.setTop(context.bigNumbersDelta);
 		const visibleWhitespaces = new Map<string, IViewWhitespaceViewportData>();
 		for (const whitespace of context.viewportData.whitespaceViewportData) {
 			if (this.zones.has(whitespace.id)) visibleWhitespaces.set(whitespace.id, whitespace);

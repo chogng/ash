@@ -11,14 +11,15 @@ type DisposableConstructor1<TArgument, TServices extends unknown[], TResult exte
 
 /**
  * Recreates a disposable class when its defining module reloads.
- * The `1` denotes one leading argument supplied by the caller; remaining
- * constructor arguments are resolved services.
+ * The `1` denotes one leading argument supplied by the caller; constructor
+ * service parameters are resolved by the instantiation service.
  */
 export function wrapInReloadableClass1<TArgument, TServices extends unknown[], TResult extends IDisposable>(
 	getClass: () => DisposableConstructor1<TArgument, TServices, TResult>,
-): new (argument: TArgument, ...services: any[]) => IDisposable {
+): new (argument: TArgument) => TResult {
 	if (!isHotReloadEnabled()) {
-		return getClass();
+		// The service parameters of the returned constructor are container-resolved and not caller-supplied.
+		return getClass() as unknown as new (argument: TArgument) => TResult;
 	}
 	return wrapInHotClass1(derived(reader => readHotReloadableExport(getClass(), reader)));
 }

@@ -142,8 +142,8 @@ export class GotoLineController extends Disposable {
 		const layout = this.viewport.viewportLayout;
 		const width = Math.max(0, Math.min(340, layout.viewportSize.width - 24));
 		this.element.style.width = `${width}px`;
-		this.element.style.left = `${layout.scrollPosition.left + Math.max(0, layout.viewportSize.width - width - 12)}px`;
-		this.element.style.top = `${layout.scrollPosition.top + 6}px`;
+		this.element.style.left = `${Math.max(0, layout.viewportSize.width - width - 12)}px`;
+		this.element.style.top = '6px';
 	}
 }
 

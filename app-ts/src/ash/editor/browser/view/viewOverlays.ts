@@ -140,6 +140,8 @@ export class MarginViewOverlays extends ViewOverlays {
 	protected override _viewOverlaysRender(context: RestrictedRenderingContext): void {
 		super._viewOverlaysRender(context);
 		renderLineDecorationIcons(this.domNode.domNode);
+		// Margin owns the large-coordinate origin for all of its children.
+		this.domNode.setTop(0);
 		this.domNode.setHeight(Math.min(context.scrollHeight, 1_000_000));
 		this.domNode.setWidth(this._contentLeft);
 	}

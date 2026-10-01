@@ -128,8 +128,8 @@ export class Minimap extends ViewPart {
 		const scrollRange = Math.max(0, context.scrollHeight - context.viewportHeight);
 		this.sliderTop = scrollRange > 0 ? context.scrollTop / scrollRange * (this.contentHeight - this.sliderHeight) : 0;
 		this.domNode.classList.toggle('stanza-editor-minimap-hover-slider', minimap.showSlider === 'mouseover');
-		this.domNode.style.left = `${context.scrollLeft + geometry.minimapLeft}px`;
-		this.domNode.style.top = `${context.scrollTop}px`;
+		this.domNode.style.left = `${geometry.minimapLeft}px`;
+		this.domNode.style.top = '0px';
 		this.domNode.style.width = `${geometry.minimapWidth}px`;
 		this.domNode.style.height = `${context.viewportHeight}px`;
 		this.slider.style.top = `${this.sliderTop}px`;

@@ -1,5 +1,5 @@
 /* The editable mirror remains focusable while View renders the document. */
-.stanza-editor > .stanza-editor-input {
+.stanza-editor > .ash-smooth-scrollable > .stanza-editor-input {
 	position: absolute;
 	box-sizing: border-box;
 	inline-size: 1px;
@@ -16,7 +16,7 @@
 	pointer-events: none;
 }
 
-.stanza-editor > .stanza-editor-input.ime-input {
+.stanza-editor > .ash-smooth-scrollable > .stanza-editor-input.ime-input {
 	inline-size: 20ch;
 	max-inline-size: 100%;
 	opacity: 1;

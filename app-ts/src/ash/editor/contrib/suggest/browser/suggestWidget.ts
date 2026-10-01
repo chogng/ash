@@ -180,8 +180,9 @@ export class CompletionWidget extends Disposable {
 	private position(state = this.readState()): void {
 		if (!state) return;
 		const coordinates = this.viewport.getPositionContentCoordinates(state.position);
-		this.element.style.left = `${coordinates.left}px`;
-		this.element.style.top = `${coordinates.top + coordinates.height}px`;
+		const scroll = this.viewport.viewportLayout.scrollPosition;
+		this.element.style.left = `${coordinates.left - scroll.left}px`;
+		this.element.style.top = `${coordinates.top - scroll.top + coordinates.height}px`;
 	}
 
 	private readState(): LanguageCompletionSessionState | undefined {

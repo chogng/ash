@@ -129,6 +129,8 @@ flowchart LR
 ```
 
 - `ViewContext` 统一注册和移除事件处理器，`ViewPart` 接收配置、滚动、行映射和装饰事件，`View` 只负责组装、同步渲染阶段与 DOM 层级。
+- 编辑器根节点是固定视口。`EditorScrollbar` 创建的既有 wrapper 独占正文的物理滚动，`View` 将它与 `ViewLayout` 的唯一滚动状态同步；Margin、minimap、块装饰和滚动阴影作为 wrapper 的同级节点。Margin 只应用一次纵向视口偏移，横向保持固定。正文 View Zone 的根节点恢复大文件坐标原点，侧栏 View Zone 和行号的原点则由 Margin 父级统一恢复。输入节点保留在滚动 wrapper 中，以维持输入法和字符 bounds 的文档坐标约定。
+- 吸顶标题和快速跳转输入框直接使用根节点的视口坐标；补全菜单把文档锚点减去同一布局状态中的滚动位置后再定位。固定节点不再通过额外平移补偿根节点滚动。
 - `ContentViewOverlays` 和 `MarginViewOverlays` 分别持有一份可见行 DOM；`DynamicViewOverlay` 只准备数据并按行返回内容。
 - 光标与块装饰持有跨行稳定 DOM，因此作为独立 `ViewPart`；旧的 `EditorViewPartCollection` 和各覆盖层独立行容器已经移除。
 
