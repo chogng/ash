@@ -134,6 +134,7 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 				const existing = previous.get(provider.connection);
 				if (existing) {
 					existing.row.querySelector('h5')!.textContent = provider.displayName;
+					existing.row.querySelector('.ash-models-settings-api-key-status')!.textContent = this.apiKeyStatus(provider);
 					return { provider, row: existing.row };
 				}
 				const resources = new DisposableStore();
@@ -191,12 +192,8 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 		details.className = 'ash-models-settings-note';
 		details.textContent = provider.connection;
 		const keyStatus = h(document, 'p');
-		keyStatus.className = 'ash-models-settings-note';
-		keyStatus.textContent = provider.apiKeyConfigured
-			? localize('chat.providerKeys.configured', 'API key saved')
-			: provider.apiKeyPolicy === 'required'
-				? localize('chat.providerKeys.missing', 'API key required')
-				: localize('chat.providerKeys.optional', 'No API key saved');
+		keyStatus.className = 'ash-models-settings-note ash-models-settings-api-key-status';
+		keyStatus.textContent = this.apiKeyStatus(provider);
 		const controls = h(document, 'div');
 		controls.className = 'ash-models-settings-api-controls';
 		const input = resources.add(new InputBox(controls, {
@@ -250,6 +247,14 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 		}));
 		resources.add(save.onDidClick(() => void saveKey()));
 		return row;
+	}
+
+	private apiKeyStatus(provider: ModelProviderCredentialStatus): string {
+		return provider.apiKeyConfigured
+			? localize('chat.providerKeys.configured', 'API key saved')
+			: provider.apiKeyPolicy === 'required'
+				? localize('chat.providerKeys.missing', 'API key required')
+				: localize('chat.providerKeys.optional', 'No API key saved');
 	}
 
 	private reportStatus(message: string, isError: boolean): void {
