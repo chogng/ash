@@ -1,4 +1,3 @@
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -11,9 +10,10 @@ use std::time::UNIX_EPOCH;
 static NEXT_RUN_ID: AtomicU64 = AtomicU64::new(1);
 
 /// Stable identity for one invocation of the headless runner.
-#[derive(Clone, Debug, Eq, Hash, JsonSchema, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(transparent)]
-pub struct ExecRunId(#[schemars(length(min = 1))] String);
+pub struct ExecRunId(#[cfg_attr(feature = "schema", schemars(length(min = 1)))] String);
 
 impl ExecRunId {
     /// Validates an externally supplied run identity.

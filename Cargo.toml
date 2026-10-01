@@ -668,6 +668,13 @@ codegen-units = 256
 # App Server source edits need the wider incremental partitioning as well.
 codegen-units = 256
 
+[profile.dev-small.package.ash-app-server-protocol]
+# Development protocol builds spend substantial time optimizing generated Serde code.
+opt-level = 0
+
+[profile.dev-small.package.ash-protocol]
+opt-level = 0
+
 [profile.ci-test]
 # Reduce binary size and disk pressure in CI test builds.
 inherits = "test"

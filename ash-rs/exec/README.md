@@ -36,6 +36,11 @@ Core、rollout、store、model provider、sandbox 或 `ash-tool-executor`。
 `ThreadUpdateEnvelope`，不建立第二套 authoritative item 或 Turn 状态。`JsonLinesExecEventSink`
 每次写入一个完整 JSON object、换行并 flush；诊断文本必须由宿主写入 stderr。
 
+默认构建保留完整 Serde 序列化与反序列化，不编译 JSON Schema 派生。需要为这些类型生成 schema 的
+Rust 调用方显式开启 `ash-exec/schema`；该 feature 同时开启 App Server 协议的 `json-schema`，
+以描述嵌套的输入类型。Bazel 的 `exec` 目标显式开启此 feature。普通 CLI 构建不应为导出工具开启它，
+否则 Cargo 的 feature 合并会让所有协议消费方都承担 schema 编译开销。
+
 终态只由读取到的 canonical `TurnStatus::{Completed,Failed,Interrupted}` 产生：
 
 | `ExecOutcome` | 来源 | 默认退出码 |
@@ -102,9 +107,10 @@ unsubscribe 并调用 `AppServerSession::shutdown`；shutdown 失败不会被静
 状态。
 
 ```bash
-cargo test -p ash-exec
-cargo test -p ash-cli
-cargo clippy -p ash-exec --all-targets --no-deps -- -D warnings
+just test ash-exec
+just test ash-exec --features schema
+just rust-warnings ash-exec --features schema
+just test ash-cli --test commands
 bazel test //ash-rs/exec:exec-unit-tests
 ```
 

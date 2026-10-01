@@ -15,8 +15,12 @@ ash_rust_crate(
     name = "app-server-protocol",
     crate_name = "ash_app_server_protocol",
     crate_features = ["json-schema"],
-    data = glob(["schema/**"]) + ["src/typescript_decoder.template.ts"],
-    extra_deps = [":build_script"],
+    data = glob(["schema/**"]) + [
+        "src/typescript_decoder.template.ts",
+        "src/typescript_web.template.ts",
+    ],
+    # This Bazel target enables a feature absent from Cargo's default dependency graph.
+    extra_deps = [":build_script", "@crates//:schemars"],
 )
 
 exports_files(["schema/metadata.json"])

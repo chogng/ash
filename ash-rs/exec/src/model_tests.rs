@@ -40,3 +40,22 @@ fn run_request_round_trips_entry_intent() {
         request
     );
 }
+
+#[cfg(feature = "schema")]
+#[test]
+fn schema_feature_describes_requests_and_canonical_thread_events() {
+    let request = serde_json::to_value(schemars::schema_for!(ExecRunRequest)).unwrap();
+    assert_eq!(request["properties"]["runId"]["$ref"], "#/$defs/ExecRunId");
+    assert_eq!(request["$defs"]["ExecRunId"]["minLength"], 1);
+    assert_eq!(
+        request["$defs"]["ExecEntry"]["oneOf"][0]["properties"]["type"]["const"],
+        "new"
+    );
+
+    let event = serde_json::to_value(schemars::schema_for!(ExecEvent)).unwrap();
+    assert_eq!(
+        event["properties"]["event"]["$ref"],
+        "#/$defs/ExecEventKind"
+    );
+    assert!(event["$defs"].get("ThreadUpdateEnvelope").is_some());
+}

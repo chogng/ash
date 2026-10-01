@@ -3,4 +3,6 @@ load("//:defs.bzl", "ash_rust_crate")
 ash_rust_crate(
     name = "realtime-voice",
     crate_name = "realtime_voice",
+    # App Server enables cloud transcription in the resolved Cargo product graph.
+    crate_features = ["cloud"],
 )

@@ -3,4 +3,7 @@ load("//:defs.bzl", "ash_rust_crate")
 ash_rust_crate(
     name = "exec",
     crate_name = "ash_exec",
+    crate_features = ["schema"],
+    # Cargo's default dependency graph omits this optional schema dependency.
+    extra_deps = ["@crates//:schemars"],
 )

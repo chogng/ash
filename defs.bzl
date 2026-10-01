@@ -52,6 +52,8 @@ def ash_rust_crate(name, crate_name, data = [], crate_features = [], extra_alias
         name = name + "-unit-tests",
         aliases = _crate_aliases(include_dev = True) | extra_aliases,
         crate = ":" + name,
+        # rust_test recompiles the crate; feature flags must match its library.
+        crate_features = crate_features,
         data = data,
         env = test_env,
         env_inherit = test_env_inherit,

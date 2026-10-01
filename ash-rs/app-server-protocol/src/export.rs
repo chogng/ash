@@ -38,12 +38,22 @@ pub const METADATA_FIXTURE: &str = "schema/metadata.json";
 
 /// Generates version and schema identity from the current Rust contract.
 pub fn protocol_metadata() -> String {
-    let metadata = serde_json::json!({
-        "major": crate::protocol::initialize::APP_SERVER_PROTOCOL_MAJOR,
-        "revision": crate::protocol::initialize::APP_SERVER_PROTOCOL_REVISION,
-        "capabilityVersion": crate::protocol::initialize::APP_SERVER_CAPABILITY_VERSION,
-        "schemaHash": schema_hash(),
-    });
+    // Fixture bytes must not depend on whether another crate enables preserve_order.
+    let metadata = BTreeMap::from([
+        (
+            "capabilityVersion",
+            Value::from(crate::protocol::initialize::APP_SERVER_CAPABILITY_VERSION),
+        ),
+        (
+            "major",
+            Value::from(crate::protocol::initialize::APP_SERVER_PROTOCOL_MAJOR),
+        ),
+        (
+            "revision",
+            Value::from(crate::protocol::initialize::APP_SERVER_PROTOCOL_REVISION),
+        ),
+        ("schemaHash", Value::from(schema_hash())),
+    ]);
     let mut output =
         serde_json::to_string_pretty(&metadata).expect("protocol metadata must serialize as JSON");
     output.push('\n');

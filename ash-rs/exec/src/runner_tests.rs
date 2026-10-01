@@ -309,6 +309,7 @@ fn turn(ids: &TestIds, status: TurnStatus, items: Vec<ThreadItem>) -> Turn {
         turn_id: ids.turn_id.clone(),
         status,
         kind: ash_protocol::TurnKind::Coding,
+        mode: ash_protocol::CollaborationMode::Agent,
         instructions: None,
         model: None,
         reasoning_effort: None,
