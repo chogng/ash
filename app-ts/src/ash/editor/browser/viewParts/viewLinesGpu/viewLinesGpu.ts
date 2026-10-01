@@ -46,21 +46,22 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 	private readonly rasterizer = this._register(new MutableDisposable<GlyphRasterizer>());
 	private device: GPUDevice | undefined;
 	private initialized = false;
-	private pendingViewportData: ViewportData | undefined;
 	private lastLineGeometries: ReadonlyMap<number, GpuLineGeometry> | undefined;
 	private lastViewportData: ViewportData | undefined;
 	private visibleObjectCount = 0;
 
-	constructor(context: ViewContext, private readonly viewGpuContext: ViewGpuContext) {
+	constructor(
+		context: ViewContext,
+		private readonly viewGpuContext: ViewGpuContext,
+		private readonly requestRender: () => void,
+	) {
 		super(context);
 		this.canvas = this.viewGpuContext.canvas.domNode;
 		this._register(autorun(reader => {
 			this.viewGpuContext.canvasDevicePixelDimensions.read(reader);
-			const viewportData = this.lastViewportData;
-			if (!viewportData) return;
-			queueMicrotask(() => {
-				if (!this.isDisposed && viewportData === this.lastViewportData) this.renderText(viewportData);
-			});
+			// Canvas changes require a fresh host frame; cached ranges refer to a live model.
+			this.setShouldRender();
+			this.requestRender();
 		}));
 		this._register(autorun(reader => {
 			this.viewGpuContext.devicePixelRatio.read(reader);
@@ -157,10 +158,7 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 	}
 
 	public renderText(viewportData: ViewportData): void {
-		if (!this.initialized || !this.device) {
-			this.pendingViewportData = viewportData;
-			return;
-		}
+		if (!this.initialized || !this.device) return;
 		const viewLineOptions = new ViewLineOptions(this._context.configuration, this._context.theme.type);
 		this.refreshGlyphRasterizer();
 		this.ensureRenderStrategy(viewportData);
@@ -182,9 +180,9 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 			this.renderStrategy.value?.reset();
 		}));
 		this.initialized = true;
-		const viewportData = this.pendingViewportData;
-		this.pendingViewportData = undefined;
-		if (viewportData) this.renderText(viewportData);
+		// Device initialization can finish after edits changed the visible rows.
+		this.setShouldRender();
+		this.requestRender();
 	}
 
 	private ensureGpuResources(): void {

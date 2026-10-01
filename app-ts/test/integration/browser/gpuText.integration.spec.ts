@@ -62,6 +62,7 @@ test('GPU text keeps wrapped rows disjoint and the gutter in VS Code order', asy
 
 	await page.evaluate(() => window.ashGpuTextIntegration.resetGpuFrameTrace());
 	await page.keyboard.press('ControlOrMeta+z');
+	await expect(page.locator('.margin-view-overlays .view-overlay-line[data-line-index="0"] .ash-icon-folding-expanded')).toBeVisible();
 	await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
 	await expect.poll(() => gpuFrameLayeringState(page)).toEqual({ hasFrame: true, everyFrameIsLayered: true });
 	await expectGpuAdvanceMatchesDom(page);

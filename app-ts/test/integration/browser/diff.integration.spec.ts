@@ -303,8 +303,8 @@ test('word wrap updates both editable columns and keeps diff navigation availabl
 	await expect(editor.locator('.stanza-diff-editor-side.original .stanza-editor')).toBeVisible();
 	await expect(editor.locator('.stanza-diff-editor-side.modified .stanza-editor')).toBeVisible();
 	await page.keyboard.press('F7');
-	await expect(editor.locator('.stanza-diff-inline-removed')).toContainText('😀');
-	await expect(editor.locator('.stanza-diff-inline-added')).toContainText('🤖');
+	await expect(editor.locator('.stanza-diff-inline-removed')).toContainText(['😀']);
+	await expect(editor.locator('.stanza-diff-inline-added')).toContainText(['🤖']);
 	await page.locator('#single').evaluate(element => { element.style.width = '400px'; });
 	await expect.poll(() => editor.locator('.stanza-diff-editor-side.original').evaluate(element => element.getBoundingClientRect().width)).toBeLessThan(200);
 	await page.keyboard.press('F7');

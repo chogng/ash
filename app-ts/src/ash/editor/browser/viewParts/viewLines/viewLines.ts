@@ -94,7 +94,12 @@ export class ViewLines extends ViewPart implements IViewLines {
 					lineDomNode.dataset.logicalLineIndex = String(visualLine.logicalLineIndex);
 					const renderedOnGpu = this.isGpuLine(visualLine.visualLineIndex + 1);
 					lineDomNode.classList.toggle('gpu-rendered', renderedOnGpu);
-					if (!renderedOnGpu) this.projectLineText(line, visualLine, this.resolveSemanticTokensForLine(visualLine));
+					if (renderedOnGpu) {
+						// Retained layout rows must release glyphs from an earlier DOM frame.
+						line.renderLine('', []);
+					} else {
+						this.projectLineText(line, visualLine, this.resolveSemanticTokensForLine(visualLine));
+					}
 				},
 				layoutLine: (line, lineHeight) => {
 					line.layoutLine(lineHeight);

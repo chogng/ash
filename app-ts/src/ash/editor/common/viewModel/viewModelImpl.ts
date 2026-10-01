@@ -122,6 +122,9 @@ export class ViewModel extends Disposable implements IViewModel {
 			);
 			if (CursorConfiguration.shouldRecreate(event)) this.recreateCursorConfiguration();
 			this.events.emitSingleViewEvent(new viewEvents.ViewConfigurationChangedEvent(event));
+			if (event.hasChanged(EditorOption.bracketPairColorization)) {
+				this.events.emitSingleViewEvent(new viewEvents.ViewDecorationsChangedEvent(null));
+			}
 		}));
 		this._register(model.onDidChangeLanguage(() => this.recreateCursorConfiguration()));
 		this._register(model.onDidChangeLanguageConfiguration(() => {

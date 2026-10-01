@@ -19,6 +19,8 @@ import { type ViewportData } from '../../common/viewLayout/viewLinesViewportData
 import { type ViewLineOptions } from '../../browser/viewParts/viewLines/viewLineOptions.js';
 import { observableValue } from '../../../base/common/observable.js';
 import { Emitter } from '../../../base/common/event.js';
+import { DeferredPromise } from '../../../base/common/async.js';
+import { DisposableTracker, installDisposableTracker } from '../../../base/common/lifecycle.js';
 import { darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { createColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { ColorScheme } from '../../../platform/theme/common/theme.js';
@@ -227,6 +229,62 @@ test('Rectangle GPU rendering draws a clear pass into the caller-owned frame', a
 		} finally {
 		installedUsage.dispose();
 	}
+});
+
+test('GPU initialization and canvas resizing request a fresh host frame and stop after disposal', async () => {
+	const { ViewLinesGpu } = await import('../../browser/viewParts/viewLinesGpu/viewLinesGpu.js');
+	const { ViewGpuContext } = await import('../../browser/gpu/viewGpuContext.js');
+	const tracker = new DisposableTracker();
+	using deletedGlyphs = new Emitter<void>();
+	const originalDevice = ViewGpuContext.device;
+	const originalDeviceSync = ViewGpuContext.deviceSync;
+	const atlasDescriptor = Object.getOwnPropertyDescriptor(ViewGpuContext, 'atlas')!;
+	const ready = new DeferredPromise<GPUDevice>();
+	ViewGpuContext.device = ready.p;
+	ViewGpuContext.deviceSync = undefined;
+	Object.defineProperty(ViewGpuContext, 'atlas', {
+		configurable: true,
+		get: () => ({ onDidDeleteGlyphs: deletedGlyphs.event }),
+	});
+	const dimensions = observableValue('canvasDimensions', { width: 800, height: 300 });
+	const handlers = new Set<object>();
+	const context = {
+		addEventHandler: (handler: object) => handlers.add(handler),
+		removeEventHandler: (handler: object) => handlers.delete(handler),
+	} as unknown as ViewContext;
+	const gpuContext = {
+		canvas: { domNode: h(browserEnvironment.window.document, 'canvas') },
+		canvasDevicePixelDimensions: dimensions,
+		devicePixelRatio: observableValue('pixelRatio', 1),
+	} as unknown as ViewGpuContext;
+	let requests = 0;
+	using tracking = installDisposableTracker(tracker);
+	const view = new ViewLinesGpu(context, gpuContext, () => requests++);
+	try {
+		// This range belongs to the frame before the model was replaced.
+		view.renderText({
+			getViewLineRenderingData: () => { throw new RangeError('Stale viewport'); },
+		} as unknown as ViewportData);
+		view.onDidRender();
+		await ready.complete({} as GPUDevice);
+		assert.deepEqual(
+			{ requests, dirty: view.shouldRender(), handlers: handlers.size },
+			{ requests: 2, dirty: true, handlers: 1 },
+		);
+		view.onDidRender();
+		dimensions.set({ width: 400, height: 300 });
+		assert.deepEqual({ requests, dirty: view.shouldRender() }, { requests: 3, dirty: true });
+		view.dispose();
+		dimensions.set({ width: 600, height: 300 });
+		assert.deepEqual({ requests, handlers: handlers.size }, { requests: 3, handlers: 0 });
+	} finally {
+		view.dispose();
+		deletedGlyphs.dispose();
+		ViewGpuContext.device = originalDevice;
+		ViewGpuContext.deviceSync = originalDeviceSync;
+		Object.defineProperty(ViewGpuContext, 'atlas', atlasDescriptor);
+	}
+	tracker.assertNoLeaks();
 });
 
 test('ViewGpuContext exposes observable canvas geometry and releases view handlers', async () => {

@@ -337,7 +337,7 @@ export class View extends ViewEventHandler {
 			viewGpuContext: this.viewGpuContext,
 		}));
 		this.viewLinesGpu = this.viewGpuContext
-			? this.registerViewPart(new ViewLinesGpu(this.viewContext, this.viewGpuContext))
+			? this.registerViewPart(new ViewLinesGpu(this.viewContext, this.viewGpuContext, () => this.scheduleProjection()))
 			: undefined;
 		this.contentViewOverlays = this.registerViewPart(new ContentViewOverlays(this.viewContext, this.contentElement));
 		this.decorations = new DecorationsOverlay(this.viewContext);

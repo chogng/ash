@@ -117,7 +117,8 @@ export class ViewOverlayWidgets extends ViewPart {
 		if (candidate?.actual !== widget) return false;
 		const changed = candidate.setPosition(position);
 		this._updateMaxMinWidth();
-		if (changed) this.setShouldRender();
+		// Layout requests also follow size changes at the same position.
+		this.setShouldRender();
 		return changed;
 	}
 
@@ -210,9 +211,11 @@ class OverlayWidget extends Disposable {
 	}
 
 	public setPosition(position: IOverlayWidgetPosition | null): boolean {
-		if (samePosition(this.position, position)) return false;
+		const changed = !samePosition(this.position, position);
 		this.position = position;
-		return true;
+		// The caller may focus a newly revealed widget before the next frame.
+		this.onBeforeRender();
+		return changed;
 	}
 
 	public updatePositionMode(): void {

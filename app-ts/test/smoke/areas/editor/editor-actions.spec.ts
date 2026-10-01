@@ -1,5 +1,25 @@
 import { expect, test } from '../../../automation/test.js';
 
+test('opening find focuses its input and leaves editor text unchanged', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await editor.waitForTypeInEditor('alpha beta');
+	await page.keyboard.press('ControlOrMeta+F');
+	const dialog = workbench.editors.groupAt(0).content.getByRole('dialog', { name: 'Find and replace', exact: true });
+	const input = dialog.getByRole('textbox', { name: 'Find', exact: true });
+	await expect(input).toBeFocused();
+	await page.keyboard.press('ControlOrMeta+A');
+	await page.keyboard.insertText('beta');
+	await expect(input).toHaveValue('beta');
+	await editor.waitForEditorContents(contents => contents === 'alpha beta');
+	await page.keyboard.press('Escape');
+	await expect(dialog).toBeHidden();
+	await expect(editor.input).toBeFocused();
+});
+
 test('closed find options show a checked button when toggled from the editor', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;

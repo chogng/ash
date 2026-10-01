@@ -31,7 +31,7 @@ test('iPad keyboard control follows editability and returns touch focus to the e
 	const darkIcon = await widget.evaluate(element => getComputedStyle(element, '::before').maskImage);
 	expect(darkIcon).not.toBe(lightIcon);
 	await page.evaluate(() => window.ashStandaloneIntegration.setStickyTheme('ash-high-contrast-dark'));
-	await expect(widget).toHaveCSS('border-color', 'rgb(0, 127, 212)');
+	await expect(widget).toHaveCSS('border-color', 'rgb(255, 255, 255)');
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	await expect(control).toHaveCount(0);
 });

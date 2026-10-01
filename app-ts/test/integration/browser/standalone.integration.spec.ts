@@ -3272,6 +3272,7 @@ test('double-clicking editor text selects the whole word', async ({ page }) => {
 	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.preparePointerSelection());
 	const before = await page.evaluate(() => window.ashStandaloneIntegration.readPointerSelection());
+	await expect(page.locator('#caller .view-line > span')).toHaveText(['alpha beta', 'second line']);
 	const character = await page.evaluate(() => {
 		const spans = [...document.querySelectorAll('#caller .view-line > span > span')];
 		const box = spans[0]?.getBoundingClientRect();
@@ -3299,6 +3300,7 @@ test('pointer drag extends one editor selection and stops on release', async ({ 
 	expect((await page.evaluate(() => window.ashStandaloneIntegration.switchOwnedToCaller())).currentModelIsCaller).toBe(true);
 	await page.evaluate(() => window.ashStandaloneIntegration.preparePointerSelection());
 	const before = await page.evaluate(() => window.ashStandaloneIntegration.readPointerSelection());
+	await expect(page.locator('#caller .view-line > span')).toHaveText(['alpha beta', 'second line']);
 	const lines = await page.evaluate(() => [...document.querySelectorAll('#caller .view-line > span > span')].map((span, index) => {
 		const box = span.getBoundingClientRect();
 		const range = document.createRange();
@@ -3333,6 +3335,7 @@ test('Alt-click toggles editor-local cursors and one typing transaction edits bo
 	await page.goto('/standalone.html');
 	expect((await page.evaluate(() => window.ashStandaloneIntegration.switchOwnedToCaller())).currentModelIsCaller).toBe(true);
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareMultiCursor());
+	await expect(page.locator('#caller .view-line > span')).toHaveText(['abcd', 'efgh']);
 	const lines = await page.evaluate(() => [...document.querySelectorAll('#caller .view-line > span > span')].map(span => {
 		const box = span.getBoundingClientRect();
 		return { text: span.textContent, x: box.x, y: box.y, width: box.width, height: box.height };
@@ -3843,7 +3846,7 @@ for (const inputKind of ['EditContext', 'textarea'] as const) {
 		{ name: 'adjacent code blocks', html: '<pre>one</pre><pre>two</pre>', text: 'one\ntwo' },
 		{ name: 'nested blocks', html: '<div><div>one</div><div>two</div></div>', text: 'one\ntwo' },
 	]) {
-		test(`${inputKind} HTML clipboard preserves ${scenario.name}`, async ({ page }) => {
+		test(`${inputKind} default paste requires plain text for ${scenario.name}`, async ({ page }) => {
 			if (inputKind === 'textarea') {
 				await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
 			}
@@ -3856,7 +3859,14 @@ for (const inputKind of ['EditContext', 'textarea'] as const) {
 				clipboardData.setData('text/html', html);
 				input.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
 			}, scenario.html);
-			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha' + scenario.text);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha');
+			await input.evaluate((input, scenario) => {
+				const clipboardData = new DataTransfer();
+				clipboardData.setData('text/html', scenario.html);
+				clipboardData.setData('text/plain', scenario.text);
+				input.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+			}, scenario);
+			await expect.poll(async () => (await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha' + scenario.text);
 			await page.keyboard.press('ControlOrMeta+z');
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha');
 		});
@@ -3877,8 +3887,8 @@ for (const inputKind of ['EditContext', 'textarea'] as const) {
 				if (mode === 'plain') clipboardData.setData('text/plain', ' plain');
 				input.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
 			}, mode);
-			const expected = { html: 'alpha<x> & one\ntwo\nthree', plain: 'alpha plain', readonly: 'alpha' }[mode];
-			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe(expected);
+			const expected = { html: 'alpha', plain: 'alpha plain', readonly: 'alpha' }[mode];
+			await expect.poll(async () => (await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe(expected);
 			expect(await page.evaluate(() => Reflect.get(window, 'clipboardScriptRan'))).toBeUndefined();
 			if (mode !== 'readonly') {
 				await page.keyboard.press('ControlOrMeta+z');
@@ -3922,21 +3932,21 @@ for (const inputKind of ['EditContext', 'textarea'] as const) {
 					}
 					input.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data }));
 				}
-				return { text, metadata, state: window.ashStandaloneIntegration.readLineCopy() };
+				return { text, metadata };
 			}, mode);
 			if (mode === 'selections') {
 				expect(result.text).toBe('a\nb');
 				expect(JSON.parse(result.metadata)).toMatchObject({ isFromEmptySelection: false, multicursorText: ['a', 'b'] });
-				expect(result.state.value).toBe('a b');
+				await expect.poll(async () => (await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('a b');
 			} else if (mode === 'externalLines') {
-				expect(result.state.value).toBe('Xa Yb');
+				await expect.poll(async () => (await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('Xa Yb');
 			} else if (mode === 'line') {
 				expect(result.text).toBe('alpha\n');
 				expect(JSON.parse(result.metadata)).toMatchObject({ isFromEmptySelection: true });
-				expect(result.state).toEqual({ value: 'alpha\nalpha\nbeta', selections: ['[2,3 -> 2,3]'] });
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({ value: 'alpha\nalpha\nbeta', selections: ['[2,3 -> 2,3]'] });
 			} else {
 				expect(result.text).toBe('');
-				expect(result.state).toEqual({ value: 'alpha\nbeta', selections: ['[1,3 -> 1,3]'] });
+				expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({ value: 'alpha\nbeta', selections: ['[1,3 -> 1,3]'] });
 			}
 			if (mode !== 'emptyDisabled') {
 				await page.keyboard.press('ControlOrMeta+z');
@@ -4115,6 +4125,8 @@ test('scrolling keeps overlapping visible rows attached and releases rows that l
 	await page.goto('/standalone.html');
 	const initial = await page.evaluate(() => window.ashStandaloneIntegration.prepareVisibleRows());
 	expect(initial.lineCount).toBe(80);
+	await expect(page.locator('#caller .view-line > span')).toHaveText(['line-00', 'line-01', 'line-02', 'line-03', 'line-04']);
+	await expect(page.locator('#caller .stanza-editor-row-layer.view-overlays > div')).toHaveCount(5);
 	const result = await page.evaluate(async () => {
 		const layers = [...document.querySelectorAll<HTMLElement>('#caller .view-lines, #caller .stanza-editor-row-layer.view-overlays')];
 		const tracked = layers.map(layer => {
@@ -4227,6 +4239,8 @@ test('wrapped cursor and gutter markers stay on their model lines through naviga
 	const initial = await page.evaluate(() => window.ashStandaloneIntegration.prepareCursorGutter());
 	expect(initial.modelLineCount).toBe(2);
 	await page.locator('#caller .stanza-editor-input').focus();
+	await expect(page.locator('#caller .view-line[data-logical-line-index="1"] > span')).toHaveText('next');
+	await expect(page.locator('#caller .ash-gutter-probe')).toHaveCount(1);
 	const readGeometry = async () => page.evaluate(() => {
 		const firstRows = [...document.querySelectorAll<HTMLElement>('#caller .view-line[data-logical-line-index="0"]')];
 		const secondRow = document.querySelector<HTMLElement>('#caller .view-line[data-logical-line-index="1"]');
@@ -4268,6 +4282,7 @@ test('wrapped cursor and gutter markers stay on their model lines through naviga
 
 	const editedVersion = await page.evaluate(() => window.ashStandaloneIntegration.shortenGutterLine());
 	expect(editedVersion).toBe(initial.version + 1);
+	await expect(page.locator('#caller .view-line > span')).toHaveText(['short', 'next']);
 	await expect.poll(async () => {
 		const geometry = await readGeometry();
 		return geometry.caretTop - geometry.secondTop;

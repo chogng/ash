@@ -36,6 +36,10 @@ test('ViewOverlayWidgets reports only position changes and owns widget DOM lifet
 	assert.equal(node.parentElement, overlays.overflowingOverlayWidgetsDomNode.domNode);
 	assert.equal(overlays.setWidgetPosition(widget, initial), false);
 	assert.equal(rendered, 0);
+	assert.equal(overlays.setWidgetPosition(widget, null), true);
+	assert.equal(node.style.display, 'none');
+	assert.equal(overlays.setWidgetPosition(widget, initial), true);
+	assert.equal(node.style.display, '');
 	configuration.allowOverflow = false;
 	overlays.onConfigurationChanged({} as ViewConfigurationChangedEvent);
 	assert.equal(node.parentElement, overlays.getDomNode().domNode);
