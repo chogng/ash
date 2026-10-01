@@ -2,7 +2,7 @@ import { combinedDisposable, type IDisposable, toDisposable } from "../../../bas
 import { colorCssVariable } from "../common/colorUtils.js";
 import { asCssVariableName, sizeValueToCss } from "../common/sizeUtils.js";
 import type { IColorTheme, IThemeService } from "../common/themeService.js";
-import { isDarkColorScheme } from "../common/theme.js";
+import { ColorScheme, isDarkColorScheme } from "../common/theme.js";
 
 interface IPreviousProperty {
 	readonly value: string;
@@ -28,11 +28,16 @@ export function bindColorTheme(
 		});
 	};
 	rememberProperty("color-scheme");
+	rememberProperty("forced-color-adjust");
+	let colorProperties = new Set<string>();
 
 	const previousThemeId = target.getAttribute("data-color-theme");
 	const previousColorScheme = target.getAttribute("data-color-scheme");
 
 	const apply = (theme: IColorTheme): void => {
+		const nextProperties = new Set(theme.colorEntries.map(entry => colorCssVariable(entry.id)));
+		for (const property of colorProperties) { if (!nextProperties.has(property)) { target.style.setProperty(property, "initial"); } }
+		colorProperties = nextProperties;
 		for (const { id, value } of theme.colorEntries) {
 			rememberProperty(colorCssVariable(id));
 			if (value) target.style.setProperty(colorCssVariable(id), value.toString());
@@ -47,6 +52,7 @@ export function bindColorTheme(
 			"color-scheme",
 			isDarkColorScheme(theme.colorScheme) ? "dark" : "light",
 		);
+		target.style.setProperty("forced-color-adjust", theme.colorScheme === ColorScheme.HighContrastDark || theme.colorScheme === ColorScheme.HighContrastLight ? "none" : "auto");
 		target.setAttribute("data-color-theme", theme.id);
 		target.setAttribute("data-color-scheme", theme.colorScheme);
 	};

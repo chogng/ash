@@ -1,4 +1,4 @@
-import { WorkbenchFileIconThemesRegistry, WorkbenchProductIconThemesRegistry } from '../services/themes/common/themeExtensionPoints.js';
+import { ThemeConfigurationSettings } from '../services/themes/common/themeConfiguration.js';
 import { localize } from '../../nls.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../platform/configuration/common/configurationRegistry.js";
 import { AccessibilityConfiguration } from "../../platform/accessibility/common/accessibility.js";
@@ -6,8 +6,6 @@ import { Registry } from "../../platform/registry/common/platform.js";
 import { isMacintosh, isWeb } from "../../base/common/platform.js";
 import { MenuSettings, TitleBarSetting, parseMenuStyle, parseTitleBarStyle, type MenuStyleConfiguration, type TitleBarStyleConfiguration } from "../../platform/window/common/window.js";
 import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry } from "./workbenchMode.js";
-import { defaultWorkbenchColorThemePreference, SystemColorThemePreference, WorkbenchThemesRegistry } from "./theme.js";
-import { validateTokenId } from '../../platform/theme/common/colorRegistry.js';
 
 export type WorkbenchLayoutStyle = "modern" | "flat";
 export const enum ActivityBarPosition {
@@ -19,7 +17,6 @@ export const enum ActivityBarPosition {
 export type SideBarLocation = 'left' | 'right';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
-const defaultFileIconThemeId = 'vs-seti';
 
 /** Typed configuration keys owned by the workbench layer. */
 export const WorkbenchConfiguration = Object.freeze({
@@ -67,92 +64,7 @@ export const WorkbenchConfiguration = Object.freeze({
 			return WorkbenchModeRegistry.resolveModeId(value);
 		},
 	}),
-	iconTheme: configurationRegistry.registerConfiguration<string>({
-		key: 'workbench.iconTheme',
-		defaultValue: defaultFileIconThemeId,
-		parse(value: unknown): string {
-			if (value === null || value === '') { return ''; }
-			if (typeof value === 'string' && /^[a-zA-Z0-9._-]{1,256}$/.test(value)) { return value; }
-			throw new TypeError('Invalid file icon theme ID');
-		},
-		serialize: value => value === '' ? null : value,
-		setting: {
-			valueType: 'select', title: 'File icon theme', description: 'Choose the file icons contributed by an installed extension.',
-			get options() {
-				return [
-					{ value: '', label: 'None' },
-					{ value: defaultFileIconThemeId, label: 'Seti' },
-					...WorkbenchFileIconThemesRegistry.getThemes()
-						.filter(theme => theme.id !== defaultFileIconThemeId)
-						.map(theme => ({ value: theme.id, label: theme.label })),
-				];
-			},
-		},
-	}),
-	productIconTheme: configurationRegistry.registerConfiguration<string>({
-		key: 'workbench.productIconTheme',
-		defaultValue: 'default',
-		parse(value: unknown): string {
-			if (typeof value === 'string' && /^[a-zA-Z0-9._-]{1,256}$/u.test(value)) return value;
-			throw new TypeError('Invalid product icon theme ID');
-		},
-		setting: {
-			valueType: 'select', title: 'Product icon theme', description: 'Choose the SVG artwork for controls and other product icons.',
-			get options() { return [{ value: 'default', label: 'Default' }, ...WorkbenchProductIconThemesRegistry.getThemes().map(theme => ({ value: theme.id, label: theme.label }))]; },
-		},
-	}),
-	colorCustomizations: configurationRegistry.registerConfiguration<Record<string, string>>({
-		key: 'workbench.colorCustomizations',
-		defaultValue: {},
-		parse(value: unknown): Record<string, string> {
-			if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-				throw new TypeError(localize('workbench.colorCustomizations.invalidObject', 'Color customizations must be an object.'));
-			}
-			const colors: Record<string, string> = {};
-			for (const [id, color] of Object.entries(value)) {
-				try {
-					validateTokenId(id, 'color');
-				} catch {
-					throw new TypeError(localize('workbench.colorCustomizations.invalidColor', 'Invalid theme color or hex value: {0}', id));
-				}
-				if (typeof color !== 'string' || !/^#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})$/iu.test(color)) {
-					throw new TypeError(localize('workbench.colorCustomizations.invalidColor', 'Invalid theme color or hex value: {0}', id));
-				}
-				colors[id] = color;
-			}
-			return colors;
-		},
-		setting: {
-			valueType: 'stringMap',
-			get title() { return localize('workbench.colorCustomizations.title', 'Color Customizations'); },
-			get description() { return localize('workbench.colorCustomizations.description', 'Override colors from the current theme, including editor selections. Use #RGB, #RGBA, #RRGGBB, or #RRGGBBAA.'); },
-			get keyLabel() { return localize('workbench.colorCustomizations.key', 'Theme Color'); },
-			get valueLabel() { return localize('workbench.colorCustomizations.value', 'Hex Color'); },
-			get addLabel() { return localize('workbench.colorCustomizations.add', 'Add Color'); },
-			get removeLabel() { return localize('workbench.colorCustomizations.remove', 'Remove Color'); },
-			get incompleteMessage() { return localize('workbench.colorCustomizations.incomplete', 'Enter a theme color name and a hex color.'); },
-			get duplicateMessage() { return localize('workbench.colorCustomizations.duplicate', 'Each theme color name must be unique.'); },
-		},
-	}),
-	colorTheme: configurationRegistry.registerConfiguration<string>({
-		key: "workbench.colorTheme",
-		defaultValue: defaultWorkbenchColorThemePreference,
-		parse(value: unknown): string {
-			if (typeof value !== "string" || !isColorThemePreference(value)) throw new TypeError(`Unknown workbench color theme preference: ${String(value)}`);
-			return value;
-		},
-		setting: {
-			valueType: "select",
-			title: "Color theme",
-			description: "Choose a built-in theme or follow the operating-system appearance.",
-			get options() {
-				return [
-					{ value: SystemColorThemePreference, label: "System" },
-					...WorkbenchThemesRegistry.getColorThemes().map(theme => ({ value: theme.id, label: theme.label })),
-				];
-			},
-		},
-	}),
+	...ThemeConfigurationSettings,
 	layoutStyle: configurationRegistry.registerConfiguration<WorkbenchLayoutStyle>({
 		key: "workbench.layoutStyle",
 		defaultValue: "modern",
@@ -227,7 +139,3 @@ export const WorkbenchConfiguration = Object.freeze({
 		},
 	}),
 });
-
-function isColorThemePreference(value: string): boolean {
-	return value === SystemColorThemePreference || WorkbenchThemesRegistry.getColorTheme(value) !== undefined || /^extension-[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(value);
-}

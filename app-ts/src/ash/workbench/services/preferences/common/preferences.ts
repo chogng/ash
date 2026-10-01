@@ -61,8 +61,9 @@ export interface ITextSetting extends ISettingBase {
 
 export interface IStringMapSetting extends ISettingBase {
 	readonly valueType: 'stringMap';
-	readonly configuration: IRegisteredConfiguration<Record<string, string>>;
-	readonly binding?: SettingValueBinding<Record<string, string>>;
+	readonly structuredValues?: boolean;
+	readonly configuration: IRegisteredConfiguration<Record<string, unknown>>;
+	readonly binding?: SettingValueBinding<Record<string, unknown>>;
 	readonly keyLabel: string;
 	readonly valueLabel: string;
 	readonly addLabel: string;

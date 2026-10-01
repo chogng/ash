@@ -1,3 +1,5 @@
+import { IHostColorSchemeService } from '../../common/hostColorSchemeService.js';
+import { BrowserHostColorSchemeService } from '../../browser/browserHostColorSchemeService.js';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -9,6 +11,7 @@ import { LanguageService } from '../../../../../editor/common/services/languageS
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { WorkbenchConfiguration } from '../../../../common/configuration.js';
 import { WorkbenchConfigurationService } from '../../../configuration/browser/configurationService.js';
+import { resolveSemanticTokenPresentation } from '../../../../../editor/common/services/semanticTokensStyling.js';
 import { lightColorTheme } from '../../../../../platform/theme/common/colorTheme.js';
 import { registerColor } from '../../../../../platform/theme/common/colorUtils.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
@@ -40,6 +43,8 @@ test('selected product icon theme refreshes mounted SVGs and returns to defaults
 		services.registerInstance(IConfigurationService, configuration);
 		using languages = new LanguageService();
 		services.registerInstance(ILanguageService, languages);
+		using hostColors = new BrowserHostColorSchemeService(browser.window as unknown as Window);
+		services.registerInstance(IHostColorSchemeService, hostColors);
 		using active = services.createInstance(WorkbenchThemeService, browser.window.document.body);
 		active.initialize();
 		const mounted = appendIcon(icon, browser.window.document.body);
@@ -81,6 +86,8 @@ test('persisted color customizations override themes, update live, and restore t
 		services.registerInstance(IConfigurationService, configuration);
 		using languages = new LanguageService();
 		services.registerInstance(ILanguageService, languages);
+		using hostColors = new BrowserHostColorSchemeService(browser.window as unknown as Window);
+		services.registerInstance(IHostColorSchemeService, hostColors);
 		using active = services.createInstance(WorkbenchThemeService, browser.window.document.body);
 		active.initialize();
 		assert.deepEqual([
@@ -113,8 +120,7 @@ test('user and extension themes share colors and TextMate rules', () => {
 	assert.deepEqual(user.colors, extension.colors);
 	assert.deepEqual(projectColorThemeTokens(user, 1), projectColorThemeTokens(extension, 1));
 	assert.deepEqual(projectColorThemeTokens(user, 1).rules, [
-		{ selector: 'comment', foreground: '#123456', fontStyle: ['italic', 'bold'] },
-		{ selector: 'string.quoted', foreground: '#123456', fontStyle: ['italic', 'bold'] },
+		{ selector: 'comment, string.quoted', foreground: '#123456', fontStyle: ['italic', 'bold'] },
 	]);
 });
 
@@ -133,8 +139,8 @@ test('user and extension themes preserve semantic token selectors and styles', (
 	assert.deepEqual(user.semanticTokenRules, extension.semanticTokenRules);
 	assert.deepEqual(user.semanticTokenRules, [
 		{ selector: '*', type: '*', modifiers: [], foreground: '#112233' },
-		{ selector: 'function.declaration:typescript', type: 'function', modifiers: ['declaration'], language: 'typescript', foreground: '#abcdef', fontStyle: 'italic bold' },
-		{ selector: 'variable.readonly', type: 'variable', modifiers: ['readonly'], fontStyle: '' },
+		{ selector: 'function.declaration:typescript', type: 'function', modifiers: ['declaration'], language: 'typescript', foreground: '#abcdef', bold: true, italic: true },
+		{ selector: 'variable.readonly', type: 'variable', modifiers: ['readonly'], bold: false },
 	]);
 	assert.equal(JSON.parse(serializeUserColorThemeDraft(user, user.label)).semanticTokenColors['function.declaration:typescript'].foreground, '#abcdef');
 	assert.throws(() => parseUserColorTheme(JSON.stringify({ semanticTokenColors: { 'function[unsafe]': '#ffffff' } })), /Invalid semantic token selector/);
@@ -152,16 +158,19 @@ test('active semantic theme styles follow the selected theme', async () => {
 		services.registerInstance(IConfigurationService, configuration);
 		using languages = new LanguageService();
 		services.registerInstance(ILanguageService, languages);
+		using hostColors = new BrowserHostColorSchemeService(browser.window as unknown as Window);
+		services.registerInstance(IHostColorSchemeService, hostColors);
 		using active = services.createInstance(WorkbenchThemeService, browser.window.document.body);
 		active.initialize();
-		const token = browser.window.document.querySelector<HTMLElement>('.stanza-editor-token')!;
-		assert.equal(browser.window.getComputedStyle(token).color, 'rgb(171, 205, 239)');
+		const token = { startColumn: 1, endColumn: 5, type: 'function', modifiers: [] as const, semanticType: 'function', semanticModifiers: ['declaration'], semanticLanguage: 'typescript', syntaxPresentation: { foreground: '#123456', fontStyle: ['italic'] as const } };
+		const presentation = () => resolveSemanticTokenPresentation(token, active.getColorTheme(), configuration.getValue('editor.semanticHighlighting.enabled') !== false && active.getColorTheme().semanticHighlighting === true);
+		assert.deepEqual(presentation(), { foreground: '#abcdef', fontStyle: ['italic', 'bold'] });
 		await configuration.updateValue('editor.semanticHighlighting.enabled', false);
-		assert.notEqual(browser.window.getComputedStyle(token).color, 'rgb(171, 205, 239)');
+		assert.deepEqual(presentation(), token.syntaxPresentation);
 		await configuration.updateValue('editor.semanticHighlighting.enabled', true);
-		assert.equal(browser.window.getComputedStyle(token).color, 'rgb(171, 205, 239)');
+		assert.equal(presentation().foreground, '#abcdef');
 		await configuration.updateValue(WorkbenchConfiguration.colorTheme, 'ash-light');
-		assert.notEqual(browser.window.getComputedStyle(token).color, 'rgb(171, 205, 239)');
+		assert.deepEqual(presentation(), token.syntaxPresentation);
 	} finally { browser.window.close(); }
 });
 
@@ -211,6 +220,8 @@ test('active user themes apply overrides for colors registered after theme loadi
 		services.registerInstance(IConfigurationService, configuration);
 		using languages = new LanguageService();
 		services.registerInstance(ILanguageService, languages);
+		using hostColors = new BrowserHostColorSchemeService(browser.window as unknown as Window);
+		services.registerInstance(IHostColorSchemeService, hostColors);
 		using active = services.createInstance(WorkbenchThemeService, browser.window.document.body);
 		active.initialize();
 		const before = theme.colorEntries;
@@ -225,7 +236,7 @@ test('active user themes apply overrides for colors registered after theme loadi
 			tokenRules: theme.tokenColors,
 		}, {
 			before: undefined, resolved: '#fedcba', css: '#fedcba', changes: ['#fedcba'],
-			tokenRules: [{ scopes: ['comment', 'string.quoted'], settings: { foreground: '#123456', fontStyle: 'italic bold' } }],
+			tokenRules: [{ scopes: ['comment, string.quoted'], settings: { foreground: '#123456', fontStyle: 'italic bold' } }],
 		});
 		assert.equal(JSON.parse(serializeUserColorThemeDraft(theme, theme.label)).colors['test.workbenchLate'], '#fedcba');
 		assert.ok(JsonSchemasRegistry.getSchema(colorThemeSchemaId)?.properties?.colors?.properties?.['test.workbenchLate']);
@@ -396,6 +407,8 @@ test('theme save, rename, reload, and delete keep identity in the filename', asy
 		services.registerInstance(IConfigurationService, configuration);
 		using languages = new LanguageService();
 		services.registerInstance(ILanguageService, languages);
+		using hostColors = new BrowserHostColorSchemeService(browser.window as unknown as Window);
+		services.registerInstance(IHostColorSchemeService, hostColors);
 		using activeThemes = services.createInstance(WorkbenchThemeService, browser.window.document.body);
 		activeThemes.initialize();
 		const created = await service.saveAs(JSON.stringify(document));
@@ -422,3 +435,86 @@ async function loadThemes(files: IFileService, directory: string): Promise<IUser
 	services.registerInstance(IFileService, files);
 	return loadUserThemes(services, URI.file(directory));
 }
+
+test('theme scoped customizations inherit global syntax and semantic styles and reset authored UI colors', async () => {
+	const theme = parseUserColorTheme(JSON.stringify({
+		name: 'Scoped Aurora', type: 'dark', colors: { 'editor.selectionBackground': '#123456' },
+		tokenColors: [{ settings: { foreground: '#112233', fontStyle: 'italic bold' } }, { scope: 'entity.name.function', settings: { foreground: '#223344' } }],
+	}), 'scoped-aurora');
+	using configuration = new WorkbenchConfigurationService();
+	await configuration.updateValue('workbench.colorCustomizations', { 'editor.selectionForeground': '#445566', '[Scoped *]': { 'editor.selectionBackground': 'default' } });
+	await configuration.updateValue('editor.tokenColorCustomizations', {
+		textMateRules: [{ scope: 'entity.name.function', settings: { fontStyle: 'italic' } }],
+		'[Scoped Aurora]': { textMateRules: [{ scope: 'entity.name.function', settings: { foreground: '#556677' } }] },
+	});
+	await configuration.updateValue('editor.semanticTokenColorCustomizations', {
+		enabled: true, rules: { function: { foreground: '#778899', italic: false } },
+		'[Scoped Aurora]': { rules: { function: { bold: false } } },
+	});
+	const { applyThemeCustomizations } = await import('../../common/themeConfiguration.js');
+	const active = applyThemeCustomizations(theme, configuration);
+	assert.deepEqual([
+		active.defines('editor.selectionBackground'), active.getColor('editor.selectionBackground', false),
+		active.getColorCss('editor.selectionForeground'), active.semanticHighlighting,
+	], [false, undefined, '#445566', true]);
+	const syntax = projectColorThemeTokens(active, 1);
+	const { createTextMateScopeThemeResolver } = await import('../../../textMate/common/textMateScopeTheme.js');
+	assert.deepEqual(createTextMateScopeThemeResolver(syntax)(['source.ts', 'entity.name.function.ts']), {
+		tokenType: 'function', modifiers: [], foreground: '#556677', fontStyle: ['italic'],
+	});
+	const metadata = active.getTokenStyleMetadata('function', [], 'typescript')!;
+	assert.deepEqual({ ...metadata, foreground: active.tokenColorMap[metadata.foreground!] }, { foreground: '#778899', bold: false, italic: false, underline: false, strikethrough: false });
+	await configuration.updateValue('editor.semanticTokenColorCustomizations', {});
+	const syntaxMapped = applyThemeCustomizations(theme, configuration).getTokenStyleMetadata('function', [], 'typescript')!;
+	assert.equal(syntaxMapped.italic, true);
+});
+
+test('theme settings expose structured schemas and localized labels', async () => {
+	const { Registry } = await import('../../../../../platform/registry/common/platform.js');
+	const { Extensions, ConfigurationScope } = await import('../../../../../platform/configuration/common/configurationRegistry.js');
+	const registry = Registry.as<import('../../../../../platform/configuration/common/configurationRegistry.js').IConfigurationRegistry>(Extensions.Configuration);
+	const { createConfigurationSchema } = await import('../../../../../platform/configuration/common/configurationSchema.js');
+	const { jsonSchemaAtPath } = await import('../../../../../base/common/jsonSchema.js');
+	const schema = createConfigurationSchema();
+	assert.equal(jsonSchemaAtPath(schema, ['workbench.colorCustomizations', '[Ash Dark]', 'editor.selectionBackground'])?.type, 'string');
+	assert.equal(jsonSchemaAtPath(schema, ['editor.semanticTokenColorCustomizations', '[Ash Dark]', 'rules', 'function', 'bold'])?.type, 'boolean');
+	assert.equal(registry.getConfiguration('window.autoDetectColorScheme')?.scope, ConfigurationScope.APPLICATION);
+	using configuration = new WorkbenchConfigurationService();
+	await assert.rejects(configuration.updateValue('workbench.colorCustomizations', {}, { overrideIdentifiers: ['typescript'] }), /language|Language/u);
+	const { builtinLanguagePackCatalogs } = await import('../../../localization/common/localizationCatalogs.js');
+	const { setNlsResolver, resetNlsResolver } = await import('../../../../../nls.js');
+	const chinese = builtinLanguagePackCatalogs.find(pack => pack.locale === 'zh-CN')!;
+	try {
+		setNlsResolver((bundle, key, original) => chinese.bundles[bundle]?.[key] ?? original);
+		assert.equal(registry.getConfiguration('editor.tokenColorCustomizations')?.setting?.title, '语法颜色');
+		assert.equal(registry.getConfiguration('window.autoDetectHighContrast')?.setting?.title, '跟随系统高对比度');
+	} finally { resetNlsResolver(); }
+});
+
+test('TextMate configuration retains grouped alternatives and global styles throughout theme compilation', async () => {
+	const { applyThemeCustomizations } = await import('../../common/themeConfiguration.js');
+	const { createTextMateScopeThemeResolver } = await import('../../../textMate/common/textMateScopeTheme.js');
+	const theme = parseUserColorTheme(JSON.stringify({
+		name: 'Grouped', tokenColors: [{ scope: 'source.ts (entity.name.function, variable.other)', settings: { foreground: '#112233' } }],
+	}));
+	using configuration = new WorkbenchConfigurationService();
+	await configuration.updateValue('editor.tokenColorCustomizations', {
+		textMateRules: [{ settings: { fontStyle: 'italic' } }, { scope: 'source.ts (entity.name.function, variable.other)', settings: { foreground: '#445566' } }],
+	});
+	const active = applyThemeCustomizations(theme, configuration);
+	const resolve = createTextMateScopeThemeResolver(projectColorThemeTokens(active, 1));
+	assert.deepEqual(resolve(['source.ts', 'entity.name.function.ts']), { tokenType: 'function', modifiers: [], foreground: '#445566', fontStyle: ['italic'] });
+	assert.deepEqual(resolve(['source.ts', 'variable.other.ts']), { tokenType: 'variable', modifiers: [], foreground: '#445566', fontStyle: ['italic'] });
+});
+
+test('individual semantic flags override shorthand fontStyle even when false', () => {
+	const theme = parseUserColorTheme(JSON.stringify({
+		name: 'Semantic flags', semanticTokenColors: {
+			function: { foreground: '#123456', fontStyle: 'bold italic', bold: false, italic: false, underline: true },
+		},
+	}));
+	const metadata = theme.getTokenStyleMetadata('function', [], 'typescript')!;
+	assert.deepEqual({ ...metadata, foreground: theme.tokenColorMap[metadata.foreground!] }, {
+		foreground: '#123456', bold: false, italic: false, underline: true, strikethrough: false,
+	});
+});

@@ -1,5 +1,7 @@
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { PlaywrightApplication } from '../../../automation/playwrightDriver.js';
+import type { Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 
 test('Seti extension fonts render in Explorer and editor tabs and can be switched off', async ({ application, target, workbench }) => {
@@ -38,7 +40,7 @@ test('Seti extension fonts render in Explorer and editor tabs and can be switche
 	const tabId = await tab.getAttribute('id');
 	await tab.focus();
 	for (const scheme of ['dark', 'light'] as const) {
-		await workbench.page.emulateMedia({ colorScheme: scheme });
+		await setAppearance(application, workbench.page, scheme);
 		await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-' + scheme);
 		await expect.poll(async () => (await tabIcon.evaluate(element => getComputedStyle(element).color)) === (await icon.evaluate(element => getComputedStyle(element).color))).toBe(true);
 		await expect(tab).toBeFocused();
@@ -62,15 +64,15 @@ test('Seti extension fonts render in Explorer and editor tabs and can be switche
 	}
 });
 
-test('Workbench follows system color changes without reopening the window', async ({ workbench }) => {
-	await workbench.page.emulateMedia({ colorScheme: 'dark' });
+test('Workbench follows system color changes without reopening the window', async ({ application, workbench }) => {
+	await setAppearance(application, workbench.page, 'dark');
 	await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-dark');
-	await workbench.page.emulateMedia({ colorScheme: 'light' });
+	await setAppearance(application, workbench.page, 'light');
 	await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-light');
 	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).colorScheme)).toBe('light');
 });
 
-test('Explorer keeps selection distinct from hover and reflects keyboard focus', async ({ target, workbench }) => {
+test('Explorer keeps selection distinct from hover and reflects keyboard focus', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires an App Server workspace');
 	const page = workbench.page;
 	const explorer = page.locator('.ash-explorer');
@@ -82,7 +84,7 @@ test('Explorer keeps selection distinct from hover and reflects keyboard focus',
 		{ scheme: 'light', id: 'ash-light', active: 'rgb(232, 232, 232)', foreground: 'rgb(0, 0, 0)', inactive: 'rgb(228, 230, 241)', hover: 'rgb(242, 242, 242)' },
 		{ scheme: 'dark', id: 'ash-dark', active: 'rgba(255, 255, 255, 0.13)', foreground: 'rgb(237, 237, 237)', inactive: 'rgb(44, 45, 46)', hover: 'rgba(255, 255, 255, 0.08)' },
 	] as const) {
-		await page.emulateMedia({ colorScheme: theme.scheme });
+		await setAppearance(application, page, theme.scheme);
 		await expect(workbench.element).toHaveAttribute('data-color-theme', theme.id);
 		await tree.focus();
 		await expect(selected).toHaveAttribute('aria-selected', 'true');
@@ -103,15 +105,13 @@ test('Explorer keeps selection distinct from hover and reflects keyboard focus',
 	}
 });
 
-test('Modern Activity Bar keeps selected styling above hover in high contrast', async ({ workbench }) => {
+test('Modern Activity Bar keeps selected styling above hover in high contrast', async ({ application, workbench }) => {
 	const page = workbench.page;
 	const bar = page.locator('[data-part="activitybar"]');
 	const selected = bar.locator('.ash-composite-bar-item.checked').first();
 	const other = bar.getByRole('tab', { name: 'Search', exact: true });
 	for (const theme of ['Ash Light', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
-		await page.getByRole('button', { name: 'Manage', exact: true }).click();
-		await page.getByRole('menu').last().getByRole('menuitem', { name: 'Themes', exact: true }).hover();
-		await page.getByRole('menu').last().getByRole('menuitem', { name: 'Color Theme', exact: true }).click();
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 		const search = page.locator('.ash-quick-pick').getByRole('combobox');
 		await search.fill(theme);
 		await search.press('Enter');
@@ -137,7 +137,7 @@ test('Modern Activity Bar keeps selected styling above hover in high contrast', 
 test.describe('Workbench shell colors', () => {
 	test.use({ openWorkspace: false });
 
-	test('Dark and light themes color the shell and Welcome together', async ({ workbench }) => {
+	test('Dark and light themes color the shell and Welcome together', async ({ application, workbench }) => {
 		const titleBar = workbench.element.locator('.ash-workbench-titlebar');
 		const activityBar = workbench.element.locator('.ash-workbench-activitybar');
 		const selectedActivity = activityBar.locator('.ash-composite-bar-item.checked').first();
@@ -145,7 +145,7 @@ test.describe('Workbench shell colors', () => {
 		const commandCenter = titleBar.locator('.ash-titlebar-command-center-button');
 		const welcome = workbench.editors.groupAt(0).welcome;
 
-		await workbench.page.emulateMedia({ colorScheme: 'dark' });
+		await setAppearance(application, workbench.page, 'dark');
 		await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-dark');
 		await expect(welcome).toHaveCSS('background-color', 'rgb(30, 30, 30)');
 		await expect(titleBar).toHaveCSS('background-color', 'rgb(30, 30, 30)');
@@ -158,7 +158,7 @@ test.describe('Workbench shell colors', () => {
 		await expect(commandCenter).toHaveCSS('color', 'rgb(204, 204, 204)');
 		await expect(statusBar).toHaveCSS('color', 'rgb(204, 204, 204)');
 
-		await workbench.page.emulateMedia({ colorScheme: 'light' });
+		await setAppearance(application, workbench.page, 'light');
 		await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-light');
 		await expect(welcome).toHaveCSS('background-color', 'rgb(255, 255, 255)');
 		await expect(titleBar).toHaveCSS('background-color', 'rgb(255, 255, 255)');
@@ -186,7 +186,7 @@ test('Settings modal dims and restores Electron window controls', async ({ appli
 	});
 	test.skip(!hasOverlay, 'macOS window buttons use a separate host control');
 	const page = workbench.page;
-	await page.emulateMedia({ colorScheme: 'light' });
+	await setAppearance(application, page, 'light');
 	await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-light');
 	await page.keyboard.press('ControlOrMeta+Shift+P');
 	await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
@@ -240,4 +240,49 @@ test('Desktop migrates a user theme through the file provider and applies its co
 	if (hasOverlay) {
 		await expect.poll(() => application.evaluate(() => (globalThis as unknown as { themeUpdates: { color?: string; symbolColor?: string }[] }).themeUpdates.at(-1))).toEqual({ color: '#18293a', symbolColor: '#fedcba' });
 	}
+});
+
+async function setAppearance(application: PlaywrightApplication, page: Page, colorScheme: 'dark' | 'light'): Promise<void> {
+	if ('windows' in application) {
+		await application.evaluate(({ nativeTheme }, scheme) => { nativeTheme.themeSource = scheme; }, colorScheme);
+	} else { await page.emulateMedia({ colorScheme }); }
+}
+
+test('structured theme settings persist scoped colors and token rules after reload', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'Requires the Code product settings');
+	const page = workbench.page;
+	const entries = [
+		{ setting: 'workbench.colorCustomizations', key: '[Ash Dark][Ash Light]', value: { 'editor.selectionBackground': '#123456' } },
+		{ setting: 'editor.tokenColorCustomizations', key: 'textMateRules', value: [{ scope: 'variable.other.readwrite', settings: { foreground: '#654321', fontStyle: 'bold' } }] },
+		{ setting: 'editor.semanticTokenColorCustomizations', key: 'rules', value: { 'variable.readonly': { foreground: '#fedcba', italic: false } } },
+	];
+	const openAppearance = async (): Promise<void> => {
+		await workbench.quickaccess.runCommand('workbench.action.openSettings');
+		const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+		await settings.locator('[data-settings-group-id="workbench"]').click();
+		await settings.locator('[data-settings-category-id="appearance"]').click();
+	};
+	await openAppearance();
+	for (const entry of entries) {
+		const setting = page.locator('[data-configuration-key="' + entry.setting + '"]');
+		await setting.getByRole('button', { name: /^Add / }).click();
+		const row = setting.locator('.ash-string-map-row').last();
+		await row.locator('[data-pattern-part="key"]').fill(entry.key);
+		await row.locator('[data-pattern-part="value"]').fill(JSON.stringify(entry.value));
+		await row.locator('[data-pattern-part="value"]').press('Tab');
+		await expect(row.locator('[data-pattern-part="value"]')).not.toHaveAttribute('aria-invalid', 'true');
+		await expect(row.locator('[data-pattern-part="value"]')).toBeEnabled();
+		await expect(setting.locator('.ash-string-map-row')).toHaveCount(1);
+	}
+	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-selection-background').trim())).toBe('#123456');
+	await page.getByRole('dialog', { name: 'Ash Settings' }).locator('.ash-modal-editor-close').click();
+	await page.reload();
+	await workbench.waitForReady();
+	await openAppearance();
+	for (const entry of entries) {
+		const row = page.locator('[data-configuration-key="' + entry.setting + '"] .ash-string-map-row');
+		await expect(row.locator('[data-pattern-part="key"]')).toHaveValue(entry.key);
+		await expect(row.locator('[data-pattern-part="value"]')).toHaveValue(JSON.stringify(entry.value));
+	}
+	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-selection-background').trim())).toBe('#123456');
 });

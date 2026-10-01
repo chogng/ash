@@ -2,6 +2,8 @@ import { isMacintosh, isWeb } from '../../../base/common/platform.js';
 import type { IConfigurationService } from '../../configuration/common/configuration.js';
 import { createSshRemoteAuthority } from '../../remote/common/remote.js';
 
+export interface IColorScheme { readonly dark: boolean; readonly highContrast: boolean; }
+
 export interface IOpenEmptyWindowOptions {
 	readonly forceReuseWindow?: boolean;
 	readonly remoteAuthority?: string;

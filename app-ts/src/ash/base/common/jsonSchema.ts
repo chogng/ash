@@ -76,6 +76,9 @@ export function jsonSchemaAtPath(schema: JsonSchema | undefined, path: readonly 
 	let current = schema;
 	for (const segment of path) {
 		if (!current) return undefined;
+		const containerType = typeof segment === 'number' ? 'array' : 'object';
+		const alternative = current.anyOf?.find(schema => schema.type === containerType || Array.isArray(schema.type) && schema.type.includes(containerType));
+		if (alternative) { current = { ...current, ...alternative }; }
 		if (typeof segment === 'number') {
 			if (isSchemaTuple(current.items)) {
 				const itemSchema = current.items[segment] ?? current.additionalItems;
@@ -85,7 +88,8 @@ export function jsonSchemaAtPath(schema: JsonSchema | undefined, path: readonly 
 			}
 			continue;
 		}
-		current = current.properties?.[segment] ?? (typeof current.additionalProperties === 'object' ? current.additionalProperties : undefined);
+		const pattern = Object.entries(current.patternProperties ?? {}).find(([expression]) => new RegExp(expression, 'u').test(segment));
+		current = current.properties?.[segment] ?? pattern?.[1] ?? (typeof current.additionalProperties === 'object' ? current.additionalProperties : undefined);
 	}
 	return current;
 }

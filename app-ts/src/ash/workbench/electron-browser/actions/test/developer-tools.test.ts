@@ -60,6 +60,7 @@ test("native host routes validate folder picking and developer tools", async () 
 			savedFileOptions = options;
 			return "C:\\project\\draft.txt";
 		},
+		getOSColorScheme: () => ({ dark: false, highContrast: false }),
 		isAccessibilitySupportEnabled: () => false,
 		setWindowTheme: (theme) => {
 			windowThemes.push(theme);
@@ -185,6 +186,8 @@ test("desktop commands are available from the command palette", async () => {
 		openAgentsWindow: async () => {},
 		revealFile: async () => {},
 		saveFile: async () => undefined,
+		getOSColorScheme: async () => ({ dark: false, highContrast: false }),
+		onDidChangeColorScheme: () => ({ dispose() {} }),
 		isAccessibilitySupportEnabled: async () => false,
 		onDidChangeAccessibilitySupport: () => ({ dispose() {} }),
 		setWindowTheme: async () => {},

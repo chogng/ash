@@ -1,3 +1,5 @@
+import { IHostColorSchemeService } from '../../services/themes/common/hostColorSchemeService.js';
+import { BrowserHostColorSchemeService } from '../../services/themes/browser/browserHostColorSchemeService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -25,11 +27,11 @@ class ThemeWindow extends Disposable {
 		super();
 		this._register(toDisposable(() => this.browser.window.close()));
 		Object.defineProperty(this.browser.window, 'matchMedia', { value: (query: string) => {
-			assert.equal(query, '(prefers-color-scheme: dark)');
-			return this.systemTheme;
+			return query === '(prefers-color-scheme: dark)' ? this.systemTheme : { matches: false, addEventListener() {}, removeEventListener() {} };
 		} });
 		this.services.registerInstance(IConfigurationService, this.configuration);
 		this.services.registerInstance(ILanguageService, this._register(new LanguageService()));
+		this.services.registerInstance(IHostColorSchemeService, this._register(new BrowserHostColorSchemeService(this.browser.window as unknown as Window)));
 		this.themes = this._register(this.services.createInstance(WorkbenchThemeService, this.root));
 		this.themes.initialize();
 	}
@@ -127,12 +129,14 @@ test('unrelated registrations do not notify colors or file icons and disposal re
 		await configuration.updateValue(WorkbenchConfiguration.colorTheme, highContrastDarkColorTheme.id);
 		assert.deepEqual([colors, icons, root.getAttribute('data-color-scheme')], [1, 1, ColorScheme.HighContrastDark]);
 		themes.dispose();
-		assert.equal(systemTheme.listenerCount, 0);
+		assert.equal(systemTheme.listenerCount, 1);
 		assert.equal(root.getAttribute('data-color-theme'), null);
 		assert.equal(root.style.getPropertyValue('--ash-editor-background'), '');
 		systemTheme.setMatches(true);
 		await configuration.updateValue(WorkbenchConfiguration.colorTheme, 'ash-dark');
 		assert.deepEqual([colors, icons], [1, 1]);
+		window.dispose();
+		assert.equal(systemTheme.listenerCount, 0);
 	}
 	tracker.assertNoLeaks();
 });
@@ -158,3 +162,21 @@ class TestMediaQueryList {
 		for (const listener of this.listeners) { listener(); }
 	}
 }
+
+test('automatic appearance uses preferred themes and explicit selection remains available', async () => {
+	using window = new ThemeWindow();
+	const { configuration, themes, systemTheme } = window;
+	await configuration.updateValue('workbench.preferredDarkColorTheme', 'ash-high-contrast-dark');
+	await configuration.updateValue('window.autoDetectColorScheme', true);
+	systemTheme.setMatches(true);
+	assert.equal(themes.getColorTheme().id, 'ash-high-contrast-dark');
+	await themes.setColorTheme('ash-dark');
+	assert.equal(configuration.getValue('workbench.preferredDarkColorTheme'), 'ash-dark');
+	assert.equal(themes.getColorTheme().id, 'ash-dark');
+	systemTheme.setMatches(false);
+	assert.equal(themes.getColorTheme().id, 'ash-light');
+	await configuration.updateValue('window.autoDetectColorScheme', false);
+	await configuration.updateValue('workbench.colorTheme', 'ash-light');
+	systemTheme.setMatches(true);
+	assert.equal(themes.getColorTheme().id, 'ash-light');
+});

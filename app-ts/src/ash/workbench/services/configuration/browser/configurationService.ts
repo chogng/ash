@@ -1,10 +1,11 @@
+import { localize } from '../../../../nls.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { editJsonObjectProperty } from '../../../../base/common/json.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { equals } from '../../../../base/common/objects.js';
 import { ConfigurationTarget, isConfigurationOverrides, isConfigurationUpdateOverrides, type IConfigurationChange, type IConfigurationChangeEvent, type IConfigurationData, type IConfigurationModel, type IConfigurationOverrides, type IConfigurationService, type IConfigurationUpdateOptions, type IConfigurationUpdateOverrides, type IConfigurationValue } from '../../../../platform/configuration/common/configuration.js';
 import { configurationOverrideValues, configurationValues, emptyConfigurationDocument, overrideKeyFromIdentifiers, type IConfigurationApi, type IConfigurationDocument, type IConfigurationSnapshot, validateConfigurationDocument, validateConfigurationSnapshot } from '../../../../platform/configuration/common/configurationIpc.js';
-import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IRegisteredConfiguration, ConfigurationScope } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ConfigurationResourceRevisionConflictError, type IConfigurationResourceService, type IConfigurationResourceSnapshot } from '../../../../platform/configuration/common/configurationResourceService.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import type { IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
@@ -106,6 +107,7 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 		const { identifiers, overrides, target } = parseUpdateArguments(arg3, arg4);
 		assertNoResourceOverride(overrides, 'Workbench configuration');
 		if (target !== undefined && target !== ConfigurationTarget.USER && target !== ConfigurationTarget.USER_LOCAL) throw new Error(`Unable to write ${key} to target ${target}.`);
+		if (identifiers.length && configuration.scope !== undefined && configuration.scope !== ConfigurationScope.LANGUAGE_OVERRIDABLE) { throw new TypeError(localize('configuration.languageScopeError', 'Setting {0} does not support language overrides', key)); }
 		const parsed = value === undefined ? undefined : configuration.parse(value);
 		let serialized = parsed === undefined ? undefined : configuration.serialize(parsed);
 		if (serialized === undefined && value !== undefined) throw new TypeError(`Configuration key '${key}' did not serialize to JSON`);
@@ -267,7 +269,13 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 			const blockValues = new Map<string, unknown>();
 			for (const [key, candidate] of Object.entries(entry.values)) {
 				const configuration = this.registry.getConfiguration(key);
-				if (configuration) blockValues.set(key, this.parseConfigurationValue(configuration, candidate));
+				if (configuration) {
+					if (configuration.scope !== undefined && configuration.scope !== ConfigurationScope.LANGUAGE_OVERRIDABLE) {
+						this.onError(new TypeError(localize('configuration.languageScopeError', 'Setting {0} does not support language overrides', key)));
+						continue;
+					}
+					blockValues.set(key, this.parseConfigurationValue(configuration, candidate));
+				}
 			}
 			this.overrideBlocks.push({ key: entry.key, identifiers: [...entry.identifiers], values: blockValues });
 			for (const identifier of entry.identifiers) {
@@ -308,7 +316,11 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 			throw new TypeError(`Settings JSONC is invalid: ${error instanceof Error ? error.message : String(error)}`);
 		}
 		for (const [key, value] of Object.entries(configurationValues(document))) this.validateRegisteredValue(key, value);
-		for (const entry of configurationOverrideValues(document)) for (const [key, value] of Object.entries(entry.values)) this.validateRegisteredValue(key, value);
+		for (const entry of configurationOverrideValues(document)) for (const [key, value] of Object.entries(entry.values)) {
+			const configuration = this.registry.getConfiguration(key);
+			if (configuration?.scope !== undefined && configuration.scope !== ConfigurationScope.LANGUAGE_OVERRIDABLE) { throw new TypeError(localize('configuration.languageScopeError', 'Setting {0} does not support language overrides', key)); }
+			this.validateRegisteredValue(key, value);
+		}
 		return document;
 	}
 

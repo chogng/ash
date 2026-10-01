@@ -11,6 +11,7 @@ import { ServiceContainer } from '../../platform/instantiation/common/instantiat
 import { createElectronRendererApi, type ElectronRendererCapabilityContribution } from '../../platform/native/electron-browser/rendererApi.js';
 import { parseWorkspace } from '../../platform/workspace/common/workspace.js';
 import { showStartupError } from '../browser/startupError.js';
+import { NativeHostColorSchemeService } from '../services/themes/electron-browser/nativeHostColorSchemeService.js';
 import { startWorkbench, type Workbench } from '../browser/workbench.js';
 import type { WorkbenchModeId } from '../common/workbenchMode.js';
 import { createElectronWorkbenchContextMenuService } from '../services/contextmenu/electron-browser/contextMenuService.js';
@@ -48,6 +49,7 @@ export class DesktopMain extends Disposable {
 			const workspace = parseWorkspace(await api.workspace.getWorkspace());
 			const initialConfigurationSnapshot = validateConfigurationSnapshot(await api.configuration.read());
 			const lifecycleService = new ElectronLifecycleService({ ownerWindow: window, onError: onUnexpectedError });
+			const hostColorScheme = await api.nativeHost.getOSColorScheme();
 			const workbench = this._register(startWorkbench({
 				modeId: this.modeId,
 				api,
@@ -61,6 +63,11 @@ export class DesktopMain extends Disposable {
 				keyboardLayoutProvider: api.keyboardLayout,
 				userKeyboardLayoutApi: api.userKeyboardLayout,
 				nativeHostApi: api.nativeHost,
+				createHostColorSchemeService: services => {
+					const colors = services.createInstance(NativeHostColorSchemeService, hostColorScheme);
+					void colors.initialize().catch(onUnexpectedError);
+					return colors;
+				},
 				clipboardService: new ElectronRendererClipboardService(),
 				dialogHandler: new NativeDialogHandler(api.nativeHost, container),
 				userThemeService: userThemes,

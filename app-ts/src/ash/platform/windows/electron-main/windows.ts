@@ -18,6 +18,7 @@ import {
 /** The Electron window options owned by the platform window policy. */
 export interface IWindowConstructorOptions {
 	show: boolean;
+	backgroundColor?: string;
 	x?: number;
 	y?: number;
 	width: number;
@@ -55,6 +56,7 @@ export interface IResolveBrowserWindowOptions {
 	readonly webPreferences: IWindowWebPreferences;
 	readonly titleBarStyle?: TitleBarStyleConfiguration;
 	readonly platform?: NodeJS.Platform;
+	readonly backgroundColor?: string;
 }
 
 /** Produces Electron options from window state and Ash's fixed host policy. */
@@ -63,9 +65,11 @@ export function resolveBrowserWindowOptions({
 	webPreferences,
 	titleBarStyle = 'custom',
 	platform = process.platform,
+	backgroundColor,
 }: IResolveBrowserWindowOptions): IWindowConstructorOptions {
 	const browserWindowOptions: IWindowConstructorOptions = {
 		show: state.mode === WindowMode.Normal,
+		...(backgroundColor ? { backgroundColor } : {}),
 		x: state.x,
 		y: state.y,
 		width: state.width,

@@ -384,6 +384,7 @@ function createStrategyHarness(): {
 		},
 	} as unknown as GPUDevice;
 	const context = {
+		theme: { value: darkColorTheme },
 		addEventHandler: () => undefined,
 		removeEventHandler: () => undefined,
 		viewLayout: {

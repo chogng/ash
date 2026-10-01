@@ -1,5 +1,6 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
+import { createMatchers, type MatcherWithPriority } from '../../themes/common/textMateScopeMatcher.js';
 import { escapeRegExpCharacters } from "../../../../base/common/strings.js";
 import { defaultTextMateScopeResolver, type TextMateResolvedTokenStyle, type TextMateScopeResolver } from "./textMateScopeResolver.js";
 
@@ -73,15 +74,31 @@ export class TextMateScopeThemeModel extends Disposable implements TextMateScope
 /** Creates a pure resolver for a normalized, transferable scope theme. */
 export function createTextMateScopeThemeResolver(theme: TextMateScopeTheme): TextMateScopeResolver {
 	const normalized = normalizeTextMateScopeTheme(theme);
+	const compiled = normalized.rules.map(rule => {
+		const matchers: MatcherWithPriority<readonly string[]>[] = [];
+		createMatchers(rule.selector, scopeMatchScore, matchers);
+		return { rule, matchers };
+	});
 	return scopes => {
-		for (let index = normalized.rules.length - 1; index >= 0; index -= 1) {
-			const rule = normalized.rules[index]!;
-			if (matchesTextMateScopeSelector(rule.selector, scopes)) {
-				const fallback = defaultTextMateScopeResolver(scopes);
-				return Object.freeze({ tokenType: rule.tokenType ?? fallback?.tokenType ?? "source", modifiers: rule.modifiers ?? fallback?.modifiers ?? EMPTY_MODIFIERS, ...(rule.foreground === undefined ? {} : { foreground: rule.foreground }), ...(rule.background === undefined ? {} : { background: rule.background }), ...(rule.fontStyle === undefined ? {} : { fontStyle: rule.fontStyle }) });
+		const base = defaultTextMateScopeResolver(scopes);
+		const result: { tokenType: string; modifiers: readonly string[]; foreground?: string; background?: string; fontStyle?: readonly TextMateTokenFontStyle[] } = {
+			tokenType: base?.tokenType ?? 'source', modifiers: base?.modifiers ?? EMPTY_MODIFIERS,
+		};
+		const scores = new Map<string, number>();
+		for (const { rule, matchers } of compiled) {
+			const score = Math.max(...matchers.map(({ matcher, priority }) => {
+				const value = matcher(scopes);
+				return value < 0 ? -1 : value + (priority + 1) * 1_000_000;
+			}));
+			if (score < 0) { continue; }
+			for (const property of ['tokenType', 'modifiers', 'foreground', 'background', 'fontStyle'] as const) {
+				if (rule[property] !== undefined && score >= (scores.get(property) ?? -1)) {
+					Object.assign(result, { [property]: rule[property] });
+					scores.set(property, score);
+				}
 			}
 		}
-		return defaultTextMateScopeResolver(scopes);
+		return Object.freeze(result);
 	};
 }
 
@@ -101,7 +118,9 @@ export function normalizeTextMateScopeTheme(value: TextMateScopeTheme): TextMate
 /** Matches comma-separated TextMate-like selectors against an outer-to-inner scope stack. */
 export function matchesTextMateScopeSelector(selector: string, scopes: readonly string[]): boolean {
 	if (typeof selector !== "string" || !Array.isArray(scopes)) return false;
-	return selector.split(",").some(part => matchesSelectorSequence(part.trim(), scopes));
+	const matchers: MatcherWithPriority<readonly string[]>[] = [];
+	createMatchers(selector, scopeMatchScore, matchers);
+	return matchers.some(({ matcher }) => matcher(scopes) >= 0);
 }
 
 const MAX_RULE_COUNT = 1_024;
@@ -171,23 +190,19 @@ function normalizeText(value: unknown, owner: string, maximumLength: number): st
 	return value;
 }
 
-function matchesSelectorSequence(selector: string, scopes: readonly string[]): boolean {
-	if (selector.length === 0) return false;
-	const clauses = selector.split(/\s+/u);
-	const positive = clauses.filter(clause => !clause.startsWith("-"));
-	if (positive.length === 0) return false;
-	if (clauses.some(clause => clause === "-" || (clause.startsWith("-") && matchesAnyScope(clause.slice(1), scopes)))) return false;
-	let scopeIndex = 0;
-	for (const clause of positive) {
-		const matchIndex = scopes.findIndex((scope, index) => index >= scopeIndex && matchesScope(clause, scope));
-		if (matchIndex < 0) return false;
-		scopeIndex = matchIndex + 1;
+function scopeMatchScore(names: string[], scopes: readonly string[]): number {
+	let limit = scopes.length;
+	let score = 0;
+	// Resolve from the inner end so a repeated ancestor does not hide an earlier complete sequence.
+	for (let index = names.length - 1; index >= 0; index--) {
+		const name = names[index]!;
+		let match = limit - 1;
+		while (match >= 0 && !matchesScope(name, scopes[match]!)) { match--; }
+		if (match < 0) { return -1; }
+		limit = match;
+		if (name !== '*') { score += (match + 1) * 1_000 + name.split('.').length * 100 + name.length; }
 	}
-	return true;
-}
-
-function matchesAnyScope(selector: string, scopes: readonly string[]): boolean {
-	return scopes.some(scope => matchesScope(selector, scope));
+	return score;
 }
 
 function matchesScope(selector: string, scope: string): boolean {

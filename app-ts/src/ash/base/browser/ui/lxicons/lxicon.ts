@@ -27,7 +27,14 @@ export function setIconResolver(document: Document, resolver: (icon: Icon) => Ic
 		const previousAttributes = artworkAttributes.get(element);
 		if (!previousAttributes) continue;
 		const id = element.getAttribute('data-ash-icon-id')!;
-		const artwork = createLxicon(resolveDefinition(Icon.fromId(id), document), document);
+		const definition = resolver(Icon.fromId(id)) ?? getLxiconDefinition(id);
+		if (!definition) {
+			for (const attribute of previousAttributes) { element.removeAttribute(attribute); }
+			artworkAttributes.set(element, []);
+			element.replaceChildren();
+			continue;
+		}
+		const artwork = createLxicon(definition, document);
 		for (const attribute of previousAttributes) element.removeAttribute(attribute);
 		for (const attribute of [...artwork.attributes]) {
 			if (isArtworkAttribute(attribute.name)) element.setAttribute(attribute.name, attribute.value);

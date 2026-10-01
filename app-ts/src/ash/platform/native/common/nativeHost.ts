@@ -1,3 +1,4 @@
+import type { IColorScheme } from '../../window/common/window.js';
 import type { SessionMode } from '../../sessions/common/sessionApi.js';
 import type { DisposableHandle } from "../../ipc/common/ipc.js";
 import type { DialogRequest, FileFilter, IDialogOutcome } from '../../dialogs/common/dialogs.js';
@@ -28,6 +29,16 @@ export const NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL =
 export const NATIVE_HOST_SHELL_COMMAND_CHANNEL = 'ash:native-host:shell-command';
 export const NATIVE_HOST_DIALOG_CHANNEL = 'ash:native-host:dialog';
 export const NATIVE_HOST_REVEAL_FILE_CHANNEL = 'ash:native-host:reveal-file';
+
+export const NATIVE_HOST_GET_COLOR_SCHEME_CHANNEL = 'ash:native-host:get-color-scheme';
+export const NATIVE_HOST_COLOR_SCHEME_CHANGED_CHANNEL = 'ash:native-host:color-scheme-changed';
+
+export function validateColorScheme(value: unknown): IColorScheme {
+	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Invalid system color scheme');
+	const scheme = value as Record<string, unknown>;
+	if (Object.keys(scheme).sort().join(',') !== 'dark,highContrast' || typeof scheme.dark !== 'boolean' || typeof scheme.highContrast !== 'boolean') throw new TypeError('Invalid system color scheme');
+	return scheme as unknown as IColorScheme;
+}
 
 export type NativeDialogOperation =
 	| { readonly kind: 'show'; readonly id: number; readonly request: DialogRequest }
@@ -139,6 +150,8 @@ export interface IOpenAgentsWindowOptions {
 
 /** Window-scoped native capabilities exposed to an Electron renderer. */
 export interface INativeHostApi {
+	getOSColorScheme(): Promise<IColorScheme>;
+	onDidChangeColorScheme(listener: (scheme: IColorScheme) => void): DisposableHandle;
 	showNativeDialog(request: DialogRequest, signal: AbortSignal): Promise<IDialogOutcome>;
 	installShellCommand(): Promise<string>;
 	uninstallShellCommand(): Promise<string>;

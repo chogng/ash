@@ -1,3 +1,6 @@
+import { IWorkbenchThemeService } from '../services/themes/common/workbenchThemeService.js';
+import { IHostColorSchemeService, type IHostColorSchemeService as HostColorSchemeService } from '../services/themes/common/hostColorSchemeService.js';
+import { BrowserHostColorSchemeService } from '../services/themes/browser/browserHostColorSchemeService.js';
 import { getActivityHoverPosition } from "./parts/compositeBarActions.js";
 import { ISkillService } from "../../platform/skills/common/skillService.js";
 import { ILanguageServerService } from "../../platform/language/common/languageServerService.js";
@@ -55,6 +58,7 @@ import { IStorageService, StorageScope, StorageTarget, WillSaveStateReason } fro
 import "../../platform/layout/browser/zIndexRegistry.js";
 import {
 	ServiceContainer,
+	type IInstantiationService,
 } from "../../platform/instantiation/common/instantiation.js";
 import { getSingletonServiceDescriptors } from '../../platform/instantiation/common/extensions.js';
 import { NotificationService } from "../services/notification/common/notificationService.js";
@@ -308,6 +312,7 @@ export interface IStartWorkbenchOptions {
 	readonly keyboardLayoutProvider?: IKeyboardLayoutProvider;
 	readonly userKeyboardLayoutApi?: IUserKeyboardLayoutApi;
 	readonly nativeHostApi?: INativeHostApi;
+	readonly createHostColorSchemeService?: (services: IInstantiationService) => HostColorSchemeService & IDisposable;
 	readonly clipboardService?: IClipboardService;
 	readonly dialogHandler?: IDialogHandler;
 	readonly userThemeService?: IUserThemeServiceContract;
@@ -332,6 +337,7 @@ export function startWorkbench({
 	keyboardLayoutProvider,
 	userKeyboardLayoutApi,
 	nativeHostApi,
+	createHostColorSchemeService,
 	clipboardService,
 	dialogHandler,
 	userThemeService,
@@ -353,6 +359,7 @@ export function startWorkbench({
 		keyboardLayoutProvider,
 		userKeyboardLayoutApi,
 		nativeHostApi,
+		createHostColorSchemeService,
 		clipboardService,
 		dialogHandler,
 		userThemeService,
@@ -399,6 +406,7 @@ export class Workbench extends Disposable {
 		keyboardLayoutProvider: IKeyboardLayoutProvider | undefined,
 		userKeyboardLayoutApi: IUserKeyboardLayoutApi | undefined,
 		nativeHostApi: INativeHostApi | undefined,
+		createHostColorSchemeService: ((services: IInstantiationService) => HostColorSchemeService & IDisposable) | undefined,
 		clipboardService: IClipboardService | undefined,
 		dialogHandler: IDialogHandler | undefined,
 		userThemeService: IUserThemeServiceContract | undefined,
@@ -689,8 +697,12 @@ export class Workbench extends Disposable {
 		const serviceContributionReady: Promise<void>[] = [];
 		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
 		services.registerInstance(IAccessibleViewInformationService, this._register(new AccessibleViewInformationService(storage)));
+		if (nativeHostApi && !createHostColorSchemeService) { throw new Error('Desktop Workbench requires its system appearance service'); }
+		const hostColors = this._register(createHostColorSchemeService ? createHostColorSchemeService(services) : new BrowserHostColorSchemeService(this.ownerWindow));
+		services.registerInstance(IHostColorSchemeService, hostColors);
 		const themeService = this._register(services.createInstance(WorkbenchThemeService, workbenchRoot));
 		services.registerInstance(IThemeService, themeService);
+		services.registerInstance(IWorkbenchThemeService, themeService);
 		themeService.initialize();
 		let textMateThemeRevision = 0;
 		const updateTextMateTheme = (): void => {
@@ -702,6 +714,7 @@ export class Workbench extends Disposable {
 		};
 		this._register(extensionService.themes.onDidChange(() => updateTextMateTheme()));
 		this._register(themeService.onDidColorThemeChange(() => updateTextMateTheme()));
+		updateTextMateTheme();
 		services.registerInstance(IUserThemeService, userThemeService ?? UnavailableUserThemeService);
 		services.registerInstance(IResourceIconRenderer, themeService);
 		services.registerInstance(IResourceLabelService, services.createInstance(ResourceLabelService));

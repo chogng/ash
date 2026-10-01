@@ -7,6 +7,9 @@ import { EditorTitleControl } from '../../../../browser/parts/editor/editorTitle
 import { EditorGroupModel } from '../../../../common/editor/editorGroupModel.js';
 import { EditorShowIconsConfiguration, EditorTabsModeConfiguration } from '../../../editor/common/editorConfiguration.js';
 import type { EditorTabsDelegate } from '../../../../browser/parts/editor/editorTabsControl.js';
+import { IHostColorSchemeService } from '../../common/hostColorSchemeService.js';
+import { BrowserHostColorSchemeService } from '../../browser/browserHostColorSchemeService.js';
+import { ColorScheme } from '../../../../../platform/theme/common/theme.js';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'mocha';
@@ -41,6 +44,8 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		using typescript = languages.registerLanguage({ id: 'typescript', extensions: ['.ts'] });
 		using rust = languages.registerLanguage({ id: 'rust', extensions: ['.rs'] });
 		services.registerInstance(ILanguageService, languages);
+		using hostColors = new BrowserHostColorSchemeService(browser.window as unknown as Window);
+		services.registerInstance(IHostColorSchemeService, hostColors);
 		using models = new BrowserTextModelService({ onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: request.bootstrapText ?? '', revision: undefined }), save: async () => ({ revision: undefined }) }, { languageService: languages });
 		services.registerInstance(IFileTextModelService, models);
 		using themes = services.createInstance(WorkbenchThemeService, browser.window.document.body);
@@ -162,10 +167,30 @@ test('folder completion classes resolve folder theme associations', async () => 
 		light: { folderNames: { src: 'lightSrc' } },
 	}, async path => new TextEncoder().encode(path));
 	assert.deepEqual([theme.hasFileIcons, theme.hasFolderIcons, theme.hidesExplorerArrows], [false, true, true]);
-	const fallback = theme.resolveFileIcon(['folder-icon'], true);
-	const dark = theme.resolveFileIcon(['folder-icon', 'src-name-folder-icon'], true);
-	const light = theme.resolveFileIcon(['folder-icon', 'src-name-folder-icon'], false);
+	const fallback = theme.resolveFileIcon(['folder-icon'], ColorScheme.Dark);
+	const dark = theme.resolveFileIcon(['folder-icon', 'src-name-folder-icon'], ColorScheme.Dark);
+	const light = theme.resolveFileIcon(['folder-icon', 'src-name-folder-icon'], ColorScheme.Light);
 	assert.notEqual(dark?.image, fallback?.image);
 	assert.notEqual(light?.image, dark?.image);
 	assert.match(theme.styleSheetContent, /ash-themed-file-icon\.folder-icon\[class~="src-name-folder-icon"\]/);
+});
+
+test('high contrast file associations and font descriptors reach resource and suggestion renderers', async () => {
+	const theme = await FileIconThemeData.load('contrast-font', 'Contrast font', {
+		fonts: [{ id: 'icons', weight: '700', style: 'italic', src: [{ path: 'icons.woff', format: 'woff' }] }],
+		iconDefinitions: { normal: { fontCharacter: 'N' }, contrast: { fontCharacter: 'H', fontColor: '#ffffff' } },
+		file: 'normal',
+		highContrast: { fileExtensions: { ts: 'contrast' } },
+	}, async () => new Uint8Array([1]));
+	const classes = ['file-icon', 'ts-ext-file-icon'];
+	assert.equal(theme.resolveFileIcon(classes, ColorScheme.Dark)?.character, 'N');
+	for (const scheme of [ColorScheme.HighContrastDark, ColorScheme.HighContrastLight]) {
+		const icon = theme.resolveFileIcon(classes, scheme)!;
+		assert.deepEqual([icon.character, icon.fontWeight, icon.fontStyle], ['H', '700', 'italic']);
+	}
+	assert.match(theme.styleSheetContent, /font-weight:700;font-style:italic/);
+	assert.match(theme.styleSheetContent, /data-color-scheme="high-contrast-dark"/);
+	await assert.rejects(FileIconThemeData.load('invalid-font', 'Invalid font', {
+		fonts: [{ id: 'icons', weight: 'heavy', src: [{ path: 'icons.woff', format: 'woff' }] }], iconDefinitions: {},
+	}, async () => new Uint8Array([1])), /weight or style/);
 });

@@ -39,6 +39,7 @@ export interface ResolvedColorContribution extends ColorContribution {
 }
 
 export class ColorRegistry extends Disposable {
+	private readonly groups = new Map<symbol, readonly string[]>();
 	private readonly colors = new Map<ColorIdentifier, ColorContribution>();
 	private catalog: readonly ColorContribution[] = Object.freeze([]);
 	private readonly changed = this._register(new Emitter<void>());
@@ -58,6 +59,27 @@ export class ColorRegistry extends Disposable {
 		this.publishCatalog();
 		this.changed.fire();
 		return id;
+	}
+
+	/** A group is validated as a whole before publishing, so alias cycles never enter active themes. */
+	public replaceColors(owner: symbol, contributions: readonly ColorContribution[]): void {
+		const previous = this.groups.get(owner) ?? [];
+		if (!previous.length && !contributions.length) { return; }
+		const next = new Map([...this.colors].filter(([id]) => !previous.includes(id)));
+		for (const contribution of contributions) {
+			validateTokenId(contribution.id, 'color');
+			if (next.has(contribution.id)) { throw new TypeError(`Duplicate color token: ${contribution.id}`); }
+			next.set(contribution.id, contribution);
+		}
+		using validation = new ColorRegistry();
+		for (const [id, contribution] of next) { validation.colors.set(id, contribution); }
+		validation.publishCatalog();
+		for (const scheme of [ColorScheme.Dark, ColorScheme.Light, ColorScheme.HighContrastDark, ColorScheme.HighContrastLight]) { validation.resolve(scheme); }
+		this.colors.clear();
+		for (const [id, contribution] of next) { this.colors.set(id, contribution); }
+		if (contributions.length) { this.groups.set(owner, contributions.map(color => color.id)); } else { this.groups.delete(owner); }
+		this.publishCatalog();
+		this.changed.fire();
 	}
 
 	/** Color modules load before the locale service, so descriptions are resolved again when the language changes. */

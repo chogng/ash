@@ -1,3 +1,7 @@
+import { combinedDisposable } from '../../../../base/common/lifecycle.js';
+import { getTokenClassificationRegistry } from '../../../../platform/theme/common/tokenClassificationRegistry.js';
+import { fileIconThemeSchema, fileIconThemeSchemaId } from './fileIconThemeSchema.js';
+import { productIconThemeSchema, productIconThemeSchemaId } from './productIconThemeSchema.js';
 import type { JsonSchema } from '../../../../base/common/jsonSchema.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import { JsonSchemasRegistry } from '../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
@@ -52,6 +56,7 @@ export const colorThemeSchema: JsonSchema = {
 		semanticHighlighting: { type: 'boolean' },
 		semanticTokenColors: {
 			type: 'object',
+			get properties() { return Object.fromEntries(getTokenClassificationRegistry().getTokenTypes().map(type => [type.id, { ...colorThemeSchema.properties!.semanticTokenColors!.additionalProperties as JsonSchema, description: type.description }])); },
 			additionalProperties: {
 				anyOf: [color, {
 					type: 'object',
@@ -64,5 +69,9 @@ export const colorThemeSchema: JsonSchema = {
 };
 
 export function registerColorThemeSchemas(): IDisposable {
-	return JsonSchemasRegistry.registerSchema(colorThemeSchemaId, colorThemeSchema);
+	return combinedDisposable(
+		JsonSchemasRegistry.registerSchema(colorThemeSchemaId, colorThemeSchema),
+		JsonSchemasRegistry.registerSchema(fileIconThemeSchemaId, fileIconThemeSchema),
+		JsonSchemasRegistry.registerSchema(productIconThemeSchemaId, productIconThemeSchema),
+	);
 }

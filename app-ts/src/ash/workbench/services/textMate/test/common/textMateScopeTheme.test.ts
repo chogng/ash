@@ -46,3 +46,20 @@ test("Scope theme models clone revisions, publish replacements, and reject inval
 	assert.throws(() => normalizeTextMateScopeTheme({ revision: 2, rules: [{ selector: "comment", tokenType: "remark" }] }), /Unsupported semantic token type/);
 	assert.equal(themes.currentTheme.revision, 1);
 });
+
+
+test('scope styles inherit each property and specific selectors win regardless of declaration order', () => {
+	const resolver = createTextMateScopeThemeResolver({ revision: 1, rules: [
+		{ selector: 'comment.line', foreground: '#123456' },
+		{ selector: 'comment', foreground: '#abcdef', fontStyle: ['italic'] },
+		{ selector: 'source.ts (comment.line | string) - string.regexp', fontStyle: ['bold'] },
+	] });
+	assert.deepEqual(resolver(['source.ts', 'comment.line.ts']), { tokenType: 'comment', modifiers: [], foreground: '#123456', fontStyle: ['bold'] });
+});
+
+test('repeated embedded ancestors preserve an earlier complete selector sequence', () => {
+	const resolve = createTextMateScopeThemeResolver({ revision: 1, rules: [
+		{ selector: 'source.ts entity.name.function', foreground: '#123456' },
+	] });
+	assert.equal(resolve(['source.ts', 'entity.name.function.ts', 'source.ts'])?.foreground, '#123456');
+});

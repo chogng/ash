@@ -1,3 +1,6 @@
+import '../../../src/ash/workbench/browser/parts/notifications/media/notifications.css';
+import { IHostColorSchemeService } from '../../../src/ash/workbench/services/themes/common/hostColorSchemeService.js';
+import { BrowserHostColorSchemeService } from '../../../src/ash/workbench/services/themes/browser/browserHostColorSchemeService.js';
 import type { TextModelReference } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
 import '../../../src/ash/base/browser/ui/iconlabel/iconlabel.css';
 import { Event } from '../../../src/ash/base/common/event.js';
@@ -60,6 +63,8 @@ declare global {
 		registerLateThemeColor(): void;
 		disposeThemeRoot(): void;
 		selectColorTheme(id: string): Promise<void>;
+		setThemeSetting(key: string, value: unknown): Promise<void>;
+		disposeThemeExtensions(): void;
 		mountNestedHighContrastWidget(): void;
 		disposeNestedHighContrastWidget(): void;
 		disposeIconSelectBox(): void;
@@ -118,6 +123,7 @@ services.registerInstance(IConfigurationService, configuration);
 const languages = resources.add(new LanguageService());
 resources.add(languages.registerLanguage({ id: 'typescript', extensions: ['.ts'] }));
 services.registerInstance(ILanguageService, languages);
+services.registerInstance(IHostColorSchemeService, resources.add(new BrowserHostColorSchemeService(window)));
 const themes = resources.add(services.createInstance(WorkbenchThemeService, document.querySelector<HTMLElement>('#root')!));
 themes.initialize();
 appendIcon(Lxicon.add, document.querySelector<HTMLElement>('#product-icon')!);
@@ -133,6 +139,7 @@ window.registerLateThemeColor = () => {
 };
 window.disposeThemeRoot = () => themes.dispose();
 window.selectColorTheme = id => configuration.updateValue(WorkbenchConfiguration.colorTheme, id);
+window.setThemeSetting = (key, value) => configuration.updateValue(key, value);
 let nestedHighContrastWidget: { host: HTMLElement; service: TestThemeService; binding: { dispose(): void } } | undefined;
 window.mountNestedHighContrastWidget = () => {
 	const host = document.createElement('div');
@@ -153,7 +160,7 @@ window.disposeNestedHighContrastWidget = () => {
 };
 const render = (): void => themes.renderFileIcon(URI.file('/workspace/main.ts'), document.querySelector<HTMLElement>('#icon')!);
 resources.add(themes.onDidChangeResourceIcons(render));
-const manifestJson = JSON.stringify({ ...manifest, contributes: { ...manifest.contributes, productIconThemes: [{ id: 'test-svg-product', label: 'Test SVG product icons', path: './product-icons/theme.json' }] } });
+const manifestJson = JSON.stringify({ ...manifest, contributes: { ...manifest.contributes, productIconThemes: [{ id: 'test-svg-product', label: 'Test SVG product icons', path: './product-icons/theme.json' }, { id: 'test-font-product', label: 'Font icons', path: './icons/font-product.json' }] } });
 const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(manifestJson));
 const hash = 'sha256:' + Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 const urls: Record<string, string> = { 'icons/vs-seti-icon-theme.json': themeUrl, 'icons/seti.woff': fontUrl, 'product-icons/theme.json': productThemeUrl, 'product-icons/add.svg': productIconUrl };
@@ -165,7 +172,10 @@ const extensions = resources.add(new AppServerExtensionService({
 			displayName: manifest.displayName, sourceKind: 'builtIn', manifestJson, manifestSha256: hash, packageSha256: hash,
 		}] }),
 		readResource: async request => {
-			if (!urls[request.path]) { throw new Error('Unexpected icon resource'); }
+			if (request.path === 'icons/font-product.json') {
+			return new TextEncoder().encode(JSON.stringify({ fonts: [{ id: 'seti', weight: '700', style: 'italic', src: [{ path: 'seti.woff', format: 'woff' }] }], iconDefinitions: { add: { fontCharacter: '\\E001', fontId: 'seti' } } }));
+		}
+		if (!urls[request.path]) { throw new Error('Unexpected icon resource'); }
 			const response = await fetch(urls[request.path]!);
 			if (!response.ok) { throw new Error('Icon resource failed'); }
 			return new Uint8Array(await response.arrayBuffer());
@@ -174,6 +184,7 @@ const extensions = resources.add(new AppServerExtensionService({
 	textMateService: { grammars } as unknown as ITextMateService,
 }));
 await extensions.start();
+window.disposeThemeExtensions = () => extensions.dispose();
 render();
 document.querySelector('#none')!.addEventListener('click', () => { void configuration.updateValue(WorkbenchConfiguration.iconTheme, null); });
 document.querySelector('#seti')!.addEventListener('click', () => { void configuration.updateValue(WorkbenchConfiguration.iconTheme, 'vs-seti'); });

@@ -1,3 +1,4 @@
+import { resolveTextMateTokenStyle } from '../../textMate/common/textMateThemeProjection.js';
 import { Color } from '../../../../base/common/color.js';
 import * as textMateNamespace from 'vscode-textmate';
 import { parseJsonDocument } from '../../../../base/common/json.js';
@@ -151,18 +152,18 @@ export function colorThemeType(type: ColorThemeDocument['type']): ColorScheme {
 
 export function createDocumentColorTheme(document: ColorThemeDocument, id: string, label: string, colorScheme: ColorScheme): IColorTheme {
 	const tokenColors = Object.freeze(asTokenColorRules(document.tokenColors).map(rule => Object.freeze({
-		scopes: Object.freeze((typeof rule.scope === 'string' ? [rule.scope] : rule.scope ?? []).flatMap(scope => scope.split(',')).map(scope => scope.trim()).filter(Boolean)),
+		scopes: Object.freeze((typeof rule.scope === 'string' ? [rule.scope] : rule.scope ?? []).map(scope => scope.trim()).filter(Boolean)),
 		settings: Object.freeze({ ...rule.settings }),
 	})));
 	if (tokenColors.reduce((count, rule) => count + rule.scopes.length, 0) > 1024) throw new Error('Theme exceeds 1024 token scopes');
 	return createColorTheme({
-		id, label, colorScheme, colorOverrides: document.colors, allowUnregisteredColorOverrides: true, tokenColors,
+		id, label, colorScheme, resolveTokenScopes: resolveTextMateTokenStyle, colorOverrides: document.colors, allowUnregisteredColorOverrides: true, tokenColors,
 		semanticHighlighting: document.semanticHighlighting,
 		semanticTokenRules: parseSemanticTokenRules(document.semanticTokenColors),
 	});
 }
 
-function parseSemanticTokenRules(colors: ColorThemeDocument['semanticTokenColors']): readonly ISemanticTokenThemeRule[] {
+export function parseSemanticTokenRules(colors: ColorThemeDocument['semanticTokenColors']): readonly ISemanticTokenThemeRule[] {
 	if (!colors) return Object.freeze([]);
 	if (Object.keys(colors).length > 1024) throw new Error('Theme exceeds 1024 semantic token rules');
 	return Object.freeze(Object.entries(colors).map(([selector, value]) => {
@@ -171,10 +172,8 @@ function parseSemanticTokenRules(colors: ColorThemeDocument['semanticTokenColors
 		const [typeAndModifiers, language] = selector.split(':');
 		const [type, ...modifiers] = typeAndModifiers!.split('.');
 		const style = typeof value === 'string' ? { foreground: value } : value;
-		const fontStyle = style.fontStyle ?? [style.italic && 'italic', style.bold && 'bold', style.underline && 'underline', style.strikethrough && 'strikethrough'].filter(Boolean).join(' ');
-		const hasFontFlags = 'italic' in style || 'bold' in style || 'underline' in style || 'strikethrough' in style;
 		return Object.freeze({ selector, type: type!, modifiers: Object.freeze(modifiers), ...(language ? { language } : {}),
-			...(style.foreground ? { foreground: style.foreground } : {}), ...(style.fontStyle !== undefined || hasFontFlags ? { fontStyle } : {}) });
+			...style });
 	}));
 }
 
@@ -188,7 +187,7 @@ export function serializeUserColorThemeDraft(theme: IColorTheme, label: string):
 		colors: Object.fromEntries(theme.colorEntries.flatMap(({ id, value }) => value ? [[id, Color.Format.CSS.formatHexA(value, true)]] : [])),
 		tokenColors: theme.tokenColors?.map(rule => ({ scope: rule.scopes, settings: rule.settings })) ?? [],
 		...(theme.semanticHighlighting === undefined ? {} : { semanticHighlighting: theme.semanticHighlighting }),
-		...(theme.semanticTokenRules?.length ? { semanticTokenColors: Object.fromEntries(theme.semanticTokenRules.map(rule => [rule.selector, { foreground: rule.foreground, fontStyle: rule.fontStyle }])) } : {}),
+		...(theme.semanticTokenRules?.length ? { semanticTokenColors: Object.fromEntries(theme.semanticTokenRules.map(rule => [rule.selector, { foreground: rule.foreground, fontStyle: rule.fontStyle, bold: rule.bold, italic: rule.italic, underline: rule.underline, strikethrough: rule.strikethrough }])) } : {}),
 	};
 	parseColorThemeDocument(document);
 	return `${JSON.stringify(document, null, 2)}\n`;

@@ -8,6 +8,7 @@ export interface IWindowCreationOptions {
 	readonly webPreferences: IWindowWebPreferences;
 	readonly title: string;
 	readonly titleBarStyle?: TitleBarStyleConfiguration;
+	readonly backgroundColor?: string;
 	readonly icon?: string;
 	readonly tabbingIdentifier?: string;
 }
@@ -36,7 +37,7 @@ export class CodeWindow<TWindow extends ICodeWindowHandle> extends Disposable {
 		this.resources = this._register(resources);
 		try {
 			this.win = createWindow({
-				...resolveBrowserWindowOptions({ state: options.state, webPreferences: options.webPreferences, titleBarStyle: options.titleBarStyle }),
+				...resolveBrowserWindowOptions({ state: options.state, webPreferences: options.webPreferences, titleBarStyle: options.titleBarStyle, backgroundColor: options.backgroundColor }),
 				show: false,
 				title: options.title,
 				icon: options.icon,

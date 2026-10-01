@@ -1,3 +1,5 @@
+import { createTextMateScopeThemeResolver } from './textMateScopeTheme.js';
+import type { TokenStyleData } from '../../../../platform/theme/common/tokenClassificationRegistry.js';
 import { type ColorScheme } from "../../../../platform/theme/common/theme.js";
 import type { IColorTheme } from "../../../../platform/theme/common/themeService.js";
 import { type ExtensionThemeCatalog, type ExtensionThemeDefinition } from "../../extensions/common/extensionTheme.js";
@@ -26,7 +28,7 @@ function compileRules(theme: Pick<ExtensionThemeDefinition, "tokenColors">): rea
 		const background = tokenColor.settings.background;
 		const fontStyle = parseFontStyle(tokenColor.settings.fontStyle);
 		if (foreground === undefined && background === undefined && fontStyle === undefined) continue;
-		for (const selector of tokenColor.scopes) rules.push(Object.freeze({ selector, ...(foreground === undefined ? {} : { foreground }), ...(background === undefined ? {} : { background }), ...(fontStyle === undefined ? {} : { fontStyle }) }));
+		for (const selector of tokenColor.scopes.length ? tokenColor.scopes : ['*']) rules.push(Object.freeze({ selector, ...(foreground === undefined ? {} : { foreground }), ...(background === undefined ? {} : { background }), ...(fontStyle === undefined ? {} : { fontStyle }) }));
 	}
 	return Object.freeze(rules);
 }
@@ -39,4 +41,18 @@ function parseFontStyle(value: string | undefined): readonly TextMateTokenFontSt
 		return style;
 	});
 	return Object.freeze([...new Set(styles)]);
+}
+
+const scopeResolvers = new WeakMap<NonNullable<IColorTheme['tokenColors']>, ReturnType<typeof createTextMateScopeThemeResolver>>();
+
+export function resolveTextMateTokenStyle(rules: NonNullable<IColorTheme['tokenColors']>, scopes: readonly string[]): TokenStyleData | undefined {
+	let resolver = scopeResolvers.get(rules);
+	if (!resolver) { resolver = createTextMateScopeThemeResolver({ revision: 1, rules: compileRules({ tokenColors: rules }) }); scopeResolvers.set(rules, resolver); }
+	const result = resolver(scopes);
+	if (!result || result.foreground === undefined && result.fontStyle === undefined) { return undefined; }
+	const style: { foreground?: string; bold?: boolean; italic?: boolean; underline?: boolean; strikethrough?: boolean } = { foreground: result.foreground };
+	if (result.fontStyle) {
+		Object.assign(style, { bold: result.fontStyle.includes('bold'), italic: result.fontStyle.includes('italic'), underline: result.fontStyle.includes('underline'), strikethrough: result.fontStyle.includes('strikethrough') });
+	}
+	return style;
 }

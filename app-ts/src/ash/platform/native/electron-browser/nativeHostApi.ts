@@ -1,6 +1,9 @@
 import { invoke, subscribe } from "../../ipc/electron-browser/rendererIpc.js";
 import {
 	NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL,
+	NATIVE_HOST_GET_COLOR_SCHEME_CHANNEL,
+	NATIVE_HOST_COLOR_SCHEME_CHANGED_CHANNEL,
+	validateColorScheme,
 	NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL,
 	NATIVE_HOST_OPEN_WORKSPACE_CHANNEL,
 	NATIVE_HOST_OPEN_WINDOW_CHANNEL,
@@ -25,6 +28,8 @@ import { showNativeDialog } from '../../dialogs/electron-browser/dialog.js';
 
 export function createNativeHostApi(): INativeHostApi {
 	return {
+		getOSColorScheme: async () => validateColorScheme(await invoke<unknown>(NATIVE_HOST_GET_COLOR_SCHEME_CHANNEL)),
+		onDidChangeColorScheme: listener => subscribe<unknown>(NATIVE_HOST_COLOR_SCHEME_CHANGED_CHANNEL, value => listener(validateColorScheme(value))),
 		showNativeDialog,
 		installShellCommand: () => invoke<string>(NATIVE_HOST_SHELL_COMMAND_CHANNEL, 'install'),
 		uninstallShellCommand: () => invoke<string>(NATIVE_HOST_SHELL_COMMAND_CHANNEL, 'uninstall'),

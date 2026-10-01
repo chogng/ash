@@ -1,3 +1,8 @@
+import { validateTokenId, type ColorContribution } from '../../../../platform/theme/common/colorRegistry.js';
+import { getTokenClassificationRegistry, type TokenTypeOrModifierContribution } from '../../../../platform/theme/common/tokenClassificationRegistry.js';
+import type { SemanticTokenScopeContribution } from '../../themes/common/tokenClassificationExtensionPoint.js';
+
+export interface ExtensionIconContribution { readonly id: string; readonly description: string; readonly defaults: string | { readonly fontPath: string; readonly fontCharacter: string }; }
 export interface ExtensionGrammarContribution {
 	readonly language?: string;
 	readonly scopeName: string;
@@ -52,6 +57,11 @@ export interface ExtensionManifest {
 		readonly iconThemes: readonly ExtensionThemeContribution[];
 		readonly productIconThemes: readonly ExtensionThemeContribution[];
 		readonly debuggers: readonly ExtensionDebugAdapterContribution[];
+		readonly colors: readonly ColorContribution[];
+		readonly semanticTokenTypes: readonly TokenTypeOrModifierContribution[];
+		readonly semanticTokenModifiers: readonly TokenTypeOrModifierContribution[];
+		readonly semanticTokenScopes: readonly SemanticTokenScopeContribution[];
+		readonly icons: readonly ExtensionIconContribution[];
 	};
 }
 
@@ -100,6 +110,11 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 			themes: Object.freeze(contributes.themes === undefined ? [] : parseThemes(contributes.themes, descriptor.id)),
 			iconThemes: Object.freeze(contributes.iconThemes === undefined ? [] : parseThemes(contributes.iconThemes, descriptor.id)),
 			productIconThemes: Object.freeze(contributes.productIconThemes === undefined ? [] : parseThemes(contributes.productIconThemes, descriptor.id)),
+			colors: parseColors(contributes.colors, descriptor.id),
+			semanticTokenTypes: parseClassifications(contributes.semanticTokenTypes, true),
+			semanticTokenModifiers: parseClassifications(contributes.semanticTokenModifiers, false),
+			semanticTokenScopes: parseSemanticScopes(contributes.semanticTokenScopes),
+			icons: parseIcons(contributes.icons),
 			debuggers: Object.freeze(contributes.debuggers === undefined ? [] : parseDebuggers(contributes.debuggers, descriptor.id)),
 		}),
 	});
@@ -294,4 +309,76 @@ function requiredString(value: unknown, owner: string, maximum: number): string 
 function boundedText(value: unknown, owner: string, maximum = 256): string {
 	if (typeof value !== "string" || value.trim().length === 0 || value.length > maximum || /[\r\n]/u.test(value)) throw new TypeError(`${owner} is invalid`);
 	return value;
+}
+
+function parseColors(value: unknown, extensionId: string): readonly ColorContribution[] {
+	if (value === undefined) { return []; }
+	if (!Array.isArray(value) || value.length > 512) { throw new TypeError('Extension colors must be an array of up to 512 contributions'); }
+	return value.map(candidate => {
+		const color = record(candidate, 'Extension color');
+		const id = requiredString(color.id, 'Color ID', 256);
+		validateTokenId(id, 'color');
+		const defaults = record(color.defaults, 'Color defaults');
+		const parse = (value: unknown): string => {
+			const text = requiredString(value, 'Color default', 256);
+			if (text.startsWith('#')) {
+				if (!/^#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})$/iu.test(text)) { throw new TypeError('Invalid color default'); }
+			} else { validateTokenId(text, 'color'); }
+			return text;
+		};
+		return { id, description: requiredString(color.description, 'Color description', 1024), owner: extensionId, defaults: {
+			light: parse(defaults.light), dark: parse(defaults.dark),
+			highContrastDark: parse(defaults.highContrast ?? defaults.dark), highContrastLight: parse(defaults.highContrastLight ?? defaults.light),
+		} };
+	});
+}
+
+function parseClassifications(value: unknown, allowSuperType: boolean): readonly TokenTypeOrModifierContribution[] {
+	if (value === undefined) { return []; }
+	if (!Array.isArray(value) || value.length > 512) { throw new TypeError('Semantic classifications must be an array of up to 512 contributions'); }
+	return value.map(candidate => {
+		const source = record(candidate, 'Semantic classification');
+		const id = requiredString(source.id, 'Semantic classification ID', 128);
+		if (!/^[A-Za-z][\w]*$/u.test(id)) { throw new TypeError('Invalid semantic classification ID'); }
+		const superType = allowSuperType && source.superType !== undefined ? requiredString(source.superType, 'Semantic super type', 128) : undefined;
+		if (superType && !/^[A-Za-z][\w]*$/u.test(superType)) { throw new TypeError('Invalid semantic super type'); }
+		return { id, description: requiredString(source.description, 'Semantic classification description', 1024), ...(superType ? { superType } : {}) };
+	});
+}
+
+function parseSemanticScopes(value: unknown): readonly SemanticTokenScopeContribution[] {
+	if (value === undefined) { return []; }
+	if (!Array.isArray(value) || value.length > 512) { throw new TypeError('Semantic token scopes must be an array of up to 512 contributions'); }
+	return value.map(candidate => {
+		const source = record(candidate, 'Semantic token scopes');
+		const language = source.language === undefined ? undefined : languageId(source.language, 'Semantic token language');
+		const scopes = Object.fromEntries(Object.entries(record(source.scopes, 'Semantic token scopes')).map(([selector, mapping]) => {
+			getTokenClassificationRegistry().parseTokenSelector(selector, language);
+			const values = parseTextList(mapping, 'Semantic token scope mappings');
+			if (values.some(value => !/^[A-Za-z0-9_.+*-]+(?: [A-Za-z0-9_.+*-]+)*$/u.test(value))) { throw new TypeError('Invalid semantic token scope mapping'); }
+			return [selector, values];
+		}));
+		return { ...(language ? { language } : {}), scopes };
+	});
+}
+
+function parseIcons(value: unknown): readonly ExtensionIconContribution[] {
+	if (value === undefined) { return []; }
+	const icons = Object.entries(record(value, 'Extension icons'));
+	if (icons.length > 512) { throw new RangeError('Extension has too many icons'); }
+	return icons.map(([id, candidate]) => {
+		if (!/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+$/u.test(id)) { throw new TypeError('Invalid contributed icon ID'); }
+		const icon = record(candidate, 'Extension icon');
+		const description = requiredString(icon.description, 'Icon description', 1024);
+		if (typeof icon.default === 'string') {
+			if (!/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/u.test(icon.default)) { throw new TypeError('Invalid icon reference'); }
+			return { id, description, defaults: icon.default };
+		}
+		const defaults = record(icon.default, 'Icon default');
+		const fontPath = normalizeResourcePath(defaults.fontPath, 'Icon font path');
+		if (!/\.(?:woff2?|ttf|otf)$/iu.test(fontPath)) { throw new TypeError('Unsupported icon font'); }
+		const fontCharacter = requiredString(defaults.fontCharacter, 'Icon font character', 16);
+		if (!/^(?:\\[\da-f]{1,6}|[^\\])$/iu.test(fontCharacter)) { throw new TypeError('Invalid icon font character'); }
+		return { id, description, defaults: { fontPath, fontCharacter } };
+	});
 }

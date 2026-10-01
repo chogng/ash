@@ -1,3 +1,4 @@
+import type { IconFontDefinition } from './iconRegistry.js';
 import type { Event } from "../../../base/common/event.js";
 import type { IconDefinition } from "../../../base/common/icon.js";
 import type { Color } from "../../../base/common/color.js";
@@ -11,18 +12,25 @@ import type { ColorScheme } from "./theme.js";
 
 export type ThemeColors = Readonly<Record<ColorIdentifier, string>>;
 
+export interface ITokenStyle {
+	readonly foreground?: number;
+	readonly bold?: boolean;
+	readonly italic?: boolean;
+	readonly underline?: boolean;
+	readonly strikethrough?: boolean;
+}
+
 export interface ISemanticTokenThemeRule {
+	readonly bold?: boolean;
+	readonly italic?: boolean;
+	readonly underline?: boolean;
+	readonly strikethrough?: boolean;
 	readonly selector: string;
 	readonly type: string;
 	readonly modifiers: readonly string[];
 	readonly language?: string;
 	readonly foreground?: string;
 	readonly fontStyle?: string;
-}
-
-/** Matches the semantic selector ordering used by editor CSS and GPU glyph styling. */
-export function semanticTokenRuleSpecificity(rule: ISemanticTokenThemeRule): number {
-	return Number(rule.type !== '*') + rule.modifiers.length + Number(rule.language !== undefined);
 }
 
 /** Resolved color and size values exposed to editor and Workbench consumers. */
@@ -39,7 +47,10 @@ export interface IColorTheme {
 	readonly colors: ThemeColors;
 	readonly colorEntries: readonly ResolvedColorContribution[];
 	readonly sizeEntries: readonly SizeContribution[];
-	getColor(id: ColorIdentifier): Color | undefined;
+	readonly tokenColorMap: readonly string[];
+	getTokenStyleMetadata(type: string, modifiers: readonly string[], modelLanguage: string): ITokenStyle | undefined;
+	defines(id: ColorIdentifier): boolean;
+	getColor(id: ColorIdentifier, useDefault?: boolean): Color | undefined;
 	getColorCss(id: ColorIdentifier): string | undefined;
 	getSize(id: string): SizeValue | undefined;
 }
@@ -49,6 +60,7 @@ export interface IProductIconTheme {
 	readonly id: string;
 	readonly label: string;
 	readonly icons: ReadonlyMap<string, IconDefinition>;
+	readonly fonts?: readonly IconFontDefinition[];
 }
 
 export const defaultProductIconTheme: IProductIconTheme = Object.freeze({ id: 'default', label: 'Default', icons: new Map() });

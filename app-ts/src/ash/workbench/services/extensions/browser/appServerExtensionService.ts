@@ -1,7 +1,13 @@
+import { ColorExtensionPoint } from '../../themes/common/colorExtensionPoint.js';
+import { IconExtensionPoint } from '../../themes/common/iconExtensionPoint.js';
+import { TokenClassificationExtensionPoint, type SemanticTokenScopeContribution } from '../../themes/common/tokenClassificationExtensionPoint.js';
+import type { ColorContribution } from '../../../../platform/theme/common/colorRegistry.js';
+import type { IconContribution, IconFontDefinition } from '../../../../platform/theme/common/iconRegistry.js';
+import type { TokenTypeOrModifierContribution } from '../../../../platform/theme/common/tokenClassificationRegistry.js';
 import { WorkbenchFileIconThemesRegistry, WorkbenchProductIconThemesRegistry } from '../../themes/common/themeExtensionPoints.js';
 import type { IWorkbenchFileIconTheme, IWorkbenchProductIconTheme } from '../../themes/common/workbenchThemeService.js';
 import { FileIconThemeData } from '../../themes/browser/fileIconThemeData.js';
-import { ProductIconThemeData } from '../../themes/browser/productIconThemeData.js';
+import { ProductIconThemeData, loadExtensionFontIcon } from '../../themes/browser/productIconThemeData.js';
 import { Emitter, runWithBufferedEvents, type Event } from "../../../../base/common/event.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type LanguageCompletionProvider, type LanguageCompletionProviderRegistration } from '../../../../editor/common/languages.js';
@@ -47,6 +53,10 @@ interface LanguageConfigurationContribution {
 
 /** Loads Rust-discovered declarative extensions and projects their grammar contributions into TextMate. */
 export class AppServerExtensionService extends Disposable implements IExtensionService {
+	private readonly colorContributions = this._register(new ColorExtensionPoint());
+	private readonly iconContributions = this._register(new IconExtensionPoint());
+	private readonly tokenContributions = this._register(new TokenClassificationExtensionPoint());
+	private activeThemeContributions: ThemeContributions = { colors: [], icons: [], fonts: [], types: [], modifiers: [], scopes: [] };
 	private readonly changeEmitter = this._register(new Emitter<ExtensionCatalog>());
 	private readonly failureEmitter = this._register(new Emitter<ExtensionServiceFailure>());
 	private catalog: ExtensionCatalog = Object.freeze({
@@ -168,6 +178,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	}
 
 	private async loadAndRegister(): Promise<void> {
+		const themeContributions: ThemeContributions = { colors: [], icons: [], fonts: [], types: [], modifiers: [], scopes: [] };
 		const languages: LanguageDescriptionContribution[] = [];
 		const languageConfigurations: LanguageConfigurationContribution[] = [];
 		const completionProviders: LanguageCompletionProvider[] = [];
@@ -191,6 +202,19 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				await verifyExtensionManifestDigest(extension);
 				if (this.isDisposed) return;
 				const manifest = parseExtensionManifest(extension.manifestJson, extension);
+				themeContributions.colors.push(...manifest.contributes.colors);
+				themeContributions.types.push(...manifest.contributes.semanticTokenTypes);
+				themeContributions.modifiers.push(...manifest.contributes.semanticTokenModifiers);
+				themeContributions.scopes.push(...manifest.contributes.semanticTokenScopes);
+				for (const icon of manifest.contributes.icons) {
+					if (typeof icon.defaults === 'string') { themeContributions.icons.push({ id: icon.id, description: icon.description, defaults: { id: icon.defaults } }); }
+					else {
+						const loaded = await loadExtensionFontIcon(extension.id + '.' + icon.id, icon.defaults.fontPath, icon.defaults.fontCharacter, path => this.loadResource(resources, catalog.generation, extension.id, path));
+						if (this.isDisposed) { return; }
+						themeContributions.icons.push({ id: icon.id, description: icon.description, defaults: loaded.icon });
+						themeContributions.fonts.push(loaded.font);
+					}
+				}
 				if ((manifest.contributes.languages.length > 0 || manifest.contributes.snippets.length > 0) && !this.options.languageService) {
 					throw new Error(`Extension '${extension.id}' contributes language features but no editor language service is available`);
 				}
@@ -281,7 +305,8 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			try {
 				runWithBufferedEvents(() => {
 					preparedGrammars.commit();
-					this.replaceContributions(languages, languageConfigurations, completionProviders, themes, workbenchThemes, fileTemplates, debugAdapters, debugAdapterFactories, fileIconThemes, productIconThemes);
+					this.replaceContributions(languages, languageConfigurations, completionProviders, themes, workbenchThemes, fileTemplates, debugAdapters, debugAdapterFactories, fileIconThemes, productIconThemes, themeContributions);
+					this.activeThemeContributions = themeContributions;
 					this.activeGrammars = Object.freeze([...grammars]);
 					this.activeLanguages = Object.freeze([...languages]);
 					this.activeLanguageConfigurations = Object.freeze([...languageConfigurations]);
@@ -304,11 +329,12 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		}
 	}
 
-	private replaceContributions(languages: readonly LanguageDescriptionContribution[], languageConfigurations: readonly LanguageConfigurationContribution[], completionProviders: readonly LanguageCompletionProvider[], themes: readonly ExtensionThemeDefinition[], workbenchThemes: readonly IColorTheme[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[], debugAdapterFactories: readonly DebugAdapterFactory[], fileIconThemes: readonly IWorkbenchFileIconTheme[], productIconThemes: readonly IWorkbenchProductIconTheme[]): void {
+	private replaceContributions(languages: readonly LanguageDescriptionContribution[], languageConfigurations: readonly LanguageConfigurationContribution[], completionProviders: readonly LanguageCompletionProvider[], themes: readonly ExtensionThemeDefinition[], workbenchThemes: readonly IColorTheme[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[], debugAdapterFactories: readonly DebugAdapterFactory[], fileIconThemes: readonly IWorkbenchFileIconTheme[], productIconThemes: readonly IWorkbenchProductIconTheme[], themeContributions: ThemeContributions): void {
 		const previousThemes = this.themeRegistry.currentCatalog.themes;
 		const previousFileTemplates = this.fileTemplateRegistry.currentCatalog.templates;
 		const previousDebugAdapters = this.debugAdapterRegistry.definitions;
 		try {
+			this.replaceThemeContributions(themeContributions);
 			this.languageRegistration?.replace(languages);
 			this.replaceLanguageConfigurations(languageConfigurations);
 			this.completionRegistration?.replace(completionProviders);
@@ -321,6 +347,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			this.productIconRegistration.replace(productIconThemes);
 		} catch (error) {
 			try {
+				this.replaceThemeContributions(this.activeThemeContributions);
 				this.languageRegistration?.replace(this.activeLanguages);
 				this.replaceLanguageConfigurations(this.activeLanguageConfigurations);
 				this.completionRegistration?.replace(this.activeCompletionProviders);
@@ -336,6 +363,12 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			}
 			throw error;
 		}
+	}
+
+	private replaceThemeContributions(contributions: ThemeContributions): void {
+		this.colorContributions.replace(contributions.colors);
+		this.tokenContributions.replace(contributions.types, contributions.modifiers, contributions.scopes);
+		this.iconContributions.replace(contributions.icons, contributions.fonts);
 	}
 
 	private replaceLanguageConfigurations(contributions: readonly LanguageConfigurationContribution[]): void {
@@ -442,4 +475,13 @@ function projectExtensionDescriptor(extension: TransportExtensionDescriptor): Ex
 		manifestSha256: extension.manifestSha256,
 		packageSha256: extension.packageSha256,
 	});
+}
+
+interface ThemeContributions {
+	readonly colors: ColorContribution[];
+	readonly icons: IconContribution[];
+	readonly fonts: IconFontDefinition[];
+	readonly types: TokenTypeOrModifierContribution[];
+	readonly modifiers: TokenTypeOrModifierContribution[];
+	readonly scopes: SemanticTokenScopeContribution[];
 }

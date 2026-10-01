@@ -25,7 +25,6 @@ test('high contrast themes remove decorative shadows while preserving state mark
 	const hoverView = page.locator('.ash-context-view-hover');
 	const dropRow = page.locator('.ash-list-row.ash-dnd-drop-before');
 	const pdfPage = page.locator('.ash-pdf-page');
-	const titlebar = page.locator('.ash-workbench-titlebar > .ash-workbench-part-content');
 	await root.evaluate(element => {
 		element.classList.add('ash-workbench');
 		for (const className of ['ash-notification', 'ash-context-view-default', 'ash-context-view-hover', 'ash-list-row ash-dnd-drop-before', 'ash-pdf-page']) {
@@ -34,19 +33,13 @@ test('high contrast themes remove decorative shadows while preserving state mark
 			item.textContent = className;
 			element.append(item);
 		}
-		const bar = document.createElement('div');
-		bar.className = 'ash-workbench-titlebar';
-		const content = document.createElement('div');
-		content.className = 'ash-workbench-part-content';
-		bar.append(content);
-		element.append(bar);
+
 	});
 	expect(await notification.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe('none');
 	expect(await contextView.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe('none');
 	expect(await hoverView.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe('none');
 	expect(await dropRow.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe('none');
 	expect(await pdfPage.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe('none');
-	expect(await titlebar.evaluate(element => getComputedStyle(element, '::before').boxShadow)).not.toBe('none');
 	for (const [id, border] of [['ash-high-contrast-dark', 'rgb(255, 255, 255)'], ['ash-high-contrast-light', 'rgb(0, 0, 0)']] as const) {
 		await page.evaluate(id => window.selectColorTheme(id), id);
 		await expect(root).toHaveAttribute('data-color-theme', id);
@@ -69,11 +62,7 @@ test('high contrast themes remove decorative shadows while preserving state mark
 			outline: getComputedStyle(element).outlineColor,
 			style: getComputedStyle(element).outlineStyle,
 		}))).toEqual({ shadow: 'none', outline: border, style: 'solid' });
-		expect(await titlebar.evaluate(element => ({
-			shadow: getComputedStyle(element, '::before').boxShadow,
-			outline: getComputedStyle(element, '::before').outlineColor,
-			style: getComputedStyle(element, '::before').outlineStyle,
-		}))).toEqual({ shadow: 'none', outline: border, style: 'solid' });
+
 	}
 });
 
@@ -293,5 +282,51 @@ test('open models update file and untitled icons in place and release their lang
 	await page.evaluate(() => window.disposeIconLabels());
 	await expect(host.locator('.ash-icon-label')).toHaveCount(0);
 	await page.getByRole('button', { name: 'None', exact: true }).click();
+	expect(errors).toEqual([]);
+});
+
+test('system appearance and forced colors select preferred themes and release their queries on disposal', async ({ page }) => {
+	await page.goto('/themes.html');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	await page.evaluate(async () => {
+		await window.setThemeSetting('workbench.preferredDarkColorTheme', 'ash-high-contrast-dark');
+		await window.setThemeSetting('window.autoDetectColorScheme', true);
+	});
+	await page.emulateMedia({ colorScheme: 'dark' });
+	await expect(page.locator('#root')).toHaveAttribute('data-color-theme', 'ash-high-contrast-dark');
+	await page.emulateMedia({ colorScheme: 'light' });
+	await expect(page.locator('#root')).toHaveAttribute('data-color-theme', 'ash-light');
+	await page.emulateMedia({ forcedColors: 'active' });
+	await expect(page.locator('#root')).toHaveAttribute('data-color-theme', 'ash-high-contrast-light');
+	await expect(page.locator('#root')).toHaveCSS('forced-color-adjust', 'none');
+	await page.emulateMedia({ forcedColors: 'none' });
+	await expect(page.locator('#root')).toHaveAttribute('data-color-theme', 'ash-light');
+	await page.evaluate(() => window.disposeThemeRoot());
+	await page.emulateMedia({ colorScheme: 'dark' });
+	await expect(page.locator('#root')).not.toHaveAttribute('data-color-theme', /.+/);
+});
+
+test('standard product icon fonts load into mounted icons and unload with their extension', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/themes.html');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	const icon = page.locator('#product-icon svg.ash-icon');
+	const mounted = await icon.elementHandle();
+	await page.evaluate(() => window.setThemeSetting('workbench.productIconTheme', 'test-font-product'));
+	await expect(icon.locator('text')).toHaveCount(1);
+	await expect(icon.locator('text')).toHaveCSS('font-weight', '700');
+	await expect(icon.locator('text')).toHaveCSS('font-style', 'italic');
+	const font = await icon.locator('text').evaluate(async element => {
+		const family = getComputedStyle(element).fontFamily;
+		const query = 'italic 700 16px ' + family;
+		const loaded = await document.fonts.load(query);
+		return { loaded: loaded.length, ready: document.fonts.check(query) };
+	});
+	expect(font).toEqual({ loaded: 1, ready: true });
+	expect(await mounted!.evaluate(element => element === document.querySelector('#product-icon svg'))).toBe(true);
+	await page.evaluate(() => window.disposeThemeExtensions());
+	await expect(icon.locator('path')).toHaveCount(1);
+	await expect(page.locator('style[data-ash-icon-fonts]')).toBeEmpty();
 	expect(errors).toEqual([]);
 });

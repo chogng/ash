@@ -19,7 +19,8 @@ test('desktop dialog and shell routes reject malformed requests', async () => {
 		openWindow: async options => { operations.push(options); },
 		openAgentsWindow: async options => { operations.push(options ?? 'openAgentsWindow'); },
 		revealFile: () => {},
-		saveFile: async () => undefined, isAccessibilitySupportEnabled: () => false,
+		saveFile: async () => undefined, getOSColorScheme: () => ({ dark: false, highContrast: false }),
+		isAccessibilitySupportEnabled: () => false,
 		setWindowTheme: () => {}, setWindowDimmed: () => {}, toggleDeveloperTools: () => {},
 		syncSystemWideKeybindings: () => ({ failed: [] }),
 	});
@@ -89,6 +90,8 @@ test('desktop window commands reach the window host', async () => {
 		setWindowDimmed: async () => {},
 		toggleDeveloperTools: async () => {},
 		saveFile: async () => undefined,
+		getOSColorScheme: async () => ({ dark: false, highContrast: false }),
+		onDidChangeColorScheme: () => ({ dispose() {} }),
 		isAccessibilitySupportEnabled: async () => false,
 		onDidChangeAccessibilitySupport: () => ({ dispose() {} }),
 	});

@@ -6,7 +6,7 @@ Desktop 用户主题与根部 [extensions/theme-defaults](../extensions/theme-de
 
 内置扩展随根部 extensions 打包到 ash-resources/extensions，由扩展服务加载。用户文件留在当前 Desktop profile 的 themes/*.json，不写入仓库扩展目录。默认 profile 为用户主目录下的 .ash，ASH_HOME 可覆盖；ASH_DEVICE_ROOT 可覆盖设备资源根目录。
 
-将以下内容保存为 themes/aurora.json，完全重启 Desktop 后加载：
+将以下内容保存为 themes/aurora.json，Desktop 会自动加载并监听更改：
 
 ```json
 {
@@ -37,9 +37,44 @@ Desktop 用户主题与根部 [extensions/theme-defaults](../extensions/theme-de
 
 文件不接受颜色别名和变换对象。注册表内部仍可使用这些能力；导出时转换成具体颜色。未覆盖颜色由对应明暗注册表默认值补齐。Schema 由主题服务注册，颜色提示从当前颜色注册表生成。
 
-当前支持自包含主题；include 和外部 tokenColors 文件不在加载契约内。semanticHighlighting 与 semanticTokenColors 可用于标准文档校验，现有语义高亮消费能力不因本次格式迁移扩大。
+支持相对路径的 include 和外部 TextMate tokenColors 文件；引用必须留在主题目录或扩展包内，循环引用会被拒绝。semanticHighlighting 控制主题是否默认启用语义颜色，semanticTokenColors 支持类型、修饰符和语言选择器。DOM 与 GPU 使用同一套解析结果；每项颜色和字体标志分别继承，false 清除对应字体标志。
 
-每个文件最大 1 MiB，目录最多读取 128 个常规 JSON 文件，不跟随符号链接。加载失败逐文件报告。服务内保存和重新加载会更新注册，并立即更新使用该主题的工作台；外部编辑后需要重启。替换和删除要求文件内容仍与读取时一致，冲突时拒绝覆盖。
+每个文件最大 1 MiB，目录最多读取 128 个常规 JSON 文件，不跟随符号链接。加载失败逐文件报告。服务内保存和重新加载会更新注册，并立即更新使用该主题的工作台；外部编辑会自动重新加载。替换和删除要求文件内容仍与读取时一致，冲突时拒绝覆盖。
+
+## 覆盖配置与系统外观
+
+配置保存在 Desktop profile 的 settings.json，支持注释和尾随逗号。主题服务负责选择主题、解析主题资源和应用覆盖；编辑器消费最终颜色与 token 样式。
+
+| 设置 | 内容 |
+| --- | --- |
+| workbench.colorCustomizations | 界面颜色，包括 editor.selectionBackground、editor.inactiveSelectionBackground 和 editor.selectionForeground；default 恢复注册表默认值 |
+| editor.tokenColorCustomizations | comments、strings 等语法分组，以及 textMateRules |
+| editor.semanticTokenColorCustomizations | enabled 和 rules；规则可分别覆盖 foreground、bold、italic、underline、strikethrough |
+| window.autoDetectColorScheme | 根据系统外观使用首选浅色或深色主题 |
+| window.autoDetectHighContrast | 系统开启高对比度时使用首选高对比度主题 |
+| workbench.preferred*ColorTheme | 分别指定浅色、深色、高对比度浅色、高对比度深色的主题 |
+
+三个覆盖设置都支持以主题显示名称或 ID 编写的方括号块，也支持通配符和多个名称，例如 "[Ash Dark][Ash Light]"。匹配块按声明顺序覆盖全局配置，未指定的属性继续继承。TextMate 规则按 scope 的具体程度逐项匹配，相同具体程度时后声明的值生效；无 scope 的规则提供全局 token 样式。
+
+```json
+{
+  "workbench.colorCustomizations": {
+    "editor.selectionBackground": "#264f78",
+    "[Ash Light]": { "editor.selectionBackground": "#add6ff" }
+  },
+  "editor.tokenColorCustomizations": {
+    "comments": { "foreground": "#8899aa", "fontStyle": "italic" }
+  },
+  "editor.semanticTokenColorCustomizations": {
+    "enabled": true,
+    "rules": { "variable.readonly": { "bold": false } }
+  }
+}
+```
+
+主题配置不接受语言覆盖块。自动外观开启时，颜色主题选择命令修改当前系统外观对应的首选主题。Browser 监听媒体查询；Electron 从 Main 读取系统配色并订阅变化。Main 保存最近的窗口背景色，在下一次创建窗口时使用。
+
+扩展清单可贡献 colors、semanticTokenTypes、semanticTokenModifiers、semanticTokenScopes 和 icons。注册随扩展目录的更新一起替换，卸载后撤销；校验失败保留此前有效的目录。产品图标主题支持标准 fonts/fontCharacter/fontId，也支持 SVG iconPath；字体来自扩展包内的资源，样式表随主题切换和卸载更新。颜色、文件图标和产品图标 Schema 从当前注册表提供提示。
 
 ## 旧 Desktop 文件
 

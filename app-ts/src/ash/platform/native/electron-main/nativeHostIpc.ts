@@ -1,7 +1,9 @@
+import type { IColorScheme } from '../../window/common/window.js';
 import type {
 	IpcRoute,
 } from "../../ipc/electron-main/trustedIpcRouter.js";
 import {
+	NATIVE_HOST_GET_COLOR_SCHEME_CHANNEL,
 	NATIVE_HOST_PICK_FOLDER_CHANNEL,
 	NATIVE_HOST_PICK_FILE_CHANNEL,
 	NATIVE_HOST_OPEN_WORKSPACE_CHANNEL,
@@ -53,6 +55,7 @@ export interface INativeHostMainService {
 	revealFile(path: string): void;
 	saveFile(options: INativeSaveFileOptions): Promise<string | undefined>;
 	isAccessibilitySupportEnabled(): boolean;
+	getOSColorScheme(): IColorScheme;
 	setWindowTheme(theme: INativeWindowTheme): void;
 	setWindowDimmed(dimmed: boolean): void;
 	toggleDeveloperTools(): void;
@@ -129,8 +132,13 @@ export function nativeHostIpcRoutes(
 }
 
 /** Window appearance is available to every Electron renderer, including Sessions. */
-export function windowAppearanceIpcRoutes(service: Pick<INativeHostMainService, 'setWindowTheme' | 'setWindowDimmed'>): readonly IpcRoute<unknown, unknown>[] {
+export function windowAppearanceIpcRoutes(service: Pick<INativeHostMainService, 'setWindowTheme' | 'setWindowDimmed' | 'getOSColorScheme'>): readonly IpcRoute<unknown, unknown>[] {
 	return [
+		{
+			channel: NATIVE_HOST_GET_COLOR_SCHEME_CHANNEL,
+			validate: value => { if (value !== undefined) { throw new TypeError('System color scheme read takes no arguments'); } return undefined; },
+			invoke: () => service.getOSColorScheme(),
+		},
 		{
 			channel: NATIVE_HOST_SET_WINDOW_THEME_CHANNEL,
 			validate: validateNativeWindowTheme,

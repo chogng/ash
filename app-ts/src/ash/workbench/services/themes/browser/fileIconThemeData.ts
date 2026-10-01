@@ -1,3 +1,4 @@
+import { ColorScheme, isDarkColorScheme } from '../../../../platform/theme/common/theme.js';
 import type { FileIconDefinition, IWorkbenchFileIconTheme } from '../common/workbenchThemeService.js';
 import { fileIconSelectorEscape, getIconClassesForLanguageId } from '../../../../editor/common/services/getIconClasses.js';
 
@@ -19,16 +20,17 @@ export class FileIconThemeData implements IWorkbenchFileIconTheme {
 		private readonly icons: ReadonlyMap<string, FileIconDefinition>,
 		private readonly normal: Associations,
 		private readonly light: Associations,
+		private readonly highContrast: Associations,
 		public readonly hidesExplorerArrows: boolean,
 	) {
-		this.hasFileIcons = [normal, light].some(associations => associations.file !== undefined || [...associations.selectors.keys()].some(selector => selector.endsWith('-file-icon')));
-		this.hasFolderIcons = [normal, light].some(associations => associations.folder !== undefined || associations.rootFolder !== undefined || [...associations.selectors.keys()].some(selector => selector.endsWith('-folder-icon')));
+		this.hasFileIcons = [normal, light, highContrast].some(associations => associations.file !== undefined || [...associations.selectors.keys()].some(selector => selector.endsWith('-file-icon')));
+		this.hasFolderIcons = [normal, light, highContrast].some(associations => associations.folder !== undefined || associations.rootFolder !== undefined || [...associations.selectors.keys()].some(selector => selector.endsWith('-folder-icon')));
 	}
 
 	public static async load(id: string, label: string, value: unknown, readResource: (path: string) => Promise<Uint8Array>): Promise<FileIconThemeData> {
 		const document = record(value);
 		if (document.hidesExplorerArrows !== undefined && typeof document.hidesExplorerArrows !== 'boolean') { throw new Error('hidesExplorerArrows must be a boolean'); }
-		const fonts = new Map<string, { family: string; size: string }>();
+		const fonts = new Map<string, { family: string; size: string; weight: string; style: string }>();
 		const styles: string[] = [];
 		if (document.fonts !== undefined && !Array.isArray(document.fonts)) { throw new Error('Icon fonts must be an array'); }
 		for (const [index, candidate] of ((document.fonts ?? []) as unknown[]).entries()) {
@@ -46,8 +48,11 @@ export class FileIconThemeData implements IWorkbenchFileIconTheme {
 				sources.push('url("' + data + '") format("' + format + '")');
 			}
 			const size = font.size === undefined ? '100%' : fontSize(font.size);
-			fonts.set(fontId, { family, size });
-			styles.push('@font-face{font-family:"' + family + '";src:' + sources.join(',') + ';font-display:block;}');
+			const weight = font.weight === undefined ? 'normal' : text(font.weight);
+			const style = font.style === undefined ? 'normal' : text(font.style);
+			if (!/^(?:normal|bold|[1-9]00)$/.test(weight) || !['normal', 'italic', 'oblique'].includes(style)) { throw new Error('Invalid icon font weight or style'); }
+			fonts.set(fontId, { family, size, weight, style });
+			styles.push('@font-face{font-family:"' + family + '";src:' + sources.join(',') + ';font-weight:' + weight + ';font-style:' + style + ';font-display:block;}');
 		}
 		const icons = new Map<string, FileIconDefinition>();
 		for (const [key, candidate] of Object.entries(record(document.iconDefinitions))) {
@@ -68,16 +73,18 @@ export class FileIconThemeData implements IWorkbenchFileIconTheme {
 			const escape = /^\\([0-9a-f]{1,6})$/i.exec(character);
 			icons.set(key, Object.freeze({
 				character: escape ? String.fromCodePoint(parseInt(escape[1]!, 16)) : character,
+				fontWeight: font?.weight ?? 'normal', fontStyle: font?.style ?? 'normal',
 				color, fontFamily: font?.family ?? '', fontSize: definition.fontSize === undefined ? font?.size ?? '100%' : fontSize(definition.fontSize), image,
 			}));
 		}
 		const normal = associations(document, icons);
 		const light = associations(document.light ?? {}, icons);
-		styles.push(...suggestionStyles(icons, normal, light));
-		return new FileIconThemeData(id, label, styles.join('\n'), icons, normal, light, document.hidesExplorerArrows === true);
+		const highContrast = associations(document.highContrast ?? {}, icons);
+		styles.push(...suggestionStyles(icons, normal, light, highContrast));
+		return new FileIconThemeData(id, label, styles.join('\n'), icons, normal, light, highContrast, document.hidesExplorerArrows === true);
 	}
 
-	public resolveFileIcon(classes: readonly string[], dark: boolean): FileIconDefinition | undefined {
+	public resolveFileIcon(classes: readonly string[], colorScheme: ColorScheme): FileIconDefinition | undefined {
 		const specific = (associations: Associations): string | undefined => {
 			for (const className of classes) {
 				const match = associations.selectors.get(className);
@@ -88,7 +95,10 @@ export class FileIconThemeData implements IWorkbenchFileIconTheme {
 		const fallback = (associations: Associations): string | undefined =>
 			classes.includes('rootfolder-icon') ? associations.rootFolder ?? associations.folder :
 			classes.includes('folder-icon') ? associations.folder : associations.file;
-		const icon = dark ? specific(this.normal) ?? fallback(this.normal) : specific(this.light) ?? specific(this.normal) ?? fallback(this.light) ?? fallback(this.normal);
+		const dark = isDarkColorScheme(colorScheme);
+		const contrast = colorScheme === ColorScheme.HighContrastDark || colorScheme === ColorScheme.HighContrastLight;
+		const ordinary = dark ? specific(this.normal) ?? fallback(this.normal) : specific(this.light) ?? specific(this.normal) ?? fallback(this.light) ?? fallback(this.normal);
+		const icon = contrast ? specific(this.highContrast) ?? (dark ? specific(this.normal) : specific(this.light) ?? specific(this.normal)) ?? fallback(this.highContrast) ?? ordinary : ordinary;
 		return icon === undefined ? undefined : this.icons.get(icon);
 	}
 }
@@ -144,7 +154,7 @@ function associations(value: unknown, icons: ReadonlyMap<string, FileIconDefinit
 	};
 }
 
-function suggestionStyles(icons: ReadonlyMap<string, FileIconDefinition>, normal: Associations, light: Associations): string[] {
+function suggestionStyles(icons: ReadonlyMap<string, FileIconDefinition>, normal: Associations, light: Associations, highContrast: Associations): string[] {
 	const styles: string[] = [];
 	const add = (selector: string, iconId: string | undefined): void => {
 		if (!iconId) return;
@@ -153,10 +163,11 @@ function suggestionStyles(icons: ReadonlyMap<string, FileIconDefinition>, normal
 		const common = 'display:inline-block;width:16px;height:16px;vertical-align:middle;';
 		styles.push(icon.image
 			? `${selector}::before{${common}content:"";background:url(${cssString(icon.image)}) center/contain no-repeat;}`
-			: `${selector}::before{${common}content:${cssString(icon.character)};color:${icon.color || 'inherit'};font-family:${cssString(icon.fontFamily)};font-size:${icon.fontSize};line-height:16px;}`);
+			: `${selector}::before{${common}content:${cssString(icon.character)};color:${icon.color || 'inherit'};font-family:${cssString(icon.fontFamily)};font-size:${icon.fontSize};font-weight:${icon.fontWeight};font-style:${icon.fontStyle};line-height:16px;}`);
 	};
 	const base = ':where(.ash-workbench) .ash-themed-file-icon';
 	const lightBase = ':where(.ash-workbench[data-color-scheme="light"],.ash-workbench[data-color-scheme="high-contrast-light"]) .ash-themed-file-icon';
+	const contrastBase = ':where(.ash-workbench[data-color-scheme="high-contrast-dark"],.ash-workbench[data-color-scheme="high-contrast-light"]) .ash-themed-file-icon';
 	const defaults = (prefix: string, associations: Associations): void => {
 		add(`${prefix}.file-icon`, associations.file);
 		add(`${prefix}.folder-icon`, associations.folder);
@@ -173,8 +184,10 @@ function suggestionStyles(icons: ReadonlyMap<string, FileIconDefinition>, normal
 	// light-specific matches then win over normal matches at the same specificity.
 	defaults(base, normal);
 	defaults(lightBase, light);
+	defaults(contrastBase, highContrast);
 	specifics(base, normal);
 	specifics(lightBase, light);
+	specifics(contrastBase, highContrast);
 	return styles;
 }
 

@@ -1,5 +1,7 @@
+import { IconsStyleSheet } from '../../../../platform/theme/browser/iconsStyleSheet.js';
+import { IHostColorSchemeService } from '../common/hostColorSchemeService.js';
 import { WorkbenchFileIconThemesRegistry, WorkbenchProductIconThemesRegistry } from '../common/themeExtensionPoints.js';
-import type { IWorkbenchFileIconTheme } from '../common/workbenchThemeService.js';
+import type { IWorkbenchFileIconTheme, IWorkbenchThemeService } from '../common/workbenchThemeService.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { setIconResolver } from '../../../../base/browser/ui/lxicons/lxicon.js';
@@ -12,10 +14,11 @@ import { getIconClasses } from '../../../../editor/common/services/getIconClasse
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { FileKind, FileNotFoundError, FileRevisionConflictError, IFileService, type IFileContent } from '../../../../platform/files/common/files.js';
 import { type IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { getTokenClassificationRegistry } from '../../../../platform/theme/common/tokenClassificationRegistry.js';
 import { Colors } from '../../../../platform/theme/common/colorRegistry.js';
-import { createColorTheme } from '../../../../platform/theme/common/colorTheme.js';
-import { noFileIconTheme, defaultProductIconTheme, semanticTokenRuleSpecificity, type IFileIconTheme, type IColorTheme, type IProductIconTheme, type IThemeService } from '../../../../platform/theme/common/themeService.js';
-import { getIconDefinition } from '../../../../platform/theme/common/iconRegistry.js';
+import { applyThemeCustomizations, ThemeConfigurationSettings } from '../common/themeConfiguration.js';
+import { noFileIconTheme, defaultProductIconTheme, type IFileIconTheme, type IColorTheme, type IProductIconTheme, type IThemeService } from '../../../../platform/theme/common/themeService.js';
+import { getIconDefinition, getIconRegistry } from '../../../../platform/theme/common/iconRegistry.js';
 import { bindColorTheme } from '../../../../platform/theme/browser/themeStyles.js';
 import type { IResourceIconRenderer } from '../../../browser/labels.js';
 import { isDarkColorScheme } from '../../../../platform/theme/common/theme.js';
@@ -27,9 +30,8 @@ import { migrateUserTheme } from '../common/themeMigration.js';
 import { registerColorThemeSchemas } from '../common/colorThemeSchema.js';
 
 /** Owns active theme selection and its window-scoped visual resources. */
-export class WorkbenchThemeService extends Disposable implements IThemeService, IResourceIconRenderer {
+export class WorkbenchThemeService extends Disposable implements IWorkbenchThemeService, IResourceIconRenderer {
 	private readonly colorThemeChange = this._register(new Emitter<IColorTheme>());
-	private readonly systemDarkQuery: MediaQueryList;
 	private colorTheme: IColorTheme;
 	private initialized = false;
 	public readonly onDidColorThemeChange = this.colorThemeChange.event;
@@ -42,19 +44,14 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 	private readonly productIconThemeChange = this._register(new Emitter<IProductIconTheme>());
 	public readonly onDidProductIconThemeChange = this.productIconThemeChange.event;
 	private iconStyles: HTMLStyleElement | undefined;
-	private semanticStyles: HTMLStyleElement | undefined;
 
 	constructor(
 		private readonly container: HTMLElement,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@ILanguageService private readonly languageService: ILanguageService,
+		@IHostColorSchemeService private readonly hostColorScheme: IHostColorSchemeService,
 	) {
 		super();
-		const ownerWindow = container.ownerDocument.defaultView;
-		if (!ownerWindow) {
-			throw new Error('Workbench themes require an owner window');
-		}
-		this.systemDarkQuery = ownerWindow.matchMedia('(prefers-color-scheme: dark)');
 		this.colorTheme = this.resolveColorTheme();
 	}
 
@@ -64,25 +61,23 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 			throw new Error('Workbench themes are already initialized');
 		}
 		this.initialized = true;
+		this._register(new IconsStyleSheet(this.container.ownerDocument, this));
 		const iconStyles = this.container.ownerDocument.createElement('style');
 		this.container.ownerDocument.head.append(iconStyles);
 		this.iconStyles = iconStyles;
 		this._register(toDisposable(() => iconStyles.remove()));
-		const semanticStyles = this.container.ownerDocument.createElement('style');
-		this.container.ownerDocument.head.append(semanticStyles);
-		this.semanticStyles = semanticStyles;
-		this._register(toDisposable(() => semanticStyles.remove()));
 		this._register(registerColorThemeSchemas());
 		this._register(this.configurationService.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(WorkbenchConfiguration.colorTheme) || event.affectsConfiguration(WorkbenchConfiguration.colorCustomizations)) {
+			if (Object.values(ThemeConfigurationSettings).some(key => event.affectsConfiguration(key))) {
 				this.updateColorTheme();
 			}
-			if (event.affectsConfiguration(EditorSemanticHighlightingConfiguration)) { this.updateSemanticStyles(); }
+			if (event.affectsConfiguration(EditorSemanticHighlightingConfiguration)) { this.colorThemeChange.fire(this.colorTheme); }
 			if (event.affectsConfiguration(WorkbenchConfiguration.iconTheme)) { this.updateFileIconTheme(); }
 			if (event.affectsConfiguration(WorkbenchConfiguration.productIconTheme)) { this.updateProductIconTheme(); }
 		}));
 		this._register(WorkbenchFileIconThemesRegistry.onDidChange(() => this.updateFileIconTheme()));
 		this._register(this.languageService.onDidChange(() => this.resourceIconChange.fire()));
+		this._register(getIconRegistry().onDidChange(() => setIconResolver(this.container.ownerDocument, icon => getIconDefinition(icon, this.productIconTheme.icons))));
 		this._register(WorkbenchProductIconThemesRegistry.onDidChange(() => this.updateProductIconTheme()));
 		setIconResolver(this.container.ownerDocument, icon => getIconDefinition(icon, defaultProductIconTheme.icons));
 		this._register(toDisposable(() => setIconResolver(this.container.ownerDocument, icon => getIconDefinition(icon, defaultProductIconTheme.icons))));
@@ -92,11 +87,9 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 			this.updateColorTheme();
 			if (previous === this.colorTheme) this.colorThemeChange.fire(this.colorTheme);
 		}));
-		const updateSystemTheme = (): void => this.updateColorTheme();
-		this.systemDarkQuery.addEventListener('change', updateSystemTheme);
-		this._register(toDisposable(() => this.systemDarkQuery.removeEventListener('change', updateSystemTheme)));
+		this._register(getTokenClassificationRegistry().onDidChange(() => this.colorThemeChange.fire(this.colorTheme)));
+		this._register(this.hostColorScheme.onDidChangeColorScheme(() => this.updateColorTheme()));
 		this.updateColorTheme();
-		this.updateSemanticStyles();
 		this._register(bindColorTheme(this, this.container));
 		this.updateFileIconTheme();
 		this.updateProductIconTheme();
@@ -109,18 +102,31 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 	public getProductIconTheme(): IProductIconTheme { return this.productIconTheme; }
 	public getFileIconTheme(): IFileIconTheme { return this.fileIconTheme ?? noFileIconTheme; }
 
+	public async setColorTheme(themeId: string): Promise<IColorTheme> {
+		const settings = ThemeConfigurationSettings;
+		let key = settings.colorTheme;
+		if (themeId !== SystemColorThemePreference) {
+			if (this.hostColorScheme.highContrast && this.configurationService.getValue<boolean>(settings.autoDetectHighContrast)) {
+				key = this.hostColorScheme.dark ? settings.preferredHighContrastColorTheme : settings.preferredHighContrastLightColorTheme;
+			} else if (this.configurationService.getValue<boolean>(settings.autoDetectColorScheme)) {
+				key = this.hostColorScheme.dark ? settings.preferredDarkColorTheme : settings.preferredLightColorTheme;
+			}
+		}
+		await this.configurationService.updateValue(key, themeId);
+		return this.colorTheme;
+	}
+
 	private resolveColorTheme(): IColorTheme {
-		const preference = this.configurationService.getValue<string>(WorkbenchConfiguration.colorTheme);
+		let preference = this.configurationService.getValue<string>(WorkbenchConfiguration.colorTheme);
+		const settings = ThemeConfigurationSettings;
+		if (this.hostColorScheme.highContrast && this.configurationService.getValue<boolean>(settings.autoDetectHighContrast)) {
+			preference = this.configurationService.getValue(this.hostColorScheme.dark ? settings.preferredHighContrastColorTheme : settings.preferredHighContrastLightColorTheme);
+		} else if (this.configurationService.getValue<boolean>(settings.autoDetectColorScheme) || preference === SystemColorThemePreference) {
+			preference = this.configurationService.getValue(this.hostColorScheme.dark ? settings.preferredDarkColorTheme : settings.preferredLightColorTheme);
+		}
 		const registeredTheme = WorkbenchThemesRegistry.getColorTheme(preference);
-		const theme = registeredTheme ?? resolveWorkbenchColorTheme(SystemColorThemePreference, this.systemDarkQuery.matches);
-		const customizations = this.configurationService.getValue<Record<string, string>>(WorkbenchConfiguration.colorCustomizations);
-		if (Object.keys(customizations).length === 0) return theme;
-		return createColorTheme({
-			...theme,
-			baseTheme: theme,
-			colorOverrides: customizations,
-			allowUnregisteredColorOverrides: true,
-		});
+		const theme = registeredTheme ?? resolveWorkbenchColorTheme(SystemColorThemePreference, this.hostColorScheme.dark);
+		return applyThemeCustomizations(theme, this.configurationService);
 	}
 
 	private updateColorTheme(): void {
@@ -129,14 +135,8 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 			return;
 		}
 		this.colorTheme = theme;
-		this.updateSemanticStyles();
 		this.colorThemeChange.fire(theme);
 		this.resourceIconChange.fire();
-	}
-
-	private updateSemanticStyles(): void {
-		const preference = this.configurationService.getValue<boolean | 'configuredByTheme'>(EditorSemanticHighlightingConfiguration);
-		if (this.semanticStyles) this.semanticStyles.textContent = semanticTokenThemeCss(this.colorTheme, preference === true || (preference !== false && this.colorTheme.semanticHighlighting === true));
 	}
 
 	private updateFileIconTheme(): void {
@@ -161,13 +161,15 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 	}
 
 	public renderFileIcon(resource: URI, container: HTMLElement, classes: readonly string[] = getIconClasses(undefined, this.languageService, resource, FileKind.File)): void {
-		const icon = this.fileIconTheme?.resolveFileIcon(classes, isDarkColorScheme(this.colorTheme.colorScheme));
+		const icon = this.fileIconTheme?.resolveFileIcon(classes, this.colorTheme.colorScheme);
 		container.classList.add(...classes);
 		container.classList.toggle('ash-file-icon', icon !== undefined);
 		container.textContent = icon?.character ?? '';
 		container.style.color = icon?.color ?? '';
 		container.style.fontFamily = icon?.fontFamily ?? '';
 		container.style.fontSize = icon?.fontSize ?? '';
+		container.style.fontWeight = icon?.fontWeight ?? '';
+		container.style.fontStyle = icon?.fontStyle ?? '';
 		container.style.backgroundImage = icon?.image ? `url("${icon.image}")` : '';
 		container.style.backgroundSize = icon?.image ? 'contain' : '';
 		container.style.backgroundRepeat = icon?.image ? 'no-repeat' : '';
@@ -325,22 +327,3 @@ export async function loadUserThemes(services: IInstantiationService, directory:
 }
 
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error); }
-
-function semanticTokenThemeCss(theme: IColorTheme, enabled: boolean): string {
-	if (!enabled) return '';
-	const rules = [...theme.semanticTokenRules ?? []].sort((left, right) => semanticTokenRuleSpecificity(left) - semanticTokenRuleSpecificity(right));
-	return rules.map(rule => {
-		const selector = `.stanza-editor .stanza-editor-token[data-ash-semantic-type${rule.type === '*' ? ']' : `="${rule.type}"]`}`
-			+ rule.modifiers.map(modifier => `[data-ash-semantic-modifiers~="${modifier}"]`).join('')
-			+ (rule.language ? `[data-ash-semantic-language="${rule.language}"]` : '');
-		const declarations = [];
-		if (rule.foreground) declarations.push(`color: ${rule.foreground};`);
-		if (rule.fontStyle !== undefined) {
-			const styles = new Set(rule.fontStyle.split(/\s+/u).filter(Boolean));
-			declarations.push(`font-style: ${styles.has('italic') ? 'italic' : 'normal'};`);
-			declarations.push(`font-weight: ${styles.has('bold') ? 'bold' : 'normal'};`);
-			declarations.push(`text-decoration: ${[styles.has('underline') && 'underline', styles.has('strikethrough') && 'line-through'].filter(Boolean).join(' ') || 'none'};`);
-		}
-		return declarations.length ? `${selector} { ${declarations.join(' ')} }` : '';
-	}).filter(Boolean).join('\n');
-}

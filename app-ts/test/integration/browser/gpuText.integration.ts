@@ -38,6 +38,8 @@ interface GpuTextIntegrationHarness {
 	setSelectionColor(color: string): void;
 	prepareBracketText(length: number): void;
 	prepareSemanticText(): void;
+	mountDomSemanticEditor(): void;
+	clearSemanticFontStyles(): void;
 	countGlyphPixels(red: number, green: number, blue: number): number;
 	dispose(): void;
 }
@@ -111,6 +113,20 @@ window.ashGpuTextIntegration = {
 		editor.updateOptions({ wordWrap: 'off' });
 		editor.setValue('sample');
 	},
+	mountDomSemanticEditor: () => {
+		window.ashGpuTextIntegration.prepareSemanticText();
+		const domContainer = document.createElement('div');
+		domContainer.id = 'dom-semantic-editor';
+		Object.assign(domContainer.style, { position: 'absolute', inset: '0', width: '800px', height: '300px' });
+		document.body.append(domContainer);
+		disposables.add(toDisposable(() => domContainer.remove()));
+		const domEditor = disposables.add(stanzaApi.editor.create(domContainer, { model, experimentalGpuAcceleration: 'off' }));
+		domEditor.layout({ width: 800, height: 300 });
+	},
+	clearSemanticFontStyles: () => StandaloneServices.get(IStandaloneThemeService).setColorTheme(createColorTheme({
+		id: 'semantic-normal', label: 'Semantic normal', colorScheme: stanzaApi.ColorScheme.Dark, semanticHighlighting: true,
+		semanticTokenRules: [{ selector: 'variable.readonly', type: 'variable', modifiers: ['readonly'], foreground: '#46ac72', bold: false, italic: false, underline: false, strikethrough: false }],
+	})),
 	setSelectionColor: color => {
 		stanzaApi.editor.defineNamedTheme('gpu-selection', { label: 'GPU selection', colorScheme: stanzaApi.ColorScheme.Dark, colors: { 'editor.selectionForeground': color } });
 		stanzaApi.editor.setTheme('gpu-selection');

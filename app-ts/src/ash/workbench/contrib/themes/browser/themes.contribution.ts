@@ -1,3 +1,4 @@
+import { IWorkbenchThemeService } from '../../../services/themes/common/workbenchThemeService.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { commandActionLabel, localizedString } from '../../../../platform/action/common/action.js';
@@ -61,7 +62,10 @@ for (const [index, themeAction] of themeActions.entries()) {
 			picker.items = items;
 			disposables.add(picker.onDidAccept(item => {
 				picker.hide();
-				void configuration.updateValue(themeAction.setting, item.value).catch(onUnexpectedError);
+				const update = themeAction.setting === WorkbenchConfiguration.colorTheme
+					? accessor.get(IWorkbenchThemeService).setColorTheme(item.value)
+					: configuration.updateValue(themeAction.setting, item.value);
+				void update.catch(onUnexpectedError);
 			}));
 			disposables.add(picker.onDidHide(() => disposables.dispose()));
 			picker.show();

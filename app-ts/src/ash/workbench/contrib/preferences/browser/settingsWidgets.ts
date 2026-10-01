@@ -13,6 +13,7 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import type { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
+import { parseJsonc } from '../../../../base/common/jsonc.js';
 import type { IBooleanSetting, INumberSetting, ISelectSetting, ISetting, IStringMapSetting, ITextSetting, SettingReference, SettingValueBinding, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
 import { configurationSettingBinding, SettingModel, type SettingState } from '../../../services/preferences/common/settingsModels.js';
 import { SettingsSearchMenu } from './settingsSearchMenu.js';
@@ -421,11 +422,11 @@ class TextSettingWidget extends AbstractSettingWidget<ITextSetting, string> {
 	}
 }
 
-class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Record<string, string>> {
+class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Record<string, unknown>> {
 	private readonly rows: HTMLDivElement;
 	private readonly addButton: Button;
 	private readonly rowDisposables = this._register(new DisposableStore());
-	private renderedValue: Record<string, string> | undefined;
+	private renderedValue: Record<string, unknown> | undefined;
 
 	constructor(container: HTMLElement, descriptor: IStringMapSetting, options: SettingWidgetOptions) {
 		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(options.configurationService, descriptor.configuration), options);
@@ -464,11 +465,11 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 		this.updateRowLabels();
 	}
 
-	private renderRows(value: Record<string, string>): void {
+	private renderRows(value: Record<string, unknown>): void {
 		this.rowDisposables.clear();
 		this.rows.replaceChildren();
 		for (const [key, childPatterns] of Object.entries(value)) {
-			this.addRow(key, childPatterns);
+			this.addRow(key, typeof childPatterns === 'string' ? childPatterns : JSON.stringify(childPatterns));
 		}
 		this.renderedValue = value;
 	}
@@ -514,7 +515,7 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 
 	private acceptRows(): void {
 		if (this.model.state.isPending) return;
-		const value: Record<string, string> = Object.create(null) as Record<string, string>;
+		const value: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
 		for (const row of this.rows.children) {
 			const keyInput = row.querySelector<HTMLInputElement>('[data-pattern-part="key"]');
 			const valueInput = row.querySelector<HTMLInputElement>('[data-pattern-part="value"]');
@@ -532,7 +533,13 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 				this.reportStatus(this.descriptor.duplicateMessage, true);
 				return;
 			}
-			value[key] = childPatterns;
+			try {
+				value[key] = this.descriptor.structuredValues && /^(?:\{|\[|true$|false$)/u.test(childPatterns) ? parseJsonc(childPatterns, key) : childPatterns;
+			} catch (error) {
+				valueInput.setAttribute('aria-invalid', 'true');
+				this.reportStatus(settingErrorMessage(error, 'Invalid setting value.'), true);
+				return;
+			}
 		}
 		try {
 			this.descriptor.configuration.parse(value);
@@ -563,11 +570,11 @@ export function createSettingWidget(container: HTMLElement, setting: ISetting, o
 	}
 }
 
-function sameStringMap(left: Record<string, string> | undefined, right: Record<string, string>): boolean {
+function sameStringMap(left: Record<string, unknown> | undefined, right: Record<string, unknown>): boolean {
 	if (!left) return false;
 	const leftEntries = Object.entries(left);
 	const rightEntries = Object.entries(right);
-	return leftEntries.length === rightEntries.length && leftEntries.every(([key, value], index) => key === rightEntries[index]?.[0] && value === rightEntries[index]?.[1]);
+	return leftEntries.length === rightEntries.length && leftEntries.every(([key, value], index) => key === rightEntries[index]?.[0] && JSON.stringify(value) === JSON.stringify(rightEntries[index]?.[1]));
 }
 
 function sameSelectOptions(left: readonly SelectOption[], right: readonly SelectOption[]): boolean {

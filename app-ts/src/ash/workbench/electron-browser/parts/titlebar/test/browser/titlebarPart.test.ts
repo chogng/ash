@@ -74,7 +74,9 @@ test('Electron titlebar applies the active theme and releases its subscription w
 			revealFile: async () => {},
 			toggleDeveloperTools: async () => {},
 			saveFile: async () => undefined,
-			isAccessibilitySupportEnabled: async () => false,
+			getOSColorScheme: async () => ({ dark: false, highContrast: false }),
+		onDidChangeColorScheme: () => ({ dispose() {} }),
+		isAccessibilitySupportEnabled: async () => false,
 			onDidChangeAccessibilitySupport: () => ({ dispose() {} }),
 		});
 		const factory = createElectronTitlebarPartFactory({ update: async () => {}, onDidSelect: () => ({ dispose() {} }) });

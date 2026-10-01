@@ -2,6 +2,7 @@ import { strict as assert } from "node:assert";
 import { createHash } from "node:crypto";
 import { test } from "mocha";
 import { readFile } from 'node:fs/promises';
+import { ColorScheme } from '../../../../../platform/theme/common/theme.js';
 import { WorkbenchFileIconThemesRegistry } from '../../../themes/common/themeExtensionPoints.js';
 import { WorkbenchThemesRegistry } from '../../../../common/theme.js';
 import { DisposableTracker, installDisposableTracker, toDisposable } from "../../../../../base/common/lifecycle.js";
@@ -523,7 +524,7 @@ test('loads icon manifests and fonts through generation-bound resources and revo
 	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
 	await service.start();
 	const theme = WorkbenchFileIconThemesRegistry.getThemes().find(theme => theme.id === 'vs-seti');
-	assert.ok(theme?.resolveFileIcon(['file-icon', 'typescript-lang-file-icon'], true)?.character);
+	assert.ok(theme?.resolveFileIcon(['file-icon', 'typescript-lang-file-icon'], ColorScheme.Dark)?.character);
 	assert.deepEqual(requests, ['icons/vs-seti-icon-theme.json', 'icons/seti.woff']);
 	generation++;
 	fail = true;
@@ -562,3 +563,43 @@ function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value
 	const promise = new Promise<T>(accept => { resolve = accept; });
 	return { promise, resolve };
 }
+
+test('extension theme contributions activate together, retain the last valid catalog, and revoke on removal', async () => {
+	const { Colors } = await import('../../../../../platform/theme/common/colorRegistry.js');
+	const { getIconRegistry, getIconDefinition } = await import('../../../../../platform/theme/common/iconRegistry.js');
+	const { getTokenClassificationRegistry } = await import('../../../../../platform/theme/common/tokenClassificationRegistry.js');
+	const { parseUserColorTheme } = await import('../../../themes/common/colorThemeData.js');
+	let generation = 1;
+	let contributed = true;
+	let invalid = false;
+	const manifest = () => descriptorWithManifest({ name: 'demo', publisher: 'ash', version: '1.0.0', contributes: {
+		colors: [{ id: 'test.extensionAccent', description: 'Extension accent', defaults: { light: '#123456', dark: '#654321' } }],
+		semanticTokenTypes: [{ id: 'testCustomFunction', description: 'Custom function', superType: invalid ? 'missingType' : 'function' }],
+		semanticTokenModifiers: [{ id: 'testCustomModifier', description: 'Custom modifier' }],
+		semanticTokenScopes: [{ language: 'typescript', scopes: { testCustomFunction: ['entity.name.function.custom'] } }],
+		icons: { 'test-extension-alias': { description: 'Extension icon', default: 'add' } },
+	} });
+	using service = new AppServerExtensionService({ api: { list: async () => ({ generation, extensions: contributed ? [manifest()] : [], diagnostics: [] }), readResource: async () => { throw new Error('Unexpected resource'); } }, textMateService: emptyTextMateService() });
+	await service.start();
+	const themed = parseUserColorTheme(JSON.stringify({ name: 'Extension mappings', colors: { 'test.extensionAccent': '#abcdef' },
+		tokenColors: [{ scope: 'entity.name.function.custom', settings: { foreground: '#112233', fontStyle: 'italic' } }],
+		semanticTokenColors: { function: { bold: true } },
+	}));
+	const style = themed.getTokenStyleMetadata('testCustomFunction', ['testCustomModifier'], 'typescript')!;
+	assert.equal(themed.tokenColorMap[style.foreground!], '#112233');
+	assert.equal(style.bold, true);
+	assert.equal(style.italic, true);
+	assert.equal(themed.getColorCss('test.extensionAccent'), '#abcdef');
+	assert.ok(getIconDefinition({ id: 'test-extension-alias' }));
+	invalid = true; generation++;
+	await assert.rejects(service.reload(), /Unknown semantic super type/);
+	assert.equal(service.currentCatalog.generation, 1);
+	assert.ok(getTokenClassificationRegistry().getTokenTypes().some(type => type.id === 'testCustomFunction'));
+	assert.ok(getIconRegistry().getIcon('test-extension-alias'));
+	contributed = false; generation++;
+	await service.reload();
+	assert.equal(themed.getColor('test.extensionAccent'), undefined);
+	assert.equal(Colors.getColors().some(color => color.id === 'test.extensionAccent'), false);
+	assert.equal(getTokenClassificationRegistry().getTokenTypes().some(type => type.id === 'testCustomFunction'), false);
+	assert.equal(getIconRegistry().getIcon('test-extension-alias'), undefined);
+});

@@ -4,6 +4,8 @@ import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { CharCode } from '../../../../base/common/charCode.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, MutableDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { resolveSemanticTokenPresentation } from '../../../common/services/semanticTokensStyling.js';
+import type { IColorTheme } from '../../../../platform/theme/common/themeService.js';
 import { type EditorVisualLine, type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
@@ -33,6 +35,7 @@ export interface ViewLinesOptions {
 	readonly readVisualProjection: () => EditorVisualLineProjection;
 	readonly readProjectionRevision: () => number;
 	readonly semanticTokenSource: SemanticTokenSource | undefined;
+	readonly semanticHighlightingEnabled: (theme: IColorTheme) => boolean;
 	readonly configuration: IEditorConfiguration;
 	readonly themeType: ColorScheme;
 	readonly tabSize: number;
@@ -47,6 +50,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 	private readonly model: TextModel;
 	private readonly readVisualProjection: () => EditorVisualLineProjection;
 	private readonly semanticTokenSource: SemanticTokenSource | undefined;
+	private readonly semanticHighlightingEnabled: (theme: IColorTheme) => boolean;
 	private readonly _visibleLines: ViewLayer<ViewLine>;
 	private readonly _typicalHalfwidthCharacterWidth: number;
 	private readonly viewGpuContext: ViewGpuContext | undefined;
@@ -63,6 +67,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 		this.model = options.model;
 		this.readVisualProjection = options.readVisualProjection;
 		this.semanticTokenSource = options.semanticTokenSource;
+		this.semanticHighlightingEnabled = options.semanticHighlightingEnabled;
 		this._viewLineOptions = new ViewLineOptions(options.configuration, options.themeType);
 		if (!Number.isSafeInteger(options.tabSize) || options.tabSize < 1) throw new RangeError('Stanza view-line tab size must be a positive safe integer');
 		if (!Number.isFinite(options.typicalHalfwidthCharacterWidth) || options.typicalHalfwidthCharacterWidth <= 0) throw new RangeError('Stanza view-line halfwidth character width must be positive');
@@ -432,7 +437,9 @@ export class ViewLines extends ViewPart implements IViewLines {
 		}
 		line.renderLine(
 			lineData.content,
-			hasInjectedText ? [] : clipSemanticTokens(tokens, visualLine.startColumn, visualLine.endColumn),
+			hasInjectedText ? [] : clipSemanticTokens(tokens, visualLine.startColumn, visualLine.endColumn).map(token => ({
+				...token, syntaxPresentation: resolveSemanticTokenPresentation(token, this._context.theme.value, this.semanticHighlightingEnabled(this._context.theme.value)),
+			})),
 			0,
 			inlineDecorations,
 			viewLineNumber,

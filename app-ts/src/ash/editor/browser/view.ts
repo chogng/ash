@@ -288,10 +288,11 @@ export class View extends ViewEventHandler {
 				return preference === true || (preference !== false && theme.semanticHighlighting === true);
 			}))
 			: undefined;
-		if (this.viewGpuContext && options.configurationService) {
+		if (options.configurationService) {
 			this._register(options.configurationService.onDidChangeConfiguration(event => {
 				if (!event.affectsConfiguration(EditorSemanticHighlightingConfiguration)) return;
 				this.viewGpuContext?.refreshSemanticStyles(this.viewContext.theme.value);
+				this.viewLines.onTokensChanged();
 				this.scheduleProjection();
 			}));
 		}
@@ -323,6 +324,10 @@ export class View extends ViewEventHandler {
 			readVisualProjection: () => this.visualProjection,
 			readProjectionRevision: () => this.projectionRevision,
 			semanticTokenSource: options.semanticTokenSource,
+			semanticHighlightingEnabled: theme => {
+				const preference = options.configurationService?.getValue<boolean | 'configuredByTheme'>(EditorSemanticHighlightingConfiguration);
+				return preference === true || (preference !== false && theme.semanticHighlighting === true);
+			},
 			configuration: this.editorConfiguration,
 			themeType: options.theme.colorScheme,
 			tabSize: this.indentation.tabSize,

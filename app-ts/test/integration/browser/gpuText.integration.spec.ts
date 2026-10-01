@@ -317,3 +317,17 @@ test('GPU text uses semantic token colors from the active theme', async ({ page 
 	await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.countGlyphPixels(225, 55, 171))).toBeGreaterThan(0);
 	await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.getValue())).toBe('sample');
 });
+
+test('DOM semantic styles update with the theme and explicit false clears font styles', async ({ page }) => {
+	await page.goto('/gpuText.html');
+	await page.evaluate(() => window.ashGpuTextIntegration.mountDomSemanticEditor());
+	const token = page.locator('#dom-semantic-editor .stanza-editor-token').filter({ hasText: 'sample' });
+	await expect(token).toHaveCSS('color', 'rgb(225, 55, 171)');
+	await expect(token).toHaveCSS('font-style', 'italic');
+	await expect(token).toHaveCSS('text-decoration-line', 'underline');
+	await page.evaluate(() => window.ashGpuTextIntegration.clearSemanticFontStyles());
+	await expect(token).toHaveCSS('color', 'rgb(70, 172, 114)');
+	await expect(token).toHaveCSS('font-style', 'normal');
+	await expect(token).toHaveCSS('font-weight', '400');
+	await expect(token).toHaveCSS('text-decoration-line', 'none');
+});

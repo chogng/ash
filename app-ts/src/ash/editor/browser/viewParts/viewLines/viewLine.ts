@@ -346,8 +346,10 @@ function applySyntaxPresentation(element: HTMLElement, presentation: NonNullable
 		element.style.setProperty('--ash-editor-token-foreground', presentation.foreground);
 	}
 	if (presentation.background !== undefined) element.style.backgroundColor = presentation.background;
-	if (presentation.fontStyle?.includes("italic")) element.style.fontStyle = "italic";
-	if (presentation.fontStyle?.includes("bold")) element.style.fontWeight = "bold";
+	if (presentation.fontStyle !== undefined) {
+		element.style.fontStyle = presentation.fontStyle.includes("italic") ? "italic" : "normal";
+		element.style.fontWeight = presentation.fontStyle.includes("bold") ? "bold" : "normal";
+	}
 	const decorations = presentation.fontStyle?.filter(style => style === "underline" || style === "strikethrough").map(style => style === "strikethrough" ? "line-through" : style) ?? [];
-	if (decorations.length > 0) element.style.textDecorationLine = decorations.join(" ");
+	if (presentation.fontStyle !== undefined) element.style.textDecorationLine = decorations.length ? decorations.join(" ") : "none";
 }

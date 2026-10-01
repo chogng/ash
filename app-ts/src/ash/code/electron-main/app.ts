@@ -1,3 +1,5 @@
+import { ThemeMainService } from '../../platform/theme/electron-main/themeMainServiceImpl.js';
+import { NATIVE_HOST_COLOR_SCHEME_CHANGED_CHANNEL } from '../../platform/native/common/nativeHost.js';
 import { OAuthCallbackHost } from "../../platform/connectors/electron-main/oauthCallbackHost.js";
 import { RendererWorkspaceHost } from "../../platform/workspaces/electron-main/rendererWorkspaceHost.js";
 import { BrowserAutomationHost } from "../../platform/browser/electron-main/browserAutomationHostRoutes.js";
@@ -229,6 +231,7 @@ export class AshApplication extends Disposable {
 		showOpenDialog: (options, window) => window ? dialog.showOpenDialog(window, options) : dialog.showOpenDialog(options),
 		showSaveDialog: (options, window) => window ? dialog.showSaveDialog(window, options) : dialog.showSaveDialog(options),
 	}));
+	private themeMainService!: ThemeMainService;
 	private lifecycleMainService!: LifecycleMainService<BrowserWindow>;
 	private windowSessionStateHandler!: WindowSessionStateHandler<WindowSessionEntry>;
 	private readonly pendingWindowLaunches: PendingWindowLaunch[] = [];
@@ -307,6 +310,7 @@ export class AshApplication extends Disposable {
 		}
 
 		await this.createPersistentServices();
+		this.themeMainService = this._register(new ThemeMainService(nativeTheme, this.services.state));
 		this.lifecycleMainService = this._register(new LifecycleMainService<BrowserWindow>(async (window, message) => {
 			this.windowsMainService.failManagedWindowClose(window, message);
 			await this.dialogs.showMessageBox({ type: 'error', message }, window);
@@ -688,6 +692,7 @@ export class AshApplication extends Disposable {
 		const titleBarStyle = this.titleBarStyle;
 		const windowHost = this.windowsMainService.createWindow(options => new BrowserWindow(options), {
 			state: windowState,
+			backgroundColor: this.themeMainService.getBackgroundColor(),
 			titleBarStyle,
 			webPreferences: this.createSandboxWebPreferences(),
 			title: WorkbenchModeRegistry.get(this.defaultModeId).title,
@@ -841,6 +846,7 @@ export class AshApplication extends Disposable {
 		record.openWorkspace = (root) => transitionToFolder(root, true);
 
 		windowDisposables.add(toDisposable(() => this.dialogs.cancelWindow(window)));
+		windowDisposables.add(this.themeMainService.onDidChangeColorScheme(scheme => window.webContents.send(NATIVE_HOST_COLOR_SCHEME_CHANGED_CHANNEL, scheme)));
 		const windowControlsOverlay = new WindowControlsOverlay(colors => {
 			if (titleBarStyle === 'custom' && (process.platform === 'win32' || process.platform === 'linux')) window.setTitleBarOverlay(colors);
 		});
@@ -928,7 +934,12 @@ export class AshApplication extends Disposable {
 					return result.canceled || !result.filePath ? undefined : result.filePath;
 				},
 				isAccessibilitySupportEnabled: () => app.isAccessibilitySupportEnabled(),
-				setWindowTheme: theme => windowControlsOverlay.setTheme(theme),
+				getOSColorScheme: () => this.themeMainService.getColorScheme(),
+				setWindowTheme: theme => {
+					windowControlsOverlay.setTheme(theme);
+					window.setBackgroundColor(theme.backgroundColor);
+					void this.themeMainService.saveWindowTheme(theme).catch(error => console.error('Failed to save window theme', error));
+				},
 				setWindowDimmed: dimmed => windowControlsOverlay.setDimmed(dimmed),
 				toggleDeveloperTools: () => window.webContents.toggleDevTools(),
 				syncSystemWideKeybindings: bindings => this.globalKeybindings.updateKeybindings(
@@ -1034,6 +1045,7 @@ export class AshApplication extends Disposable {
 						window.webContents.removeListener('did-start-navigation', onNavigation);
 						window.webContents.removeListener('render-process-gone', rejectInterruptedHandoffs);
 					}));
+					windowDisposables.add(this.themeMainService.onDidChangeColorScheme(scheme => window.webContents.send(NATIVE_HOST_COLOR_SCHEME_CHANGED_CHANNEL, scheme)));
 					const windowControlsOverlay = new WindowControlsOverlay(colors => {
 						if (titleBarStyle === 'custom' && (process.platform === 'win32' || process.platform === 'linux')) window.setTitleBarOverlay(colors);
 					});
@@ -1073,7 +1085,12 @@ export class AshApplication extends Disposable {
 						...remoteWindowContext.ipcRoutes,
 						...windowResourceIpcRoutes(windowResources),
 						...windowAppearanceIpcRoutes({
-							setWindowTheme: theme => windowControlsOverlay.setTheme(theme),
+							getOSColorScheme: () => this.themeMainService.getColorScheme(),
+							setWindowTheme: theme => {
+								windowControlsOverlay.setTheme(theme);
+								window.setBackgroundColor(theme.backgroundColor);
+								void this.themeMainService.saveWindowTheme(theme).catch(error => console.error('Failed to save window theme', error));
+							},
 							setWindowDimmed: dimmed => windowControlsOverlay.setDimmed(dimmed),
 						}),
 						windowOperationIpcRoute(this.windowsMainService, window),

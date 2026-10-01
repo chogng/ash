@@ -5,8 +5,12 @@ export const Extensions = {
 	Configuration: 'base.contributions.configuration',
 };
 
+export enum ConfigurationScope {
+	APPLICATION = 1, MACHINE = 2, WINDOW = 3, RESOURCE = 4, LANGUAGE_OVERRIDABLE = 5, MACHINE_OVERRIDABLE = 6, APPLICATION_MACHINE = 7,
+}
+
 export interface IConfigurationPropertySchema extends JsonSchema {
-	readonly scope?: string;
+	readonly scope?: ConfigurationScope;
 	readonly included?: boolean;
 }
 
@@ -38,6 +42,7 @@ export interface ITextConfigurationSettingSchema extends IConfigurationSettingSc
 
 export interface IStringMapConfigurationSettingSchema extends IConfigurationSettingSchemaBase {
 	readonly valueType: 'stringMap';
+	readonly structuredValues?: boolean;
 	readonly keyLabel: string;
 	readonly valueLabel: string;
 	readonly addLabel: string;
@@ -53,7 +58,7 @@ export type ConfigurationSettingSchemaFor<T> =
 		: [T] extends [number] ? INumberConfigurationSettingSchema
 			: [T] extends [string] ? ISelectConfigurationSettingSchema<T & string> | ITextConfigurationSettingSchema
 				: [T] extends [string | boolean] ? ISelectConfigurationSettingSchema<T & (string | boolean)>
-					: [T] extends [Record<string, string>] ? IStringMapConfigurationSettingSchema
+					: [T] extends [Record<string, unknown>] ? IStringMapConfigurationSettingSchema
 						: never;
 
 export interface IRegisteredConfiguration<T = unknown> {
@@ -62,6 +67,8 @@ export interface IRegisteredConfiguration<T = unknown> {
 	readonly parse: (value: unknown) => T;
 	readonly serialize: (value: T) => unknown;
 	readonly setting?: IConfigurationSettingSchema;
+	readonly scope?: ConfigurationScope;
+	readonly schema?: JsonSchema;
 }
 
 export interface IConfigurationKeyDefinition<T> {
@@ -70,6 +77,8 @@ export interface IConfigurationKeyDefinition<T> {
 	readonly parse: (value: unknown) => T;
 	readonly serialize?: (value: T) => unknown;
 	readonly setting?: ConfigurationSettingSchemaFor<T>;
+	readonly scope?: ConfigurationScope;
+	readonly schema?: JsonSchema;
 }
 
 export interface IConfigurationRegistry {
@@ -102,6 +111,8 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 		}
 		const configuration: IRegisteredConfiguration<T> = Object.freeze({
 			key: definition.key,
+			scope: definition.scope,
+			schema: definition.schema,
 			defaultValue: definition.defaultValue,
 			parse: definition.parse,
 			serialize: definition.serialize ?? ((value: T) => value),
