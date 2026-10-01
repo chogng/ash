@@ -55,7 +55,7 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 		return [
 			{
 				element: { kind: 'group', id: 'models.catalog', title: localize('sessions.settings.chatModels', 'Chat models'), description: '' },
-				children: this.modelElements.length ? this.modelElements.map(({ entry, row }) => item(`models.catalog.${entry.model.provider}/${entry.model.model}`, entry.displayName, `${entry.model.provider}/${entry.model.model}`, row)) : [item('models.catalog.status', localize('sessions.settings.chatModels', 'Chat models'), this.modelsStatus.textContent ?? '', this.modelsStatus)],
+				children: this.modelElements.length ? this.modelElements.map(({ entry, row }) => item(`models.catalog.${entry.model.provider}/${entry.model.model}`, entry.displayName, '', row, [`${entry.model.provider}/${entry.model.model}`])) : [item('models.catalog.status', localize('sessions.settings.chatModels', 'Chat models'), this.modelsStatus.textContent ?? '', this.modelsStatus)],
 			},
 			{
 				element: { kind: 'group', id: `${this.categoryId}.providers`, title: localize('sessions.settings.apiConnections', 'API connections'), description: '' },
@@ -147,10 +147,7 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 		copy.className = 'ash-models-settings-model-copy';
 		const name = h(this.document, 'span');
 		name.textContent = entry.displayName;
-		const description = h(this.document, 'span');
-		description.className = 'ash-models-settings-note';
-		description.textContent = `${entry.model.provider}/${entry.model.model}`;
-		copy.append(name, description);
+		copy.append(name);
 		const toggle = resources.add(new Switch(row, {
 			ariaLabel: localize('sessions.settings.modelVisibility', 'Show {0} in model picker', entry.displayName),
 			checked: this.chatService.isModelVisible(entry.model),

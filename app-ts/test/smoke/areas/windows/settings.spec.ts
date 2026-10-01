@@ -142,6 +142,49 @@ test('Workbench exposes current Tools and Sandbox capabilities', async ({ target
 	await expect(settings.getByText('Could not load agent capabilities.')).toHaveCount(0);
 });
 
+test('Workbench Models switches control the model picker', async ({ target, workbench }) => {
+	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires Code with App Server');
+	const page = workbench.page;
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	const modelButton = page.locator('.ash-chat-view-pane [data-action-id="ash.chat.input.model"] button');
+	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+	for (const visible of [false, true]) {
+		await page.keyboard.press('ControlOrMeta+Shift+P');
+		await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
+		await page.keyboard.press('Enter');
+		await settings.locator('[data-settings-group-id="agents"]').click();
+		await settings.locator('[data-settings-category-id="models"]').click();
+		const row = settings.locator('.ash-models-settings-model-row').first();
+		await expect(row).toBeVisible();
+		const name = (await row.locator('.ash-models-settings-model-copy').textContent())!.trim();
+		await expect(row.locator('.ash-models-settings-model-copy > span')).toHaveCount(1);
+		await expect(row.locator('.ash-models-settings-note')).toHaveCount(0);
+		const itemId = await row.getAttribute('data-settings-tree-item-id');
+		if (!itemId) throw new Error('Model setting has no search identity');
+		const search = settings.getByRole('searchbox', { name: 'Search settings' });
+		await search.fill(itemId.slice('models.catalog.'.length));
+		await expect(row).toBeVisible();
+		await search.fill('');
+		const visibility = row.getByRole('switch', { name: `Show ${name} in model picker` });
+		await visibility.focus();
+		await page.keyboard.press('Space');
+		await expect(visibility).toHaveAttribute('aria-checked', String(visible));
+		await expect(visibility).not.toHaveAttribute('aria-busy', 'true');
+		await settings.locator('.ash-modal-editor-close').click();
+		await modelButton.click();
+		const picker = page.locator('.ash-chat-model-picker');
+		await expect(picker).toBeVisible();
+		if (visible) {
+			await expect(picker.getByText(name, { exact: true })).toBeVisible();
+		} else {
+			await expect(picker.getByText(name, { exact: true })).toHaveCount(0);
+		}
+		await page.keyboard.press('Escape');
+	}
+});
+
 test('Workbench and Sessions Models share model visibility', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires Electron Code with App Server');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
