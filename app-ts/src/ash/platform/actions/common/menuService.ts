@@ -5,13 +5,8 @@ import {
 import { Emitter } from "../../../base/common/event.js";
 import { Disposable } from "../../../base/common/lifecycle.js";
 import { isCommandActionToggleInfo } from "../../action/common/action.js";
-import type {
-	ICommandService,
-} from "../../commands/common/commands.js";
-import type {
-	ContextKeyExpression,
-	IContextKeyService,
-} from "../../contextkey/common/contextkey.js";
+import { ICommandService } from "../../commands/common/commands.js";
+import { type ContextKeyExpression, IContextKeyService } from "../../contextkey/common/contextkey.js";
 import { onDidChangeNls } from "../../../nls.js";
 import {
 	type IMenuActionOptions,
@@ -34,8 +29,8 @@ export class MenuService implements IMenuService {
 	private readonly contextKeyService: IContextKeyService;
 
 	constructor(
-		commandService: ICommandService,
-		contextKeyService: IContextKeyService,
+		@ICommandService commandService: ICommandService,
+		@IContextKeyService contextKeyService: IContextKeyService,
 	) {
 		this.commandService = commandService;
 		this.contextKeyService = contextKeyService;

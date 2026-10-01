@@ -19,7 +19,7 @@ import { MenuService } from "../../../platform/actions/common/menuService.js";
 import type { IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
-import { ServiceContainer } from "../../../platform/instantiation/common/instantiation.js";
+import { InstantiationService } from "../../../platform/instantiation/common/instantiationService.js";
 import { IQuickInputService } from "../../../platform/quickinput/common/quickInput.js";
 import { CommandService } from "../../../workbench/services/commands/common/commandService.js";
 import type { ViewPaneContainer } from "../../../workbench/browser/parts/views/viewPaneContainer.js";
@@ -177,7 +177,7 @@ test('Chat loads an Ash remote workspace image through the file service', async 
 		using contextViewService = new BrowserContextViewService(dom.window.document.body);
 		using sessions = new SessionsManagementService(fake.api);
 		using contextKeys = new ContextKeyService();
-		const services = new ServiceContainer();
+		const services = new InstantiationService();
 		using commands = new CommandService(services);
 		const menuService = new MenuService(commands, contextKeys);
 		const contextMenuService = { showContextMenu: () => undefined } as unknown as IContextMenuService;
@@ -259,7 +259,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		contextKeyService: contextKeys,
 		registry: new WorkbenchViewRegistry(),
 	});
-	const services = new ServiceContainer();
+	const services = new InstantiationService();
 	let preferencesEditorTarget: string | undefined;
 	using chat = createChatService(api);
 	using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
@@ -719,7 +719,7 @@ test('Code sending preserves the Chat draft when pages switch during first-sessi
 	view.selectPage('code');
 	const draft = view.activeSelection;
 	if (draft?.kind !== 'untitled') throw new Error('Expected Code draft');
-	using commands = new CommandService(new ServiceContainer());
+	using commands = new CommandService(new InstantiationService());
 	using chat = createChatService(fake.api);
 	const widgetModel = new ChatWidgetModel(chat, { kind: 'untitled', session: draft.session }, sessions);
 	using widget = new ChatWidget(
@@ -793,7 +793,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 		},
 	});
 	const api = fake.api;
-	const services = new ServiceContainer();
+	const services = new InstantiationService();
 	using sessions = new SessionsManagementService(api);
 	using contextKeys = new ContextKeyService();
 	using viewDescriptors = new ViewDescriptorService({
@@ -955,7 +955,7 @@ test("the New Chat slash command opens an untitled session", async () => {
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
 	const initialSession = session("session-1", "thread-1", "First Chat");
 	const fake = fakeApi({ sessions: [initialSession] });
-	const services = new ServiceContainer();
+	const services = new InstantiationService();
 	using sessions = new SessionsManagementService(fake.api);
 	using contextKeys = new ContextKeyService();
 	using viewDescriptors = new ViewDescriptorService({
@@ -1036,7 +1036,7 @@ test("failed first send keeps the untitled session and its input draft", async (
 		sessions: [],
 		createSessionError: new Error("Cannot create Session"),
 	});
-	const services = new ServiceContainer();
+	const services = new InstantiationService();
 	using sessions = new SessionsManagementService(fake.api);
 	using contextKeys = new ContextKeyService();
 	using viewDescriptors = new ViewDescriptorService({
@@ -1131,7 +1131,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 		contextKeyService: contextKeys,
 		registry: new WorkbenchViewRegistry(),
 	});
-	using commands = new CommandService(new ServiceContainer());
+	using commands = new CommandService(new InstantiationService());
 	const menuService = new MenuService(commands, contextKeys);
 	const layout = testLayoutService();
 	const contextMenuService = {
@@ -1190,7 +1190,7 @@ test("Chat history selects an active Thread through Quick Pick", async () => {
 			session("session-2", "thread-2", "Second Chat"),
 		],
 	}).api;
-	const services = new ServiceContainer();
+	const services = new InstantiationService();
 	using sessions = new SessionsManagementService(api);
 	using contextKeys = new ContextKeyService();
 	using quickInput = new WorkbenchQuickInputService({
@@ -2773,7 +2773,7 @@ test("Chat Settings toggles Advisor while keeping its selected model", async () 
 	using chat = createChatService(fake.api);
 	using contextKeys = new ContextKeyService();
 	using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
-	const services = new ServiceContainer();
+	const services = new InstantiationService();
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IDialogService, recordingDialogService([]));
@@ -2811,7 +2811,7 @@ test('Chat Settings saves a masked provider key through the model API and refres
 	using contextKeys = new ContextKeyService();
 	using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
 	const messages: IMessageDialogOptions[] = [];
-	const services = new ServiceContainer();
+	const services = new InstantiationService();
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IDialogService, recordingDialogService(messages));

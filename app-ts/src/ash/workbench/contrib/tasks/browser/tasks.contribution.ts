@@ -1,8 +1,5 @@
-import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
+import { SyncDescriptor } from "../../../../platform/instantiation/common/descriptors.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
-import { ITaskService } from "../../../services/tasks/common/taskService.js";
-import { ITerminalService } from "../../../services/terminal/common/terminal.js";
-import { IViewsService } from "../../../services/views/browser/viewsService.js";
 import { TASKS_VIEW_ID } from "../common/tasks.js";
 import { TasksViewPane } from "./tasksViewPane.js";
 import "./taskActions.js";
@@ -23,7 +20,7 @@ export function registerTasksView(registry: WorkbenchViewRegistry = ViewsRegistr
 		localizationKey: { bundle: "ash.views", key: "tasks" },
 		order: 2,
 		canToggleVisibility: false,
-		ctorDescriptor: new ServiceConstructionDescriptor(TasksViewPane, { serviceDependencies: [ITaskService, IViewsService, ITerminalService] }),
+		ctorDescriptor: new SyncDescriptor(TasksViewPane),
 	}]);
 }
 

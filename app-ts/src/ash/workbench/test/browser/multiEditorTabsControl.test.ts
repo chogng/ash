@@ -1,4 +1,4 @@
-import { ServiceContainer } from '../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { EditorShowIconsConfiguration } from '../../services/editor/common/editorConfiguration.js';
@@ -327,7 +327,7 @@ function externalDataTransfer(): DataTransfer {
 test('Editor tabs require the window resource label service before rendering', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
-		using services = new ServiceContainer();
+		using services = new InstantiationService();
 		assert.throws(() => services.createInstance(MultiEditorTabsControl, dom.window.document.body, inertDelegate), /Unknown service: resourceLabelService/u);
 		assert.equal(dom.window.document.body.childElementCount, 0);
 	} finally {

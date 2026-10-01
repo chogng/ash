@@ -91,7 +91,9 @@ const {
 const { CommandService } = await import(
 	"../../../workbench/services/commands/common/commandService.js"
 );
-const { ServiceContainer, ServiceConstructionDescriptor } = await import(
+const { InstantiationService } = await import('../../../platform/instantiation/common/instantiationService.js');
+const { SyncDescriptor } = await import('../../../platform/instantiation/common/descriptors.js');
+const {  } = await import(
 	"../../../platform/instantiation/common/instantiation.js"
 );
 type WorkbenchPartId =
@@ -158,7 +160,7 @@ function createLayoutHarness(
 	readonly container: HTMLElement;
 	readonly editor: EditorPartInstance;
 	readonly layout: WorkbenchLayoutInstance;
-	readonly services: InstanceType<typeof ServiceContainer>;
+	readonly services: InstanceType<typeof InstantiationService>;
 	readonly configuration: InstanceType<typeof InMemoryConfigurationService>;
 } {
 	const disposables = new DisposableStore();
@@ -470,7 +472,7 @@ test("platform and Workbench dependencies resolve one owner and publish complete
 });
 
 test('Workbench layout requires its services and hosts overlays before Parts creation', () => {
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	const dom = new JSDOM('', { url: 'https://ash.test' });
 	const container = h(dom.window.document, 'main');
 	const options = { workbenchState: WorkbenchState.FOLDER };
@@ -506,7 +508,7 @@ test('maximized Panel survives configuration changes and restores its saved heig
 	using disposables = harness.disposables;
 	const contextKeys = disposables.add(new ContextKeyService());
 	disposables.add(createTestWorkbenchContextKeysHandler(contextKeys, { layoutService: harness.layout }));
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IWorkbenchLayoutService, harness.layout);
 	const commands = disposables.add(new CommandService(services));
 	harness.layout.layout(new Dimension(1_200, 800));
@@ -656,8 +658,8 @@ test("Git sidebar uses its preferred reset width and merges a lone view into the
 		isDefault: true,
 	}));
 	disposables.add(registry.registerViews("ash.git", [
-		{ id: "test.changes", title: "Changes", collapsed: true, ctorDescriptor: new ServiceConstructionDescriptor(GitTestView) },
-		{ id: "test.graph", title: "Graph", ctorDescriptor: new ServiceConstructionDescriptor(GitTestView) },
+		{ id: "test.changes", title: "Changes", collapsed: true, ctorDescriptor: new SyncDescriptor(GitTestView) },
+		{ id: "test.graph", title: "Graph", ctorDescriptor: new SyncDescriptor(GitTestView) },
 	]));
 	const contextKeys = disposables.add(new ContextKeyService());
 	const viewDescriptors = disposables.add(new ViewDescriptorService({ contextKeyService: contextKeys, registry }));
@@ -669,7 +671,7 @@ test("Git sidebar uses its preferred reset width and merges a lone view into the
 	const composite = new SCMViewPaneContainer(host, {
 		viewContainer: descriptor,
 		model,
-		instantiationService: disposables.add(new ServiceContainer()),
+		instantiationService: disposables.add(new InstantiationService()),
 		contextKeyService: contextKeys,
 	});
 	sidebar.addComposite(composite);
@@ -1182,7 +1184,7 @@ test("Activity Bar hosts the primary sidebar selector independently of sidebar v
 	assert.deepEqual(selections, ["ash.explorer", "ash.search"]);
 	assert.equal(compositeBar.activeCompositeId, "ash.explorer");
 
-	const instantiationService = new ServiceContainer();
+	const instantiationService = new InstantiationService();
 	const explorerContainer = viewDescriptors.getViewContainers(
 		ViewContainerLocation.Sidebar,
 	)[0];
@@ -1263,7 +1265,7 @@ test("Pane Composite Parts restore workspace selections with Registry fallback",
 		return new PaneComposite(dom.window.document.body, {
 			viewContainer: descriptor,
 			model: viewDescriptors.getViewContainerModel(descriptor.id),
-			instantiationService: new ServiceContainer(),
+			instantiationService: new InstantiationService(),
 			contextKeyService: contextKeys,
 		});
 	};
@@ -1347,7 +1349,7 @@ test("Sidebar can host Agent Sidebar composites", () => {
 	const composite = new PaneComposite(dom.window.document.body, {
 		viewContainer: descriptor,
 		model: viewDescriptors.getViewContainerModel(descriptor.id),
-		instantiationService: new ServiceContainer(),
+		instantiationService: new InstantiationService(),
 		contextKeyService: contextKeys,
 	});
 	agentSidebar.addComposite(composite);
@@ -1380,10 +1382,10 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 	disposables.add(registry.registerViews("ash.panel.terminal", [{
 		id: "ash.terminal",
 		title: "Terminal",
-		ctorDescriptor: new ServiceConstructionDescriptor(TestPanelView),
+		ctorDescriptor: new SyncDescriptor(TestPanelView),
 	}]));
 	const contextKeys = disposables.add(new ContextKeyService());
-	const commands = disposables.add(new CommandService(new ServiceContainer()));
+	const commands = disposables.add(new CommandService(new InstantiationService()));
 	const menuService = new MenuService(commands, contextKeys);
 	const contextMenuProvider: IContextMenuProvider = { showContextMenu() {} };
 	const viewDescriptors = disposables.add(new ViewDescriptorService({
@@ -1423,7 +1425,7 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 	const terminal = new PaneComposite(dom.window.document.body, {
 		viewContainer: terminalDescriptor,
 		model: viewDescriptors.getViewContainerModel(terminalDescriptor.id),
-		instantiationService: new ServiceContainer(),
+		instantiationService: new InstantiationService(),
 		contextKeyService: contextKeys,
 		paneHeaders: "hidden",
 		paneLayout: "fill",
@@ -1449,7 +1451,7 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 		const composite = new PaneComposite(dom.window.document.body, {
 			viewContainer: descriptor,
 			model: viewDescriptors.getViewContainerModel(descriptor.id),
-			instantiationService: new ServiceContainer(),
+			instantiationService: new InstantiationService(),
 			contextKeyService: contextKeys,
 			paneHeaders: "hidden",
 			paneLayout: "fill",
@@ -1657,7 +1659,7 @@ test("Auxiliary Bar retains its fixed View as a standard Pane Composite", () => 
 		isDefault: true,
 	}));
 	disposables.add(registry.registerViews("ash.chat", [
-		{ id: "ash.chat.test", title: "Chat", ctorDescriptor: new ServiceConstructionDescriptor(TestPanelView) },
+		{ id: "ash.chat.test", title: "Chat", ctorDescriptor: new SyncDescriptor(TestPanelView) },
 	]));
 	const contextKeys = disposables.add(new ContextKeyService());
 	const viewDescriptors = disposables.add(new ViewDescriptorService({
@@ -1668,7 +1670,7 @@ test("Auxiliary Bar retains its fixed View as a standard Pane Composite", () => 
 		ViewContainerLocation.AuxiliaryBar,
 	);
 	assert.ok(descriptor);
-	const instantiationService = new ServiceContainer();
+	const instantiationService = new InstantiationService();
 	const composite = new PaneComposite(dom.window.document.body, {
 		viewContainer: descriptor,
 		model: viewDescriptors.getViewContainerModel(descriptor.id),
@@ -1763,8 +1765,8 @@ test("PaneComposite rejects ambiguous title projections from multiple Views", ()
 		isDefault: true,
 	}));
 	disposables.add(registry.registerViews("ash.test.projection", [
-		{ id: "ash.test.content", title: "Content", ctorDescriptor: new ServiceConstructionDescriptor(ContentProjectionView) },
-		{ id: "ash.test.actions", title: "Actions", ctorDescriptor: new ServiceConstructionDescriptor(ActionsProjectionView) },
+		{ id: "ash.test.content", title: "Content", ctorDescriptor: new SyncDescriptor(ContentProjectionView) },
+		{ id: "ash.test.actions", title: "Actions", ctorDescriptor: new SyncDescriptor(ActionsProjectionView) },
 	]));
 	const contextKeys = disposables.add(new ContextKeyService());
 	const viewDescriptors = disposables.add(new ViewDescriptorService({
@@ -1776,7 +1778,7 @@ test("PaneComposite rejects ambiguous title projections from multiple Views", ()
 	const composite = new PaneComposite(dom.window.document.body, {
 		viewContainer: descriptor,
 		model: viewDescriptors.getViewContainerModel(descriptor.id),
-		instantiationService: new ServiceContainer(),
+		instantiationService: new InstantiationService(),
 		contextKeyService: contextKeys,
 	});
 
@@ -1831,7 +1833,7 @@ test("CompositeBar reorders view container tabs through drag and drop", () => {
 test("titlebar layout commands toggle shell regions", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const harness = createLayoutHarness(dom.window.document, { defaultLayout: { parts: { panel: true } } });
-	const services = new ServiceContainer();
+	const services = new InstantiationService();
 	services.registerInstance(IWorkbenchLayoutService, harness.layout);
 	const commands = harness.disposables.add(new CommandService(services));
 
@@ -1873,7 +1875,7 @@ test("panel layout actions use state icons", () => {
 	using disposables = new DisposableStore();
 	const contextKeys = disposables.add(new ContextKeyService());
 	const commands = disposables.add(
-		new CommandService(new ServiceContainer()),
+		new CommandService(new InstantiationService()),
 	);
 	const menuService = new MenuService(commands, contextKeys);
 	const panelAction = () => menuService

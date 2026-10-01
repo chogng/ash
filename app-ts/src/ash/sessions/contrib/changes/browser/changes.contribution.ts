@@ -1,6 +1,6 @@
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
-import { ServiceConstructionDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -24,7 +24,7 @@ SessionsViewRegistry.registerStaticViews(CHANGES_VIEW_CONTAINER_ID, [{
 	id: CHANGES_VIEW_ID,
 	title: 'Changes',
 	localizationKey: { bundle: 'ash', key: 'sessions.changes.title' },
-	ctorDescriptor: new ServiceConstructionDescriptor(ChangesViewPane),
+	ctorDescriptor: new SyncDescriptor(ChangesViewPane),
 	canToggleVisibility: false,
 }]);
 

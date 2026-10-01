@@ -6,7 +6,9 @@ import { MarkerService, IMarkerService } from '../../../platform/markers/common/
 import { MarkerDecorationsService } from '../../common/services/markerDecorationsService.js';
 import { IMarkerDecorationsService } from '../../common/services/markerDecorations.js';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
-import { IInstantiationService, ServiceContainer, ServiceConstructionDescriptor, type ServiceIdentifier } from "../../../platform/instantiation/common/instantiation.js";
+import { IInstantiationService, type ServiceIdentifier } from "../../../platform/instantiation/common/instantiation.js";
+import { InstantiationService } from "../../../platform/instantiation/common/instantiationService.js";
+import { SyncDescriptor } from "../../../platform/instantiation/common/descriptors.js";
 import { IThemeService } from "../../../platform/theme/common/themeService.js";
 import { ConfigurationTarget, IConfigurationService, isConfigurationUpdateOverrides, type IConfigurationChangeEvent, type IConfigurationData, type IConfigurationOverrides, type IConfigurationUpdateOptions, type IConfigurationUpdateOverrides, type IConfigurationValue } from '../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
@@ -137,7 +139,7 @@ export interface StandaloneServiceOverrides {
 	readonly completionWorkerFactory?: LanguageCompletionWorkerFactory;
 }
 
-export class StandaloneServiceCollection extends ServiceContainer {
+export class StandaloneServiceCollection extends InstantiationService {
 	readonly modelService: ModelService;
 	readonly languageService: IAshLanguageService;
 	readonly languageConfigurationService: ILanguageConfigurationService;
@@ -158,13 +160,9 @@ export class StandaloneServiceCollection extends ServiceContainer {
 		this.registerSingleton(ICommandService, () => this.createInstance(StandaloneCommandService));
 		this.registerSingleton(INotificationService, () => this.createInstance(StandaloneNotificationService));
 		this.registerSingleton(IKeybindingService, () => this.createInstance(StandaloneKeybindingService));
-		this.registerSingleton(IMenuService, () => this.createInstance(new ServiceConstructionDescriptor(MenuService, {
-			serviceDependencies: [ICommandService, IContextKeyService],
-		})));
+		this.registerSingleton(IMenuService, () => this.createInstance(new SyncDescriptor(MenuService)));
 		this.registerSingleton(IContextViewService, () => this.createInstance(StandaloneContextViewService));
-		this.registerSingleton(IContextMenuService, () => this.createInstance(new ServiceConstructionDescriptor(BrowserContextMenuService, {
-			serviceDependencies: [IMenuService, IContextKeyService, IKeybindingService, IContextViewService, INotificationService],
-		})));
+		this.registerSingleton(IContextMenuService, () => this.createInstance(new SyncDescriptor(BrowserContextMenuService)));
 		this.registerSingleton(IHoverService, accessor => new HoverService(
 			accessor.get(IConfigurationService),
 			accessor.get(IContextViewService),

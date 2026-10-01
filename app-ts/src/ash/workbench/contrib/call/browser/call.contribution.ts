@@ -3,7 +3,8 @@ import { Extensions, type IConfigurationRegistry } from '../../../../platform/co
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { ICallService } from '../../../../platform/call/common/callService.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { ServiceConstructionDescriptor, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { ViewContainerLocation, ViewsRegistry } from '../../../common/views.js';
 import { IViewsService } from '../../../services/views/browser/viewsService.js';
@@ -22,7 +23,7 @@ registerWorkbenchContribution('workbench.contrib.call', WorkbenchPhase.BlockStar
 	registrations.add(ViewsRegistry.registerViewContainer({ id: 'ash.call', title: 'Calls', location: ViewContainerLocation.Panel, order: 4 }));
 	registrations.add(ViewsRegistry.registerViews('ash.call', [{
 		id: 'ash.call.view', title: 'Calls', canToggleVisibility: false,
-		ctorDescriptor: new ServiceConstructionDescriptor(CallViewPane),
+		ctorDescriptor: new SyncDescriptor(CallViewPane),
 	}]));
 	registrations.add(registerAction2(class OpenCalls extends Action2 {
 		constructor() { super({ id: 'ash.call.open', title: 'Open Calls', f1: true }); }

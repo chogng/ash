@@ -1,5 +1,5 @@
 import { _electron, type Page } from '@playwright/test';
-import { link, mkdir, mkdtemp, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { cp, link, mkdir, mkdtemp, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { expect, test } from '../../../automation/test.js';
@@ -16,7 +16,9 @@ const execFileAsync = promisify(execFile);
 async function linkRuntime(source: string, target: string): Promise<void> {
 	await mkdir(target, { recursive: true });
 	for (const entry of await readdir(source, { withFileTypes: true })) {
-		if (entry.isDirectory()) await linkRuntime(join(source, entry.name), join(target, entry.name));
+		// Declarative backend resources require single-link files, as in published runtimes.
+		if (entry.isDirectory() && entry.name === 'ash-resources') await cp(join(source, entry.name), join(target, entry.name), { recursive: true });
+		else if (entry.isDirectory()) await linkRuntime(join(source, entry.name), join(target, entry.name));
 		else if (entry.name === '.lease') await writeFile(join(target, entry.name), '');
 		else await link(join(source, entry.name), join(target, entry.name));
 	}

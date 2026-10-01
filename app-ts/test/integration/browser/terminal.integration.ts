@@ -66,11 +66,11 @@ declare global {
 // Exercise the production pane with controlled process and workspace boundaries.
 if (new URLSearchParams(location.search).has('pane')) {
 	widget.dispose();
-	const [{ TerminalViewPane }, { ContextKeyService }, { MenuService }, { ServiceContainer }, { CommandService }, { URI }] = await Promise.all([
+	const [{ TerminalViewPane }, { ContextKeyService }, { MenuService }, { InstantiationService }, { CommandService }, { URI }] = await Promise.all([
 		import('../../../src/ash/workbench/contrib/terminal/browser/terminalView.js'),
 		import('../../../src/ash/platform/contextkey/browser/contextKeyService.js'),
 		import('../../../src/ash/platform/actions/common/menuService.js'),
-		import('../../../src/ash/platform/instantiation/common/instantiation.js'),
+		import('../../../src/ash/platform/instantiation/common/instantiationService.js'),
 		import('../../../src/ash/workbench/services/commands/common/commandService.js'),
 		import('../../../src/ash/base/common/uri.js'),
 	]);
@@ -78,7 +78,7 @@ if (new URLSearchParams(location.search).has('pane')) {
 	const workspaceChanged = store.add(new Emitter<import('../../../src/ash/platform/workspace/common/workspace.js').IWorkspaceChangeEvent>());
 	const created = store.add(new Emitter<ITerminalInstance>());
 	const context = store.add(new ContextKeyService());
-	const commands = new CommandService(new ServiceContainer());
+	const commands = new CommandService(new InstantiationService());
 	const menu = new MenuService(commands, context);
 	let visible = false;
 	let selected = true;

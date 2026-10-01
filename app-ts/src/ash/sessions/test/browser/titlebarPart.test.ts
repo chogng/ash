@@ -14,7 +14,7 @@ import { MenusRegistry } from '../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../platform/actions/common/menuService.js';
 import type { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import { ContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
-import { ServiceContainer } from '../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import { resetNlsResolver, setNlsResolver } from '../../../nls.js';
 import { WorkbenchPart } from '../../../workbench/browser/part.js';
@@ -33,7 +33,7 @@ test('Sessions titlebar localizes its actions and closes the application menu be
 	using globals = installEditorTestDom(browser, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);
 	using changed = new Emitter<void>();
 	using contextKeys = new ContextKeyService();
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	using commands = new CommandService(services);
 	const menus = new MenuService(commands, contextKeys);
 	using resources = new DisposableStore();
@@ -122,7 +122,7 @@ suiteTeardown(() => layoutTestResources.dispose());
 function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, WorkbenchPart>, options: import('../../browser/workbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService } = {}): import('../../browser/workbench.js').SessionsWorkbenchLayout {
 	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, applicationId: 'sessions-test', workspaceId: 'sessions', flushInterval: 0, onError: () => {} }));
 	const storage = options.storageService ?? ownedStorage!;
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IStorageService, storage);
 	const layout = services.createInstance(SessionsWorkbenchLayout, container, options);
 	try {

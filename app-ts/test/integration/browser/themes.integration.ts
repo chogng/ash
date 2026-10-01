@@ -38,7 +38,7 @@ import { URI } from '../../../src/ash/base/common/uri.js';
 import { ILanguageService } from '../../../src/ash/editor/common/languages/language.js';
 import { LanguageService } from '../../../src/ash/editor/common/services/languageService.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
-import { ServiceContainer } from '../../../src/ash/platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { WorkbenchConfiguration } from '../../../src/ash/workbench/common/configuration.js';
 import { WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/browser/configurationService.js';
 import { AppServerExtensionService } from '../../../src/ash/workbench/services/extensions/browser/appServerExtensionService.js';
@@ -124,7 +124,7 @@ const extensionThemes = resources.add(new ExtensionColorThemeService(createDisco
 await extensionThemes.start();
 const configuration = resources.add(new WorkbenchConfigurationService());
 await configuration.updateValue(WorkbenchConfiguration.colorTheme, 'ash-dark');
-const services = resources.add(new ServiceContainer());
+const services = resources.add(new InstantiationService());
 services.registerInstance(IConfigurationService, configuration);
 const languages = resources.add(new LanguageService());
 resources.add(languages.registerLanguage({ id: 'typescript', extensions: ['.ts'] }));

@@ -1,8 +1,8 @@
 import { toDisposable } from "../../../../base/common/lifecycle.js";
 import { addDisposableListener, h, text as createText } from "../../../../base/browser/dom.js";
 import { Checkbox } from "../../../../base/browser/ui/toggle/toggle.js";
-import type { IContentSearchQuery, IContentSearchService, ContentSearchMatch, ContentSearchMatchRange } from "../../../../platform/search/common/search.js";
-import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
+import { type IContentSearchQuery, IContentSearchService, type ContentSearchMatch, type ContentSearchMatchRange } from "../../../../platform/search/common/search.js";
+import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IRegisteredConfiguration } from "../../../../platform/configuration/common/configurationRegistry.js";
 import { Registry } from "../../../../platform/registry/common/platform.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
@@ -32,8 +32,8 @@ export class SearchViewPane extends ViewPane {
 	constructor(
 		container: HTMLElement,
 		options: IViewPaneOptions,
-		searchService: IContentSearchService,
-		private readonly configurationService?: IConfigurationService,
+		@IContentSearchService searchService: IContentSearchService,
+		@IConfigurationService private readonly configurationService?: IConfigurationService,
 	) {
 		super(container, options);
 		this.searchService = searchService;

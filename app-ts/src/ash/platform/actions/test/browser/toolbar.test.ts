@@ -313,7 +313,7 @@ test("workbench toolbar adapts manually supplied platform menu actions", async (
 		{ MenuService },
 		{ CommandsRegistry },
 		{ ContextKeyService },
-		{ ServiceContainer },
+		{ InstantiationService },
 		{ CommandService },
 		{ DisposableStore },
 		{ WorkbenchToolBar },
@@ -322,7 +322,7 @@ test("workbench toolbar adapts manually supplied platform menu actions", async (
 		import("../../../../platform/actions/common/menuService.js"),
 		import("../../../../platform/commands/common/commands.js"),
 		import("../../../../platform/contextkey/browser/contextKeyService.js"),
-		import("../../../../platform/instantiation/common/instantiation.js"),
+		import('../../../../platform/instantiation/common/instantiationService.js'),
 		import("../../../../workbench/services/commands/common/commandService.js"),
 		import("../../../../base/common/lifecycle.js"),
 		import("../../../../platform/actions/browser/toolbar.js"),
@@ -335,7 +335,7 @@ test("workbench toolbar adapts manually supplied platform menu actions", async (
 		command: { id: commandId, title: "Workbench action" },
 		group: "navigation",
 	}));
-	const commands = new CommandService(new ServiceContainer());
+	const commands = new CommandService(new InstantiationService());
 	const contexts = registrations.add(new ContextKeyService());
 	const menus = new MenuService(commands, contexts);
 	const action = menus.getMenuActions(menuId)[0]?.[1][0];
@@ -362,7 +362,7 @@ test("menu toolbar keeps navigation inline and moves other groups into More Acti
 		{ MenuService },
 		{ CommandsRegistry },
 		{ ContextKeyService },
-		{ ServiceContainer },
+		{ InstantiationService },
 		{ CommandService },
 		{ DisposableStore },
 		{ MenuWorkbenchToolBar },
@@ -371,7 +371,7 @@ test("menu toolbar keeps navigation inline and moves other groups into More Acti
 		import("../../../../platform/actions/common/menuService.js"),
 		import("../../../../platform/commands/common/commands.js"),
 		import("../../../../platform/contextkey/browser/contextKeyService.js"),
-		import("../../../../platform/instantiation/common/instantiation.js"),
+		import('../../../../platform/instantiation/common/instantiationService.js'),
 		import("../../../../workbench/services/commands/common/commandService.js"),
 		import("../../../../base/common/lifecycle.js"),
 		import("../../../../platform/actions/browser/toolbar.js"),
@@ -400,7 +400,7 @@ test("menu toolbar keeps navigation inline and moves other groups into More Acti
 		},
 		group: "other",
 	}));
-	const commands = new CommandService(new ServiceContainer());
+	const commands = new CommandService(new InstantiationService());
 	const contexts = registrations.add(new ContextKeyService());
 	const menus = new MenuService(commands, contexts);
 	let shownOptions:
@@ -449,7 +449,7 @@ test("menu toolbar projects empty state as a stable visual class", async () => {
 		{ MenuService },
 		{ CommandsRegistry },
 		{ ContextKeyService },
-		{ ServiceContainer },
+		{ InstantiationService },
 		{ CommandService },
 		{ DisposableStore },
 		{ MenuWorkbenchToolBar },
@@ -458,7 +458,7 @@ test("menu toolbar projects empty state as a stable visual class", async () => {
 		import("../../../../platform/actions/common/menuService.js"),
 		import("../../../../platform/commands/common/commands.js"),
 		import("../../../../platform/contextkey/browser/contextKeyService.js"),
-		import("../../../../platform/instantiation/common/instantiation.js"),
+		import('../../../../platform/instantiation/common/instantiationService.js'),
 		import("../../../../workbench/services/commands/common/commandService.js"),
 		import("../../../../base/common/lifecycle.js"),
 		import("../../../../platform/actions/browser/toolbar.js"),
@@ -475,7 +475,7 @@ test("menu toolbar projects empty state as a stable visual class", async () => {
 	const contexts = registrations.add(new ContextKeyService());
 	const toolbar = new MenuWorkbenchToolBar(
 		dom.window.document.body,
-		new MenuService(new CommandService(new ServiceContainer()), contexts),
+		new MenuService(new CommandService(new InstantiationService()), contexts),
 		{ showContextMenu() {} },
 		menuId,
 	);
@@ -510,7 +510,7 @@ test("menu toolbar retains action slots for enablement and toggle changes", asyn
 		{ MenuService },
 		{ CommandsRegistry },
 		{ ContextKeyService },
-		{ ServiceContainer },
+		{ InstantiationService },
 		{ CommandService },
 		{ DisposableStore },
 		{ MenuWorkbenchToolBar },
@@ -519,7 +519,7 @@ test("menu toolbar retains action slots for enablement and toggle changes", asyn
 		import("../../../../platform/actions/common/menuService.js"),
 		import("../../../../platform/commands/common/commands.js"),
 		import("../../../../platform/contextkey/browser/contextKeyService.js"),
-		import("../../../../platform/instantiation/common/instantiation.js"),
+		import('../../../../platform/instantiation/common/instantiationService.js'),
 		import("../../../../workbench/services/commands/common/commandService.js"),
 		import("../../../../base/common/lifecycle.js"),
 		import("../../../../platform/actions/browser/toolbar.js"),
@@ -540,7 +540,7 @@ test("menu toolbar retains action slots for enablement and toggle changes", asyn
 	const contexts = registrations.add(new ContextKeyService());
 	const toolbar = new MenuWorkbenchToolBar(
 		dom.window.document.body,
-		new MenuService(new CommandService(new ServiceContainer()), contexts),
+		new MenuService(new CommandService(new InstantiationService()), contexts),
 		{ showContextMenu() {} },
 		menuId,
 	);
@@ -591,7 +591,7 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 		{ ToolBar },
 		{ ContextKeyService },
 		{ MenuService },
-		{ ServiceContainer },
+		{ InstantiationService },
 		{ CommandService },
 		{ BrowserContextViewService },
 		{ BrowserContextMenuService },
@@ -600,7 +600,7 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 		import("../../../../base/browser/ui/toolbar/toolbar.js"),
 		import("../../../../platform/contextkey/browser/contextKeyService.js"),
 		import("../../../../platform/actions/common/menuService.js"),
-		import("../../../../platform/instantiation/common/instantiation.js"),
+		import('../../../../platform/instantiation/common/instantiationService.js'),
 		import("../../../../workbench/services/commands/common/commandService.js"),
 		import("../../../../platform/contextview/browser/contextViewService.js"),
 		import("../../../../platform/contextview/browser/contextMenuService.js"),
@@ -608,7 +608,7 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 	const host = dom.window.document.querySelector<HTMLElement>("main");
 	assert.ok(host);
 	using contexts = new ContextKeyService();
-	const commands = new CommandService(new ServiceContainer());
+	const commands = new CommandService(new InstantiationService());
 	const menus = new MenuService(commands, contexts);
 	using contextViews = new BrowserContextViewService(host);
 	const notificationMessages: string[] = [];

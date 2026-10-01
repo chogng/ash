@@ -7,16 +7,16 @@ import { Lxicon } from "../../../../base/common/lxicons.js";
 import { localize } from '../../../../nls.js';
 import { DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { MenuWorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
-import { type IMenuService, MenuId } from "../../../../platform/actions/common/actions.js";
+import { IMenuService, MenuId } from "../../../../platform/actions/common/actions.js";
 import type { IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
-import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import type { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
+import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { registerOpenEditorListeners, type IOpenEditorOptions } from "../../../../platform/editor/browser/editor.js";
-import type { IHoverService } from "../../../../platform/hover/browser/hoverService.js";
-import type { IResourceIconRenderer } from "../../../browser/labels.js";
+import { IHoverService } from "../../../../platform/hover/browser/hoverService.js";
+import { IResourceIconRenderer } from "../../../browser/labels.js";
 import { SCMHistoryUnavailableError, type ISCMHistoryItem, type ISCMHistoryItemChange, type ISCMHistoryItemRef, type ISCMHistoryItemViewModel, type ISCMHistoryProvider, type SCMHistoryItemChangeViewModelTreeElement, type SCMHistoryItemViewModelTreeElement } from '../common/history.js';
-import type { ISCMViewService } from '../common/scm.js';
-import type { IEditorService } from "../../../services/editor/common/editorService.js";
+import { ISCMViewService } from '../common/scm.js';
+import { IEditorService } from "../../../services/editor/common/editorService.js";
 import type { IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { ViewPane } from "../../../browser/parts/views/viewPane.js";
 import { createDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
@@ -59,7 +59,7 @@ export class SCMHistoryViewPane extends ViewPane {
 	private graphRepositoryId: string | undefined;
 	public get repositoryId(): string | undefined { return this.graphRepositoryId; }
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, scmViewService: ISCMViewService, menuService: IMenuService, private readonly contextMenuService: IContextMenuService, contextKeyService: IContextKeyService, private readonly hoverService: IHoverService, private readonly editorService: IEditorService, private readonly resourceIconRenderer: IResourceIconRenderer) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @ISCMViewService scmViewService: ISCMViewService, @IMenuService menuService: IMenuService, @IContextMenuService private readonly contextMenuService: IContextMenuService, @IContextKeyService contextKeyService: IContextKeyService, @IHoverService private readonly hoverService: IHoverService, @IEditorService private readonly editorService: IEditorService, @IResourceIconRenderer private readonly resourceIconRenderer: IResourceIconRenderer) {
 		super(container, { ...options, headerActionsVisibility: "whenExpanded" });
 		this.scmViewService = scmViewService;
 		this.graphLabel = options.title;

@@ -7,7 +7,7 @@ import { commandActionLabel } from '../../../../../platform/action/common/action
 import { registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILanguagePackService } from '../../../../../platform/languagePacks/common/languagePacksService.js';
 import type { LanguagePackCatalog, LanguagePackInfo } from '../../../../../platform/languagePacks/common/languagePacksService.js';
 import type { LanguagePackPackage } from '../../../../../platform/languagePacks/common/languagePacksService.js';
@@ -74,7 +74,7 @@ class LanguageActionEnvironment extends Disposable {
 
 	constructor() {
 		super();
-		const services = new ServiceContainer();
+		const services = new InstantiationService();
 		services.registerInstance(ILanguagePackService, this.languagePacks);
 		services.registerInstance(ILocaleService, this.locale);
 		services.registerInstance(IQuickInputService, this.quickInput);

@@ -3,7 +3,7 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { AbstractCodeEditorService } from '../../../../../editor/browser/services/abstractCodeEditorService.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IQuickDiffEditorControllerService, IQuickDiffModelService } from '../../common/quickDiff.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
@@ -147,7 +147,7 @@ const { createTestCodeEditor } = await import('../../../../../editor/test/browse
 		using modelService = new QuickDiffModelService(quickDiffService, new DiffService(() => new DiffTestPort()), configuration);
 		using controllers = new QuickDiffEditorControllerService();
 		await configuration.updateValue(ScmConfiguration.diffDecorations, 'all');
-		using services = new ServiceContainer();
+		using services = new InstantiationService();
 		using codeEditors = new class extends AbstractCodeEditorService { getActiveCodeEditor() { return this.getFocusedCodeEditor(); } }();
 		services.registerInstance(ICodeEditorService, codeEditors);
 		services.registerInstance(IConfigurationService, configuration);

@@ -9,7 +9,7 @@ import { MenuService } from '../../../../../platform/actions/common/menuService.
 import { CommandRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IDialogService, DialogResult, DialogSeverity } from '../../../../../platform/dialogs/common/dialogs.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import type { IQuickPick, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
@@ -29,7 +29,7 @@ test('Command Palette shows a localized error dialog for a failed command', asyn
 		resources.add(MenusRegistry.appendMenuItem(MenuId.CommandPalette, {
 			command: { id: 'test.commandFailure', title: 'Failing command' },
 		}));
-		using services = new ServiceContainer();
+		using services = new InstantiationService();
 		const commands = resources.add(new CommandService(services, registry));
 		const contexts = resources.add(new ContextKeyService());
 		const dialogs = resources.add(new DialogService());
@@ -75,7 +75,7 @@ test('Command Palette does not show a dialog for cancelled commands', async () =
 	resources.add(MenusRegistry.appendMenuItem(MenuId.CommandPalette, {
 		command: { id: 'test.cancelCommand', title: 'Cancelled command' },
 	}));
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	const commands = resources.add(new CommandService(services, registry));
 	const contexts = resources.add(new ContextKeyService());
 	const dialogs = resources.add(new DialogService());

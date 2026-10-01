@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { type IEditorPartsService as EditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
@@ -27,7 +27,7 @@ const { CodeEditorService } = await import('../../browser/codeEditorService.js')
 
 test('active code editor follows the pane control when two editors share a model', () => {
 	using resources = new DisposableStore();
-	const services = resources.add(new ServiceContainer());
+	const services = resources.add(new InstantiationService());
 	let control: unknown;
 	services.registerInstance(IEditorPartsService, {
 		get activePane() { return { getControl: () => control }; },
@@ -58,9 +58,9 @@ test('active code editor follows the pane control when two editors share a model
 });
 
 test('code editor services require their host and keep registrations within its scope', () => {
-	using first = new ServiceContainer();
+	using first = new InstantiationService();
 	assert.throws(() => first.createInstance(CodeEditorService), /Unknown service: editorPartsService/);
-	using second = new ServiceContainer();
+	using second = new InstantiationService();
 	for (const services of [first, second]) {
 		services.registerInstance(IEditorPartsService, { activePane: undefined } as unknown as EditorPartsService);
 		services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));

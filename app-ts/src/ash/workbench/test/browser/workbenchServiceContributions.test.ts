@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { createServiceIdentifier, ServiceContainer } from "../../../platform/instantiation/common/instantiation.js";
+import { createServiceIdentifier } from "../../../platform/instantiation/common/instantiation.js";
+import { InstantiationService } from "../../../platform/instantiation/common/instantiationService.js";
 import { WorkbenchServiceContributionRegistry, type WorkbenchServiceContributionContext } from "../../browser/workbenchServiceContributions.js";
 
 test("Workbench service contributions install by declared dependency topology", () => {
@@ -10,7 +11,7 @@ test("Workbench service contributions install by declared dependency topology", 
 	const installed: string[] = [];
 	registry.register({ service: second, dependencies: [first], install: context => { installed.push("second"); return { value: `${context.container.get(first).value}:second` }; } });
 	registry.register({ service: first, dependencies: [], install: () => { installed.push("first"); return { value: "first" }; } });
-	const services = new ServiceContainer();
+	const services = new InstantiationService();
 	registry.install(context(services));
 	assert.deepEqual(installed, ["first", "second"]);
 	assert.equal(services.get(second).value, "first:second");
@@ -22,9 +23,9 @@ test("Workbench service contributions reject duplicate and unresolved ownership"
 	const registry = new WorkbenchServiceContributionRegistry();
 	registry.register({ service: first, dependencies: [missing], install: () => ({}) });
 	assert.throws(() => registry.register({ service: first, dependencies: [], install: () => ({}) }), /more than once/u);
-	assert.throws(() => registry.install(context(new ServiceContainer())), /missing or cyclic dependencies.*testDuplicate.*testMissing/u);
+	assert.throws(() => registry.install(context(new InstantiationService())), /missing or cyclic dependencies.*testDuplicate.*testMissing/u);
 });
 
-function context(container: ServiceContainer): WorkbenchServiceContributionContext {
+function context(container: InstantiationService): WorkbenchServiceContributionContext {
 	return { container, register: value => value, blockRestorationUntil: () => undefined };
 }

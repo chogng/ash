@@ -26,7 +26,7 @@ const { CodeEditorWidget } = await import("../../../browser/widget/codeEditor/co
 const { createTestCodeEditor } = await import('../testCodeEditor.js');
 const { TextAreaEditContextRegistry } = await import('../../../browser/controller/editContext/textArea/textAreaEditContextRegistry.js');
 const { ViewPart } = await import('../../../browser/view/viewPart.js');
-const { ServiceContainer } = await import("../../../../platform/instantiation/common/instantiation.js");
+const { InstantiationService } = await import("../../../../platform/instantiation/common/instantiationService.js");
 const { ILogService, NullLoggerService } = await import('../../../../platform/log/common/log.js');
 const { PlaceholderTextContribution } = await import("../../../contrib/placeholderText/browser/placeholderTextContribution.js");
 const { VersionedEditorWorkerClient } = await import('../../../browser/services/editorWorkerService.js');
@@ -151,7 +151,7 @@ test('CodeEditorWidget scopes and updates the standard editor context keys', () 
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	using rootContextKeys = new ContextKeyService();
 	services.registerInstance(IContextKeyService, rootContextKeys);
 	using editor = createTestCodeEditor({
@@ -299,7 +299,7 @@ test('CodeEditorWidget actions keep their editor context across read-only change
 	using first = new TextModel('first\nkeep');
 	using second = new TextModel('second\nkeep');
 	using replacement = new TextModel('replacement\nkeep');
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	using rootContext = new ContextKeyService();
 	services.registerInstance(IContextKeyService, rootContext);
 	using editor = createTestCodeEditor({
@@ -936,7 +936,7 @@ test('formatting context keys follow registration, language changes, and model r
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha', { languageId: 'plaintext' });
 	using next = new TextModel('beta', { languageId: 'typescript' });
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	using rootContextKeys = new ContextKeyService();
 	services.registerInstance(IContextKeyService, rootContextKeys);
 	using editor = createTestCodeEditor({

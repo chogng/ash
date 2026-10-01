@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../platform/configuration/common/inMemoryConfigurationService.js';
-import { ServiceContainer } from '../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
 import { TokenMetadata } from '../../../common/encodedTokenAttributes.js';
 import { TokenizationRegistry, type IState, type ITokenizationSupport } from '../../../common/languages.js';
 import { ILanguageService } from '../../../common/languages/language.js';
@@ -17,7 +17,7 @@ import { IStandaloneThemeService } from '../../common/standaloneTheme.js';
 import '../../../common/config/editorConfigurationSchema.js';
 
 function createTokenizer(resources: DisposableStore, definition: IMonarchLanguage) {
-	const services = resources.add(new ServiceContainer());
+	const services = resources.add(new InstantiationService());
 	const dom = new JSDOM('<!doctype html><body></body>');
 	resources.add(toDisposable(() => dom.window.close()));
 	const media = Object.assign(new EventTarget(), { matches: false });

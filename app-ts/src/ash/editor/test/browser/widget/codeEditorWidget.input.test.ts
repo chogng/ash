@@ -33,7 +33,7 @@ const { NativeEditContextRegistry } = await import('../../../browser/controller/
 const { ScreenReaderSupport } = await import('../../../browser/controller/editContext/native/screenReaderSupport.js');
 const { TextAreaEditContext } = await import('../../../browser/controller/editContext/textArea/textAreaEditContext.js');
 const { TestView } = await import('../viewModel/testViewModel.js');
-const { ServiceContainer } = await import("../../../../platform/instantiation/common/instantiation.js");
+const { InstantiationService } = await import("../../../../platform/instantiation/common/instantiationService.js");
 const { ILogService, NullLoggerService } = await import('../../../../platform/log/common/log.js');
 await import("../../../contrib/placeholderText/browser/placeholderText.contribution.js");
 await import('../../../contrib/inPlaceReplace/browser/inPlaceReplace.js');
@@ -443,7 +443,7 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 	}
 	Object.defineProperty(dom.window, 'EditContext', { configurable: true, value: TestEditContext });
 	using model = new TextModel('alpha');
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(ILogService, new NullLoggerService());
 	using editor = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'main'),

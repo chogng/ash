@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../../base/common/uri.js';
-import { ServiceContainer } from '../../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { ILabelService, LabelService } from '../../../../../../platform/label/common/labelService.js';
 import { IWorkspaceContextService, type IWorkspace } from '../../../../../../platform/workspace/common/workspace.js';
 import { WorkbenchModeId } from '../../../../../common/workbenchMode.js';
@@ -17,7 +17,7 @@ import { WindowTitle } from '../../windowTitle.js';
 
 interface TestContext {
 	readonly dom: JSDOM;
-	readonly services: ServiceContainer;
+	readonly services: InstantiationService;
 	readonly workspace: WorkspaceContextService;
 	readonly workingCopies: BrowserWorkingCopyService;
 	readonly labels: LabelService;
@@ -27,7 +27,7 @@ interface TestContext {
 function createContext(resources: DisposableStore, modeId: WorkbenchModeId = WorkbenchModeId.Code): TestContext {
 	const dom = new JSDOM('<!doctype html><title>Previous title</title>');
 	resources.add(toDisposable(() => dom.window.close()));
-	const services = resources.add(new ServiceContainer());
+	const services = resources.add(new InstantiationService());
 	const workspace = resources.add(new WorkspaceContextService({ id: 'test', folders: [] }));
 	const workingCopies = resources.add(new BrowserWorkingCopyService());
 	const labels = resources.add(new LabelService(workspace));
@@ -126,7 +126,7 @@ test('WindowTitle keeps main and auxiliary editor scopes independent', async () 
 });
 
 test('WindowTitle rejects creation without its required services', () => {
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	assert.throws(() => services.createInstance(WindowTitle, {} as Window), /Unknown service: editorService/);
 });
 

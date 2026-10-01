@@ -4,14 +4,14 @@ import { LanguageDiagnosticSeverity } from '../../../common/languages.js';
 import { LanguageDiagnosticDecorationBridge } from '../../../contrib/gotoError/common/diagnosticDecorations.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { ServiceContainer } from '../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
 import { IMarkerService, MarkerService, MarkerSeverity } from '../../../../platform/markers/common/markers.js';
 import { MarkerDecorationsService } from '../../../common/services/markerDecorationsService.js';
 import { TextModel } from '../../../common/model/textModel.js';
 import { Range } from '../../../common/core/range.js';
 
 function fixture() {
-	const container = new ServiceContainer();
+	const container = new InstantiationService();
 	const markers = new MarkerService();
 	container.registerInstance(IMarkerService, markers);
 	return { container, markers, service: container.createInstance(MarkerDecorationsService) };

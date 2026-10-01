@@ -80,7 +80,7 @@ before flushing storage.
 2. `browser/workbench.ts` creates one App Server Session provider, one
    `ISessionsManagementService`, one window `ISessionsService`, and one
    `ChatService`, then registers their frontend contracts in a window-local
-   `ServiceContainer`.
+   `InstantiationService`.
 3. The Sessions `Workbench` creates `BrowserLayoutService` and registers
    commands, context keys, menus, keybindings, overlays, quick input, settings,
    and hover services for its own window, using the same service implementations

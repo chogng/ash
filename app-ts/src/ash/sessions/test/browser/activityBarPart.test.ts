@@ -18,7 +18,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { ServiceContainer } = await import('../../../platform/instantiation/common/instantiation.js');
+const { InstantiationService } = await import('../../../platform/instantiation/common/instantiationService.js');
 const { IConfigurationService } = await import('../../../platform/configuration/common/configuration.js');
 const { BrowserContextViewService } = await import('../../../platform/contextview/browser/contextViewService.js');
 const { HoverService, IHoverService } = await import('../../../platform/hover/browser/hoverService.js');
@@ -43,7 +43,7 @@ test('Sessions Activity Bar selects Chat, Collaboration, Library, and Code pages
 	const configuration = new WorkbenchConfigurationService();
 	using contextViews = new BrowserContextViewService(ownerDocument.body);
 	using hovers = new HoverService(configuration, contextViews, contextMenu);
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IContextMenuService, contextMenu);
 	services.registerInstance(IHoverService, hovers);
@@ -113,7 +113,7 @@ test('Sessions Activity Bar context menu changes its own position and size setti
 	const configuration = new WorkbenchConfigurationService();
 	using contextViews = new BrowserContextViewService(ownerDocument.body);
 	using hovers = new HoverService(configuration, contextViews, contextMenu);
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IContextMenuService, contextMenu);
 	services.registerInstance(IHoverService, hovers);
@@ -144,7 +144,7 @@ test('Sessions Activity Bar context menu changes its own position and size setti
 
 test('Sessions Activity Bar requires its window Hover service during creation', () => {
 	using configuration = new WorkbenchConfigurationService();
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IContextMenuService, {
 		onDidShowContextMenu: Event.None,

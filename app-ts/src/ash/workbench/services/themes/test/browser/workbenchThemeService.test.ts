@@ -15,7 +15,7 @@ import { resolveSemanticTokenPresentation } from '../../../../../editor/common/s
 import { lightColorTheme } from '../../../../../platform/theme/common/colorTheme.js';
 import { registerColor } from '../../../../../platform/theme/common/colorUtils.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { WorkbenchThemesRegistry } from '../../../../common/theme.js';
 import { loadUserThemes, WorkbenchThemeService } from '../../browser/workbenchThemeService.js';
@@ -39,7 +39,7 @@ test('selected product icon theme refreshes mounted SVGs and returns to defaults
 		using registration = WorkbenchProductIconThemesRegistry.registerThemes();
 		registration.replace([{ id: 'test-workbench-svg', label: 'Test SVG', icons: new Map([[icon.id, () => '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4"/></svg>']]) }]);
 		using configuration = new WorkbenchConfigurationService();
-		using services = new ServiceContainer();
+		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
 		using languages = new LanguageService();
 		services.registerInstance(ILanguageService, languages);
@@ -82,7 +82,7 @@ test('persisted color customizations override themes, update live, and restore t
 			revision: 1,
 			document: { version: 1, source: `// user colors\n${JSON.stringify({ 'workbench.colorTheme': theme.id, 'workbench.colorCustomizations': { 'editor.selectionBackground': '#456789', 'editor.selectionForeground': '#112233' } })}` },
 		} });
-		using services = new ServiceContainer();
+		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
 		using languages = new LanguageService();
 		services.registerInstance(ILanguageService, languages);
@@ -154,7 +154,7 @@ test('active semantic theme styles follow the selected theme', async () => {
 		using registration = WorkbenchThemesRegistry.registerColorThemes([theme]);
 		using configuration = new WorkbenchConfigurationService();
 		await configuration.updateValue(WorkbenchConfiguration.colorTheme, theme.id);
-		using services = new ServiceContainer();
+		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
 		using languages = new LanguageService();
 		services.registerInstance(ILanguageService, languages);
@@ -216,7 +216,7 @@ test('active user themes apply overrides for colors registered after theme loadi
 		using registration = WorkbenchThemesRegistry.registerColorThemes([theme]);
 		using configuration = new WorkbenchConfigurationService();
 		await configuration.updateValue(WorkbenchConfiguration.colorTheme, theme.id);
-		using services = new ServiceContainer();
+		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
 		using languages = new LanguageService();
 		services.registerInstance(ILanguageService, languages);
@@ -403,7 +403,7 @@ test('theme save, rename, reload, and delete keep identity in the filename', asy
 			removeEventListener: () => {},
 		}) });
 		using configuration = new WorkbenchConfigurationService();
-		using services = new ServiceContainer();
+		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
 		using languages = new LanguageService();
 		services.registerInstance(ILanguageService, languages);
@@ -431,7 +431,7 @@ test('theme save, rename, reload, and delete keep identity in the filename', asy
 });
 
 async function loadThemes(files: IFileService, directory: string): Promise<IUserThemeService & IDisposable> {
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IFileService, files);
 	return loadUserThemes(services, URI.file(directory));
 }

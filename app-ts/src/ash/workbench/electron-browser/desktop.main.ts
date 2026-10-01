@@ -7,7 +7,7 @@ import { IFileService } from '../../platform/files/common/files.js';
 import { ElectronRendererClipboardService } from '../../platform/clipboard/electron-browser/electronRendererClipboardService.js';
 import { validateConfigurationSnapshot } from '../../platform/configuration/common/configurationIpc.js';
 import { invoke } from '../../platform/ipc/electron-browser/rendererIpc.js';
-import { ServiceContainer } from '../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
 import { createElectronRendererApi, type ElectronRendererCapabilityContribution } from '../../platform/native/electron-browser/rendererApi.js';
 import { parseWorkspace } from '../../platform/workspace/common/workspace.js';
 import { showStartupError } from '../browser/startupError.js';
@@ -43,7 +43,7 @@ export class DesktopMain extends Disposable {
 			const container = document.querySelector<HTMLElement>('#app') ?? document.body;
 			const permissionDialog = this._register(new DirectoryPermissionDialog(container));
 			const api = this._register(await createElectronRendererApi(this.rendererCapabilities, { browser: true }, permissionDialog));
-			const profileServices = this._register(new ServiceContainer());
+			const profileServices = this._register(new InstantiationService());
 			profileServices.registerInstance(IFileService, api.localFiles);
 			const userThemes = this._register(await loadUserThemes(profileServices, URI.parse(api.userDataHome.toString().replace(/\/$/u, '') + '/themes')));
 			const workspace = parseWorkspace(await api.workspace.getWorkspace());

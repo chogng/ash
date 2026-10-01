@@ -2,9 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { ContextKeyExpr } from "../../../platform/contextkey/common/contextkey.js";
 import { ContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
-import {
-	ServiceConstructionDescriptor,
-} from "../../../platform/instantiation/common/instantiation.js";
+import { SyncDescriptor } from "../../../platform/instantiation/common/descriptors.js";
 import {
 	type IView,
 	type IViewDescriptor,
@@ -145,9 +143,7 @@ function testView(
 	return {
 		id,
 		title,
-		ctorDescriptor: new ServiceConstructionDescriptor(TestView, {
-			staticArguments: [id],
-		}),
+		ctorDescriptor: new SyncDescriptor(TestView, [id]),
 		...options,
 	};
 }

@@ -1,15 +1,15 @@
 import { TabList, type TabListDropPosition } from "../../../../base/browser/ui/tablist/tabList.js";
 import { Disposable, DisposableMap } from "../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
-import type { IMenuService } from "../../../../platform/actions/common/actions.js";
-import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import type { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
-import type { IThemeService } from "../../../../platform/theme/common/themeService.js";
+import { IMenuService } from "../../../../platform/actions/common/actions.js";
+import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
+import { IThemeService } from "../../../../platform/theme/common/themeService.js";
 import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
-import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
+import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
-import type { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
-import type { ITerminalDimensions, ITerminalInstance, ITerminalService } from "../../../services/terminal/common/terminal.js";
+import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
+import { type ITerminalDimensions, type ITerminalInstance, ITerminalService } from "../../../services/terminal/common/terminal.js";
 import { TerminalInstanceWidget } from "./instance/terminalInstanceWidget.js";
 import { TerminalTabsLayout } from "./view/terminalTabsLayout.js";
 import { terminalProfileIcon } from "./view/terminalProfileIcon.js";
@@ -35,7 +35,7 @@ export class TerminalViewPane extends ViewPane {
 	private initializing = false;
 	private focusSource: Element | null | undefined;
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, terminalService: ITerminalService, themeService: IThemeService, menuService: IMenuService, contextMenuService: IContextMenuService, contextKeyService: IContextKeyService, private readonly layoutService: IWorkbenchLayoutService, private readonly workspaceContext: IWorkspaceContextService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @ITerminalService terminalService: ITerminalService, @IThemeService themeService: IThemeService, @IMenuService menuService: IMenuService, @IContextMenuService contextMenuService: IContextMenuService, @IContextKeyService contextKeyService: IContextKeyService, @IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService, @IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService) {
 		super(container, options);
 		this.terminalService = terminalService;
 		this.themeService = themeService;

@@ -10,7 +10,7 @@ import { Selection } from '../../../../common/core/selection.js';
 import { Position } from '../../../../common/core/position.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { ICodeEditorService } from '../../../../browser/services/codeEditorService.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { StandaloneCodeEditorService } from '../../../../standalone/browser/standaloneCodeEditorService.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import '../../browser/messageController.js';
@@ -70,7 +70,7 @@ test('Markdown resource links open through the code editor service', async () =>
 		openedResources.push(resource);
 		return null;
 	});
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(ICodeEditorService, codeEditorService);
 	using editor = createTestCodeEditor({ container, model, instantiationService: services });
 	editor.layout({ width: 400, height: 100 });

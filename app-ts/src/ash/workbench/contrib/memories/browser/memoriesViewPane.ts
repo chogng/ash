@@ -39,11 +39,11 @@ export class MemoriesViewPane extends ViewPane {
 	private mutationId = generateUuid();
 
 	constructor(container: HTMLElement, options: IViewPaneOptions,
-		private readonly memories: IMemoriesService,
-		private readonly sessions: IChatSessionNavigationService,
-		private readonly dialogs: IDialogService,
-		private readonly configuration: IConfigurationService,
-		contextKeys: IContextKeyService,
+		@IMemoriesService private readonly memories: IMemoriesService,
+		@IChatSessionNavigationService private readonly sessions: IChatSessionNavigationService,
+		@IDialogService private readonly dialogs: IDialogService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super(container, options);
 		const document = container.ownerDocument;

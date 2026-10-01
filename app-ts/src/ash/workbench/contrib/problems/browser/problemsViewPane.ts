@@ -6,9 +6,9 @@ import { getOrSet } from "../../../../base/common/map.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { Range } from "../../../../editor/common/core/range.js";
 import { MarkerSeverity, type Marker } from "../../../../platform/markers/common/markers.js";
-import { type IEditorService } from "../../../services/editor/common/editorService.js";
+import { IEditorService } from "../../../services/editor/common/editorService.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
-import { type IMarkerService } from "../../../../platform/markers/common/markers.js";
+import { IMarkerService } from "../../../../platform/markers/common/markers.js";
 
 interface ProblemEntry {
 	readonly marker: Marker;
@@ -39,7 +39,7 @@ export class ProblemsViewPane extends ViewPane {
 	private renderedProblems: readonly ProblemEntry[] = [];
 	private navigationError: string | undefined;
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, private readonly markerService: IMarkerService, private readonly editorService: IEditorService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @IMarkerService private readonly markerService: IMarkerService, @IEditorService private readonly editorService: IEditorService) {
 		super(container, options);
 		this.contentElement.classList.add("ash-problems");
 		const document = container.ownerDocument;

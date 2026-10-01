@@ -5,14 +5,14 @@ import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import { IAccountService, type AccountLoginChallenge, type AccountLoginCompletion, type AccountState } from '../../../../../platform/accounts/common/accountService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
 import { ILocalizationService } from '../../../localization/common/localizationService.js';
 import { GitHubConnectionService } from '../../browser/gitHubConnectionService.js';
 
 test('GitHub connection handles completion received before login start returns', async () => {
 	using disposables = new DisposableStore();
-	const services = disposables.add(new ServiceContainer());
+	const services = disposables.add(new InstantiationService());
 	const completed = disposables.add(new Emitter<AccountLoginCompletion>());
 	const accountState: AccountState = {
 		revision: 2n,

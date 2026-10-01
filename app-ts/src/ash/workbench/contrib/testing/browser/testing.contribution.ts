@@ -1,9 +1,6 @@
 import { Lxicon } from "../../../../base/common/lxicons.js";
-import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
+import { SyncDescriptor } from "../../../../platform/instantiation/common/descriptors.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
-import { ITestingService } from "../../../services/testing/common/testingService.js";
-import { ITerminalService } from "../../../services/terminal/common/terminal.js";
-import { IViewsService } from "../../../services/views/browser/viewsService.js";
 import { TESTING_VIEW_ID } from "../common/testing.js";
 import { TestingViewPane } from "./testingViewPane.js";
 import "./testingActions.js";
@@ -17,7 +14,7 @@ export function registerTestingView(registry: WorkbenchViewRegistry = ViewsRegis
 		localizationKey: { bundle: "ash.views", key: "testing" },
 		order: 1,
 		canToggleVisibility: false,
-		ctorDescriptor: new ServiceConstructionDescriptor(TestingViewPane, { serviceDependencies: [ITestingService, ITerminalService, IViewsService] }),
+		ctorDescriptor: new SyncDescriptor(TestingViewPane),
 	}]);
 }
 

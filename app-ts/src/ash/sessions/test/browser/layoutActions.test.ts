@@ -13,7 +13,7 @@ import { installEditorTestDom } from '../../../editor/test/browser/editorTestGlo
 import { MenuService } from '../../../platform/actions/common/menuService.js';
 import { CommandsRegistry } from '../../../platform/commands/common/commands.js';
 import { ContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
-import { ServiceContainer } from '../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { WorkbenchPart } from '../../../workbench/browser/part.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import { registerLayoutActions } from '../../browser/layoutActions.js';
@@ -33,7 +33,7 @@ test('Sessions layout commands update menu state from their owners and release w
 	using resources = new DisposableStore();
 	using changed = new Emitter<void>();
 	using contextKeys = new ContextKeyService();
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	using commands = new CommandService(services);
 	const parts = new Map(sessionsPartIds.map(id => [id, resources.add(new TestPart(browser.window.document.body, id))]));
 	using layout = createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
@@ -88,7 +88,7 @@ suiteTeardown(() => layoutTestResources.dispose());
 function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, WorkbenchPart>, options: import('../../browser/workbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService } = {}): import('../../browser/workbench.js').SessionsWorkbenchLayout {
 	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, applicationId: 'sessions-test', workspaceId: 'sessions', flushInterval: 0, onError: () => {} }));
 	const storage = options.storageService ?? ownedStorage!;
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IStorageService, storage);
 	const layout = services.createInstance(SessionsWorkbenchLayout, container, options);
 	try {

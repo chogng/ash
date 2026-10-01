@@ -22,12 +22,13 @@ import { IContextKeyService, ContextKeyService } from "../../../../platform/cont
 import { AccessibilitySupport, IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { darkColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 import { type TextEditorContributionContext } from '../../../browser/editorExtensions.js';
-import { IInstantiationService, ServiceConstructionDescriptor, createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 
 const { CodeEditorWidget } = await import("../../../browser/widget/codeEditor/codeEditorWidget.js");
 const { createTestCodeEditor } = await import('../testCodeEditor.js');
 const { EditorContributionInstantiation } = await import('../../../browser/editorExtensions.js');
-const { ServiceContainer } = await import("../../../../platform/instantiation/common/instantiation.js");
+const { InstantiationService } = await import("../../../../platform/instantiation/common/instantiationService.js");
 const { ILogService, NullLoggerService } = await import('../../../../platform/log/common/log.js');
 const { PlaceholderTextContribution } = await import("../../../contrib/placeholderText/browser/placeholderTextContribution.js");
 const { VersionedEditorWorkerClient } = await import('../../../browser/services/editorWorkerService.js');
@@ -59,7 +60,7 @@ test('CodeEditorWidget publishes service lifecycle in construction order', () =>
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
 	using service = new StandaloneCodeEditorService();
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(ICodeEditorService, service);
 	const events: string[] = [];
 	using willCreate = service.onWillCreateCodeEditor(() => events.push('will'));
@@ -349,7 +350,7 @@ test('CodeEditorWidget owns configured resources and deferred controllers across
 	const events: string[] = [];
 	const modelService = createServiceIdentifier<TextModel>('test.editor.model');
 	class Controller extends Disposable {
-		constructor(context: TextEditorContributionContext, services: IInstantiationService, providedModel: TextModel) {
+		constructor(context: TextEditorContributionContext, @IInstantiationService services: IInstantiationService, @modelService providedModel: TextModel) {
 			super();
 			assert.equal(services, context.instantiationService);
 			assert.equal(providedModel, model);
@@ -375,7 +376,7 @@ test('CodeEditorWidget owns configured resources and deferred controllers across
 					if (context.kind !== 'text') return;
 					events.push('install');
 					context.register(toDisposable(() => events.push('dispose installation')));
-					return context.instantiationService.createInstance(new ServiceConstructionDescriptor(Controller, { serviceDependencies: [IInstantiationService, modelService] }), context);
+					return context.instantiationService.createInstance(new SyncDescriptor(Controller), context);
 				},
 			}],
 		});
@@ -443,7 +444,7 @@ test('CodeEditorWidget keeps configuration resources alive after installation fa
 test('CodeEditorWidget injects scoped services into contributions and releases them on model detach', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	using parent = new ServiceContainer();
+	using parent = new InstantiationService();
 	using model = new TextModel('alpha');
 	const instances: Contribution[] = [];
 	class Contribution extends Disposable {
@@ -655,7 +656,7 @@ test('CodeEditorWidget rejects missing shared services before creating its surfa
 		IAccessibilityService,
 		ICodeEditorService,
 	]) {
-		using services = new ServiceContainer();
+		using services = new InstantiationService();
 		if (missing !== ICodeEditorService) {
 			services.registerSingleton(ICodeEditorService, () => services.createInstance(StandaloneCodeEditorService));
 		}
@@ -676,7 +677,7 @@ test('CodeEditorWidget shares host language services across contributions and mo
 	using configurations = createTestLanguageConfigurationService();
 	using features = new LanguageFeaturesService();
 	using theme = new TestThemeService(darkColorTheme);
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	services.registerInstance(IThemeService, theme);
 	services.registerInstance(ILanguageConfigurationService, configurations);

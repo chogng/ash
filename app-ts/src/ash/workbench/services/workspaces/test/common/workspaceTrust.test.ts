@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IDirPermissionsService, type DirPermission } from '../../../../../platform/dirPermissions/common/dirPermissionsService.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS } from '../../../../../platform/workspace/common/workspaceTrust.js';
@@ -21,7 +21,7 @@ test('Workspace Trust reads current Rust permissions for each workspace folder',
 		set: async () => { throw new Error('Unexpected permission write'); },
 		forget: async () => { throw new Error('Unexpected permission deletion'); },
 	};
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IDirPermissionsService, permissions);
 	using trust = services.createInstance(WorkspaceTrustManagementService);

@@ -15,7 +15,7 @@ import { URI } from "../../../../../base/common/uri.js";
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { MenuId, registerAction2 } from "../../../../../platform/actions/common/actions.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
-import { ServiceContainer } from "../../../../../platform/instantiation/common/instantiation.js";
+import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
@@ -104,7 +104,7 @@ test('Git history contribution registers repositories and follows active reposit
 
 test('SCM history services assemble through their production registrations', async () => {
 	await import('../../browser/scm.service.contribution.js');
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	for (const [id, descriptor] of getSingletonServiceDescriptors()) {
 		if (id === ISCMService || id === ISCMViewService) services.registerSingleton(id, () => services.createInstance(descriptor));
 	}
@@ -167,16 +167,16 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 	const [
 		{ ContextKeyService },
 		{ MenuService },
-		{ ServiceContainer },
+		{ InstantiationService },
 		{ CommandService },
 	] = await Promise.all([
 		import("../../../../../platform/contextkey/browser/contextKeyService.js"),
 		import("../../../../../platform/actions/common/menuService.js"),
-		import("../../../../../platform/instantiation/common/instantiation.js"),
+		import('../../../../../platform/instantiation/common/instantiationService.js'),
 		import("../../../../../workbench/services/commands/common/commandService.js"),
 	]);
 	using contextKeyService = new ContextKeyService();
-	const services = new ServiceContainer();
+	const services = new InstantiationService();
 	const menuService = new MenuService(new CommandService(services), contextKeyService);
 	const hoverOptions: HoverSetupOptions[] = [];
 	const graphRepositoryIds: Array<string | undefined> = [];
@@ -313,16 +313,16 @@ test("SCMHistoryViewPane loads the complete history across graph pages", async (
 	const [
 		{ ContextKeyService },
 		{ MenuService },
-		{ ServiceContainer },
+		{ InstantiationService },
 		{ CommandService },
 	] = await Promise.all([
 		import("../../../../../platform/contextkey/browser/contextKeyService.js"),
 		import("../../../../../platform/actions/common/menuService.js"),
-		import("../../../../../platform/instantiation/common/instantiation.js"),
+		import('../../../../../platform/instantiation/common/instantiationService.js'),
 		import("../../../../../workbench/services/commands/common/commandService.js"),
 	]);
 	using contextKeyService = new ContextKeyService();
-	const menuService = new MenuService(new CommandService(new ServiceContainer()), contextKeyService);
+	const menuService = new MenuService(new CommandService(new InstantiationService()), contextKeyService);
 	const hoverService: IHoverService = {
 		setupDelayedHover() { throw new Error("Unexpected delayed hover registration"); },
 		setupHover: () => testManagedHover(),
@@ -394,16 +394,16 @@ test("SCMHistoryViewPane virtualizes loaded history rows", async () => {
 	const [
 		{ ContextKeyService },
 		{ MenuService },
-		{ ServiceContainer },
+		{ InstantiationService },
 		{ CommandService },
 	] = await Promise.all([
 		import("../../../../../platform/contextkey/browser/contextKeyService.js"),
 		import("../../../../../platform/actions/common/menuService.js"),
-		import("../../../../../platform/instantiation/common/instantiation.js"),
+		import('../../../../../platform/instantiation/common/instantiationService.js'),
 		import("../../../../../workbench/services/commands/common/commandService.js"),
 	]);
 	using contextKeyService = new ContextKeyService();
-	const menuService = new MenuService(new CommandService(new ServiceContainer()), contextKeyService);
+	const menuService = new MenuService(new CommandService(new InstantiationService()), contextKeyService);
 	const status: GitStatus = {
 		repositoryId: "repo-1",
 		streamInstanceId: "git-graph-stream",
@@ -470,14 +470,14 @@ test("SCMHistoryViewPane virtualizes loaded history rows", async () => {
 test("SCMHistoryViewPane expands commit files and opens a selected change in the diff editor", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
-	const [{ ContextKeyService }, { MenuService }, { ServiceContainer }, { CommandService }] = await Promise.all([
+	const [{ ContextKeyService }, { MenuService }, { InstantiationService }, { CommandService }] = await Promise.all([
 		import("../../../../../platform/contextkey/browser/contextKeyService.js"),
 		import("../../../../../platform/actions/common/menuService.js"),
-		import("../../../../../platform/instantiation/common/instantiation.js"),
+		import('../../../../../platform/instantiation/common/instantiationService.js'),
 		import("../../../../../workbench/services/commands/common/commandService.js"),
 	]);
 	using contextKeyService = new ContextKeyService();
-	const menuService = new MenuService(new CommandService(new ServiceContainer()), contextKeyService);
+	const menuService = new MenuService(new CommandService(new InstantiationService()), contextKeyService);
 	const objectId = "1".repeat(40);
 	const parentObjectId = "2".repeat(40);
 	let changeRequests = 0;
@@ -634,7 +634,7 @@ test('ScmViewPane folds groups through the shared tree and keeps state when reso
 	setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
 	try {
 		const { ScmViewPane } = await import('../../browser/scmViewPane.js');
-		using services = new ServiceContainer();
+		using services = new InstantiationService();
 		using configuration = new InMemoryConfigurationService();
 		using scm = new SCMService();
 		using views = new SCMViewService(scm);
@@ -806,7 +806,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 	try {
 		const { ScmViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmViewPane.js");
 		const editorService = testEditorService(opened);
-		const services = new ServiceContainer();
+		const services = new InstantiationService();
 		services.registerInstance(IGitService, gitService);
 		services.registerInstance(IEditorService, editorService);
 		using commandService = new CommandService(services);

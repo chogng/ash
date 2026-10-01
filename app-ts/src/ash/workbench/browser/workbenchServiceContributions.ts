@@ -1,8 +1,9 @@
 import { type IDisposable } from "../../base/common/lifecycle.js";
-import { type ServiceContainer, type ServiceIdentifier } from "../../platform/instantiation/common/instantiation.js";
+import { type InstantiationService } from "../../platform/instantiation/common/instantiationService.js";
+import { type ServiceIdentifier } from "../../platform/instantiation/common/instantiation.js";
 
 export interface WorkbenchServiceContributionContext {
-	readonly container: ServiceContainer;
+	readonly container: InstantiationService;
 	readonly register: <T extends IDisposable>(value: T) => T;
 	readonly blockRestorationUntil: (operation: Promise<void>) => void;
 }

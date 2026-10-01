@@ -9,14 +9,14 @@ import { Lxicon } from "../../../../base/common/lxicons.js";
 import { URI } from "../../../../base/common/uri.js";
 import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
-import type { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
-import type { IStorageService } from "../../../../platform/storage/common/storage.js";
+import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
+import { IStorageService } from "../../../../platform/storage/common/storage.js";
 import { StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
-import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
-import type { IEditorService } from "../../../services/editor/common/editorService.js";
+import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
+import { IEditorService } from "../../../services/editor/common/editorService.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
-import type { IWorkbenchHostService } from "../../../services/host/common/workbenchHostService.js";
-import type { IOutputChannel, IOutputEntry, IOutputService, OutputEntrySeverity } from "../../../services/output/common/outputService.js";
+import { IWorkbenchHostService } from "../../../services/host/common/workbenchHostService.js";
+import { type IOutputChannel, type IOutputEntry, IOutputService, type OutputEntrySeverity } from "../../../services/output/common/outputService.js";
 import { OutputFilterState, OutputSeverities } from "./outputFilterState.js";
 import { detectOutputLinks } from "./outputLinks.js";
 import { exportOutputChannel, openOutputChannelInEditor } from "./outputOperations.js";
@@ -40,7 +40,7 @@ export class OutputViewPane extends ViewPane {
 	private autoScroll: boolean;
 	private titleStateKey = "";
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, private readonly outputService: IOutputService, private readonly contextMenuService: IContextMenuService, private readonly storageService?: IStorageService, private readonly editorService?: IEditorService, private readonly workspaceContextService?: IWorkspaceContextService, private readonly hostService?: IWorkbenchHostService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @IOutputService private readonly outputService: IOutputService, @IContextMenuService private readonly contextMenuService: IContextMenuService, @IStorageService private readonly storageService?: IStorageService, @IEditorService private readonly editorService?: IEditorService, @IWorkspaceContextService private readonly workspaceContextService?: IWorkspaceContextService, @IWorkbenchHostService private readonly hostService?: IWorkbenchHostService) {
 		super(container, options);
 		this.contentElement.classList.add("ash-output");
 		this.filters = this._register(new OutputFilterState(storageService));

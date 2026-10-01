@@ -3,7 +3,7 @@ import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
-import type { IDebugConsoleService } from "../../../services/debug/common/debugConsoleService.js";
+import { IDebugConsoleService } from "../../../services/debug/common/debugConsoleService.js";
 import { CLEAR_DEBUG_CONSOLE_COMMAND_ID } from "../common/debug.js";
 
 /** Panel-owned Debug Console projection for DAP output and REPL evaluation. */
@@ -15,7 +15,7 @@ export class DebugConsoleViewPane extends ViewPane {
 	private readonly input: HTMLInputElement;
 	private readonly status: HTMLDivElement;
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, private readonly consoleService: IDebugConsoleService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @IDebugConsoleService private readonly consoleService: IDebugConsoleService) {
 		super(container, options);
 		this.contentElement.classList.add("ash-debug-console");
 		this.titleActions = this._register(new ActionBar(this.headerActionsElement, { ariaLabel: "Debug Console actions" }));

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { Emitter, Event } from "../../../base/common/event.js";
 import { Disposable } from "../../../base/common/lifecycle.js";
-import { ServiceContainer } from "../../../platform/instantiation/common/instantiation.js";
+import { InstantiationService } from "../../../platform/instantiation/common/instantiationService.js";
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from "../../../platform/quickinput/common/quickInput.js";
 import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
 import { CommandService } from "../../../workbench/services/commands/common/commandService.js";
@@ -37,7 +37,7 @@ test("Sessions owns the local New Chat command without requiring regular Workben
 		navigateBack() {},
 		navigateForward() {},
 	};
-	const services = new ServiceContainer();
+	const services = new InstantiationService();
 	services.registerInstance(ISessionsService, viewService);
 	using commands = new CommandService(services);
 
@@ -69,7 +69,7 @@ test("Sessions History opens the selected active chat", async () => {
 			chats: [{ threadId: "thread-3", origin: { type: "root" }, status: "active" }],
 		},
 	];
-	const services = new ServiceContainer();
+	const services = new InstantiationService();
 	services.registerInstance(ISessionsManagementService, { sessions } as ISessionsManagementService);
 	services.registerInstance(ISessionsService, {
 		openSession: (sessionId: string, threadId: string) => opened.push({ sessionId, threadId }),

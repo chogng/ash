@@ -4,7 +4,7 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { HierarchicalKind } from '../../../../../base/common/hierarchicalKind.js';
 import { createStringDataTransferItem, VSDataTransfer } from '../../../../../base/common/dataTransfer.js';
 import { Selection } from '../../../../common/core/selection.js';
@@ -240,7 +240,7 @@ test('Switching a paste choice reverts additional edits in another open resource
 	const dom = new JSDOM('<!doctype html><body><main></main><aside></aside></body>');
 	using closeWindow = toDisposable(() => dom.window.close());
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	registerCodeEditorServices(services);
 	using model = new TextModel('old', { resource: URI.file('/workspace/main.ts') });
 	using otherModel = new TextModel('trail', { resource: URI.file('/workspace/other.ts') });

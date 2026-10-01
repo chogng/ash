@@ -1,6 +1,6 @@
 import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import type { Event } from '../../../base/common/event.js';
-import type { Constructor } from '../../instantiation/common/instantiation.js';
+import type { Constructor } from '../../instantiation/common/descriptors.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { IQuickPick, IQuickPickItem } from './quickInput.js';
 

@@ -20,7 +20,7 @@ import { DEFAULT_LABELS_CONTAINER, ResourceLabels } from '../../../../browser/la
 import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { WorkbenchConfiguration } from '../../../../common/configuration.js';
 import { WorkbenchFileIconThemesRegistry } from '../../../themes/common/themeExtensionPoints.js';
 import { WorkbenchConfigurationService } from '../../../configuration/browser/configurationService.js';
@@ -38,7 +38,7 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 	try {
 		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }) });
 		using configuration = new WorkbenchConfigurationService();
-		using services = new ServiceContainer();
+		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
 		using languages = new LanguageService();
 		using typescript = languages.registerLanguage({ id: 'typescript', extensions: ['.ts'] });

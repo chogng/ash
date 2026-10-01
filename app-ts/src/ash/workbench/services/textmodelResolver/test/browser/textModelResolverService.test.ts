@@ -3,7 +3,7 @@ import { test } from 'mocha';
 import { Emitter } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { TextResourceEditorModel } from '../../../../common/editor/textResourceEditorModel.js';
@@ -37,7 +37,7 @@ test('document symbol command resolves a closed Workbench resource and releases 
 	using second = features.documentSymbolProvider.register('*', {
 		provideDocumentSymbols: () => [symbol('second', 7, 13)],
 	});
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(ITextModelResourceService, models);
 	services.registerInstance(ILanguageFeaturesService, features);
 	services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
@@ -65,7 +65,7 @@ test('provider references share text and release it after the last editor model 
 		resolve: async request => ({ resource: request.resource, text: '', revision: '1' }),
 		save: async () => ({ revision: '1' }),
 	});
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(ITextModelResourceService, models);
 	const resolver = services.createInstance(TextModelResolverService);
 	using text = new TextModel('shared provider content', { languageId: 'typescript' });

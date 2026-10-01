@@ -27,7 +27,7 @@ const { Disposable, DisposableStore } = await import('../../../../../base/common
 const { OperatingSystem } = await import('../../../../../base/common/platform.js');
 const { CommandsRegistry } = await import('../../../../../platform/commands/common/commands.js');
 const { ContextKeyService } = await import('../../../../../platform/contextkey/browser/contextKeyService.js');
-const { ServiceContainer } = await import('../../../../../platform/instantiation/common/instantiation.js');
+const { InstantiationService } = await import('../../../../../platform/instantiation/common/instantiationService.js');
 const { IConfigurationService } = await import('../../../../../platform/configuration/common/configuration.js');
 const { InMemoryConfigurationService } = await import('../../../../../platform/configuration/common/inMemoryConfigurationService.js');
 const { IKeybindingService } = await import('../../../../../platform/keybinding/common/keybinding.js');
@@ -69,7 +69,7 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 	]);
 	disposables.add(new KeybindingsResourceContribution({ service: resources }));
 	const contextKeys = disposables.add(new ContextKeyService());
-	const commands = disposables.add(new CommandService(new ServiceContainer()));
+	const commands = disposables.add(new CommandService(new InstantiationService()));
 	const keyboardLayout = disposables.add(new BrowserKeyboardLayoutService({
 		navigator: browserEnvironment.window.navigator,
 		operatingSystem: OperatingSystem.Windows,
@@ -81,7 +81,7 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 		keyboardLayoutService: keyboardLayout,
 	}, disposables.add(new NotificationService())));
 	const configuration = disposables.add(new InMemoryConfigurationService());
-	const services = disposables.add(new ServiceContainer());
+	const services = disposables.add(new InstantiationService());
 	services.registerInstance(IKeybindingService, keybindings);
 	services.registerInstance(IConfigurationService, configuration);
 	const registry = new EditorPaneRegistry();

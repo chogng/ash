@@ -2,11 +2,11 @@ import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
-import { type ITaskRun, type ITaskService, type IWorkspaceTask } from "../../../services/tasks/common/taskService.js";
+import { type ITaskRun, ITaskService, type IWorkspaceTask } from "../../../services/tasks/common/taskService.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
 import { TERMINAL_VIEW_ID } from "../../terminal/common/terminal.js";
-import { type IViewsService } from "../../../services/views/browser/viewsService.js";
-import { type ITerminalService } from "../../../services/terminal/common/terminal.js";
+import { IViewsService } from "../../../services/views/browser/viewsService.js";
+import { ITerminalService } from "../../../services/terminal/common/terminal.js";
 
 /** Code-owned task catalog and execution status view. */
 export class TasksViewPane extends ViewPane {
@@ -17,7 +17,7 @@ export class TasksViewPane extends ViewPane {
 	private refreshing = false;
 	private error: string | undefined;
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, private readonly taskService: ITaskService, private readonly viewsService: IViewsService, private readonly terminalService: ITerminalService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @ITaskService private readonly taskService: ITaskService, @IViewsService private readonly viewsService: IViewsService, @ITerminalService private readonly terminalService: ITerminalService) {
 		super(container, options);
 		this.contentElement.classList.add("ash-tasks");
 		this.titleActions = this._register(new ActionBar(this.headerActionsElement, { ariaLabel: "Tasks actions" }));

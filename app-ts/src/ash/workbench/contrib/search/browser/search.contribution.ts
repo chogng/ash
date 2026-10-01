@@ -1,7 +1,5 @@
 import { Lxicon } from "../../../../base/common/lxicons.js";
-import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
-import { IContentSearchService } from "../../../../platform/search/common/search.js";
-import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
+import { SyncDescriptor } from "../../../../platform/instantiation/common/descriptors.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
 import { SearchViewPane } from "./searchViewPane.js";
 import "./media/search.css";
@@ -26,8 +24,6 @@ export function registerSearchViews(
 		localizationKey: { bundle: "ash.views", key: "search" },
 		order: 1,
 		canToggleVisibility: false,
-		ctorDescriptor: new ServiceConstructionDescriptor(SearchViewPane, {
-			serviceDependencies: [IContentSearchService, IConfigurationService],
-		}),
+		ctorDescriptor: new SyncDescriptor(SearchViewPane),
 	}]);
 }

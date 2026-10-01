@@ -9,7 +9,7 @@ import { IDialogService, type IConfirmationDialogOptions } from '../../../../../
 import { Event } from '../../../../../base/common/event.js';
 import { IFileService, FileKind, FileNotFoundError, type IFileService as FileServiceContract } from '../../../../../platform/files/common/files.js';
 import { ISystemFileTransferService } from '../../../../../platform/files/common/systemFileTransferService.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IQuickInputService, type IQuickInputService as QuickInputServiceContract } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
@@ -35,7 +35,7 @@ test('Save File command saves the active editor', async () => {
 		const { IEditorPart } = await import('../../../../browser/parts/editor/editorPart.js');
 		await import('../../browser/fileActions.contribution.js');
 		let saves = 0;
-		const services = new ServiceContainer();
+		const services = new InstantiationService();
 		services.registerInstance(IEditorPart, {
 			saveActiveEditor: async () => { saves += 1; },
 		} as unknown as EditorPartContract);
@@ -62,7 +62,7 @@ test('Open File command opens every file selected by the dialog', async () => {
 		await import('../../browser/fileActions.contribution.js');
 		const resources = [URI.file('/work/one.md'), URI.file('/work/two.md')];
 		const opened: URI[] = [];
-		const services = new ServiceContainer();
+		const services = new InstantiationService();
 		services.registerInstance(IFileDialogService, {
 			pickFileToSave: async () => { throw new Error('Unexpected Save As'); },
 			showSaveConfirm: async () => { throw new Error('Unexpected save confirmation'); },
@@ -93,7 +93,7 @@ test('New File command creates and opens a file in the active workspace folder',
 		const created: URI[] = [];
 		const opened: URI[] = [];
 		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
-		const services = new ServiceContainer();
+		const services = new InstantiationService();
 		using explorerService = createExplorerService(workspace);
 		services.registerInstance(IWorkspaceContextService, workspace);
 		services.registerInstance(IExplorerService, explorerService);
@@ -150,7 +150,7 @@ test('New Folder command creates a directory under the selected folder', async (
 		getAccessibleContent: () => '',
 		focus() {},
 	});
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IExplorerService, explorer);
 	services.registerInstance(IEditorService, { activeEditor: undefined } as EditorServiceContract);
@@ -187,7 +187,7 @@ test('Explorer copy and cut paste selected files with conflict names', async () 
 	const copied: string[] = [];
 	const renamed: string[] = [];
 	let resourceClipboard: IClipboardResources = { resources: [], operation: 'copy' };
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IExplorerService, explorer);
 	services.registerInstance(IClipboardService, {
@@ -244,7 +244,7 @@ test('Explorer paste keeps copy and cut operations across windows', async () => 
 	using second = createExplorerService(workspace);
 	using firstView = first.registerView({ getContext: () => [new ExplorerItem(source, '100% ready.bin', FileKind.File)], getAccessibleContent: () => '', focus() {} });
 	using secondView = second.registerView({ getContext: () => [new ExplorerItem(pasteDestination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', focus() {} });
-	using firstServices = new ServiceContainer();
+	using firstServices = new InstantiationService();
 	firstServices.registerInstance(IWorkspaceContextService, workspace);
 	firstServices.registerInstance(IExplorerService, first);
 	firstServices.registerInstance(IClipboardService, clipboard);
@@ -252,7 +252,7 @@ test('Explorer paste keeps copy and cut operations across windows', async () => 
 	await firstCommands.executeCommand(COPY_FILE_COMMAND_ID);
 
 	const operations: string[] = [];
-	using secondServices = new ServiceContainer();
+	using secondServices = new InstantiationService();
 	secondServices.registerInstance(IWorkspaceContextService, workspace);
 	secondServices.registerInstance(IExplorerService, second);
 	secondServices.registerInstance(IClipboardService, clipboard);
@@ -293,7 +293,7 @@ test('Explorer cut across nested workspace roots copies before deleting the sour
 	using view = explorer.registerView({ getContext: () => [selected], getAccessibleContent: () => '', focus() {} });
 	let clipboardResources: IClipboardResources = { resources: [], operation: 'copy' };
 	const operations: string[] = [];
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IExplorerService, explorer);
 	services.registerInstance(IClipboardService, {
@@ -329,7 +329,7 @@ test('Explorer paste forwards copy and move requests to the system file transfer
 		using explorer = createExplorerService(workspace);
 		using view = explorer.registerView({ getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', focus() {} });
 		const pastes: { directory: string; moveRequested: boolean }[] = [];
-		using services = new ServiceContainer();
+		using services = new InstantiationService();
 		services.registerInstance(IWorkspaceContextService, workspace);
 		services.registerInstance(IExplorerService, explorer);
 		services.registerInstance(IClipboardService, {
@@ -374,7 +374,7 @@ test('Explorer paste imports exact bytes from the system file list', async () =>
 		using view = explorer.registerView({ getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', focus() {} });
 		const writes: { resource: string; bytes: number[] }[] = [];
 		const attemptedTransfers: string[] = [];
-		using services = new ServiceContainer();
+		using services = new InstantiationService();
 		services.registerInstance(IWorkspaceContextService, workspace);
 		services.registerInstance(IExplorerService, explorer);
 		services.registerInstance(IClipboardService, {
@@ -409,7 +409,7 @@ test('Copy Path commands copy the active file and its workspace-relative path', 
 		const file = URI.file('C:\\project\\src\\main.ts');
 		const copied: string[] = [];
 		using workspace = new WorkspaceContextService({ id: 'project', folders: [{ id: 'project', uri: root, name: 'project', index: 0 }] });
-		const services = new ServiceContainer();
+		const services = new InstantiationService();
 		services.registerInstance(IEditorService, {
 			activeEditor: { resource: file },
 		} as EditorServiceContract);
@@ -457,7 +457,7 @@ test('Download File command preserves the active file bytes and filename', async
 		browser.window.HTMLAnchorElement.prototype.click = function () {
 			downloadedName = this.download;
 		};
-		const services = new ServiceContainer();
+		const services = new InstantiationService();
 		services.registerInstance(IEditorService, { activeEditor: { resource } } as EditorServiceContract);
 		services.registerInstance(IFileService, {
 			readFileBytes: async requested => {
@@ -493,7 +493,7 @@ test('Explorer menu commands rename, open beside the editor, and delete the sele
 		getAccessibleContent: () => '',
 		focus() {},
 	});
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IExplorerService, explorer);
 	services.registerInstance(IQuickInputService, {
@@ -549,7 +549,7 @@ test('Reveal in OS command sends the selected local file to the desktop host', a
 		getAccessibleContent: () => '',
 		focus() {},
 	});
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IExplorerService, explorer);
 	services.registerInstance(IEditorService, { activeEditor: undefined } as EditorServiceContract);

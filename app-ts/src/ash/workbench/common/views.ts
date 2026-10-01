@@ -6,9 +6,7 @@ import {
 import type {
 	ContextKeyExpression,
 } from "../../platform/contextkey/common/contextkey.js";
-import type {
-	ServiceConstructionDescriptor,
-} from "../../platform/instantiation/common/instantiation.js";
+import type { SyncDescriptor } from "../../platform/instantiation/common/descriptors.js";
 import type { Icon } from "../../base/common/icon.js";
 import type { LocalizationKey } from "../../nls.js";
 
@@ -27,7 +25,7 @@ export interface IViewContainerDescriptor {
 	readonly localizationKey?: LocalizationKey;
 	readonly location: ViewContainerLocation;
 	/** Browser host constructed for this container when it opens. */
-	readonly ctorDescriptor?: ServiceConstructionDescriptor<IView>;
+	readonly ctorDescriptor?: SyncDescriptor<IView>;
 	readonly icon?: Icon;
 	readonly order?: number;
 	readonly isDefault?: boolean;
@@ -44,7 +42,7 @@ export interface IViewDescriptor {
 	 * Browser hosts append their runtime pane options after descriptor static
 	 * arguments. The instantiation service appends declared services last.
 	 */
-	readonly ctorDescriptor: ServiceConstructionDescriptor<IView>;
+	readonly ctorDescriptor: SyncDescriptor<IView>;
 	readonly when?: ContextKeyExpression;
 	readonly order?: number;
 	readonly collapsed?: boolean;

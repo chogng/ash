@@ -5,7 +5,7 @@ import { getWindows } from '../../../../../base/browser/window.js';
 import { Event } from '../../../../../base/common/event.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { IStorageService, StorageScope } from '../../../../../platform/storage/common/storage.js';
 import { OnboardingScenarioService } from '../../browser/onboardingService.js';
@@ -21,7 +21,7 @@ suite('OnboardingScenarioService', () => {
 		getWindows();
 		try {
 			const container = dom.window.document.querySelector('main')!;
-			using services = new ServiceContainer();
+			using services = new InstantiationService();
 			using context = new ContextKeyService();
 			services.registerInstance(IConfigurationService, { getValue: () => true, onDidChangeConfiguration: Event.None } as unknown as IConfigurationService);
 			services.registerInstance(IContextKeyService, context);
@@ -60,7 +60,7 @@ suite('OnboardingScenarioService', () => {
 			const container = dom.window.document.querySelector('main')!;
 			const target = dom.window.document.querySelector<HTMLButtonElement>('#target')!;
 			const values = new Map<string, boolean>();
-			using services = new ServiceContainer();
+			using services = new InstantiationService();
 			using context = new ContextKeyService();
 			services.registerInstance(IConfigurationService, {
 				getValue: () => true,

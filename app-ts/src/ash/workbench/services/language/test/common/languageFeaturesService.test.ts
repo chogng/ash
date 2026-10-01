@@ -10,7 +10,7 @@ import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { TestLanguageConfigurationService } from '../../../../../editor/test/common/modes/testLanguageConfigurationService.js';
 import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
 import { WorkbenchLanguageFeatures } from '../../browser/workbenchLanguageFeatures.js';
 import { SyntaxProviderWorker } from '../../../../../editor/common/services/editorWebWorker.js';
@@ -19,7 +19,7 @@ test('Workbench installs JSON providers without registering language definitions
 	using languageService = new LanguageService();
 	using languageConfigurations = new TestLanguageConfigurationService();
 	using languageFeatures = new LanguageFeaturesService();
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(ILanguageFeaturesService, languageFeatures);
 	using workbenchLanguages = services.createInstance(WorkbenchLanguageFeatures);
 	using model = new TextModel('const answer = 42;');

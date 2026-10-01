@@ -1,11 +1,11 @@
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
-import type { Automation, AutomationDefinition, AutomationRun, AutomationSchedule, IAutomationService } from '../../../../platform/automation/common/automationService.js';
-import type { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
-import type { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
+import { type Automation, type AutomationDefinition, type AutomationRun, type AutomationSchedule, IAutomationService } from '../../../../platform/automation/common/automationService.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
 import { getRemoteWorkspacePath, isRemoteResource } from '../../../../platform/remote/common/remote.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
-import type { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { OPEN_CHAT_COMMAND_ID } from '../../chat/common/chat.js';
 
 export class AutomationViewPane extends ViewPane {
@@ -31,7 +31,7 @@ export class AutomationViewPane extends ViewPane {
 	private refreshAgain = false;
 	private working = false;
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, private readonly automation: IAutomationService, private readonly workspace: IWorkspaceContextService, private readonly sessions: IChatSessionNavigationService, private readonly commands: ICommandService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @IAutomationService private readonly automation: IAutomationService, @IWorkspaceContextService private readonly workspace: IWorkspaceContextService, @IChatSessionNavigationService private readonly sessions: IChatSessionNavigationService, @ICommandService private readonly commands: ICommandService) {
 		super(container, options);
 		const document = container.ownerDocument;
 		this.contentElement.classList.add('ash-automation');

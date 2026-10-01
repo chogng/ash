@@ -2,7 +2,7 @@ import '../../../codeEditor/common/editorConfiguration.js';
 import { ConfigurationTarget } from '../../../../../platform/configuration/common/configuration.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IEditorService as EditorServiceId } from '../../../../services/editor/common/editorService.js';
 import { IFileTextModelService, TextModelConflictError } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { Event } from '../../../../../base/common/event.js';
@@ -192,7 +192,7 @@ test('PreferencesService uses the shared dirty model, inserts an undoable defaul
 	const before = '{\n\t// editor.fontSize is mentioned here, not configured.\n\t"extension.data": { "editor.fontSize": 99 },\n}\n';
 	reference.model.applyEdits([{ range: reference.model.getFullModelRange(), text: before }]);
 	let selection: Range | undefined;
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(EditorServiceId, {
 		...emptyEditorServiceState,
 		openEditor: async (_input, options) => { selection = options?.selection; },

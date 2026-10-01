@@ -25,9 +25,7 @@ import { ContextKeyService } from "../../../../../platform/contextkey/browser/co
 import {
 	parseContextKeyExpression,
 } from "../../../../../platform/contextkey/common/contextKeyExpressionParser.js";
-import {
-	ServiceContainer,
-} from "../../../../../platform/instantiation/common/instantiation.js";
+import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
 import { NotificationService } from "../../../../../workbench/services/notification/common/notificationService.js";
 import { NotificationsToasts } from "../../../../browser/parts/notifications/notificationsToasts.js";
 import { INotificationService, NotificationSeverity } from "../../../../../platform/notification/common/notification.js";
@@ -180,7 +178,7 @@ test("browser service executes chords and restores IME state", async () => {
 	const statusbar = registrations.add(new StatusbarService());
 	const service = registrations.add(new WorkbenchKeybindingService({
 		ownerDocument: dom.window.document,
-		commandService: new CommandService(new ServiceContainer(), commands),
+		commandService: new CommandService(new InstantiationService(), commands),
 		contextKeyService: contexts,
 		keyboardLayoutService: keyboardLayout,
 		statusbarService: statusbar,
@@ -225,7 +223,7 @@ test("browser layout observation preserves a chord ending with Shift+Enter", asy
 	let executions = 0;
 	registrations.add(commands.register("test.shiftEnter", () => { executions += 1; }));
 	registrations.add(registry.registerKeybindingRule({ command: "test.shiftEnter", keybinding: Keybinding.chord(physicalKey("KeyK", { ctrlKey: true }), logicalKey("Enter", { shiftKey: true })) }));
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	using commandService = new CommandService(services, commands);
 	using notifications = new NotificationService();
 	using keybindings = new WorkbenchKeybindingService({ ownerDocument: dom.window.document, commandService, contextKeyService: contexts, keyboardLayoutService: layouts, registry }, notifications);
@@ -265,7 +263,7 @@ test("browser service dispatches Ctrl+Shift+P with a shifted key value", async (
 	);
 	const service = registrations.add(new WorkbenchKeybindingService({
 		ownerDocument: dom.window.document,
-		commandService: new CommandService(new ServiceContainer(), commands),
+		commandService: new CommandService(new InstantiationService(), commands),
 		contextKeyService: contexts,
 		keyboardLayoutService: keyboardLayout,
 		registry,
@@ -300,7 +298,7 @@ test('registered auxiliary window dispatches workbench shortcuts until it closes
 		navigator: fakeNavigator(),
 		operatingSystem: OperatingSystem.Windows,
 	}));
-	const services = resources.add(new ServiceContainer());
+	const services = resources.add(new InstantiationService());
 	resources.add(new WorkbenchKeybindingService({
 		ownerDocument: main.window.document,
 		commandService: resources.add(new CommandService(services, commands)),
@@ -343,7 +341,7 @@ test('failed keyboard command appears as a warning notification', async () => {
 	}));
 	const notifications = resources.add(new NotificationService());
 	resources.add(new NotificationsToasts(dom.window.document.body, notifications));
-	const services = resources.add(new ServiceContainer());
+	const services = resources.add(new InstantiationService());
 	services.registerInstance(INotificationService, notifications);
 	const keybindings = resources.add(services.createInstance(WorkbenchKeybindingService, {
 		ownerDocument: dom.window.document,
@@ -381,7 +379,7 @@ test("keyboard shortcut troubleshooting traces native, mapped, and resolved even
 	}));
 	const service = registrations.add(new WorkbenchKeybindingService({
 		ownerDocument: dom.window.document,
-		commandService: new CommandService(new ServiceContainer(), commands),
+		commandService: new CommandService(new InstantiationService(), commands),
 		contextKeyService: contexts,
 		keyboardLayoutService: keyboardLayout,
 		registry,
@@ -441,7 +439,7 @@ test("single modifier bindings dispatch on keyup only when the modifier was unus
 	}));
 	const service = registrations.add(new WorkbenchKeybindingService({
 		ownerDocument: dom.window.document,
-		commandService: new CommandService(new ServiceContainer(), commands),
+		commandService: new CommandService(new InstantiationService(), commands),
 		contextKeyService: contexts,
 		keyboardLayoutService: keyboardLayout,
 		registry,

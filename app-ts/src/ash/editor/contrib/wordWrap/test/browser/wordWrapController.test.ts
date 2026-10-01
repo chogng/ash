@@ -12,7 +12,7 @@ const { WordWrapController } = await import("../../browser/wordWrapController.js
 const { createTestCodeEditor } = await import("../../../../test/browser/testCodeEditor.js");
 const { StandaloneCodeEditorService } = await import("../../../../standalone/browser/standaloneCodeEditorService.js");
 const { ICodeEditorService } = await import("../../../../browser/services/codeEditorService.js");
-const { ServiceContainer } = await import("../../../../../platform/instantiation/common/instantiation.js");
+const { InstantiationService } = await import("../../../../../platform/instantiation/common/instantiationService.js");
 
 test("word-wrap choice follows the model and leaves the editor setting unchanged", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main><aside></aside></body>");
@@ -22,7 +22,7 @@ test("word-wrap choice follows the model and leaves the editor setting unchanged
 	resources.add(toDisposable(() => dom.window.close()));
 	using first = new TextModel("abcdef", { resource: URI.parse("inmemory://word-wrap/first") });
 	using second = new TextModel("ghijkl", { resource: URI.parse("inmemory://word-wrap/second") });
-	const services = resources.add(new ServiceContainer());
+	const services = resources.add(new InstantiationService());
 	const codeEditorService = resources.add(new StandaloneCodeEditorService());
 	services.registerInstance(ICodeEditorService, codeEditorService);
 	using editor = createTestCodeEditor({

@@ -25,11 +25,8 @@ import {
 } from "../../../../platform/commands/common/commands.js";
 import { ContextKeyExpr } from "../../../../platform/contextkey/common/contextkey.js";
 import { ContextKeyService } from "../../../contextkey/browser/contextKeyService.js";
-import {
-	createServiceIdentifier,
-	ServiceContainer,
-	type ServicesAccessor,
-} from "../../../../platform/instantiation/common/instantiation.js";
+import { createServiceIdentifier, type ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
+import { InstantiationService } from "../../../../platform/instantiation/common/instantiationService.js";
 import {
 	KeybindingResolver,
 } from "../../../../platform/keybinding/common/keybindingResolver.js";
@@ -76,7 +73,7 @@ test("registerAction2 connects command execution and menu placement", async () =
 	}
 
 	registrations.add(registerAction2(RegisteredAction));
-	const services = new ServiceContainer();
+	const services = new InstantiationService();
 	services.registerInstance(serviceId, "service");
 	const commands = new CommandService(services);
 	const contexts = registrations.add(new ContextKeyService());
@@ -110,7 +107,7 @@ test("registerAction2 publishes all menu placements as one change", () => {
 		registrations.add(MenusRegistry.appendMenuItem(rootMenu, { title, submenu }));
 	}
 	const contexts = registrations.add(new ContextKeyService());
-	const commands = new CommandService(new ServiceContainer());
+	const commands = new CommandService(new InstantiationService());
 	const menu = registrations.add(new MenuService(commands, contexts).createMenu(rootMenu));
 	const snapshots: string[][] = [];
 	const changedMenus: boolean[][] = [];
@@ -237,7 +234,7 @@ test("menu actions react to visibility, enablement, and toggle context", () => {
 		when: ContextKeyExpr.has("test.visible"),
 	}));
 
-	const services = new ServiceContainer();
+	const services = new InstantiationService();
 	const commands = new CommandService(services);
 	const contexts = registrations.add(new ContextKeyService());
 	const menus = new MenuService(commands, contexts);
@@ -298,7 +295,7 @@ test("menu actions react to alternate enablement and toggle context", () => {
 		},
 	}));
 	const contexts = registrations.add(new ContextKeyService());
-	const menu = registrations.add(new MenuService(new CommandService(new ServiceContainer()), contexts).createMenu(menuId));
+	const menu = registrations.add(new MenuService(new CommandService(new InstantiationService()), contexts).createMenu(menuId));
 	const changes: Array<[boolean, boolean, boolean]> = [];
 	registrations.add(menu.onDidChange(event => {
 		changes.push([event.isStructuralChange, event.isEnablementChange, event.isToggleChange]);
@@ -328,7 +325,7 @@ test("menus can resolve actions against a caller-owned context scope", () => {
 	using rootContexts = new ContextKeyService();
 	using scopedContexts = new ContextKeyService();
 	scopedContexts.setContext("test.scopeVisible", true);
-	const menus = new MenuService(new CommandService(new ServiceContainer()), rootContexts);
+	const menus = new MenuService(new CommandService(new InstantiationService()), rootContexts);
 
 	assert.deepEqual(menus.getMenuActions(menuId), []);
 	assert.equal(menus.getMenuActions(menuId, undefined, scopedContexts)[0]?.[1].length, 1);
@@ -353,7 +350,7 @@ test("menu change events include context keys used by nested submenus", () => {
 		when: ContextKeyExpr.has("test.nested-visible"),
 	}));
 
-	const commands = new CommandService(new ServiceContainer());
+	const commands = new CommandService(new InstantiationService());
 	const contexts = registrations.add(new ContextKeyService());
 	const menu = registrations.add(new MenuService(commands, contexts).createMenu(rootMenu));
 	let changes = 0;
@@ -408,7 +405,7 @@ test("menu service sorts groups and resolves submenus", () => {
 		order: 2,
 	}));
 
-	const commands = new CommandService(new ServiceContainer());
+	const commands = new CommandService(new InstantiationService());
 	const contexts = registrations.add(new ContextKeyService());
 	const groups = new MenuService(commands, contexts)
 		.getMenuActions(rootMenu);
@@ -443,7 +440,7 @@ test("menu service does not read titles of actions hidden by context", () => {
 		command: { id: "test.actions.visible", title: "Visible" },
 	}));
 	const contexts = registrations.add(new ContextKeyService());
-	const menus = new MenuService(new CommandService(new ServiceContainer()), contexts);
+	const menus = new MenuService(new CommandService(new InstantiationService()), contexts);
 
 	assert.deepEqual(menus.getMenuActions(menuId).flatMap(([, actions]) => actions.map(action => action.label)), ["Visible"]);
 	assert.equal(hiddenTitleReads, 0);
@@ -477,7 +474,7 @@ test("menu actions refresh localized labels when the locale changes", () => {
 	};
 	setNlsResolver(resolve);
 	try {
-		const commands = new CommandService(new ServiceContainer());
+		const commands = new CommandService(new InstantiationService());
 		const contexts = registrations.add(new ContextKeyService());
 		const menu = registrations.add(new MenuService(commands, contexts).createMenu(menuId));
 		const changes: boolean[] = [];

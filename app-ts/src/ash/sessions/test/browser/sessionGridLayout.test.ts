@@ -5,7 +5,7 @@ import type { IPositionedRectangle } from '../../../base/browser/geometry.js';
 import type { IView } from '../../../base/browser/ui/grid/grid.js';
 import { installEditorTestDom } from '../../../editor/test/browser/editorTestGlobals.js';
 import { SessionGridLayout } from '../../browser/parts/sessionGridLayout.js';
-import { ServiceContainer } from '../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 
@@ -36,7 +36,7 @@ test('Sessions split insertion preserves an unrelated pane and retained input fo
 	const third = new TestView(document);
 	try {
 		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: 'grid-test', workspaceId: 'test', flushInterval: 0 });
-		using services = new ServiceContainer();
+		using services = new InstantiationService();
 		services.registerInstance(IStorageService, storage);
 		using layout = services.createInstance(SessionGridLayout, document.body, first, 'chat');
 		layout.reconcile([{ id: 'first', view: first }, { id: 'second', view: second }], 'first');
@@ -62,7 +62,7 @@ test('Sessions rearrangement keeps live inputs and does not steal focus from ano
 	const second = new TestView(document);
 	try {
 		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: 'grid-test', workspaceId: 'test', flushInterval: 0 });
-		using services = new ServiceContainer();
+		using services = new InstantiationService();
 		services.registerInstance(IStorageService, storage);
 		using layout = services.createInstance(SessionGridLayout, document.body, first, 'chat');
 		layout.reconcile([{ id: 'first', view: first }, { id: 'second', view: second }], 'first');
@@ -87,7 +87,7 @@ test('Sessions restores saved widths at the available size without reviving miss
 		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: 'grid-test', workspaceId: 'test', flushInterval: 0 });
 		storage.store('sessions.gridState.chat', JSON.stringify({ version: 1, widths: [{ id: 'first', width: 300 }, { id: 'missing', width: 200 }, { id: 'second', width: 600 }] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		storage.store('sessions.gridState.code', JSON.stringify({ version: 1, widths: [{ id: 'code', width: 900 }] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
-		using services = new ServiceContainer();
+		using services = new InstantiationService();
 		services.registerInstance(IStorageService, storage);
 		const first = new TestView(browser.window.document);
 		const second = new TestView(browser.window.document);

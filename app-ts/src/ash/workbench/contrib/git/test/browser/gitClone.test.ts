@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
@@ -14,7 +14,7 @@ import '../../browser/gitClone.js';
 
 test('Git clone command asks for a repository, clones it, and opens the result', async () => {
 	const calls: string[] = [];
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IGitService, {
 		canCloneRepository: true,
 		cloneRepository: async (url: string, parent: string) => {

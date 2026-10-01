@@ -4,14 +4,14 @@ import { type BareFontInfo, FontInfo } from '../../../common/config/fontInfo.js'
 import { MenuId } from '../../../../platform/actions/common/actions.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
-import { ServiceContainer } from '../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
 import { ContextKeyService, IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { AccessibilityService } from '../../../../platform/accessibility/browser/accessibilityService.js';
 
-export function createConfigurationServices(resources: DisposableStore, container: HTMLElement): ServiceContainer {
-	const services = resources.add(new ServiceContainer());
+export function createConfigurationServices(resources: DisposableStore, container: HTMLElement): InstantiationService {
+	const services = resources.add(new InstantiationService());
 	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
 	services.registerSingleton(IAccessibilityService, accessor => new AccessibilityService({

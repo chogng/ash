@@ -1,7 +1,7 @@
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
-import { type ITestProfile, type ITestRun, type ITestingService } from "../../../services/testing/common/testingService.js";
-import { type ITerminalService } from "../../../services/terminal/common/terminal.js";
-import { type IViewsService } from "../../../services/views/browser/viewsService.js";
+import { type ITestProfile, type ITestRun, ITestingService } from "../../../services/testing/common/testingService.js";
+import { ITerminalService } from "../../../services/terminal/common/terminal.js";
+import { IViewsService } from "../../../services/views/browser/viewsService.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { TERMINAL_VIEW_ID } from "../../terminal/common/terminal.js";
 
@@ -14,7 +14,7 @@ export class TestingViewPane extends ViewPane {
 	private error: string | undefined;
 	private refreshing = false;
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, private readonly testingService: ITestingService, private readonly terminalService: ITerminalService, private readonly viewsService: IViewsService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @ITestingService private readonly testingService: ITestingService, @ITerminalService private readonly terminalService: ITerminalService, @IViewsService private readonly viewsService: IViewsService) {
 		super(container, options);
 		this.contentElement.classList.add("ash-testing");
 		const controls = h(container.ownerDocument, "div");

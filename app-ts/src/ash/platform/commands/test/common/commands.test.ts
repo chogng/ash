@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { CommandRegistry } from "../../common/commands.js";
-import { ServiceContainer } from '../../../instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
 
 test("CommandRegistry atomically replaces one caller-owned command batch", () => {
 	const registry = new CommandRegistry();
@@ -39,7 +39,7 @@ test("disposing a command batch removes only commands owned by that batch", () =
 
 test('command metadata validates supplied arguments while preserving handler values and registration input', () => {
 	const registry = new CommandRegistry();
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	const calls: unknown[][] = [];
 	const handler = (accessor: unknown, ...args: unknown[]): unknown => {
 		assert.equal(accessor, services);
@@ -64,7 +64,7 @@ test('command metadata validates supplied arguments while preserving handler val
 
 test('replacing a command batch replaces its constraints and disposal removes the registered handler', () => {
 	const registry = new CommandRegistry();
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	const registration = registry.registerMany([{
 		id: 'test.replaced',
 		handler: (_accessor, value) => value,

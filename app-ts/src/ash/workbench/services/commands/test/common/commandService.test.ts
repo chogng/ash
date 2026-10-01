@@ -3,9 +3,7 @@ import { test } from "mocha";
 import {
 	CommandRegistry,
 } from "../../../../../platform/commands/common/commands.js";
-import {
-	ServiceContainer,
-} from "../../../../../platform/instantiation/common/instantiation.js";
+import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
 import {
 	CommandService,
 } from "../../../../../workbench/services/commands/common/commandService.js";
@@ -20,7 +18,7 @@ test("command service emits execution events around the handler call", async () 
 			return "result";
 		},
 	);
-	using service = new CommandService(new ServiceContainer(), registry);
+	using service = new CommandService(new InstantiationService(), registry);
 	using willListener = service.onWillExecuteCommand((event) => {
 		order.push(`will:${event.commandId}:${String(event.args[0])}`);
 	});
@@ -49,7 +47,7 @@ test("command service does not emit did when a handler throws", async () => {
 			throw new Error("failed");
 		},
 	);
-	using service = new CommandService(new ServiceContainer(), registry);
+	using service = new CommandService(new InstantiationService(), registry);
 	let willCount = 0;
 	let didCount = 0;
 	using willListener = service.onWillExecuteCommand(() => {
@@ -69,7 +67,7 @@ test("command service does not emit did when a handler throws", async () => {
 
 test('command metadata rejects arguments before handler effects and completion events', async () => {
 	const registry = new CommandRegistry();
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	const order: string[] = [];
 	using registration = registry.registerMany([{
 		id: 'test.command.arguments',

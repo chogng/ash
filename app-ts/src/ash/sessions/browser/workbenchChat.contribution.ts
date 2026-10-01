@@ -1,6 +1,6 @@
 import { Lxicon } from '../../base/common/lxicons.js';
 import { InstantiationType, registerSingleton } from '../../platform/instantiation/common/extensions.js';
-import { ServiceConstructionDescriptor } from '../../platform/instantiation/common/instantiation.js';
+import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
 import type { IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { ViewContainerLocation, type WorkbenchViewRegistry, ViewsRegistry } from '../../workbench/common/views.js';
 import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID } from '../../workbench/contrib/chat/common/chat.js';
@@ -61,7 +61,7 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
 		localizationKey: { bundle: 'ash.views', key: 'chat' },
 		order: 1,
 		canToggleVisibility: false,
-		ctorDescriptor: new ServiceConstructionDescriptor(ChatViewPane),
+		ctorDescriptor: new SyncDescriptor(ChatViewPane),
 	}]);
 }
 

@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { createStringDataTransferItem, VSDataTransfer } from '../../../base/common/dataTransfer.js';
-import { ServiceContainer } from '../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
 import { ITreeViewsDnDService } from '../../common/services/treeViewsDndService.js';
 
 test('tree view drag data service is registered with VSDataTransfer', async () => {
-	using container = new ServiceContainer();
+	using container = new InstantiationService();
 	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === ITreeViewsDnDService)?.[1];
 	assert.ok(descriptor);
 	container.registerSingleton(ITreeViewsDnDService, () => container.createInstance(descriptor));

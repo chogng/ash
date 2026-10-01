@@ -3,9 +3,7 @@ import {
 	ViewPane,
 	type IViewPaneOptions,
 } from "../../../../browser/parts/views/viewPane.js";
-import type {
-	IWorkspaceOpenService,
-} from "../../../../services/workspaces/browser/workspaceOpenService.js";
+import { IWorkspaceOpenService } from "../../../../services/workspaces/browser/workspaceOpenService.js";
 import { h } from "../../../../../base/browser/dom.js";
 
 /**
@@ -25,7 +23,7 @@ export class EmptyView extends ViewPane {
 	constructor(
 		container: HTMLElement,
 		options: IViewPaneOptions,
-		workspaceOpenService: IWorkspaceOpenService,
+		@IWorkspaceOpenService workspaceOpenService: IWorkspaceOpenService,
 	) {
 		super(container, options);
 		this.workspaceOpenService = workspaceOpenService;

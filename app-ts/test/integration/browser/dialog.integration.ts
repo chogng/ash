@@ -9,7 +9,7 @@ import { MenuId, MenusRegistry } from '../../../src/ash/platform/actions/common/
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import { CommandRegistry } from '../../../src/ash/platform/commands/common/commands.js';
 import { ContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
-import { ServiceContainer } from '../../../src/ash/platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import type { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
 import type { IQuickPick, IQuickPickItem } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
@@ -100,7 +100,7 @@ window.ashDialogIntegration = {
 		controller.abort();
 	},
 	showCommandFailure(): void {
-		const services = commandResources.add(new ServiceContainer());
+		const services = commandResources.add(new InstantiationService());
 		const registry = new CommandRegistry();
 		commandResources.add(registry.register('test.commandFailure', () => { throw new Error('The command could not finish.'); }));
 		commandResources.add(MenusRegistry.appendMenuItem(MenuId.CommandPalette, {

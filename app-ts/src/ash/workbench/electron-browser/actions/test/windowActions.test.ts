@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { ServiceContainer } from '../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { NATIVE_HOST_OPEN_WINDOW_CHANNEL, NATIVE_HOST_DIALOG_CHANNEL, NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL, NATIVE_HOST_SHELL_COMMAND_CHANNEL } from '../../../../platform/native/common/nativeHost.js';
@@ -58,7 +58,7 @@ test('desktop dialog and shell routes reject malformed requests', async () => {
 });
 
 test('desktop window commands reach the window host', async () => {
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	using configuration = new InMemoryConfigurationService();
 	services.registerInstance(IConfigurationService, configuration);
 	const calls: string[] = [];
@@ -109,7 +109,7 @@ test('desktop window commands reach the window host', async () => {
 });
 
 test('quick window switching focuses the next registered window', async () => {
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(INativeHostService, {
 		listWindows: async () => [{ id: 1, title: 'Workbench', focused: true }, { id: 2, title: 'Agents', focused: false }],
 		focusWindowById: async (id: number) => { assert.equal(id, 2); },

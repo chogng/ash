@@ -7,7 +7,7 @@ import { TextModel } from '../../../../common/model/textModel.js';
 import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
 import { IClipboardService, type IClipboardService as IClipboardServiceContract } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { ContextKeyService, IContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { ICodeEditorService } from '../../../../browser/services/codeEditorService.js';
 import { installEditorTestDom } from '../../../../test/browser/editorTestGlobals.js';
@@ -37,7 +37,7 @@ test('clipboard actions use the focused code editor and platform clipboard servi
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('alpha beta');
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	using contextKeys = new ContextKeyService();
 	using codeEditorService = new StandaloneCodeEditorService();
 	const clipboard = new MemoryClipboardService();
@@ -72,7 +72,7 @@ test('paste command drops a delayed clipboard read after focus, selection, or mo
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using firstModel = new TextModel('alpha');
 	using secondModel = new TextModel('bravo');
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	using contextKeys = new ContextKeyService();
 	using codeEditorService = new StandaloneCodeEditorService();
 	const clipboard = new DeferredClipboardService();
@@ -160,7 +160,7 @@ test('cut command keeps text when clipboard writing completes after selection or
 	dom.window.document.execCommand = () => true;
 	using firstModel = new TextModel('alpha beta');
 	using secondModel = new TextModel('bravo');
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	using contextKeys = new ContextKeyService();
 	using codeEditorService = new StandaloneCodeEditorService();
 	const clipboard = new DeferredClipboardService();

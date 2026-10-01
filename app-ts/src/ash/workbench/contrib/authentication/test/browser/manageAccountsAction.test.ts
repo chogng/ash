@@ -7,7 +7,7 @@ import { commandActionLabel } from '../../../../../platform/action/common/action
 import { registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { IAccountService, type AccountState } from '../../../../../platform/accounts/common/accountService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
@@ -158,7 +158,7 @@ class AccountActionEnvironment extends Disposable {
 
 	constructor(accounts: IAccountService, quickInput: IQuickInputService, operations: string[]) {
 		super();
-		const services = new ServiceContainer();
+		const services = new InstantiationService();
 		services.registerInstance(IAccountService, accounts);
 		services.registerInstance(IQuickInputService, quickInput);
 		this.github = {

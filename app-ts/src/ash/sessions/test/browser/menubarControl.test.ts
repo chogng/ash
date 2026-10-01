@@ -9,7 +9,7 @@ import { MenuService } from '../../../platform/actions/common/menuService.js';
 import { CommandsRegistry } from '../../../platform/commands/common/commands.js';
 import { ContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import type { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
-import { ServiceContainer } from '../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import { BrowserMenubarControl } from '../../../workbench/browser/parts/titlebar/menubarControl.js';
 import { Menus } from '../../browser/menus.js';
@@ -18,7 +18,7 @@ import { RETURN_TO_WORKBENCH_COMMAND_ID } from '../../common/windowNavigation.js
 test('Sessions and Workbench menus keep product commands separate while sharing menu interaction', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	using globals = installEditorTestDom(browser, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	using commands = new CommandService(services);
 	using contextKeys = new ContextKeyService();
 	const menus = new MenuService(commands, contextKeys);

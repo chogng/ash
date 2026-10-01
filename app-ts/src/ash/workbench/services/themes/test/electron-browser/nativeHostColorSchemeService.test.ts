@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter } from '../../../../../base/common/event.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import type { INativeHostApi } from '../../../../../platform/native/common/nativeHost.js';
 import type { IColorScheme } from '../../../../../platform/window/common/window.js';
 import { INativeHostService } from '../../../../common/services.js';
@@ -22,7 +22,7 @@ test('a system event wins over an older startup read and disposed windows ignore
 		revealFile: unexpected, setWindowTheme: unexpected, setWindowDimmed: unexpected, toggleDeveloperTools: unexpected,
 		saveFile: unexpected, isAccessibilitySupportEnabled: unexpected, onDidChangeAccessibilitySupport: unexpected,
 	};
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(INativeHostService, host);
 	using colors = services.createInstance(NativeHostColorSchemeService, { dark: false, highContrast: false });
 	const changes: IColorScheme[] = [];

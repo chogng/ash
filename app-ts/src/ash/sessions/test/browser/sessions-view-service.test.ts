@@ -2,7 +2,7 @@ import { observableValue } from '../../../base/common/observable.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from 'jsdom';
-import { ServiceContainer } from '../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { Emitter } from "../../../base/common/event.js";
@@ -21,7 +21,7 @@ function createTestStorage(): BrowserStorageService {
 }
 
 function createView(sessions: ISessionsManagementService, storage: IStorageService): SessionsService {
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(ISessionsManagementService, sessions);
 	services.registerInstance(IStorageService, storage);
 	return services.createInstance(SessionsService);

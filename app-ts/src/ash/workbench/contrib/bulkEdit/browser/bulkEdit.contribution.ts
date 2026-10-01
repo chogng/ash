@@ -4,7 +4,7 @@ import { type LanguageWorkspaceEdit } from "../../../../editor/common/languages.
 import { IBulkEditService, ResourceEdit } from '../../../../editor/browser/services/bulkEditService.js';
 import { ITextModelResourceService } from "../../../services/textmodelResolver/common/textModelResourceService.js";
 import { IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
-import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
+import { SyncDescriptor } from "../../../../platform/instantiation/common/descriptors.js";
 import { IFileService } from "../../../../platform/files/common/files.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
@@ -25,7 +25,7 @@ export function registerBulkEditView(registry: WorkbenchViewRegistry = ViewsRegi
 		order: 1,
 		hideByDefault: true,
 		canToggleVisibility: false,
-		ctorDescriptor: new ServiceConstructionDescriptor(BulkEditPreviewPane),
+		ctorDescriptor: new SyncDescriptor(BulkEditPreviewPane),
 	}]);
 }
 

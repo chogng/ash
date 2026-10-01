@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
-import { ServiceContainer } from '../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IRendererHostService, type IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
@@ -44,7 +44,7 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 		model: { async readModel() { return null; } },
 		events: { subscribe() { subscriptions++; return { dispose() {} }; } },
 	} as unknown as IRendererHost;
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IRendererHostService, api);
 	using workspace = new WorkspaceContextService({ id: 'empty-window' });
 	services.registerInstance(IWorkspaceContextService, workspace);
@@ -75,7 +75,7 @@ test('Open in Agents uses the visible untitled chat instead of an older active s
 		active: { session: { sessionId: 'older-session' }, threadId: 'older-thread' },
 		activeUntitledSession: undefined as { readonly untitledSessionId: string } | undefined,
 	};
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(ISessionsManagementService, selection as unknown as ISessionsManagementService);
 	services.registerInstance(IViewsService, { openView: () => undefined, focusView: () => false, getViewWithId: () => undefined });
 	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)?.[1];
@@ -109,7 +109,7 @@ test('Sessions contributes Turn changes and commit actions to the shared multi-d
 			return summaries;
 		},
 	} as unknown as IChatService;
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IChatService, chat);
 	const session = { sessionId: 'session' };
 	services.registerInstance(ISessionsManagementService, {

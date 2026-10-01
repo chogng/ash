@@ -9,11 +9,9 @@ import {
 	type IConfigurationRegistry,
 } from "../../../platform/configuration/common/configurationRegistry.js";
 import { ContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
-import {
-	createServiceIdentifier,
-	ServiceContainer,
-	ServiceConstructionDescriptor,
-} from "../../../platform/instantiation/common/instantiation.js";
+import { createServiceIdentifier } from '../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
+import { SyncDescriptor } from '../../../platform/instantiation/common/descriptors.js';
 import {
 	darkColorTheme,
 	lightColorTheme,
@@ -116,7 +114,7 @@ test("workbench context keys describe the current workspace", () => {
 
 test("workbench contributions start once at their declared phases", async () => {
 	const serviceId = createServiceIdentifier<string>("testService");
-	const services = new ServiceContainer();
+	const services = new InstantiationService();
 	services.registerInstance(serviceId, "ready");
 	const registry = new WorkbenchContributionRegistry();
 	const calls: string[] = [];
@@ -262,17 +260,13 @@ test("view registrations are ordered and disposed atomically", () => {
 			id: "ash.search",
 			title: "Search",
 			order: 20,
-			ctorDescriptor: new ServiceConstructionDescriptor(TestView, {
-				staticArguments: ["ash.search"],
-			}),
+			ctorDescriptor: new SyncDescriptor(TestView, ["ash.search"]),
 		},
 		{
 			id: "ash.explorer",
 			title: "Explorer",
 			order: 10,
-			ctorDescriptor: new ServiceConstructionDescriptor(TestView, {
-				staticArguments: ["ash.explorer"],
-			}),
+			ctorDescriptor: new SyncDescriptor(TestView, ["ash.explorer"]),
 		},
 	]);
 
@@ -289,9 +283,7 @@ test("view registrations are ordered and disposed atomically", () => {
 			{
 				id: "ash.explorer",
 				title: "Duplicate",
-				ctorDescriptor: new ServiceConstructionDescriptor(TestView, {
-					staticArguments: ["ash.explorer"],
-				}),
+				ctorDescriptor: new SyncDescriptor(TestView, ["ash.explorer"]),
 			},
 		]),
 		/already registered/,

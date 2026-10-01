@@ -3,7 +3,7 @@ import { test } from 'mocha';
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import { registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { DialogResult, IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { DialogService } from '../../../../services/dialogs/common/dialogService.js';
 import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
@@ -11,7 +11,7 @@ import { ShowAboutDialogAction } from '../../windowActions.js';
 
 test('About Ash command opens the version dialog', async () => {
 	using registration = registerAction2(ShowAboutDialogAction);
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	using dialogs = new DialogService();
 	services.registerInstance(IDialogService, dialogs);
 	using commands = new CommandService(services);
@@ -30,7 +30,7 @@ test('About Ash command and dialog use the selected language', async () => {
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using registration = registerAction2(ShowAboutDialogAction);
-		using services = new ServiceContainer();
+		using services = new InstantiationService();
 		using dialogs = new DialogService();
 		services.registerInstance(IDialogService, dialogs);
 		using commands = new CommandService(services);

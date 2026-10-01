@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import type { ICodeEditor } from '../../../../browser/editorBrowser.js';
 import { EditorOption, type EditorStickyScrollOptions } from '../../../../common/config/editorOptions.js';
 import { Range } from '../../../../common/core/range.js';
@@ -186,7 +186,7 @@ suite('Sticky scroll scope sources', () => {
 class Fixture extends Disposable {
 	public readonly model = this._register(new TextModel('comment\nouter\n  body\n  last\n}\nmore\n}'));
 	public readonly folding = this._register(new EditorFoldingModel(this.model));
-	private readonly services = this._register(new ServiceContainer());
+	private readonly services = this._register(new InstantiationService());
 	public readonly features = this._register(new LanguageFeaturesService());
 	public readonly provider: StickyModelProvider;
 	public readonly errors: unknown[] = [];

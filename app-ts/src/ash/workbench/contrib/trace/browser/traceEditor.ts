@@ -5,8 +5,8 @@ import { Button } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { DialogSeverity, type IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { DialogSeverity, IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { exportTrace, TraceConnection, type TraceConnectionState, type TraceSpan } from './traceConnection.js';
@@ -36,7 +36,7 @@ export class TraceEditor extends Disposable implements IEditorPane {
 	private shown = true;
 	private readonly listId = 'ash-trace-list-' + nextListId++;
 
-	constructor(private readonly dialogs: IDialogService, private readonly configuration: IConfigurationService) { super(); }
+	constructor(@IDialogService private readonly dialogs: IDialogService, @IConfigurationService private readonly configuration: IConfigurationService) { super(); }
 
 	create(parent: HTMLElement): void {
 		const document = parent.ownerDocument;

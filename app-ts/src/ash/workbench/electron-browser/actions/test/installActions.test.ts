@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Event } from '../../../../base/common/event.js';
 import { DialogSeverity, IDialogService, type IMessageDialogOptions } from '../../../../platform/dialogs/common/dialogs.js';
-import { ServiceContainer } from '../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
 import type { INativeHostApi } from '../../../../platform/native/common/nativeHost.js';
 import { INativeHostService } from '../../../common/services.js';
 import { InstallShellCommandAction, UninstallShellCommandAction } from '../installActions.js';
 
 test('shell command actions report the installed path and installation errors', async () => {
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	const messages: IMessageDialogOptions[] = [];
 	services.registerInstance(IDialogService, {
 		onWillShowDialog: Event.None,

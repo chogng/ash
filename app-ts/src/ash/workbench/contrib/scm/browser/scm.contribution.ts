@@ -1,13 +1,9 @@
 import { Lxicon } from "../../../../base/common/lxicons.js";
-import { Action2, IMenuService, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
-import { IHoverService } from "../../../../platform/hover/browser/hoverService.js";
-import { IResourceIconRenderer } from "../../../browser/labels.js";
-import { ServiceConstructionDescriptor, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
-import { IEditorService } from "../../../services/editor/common/editorService.js";
 import { IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
 import { ScmAgentReviewViewPane } from "./scmAgentReviewViewPane.js";
 import { SCMHistoryViewPane } from "./scmHistoryViewPane.js";
@@ -121,7 +117,7 @@ export function registerGitViews(
 		title: "Git",
 		localizationKey: { bundle: "ash.views", key: "git" },
 		location: ViewContainerLocation.Sidebar,
-		ctorDescriptor: new ServiceConstructionDescriptor(SCMViewPaneContainer),
+		ctorDescriptor: new SyncDescriptor(SCMViewPaneContainer),
 		icon: Lxicon.gitBranch,
 		order: 3,
 	});
@@ -132,7 +128,7 @@ export function registerGitViews(
 			localizationKey: { bundle: "ash.views", key: "changes" },
 			order: 1,
 			canToggleVisibility: false,
-			ctorDescriptor: new ServiceConstructionDescriptor(ScmViewPane),
+			ctorDescriptor: new SyncDescriptor(ScmViewPane),
 		},
 		{
 			id: GIT_AGENT_REVIEW_VIEW_ID,
@@ -141,7 +137,7 @@ export function registerGitViews(
 			order: 2,
 			collapsed: true,
 			canToggleVisibility: false,
-			ctorDescriptor: new ServiceConstructionDescriptor(ScmAgentReviewViewPane),
+			ctorDescriptor: new SyncDescriptor(ScmAgentReviewViewPane),
 		},
 		{
 			id: GIT_GRAPH_VIEW_ID,
@@ -150,9 +146,7 @@ export function registerGitViews(
 			order: 3,
 			collapsed: true,
 			canToggleVisibility: false,
-			ctorDescriptor: new ServiceConstructionDescriptor(SCMHistoryViewPane, {
-				serviceDependencies: [ISCMViewService, IMenuService, IContextMenuService, IContextKeyService, IHoverService, IEditorService, IResourceIconRenderer],
-			}),
+			ctorDescriptor: new SyncDescriptor(SCMHistoryViewPane),
 		},
 	]);
 }

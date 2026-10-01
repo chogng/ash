@@ -21,7 +21,8 @@ import { AccessibleViewRegistry } from '../../platform/accessibility/browser/acc
 import type { IConfigurationApi, IConfigurationSnapshot } from "../../platform/configuration/common/configurationIpc.js";
 import { IConfigurationService } from "../../platform/configuration/common/configuration.js";
 import { ContextKeyExpr } from '../../platform/contextkey/common/contextkey.js';
-import { refineServiceDecorator, ServiceContainer, type IInstantiationService } from "../../platform/instantiation/common/instantiation.js";
+import { refineServiceDecorator, type IInstantiationService } from "../../platform/instantiation/common/instantiation.js";
+import { InstantiationService } from "../../platform/instantiation/common/instantiationService.js";
 import { ICodeEditorService } from '../../editor/browser/services/codeEditorService.js';
 import { StandaloneCodeEditorService } from '../../editor/standalone/browser/standaloneCodeEditorService.js';
 import { ILanguageConfigurationService, LanguageConfigurationService } from '../../editor/common/languages/languageConfigurationRegistry.js';
@@ -204,7 +205,7 @@ export class Workbench extends Disposable {
 		if (!ownerWindow) throw new Error("Sessions renderer requires an owner window");
 
 		const configurationService = this.configurationService = this._register(new WorkbenchConfigurationService({ api: options.configurationApi, initialSnapshot: options.initialConfigurationSnapshot }));
-		const services = this._register(new ServiceContainer());
+		const services = this._register(new InstantiationService());
 		services.registerInstance(IConfigurationService, configurationService);
 		if (options.nativeHostApi) services.registerInstance(INativeHostService, options.nativeHostApi);
 		const languageService = this._register(new LanguageService());

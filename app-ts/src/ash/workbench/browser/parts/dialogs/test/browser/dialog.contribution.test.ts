@@ -8,9 +8,7 @@ import {
 	type IDialogHandler,
 	type IDialogOutcome,
 } from "../../../../../../platform/dialogs/common/dialogs.js";
-import {
-	ServiceContainer,
-} from "../../../../../../platform/instantiation/common/instantiation.js";
+import { InstantiationService } from "../../../../../../platform/instantiation/common/instantiationService.js";
 import {
 	IDialogsModel,
 	IWorkbenchDialogHandler,
@@ -45,7 +43,7 @@ class TestDialogHandler implements IDialogHandler {
 test("dialog handler contribution starts at BlockStartup", async () => {
 	using service = new DialogService();
 	const handler = new TestDialogHandler();
-	const services = new ServiceContainer();
+	const services = new InstantiationService();
 	services.registerInstance(IDialogsModel, service.model);
 	services.registerInstance(IWorkbenchDialogHandler, handler);
 	using host = WorkbenchContributionsRegistry.createHost(services);

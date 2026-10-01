@@ -16,7 +16,7 @@ import { MenuId } from '../../../../platform/actions/common/actions.js';
 import { createConfigurationServices, createTestConfiguration, TEST_FONT_INFO } from './testConfiguration.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { AccessibilitySupport, IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
-import { ServiceContainer } from '../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
 import { installEditorTestGlobals } from '../editorTestGlobals.js';
 
 test('ComputedEditorOptions stores canonical option IDs', () => {
@@ -98,7 +98,7 @@ test('EditorConfiguration validates updates and reports the changed option', () 
 
 test('EditorConfiguration requires the registered accessibility service at construction', () => {
 	const dom = new JSDOM('<div></div>');
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	try {
 		assert.throws(() => services.createInstance(EditorConfiguration, false, MenuId.EditorContext, {}, dom.window.document.body), /accessibilityService/);
 	} finally {

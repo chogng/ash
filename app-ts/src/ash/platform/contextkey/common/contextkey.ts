@@ -1,4 +1,7 @@
 import type { Event } from "../../../base/common/event.js";
+import { createDecorator } from '../../instantiation/common/instantiation.js';
+
+export const IContextKeyService = createDecorator<IContextKeyService>('contextKeyService');
 
 export type ContextKeyValue = boolean | string | number | null | undefined;
 

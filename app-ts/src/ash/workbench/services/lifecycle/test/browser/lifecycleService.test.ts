@@ -3,7 +3,7 @@ import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { BrowserLifecycleService } from "../../browser/lifecycleService.js";
 import { LifecyclePhase, StartupKind, ShutdownVetoError } from '../../common/lifecycle.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { IStorageService, StorageScope, StorageTarget, WillSaveStateReason } from '../../../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../storage/browser/storageService.js';
@@ -177,7 +177,7 @@ test('a failed shutdown clears its persisted reason and can retry with another r
 
 test('the browser renderer requires registered lifecycle dependencies at construction', () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	const options = { ownerWindow: browser.window as unknown as Window, onError: () => undefined };
 	assert.throws(() => services.createInstance(BrowserLifecycleService, options), /logService/);
 	services.registerInstance(ILogService, new NullLoggerService());
@@ -185,10 +185,10 @@ test('the browser renderer requires registered lifecycle dependencies at constru
 	browser.window.close();
 });
 
-function createLifecycleServices(browser: JSDOM, navigationType = 'navigate'): ServiceContainer {
+function createLifecycleServices(browser: JSDOM, navigationType = 'navigate'): InstantiationService {
 	browser.reconfigure({ url: 'https://ash.test/' });
 	Object.defineProperty(browser.window.performance, 'getEntriesByType', { configurable: true, value: () => [{ type: navigationType }] });
-	const services = new ServiceContainer();
+	const services = new InstantiationService();
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerSingleton(IStorageService, () => new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: 'lifecycle-test', workspaceId: 'workspace', flushInterval: 0 }));
 	return services;

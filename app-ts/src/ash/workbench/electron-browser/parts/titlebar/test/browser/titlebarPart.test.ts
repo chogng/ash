@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { Event } from '../../../../../../base/common/event.js';
 import { isMacintosh } from '../../../../../../base/common/platform.js';
 import { DisposableTracker, installDisposableTracker } from '../../../../../../base/common/lifecycle.js';
-import { ServiceContainer } from '../../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import { IQuickAccessController } from '../../../../../../platform/quickinput/common/quickAccess.js';
 import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
@@ -38,7 +38,7 @@ test('Electron titlebar applies the active theme and releases its subscription w
 	const tracker = new DisposableTracker();
 	using tracking = installDisposableTracker(tracker);
 	{
-		using services = new ServiceContainer();
+		using services = new InstantiationService();
 		using themes = new TestThemeService(darkColorTheme);
 		using commands = new CommandService(services);
 		using contextKeys = new ContextKeyService();
@@ -87,7 +87,7 @@ test('Electron titlebar applies the active theme and releases its subscription w
 			localizationService: { onDidChange: Event.None, whenReady: Promise.resolve(), translate: (_bundle: string, _key: string, fallback: string) => fallback },
 		};
 		services.registerInstance(IContextMenuService, options.contextMenuService);
-		using missingServices = new ServiceContainer();
+		using missingServices = new InstantiationService();
 		assert.throws(() => factory(environment.window.document.body, options, missingServices), /service/i);
 		using titlebar = factory(environment.window.document.body, options, services);
 		const leftActions = titlebar.domNode.querySelector('.ash-titlebar-left-actions');

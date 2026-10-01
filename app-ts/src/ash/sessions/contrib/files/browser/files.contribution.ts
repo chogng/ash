@@ -1,6 +1,6 @@
 import '../../../../workbench/contrib/files/browser/files.contribution.js';
 import '../../../../workbench/contrib/files/browser/media/explorerviewlet.css';
-import { ServiceConstructionDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
@@ -22,6 +22,6 @@ SessionsViewRegistry.registerStaticViews(SESSIONS_FILES_CONTAINER_ID, [{
 	id: VIEW_ID,
 	title: 'Files',
 	localizationKey: { bundle: 'ash', key: 'sessions.files.title' },
-	ctorDescriptor: new ServiceConstructionDescriptor(ExplorerView),
+	ctorDescriptor: new SyncDescriptor(ExplorerView),
 	canToggleVisibility: false,
 }]);

@@ -8,7 +8,9 @@ import { StandaloneCodeEditorService } from '../../standalone/browser/standalone
 import { IInlineCompletionsService, InlineCompletionsService } from '../../browser/services/inlineCompletionsService.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { setIconResolver } from '../../../base/browser/ui/lxicons/lxicon.js';
-import { IInstantiationService, ServiceContainer, ServiceConstructionDescriptor } from '../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
+import { SyncDescriptor } from '../../../platform/instantiation/common/descriptors.js';
 import { darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../platform/theme/test/common/testThemeService.js';
@@ -49,14 +51,14 @@ interface TestCodeEditorOptions extends CodeEditorWidgetOptions {
 	readonly accessibilityService?: IAccessibilityService;
 }
 
-export function createCodeEditorServices(disposables: Pick<DisposableStore, 'add'>, parent?: IInstantiationService): ServiceContainer {
-	const services = disposables.add(parent ? parent.createChild() : new ServiceContainer());
+export function createCodeEditorServices(disposables: Pick<DisposableStore, 'add'>, parent?: IInstantiationService): InstantiationService {
+	const services = disposables.add(parent ? parent.createChild() : new InstantiationService());
 	registerCodeEditorServices(services);
 	return services;
 }
 
 /** Completes an existing test scope without replacing its explicit service overrides. */
-export function registerCodeEditorServices(services: ServiceContainer): void {
+export function registerCodeEditorServices(services: InstantiationService): void {
 	if (!services.has(ILanguageService)) {
 		services.registerSingleton(ILanguageService, () => new LanguageService());
 	}
@@ -98,17 +100,13 @@ export function registerCodeEditorServices(services: ServiceContainer): void {
 		services.registerSingleton(IQuickInputService, () => new QuickInputController(document.body));
 	}
 	if (!services.has(IMenuService)) {
-		services.registerSingleton(IMenuService, () => services.createInstance(new ServiceConstructionDescriptor(MenuService, {
-			serviceDependencies: [ICommandService, IContextKeyService],
-		})));
+		services.registerSingleton(IMenuService, () => services.createInstance(new SyncDescriptor(MenuService)));
 	}
 	if (!services.has(IContextViewService)) {
 		services.registerSingleton(IContextViewService, () => services.createInstance(BrowserContextViewService, document.body));
 	}
 	if (!services.has(IContextMenuService)) {
-		services.registerSingleton(IContextMenuService, () => services.createInstance(new ServiceConstructionDescriptor(BrowserContextMenuService, {
-			serviceDependencies: [IMenuService, IContextKeyService, IKeybindingService, IContextViewService, INotificationService],
-		})));
+		services.registerSingleton(IContextMenuService, () => services.createInstance(new SyncDescriptor(BrowserContextMenuService)));
 	}
 	if (!services.has(IHoverService)) {
 		services.registerSingleton(IHoverService, accessor => new HoverService(
@@ -145,7 +143,7 @@ export function createTestCodeEditor(options: TestCodeEditorOptions): CodeEditor
 	try {
 		const { instantiationService, languageConfigurationService, languageFeaturesService, accessibilityService, ...widgetOptions } = options;
 		setIconResolver(widgetOptions.container.ownerDocument, icon => getIconDefinition(icon));
-		const overrides = resources.add(instantiationService ? instantiationService.createChild() : new ServiceContainer());
+		const overrides = resources.add(instantiationService ? instantiationService.createChild() : new InstantiationService());
 		if (!overrides.has(IQuickInputService)) {
 			overrides.registerSingleton(IQuickInputService, () => new QuickInputController(widgetOptions.container.ownerDocument.body));
 		}

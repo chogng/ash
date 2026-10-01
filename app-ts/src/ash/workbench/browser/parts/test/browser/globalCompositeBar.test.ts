@@ -32,7 +32,7 @@ const { IMenuService, MenuId, MenusRegistry } = await import('../../../../../pla
 const { MenuService } = await import('../../../../../platform/actions/common/menuService.js');
 const { ICommandService, CommandsRegistry } = await import('../../../../../platform/commands/common/commands.js');
 const { ContextKeyService } = await import('../../../../../platform/contextkey/browser/contextKeyService.js');
-const { ServiceContainer } = await import('../../../../../platform/instantiation/common/instantiation.js');
+const { InstantiationService } = await import('../../../../../platform/instantiation/common/instantiationService.js');
 const { CommandService } = await import('../../../../services/commands/common/commandService.js');
 const { GlobalCompositeBar } = await import('../../globalCompositeBar.js');
 
@@ -40,7 +40,7 @@ test('Activity Bar global actions open account and management menus', async () =
 	using disposables = new DisposableStore();
 	const ownerDocument = browser.window.document;
 	ownerDocument.body.replaceChildren();
-	const services = disposables.add(new ServiceContainer());
+	const services = disposables.add(new InstantiationService());
 	const commands = disposables.add(new CommandService(services));
 	services.registerInstance(ICommandService, commands);
 	const contextKeys = disposables.add(new ContextKeyService());

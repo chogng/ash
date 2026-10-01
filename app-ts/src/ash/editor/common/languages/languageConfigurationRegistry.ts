@@ -10,7 +10,8 @@ import { IndentRulesSupport } from './supports/indentRules.js';
 import { OnEnterSupport } from './supports/onEnter.js';
 import { RichEditBrackets } from './supports/richEditBrackets.js';
 import { EditorAutoIndentStrategy } from '../config/editorOptions.js';
-import { createDecorator, ServiceConstructionDescriptor } from '../../../platform/instantiation/common/instantiation.js';
+import { createDecorator } from '../../../platform/instantiation/common/instantiation.js';
+import { SyncDescriptor } from '../../../platform/instantiation/common/descriptors.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { ILanguageService } from './language.js';
 import { registerSingleton } from '../../../platform/instantiation/common/extensions.js';
@@ -66,8 +67,8 @@ export class LanguageConfigurationService extends Disposable implements ILanguag
 	private readonly configurations = new Map<string, ResolvedLanguageConfiguration>();
 
 	constructor(
-		private readonly configurationService: IConfigurationService,
-		private readonly languageService: ILanguageService
+		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@ILanguageService private readonly languageService: ILanguageService
 	) {
 		super();
 
@@ -494,6 +495,4 @@ export class ResolvedLanguageConfiguration {
 	}
 }
 
-registerSingleton(ILanguageConfigurationService, new ServiceConstructionDescriptor(LanguageConfigurationService, {
-	serviceDependencies: [IConfigurationService, ILanguageService],
-}));
+registerSingleton(ILanguageConfigurationService, new SyncDescriptor(LanguageConfigurationService));

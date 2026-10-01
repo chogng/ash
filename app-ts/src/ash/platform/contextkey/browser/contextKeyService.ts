@@ -1,7 +1,8 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
-import type { Context, ContextKeyValue, ContextKeyExpression, ContextKeyChangeEvent, IContextKey, IContextKeyService as IContextKeyValueService } from "../common/contextkey.js";
+import { refineServiceDecorator } from "../../instantiation/common/instantiation.js";
+import { IContextKeyService as IContextKeyValueService } from '../common/contextkey.js';
+import type { Context, ContextKeyValue, ContextKeyExpression, ContextKeyChangeEvent, IContextKey } from "../common/contextkey.js";
 
 /** Evaluates and publishes context values for one window or DOM scope. */
 export interface IContextKeyService extends IContextKeyValueService {
@@ -15,7 +16,7 @@ export interface IScopedContextKeyService
 	extends IContextKeyService, IDisposable {}
 
 export const IContextKeyService =
-	createServiceIdentifier<IContextKeyService>("contextKeyService");
+	refineServiceDecorator<IContextKeyValueService, IContextKeyService>(IContextKeyValueService);
 
 interface ContextKeyState {
 	readonly emitter: Emitter<ContextKeyChangeEvent>;

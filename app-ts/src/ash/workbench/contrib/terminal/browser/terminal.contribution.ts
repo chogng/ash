@@ -1,13 +1,8 @@
 import { localizedString } from "../../../../platform/action/common/action.js";
-import { Action2, IMenuService, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
-import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
-import { ServiceConstructionDescriptor, type ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
-import { IThemeService } from "../../../../platform/theme/common/themeService.js";
-import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
+import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
+import { SyncDescriptor } from "../../../../platform/instantiation/common/descriptors.js";
+import { type ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { ViewContainerLocation, WorkbenchViewContainerId, type WorkbenchViewRegistry, ViewsRegistry } from "../../../common/views.js";
-import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
-import { ITerminalService } from "../../../services/terminal/common/terminal.js";
 import { IViewsService } from "../../../services/views/browser/viewsService.js";
 import { TERMINAL_VIEW_ID } from "../common/terminal.js";
 import { TerminalViewPane } from "./terminalView.js";
@@ -45,8 +40,6 @@ export function registerTerminalView(registry: WorkbenchViewRegistry = ViewsRegi
 		localizationKey: { bundle: "ash.views", key: "terminal" },
 		order: 1,
 		canToggleVisibility: false,
-		ctorDescriptor: new ServiceConstructionDescriptor(TerminalViewPane, {
-			serviceDependencies: [ITerminalService, IThemeService, IMenuService, IContextMenuService, IContextKeyService, IWorkbenchLayoutService, IWorkspaceContextService],
-		}),
+		ctorDescriptor: new SyncDescriptor(TerminalViewPane),
 	}]);
 }

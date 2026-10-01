@@ -3,7 +3,7 @@ import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../../../../base/common/uri.js";
 import { ContextKeyService, IContextKeyService } from "../../../../../../platform/contextkey/browser/contextKeyService.js";
-import { ServiceContainer } from "../../../../../../platform/instantiation/common/instantiation.js";
+import { InstantiationService } from "../../../../../../platform/instantiation/common/instantiationService.js";
 import { IQuickInputService } from "../../../../../../platform/quickinput/common/quickInput.js";
 import { CommandService } from "../../../../../services/commands/common/commandService.js";
 import { WorkbenchQuickInputService } from "../../../../../services/quickinput/browser/quickInputService.js";
@@ -20,7 +20,7 @@ import { createTestWorkbenchContextKeysHandler } from '../../../../../test/commo
 test('Close Workspace delegates an empty window to the host and follows workspace menu state', async () => {
 	using registration = registerAction2(CloseWorkspaceAction);
 	using workspace = new WorkspaceContextService({ id: 'folder', uri: URI.file('/project') });
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	using contextKeys = new ContextKeyService();
 	using bindings = createTestWorkbenchContextKeysHandler(contextKeys, { workspaceContextService: workspace, browserLocalFolderSupported: true });
 	using commands = new CommandService(services);
@@ -102,7 +102,7 @@ test("editor commands close the active tab and reopen it with a chosen editor", 
 			},
 		} as unknown as EditorPartContract;
 
-		using services = new ServiceContainer();
+		using services = new InstantiationService();
 		using contextKeys = new ContextKeyService();
 		services.registerInstance(IContextKeyService, contextKeys);
 		services.registerInstance(IEditorPart, editorPart);

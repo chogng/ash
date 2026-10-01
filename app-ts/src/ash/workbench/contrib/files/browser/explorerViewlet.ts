@@ -2,11 +2,10 @@ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextke
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { localizedString } from '../../../../platform/action/common/action.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { ServiceConstructionDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { WorkspaceFolderCountContext } from '../../../common/contextkeys.js';
 import { type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from '../../../common/views.js';
-import { IWorkspaceOpenService } from '../../../services/workspaces/browser/workspaceOpenService.js';
 import { IViewsService } from '../../../services/views/browser/viewsService.js';
 import { VIEW_ID } from '../common/files.js';
 import { EmptyView } from './views/emptyView.js';
@@ -24,7 +23,7 @@ export function registerFilesViews(registry: WorkbenchViewRegistry = ViewsRegist
 			order: 0,
 			hideByDefault: true,
 			canToggleVisibility: true,
-			ctorDescriptor: new ServiceConstructionDescriptor(OpenEditorsView),
+			ctorDescriptor: new SyncDescriptor(OpenEditorsView),
 		},
 		{
 			id: VIEW_ID,
@@ -33,7 +32,7 @@ export function registerFilesViews(registry: WorkbenchViewRegistry = ViewsRegist
 			order: 1,
 			when: ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0),
 			canToggleVisibility: false,
-			ctorDescriptor: new ServiceConstructionDescriptor(ExplorerView),
+			ctorDescriptor: new SyncDescriptor(ExplorerView),
 		},
 		{
 			id: EmptyView.ID,
@@ -41,9 +40,7 @@ export function registerFilesViews(registry: WorkbenchViewRegistry = ViewsRegist
 			order: 2,
 			when: WorkspaceFolderCountContext.isEqualTo(0),
 			canToggleVisibility: false,
-			ctorDescriptor: new ServiceConstructionDescriptor(EmptyView, {
-				serviceDependencies: [IWorkspaceOpenService],
-			}),
+			ctorDescriptor: new SyncDescriptor(EmptyView),
 		},
 	]);
 }

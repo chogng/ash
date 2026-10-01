@@ -7,7 +7,7 @@ import { MenuId } from '../../../../../platform/actions/common/actions.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { type IContextMenuMenuDelegate, type IContextMenuService as IContextMenuServiceContract } from '../../../../../platform/contextview/browser/contextView.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { EditorOption } from '../../../../common/config/editorOptions.js';
 import { Position } from '../../../../common/core/position.js';
 import { Selection } from '../../../../common/core/selection.js';
@@ -43,7 +43,7 @@ test('ContextMenuController opens the host menu at the active cursor from Shift+
 		showContextMenu: request => { requests.push(request); },
 		hideContextMenu() {},
 	};
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IContextMenuService, contextMenuService);
 	using editor = createTestCodeEditor({
 		container,
@@ -88,7 +88,7 @@ test('ContextMenuController opens minimap settings from the scrollbar and closes
 			onHide?.(true);
 		},
 	};
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	using configuration = new InMemoryConfigurationService();
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IContextMenuService, contextMenuService);

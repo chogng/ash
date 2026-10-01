@@ -5,7 +5,7 @@ import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
-import { ServiceContainer } from '../../../src/ash/platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
@@ -23,7 +23,7 @@ import { SkillsViewPane } from '../../../src/ash/workbench/contrib/skills/browse
 import { LanguageServersViewPane } from '../../../src/ash/workbench/contrib/language/browser/languageServersViewPane.js';
 
 const disposables = new DisposableStore();
-const services = disposables.add(new ServiceContainer());
+const services = disposables.add(new InstantiationService());
 const changed = disposables.add(new Emitter<void>());
 const requests: unknown[] = [];
 let offline = false;

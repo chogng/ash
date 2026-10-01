@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
-import { ServiceContainer } from '../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { createDisconnectedRendererApi } from '../../../platform/app-server/browser/rendererApi.js';
@@ -21,7 +21,7 @@ import { SessionFileService } from '../../contrib/providers/appServer/browser/se
 test('Session files preserve their original directory through selection, directory moves and archive', async () => {
 	const browser = new JSDOM('<!doctype html>', { url: 'https://sessions.test' });
 	try {
-		using services = new ServiceContainer();
+		using services = new InstantiationService();
 		using provider = new MemoryProvider();
 		using management = new SessionsManagementService(provider);
 		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, applicationId: 'session-files', workspaceId: 'sessions', flushInterval: 0 });

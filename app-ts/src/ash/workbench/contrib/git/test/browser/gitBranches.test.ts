@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter } from '../../../../../base/common/event.js';
 import { AppServerRemoteError } from '../../../../../platform/app-server/common/appServerError.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
@@ -16,7 +16,7 @@ test('Git branch command lists the selected repository and switches the chosen b
 		{ name: 'main', objectId: 'one', current: true, upstream: 'origin/main' },
 		{ name: 'feature', objectId: 'two', current: false, upstream: undefined },
 	];
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IGitService, {
 		branches: async (repositoryId?: string) => { calls.push(`list:${repositoryId}`); return branches; },
 		switchBranch: async (name: string, repositoryId?: string) => { calls.push(`switch:${repositoryId}:${name}`); return {} as never; },
@@ -37,7 +37,7 @@ test('Git branch command leaves the current branch alone and reports a rejected 
 	];
 	const calls: string[] = [];
 	let chosen = 0;
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IGitService, {
 		activeRepository: { id: 'repo-1' },
 		branches: async () => branches,

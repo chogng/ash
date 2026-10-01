@@ -5,7 +5,7 @@ import { Event } from '../../../../../base/common/event.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { DialogResult, IDialogService, type IConfirmationDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
 import { INotificationService, NotificationSeverity, type NotificationOptions } from '../../../../../platform/notification/common/notification.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IViewsService } from '../../../../services/views/browser/viewsService.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { IOnboardingScenarioService } from '../../common/onboardingScenarioService.js';
@@ -14,7 +14,7 @@ import { OnboardingTryoutService } from '../../browser/onboardingTryoutService.j
 
 suite('OnboardingTryoutService', () => {
 	function createServices() {
-		const services = new ServiceContainer();
+		const services = new InstantiationService();
 		const commands = new CommandService(services);
 		const notifications: NotificationOptions[] = [];
 		let confirmed = false;

@@ -7,9 +7,7 @@ import {
 	ICommandService,
 } from "../../../../../platform/commands/common/commands.js";
 import { ContextKeyService, IContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
-import {
-	ServiceContainer,
-} from "../../../../../platform/instantiation/common/instantiation.js";
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import {
 	IKeybindingService,
 	type IKeybindingService as KeybindingService,
@@ -141,7 +139,7 @@ test("Command Palette filters, executes, closes, and restores focus", async () =
 	container.append(focusTarget);
 	focusTarget.focus();
 
-	const services = new ServiceContainer();
+	const services = new InstantiationService();
 	const contextKeys = new ContextKeyService();
 	services.registerInstance(IContextKeyService, contextKeys);
 	const commands = new CommandService(services);
@@ -213,7 +211,7 @@ test('Quick Access switches search modes in one picker and restores focus on clo
 	const dom = new JSDOM('<!doctype html><body><button>Search</button></body>');
 	installDomGlobals(dom);
 	{
-		using services = new ServiceContainer();
+		using services = new InstantiationService();
 		using contextKeys = new ContextKeyService();
 		services.registerInstance(IContextKeyService, contextKeys);
 		using commands = new CommandService(services);

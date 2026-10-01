@@ -41,7 +41,7 @@ import { MenuId } from "../../../../../../platform/actions/common/actions.js";
 import { MenuService } from "../../../../../../platform/actions/common/menuService.js";
 import { IEditorGroupsService } from "../../../../../services/editor/common/editorGroupsService.js";
 import { ContextKeyService, IContextKeyService } from "../../../../../../platform/contextkey/browser/contextKeyService.js";
-import { ServiceContainer } from '../../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { highContrastDarkColorTheme, lightColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
 import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
 import { IStorageService, StorageScope, StorageTarget, WillSaveStateReason } from '../../../../../../platform/storage/common/storage.js';
@@ -127,7 +127,7 @@ await import('../../../../../../workbench/browser/workbench.contribution.js');
 const editorTestServices = new DisposableStore();
 suiteTeardown(() => { editorTestServices.dispose(); browserEnvironment.window.close(); });
 
-function createEditorPart(container: HTMLElement, options: IEditorPartOptions, parent?: ServiceContainer): InstanceType<typeof EditorPart> {
+function createEditorPart(container: HTMLElement, options: IEditorPartOptions, parent?: InstantiationService): InstanceType<typeof EditorPart> {
 	const services = editorTestServices.add(createTestEditorServices(options.configurationService, parent));
 	return services.createInstance(EditorPart, container, options);
 }
@@ -368,7 +368,7 @@ test("EditorPart applies empty-editor tips changes without showing them over an 
 	));
 	const keybindings = new TestKeybindingService();
 	using configuration = new InMemoryConfigurationService();
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IKeybindingService, keybindings);
 	services.registerInstance(IConfigurationService, configuration);
 	await assert.rejects(configuration.updateValue('workbench.tips.enabled', 'false'), /must be boolean/);
@@ -1172,7 +1172,7 @@ test('HistoryService restores cursor, edit, and navigation locations', async () 
 	const history = new HistoryService(editor, contextKeys);
 	await editor.openEditor(input('C:\\project\\locations.ts'), { pinned: true });
 	assert.ok(pane);
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IHistoryService, history);
 	using commands = new CommandService(services);
 
@@ -1292,12 +1292,12 @@ test("Editor title toolbar splits the active group and owns More Actions", async
 	const [
 		{ MenuService },
 		{ ContextKeyService },
-		{ ServiceContainer },
+		{ InstantiationService },
 		{ CommandService },
 	] = await Promise.all([
 		import("../../../../../../platform/actions/common/menuService.js"),
 		import("../../../../../../platform/contextkey/browser/contextKeyService.js"),
-		import("../../../../../../platform/instantiation/common/instantiation.js"),
+		import('../../../../../../platform/instantiation/common/instantiationService.js'),
 		import("../../../../../../workbench/services/commands/common/commandService.js"),
 	]);
 	const dom = new JSDOM("<!doctype html><body></body>");
@@ -1308,7 +1308,7 @@ test("Editor title toolbar splits the active group and owns More Actions", async
 		".ts",
 		() => trackPane(panes, "stanza.editor.code"),
 	));
-	const services = new ServiceContainer();
+	const services = new InstantiationService();
 	using contextKeys = new ContextKeyService();
 	using commands = new CommandService(services);
 	const menus = new MenuService(commands, contextKeys);
@@ -1747,10 +1747,10 @@ test("BrowserAuxiliaryWindowService opens, registers, mirrors styles, and releas
 		configurable: true,
 		value: (_url: string, _target: string, features: string) => { openFeatures = features; return nextPopup.window; },
 	});
-	const missingServices = new ServiceContainer();
+	const missingServices = new InstantiationService();
 	assert.throws(() => missingServices.createInstance(BrowserAuxiliaryWindowService, opener.window as unknown as Window, root), /themeService/);
 	missingServices.dispose();
-	const services = new ServiceContainer();
+	const services = new InstantiationService();
 	const themes = new TestThemeService(lightColorTheme);
 	services.registerInstance(IThemeService, themes);
 	const storage = new BrowserStorageService({ ownerWindow: opener.window as unknown as Window, applicationId: 'ash-test', workspaceId: 'workspace', backend: opener.window.localStorage, flushInterval: 0 });

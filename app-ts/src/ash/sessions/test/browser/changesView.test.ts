@@ -5,7 +5,7 @@ import { JSDOM } from 'jsdom';
 import { Event, Emitter } from '../../../base/common/event.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { observableValue } from '../../../base/common/observable.js';
-import { ServiceContainer } from '../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
@@ -27,7 +27,7 @@ import { createTurnMultiDiffEditorInput } from '../../browser/turnMultiDiffSourc
 test('Changes ignores an old conversation response and opens a shared read-only Diff from the selected row', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://changes.test' });
 	try {
-		using services = new ServiceContainer();
+		using services = new InstantiationService();
 		using changed = new Emitter<void>();
 		using config = new WorkbenchConfigurationService();
 		using contexts = new ContextKeyService();

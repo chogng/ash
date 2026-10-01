@@ -52,7 +52,7 @@ const { IConfigurationService: ConfigurationServiceId } = await import('../../..
 const { IContextMenuService } = await import('../../../../../platform/contextview/browser/contextView.js');
 const { IContextViewService } = await import('../../../../../platform/contextview/browser/contextView.js');
 const { BrowserContextViewService } = await import('../../../../../platform/contextview/browser/contextViewService.js');
-const { ServiceContainer } = await import('../../../../../platform/instantiation/common/instantiation.js');
+const { InstantiationService } = await import('../../../../../platform/instantiation/common/instantiationService.js');
 const { Registry } = await import('../../../../../platform/registry/common/platform.js');
 const { darkColorTheme } = await import('../../../../../platform/theme/common/colorTheme.js');
 const { AccessibilityConfiguration } = await import('../../../../../platform/accessibility/common/accessibility.js');
@@ -458,7 +458,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		refreshModels: async () => [{ model, displayName: 'GPT Test' }],
 	} as unknown as IChatService;
 	const contextView = disposables.add(new BrowserContextViewService(root));
-	const services = new ServiceContainer();
+	const services = new InstantiationService();
 	services.registerInstance(ClipboardServiceId, clipboardService);
 	services.registerInstance(ConfigurationServiceId, configuration);
 	services.registerInstance(IContextMenuService, contextMenuProvider);

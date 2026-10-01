@@ -27,7 +27,7 @@ import type { IDocumentCollaborationService } from "../../../src/ash/workbench/s
 import { MemoryTextFiles } from "./memoryTextFiles.js";
 import { EditorExtensionsRegistry } from '../../../src/ash/editor/browser/editorExtensions.js';
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
-import { ServiceContainer } from '../../../src/ash/platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
 import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
@@ -130,7 +130,7 @@ const codeBlockDocument = schema.createDocument([schema.createNode("codeBlock", 
 const codeBlockFiles = new MemoryTextFiles(codeBlockResource, serializeDocument(codeBlockDocument, schema));
 const structuredFiles = new MemoryTextFiles(structuredResource, "Title\nBody");
 const disposables = new DisposableStore();
-const services = disposables.add(new ServiceContainer());
+const services = disposables.add(new InstantiationService());
 const dialogs = disposables.add(new DialogService());
 services.registerInstance(IDialogService, dialogs);
 disposables.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));

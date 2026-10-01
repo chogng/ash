@@ -7,7 +7,7 @@ import { ILanguageService } from '../../../editor/common/languages/language.js';
 import { LanguageService } from '../../../editor/common/services/languageService.js';
 import { Disposable, DisposableTracker, installDisposableTracker, toDisposable } from '../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
-import { ServiceContainer } from '../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { createColorTheme, highContrastDarkColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { ColorScheme } from '../../../platform/theme/common/theme.js';
 import { WorkbenchConfiguration } from '../../common/configuration.js';
@@ -20,7 +20,7 @@ class ThemeWindow extends Disposable {
 	public readonly root = this.browser.window.document.querySelector('main')!;
 	public readonly systemTheme = new TestMediaQueryList(false);
 	public readonly configuration = this._register(new WorkbenchConfigurationService());
-	public readonly services = this._register(new ServiceContainer());
+	public readonly services = this._register(new InstantiationService());
 	public readonly themes: WorkbenchThemeService;
 
 	constructor() {
@@ -142,7 +142,7 @@ test('unrelated registrations do not notify colors or file icons and disposal re
 });
 
 test('workbench theme creation rejects a missing configuration registration', () => {
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	assert.throws(() => services.createInstance(WorkbenchThemeService, {}), /configurationService/);
 });
 

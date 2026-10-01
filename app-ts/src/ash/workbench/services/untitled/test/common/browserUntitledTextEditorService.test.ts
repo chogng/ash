@@ -3,7 +3,7 @@ import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { Emitter, Event } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
-import { ServiceContainer } from "../../../../../platform/instantiation/common/instantiation.js";
+import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
 import { IQuickInputService, type IQuickInputService as IQuickInputServiceContract, type IQuickPick, type IQuickPickItem } from "../../../../../platform/quickinput/common/quickInput.js";
 import type { IEditorPart as IEditorPartContract } from "../../../../browser/parts/editor/editorPart.js";
 import { ExtensionFileTemplateRegistry } from "../../../extensions/common/extensionFileTemplate.js";
@@ -37,7 +37,7 @@ suiteTeardown(() => browserEnvironment.window.close());
 
 test("untitled service creates stable virtual editor identities", () => {
 	using workingCopies = new BrowserWorkingCopyService();
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IWorkingCopyService, workingCopies);
 	using service = services.createInstance(BrowserUntitledTextEditorService);
 	const first = service.create();
@@ -57,7 +57,7 @@ test("untitled service creates stable virtual editor identities", () => {
 
 test("untitled service publishes display-label changes without changing resource identity", () => {
 	using workingCopies = new BrowserWorkingCopyService();
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IWorkingCopyService, workingCopies);
 	using service = services.createInstance(BrowserUntitledTextEditorService);
 	const editor = service.create();
@@ -77,7 +77,7 @@ test("untitled service publishes display-label changes without changing resource
 
 test("restored untitled resources are reused and reserve their document numbers", () => {
 	using workingCopies = new BrowserWorkingCopyService();
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IWorkingCopyService, workingCopies);
 	using service = services.createInstance(BrowserUntitledTextEditorService);
 	const resource = URI.parse("untitled:/Untitled-7");
@@ -96,7 +96,7 @@ test("restored untitled resources are reused and reserve their document numbers"
 
 test("closing the last working copy releases its untitled identity", () => {
 	using workingCopies = new BrowserWorkingCopyService();
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IWorkingCopyService, workingCopies);
 	using service = services.createInstance(BrowserUntitledTextEditorService);
 	const editor = service.create();
@@ -124,7 +124,7 @@ test("closing the last working copy releases its untitled identity", () => {
 
 test("New Untitled Text Editor opens a compatible text editor input", async () => {
 	using workingCopies = new BrowserWorkingCopyService();
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IWorkingCopyService, workingCopies);
 	using untitled = services.createInstance(BrowserUntitledTextEditorService);
 	const opened: Array<{ readonly resource: URI; readonly label?: string; readonly initialText?: string }> = [];
@@ -143,7 +143,7 @@ test("New Untitled Text Editor opens a compatible text editor input", async () =
 
 test("New File from Template opens the selected extension template as an untitled editor", async () => {
 	using workingCopies = new BrowserWorkingCopyService();
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IWorkingCopyService, workingCopies);
 	using untitled = services.createInstance(BrowserUntitledTextEditorService);
 	using templates = new ExtensionFileTemplateRegistry();

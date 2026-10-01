@@ -22,7 +22,7 @@ import { type ILanguageDiagnosticsService, type LanguageDiagnosticsPublisher, ty
 import { type TextModel } from "../../../../../editor/common/model/textModel.js";
 import { EDITOR_FONT_DEFAULTS } from "../../../../../editor/common/config/fontInfo.js";
 import type { EditorPaneOptions, EditorPanePart, EditorPanePartOptions } from "../../../../browser/parts/editor/textResourceEditor.js";
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ITextModelResourceService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
 import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../../../../editor/common/services/languageFeatureDebounce.js';
@@ -707,8 +707,8 @@ test('Workbench status follows cursor movement through public editor events', as
 	assert.ok(columns.includes(2));
 });
 
-function paneServices(models: ITextModelResourceService, languages?: LanguageFeaturesService): ServiceContainer {
-	const services = new ServiceContainer();
+function paneServices(models: ITextModelResourceService, languages?: LanguageFeaturesService): InstantiationService {
+	const services = new InstantiationService();
 	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	services.registerInstance(ITextModelResourceService, models);
 	services.registerSingleton(ILanguageFeatureDebounceService, () => new LanguageFeatureDebounceService());
@@ -725,7 +725,7 @@ function paneServices(models: ITextModelResourceService, languages?: LanguageFea
 	return services;
 }
 
-function createPane(services: ServiceContainer, resourceStore: ConstructorParameters<typeof EditorPane>[0], options: EditorPaneOptions): InstanceType<typeof EditorPane> {
+function createPane(services: InstantiationService, resourceStore: ConstructorParameters<typeof EditorPane>[0], options: EditorPaneOptions): InstanceType<typeof EditorPane> {
 	return services.createInstance(EditorPane, resourceStore, options);
 }
 
@@ -763,7 +763,7 @@ test('code editor creation rejects a missing language configuration registration
 	const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles('text'));
 	using models = new BrowserTextModelService(resourceStore);
 	using languages = new LanguageFeaturesService();
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(ITextModelResourceService, models);
 	services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
 	services.registerSingleton(IThemeService, () => new TestThemeService(darkColorTheme));

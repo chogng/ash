@@ -26,13 +26,13 @@ for (const [name, value] of Object.entries({
 const [
 	{ ContextKeyService },
 	{ MenuService },
-	{ ServiceContainer },
+	{ InstantiationService },
 	{ CommandService },
 	{ TerminalTitleActions },
 ] = await Promise.all([
 	import("../../../../../platform/contextkey/browser/contextKeyService.js"),
 	import("../../../../../platform/actions/common/menuService.js"),
-	import("../../../../../platform/instantiation/common/instantiation.js"),
+	import('../../../../../platform/instantiation/common/instantiationService.js'),
 	import("../../../../../workbench/services/commands/common/commandService.js"),
 	import("../../../../../workbench/contrib/terminal/browser/view/terminalTitleActions.js"),
 ]);
@@ -66,7 +66,7 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	let focusCount = 0;
 	let clearCount = 0;
 	using contextKeyService = new ContextKeyService();
-	const commandService = new CommandService(new ServiceContainer());
+	const commandService = new CommandService(new InstantiationService());
 	const menuService = new MenuService(commandService, contextKeyService);
 	using titleActions = new TerminalTitleActions(ownerDocument.body, {
 		menuService,

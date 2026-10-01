@@ -8,17 +8,13 @@ import {
 	resolveAlternativeMenuActions,
 	shouldUseAlternativeMenuActions,
 } from "../../actions/browser/menuEntryActionViewItem.js";
-import { MenuId, type IMenuService } from "../../actions/common/actions.js";
-import type { IContextKeyService } from "../../contextkey/browser/contextKeyService.js";
+import { MenuId, IMenuService } from "../../actions/common/actions.js";
+import { IContextKeyService } from "../../contextkey/browser/contextKeyService.js";
 import type { IConfigurationService } from "../../configuration/common/configuration.js";
-import type { IKeybindingService } from "../../keybinding/common/keybinding.js";
-import type { INotificationService } from "../../notification/common/notification.js";
+import { IKeybindingService } from "../../keybinding/common/keybinding.js";
+import { INotificationService } from "../../notification/common/notification.js";
 import { ContextMenuHandler } from "./contextMenuHandler.js";
-import type {
-	IContextMenuMenuDelegate,
-	IContextMenuService,
-	IContextViewService,
-} from "./contextView.js";
+import { type IContextMenuMenuDelegate, type IContextMenuService, IContextViewService } from "./contextView.js";
 
 /** Transforms menu contributions and delegates browser rendering to one handler. */
 export class BrowserContextMenuService extends Disposable
@@ -31,11 +27,11 @@ export class BrowserContextMenuService extends Disposable
 	readonly onDidHideContextMenu = this._onDidHideContextMenu.event;
 
 	constructor(
-		private readonly menuService: IMenuService,
-		private readonly contextKeyService: IContextKeyService,
-		keybindingService: IKeybindingService,
-		contextViewService: IContextViewService,
-		notificationService: INotificationService,
+		@IMenuService private readonly menuService: IMenuService,
+		@IContextKeyService private readonly contextKeyService: IContextKeyService,
+		@IKeybindingService keybindingService: IKeybindingService,
+		@IContextViewService contextViewService: IContextViewService,
+		@INotificationService notificationService: INotificationService,
 	) {
 		super();
 		this.handler = new ContextMenuHandler(

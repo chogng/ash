@@ -8,9 +8,7 @@ import {
 	MenuService,
 } from "../../../../platform/actions/common/menuService.js";
 import { ContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import {
-	ServiceContainer,
-} from "../../../../platform/instantiation/common/instantiation.js";
+import { InstantiationService } from "../../../../platform/instantiation/common/instantiationService.js";
 import {
 	NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL,
 	NATIVE_HOST_PICK_FOLDER_CHANNEL,
@@ -161,7 +159,7 @@ test("native host routes validate folder picking and developer tools", async () 
 
 test("desktop commands are available from the command palette", async () => {
 	registerAction2(OpenFolderAction);
-	const services = new ServiceContainer();
+	const services = new InstantiationService();
 	let toggles = 0;
 	services.registerInstance(INativeHostService, {
 		showNativeDialog: async () => { throw new Error('unused'); },

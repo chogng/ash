@@ -24,7 +24,7 @@ const { WorkbenchPart } = await import("../../../workbench/browser/part.js");
 const { WorkbenchWindowBarHeight } = await import("../../../workbench/browser/parts/workbenchPartDimensions.js");
 const { BrowserStorageService } = await import("../../../workbench/services/storage/browser/storageService.js");
 const { IStorageService, WillSaveStateReason } = await import("../../../platform/storage/common/storage.js");
-const { ServiceContainer } = await import('../../../platform/instantiation/common/instantiation.js');
+const { InstantiationService } = await import('../../../platform/instantiation/common/instantiationService.js');
 const { SessionsWorkbenchLayout } = await import("../../../sessions/browser/workbench.js");
 const { SessionsModernUIContribution } = await import('../../../sessions/contrib/modernUI/browser/modernUI.contribution.js');
 const { SessionsConfiguration } = await import('../../../sessions/common/configuration.js');
@@ -277,7 +277,7 @@ test('Sessions page availability preserves user visibility and cached widths dur
 
 test('Sessions layout creation requires the registered storage service', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	assert.throws(() => services.createInstance(SessionsWorkbenchLayout, dom.window.document.body, {}), /storageService|StorageService/);
 	dom.window.close();
 });
@@ -288,7 +288,7 @@ suiteTeardown(() => layoutTestResources.dispose());
 function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, WorkbenchPartInstance>, options: import('../../browser/workbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService } = {}): import('../../browser/workbench.js').SessionsWorkbenchLayout {
 	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, applicationId: 'sessions-test', workspaceId: 'sessions', flushInterval: 0, onError: () => {} }));
 	const storage = options.storageService ?? ownedStorage!;
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IStorageService, storage);
 	const layout = services.createInstance(SessionsWorkbenchLayout, container, options);
 	try {

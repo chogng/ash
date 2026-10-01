@@ -1,10 +1,9 @@
 import { URI } from '../../../../base/common/uri.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
-import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { ServiceConstructionDescriptor, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { registerEditorPane } from '../../../browser/editor.js';
@@ -23,7 +22,7 @@ registerEditorPane({
 	canOpen: input => input.resource.toString() === 'ash-trace:/viewer' ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	create: options => {
 		if (!options.instantiationService) { throw new Error('Trace viewer requires Workbench services'); }
-		return options.instantiationService.createInstance(new ServiceConstructionDescriptor(TraceEditor, { serviceDependencies: [IDialogService, IConfigurationService] }));
+		return options.instantiationService.createInstance(new SyncDescriptor(TraceEditor));
 	},
 });
 

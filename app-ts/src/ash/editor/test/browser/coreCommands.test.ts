@@ -12,7 +12,7 @@ import { CursorState } from '../../common/cursorCommon.js';
 import { CursorChangeReason } from '../../common/cursorEvents.js';
 import { OperatingSystem } from '../../../base/common/platform.js';
 import { ContextKeyService, IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
-import { ServiceContainer } from '../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 import { ICodeEditorService } from '../../browser/services/codeEditorService.js';
 import { type TextMeasurer } from '../../common/viewModel.js';
@@ -30,7 +30,7 @@ test('workbench select-all command selects the focused or active editor model', 
 	const dom = new JSDOM('<!doctype html><body><main></main><button>Outside</button></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('one\ntwo');
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	using contextKeys = new ContextKeyService();
 	using codeEditorService = new StandaloneCodeEditorService();
 	services.registerInstance(IContextKeyService, contextKeys);

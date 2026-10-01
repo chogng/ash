@@ -13,7 +13,7 @@ Object.defineProperty(globalThis, 'document', { configurable: true, value: brows
 const { Emitter, Event } = await import('../../../../../base/common/event.js');
 const { Disposable } = await import('../../../../../base/common/lifecycle.js');
 const { IConfigurationService } = await import('../../../../../platform/configuration/common/configuration.js');
-const { ServiceContainer } = await import('../../../../../platform/instantiation/common/instantiation.js');
+const { InstantiationService } = await import('../../../../../platform/instantiation/common/instantiationService.js');
 const { WorkbenchConfiguration } = await import('../../../../common/configuration.js');
 const { WorkbenchContributionsRegistry, WorkbenchPhase } = await import('../../../../common/contributions.js');
 const { IAuxiliaryWindowService } = await import('../../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js');
@@ -67,7 +67,7 @@ test('Modern UI contribution starts at restore and owns live window layout style
 	using auxiliaryWindows = new TestAuxiliaryWindowService();
 	using layout = new TestWorkbenchLayoutService(h(dom.window.document, 'main'));
 	dom.window.document.body.append(layout.mainContainer);
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IWorkbenchLayoutService, layout);
 	services.registerInstance(IAuxiliaryWindowService, auxiliaryWindows);

@@ -60,16 +60,18 @@ suiteTeardown(() => {
 
 test("ViewPaneContainer opens a collapsed view and focuses only when requested", async () => {
 	const { ViewPane } = await import("../../../../../../workbench/browser/parts/views/viewPane.js");
-	const { ServiceContainer, ServiceConstructionDescriptor } = await import("../../../../../../platform/instantiation/common/instantiation.js");
+	const { InstantiationService } = await import('../../../../../../platform/instantiation/common/instantiationService.js');
+const { SyncDescriptor } = await import('../../../../../../platform/instantiation/common/descriptors.js');
+const {  } = await import("../../../../../../platform/instantiation/common/instantiation.js");
 	class TestView extends ViewPane {
 		constructor(container: HTMLElement, options: import("../../../../../../workbench/browser/parts/views/viewPane.js").IViewPaneOptions) {
 			super(container, options);
 		}
 	}
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	using contextKeys = new ContextKeyService();
 	const viewContainer: IViewContainerDescriptor = { id: "test", title: "Test", location: ViewContainerLocation.Panel };
-	const descriptor = { id: "test.view", title: "Test View", collapsed: true, ctorDescriptor: new ServiceConstructionDescriptor(TestView) };
+	const descriptor = { id: "test.view", title: "Test View", collapsed: true, ctorDescriptor: new SyncDescriptor(TestView) };
 	const views = [descriptor];
 	using container = new ViewPaneContainer(browserEnvironment.window.document.body, {
 		viewContainer,

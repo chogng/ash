@@ -45,8 +45,8 @@ const { CommandsRegistry, ICommandService } = await import(
 const { ContextKeyService } = await import(
 	"../../../../../../platform/contextkey/browser/contextKeyService.js"
 );
-const { ServiceContainer } = await import(
-	"../../../../../../platform/instantiation/common/instantiation.js"
+const { InstantiationService } = await import(
+	'../../../../../../platform/instantiation/common/instantiationService.js'
 );
 const { CommandService } = await import(
 	"../../../../../../workbench/services/commands/common/commandService.js"
@@ -72,7 +72,7 @@ test("titlebar owns a menu-driven actions container", async () => {
 	using disposables = new DisposableStore();
 	const ownerDocument = browserEnvironment.window.document;
 	ownerDocument.body.replaceChildren();
-	const services = disposables.add(new ServiceContainer());
+	const services = disposables.add(new InstantiationService());
 	const commandService = disposables.add(new CommandService(services));
 	services.registerInstance(ICommandService, commandService);
 	services.registerInstance(IQuickAccessController, { onDidChangeVisibility: Event.None, show() {} });
@@ -165,7 +165,7 @@ test("titlebar renders its product icon, command center, and application menu", 
 	using disposables = new DisposableStore();
 	const ownerDocument = browserEnvironment.window.document;
 	ownerDocument.body.replaceChildren();
-	const services = disposables.add(new ServiceContainer());
+	const services = disposables.add(new InstantiationService());
 	const commandService = disposables.add(new CommandService(services));
 	services.registerInstance(ICommandService, commandService);
 	services.registerInstance(IQuickAccessController, { onDidChangeVisibility: Event.None, show() {} });
@@ -256,7 +256,7 @@ test("browser titlebar hosts the application menu in an ActionBar", () => {
 	const ownerDocument = browserEnvironment.window.document;
 	ownerDocument.body.replaceChildren();
 	const commandService = disposables.add(
-		new CommandService(new ServiceContainer()),
+		new CommandService(new InstantiationService()),
 	);
 	const contextKeyService = disposables.add(new ContextKeyService());
 	const menuService = new MenuService(commandService, contextKeyService);

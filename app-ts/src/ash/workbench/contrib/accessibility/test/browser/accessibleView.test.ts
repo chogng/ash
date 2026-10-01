@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import type { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import '../../browser/accessibilityConfiguration.js';
 import { AccessibleViewService } from '../../browser/accessibleView.js';
@@ -13,7 +13,7 @@ test('Explorer accessibility hint follows the verbosity setting', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	using configuration = new InMemoryConfigurationService();
 	using contextKeys = new ContextKeyService();
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	using accessibleView = new AccessibleViewService({ mainContainer: browser.window.document.body } as ILayoutService, contextKeys, configuration, services);
 	try {
 		assert.match(accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.Explorer) ?? '', /Alt\+F1/);

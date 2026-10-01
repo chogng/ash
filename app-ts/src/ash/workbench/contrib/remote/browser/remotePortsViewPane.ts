@@ -4,11 +4,11 @@ import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import type { RemoteAgentConnection } from "../../../../platform/remote/common/remoteAgentApi.js";
-import type { IRemoteTunnelService } from "../../../../platform/remote/common/remoteTunnelService.js";
+import { IRemoteTunnelService } from "../../../../platform/remote/common/remoteTunnelService.js";
 import type { RemoteTunnel } from "../../../../platform/remote/common/remoteTunnelService.js";
 import type { RemoteTunnelChange } from "../../../../platform/remote/common/remoteTunnelService.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
-import type { IRemoteAgentService } from "../../../services/remote/common/remoteAgentService.js";
+import { IRemoteAgentService } from "../../../services/remote/common/remoteAgentService.js";
 import "./media/remotePorts.css";
 
 /** Renderer projection of the Electron Main-owned SSH tunnel catalog. */
@@ -30,7 +30,7 @@ export class RemotePortsViewPane extends ViewPane {
 	private error: string | undefined;
 	private activeConnectionIdentity: string | undefined;
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, private readonly tunnelService: IRemoteTunnelService, private readonly remoteAgentService: IRemoteAgentService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @IRemoteTunnelService private readonly tunnelService: IRemoteTunnelService, @IRemoteAgentService private readonly remoteAgentService: IRemoteAgentService) {
 		super(container, options);
 		this.activeConnectionIdentity = remoteConnectionIdentity(remoteAgentService.connection);
 		this.contentElement.classList.add("ash-remote-ports");

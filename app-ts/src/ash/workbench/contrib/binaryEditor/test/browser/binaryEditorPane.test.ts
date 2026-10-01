@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import { URI } from "../../../../../base/common/uri.js";
 import { Event } from '../../../../../base/common/event.js';
 import { FileKind, IFileService, type IFileWriteRequest } from "../../../../../platform/files/common/files.js";
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { EditorPaneMatch } from "../../../../../workbench/browser/parts/editor/editorPane.js";
 import { BaseBinaryResourceEditor, binaryEditorDescriptor } from "../../../../../workbench/browser/parts/editor/binaryEditor.js";
 import { BinaryResourceDiffEditor, binaryDiffEditorDescriptor, createBinaryDiffEditorInput } from "../../../../../workbench/browser/parts/editor/binaryDiffEditor.js";
@@ -18,7 +18,7 @@ import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.j
 test("BinaryEditorPane renders a bounded hexadecimal and ascii preview", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const resource = URI.file("C:\\project\\sample.bin");
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IFileService, new TestFileService(new Uint8Array([0x48, 0x69, 0x00, 0xff])));
 	const pane = binaryEditorDescriptor().create({ instantiationService: services });
 	pane.create(dom.window.document.body);
@@ -42,7 +42,7 @@ test("binary editor descriptor is default for explicit binary content and option
 });
 
 test('Binary editor rejects missing file services during creation', () => {
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	assert.throws(() => binaryEditorDescriptor().create({ instantiationService: services }), /fileService/);
 });
 
@@ -59,7 +59,7 @@ test('Binary editor rejects oversized files before reading their bytes', async (
 				return super.readFileBytes(resource);
 			}
 		}
-		using services = new ServiceContainer();
+		using services = new InstantiationService();
 		services.registerInstance(IFileService, new OversizedFileService(new Uint8Array()));
 		using pane = binaryEditorDescriptor().create({ instantiationService: services });
 		pane.create(dom.window.document.body);
@@ -88,7 +88,7 @@ test('Binary file editor opens a bounded read-only text preview', async () => {
 		prompt: async () => { throw new Error('Unexpected prompt'); },
 		input: async () => { throw new Error('Unexpected input'); },
 	};
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IFileService, new TestFileService(new Uint8Array([0x48, 0x69, 0x00, 0xff])));
 	services.registerInstance(IEditorService, {
 		...emptyEditorServiceState,
@@ -116,7 +116,7 @@ test("Binary diff keeps both byte previews and metadata through working-set seri
 	const input = createBinaryDiffEditorInput(original, modified);
 	const restored = EditorInputSerializers.deserialize(EditorInputSerializers.serialize(input));
 	assert.equal(binaryDiffEditorDescriptor().canOpen(restored), EditorPaneMatch.Default);
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IFileService, new TestFileService(new Uint8Array([0x48, 0x69, 0x00, 0xff])));
 	const pane = binaryDiffEditorDescriptor().create({ instantiationService: services });
 	assert.ok(pane instanceof BinaryResourceDiffEditor);

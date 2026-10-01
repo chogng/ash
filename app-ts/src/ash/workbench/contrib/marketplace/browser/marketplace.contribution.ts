@@ -3,7 +3,8 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { localizedString } from '../../../../platform/action/common/action.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
-import { ServiceConstructionDescriptor, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { OPEN_MARKETPLACE_COMMAND_ID, OPEN_PLUGINS_COMMAND_ID, type MarketplaceOpenOptions } from '../../../../platform/marketplace/common/marketplaceService.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
@@ -20,7 +21,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 registerWorkbenchContribution('workbench.contrib.marketplace', WorkbenchPhase.BlockStartup, () => {
 	const registrations = new DisposableStore();
 	registrations.add(ViewsRegistry.registerViewContainer({ id: 'ash.marketplace', title: 'Marketplace', location: ViewContainerLocation.Sidebar, icon: Lxicon.extensions, order: 8 }));
-	registrations.add(ViewsRegistry.registerViews('ash.marketplace', [{ id: 'ash.marketplace.view', title: 'Marketplace', canToggleVisibility: false, ctorDescriptor: new ServiceConstructionDescriptor(MarketplaceViewPane) }]));
+	registrations.add(ViewsRegistry.registerViews('ash.marketplace', [{ id: 'ash.marketplace.view', title: 'Marketplace', canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(MarketplaceViewPane) }]));
 	registrations.add(registerAction2(class OpenMarketplace extends Action2 {
 		constructor() { super({ id: OPEN_MARKETPLACE_COMMAND_ID, title: 'Open Marketplace', f1: true }); }
 		public override async run(accessor: ServicesAccessor, options?: MarketplaceOpenOptions | string): Promise<void> {

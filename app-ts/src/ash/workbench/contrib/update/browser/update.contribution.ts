@@ -1,13 +1,11 @@
 import { URI } from '../../../../base/common/uri.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { ServiceConstructionDescriptor, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { IOpenerService } from '../../../../platform/opener/common/openerService.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { registerEditorPane } from '../../../browser/editor.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { ILocaleService } from '../../../services/localization/common/locale.js';
-import { IOnboardingTryoutService } from '../../onboarding/common/onboardingTryout.js';
 import { ReleaseNotesEditor, releaseNotesEditorId, releaseNotesResource } from './releaseNotesEditor.js';
 
 registerEditorPane({
@@ -16,7 +14,7 @@ registerEditorPane({
 	canOpen: input => input.resource.toString() === releaseNotesResource ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	create: options => {
 		if (!options.instantiationService) throw new Error('Release notes require Workbench services');
-		return options.instantiationService.createInstance(new ServiceConstructionDescriptor(ReleaseNotesEditor, { serviceDependencies: [ILocaleService, IOnboardingTryoutService, IOpenerService] }));
+		return options.instantiationService.createInstance(new SyncDescriptor(ReleaseNotesEditor));
 	},
 });
 

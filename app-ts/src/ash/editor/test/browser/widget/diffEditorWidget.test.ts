@@ -22,7 +22,7 @@ import { ILanguageFeaturesService } from '../../../common/services/languageFeatu
 import { LanguageFeaturesService } from '../../../common/services/languageFeaturesService.js';
 import { IContextKeyService, ContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { AccessibilitySupport, IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
-import { ServiceContainer } from '../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
 import { installEditorTestDom } from '../editorTestGlobals.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
@@ -179,8 +179,8 @@ test('DiffEditorWidget hides paired unchanged lines and reveals them from either
 	assert.equal(editor.originalEditor.getVisibleRanges().some(range => range.startLineNumber <= 5 && 5 <= range.endLineNumber), true);
 });
 
-function createServices(): ServiceContainer {
-	const services = new ServiceContainer();
+function createServices(): InstantiationService {
+	const services = new InstantiationService();
 	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	services.registerInstance(IThemeService, new TestThemeService(darkColorTheme));
 	services.registerInstance(ILanguageConfigurationService, createTestLanguageConfigurationService());

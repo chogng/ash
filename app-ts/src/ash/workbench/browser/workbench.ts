@@ -57,11 +57,10 @@ import { IConfigurationResourceService } from "../../platform/configuration/comm
 import { IConfigurationService } from "../../platform/configuration/common/configuration.js";
 import { IStorageService, StorageScope, StorageTarget, WillSaveStateReason } from "../../platform/storage/common/storage.js";
 import "../../platform/layout/browser/zIndexRegistry.js";
-import {
-	ServiceContainer,
-	type IInstantiationService,
-} from "../../platform/instantiation/common/instantiation.js";
+import { InstantiationService } from "../../platform/instantiation/common/instantiationService.js";
+import { type IInstantiationService } from "../../platform/instantiation/common/instantiation.js";
 import { getSingletonServiceDescriptors } from '../../platform/instantiation/common/extensions.js';
+import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
 import { NotificationService } from "../services/notification/common/notificationService.js";
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from "../../platform/accessibility/browser/accessibleView.js";
 import { INotificationsCenter, NotificationsCenter } from "./parts/notifications/notificationsCenter.js";
@@ -432,10 +431,11 @@ export class Workbench extends Disposable {
 		this._register(themes);
 		this._register(FormattingConflicts.setFormatterSelector(async formatters => formatters[0]));
 		const mode = WorkbenchModeRegistry.get(modeId);
-		const services = this._register(new ServiceContainer());
+		const serviceCollection = new ServiceCollection();
 		for (const [id, descriptor] of getSingletonServiceDescriptors()) {
-			services.registerSingleton(id, () => services.createInstance(descriptor));
+			serviceCollection.set(id, descriptor);
 		}
+		const services = this._register(new InstantiationService(serviceCollection));
 		if (browserViewApi) { services.registerInstance(IBrowserViewApi, browserViewApi); }
 		const instantiationService = services;
 		const logService = this._register(new LogService({ sinks: [new ConsoleLogSink()] }));

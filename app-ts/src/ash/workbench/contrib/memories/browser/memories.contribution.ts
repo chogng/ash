@@ -1,13 +1,10 @@
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { ContextKeyExpr } from "../../../../platform/contextkey/common/contextkey.js";
-import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
-import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IMemoriesService } from '../../../../platform/memories/common/memoriesService.js';
-import { ServiceConstructionDescriptor, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
@@ -25,7 +22,7 @@ registerWorkbenchContribution('workbench.contrib.memories', WorkbenchPhase.Block
 	const registrations = new DisposableStore();
 	if (!accessor.getOptional(IMemoriesService)) { return registrations; }
 	registrations.add(ViewsRegistry.registerViewContainer({ id: 'ash.memories', title: 'Memories', location: ViewContainerLocation.Panel, order: 4 }));
-	registrations.add(ViewsRegistry.registerViews('ash.memories', [{ id: 'ash.memories.view', title: 'Memories', canToggleVisibility: false, ctorDescriptor: new ServiceConstructionDescriptor(MemoriesViewPane, { serviceDependencies: [IMemoriesService, IChatSessionNavigationService, IDialogService, IConfigurationService, IContextKeyService] }) }]));
+	registrations.add(ViewsRegistry.registerViews('ash.memories', [{ id: 'ash.memories.view', title: 'Memories', canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(MemoriesViewPane) }]));
 	registrations.add(registerAction2(class OpenMemories extends Action2 {
 		constructor() { super({ id: 'ash.memories.open', title: 'Open memories', f1: true }); }
 		public override run(services: ServicesAccessor): void { services.get(IViewsService).focusView('ash.memories.view'); }

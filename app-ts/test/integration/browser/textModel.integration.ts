@@ -27,7 +27,7 @@ import { TextResourceEditor, type EditorPaneOptions } from "../../../src/ash/wor
 import { ILanguageConfigurationService, LanguageConfigurationService } from "../../../src/ash/editor/common/languages/languageConfigurationRegistry.js";
 import { ILanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeatures.js';
 import { ITextModelResourceService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
-import { ServiceContainer } from '../../../src/ash/platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import { LanguageFeaturesService } from "../../../src/ash/editor/common/services/languageFeaturesService.js";
 import { LanguageService } from "../../../src/ash/editor/common/services/languageService.js";
@@ -158,7 +158,7 @@ let glyphWidget: IGlyphMarginWidget | undefined;
 let glyphWidgetLineNumber = 1;
 let glyphDecorations: IEditorDecorationsCollection | undefined;
 let modelDecorations: IEditorDecorationsCollection | undefined;
-const services = disposables.add(new ServiceContainer());
+const services = disposables.add(new InstantiationService());
 services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 services.registerSingleton(IMarkerService, () => services.createInstance(MarkerService));
 services.registerSingleton(IMarkerDecorationsService, () => services.createInstance(MarkerDecorationsService));

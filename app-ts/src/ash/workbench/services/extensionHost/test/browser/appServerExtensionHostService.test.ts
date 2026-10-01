@@ -4,7 +4,8 @@ import { CancellationTokenSource } from '../../../../../base/common/cancellation
 import { URI } from '../../../../../base/common/uri.js';
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { CommandRegistry } from "../../../../../platform/commands/common/commands.js";
-import { ServiceContainer, type ServicesAccessor } from "../../../../../platform/instantiation/common/instantiation.js";
+import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
+import { type ServicesAccessor } from "../../../../../platform/instantiation/common/instantiation.js";
 import type { AppServerConnectionState } from "../../../../../platform/app-server/common/appServerApi.js";
 import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type ExtensionHostOutputEvent, type ExtensionHostReconcileMode, type JsonValue } from "../../../../../platform/extensionHost/common/extensionHostApi.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
@@ -254,7 +255,7 @@ test("projects ordered extension-created named Output channels without replaying
 });
 
 test('extension API requires its domain services before registering any contributions', () => {
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	using output = new OutputService();
 	using diagnostics = output.createChannel({ id: 'host-diagnostics', label: 'Host' });
 	const commands = new CommandRegistry();
@@ -463,8 +464,8 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 	throw new Error("Timed out waiting for Extension Host state");
 }
 
-function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesService, tasks: ProviderSink<TaskProvider>, tests: ProviderSink<TestProfileProvider>, output?: IOutputService): ServiceContainer {
-	const services = new ServiceContainer();
+function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesService, tasks: ProviderSink<TaskProvider>, tests: ProviderSink<TestProfileProvider>, output?: IOutputService): InstantiationService {
+	const services = new InstantiationService();
 	services.registerInstance(IExtensionHostApi, api);
 	services.registerInstance(ILanguageFeaturesService, languages);
 	services.registerInstance(ITaskService, tasks as unknown as ITaskService);

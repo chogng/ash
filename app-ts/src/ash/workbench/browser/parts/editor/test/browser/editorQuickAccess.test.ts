@@ -7,7 +7,7 @@ import { Range } from "../../../../../../editor/common/core/range.js";
 import type { LanguageDocumentSymbol } from "../../../../../../editor/common/languages.js";
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from "../../../../../../nls.js";
 import { IContextKeyService, ContextKeyService } from "../../../../../../platform/contextkey/browser/contextKeyService.js";
-import { ServiceContainer } from "../../../../../../platform/instantiation/common/instantiation.js";
+import { InstantiationService } from "../../../../../../platform/instantiation/common/instantiationService.js";
 import { QuickAccessController } from "../../../../../../platform/quickinput/browser/quickAccess.js";
 import { IQuickAccessController } from "../../../../../../platform/quickinput/common/quickAccess.js";
 import { IQuickInputService } from "../../../../../../platform/quickinput/common/quickInput.js";
@@ -54,7 +54,7 @@ test("Show All Editors opens the MRU quick access mode and activates the chosen 
 			focus: () => { focused = true; },
 		} as unknown as EditorPartContract;
 
-		using services = new ServiceContainer();
+		using services = new InstantiationService();
 		using contextKeys = new ContextKeyService();
 		services.registerInstance(IContextKeyService, contextKeys);
 		services.registerInstance(IEditorPart, editorPart);

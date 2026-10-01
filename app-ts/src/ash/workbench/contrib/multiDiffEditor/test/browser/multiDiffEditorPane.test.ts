@@ -18,7 +18,7 @@ import { ContextKeyService } from "../../../../../platform/contextkey/browser/co
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { DialogResult, IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { EditorPaneVisibility } from '../../../../browser/parts/editor/editorPane.js';
 import { IEditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
@@ -58,7 +58,7 @@ const { MultiDiffEditorPane } = await import('../../browser/multiDiffEditorPane.
 await import('../../../codeEditor/browser/toggleWordWrap.js');
 const { createGitMultiDiffEditorInput } = await import('../../browser/scmMultiDiffAction.js');
 
-function registerDialogs(services: ServiceContainer, sourceResolver?: IMultiDiffSourceResolver): void {
+function registerDialogs(services: InstantiationService, sourceResolver?: IMultiDiffSourceResolver): void {
 	services.registerInstance(IDialogService, {
 		onWillShowDialog: Event.None,
 		onDidShowDialog: Event.None,
@@ -112,7 +112,7 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
 	using models = new BrowserTextModelService(resourceStore);
-	using commands = new CommandService(new ServiceContainer());
+	using commands = new CommandService(new InstantiationService());
 	using contexts = new ContextKeyService();
 	const menus = new MenuService(commands, contexts);
 	const gitActions: string[] = [];

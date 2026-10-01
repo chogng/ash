@@ -3,14 +3,14 @@ import { test } from 'mocha';
 import { URI } from '../../../../../base/common/uri.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import type { INativeHostApi } from '../../../../../platform/native/common/nativeHost.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INativeHostService } from '../../../../common/services.js';
 import { FileDialogService } from '../../electron-browser/fileDialogService.js';
 import { DialogService } from '../../common/dialogService.js';
 
 test('Save As passes the suggested file name to the owning desktop window', async () => {
 	const calls: Array<{ readonly defaultName?: string } | undefined> = [];
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IDialogService, new DialogService());
 	services.registerInstance(INativeHostService, {
 		async saveFile(options) {
@@ -25,7 +25,7 @@ test('Save As passes the suggested file name to the owning desktop window', asyn
 });
 
 test('cancelling the desktop Save As dialog leaves the editor without a target', async () => {
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IDialogService, new DialogService());
 	services.registerInstance(INativeHostService, {
 		async saveFile() { return undefined; },
@@ -36,7 +36,7 @@ test('cancelling the desktop Save As dialog leaves the editor without a target',
 });
 
 test('desktop Open File returns the path selected by its window', async () => {
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IDialogService, new DialogService());
 	services.registerInstance(INativeHostService, {
 		async pickFile() { return ['C:\\Users\\test\\paper.md']; },
@@ -48,7 +48,7 @@ test('desktop Open File returns the path selected by its window', async () => {
 
 test('desktop open and save dialogs pass VS Code file options through to the window', async () => {
 	const calls: unknown[] = [];
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IDialogService, new DialogService());
 	services.registerInstance(INativeHostService, {
 		async pickFile(options: unknown) { calls.push(options); return ['C:\\work\\one.md', 'C:\\work\\two.md']; },

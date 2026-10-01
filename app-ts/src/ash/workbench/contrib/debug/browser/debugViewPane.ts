@@ -5,9 +5,9 @@ import { basename } from "../../../../base/common/resources.js";
 import { URI } from "../../../../base/common/uri.js";
 import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
-import { type IEditorService } from "../../../services/editor/common/editorService.js";
+import { IEditorService } from "../../../services/editor/common/editorService.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
-import { type IDebugBreakpoint, type IDebugConfiguration, type IDebugEvaluateResult, type IDebugScope, type IDebugService, type IDebugSession, type IDebugStackFrame, type IDebugThread, type IDebugVariable } from "../../../services/debug/common/debugService.js";
+import { type IDebugBreakpoint, type IDebugConfiguration, type IDebugEvaluateResult, type IDebugScope, IDebugService, type IDebugSession, type IDebugStackFrame, type IDebugThread, type IDebugVariable } from "../../../services/debug/common/debugService.js";
 
 interface DebugVariableRow {
 	readonly key: number;
@@ -49,7 +49,7 @@ export class DebugViewPane extends ViewPane {
 	private refreshGeneration = 0;
 	private error: string | undefined;
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, private readonly debug: IDebugService, private readonly editor: IEditorService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @IDebugService private readonly debug: IDebugService, @IEditorService private readonly editor: IEditorService) {
 		super(container, options);
 		this.contentElement.classList.add("ash-debug");
 		const controls = h(container.ownerDocument, "div");

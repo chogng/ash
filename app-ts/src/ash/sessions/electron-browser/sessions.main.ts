@@ -2,7 +2,7 @@ import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
 import { URI } from "../../base/common/uri.js";
 import { IFileService } from "../../platform/files/common/files.js";
 import { validateConfigurationSnapshot } from '../../platform/configuration/common/configurationIpc.js';
-import { ServiceContainer } from "../../platform/instantiation/common/instantiation.js";
+import { InstantiationService } from "../../platform/instantiation/common/instantiationService.js";
 import { addDisposableListener } from "../../base/browser/dom.js";
 import { DisposableStore, toDisposable, type IDisposable } from "../../base/common/lifecycle.js";
 import { onUnexpectedError } from "../../base/common/errors.js";
@@ -67,7 +67,7 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 	try { api = await createElectronRendererApi([], { browser: false }, permissionDialog); }
 	catch (error) { sessions.dispose(); return showStartupError(error, text => invoke<void>('ash:host:writeClipboard', text)); }
 	sessions.add(api);
-	const profileServices = sessions.add(new ServiceContainer());
+	const profileServices = sessions.add(new InstantiationService());
 	profileServices.registerInstance(IFileService, api.localFiles);
 	const { loadUserThemes } = await import('../../workbench/services/themes/browser/workbenchThemeService.js');
 	sessions.add(await loadUserThemes(profileServices, URI.parse(api.userDataHome.toString().replace(/\/$/u, '') + '/themes')));

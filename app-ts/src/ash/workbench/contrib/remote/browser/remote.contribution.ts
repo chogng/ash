@@ -4,8 +4,7 @@ import { IContextKeyService } from "../../../../platform/contextkey/browser/cont
 import { IExtensionService } from "../../../services/extensions/common/extensionService.js";
 import { IRemoteAgentService } from "../../../services/remote/common/remoteAgentService.js";
 import { IRemoteConnectionService } from "../../../../platform/remote/common/remoteConnectionService.js";
-import { IRemoteTunnelService } from "../../../../platform/remote/common/remoteTunnelService.js";
-import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
+import { SyncDescriptor } from "../../../../platform/instantiation/common/descriptors.js";
 import { IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
 import "./remoteActions.js";
@@ -31,7 +30,7 @@ export function registerRemoteViews(registry: WorkbenchViewRegistry = ViewsRegis
 		localizationKey: { bundle: "ash.views", key: "ports" },
 		order: 1,
 		canToggleVisibility: false,
-		ctorDescriptor: new ServiceConstructionDescriptor(RemotePortsViewPane, { serviceDependencies: [IRemoteTunnelService, IRemoteAgentService] }),
+		ctorDescriptor: new SyncDescriptor(RemotePortsViewPane),
 	}]);
 }
 
