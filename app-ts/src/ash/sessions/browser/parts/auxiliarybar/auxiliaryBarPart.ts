@@ -1,11 +1,11 @@
 import "./media/auxiliaryBarPart.css";
-import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
-import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
-import { IStorageService } from '../../../platform/storage/common/storage.js';
-import { AuxiliarybarPart } from '../../../workbench/browser/parts/auxiliarybar/auxiliarybarPart.js';
-import { PaneComposite } from '../../../workbench/browser/parts/views/paneComposite.js';
-import { IViewDescriptorService } from '../../../workbench/services/views/common/viewDescriptorService.js';
-import { ViewContainerLocation } from '../../../workbench/common/views.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { AuxiliarybarPart } from '../../../../workbench/browser/parts/auxiliarybar/auxiliarybarPart.js';
+import { PaneComposite } from '../../../../workbench/browser/parts/views/paneComposite.js';
+import { IViewDescriptorService } from '../../../../workbench/services/views/common/viewDescriptorService.js';
+import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 
 /** Composes Sessions contributions in the shared retained Auxiliary Bar. */
 export class AuxiliaryBarPart extends AuxiliarybarPart {

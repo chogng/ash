@@ -141,7 +141,7 @@ import { SessionsManagementService } from "../services/sessions/browser/sessions
 import { ISessionsManagementService } from "../services/sessions/common/sessionsManagement.js";
 import { ISessionsService, SessionsService } from "../services/sessions/browser/sessionsService.js";
 import { registerLayoutActions } from './layoutActions.js';
-import { AuxiliaryBarPart } from "./parts/auxiliaryBarPart.js";
+import { AuxiliaryBarPart } from "./parts/auxiliarybar/auxiliaryBarPart.js";
 import { disposableWindowTimeout } from '../../base/browser/scheduler.js';
 import { ActivityBarPart, type SessionsActivityPage } from './parts/activitybar/activityBarPart.js';
 import { SessionsPart, type SessionsPartOptions } from "./parts/sessionsPart.js";
