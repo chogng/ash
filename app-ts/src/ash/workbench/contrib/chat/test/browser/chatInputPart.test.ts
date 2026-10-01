@@ -75,6 +75,20 @@ function edit(part: ChatInputPart, text: string): void {
 	input.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
+test('Chat configuration requests append without sending or replacing draft attachments', async () => {
+	let sends = 0;
+	using part = inputPart(sharedNotifications, undefined, 'debug', { send: async () => { sends++; } });
+	edit(part, 'Existing draft');
+	part.addContext({ id: 'file', kind: 'file', name: 'file.ts', resolve: async () => ({ name: 'file.ts', content: 'const answer = 42;' }) });
+	const oldCapture = await part.captureDraft();
+	part.appendToDraft('Configure Hooks');
+	oldCapture?.clear();
+	assert.deepEqual((await part.captureDraft())?.draft, {
+		mode: 'debug', text: 'Existing draft\n\nConfigure Hooks', contexts: [{ id: 'file', kind: 'file', name: 'file.ts', content: 'const answer = 42;' }],
+	});
+	assert.equal(sends, 0);
+});
+
 test('Chat draft handoff moves text and resolved attachments after acknowledgement', async () => {
 	using source = inputPart(sharedNotifications, undefined, 'debug');
 	using target = inputPart(sharedNotifications);

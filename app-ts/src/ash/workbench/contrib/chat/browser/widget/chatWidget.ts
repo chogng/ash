@@ -166,6 +166,10 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.inputPart.restoreDraft(draft);
 	}
 
+	appendToDraft(text: string): void {
+		this.inputPart.appendToDraft(text);
+	}
+
 	acceptInput(value?: string): Promise<void> {
 		return this.inputPart.acceptInput(value);
 	}

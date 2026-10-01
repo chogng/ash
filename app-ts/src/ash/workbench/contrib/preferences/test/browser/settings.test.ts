@@ -1,3 +1,4 @@
+import type { SettingsContentItem } from '../../browser/settingsTreeModels.js';
 import { IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
@@ -8,14 +9,31 @@ import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../
 import type { IAction } from '../../../../../base/common/actions.js';
 import type { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import type { IContextMenuService as ContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
-import type { ILocalizationService } from '../../../../../workbench/services/localization/common/localizationService.js';
-import type { IGitService } from '../../../../../workbench/contrib/git/common/gitService.js';
-import type { IChatService } from '../../../../../workbench/services/chat/common/chatService.js';
-import type { IRemoteAgentService } from '../../../../../workbench/services/remote/common/remoteAgentService.js';
+import type { ILocalizationService } from '../../../../services/localization/common/localizationService.js';
+import type { IGitService } from '../../../git/common/gitService.js';
+import type { IChatService } from '../../../../services/chat/common/chatService.js';
+import type { IRemoteAgentService } from '../../../../services/remote/common/remoteAgentService.js';
+import type { RemoteAgentConnection } from '../../../../../platform/remote/common/remoteAgentApi.js';
 import type { RemoteConnectionState } from '../../../../../platform/remote/common/remote.js';
 import type { IDirPermissionsService } from '../../../../../platform/dirPermissions/common/dirPermissionsService.js';
 import type { ILanguagePackService, LanguagePackInfo } from '../../../../../platform/languagePacks/common/languagePacksService.js';
 import type { ILocalTranscriptionModelStatus, ILocalTranscriptionService as LocalTranscriptionService, LocalTranscriptionModelState as ModelState } from '../../../../../platform/localTranscription/common/localTranscription.js';
+
+import { DeferredPromise } from '../../../../../base/common/async.js';
+import { IHooksService, type HookSource } from '../../../../../platform/hooks/common/hooksService.js';
+import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { IFileService } from '../../../../../platform/files/common/files.js';
+import { DiskFileSystemProvider } from '../../../../../platform/files/node/diskFileSystemProvider.js';
+import { IAccessibleViewService, AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { CommandService } from '../../../../services/commands/common/commandService.js';
+import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>', {
 	pretendToBeVisual: true,
@@ -59,47 +77,48 @@ const { Registry } = await import('../../../../../platform/registry/common/platf
 const { darkColorTheme } = await import('../../../../../platform/theme/common/colorTheme.js');
 const { AccessibilityConfiguration } = await import('../../../../../platform/accessibility/common/accessibility.js');
 const { HoverConfiguration } = await import('../../../../../platform/hover/common/hoverService.js');
-const { SashConfiguration } = await import('../../../../../workbench/contrib/sash/common/sash.js');
+const { SashConfiguration } = await import('../../../sash/common/sash.js');
 const { DictationConfiguration } = await import('../../../../../platform/dictation/common/dictationConfiguration.js');
-const { WorkbenchConfiguration } = await import('../../../../../workbench/common/configuration.js');
+const { WorkbenchConfiguration } = await import('../../../../common/configuration.js');
 const { SessionsConfiguration } = await import('../../../../../sessions/common/configuration.js');
-const { WorkbenchThemesRegistry } = await import('../../../../../workbench/common/theme.js');
-const { EditorSelectionConfiguration } = await import('../../../../../workbench/common/editorSelectionConfiguration.js');
-const { CodeEditorConfiguration } = await import('../../../../../workbench/contrib/codeEditor/common/editorConfiguration.js');
-const { ContentSearchConfiguration } = await import('../../../../../workbench/contrib/search/common/searchConfiguration.js');
-const { GitConfiguration } = await import('../../../../../workbench/contrib/git/common/gitConfiguration.js');
-const { ScmConfiguration } = await import('../../../../../workbench/contrib/scm/common/scmConfiguration.js');
-const { IGitService: GitServiceId } = await import('../../../../../workbench/contrib/git/common/gitService.js');
-const { IChatService: ChatServiceId } = await import('../../../../../workbench/services/chat/common/chatService.js');
-await import('../../../../../workbench/services/chat/common/modelCatalog.js');
+const { WorkbenchThemesRegistry } = await import('../../../../common/theme.js');
+const { EditorSelectionConfiguration } = await import('../../../../common/editorSelectionConfiguration.js');
+const { CodeEditorConfiguration } = await import('../../../codeEditor/common/editorConfiguration.js');
+const { ContentSearchConfiguration } = await import('../../../search/common/searchConfiguration.js');
+const { GitConfiguration } = await import('../../../git/common/gitConfiguration.js');
+const { ScmConfiguration } = await import('../../../scm/common/scmConfiguration.js');
+const { IGitService: GitServiceId } = await import('../../../git/common/gitService.js');
+const { IChatService: ChatServiceId } = await import('../../../../services/chat/common/chatService.js');
+await import('../../../../services/chat/common/modelCatalog.js');
 const { IAgentCapabilitiesService } = await import('../../../../../platform/agentCapabilities/common/agentCapabilitiesService.js');
-const { IRemoteAgentService: RemoteAgentServiceId } = await import('../../../../../workbench/services/remote/common/remoteAgentService.js');
+const { IRemoteAgentService: RemoteAgentServiceId } = await import('../../../../services/remote/common/remoteAgentService.js');
 const { IDirPermissionsService: DirPermissionsServiceId } = await import('../../../../../platform/dirPermissions/common/dirPermissionsService.js');
 const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(ConfigurationExtensions.Configuration);
-const { EditorPart } = await import('../../../../../workbench/browser/parts/editor/editorPart.js');
+const { EditorPart } = await import('../../../../browser/parts/editor/editorPart.js');
 const { EditorPaneRegistry, EditorPanes } = await import('../../../../browser/editor.js');
-const { SettingsSearchQuery } = await import('../../../../../workbench/contrib/preferences/browser/settingsSearch.js');
-const { createSettingsLayout, SettingsCategories, SettingsLayout } = await import('../../../../../workbench/contrib/preferences/browser/settingsLayout.js');
-const { SettingsEditorId } = await import('../../../../../workbench/contrib/preferences/browser/settingsEditor.js');
+const { SettingsSearchQuery } = await import('../../browser/settingsSearch.js');
+const { createSettingsLayout, SettingsCategories, SettingsLayout } = await import('../../browser/settingsLayout.js');
+const { SettingsEditorId } = await import('../../browser/settingsEditor.js');
 const { ILocalTranscriptionService, LocalTranscriptionModelState } = await import('../../../../../platform/localTranscription/common/localTranscription.js');
-const { NullLocalTranscriptionService } = await import('../../../../../workbench/services/localTranscription/browser/localTranscriptionService.js');
-const { ModelsSettings, LocalTranscriptionModelControls } = await import('../../../../../workbench/contrib/preferences/browser/modelsSettings.js');
-const { SettingsTree } = await import('../../../../../workbench/contrib/preferences/browser/settingsTree.js');
-const { SettingsTreeModel } = await import('../../../../../workbench/contrib/preferences/browser/settingsTreeModels.js');
-const { PreferencesService } = await import('../../../../../workbench/services/preferences/browser/preferencesService.js');
-const { BrowserEditorService } = await import('../../../../../workbench/services/editor/browser/browserEditorService.js');
-const { ILocalizationService: LocalizationServiceId } = await import('../../../../../workbench/services/localization/common/localizationService.js');
-const { DefaultSettings, SettingsEditorModel } = await import('../../../../../workbench/services/preferences/common/settingsModels.js');
-const { WorkbenchConfigurationService } = await import('../../../../../workbench/services/configuration/browser/configurationService.js');
-const { builtinLanguagePackCatalogs } = await import('../../../../../workbench/services/localization/common/localizationCatalogs.js');
+const { NullLocalTranscriptionService } = await import('../../../../services/localTranscription/browser/localTranscriptionService.js');
+const { ModelSettingsContent } = await import('../../../chat/browser/modelSettingsContent.js');
+const { LocalTranscriptionModelControls } = await import('../../../localTranscription/browser/localTranscriptionModelControls.js');
+const { SettingsTree } = await import('../../browser/settingsTree.js');
+const { SettingsTreeModel } = await import('../../browser/settingsTreeModels.js');
+const { PreferencesService } = await import('../../../../services/preferences/browser/preferencesService.js');
+const { BrowserEditorService } = await import('../../../../services/editor/browser/browserEditorService.js');
+const { ILocalizationService: LocalizationServiceId } = await import('../../../../services/localization/common/localizationService.js');
+const { DefaultSettings, SettingsEditorModel } = await import('../../../../services/preferences/common/settingsModels.js');
+const { WorkbenchConfigurationService } = await import('../../../../services/configuration/browser/configurationService.js');
+const { builtinLanguagePackCatalogs } = await import('../../../../services/localization/common/localizationCatalogs.js');
 const { ILanguagePackService: LanguagePackServiceId } = await import('../../../../../platform/languagePacks/common/languagePacksService.js');
-const { ILocaleService, LocalizationConfiguration } = await import('../../../../../workbench/services/localization/common/locale.js');
-const { WorkbenchLocaleService } = await import('../../../../../workbench/services/localization/browser/localeService.js');
-const { WorkbenchLocalizationService } = await import('../../../../../workbench/services/localization/browser/workbenchLocalizationService.js');
-const { StartupEditorConfigurationKey } = await import('../../../../../workbench/contrib/welcomeGettingStarted/browser/startupPage.js');
-await import('../../../../../workbench/contrib/welcomeGettingStarted/browser/gettingStarted.contribution.js');
-await import('../../../../../workbench/browser/workbench.contribution.js');
-await import('../../../../../workbench/electron-browser/desktop.contribution.js');
+const { ILocaleService, LocalizationConfiguration } = await import('../../../../services/localization/common/locale.js');
+const { WorkbenchLocaleService } = await import('../../../../services/localization/browser/localeService.js');
+const { WorkbenchLocalizationService } = await import('../../../../services/localization/browser/workbenchLocalizationService.js');
+const { StartupEditorConfigurationKey } = await import('../../../welcomeGettingStarted/browser/startupPage.js');
+await import('../../../welcomeGettingStarted/browser/gettingStarted.contribution.js');
+await import('../../../../browser/workbench.contribution.js');
+await import('../../../../electron-browser/desktop.contribution.js');
 
 const localizationService: ILocalizationService = {
 	onDidChange: Event.None,
@@ -210,8 +229,8 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, LocalizationConfiguration.locale), 'general');
 	assert.equal(findSettingCategory(layout, HoverConfiguration.delay), 'general');
 	assert.equal(findSettingCategory(layout, SashConfiguration.size), 'general');
-	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'general');
-	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'general');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'models');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'models');
 	assert.equal(findSettingCategory(layout, 'chat.defaultModel'), 'models');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.colorTheme), 'appearance');
 	assert.equal(findSettingCategory(layout, 'workbench.tips.enabled'), 'appearance');
@@ -244,9 +263,9 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.renderControlCharacters), 'editor');
 	assert.equal(findSettingCategory(layout, ContentSearchConfiguration.maxResults), 'editor');
 	assert.equal(findSettingCategory(layout, ScmConfiguration.diffDecorationsIgnoreTrimWhitespace), 'general');
-	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'general');
-	assert.equal(findSettingCategory(layout, DictationConfiguration.cloudProvider), 'general');
-	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'general');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'models');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.cloudProvider), 'models');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'models');
 	assert.equal(defaults.all.some(setting => setting.id === GitConfiguration.autofetch), false);
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetch)?.defaultValue, false);
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetchPeriod)?.defaultValue, 180);
@@ -346,20 +365,26 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	const services = disposables.add(new InstantiationService());
 	services.registerInstance(ILocalTranscriptionService, disposables.add(new NullLocalTranscriptionService()));
 	services.registerInstance(ConfigurationServiceId, configuration);
-	const panel = disposables.add(services.createInstance(ModelsSettings, root, {
-		chatService: chat,
-		clipboardService: {} as IClipboardService,
-		configurationService: configuration,
-		contextMenuProvider: {} as ContextMenuService,
-		contextViewProvider: contextView,
+	services.registerInstance(ChatServiceId, chat);
+	const panel = disposables.add(services.createInstance(ModelSettingsContent, root));
+	const modelTree = disposables.add(new SettingsTreeModel<SettingsContentItem>());
+	disposables.add(new SettingsTree(root, {
+		model: modelTree, rootClassName: 'ash-models-settings', groupClassName: 'ash-settings-content-group', groupDescriptionClassName: 'ash-settings-group-description', itemsClassName: 'ash-settings-list', renderItem: item => item.value.domNode,
 	}));
+	disposables.add(panel.onDidChange(() => modelTree.setChildren(panel.getNodes())));
 	panel.setVisible(true);
+	modelTree.setNavigationTarget('models.catalog');
 	await nextTurn();
+	assert.equal(root.querySelector('.ash-models-settings-model-copy > span')?.textContent, 'GPT Test');
+	const retainedModel = root.querySelector('.ash-models-settings-model-row');
+	modelTree.setNavigationTarget(undefined);
 	catalog = [{ model, displayName: 'GPT Test Updated' }];
 	changed.fire();
 	resolveProviders([{ connection: 'openai', provider: 'openai', displayName: 'OpenAI API', apiKeyPolicy: 'required', apiKeyConfigured: false }]);
 	await nextTurn();
 	assert.equal(root.querySelector('.ash-models-settings-api-row h5')?.textContent, 'OpenAI API');
+	assert.equal(root.querySelector('.ash-models-settings-model-row'), retainedModel);
+	assert.equal(root.querySelector('.ash-models-settings-model-copy > span')?.textContent, 'GPT Test Updated');
 });
 
 test('Settings tree preserves item identity while filtering and updating', () => {
@@ -516,19 +541,63 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	});
 	assert.throws(() => descriptor.create({ instantiationService: services }), /Unknown service: remoteAgentService/);
 	const connectionChanged = disposables.add(new Emitter<RemoteConnectionState>());
+	const connectionIdentityChanged = disposables.add(new Emitter<RemoteAgentConnection>());
+	let connectionIdentity: RemoteAgentConnection = { kind: 'local', generation: 1 };
 	services.registerInstance(RemoteAgentServiceId, {
 		onDidChangeConnectionState: connectionChanged.event,
-	} as IRemoteAgentService);
+		onDidChangeConnection: connectionIdentityChanged.event,
+		connectionState: 'connected',
+		get connection() { return connectionIdentity; },
+		reconnect: async () => ({ kind: 'alreadyConnected' }),
+		rollbackRuntime: async () => ({ kind: 'cancelled' }),
+	});
 	services.registerInstance(DirPermissionsServiceId, {
 		onDidChangePermissions: Event.None,
 		list: async () => ({ revision: 1, entries: [{ dir: 'dir-1', path: '/workspace', permissions: ['readFiles'] }] }),
 	} as unknown as IDirPermissionsService);
+	let hookReads = 0;
+	let hooksFailure = false;
+	let openUserToml = 0;
+	let sources: readonly HookSource[] = [{ namespace: 'user', configPath: '/profile/config.toml', hooks: [{
+		id: 'user:hook:check', event: 'preToolUse', enabled: false, toolNames: ['shell-command'], program: '/program with spaces', args: ['two words', '"quote"'],
+	}] }];
+	const hooksChanged = disposables.add(new Emitter<void>());
+	let nextHooksRead: Promise<readonly HookSource[]> | undefined;
+	const hooksService: IHooksService = {
+		onDidChange: hooksChanged.event,
+		userConfigurationEditor: async () => { openUserToml++; },
+		read: async sessionId => {
+			hookReads++;
+			assert.equal(sessionId, 'session-hooks');
+			if (hooksFailure) throw new Error('Invalid TOML');
+			const pending = nextHooksRead;
+			nextHooksRead = undefined;
+			return pending ?? sources;
+		},
+	};
+	const prompts: string[] = [];
+	services.registerInstance(IChatSessionNavigationService, {
+		getActiveConversation: () => ({ sessionId: 'session-hooks', threadId: 'thread-hooks' }),
+		getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => {},
+		appendToActiveDraft: text => { prompts.push(text); },
+	});
+	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, dispose() {}, [Symbol.dispose]() {} });
+	const hooksFolder = await mkdtemp(join(tmpdir(), 'ash-settings-hooks-'));
+	await using hooksFolderCleanup = { [Symbol.asyncDispose]: async () => { await rm(hooksFolder, { recursive: true, force: true }); } };
+	services.registerInstance(IFileService, disposables.add(new DiskFileSystemProvider([URI.file(hooksFolder)])));
 	const editorPanes = new EditorPaneRegistry();
 	disposables.add(editorPanes.registerEditorPane(descriptor));
 	const editorServices = disposables.add(createTestEditorServices(undefined, services));
 	const editor = disposables.add(editorServices.createInstance(EditorPart, root, { registry: editorPanes }));
-	const preferences = disposables.add(new PreferencesService(new BrowserEditorService(editor), editorServices.get(IFileTextModelService)));
+	editorServices.registerInstance(IEditorPart, editor);
+	editorServices.registerInstance(ICommandService, disposables.add(new CommandService(editorServices)));
+	editorServices.registerInstance(IEditorService, disposables.add(new BrowserEditorService(editor)));
+	const preferences = disposables.add(new PreferencesService(editorServices.get(IEditorService), editorServices.get(IFileTextModelService)));
 	services.registerInstance(IPreferencesService, preferences);
+	const missingHooks = disposables.add(descriptor.create({ instantiationService: editorServices }));
+	assert.throws(() => missingHooks.create(h(ownerDocument, 'div')), /Unknown service: hooksService/);
+	missingHooks.dispose();
+	services.registerInstance(IHooksService, hooksService);
 
 	await preferences.openSettings();
 	const host = root.querySelector<HTMLElement>('.ash-modal-editor-host');
@@ -653,6 +722,75 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await nextTurn();
 	assert.equal(capabilityReads, 4);
 	assert.match(root.querySelector('.ash-agent-capabilities-settings')?.textContent ?? '', /read_file/);
+	root.querySelector<HTMLElement>('[data-settings-category-id="hooks"]')?.click();
+	await nextTurn();
+	const hooksRoot = root.querySelector<HTMLElement>('.ash-hooks-settings');
+	assert.ok(hooksRoot && !hooksRoot.hidden);
+	assert.equal(hooksRoot.querySelectorAll('[data-hook-event]').length, 33, hooksRoot.outerHTML);
+	assert.equal(hooksRoot.querySelector('[data-hook-event="preToolUse"] > summary')?.textContent, 'PreToolUse · 1 configured');
+	assert.equal(root.querySelectorAll('input[type="search"]').length, 1);
+	await configuration.updateValue(LocalizationConfiguration.locale, 'zh-CN');
+	assert.equal(hooksRoot.querySelector('[data-hook-action="edit-scope"]')?.textContent, '编辑 TOML');
+	await configuration.updateValue(LocalizationConfiguration.locale, 'en');
+	assert.match(hooksRoot.querySelector('[data-hook-id="user:hook:check"]')?.textContent ?? '', /Disabled.*Source file.*\/profile\/config.toml.*two words/s);
+	const hookSearch = root.querySelector<HTMLInputElement>('.ash-settings-search input');
+	assert.ok(hookSearch);
+	hookSearch.value = 'two words';
+	hookSearch.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+	assert.deepEqual([...hooksRoot.querySelectorAll<HTMLElement>('.ash-hooks-event')].filter(row => !row.hidden).map(row => row.dataset.hookEvent), ['preToolUse']);
+	hooksRoot.querySelector<HTMLElement>('summary')?.focus();
+	const contentProvider = AccessibleViewRegistry.getImplementations().find(provider => provider.name.startsWith('hooks-settings-') && provider.type === AccessibleViewType.View)?.getProvider(editorServices);
+	assert.ok(contentProvider);
+	assert.match(contentProvider.provideContent(), /user:hook:check/);
+	contentProvider.dispose();
+	hooksRoot.querySelector<HTMLButtonElement>('[data-hook-action="edit-scope"]')?.click();
+	await nextTurn();
+	assert.equal(openUserToml, 1);
+	hookSearch.value = '';
+	hookSearch.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+	sources = [{ namespace: 'user', configPath: '/profile/config.toml', hooks: [] }];
+	hooksChanged.fire();
+	await nextTurn();
+	assert.equal(hookReads, 2);
+	assert.equal(hooksRoot.querySelectorAll('.ash-hooks-declaration').length, 0);
+	const pendingHooks = new DeferredPromise<readonly HookSource[]>();
+	nextHooksRead = pendingHooks.p;
+	hooksChanged.fire();
+	root.querySelector<HTMLElement>('[data-settings-category-id="models"]')?.click();
+	await pendingHooks.complete([{ namespace: 'user', configPath: '/stale/config.toml', hooks: [] }]);
+	await nextTurn();
+	assert.equal(hooksRoot.querySelector<HTMLButtonElement>('[data-hook-action="edit-scope"]')?.title, '/profile/config.toml');
+	root.querySelector<HTMLElement>('[data-settings-category-id="hooks"]')?.click();
+	await nextTurn();
+	assert.equal(hookReads, 4);
+	assert.doesNotMatch(hooksRoot.textContent ?? '', /\/stale\/config.toml/);
+	hooksFailure = true;
+	hooksChanged.fire();
+	await nextTurn();
+	assert.match(hooksRoot.querySelector('[role="status"]')?.textContent ?? '', /Invalid TOML/);
+	const userTomlButton = hooksRoot.querySelector<HTMLButtonElement>('[data-hook-action="edit-scope"]');
+	assert.ok(userTomlButton && !userTomlButton.disabled);
+	userTomlButton.click();
+	await nextTurn();
+	assert.equal(openUserToml, 2);
+	hooksFailure = false;
+	connectionIdentity = { kind: 'ssh', host: 'test-server', authority: 'ssh+test-server', generation: 2 };
+	connectionIdentityChanged.fire(connectionIdentity);
+	await nextTurn();
+	assert.equal(userTomlButton.disabled, true);
+	connectionIdentity = { kind: 'local', generation: 3 };
+	connectionIdentityChanged.fire(connectionIdentity);
+	await nextTurn();
+	assert.equal(userTomlButton.disabled, false);
+
+	hookSearch.value = '';
+	hookSearch.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+	hooksRoot.querySelector<HTMLButtonElement>('[data-hook-action="ask-scope"]')?.click();
+	await nextTurn();
+	assert.equal(host.hidden, true);
+	assert.match(prompts[0] ?? '', /\/profile\/config.toml.*namespace \(user\)/);
+	await preferences.openSettings();
+	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')?.click();
 	root.querySelector<HTMLElement>('[data-settings-category-id="models"]')?.click();
 	await nextTurn();
 	assert.equal(root.querySelector('[data-settings-container]')?.getAttribute('data-active-settings-category'), 'models');
@@ -664,11 +802,11 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await nextTurn();
 	assert.deepEqual(modelWrites, [false]);
 	assert.equal(modelSwitch.getAttribute('aria-checked'), 'false');
-	const modelSearch = root.querySelector<HTMLInputElement>('.ash-models-settings-search input');
+	const modelSearch = root.querySelector<HTMLInputElement>('.ash-settings-search input');
 	assert.ok(modelSearch);
 	modelSearch.value = 'missing';
 	modelSearch.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
-	assert.equal(root.querySelector('.ash-models-settings-empty')?.textContent, 'No matching models or APIs.');
+	assert.equal(root.querySelector('.ash-models-settings-model-row'), null);
 	modelSearch.value = '';
 	modelSearch.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	const apiInput = root.querySelector<HTMLInputElement>('.ash-models-settings-api-controls input[type="password"]');

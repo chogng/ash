@@ -1,3 +1,5 @@
+import type { Event } from '../../../../base/common/event.js';
+import type { ISetting } from '../../../services/preferences/common/preferences.js';
 import { ObjectTreeModel, type ObjectTreeElement, type ObjectTreeNode } from "../../../../base/browser/ui/tree/objectTreeModel.js";
 import { TreeVisibility } from "../../../../base/browser/ui/tree/tree.js";
 import { SettingsSearchQuery } from "./settingsSearch.js";
@@ -21,6 +23,18 @@ export interface SettingsTreeGroup {
 
 export type SettingsTreeElement<T> = SettingsTreeGroup | SettingsTreeItem<T>;
 export type SettingsTreeNode<T> = ObjectTreeElement<SettingsTreeElement<T>>;
+
+/** Domain-owned content uses the same keyed tree as registered settings, without inventing configuration keys. */
+export interface SettingsContentItem {
+	readonly domNode: HTMLElement;
+}
+
+export interface SettingsContent {
+	readonly categoryId: string;
+	readonly onDidChange: Event<void>;
+	getNodes(query: SettingsSearchQuery): readonly SettingsTreeNode<ISetting | SettingsContentItem>[];
+	setVisible(visible: boolean): void;
+}
 
 /** Settings group/item model with query filtering over canonical item metadata. */
 export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>> {
@@ -50,6 +64,7 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 	setChildren(children: readonly SettingsTreeNode<T>[]): void {
 		validateSettingsNodes(children);
 		super.setChildren(asNonCollapsibleSettingsTree(children));
+		this.refreshNavigationScope();
 	}
 
 	setNodeChildren(parentId: string, children: readonly SettingsTreeNode<T>[]): void {

@@ -29,6 +29,7 @@ import type { IRemoteConnectionService } from "../../remote/common/remoteConnect
 import type { IRemoteTunnelService } from "../../remote/common/remoteTunnelService.js";
 import type { IMarketplaceApi } from "../../marketplace/common/marketplaceApi.js";
 import type { IDirPermissionsApi } from "../../dirPermissions/common/dirPermissionsApi.js";
+import type { IHooksService } from '../../hooks/common/hooksService.js';
 import type { IAgentCapabilitiesService } from '../../agentCapabilities/common/agentCapabilitiesService.js';
 import type { IAccountApi } from "../../accounts/common/accountApi.js";
 import type { ITurnChangesApi } from "../../turnChanges/common/turnChangesApi.js";
@@ -98,6 +99,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly toolSearch: IToolSearchApi;
 	readonly dirPermissions: IDirPermissionsApi;
 	readonly agentCapabilities: IAgentCapabilitiesService;
+	readonly hooks: IHooksService;
 }
 
 export const IRendererHostService = createServiceIdentifier<IRendererHost>('rendererHostService');

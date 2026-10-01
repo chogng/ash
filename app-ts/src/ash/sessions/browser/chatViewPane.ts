@@ -179,6 +179,12 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		return this.activePane?.captureDraft() ?? Promise.resolve(undefined);
 	}
 
+	appendToDraft(text: string): void {
+		this.ensureTabForVisibleChat();
+		if (!this.activePane) throw new Error('Chat has no active composer');
+		this.activePane.appendToDraft(text);
+	}
+
 	acceptInput(value?: string): Promise<void> {
 		this.ensureTabForVisibleChat();
 		return this.activePane?.acceptInput(value) ?? Promise.resolve();

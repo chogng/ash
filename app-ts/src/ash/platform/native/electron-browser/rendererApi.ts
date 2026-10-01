@@ -1,3 +1,4 @@
+import { EDIT_USER_HOOKS_CONFIGURATION_CHANNEL } from '../../hooks/common/hooksIpc.js';
 import { AppServerCallService } from '../../call/browser/appServerCallService.js';
 import { AppServerDictationService } from '../../dictation/browser/appServerDictationService.js';
 import { AppServerMemoriesService } from '../../memories/browser/appServerMemoriesService.js';
@@ -161,6 +162,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			nativeContextMenu: createNativeContextMenuApi(),
 			nativeHost: createNativeHostApi(mainProcessService),
 			nativeMenubar: createNativeMenubarApi(),
+			hooks: { ...backend.hooks, userConfigurationEditor: () => invoke<void>(EDIT_USER_HOOKS_CONFIGURATION_CHANNEL) },
 			localFiles: resources.add(new DiskFileSystemProviderClient(request => invoke(LOCAL_FILE_SYSTEM_CHANNEL_NAME, request), listener => subscribe(LOCAL_FILE_SYSTEM_CHANGED_CHANNEL, listener))),
 			userDataHome: URI.parse(await invoke<string>(`${LOCAL_FILE_SYSTEM_CHANNEL_NAME}:userDataHome`)),
 			workspace: createWorkspaceContextApi(),

@@ -63,6 +63,7 @@ export interface IChatInputPart extends IDisposable {
 	focus(): void;
 	addContext(attachment: ChatContextAttachment): void;
 	captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined>;
+	appendToDraft(text: string): void;
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void;
 	acceptInput(value?: string): Promise<void>;
 	openModelSelector(): void;
@@ -224,6 +225,12 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				this.inputChanges.fire();
 			},
 		};
+	}
+
+	appendToDraft(text: string): void {
+		const previous = this.input.value;
+		this.input.value = previous ? `${previous}\n\n${text}` : text;
+		this.renderToolbar();
 	}
 
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void {

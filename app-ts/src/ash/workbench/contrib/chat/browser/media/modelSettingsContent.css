@@ -1,0 +1,71 @@
+.ash-models-settings[hidden],
+.ash-models-settings [hidden] {
+	display: none;
+}
+
+.ash-models-settings-api-row h5 {
+	margin: 0;
+	color: var(--ash-foreground);
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-models-settings-model-row,
+.ash-models-settings-api-row {
+	min-width: 0;
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+}
+
+.ash-models-settings-model-row .ash-switch {
+	width: 100%;
+}
+
+.ash-models-settings-model-copy {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-models-settings-model-copy > span {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ash-models-settings-note {
+	margin: var(--ash-spacing-size40) 0 0;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-models-settings-note[role='alert'],
+.ash-models-settings-status.is-error {
+	color: var(--ash-error-foreground);
+}
+
+.ash-models-settings-api-controls {
+	display: flex;
+	min-width: 0;
+	align-items: center;
+	margin-top: var(--ash-spacing-size120);
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-models-settings-api-controls .ash-input-box {
+	flex: 1;
+	min-width: 0;
+}
+
+.ash-models-settings-api-controls .ash-button {
+	flex: 0 0 auto;
+}
+
+.ash-models-settings-empty {
+	margin: 0;
+	color: var(--ash-description-foreground);
+}
+
+.ash-models-settings-status {
+	margin: var(--ash-spacing-size120) 0 0;
+}

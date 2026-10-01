@@ -1,3 +1,4 @@
+import { IHooksService } from '../../platform/hooks/common/hooksService.js';
 import { ExtensionColorThemeService } from '../services/extensions/browser/extensionColorThemeService.js';
 import { IWorkbenchThemeService } from '../services/themes/common/workbenchThemeService.js';
 import { IHostColorSchemeService, type IHostColorSchemeService as HostColorSchemeService } from '../services/themes/common/hostColorSchemeService.js';
@@ -451,6 +452,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IRendererHostService, api);
 		services.registerInstance(ILocalTranscriptionService, api.localTranscription ?? this._register(new NullLocalTranscriptionService()));
 		services.registerInstance(IAgentCapabilitiesService, api.agentCapabilities);
+		services.registerInstance(IHooksService, api.hooks);
 		services.registerInstance(IExtensionHostApi, api.extensionHost);
 		services.registerInstance(ICodebaseSymbolsApi, api.codebaseSymbols);
 		services.registerInstance(ISyntaxApi, api.syntax);

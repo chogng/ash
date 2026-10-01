@@ -1,3 +1,4 @@
+import { hooksConfigurationIpcRoute, openHooksTextFile } from '../../platform/hooks/electron-main/hooksConfigurationIpc.js';
 import { ThemeMainService } from '../../platform/theme/electron-main/themeMainServiceImpl.js';
 import { Server as MainProcessIPCServer } from '../../base/parts/ipc/electron-main/ipc.electron.js';
 import { isRecord } from '../../base/common/types.js';
@@ -979,6 +980,7 @@ export class AshApplication extends Disposable {
 			...windowDisposables.add(new BrowserAutomationHost(browserAutomationMainService)).routes(),
 			...windowDisposables.add(new OAuthCallbackHost()).routes(),
 			...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path)),
+			hooksConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(workspaceContext.getWorkspace()), openHooksTextFile),
 			...remoteWindowContext.ipcRoutes,
 			...browserViewIpcRoutes(browserViewMainService),
 			...windowResourceIpcRoutes(windowResources),
@@ -1181,6 +1183,7 @@ export class AshApplication extends Disposable {
 						...this.mainProcessIpcRoutes(window),
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
 						...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path)),
+						hooksConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(session.workspaceContext.getWorkspace()), openHooksTextFile),
 						...remoteWindowContext.ipcRoutes,
 						...windowResourceIpcRoutes(windowResources),
 						...windowAppearanceIpcRoutes({

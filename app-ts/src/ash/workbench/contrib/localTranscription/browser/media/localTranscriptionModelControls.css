@@ -1,0 +1,26 @@
+.ash-local-transcription-model-controls {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+	gap: var(--ash-spacing-size80);
+	font-size: var(--ash-fontSize-label1);
+	font-weight: var(--ash-fontWeight-regular);
+	line-height: 1.5;
+}
+
+.ash-local-transcription-model-source .ash-input-box {
+	width: 100%;
+}
+
+.ash-local-transcription-model-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-local-transcription-model-status {
+	margin: 0;
+	color: var(--ash-description-foreground);
+	overflow-wrap: anywhere;
+}

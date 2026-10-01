@@ -1,3 +1,4 @@
+import { createDisconnectedHooksApi } from '../../hooks/browser/hooksApi.js';
 import { createDisconnectedLanguageServerService } from "../../language/browser/languageServerService.js";
 import { createDisconnectedAppServerApi, createDisconnectedResourceApi, createDisconnectedServerEventApi } from "./appServerApi.js";
 import { createDisconnectedFileApi } from "../../files/browser/fileApi.js";
@@ -64,5 +65,6 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		toolSearch: createDisconnectedToolSearchApi(unavailableOperation),
 		dirPermissions: createDisconnectedDirPermissionsApi(unavailableOperation),
 		agentCapabilities: createDisconnectedAgentCapabilitiesApi(unavailableOperation),
+		hooks: createDisconnectedHooksApi(unavailableOperation),
 	};
 }

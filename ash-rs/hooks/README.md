@@ -11,6 +11,29 @@ Hooks 在指定事件发生时执行用户配置的程序。Ash 提供 33 种事
 
 ## 配置与浏览
 
+### 桌面 Settings
+
+打开 **Settings → Agents → Hooks**，可以浏览全部 33 种事件，以及当前连接的 App Server
+返回的 Hook 声明。事件和声明都可以展开；使用 Settings 的统一搜索可查找事件、Hook ID、命令和路径。
+详情显示启用状态、来源 TOML、工具匹配、程序与
+完整参数。搜索支持事件名称、Hook ID、命令和来源路径，禁用声明仍计入数量。
+
+选择用户或项目范围后，**编辑 TOML** 打开该范围的配置：本地用户配置通过系统文本编辑器
+打开，项目配置通过工作区编辑器打开。首次编辑会创建缺失的空文件，已有内容与注释保留。
+远程项目使用远程工作区资源；远程用户配置通过所属主机或助手编辑，不会交给本地编辑器。
+
+**让 Ash 配置** 关闭 Settings，把目标事件、文件和已知来源身份追加到当前聊天草稿。
+原有文字、模式与附件保留，不会自动发送。保存配置后点击 **刷新** 检查修改；用户配置变更
+通知也会刷新当前页面。加载失败显示错误，不会把查询失败显示成“未配置”。
+本地用户 TOML 的编辑入口由桌面主进程提供；即使查询失败或 App Server 离线，也可以打开
+该文件修正配置。浏览器环境和远程用户配置不使用这个本地入口。
+
+项目声明依赖当前聊天会话的目录发现权限。工作区内可以打开项目 TOML，但只有会话目录
+同时具备 `LoadConfig` 和 `DiscoverHooks` 时，其声明才进入列表。页面只浏览和协助编辑配置，
+不执行 Hook，也不授予执行权限。
+
+### 终端 `/hooks`
+
 在 Ash Code 中输入 `/hooks`，默认看到 33 种事件及其配置数量。`0` 表示该事件尚未配置程序，
 不是事件不可用。选择事件后查看对应的 Hook，再选择具体 Hook 查看事件、启用状态、来源文件、
 工具匹配、程序和参数。旧配置中的 `beforeTool`、`afterTool`、`turnCompleted` 有声明时仍可浏览，
@@ -114,6 +137,7 @@ Hook，也不授予权限。
 | TOML、ID、声明校验 | [config](../config/src/hooks.rs) |
 | 来源查询与配置命令 | [App Server](../app-server/src/server/extension_config_operations.rs) |
 | 事件列表、详情与配置入口 | [Ash Code](../../code/tui/src/hooks.rs) |
+| 桌面 Settings 与配置入口 | [Hooks Settings](../../app-ts/src/ash/workbench/contrib/hooks/browser/hooksSettingsContent.ts) |
 | 执行、进程协议与运行记录 | [运行时说明](docs/runtime.md) |
 
 定向验证：

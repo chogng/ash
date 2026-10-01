@@ -1,3 +1,4 @@
+import { CLOUD_DICTATION_MODEL, XAI_DICTATION_MODEL } from '../../../../platform/dictation/common/dictationConfiguration.js';
 import type { ISetting, ISettingsGroup, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
 import { localize } from '../../../../nls.js';
 import type { SettingsTreeNode } from './settingsTreeModels.js';
@@ -75,12 +76,7 @@ export const SettingsNavigation = [
 				description: 'Tune hover feedback and resize handles.',
 				settings: ['workbench.hover.*', 'workbench.sash.*', 'onboarding.enabled'],
 			},
-			{
-				id: 'dictation',
-				label: 'Voice input',
-				description: 'Choose how speech is transcribed in chat.',
-				settings: ['dictation.*'],
-			},
+
 		],
 	},
 	{
@@ -269,6 +265,11 @@ export const SettingsNavigation = [
 					get label() { return localize('settings.models.chatDefault.label', 'Chat'); },
 					get description() { return localize('settings.models.chatDefault.description', 'Choose the model used for new chats.'); },
 					settings: ['chat.defaultModel'],
+				}, {
+					id: 'dictation',
+					get label() { return localize('sessions.settings.voiceModels', 'Voice input'); },
+					get description() { return localize('sessions.settings.cloudVoiceModels', 'Cloud models: OpenAI {0} · xAI {1}', CLOUD_DICTATION_MODEL, XAI_DICTATION_MODEL); },
+					settings: ['dictation.*'],
 				}],
 			},
 			{

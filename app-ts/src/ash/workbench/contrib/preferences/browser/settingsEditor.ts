@@ -10,19 +10,18 @@ import { IDirPermissionsService } from '../../../../platform/dirPermissions/comm
 import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILanguagePackService } from '../../../../platform/languagePacks/common/languagePacksService.js';
 import type { IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { DESKTOP_UPDATE_POLICY_SETTING, type DesktopUpdatePolicy } from '../../../../platform/update/common/updateService.js';
 import { localize } from '../../../../nls.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
-import { IChatService } from '../../../services/chat/common/chatService.js';
 import { IRemoteAgentService } from '../../../services/remote/common/remoteAgentService.js';
 import type { EditorInput } from '../../../services/editor/common/editorService.js';
-import { GitConfiguration, type GitAutofetch } from '../../../contrib/git/common/gitConfiguration.js';
-import { IGitService } from '../../../contrib/git/common/gitService.js';
+import { GitConfiguration, type GitAutofetch } from '../../git/common/gitConfiguration.js';
+import { IGitService } from '../../git/common/gitService.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { ILocaleService, LocalizationConfiguration } from '../../../services/localization/common/locale.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
@@ -30,13 +29,14 @@ import type { ISelectSetting, ISetting, ISettingsEditorModel } from '../../../se
 import { isSettingsEditorInput } from '../../../services/preferences/common/settingsEditorInput.js';
 import { DefaultSettings, SettingsEditorModel } from '../../../services/preferences/common/settingsModels.js';
 import { SettingsRenderer } from './settingsRenderers.js';
-import { ModelsSettings } from './modelsSettings.js';
+import { HooksSettingsContent } from '../../hooks/browser/hooksSettingsContent.js';
+import { ModelSettingsContent } from '../../chat/browser/modelSettingsContent.js';
 import { AgentCapabilitiesSettings } from './agentCapabilitiesSettings.js';
 import { SettingsSearchQuery } from './settingsSearch.js';
 import { SettingsSearchWidget } from './settingsWidgets.js';
 import { createSettingsLayout, settingsRootNodes, SettingsCategories, type SettingsCategoryDescriptor, type SettingsCategoryGroupDescriptor, type SettingsLayoutCategory } from './settingsLayout.js';
 import { SettingsTree } from './settingsTree.js';
-import { SettingsTreeModel } from './settingsTreeModels.js';
+import { SettingsTreeModel, type SettingsContent, type SettingsContentItem, type SettingsTreeNode } from './settingsTreeModels.js';
 import { TOCTree, TOCTreeModel, type SettingsTOCEntry, type SettingsTOCOpenEntry } from './tocTree.js';
 
 export const SettingsEditorId = 'workbench.editor.settings';
@@ -48,6 +48,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 	private contentDescription!: HTMLParagraphElement;
 	private contentHeading!: HTMLHeadingElement;
 	private contentScrollable!: ScrollableElement;
+	private contentEmpty!: HTMLParagraphElement;
 	private contentStatus!: HTMLParagraphElement;
 	private readonly configurationService: IConfigurationService;
 	private readonly clipboardService: IClipboardService;
@@ -58,11 +59,11 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 	private navigationEmpty!: HTMLParagraphElement;
 	private navigationScrollable!: ScrollableElement;
 	private readonly settingsModel: ISettingsEditorModel;
-	private modelsSettings!: ModelsSettings;
 	private agentCapabilitiesSettings!: AgentCapabilitiesSettings;
-	private settingsTree!: SettingsTree<ISetting>;
+	private readonly contents: SettingsContent[] = [];
+	private settingsTree!: SettingsTree<ISetting | SettingsContentItem>;
 	private tocTree!: TOCTree;
-	private treeModel!: SettingsTreeModel<ISetting>;
+	private treeModel!: SettingsTreeModel<ISetting | SettingsContentItem>;
 	private activeCategory!: SettingsCategoryDescriptor;
 	private activeNavigationTarget: Extract<SettingsTOCEntry, { readonly kind: 'target' }> | undefined;
 	private rootDomNode: HTMLDivElement | undefined;
@@ -78,7 +79,6 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		@ILocaleService localeService: ILocaleService,
 		@ILanguagePackService private readonly languagePackService: ILanguagePackService,
 		@IGitService gitService: IGitService,
-		@IChatService private readonly chatService: IChatService,
 		@IAgentCapabilitiesService private readonly agentCapabilitiesService: IAgentCapabilitiesService,
 		@IRemoteAgentService private readonly remoteAgentService: IRemoteAgentService,
 		@IDirPermissionsService private readonly dirPermissionsService: IDirPermissionsService,
@@ -104,6 +104,8 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 	public create(container: HTMLElement): void {
 		if (this.rootDomNode) throw new Error('Settings editor has already been created');
 		const settingsLayout = createSettingsLayout(this.settingsModel.settings);
+		this.treeModel = this._register(new SettingsTreeModel<ISetting | SettingsContentItem>());
+		this.treeModel.setChildren(settingsRootNodes(settingsLayout));
 		const settingsRenderer = this._register(new SettingsRenderer(container, {
 			clipboardService: this.clipboardService,
 			configurationService: this.configurationService,
@@ -138,7 +140,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 			wheel: { consume: 'when-scrolling' },
 		}));
 		this.navigationScrollable.element.classList.add('ash-settings-sidebar-scrollable');
-		this.tocTree = this._register(new TOCTree(this.navigationScrollable.contentElement, new TOCTreeModel(settingsLayout), {
+		this.tocTree = this._register(new TOCTree(this.navigationScrollable.contentElement, new TOCTreeModel(settingsLayout, this.treeModel), {
 			ariaLabel: this.localized('chrome.categories', 'Settings categories'),
 			categoryLabel: category => this.localizedCategoryLabel(category),
 			categoryDescription: category => this.localizedCategoryDescription(category),
@@ -173,12 +175,15 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		const settingsContent = h(ownerDocument, 'div');
 		settingsContent.className = 'ash-settings-content';
 		settingsContent.dataset.settingsContent = '';
+		this.contentEmpty = h(ownerDocument, 'p');
+		this.contentEmpty.setAttribute('role', 'status');
+		this.contentEmpty.hidden = true;
 		this.contentStatus = h(ownerDocument, 'p');
 		this.contentStatus.className = 'ash-configuration-settings-status';
 		this.contentStatus.setAttribute('role', 'status');
 		this.contentStatus.setAttribute('aria-live', 'polite');
 		this.contentStatus.hidden = true;
-		contentInner.append(this.contentHeading, this.contentDescription, settingsContent, this.contentStatus);
+		contentInner.append(this.contentHeading, this.contentDescription, settingsContent, this.contentEmpty, this.contentStatus);
 		this.contentScrollable.append(contentInner);
 		this.content.append(this.contentScrollable.element);
 		this.element.append(navigation, this.content);
@@ -189,8 +194,14 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		const initialCategory = SettingsCategories[0];
 		if (!initialCategory) throw new Error('Settings requires at least one category');
 		this.activeCategory = initialCategory;
-		this.treeModel = this._register(new SettingsTreeModel<ISetting>());
-		this.treeModel.setChildren(settingsRootNodes(settingsLayout));
+		this.contents.push(
+			this._register(this.instantiationService.createInstance(ModelSettingsContent, settingsContent)),
+			this._register(this.instantiationService.createInstance(HooksSettingsContent, settingsContent)),
+		);
+		this.rebuildContent();
+		for (const content of this.contents) {
+			this._register(content.onDidChange(() => this.rebuildContent()));
+		}
 		this.treeModel.setNavigationTarget(initialCategory.id);
 		this.settingsTree = this._register(new SettingsTree(settingsContent, {
 			model: this.treeModel,
@@ -198,23 +209,16 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 			groupClassName: 'ash-configuration-settings-group ash-settings-content-group',
 			groupDescriptionClassName: 'ash-configuration-settings-group-description',
 			itemsClassName: 'ash-configuration-settings-list',
-			renderItem: item => settingsRenderer.render(item.value),
-			updateItem: item => settingsRenderer.update(item.value),
-			disposeItem: item => settingsRenderer.disposeSetting(item.id),
-		}));
-		this.modelsSettings = this._register(this.instantiationService.createInstance(ModelsSettings, settingsContent, {
-			chatService: this.chatService,
-			clipboardService: this.clipboardService,
-			configurationService: this.configurationService,
-			contextMenuProvider: this.contextMenuProvider,
-			contextViewProvider: this.contextViewProvider,
+			renderItem: item => 'domNode' in item.value ? item.value.domNode : settingsRenderer.render(item.value),
+			updateItem: item => { if (!('domNode' in item.value)) settingsRenderer.update(item.value); },
+			disposeItem: item => { if (!('domNode' in item.value)) settingsRenderer.disposeSetting(item.id); },
 		}));
 		this.agentCapabilitiesSettings = this._register(new AgentCapabilitiesSettings(settingsContent, this.agentCapabilitiesService, this.remoteAgentService, this.dirPermissionsService, this.localizationService));
 		this.renderCategory(initialCategory);
 
 		const updateLanguageSetting = (): void => {
 			// Recompute descriptors while the keyed renderer retains controls and keyboard focus.
-			this.treeModel.setChildren(settingsRootNodes(createSettingsLayout(this.settingsModel.settings)));
+			this.rebuildContent();
 		};
 		this._register(this.languagePackService.onDidChange(updateLanguageSetting));
 		this._register(this.localizationService.onDidChange(() => {
@@ -262,6 +266,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 
 	public setVisible(visibility: EditorPaneVisibility): void {
 		this.visible = visibility === EditorPaneVisibility.Visible;
+		this.updateContentVisibility();
 	}
 
 	public focus(): void {
@@ -271,12 +276,34 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 
 	private search(text: string): void {
 		const query = new SettingsSearchQuery(text);
-		this.tocTree.setFindPattern(query.text);
 		this.treeModel.setQuery(query);
-		this.modelsSettings.setVisible(query.isEmpty && this.activeCategory.id === 'models');
+		this.settingsTree.setNavigationTarget(query.isEmpty ? this.activeNavigationTarget?.target.targetId ?? this.activeCategory.id : undefined);
+		this.rebuildContent();
+		this.updateContentVisibility();
 		this.agentCapabilitiesSettings.setView(query.isEmpty && (this.activeCategory.id === 'tools' || this.activeCategory.id === 'sandbox') ? this.activeCategory.id : undefined);
 		this.navigationScrollable.scrollTo(0, 0);
 		this.navigationScrollable.layout();
+	}
+
+	private rebuildContent(): void {
+		const query = new SettingsSearchQuery(this.searchWidget?.value ?? '');
+		const nodes: readonly SettingsTreeNode<ISetting | SettingsContentItem>[] = settingsRootNodes(createSettingsLayout(this.settingsModel.settings)).map(root => ({
+			...root,
+			children: [...root.children ?? [], ...this.contents.filter(content => content.categoryId === root.element.id).flatMap(content => content.getNodes(query))],
+		}));
+		this.treeModel.setChildren(nodes);
+		this.contentEmpty.textContent = this.localized('chrome.noResults', 'No settings found.');
+		this.contentEmpty.hidden = query.isEmpty || this.treeModel.visibleItems.some(item => !('domNode' in item.value) || !item.value.domNode.hidden);
+		this.tocTree.refresh();
+		this.tocTree.setFindPattern(query.text);
+	}
+
+	private updateContentVisibility(): void {
+		const query = new SettingsSearchQuery(this.searchWidget?.value ?? '');
+		// A global query loads each catalog so model names and Hook commands can become searchable.
+		for (const content of this.contents) {
+			content.setVisible(this.visible && (!query.isEmpty || content.categoryId === this.activeCategory.id));
+		}
 	}
 
 	private focusResults(): void {
@@ -308,7 +335,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		const target = this.treeModel.getGroup(targetId);
 		if (!target) throw new RangeError(`Settings layout does not expose navigation target '${targetId}'`);
 		this.settingsTree.setNavigationTarget(targetId);
-		this.modelsSettings.setVisible(category.id === 'models' && !this.searchWidget?.value);
+		this.updateContentVisibility();
 		this.agentCapabilitiesSettings.setView(!this.searchWidget?.value && (category.id === 'tools' || category.id === 'sandbox') ? category.id : undefined);
 		this.activeNavigationTarget = entry;
 		this.content.classList.toggle('has-navigation-target', entry !== undefined);

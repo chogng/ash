@@ -26,6 +26,19 @@
 | 主题颜色或标准尺寸 | Design Token | 修改语义 token，不修改 selector |
 | 某个业务动作的显隐 | Command/Menu/Context Key | 不用 CSS 猜业务状态 |
 
+## Settings 内容
+
+Workbench 的 SettingsEditor 统一负责分类、搜索输入和页面可见性；SettingsTree 使用同一份条目
+元数据筛选和保留内容，TOC 从这棵树读取动态内容的搜索词。功能组件提供条目、控件和操作，
+不再单独创建搜索输入或维护另一份分类选择。嵌套内容使用宿主传入的 SettingsSearchQuery。
+
+普通配置继续由 Configuration Registry 声明并交给 SettingsRenderer。模型目录、API 凭据和
+Hook 声明是各领域的内容，不为复用界面而伪造配置键或改变存储位置。Workbench 与 Sessions
+复用模型条目和凭据控件；Sessions 仍负责自己的设置窗口布局。Hook 内容归
+`workbench/contrib/hooks`，模型与凭据内容归 `workbench/contrib/chat`，模型包准备、导入和取消
+归 `workbench/contrib/localTranscription`。各控件的 CSS 跟随所属功能；`preferences` 负责
+设置框架和内容接入，不承接这些功能的业务控件。
+
 ## 分层所有权
 
 | 层级 | 当前代表 | 必须负责 | 禁止负责 |

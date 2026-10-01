@@ -1,3 +1,4 @@
+import { createAppServerHooksApi } from '../../hooks/browser/hooksApi.js';
 import { createAppServerLanguageServerService } from "../../language/browser/languageServerService.js";
 import { AppServerCallService } from '../../call/browser/appServerCallService.js';
 import { AppServerMemoriesService } from '../../memories/browser/appServerMemoriesService.js';
@@ -120,5 +121,6 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		toolSearch: createAppServerToolSearchApi(connection),
 		dirPermissions: createAppServerDirPermissionsApi(connection),
 		agentCapabilities: createAppServerAgentCapabilitiesApi(connection),
+		hooks: createAppServerHooksApi(connection),
 	};
 }

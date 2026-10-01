@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { isCancellationError } from "../../../../base/common/errors.js";
+import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { isRecord } from "../../../../base/common/types.js";
 import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
 import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH, type InitializeResult, type ServerNotification } from "../../common/generated/index.js";
@@ -48,6 +49,33 @@ test('Web disposal cancels scheduled reconnect and revoked authorization is term
 		assert.equal(await revoked.api.appServer.getConnectionState(), 'stopped');
 		assert.equal(revokedTransport.sentEvents.filter(event => event === WEB_APP_SERVER_CONNECT_EVENT).length, 1);
 	} finally { revoked.dispose(); }
+});
+
+test('Hooks use the shared protocol, retain disabled declarations, and refresh on configuration changes', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	const pending = connected.api.hooks.read('session-hooks');
+	assert.deepEqual(transport.requests.at(-1)?.params, { sessionId: 'session-hooks' });
+	assert.equal(transport.requests.at(-1)?.method, 'hook/list');
+	transport.respondAt(-1, { sources: [{ namespace: 'user', configPath: '/profile/config.toml', hooks: [
+		{ id: 'user:hook:check', event: 'preToolUse', enablement: 'disabled', matcher: { toolNames: ['shell-command'] }, action: { type: 'process', program: '/program with spaces', args: ['two words', '"quote"'] } },
+	] }] });
+	assert.deepEqual(await pending, [{ namespace: 'user', configPath: '/profile/config.toml', hooks: [
+		{ id: 'user:hook:check', event: 'preToolUse', enabled: false, toolNames: ['shell-command'], program: '/program with spaces', args: ['two words', '"quote"'] },
+	] }]);
+	const userRead = connected.api.hooks.read();
+	assert.deepEqual(transport.requests.at(-1)?.params, {});
+	transport.respondAt(-1, { sources: [{ namespace: 'user', configPath: '/profile/config.toml', hooks: [] }] });
+	assert.equal((await userRead)[0]?.hooks.length, 0);
+	let changes = 0;
+	const subscription = connected.api.hooks.onDidChange(() => changes++);
+	transport.emitNotification({ method: 'config/changed', params: { revision: 2, generation: 2 } });
+	assert.equal(changes, 1);
+	subscription.dispose();
+	transport.emitNotification({ method: 'config/changed', params: { revision: 3, generation: 3 } });
+	assert.equal(changes, 1);
+	assert.equal(connected.api.hooks.userConfigurationEditor, undefined);
 });
 
 class FakeTransport implements AppServerTransport {

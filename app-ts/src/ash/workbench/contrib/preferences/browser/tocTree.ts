@@ -6,7 +6,7 @@ import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { ISetting } from '../../../services/preferences/common/preferences.js';
 import { SettingsLayout, SettingsNavigation, type SettingsCategoryDescriptor, type SettingsCategoryGroupDescriptor, type SettingsLayoutCategory, type SettingsNavigationDescriptor } from './settingsLayout.js';
-import type { SettingsTreeNode } from './settingsTreeModels.js';
+import type { SettingsContentItem, SettingsTreeModel, SettingsTreeNode } from './settingsTreeModels.js';
 
 export interface SettingsTOCTarget {
 	readonly id: string;
@@ -32,7 +32,7 @@ export interface TOCTreeOptions {
 
 /** Projects the product hierarchy and contributed layout groups into Settings TOC entries. */
 export class TOCTreeModel {
-	constructor(private readonly layout: readonly SettingsLayoutCategory[]) {}
+	constructor(private readonly layout: readonly SettingsLayoutCategory[], private readonly content: SettingsTreeModel<ISetting | SettingsContentItem>) {}
 
 	public get children(): readonly ObjectTreeElement<SettingsTOCEntry>[] {
 		return SettingsNavigation.map(entry => this.navigationElement(entry));
@@ -50,6 +50,18 @@ export class TOCTreeModel {
 		return this.categoryElement(entry);
 	}
 
+	private contentSearchKeywords(categoryId: string): readonly string[] {
+		const keywords: string[] = [];
+		const visit = (id: string): void => {
+			const node = this.content.getNode(id);
+			if (!node) return;
+			keywords.push(node.element.id, node.element.title, node.element.description, ...node.element.keywords ?? []);
+			for (const child of node.children) visit(child.element.id);
+		};
+		visit(categoryId);
+		return keywords;
+	}
+
 	private categoryElement(category: SettingsCategoryDescriptor): ObjectTreeElement<SettingsTOCEntry> {
 		const groups = this.layout.find(candidate => candidate.id === category.id)?.groups ?? [];
 		const targets = new SettingsLayout(category.id, groups).nodes.map(node => ({
@@ -64,7 +76,7 @@ export class TOCTreeModel {
 			element: { kind: 'target', id: target.id, category, target },
 		}));
 		return {
-			element: { kind: 'category', id: category.id, category, searchKeywords: showGroupTargets ? [] : targets.flatMap(target => [target.label, ...(target.keywords ?? [])]) },
+			element: { kind: 'category', id: category.id, category, searchKeywords: [...showGroupTargets ? [] : targets.flatMap(target => [target.label, ...(target.keywords ?? [])]), ...this.contentSearchKeywords(category.id)] },
 			children,
 			collapsible: showGroupTargets,
 			collapsed: showGroupTargets,
