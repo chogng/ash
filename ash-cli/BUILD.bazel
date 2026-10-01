@@ -25,10 +25,10 @@ rust_test(
         "tests/tui_real_scenarios.rs",
     ],
     compile_data = [
-        "tests/support/issue_provider.py",
         "//ash-rs/skills:built-in-skills",
     ],
     data = [
+        "tests/support/issue_provider.py",
         ":ash",
         "//ash-rs/app-server:ash-app-server",
         "//ash-rs/app-server-daemon:ash-app-server-daemon",
@@ -37,9 +37,9 @@ rust_test(
     edition = "2024",
     env_inherit = ["PATH", "ASH_RG_PATH", "ASH_TGREP_PATH"],
     rustc_env = {
-        "ASH_BAZEL_ASH": "$(rlocationpath :ash)",
-        "ASH_BAZEL_APP_SERVER": "$(rlocationpath //ash-rs/app-server:ash-app-server)",
-        "ASH_BAZEL_DAEMON": "$(rlocationpath //ash-rs/app-server-daemon:ash-app-server-daemon)",
+        "CARGO_BIN_EXE_ash": "$(rlocationpath :ash)",
+        "CARGO_BIN_EXE_ash-app-server": "$(rlocationpath //ash-rs/app-server:ash-app-server)",
+        "CARGO_BIN_EXE_ash-app-server-daemon": "$(rlocationpath //ash-rs/app-server-daemon:ash-app-server-daemon)",
     },
     rustc_env_files = ["//:workspace-version-env"],
     timeout = "long",

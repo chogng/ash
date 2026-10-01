@@ -42,15 +42,12 @@ pub const SMALL_SIZE: PtySize = PtySize {
 };
 
 fn ash_executable() -> PathBuf {
-    match option_env!("ASH_BAZEL_ASH") {
-        Some(path) => bazel_runfile(path),
-        None => PathBuf::from(option_env!("CARGO_BIN_EXE_ash").expect("Cargo ash executable")),
-    }
+    cargo_bin::cargo_bin!("ash").unwrap()
 }
 
 fn daemon_executable() -> PathBuf {
-    match option_env!("ASH_BAZEL_DAEMON") {
-        Some(path) => bazel_runfile(path),
+    match option_env!("CARGO_BIN_EXE_ash-app-server-daemon") {
+        Some(path) => cargo_bin::resolve_executable(Path::new(path)).unwrap(),
         None => ash_executable().with_file_name(format!(
             "ash-app-server-daemon{}",
             std::env::consts::EXE_SUFFIX
@@ -59,25 +56,11 @@ fn daemon_executable() -> PathBuf {
 }
 
 fn app_server_executable() -> PathBuf {
-    match option_env!("ASH_BAZEL_APP_SERVER") {
-        Some(path) => bazel_runfile(path),
+    match option_env!("CARGO_BIN_EXE_ash-app-server") {
+        Some(path) => cargo_bin::resolve_executable(Path::new(path)).unwrap(),
         None => ash_executable()
             .with_file_name(format!("ash-app-server{}", std::env::consts::EXE_SUFFIX)),
     }
-}
-
-fn bazel_runfile(path: &str) -> PathBuf {
-    if let Some(directory) = std::env::var_os("RUNFILES_DIR") {
-        return PathBuf::from(directory).join(path);
-    }
-    let manifest = std::env::var("RUNFILES_MANIFEST_FILE").expect("Bazel runfiles manifest");
-    let contents = fs::read_to_string(manifest).expect("read Bazel runfiles manifest");
-    let value = contents
-        .lines()
-        .filter_map(|line| line.split_once(' '))
-        .find_map(|(key, value)| (key == path).then_some(value))
-        .unwrap_or_else(|| panic!("missing Bazel runfile: {path}"));
-    PathBuf::from(value)
 }
 
 struct StagedBinaries {
@@ -96,7 +79,7 @@ impl StagedBinaries {
         fs::create_dir(&bin).unwrap();
         let staged = |source: PathBuf| {
             let destination = bin.join(source.file_name().expect("executable name"));
-            fs::copy(source, &destination).unwrap();
+            cargo_bin::copy_executable(&source, &destination).unwrap();
             destination
         };
         let binaries = Self {
@@ -196,7 +179,7 @@ impl Fixture {
         let profile = path.join("profile");
         fs::create_dir_all(&workspace).unwrap();
         fs::create_dir_all(&profile).unwrap();
-        let (ash, daemon, app_server) = if option_env!("ASH_BAZEL_ASH").is_some() {
+        let (ash, daemon, app_server) = if cargo_bin::runfiles_available() {
             let staged = STAGED_BINARIES.get_or_init(StagedBinaries::new);
             (
                 staged.ash.clone(),
@@ -283,7 +266,12 @@ impl Fixture {
             fs::write(bin.join(name), serde_json::to_vec(&data).unwrap()).unwrap();
         }
         let script = bin.join("gh");
-        fs::write(&script, include_str!("issue_provider.py")).unwrap();
+        let resource = cargo_bin::find_resource!(
+            "tests/support/issue_provider.py",
+            "_main/ash-cli/tests/support/issue_provider.py"
+        )
+        .unwrap();
+        cargo_bin::write_executable(&script, &fs::read_to_string(resource).unwrap()).unwrap();
         fs::set_permissions(script, fs::Permissions::from_mode(0o700)).unwrap();
     }
 
@@ -1048,16 +1036,17 @@ fn assert_named_snapshot(name: &str, screen: String) {
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or_else(|| panic!("snapshot name must end in valid UTF-8: {}", name.display()));
-    let snapshot_file = match option_env!("ASH_BAZEL_ASH") {
-        Some(_) => bazel_runfile(&format!(
-            "{}/ash-cli/tests/snapshots/{}.snap",
-            std::env::var("TEST_WORKSPACE").expect("Bazel test workspace"),
-            name.display()
-        )),
-        None => PathBuf::from(option_env!("CARGO_MANIFEST_DIR").expect("Cargo manifest directory"))
+    let snapshot_file = if cargo_bin::runfiles_available() {
+        cargo_bin::find_resource!(
+            format!("tests/snapshots/{}.snap", name.display()),
+            format!("_main/ash-cli/tests/snapshots/{}.snap", name.display())
+        )
+        .unwrap()
+    } else {
+        PathBuf::from(option_env!("CARGO_MANIFEST_DIR").expect("Cargo manifest directory"))
             .join("tests/snapshots")
             .join(name)
-            .with_extension("snap"),
+            .with_extension("snap")
     };
     let snapshot_dir = snapshot_file.parent().expect("snapshot parent directory");
 

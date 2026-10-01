@@ -1,3 +1,5 @@
+use cli::format_command;
+
 use std::time::Duration;
 
 const WINDOW: Duration = Duration::from_secs(30);
@@ -11,26 +13,6 @@ pub(super) enum Failure {
 
 pub(super) fn recovery_error(error: impl std::fmt::Display, command: &[String]) -> String {
     format!("{error}\nReconnect: {}", format_command(command))
-}
-
-fn format_command(command: &[String]) -> String {
-    command
-        .iter()
-        .map(|argument| quote_argument(argument))
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn quote_argument(argument: &str) -> String {
-    if !argument.is_empty()
-        && argument.bytes().all(|byte| {
-            byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.' | b'/' | b':' | b'@')
-        })
-    {
-        argument.to_owned()
-    } else {
-        format!("'{}'", argument.replace('\'', "'\\''"))
-    }
 }
 
 pub(super) fn retry<T>(

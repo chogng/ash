@@ -128,6 +128,12 @@ crate.from_cargo(
 )
 use_repo(crate, "crates")
 
+# rules_rust's runfiles crate has its own manifest below the repository root.
+crate.annotation(
+    crate = "runfiles",
+    workspace_cargo_toml = "rust/runfiles/Cargo.toml",
+)
+
 # Export the locked protoc binaries for the build script's execution platform.
 [
     crate.annotation(

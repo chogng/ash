@@ -213,6 +213,13 @@ just bench-build ash-cli --profile dev-small --jobs 4 --compare .build/build-hea
 
 本次验证：完整 `just build-code`、默认 TUI 的 1,197 项测试、本地与 cloud 语音测试、诊断/反馈及听写 RPC、协议测试、更新与 Remote 宿主测试、受影响包的 `just rust-warnings`、Python 构建测试与 `just dependencies`。真实模型/麦克风测试按已有条件忽略；Windows/Linux 构建未在本机执行。后端与 Remote 的 `ci-test` 程序链接有 `__eh_frame` 超过 16 MiB 的 compact-unwind 提示；测试通过，但不将其记录为无 warning 的构建。正常 Code 的 `dev-small` 构建和包级 warning 检查未出现该提示，未改变全局 profile 或 unwind 设置。
 
+
+2026-10-01 补齐 `utils/cargo-bin` 和 `utils/cli` 时，对 `ash-cli` / `dev-small` 做了三轮构建对照，使用同一 macOS arm64 主机、Rust 1.98.0 和 12 个任务。最初空输出构建中位数为 85.70 秒；补齐后为 98.00 秒，回切原 CLI 源码后为 98.17 秒。无改动分别为 1.45 / 1.62 / 1.58 秒，源码时间戳重编译为 2.60 / 2.78 / 2.81 秒。后两组的冷构建 RSS 为 1.68 / 1.54 GiB，CLI 二进制约 83.4 MiB。回切保留了新增 workspace 成员；这些结果未证明工具库能够提速，也不能把最初与后两组的差异直接归因于工具库。
+
+真实 `just build-code` 的三轮对照中，无改动为 0.78 → 0.78 秒，CLI 错误前缀的实际代码编辑为 2.36 → 2.40 秒，CLI 二进制约 84.5 MiB，编辑构建 RSS 约 0.87 GiB。参数图拆成独立 crate 的实验，在 TUI Debug 文案实际编辑后为 3.63 → 3.57 秒，回切为 3.69 秒；没有明显收益，已撤回。Cargo timings 中 `ash-app-server-protocol` 单个编译单元约 41–48 秒，新增 CLI 工具库约 0.24 秒；该调查未修改协议实现或全局优化配置，冷编译瓶颈仍在。
+
+报告分别为 `.build/build-health/ash-cli-dev-small-{iktqajj3,9wk3uvac,jw5yk5r9}/report.json`；完整入口与拆分实验位于 `.build/build-health/cli-utils-20261001/{baseline-product,kept-product,tui-product}.json`。Cargo/Bazel 工具库测试、CLI 43 项测试、一个真实终端资源场景、正常 Code 构建、包级 warning 检查及依赖检查通过。完整 Bazel CLI 目标的分析被已有 `collaboration-mode-templates` / `ash-mcp` 依赖标签错误阻断；未将它记录为通过，Windows/Linux 运行行为也未在本机验证。
+
 早期 WebRTC 构建记录属于已切换的依赖图，不能用于当前耗时判断。2026-09-24 产品宿主拆除 App Server 实现依赖的单包测量，也没有同条件完整产品冷构建的前后对照。
 
 ## 构建源码与仓库脚本边界

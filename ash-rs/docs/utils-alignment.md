@@ -8,8 +8,8 @@ Ash 按能力及依赖边界安排实现，不按 Codex 的 crate 名称复制�
 | approval-presets | `action-policy`、`execpolicy`、客户端权限选择器 | 权限由 Ash 的 action、规则和授权契约决定，不复制 Codex 预设值 |
 | audio | `utils/audio`、`attachments`、`core`、`ash-api` | 新增容器校验、时长估算、普通会话附件及模型编码；详见下节 |
 | cache | `utils/cache` | 修复普通线程和单线程异步运行时不能可靠复用缓存的问题；同步初始化共享互斥锁 |
-| cargo-bin | `test-binary-support`、`install-context` | 测试 helper 与产品可执行文件发现各有负责位置 |
-| cli | `cli`、`config` | 参数、恢复命令和权限选项由 Ash 产品解释；不引入 Codex CLI 配置协议 |
+| cargo-bin | `utils/cargo-bin`、`test-binary-support`、`install-context` | Cargo/Bazel 测试程序、资源与脚本夹具由轻量测试库定位；helper 角色和产品安装发现保留各自职责 |
+| cli | `utils/cli`、`ash-cli`、`config` | 通用解析退出码与命令格式化共享；Ash 产品继续负责参数定义、命令行为与配置 |
 | elapsed | `utils/elapsed` | 已有时间累计能力 |
 | fuzzy-match | `code/tui/src/widgets/list_selection/matcher.rs` | 当前列表搜索已有前缀、子串和模糊匹配；不新增空的公共封装 |
 | git-discovery | `git/src/repository.rs`、`git/src/client.rs` | 已有工作树/元数据发现和有超时、输出限制的 Git 子进程；与上游可选元数据探测的契约不同 |
@@ -30,6 +30,15 @@ Ash 按能力及依赖边界安排实现，不按 Codex 的 crate 名称复制�
 | stream-parser | `utils/stream-parser` | 已有增量解析和隐藏片段处理 |
 | string | `utils/output-truncation` 及字符串所属领域 | 已有 UTF-8 截断和 token 估算；UUID 提取、指标标签和链接语法仅在实际领域需要时提供 |
 | template | `utils/template` | 已有模板展开能力 |
+
+
+## CLI 与测试程序工具
+
+`utils/cargo-bin` 通过调用点的 `CARGO_BIN_EXE_*` 定位已声明的测试程序，通过 `find_resource!` 捕获调用方 manifest 路径；Bazel 使用目标提供的 runfile 路径及 data。可执行脚本写入与复制在 Linux 的独立子进程内完成，避免并行测试 fork 时继承尚未关闭的写入描述符。CLI/PTY 夹具已接入这套定位与资源加载。
+
+`utils/cli` 共享 Clap 的帮助、版本、参数错误退出路径，以及恢复命令的参数格式化。产品参数、执行模式与配置语义仍由 `ash-cli` 和 `config` 负责。未引入没有 Ash 调用方的 Codex 配置别名、权限枚举或恢复参数。
+
+这次补齐没有证明 `just build-code` 提速；参数库独立编译实验已撤回。构建对照与验证范围记录在 [构建文档](../../docs/build.md#历史测量与适用范围)。
 
 ## 普通会话音频
 

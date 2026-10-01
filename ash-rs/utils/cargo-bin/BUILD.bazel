@@ -1,0 +1,8 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "cargo-bin",
+    crate_name = "cargo_bin",
+    data = ["Cargo.toml"],
+    testonly = True,
+)
