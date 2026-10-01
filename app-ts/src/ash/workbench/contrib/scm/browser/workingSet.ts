@@ -1,4 +1,6 @@
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { autorun } from '../../../../base/common/observable.js';
+import { observableConfigValue } from '../../../../platform/observable/common/platformObservableUtils.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { StorageScope, StorageTarget, type IStorageService } from '../../../../platform/storage/common/storage.js';
 import type { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
@@ -37,19 +39,17 @@ export class ScmWorkingSetController extends Disposable {
 
 	constructor(private readonly options: ScmWorkingSetControllerOptions) {
 		super();
-		this._register(options.configurationService.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(ScmConfiguration.workingSetsEnabled)) this.configure();
-		}));
-		this.configure();
+		const enabled = observableConfigValue(ScmConfiguration.workingSetsEnabled, false, options.configurationService);
+		this._register(autorun(reader => this.configure(enabled.read(reader))));
 	}
 
-	private configure(): void {
+	private configure(enabled: boolean): void {
 		this.generation += 1;
 		this.enabledResources.clear();
 		this.repositoryWorkingSets.clear();
 		this.lastRefIdentity = undefined;
 		this.providerListener.clear();
-		if (!this.options.configurationService.getValue(ScmConfiguration.workingSetsEnabled)) {
+		if (!enabled) {
 			this.options.storageService.remove(WorkingSetsStorageKey, StorageScope.WORKSPACE);
 			return;
 		}

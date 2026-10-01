@@ -9,12 +9,17 @@ const desktopRoot = resolve(repositoryRoot, "app-ts");
 
 export default defineConfig({
   base: "./",
-  root: repositoryRoot,
+  root: resolve(import.meta.dirname, 'stanza'),
   plugins: [buildMetricsPlugin(), hotReloadPlugin({ desktopRoot })],
   server: {
     host: "127.0.0.1",
     port: 5199,
     strictPort: true,
+    fs: { allow: [repositoryRoot] },
+  },
+  optimizeDeps: {
+    // The scanner runs before parameter decorators are transformed, as in the Workbench dev entry.
+    noDiscovery: true,
   },
   build: {
     outDir: resolve(repositoryRoot, ".build/app-ts/stanza"),

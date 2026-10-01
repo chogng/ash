@@ -87,7 +87,7 @@
 			"name": "Stanza Editor - Standalone",
 			"type": "chrome",
 			"request": "launch",
-			"url": "http://127.0.0.1:5199/build/app_ts/vite/stanza/index.html",
+			"url": "http://127.0.0.1:5199/",
 			"webRoot": "${workspaceFolder}",
 			"preLaunchTask": "Launch Stanza Vite",
 			"presentation": {

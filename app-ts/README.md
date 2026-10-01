@@ -18,7 +18,7 @@
 
 `Frontend Watch Only` 仍连接 Rust 后端，只是不监听后端源码变化。两种仅 UI 模式中的聊天、文件、Git、终端和搜索等后端操作不可用；选择文件夹只更新界面的工作区上下文。
 
-浏览器仅前端模式打开 `http://127.0.0.1:5173/`。完整 Web 模式使用 5174 端口，须打开终端输出的认证链接。Stanza 页面为 `http://127.0.0.1:5199/build/app_ts/vite/stanza/index.html`，仅启动编辑器，可通过 `globalThis.stanza.editor` 检查模型和编辑器。
+浏览器仅前端模式打开 `http://127.0.0.1:5173/`。完整 Web 模式使用 5174 端口，须打开终端输出的认证链接。Stanza 页面为 `http://127.0.0.1:5199/`，仅启动编辑器，可通过 `globalThis.stanza.editor` 检查模型和编辑器。
 
 F5 配置见 [launch.json](../.vscode/launch.json)。macOS 的 Electron 入口通过 `uv run --python 3.12` 选择 Python；手动运行命令时，按 [macOS 环境要求](../docs/build.md#macos-与-linux-开发环境) 配置。
 
@@ -33,6 +33,8 @@ F5 配置见 [launch.json](../.vscode/launch.json)。macOS 的 Electron 入口�
 | Rust 后端 | 完整桌面开发命令监听后端，增量编译后发布开发运行目录，所有本地窗口共用一次后端重启 |
 
 Renderer 中，`Part`、`ViewPane`、`Widget` 的普通方法和 getter/setter 可修改现有实例；构造器、字段、静态状态、模块副作用或继承关系变化会重载页面。其他仅修改原型方法的 UI 类可用 `@ash-hot-reload patch-prototype` 加入。运行时实现见 `base/common/hotReload.ts`、`hotReloadHelpers.ts`，开发转换见 `build/app_ts/vite/hotReloadPlugin.ts`。
+
+需要重新执行初始化的可释放贡献，由注册入口通过 `platform/observable/common/wrapInReloadableClass.ts` 包装构造函数。开发模式下，模块替换会先释放旧贡献，再通过编辑器原有的服务容器创建新贡献；编辑器和模型由宿主继续持有。占位文本贡献已接入这条链路，修改其构造器、字段或方法可以更新现有编辑器。注册模块应与实现模块分开，避免重新执行注册副作用。注册处保存的是释放句柄，需要访问贡献实现时使用 `hotClassGetOriginalInstance`。这些热更新只用于开发 Ash 自身；发布构建不注入 Vite 热更新边界。
 
 Electron 启动前并行准备键盘模块、前端生成资源和后端资源；输入未变化时复用已有结果。运行期间 Rust 保存只增量编译并发布程序，复用准备好的资源文件，不走完整包验证和发布。`ASH_DEV_RUNTIME_ROOT` 由启动器提供，统一定位搜索工具、语言服务、内置 Skills 和辅助程序。Workbench 与 Agents 共用一个重启协调者：先停连接，重启一次后端，再连接仍打开的窗口。新窗口在重启期间等待；关闭窗口会注销监听。Main/Preload 编译或校验失败会保留当前进程，Rust 构建失败不切换运行版本；启动失败会报告错误。监听器忽略 Cargo 输出，避免构建再次触发自己。
 

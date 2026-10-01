@@ -33,6 +33,12 @@ export function hotReloadPlugin(options: HotReloadPluginOptions = {}): AshHotRel
   return {
     name: "ash-hot-reload",
     apply: "serve",
+    // Chokidar suppresses change events within 50 ms; completed-write delivery preserves rapid saves.
+    config: () => ({
+      server: {
+        watch: { awaitWriteFinish: { stabilityThreshold: 75, pollInterval: 10 } },
+      },
+    }),
     transformIndexHtml: {
       order: "pre",
       handler: () => [{ tag: "script", attrs: { type: "module", src: viteFileUrl(setupPath) }, injectTo: "head-prepend" }],
@@ -74,7 +80,7 @@ export function hotReloadPlugin(options: HotReloadPluginOptions = {}): AshHotRel
 function injectHotReloadBoundary(code: string, exportNames: readonly string[], moduleId: string, patchPrototype: boolean): string {
   const exports = exportNames.join(", ");
   const config = patchPrototype ? '{ mode: "patch-prototype" }' : "{}";
-  return `${code}\n\nconst ${hotExportsName} = { ${exports} };\nexport { ${hotExportsName} };\nif (import.meta.hot) {\n  const oldExports = import.meta.hot.data.$hotReloadExports ?? ${hotExportsName};\n  import.meta.hot.data.$hotReloadExports = oldExports;\n  import.meta.hot.accept(newModule => {\n    const newExports = newModule?.${hotExportsName};\n    const acceptNewExports = globalThis.$hotReload_applyNewExports?.({\n      oldExports,\n      newSrc: ${JSON.stringify(moduleId)},\n      config: ${config},\n    });\n    if (!newExports || !acceptNewExports?.(newExports)) import.meta.hot?.invalidate("No compatible hot-reload handler accepted this module");\n  });\n}\n`;
+  return `${code}\n\nconst ${hotExportsName} = { ${exports} };\nexport { ${hotExportsName} };\nif (import.meta.hot) {\n  import.meta.hot.data.$hotReloadExports ??= ${hotExportsName};\n  import.meta.hot.accept(newModule => {\n    const oldExports = import.meta.hot.data.$hotReloadExports;\n    const newExports = newModule?.${hotExportsName};\n    const acceptNewExports = globalThis.$hotReload_applyNewExports?.({\n      oldExports,\n      newSrc: ${JSON.stringify(moduleId)},\n      config: ${config},\n    });\n    if (newExports && acceptNewExports?.(newExports)) {\n      import.meta.hot.data.$hotReloadExports = newExports;\n    } else {\n      import.meta.hot.invalidate("No compatible hot-reload handler accepted this module");\n    }\n  });\n}\n`;
 }
 
 function cleanModuleId(id: string): string {

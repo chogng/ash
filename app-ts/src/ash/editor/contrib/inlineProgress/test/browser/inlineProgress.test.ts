@@ -3,7 +3,7 @@ import { browserEnvironment as environment } from '../../../../test/browser/test
 import { h } from '../../../../../base/browser/dom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import type { ICodeEditor, IContentWidget } from '../../../../browser/editorBrowser.js';
 import { Position } from '../../../../common/core/position.js';
 
@@ -23,7 +23,7 @@ test('InlineProgressManager delays, positions, cancels, and releases its widget'
 			if (widget === value) removed = true;
 		},
 	} as unknown as ICodeEditor;
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	using manager = new InlineProgressManager('test', editor, services);
 	let finish: ((value: string) => void) | undefined;
 	const operation = manager.showWhile(new Position(2, 3), 'Working', new Promise(resolve => { finish = resolve; }), {

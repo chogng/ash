@@ -24,7 +24,8 @@ import { ILanguageFeatureDebounceService, type IFeatureDebounceInformation } fro
 import { ILanguageConfigurationService } from '../../../../common/languages/languageConfigurationRegistry.js';
 import { EditorOption } from '../../../../common/config/editorOptions.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import type { IContextKey } from '../../../../../platform/contextkey/common/contextkey.js';
+import { observableValue } from '../../../../../base/common/observable.js';
+import { bindContextKey } from '../../../../../platform/observable/common/platformObservableUtils.js';
 import { InlineCompletionContextKeys } from './inlineCompletionContextKeys.js';
 
 /** Owns ghost-text projection and explicit acceptance of one inline completion. */
@@ -42,7 +43,7 @@ export class InlineCompletionsController extends Disposable {
 	private readonly debounce: IFeatureDebounceInformation;
 	private readonly scheduler: RunOnceScheduler;
 	private composing = false;
-	private readonly visible: IContextKey<boolean>;
+	private readonly visible = observableValue(this, false);
 
 	constructor(
 		private readonly editor: ICodeEditor,
@@ -57,7 +58,9 @@ export class InlineCompletionsController extends Disposable {
 		@ILanguageConfigurationService private readonly languageConfigurationService: ILanguageConfigurationService,
 	) {
 		super();
-		this.visible = InlineCompletionContextKeys.inlineSuggestionVisible.bindTo(contextKeyService);
+		// Clear the state while its context binding is still subscribed during disposal.
+		this._register(toDisposable(() => this.visible.set(false)));
+		this._register(bindContextKey(InlineCompletionContextKeys.inlineSuggestionVisible, contextKeyService, reader => this.visible.read(reader)));
 		if (editor.getModel() !== model || viewport.textModel !== model) throw new TypeError('Inline completion dependencies must share one text model');
 		this.debounce = debounceService.for(providers, 'Inline completions', { min: 50, max: 500 });
 		this.scheduler = this._register(new RunOnceScheduler(() => void this.trigger('automatic'), this.debounce.default()));
@@ -177,7 +180,7 @@ export class InlineCompletionsController extends Disposable {
 	}
 
 	public hide(): void {
-		this.visible.reset();
+		this.visible.set(false);
 		this.scheduler.cancel();
 		this.request?.abort();
 		this.request = undefined;

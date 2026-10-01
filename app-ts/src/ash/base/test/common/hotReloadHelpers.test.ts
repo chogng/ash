@@ -22,6 +22,7 @@ test("readHotReloadableExport invalidates its reader when the defining module re
 	assert.ok(accept);
 	assert.equal(accept({ exported: () => "after" }), true);
 	assert.equal(reader.invalidations, 1);
+	assert.equal(readHotReloadableExport(exported, undefined)(), 'after');
 });
 
 test("readHotReloadableExport ignores unrelated module replacements", () => {

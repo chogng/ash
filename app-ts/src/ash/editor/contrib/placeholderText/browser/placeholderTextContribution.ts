@@ -4,11 +4,12 @@ import { observableCodeEditor } from '../../../browser/observableCodeEditor.js';
 import { type ICodeEditor, type IOverlayWidget, type IOverlayWidgetPosition } from '../../../browser/editorBrowser.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { type IEditorContribution } from '../../../common/editorCommon.js';
+import { hotClassGetOriginalInstance } from '../../../../platform/observable/common/wrapInHotClass.js';
 
 /** Uses the editor option to present placeholder text while the model is empty. */
 export class PlaceholderTextContribution extends Disposable implements IEditorContribution {
 	public static get(editor: ICodeEditor): PlaceholderTextContribution {
-		return editor.getContribution<PlaceholderTextContribution>(PlaceholderTextContribution.ID)!;
+		return hotClassGetOriginalInstance(editor.getContribution<PlaceholderTextContribution>(PlaceholderTextContribution.ID)!);
 	}
 
 	public static readonly ID = 'editor.contrib.placeholderText';

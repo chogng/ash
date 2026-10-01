@@ -4,7 +4,7 @@ import type { LanguageInlineCompletionsProvider } from '../../../../common/langu
 import { createTestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { ILanguageConfigurationService } from '../../../../common/languages/languageConfigurationRegistry.js';
 import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../../../common/services/languageFeatureDebounce.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../../../browser/services/inlineCompletionsService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -55,8 +55,9 @@ test('Registered editor commands retrigger inline completions after their edit',
 	using commands = new Emitter<{ readonly commandId: string }>();
 	const commandId = 'editor.test.inlineCompletionTrigger';
 	TriggerInlineEditCommandsRegistry.registerCommand(commandId);
-	using services = new ServiceContainer();
-	services.registerInstance(IContextKeyService, new ContextKeyService());
+	using services = new InstantiationService();
+	using contexts = new ContextKeyService();
+	services.registerInstance(IContextKeyService, contexts);
 	services.registerInstance(IInlineCompletionsService, inlineCompletionsService);
 	services.registerInstance(ILanguageFeatureDebounceService, new LanguageFeatureDebounceService());
 	using configurations = createTestLanguageConfigurationService();
@@ -75,6 +76,11 @@ test('Registered editor commands retrigger inline completions after their edit',
 	assert.equal(viewport.domNode.domNode.querySelector('.stanza-editor-inline-completion')?.textContent, ' completion');
 	selections.setSelections([Selection.fromPositions(new Position(1, 2))]);
 	assert.equal(viewport.domNode.domNode.querySelector<HTMLElement>('.stanza-editor-inline-completion')?.hidden, true);
+	await controller.trigger();
+	assert.equal(contexts.getValue('inlineSuggestionVisible'), true);
+	controller.dispose();
+	assert.equal(contexts.getValue('inlineSuggestionVisible'), false);
+	assert.equal(viewport.domNode.domNode.querySelector('.stanza-editor-inline-completion'), null);
 
 	dom.window.close();
 });
@@ -94,7 +100,7 @@ test('inline completion acceptance applies additional edits and undoes atomicall
 		}],
 	});
 	using service = new InlineCompletionsService();
-	using services = new ServiceContainer();
+	using services = new InstantiationService();
 	services.registerInstance(IContextKeyService, new ContextKeyService());
 	assert.throws(() => services.createInstance(InlineCompletionsController, editorFor(model, selections), viewport, model, providers, undefined, (error: unknown) => { throw error; }), /Unknown service/);
 	services.registerInstance(IInlineCompletionsService, service);

@@ -1,7 +1,8 @@
 import { h, addDisposableListener } from '../../../../base/browser/dom.js';
 import { disposableTimeout } from '../../../../base/common/async.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { ServiceConstructionDescriptor, type IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+import { type IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget, type IContentWidgetPosition } from '../../../browser/editorBrowser.js';
 import type { IPosition } from '../../../common/core/position.js';
 import './inlineProgressWidget.css';
@@ -49,7 +50,7 @@ class InlineProgressWidget extends Disposable implements IContentWidget {
 	}
 }
 
-const inlineProgressWidget = new ServiceConstructionDescriptor(InlineProgressWidget);
+const inlineProgressWidget = new SyncDescriptor(InlineProgressWidget);
 
 /** Owns one delayed, cancellable progress indicator attached to an editor position. */
 export class InlineProgressManager extends Disposable {

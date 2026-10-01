@@ -7,23 +7,48 @@ import type { ISettableObservable } from "./observable.js";
 import { observableSignalFromEvent } from "./observable.js";
 import { observableValue } from "./observable.js";
 
+// All versions share one slot; retaining the original import must not retain every replaced class.
+const replacements = new WeakMap<object, { current: unknown }>();
+
 /** Reads an export and invalidates the reader when its defining module reloads. */
 export function readHotReloadableExport<T>(value: T, reader: IReader | undefined): T {
 	observeHotReloadableExports([value], reader);
-	return value;
+	return currentExport(value);
 }
 
 /** Observes reloads of any module that currently exports one of the supplied values. */
 export function observeHotReloadableExports(values: readonly unknown[], reader: IReader | undefined): void {
 	if (!isHotReloadEnabled()) return;
 	const reload = observableSignalFromEvent("reload", event => registerHotReloadHandler(({ oldExports }) => {
-		if (!Object.values(oldExports).some(value => values.includes(value))) return undefined;
-		return () => {
+		const tracked = Object.entries(oldExports).filter(([, value]) => values.some(watched => currentExport(watched) === value));
+		if (tracked.length === 0) return undefined;
+		return newExports => {
+			if (tracked.some(([name]) => !(name in newExports))) return false;
+			for (const [name, previous] of tracked) {
+				if (previous !== newExports[name] && isExportReference(previous)) {
+					const replacement = newExports[name];
+					const slot = replacements.get(previous) ?? { current: previous };
+					slot.current = replacement;
+					replacements.set(previous, slot);
+					if (isExportReference(replacement)) {
+						replacements.set(replacement, slot);
+					}
+				}
+			}
 			event(undefined);
 			return true;
 		};
 	}));
 	reload.read(reader);
+}
+
+function currentExport<T>(value: T): T {
+	const slot = isExportReference(value) ? replacements.get(value) : undefined;
+	return slot ? slot.current as T : value;
+}
+
+function isExportReference(value: unknown): value is object {
+	return typeof value === 'function' || (typeof value === 'object' && value !== null);
 }
 
 interface HotClassEntry {
