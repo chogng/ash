@@ -776,6 +776,7 @@ export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAg
 	private layoutStyle: SessionsLayoutStyle;
 	private activityBarLocation: ActivityBarPosition;
 	private readonly layoutPolicy = new SessionsLayoutPolicy();
+	private readonly cardDomNode: HTMLDivElement;
 
 	readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
 	readonly domNode: HTMLDivElement;
@@ -789,6 +790,10 @@ export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAg
 		this.domNode.className = 'ash-sessions-workbench-layout';
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
+		this.cardDomNode = h(container.ownerDocument, 'div');
+		this.cardDomNode.className = 'ash-sessions-content-card';
+		this.cardDomNode.setAttribute('aria-hidden', 'true');
+		this.domNode.append(this.cardDomNode);
 		this.stateModel = new SessionsWorkbenchLayoutStateModel(storageService, options.initialState ?? createDefaultSessionsWorkbenchLayoutState());
 		const state = this.stateModel.state;
 		this.desiredVisibility = { sidebar: state.sidebar.visible, auxiliarybar: state.auxiliarybar.visible, editor: false };
@@ -804,6 +809,7 @@ export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAg
 			this.views.set(partId, new WorkbenchPartView(partId, requiredPart(parts, partId)));
 		}
 		this.titlebarHeight = this.view('titlebar').minimumHeight;
+		this._register(this.view('activitybar').part.onDidChangeConstraints(() => this.projectFrameInsets()));
 		const state = this.stateModel.state;
 		this.projectFrameInsets(state.auxiliarybar.visible);
 		this.grid = this._register(SerializableGrid.deserialize(
@@ -896,13 +902,30 @@ export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAg
 	private projectFrameInsets(auxiliarybarVisible = this.isPartVisible('auxiliarybar')): void {
 		const { leftEdge, rightEdge } = this.layoutPolicy.getFrameMetrics(this.layoutStyle);
 		this.view('titlebar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: 0 });
-		this.view('activitybar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: this.activityBarLocation === ActivityBarPosition.DEFAULT ? leftEdge : 0 });
-		this.view('sidebar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: this.activityBarLocation === ActivityBarPosition.DEFAULT ? 0 : leftEdge });
+		// The leading menu and side navigation share a center line in both density modes.
+		this.view('titlebar').part.domNode.style.setProperty('--ash-sessions-titlebar-leading-width', `${this.view('activitybar').part.minimumWidth}px`);
+		this.view('activitybar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: 0 });
 		const sidebarVisible = this.desiredVisibility.sidebar && !this.unavailableParts.has('sidebar');
 		const editorVisible = this.desiredVisibility.editor && !this.unavailableParts.has('editor');
-		this.view('sessions').setFrameInsets({ top: 0, right: auxiliarybarVisible || editorVisible ? 0 : rightEdge, bottom: 0, left: this.activityBarLocation !== ActivityBarPosition.DEFAULT && !sidebarVisible ? leftEdge : 0 });
-		this.view('auxiliarybar').setFrameInsets({ top: 0, right: rightEdge, bottom: 0, left: 0 });
-		this.view('editor').setFrameInsets({ top: 0, right: auxiliarybarVisible ? 0 : rightEdge, bottom: 0, left: 0 });
+		const contentLeftEdge = this.activityBarLocation === ActivityBarPosition.DEFAULT ? 0 : leftEdge;
+		this.view('sidebar').setFrameInsets({ top: 0, right: 0, bottom: rightEdge, left: contentLeftEdge });
+		this.view('sessions').setFrameInsets({ top: 0, right: auxiliarybarVisible || editorVisible ? 0 : rightEdge, bottom: rightEdge, left: sidebarVisible ? 0 : contentLeftEdge });
+		this.view('auxiliarybar').setFrameInsets({ top: 0, right: rightEdge, bottom: rightEdge, left: 0 });
+		this.view('editor').setFrameInsets({ top: 0, right: auxiliarybarVisible ? 0 : rightEdge, bottom: rightEdge, left: 0 });
+		const firstPart = sidebarVisible ? 'sidebar' : 'sessions';
+		let lastPart: SessionsPartId = 'sessions';
+		if (editorVisible) lastPart = 'editor';
+		if (auxiliarybarVisible) lastPart = 'auxiliarybar';
+		for (const partId of ['sidebar', 'sessions', 'editor', 'auxiliarybar'] as const) {
+			this.view(partId).part.domNode.classList.toggle('ash-sessions-frame-start', partId === firstPart);
+			this.view(partId).part.domNode.classList.toggle('ash-sessions-frame-end', partId === lastPart);
+		}
+		// One decorative outline spans the retained Parts; it never intercepts their input or sashes.
+		const activityBarWidth = this.activityBarLocation === ActivityBarPosition.DEFAULT ? this.view('activitybar').minimumWidth : 0;
+		this.cardDomNode.style.top = `${this.titlebarHeight}px`;
+		this.cardDomNode.style.left = `${activityBarWidth + contentLeftEdge}px`;
+		this.cardDomNode.style.right = `${rightEdge}px`;
+		this.cardDomNode.style.bottom = `${rightEdge}px`;
 	}
 
 	private publishPartVisibility(): void {

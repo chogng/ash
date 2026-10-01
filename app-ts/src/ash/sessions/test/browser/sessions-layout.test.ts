@@ -70,7 +70,7 @@ test("Sessions layout owns a fixed Sessions-first Part topology", () => {
 	layout.layout(new Dimension(1_200, 800));
 
 	assert.deepEqual(layout.getPartSize("titlebar"), new Dimension(1_200, WorkbenchWindowBarHeight));
-	assert.equal(Math.abs(layout.getPartSize('activitybar').width - 50) <= 1, true);
+	assert.equal(layout.getPartSize('activitybar').width, 44);
 	assert.equal(Math.abs(layout.getPartSize("sidebar").width - 260) <= 1, true);
 	assert.equal(Math.abs(layout.getPartSize("auxiliarybar").width - 200) <= 1, true);
 	assert.equal(layout.getPartSize("sessions").height, 800 - WorkbenchWindowBarHeight);
@@ -97,12 +97,13 @@ test('Sessions layout style changes without changing the IDE preference or visib
 		style: container.dataset.layoutStyle,
 		leftInset: sessionsFrame.style.paddingLeft,
 		rightInset: sessionsFrame.style.paddingRight,
+		bottomInset: sessionsFrame.style.paddingBottom,
 	});
 	try {
 		layout.layout(new Dimension(1_200, 800));
-		assert.deepEqual(surface(), { style: 'modern', leftInset: '', rightInset: '' });
+		assert.deepEqual(surface(), { style: 'modern', leftInset: '0px', rightInset: '0px', bottomInset: '4px' });
 		await configuration.updateValue(SessionsConfiguration.layoutStyle, 'flat');
-		assert.deepEqual(surface(), { style: 'flat', leftInset: '', rightInset: '' });
+		assert.deepEqual(surface(), { style: 'flat', leftInset: '0px', rightInset: '0px', bottomInset: '0px' });
 		assert.equal(container.classList.contains('modern-ui'), false);
 		assert.equal(configuration.getValue(WorkbenchConfiguration.layoutStyle), 'modern');
 		assert.equal(layout.isPartVisible('auxiliarybar'), true);
@@ -110,7 +111,8 @@ test('Sessions layout style changes without changing the IDE preference or visib
 		assert.equal(container.dataset.layoutStyle, 'flat');
 		await configuration.updateValue(SessionsConfiguration.layoutStyle, 'modern');
 		layout.hidePart('auxiliarybar');
-		assert.equal(sessionsFrame.style.paddingRight, '8px');
+		assert.equal(sessionsFrame.style.paddingRight, '4px');
+		assert.equal(sessionsFrame.style.paddingBottom, '4px');
 	} finally {
 		appearance.dispose();
 		layout.dispose();
@@ -170,8 +172,8 @@ test('Sessions Activity Bar position changes the grid visibility and frame edge'
 		const expandedWidth = layout.getPartSize('sessions').width;
 		layout.setActivityBarLocation(ActivityBarPosition.DEFAULT);
 		assert.equal(layout.isPartVisible('activitybar'), true);
-		assert.equal(Math.abs(layout.getPartSize('activitybar').width - 50) <= 1, true);
-		assert.equal(parts.get('activitybar')!.domNode.parentElement?.style.paddingLeft, '6px');
+		assert.equal(layout.getPartSize('activitybar').width, 44);
+		assert.equal(parts.get('activitybar')!.domNode.parentElement?.style.paddingLeft, '');
 		assert.equal(parts.get('sidebar')!.domNode.parentElement?.style.paddingLeft, '0px');
 		assert.equal(layout.getPartSize('sessions').width < expandedWidth, true);
 		layout.setActivityBarLocation(ActivityBarPosition.HIDDEN);

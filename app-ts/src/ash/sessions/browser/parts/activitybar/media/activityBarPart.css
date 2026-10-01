@@ -1,6 +1,5 @@
 .ash-sessions-activitybar {
-	border-right: var(--ash-stroke-thickness) solid var(--ash-border);
-	background: var(--ash-side-bar-background);
+	background: var(--ash-title-bar-background);
 }
 
 .ash-sessions-activity-content {

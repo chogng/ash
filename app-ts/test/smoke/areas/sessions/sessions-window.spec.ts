@@ -331,10 +331,13 @@ test('Sessions input card keeps a visible border without shadow or focus outline
 			page = await opened;
 		}
 		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', theme.endsWith('Dark') ? 'high-contrast-dark' : 'high-contrast-light');
+		const frame = page.locator('.ash-sessions-content-card');
+		expect(await frame.evaluate(element => Math.round(parseFloat(getComputedStyle(element).borderRightWidth)))).toBe(1);
+		await expect(frame).toHaveCSS('box-shadow', 'none');
 		for (const presentation of ['Chat', 'Code'] as const) {
 			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: new RegExp(`^${presentation}(?:\\.|$)`, 'u') }).click();
 			const card = page.locator(`.${presentation.toLowerCase()}-composer .ash-chat-input-container`).first();
-			await expect(card).toHaveCSS('border-width', '1px');
+			expect(await card.evaluate(element => Math.round(parseFloat(getComputedStyle(element).borderRightWidth)))).toBe(1);
 			await expect(card).toHaveCSS('border-style', 'solid');
 			await expect(card).toHaveCSS('box-shadow', 'none');
 			await expectComposerFocusWithoutOutline(card, card.getByRole('textbox', { name: 'Chat message' }), page.getByRole('button', { name: 'Hide sidebar', exact: true }));
@@ -959,7 +962,8 @@ test('Sessions and IDE layout styles switch independently', async ({ application
 		await updateSettings({ 'workbench.layoutStyle': 'modern', 'sessions.layoutStyle': 'modern' });
 		await expect(sessionsWindow).toHaveAttribute('data-layout-style', 'modern');
 		await expect.poll(gap).toBe(0);
-		await expect(sessionsPage.locator('[data-part="activitybar"]')).toHaveCSS('border-top-left-radius', '8px');
+		await expect(sessionsPage.locator('[data-part="activitybar"]')).toHaveCSS('border-top-left-radius', '0px');
+		await expect(sessionsPage.locator('.ash-sessions-content-card')).toHaveCSS('border-radius', '12px');
 		await updateSettings({ 'workbench.layoutStyle': 'flat' });
 		await expect(workbench.element).toHaveAttribute('data-layout-style', 'flat');
 		await expect(sessionsWindow).toHaveAttribute('data-layout-style', 'modern');
@@ -974,7 +978,8 @@ test('Sessions and IDE layout styles switch independently', async ({ application
 		await expect(sessionsWindow).toHaveAttribute('data-layout-style', 'modern');
 		await expect.poll(gap).toBe(0);
 		await expect(sessionsPage.locator('[data-part="sessions"]')).toHaveCSS('border-top-left-radius', '0px');
-		await expect(sessionsPage.locator('[data-part="activitybar"]')).toHaveCSS('border-top-left-radius', '8px');
+		await expect(sessionsPage.locator('[data-part="activitybar"]')).toHaveCSS('border-top-left-radius', '0px');
+		await expect(sessionsPage.locator('.ash-sessions-content-card')).toHaveCSS('border-radius', '12px');
 	} finally {
 		await sessionsPage.evaluate(async source => {
 			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;

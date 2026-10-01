@@ -1,4 +1,5 @@
-.ash-sessions-titlebar {
+.ash-workbench-titlebar.ash-sessions-titlebar {
+  padding: 0;
   background: var(--ash-title-bar-background);
 }
 
@@ -7,7 +8,7 @@
   width: 100%;
   flex-direction: row;
   align-items: center;
-  padding: 0 var(--ash-spacing-size160) 0 var(--ash-spacing-size20);
+  padding: 0 var(--ash-spacing-size160) 0 calc((var(--ash-sessions-titlebar-leading-width) - var(--ash-spacing-size280)) / 2);
 }
 
 .ash-sessions-titlebar-left {

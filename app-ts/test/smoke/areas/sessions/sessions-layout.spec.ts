@@ -1,6 +1,89 @@
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 
+test('Sessions content shares one raised card with equal right and bottom margins', async ({ application, target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code');
+	let page = workbench.page;
+	if (target.kind === 'browser') {
+		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+	} else {
+		if (!('windows' in application)) {
+			throw new Error('Expected Electron windows');
+		}
+		const opened = application.waitForEvent('window');
+		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
+		page = await opened;
+	}
+	const card = page.locator('.ash-sessions-content-card');
+	const sidebar = page.locator('[data-part="sidebar"]');
+	const sessions = page.locator('[data-part="sessions"]');
+	const activitybar = page.locator('[data-part="activitybar"]');
+	const titlebar = page.locator('[data-part="titlebar"]');
+	const navigation = page.locator('.ash-sessions-activity-content');
+	await expect(card).toBeVisible();
+	await expect(card).toHaveAttribute('aria-hidden', 'true');
+	await expect(card).toHaveCSS('pointer-events', 'none');
+	await expect(card).toHaveCSS('border-radius', '12px');
+	// Chromium rounds strokes to device pixels at Windows display scaling.
+	expect(await card.evaluate(element => Math.round(parseFloat(getComputedStyle(element).borderRightWidth)))).toBe(1);
+	await expect(card).not.toHaveCSS('box-shadow', 'none');
+	await expect(activitybar).toHaveCSS('border-width', '0px');
+	await expect(activitybar).toHaveCSS('border-radius', '0px');
+	await expect(activitybar).toHaveCSS('background-color', await titlebar.evaluate(element => getComputedStyle(element).backgroundColor));
+	const accounts = navigation.getByRole('button', { name: 'Accounts', exact: true });
+	const expectCardGeometry = async (): Promise<void> => {
+		await expect.poll(() => page.evaluate(() => {
+			const card = document.querySelector<HTMLElement>('.ash-sessions-content-card')!.getBoundingClientRect();
+			const layout = document.querySelector<HTMLElement>('.ash-sessions-workbench-layout')!.getBoundingClientRect();
+			const start = document.querySelector<HTMLElement>('.ash-sessions-frame-start')!.getBoundingClientRect();
+			const end = document.querySelector<HTMLElement>('.ash-sessions-frame-end')!.getBoundingClientRect();
+			const rail = document.querySelector<HTMLElement>('[data-part="activitybar"]')!.getBoundingClientRect();
+			const menu = document.querySelector<HTMLElement>('.ash-sessions-titlebar-actions .ash-menubar-item')!.getBoundingClientRect();
+			const controlsWidth = document.querySelector<HTMLElement>('.ash-sessions-window-controls-spacer')?.getBoundingClientRect().width ?? 0;
+			const center = (layout.left + card.left) / 2;
+			const buttonOffsets = [...document.querySelectorAll<HTMLElement>('.ash-sessions-activity-item')].map(button => {
+				const bounds = button.getBoundingClientRect();
+				return Math.abs(bounds.left + bounds.width / 2 - center);
+			});
+			return [layout.right - card.right, layout.bottom - card.bottom, card.left - start.left, card.right - end.right, card.bottom - start.bottom, card.bottom - end.bottom, rail.left - layout.left, Math.max(...buttonOffsets), menu.left + menu.width / 2 - controlsWidth - center].map(Math.round);
+		})).toEqual([4, 4, 0, 0, 0, 0, 0, 0, 0]);
+	};
+	await expectCardGeometry();
+	await accounts.click({ button: 'right' });
+	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Activity Bar Size' }).press('ArrowRight');
+	await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: 'Compact', exact: true }).click();
+	await expect(navigation).toHaveClass(/compact/u);
+	await expectCardGeometry();
+	await accounts.click({ button: 'right' });
+	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Activity Bar Size' }).press('ArrowRight');
+	await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: 'Default', exact: true }).click();
+	await expect(navigation).not.toHaveClass(/compact/u);
+	await expectCardGeometry();
+	await expect(sidebar).toHaveCSS('border-top-left-radius', '12px');
+	await expect(sessions).toHaveCSS('border-bottom-right-radius', '12px');
+	await expect(sessions).toHaveCSS('border-right-width', '0px');
+	await expect(page.locator('.ash-sessions-chat-slot:visible').last()).toHaveCSS('border-right-width', '0px');
+	await page.locator('.ash-sessions-list-add').click();
+	await expect(page.locator('.ash-sessions-chat-slot:visible')).toHaveCount(2);
+	expect(await page.locator('.ash-sessions-chat-slot:visible').first().evaluate(element => Math.round(parseFloat(getComputedStyle(element).borderRightWidth)))).toBe(1);
+	await expect(page.locator('.ash-sessions-chat-slot:visible').last()).toHaveCSS('border-right-width', '0px');
+	await titlebar.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+	await expect(sessions).toHaveCSS('border-top-left-radius', '12px');
+	await expectCardGeometry();
+	await page.setViewportSize({ width: 900, height: 700 });
+	await expectCardGeometry();
+	await titlebar.getByRole('button', { name: 'Show sidebar', exact: true }).click();
+	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(page.locator('[data-part="auxiliarybar"]')).toBeVisible();
+	await expect(page.locator('[data-part="auxiliarybar"]')).toHaveCSS('border-bottom-right-radius', '12px');
+	await expectCardGeometry();
+	await navigation.getByRole('button', { name: 'Collaboration', exact: true }).click();
+	await expect(sidebar).toBeHidden();
+	await expect(sessions).toHaveCSS('border-top-left-radius', '12px');
+	await expect(sessions).toHaveCSS('border-bottom-right-radius', '12px');
+	await expectCardGeometry();
+});
+
 test('Sessions shared layout preserves user geometry across pages, resize and reload', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	let page = workbench.page;

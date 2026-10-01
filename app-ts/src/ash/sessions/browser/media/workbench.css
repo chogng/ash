@@ -30,7 +30,7 @@ button, input, textarea { font: inherit; }
   overflow: hidden;
   flex-direction: column;
   color: var(--ash-foreground);
-  background: var(--ash-workbench-background);
+  background: var(--ash-title-bar-background);
 }
 
 .ash-sessions-window .ash-context-view-hover {
@@ -54,4 +54,11 @@ button, input, textarea { font: inherit; }
 .ash-sessions-workbench-layout > .ash-grid {
   position: absolute;
   inset: 0;
+}
+
+.ash-sessions-content-card {
+  display: none;
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
 }

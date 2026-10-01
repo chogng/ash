@@ -23,6 +23,10 @@
   background: var(--ash-editor-background);
 }
 
+.ash-sessions-chat-slot.last-slot {
+  border-right: 0;
+}
+
 .ash-sessions-chat-slot-header {
   display: flex;
   min-height: 36px;

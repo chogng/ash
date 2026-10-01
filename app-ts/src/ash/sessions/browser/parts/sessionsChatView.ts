@@ -148,6 +148,7 @@ export class SessionsChatView extends Disposable {
 				entry.pane.setVisible(this.visible);
 			}
 			entry.update(selection, sameSelection(selection, active));
+			entry.element.classList.toggle('last-slot', selection === selections.at(-1));
 			gridEntries.push({ id: key, view: entry });
 		}
 		if (gridEntries.length === 0) {
