@@ -57,7 +57,7 @@
 .ash-scrollbar-track {
   position: absolute;
   z-index: 3;
-  border-radius: calc(var(--ash-scrollbar-size) / 2);
+  background: var(--ash-scrollbar-background);
   opacity: 1;
   outline: none;
   touch-action: none;

@@ -1073,6 +1073,31 @@ test('editor auto scrollbars reveal on hover, focus and scrolling and remain dra
 	expect(remainingTracks).toBe(0);
 });
 
+test('editor scrollbar track colors follow theme overrides in all color schemes', async ({ page }) => {
+	await openEditor(page);
+	await page.evaluate(() => {
+		window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'long text '.repeat(100)).join('\n'));
+		window.ashTextModelIntegration.setScrollbar({ horizontal: 'visible', vertical: 'visible' });
+	});
+	const tracks = page.locator('.stanza-editor .ash-scrollbar-track');
+	await expect(tracks).toHaveCount(2);
+	for (const theme of ['dark', 'light', 'contrast', 'contrastLight'] as const) {
+		await page.evaluate(theme => window.ashTextModelIntegration.setTheme(theme), theme);
+		for (const track of await tracks.all()) {
+			await expect(track).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		}
+		await page.evaluate(() => window.ashTextModelIntegration.setSelectionColors({ 'scrollbar.background': '#123456' }));
+		for (const track of await tracks.all()) {
+			await expect(track).toHaveCSS('background-color', 'rgb(18, 52, 86)');
+			await expect(track).toHaveCSS('border-radius', '0px');
+		}
+	}
+	await page.evaluate(() => window.ashTextModelIntegration.setTheme('dark'));
+	for (const track of await tracks.all()) {
+		await expect(track).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	}
+});
+
 test('editor scrollbar configuration updates visibility and track dimensions', async ({ page }) => {
 	await openEditor(page);
 	const horizontal = page.locator('.ash-smooth-scrollable > .ash-scrollbar-track-horizontal');

@@ -218,6 +218,47 @@ test('minimap reflects equal-length text edits in the workbench', async ({ targe
 	await expect(editor.element.locator('.minimap')).toHaveAttribute('aria-hidden', 'true');
 });
 
+test('editor scrollbar track background follows the theme through hover and dragging', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText(Array.from({ length: 120 }, () => 'long text '.repeat(100)).join('\n'));
+	await page.keyboard.press('ControlOrMeta+Home');
+	const tracks = editor.element.locator('.ash-scrollbar-track');
+	await expect(tracks).toHaveCount(2);
+	for (const track of await tracks.all()) {
+		await expect(track).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	}
+	await editor.element.evaluate(element => element.style.setProperty('--ash-scrollbar-background', '#123456'));
+	try {
+		for (const track of await tracks.all()) {
+			await expect(track).toHaveCSS('background-color', 'rgb(18, 52, 86)');
+			await expect(track).toHaveCSS('border-radius', '0px');
+		}
+		const vertical = editor.element.locator('.ash-scrollbar-track-vertical');
+		await vertical.hover();
+		await expect(vertical).toHaveCSS('background-color', 'rgb(18, 52, 86)');
+		const thumb = (await vertical.locator('.ash-scrollbar-thumb').boundingBox())!;
+		await page.mouse.move(thumb.x + thumb.width / 2, thumb.y + thumb.height / 2);
+		await page.mouse.down();
+		try {
+			await page.mouse.move(thumb.x + thumb.width / 2, thumb.y + thumb.height / 2 + 20);
+			await expect(vertical).toHaveClass(/\bactive\b/u);
+			await expect(vertical).toHaveCSS('background-color', 'rgb(18, 52, 86)');
+			await expect.poll(() => editor.element.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+		} finally {
+			await page.mouse.up();
+		}
+	} finally {
+		await editor.element.evaluate(element => element.style.removeProperty('--ash-scrollbar-background'));
+	}
+	for (const track of await tracks.all()) {
+		await expect(track).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	}
+});
+
 test('minimap shadow indicates content beyond the right edge', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;

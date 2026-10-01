@@ -11,6 +11,9 @@ registerColor('sash.hoverBackground', {
 }, { description: 'Hovered sash background.', owner });
 
 export const scrollbarShadow = color('scrollbar.shadow', '#000000', '#dddddd', null, null, 'Scrollbar shadow indicating that the editor is scrolled.');
+export const scrollbarBackground = registerColor('scrollbar.background', {
+	dark: null, light: null, highContrastDark: null, highContrastLight: null,
+}, { description: 'Scrollbar track background.', owner });
 export const scrollbarSliderBackground = color('scrollbar.sliderBackground', '#79797966', '#64646433', foreground, foreground, 'Scrollbar slider background.');
 export const scrollbarSliderHoverBackground = color('scrollbar.sliderHoverBackground', '#646464b3', '#64646459', foreground, foreground, 'Hovered scrollbar slider background.');
 export const scrollbarSliderActiveBackground = color('scrollbar.sliderActiveBackground', '#bfbfbf66', '#00000033', '#ffff00', '#0000ee', 'Active scrollbar slider background.');
