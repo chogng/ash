@@ -102,6 +102,32 @@ class JustTests(unittest.TestCase):
             ],
         )
 
+    def test_process_test_recipe_preserves_target_and_harness_arguments(self) -> None:
+        result = self.run_tui_recipe(
+            "test-processes",
+            "ash-app-server",
+            "--test",
+            "managed_lifecycle",
+            "stop_",
+            "--",
+            "--exact",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            json.loads(result.stdout),
+            [
+                "--process-tests",
+                "test",
+                "-p",
+                "ash-app-server",
+                "--test",
+                "managed_lifecycle",
+                "stop_",
+                "--",
+                "--exact",
+            ],
+        )
+
     def test_tui_service_build_failure_stops_before_tests(self) -> None:
         result = self.run_tui_recipe("test-tui", build_exit=23)
         self.assertNotEqual(result.returncode, 0)
