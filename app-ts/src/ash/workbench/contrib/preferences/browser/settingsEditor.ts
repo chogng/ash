@@ -10,6 +10,7 @@ import { IDirPermissionsService } from '../../../../platform/dirPermissions/comm
 import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
+import { ILanguagePackService } from '../../../../platform/languagePacks/common/languagePacksService.js';
 import type { IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -22,8 +23,9 @@ import type { EditorInput } from '../../../services/editor/common/editorService.
 import { GitConfiguration, type GitAutofetch } from '../../../contrib/git/common/gitConfiguration.js';
 import { IGitService } from '../../../contrib/git/common/gitService.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
+import { ILocaleService, LocalizationConfiguration } from '../../../services/localization/common/locale.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
-import type { ISetting, ISettingsEditorModel } from '../../../services/preferences/common/preferences.js';
+import type { ISelectSetting, ISetting, ISettingsEditorModel } from '../../../services/preferences/common/preferences.js';
 import { isSettingsEditorInput } from '../../../services/preferences/common/settingsEditorInput.js';
 import { DefaultSettings, SettingsEditorModel } from '../../../services/preferences/common/settingsModels.js';
 import { SettingsRenderer } from './settingsRenderers.js';
@@ -72,6 +74,8 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		@IContextMenuService contextMenuProvider: IContextMenuProvider,
 		@IContextViewService contextViewProvider: IContextViewProvider,
 		@ILocalizationService localizationService: ILocalizationService,
+		@ILocaleService localeService: ILocaleService,
+		@ILanguagePackService private readonly languagePackService: ILanguagePackService,
 		@IGitService gitService: IGitService,
 		@IChatService private readonly chatService: IChatService,
 		@IAgentCapabilitiesService private readonly agentCapabilitiesService: IAgentCapabilitiesService,
@@ -83,7 +87,11 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		this.configurationService = configurationService;
 		this.localizationService = localizationService;
 		this.settingsModel = this._register(new SettingsEditorModel([
-			...new DefaultSettings().all.map(setting => setting.id === DESKTOP_UPDATE_POLICY_SETTING ? localUpdatePolicySetting(setting, configurationService) : setting),
+			...new DefaultSettings().all.map(setting => {
+				if (setting.id === DESKTOP_UPDATE_POLICY_SETTING) return localUpdatePolicySetting(setting, configurationService);
+				if (setting.id === LocalizationConfiguration.locale) return displayLanguageSetting(setting, localeService, languagePackService, localizationService);
+				return setting;
+			}),
 			...gitSettings(gitService),
 		]));
 		this.clipboardService = clipboardService;
@@ -202,7 +210,15 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		this.agentCapabilitiesSettings = this._register(new AgentCapabilitiesSettings(settingsContent, this.agentCapabilitiesService, this.remoteAgentService, this.dirPermissionsService, this.localizationService));
 		this.renderCategory(initialCategory);
 
-		this._register(this.localizationService.onDidChange(() => this.updateLocalizedChrome()));
+		const updateLanguageSetting = (): void => {
+			// Recompute descriptors while the keyed renderer retains controls and keyboard focus.
+			this.treeModel.setChildren(settingsRootNodes(createSettingsLayout(this.settingsModel.settings)));
+		};
+		this._register(this.languagePackService.onDidChange(updateLanguageSetting));
+		this._register(this.localizationService.onDidChange(() => {
+			updateLanguageSetting();
+			this.updateLocalizedChrome();
+		}));
 		this._register(this.settingsModel.onDidChangeStatus(status => {
 			this.contentStatus.textContent = status.message;
 			this.contentStatus.classList.toggle('is-error', status.isError);
@@ -306,7 +322,9 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		this.navigationEmpty.textContent = this.localized('chrome.noResults', 'No settings found.');
 		this.tocTree.rerender();
 		if (this.activeNavigationTarget) {
-			this.contentHeading.textContent = this.activeNavigationTarget.target.label;
+			const target = this.treeModel.getGroup(this.activeNavigationTarget.target.targetId)!;
+			this.contentHeading.textContent = target.title;
+			this.contentDescription.textContent = target.description;
 			return;
 		}
 		this.contentHeading.textContent = this.localizedCategoryLabel(this.activeCategory);
@@ -332,6 +350,25 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 	private localizedGroupDescription(group: SettingsCategoryGroupDescriptor): string {
 		return this.localized(`groups.${group.id}.description`, group.description);
 	}
+}
+
+function displayLanguageSetting(setting: ISetting, locale: ILocaleService, languagePacks: ILanguagePackService, localization: ILocalizationService): ISelectSetting {
+	if (setting.valueType !== 'select') throw new TypeError('Display language requires a select setting');
+	return {
+		...setting,
+		get title() { return localization.translate('ash.settings', 'displayLanguage.select', 'Interface language'); },
+		get description() { return localization.translate('ash.settings', 'displayLanguage.description', 'Choose the language used by the Ash interface.'); },
+		get options() { return languagePacks.availableLocales.map(locale => ({ value: locale.locale, label: locale.localizedLanguageName })); },
+		// The control shows the resolved installed language, including changes made through commands or JSON.
+		binding: {
+			id: setting.id,
+			defaultValue: setting.configuration.defaultValue,
+			onDidChange: listener => locale.onDidChangeLocale(() => listener()),
+			getValue: () => locale.locale,
+			updateValue: value => locale.setLocale({ id: String(value), label: String(value) }),
+			resetValue: () => locale.clearLocalePreference(),
+		},
+	};
 }
 
 function localUpdatePolicySetting(setting: ISetting, configuration: IConfigurationService): ISetting {

@@ -1,7 +1,8 @@
 import './media/settingsWidgets.css';
 import { localize, onDidChangeNls } from '../../../../nls.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
-import { addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
+import { addDisposableListener, getActiveElement, h, stopEvent } from '../../../../base/browser/dom.js';
+import { isAncestorOfActiveElement } from '../../../../base/browser/focus.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import type { IContextViewProvider } from '../../../../base/browser/ui/contextview/contextview.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
@@ -391,10 +392,7 @@ class SelectSettingWidget extends AbstractSettingWidget<ISelectSetting, string |
 		this.select.element.dataset.configurationKey = descriptor.id;
 		this.domNode.append(this.copyDomNode, this.select.element);
 		this.bindState(state => this.renderState(state));
-		this._register(this.select.onDidSelect(({ value }) => {
-			const option = this.descriptor.options.find(candidate => String(candidate.value) === value);
-			if (option) void this.updateSetting(option.value);
-		}));
+		this._register(this.select.onDidSelect(({ value }) => void this.handleSelection(value)));
 	}
 
 	protected updateControl(descriptor: ISelectSetting): void {
@@ -402,7 +400,18 @@ class SelectSettingWidget extends AbstractSettingWidget<ISelectSetting, string |
 		const options = descriptor.options.map(option => ({ value: String(option.value), label: option.label }));
 		if (sameSelectOptions(this.select.options, options)) return;
 		this.select.setOptions(options);
+		this.model.refresh();
 		this.renderState(this.model.state);
+	}
+
+	private async handleSelection(value: string): Promise<void> {
+		const option = this.descriptor.options.find(candidate => String(candidate.value) === value);
+		if (!option) return;
+		const hadFocus = isAncestorOfActiveElement(this.select.element);
+		await this.updateSetting(option.value);
+		// Saving disables the trigger. Restore its focus only if the user has not moved to another control.
+		const document = this.domNode.ownerDocument;
+		if (hadFocus && this.domNode.isConnected && getActiveElement(document) === document.body) this.select.focus();
 	}
 
 	private renderState(state: SettingState<string | boolean>): void {

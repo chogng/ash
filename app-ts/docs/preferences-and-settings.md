@@ -23,6 +23,8 @@
 
 图形设置页从 Configuration Registry 取得可编辑设置，经 `SettingsEditorModel` 和 `settingsLayout.ts` 组成页面，再由设置控件读写配置服务。JSON 路径经 `SettingsFileSystemProvider` 读写同一份用户设置源。两种设置入口共享配置数据，不共享页面容器。
 
+“常规 → 显示语言”提供界面语言下拉框，列出内置语言和已安装语言包。设置页与“配置显示语言”命令共用语言服务，保存当前用户的 `workbench.locale`；重置设置会清除语言偏好。语言包列表变化时，下拉选项同步更新。设置搜索支持 `language`、`locale` 和“语言”。
+
 配置注册表驱动的设置项菜单提供“在 JSON 中编辑”，复杂键值控件同时提供直接按钮。设置页调用 `openUserSettings({ target: USER_LOCAL, revealSetting: { key, edit: true } })`。Preferences 服务取得编辑器共享的文件模型，在现有 JSONC 中定位顶层键；缺失键以注册默认值插入未保存的模型，保留注释、尾随逗号和其他键。普通编辑器打开固定标签，选择对应值并取得焦点。已有脏模型复用，插入支持撤销，不在打开入口中保存。使用自有 binding 的设置不提供此入口。
 
 保存沿普通文本编辑器 → TextFileService → SettingsFileSystemProvider → ConfigurationResourceService → 配置 API 写入同一份用户配置。配置变更事件驱动主题和编辑器立即刷新；保存使用模型读取时的修订号，真实外部修改会进入现有保存冲突处理。无效 JSONC 或注册值被拒绝，已生效配置保持原值，未保存文本仍留在编辑器。当前只支持 `USER` 与 `USER_LOCAL`，工作区和远程用户目标尚未实现。Electron 持久化到当前 profile 的 `settings.json`，Web 持久化到现有 IndexedDB 配置存储。

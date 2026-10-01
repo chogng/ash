@@ -46,6 +46,12 @@ export const SettingsNavigation = [
 		presentation: 'general',
 		groups: [
 			{
+				id: 'display-language',
+				get label() { return localize({ bundle: 'ash.settings', key: 'displayLanguage.title' }, 'Display Language'); },
+				get description() { return localize({ bundle: 'ash.settings', key: 'displayLanguage.description' }, 'Choose the language used by the Ash interface.'); },
+				settings: ['workbench.locale'],
+			},
+			{
 				id: 'updates',
 				get label() { return localize('update.settingsGroup', 'Updates'); },
 				get description() { return localize('update.settingsGroupDescription', 'Choose how Ash Desktop checks for product updates.'); },

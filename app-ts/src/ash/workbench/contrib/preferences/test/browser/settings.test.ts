@@ -14,6 +14,7 @@ import type { IChatService } from '../../../../../workbench/services/chat/common
 import type { IRemoteAgentService } from '../../../../../workbench/services/remote/common/remoteAgentService.js';
 import type { RemoteConnectionState } from '../../../../../platform/remote/common/remote.js';
 import type { IDirPermissionsService } from '../../../../../platform/dirPermissions/common/dirPermissionsService.js';
+import type { ILanguagePackService, LanguagePackInfo } from '../../../../../platform/languagePacks/common/languagePacksService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>', {
 	pretendToBeVisual: true,
@@ -45,7 +46,7 @@ for (const [name, value] of Object.entries({
 
 const { h } = await import('../../../../../base/browser/dom.js');
 const { Emitter, Event } = await import('../../../../../base/common/event.js');
-const { DisposableStore } = await import('../../../../../base/common/lifecycle.js');
+const { DisposableStore, toDisposable } = await import('../../../../../base/common/lifecycle.js');
 const { ConfigurationRegistry, Extensions: ConfigurationExtensions } = await import('../../../../../platform/configuration/common/configurationRegistry.js');
 const { IClipboardService: ClipboardServiceId } = await import('../../../../../platform/clipboard/common/clipboardService.js');
 const { IConfigurationService: ConfigurationServiceId } = await import('../../../../../platform/configuration/common/configuration.js');
@@ -88,6 +89,10 @@ const { ILocalizationService: LocalizationServiceId } = await import('../../../.
 const { DefaultSettings, SettingsEditorModel } = await import('../../../../../workbench/services/preferences/common/settingsModels.js');
 const { WorkbenchConfigurationService } = await import('../../../../../workbench/services/configuration/browser/configurationService.js');
 const { builtinLanguagePackCatalogs } = await import('../../../../../workbench/services/localization/common/localizationCatalogs.js');
+const { ILanguagePackService: LanguagePackServiceId } = await import('../../../../../platform/languagePacks/common/languagePacksService.js');
+const { ILocaleService, LocalizationConfiguration } = await import('../../../../../workbench/services/localization/common/locale.js');
+const { WorkbenchLocaleService } = await import('../../../../../workbench/services/localization/browser/localeService.js');
+const { WorkbenchLocalizationService } = await import('../../../../../workbench/services/localization/browser/workbenchLocalizationService.js');
 const { StartupEditorConfigurationKey } = await import('../../../../../workbench/contrib/welcomeGettingStarted/browser/startupPage.js');
 await import('../../../../../workbench/contrib/welcomeGettingStarted/browser/gettingStarted.contribution.js');
 await import('../../../../../workbench/browser/workbench.contribution.js');
@@ -199,6 +204,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	]);
 	assert.deepEqual(model.settings.map(setting => setting.id), defaults.all.map(setting => setting.id));
 	assert.equal(findSettingCategory(layout, AccessibilityConfiguration.underlineLinks), 'general');
+	assert.equal(findSettingCategory(layout, LocalizationConfiguration.locale), 'general');
 	assert.equal(findSettingCategory(layout, HoverConfiguration.delay), 'general');
 	assert.equal(findSettingCategory(layout, SashConfiguration.size), 'general');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'general');
@@ -429,6 +435,22 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		hideContextMenu() {},
 	};
 	const configuration = disposables.add(new WorkbenchConfigurationService());
+	const languagePacksChanged = disposables.add(new Emitter<void>());
+	const availableLocales: LanguagePackInfo[] = builtinLanguagePackCatalogs.map(catalog => ({ ...catalog, source: 'builtin' }));
+	const languagePacks: ILanguagePackService = {
+		onDidChange: languagePacksChanged.event,
+		whenReady: Promise.resolve(),
+		catalogs: builtinLanguagePackCatalogs,
+		availableLocales,
+		installedPackages: [],
+		search: async () => [],
+		install: async () => {},
+		refresh: async () => {},
+	};
+	const locale = disposables.add(new WorkbenchLocaleService(configuration, languagePacks));
+	await locale.whenReady;
+	const workbenchLocalization = disposables.add(new WorkbenchLocalizationService(locale, languagePacks));
+	disposables.add(toDisposable(() => resetNlsResolver()));
 	const autoFetchChanged = disposables.add(new Emitter<void>());
 	let autoFetch: false | true | 'all' = false;
 	let autoFetchPeriod = 180;
@@ -463,11 +485,15 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(ConfigurationServiceId, configuration);
 	services.registerInstance(IContextMenuService, contextMenuProvider);
 	services.registerInstance(IContextViewService, contextView);
-	services.registerInstance(LocalizationServiceId, localizationService);
+	services.registerInstance(LocalizationServiceId, workbenchLocalization);
 	services.registerInstance(GitServiceId, gitService);
 	services.registerInstance(ChatServiceId, chatService);
 	const descriptor = EditorPanes.getEditorPanes().find(candidate => candidate.id === SettingsEditorId);
 	assert.ok(descriptor);
+	assert.throws(() => descriptor.create({ instantiationService: services }), /Unknown service: localeService/);
+	services.registerInstance(ILocaleService, locale);
+	assert.throws(() => descriptor.create({ instantiationService: services }), /Unknown service: languagePackService/);
+	services.registerInstance(LanguagePackServiceId, languagePacks);
 	assert.throws(() => descriptor.create({ instantiationService: services }), /Unknown service: agentCapabilitiesService/);
 	let capabilityReads = 0;
 	services.registerInstance(IAgentCapabilitiesService, {
@@ -528,6 +554,30 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector('[data-settings-category-id="models"]'), null);
 	assert.ok(root.querySelector(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks}"]`));
 	assert.ok(root.querySelector(`[data-settings-item-id="${HoverConfiguration.delay}"]`));
+	const languageControl = root.querySelector<HTMLElement>('[data-configuration-key="workbench.locale"] [role="combobox"]');
+	assert.ok(languageControl);
+	assert.equal(languageControl.textContent, 'English');
+	availableLocales.push({ locale: 'fr', languageName: 'French', localizedLanguageName: 'Français', source: 'marketplace' });
+	languagePacksChanged.fire();
+	languageControl.click();
+	const languageListId = languageControl.getAttribute('aria-controls')!;
+	const languageOptions = [...ownerDocument.getElementById(languageListId)!.querySelectorAll<HTMLElement>('[role="option"]')];
+	assert.deepEqual(languageOptions.map(option => option.textContent), ['English', '简体中文', 'Français']);
+	languageOptions[2].click();
+	await nextTurn();
+	assert.equal(configuration.getValue(LocalizationConfiguration.locale), 'fr');
+	assert.equal(languageControl.textContent, 'Français');
+	availableLocales.pop();
+	languagePacksChanged.fire();
+	assert.equal(languageControl.textContent, 'English');
+	await configuration.updateValue(LocalizationConfiguration.locale, 'zh-CN');
+	assert.equal(languageControl.textContent, '简体中文');
+	assert.equal(languageControl.getAttribute('aria-label'), '界面语言');
+	root.querySelector<HTMLButtonElement>('[data-settings-item-id="workbench.locale"] .ash-setting-item-actions-trigger')!.click();
+	await menuActions.find(action => action.id === 'settings.resetSetting')!.run();
+	hideMenu?.(false);
+	assert.equal(languageControl.textContent, 'English');
+	assert.equal(configuration.inspect(LocalizationConfiguration.locale).userValue, undefined);
 	const autofetchControl = root.querySelector<HTMLElement>(`[data-configuration-key="${GitConfiguration.autofetch}"]`);
 	assert.ok(autofetchControl);
 	const autofetchButton = autofetchControl.querySelector<HTMLButtonElement>('[role="combobox"]');
