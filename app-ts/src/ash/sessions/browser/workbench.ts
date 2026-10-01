@@ -5,8 +5,12 @@ import './activityBarAccessibility.js';
 import '../../workbench/contrib/accessibility/browser/accessibilityConfiguration.js';
 import '../../workbench/browser/parts/notifications/notificationsCommands.js';
 import '../../workbench/contrib/accessibility/browser/accessibleViewActions.js';
-import { h } from "../../base/browser/dom.js";
-import { bindResizableLayout } from "../../base/browser/ui/resizable/resizable.js";
+import { Dimension, getClientArea, h, type IDimension } from "../../base/browser/dom.js";
+import { SerializableGrid, type SerializedGridDescriptor } from '../../base/browser/ui/grid/grid.js';
+import { Emitter, type Event } from '../../base/common/event.js';
+import { WorkbenchPartView } from '../../workbench/browser/workbenchPartView.js';
+import { SessionsLayoutPolicy } from './layoutPolicy.js';
+import { sessionsPartIds, SESSION_SIDEBAR_DEFAULT_WIDTH, SESSION_AUXILIARYBAR_DEFAULT_WIDTH, type SessionsPartId } from '../common/layoutConstants.js';
 import { Disposable, toDisposable, type IDisposable } from "../../base/common/lifecycle.js";
 import { ILanguageService } from "../../editor/common/languages/language.js";
 import { LanguageService } from "../../editor/common/services/languageService.js";
@@ -16,7 +20,7 @@ import { AccessibleViewRegistry } from '../../platform/accessibility/browser/acc
 import type { IConfigurationApi, IConfigurationSnapshot } from "../../platform/configuration/common/configurationIpc.js";
 import { IConfigurationService } from "../../platform/configuration/common/configuration.js";
 import { ContextKeyExpr } from '../../platform/contextkey/common/contextkey.js';
-import { ServiceContainer } from "../../platform/instantiation/common/instantiation.js";
+import { refineServiceDecorator, ServiceContainer, type IInstantiationService } from "../../platform/instantiation/common/instantiation.js";
 import { ICodeEditorService } from '../../editor/browser/services/codeEditorService.js';
 import { StandaloneCodeEditorService } from '../../editor/standalone/browser/standaloneCodeEditorService.js';
 import { ILanguageConfigurationService, LanguageConfigurationService } from '../../editor/common/languages/languageConfigurationRegistry.js';
@@ -31,14 +35,14 @@ import { ILogService } from '../../platform/log/common/log.js';
 import { LogService } from '../../platform/log/common/logServiceImpl.js';
 import { ConsoleLogSink } from '../../platform/log/common/consoleLogSink.js';
 import type { IKeybindingsResourceApi } from "../../platform/keybinding/common/keybindingsResource.js";
-import { BrowserLayoutService, ILayoutService } from "../../platform/layout/browser/layoutService.js";
+import { BrowserLayoutService, ILayoutService, type ILayoutOffsetInfo } from "../../platform/layout/browser/layoutService.js";
 import { ILifecycleService, type ShutdownReason } from "../../workbench/services/lifecycle/common/lifecycle.js";
 import { NotificationService } from "../../workbench/services/notification/common/notificationService.js";
 import { INotificationsCenter, NotificationsCenter } from "../../workbench/browser/parts/notifications/notificationsCenter.js";
 import { INotificationService } from "../../platform/notification/common/notification.js";
 import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
 import type { INativeHostApi, IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
-import { IStorageService, WillSaveStateReason } from "../../platform/storage/common/storage.js";
+import { IStorageService, WillSaveStateReason, StorageScope, StorageTarget } from "../../platform/storage/common/storage.js";
 import { IThemeService } from "../../platform/theme/common/themeService.js";
 import { WorkbenchState } from "../../platform/workspace/common/workspace.js";
 import type { SessionWorkspaceSelection } from '../services/sessions/common/session.js';
@@ -79,7 +83,7 @@ import { IAccountService } from '../../platform/accounts/common/accountService.j
 import { BrowserClipboardService } from '../../platform/clipboard/browser/clipboardService.js';
 import { INativeHostService } from '../../workbench/common/services.js';
 import { WorkbenchModeRegistry, type WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
-import type { ActivityBarPosition } from '../../workbench/common/configuration.js';
+import { ActivityBarPosition } from '../../workbench/common/configuration.js';
 import { ChatService } from "../../workbench/services/chat/browser/chatService.js";
 import { AppServerAccountService } from '../../workbench/services/accounts/browser/appServerAccountService.js';
 import { IChatService } from "../../workbench/services/chat/common/chatService.js";
@@ -88,6 +92,7 @@ import { ExtensionColorThemeService } from "../../workbench/services/extensions/
 import { BrowserStorageService } from "../../workbench/services/storage/browser/storageService.js";
 import { IWorkbenchHostService } from "../../workbench/services/host/common/workbenchHostService.js";
 import { WorkbenchThemeService } from "../../workbench/services/themes/browser/workbenchThemeService.js";
+import { IHostColorSchemeService } from '../../workbench/services/themes/common/hostColorSchemeService.js';
 import { AppServerSessionsProvider } from "../contrib/providers/appServer/browser/appServerSessionsProvider.js";
 import { AppServerTeamsProvider } from '../contrib/providers/appServer/browser/appServerTeamsProvider.js';
 import { TeamsManagementService } from '../services/teams/browser/teamsManagementService.js';
@@ -97,11 +102,10 @@ import { SessionsModernUIContribution } from '../contrib/modernUI/browser/modern
 import { SessionsPreferences } from '../contrib/preferences/browser/sessionsPreferences.js';
 import type { SessionsProfile } from "../common/sessionsProfile.js";
 import { RETURN_TO_WORKBENCH_COMMAND_ID } from '../common/windowNavigation.js';
-import { SessionsConfiguration } from '../common/configuration.js';
+import { SessionsConfiguration, type SessionsLayoutStyle } from '../common/configuration.js';
 import { SessionsManagementService } from "../services/sessions/browser/sessionsManagementService.js";
 import { ISessionsManagementService } from "../services/sessions/common/sessionsManagement.js";
 import { ISessionsService, SessionsService } from "../services/sessions/browser/sessionsService.js";
-import { SessionsWorkbenchLayout, type SessionsPartId } from "./layoutPolicy.js";
 import { registerLayoutActions } from './layoutActions.js';
 import { AuxiliaryBarPart } from "./parts/auxiliaryBarPart.js";
 import { ActivityBarPart, type SessionsActivityPage } from './parts/activitybar/activityBarPart.js';
@@ -121,6 +125,7 @@ export interface IWorkbenchOptions {
 	readonly initialConfigurationSnapshot?: IConfigurationSnapshot;
 	readonly keybindingsResourceApi?: IKeybindingsResourceApi;
 	readonly createContextMenuService: ContextMenuServiceFactory;
+	readonly createHostColorSchemeService: (services: IInstantiationService) => IHostColorSchemeService & IDisposable;
 	readonly container: HTMLElement;
 }
 
@@ -129,7 +134,7 @@ export class Workbench extends Disposable {
 	readonly domNode: HTMLElement;
 	readonly configurationService: WorkbenchConfigurationService;
 	readonly themeService: WorkbenchThemeService;
-	private readonly layoutService: BrowserLayoutService;
+	private readonly layoutService: SessionsWorkbenchLayout;
 	private readonly lifecycleService: ILifecycleService;
 	private readonly sessionsView: SessionsService;
 	private readonly sessionsPart: SessionsPart;
@@ -160,6 +165,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ILanguageFeaturesService, this._register(new LanguageFeaturesService()));
 		services.registerInstance(ICodeEditorService, this._register(new StandaloneCodeEditorService()));
 		services.registerInstance(ILogService, this._register(new LogService({ sinks: [new ConsoleLogSink()] })));
+		services.registerInstance(IHostColorSchemeService, this._register(options.createHostColorSchemeService(services)));
 		const themeService = this.themeService = this._register(services.createInstance(WorkbenchThemeService, options.container));
 		services.registerInstance(IThemeService, themeService);
 		themeService.initialize();
@@ -218,14 +224,12 @@ export class Workbench extends Disposable {
 		options.container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 
-		let layout: SessionsWorkbenchLayout | undefined;
 		let sessionsPart: SessionsPart | undefined;
-		this.layoutService = this._register(new BrowserLayoutService({
-			root: this.domNode,
-			getContainerOffset: () => layout?.mainContainerOffset ?? { top: 0, quickInputTop: 0 },
+		const layout = this.layoutService = this._register(services.createInstance(SessionsWorkbenchLayout, this.domNode, {
+			activityBarLocation: configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation),
 			focus: () => sessionsPart?.focus(),
 		}));
-		services.registerInstance(ILayoutService, this.layoutService);
+		services.registerInstance(IAgentWorkbenchLayoutService, layout);
 		const notificationService = this._register(new NotificationService());
 		services.registerInstance(INotificationService, notificationService);
 		const feedbackHost = h(ownerDocument, "div");
@@ -322,6 +326,8 @@ export class Workbench extends Disposable {
 			}
 			else sessionsPart?.setPage('empty');
 			auxiliarybar?.setEmptyPage(page !== 'chat');
+			layout.setPartAvailable('sidebar', page === 'chat' || page === 'code');
+			layout.setPartAvailable('auxiliarybar', page === 'chat' || page === 'code');
 		};
 		this.showChat = () => selectActivityPage('chat');
 		activitybar = this._register(services.createInstance(ActivityBarPart, this.domNode, {
@@ -390,16 +396,12 @@ export class Workbench extends Disposable {
 			["sessions", sessionsPart],
 			["auxiliarybar", auxiliarybar],
 		]);
-		layout = this._register(new SessionsWorkbenchLayout(this.domNode, parts, {
-			initialDimension: this.layoutService.mainContainerDimension,
-			storageService: storage,
-			activityBarLocation,
-		}));
+		layout.createWorkbenchLayout(parts);
 		this._register(configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(SessionsConfiguration.activityBarLocation)) {
 				const location = configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation);
 				activitybar.setLocation(location, sidebar.setActivityBarLocation(location));
-				layout!.setActivityBarLocation(location);
+				layout.setActivityBarLocation(location);
 			}
 			if (event.affectsConfiguration(SessionsConfiguration.activityBarCompact)) {
 				activitybar.setCompact(configurationService.getValue<boolean>(SessionsConfiguration.activityBarCompact));
@@ -407,7 +409,6 @@ export class Workbench extends Disposable {
 		}));
 		this._register(new SessionsModernUIContribution(this.domNode, layout, configurationService));
 		this._register(registerLayoutActions(layout, view, contextKeys));
-		this._register(bindResizableLayout(this.layoutService.onDidLayoutMainContainer, layout));
 		this.layoutService.layout();
 		this.initialized = this.initialize(view, configurationService);
 		void this.initialized.catch(error => console.error('Failed to initialize Sessions Workbench', error));
@@ -446,4 +447,357 @@ function sameWorkspace(first: SessionWorkspaceSelection, second: SessionWorkspac
 	if (first.type === 'multiple' && second.type === 'multiple') return first.folders.length === second.folders.length && first.folders.every((folder, index) => folder.label === second.folders[index]?.label && sameWorkspace(folder.target, second.folders[index]!.target));
 	if (first.type === 'local' && second.type === 'local') return first.root === second.root;
 	return first.type === 'ssh' && second.type === 'ssh' && first.host === second.host && first.root === second.root;
+}
+
+export interface IAgentWorkbenchLayoutService extends ILayoutService {
+	readonly onDidChangePartVisibility: Event<SessionsPartVisibilityChangeEvent>;
+	setLayoutStyle(style: SessionsLayoutStyle): void;
+	isPartVisible(partId: SessionsPartId): boolean;
+	showPart(partId: SessionsPartId): void;
+	hidePart(partId: SessionsPartId): void;
+}
+
+export const IAgentWorkbenchLayoutService = refineServiceDecorator<ILayoutService, IAgentWorkbenchLayoutService>(ILayoutService);
+
+export interface SessionsPartVisibilityChangeEvent {
+	readonly partId: SessionsPartId;
+	readonly visible: boolean;
+}
+
+
+/** Persisted, Sessions-owned dimensions and visibility for the dedicated window. */
+export interface SessionsWorkbenchLayoutState {
+	readonly version: 1;
+	readonly sidebar: {
+		readonly width: number;
+		readonly visible: boolean;
+	};
+	readonly auxiliarybar: {
+		readonly width: number;
+		readonly visible: boolean;
+	};
+}
+
+function createDefaultSessionsWorkbenchLayoutState(): SessionsWorkbenchLayoutState {
+	return {
+		version: 1,
+		sidebar: { width: SESSION_SIDEBAR_DEFAULT_WIDTH, visible: true },
+		auxiliarybar: { width: SESSION_AUXILIARYBAR_DEFAULT_WIDTH, visible: true },
+	};
+}
+
+/** Bridges the Sessions layout schema to the generic scoped storage service. */
+class SessionsWorkbenchLayoutStateModel {
+	constructor(
+		private readonly storageService: IStorageService,
+		private readonly defaults: SessionsWorkbenchLayoutState,
+	) {}
+
+	get state(): SessionsWorkbenchLayoutState {
+		const storage = this.storageService;
+		return {
+			version: 1,
+			sidebar: {
+				width: storedDimension(storage.getNumber(SessionsWorkbenchLayoutStorageKeys.SIDEBAR_WIDTH.key, SessionsWorkbenchLayoutStorageKeys.SIDEBAR_WIDTH.scope), this.defaults.sidebar.width),
+				visible: storage.getBoolean(SessionsWorkbenchLayoutStorageKeys.SIDEBAR_VISIBLE.key, SessionsWorkbenchLayoutStorageKeys.SIDEBAR_VISIBLE.scope, this.defaults.sidebar.visible),
+			},
+			auxiliarybar: {
+				width: storedDimension(storage.getNumber(SessionsWorkbenchLayoutStorageKeys.AUXILIARYBAR_WIDTH.key, SessionsWorkbenchLayoutStorageKeys.AUXILIARYBAR_WIDTH.scope), this.defaults.auxiliarybar.width),
+				visible: storage.getBoolean(SessionsWorkbenchLayoutStorageKeys.AUXILIARYBAR_VISIBLE.key, SessionsWorkbenchLayoutStorageKeys.AUXILIARYBAR_VISIBLE.scope, this.defaults.auxiliarybar.visible),
+			},
+		};
+	}
+
+	save(state: SessionsWorkbenchLayoutState): void {
+		const storage = this.storageService;
+		storeLayoutValue(storage, SessionsWorkbenchLayoutStorageKeys.SIDEBAR_WIDTH, state.sidebar.width);
+		storeLayoutValue(storage, SessionsWorkbenchLayoutStorageKeys.SIDEBAR_VISIBLE, state.sidebar.visible);
+		storeLayoutValue(storage, SessionsWorkbenchLayoutStorageKeys.AUXILIARYBAR_WIDTH, state.auxiliarybar.width);
+		storeLayoutValue(storage, SessionsWorkbenchLayoutStorageKeys.AUXILIARYBAR_VISIBLE, state.auxiliarybar.visible);
+	}
+}
+
+interface SessionsWorkbenchLayoutStorageKey {
+	readonly key: string;
+	readonly scope: StorageScope;
+	readonly target: StorageTarget;
+}
+
+const SessionsWorkbenchLayoutStorageKeys = {
+	SIDEBAR_WIDTH: {
+		key: 'sessions.layout.sidebar.width',
+		scope: StorageScope.PROFILE,
+		target: StorageTarget.MACHINE,
+	},
+	SIDEBAR_VISIBLE: {
+		key: 'sessions.layout.sidebar.visible',
+		scope: StorageScope.PROFILE,
+		target: StorageTarget.MACHINE,
+	},
+	AUXILIARYBAR_WIDTH: {
+		key: 'sessions.layout.auxiliarybar.width',
+		scope: StorageScope.PROFILE,
+		target: StorageTarget.MACHINE,
+	},
+	AUXILIARYBAR_VISIBLE: {
+		key: 'sessions.layout.auxiliarybar.visible',
+		scope: StorageScope.PROFILE,
+		target: StorageTarget.MACHINE,
+	},
+} as const satisfies Record<string, SessionsWorkbenchLayoutStorageKey>;
+
+function storeLayoutValue(storage: IStorageService, key: SessionsWorkbenchLayoutStorageKey, value: number | boolean): void {
+	storage.store(key.key, value, key.scope, key.target);
+}
+
+function storedDimension(value: number | undefined, fallback: number): number {
+	return value !== undefined && value >= 0 ? value : fallback;
+}
+
+const SESSIONS_LAYOUT_PRIORITY = 'high' as const;
+const DEFAULT_LAYOUT_WIDTH = 1_024;
+const DEFAULT_LAYOUT_HEIGHT = 768;
+
+function createSessionsWorkbenchGridDescriptor(
+	views: ReadonlyMap<SessionsPartId, WorkbenchPartView<SessionsPartId>>,
+	dimension: IDimension,
+	state: SessionsWorkbenchLayoutState,
+	activityBarLocation: ActivityBarPosition = ActivityBarPosition.DEFAULT,
+): SerializedGridDescriptor {
+	const leaf = (partId: SessionsPartId, size: number, visible = true, priority: 'normal' | 'high' = 'normal'): SerializedGridDescriptor => ({
+		type: 'leaf',
+		data: partId,
+		size,
+		visible,
+		priority,
+	});
+	const titlebarHeight = requiredView(views, 'titlebar').minimumHeight;
+	const bodyHeight = Math.max(0, dimension.height - titlebarHeight);
+	const activityBarWidth = requiredView(views, 'activitybar').minimumWidth;
+	const sessionsWidth = Math.max(0, dimension.width - (activityBarLocation === ActivityBarPosition.DEFAULT ? activityBarWidth : 0) - (state.sidebar.visible ? state.sidebar.width : 0) - (state.auxiliarybar.visible ? state.auxiliarybar.width : 0));
+	return {
+		type: 'branch',
+		orientation: 'vertical',
+		size: dimension.height,
+		priority: 'normal',
+		children: [
+			leaf('titlebar', titlebarHeight),
+			{
+				type: 'branch',
+				orientation: 'horizontal',
+				size: bodyHeight,
+				priority: SESSIONS_LAYOUT_PRIORITY,
+				children: [
+					leaf('activitybar', activityBarWidth, activityBarLocation === ActivityBarPosition.DEFAULT),
+					leaf('sidebar', state.sidebar.width, state.sidebar.visible),
+					leaf('sessions', sessionsWidth, true, SESSIONS_LAYOUT_PRIORITY),
+					leaf('auxiliarybar', state.auxiliarybar.width, state.auxiliarybar.visible),
+				],
+			},
+		],
+	};
+}
+
+function resolveSessionsInitialDimension(container: HTMLElement, dimension: IDimension | undefined): Dimension {
+	if (dimension) {
+		assertDimension(dimension);
+		if (dimension.width > 0 && dimension.height > 0) return new Dimension(dimension.width, dimension.height);
+	}
+	return new Dimension(container.clientWidth > 0 ? container.clientWidth : DEFAULT_LAYOUT_WIDTH, container.clientHeight > 0 ? container.clientHeight : DEFAULT_LAYOUT_HEIGHT);
+}
+
+function parseSessionsPartId(value: unknown): SessionsPartId {
+	if (value === 'titlebar' || value === 'activitybar' || value === 'sidebar' || value === 'sessions' || value === 'auxiliarybar') return value;
+	throw new TypeError('Sessions Grid contains an unknown Part');
+}
+
+function requiredView(
+	views: ReadonlyMap<SessionsPartId, WorkbenchPartView<SessionsPartId>>,
+	partId: SessionsPartId,
+): WorkbenchPartView<SessionsPartId> {
+	const view = views.get(partId);
+	if (!view) throw new Error(`Sessions Part view is not registered: ${partId}`);
+	return view;
+}
+
+function assertDimension(dimension: IDimension): void {
+	if (!Number.isFinite(dimension.width) || dimension.width < 0 || !Number.isFinite(dimension.height) || dimension.height < 0) {
+		throw new RangeError('Sessions layout dimensions must be non-negative and finite');
+	}
+}
+
+export interface SessionsWorkbenchLayoutOptions {
+	readonly initialDimension?: IDimension;
+	readonly initialState?: SessionsWorkbenchLayoutState;
+	readonly focus?: () => void;
+	readonly layoutStyle?: SessionsLayoutStyle;
+	readonly activityBarLocation?: ActivityBarPosition;
+}
+
+/** Owns the fixed Part topology and mutable geometry of one dedicated Sessions window. */
+export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAgentWorkbenchLayoutService {
+	private readonly views = new Map<SessionsPartId, WorkbenchPartView<SessionsPartId>>();
+	private grid!: SerializableGrid<WorkbenchPartView<SessionsPartId>>;
+	private readonly unavailableParts = new Set<SessionsPartId>();
+	private readonly desiredVisibility: { sidebar: boolean; auxiliarybar: boolean };
+	private titlebarHeight = 0;
+	private readonly initialDimension: Dimension;
+	private readonly stateModel: SessionsWorkbenchLayoutStateModel;
+	private readonly partVisibility = new Map<SessionsPartId, boolean>();
+	private readonly _onDidChangePartVisibility = this._register(new Emitter<SessionsPartVisibilityChangeEvent>());
+	private layoutStyle: SessionsLayoutStyle;
+	private activityBarLocation: ActivityBarPosition;
+	private readonly layoutPolicy = new SessionsLayoutPolicy();
+
+	readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
+	readonly domNode: HTMLDivElement;
+
+	constructor(container: HTMLElement, options: SessionsWorkbenchLayoutOptions, @IStorageService storageService: IStorageService) {
+		super({ root: container, focus: options.focus });
+		this.initialDimension = resolveSessionsInitialDimension(container, options.initialDimension);
+		this.layoutStyle = options.layoutStyle ?? 'modern';
+		this.activityBarLocation = options.activityBarLocation ?? ActivityBarPosition.DEFAULT;
+		this.domNode = h(container.ownerDocument, 'div');
+		this.domNode.className = 'ash-sessions-workbench-layout';
+		container.append(this.domNode);
+		this._register(toDisposable(() => this.domNode.remove()));
+		this.stateModel = new SessionsWorkbenchLayoutStateModel(storageService, options.initialState ?? createDefaultSessionsWorkbenchLayoutState());
+		const state = this.stateModel.state;
+		this.desiredVisibility = { sidebar: state.sidebar.visible, auxiliarybar: state.auxiliarybar.visible };
+		this._register(storageService.onWillSaveState(() => this.saveState()));
+	}
+
+	public createWorkbenchLayout(parts: ReadonlyMap<SessionsPartId, WorkbenchPart>): void {
+		validateParts(parts);
+		if (this.grid) {
+			throw new Error('Sessions Parts are already attached');
+		}
+		for (const partId of sessionsPartIds) {
+			this.views.set(partId, new WorkbenchPartView(partId, requiredPart(parts, partId)));
+		}
+		this.titlebarHeight = this.view('titlebar').minimumHeight;
+		const state = this.stateModel.state;
+		this.projectFrameInsets(state.auxiliarybar.visible);
+		this.grid = this._register(SerializableGrid.deserialize(
+			this.domNode,
+			createSessionsWorkbenchGridDescriptor(this.views, this.initialDimension, state, this.activityBarLocation),
+			{ fromJSON: data => this.view(parseSessionsPartId(data)) },
+		));
+		// Save before the Grid is disposed; hidden views retain their cached user sizes.
+		this._register(toDisposable(() => this.saveState()));
+	}
+
+	override get mainContainerOffset(): ILayoutOffsetInfo {
+		return { top: this.titlebarHeight, quickInputTop: 0 };
+	}
+
+	get state(): SessionsWorkbenchLayoutState {
+		return {
+			version: 1,
+			sidebar: { width: this.getPartSize('sidebar').width, visible: this.desiredVisibility.sidebar },
+			auxiliarybar: {
+				width: this.getPartSize('auxiliarybar').width,
+				visible: this.desiredVisibility.auxiliarybar,
+			},
+		};
+	}
+
+	setLayoutStyle(style: SessionsLayoutStyle): void {
+		if (this.layoutStyle === style) return;
+		this.layoutStyle = style;
+		this.projectFrameInsets();
+		if (this.grid.width > 0 && this.grid.height > 0) {
+			this.layout(new Dimension(this.grid.width, this.grid.height));
+		}
+	}
+
+	setActivityBarLocation(location: ActivityBarPosition): void {
+		if (this.activityBarLocation === location) return;
+		this.activityBarLocation = location;
+		this.projectFrameInsets();
+		this.grid.setViewVisible(this.view('activitybar'), location === ActivityBarPosition.DEFAULT);
+		if (this.grid.width > 0 && this.grid.height > 0) this.layout(new Dimension(this.grid.width, this.grid.height));
+		else this.publishPartVisibility();
+	}
+
+	override layout(dimension: IDimension = getClientArea(this.mainContainer)): void {
+		assertDimension(dimension);
+		this.grid.layout(dimension.width, dimension.height);
+		this.publishPartVisibility();
+		// Overlay consumers observe completed Part and nested Chat geometry.
+		super.layout(dimension);
+	}
+
+	isPartVisible(partId: SessionsPartId): boolean { return this.grid.isViewVisible(this.view(partId)); }
+	showPart(partId: SessionsPartId): void { this.updatePartVisibility(partId, true); }
+	hidePart(partId: SessionsPartId): void { this.updatePartVisibility(partId, false); }
+	getPartSize(partId: SessionsPartId): Dimension {
+		const size = this.grid.getViewSize(this.view(partId));
+		return new Dimension(size.width, size.height);
+	}
+	resizePart(partId: SessionsPartId, dimension: IDimension): void {
+		assertDimension(dimension);
+		this.grid.resizeView(this.view(partId), dimension);
+		this.layout(new Dimension(this.grid.width, this.grid.height));
+	}
+
+	private updatePartVisibility(partId: SessionsPartId, visible: boolean): void {
+		if (partId === 'titlebar' || partId === 'activitybar' || partId === 'sessions') throw new Error(`Required Sessions Part cannot be hidden: ${partId}`);
+		this.desiredVisibility[partId] = visible;
+		this.grid.setViewVisible(this.view(partId), visible && !this.unavailableParts.has(partId));
+		this.projectFrameInsets();
+		this.layout(new Dimension(this.grid.width, this.grid.height));
+	}
+
+	public setPartAvailable(partId: 'sidebar' | 'auxiliarybar', available: boolean): void {
+		if (available === !this.unavailableParts.has(partId)) {
+			return;
+		}
+		if (available) {
+			this.unavailableParts.delete(partId);
+		} else {
+			this.unavailableParts.add(partId);
+		}
+		this.grid.setViewVisible(this.view(partId), available && this.desiredVisibility[partId]);
+		this.projectFrameInsets();
+		this.layout(new Dimension(this.grid.width, this.grid.height));
+	}
+
+	private saveState(): void { this.stateModel.save(this.state); }
+
+	private projectFrameInsets(auxiliarybarVisible = this.isPartVisible('auxiliarybar')): void {
+		const { leftEdge, rightEdge } = this.layoutPolicy.getFrameMetrics(this.layoutStyle);
+		this.view('titlebar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: 0 });
+		this.view('activitybar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: this.activityBarLocation === ActivityBarPosition.DEFAULT ? leftEdge : 0 });
+		this.view('sidebar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: this.activityBarLocation === ActivityBarPosition.DEFAULT ? 0 : leftEdge });
+		const sidebarVisible = this.desiredVisibility.sidebar && !this.unavailableParts.has('sidebar');
+		this.view('sessions').setFrameInsets({ top: 0, right: auxiliarybarVisible ? 0 : rightEdge, bottom: 0, left: this.activityBarLocation !== ActivityBarPosition.DEFAULT && !sidebarVisible ? leftEdge : 0 });
+		this.view('auxiliarybar').setFrameInsets({ top: 0, right: rightEdge, bottom: 0, left: 0 });
+	}
+
+	private publishPartVisibility(): void {
+		for (const partId of sessionsPartIds) {
+			const visible = this.isPartVisible(partId);
+			if (this.partVisibility.get(partId) === visible) continue;
+			this.partVisibility.set(partId, visible);
+			this._onDidChangePartVisibility.fire({ partId, visible });
+		}
+	}
+
+	private view(partId: SessionsPartId): WorkbenchPartView<SessionsPartId> {
+		const view = this.views.get(partId);
+		if (!view) throw new Error(`Unknown Sessions Part: ${partId}`);
+		return view;
+	}
+}
+
+function validateParts(parts: ReadonlyMap<SessionsPartId, WorkbenchPart>): void {
+	const missing = sessionsPartIds.filter(partId => !parts.has(partId));
+	if (missing.length > 0) throw new TypeError(`Sessions layout is missing Parts: ${missing.join(', ')}`);
+}
+
+function requiredPart(parts: ReadonlyMap<SessionsPartId, WorkbenchPart>, partId: SessionsPartId): WorkbenchPart {
+	const part = parts.get(partId);
+	if (!part) throw new Error(`Sessions Part is not registered: ${partId}`);
+	return part;
 }

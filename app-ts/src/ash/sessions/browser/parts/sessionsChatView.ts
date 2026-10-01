@@ -2,7 +2,7 @@ import "./media/sessionsChatView.css";
 import { addDisposableListener, h } from "../../../base/browser/dom.js";
 import type { IDimension } from "../../../base/browser/dom.js";
 import type { IPositionedRectangle } from "../../../base/browser/geometry.js";
-import { Direction, Grid, Sizing, type IView } from "../../../base/browser/ui/grid/grid.js";
+import type { IView } from "../../../base/browser/ui/grid/grid.js";
 import { Disposable, setDisposableOwner, toDisposable } from "../../../base/common/lifecycle.js";
 import type { ICommandService } from "../../../platform/commands/common/commands.js";
 import type { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
@@ -20,6 +20,8 @@ import type { IDictationService } from '../../../platform/dictation/common/dicta
 import type { INotificationService } from '../../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../../platform/native/common/nativeHost.js';
 import { localize } from '../../../nls.js';
+
+import { SessionGridLayout, type ISessionGridEntry } from './sessionGridLayout.js';
 
 let sessionsChatPaneInstanceId = 0;
 
@@ -41,7 +43,7 @@ export interface SessionsChatViewOptions {
 /** Owns the resizable grid of retained Chat panes in the Sessions Part. */
 export class SessionsChatView extends Disposable {
 	readonly domNode: HTMLElement;
-	private readonly grid: Grid<SessionsChatGridView>;
+	private readonly grid: SessionGridLayout;
 	private readonly empty: SessionsChatEmptyView;
 	private readonly entries = new Map<string, SessionsChatGridEntry>();
 	private activePane: ChatWidget<ChatWidgetModel> | undefined;
@@ -80,8 +82,7 @@ export class SessionsChatView extends Disposable {
 		this.domNode.className = "ash-sessions-chat-view";
 		container.append(this.domNode);
 		this.empty = new SessionsChatEmptyView(this.domNode);
-		this.grid = this._register(new Grid<SessionsChatGridView>(this.domNode, { type: "leaf", view: this.empty, size: 800 }, { sashPresentation: { type: "inset", gap: 8 } }));
-		this.grid.element.classList.add("ash-sessions-chat-grid");
+		this.grid = this._register(new SessionGridLayout(this.domNode, this.empty));
 		this._register(toDisposable(() => {
 			for (const entry of this.entries.values()) entry.dispose();
 			this.entries.clear();
@@ -113,14 +114,14 @@ export class SessionsChatView extends Disposable {
 		this.rekeyMaterializedEntries();
 		this.domNode.classList.toggle('single-chat', selections.length === 1);
 		this.empty.update(this.sessionService.state, this.sessionService.error);
+		const removed: SessionsChatGridEntry[] = [];
 		const visibleKeys = new Set(selections.map(selectionKey));
 		for (const [key, entry] of [...this.entries]) {
 			if (visibleKeys.has(key)) continue;
-			this.grid.removeView(entry);
 			this.entries.delete(key);
-			entry.dispose();
+			removed.push(entry);
 		}
-		let reference: SessionsChatGridView = this.empty;
+		const gridEntries: ISessionGridEntry[] = [];
 		for (const selection of selections) {
 			const key = selectionKey(selection);
 			let entry = this.entries.get(key);
@@ -143,12 +144,17 @@ export class SessionsChatView extends Disposable {
 				setDisposableOwner(entry, this);
 				this.entries.set(key, entry);
 				entry.pane.setVisible(this.visible);
-				this.grid.addView(entry, Sizing.Distribute, reference, Direction.Right);
 			}
 			entry.update(selection, sameSelection(selection, active));
-			reference = entry;
+			gridEntries.push({ id: key, view: entry });
 		}
-		this.grid.setViewVisible(this.empty, selections.length === 0);
+		if (gridEntries.length === 0) {
+			gridEntries.push({ id: 'empty', view: this.empty });
+		}
+		this.grid.reconcile(gridEntries, active ? selectionKey(active) : 'empty');
+		for (const entry of removed) {
+			entry.dispose();
+		}
 		this.activePane = active ? this.entries.get(selectionKey(active))?.pane : undefined;
 		if (this.dimension) this.grid.layout(this.dimension.width, this.dimension.height);
 	}
@@ -161,9 +167,6 @@ export class SessionsChatView extends Disposable {
 			if (key === durableKey) continue;
 			const existing = this.entries.get(durableKey);
 			if (existing && existing !== entry) {
-				this.grid.removeView(entry);
-				this.entries.delete(key);
-				entry.dispose();
 				continue;
 			}
 			this.entries.delete(key);
@@ -171,8 +174,6 @@ export class SessionsChatView extends Disposable {
 		}
 	}
 }
-
-type SessionsChatGridView = SessionsChatEmptyView | SessionsChatGridEntry;
 
 class SessionsChatEmptyView implements IView {
 	readonly element: HTMLDivElement;

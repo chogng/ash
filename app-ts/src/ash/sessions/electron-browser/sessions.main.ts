@@ -18,6 +18,7 @@ import { RETURN_TO_WORKBENCH_CHANNEL } from '../common/windowNavigation.js';
 import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL } from '../common/windowNavigation.js';
 import type { IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { ElectronLifecycleService } from '../../workbench/services/lifecycle/electron-browser/lifecycleService.js';
+import { NativeHostColorSchemeService } from '../../workbench/services/themes/electron-browser/nativeHostColorSchemeService.js';
 import { showStartupError } from "../../workbench/browser/startupError.js";
 import { invoke, subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL } from '../../platform/window/common/window.js';
@@ -91,6 +92,7 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 		workspaceSelection = selectionFromWorkspace(parseWorkspace(value));
 	});
 	sessions.add(toDisposable(() => workspaceSubscription.dispose()));
+	const hostColorScheme = await api.nativeHost.getOSColorScheme();
 	workbench = sessions.add(new Workbench({
 		modeId,
 		profile,
@@ -103,6 +105,11 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 		initialConfigurationSnapshot,
 		keybindingsResourceApi: api.keybindings,
 		createContextMenuService: options => createElectronWorkbenchContextMenuService(options, api.nativeContextMenu),
+		createHostColorSchemeService: services => {
+			const colors = services.createInstance(NativeHostColorSchemeService, hostColorScheme);
+			void colors.initialize().catch(onUnexpectedError);
+			return colors;
+		},
 		container,
 	}));
 	requestDrain();

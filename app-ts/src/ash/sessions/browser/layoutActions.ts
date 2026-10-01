@@ -6,14 +6,14 @@ import { CommandsRegistry } from '../../platform/commands/common/commands.js';
 import { RawContextKey, type IContextKeyService } from '../../platform/contextkey/common/contextkey.js';
 import { SideBarVisibleContext } from '../../workbench/common/contextkeys.js';
 import type { ISessionsService } from '../services/sessions/browser/sessionsService.js';
-import type { SessionsWorkbenchLayout } from './layoutPolicy.js';
+import type { IAgentWorkbenchLayoutService } from './workbench.js';
 import { Menus } from './menus.js';
 
 const canNavigateBack = new RawContextKey<boolean>('sessions.canNavigateBack', false);
 const canNavigateForward = new RawContextKey<boolean>('sessions.canNavigateForward', false);
 
 /** Registers window-local commands and derives their menu state from the layout and session owners. */
-export function registerLayoutActions(layout: SessionsWorkbenchLayout, sessions: ISessionsService, contextKeys: IContextKeyService): IDisposable {
+export function registerLayoutActions(layout: IAgentWorkbenchLayoutService, sessions: ISessionsService, contextKeys: IContextKeyService): IDisposable {
 	const disposables = new DisposableStore();
 	const sidebarVisible = SideBarVisibleContext.bindTo(contextKeys);
 	const backEnabled = canNavigateBack.bindTo(contextKeys);

@@ -1,6 +1,10 @@
+import '../../../editor/test/browser/testEditorDom.js';
+import { IStorageService } from '../../../platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
+import { sessionsPartIds, type SessionsPartId } from '../../common/layoutConstants.js';
 import { observableValue } from '../../../base/common/observable.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Dimension } from '../../../base/browser/dom.js';
 import { Emitter } from '../../../base/common/event.js';
@@ -13,7 +17,7 @@ import { ServiceContainer } from '../../../platform/instantiation/common/instant
 import { WorkbenchPart } from '../../../workbench/browser/part.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import { registerLayoutActions } from '../../browser/layoutActions.js';
-import { SessionsWorkbenchLayout, sessionsPartIds, type SessionsPartId } from '../../browser/layoutPolicy.js';
+import { SessionsWorkbenchLayout } from '../../browser/workbench.js';
 import { Menus } from '../../browser/menus.js';
 import type { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 
@@ -32,7 +36,7 @@ test('Sessions layout commands update menu state from their owners and release w
 	using services = new ServiceContainer();
 	using commands = new CommandService(services);
 	const parts = new Map(sessionsPartIds.map(id => [id, resources.add(new TestPart(browser.window.document.body, id))]));
-	using layout = new SessionsWorkbenchLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
+	using layout = createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
 	let historyIndex = 1;
 	const sessions: ISessionsService = {
 		page: observableValue<"chat" | "code">("page", "chat"),
@@ -77,3 +81,21 @@ test('Sessions layout commands update menu state from their owners and release w
 		browser.window.close();
 	}
 });
+
+const layoutTestResources = new DisposableStore();
+suiteTeardown(() => layoutTestResources.dispose());
+
+function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, WorkbenchPart>, options: import('../../browser/workbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService } = {}): import('../../browser/workbench.js').SessionsWorkbenchLayout {
+	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, applicationId: 'sessions-test', workspaceId: 'sessions', flushInterval: 0, onError: () => {} }));
+	const storage = options.storageService ?? ownedStorage!;
+	using services = new ServiceContainer();
+	services.registerInstance(IStorageService, storage);
+	const layout = services.createInstance(SessionsWorkbenchLayout, container, options);
+	try {
+		layout.createWorkbenchLayout(parts);
+	} catch (error) {
+		layout.dispose();
+		throw error;
+	}
+	return layout;
+}

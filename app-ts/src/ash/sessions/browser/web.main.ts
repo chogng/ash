@@ -6,6 +6,7 @@ import { DisposableStore, type IDisposable } from "../../base/common/lifecycle.j
 import { createDisconnectedRendererApi } from "../../platform/app-server/browser/rendererApi.js";
 import { IndexedDbConfigurationApi } from '../../platform/configuration/browser/indexedDbConfigurationApi.js';
 import { BrowserLifecycleService } from '../../workbench/services/lifecycle/browser/lifecycleService.js';
+import { BrowserHostColorSchemeService } from '../../workbench/services/themes/browser/browserHostColorSchemeService.js';
 import { createBrowserContextMenuService } from "../../platform/contextview/browser/contextMenuService.js";
 import { BrowserClipboardService } from '../../platform/clipboard/browser/clipboardService.js';
 import { connectBrowserWorkbenchHost } from '../../workbench/browser/web.host.js';
@@ -56,6 +57,7 @@ async function mountBrowserSessions(modeId: WorkbenchModeId, profile: SessionsPr
 				location.assign(new URL(profile.workbenchRelativePath, location.href).href);
 			},
 			createContextMenuService: createBrowserContextMenuService,
+			createHostColorSchemeService: () => new BrowserHostColorSchemeService(ownerWindow),
 			container,
 		}));
 		sessions.add(addDisposableListener(window, "pagehide", () => {

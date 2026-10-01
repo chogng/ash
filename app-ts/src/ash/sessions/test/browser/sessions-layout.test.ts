@@ -1,5 +1,7 @@
+import { DisposableStore } from '../../../base/common/lifecycle.js';
+import { sessionsPartIds } from '../../common/layoutConstants.js';
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { h } from "../../../base/browser/dom.js";
 
@@ -21,14 +23,15 @@ const { Dimension } = await import("../../../base/browser/dom.js");
 const { WorkbenchPart } = await import("../../../workbench/browser/part.js");
 const { WorkbenchWindowBarHeight } = await import("../../../workbench/browser/parts/workbenchPartDimensions.js");
 const { BrowserStorageService } = await import("../../../workbench/services/storage/browser/storageService.js");
-const { WillSaveStateReason } = await import("../../../platform/storage/common/storage.js");
-const { SessionsWorkbenchLayout, sessionsPartIds } = await import("../../../sessions/browser/layoutPolicy.js");
+const { IStorageService, WillSaveStateReason } = await import("../../../platform/storage/common/storage.js");
+const { ServiceContainer } = await import('../../../platform/instantiation/common/instantiation.js');
+const { SessionsWorkbenchLayout } = await import("../../../sessions/browser/workbench.js");
 const { SessionsModernUIContribution } = await import('../../../sessions/contrib/modernUI/browser/modernUI.contribution.js');
 const { SessionsConfiguration } = await import('../../../sessions/common/configuration.js');
 const { ActivityBarPosition, WorkbenchConfiguration } = await import('../../../workbench/common/configuration.js');
 const { WorkbenchConfigurationService } = await import('../../../workbench/services/configuration/browser/configurationService.js');
 
-type SessionsPartId = import("../../../sessions/browser/layoutPolicy.js").SessionsPartId;
+type SessionsPartId = import("../../common/layoutConstants.js").SessionsPartId;
 type WorkbenchPartInstance = import("../../../workbench/browser/part.js").WorkbenchPart;
 
 class TestSessionsPart extends WorkbenchPart {
@@ -62,7 +65,7 @@ test("Sessions layout owns a fixed Sessions-first Part topology", () => {
 	const container = h(dom.window.document, "main");
 	dom.window.document.body.append(container);
 	const parts = createParts(dom.window.document);
-	const layout = new SessionsWorkbenchLayout(container, parts, { initialDimension: new Dimension(1_200, 800) });
+	const layout = createLayout(container, parts, { initialDimension: new Dimension(1_200, 800) });
 
 	layout.layout(new Dimension(1_200, 800));
 
@@ -87,7 +90,7 @@ test('Sessions layout style changes without changing the IDE preference or visib
 	dom.window.document.body.append(container);
 	const parts = createParts(dom.window.document);
 	const configuration = new WorkbenchConfigurationService();
-	const layout = new SessionsWorkbenchLayout(container, parts, { initialDimension: new Dimension(1_200, 800) });
+	const layout = createLayout(container, parts, { initialDimension: new Dimension(1_200, 800) });
 	const appearance = new SessionsModernUIContribution(container, layout, configuration);
 	const sessionsFrame = parts.get('sessions')!.domNode.parentElement as HTMLElement;
 	const surface = () => ({
@@ -122,7 +125,7 @@ test("Sessions layout toggles the sidebar and auxiliary Part while keeping the p
 	const container = h(dom.window.document, "main");
 	dom.window.document.body.append(container);
 	const parts = createParts(dom.window.document);
-	const layout = new SessionsWorkbenchLayout(container, parts, { initialDimension: new Dimension(1_000, 700) });
+	const layout = createLayout(container, parts, { initialDimension: new Dimension(1_000, 700) });
 	const changes: Array<{ partId: SessionsPartId; visible: boolean }> = [];
 	const subscription = layout.onDidChangePartVisibility(change => changes.push(change));
 
@@ -156,7 +159,7 @@ test('Sessions Activity Bar position changes the grid visibility and frame edge'
 	const container = h(dom.window.document, 'main');
 	dom.window.document.body.append(container);
 	const parts = createParts(dom.window.document);
-	const layout = new SessionsWorkbenchLayout(container, parts, {
+	const layout = createLayout(container, parts, {
 		initialDimension: new Dimension(1_200, 800),
 		activityBarLocation: ActivityBarPosition.TOP,
 	});
@@ -187,10 +190,10 @@ test("Sessions layout validates its complete Part set", () => {
 	const parts = createParts(dom.window.document);
 	parts.delete("auxiliarybar");
 
-	assert.throws(() => new SessionsWorkbenchLayout(container, parts), /missing Parts: auxiliarybar/);
+	assert.throws(() => createLayout(container, parts), /missing Parts: auxiliarybar/);
 	parts.set('auxiliarybar', new TestSessionsPart('auxiliarybar', dom.window.document.body));
 	parts.delete('activitybar');
-	assert.throws(() => new SessionsWorkbenchLayout(container, parts), /missing Parts: activitybar/);
+	assert.throws(() => createLayout(container, parts), /missing Parts: activitybar/);
 
 	for (const part of parts.values()) part.dispose();
 	dom.window.close();
@@ -209,7 +212,7 @@ test("Sessions layout restores its profile-scoped geometry and auxiliary visibil
 	const firstStorage = createStorage();
 	const firstContainer = h(dom.window.document, "main");
 	const firstParts = createParts(dom.window.document);
-	const first = new SessionsWorkbenchLayout(firstContainer, firstParts, { initialDimension: new Dimension(1_100, 700), storageService: firstStorage });
+	const first = createLayout(firstContainer, firstParts, { initialDimension: new Dimension(1_100, 700), storageService: firstStorage });
 	first.layout(new Dimension(1_100, 700));
 	first.resizePart("sidebar", new Dimension(320, first.getPartSize("sidebar").height));
 	first.resizePart("auxiliarybar", new Dimension(360, first.getPartSize("auxiliarybar").height));
@@ -223,7 +226,7 @@ test("Sessions layout restores its profile-scoped geometry and auxiliary visibil
 	const restoredStorage = createStorage();
 	const restoredContainer = h(dom.window.document, "main");
 	const restoredParts = createParts(dom.window.document);
-	const restored = new SessionsWorkbenchLayout(restoredContainer, restoredParts, { initialDimension: new Dimension(1_100, 700), storageService: restoredStorage });
+	const restored = createLayout(restoredContainer, restoredParts, { initialDimension: new Dimension(1_100, 700), storageService: restoredStorage });
 	restored.layout(new Dimension(1_100, 700));
 
 	assert.equal(Math.abs(restored.getPartSize("sidebar").width - 320) <= 1, true);
@@ -236,3 +239,63 @@ test("Sessions layout restores its profile-scoped geometry and auxiliary visibil
 	restoredStorage.dispose();
 	dom.window.close();
 });
+
+test('Sessions layout completion exposes settled Parts through the window container service', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const container = h(dom.window.document, 'main');
+	dom.window.document.body.append(container);
+	const parts = createParts(dom.window.document);
+	using layout = createLayout(container, parts, { initialDimension: new Dimension(1_200, 800) });
+	const observed: unknown[] = [];
+	using subscription = layout.onDidLayoutMainContainer(dimension => observed.push({ dimension, titlebar: layout.getPartSize('titlebar'), height: layout.getPartSize('sessions').height, offset: layout.mainContainerOffset.top }));
+	layout.layout(new Dimension(1_400, 900));
+	assert.deepEqual(observed, [{ dimension: new Dimension(1_400, 900), titlebar: new Dimension(1_400, WorkbenchWindowBarHeight), height: 900 - WorkbenchWindowBarHeight, offset: WorkbenchWindowBarHeight }]);
+	assert.equal(layout.mainContainer, container);
+	for (const part of parts.values()) part.dispose();
+	dom.window.close();
+});
+
+test('Sessions page availability preserves user visibility and cached widths during persistence', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, applicationId: 'code', workspaceId: 'sessions', flushInterval: 0 });
+	const parts = createParts(dom.window.document);
+	using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1_200, 800), storageService: storage });
+	layout.layout(new Dimension(1_200, 800));
+	layout.resizePart('auxiliarybar', new Dimension(280, 800));
+	layout.setPartAvailable('auxiliarybar', false);
+	await storage.flush(WillSaveStateReason.SHUTDOWN);
+	assert.deepEqual({ visible: layout.isPartVisible('auxiliarybar'), desired: layout.state.auxiliarybar }, { visible: false, desired: { width: 280, visible: true } });
+	layout.setPartAvailable('auxiliarybar', true);
+	assert.deepEqual({ visible: layout.isPartVisible('auxiliarybar'), width: layout.getPartSize('auxiliarybar').width }, { visible: true, width: 280 });
+	layout.setPartAvailable('auxiliarybar', false);
+	layout.hidePart('auxiliarybar');
+	layout.setPartAvailable('auxiliarybar', true);
+	assert.deepEqual({ visible: layout.isPartVisible('auxiliarybar'), desired: layout.state.auxiliarybar.visible }, { visible: false, desired: false });
+	for (const part of parts.values()) part.dispose();
+	dom.window.close();
+});
+
+test('Sessions layout creation requires the registered storage service', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using services = new ServiceContainer();
+	assert.throws(() => services.createInstance(SessionsWorkbenchLayout, dom.window.document.body, {}), /storageService|StorageService/);
+	dom.window.close();
+});
+
+const layoutTestResources = new DisposableStore();
+suiteTeardown(() => layoutTestResources.dispose());
+
+function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, WorkbenchPartInstance>, options: import('../../browser/workbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService } = {}): import('../../browser/workbench.js').SessionsWorkbenchLayout {
+	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, applicationId: 'sessions-test', workspaceId: 'sessions', flushInterval: 0, onError: () => {} }));
+	const storage = options.storageService ?? ownedStorage!;
+	using services = new ServiceContainer();
+	services.registerInstance(IStorageService, storage);
+	const layout = services.createInstance(SessionsWorkbenchLayout, container, options);
+	try {
+		layout.createWorkbenchLayout(parts);
+	} catch (error) {
+		layout.dispose();
+		throw error;
+	}
+	return layout;
+}
