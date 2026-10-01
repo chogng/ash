@@ -86,6 +86,8 @@ mod artwork {
     pub(crate) const DOWNLOAD_BOX: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/download-box.svg"));
     pub(crate) const DOWNLOAD_TRAY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/download-tray.svg"));
     pub(crate) const EDIT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/edit.svg"));
+    pub(crate) const EDIT_1: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/edit-1.svg"));
+    pub(crate) const EDIT_2: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/edit-2.svg"));
     pub(crate) const EDIT_WRITE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/edit-write.svg"));
     pub(crate) const ELLIPSIS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/ellipsis.svg"));
     pub(crate) const ENTER: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/enter.svg"));
@@ -167,6 +169,7 @@ mod artwork {
     pub(crate) const PINNED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/pinned.svg"));
     pub(crate) const PLAN: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/plan.svg"));
     pub(crate) const PREVIEW: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/preview.svg"));
+    pub(crate) const PRIMITIVE_SQUARE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/primitive-square.svg"));
     pub(crate) const PROJECTS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/projects.svg"));
     pub(crate) const PROJECTS_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/projects-filled.svg"));
     pub(crate) const QUESTION: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/question.svg"));
@@ -193,8 +196,9 @@ mod artwork {
     pub(crate) const STAR: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/star.svg"));
     pub(crate) const STAR_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/star-filled.svg"));
     pub(crate) const START: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/start.svg"));
-    pub(crate) const STOP: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/stop.svg"));
     pub(crate) const SUMMARY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/summary.svg"));
+    pub(crate) const SYMBOL_COLOR: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/symbol-color.svg"));
+    pub(crate) const SYMBOL_COLOR_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/symbol-color-filled.svg"));
     pub(crate) const SYNC: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/sync.svg"));
     pub(crate) const TABLE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/table.svg"));
     pub(crate) const TARGET: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/target.svg"));
@@ -307,6 +311,8 @@ pub mod icons {
     pub const DOWNLOAD_BOX: Icon = Icon::new(IconId::new("download-box"), artwork::DOWNLOAD_BOX);
     pub const DOWNLOAD_TRAY: Icon = Icon::new(IconId::new("download-tray"), artwork::DOWNLOAD_TRAY);
     pub const EDIT: Icon = Icon::new(IconId::new("edit"), artwork::EDIT);
+    pub const EDIT_1: Icon = Icon::new(IconId::new("edit-1"), artwork::EDIT_1);
+    pub const EDIT_2: Icon = Icon::new(IconId::new("edit-2"), artwork::EDIT_2);
     pub const EDIT_WRITE: Icon = Icon::new(IconId::new("edit-write"), artwork::EDIT_WRITE);
     pub const ELLIPSIS: Icon = Icon::new(IconId::new("ellipsis"), artwork::ELLIPSIS);
     pub const ENTER: Icon = Icon::new(IconId::new("enter"), artwork::ENTER);
@@ -388,6 +394,7 @@ pub mod icons {
     pub const PINNED: Icon = Icon::new(IconId::new("pinned"), artwork::PINNED);
     pub const PLAN: Icon = Icon::new(IconId::new("plan"), artwork::PLAN);
     pub const PREVIEW: Icon = Icon::new(IconId::new("preview"), artwork::PREVIEW);
+    pub const PRIMITIVE_SQUARE: Icon = Icon::new(IconId::new("primitive-square"), artwork::PRIMITIVE_SQUARE);
     pub const PROJECTS: Icon = Icon::new(IconId::new("projects"), artwork::PROJECTS);
     pub const PROJECTS_FILLED: Icon = Icon::new(IconId::new("projects-filled"), artwork::PROJECTS_FILLED);
     pub const QUESTION: Icon = Icon::new(IconId::new("question"), artwork::QUESTION);
@@ -414,8 +421,9 @@ pub mod icons {
     pub const STAR: Icon = Icon::new(IconId::new("star"), artwork::STAR);
     pub const STAR_FILLED: Icon = Icon::new(IconId::new("star-filled"), artwork::STAR_FILLED);
     pub const START: Icon = Icon::new(IconId::new("start"), artwork::START);
-    pub const STOP: Icon = Icon::new(IconId::new("stop"), artwork::STOP);
     pub const SUMMARY: Icon = Icon::new(IconId::new("summary"), artwork::SUMMARY);
+    pub const SYMBOL_COLOR: Icon = Icon::new(IconId::new("symbol-color"), artwork::SYMBOL_COLOR);
+    pub const SYMBOL_COLOR_FILLED: Icon = Icon::new(IconId::new("symbol-color-filled"), artwork::SYMBOL_COLOR_FILLED);
     pub const SYNC: Icon = Icon::new(IconId::new("sync"), artwork::SYNC);
     pub const TABLE: Icon = Icon::new(IconId::new("table"), artwork::TABLE);
     pub const TARGET: Icon = Icon::new(IconId::new("target"), artwork::TARGET);
@@ -524,6 +532,8 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::DOWNLOAD_BOX,
     icons::DOWNLOAD_TRAY,
     icons::EDIT,
+    icons::EDIT_1,
+    icons::EDIT_2,
     icons::EDIT_WRITE,
     icons::ELLIPSIS,
     icons::ENTER,
@@ -605,6 +615,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::PINNED,
     icons::PLAN,
     icons::PREVIEW,
+    icons::PRIMITIVE_SQUARE,
     icons::PROJECTS,
     icons::PROJECTS_FILLED,
     icons::QUESTION,
@@ -631,8 +642,9 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::STAR,
     icons::STAR_FILLED,
     icons::START,
-    icons::STOP,
     icons::SUMMARY,
+    icons::SYMBOL_COLOR,
+    icons::SYMBOL_COLOR_FILLED,
     icons::SYNC,
     icons::TABLE,
     icons::TARGET,
@@ -742,6 +754,8 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("download-box", artwork::DOWNLOAD_BOX),
     ("download-tray", artwork::DOWNLOAD_TRAY),
     ("edit", artwork::EDIT),
+    ("edit-1", artwork::EDIT_1),
+    ("edit-2", artwork::EDIT_2),
     ("edit-write", artwork::EDIT_WRITE),
     ("ellipsis", artwork::ELLIPSIS),
     ("enter", artwork::ENTER),
@@ -823,6 +837,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("pinned", artwork::PINNED),
     ("plan", artwork::PLAN),
     ("preview", artwork::PREVIEW),
+    ("primitive-square", artwork::PRIMITIVE_SQUARE),
     ("projects", artwork::PROJECTS),
     ("projects-filled", artwork::PROJECTS_FILLED),
     ("question", artwork::QUESTION),
@@ -849,8 +864,9 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("star", artwork::STAR),
     ("star-filled", artwork::STAR_FILLED),
     ("start", artwork::START),
-    ("stop", artwork::STOP),
     ("summary", artwork::SUMMARY),
+    ("symbol-color", artwork::SYMBOL_COLOR),
+    ("symbol-color-filled", artwork::SYMBOL_COLOR_FILLED),
     ("sync", artwork::SYNC),
     ("table", artwork::TABLE),
     ("target", artwork::TARGET),

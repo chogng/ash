@@ -392,6 +392,16 @@
       "rendering": "symbolic"
     },
     {
+      "id": "edit-1",
+      "file": "edit-1.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "edit-2",
+      "file": "edit-2.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "edit-write",
       "file": "edit-write.svg",
       "rendering": "symbolic"
@@ -797,6 +807,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "primitive-square",
+      "file": "primitive-square.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "projects",
       "file": "projects.svg",
       "rendering": "symbolic"
@@ -927,13 +942,18 @@
       "rendering": "symbolic"
     },
     {
-      "id": "stop",
-      "file": "stop.svg",
+      "id": "summary",
+      "file": "summary.svg",
       "rendering": "symbolic"
     },
     {
-      "id": "summary",
-      "file": "summary.svg",
+      "id": "symbol-color",
+      "file": "symbol-color.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "symbol-color-filled",
+      "file": "symbol-color-filled.svg",
       "rendering": "symbolic"
     },
     {
