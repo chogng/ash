@@ -1,0 +1,20 @@
+---
+source: code/tui/src/app/inline/frame_tests.rs
+expression: "text(&render(&app, 50, 16))"
+---
+                                                  
+    ▄  ▄     Ash Code v0.1.0                      
+  ▗█▛██▜█▖   Automatic model                      
+  ▝▜████▛▘   .                                    
+    ▝  ▘                                          
+                                                  
+                                                  
+                                                  
+                                                  
+─ Help ───────────────────────────────────────────
+                                                  
+   Commands                                       
+  First                                           
+> Second                                          
+                                                  
+  Tab/Shift+Tab to switch  ·  Esc to close

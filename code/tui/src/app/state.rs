@@ -1281,13 +1281,14 @@ impl App {
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
         self.fullscreen.pointer.clear();
-        if self.overlay().is_some() || self.session_navigation().preview.is_some() {
+        if self.overlay().is_some() {
             return;
         }
-        if self.screen_mode() == crate::terminal::ScreenMode::Fullscreen
-            && self.panels().command_active()
-        {
+        if self.panels().command_active() {
             self.panels_mut().handle_command_paste(pasted);
+            return;
+        }
+        if self.session_navigation().preview.is_some() {
             return;
         }
         if self.issues().is_open() {
@@ -1302,10 +1303,6 @@ impl App {
             && self.chat_panel.request_active()
         {
             self.chat_panel.handle_request_paste(pasted);
-            return;
-        }
-        if self.panels().command_active() {
-            self.panels_mut().handle_command_paste(pasted);
             return;
         }
         if self.fullscreen_home_visible() && self.accepts_input() {

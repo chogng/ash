@@ -1,0 +1,18 @@
+---
+source: code/tui/src/app/mode_tests.rs
+expression: render(&app)
+---
+  .                          [— / —] [Dashboard]  
+                                                  
+  ┌── Help ────────────────────────────────[✗]─┐  
+  │                                            │  
+  │   Commands                                 │  
+  │                                            │  
+  │> First                                     │  
+  │  Second                                    │  
+  │                                            │  
+  │                                            │  
+  │                                            │  
+  │                                            │  
+  │  Tab/Shift+Tab to switch  ·  Esc to close  │  
+  └────────────────────────────────────────────┘

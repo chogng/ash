@@ -369,6 +369,45 @@ fn managers_share_the_catalogue_but_keep_separate_selections_and_focus() {
 }
 
 #[test]
+fn transferred_panel_takes_input_above_the_inline_preview() {
+    let mut app = navigation_app();
+    switch(&mut app, ScreenMode::Inline);
+    app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    assert!(matches!(
+        app.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE)),
+        Some(super::AppCommand::Sessions(
+            crate::sessions::Command::Preview { .. }
+        ))
+    ));
+    assert!(app.session_preview().is_some());
+    switch(&mut app, ScreenMode::Fullscreen);
+    app.update(AppEvent::HelpOpened(ListSelectionModel::new(
+        "Help",
+        vec![ListSelectionGroup::new(
+            "Commands",
+            vec![
+                ListSelectionItem::new("First"),
+                ListSelectionItem::new("Second"),
+            ],
+        )],
+    )));
+    crate::tui_assert_snapshot!("fullscreen_panel_before_preview_handoff", render(&app));
+    switch(&mut app, ScreenMode::Inline);
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(
+        app.list_selection().unwrap().selected_visible_index(),
+        Some(1)
+    );
+    assert!(app.session_preview().is_some());
+    crate::tui_assert_snapshot!("inline_panel_above_parked_preview", render(&app));
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.command_panel().is_none());
+    assert!(app.session_preview().is_some());
+    crate::tui_assert_snapshot!("inline_preview_restored_after_panel", render(&app));
+}
+
+#[test]
 fn preview_replies_with_equal_generations_stay_with_the_requesting_mode() {
     let mut app = navigation_app();
     let preview = |app: &mut App| {

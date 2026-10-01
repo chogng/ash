@@ -78,14 +78,17 @@ pub(super) fn draw(
 }
 
 fn bottom_content(app: &App) -> BottomContent<'_> {
-    if let Some(manager) = app.issue_manager() {
-        return BottomContent::Keys(manager.key_hints());
-    }
-    if app.overlay().is_some() || app.session_preview().is_some() {
+    if app.overlay().is_some() {
         return BottomContent::Keys(&bindings::CLOSE_HINTS);
     }
     if let Some(hints) = app.command_panel_key_hints() {
         return BottomContent::Keys(hints);
+    }
+    if let Some(manager) = app.issue_manager() {
+        return BottomContent::Keys(manager.key_hints());
+    }
+    if app.session_preview().is_some() {
+        return BottomContent::Keys(&bindings::CLOSE_HINTS);
     }
     if app.session_manager_view().is_some() {
         return BottomContent::Keys(app.session_manager_hint());

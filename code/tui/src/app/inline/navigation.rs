@@ -31,15 +31,21 @@ pub(in crate::app) fn handle_key(
     now: Instant,
     terminal_area: Rect,
 ) -> Option<AppCommand> {
-    if app.inline.issues.is_open() {
-        return app.inline.issues.handle_key(key).map(Into::into);
-    }
     let overlay_area = super::layout(app, terminal_area).transient_area();
     if let Some(overlay) = app.overlay_mut() {
         if overlay.handle_key(key, overlay_area) == OverlayInputOutcome::Dismiss {
             close_overlay(app);
         }
         return None;
+    }
+    // Requests and parked pages remain pending until the foreground panel closes.
+    let composer_area = super::layout(app, terminal_area).session.composer;
+    if let Some(panel) = app.inline.panels.command_mut() {
+        let outcome = super::panel::handle_key(panel, key, composer_area);
+        return app.handle_command_panel_outcome(outcome);
+    }
+    if app.inline.issues.is_open() {
+        return app.inline.issues.handle_key(key).map(Into::into);
     }
     if app.inline.sessions.preview.is_some() {
         if key.kind == KeyEventKind::Press && bindings::CLOSE.matches(key) {
@@ -105,11 +111,6 @@ pub(in crate::app) fn handle_key(
         if app.chat_panel.request_active() {
             return None;
         }
-    }
-    let composer_area = super::layout(app, terminal_area).session.composer;
-    if let Some(panel) = app.inline.panels.command_mut() {
-        let outcome = super::panel::handle_key(panel, key, composer_area);
-        return app.handle_command_panel_outcome(outcome);
     }
     if chat_input_focused(app) && app.input_state().history_intercepts(key) {
         let outcome = app.handle_composer_key(key);

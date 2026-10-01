@@ -35,13 +35,6 @@ pub(super) fn height(app: &App, screen: Rect) -> u16 {
 }
 
 fn layout_with_minimum(app: &App, terminal_area: Rect, min_transcript_rows: u16) -> Layout {
-    if app.session_preview().is_some() {
-        let session = session_areas(terminal_area, 0, 0, 0, 0, 1, 1, 0, 0, min_transcript_rows);
-        return Layout {
-            input: Rect::default(),
-            session,
-        };
-    }
     if let Some(panel) = app.command_panel() {
         return Layout {
             session: command_panel_areas(
@@ -50,6 +43,13 @@ fn layout_with_minimum(app: &App, terminal_area: Rect, min_transcript_rows: u16)
                 BOTTOM_ROWS,
             ),
             input: Rect::default(),
+        };
+    }
+    if app.session_preview().is_some() {
+        let session = session_areas(terminal_area, 0, 0, 0, 0, 1, 1, 0, 0, min_transcript_rows);
+        return Layout {
+            input: Rect::default(),
+            session,
         };
     }
     let input_view = app.chat_composer_view();
@@ -236,7 +236,18 @@ pub(in crate::app) fn session_areas(
     let switcher_gap_rows =
         u16::from(switcher_rows > 0 && bottom_rows > 0).min(available_above_bottom);
     let available_above_gap = available_above_bottom.saturating_sub(switcher_gap_rows);
-    let transcript_rows = min_transcript_rows.min(available_above_gap);
+    // Browsing history must not hide a pending question that fits with its input.
+    let transcript_rows = if request_desired_rows > 0 {
+        min_transcript_rows.min(
+            available_above_gap.saturating_sub(
+                TOP_TIP_ROWS
+                    .saturating_add(composer_desired_rows)
+                    .saturating_add(request_desired_rows),
+            ),
+        )
+    } else {
+        min_transcript_rows.min(available_above_gap)
+    };
     let available_chrome = available_above_gap.saturating_sub(transcript_rows);
     let top_tip_rows = TOP_TIP_ROWS.min(available_chrome);
     let available_input = available_chrome.saturating_sub(top_tip_rows);

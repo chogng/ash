@@ -68,7 +68,7 @@ Skills、Models、Connectors 和 MCP 各自拥有同名模块；目录授权在 
 - 终端模块负责捕获协议、输出与恢复，`terminal/text.rs` 负责缓冲区文字范围和提取，不保存界面手势状态。
 - 命令面板的职责边界、焦点、搜索、返回和鼠标交互见 [TUI 模态交互规范](../../.github/instructions/tui.instructions.md#命令面板与模态交互规范)。
 
-`app/inline.rs` 与全屏入口平级，组合正文、输入区和临时面板；`inline/layout.rs` 为活动正文与输入分配主屏区域，`inline/output.rs` 将定稿内容逐块写入终端历史，未定稿内容留在视口内更新。会话、消息、草稿、队列、模型与设置继续共用现有功能模块的数据和操作。
+`app/inline.rs` 与全屏入口平级，组合正文、输入区和临时面板；`inline/layout.rs` 为活动正文与输入分配主屏区域，`inline/output.rs` 将定稿内容逐块写入终端历史，未定稿内容留在视口内更新。临时面板打开时，按键、粘贴和底部提示归面板；后台到达的审批或提问保留到面板关闭后再处理。短窗口中，正在浏览的历史正文先让出空间给提问和输入区。会话、消息、草稿、队列、模型与设置继续共用现有功能模块的数据和操作。
 
 共享模型保存会话目录、活动 Session/Thread、消息、配置和按输入目标保存的草稿。`SessionsState` 不保存页面、焦点或浏览选择；[SessionNavigation](src/sessions/navigation.rs) 由 fullscreen 和 inline 分别持有，负责各自的会话管理、分组、选择、预览与详情。
 

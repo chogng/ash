@@ -3,6 +3,17 @@ use super::session_areas;
 use ratatui::layout::Rect;
 
 #[test]
+fn short_query_uses_history_space_before_clipping_its_choices() {
+    let areas = session_areas(Rect::new(3, 5, 42, 12), 0, 0, 0, 6, 3, 2, 0, 0, 4);
+    assert_eq!(areas.request, Rect::new(3, 5, 42, 6));
+    assert_eq!(areas.transcript.height, 0);
+    assert_eq!(areas.composer.height, 3);
+    assert_eq!(areas.top_tip.height, 1);
+    assert_eq!(areas.bottom.height, 2);
+    assert_eq!(areas.bottom.bottom(), 17);
+}
+
+#[test]
 fn command_panels_use_available_height_and_keep_hints_visible() {
     for height in 0..40 {
         let area = Rect::new(3, 5, 80, height);

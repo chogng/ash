@@ -98,7 +98,9 @@ fn draw_content(
         frame.area(),
     );
     let areas = layout(app, frame.area());
-    if let Some(preview) = app.session_preview() {
+    if let Some(preview) = app.session_preview()
+        && app.command_panel().is_none()
+    {
         let messages = preview.messages();
         let header = header::history_buffer(
             areas.session.transcript.width,
@@ -170,6 +172,15 @@ fn draw_content(
         }
         .render(frame, areas.session.transcript, context);
     }
+    if let Some(panel) = app.command_panel() {
+        panel::draw(panel, frame, areas.session.composer, context);
+        footer::draw(frame, areas.session.bottom, app, context);
+        if let Some(overlay) = app.overlay() {
+            context.clear_hyperlinks(overlay.surface(areas.transient_area()));
+            crate::widgets::overlay::draw(frame, areas.transient_area(), overlay, context);
+        }
+        return;
+    }
     let cursor = if app.accepts_input() && app.chat_input_focused() {
         chat_input::ChatInputCursor::Visible
     } else {
@@ -183,8 +194,6 @@ fn draw_content(
     let input_view = app.chat_composer_view();
     if let Some(approval) = app.approval_view() {
         approval::draw(frame, areas.session.composer, approval, None, None, context);
-    } else if let Some(panel) = app.command_panel() {
-        panel::draw(panel, frame, areas.session.composer, context);
     } else {
         ChatComposerSurface {
             chrome: chat_input::ChatInputChrome::Standard,

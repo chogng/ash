@@ -7,6 +7,19 @@ use crate::config::TerminalSettings;
 use crate::models::Event as ModelEvent;
 use crate::terminal::MouseMode;
 use crate::terminal::ScreenMode;
+use crate::thread::Command as ThreadCommand;
+use crate::thread::Event as ThreadEvent;
+use crate::thread::ThreadRequestKind;
+use crate::thread::interaction::approval::Approval;
+use crate::thread::interaction::approval::ApprovalDecision;
+use crate::thread::interaction::approval::ApprovalSpec;
+use crate::thread::interaction::query::Query;
+use crate::thread::interaction::query::QueryChoice;
+use crate::thread::interaction::query::QueryCustomAnswer;
+use crate::thread::interaction::query::QueryQuestion;
+use crate::widgets::list_selection::ListSelectionGroup;
+use crate::widgets::list_selection::ListSelectionItem;
+use crate::widgets::list_selection::ListSelectionModel;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -36,6 +49,168 @@ pub(super) fn render(app: &App, width: u16, rows: u16) -> Buffer {
         .draw(|frame| draw(frame, app, &Default::default()))
         .unwrap();
     terminal.backend().buffer().clone()
+}
+
+fn open_help(app: &mut App) {
+    app.update(AppEvent::HelpOpened(ListSelectionModel::new(
+        "Help",
+        vec![ListSelectionGroup::new(
+            "Commands",
+            vec![
+                ListSelectionItem::new("First"),
+                ListSelectionItem::new("Second"),
+            ],
+        )],
+    )));
+}
+
+fn pending_query() -> Query {
+    Query::new(vec![QueryQuestion {
+        id: "next".into(),
+        header: "Next step".into(),
+        prompt: "How should the work continue?".into(),
+        choices: vec![QueryChoice {
+            label: "Continue".into(),
+            description: "Use the proposed approach".into(),
+        }],
+        custom_answer: QueryCustomAnswer::Allowed,
+    }])
+    .unwrap()
+}
+
+#[test]
+fn command_panel_keeps_background_approval_pending_until_close() {
+    let mut app = app();
+    app.insert_text("unfinished chat draft");
+    open_help(&mut app);
+    app.update(ThreadEvent::ApprovalRequested(Approval::new(
+        ApprovalSpec {
+            title: "Approval required".into(),
+            reason: "Run the requested command?".into(),
+            details: vec!["Process spawn  ·  cargo test".into()],
+        },
+    )));
+
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        None
+    );
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(
+        app.list_selection().unwrap().selected_visible_index(),
+        Some(1)
+    );
+    assert_eq!(
+        app.approval_view().unwrap().selected,
+        ApprovalDecision::ApproveOnce
+    );
+    assert!(!app.approval_view().unwrap().submitting);
+    let frame = text(&render(&app, 50, 16));
+    assert!(frame.contains("Help"));
+    assert!(!frame.contains("Approval required"));
+    crate::tui_assert_snapshot!("panel_with_pending_approval", frame);
+
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.command_panel().is_none());
+    assert_eq!(app.input(), "unfinished chat draft");
+    let frame = text(&render(&app, 50, 16));
+    assert!(frame.contains("Run the requested command?"));
+    crate::tui_assert_snapshot!("approval_restored_after_panel", frame);
+    let Some(AppCommand::Thread(ThreadCommand::ResolveRequest(response))) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("closing the panel must restore approval input");
+    };
+    assert_eq!(response.kind, ThreadRequestKind::Approval);
+}
+
+#[test]
+fn command_panel_keeps_background_query_pending_until_close() {
+    let mut app = app();
+    app.insert_text("chat draft stays here");
+    open_help(&mut app);
+    app.update(ThreadEvent::QueryRequested(pending_query()));
+
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        None
+    );
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(
+        app.list_selection().unwrap().selected_visible_index(),
+        Some(1)
+    );
+    assert_eq!(app.query_view().unwrap().selected, 0);
+    assert!(!app.query_view().unwrap().submitting);
+    crate::tui_assert_snapshot!("panel_with_pending_query", text(&render(&app, 50, 16)));
+
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.command_panel().is_none());
+    assert_eq!(app.input(), "chat draft stays here");
+    crate::tui_assert_snapshot!("query_restored_after_panel", text(&render(&app, 50, 16)));
+    let Some(AppCommand::Thread(ThreadCommand::ResolveRequest(response))) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("closing the panel must restore query input");
+    };
+    assert_eq!(response.kind, ThreadRequestKind::Query);
+}
+
+#[test]
+fn command_panel_paste_does_not_edit_a_background_query() {
+    let mut app = app();
+    app.insert_text("chat draft stays here");
+    app.update(ThreadEvent::QueryRequested(pending_query()));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(app.query_view().unwrap().custom_answer, Some(""));
+    app.update(ConfigEvent::EditorOpened(crate::config::config_choices(
+        &crate::test_support::empty_config_snapshot(),
+        &ash_app_server_protocol::protocol::provider::ProviderListResult { providers: vec![] },
+        {
+            let mut settings = TerminalSettings::default();
+            settings.set_screen_mode(ScreenMode::Inline);
+            settings
+        },
+        crate::status::StatusLineSettings::default(),
+    )));
+    app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+    app.handle_paste("Screen mode".into());
+    assert_eq!(app.list_selection().unwrap().query(), "Screen mode");
+    assert_eq!(app.query_view().unwrap().custom_answer, Some(""));
+    assert_eq!(app.input(), "chat draft stays here");
+    crate::tui_assert_snapshot!(
+        "panel_search_with_pending_custom_answer",
+        text(&render(&app, 50, 16))
+    );
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.command_panel().is_none());
+    app.handle_paste("Keep the user draft".into());
+    assert_eq!(
+        app.query_view().unwrap().custom_answer,
+        Some("Keep the user draft")
+    );
+}
+
+#[test]
+fn short_query_remains_visible_while_browsing_history() {
+    let mut app = app();
+    let area = Rect::new(0, 0, 42, 12);
+    app.insert_text("chat draft stays here");
+    app.handle_key_in_area(KeyEvent::new(KeyCode::Home, KeyModifiers::CONTROL), area);
+    assert!(app.transcript_scroll().anchor().is_some());
+    app.update(ThreadEvent::QueryRequested(pending_query()));
+    let layout = super::layout(&app, area);
+    assert_eq!(layout.session.request.height, 6);
+    assert_eq!(layout.session.transcript.height, 0);
+    let buffer = render(&app, area.width, area.height);
+    let frame = text(&buffer);
+    assert!(frame.contains("How should the work continue?"));
+    assert!(frame.contains("Continue  Use the proposed approach"));
+    assert!(frame.contains("chat draft stays here"));
+    assert_eq!(buffer[(1, layout.session.request.y + 2)].symbol(), ">");
+    crate::tui_assert_snapshot!("short_query_while_browsing", frame);
 }
 
 #[test]
