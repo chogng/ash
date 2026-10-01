@@ -1062,12 +1062,6 @@ const UI_TRANSLATIONS: &[Translation] = &[
     translation("plugin", "プラグイン", "插件", "plugin"),
     translation("marketplace", "マーケットプレイス", "扩展市场", "catalogue"),
     translation(
-        "Get MCP servers",
-        "MCP サーバーを入手",
-        "获取 MCP 服务器",
-        "Obtenir des serveurs MCP",
-    ),
-    translation(
         "Get connectors",
         "コネクターを入手",
         "获取连接器",

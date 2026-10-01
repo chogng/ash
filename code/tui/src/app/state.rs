@@ -822,9 +822,6 @@ impl App {
                 Some(StatusCommand::EditLine(edit).into())
             }
             CommandPanelOutcome::Theme(outcome) => self.handle_theme_picker_outcome(outcome),
-            CommandPanelOutcome::Mcp(McpSelectionAction::Marketplace) => {
-                Some(MarketplaceCommand::browse(Some(MarketplaceCapabilityKindDto::Mcp)).into())
-            }
             CommandPanelOutcome::Connectors(ConnectorSelectionAction::Marketplace) => Some(
                 MarketplaceCommand::browse(Some(MarketplaceCapabilityKindDto::Connector)).into(),
             ),

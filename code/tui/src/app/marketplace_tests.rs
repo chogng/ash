@@ -1014,6 +1014,69 @@ fn marketplace_plugins_toggle_exact_package_revision_and_render_disabled_suffix_
 }
 
 #[test]
+fn mcp_management_opens_without_a_redundant_marketplace_action() {
+    for mode in [
+        crate::terminal::ScreenMode::Fullscreen,
+        crate::terminal::ScreenMode::Inline,
+    ] {
+        let mut app = chinese_app();
+        let mut settings = crate::config::TerminalSettings::default();
+        settings.set_language(crate::nls::Language::Chinese);
+        settings.set_screen_mode(mode);
+        app.update(crate::config::Event::SettingsReceived(settings));
+        app.update(crate::mcp::Event::SettingsOpened(crate::mcp::mcp_choices(
+            &Default::default(),
+        )));
+        let state = app.list_selection().unwrap();
+        assert_eq!(
+            state.active_tab_index(),
+            crate::extensions::Tab::Mcp.index()
+        );
+        assert!(state.tabs_focused());
+        crate::tui_assert_snapshot!(
+            match mode {
+                crate::terminal::ScreenMode::Fullscreen => "mcp_chinese_empty_fullscreen",
+                crate::terminal::ScreenMode::Inline => "mcp_chinese_empty_inline",
+            },
+            screen(&app)
+        );
+
+        let servers = serde_json::from_value(json!({"docs": {
+            "id": "docs", "displayName": "Documentation",
+            "transport": {"type": "stdio", "command": "docs-server", "args": []},
+            "credential": {"type": "unauthenticated"}, "enablement": "enabled"
+        }}))
+        .unwrap();
+        app.update(crate::mcp::Event::SettingsOpened(crate::mcp::mcp_choices(
+            &servers,
+        )));
+        let state = app.list_selection().unwrap();
+        assert!(state.items_focused());
+        assert_eq!(state.selected_item().unwrap().label(), "Documentation");
+        crate::tui_assert_snapshot!(
+            match mode {
+                crate::terminal::ScreenMode::Fullscreen => "mcp_chinese_servers_fullscreen",
+                crate::terminal::ScreenMode::Inline => "mcp_chinese_servers_inline",
+            },
+            screen(&app)
+        );
+        assert!(matches!(
+            app.handle_key(key(KeyCode::Enter)),
+            Some(AppCommand::Mcp(crate::mcp::Command::SetEnablement {
+                server_id,
+                enablement: ash_app_server_protocol::protocol::config::McpServerEnablementDto::Disabled,
+                ..
+            })) if server_id == "docs"
+        ));
+        assert!(matches!(
+            app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)),
+            Some(AppCommand::Thread(crate::thread::Command::ExecuteProductCommand(invocation)))
+                if invocation.command.name == "marketplace"
+        ));
+    }
+}
+
+#[test]
 fn management_tabs_cycle_through_feature_commands_and_empty_pages_focus_tabs() {
     let mut app = App::new();
     app.update(crate::skills::Event::SettingsOpened(

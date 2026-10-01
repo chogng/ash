@@ -25,10 +25,14 @@ fn mcp_settings_filter_servers_and_maps_enter_to_the_opposite_enablement() {
     );
 
     let view = mcp_choices(&servers);
-    let state = ListSelectionState::new(view.model);
+    let mut state = ListSelectionState::new(view.model);
 
     assert_eq!(state.title(), "Extensions");
     assert_eq!(state.active_tab().label(), "MCP");
+    assert!(
+        !state.focus_pointer(&crate::widgets::list_selection::ListSelectionPointerTarget::Action)
+    );
+    assert_eq!(view.actions.len(), 1);
     assert_eq!(state.visible_items()[0].label(), "Documentation");
     assert_eq!(
         view.actions.get(state.visible_items()[0].id().unwrap()),
