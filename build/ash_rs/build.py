@@ -180,7 +180,10 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
     if spec.is_windows:
         inputs["ash-windows-sandbox"] = args.windows_sandbox_bin
         inputs["ash-windows-sandbox-service"] = args.windows_sandbox_service_bin
-    elif args.windows_sandbox_bin is not None or args.windows_sandbox_service_bin is not None:
+    elif (
+        args.windows_sandbox_bin is not None
+        or args.windows_sandbox_service_bin is not None
+    ):
         raise RuntimeError("Windows sandbox executable requires a Windows target")
     binaries = build_binaries(
         REPOSITORY_ROOT,

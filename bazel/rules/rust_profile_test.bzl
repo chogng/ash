@@ -1,6 +1,8 @@
 """Analysis-only checks for the generated Rust dependencies' test profiles."""
 
-_PER_CRATE_RUSTC_FLAG = "@rules_rust//rust/settings:experimental_per_crate_rustc_flag"
+# analysis_test_transition returns setting keys unchanged. Resolve
+# the extension-created repository while this .bzl file's mapping is available.
+_PER_CRATE_RUSTC_FLAG = str(Label("@rules_rust//rust/settings:experimental_per_crate_rustc_flag"))
 
 _RustProfileInfo = provider(
     fields = {

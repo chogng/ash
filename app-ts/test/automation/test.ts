@@ -52,6 +52,7 @@ export const test = base.extend<PlaywrightFixtures>({
 
 		// Keep the profile socket path below Windows AF_UNIX limits.
 		const userDataDirectory = await mkdtemp(join(tmpdir(), "ash-"));
+		let closed = false;
 		try {
 			const { driver, close } = await launchElectron({
 				appServerMode: target.appServerMode,
@@ -64,9 +65,11 @@ export const test = base.extend<PlaywrightFixtures>({
 				await use(driver);
 			} finally {
 				await close();
+				closed = true;
 			}
 		} finally {
-			await rm(userDataDirectory, { force: true, recursive: true, maxRetries: 10, retryDelay: 100 });
+			// A failed startup or teardown may leave Electron alive; retain its profile for diagnosis.
+			if (closed) await rm(userDataDirectory, { force: true, recursive: true, maxRetries: 10, retryDelay: 100 });
 		}
 	},
 	application: async ({ driver }, use) => {

@@ -6,6 +6,7 @@ import { _electron, type ElectronApplication, type Request } from "@playwright/t
 import { ElectronPlaywrightDriver } from "./electronDriver.js";
 import { resolveElectronConfiguration, type ElectronLaunchOptions } from "./electron.js";
 import { StartupDeadline } from './startupDeadline.js';
+import { createElectronCleanup } from './electronCleanup.js';
 
 export interface ElectronLaunchResult {
 	readonly application: ElectronApplication;
@@ -31,21 +32,13 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 	onMilestone?.('electron-launch-resolved');
 	// Playwright releases the application channel on exit; retain the child process for startup diagnostics and cleanup.
 	const electronProcess = application.process();
-	const close = async (): Promise<void> => {
-		// Close the renderer before its daemon so shutdown cannot start a reconnect.
+	const close = createElectronCleanup(application, async () => {
 		// Explicit shared profiles remain owned by their caller.
-		try {
-			await application.evaluate(({ BrowserWindow }) => {
-				for (const window of BrowserWindow.getAllWindows()) window.destroy();
-			});
-			if (options.appServerMode === 'required' && options.profileDirectory === undefined) {
-				const daemon = appServerDaemonExecutablePath({ appPath: configuration.cwd, isPackaged: options.packagedBundle !== undefined, platform: process.platform, resourcesPath: configuration.resourcesPath });
-				await promisify(execFile)(daemon, ['stop'], { env: { ...configuration.env, ASH_HOME: resolve(options.userDataDirectory, 'profile') }, windowsHide: true, timeout: 30_000 });
-			}
-		} finally {
-			await application.close();
+		if (options.appServerMode === 'required' && options.profileDirectory === undefined) {
+			const daemon = appServerDaemonExecutablePath({ appPath: configuration.cwd, isPackaged: options.packagedBundle !== undefined, platform: process.platform, resourcesPath: configuration.resourcesPath });
+			await promisify(execFile)(daemon, ['stop'], { env: { ...configuration.env, ASH_HOME: resolve(options.userDataDirectory, 'profile') }, windowsHide: true, timeout: 30_000 });
 		}
-	};
+	});
 	let processErrors = '';
 	const onProcessError = (chunk: Buffer): void => { processErrors = (processErrors + chunk.toString()).slice(-16_384); };
 	electronProcess.stderr?.on('data', onProcessError);

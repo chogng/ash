@@ -470,6 +470,23 @@ test('Sessions Design floating tools draw, edit motion and expose reusable code'
 		expect(narrowBounds.x).toBeGreaterThanOrEqual(narrowViewport.x);
 		expect(narrowBounds.x + narrowBounds.width).toBeLessThanOrEqual(narrowViewport.x + narrowViewport.width);
 	}
+	const toolsViewport = tools.locator('.ash-scrollbar-viewport');
+	const drawMode = tools.getByRole('button', { name: 'Draw', exact: true });
+	const codeMode = tools.getByRole('button', { name: 'Code', exact: true });
+	await drawMode.focus();
+	await page.keyboard.press('End');
+	await expect(codeMode).toBeFocused();
+	const scrollBounds = (await toolsViewport.boundingBox())!;
+	const codeBounds = (await codeMode.boundingBox())!;
+	expect(codeBounds.x).toBeGreaterThanOrEqual(scrollBounds.x);
+	expect(codeBounds.x + codeBounds.width).toBeLessThanOrEqual(scrollBounds.x + scrollBounds.width);
+	await page.keyboard.press('Home');
+	await expect(drawMode).toBeFocused();
+	const drawBounds = (await drawMode.boundingBox())!;
+	expect(drawBounds.x).toBeGreaterThanOrEqual(scrollBounds.x);
+	expect(drawBounds.x + drawBounds.width).toBeLessThanOrEqual(scrollBounds.x + scrollBounds.width);
+	expect((await tools.boundingBox())!.height).toBeLessThanOrEqual(48);
+	expect(await tools.getByRole('button').evaluateAll(buttons => [...new Set(buttons.map(button => Math.round(button.getBoundingClientRect().top)))])).toHaveLength(1);
 });
 
 test('Sessions Design canvas context menu edits the pointed object and preserves keyboard focus', async ({ application, target, workbench }) => {

@@ -582,6 +582,32 @@ test('Design tool contribution draws a shape at document coordinates and hand ge
 	assert.equal(view.domNode.querySelectorAll('path[data-shape-id]').length, 1);
 });
 
+test('Design tools reveal keyboard destinations within a narrow horizontal viewport', () => {
+	using view = createView();
+	const tools = view.domNode.querySelector<HTMLElement>('.ash-design-tools-widget')!;
+	const scrollViewport = tools.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
+	assert.ok(scrollViewport, 'Floating tools use the shared scrollbar rather than an OS-sized overflow bar');
+	Object.defineProperties(scrollViewport, {
+		clientWidth: { configurable: true, value: 100 },
+		clientHeight: { configurable: true, value: 40 },
+		scrollWidth: { configurable: true, value: 560 },
+		scrollHeight: { configurable: true, value: 40 },
+	});
+	scrollViewport.getBoundingClientRect = () => new browser.window.DOMRect(0, 0, 100, 40);
+	const modes = tools.querySelector<HTMLElement>('.ash-design-modes')!;
+	const buttons = [...modes.querySelectorAll('button')];
+	for (const [index, button] of buttons.entries()) {
+		button.getBoundingClientRect = () => new browser.window.DOMRect(300 + index * 60 - scrollViewport.scrollLeft, 6, 60, 28);
+	}
+	buttons[0]!.focus();
+	assert.equal(scrollViewport.scrollLeft, 260);
+	buttons[0]!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
+	assert.deepEqual({ focused: browser.window.document.activeElement === buttons[3], left: scrollViewport.scrollLeft, top: scrollViewport.scrollTop }, { focused: true, left: 440, top: 0 });
+	buttons[3]!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }));
+	assert.deepEqual({ focused: browser.window.document.activeElement === buttons[0], left: scrollViewport.scrollLeft, top: scrollViewport.scrollTop }, { focused: true, left: 300, top: 0 });
+	assert.equal(tools.querySelector<HTMLElement>('.ash-scrollbar-track-vertical')!.hidden, true);
+});
+
 test('Motion keyframes round trip, scrub without editing, undo and export runnable code with design identities', async () => {
 	using view = createView();
 	view.layout({ width: 400, height: 300 });

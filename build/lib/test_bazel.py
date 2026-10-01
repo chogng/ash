@@ -393,6 +393,61 @@ class BazelMacroContractTests(unittest.TestCase):
 
 
 class BazelTestProfileTests(unittest.TestCase):
+    def test_analysis_transitions_use_resolved_build_setting_labels(self):
+        setting = "//rust/settings:experimental_per_crate_rustc_flag"
+        source = REPOSITORY_ROOT / "bazel/rules/rust_profile_test.bzl"
+        for repository in ("rules_rs++rules_rust+rules_rust", "alternate_rules_rust"):
+            with self.subTest(repository=repository):
+                canonical = "@@" + repository + setting
+                transitions = []
+
+                class ResolvedLabel:
+                    def __str__(self):
+                        return canonical
+
+                def resolve_label(label):
+                    self.assertEqual("@rules_rust" + setting, label)
+                    return ResolvedLabel()
+
+                def primitive(**kwargs):
+                    return None
+
+                namespace = {
+                    "Label": resolve_label,
+                    "provider": primitive,
+                    "aspect": primitive,
+                    "rule": primitive,
+                    "attr": SimpleNamespace(
+                        string=primitive, bool=primitive, label=primitive
+                    ),
+                    "analysis_test_transition": lambda *, settings: transitions.append(
+                        settings
+                    ),
+                }
+                # Execute the real transition declarations; only Bazel primitives
+                # are stubbed here; this checks forwarding, not label resolution.
+                exec(
+                    compile(source.read_text(encoding="utf-8"), str(source), "exec"),
+                    namespace,
+                )
+                self.assertEqual(
+                    [
+                        {
+                            "//command_line_option:compilation_mode": "fastbuild",
+                            canonical: [],
+                        },
+                        {
+                            "//command_line_option:compilation_mode": "opt",
+                            canonical: [],
+                        },
+                        {
+                            "//command_line_option:compilation_mode": "fastbuild",
+                            canonical: ["@-Copt-level=1"],
+                        },
+                    ],
+                    transitions,
+                )
+
     def test_identity_hash_optimization_is_scoped_to_the_ci_test_profile(self):
         option = "--@rules_rust//rust/settings:experimental_per_crate_rustc_flag="
         settings = []
