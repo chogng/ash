@@ -32,13 +32,14 @@ for (const [name, value] of Object.entries({
 
 const { ChatViewPane } = await import("../../browser/chatViewPane.js");
 const { BrowserContextViewService } = await import("../../../platform/contextview/browser/contextViewService.js");
+const { BrowserLayoutService } = await import("../../../platform/layout/browser/layoutService.js");
 
 suiteTeardown(() => browserEnvironment.window.close());
 
 test("opens a local Chat tab before the backend session request settles", () => {
 	const document = browserEnvironment.window.document;
 	const sessionService = new PendingSessionService();
-	const layoutService = new VisibleAuxiliarybarLayoutService();
+	using layoutService = new VisibleAuxiliarybarLayoutService({ root: document.body });
 	using contextViewService = new BrowserContextViewService(document.body);
 	using view = new ChatViewPane(
 		document.body,
@@ -108,10 +109,11 @@ class PendingSessionService implements ISessionsManagementService {
 	setNextApprovalMode(_sessionId: SessionId, _approvalMode: ApprovalMode): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
 }
 
-class VisibleAuxiliarybarLayoutService implements IWorkbenchLayoutService {
-	private readonly _onDidChangePartVisibility = new Emitter<WorkbenchPartVisibilityChangeEvent>();
+class VisibleAuxiliarybarLayoutService extends BrowserLayoutService implements IWorkbenchLayoutService {
+	private readonly _onDidChangePartVisibility = this._register(new Emitter<WorkbenchPartVisibilityChangeEvent>());
 
 	readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
+	setLayoutStyle(): void {}
 
 	isPartVisible(partId: WorkbenchPartId): boolean { return partId === "auxiliarybar"; }
 	isPanelMaximized(): boolean { return false; }

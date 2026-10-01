@@ -79,6 +79,22 @@ const emptyEditorService: IEditorService = Object.freeze({
 });
 
 const emptyLayoutService: IWorkbenchLayoutService = Object.freeze({
+	onDidLayoutMainContainer: Event.None,
+	onDidLayoutContainer: Event.None,
+	onDidLayoutActiveContainer: Event.None,
+	onDidChangeActiveContainer: Event.None,
+	mainContainerDimension: { width: 0, height: 0 },
+	activeContainerDimension: { width: 0, height: 0 },
+	get mainContainer(): HTMLElement { throw new Error('Context key tests do not host a layout container'); },
+	get activeContainer(): HTMLElement { throw new Error('Context key tests do not host a layout container'); },
+	containers: [],
+	getContainer(): HTMLElement { throw new Error('Context key tests do not host a layout container'); },
+	whenContainerStylesLoaded: () => undefined,
+	mainContainerOffset: { top: 0, quickInputTop: 0 },
+	activeContainerOffset: { top: 0, quickInputTop: 0 },
+	focus: () => {},
+	layout: () => {},
+	setLayoutStyle: () => {},
 	onDidChangePartVisibility: Event.None,
 	isPartVisible: () => false,
 	isPanelMaximized: () => false,

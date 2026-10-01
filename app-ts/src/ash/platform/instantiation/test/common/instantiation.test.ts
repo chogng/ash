@@ -3,6 +3,7 @@ import { test } from "mocha";
 import {
 	createServiceIdentifier,
 	createDecorator,
+	refineServiceDecorator,
 	IInstantiationService,
 	ServiceCollection,
 	ServiceContainer,
@@ -11,6 +12,22 @@ import {
 } from "../../../../platform/instantiation/common/instantiation.js";
 import { getSingletonServiceDescriptors, InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { Disposable } from "../../../../base/common/lifecycle.js";
+
+test('refined service contracts share registration and constructor injection', () => {
+	interface IBase { readonly name: string; }
+	interface IExtended extends IBase { readonly enabled: boolean; }
+	const IBase = createDecorator<IBase>('test.refined');
+	const IExtended = refineServiceDecorator<IBase, IExtended>(IBase);
+	class Consumer {
+		constructor(@IBase readonly base: IBase, @IExtended readonly extended: IExtended) {}
+	}
+	using services = new ServiceContainer();
+	const instance: IExtended = { name: 'shared', enabled: true };
+	services.registerInstance(IExtended, instance);
+	const consumer = services.createInstance(Consumer);
+	assert.deepEqual([consumer.base, consumer.extended], [instance, instance]);
+	assert.throws(() => services.registerInstance(IBase, instance), /already registered/);
+});
 
 test('constructor services resolve from the creating scope after explicit arguments', () => {
 	const IMessage = createDecorator<string>('test.constructor.message');

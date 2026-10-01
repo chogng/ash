@@ -2,6 +2,7 @@ import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { Disposable, DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { extUri } from '../../../src/ash/base/common/resources.js';
 import { darkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
+import { BrowserLayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { TerminalInstanceWidget } from '../../../src/ash/workbench/contrib/terminal/browser/instance/terminalInstanceWidget.js';
 import type { ITerminalDimensions, ITerminalInstance } from '../../../src/ash/workbench/services/terminal/common/terminal.js';
@@ -73,7 +74,7 @@ if (new URLSearchParams(location.search).has('pane')) {
 		import('../../../src/ash/workbench/services/commands/common/commandService.js'),
 		import('../../../src/ash/base/common/uri.js'),
 	]);
-	const visibility = store.add(new Emitter<import('../../../src/ash/workbench/services/layout/common/workbenchLayoutService.js').WorkbenchPartVisibilityChangeEvent>());
+	const visibility = store.add(new Emitter<import('../../../src/ash/workbench/services/layout/browser/layoutService.js').WorkbenchPartVisibilityChangeEvent>());
 	const workspaceChanged = store.add(new Emitter<import('../../../src/ash/platform/workspace/common/workspace.js').IWorkspaceChangeEvent>());
 	const created = store.add(new Emitter<ITerminalInstance>());
 	const context = store.add(new ContextKeyService());
@@ -111,7 +112,7 @@ if (new URLSearchParams(location.search).has('pane')) {
 		onDidHideContextMenu: Event.None,
 		showContextMenu: () => {},
 		hideContextMenu: () => {},
-	}, context, {
+	}, context, Object.assign(store.add(new BrowserLayoutService({ root: document.querySelector<HTMLElement>('#terminal')! })), {
 		onDidChangePartVisibility: visibility.event,
 		isPartVisible: () => visible,
 		isPanelMaximized: () => false,
@@ -122,7 +123,8 @@ if (new URLSearchParams(location.search).has('pane')) {
 		hideParts: () => setPanel(false),
 		getPartSize: () => ({ width: 800, height: 400 }),
 		resizePart: () => {},
-	}, {
+		setLayoutStyle: () => {},
+	}), {
 		onDidChangeWorkspace: workspaceChanged.event,
 		getWorkspace: () => workspace,
 		getWorkbenchState: () => 2,

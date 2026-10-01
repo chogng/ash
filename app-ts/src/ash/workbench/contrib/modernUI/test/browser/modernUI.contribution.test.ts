@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { h } from '../../../../../base/browser/dom.js';
 import type { AuxiliaryWindowOpenOptions, IAuxiliaryWindow, IAuxiliaryWindowService as IAuxiliaryWindowServiceContract } from '../../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import type { WorkbenchLayoutStyle } from '../../../../common/configuration.js';
-import type { IWorkbenchLayoutStyleService as IWorkbenchLayoutStyleServiceContract } from '../../../../services/layout/browser/workbenchLayoutStyleService.js';
+import type { IWorkbenchLayoutService as IWorkbenchLayoutServiceContract } from '../../../../services/layout/browser/layoutService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 Object.defineProperty(globalThis, 'window', { configurable: true, value: browserEnvironment.window });
@@ -18,12 +18,24 @@ const { WorkbenchConfiguration } = await import('../../../../common/configuratio
 const { WorkbenchContributionsRegistry, WorkbenchPhase } = await import('../../../../common/contributions.js');
 const { IAuxiliaryWindowService } = await import('../../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js');
 const { WorkbenchConfigurationService } = await import('../../../../services/configuration/browser/configurationService.js');
-const { IWorkbenchLayoutStyleService } = await import('../../../../services/layout/browser/workbenchLayoutStyleService.js');
+const { IWorkbenchLayoutService } = await import('../../../../services/layout/browser/layoutService.js');
+const { BrowserLayoutService } = await import('../../../../../platform/layout/browser/layoutService.js');
 await import('../../browser/modernUI.contribution.js');
 
-class TestWorkbenchLayoutStyleService implements IWorkbenchLayoutStyleServiceContract {
+class TestWorkbenchLayoutService extends BrowserLayoutService implements IWorkbenchLayoutServiceContract {
 	public readonly styles: WorkbenchLayoutStyle[] = [];
-	public readonly container = h(document, 'main');
+	public readonly onDidChangePartVisibility = Event.None;
+
+	constructor(container: HTMLElement) { super({ root: container }); }
+	isPartVisible(): boolean { return false; }
+	isPanelMaximized(): boolean { return false; }
+	toggleMaximizedPanel(): void {}
+	showPart(): void {}
+	showParts(): void {}
+	hidePart(): void {}
+	hideParts(): void {}
+	getPartSize() { return { width: 0, height: 0 }; }
+	resizePart(): void {}
 
 	public setLayoutStyle(style: WorkbenchLayoutStyle): void {
 		this.styles.push(style);
@@ -53,13 +65,13 @@ test('Modern UI contribution starts at restore and owns live window layout style
 	assert.ok(auxiliaryContainer);
 	using configuration = new WorkbenchConfigurationService();
 	using auxiliaryWindows = new TestAuxiliaryWindowService();
-	const layout = new TestWorkbenchLayoutStyleService();
-	dom.window.document.body.append(layout.container);
-	const services = new ServiceContainer();
+	using layout = new TestWorkbenchLayoutService(h(dom.window.document, 'main'));
+	dom.window.document.body.append(layout.mainContainer);
+	using services = new ServiceContainer();
 	services.registerInstance(IConfigurationService, configuration);
-	services.registerInstance(IWorkbenchLayoutStyleService, layout);
+	services.registerInstance(IWorkbenchLayoutService, layout);
 	services.registerInstance(IAuxiliaryWindowService, auxiliaryWindows);
-	const closeEmitter = new Emitter<void>();
+	using closeEmitter = new Emitter<void>();
 	const auxiliaryWindow = {
 		id: 1,
 		window: dom.window,
@@ -72,28 +84,28 @@ test('Modern UI contribution starts at restore and owns live window layout style
 		[Symbol.dispose](): void { closeEmitter.fire(); },
 	} as unknown as IAuxiliaryWindow;
 
-	const host = WorkbenchContributionsRegistry.createHost(services);
+	using host = WorkbenchContributionsRegistry.createHost(services);
 	host.advance(WorkbenchPhase.BlockStartup);
 	assert.deepEqual(layout.styles, []);
 
 	host.advance(WorkbenchPhase.BlockRestore);
 	assert.deepEqual(layout.styles, ['modern']);
-	assert.equal(layout.container.dataset.layoutStyle, 'modern');
-	assert.equal(layout.container.classList.contains('modern-ui'), true);
+	assert.equal(layout.mainContainer.dataset.layoutStyle, 'modern');
+	assert.equal(layout.mainContainer.classList.contains('modern-ui'), true);
 	auxiliaryWindows.publish(auxiliaryWindow);
 	assert.equal(auxiliaryContainer.dataset.layoutStyle, 'modern');
 	assert.equal(auxiliaryContainer.classList.contains('modern-ui'), true);
 
 	await configuration.updateValue(WorkbenchConfiguration.layoutStyle, 'flat');
 	assert.deepEqual(layout.styles, ['modern', 'flat']);
-	assert.equal(layout.container.dataset.layoutStyle, 'flat');
-	assert.equal(layout.container.classList.contains('modern-ui'), false);
+	assert.equal(layout.mainContainer.dataset.layoutStyle, 'flat');
+	assert.equal(layout.mainContainer.classList.contains('modern-ui'), false);
 	assert.equal(auxiliaryContainer.dataset.layoutStyle, 'flat');
 	assert.equal(auxiliaryContainer.classList.contains('modern-ui'), false);
 
 	host.dispose();
-	assert.equal(layout.container.hasAttribute('data-layout-style'), false);
-	assert.equal(layout.container.classList.contains('modern-ui'), false);
+	assert.equal(layout.mainContainer.hasAttribute('data-layout-style'), false);
+	assert.equal(layout.mainContainer.classList.contains('modern-ui'), false);
 	assert.equal(auxiliaryContainer.hasAttribute('data-layout-style'), false);
 	assert.equal(auxiliaryContainer.classList.contains('modern-ui'), false);
 	dom.window.close();

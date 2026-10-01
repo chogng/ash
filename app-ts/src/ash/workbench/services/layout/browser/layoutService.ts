@@ -1,12 +1,22 @@
 import type { Event } from "../../../../base/common/event.js";
 import type { ISize } from "../../../../base/common/layout.js";
-import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import type { WorkbenchPartId, WorkbenchPartVisibilityChangeEvent } from "../common/workbenchLayoutService.js";
+import type { IDimension } from "../../../../base/browser/dom.js";
+import { refineServiceDecorator } from "../../../../platform/instantiation/common/instantiation.js";
+import { ILayoutService } from "../../../../platform/layout/browser/layoutService.js";
+import type { WorkbenchLayoutStyle } from "../../../common/configuration.js";
 
-export { workbenchPartIds, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from "../common/workbenchLayoutService.js";
+export const workbenchPartIds = ["titlebar", "statusbar", "activitybar", "sidebar", "auxiliarybar", "agentSidebar", "editor", "panel"] as const;
+export type WorkbenchPartId = typeof workbenchPartIds[number];
 
-/** Window-scoped Part operations implemented by the Workbench layout owner. */
-export interface IWorkbenchLayoutService {
+export interface WorkbenchPartVisibilityChangeEvent {
+	readonly partId: WorkbenchPartId;
+	readonly visible: boolean;
+}
+
+/** Container geometry and Part operations share one window-scoped layout owner. */
+export interface IWorkbenchLayoutService extends ILayoutService {
+	layout(dimension?: IDimension): void;
+	setLayoutStyle(style: WorkbenchLayoutStyle): void;
 	readonly onDidChangePartVisibility: Event<WorkbenchPartVisibilityChangeEvent>;
 	isPartVisible(partId: WorkbenchPartId): boolean;
 	isPanelMaximized(): boolean;
@@ -20,4 +30,4 @@ export interface IWorkbenchLayoutService {
 	resizePart(partId: WorkbenchPartId, dimension: ISize): void;
 }
 
-export const IWorkbenchLayoutService = createServiceIdentifier<IWorkbenchLayoutService>("workbenchLayoutService");
+export const IWorkbenchLayoutService = refineServiceDecorator<ILayoutService, IWorkbenchLayoutService>(ILayoutService);

@@ -44,10 +44,12 @@ const {
 	WorkbenchLayout,
 } = await import("../../../workbench/browser/layout.js");
 const { createTestWorkbenchContextKeysHandler } = await import('../../../workbench/test/common/testWorkbenchContextKeys.js');
-const { BrowserLayoutService } = await import("../../../platform/layout/browser/layoutService.js");
+const { ILayoutService } = await import("../../../platform/layout/browser/layoutService.js");
 const { IWorkbenchLayoutService, workbenchPartIds } = await import("../../../workbench/services/layout/browser/layoutService.js");
 const { BrowserStorageService } = await import("../../../workbench/services/storage/browser/storageService.js");
 const { InMemoryConfigurationService } = await import('../../../platform/configuration/common/inMemoryConfigurationService.js');
+const { IConfigurationService } = await import('../../../platform/configuration/common/configuration.js');
+const { WorkbenchQuickInputService } = await import('../../../workbench/services/quickinput/browser/quickInputService.js');
 const { WorkbenchPart } = await import("../../../workbench/browser/part.js");
 const { SidebarPart } = await import(
 	"../../../workbench/browser/parts/sidebar/sidebarPart.js"
@@ -156,6 +158,7 @@ function createLayoutHarness(
 	readonly container: HTMLElement;
 	readonly editor: EditorPartInstance;
 	readonly layout: WorkbenchLayoutInstance;
+	readonly services: InstanceType<typeof ServiceContainer>;
 	readonly configuration: InstanceType<typeof InMemoryConfigurationService>;
 } {
 	const disposables = new DisposableStore();
@@ -185,6 +188,11 @@ function createLayoutHarness(
 		}));
 	}
 	services.registerInstance(IStorageService, storage);
+	const layout = disposables.add(services.createInstance(WorkbenchLayout, container, {
+		workbenchState: WorkbenchState.FOLDER,
+		...layoutOptions,
+	}));
+	services.registerInstance(IWorkbenchLayoutService, layout);
 	const parts = new Map<WorkbenchPartId, WorkbenchPartInstance>();
 	let editor: EditorPartInstance | undefined;
 	for (const partId of workbenchPartIds) {
@@ -199,11 +207,8 @@ function createLayoutHarness(
 	}
 	if (!editor) throw new Error("Test layout requires an editor Part");
 
-	const layout = disposables.add(services.createInstance(WorkbenchLayout, container, parts, {
-		workbenchState: WorkbenchState.FOLDER,
-		...layoutOptions,
-	}));
-	return { disposables, container, editor, layout, configuration };
+	layout.createParts(parts);
+	return { disposables, container, editor, layout, configuration, services };
 }
 
 test("Workbench layout hides and restores Parts with context keys", () => {
@@ -432,23 +437,29 @@ test("Workbench pane sashes snap closed and remain available for drag restore", 
 	dom.window.close();
 });
 
-test("platform layout service drives Workbench Part geometry", () => {
+test("platform and Workbench dependencies resolve one owner and publish completed Part geometry", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	const container = h(dom.window.document, "main");
-	const layoutService = new BrowserLayoutService({ root: container });
-	const harness = createLayoutHarness(dom.window.document, {
-		initialDimension: layoutService.mainContainerDimension,
-	}, container);
-	harness.disposables.add(layoutService);
-	layoutService.setContentLayout(harness.layout, () => harness.layout.mainContainerOffset);
-	for (const event of [layoutService.onDidLayoutContainer, layoutService.onDidLayoutMainContainer, layoutService.onDidLayoutActiveContainer]) {
+	const harness = createLayoutHarness(dom.window.document);
+	class LayoutConsumer {
+		constructor(@ILayoutService readonly platform: import('../../../platform/layout/browser/layoutService.js').ILayoutService,
+			@IWorkbenchLayoutService readonly workbench: import('../../../workbench/services/layout/browser/layoutService.js').IWorkbenchLayoutService) {}
+	}
+	const consumer = harness.services.createInstance(LayoutConsumer);
+	assert.equal(consumer.platform, harness.layout);
+	assert.equal(consumer.workbench, harness.layout);
+	const layoutService = consumer.workbench;
+	const events: string[] = [];
+	for (const [name, event] of [['container', layoutService.onDidLayoutContainer], ['main', layoutService.onDidLayoutMainContainer], ['active', layoutService.onDidLayoutActiveContainer]] as const) {
 		harness.disposables.add(event(() => {
 			assert.equal(harness.layout.getPartSize('titlebar').width, 1_200);
+			assert.deepEqual(consumer.platform.activeContainerOffset, { top: 35, quickInputTop: 0 });
+			events.push(name);
 		}));
 	}
 
 	layoutService.layout(new Dimension(1_200, 800));
 
+	assert.deepEqual(events, ['container', 'main', 'active']);
 	assert.deepEqual(layoutService.mainContainerDimension, new Dimension(1_200, 800));
 	assert.equal(harness.layout.getPartSize("titlebar").height, 35);
 	assert.equal(harness.layout.getPartSize("statusbar").height, 35);
@@ -458,19 +469,34 @@ test("platform layout service drives Workbench Part geometry", () => {
 	dom.window.close();
 });
 
-test('Workbench layout rejects missing service registrations during construction', () => {
+test('Workbench layout requires its services and hosts overlays before Parts creation', () => {
 	using services = new ServiceContainer();
 	const dom = new JSDOM('', { url: 'https://ash.test' });
 	const container = h(dom.window.document, 'main');
 	const options = { workbenchState: WorkbenchState.FOLDER };
-	assert.throws(() => services.createInstance(WorkbenchLayout, container, new Map(), options), /storageService/);
+	assert.throws(() => services.createInstance(WorkbenchLayout, container, options), /storageService/);
 	using storage = new BrowserStorageService({
 		ownerWindow: dom.window as unknown as Window, applicationId: 'layout', workspaceId: 'test',
 		backend: dom.window.localStorage, flushInterval: 0,
 	});
 	services.registerInstance(IStorageService, storage);
-	assert.throws(() => services.createInstance(WorkbenchLayout, container, new Map(), options), /configurationService/);
-	storage.dispose();
+	assert.throws(() => services.createInstance(WorkbenchLayout, container, options), /configurationService/);
+	using configuration = new InMemoryConfigurationService();
+	services.registerInstance(IConfigurationService, configuration);
+	using layout = services.createInstance(WorkbenchLayout, container, options);
+	services.registerInstance(IWorkbenchLayoutService, layout);
+	using contextKeys = new ContextKeyService();
+	using quickInput = new WorkbenchQuickInputService({
+		container,
+		contextKeyService: contextKeys,
+		layoutService: services.get(ILayoutService),
+	});
+	using picker = quickInput.createQuickPick();
+	picker.show();
+	assert.equal(layout.activeContainer, container);
+	assert.deepEqual(layout.activeContainerOffset, { top: 0, quickInputTop: 0 });
+	assert.equal(container.querySelector<HTMLElement>('.ash-quick-input-host')?.hidden, false);
+	picker.hide();
 	dom.window.close();
 });
 

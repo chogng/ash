@@ -1,17 +1,15 @@
 import { h } from "../../base/browser/dom.js";
 import { Dimension, getClientArea, type IDimension } from "../../base/browser/dom.js";
 import { SerializableGrid, type SerializedGridDescriptor } from "../../base/browser/ui/grid/grid.js";
-import type { IResizable } from "../../base/browser/ui/resizable/resizable.js";
 import { Emitter } from "../../base/common/event.js";
-import { Disposable, MutableDisposable, toDisposable } from "../../base/common/lifecycle.js";
+import { MutableDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { isRecord } from "../../base/common/types.js";
 import { IConfigurationService } from "../../platform/configuration/common/configuration.js";
-import type { ILayoutOffsetInfo } from "../../platform/layout/browser/layoutService.js";
+import { BrowserLayoutService, type ILayoutOffsetInfo } from "../../platform/layout/browser/layoutService.js";
 import { IStorageService, StorageScope, StorageTarget } from "../../platform/storage/common/storage.js";
 import { WorkbenchState } from "../../platform/workspace/common/workspace.js";
 import { ActivityBarPosition, WorkbenchConfiguration, type SideBarLocation, type WorkbenchLayoutStyle } from "../common/configuration.js";
 import { type IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent, workbenchPartIds } from "../services/layout/browser/layoutService.js";
-import type { IWorkbenchLayoutStyleService } from "../services/layout/browser/workbenchLayoutStyleService.js";
 import type { WorkbenchPart } from "./part.js";
 import { WorkbenchPartView } from "./workbenchPartView.js";
 
@@ -82,23 +80,24 @@ export interface WorkbenchLayoutOptions {
 	readonly initialDimension?: IDimension;
 	readonly workbenchState: WorkbenchState;
 	readonly defaultLayout?: WorkbenchDefaultLayout;
+	readonly focus?: () => void;
 }
 
 /**
  * Owns the Workbench's fixed Part topology and mutable pixel layout state.
  *
- * Container geometry is supplied through the generic `IResizable` contract; this
- * class only translates those dimensions into Grid bounds and Part layout calls.
+ * Registered before Parts are created so overlays resolve the same container
+ * owner throughout startup. Layout completion events follow Grid and Part layout.
  */
 export class WorkbenchLayout
-	extends Disposable
-	implements IResizable, IWorkbenchLayoutService, IWorkbenchLayoutStyleService {
-	readonly container: HTMLElement;
+	extends BrowserLayoutService
+	implements IWorkbenchLayoutService {
 	private readonly views = new Map<WorkbenchPartId, WorkbenchPartView>();
-	private grid: SerializableGrid<WorkbenchPartView>;
+	private grid!: SerializableGrid<WorkbenchPartView>;
 	private readonly gridHandle = this._register(new MutableDisposable<SerializableGrid<WorkbenchPartView>>());
 	private readonly gridChangeHandle = this._register(new MutableDisposable());
 	private readonly stateModel: WorkbenchLayoutStateModel;
+	private readonly initialDimension: IDimension;
 	private readonly partVisibility = new Map<WorkbenchPartId, boolean>();
 	private readonly _onDidChangePartVisibility = this._register(
 		new Emitter<WorkbenchPartVisibilityChangeEvent>(),
@@ -119,23 +118,27 @@ export class WorkbenchLayout
 
 	constructor(
 		container: HTMLElement,
-		parts: ReadonlyMap<WorkbenchPartId, WorkbenchPart>,
 		options: WorkbenchLayoutOptions,
-		@IStorageService storageService: IStorageService,
+		@IStorageService private readonly storageService: IStorageService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 	) {
-		super();
-		this.container = container;
+		super({ root: container, focus: options.focus });
 		this.layoutStyle = configurationService.getValue(WorkbenchConfiguration.layoutStyle);
 		this.activityBarLocation = configurationService.getValue(WorkbenchConfiguration.activityBarLocation);
 		this.sideBarLocation = configurationService.getValue(WorkbenchConfiguration.sideBarLocation);
-		validateParts(parts);
 		this.domNode = h(container.ownerDocument, "div");
 		this.domNode.className = "ash-workbench-layout";
 		this.domNode.classList.toggle('activitybar-absent', this.activityBarLocation !== ActivityBarPosition.DEFAULT);
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
+		this.initialDimension = resolveInitialDimension(container, options.initialDimension);
+		validateWorkbenchDefaultLayout(options.defaultLayout);
+		this.stateModel = new WorkbenchLayoutStateModel(storageService, options.workbenchState, options.defaultLayout);
+	}
 
+	/** Parts are assembled once, after container services and their dependencies have been registered. */
+	createParts(parts: ReadonlyMap<WorkbenchPartId, WorkbenchPart>): void {
+		validateParts(parts);
 		for (const partId of workbenchPartIds) {
 			this.views.set(
 				partId,
@@ -144,16 +147,6 @@ export class WorkbenchLayout
 				}),
 			);
 		}
-		const initialDimension = resolveInitialDimension(
-			this.domNode,
-			options.initialDimension,
-		);
-		validateWorkbenchDefaultLayout(options.defaultLayout);
-		this.stateModel = new WorkbenchLayoutStateModel(
-			storageService,
-			options.workbenchState,
-			options.defaultLayout,
-		);
 		const initialState = this.stateModel.state;
 		this.projectPartFrameInsets(
 			initialState.sidebar.visible,
@@ -163,7 +156,7 @@ export class WorkbenchLayout
 		);
 		this.grid = SerializableGrid.deserialize(
 			this.domNode,
-			createWorkbenchGridDescriptor(this.views, initialDimension, initialState, this.activityBarLocation, this.sideBarLocation),
+			createWorkbenchGridDescriptor(this.views, this.initialDimension, initialState, this.activityBarLocation, this.sideBarLocation),
 			{ fromJSON: (data) => this.view(parseWorkbenchPartId(data)) },
 			{
 				sashPresentation: this.layoutStyle === "modern" ? { type: "inset", gap: PART_GUTTER_SIZE } : undefined,
@@ -175,13 +168,13 @@ export class WorkbenchLayout
 			this.projectPartFrameInsets();
 			this.publishPartVisibility();
 		});
-		this._register(storageService.onWillSaveState(() => this.saveState()));
-		this._register(configurationService.onDidChangeConfiguration(event => {
+		this._register(this.storageService.onWillSaveState(() => this.saveState()));
+		this._register(this.configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(WorkbenchConfiguration.activityBarLocation)) {
-				this.setActivityBarLocation(configurationService.getValue(WorkbenchConfiguration.activityBarLocation));
+				this.setActivityBarLocation(this.configurationService.getValue(WorkbenchConfiguration.activityBarLocation));
 			}
 			if (event.affectsConfiguration(WorkbenchConfiguration.sideBarLocation)) {
-				this.setSideBarLocation(configurationService.getValue(WorkbenchConfiguration.sideBarLocation));
+				this.setSideBarLocation(this.configurationService.getValue(WorkbenchConfiguration.sideBarLocation));
 			}
 		}));
 	}
@@ -229,8 +222,9 @@ export class WorkbenchLayout
 		this.layout(dimension);
 	}
 
-	/** Offset information consumed by the platform layout service for overlays. */
-	get mainContainerOffset(): ILayoutOffsetInfo {
+	/** Overlays can read offsets before Parts exist; the mounted Grid then owns titlebar geometry. */
+	override get mainContainerOffset(): ILayoutOffsetInfo {
+		if (!this.gridHandle.value) return { top: 0, quickInputTop: 0 };
 		const titlebar = this.getPartSize("titlebar");
 		return {
 			top: this.isPartVisible("titlebar") ? titlebar.height : 0,
@@ -238,11 +232,12 @@ export class WorkbenchLayout
 		};
 	}
 
-	layout(dimension: IDimension = getClientArea(this.domNode)): void {
+	override layout(dimension: IDimension = getClientArea(this.mainContainer)): void {
 		assertDimension(dimension);
 		this.projectPartFrameInsets();
 		this.grid.layout(dimension.width, dimension.height);
 		this.publishPartVisibility();
+		super.layout(dimension);
 	}
 
 	get state(): WorkbenchLayoutState {

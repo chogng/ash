@@ -1,9 +1,10 @@
 import { Disposable, DisposableMap, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { WorkbenchConfiguration, type WorkbenchLayoutStyle } from '../../../common/configuration.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
-import { IWorkbenchLayoutStyleService } from '../../../services/layout/browser/workbenchLayoutStyleService.js';
+import { IWorkbenchLayoutService } from '../../../services/layout/browser/layoutService.js';
 import './media/editorBorder.css';
 import './media/padding.css';
 import './media/roundedCorners.css';
@@ -19,18 +20,18 @@ export class ModernUIContribution extends Disposable {
 	private readonly auxiliaryWindowListeners = this._register(new DisposableMap<number, IDisposable>());
 
 	constructor(
-		private readonly configurationService: IConfigurationService,
-		private readonly layoutStyleService: IWorkbenchLayoutStyleService,
-		auxiliaryWindowService: IAuxiliaryWindowService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
+		@IAuxiliaryWindowService auxiliaryWindowService: IAuxiliaryWindowService,
 	) {
 		super();
-		this.applyTo(layoutStyleService.container, this.getStyle());
+		this.applyTo(layoutService.mainContainer, this.getStyle());
 		this._register(auxiliaryWindowService.onDidOpenWindow(window => this.addAuxiliaryWindow(window)));
 		this._register(configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(WorkbenchConfiguration.layoutStyle)) this.update();
 		}));
 		this._register(toDisposable(() => {
-			this.clear(layoutStyleService.container);
+			this.clear(layoutService.mainContainer);
 			for (const window of this.auxiliaryWindows) {
 				this.clear(window.container);
 			}
@@ -41,8 +42,8 @@ export class ModernUIContribution extends Disposable {
 
 	private update(): void {
 		const style = this.getStyle();
-		this.layoutStyleService.setLayoutStyle(style);
-		this.applyTo(this.layoutStyleService.container, style);
+		this.layoutService.setLayoutStyle(style);
+		this.applyTo(this.layoutService.mainContainer, style);
 		for (const window of this.auxiliaryWindows) this.applyTo(window.container, style);
 	}
 
@@ -71,8 +72,4 @@ export class ModernUIContribution extends Disposable {
 	}
 }
 
-registerWorkbenchContribution(ModernUIContribution.ID, WorkbenchPhase.BlockRestore, accessor => new ModernUIContribution(
-	accessor.get(IConfigurationService),
-	accessor.get(IWorkbenchLayoutStyleService),
-	accessor.get(IAuxiliaryWindowService),
-));
+registerWorkbenchContribution(ModernUIContribution.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ModernUIContribution));

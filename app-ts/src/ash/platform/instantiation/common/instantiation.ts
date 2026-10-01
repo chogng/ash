@@ -40,6 +40,11 @@ export function createServiceIdentifier<T>(id: string): ServiceIdentifier<T> {
 /** VS Code-compatible name for declaring a service identifier. */
 export const createDecorator = createServiceIdentifier;
 
+/** Refines a service contract without creating another registration key. */
+export function refineServiceDecorator<TBase, T extends TBase>(identifier: ServiceIdentifier<TBase>): ServiceIdentifier<T> {
+	return identifier as ServiceIdentifier<T>;
+}
+
 /** Provides command handlers with the services of the active application. */
 export interface ServicesAccessor {
 	get<T>(id: ServiceIdentifier<T>): T;

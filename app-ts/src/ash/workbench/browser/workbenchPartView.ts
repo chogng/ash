@@ -2,7 +2,7 @@ import { h } from "../../base/browser/dom.js";
 import { Dimension } from "../../base/browser/dom.js";
 import { type IPositionedRectangle } from "../../base/browser/geometry.js";
 import type { Event } from "../../base/common/event.js";
-import type { WorkbenchPartId } from "../services/layout/common/workbenchLayoutService.js";
+import type { WorkbenchPartId } from "../services/layout/browser/layoutService.js";
 import type { WorkbenchPart } from "./part.js";
 
 export interface WorkbenchPartFrameInsets {

@@ -52,7 +52,6 @@ import type { IConfigurationApi, IConfigurationSnapshot } from "../../platform/c
 import { IConfigurationResourceService } from "../../platform/configuration/common/configurationResourceService.js";
 import { IConfigurationService } from "../../platform/configuration/common/configuration.js";
 import { IStorageService, StorageScope, StorageTarget, WillSaveStateReason } from "../../platform/storage/common/storage.js";
-import { BrowserLayoutService, ILayoutService } from "../../platform/layout/browser/layoutService.js";
 import "../../platform/layout/browser/zIndexRegistry.js";
 import {
 	ServiceContainer,
@@ -146,7 +145,6 @@ import { IResourceIconRenderer, IResourceLabelService, ResourceLabelService } fr
 import { ILabelService, LabelService } from "../../platform/label/common/labelService.js";
 import { WorkbenchLayout, type WorkbenchDefaultLayout } from "./layout.js";
 import { IWorkbenchLayoutService, type WorkbenchPartId } from "../services/layout/browser/layoutService.js";
-import { IWorkbenchLayoutStyleService } from "../services/layout/browser/workbenchLayoutStyleService.js";
 import { BrowserStorageService } from "../services/storage/browser/storageService.js";
 import { SystemOutputService } from "../services/output/browser/systemOutputService.js";
 import { IContentSearchService } from "../../platform/search/common/search.js";
@@ -602,11 +600,6 @@ export class Workbench extends Disposable {
 		}));
 		services.registerInstance(IWorkbenchHostService, workbenchWindow);
 		const ownerDocument = workbenchWindow.ownerDocument;
-		const layoutService = this._register(new BrowserLayoutService({
-			root: workbenchRoot,
-			focus: () => this.editor.focus(),
-		}));
-		services.registerInstance(ILayoutService, layoutService);
 
 		const languagePackService = this._register(new MarketplaceLanguagePackService(marketplaceService, builtinLanguagePackCatalogs));
 		services.registerInstance(ILanguagePackService, languagePackService);
@@ -647,6 +640,13 @@ export class Workbench extends Disposable {
 		this.workbenchWindow = workbenchWindow;
 		this.storage = storage;
 		services.registerInstance(IStorageService, storage);
+		const layoutService = this._register(services.createInstance(WorkbenchLayout, workbenchRoot, {
+			workbenchState,
+			defaultLayout,
+			focus: () => this.editor.focus(),
+		}));
+		this.workbenchLayout = layoutService;
+		services.registerInstance(IWorkbenchLayoutService, layoutService);
 		const chatService = this._register(new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, turnChangesApi: api.turnChanges, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, configurationService: configuration, storageService: storage }));
 		services.registerInstance(IChatService, chatService);
 		const savedFontInfo = storage.get('editorFontInfo', StorageScope.APPLICATION);
@@ -1043,13 +1043,8 @@ export class Workbench extends Disposable {
 			["editor", editor],
 			["panel", panel],
 		]);
-		const layout = this._register(services.createInstance(WorkbenchLayout, workbenchRoot, parts, {
-			initialDimension: layoutService.mainContainerDimension,
-			workbenchState,
-			defaultLayout,
-		}));
-		this.workbenchLayout = layout;
-		layoutService.setContentLayout(layout, () => layout.mainContainerOffset);
+		const layout = layoutService;
+		layout.createParts(parts);
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(WorkbenchConfiguration.layoutStyle)) {
 				const style = configuration.getValue<WorkbenchLayoutStyle>(WorkbenchConfiguration.layoutStyle);
@@ -1077,8 +1072,6 @@ export class Workbench extends Disposable {
 		this._register(layout.onDidChangePartVisibility(({ partId, visible }) => {
 			if (partId === 'sidebar') activitybar.setSidebarVisible(visible);
 		}));
-		services.registerInstance(IWorkbenchLayoutService, layout);
-		services.registerInstance(IWorkbenchLayoutStyleService, layout);
 		this._register(new WorkbenchContextKeysHandler(contextKeys, workspaceContext, editorService, editorService, layout, workingCopyService, nativeHostApi !== undefined || webWorkspaceClient !== undefined, browserFileSystemProvider !== undefined));
 		const openAuxiliaryComposite = (compositeId: string): PaneComposite => {
 			const viewContainer = viewDescriptors

@@ -530,10 +530,12 @@ base 能力不引用 Part、ViewContainer 或其他 Workbench domain。
 Panel profile，Workbench 不反向导入 Mode contribution。窗口变化由高优先级 Editor 区域吸收，
 Part 即使隐藏也保持挂载，尺寸查询返回其可恢复尺寸。
 
-`BrowserLayoutService` 负责容器尺寸和布局完成事件。Workbench 装配完 Parts 后通过
-`setContentLayout` 接入具体布局与浮层偏移；每次尺寸变化先调用具体布局，再发布容器、主容器和
-活动容器事件，让浮层读取已更新的几何。`WorkbenchLayout` 通过构造注入获取配置和存储服务，
-监听 Activity Bar 和 Sidebar 位置设置；布局样式由 Modern UI contribution 统一调用布局样式服务。
+`IWorkbenchLayoutService` 扩展平台 `ILayoutService`，两者共用一个注册标识和同一个
+`WorkbenchLayout` 实例。它复用 `BrowserLayoutService` 的容器尺寸观察与事件机制，在 Parts
+创建前注册，装配完成后通过 `createParts` 建立 Grid。浮层从该实例读取容器与偏移；每次尺寸变化
+先完成 Grid 和 Part 布局，再发布容器、主容器和活动容器事件。
+`WorkbenchLayout` 通过构造注入获取配置和存储服务，监听 Activity Bar 和 Sidebar 位置设置；
+Modern UI contribution 直接通过 `IWorkbenchLayoutService.setLayoutStyle` 更新布局样式。
 Panel 最大化经 `IWorkbenchLayoutService.toggleMaximizedPanel()` 执行。布局记录最大化前的 Panel
 高度，换 Sidebar 或 Activity Bar 位置时保留最大化状态；恢复编辑区或关闭最大化 Panel 时恢复原高度。
 最大化期间保存布局仍使用恢复后的高度，工作区布局恢复会重新显示编辑区。
