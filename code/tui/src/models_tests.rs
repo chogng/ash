@@ -225,13 +225,13 @@ fn collaboration_effort_steps_use_supported_values_and_stop_at_boundaries() {
         assert_eq!(update.summary.model(), Some(&model));
         assert_eq!(update.summary.model_reasoning_effort(), Some(expected));
         assert_eq!(update.config.model_reasoning_effort, Some(expected));
-        let super::ModelNotice::ThinkingEffort(notice) = update.notice else {
-            panic!("effort adjustments must use composer notices")
-        };
         if let Some(boundary) = boundary {
+            let super::ModelNotice::ThinkingEffort(notice) = update.notice else {
+                panic!("effort boundaries must use composer notices")
+            };
             assert!(notice.contains(boundary));
         } else {
-            assert_eq!(&*notice, format!("Thinking effort: {}", expected.as_str()));
+            assert!(matches!(update.notice, super::ModelNotice::Silent));
         }
         assert_eq!(transport.state.lock().unwrap().1.len(), writes);
     }
@@ -266,6 +266,7 @@ fn collaboration_effort_steps_use_supported_values_and_stop_at_boundaries() {
         update.summary.model_reasoning_effort(),
         Some(ReasoningEffort::Low)
     );
+    assert!(matches!(update.notice, super::ModelNotice::Silent));
     let choices = super::reasoning_effort::choices(&update.config, &catalog).unwrap();
     let selection = crate::widgets::list_selection::ListSelectionState::new(choices.model);
     assert_eq!(selection.selected_visible_index(), Some(0));

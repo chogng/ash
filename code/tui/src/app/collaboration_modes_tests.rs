@@ -73,6 +73,7 @@ fn collaboration_shortcuts_preserve_drafts_permissions_and_history_search() {
             assert_eq!(app.collaboration_mode(), mode);
             assert_eq!(app.input(), "keep this draft\nand this line");
             assert_eq!(app.approval_mode(), ApprovalMode::AskPermissions);
+            assert_eq!(app.top_tip().text(None), None);
         }
         for (code, modifiers, command) in [
             (
@@ -145,6 +146,79 @@ fn collaboration_effort_shortcuts_leave_open_selectors_in_control() {
         ] {
             assert_eq!(key(&mut app, code, modifiers), None);
             assert_eq!(app.input(), "/mod");
+        }
+    }
+}
+
+#[test]
+fn collaboration_effort_changes_update_status_without_a_notice() {
+    use ash_protocol::ReasoningEffort;
+    for screen in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut app = App::new();
+        let mut settings = TerminalSettings::default();
+        settings.set_screen_mode(screen);
+        settings.set_language(crate::nls::Language::Chinese);
+        app.update(ConfigEvent::SettingsReceived(settings));
+        app.insert_text("keep this draft");
+        let rows = app.messages().len();
+        let origin = super::requests::RequestOrigin {
+            mode: screen,
+            panel_generation: app.panels().generation(),
+        };
+        for (command, effort) in [
+            (
+                crate::models::Command::IncreaseEffort,
+                ReasoningEffort::High,
+            ),
+            (crate::models::Command::DecreaseEffort, ReasoningEffort::Low),
+            (
+                crate::models::Command::SetEffort {
+                    effort: ReasoningEffort::Max,
+                },
+                ReasoningEffort::Max,
+            ),
+        ] {
+            let mut config = crate::test_support::empty_config_snapshot();
+            config.model = Some(ash_app_server_protocol::protocol::config::ModelRefDto {
+                provider: "openai".into(),
+                model: "test-model".into(),
+            });
+            config.model_reasoning_effort = Some(effort);
+            super::completion::apply_request_completion(
+                super::completion::Completion::ModelUpdated {
+                    command,
+                    result: Ok(crate::models::ModelUpdate {
+                        summary: crate::models::ModelSummary::from_catalog(
+                            config.model.clone(),
+                            config.model_reasoning_effort,
+                            None,
+                        ),
+                        notice: crate::models::ModelNotice::Silent,
+                        picker: None,
+                        config,
+                    }),
+                },
+                origin,
+                &mut None,
+                &mut app,
+                &ash_app_server_protocol::protocol::model::ModelListResult { models: vec![] },
+            );
+            assert_eq!(
+                app.status_line().model_label(),
+                format!("test-model ({})", effort.as_str())
+            );
+            assert_eq!(app.top_tip().text(None), None);
+            assert_eq!(app.messages().len(), rows);
+            assert_eq!(app.input(), "keep this draft");
+            assert!(app.chat_input_focused());
+        }
+        match screen {
+            ScreenMode::Fullscreen => {
+                crate::tui_assert_snapshot!("effort_changed_fullscreen_chinese", render(&app))
+            }
+            ScreenMode::Inline => {
+                crate::tui_assert_snapshot!("effort_changed_inline_chinese", render(&app))
+            }
         }
     }
 }
@@ -291,6 +365,7 @@ fn collaboration_selector_selects_and_dismisses_in_both_screens() {
         assert!(app.command_panel().is_none());
         assert!(app.chat_input_focused());
         assert_eq!(app.input(), "draft behind selector");
+        assert_eq!(app.top_tip().text(None), None);
         match screen {
             ScreenMode::Fullscreen => {
                 crate::tui_assert_snapshot!("collaboration_fullscreen_selected", render(&app))
@@ -486,12 +561,6 @@ fn collaboration_changed_during_a_turn_is_queued_instead_of_steered() {
     app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
     assert_eq!(app.collaboration_mode(), CollaborationMode::Debug);
     command(&mut app, "/mode invalid");
-    assert_eq!(app.status(), &super::Status::Working);
-    assert!(app.steers_active_turn());
-    app.update(ThreadEvent::CommandCompleted {
-        command: "/effort".into(),
-        result: "Thinking effort: high".into(),
-    });
     assert_eq!(app.status(), &super::Status::Working);
     assert!(app.steers_active_turn());
     command(&mut app, "/mode plan");

@@ -355,6 +355,7 @@ pub(super) fn apply_request_completion(
                 );
             }
             match update.notice {
+                models::ModelNotice::Silent => {}
                 models::ModelNotice::ThinkingEffort(mut notice) => {
                     notice.localize(app.language());
                     app.chat_panel

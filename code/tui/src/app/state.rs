@@ -2365,13 +2365,6 @@ impl App {
 
     pub(super) fn set_collaboration_mode(&mut self, mode: ash_protocol::CollaborationMode) {
         self.input_state_mut().set_mode(mode);
-        let mut notice = crate::nls::Text::template(
-            "Next mode: {0}",
-            vec![crate::thread::composer::options::mode_label(mode).into()],
-        );
-        notice.localize(self.language());
-        self.chat_panel
-            .show_notice(notice.to_string(), Instant::now());
     }
 
     pub(super) fn report_composer_option_error(&mut self, error: String) {
