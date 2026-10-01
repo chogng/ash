@@ -944,6 +944,41 @@ for (const edit of ['type', 'paste', 'executeEdits'] as const) {
 	});
 }
 
+for (const scenario of [
+	{ name: 'replacement before the caret', original: 'hello world', before: [5, 5], range: [0, 5], text: 'hi', after: [2, 2], expected: 'hi world' },
+	{ name: 'replacement inside a selection', original: 'abcdef', before: [0, 6], range: [1, 4], text: 'X', after: [1, 2], expected: 'aXef' },
+	{ name: 'deletion away from the caret', original: 'hello world', before: [11, 11], range: [0, 6], text: '', after: [0, 0], expected: 'world' },
+	{ name: 'cross-line replacement', original: 'first\nsecond\nlast', before: [5, 5], range: [3, 9], text: 'X\nY', after: [5, 6], expected: 'firX\nYond\nlast' },
+	{ name: 'replacement with a backward final selection', original: 'abcdef', before: [3, 3], range: [3, 3], text: 'XYZ', after: [6, 4], expected: 'abcXYZdef' },
+	{ name: 'replacement of a surrogate pair', original: '😀 cat', before: [2, 2], range: [0, 2], text: '🙂🙂', after: [4, 4], expected: '🙂🙂 cat' },
+] as const) {
+	test(`browser text update commits ${scenario.name} and restores both selections through history`, () => {
+		const dom = new JSDOM('<!doctype html><body><main></main></body>');
+		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+		try {
+			using model = new TextModel(scenario.original);
+			using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model });
+			const before = Selection.fromPositions(model.getPositionAt(scenario.before[0]), model.getPositionAt(scenario.before[1]));
+			editor.setSelection(before);
+			editor.controller.applyTextUpdate({
+				text: scenario.text,
+				updateRangeStart: scenario.range[0], updateRangeEnd: scenario.range[1],
+				previousSelectionStart: scenario.before[0], previousSelectionEnd: scenario.before[1],
+				selectionStart: scenario.after[0], selectionEnd: scenario.after[1],
+				inputType: scenario.text ? 'insertReplacementText' : 'deleteContentForward',
+			});
+			const after = Selection.fromPositions(model.getPositionAt(scenario.after[0]), model.getPositionAt(scenario.after[1]));
+			assert.deepEqual({ value: model.getValue(), selection: editor.getSelection() }, { value: scenario.expected, selection: after });
+			editor.controller.undo();
+			assert.deepEqual({ value: model.getValue(), selection: editor.getSelection() }, { value: scenario.original, selection: before });
+			editor.controller.redo();
+			assert.deepEqual({ value: model.getValue(), selection: editor.getSelection() }, { value: scenario.expected, selection: after });
+		} finally {
+			dom.window.close();
+		}
+	});
+}
+
 function configurationChange(...changed: EditorOption[]): ViewConfigurationChangedEvent {
 	return { hasChanged: option => changed.includes(option) } as ViewConfigurationChangedEvent;
 }

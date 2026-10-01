@@ -345,18 +345,42 @@ export class ViewController extends Disposable {
 
 	public applyTextUpdate(update: EditContextTextUpdate): TextModelChange | undefined {
 		const model = this.viewport.textModel;
-		const selections = this.selectionsForTextUpdate(update);
+		const selections = this.viewModel.getSelections();
+		const primary = selections[0]!;
+		const primaryStart = model.getOffsetAt(primary.getStartPosition());
+		const primaryEnd = model.getOffsetAt(primary.getEndPosition());
+		const matchesSelection = primaryStart === update.previousSelectionStart && primaryEnd === update.previousSelectionEnd;
 		const inputType = update.inputType ?? (update.text.length > 0 ? 'insertText' : 'deleteContentBackward');
-		if (update.text.length > 0) {
+		const replacesSelection = matchesSelection && update.updateRangeStart === primaryStart && update.updateRangeEnd === primaryEnd;
+		const collapsesAfterInsertion = update.selectionStart === update.updateRangeStart + update.text.length && update.selectionEnd === update.selectionStart;
+		if (replacesSelection && collapsesAfterInsertion && update.text.length > 0) {
 			if (inputType === 'insertLineBreak' || inputType === 'insertParagraph') return this.executeEnter(selections, inputType, update.text);
 			return this.executeType(selections, update.text, inputType);
 		}
-		if (inputType === 'deleteContentForward') return this.executeDelete('right', selections, inputType);
-		if (inputType === 'deleteContentBackward') {
-			return this.executeDelete('left', selections, inputType);
-		}
-		this.viewModel.setSelections(inputType, selections);
-		return this.runViewModelEdit(inputType, undefined, () => this.viewModel.type('', inputType));
+
+		// Browser ranges describe the edit, not the selection to restore on undo.
+		// Mirror a primary-cursor update at the other cursors only when it belongs
+		// to the current selection; the command executor resolves overlapping edits.
+		const ranges = matchesSelection ? selections.map(selection => Range.fromPositions(
+			model.getPositionAt(model.getOffsetAt(selection.getStartPosition()) + update.updateRangeStart - primaryStart),
+			model.getPositionAt(model.getOffsetAt(selection.getEndPosition()) + update.updateRangeEnd - primaryEnd),
+		)) : [Range.fromPositions(model.getPositionAt(update.updateRangeStart), model.getPositionAt(update.updateRangeEnd))];
+		const commands: ICommand[] = ranges.map(range => ({
+			getEditOperations: (_model, builder): void => builder.addTrackedEditOperation(range, update.text),
+			computeCursorState: (editedModel, helper): Selection => {
+				const start = editedModel.getOffsetAt(helper.getInverseEditOperations()[0]!.range.getStartPosition());
+				// Inverse ranges are in the committed model, including shifts from
+				// other cursors. Browser selection offsets refer to its single edit.
+				return Selection.fromPositions(
+					editedModel.getPositionAt(start + update.selectionStart - update.updateRangeStart),
+					editedModel.getPositionAt(start + update.selectionEnd - update.updateRangeStart),
+				);
+			},
+		}));
+		model.pushStackElement();
+		const change = this.runViewModelEdit(inputType, update.text, () => this.viewModel.executeCommands(commands, inputType));
+		model.pushStackElement();
+		return change;
 	}
 
 	public undo(): void {
@@ -376,7 +400,10 @@ export class ViewController extends Disposable {
 		// A multiline input event is one transfer; typing it character by character
 		// would apply Enter rules and split its undo history at each line break.
 		if (text.length > 1 && /[\r\n]/u.test(text)) {
-			return this.runViewModelEdit(inputType, text, () => this.viewModel.paste(text, false, null, 'keyboard'));
+			this.viewport.textModel.pushStackElement();
+			const change = this.runViewModelEdit(inputType, text, () => this.viewModel.executeCommands(selections.map(selection => new ReplaceCommand(selection, text)), inputType));
+			this.viewport.textModel.pushStackElement();
+			return change;
 		}
 		return this.runViewModelEdit(inputType, text, () => this.viewModel.type(text, 'keyboard'));
 	}
@@ -414,18 +441,6 @@ export class ViewController extends Disposable {
 		this.revealPrimary();
 		if (change) this.didEditEmitter.fire(Object.freeze({ inputType, insertedText: undefined, change }));
 		return change;
-	}
-
-	private selectionsForTextUpdate(update: EditContextTextUpdate): readonly Selection[] {
-		const current = this.viewModel.getSelections();
-		const primary = current[0]!;
-		const primaryStart = this.viewport.textModel.offsetAt(primary.getStartPosition());
-		const primaryEnd = this.viewport.textModel.offsetAt(primary.getEndPosition());
-		if (primaryStart === update.previousSelectionStart && primaryEnd === update.previousSelectionEnd) return current;
-		return [Selection.fromPositions(
-			this.viewport.textModel.positionAt(update.updateRangeStart),
-			this.viewport.textModel.positionAt(update.updateRangeEnd),
-		)];
 	}
 
 	private runViewModelEdit(inputType: string, insertedText: string | undefined, edit: () => void, emitDidEdit = true): TextModelChange | undefined {

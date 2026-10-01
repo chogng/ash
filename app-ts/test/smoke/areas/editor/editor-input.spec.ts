@@ -16,6 +16,36 @@ test('multiline text input is restored by one undo in the editor', async ({ targ
 	await expect(editor.input).toBeFocused();
 });
 
+test('browser range replacement restores its text and selection through undo and redo', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText('hello\nworld');
+	await editor.input.press('ControlOrMeta+Home');
+	await editor.input.press('End');
+	await editor.input.evaluate(element => {
+		const context = (element as HTMLElement & { editContext?: EventTarget }).editContext;
+		if (!context) throw new Error('Browser EditContext is unavailable');
+		context.dispatchEvent(Object.assign(new Event('textupdate'), {
+			text: 'hi', updateRangeStart: 0, updateRangeEnd: 5, selectionStart: 0, selectionEnd: 2,
+		}));
+	});
+	await expect(editor.lines).toHaveText(['hi', 'world']);
+	await page.keyboard.insertText('!');
+	await expect(editor.lines).toHaveText(['!', 'world']);
+	await editor.input.press('ControlOrMeta+z');
+	await expect(editor.lines).toHaveText(['hi', 'world']);
+	await editor.input.press('ControlOrMeta+z');
+	await expect(editor.lines).toHaveText(['hello', 'world']);
+	await editor.input.press('ControlOrMeta+Shift+z');
+	await expect(editor.lines).toHaveText(['hi', 'world']);
+	await page.keyboard.insertText('!');
+	await expect(editor.lines).toHaveText(['!', 'world']);
+	await expect(editor.input).toBeFocused();
+});
+
 test('multiline paste undo and redo preserve the final editor line', async ({ target, workbench, application }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;

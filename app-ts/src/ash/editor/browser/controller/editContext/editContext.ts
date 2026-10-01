@@ -28,7 +28,11 @@ export interface EditContextState {
 	readonly position: Position;
 }
 
-/** A browser text update expressed independently of the concrete input element. */
+/**
+ * A browser text update in absolute UTF-16 model offsets. The replacement range
+ * and previous selection address the old text; selectionStart/End address the
+ * text after this single update, before any edits at secondary cursors.
+ */
 export interface EditContextTextUpdate {
 	readonly text: string;
 	readonly updateRangeStart: number;

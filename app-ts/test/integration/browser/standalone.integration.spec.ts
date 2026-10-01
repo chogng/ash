@@ -3376,7 +3376,89 @@ test('Alt-click toggles editor-local cursors and one typing transaction edits bo
 	expect(errors).toEqual([]);
 });
 
+for (const scenario of [
+	{ name: 'replacement before the caret', original: 'hello world', before: [1, 6, 1, 6], range: [0, 5], text: 'hi', after: [2, 2], expected: 'hi world', selection: '[1,3 -> 1,3]' },
+	{ name: 'deletion away from the caret', original: 'hello world', before: [1, 12, 1, 12], range: [0, 6], text: '', after: [0, 0], expected: 'world', selection: '[1,1 -> 1,1]' },
+	{ name: 'cross-line replacement with a final selection', original: 'first\nsecond\nlast', before: [1, 6, 1, 6], range: [3, 9], text: 'X\nY', after: [5, 6], expected: 'firX\nYond\nlast', selection: '[2,1 -> 2,2]' },
+] as const) {
+	test(`EditContext range update commits ${scenario.name} with undo and redo`, async ({ page }) => {
+		await page.goto('/standalone.html');
+		const initial = await page.evaluate(scenario => window.ashStandaloneIntegration.prepareClipboard(scenario.original, [[...scenario.before]]), scenario);
+		const input = page.locator('#caller .stanza-editor-input');
+		await input.focus();
+		await input.evaluate((element, scenario) => {
+			const context = (element as HTMLElement & { editContext?: EventTarget }).editContext;
+			if (!context) throw new Error('Browser EditContext is unavailable');
+			context.dispatchEvent(Object.assign(new Event('textupdate'), {
+				text: scenario.text, updateRangeStart: scenario.range[0], updateRangeEnd: scenario.range[1],
+				selectionStart: scenario.after[0], selectionEnd: scenario.after[1],
+			}));
+		}, scenario);
+		const inserted = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+		expect(inserted).toEqual({ value: scenario.expected, selection: scenario.selection, version: initial.version + 1, focused: true });
+		await input.press('ControlOrMeta+z');
+		const undone = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+		expect({ value: undone.value, selection: undone.selection }).toEqual({ value: initial.value, selection: initial.selection });
+		await input.press('ControlOrMeta+Shift+z');
+		const redone = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+		expect({ value: redone.value, selection: redone.selection }).toEqual({ value: inserted.value, selection: inserted.selection });
+		await expect(page.locator('#caller .stanza-editor-line-text')).toHaveText(scenario.expected.split('\n'));
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	});
+}
+
+test('EditContext range update replaces text at every cursor in one transaction', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareClipboard('hello\nhello', [[1, 6, 1, 6], [2, 6, 2, 6]]));
+	const input = page.locator('#caller .stanza-editor-input');
+	await input.focus();
+	const initial = await page.evaluate(() => window.ashStandaloneIntegration.readMultiCursor());
+	await input.evaluate(element => {
+		const context = (element as HTMLElement & { editContext?: EventTarget }).editContext;
+		if (!context) throw new Error('Browser EditContext is unavailable');
+		context.dispatchEvent(Object.assign(new Event('textupdate'), {
+			text: 'hi', updateRangeStart: 0, updateRangeEnd: 5, selectionStart: 2, selectionEnd: 2,
+		}));
+	});
+	const inserted = await page.evaluate(() => window.ashStandaloneIntegration.readMultiCursor());
+	expect({ value: inserted.value, selections: inserted.selections, version: inserted.version }).toEqual({
+		value: 'hi\nhi', selections: ['[1,3 -> 1,3]', '[2,3 -> 2,3]'], version: initial.version + 1,
+	});
+	await input.press('ControlOrMeta+z');
+	const undone = await page.evaluate(() => window.ashStandaloneIntegration.readMultiCursor());
+	expect({ value: undone.value, selections: undone.selections }).toEqual({ value: initial.value, selections: initial.selections });
+	await input.press('ControlOrMeta+Shift+z');
+	const redone = await page.evaluate(() => window.ashStandaloneIntegration.readMultiCursor());
+	expect({ value: redone.value, selections: redone.selections }).toEqual({ value: inserted.value, selections: inserted.selections });
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
 for (const inputKind of ['EditContext', 'textarea'] as const) {
+	test(`${inputKind} multiline input inserts the full text at every cursor`, async ({ page }) => {
+		if (inputKind === 'textarea') {
+			await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		}
+		await page.goto('/standalone.html');
+		const initial = await page.evaluate(() => window.ashStandaloneIntegration.prepareClipboard('x\ny', [[1, 1, 1, 1], [2, 1, 2, 1]]));
+		const input = page.locator('#caller .stanza-editor-input');
+		await input.focus();
+		await page.keyboard.insertText('A\nB');
+		const inserted = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+		expect(inserted.value).toBe('A\nBx\nA\nBy');
+		await input.press('ControlOrMeta+z');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).value).toBe(initial.value);
+		await input.press('ControlOrMeta+Shift+z');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).value).toBe(inserted.value);
+		await input.press('ControlOrMeta+z');
+		await input.evaluate(element => {
+			const clipboardData = new DataTransfer();
+			clipboardData.setData('text/plain', 'A\nB');
+			element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+		});
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).value).toBe('Ax\nBy');
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	});
+
 	for (const original of ['', 'prefix\nlast']) {
 		for (const text of ['one\ntwo\nthree', '    one\n  two\nthree\n']) {
 			test(`${inputKind} multiline input replaces ${original ? 'existing text' : 'empty text'} with one undo step${text.endsWith('\n') ? ' including a final newline' : ''}`, async ({ page }) => {
