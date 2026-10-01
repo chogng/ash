@@ -204,6 +204,7 @@ class PackageTests(unittest.TestCase):
                 validate_product_services(root)
 
     BUILT_IN_EXTENSIONS = [
+        "bazel",
         "css",
         "go",
         "html",

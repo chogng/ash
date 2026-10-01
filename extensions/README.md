@@ -29,8 +29,9 @@ activation, permissions, and process execution. Static language
 assets are exposed through the extension catalog; server routes are read from the signed language
 catalog and handled by the shared Rust LSP client.
 
-The bundled packages are derived from `microsoft/vscode` and retain their package-level
-`NOTICE.md` provenance. The canonical upstream MIT license copy is
+The bundled packages retain their package-level `NOTICE.md` provenance. Most are derived
+from `microsoft/vscode`; Bazel comes from `bazel-contrib/vscode-bazel` and TOML from Taplo,
+with their licenses included inside those packages. The canonical VS Code MIT license copy is
 [`third_party/vscode/LICENSE.txt`](../third_party/vscode/LICENSE.txt); both production and Desktop
 development packaging place it at `ash-resources/licenses/vscode/LICENSE.txt` alongside the
 extension packages.
@@ -41,9 +42,12 @@ User-installed extensions are a separate profile-level root. Marketplace package
 
 The current declarative pack contains the following package directories:
 
-- `css` (CSS/Less/SCSS), `go`, `html`, `javascript`, `json`, `markdown-basics`, `python`, `rust`, `shellscript`, `sql`,
+- `bazel` (Starlark/bazelrc), `css` (CSS/Less/SCSS), `go`, `html`, `javascript`, `json`, `markdown-basics`, `python`, `rust`, `shellscript`, `sql`,
   `toml`, `typescript-basics`, `xml`, and `yaml` provide language IDs, file associations, language
   configuration, TextMate grammars, and—where upstream provides them—snippets.
+  Bazel associates `BUILD`, `WORKSPACE`, `MODULE.bazel`, `.bazel`, and `.bzl` files with
+  Starlark; `.bazelrc` and `bazel.rc` use a separate configuration grammar. Starlark
+  editing includes comment toggling, bracket/quote pairs, block indentation, and folding.
 - `theme-seti` provides the Seti file icon document, font, and third-party notices.
 - `theme-defaults` currently provides four self-contained VS Code-derived color-theme documents.
   The Workbench loader also resolves package-relative JSON `include` files when a theme uses them.
