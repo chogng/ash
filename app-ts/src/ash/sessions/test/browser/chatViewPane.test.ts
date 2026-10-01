@@ -1,3 +1,5 @@
+import { IDictationService } from '../../../platform/dictation/common/dictationService.js';
+import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
 import { IFileTextModelService } from '../../../workbench/services/textmodelResolver/common/textModelResourceService.js';
 import assert from "node:assert/strict";
@@ -55,6 +57,14 @@ import { ChatTipService, IChatTipService } from '../../../workbench/contrib/chat
 import { BrowserLifecycleService } from '../../../workbench/services/lifecycle/browser/lifecycleService.js';
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 
+const inputResources = new DisposableStore();
+suiteTeardown(() => inputResources.dispose());
+function createInputServices(): InstantiationService {
+	const services = inputResources.add(new InstantiationService());
+	services.registerInstance(IDictationService, undefined);
+	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	return services;
+}
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 const unavailableFileService = {
 	readFileBytes: async () => { throw new Error('File read is unavailable in this test'); },
@@ -194,7 +204,7 @@ test('Chat loads an Ash remote workspace image through the file service', async 
 			fileService,
 			unavailableAccessibleViewService,
 			notifications,
-			contextKeys,
+			createInputServices(), contextKeys,
 		);
 		dom.window.document.body.append(pane.element);
 		await sessions.initialize();
@@ -305,7 +315,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
-		contextKeys,
+		createInputServices(), contextKeys,
 	);
 	chatView = pane;
 	const title = h(dom.window.document, "div");
@@ -698,6 +708,8 @@ test('Code sending preserves the Chat draft when pages switch during first-sessi
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editorResources = new DisposableStore();
 	const editorServices = editorResources.add(createCodeEditorServices(editorResources).createChild());
+	editorServices.registerInstance(IDictationService, undefined);
+	editorServices.registerSingleton(IChatSpeechToTextService, () => editorServices.createInstance(ChatSpeechToTextService));
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
 	editorServices.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
 	editorServices.registerInstance(INotificationService, notifications);
@@ -735,8 +747,8 @@ test('Code sending preserves the Chat draft when pages switch during first-sessi
 		undefined,
 		undefined,
 		undefined,
-		undefined,
-		(container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, widgetModel, undefined, undefined, 'code'),
+		(container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, widgetModel, undefined, 'code'),
+		editorServices,
 	);
 	widget.setVisible(true);
 	const input = widget.element.querySelector<HTMLElement>('.ash-chat-input-part');
@@ -753,8 +765,7 @@ test('Code sending preserves the Chat draft when pages switch during first-sessi
 	const chatModel = new ChatWidgetModel(chat, { kind: 'untitled', session: chatSelection.session }, sessions);
 	using chatWidget = new ChatWidget(dom.window.document.body, 'separate-chat', chatModel, () => view.openNewSession(),
 		{ showContextMenu: () => undefined } as unknown as IContextMenuService, contextViewService, commands,
-		unavailableAccessibleViewService, notifications, undefined, undefined, undefined, undefined,
-		(container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, chatModel, undefined, undefined, 'chat'));
+		unavailableAccessibleViewService, notifications, undefined, undefined, undefined, (container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, chatModel, undefined, 'chat'), editorServices);
 	chatWidget.setVisible(true);
 	const chatDraft = { mode: 'agent' as const, text: 'Keep my Chat draft', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context' }] };
 	chatWidget.restoreDraft(chatDraft);
@@ -828,6 +839,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
+		createInputServices(),
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -994,6 +1006,7 @@ test("the New Chat slash command opens an untitled session", async () => {
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
+		createInputServices(),
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1071,6 +1084,7 @@ test("failed first send keeps the untitled session and its input draft", async (
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
+		createInputServices(),
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1153,6 +1167,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
+		createInputServices(),
 	);
 	dom.window.document.body.append(pane.element);
 

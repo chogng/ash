@@ -1,5 +1,8 @@
+import { Range } from '../../core/range.js';
+import { type LanguageToken } from '../../tokens/languageTokens.js';
+import { TokenizationRegistry, type ILanguageIdCodec, type Token } from '../../languages.js';
 import { Color } from '../../../../base/common/color.js';
-import { FontStyle, type LanguageId, MetadataConsts, StandardTokenType } from '../../encodedTokenAttributes.js';
+import { ColorId, FontStyle, type LanguageId, MetadataConsts, StandardTokenType, TokenMetadata } from '../../encodedTokenAttributes.js';
 
 export interface ITokenThemeRule {
 	token: string;
@@ -121,4 +124,73 @@ export function toStandardTokenType(tokenType: string): StandardTokenType {
 		}
 	}
 	return StandardTokenType.Other;
+}
+
+/** Converts provider offsets and encoded styles into the model-owned token representation. */
+export function appendLanguageTokens(target: LanguageToken[], tokens: readonly Token[] | Uint32Array, lineNumber: number, line: string, languageIdCodec: ILanguageIdCodec, rawTokens?: readonly Token[]): void {
+	if (!(tokens instanceof Uint32Array)) {
+		for (let index = 0; index < tokens.length; index++) {
+			const token = tokens[index]!;
+			const end = tokens[index + 1]?.offset ?? line.length;
+			if (end > token.offset && token.type) {
+				target.push({ range: new Range(lineNumber, token.offset + 1, lineNumber, end + 1), tokenType: token.type, modifiers: token.modifiers ?? [], languageId: token.language, presentation: token.presentation, balancedBrackets: token.balancedBrackets });
+			}
+		}
+		return;
+	}
+	const codec = languageIdCodec;
+	const colors = TokenizationRegistry.getColorMap();
+	if (!codec || !colors) {
+		throw new ReferenceError('Encoded tokenization requires a language codec and color map');
+	}
+	if (tokens.length % 2 !== 0) {
+		throw new TypeError('Encoded tokens must contain offset and metadata pairs');
+	}
+	let rawIndex = 0;
+	for (let index = 0; index < tokens.length; index += 2) {
+		const start = tokens[index]!;
+		const end = tokens[index + 2] ?? line.length;
+		if (end <= start) {
+			continue;
+		}
+		const metadata = tokens[index + 1]!;
+		const type = TokenMetadata.getTokenType(metadata);
+		const foreground = TokenMetadata.getForeground(metadata);
+		const background = TokenMetadata.getBackground(metadata);
+		const style = TokenMetadata.getFontStyle(metadata);
+		const fontStyle: NonNullable<LanguageToken['presentation']>['fontStyle'] = [
+			...(style & FontStyle.Italic ? ['italic' as const] : []),
+			...(style & FontStyle.Bold ? ['bold' as const] : []),
+			...(style & FontStyle.Underline ? ['underline' as const] : []),
+			...(style & FontStyle.Strikethrough ? ['strikethrough' as const] : []),
+		];
+		const languageId = codec.decodeLanguageId(TokenMetadata.getLanguageId(metadata));
+		const standardType = type === StandardTokenType.Comment ? 'comment' : type === StandardTokenType.String ? 'string' : type === StandardTokenType.RegEx ? 'regexp' : 'other';
+		const presentation = {
+			foreground: foreground === ColorId.None ? undefined : Color.Format.CSS.formatHexA(colors[foreground]!, true),
+			background: background === ColorId.None || background === ColorId.DefaultBackground ? undefined : Color.Format.CSS.formatHexA(colors[background]!, true),
+			fontStyle,
+		};
+		while (rawTokens?.[rawIndex + 1] && rawTokens[rawIndex + 1]!.offset <= start) rawIndex++;
+		const append = (from: number, to: number): void => {
+			if (to <= from) return;
+			const rawToken = rawTokens?.[rawIndex];
+			target.push({
+				range: new Range(lineNumber, from + 1, lineNumber, to + 1),
+				tokenType: rawToken && rawToken.offset <= from && rawToken.language === languageId && rawToken.type ? rawToken.type : standardType,
+				modifiers: [],
+				languageId,
+				...(TokenMetadata.containsBalancedBrackets(metadata) ? {} : { balancedBrackets: false as const }),
+				presentation,
+			});
+		};
+		let segmentStart = start;
+		while (rawTokens?.[rawIndex + 1] && rawTokens[rawIndex + 1]!.offset < end) {
+			const boundary = rawTokens[rawIndex + 1]!.offset;
+			append(segmentStart, boundary);
+			rawIndex++;
+			segmentStart = boundary;
+		}
+		append(segmentStart, end);
+	}
 }

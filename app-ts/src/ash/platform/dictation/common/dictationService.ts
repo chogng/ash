@@ -1,5 +1,9 @@
 import type { Event } from '../../../base/common/event.js';
 import type { ILocalTranscriptionModelSnapshot } from '../../localTranscription/common/localTranscription.js';
+import { createDecorator } from '../../instantiation/common/instantiation.js';
+
+/** Every window registers its capture capability; unavailable hosts explicitly register undefined. */
+export const IDictationService = createDecorator<IDictationService | undefined>('dictationService');
 
 /** One microphone session delivers recognized phrases to the owning input. */
 export interface IDictationSession {

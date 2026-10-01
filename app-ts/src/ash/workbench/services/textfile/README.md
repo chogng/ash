@@ -35,11 +35,12 @@ content through this service and registers its working copy with the shared
 Workbench lifecycle.
 
 `BrowserTextModelService.acquire` holds a reference while awaiting the model's
-current lexical token result, then returns it to the text or diff pane. The first
-visible text therefore uses the same accepted syntax presentation as subsequent
-frames. Tokenization owns that readiness and shares its scheduled analysis across
-openers; cancelling an opener releases only that opener's reference. Models with
-no token provider or above the tokenization limit do not wait for analysis.
+lexical support and first line, then returns it to the text or diff pane. Its
+viewport prepares visible lines before rendering; the remaining document is analyzed
+in bounded background batches. Opening a file does not wait for full-document TextMate
+analysis. Asynchronous document providers retain their versioned readiness contract.
+Cancelling an opener releases only that opener's reference. Models with no token
+provider or above the tokenization limit do not wait for analysis.
 Semantic tokens and language-server features continue independently.
 
 ## Ownership and failure semantics

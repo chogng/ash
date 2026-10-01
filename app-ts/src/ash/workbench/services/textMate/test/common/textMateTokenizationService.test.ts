@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { test } from "mocha";
 import * as onigurumaNamespace from "vscode-oniguruma";
 import { type IOnigLib } from "vscode-textmate";
+import { TokenizationRegistry } from '../../../../../editor/common/languages.js';
 import { SyntaxProviderRegistry } from '../../../../../editor/common/languageFeatureRegistry.js';
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
@@ -410,4 +411,62 @@ test('TextMate hypothetical lines inherit multiline state without publishing or 
 	const second = await tokenization.tokenizeLinesAt('demo', snapshot, 3, ['if'], signal);
 	assert.deepEqual(project(second), [[1, 1, 3, 'keyword']]);
 	assert.equal(await tokenization.tokenizeLinesAt('missing', snapshot, 1, ['('], signal), undefined);
+});
+
+
+test('shared TextMate line support keeps document states independent and converges after edits', async () => {
+	let loads = 0;
+	using registry = new TextMateGrammarRegistry();
+	using grammar = registry.register({ languageId: 'demo', scopeName: 'source.demo', loadGrammar: () => { loads++; return demoGrammar(); } });
+	using runtime = new TextMateTokenizationService(registry, onigLib);
+	using support = await runtime.createTokenizationSupport('demo');
+	using registration = TokenizationRegistry.register('demo', support!);
+	using first = new TextModel('if "open\ninside\nend"\n42', { languageId: 'demo' });
+	using second = new TextModel('if other\n42', { languageId: 'demo' });
+	first.tokenization.forceTokenization(4);
+	second.tokenization.forceTokenization(2);
+	assert.deepEqual([loads, first.tokenization.getLanguageTokens(1)[0]?.tokenType, second.tokenization.getLanguageTokens(1)[0]?.tokenType], [1, 'string', 'number']);
+	const edits = [
+		[{ range: new Range(1, 4, 1, 5), text: '' }],
+		[{ range: new Range(1, 1, 1, 1), text: 'if "start\n' }],
+		[{ range: new Range(1, 1, 2, 1), text: '' }],
+		[{ range: new Range(1, 1, 1, 3), text: 'if' }],
+	];
+	for (const change of edits) {
+		first.applyEdits(change);
+		first.tokenization.forceTokenization(first.getLineCount());
+		const expected = await runtime.tokenize('demo', first.createVersionedSnapshot(), new AbortController().signal);
+		assert.deepEqual(first.tokenization.lines.flatMap(line => line.tokens.map(token => [token.range.toString(), token.tokenType])), expected!.tokens.map(token => [token.range.toString(), token.tokenType]));
+		assert.equal(first.tokenization.tokenCount, expected!.tokens.length);
+	}
+	assert.equal(loads, 1);
+});
+
+test('distant view tokens acquire multiline context and both attached ranges survive a reset', async () => {
+	using registry = grammarRegistry();
+	using runtime = new TextMateTokenizationService(registry, onigLib);
+	using support = await runtime.createTokenizationSupport('demo');
+	using registration = TokenizationRegistry.register('demo', support!);
+	using model = new TextModel('"open\n' + 'inside\n'.repeat(300) + 'end"\nif', { languageId: 'demo' });
+	const firstView = model.onBeforeAttached();
+	const secondView = model.onBeforeAttached();
+	try {
+		firstView.setVisibleLines([{ startLineNumber: 1, endLineNumber: 2 }], true);
+		secondView.setVisibleLines([{ startLineNumber: 250, endLineNumber: 260 }], true);
+		model.tokenization.resetTokenization();
+		assert.equal(model.tokenization.hasAccurateTokensForLine(2), true);
+		assert.equal(model.tokenization.hasAccurateTokensForLine(250), false);
+		assert.equal(model.tokenization.getLanguageTokens(249)[0]?.tokenType, 'variable');
+		model.tokenization.forceTokenization(model.getLineCount());
+		assert.equal(model.tokenization.hasAccurateTokensForLine(250), true);
+		assert.equal(model.tokenization.getLanguageTokens(249)[0]?.tokenType, 'string');
+	} finally {
+		model.onBeforeDetached(firstView);
+		model.onBeforeDetached(secondView);
+	}
+	model.applyEdits([{ range: new Range(1, 1, 1, 2), text: '' }]);
+	model.applyEdits([{ range: new Range(200, 1, 201, 1), text: '"new\ninside\n' }]);
+	model.tokenization.forceTokenization(model.getLineCount());
+	const expected = await runtime.tokenize('demo', model.createVersionedSnapshot(), new AbortController().signal);
+	assert.deepEqual(model.tokenization.lines.flatMap(line => line.tokens.map(token => [token.range.toString(), token.tokenType])), expected!.tokens.map(token => [token.range.toString(), token.tokenType]));
 });

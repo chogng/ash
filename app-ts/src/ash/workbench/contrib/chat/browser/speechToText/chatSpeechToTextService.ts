@@ -1,6 +1,11 @@
-import { Emitter } from '../../../../../base/common/event.js';
-import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
-import type { IDictationService, IDictationSession } from '../../../../../platform/dictation/common/dictationService.js';
+import { Emitter, type Event } from '../../../../../base/common/event.js';
+import { Disposable } from '../../../../../base/common/lifecycle.js';
+import { IDictationService, type IDictationSession } from '../../../../../platform/dictation/common/dictationService.js';
+import { createDecorator } from '../../../../../platform/instantiation/common/instantiation.js';
+import type { ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
+import { localize } from '../../../../../nls.js';
+
+export const IChatSpeechToTextService = createDecorator<IChatSpeechToTextService>('chatSpeechToTextService');
 
 export enum ChatSpeechToTextState {
 	Idle = 'idle',
@@ -8,76 +13,142 @@ export enum ChatSpeechToTextState {
 	Transcribing = 'transcribing',
 }
 
-/** Composer-owned recording state; the platform adapter owns microphone and App Server transport. */
-export class ChatSpeechToTextService extends Disposable {
+export interface IChatDictationTranscript {
+	readonly text: string;
+	readonly finalizedText: string;
+}
+
+export interface IChatSpeechToTextService {
+	readonly _serviceBrand: undefined;
+	readonly onDidChangeState: Event<ChatSpeechToTextState>;
+	readonly onDidUpdateTranscript: Event<IChatDictationTranscript>;
+	readonly onDidEnd: Event<string | undefined>;
+	readonly onDidChangePreparation: Event<void>;
+	readonly state: ChatSpeechToTextState;
+	readonly isBusy: boolean;
+	readonly isStarting: boolean;
+	readonly isConfigured: boolean;
+	getPreparation(): Promise<ILocalTranscriptionModelSnapshot | undefined>;
+	prepareModel(): Promise<void>;
+	cancelPreparation(): Promise<void>;
+	start(): Promise<void>;
+	stopAndTranscribe(): Promise<string | undefined>;
+	cancel(): Promise<void>;
+}
+
+interface Recording {
+	starting?: Promise<void>;
+	handle?: IDictationSession;
+	stopping?: Promise<string | undefined>;
+	finalizedText: string;
+	cancelled: boolean;
+}
+
+/** One window owns capture orchestration; the host owns audio and backend execution. */
+export class ChatSpeechToTextService extends Disposable implements IChatSpeechToTextService {
+	public readonly _serviceBrand = undefined;
 	private readonly stateChanged = this._register(new Emitter<ChatSpeechToTextState>());
 	public readonly onDidChangeState = this.stateChanged.event;
-	private readonly transcript = this._register(new Emitter<{ readonly text: string; readonly isFinal: boolean }>());
+	private readonly transcript = this._register(new Emitter<IChatDictationTranscript>());
 	public readonly onDidUpdateTranscript = this.transcript.event;
 	private readonly ended = this._register(new Emitter<string | undefined>());
 	public readonly onDidEnd = this.ended.event;
-	private session: IDictationSession | undefined;
-	private starting: Promise<void> | undefined;
-	private stopping: Promise<void> | undefined;
+	private readonly preparationChanged = this._register(new Emitter<void>());
+	public readonly onDidChangePreparation = this.preparationChanged.event;
+	private recording: Recording | undefined;
 	private currentState = ChatSpeechToTextState.Idle;
 	public get state(): ChatSpeechToTextState { return this.currentState; }
 	public get isBusy(): boolean { return this.state !== ChatSpeechToTextState.Idle; }
-	public get isStarting(): boolean { return !!this.starting; }
+	public get isStarting(): boolean { return !!this.recording && !this.recording.handle; }
+	public get isConfigured(): boolean { return !!this.backend; }
 
-	constructor(private readonly backend: IDictationService) {
+	constructor(@IDictationService private readonly backend: IDictationService | undefined) {
 		super();
-		// A pending microphone acquisition is also closed by startSession after this owner is disposed.
-		this._register(toDisposable(() => { void this.stopAndTranscribe().catch(() => {}); }));
+		if (backend) {
+			this._register(backend.onDidChangePreparation(() => this.preparationChanged.fire()));
+		}
+	}
+
+	public getPreparation(): Promise<ILocalTranscriptionModelSnapshot | undefined> {
+		return this.backend!.getPreparation();
+	}
+
+	public prepareModel(): Promise<void> {
+		return this.backend!.prepareModel();
+	}
+
+	public cancelPreparation(): Promise<void> {
+		return this.backend!.cancelPreparation();
 	}
 
 	public async start(): Promise<void> {
-		if (this.isBusy) { return; }
+		this.assertNotDisposed();
+		if (!this.isConfigured) { throw new Error(localize('chat.input.dictationUnavailable', 'Dictation is unavailable')); }
+		if (this.isBusy) { throw new Error(localize('dictation.alreadyActive', 'Dictation is already active')); }
+		const recording: Recording = { finalizedText: '', cancelled: false };
+		this.recording = recording;
 		this.setState(ChatSpeechToTextState.Recording);
-		this.starting = this.startSession();
-		try { await this.starting; }
-		finally {
-			this.starting = undefined;
+		recording.starting = this.startRecording(recording);
+		try {
+			await recording.starting;
+		} finally {
+			recording.starting = undefined;
 			if (!this.isDisposed) { this.stateChanged.fire(this.state); }
 		}
 	}
 
-	private async startSession(): Promise<void> {
-		let ended = false;
+	private async startRecording(recording: Recording): Promise<void> {
 		try {
-			const session = await this.backend.start((text, isFinal) => {
-				if (!this.isDisposed && !ended) { this.transcript.fire({ text, isFinal }); }
+			const handle = await this.backend!.start((text, isFinal) => {
+				if (this.recording !== recording || recording.cancelled || this.isDisposed) { return; }
+				const separator = /[A-Za-z0-9]$/u.test(recording.finalizedText) && /^[A-Za-z0-9]/u.test(text) ? ' ' : '';
+				const transcript = recording.finalizedText + separator + text;
+				if (isFinal) { recording.finalizedText = transcript; }
+				this.transcript.fire({ text: transcript, finalizedText: recording.finalizedText });
 			}, error => {
-				ended = true;
-				this.session = undefined;
-				if (!this.isDisposed) {
-					if (!this.stopping) { this.setState(ChatSpeechToTextState.Idle); }
-					this.ended.fire(error);
+				if (this.recording !== recording || this.isDisposed) { return; }
+				// During stop the handle still owns flushing its last phrase. Idle must follow that flush.
+				this.ended.fire(error);
+				if (!recording.stopping) {
+					this.recording = undefined;
+					this.setState(ChatSpeechToTextState.Idle);
 				}
 			});
-			if (this.isDisposed || ended) { await session.stop(); }
-			else { this.session = session; }
+			if (this.recording !== recording || this.isDisposed) { await handle.stop(); }
+			else { recording.handle = handle; }
 		} catch (error) {
-			this.setState(ChatSpeechToTextState.Idle);
+			if (this.recording === recording) {
+				this.recording = undefined;
+				this.setState(ChatSpeechToTextState.Idle);
+			}
 			throw error;
 		}
 	}
 
-	public stopAndTranscribe(): Promise<void> {
-		if (this.stopping) { return this.stopping; }
-		if (!this.isBusy) { return Promise.resolve(); }
+	public stopAndTranscribe(): Promise<string | undefined> {
+		const recording = this.recording;
+		if (!recording) { return Promise.resolve(undefined); }
+		if (recording.stopping) { return recording.stopping; }
 		this.setState(ChatSpeechToTextState.Transcribing);
-		this.stopping = this.stopSession();
-		return this.stopping;
+		recording.stopping = this.stopRecording(recording);
+		return recording.stopping;
 	}
 
-	private async stopSession(): Promise<void> {
+	public async cancel(): Promise<void> {
+		if (this.recording) { this.recording.cancelled = true; }
+		await this.stopAndTranscribe();
+	}
+
+	private async stopRecording(recording: Recording): Promise<string | undefined> {
 		try {
-			await this.starting;
-			await this.session?.stop();
+			await recording.starting;
+			await recording.handle?.stop();
+			return recording.cancelled ? undefined : recording.finalizedText || undefined;
 		} finally {
-			this.session = undefined;
-			this.stopping = undefined;
-			this.setState(ChatSpeechToTextState.Idle);
+			if (this.recording === recording) {
+				this.recording = undefined;
+				this.setState(ChatSpeechToTextState.Idle);
+			}
 		}
 	}
 
@@ -87,4 +158,8 @@ export class ChatSpeechToTextService extends Disposable {
 		if (!this.isDisposed) { this.stateChanged.fire(state); }
 	}
 
+	protected override disposeCore(): void {
+		void this.cancel().catch(() => undefined);
+		super.disposeCore();
+	}
 }

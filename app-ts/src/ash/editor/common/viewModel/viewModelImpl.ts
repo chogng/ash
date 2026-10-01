@@ -174,7 +174,7 @@ export class ViewModel extends Disposable implements IViewModel {
 	setViewport(startLineNumber: number, endLineNumber: number, _centeredLineNumber: number): void {
 		const start = this.coordinatesConverter.convertViewPositionToModelPosition(new Position(startLineNumber, 1)).lineNumber;
 		const end = this.coordinatesConverter.convertViewPositionToModelPosition(new Position(endLineNumber, this.getLineMaxColumn(endLineNumber))).lineNumber;
-		for (let lineNumber = start; lineNumber <= end; lineNumber += 1) this.model.tokenization.tokenizeIfCheap(lineNumber);
+		this.attachedView.setVisibleLines([{ startLineNumber: start, endLineNumber: end }], true);
 	}
 
 	getFontSizeAtPosition(position: Position): string | null {

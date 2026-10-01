@@ -1,3 +1,5 @@
+import { IDictationService } from '../../../src/ash/platform/dictation/common/dictationService.js';
+import { IChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import '../../../src/ash/base/browser/ui/button/button.css';
 import '../../../src/ash/base/browser/ui/inputbox/inputbox.css';
 import '../../../src/ash/base/browser/ui/splitview/splitview.css';
@@ -23,6 +25,14 @@ import { SkillSelectorCatalog } from '../../../src/ash/workbench/contrib/chat/co
 import { ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { DictationSession } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/dictationSession.js';
 import { setARIAContainer } from '../../../src/ash/base/browser/ui/aria/aria.js';
+import '../../../src/ash/workbench/contrib/chat/browser/widget/media/chat.css';
+import { ChatInputPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputPart.js';
+import type { ChatInputEditorOptions } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
+import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
+import type { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
+import type { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
+import type { ChatInputDelegate } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInput.js';
 
 declare global {
 	interface Window {
@@ -36,6 +46,9 @@ declare global {
 			startDictation(): Promise<void>;
 			transcript(text: string, final: boolean): void;
 			readonly draft: string;
+			stopDictation(): Promise<string | undefined>;
+			hideSecondInput(): void;
+			secondDraft(): Promise<string>;
 		};
 	}
 }
@@ -99,14 +112,25 @@ const preview = h(document, 'div');
 preview.id = 'dictation-preview';
 document.body.append(preview);
 let transcript!: (text: string, final: boolean) => void;
-const speech = resources.add(new ChatSpeechToTextService({
+services.registerInstance(IDictationService, {
 	onDidChangePreparation: Event.None, getPreparation: async () => undefined, prepareModel: async () => {}, cancelPreparation: async () => {},
-	start: async onTranscript => { transcript = onTranscript; return { stop: async () => {} }; },
-}));
-resources.add(new DictationSession(speech, editor, preview, () => true));
+	start: async (onTranscript: (text: string, isFinal: boolean) => void) => { transcript = onTranscript; return { stop: async () => {} }; },
+});
+services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+const dictationSession = resources.add(services.createInstance(DictationSession, editor, preview, () => true, async () => {}));
+const contextViews = resources.add(new BrowserContextViewService(document.body));
+const notifications = resources.add(new NotificationService());
+const secondInput = resources.add(services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, contextViews, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, {
+	create: (options: ChatInputEditorOptions) => services.createInstance(ChatInputEditor, options),
+}, []));
+secondInput.element.id = 'second-input';
+secondInput.render({ mode: 'agent', queuedMessages: 0, phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 window.ashTableIntegration = {
+	secondDraft: async () => (await secondInput.captureDraft())?.draft.text ?? '',
 	operations,
-	startDictation: () => speech.start(),
+	startDictation: async () => { await dictationSession.action.run(); },
+	stopDictation: () => services.get(IChatSpeechToTextService).stopAndTranscribe(),
+	hideSecondInput: () => { secondInput.setVisible(false); secondInput.element.hidden = true; },
 	transcript: (text, final) => transcript(text, final),
 	get draft() { return editor.value; },
 	progress: () => publish({ state: LocalTranscriptionModelState.Downloading, file: 'encoder.onnx', downloadedBytes: 1024 * 1024 }),

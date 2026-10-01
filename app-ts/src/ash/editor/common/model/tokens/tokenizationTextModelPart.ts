@@ -1,6 +1,6 @@
 import { LanguageResultAcceptance } from '../languageResultStore.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Position } from '../../core/position.js';
 import { type Range } from '../../core/range.js';
 import { countEOL } from '../../core/misc/eolCounter.js';
@@ -14,6 +14,7 @@ import { LineTokens } from '../../tokens/lineTokens.js';
 import { type SparseMultilineTokens } from '../../tokens/sparseMultilineTokens.js';
 import { SparseTokensStore } from '../../tokens/sparseTokensStore.js';
 import { type TextModel } from '../textModel.js';
+import { TokenizerSyntaxTokenBackend } from './tokenizerSyntaxTokenBackend.js';
 import { SemanticTokensTextModelPart } from './semanticTokensTextModelPart.js';
 import { createSyntaxWorker } from '../../services/editorWebWorker.js';
 import { LanguageRequestCoordinator } from '../languageRequestCoordinator.js';
@@ -33,17 +34,20 @@ export interface TokenizationTextModelPartOptions {
 
 /** Owns syntax requests and their line-token index for exactly one TextModel. */
 export class TokenizationTextModelPart extends Disposable implements ITokenizationTextModelPart {
-	private readonly changeEmitter = this._register(new Emitter<void>());
+	private readonly changeEmitter = this._register(new Emitter<readonly { fromLineNumber: number; toLineNumber: number }[] | undefined>());
 	private readonly errorEmitter = this._register(new Emitter<unknown>());
 	private readonly languageIdCodec: ILanguageIdCodec;
 	private readonly syntaxProviderRegistry: SyntaxProviderRegistry;
 	private readonly languageTokenLineIndex: LanguageTokenLineIndex;
 	private readonly semanticTokensStore: SparseTokensStore;
 	private readonly hasWorkerProvider: boolean;
+	private readonly lineBackendListeners = this._register(new DisposableStore());
+	private readonly lineBackend = this._register(new MutableDisposable<TokenizerSyntaxTokenBackend>());
+	private visibleLines: readonly { startLineNumber: number; endLineNumber: number }[] = [];
 	private requestGeneration = 0;
 	private pendingAnalysis: Promise<void> = Promise.resolve();
 
-	readonly onDidChange: Event<void> = this.changeEmitter.event;
+	readonly onDidChange: Event<readonly { fromLineNumber: number; toLineNumber: number }[] | undefined> = this.changeEmitter.event;
 	readonly onDidEncounterError: Event<unknown> = this.errorEmitter.event;
 	private readonly tokenStore: ReturnType<typeof createLanguageTokenStore>;
 	private readonly coordinator: LanguageRequestCoordinator<SyntaxLane, SyntaxRequest, SyntaxResult>;
@@ -77,7 +81,9 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 		this.renderedTokens = this.semanticTokens
 			? overlayTokenSources(lexicalSource, this._register(new StyledTokenSource(this.semanticTokens, 'semantic')))
 			: lexicalSource;
-		this._register(this.languageTokenLineIndex.onDidChange(() => this.changeEmitter.fire()));
+		this._register(this.languageTokenLineIndex.onDidChange(() => {
+			if (!this.lineBackend.value) this.changeEmitter.fire(undefined);
+		}));
 		this._register(textModel.onDidChangeContent(change => {
 			if (!change.isEolChange) {
 				for (const contentChange of change.changes) {
@@ -95,20 +101,26 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 		}));
 		this._register(textModel.onDidChangeLanguage(() => {
 			this.coordinator.restartWorker();
+			this.lineBackendListeners.clear();
+			this.lineBackend.clear();
 			this.languageIdCodec.encodeLanguageId(textModel.getLanguageId());
 			this.semanticTokensStore.flush();
 			this.tokenStore.clear();
-			this.changeEmitter.fire();
+			this.changeEmitter.fire(undefined);
 			this.scheduleAnalysis();
 		}));
 		this._register(this.syntaxProviderRegistry.onDidChange(() => {
 			this.coordinator.restartWorker();
+			this.lineBackendListeners.clear();
+			this.lineBackend.clear();
 			this.tokenStore.clear();
 			this.scheduleAnalysis();
 		}));
 		if (options.onDidChangeLanguageSupport) this._register(options.onDidChangeLanguageSupport(() => {
 			// The worker synchronizes its grammar catalog and theme before each request.
 			// Retaining it keeps the loaded grammars and document mirror available.
+			this.lineBackendListeners.clear();
+			this.lineBackend.clear();
 			this.tokenStore.clear();
 			this.scheduleAnalysis();
 		}));
@@ -119,34 +131,34 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	}
 
 	get modelVersion(): number {
-		return this.languageTokenLineIndex.modelVersion;
+		return this.lineBackend.value ? this.textModel.version : this.languageTokenLineIndex.modelVersion;
 	}
 
 	get tokenCount(): number {
-		return this.languageTokenLineIndex.tokenCount;
+		return this.lineBackend.value?.tokenCount ?? this.languageTokenLineIndex.tokenCount;
 	}
 
 	get lines(): readonly LanguageTokenLine[] {
-		return this.languageTokenLineIndex.lines;
+		return this.lineBackend.value?.lines ?? this.languageTokenLineIndex.lines;
 	}
 
 	getLanguageTokens(lineIndex: number): readonly LanguageToken[] {
-		return this.languageTokenLineIndex.getLineTokens(lineIndex);
+		return this.lineBackend.value?.getLanguageTokens(lineIndex + 1) ?? this.languageTokenLineIndex.getLineTokens(lineIndex);
 	}
 
 	get hasTokens(): boolean {
-		return this.languageTokenLineIndex.tokenCount > 0 || !this.semanticTokensStore.isEmpty();
+		return this.tokenCount > 0 || !this.semanticTokensStore.isEmpty();
 	}
 
 	setSemanticTokens(tokens: SparseMultilineTokens[] | null, isComplete: boolean): void {
 		this.semanticTokensStore.set(tokens, isComplete, this.textModel);
-		this.changeEmitter.fire();
+		this.changeEmitter.fire(undefined);
 	}
 
 	setPartialSemanticTokens(range: Range, tokens: SparseMultilineTokens[] | null): void {
 		if (this.semanticTokensStore.isComplete()) return;
 		this.semanticTokensStore.setPartial(range, tokens ?? []);
-		this.changeEmitter.fire();
+		this.changeEmitter.fire(undefined);
 	}
 
 	hasCompleteSemanticTokens(): boolean {
@@ -159,6 +171,8 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 
 	resetTokenization(): void {
 		this.coordinator.restartWorker();
+		this.lineBackendListeners.clear();
+		this.lineBackend.clear();
 		this.tokenStore.clear();
 		this.scheduleAnalysis();
 	}
@@ -166,6 +180,7 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	async whenReady(signal: AbortSignal): Promise<void> {
 		throwIfCancelled(signal);
 		this.assertNotDisposed();
+		if (this.lineBackend.value) this.forceTokenization(1);
 		while (!this.hasAccurateTokensForLine(1)) {
 			const analysis = this.pendingAnalysis;
 			try {
@@ -176,11 +191,13 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 				}
 			}
 			this.assertNotDisposed();
+			if (this.lineBackend.value) this.forceTokenization(1);
 		}
 	}
 
 	forceTokenization(lineNumber: number): void {
 		this.validateLineNumber(lineNumber);
+		if (this.lineBackend.value) { this.lineBackend.value.forceTokenization(lineNumber); return; }
 		if (this.hasAccurateTokensForLine(lineNumber)) return;
 		this.scheduleAnalysis();
 		throw new SynchronousTokenizationUnavailableError(lineNumber);
@@ -192,14 +209,14 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 
 	hasAccurateTokensForLine(lineNumber: number): boolean {
 		this.validateLineNumber(lineNumber);
-		return !this.hasTokenProvider() || (
+		return this.lineBackend.value?.hasAccurateTokensForLine(lineNumber) ?? (!this.hasTokenProvider() || (
 			this.languageTokenLineIndex.modelVersion === this.textModel.version
 			&& this.languageTokenLineIndex.requestId !== undefined
-		);
+		));
 	}
 
 	isCheapToTokenize(lineNumber: number): boolean {
-		return this.hasAccurateTokensForLine(lineNumber);
+		return this.lineBackend.value?.isCheapToTokenize(lineNumber) ?? this.hasAccurateTokensForLine(lineNumber);
 	}
 
 	getLineTokens(lineNumber: number): LineTokens {
@@ -207,7 +224,7 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 		const lineContent = this.textModel.getLineContent(lineNumber);
 		const syntacticTokens = createLineTokens(
 			lineContent,
-			this.languageTokenLineIndex.getLineTokens(lineNumber - 1),
+			this.getLanguageTokens(lineNumber - 1),
 			this.textModel.getLanguageId(),
 			this.languageIdCodec,
 		);
@@ -218,6 +235,11 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 		const position = this.textModel.validatePosition(new Position(lineNumber, column));
 		if (typeof character !== 'string' || character.length === 0) throw new TypeError('Tokenization insertion character must be non-empty text');
 		if (!this.hasTokenProvider()) return StandardTokenType.Other;
+		if (this.lineBackend.value) {
+			const line = this.textModel.getLineContent(position.lineNumber);
+			const tokens = this.tokenizeLinesAt(position.lineNumber, [line.slice(0, position.column - 1) + character + line.slice(position.column - 1)])![0]!;
+			return tokens.getStandardTokenType(tokens.findTokenIndexAtOffset(position.column - 1));
+		}
 		this.forceTokenization(position.lineNumber);
 		throw new SynchronousTokenizationUnavailableError(position.lineNumber);
 	}
@@ -225,7 +247,8 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	tokenizeLinesAt(lineNumber: number, lines: string[]): LineTokens[] | null {
 		this.validateLineNumber(lineNumber);
 		if (!Array.isArray(lines) || lines.some(line => typeof line !== 'string')) throw new TypeError('Tokenization lines must be strings');
-		return null;
+		const backend = this.lineBackend.value;
+		return backend ? backend.tokenizeLinesAt(lineNumber, lines).map((tokens, index) => createLineTokens(lines[index]!, tokens, this.textModel.getLanguageId(), this.languageIdCodec)) : null;
 	}
 
 	async tokenizeLinesAtAsync(lineNumber: number, lines: readonly string[], signal: AbortSignal): Promise<LineTokens[] | null> {
@@ -234,6 +257,7 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 		const payload = { languageId, tokenize: { lineNumber, lines: [...lines] } };
 		assertSyntaxRequest(payload);
 		if (!this.hasTokenProvider() || signal.aborted) return null;
+		if (this.lineBackend.value) return this.tokenizeLinesAt(lineNumber, [...lines]);
 		const text = lines.join('\n');
 		const generation = this.requestGeneration;
 		let result: LineTokens[] | null = null;
@@ -270,9 +294,14 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	}
 
 	get backgroundTokenizationState(): BackgroundTokenizationState {
-		return this.hasAccurateTokensForLine(1)
+		return this.hasAccurateTokensForLine(this.textModel.getLineCount())
 			? BackgroundTokenizationState.Completed
 			: BackgroundTokenizationState.InProgress;
+	}
+
+	setVisibleLines(ranges: readonly { startLineNumber: number; endLineNumber: number }[]): void {
+		this.visibleLines = ranges;
+		for (const range of ranges) this.lineBackend.value?.refreshRange(range.startLineNumber, range.endLineNumber);
 	}
 
 	private hasTokenProvider(): boolean {
@@ -292,6 +321,18 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 			this.pendingAnalysis = Promise.resolve();
 			return;
 		}
+		const support = TokenizationRegistry.get(languageId);
+		if (support) {
+			if (!this.lineBackend.value) {
+				const backend = this.lineBackend.value = new TokenizerSyntaxTokenBackend(this.textModel, support, this.languageIdCodec);
+				this.lineBackendListeners.clear();
+				this.lineBackendListeners.add(backend.onDidChangeTokens(ranges => this.changeEmitter.fire(ranges)));
+				this.lineBackendListeners.add(backend.onDidEncounterError(error => this.errorEmitter.fire(error)));
+				this.setVisibleLines(this.visibleLines);
+			}
+			this.pendingAnalysis = Promise.resolve();
+			return;
+		}
 		// Readers join the same scheduled request; opening another view must not restart its worker.
 		this.pendingAnalysis = Promise.resolve().then(() => this.requestAnalysis(generation, languageId));
 		void this.pendingAnalysis.catch(error => {
@@ -302,6 +343,11 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 
 	private async requestAnalysis(generation: number, languageId: string): Promise<void> {
 		if (this.isDisposed || generation !== this.requestGeneration || languageId !== this.textModel.getLanguageId()) return;
+		if (!TokenizationRegistry.isResolved(languageId)) {
+			const support = await TokenizationRegistry.getOrCreate(languageId);
+			if (this.isDisposed || generation !== this.requestGeneration) return;
+			if (support) { this.scheduleAnalysis(); return; }
+		}
 		await this.coordinator.runLatest(SYNTAX_TOKEN_LANE, { languageId }, result => {
 			if (result.value.lane !== SYNTAX_TOKEN_LANE) throw new TypeError('Token request returned a different lane');
 			const acceptance = this.tokenStore.accept({ ...result, value: result.value.value });

@@ -13,7 +13,7 @@ test.afterEach(async ({ page }) => {
 	expect(pageErrors.get(page)).toEqual([]);
 });
 
-test('all eight parser languages use bundled TextMate grammars in the frontend Worker', async ({ page }) => {
+test('all eight parser languages use bundled TextMate grammars through shared line support', async ({ page }) => {
 	const samples = [
 		['javascript', 'const value = "hello";', 'const', 'keyword'],
 		['javascriptreact', 'const view = <div>hello</div>;', 'div', 'tag'],
@@ -33,7 +33,7 @@ test('all eight parser languages use bundled TextMate grammars in the frontend W
 	expect(state.analyzeCalls).toBeGreaterThan(0);
 	expect(state.completedCalls).toBe(0);
 	expect(state.errors).toEqual([]);
-	expect(page.workers().some(worker => worker.url().includes('textMateSyntaxWorkerMain'))).toBe(true);
+	expect(page.workers().some(worker => worker.url().includes('textMateSyntaxWorkerMain'))).toBe(false);
 });
 
 test('Bazel files select Starlark or bazelrc and tokenize through the bundled grammars', async ({ page }) => {
@@ -58,7 +58,7 @@ test('Bazel files select Starlark or bazelrc and tokenize through the bundled gr
 	expect((await page.evaluate(() => window.tokenizationIntegration.state())).errors).toEqual([]);
 });
 
-test('Git files select their bundled languages and tokenize in the frontend Worker', async ({ page }) => {
+test('Git files select their bundled languages and tokenize through shared line support', async ({ page }) => {
 	const samples = [
 		['.gitignore', 'ignore', '# generated\n!keep.log\n**/*.log\nfile[0-9]?.txt', 'operator', '!'],
 		['.gitignore_global', 'ignore', '*.log', 'operator', '*'],
@@ -162,7 +162,7 @@ test('Force Retokenize action invalidates and refreshes visible tokens', async (
 	await expect(page.locator('.stanza-editor-token.token-keyword').filter({ hasText: /^fn$/ })).toBeVisible();
 	const before = await page.evaluate(() => window.tokenizationIntegration.state());
 	const result = await page.evaluate(() => window.tokenizationIntegration.forceRetokenize());
-	expect(result).toEqual({ version: before.version, accurate: false });
+	expect(result).toEqual({ version: before.version, accurate: true });
 	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokenVersion)).toBe(before.version);
 	await expect(page.locator('.stanza-editor-token.token-keyword').filter({ hasText: /^fn$/ })).toBeVisible();
 });

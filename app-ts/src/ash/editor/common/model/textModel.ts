@@ -183,7 +183,7 @@ export class TextModel implements ITextModel {
 	private readonly lineHeightEmitter = this._register(new Emitter<ModelLineHeightChangedEvent>());
 	private readonly fontEmitter = this._register(new Emitter<ModelFontChangedEvent>());
 	private readonly attachedEmitter = this._register(new Emitter<void>());
-	private readonly attachedViews = new Set<IAttachedView>();
+	private readonly attachedViews = new Map<IAttachedView, readonly { startLineNumber: number; endLineNumber: number }[]>();
 	private readonly viewModels = new Set<IViewModel>();
 	private readonly languageSelection = this._register(new MutableDisposable<IDisposable>());
 	private readonly trackedRanges = this._register(new TrackedRangeCollection(
@@ -310,10 +310,10 @@ export class TextModel implements ITextModel {
 		}));
 		this._register(this.onDidChangeLanguage(event => this._bracketPairs.handleDidChangeLanguage(event)));
 		this._register(this.onDidChangeOptions(event => this._bracketPairs.handleDidChangeOptions(event)));
-		this._register(this.tokenization.onDidChange(() => {
+		this._register(this.tokenization.onDidChange(ranges => {
 			const event: IModelTokensChangedEvent = {
 				semanticTokensApplied: false,
-				ranges: [{ fromLineNumber: 1, toLineNumber: this.getLineCount() }],
+				ranges: ranges ? [...ranges] : [{ fromLineNumber: 1, toLineNumber: this.getLineCount() }],
 			};
 			this._bracketPairs.handleDidChangeTokens(event);
 			this._bracketPairs.handleDidChangeBackgroundTokenizationState();
@@ -552,17 +552,20 @@ export class TextModel implements ITextModel {
 						throw new RangeError('Attached view visible lines must be valid model line ranges');
 					}
 				}
+				model.attachedViews.set(view, [...visibleLines]);
+				model.tokenization.setVisibleLines([...model.attachedViews.values()].flat());
 				if (stabilized) model.buffer.maintainIfNeeded();
 			},
 		});
 		const wasDetached = this.attachedViews.size === 0;
-		this.attachedViews.add(view);
+		this.attachedViews.set(view, []);
 		if (wasDetached) this.attachedEmitter.fire();
 		return view;
 	}
 
 	onBeforeDetached(view: IAttachedView): void {
 		if (!this.attachedViews.delete(view)) throw new ReferenceError('Text model view is not attached');
+		this.tokenization.setVisibleLines([...this.attachedViews.values()].flat());
 		if (this.attachedViews.size === 0) this.attachedEmitter.fire();
 	}
 

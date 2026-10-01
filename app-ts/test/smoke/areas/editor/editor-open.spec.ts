@@ -8,17 +8,20 @@ test('large YAML lockfiles highlight text and minimap without editor interaction
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Bundled language grammars require the Code App Server product.');
 	const text = await readFile(new URL('../../../../../pnpm-lock.yaml', import.meta.url), 'utf8');
 	const page = workbench.page;
+	const syntaxWorkers: string[] = [];
+	page.on('worker', worker => { if (worker.url().includes('textMateSyntaxWorkerMain')) syntaxWorkers.push(worker.url()); });
 	await writeFile(join(testWorkspace.directory, 'pnpm-lock.yaml'), text);
 	const file = page.locator('.ash-explorer').getByRole('treeitem', { name: 'pnpm-lock.yaml', exact: true });
 	await expect(file).toBeVisible();
 	await page.evaluate(() => {
 		const frames: { milliseconds: number; highlighted: boolean }[] = [];
+		const started = performance.now();
 		let frame: number;
 		const sample = (): void => {
 			const editor = document.querySelector<HTMLElement>('.stanza-editor');
 			if (editor && editor.getBoundingClientRect().height > 0 && editor.querySelector('.view-lines')?.textContent?.includes('lockfileVersion')) {
 				const key = [...editor.querySelectorAll<HTMLElement>('.stanza-editor-token')].find(element => element.textContent === 'lockfileVersion');
-				frames.push({ milliseconds: performance.now(), highlighted: key !== undefined && getComputedStyle(key).color !== getComputedStyle(editor).color });
+				frames.push({ milliseconds: performance.now() - started, highlighted: key !== undefined && getComputedStyle(key).color !== getComputedStyle(editor).color });
 			}
 			frame = requestAnimationFrame(sample);
 		};
@@ -54,12 +57,13 @@ test('large YAML lockfiles highlight text and minimap without editor interaction
 		}
 		return false;
 	})).toBe(true);
-	await testInfo.attach('yaml-first-highlight', { body: JSON.stringify({ bytes: Buffer.byteLength(text), lines: text.split('\n').length, milliseconds: Date.now() - start }), contentType: 'application/json' });
+	await testInfo.attach('yaml-first-highlight', { body: JSON.stringify({ bytes: Buffer.byteLength(text), lines: text.split('\n').length, firstVisibleMilliseconds: frames[0]!.milliseconds, milliseconds: Date.now() - start, syntaxWorkers }), contentType: 'application/json' });
 	await editor.locator('.stanza-editor-input').focus();
 	await page.keyboard.press('ControlOrMeta+End');
 	await expect(editor.locator('.stanza-editor-token').first()).toBeVisible();
 	await page.keyboard.press('ControlOrMeta+Home');
 	await expect(key).toBeVisible();
+	expect(syntaxWorkers, 'File coloring must use shared grammar support instead of starting one runtime per file').toEqual([]);
 });
 
 test.beforeEach(async ({ workbench }) => {

@@ -1,12 +1,12 @@
 # Ash TextMate adapter
 
-`workbench/services/textMate` adapts TextMate grammars to Stanza's versioned Syntax
-provider contract. It is a Workbench service adapter for Stanza editors, not
-part of `base`, and it
+`workbench/services/textMate` supplies shared TextMate line support to the editor's
+`TokenizationRegistry` and adapts grammars to the asynchronous Syntax provider contract.
+It is a Workbench service adapter for editors, not part of `base`, and it
 does not own workspace files, extension manifests, product color tokens,
 documents, or the Stanza view. It does own the serializable scope-to-semantic
-theme projection needed inside its Worker. Its browser boundary owns only
-caller-supplied grammar loaders and Worker composition; extension package files
+theme mapping used by the renderer and Worker. Its browser boundary owns the shared
+renderer runtime, caller-supplied grammar loaders and Worker composition; extension package files
 belong to the extension resource layer.
 
 ## Ownership
@@ -16,7 +16,8 @@ belong to the extension resource layer.
 | Grammar contribution identity and revision snapshots | `TextMateGrammarRegistry` | ✅ |
 | Transferable grammar catalogs and materialization | `TextMateGrammarCatalogModel` / `materializeTextMateGrammarCatalog` | ✅ |
 | Atomic Worker catalog state and side-channel transport | `TextMateGrammarCatalogStore` / catalog wire | ✅ |
-| TextMate runtime and incremental line-state cache | `TextMateTokenizationService` | ✅ |
+| Shared TextMate grammar runtime | `TextMateTokenizationService` | ✅ |
+| Editor document line tokens and states | `TokenizerSyntaxTokenBackend` | ✅ |
 | Scope-to-Stanza token vocabulary mapping | `TextMateScopeResolver` | ✅, replaceable |
 | Revisioned selector rules and Worker theme transport | `TextMateScopeThemeModel` / scope-theme wire | ✅ |
 | Stanza Syntax provider adaptation | `createTextMateSyntaxProvider` | ✅ |
@@ -69,21 +70,32 @@ nor the dedicated Worker reads product or workspace files. Workbench constructs 
 `BrowserTextMateService`, registers it as
 `ITextMateService`, and passes it to Stanza panes. `AppServerExtensionService`
 then projects Rust-discovered static grammar contributions into the same
-registry. The service owns the shared grammar catalog and scope theme; each
-Stanza editor part creates and disposes only its dedicated TextMate Syntax Worker.
+registry. The service owns the shared grammar catalog, scope theme and renderer runtime,
+and registers lazy line support with `TokenizationRegistry`. Each TextModel owns its
+line tokens and incoming/outgoing grammar states through `TokenizerSyntaxTokenBackend`.
+Opening another file reuses the loaded grammar and Oniguruma runtime. The Syntax Worker
+factory remains available to asynchronous provider consumers and isolated Worker scenarios.
 Languages without a grammar remain plain text.
+
+File acquisition prepares the grammar and first line. Attached views publish their visible
+ranges to tokenization before text rendering. Nearby ranges use confirmed multiline state;
+a distant jump calculates local tokens immediately and the ordered background pass confirms
+its context. Background work processes at most 100 lines or about 1 ms before yielding,
+pauses without an attached view, and reports only processed line ranges. Edits preserve
+unaffected relative tokens, shift line states and stop rescanning when outgoing state
+converges. Theme changes restyle through the same grammar rather than starting file Workers.
 
 `ITextMateService.createTokenizer(languageId)` supplies a raw `IGrammar` for on-demand scope
 inspection. `BrowserTextMateService` materializes the same current grammar catalog and lazily
 loads a renderer TextMate runtime with the shared Oniguruma loader. The inspector requests raw
-scope stacks only when opened; rendered token arrays do not retain them. The renderer runtime
+scope stacks only when opened; rendered token arrays do not retain them. Rendering and inspection share that runtime. The renderer runtime
 and catalog store are owned and disposed by the browser service.
 
 Direct `createBrowserEditorPart` callers may omit the service and get a
 private `BrowserTextMateService`; that compatibility path is session-owned and
 does not change Workbench ownership.
 
-## Tokenization path
+## Asynchronous provider path
 
 1. `TextMateTokenizationService` captures the current grammar snapshot.
 2. A `vscode-textmate.Registry` loads the requested root grammar and its
@@ -125,9 +137,9 @@ store, scope-theme model, TextMate service, Oniguruma runtime, provider registry
 wire servers. A replacement Worker accepts the source's current revision even
 when its revision is greater than one.
 
-## Incremental state
+## Asynchronous document state
 
-The service owns one latest tokenization document per loaded language. It compares
+For asynchronous provider consumers, the service owns one latest tokenization document per loaded language. It compares
 old and new line arrays, reuses the unchanged prefix, and rescans from the first
 changed line until an unchanged suffix line has the same TextMate input
 `StateStack`. The remaining suffix is then reused without tokenization.

@@ -1,3 +1,5 @@
+import { type ITokenizationSupport, type IState, type Token } from '../../../../editor/common/languages.js';
+import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { arraysEqual, commonArraySuffixLength, commonPrefixLength } from "../../../../base/common/arrays.js";
 import { escapeRegExpCharacters } from "../../../../base/common/strings.js";
 import { type LanguageWorkerDocumentSynchronization } from '../../../../editor/common/services/textModelSync/textModelSync.protocol.js';
@@ -123,6 +125,46 @@ export class TextMateTokenizationService implements Disposable {
 		const state = this.acquireState(snapshot);
 		try { return await this.getGrammar(state, definition.scopeName) ?? null; }
 		finally { this.releaseState(state); }
+	}
+
+	/** Borrows one shared grammar; document states remain owned by each TextModel. */
+	async createTokenizationSupport(languageId: string): Promise<(ITokenizationSupport & IDisposable) | null> {
+		this.ensureAlive();
+		const snapshot = this.grammars.currentSnapshot;
+		const definition = snapshot.getDefinitionForLanguage(languageId);
+		if (!definition) return null;
+		const state = this.acquireState(snapshot);
+		try {
+			const grammar = await this.getGrammar(state, definition.scopeName);
+			if (!grammar) throw new ReferenceError(`TextMate grammar '${definition.scopeName}' could not be loaded`);
+			const resolver = createGrammarScopeResolver(definition, snapshot, this.scopeResolver);
+			const metadata = createGrammarMetadataResolver(definition, snapshot);
+			return Object.assign(toDisposable(() => this.releaseState(state)), {
+				getInitialState: (): IState => INITIAL,
+				tokenize: (line: string, _hasEOL: boolean, inputState: IState) => {
+					const result = scanLine(grammar, line, inputState as StateStack, this.lineTimeLimitMilliseconds, resolver, metadata);
+					const tokens: Token[] = [];
+					let end = 0;
+					for (const token of result.tokens) {
+						if (end < token.startColumn) tokens.push({ offset: end, type: '', language: languageId });
+						tokens.push({
+							offset: token.startColumn,
+							type: token.tokenType,
+							language: token.languageId ?? languageId,
+							modifiers: token.modifiers,
+							presentation: token.presentation,
+							balancedBrackets: token.balancedBrackets,
+						});
+						end = token.endColumn;
+					}
+					if (end < line.length || tokens.length === 0) tokens.push({ offset: end, type: '', language: languageId });
+					return { tokens, endState: result.outputState };
+				},
+			});
+		} catch (error) {
+			this.releaseState(state);
+			throw error;
+		}
 	}
 
 	async tokenize(languageId: string, snapshot: TextSnapshot, signal: AbortSignal): Promise<LanguageTokenResult | undefined> {

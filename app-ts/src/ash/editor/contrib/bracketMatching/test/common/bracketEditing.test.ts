@@ -27,13 +27,13 @@ test("Remove matching brackets deletes distinct model pairs atomically and resto
 	assert.equal(model.getText(), "{(value)}");
 });
 
-test("Remove matching brackets leaves non-bracket or range selections alone", async () => {
+test("Remove matching brackets leaves non-bracket or range selections alone", () => {
 	using configurations = configurationsForBrackets();
 	using model = new TextModel("// ()", { languageId: "typescript", languageConfigurationService: configurations });
 	using tokens = registerTestTokens(new Map([
 		['// ()', [{ offset: 0, type: 'comment' }]],
 	]));
-	await new Promise(resolve => setImmediate(resolve));
+	model.tokenization.forceTokenization(model.getLineCount());
 	const bracketPairs = model.bracketPairs;
 	const cursor = [Selection.fromPositions(new Position((0) + 1, (3) + 1))];
 	assert.equal(createRemoveMatchingBracketsCommand(bracketPairs, cursor), undefined);

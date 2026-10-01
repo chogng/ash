@@ -280,22 +280,26 @@ test('theme color descriptions in the JSON schema follow locale changes', async 
 	try {
 		await localization.whenReady;
 		assert.equal(description('input.background'), 'Input background.');
+		assert.equal(description('scrollbar.background'), 'Scrollbar track background.');
 		await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
 		assert.deepEqual([
 			description('input.background'),
 			description('minimapSlider.background'),
+			description('scrollbar.background'),
 			description('charts.green'),
 			description('editorGroup.border'),
 			description('editorGroupHeader.tabsBackground'),
 		], [
 			'输入框背景色。',
 			'小地图视口滑块的背景色。',
+			'滚动条轨道的背景色。',
 			'图表中绿色数据系列的颜色。',
 			'编辑器分组之间的边框颜色。',
 			'编辑器标签栏的背景色。',
 		]);
 		await localeService.setLocale({ id: 'en', label: 'English' });
 		assert.equal(description('input.background'), 'Input background.');
+		assert.equal(description('scrollbar.background'), 'Scrollbar track background.');
 	} finally {
 		resetNlsResolver();
 	}

@@ -7,7 +7,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import type { IDictationService } from '../../../../platform/dictation/common/dictationService.js';
+import { IChatSpeechToTextService } from '../../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
@@ -48,9 +48,9 @@ export class NewChatInputWidget extends ChatInputPart {
 		container: HTMLElement,
 		delegate: ChatInputDelegate,
 		private readonly model: IChatWidgetModel,
-		dictation: IDictationService | undefined,
 		initialDraft: IOpenAgentsWindowOptions['draft'],
 		private readonly page: SessionsPage,
+		@IChatSpeechToTextService speechToText: IChatSpeechToTextService,
 		@IContextMenuService contextMenus: IContextMenuService,
 		@IContextViewService contextViews: IContextViewService,
 		@IAccessibleViewService accessibleViews: IAccessibleViewService,
@@ -76,7 +76,7 @@ export class NewChatInputWidget extends ChatInputPart {
 					throw error;
 				}
 			},
-		}, contextMenus, contextViews, accessibleViews, notifications, dictation, {
+		}, contextMenus, contextViews, accessibleViews, notifications, {
 			create: options => instantiationService.createInstance(ChatInputEditor, {
 				...options,
 				height: { minimum: 48, maximum: 240 },
@@ -88,7 +88,7 @@ export class NewChatInputWidget extends ChatInputPart {
 			icon: Lxicon.add,
 			enabled: true,
 			run: () => this.contextAttachments.showPicker(),
-		}]);
+		}], instantiationService, speechToText);
 		this.draftNotifications = notifications;
 		this.element.classList.add('ash-sessions-chat-input', 'floating-card');
 		this.element.classList.add(`${page}-composer`);

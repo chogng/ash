@@ -15,6 +15,9 @@ import type { IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCom
 import type { IWorkbenchLayoutService, WorkbenchPartId, WorkbenchPartVisibilityChangeEvent } from "../../../workbench/services/layout/browser/layoutService.js";
 import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../services/sessions/common/session.js";
 import type { ISessionsManagementService, SessionsManagementState } from "../../services/sessions/common/sessionsManagement.js";
+import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
+import { IDictationService } from '../../../platform/dictation/common/dictationService.js';
+import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -41,6 +44,9 @@ test("opens a local Chat tab before the backend session request settles", () => 
 	const sessionService = new PendingSessionService();
 	using layoutService = new VisibleAuxiliarybarLayoutService({ root: document.body });
 	using contextViewService = new BrowserContextViewService(document.body);
+	using services = new InstantiationService();
+	services.registerInstance(IDictationService, undefined);
+	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	using view = new ChatViewPane(
 		document.body,
 		{ id: "workbench.chat", title: "Chat" },
@@ -54,6 +60,7 @@ test("opens a local Chat tab before the backend session request settles", () => 
 		{} as IFileService,
 		{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService,
 		new NotificationService(),
+		services,
 	);
 
 	assert.equal(sessionService.untitledSessions.length, 1);

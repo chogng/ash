@@ -6,7 +6,7 @@ import { type Event } from '../../base/common/event.js';
 import { type IDisposable, Disposable } from '../../base/common/lifecycle.js';
 import { type TextModel } from './model/textModel.js';
 import { type LanguageWorker, type LanguageRequestOutcome } from './model/languageRequestCoordinator.js';
-import { type LanguageTokenResult } from './tokens/languageTokens.js';
+import { type LanguageToken, type LanguageTokenResult } from './tokens/languageTokens.js';
 import { isPositiveSafeInteger } from '../../base/common/numbers.js';
 import { type CancellationToken } from '../../base/common/cancellation.js';
 import { type IReadonlyVSDataTransfer } from '../../base/common/dataTransfer.js';
@@ -388,6 +388,9 @@ export interface Token {
 	readonly offset: number;
 	readonly type: string;
 	readonly language: string;
+	readonly presentation?: LanguageToken['presentation'];
+	readonly modifiers?: readonly string[];
+	readonly balancedBrackets?: false;
 }
 
 export interface TokenizationResult {

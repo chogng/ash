@@ -25,7 +25,7 @@ import { registerAgentSessionsAccessibility } from '../../workbench/contrib/chat
 import { createAgentSessionsModel } from './agentSessionsModel.js';
 import { localize } from '../../nls.js';
 import { ChatWidgetModel } from './chatWidgetModel.js';
-import { IRendererHostService, type IRendererHost } from '../../platform/renderer/common/rendererHost.js';
+import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 
@@ -77,10 +77,10 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		@IFileService private readonly fileService: IFileService,
 		@IAccessibleViewService private readonly accessibleViewService: IAccessibleViewService,
 		@INotificationService private readonly notifications: INotificationService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IContextKeyService contextKeyService?: IContextKeyService,
 		@IOpenerService private readonly openerService?: IOpenerService,
 		@IEditorService private readonly editorService?: IEditorService,
-		@IRendererHostService private readonly rendererHost?: IRendererHost,
 	) {
 		super(container, options);
 		this.chatService = chatService;
@@ -205,7 +205,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			retainedPaneIds.add(paneId);
 			let pane = this.panes.get(paneId);
 			if (!pane) {
-				pane = new ChatWidget(
+				pane = this.instantiationService.createInstance<ChatWidget<ChatWidgetModel>>(ChatWidget,
 					this.paneHost,
 					`ash-chat-pane-${++chatPaneInstanceId}`,
 					new ChatWidgetModel(this.chatService, { kind: "untitled", session: untitledSession }, this.sessionService),
@@ -217,8 +217,8 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 					this.notifications,
 					this.openerService,
 					this.editorService,
-					resource => readMarkdownImageResource(this.fileService, resource),
-					this.rendererHost?.dictation,
+					(resource: URI) => readMarkdownImageResource(this.fileService, resource),
+					undefined,
 				);
 				setDisposableOwner(pane, this);
 				this.panes.set(paneId, pane);
@@ -235,7 +235,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			retainedPaneIds.add(paneId);
 			let pane = this.panes.get(paneId);
 			if (!pane) {
-				pane = new ChatWidget(
+				pane = this.instantiationService.createInstance<ChatWidget<ChatWidgetModel>>(ChatWidget,
 					this.paneHost,
 					`ash-chat-pane-${++chatPaneInstanceId}`,
 					new ChatWidgetModel(this.chatService, { kind: "session", active: selection }, this.sessionService),
@@ -247,8 +247,8 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 					this.notifications,
 					this.openerService,
 					this.editorService,
-					resource => readMarkdownImageResource(this.fileService, resource),
-					this.rendererHost?.dictation,
+					(resource: URI) => readMarkdownImageResource(this.fileService, resource),
+					undefined,
 				);
 				setDisposableOwner(pane, this);
 				this.panes.set(paneId, pane);

@@ -18,6 +18,29 @@ test('dictation inserts at the rich editor selection and preserves undo', async 
 	expect(await page.evaluate(() => window.ashTableIntegration.draft)).toBe('before old after');
 });
 
+test('shared dictation disables other inputs and routes text to its current editor', async ({ page }) => {
+	await page.goto('/table.html');
+	const second = page.locator('#second-input');
+	const microphone = second.locator('[data-action-id="ash.chat.input.mic"] button');
+	await expect(microphone).toBeEnabled();
+	await page.evaluate(() => window.ashTableIntegration.startDictation());
+	await expect(microphone).toBeDisabled();
+	await page.evaluate(() => window.ashTableIntegration.transcript('first editor', true));
+	expect(await page.evaluate(() => window.ashTableIntegration.draft)).toBe('first editor');
+	expect(await page.evaluate(() => window.ashTableIntegration.secondDraft())).toBe('');
+	await page.evaluate(() => window.ashTableIntegration.stopDictation());
+	await expect(microphone).toBeEnabled();
+	await microphone.focus();
+	await page.keyboard.press('Space');
+	await expect(microphone).toHaveAttribute('aria-pressed', 'true');
+	await page.evaluate(() => window.ashTableIntegration.transcript('second editor', true));
+	expect(await page.evaluate(() => window.ashTableIntegration.secondDraft())).toBe('second editor');
+	expect(await page.evaluate(() => window.ashTableIntegration.draft)).toBe('first editor');
+	await page.evaluate(() => window.ashTableIntegration.hideSecondInput());
+	await page.evaluate(() => window.ashTableIntegration.transcript('late text', true));
+	expect(await page.evaluate(() => window.ashTableIntegration.secondDraft())).toBe('second editor');
+});
+
 test('model table installs, preserves progress focus, cancels and selects installed models', async ({ page }) => {
 	await page.goto('/table.html');
 	const grid = page.getByRole('grid', { name: 'Local dictation models' });

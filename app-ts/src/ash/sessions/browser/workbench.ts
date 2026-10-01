@@ -1,3 +1,5 @@
+import { IDictationService } from '../../platform/dictation/common/dictationService.js';
+import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import "../../workbench/browser/style.js";
 import "./media/workbench.css";
 import "./actions/sessionsChatActions.js";
@@ -208,6 +210,8 @@ export class Workbench extends Disposable {
 
 		const configurationService = this.configurationService = this._register(new WorkbenchConfigurationService({ api: options.configurationApi, initialSnapshot: options.initialConfigurationSnapshot }));
 		const services = this._register(new InstantiationService());
+		services.registerInstance(IDictationService, options.api.dictation);
+		services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 		services.registerInstance(ILocalTranscriptionService, options.api.localTranscription ?? this._register(new NullLocalTranscriptionService()));
 		services.registerInstance(IConfigurationService, configurationService);
 		if (options.nativeHostApi) services.registerInstance(INativeHostService, options.nativeHostApi);
@@ -436,7 +440,6 @@ export class Workbench extends Disposable {
 		sessionsPart = this.sessionsPart = this._register(services.createInstance(SessionsPart, this.domNode, {
 			sessionService: sessions,
 			chatService: chat,
-			dictation: options.api.dictation,
 			contextMenuService: contextMenus,
 			contextViewService: contextViews,
 			accessibleViewService,
@@ -446,7 +449,7 @@ export class Workbench extends Disposable {
 				if (model.untitledSessionId) {
 					migrateNewChatDraftState(storage, page, model.untitledSessionId);
 				}
-				return services.createInstance(NewChatInputWidget, container, delegate, model, options.api.dictation, undefined, page);
+				return services.createInstance(NewChatInputWidget, container, delegate, model, undefined, page);
 			},
 			activateSelection: (selection, page) => view.activateSelection(selection, page),
 			closeSelection: (selection, page) => {

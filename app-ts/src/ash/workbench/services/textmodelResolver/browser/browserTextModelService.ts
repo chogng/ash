@@ -147,7 +147,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 	private async acquireReference(key: string, entry: TextModelEntry, signal: AbortSignal): Promise<TextModelReference> {
 		const reference = this.reference(key, entry);
 		try {
-			// File panes receive a model whose first render already includes its lexical presentation.
+			// Prepare lexical support before handing the model to its viewport; full-document analysis is not a file-loading gate.
 			await entry.model.tokenization.whenReady(signal);
 			throwIfCancelled(signal, "Text model acquisition was cancelled");
 			return reference;

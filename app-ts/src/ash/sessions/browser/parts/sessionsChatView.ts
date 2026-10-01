@@ -17,7 +17,6 @@ import type { SessionId } from "../../services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import type { SessionsViewSelection, SessionsPage } from "../../services/sessions/browser/sessionsService.js";
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
-import type { IDictationService } from '../../../platform/dictation/common/dictationService.js';
 import type { INotificationService } from '../../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../../platform/native/common/nativeHost.js';
 import { localize } from '../../../nls.js';
@@ -29,7 +28,6 @@ let sessionsChatPaneInstanceId = 0;
 export interface SessionsChatViewOptions {
 	readonly page: SessionsPage;
 	readonly chatService: IChatService;
-	readonly dictation?: IDictationService;
 	readonly sessionService: ISessionsManagementService;
 	readonly contextMenuService: IContextMenuService;
 	readonly contextViewService: IContextViewService;
@@ -53,7 +51,6 @@ export class SessionsChatView extends Disposable {
 	private visible = true;
 
 	private readonly chatService: IChatService;
-	private readonly dictation: IDictationService | undefined;
 	private readonly sessionService: ISessionsManagementService;
 	private readonly contextMenuService: IContextMenuService;
 	private readonly contextViewService: IContextViewService;
@@ -65,11 +62,10 @@ export class SessionsChatView extends Disposable {
 	private readonly closeSelection: (selection: SessionsViewSelection) => void;
 	private readonly createNewSession: () => void;
 
-	constructor(container: HTMLElement, options: SessionsChatViewOptions, @IInstantiationService services: IInstantiationService) {
+	constructor(container: HTMLElement, options: SessionsChatViewOptions, @IInstantiationService private readonly services: IInstantiationService) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.chatService = options.chatService;
-		this.dictation = options.dictation;
 		this.sessionService = options.sessionService;
 		this.contextMenuService = options.contextMenuService;
 		this.contextViewService = options.contextViewService;
@@ -128,10 +124,9 @@ export class SessionsChatView extends Disposable {
 			const key = selectionKey(selection);
 			let entry = this.entries.get(key);
 			if (!entry) {
-				entry = new SessionsChatGridEntry(this.domNode, {
+				entry = this.services.createInstance(SessionsChatGridEntry, this.domNode, {
 					selection,
 					chatService: this.chatService,
-					dictation: this.dictation,
 					sessionService: this.sessionService,
 					contextMenuService: this.contextMenuService,
 					contextViewService: this.contextViewService,
@@ -228,7 +223,7 @@ class SessionsChatGridEntry extends Disposable implements IView {
 	private readonly title: HTMLSpanElement;
 	private selection: SessionsViewSelection;
 
-	constructor(container: HTMLElement, options: SessionsChatGridEntryOptions) {
+	constructor(container: HTMLElement, options: SessionsChatGridEntryOptions, @IInstantiationService services: IInstantiationService) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.selection = options.selection;
@@ -249,7 +244,7 @@ class SessionsChatGridEntry extends Disposable implements IView {
 		close.textContent = "×";
 		header.append(activate, close);
 		const model = new ChatWidgetModel(options.chatService, options.selection.kind === "session" ? { kind: "session", active: options.selection.active } : { kind: "untitled", session: options.selection.session }, options.sessionService);
-		this.pane = this._register(new ChatWidget(
+		this.pane = this._register(services.createInstance<ChatWidget<ChatWidgetModel>>(ChatWidget,
 			this.element,
 			`ash-sessions-chat-pane-${sessionsChatPaneInstanceId}`,
 			model,
@@ -262,8 +257,7 @@ class SessionsChatGridEntry extends Disposable implements IView {
 			undefined,
 			undefined,
 			undefined,
-			options.dictation,
-			(container, delegate) => options.createInputPart(container, delegate, model),
+			(container: HTMLElement, delegate: ChatInputDelegate) => options.createInputPart(container, delegate, model),
 		));
 		this.pane.setTabId(this.title.id);
 		this.pane.setVisible(true);

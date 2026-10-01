@@ -203,13 +203,13 @@ test('modern minimap corners apply to main and auxiliary hosts and leave flat ho
 	}
 });
 
-test('syntax theme updates repaint text and minimap through the existing Worker', async ({ page }) => {
+test('syntax theme updates repaint text and minimap through shared line support', async ({ page }) => {
 	await openEditor(page);
 	const editor = page.locator('.stanza-editor');
 	const token = editor.locator('.stanza-editor-token').filter({ hasText: /^fn$/u });
 	await expect(token).toBeVisible();
 	const workers = page.workers().filter(worker => worker.url().includes('textMateSyntaxWorkerMain'));
-	expect(workers).toHaveLength(1);
+	expect(workers).toHaveLength(0);
 	for (const [color, expected] of [['#149b37', 'rgb(20, 155, 55)'], ['#9a41da', 'rgb(154, 65, 218)']] as const) {
 		await page.evaluate(color => window.ashTextModelIntegration.setSyntaxColor(color), color);
 		await expect(token).toHaveCSS('color', expected);
@@ -1071,6 +1071,31 @@ test('editor auto scrollbars reveal on hover, focus and scrolling and remain dra
 		return element.querySelectorAll('[role="scrollbar"]').length;
 	});
 	expect(remainingTracks).toBe(0);
+});
+
+test('editor scrollbar track colors follow theme overrides in all color schemes', async ({ page }) => {
+	await openEditor(page);
+	await page.evaluate(() => {
+		window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'long text '.repeat(100)).join('\n'));
+		window.ashTextModelIntegration.setScrollbar({ horizontal: 'visible', vertical: 'visible' });
+	});
+	const tracks = page.locator('.stanza-editor .ash-scrollbar-track');
+	await expect(tracks).toHaveCount(2);
+	for (const theme of ['dark', 'light', 'contrast', 'contrastLight'] as const) {
+		await page.evaluate(theme => window.ashTextModelIntegration.setTheme(theme), theme);
+		for (const track of await tracks.all()) {
+			await expect(track).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		}
+		await page.evaluate(() => window.ashTextModelIntegration.setSelectionColors({ 'scrollbar.background': '#123456' }));
+		for (const track of await tracks.all()) {
+			await expect(track).toHaveCSS('background-color', 'rgb(18, 52, 86)');
+			await expect(track).toHaveCSS('border-radius', '0px');
+		}
+	}
+	await page.evaluate(() => window.ashTextModelIntegration.setTheme('dark'));
+	for (const track of await tracks.all()) {
+		await expect(track).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	}
 });
 
 test('editor scrollbar configuration updates visibility and track dimensions', async ({ page }) => {

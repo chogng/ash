@@ -144,6 +144,7 @@ export class Minimap extends ViewPart {
 		const rasterHeight = this.contentHeight * pixelRatio;
 		const rasterOffset = scrollRatio * Math.max(0, rows * scaleY - rasterHeight);
 		this.domNode.classList.toggle('stanza-editor-minimap-hover-slider', minimap.showSlider === 'mouseover');
+		this.domNode.classList.toggle('has-right-overflow', context.scrollWidth > context.scrollLeft + context.viewportWidth);
 		this.domNode.style.left = `${geometry.minimapLeft}px`;
 		this.domNode.style.top = '0px';
 		this.domNode.style.width = `${geometry.minimapWidth}px`;

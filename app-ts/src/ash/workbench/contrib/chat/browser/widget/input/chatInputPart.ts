@@ -1,4 +1,5 @@
-import { ChatSpeechToTextService, ChatSpeechToTextState } from '../../speechToText/chatSpeechToTextService.js';
+import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../speechToText/chatSpeechToTextService.js';
+import { DictationActionViewItem } from '../../speechToText/dictationActionViewItem.js';
 import { DictationSession } from '../../speechToText/dictationSession.js';
 import { addDisposableListener, h } from "../../../../../../base/browser/dom.js";
 import { ButtonActionViewItem, type ActionViewItem } from "../../../../../../base/browser/ui/actionbar/actionViewItems.js";
@@ -12,7 +13,7 @@ import { Lxicon } from "../../../../../../base/common/lxicons.js";
 import { localize, onDidChangeNls } from "../../../../../../nls.js";
 import { WorkbenchToolBar } from "../../../../../../platform/actions/browser/toolbar.js";
 import type { IAccessibleViewService } from '../../../../../../platform/accessibility/browser/accessibleView.js';
-import type { IDictationService } from "../../../../../../platform/dictation/common/dictationService.js";
+import { IInstantiationService } from "../../../../../../platform/instantiation/common/instantiation.js";
 import type { IOpenAgentsWindowOptions } from '../../../../../../platform/native/common/nativeHost.js';
 import type { INotificationService } from '../../../../../../platform/notification/common/notification.js';
 import type { IContextMenuService } from "../../../../../../platform/contextview/browser/contextView.js";
@@ -33,7 +34,7 @@ import { ModelPickerConfiguration } from './modelPicker/modelPickerConfiguration
 import { modelPickerEffortLabel } from './modelPicker/modelPickerModelConfig.js';
 import { ModePickerActionItem, type ChatInputMode } from './modePickerActionItem.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
-import { isModelPreparing } from '../../../../../../platform/localTranscription/common/localTranscription.js';
+import { isModelPreparing, type ILocalTranscriptionModelSnapshot } from '../../../../../../platform/localTranscription/common/localTranscription.js';
 import { LocalTranscriptionModelStatus } from '../../../../localTranscription/browser/localTranscriptionModelStatus.js';
 
 type ChatInputToolbarPresentation = "mode" | "model" | "effort" | "mic" | "voice" | "send" | "interrupt";
@@ -100,7 +101,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private skillSelectors: ChatInputState["skillSelectors"] = [];
 	private get mode(): ChatInputMode { return this.state.mode; }
 	private pendingAgentSelection: { readonly agent: ChatAgent | undefined } | undefined;
-	private readonly speechToText: ChatSpeechToTextService | undefined;
+	private readonly dictationSession: DictationSession;
 	private visible = true;
 	private readonly modelPreparation: HTMLElement;
 	private readonly modelPreparationStatus: LocalTranscriptionModelStatus;
@@ -110,7 +111,18 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private draftRevision = 0;
 	private submitting = false;
 
-	constructor(container: HTMLElement, delegate: ChatInputDelegate, contextMenuService: IContextMenuService, contextViewService: IContextViewService, private readonly accessibleViewService: IAccessibleViewService, private readonly notifications: INotificationService, private readonly dictation?: IDictationService, editorProvider: Pick<IChatInputEditorProvider, 'create'> = ChatInputEditors, private readonly additionalActions: readonly IAction[] = []) {
+	constructor(
+		container: HTMLElement,
+		delegate: ChatInputDelegate,
+		contextMenuService: IContextMenuService,
+		contextViewService: IContextViewService,
+		private readonly accessibleViewService: IAccessibleViewService,
+		private readonly notifications: INotificationService,
+		editorProvider: Pick<IChatInputEditorProvider, 'create'> = ChatInputEditors,
+		private readonly additionalActions: readonly IAction[] = [],
+		@IInstantiationService instantiationService: IInstantiationService,
+		@IChatSpeechToTextService private readonly speechToText: IChatSpeechToTextService,
+	) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.delegate = delegate;
@@ -159,17 +171,17 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.cancelModel = this._register(new Button(modelActions, { label: localize('dictation.model.cancel', 'Cancel'), presentation: 'quiet' }));
 		const dictationSettings = this._register(new Button(modelActions, { label: localize('dictation.model.settings', 'Dictation settings'), presentation: 'quiet' }));
 		this._register(dictationSettings.onDidClick(() => { void this.delegate.openModelSettings('dictation'); }));
-		this._register(this.downloadModel.onDidClick(() => { void this.changePreparation(() => this.dictation!.prepareModel()); }));
-		this._register(this.cancelModel.onDidClick(() => { void this.changePreparation(() => this.dictation!.cancelPreparation()); }));
+		this._register(this.downloadModel.onDidClick(() => { void this.changePreparation(() => this.speechToText.prepareModel()); }));
+		this._register(this.cancelModel.onDidClick(() => { void this.changePreparation(() => this.speechToText.cancelPreparation()); }));
 		this.inputContainer.append(this.modelPreparation);
-		if (dictation) {
-			this.speechToText = this._register(new ChatSpeechToTextService(dictation));
-			this._register(new DictationSession(this.speechToText, this.input, this.dictationPreview, () => this.visible));
-			this._register(this.speechToText.onDidChangeState(() => { this.status.textContent = this.statusText(this.state); this.renderToolbarActions(); }));
-			this._register(this.speechToText.onDidEnd(error => { if (error) { this.notifications.error(localize('chat.input.dictationFailed', 'Dictation failed: {0}', error)); } }));
-			this._register(dictation.onDidChangePreparation(() => { if (this.visible) { void this.readPreparation(); } }));
-			void this.readPreparation();
-		}
+		this.dictationSession = this._register(instantiationService.createInstance(DictationSession, this.input, this.dictationPreview, () => this.visible, async (preparation: ILocalTranscriptionModelSnapshot) => {
+			await this.readPreparation();
+			(isModelPreparing(preparation.status) ? this.cancelModel : this.downloadModel).domNode.focus();
+		}));
+		this._register(this.speechToText.onDidChangeState(() => { this.status.textContent = this.statusText(this.state); this.renderToolbarActions(); }));
+		this._register(this.dictationSession.onDidEnd(error => { if (error) { this.notifications.error(localize('chat.input.dictationFailed', 'Dictation failed: {0}', error)); } }));
+		this._register(this.speechToText.onDidChangePreparation(() => { if (this.visible && this.speechToText.isConfigured) { void this.readPreparation(); } }));
+		if (this.speechToText.isConfigured) { void this.readPreparation(); }
 		this.element.append(this.status, this.dictationPreview, this.interaction, this.inputContainer);
 		this._register(addDisposableListener(this.inputContainer, "focusin", () => this.inputContainer.classList.add("focused")));
 		this._register(addDisposableListener(this.inputContainer, "focusout", event => {
@@ -287,7 +299,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.submitting = true;
 		this.renderToolbar();
 		try {
-			if (this.speechToText?.isBusy) await this.stopDictation();
+			if (this.dictationSession.isActive) await this.stopDictation();
 			const inputValue = this.input.value;
 			const input = parseSlashCommandInput(inputValue, this.slashCommands);
 			if (input.kind === "command" && input.binding.origin === "local") {
@@ -321,9 +333,13 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	setVisible(visible: boolean): void {
 		this.visible = visible;
 		this.preparationVersion++;
-		if (visible && this.dictation) { void this.readPreparation(); }
+		if (visible && this.speechToText.isConfigured) { void this.readPreparation(); }
 		if (visible) this.input.layout();
-		if (!visible && this.speechToText?.isBusy) void this.stopDictation();
+		if (!visible) {
+			void this.dictationSession.cancel().catch(error => {
+				if (!this.isDisposed) { this.notifications.error(localize('chat.input.dictationFailed', 'Dictation failed: {0}', String(error))); }
+			});
+		}
 	}
 
 	render(state: ChatInputState): void {
@@ -455,16 +471,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				() => {},
 			)
 			: undefined;
-		const micAction = new ChatInputAction(
-			"ash.chat.input.mic",
-			localize('chat.input.dictate', 'Dictate message'),
-			this.speechToText?.isBusy ? localize('chat.input.dictationStop', 'Stop dictation') : this.dictation ? localize('chat.input.dictate', 'Dictate message') : localize('chat.input.dictationUnavailable', 'Dictation is unavailable'),
-			Lxicon.mic,
-			!!this.dictation && !this.speechToText?.isStarting && this.speechToText?.state !== ChatSpeechToTextState.Transcribing,
-			"mic",
-			() => { void this.toggleDictation(); },
-			this.speechToText?.state === ChatSpeechToTextState.Recording,
-		);
+		const micAction = { ...this.dictationSession.action };
 		let sendAction: ChatInputAction;
 		if (this.toolbarState.hasInput) {
 			const tooltip = this.toolbarState.inputKind === "command" ? "Run command" : "Send message";
@@ -485,27 +492,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.pickerResponsiveLayout.layout();
 	}
 
-	private async toggleDictation(): Promise<void> {
-		if (!this.speechToText || !this.dictation) { return; }
-		if (this.speechToText.isBusy) { await this.stopDictation(); return; }
-		try {
-			const preparation = await this.dictation.getPreparation();
-			if (this.isDisposed || !this.visible) { return; }
-			if (preparation && (!preparation.available || isModelPreparing(preparation.status))) {
-				await this.readPreparation();
-				(isModelPreparing(preparation.status) ? this.cancelModel : this.downloadModel).domNode.focus();
-				return;
-			}
-			await this.speechToText.start();
-		} catch (error) {
-			if (!this.isDisposed) { this.notifications.error(localize('chat.input.dictationFailed', 'Dictation failed: {0}', String(error))); }
-		}
-	}
-
 	private async readPreparation(): Promise<void> {
 		const version = ++this.preparationVersion;
 		try {
-			const snapshot = await this.dictation!.getPreparation();
+			const snapshot = await this.speechToText.getPreparation();
 			if (version !== this.preparationVersion || this.isDisposed) { return; }
 			const preparing = isModelPreparing(snapshot?.status);
 			this.modelPreparation.hidden = !snapshot || (snapshot.available && !preparing);
@@ -528,7 +518,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	private async stopDictation(): Promise<void> {
-		try { await this.speechToText?.stopAndTranscribe(); }
+		try { await this.dictationSession.stop(); }
 		catch (error) {
 			if (!this.isDisposed) { this.notifications.error(localize('chat.input.dictationFailed', 'Dictation failed: {0}', String(error))); }
 		}
@@ -561,6 +551,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	private createToolbarViewItem(action: IAction, contextViewService: IContextViewService): ActionViewItem | undefined {
+		if (action.id === this.dictationSession.action.id) { return new DictationActionViewItem(action); }
 		if (!(action instanceof ChatInputAction)) return undefined;
 		if (action.presentation === 'model') {
 			return new ModelPickerActionItem(action, {
@@ -682,8 +673,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	private statusText(state: ChatInputState): string {
 		if (state.error) return state.error;
-		if (this.speechToText?.state === ChatSpeechToTextState.Transcribing) return localize('chat.input.dictationTranscribing', 'Transcribing…');
-		if (this.speechToText?.isBusy) return localize('chat.input.dictationListening', 'Listening…');
+		if (this.dictationSession.isActive && this.speechToText.state === ChatSpeechToTextState.Transcribing) return localize('chat.input.dictationTranscribing', 'Transcribing…');
+		if (this.dictationSession.isActive) return localize('chat.input.dictationListening', 'Listening…');
 		switch (state.phase) {
 			case "loading":
 				return "Loading chat...";
