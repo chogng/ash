@@ -13,6 +13,23 @@ pub struct GitRepositoryParams {
     pub repository_id: Option<String>,
 }
 
+/// Bounded paths relative to one authorized repository; directories do not expand recursively.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCheckIgnoreParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
+    #[schemars(length(min = 1, max = 5000))]
+    pub paths: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCheckIgnoreResult {
+    pub ignored_paths: Vec<String>,
+}
+
 /// Repository URL and host-selected parent directory for a desktop clone.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

@@ -46,3 +46,7 @@
 	border-right: var(--ash-stroke-thickness) solid var(--ash-border);
 	border-radius: var(--ash-corner-radius-large);
 }
+
+:is(.ash-workbench, .ash-auxiliary-window-container).modern-ui .stanza-editor-minimap-slider {
+	border-radius: var(--ash-corner-radius-small);
+}

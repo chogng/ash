@@ -6,10 +6,12 @@ import { JSDOM } from 'jsdom';
 import { Emitter } from '../../../base/common/event.js';
 import { URI } from '../../../base/common/uri.js';
 import { FileKind } from '../../../platform/files/common/files.js';
+import { NullLoggerService } from '../../../platform/log/common/log.js';
+import type { IDecorationData } from '../../services/decorations/common/decorations.js';
 import { OperatingSystem } from '../../../base/common/platform.js';
 import { LabelService } from '../../../platform/label/common/labelService.js';
 import { WorkspaceContextService } from '../../services/workspaces/browser/workspaceContextService.js';
-import { FileLabelDecorationService } from '../../services/labels/browser/fileLabelDecorationService.js';
+import { DecorationsService } from '../../services/decorations/browser/decorationsService.js';
 import { DEFAULT_LABELS_CONTAINER, ResourceLabels, type IResourceIconRenderer } from '../../browser/labels.js';
 
 test('ResourceLabels formats files and reacts to icon and decoration changes', () => {
@@ -17,7 +19,10 @@ test('ResourceLabels formats files and reacts to icon and decoration changes', (
 	const root = URI.file('C:/project');
 	const resource = URI.file('C:/project/src/main.ts');
 	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
-	using decorations = new FileLabelDecorationService();
+	using decorations = new DecorationsService(dom.window.document, new NullLoggerService());
+	using decorationUpdates = new Emitter<readonly URI[]>();
+	let decorationData: IDecorationData | undefined;
+	using provider = decorations.registerDecorationsProvider({ label: 'Test', onDidChange: decorationUpdates.event, provideDecorations: () => decorationData });
 	using labelService = new LabelService(workspace, OperatingSystem.Linux);
 	const iconThemeChange = new Emitter<void>();
 	const resourceIconRenderer: IResourceIconRenderer = {
@@ -31,7 +36,7 @@ test('ResourceLabels formats files and reacts to icon and decoration changes', (
 	using labels = new ResourceLabels(DEFAULT_LABELS_CONTAINER, {
 		workspaceContextService: workspace,
 		resourceIconRenderer,
-		fileLabelDecorationService: decorations,
+		decorationsService: decorations,
 		labelService,
 	});
 	const label = labels.create(dom.window.document.body);
@@ -46,10 +51,12 @@ test('ResourceLabels formats files and reacts to icon and decoration changes', (
 	assert.equal(label.element.querySelector('.ash-icon-label-description')?.textContent, 'src');
 	assert.equal(label.element.querySelector('.test-file-icon')?.textContent, 'T');
 
-	decorations.setDecoration(resource, { colorClassName: 'test-color', strikethrough: true });
-	assert.equal(label.element.classList.contains('test-color'), true);
+	decorationData = { color: 'description.foreground', tooltip: 'Ignored', strikethrough: true };
+	decorationUpdates.fire([resource]);
+	assert.match(label.element.className, /ash-decoration-\d+-color/u);
 	assert.equal(label.element.classList.contains('strikethrough'), true);
 	assert.equal(decorationChanges, 1);
+	assert.equal(label.element.getAttribute('aria-label'), 'main.ts, Ignored');
 
 	using formatter = labelService.registerFormatter({
 		scheme: 'file',

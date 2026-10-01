@@ -92,8 +92,8 @@ import { ISystemFileTransferService } from '../../platform/files/common/systemFi
 import {
 	IFileService,
 } from "../../platform/files/common/files.js";
-import { FileLabelDecorationService } from "../services/labels/browser/fileLabelDecorationService.js";
-import { IFileLabelDecorationService } from "../services/labels/common/fileLabelDecorationService.js";
+import { DecorationsService } from "../services/decorations/browser/decorationsService.js";
+import { IDecorationsService } from "../services/decorations/common/decorations.js";
 import {
 	IThemeService,
 } from "../../platform/theme/common/themeService.js";
@@ -517,7 +517,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IWorkspaceContextService, workspaceContext);
 		const labelService = this._register(new LabelService(workspaceContext));
 		services.registerInstance(ILabelService, labelService);
-		services.registerInstance(IFileLabelDecorationService, this._register(new FileLabelDecorationService()));
+		services.registerInstance(IDecorationsService, this._register(services.createInstance(DecorationsService, workbenchRoot.ownerDocument)));
 		const dirPermissionsService = this._register(new AppServerDirPermissionsService(api.dirPermissions, api.events));
 		services.registerInstance(IDirPermissionsService, dirPermissionsService);
 		const workspaceTrustService = this._register(services.createInstance(WorkspaceTrustManagementService));

@@ -6,6 +6,10 @@ import { BrowserHostColorSchemeService } from '../../../src/ash/workbench/servic
 import type { TextModelReference } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
 import '../../../src/ash/base/browser/ui/iconlabel/iconlabel.css';
 import { Event } from '../../../src/ash/base/common/event.js';
+import { Emitter } from '../../../src/ash/base/common/event.js';
+import { NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
+import { DecorationsService } from '../../../src/ash/workbench/services/decorations/browser/decorationsService.js';
+import type { IDecorationData } from '../../../src/ash/workbench/services/decorations/common/decorations.js';
 import { DEFAULT_LABELS_CONTAINER, ResourceLabels } from '../../../src/ash/workbench/browser/labels.js';
 import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
 import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
@@ -72,6 +76,8 @@ declare global {
 		disposeIconSelectBox(): void;
 		previewInTextMateWorker(): Promise<{ preview: string[]; unchanged: boolean; text: string }>;
 		tokenizeInTextMateWorker(): Promise<readonly { type: string; modifiers: readonly string[]; presentation?: { foreground?: string; fontStyle?: readonly string[] } }[]>;
+		setLabelDecoration(data: IDecorationData | undefined): void;
+		removeLabelDecorationProvider(): void;
 	}
 }
 
@@ -202,6 +208,18 @@ const workspace = resources.add(new WorkspaceContextService({ id: 'icon-models',
 resources.add(languages.registerLanguage({ id: 'rust' }));
 const models = resources.add(new BrowserTextModelService({ onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '', revision: undefined }), save: async () => ({ revision: undefined }) }, { languageService: languages }));
 const labels = resources.add(new ResourceLabels(DEFAULT_LABELS_CONTAINER, { workspaceContextService: workspace, resourceIconRenderer: themes, fileModels: models, languageService: languages }));
+const decorations = resources.add(new DecorationsService(document, new NullLoggerService()));
+const decorationUpdates = resources.add(new Emitter<readonly URI[]>());
+let decorationData: IDecorationData | undefined;
+const decorationProvider = resources.add(decorations.registerDecorationsProvider({ label: 'Browser test', onDidChange: decorationUpdates.event, provideDecorations: async () => decorationData }));
+const decoratedLabels = resources.add(new ResourceLabels(DEFAULT_LABELS_CONTAINER, { workspaceContextService: workspace, resourceIconRenderer: themes, decorationsService: decorations }));
+const decoratedHost = document.createElement('button');
+decoratedHost.id = 'decorated-label';
+document.querySelector('#root')!.append(decoratedHost);
+const decoratedUri = URI.file('/workspace/ignored.log');
+decoratedLabels.create(decoratedHost).setFile(decoratedUri, { hidePath: true, fileDecorations: { colors: true, badges: true } });
+window.setLabelDecoration = data => { decorationData = data; decorationUpdates.fire([decoratedUri]); };
+window.removeLabelDecorationProvider = () => decorationProvider.dispose();
 const modelReferences: TextModelReference[] = [];
 for (const [id, resource] of [['model-icon', URI.file('/workspace/no-extension')], ['untitled-icon', URI.parse('untitled:/Untitled-1')]] as const) {
 	modelReferences.push(resources.add(await models.acquire({ resource, languageId: 'typescript' }, new AbortController().signal)));

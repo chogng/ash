@@ -6,9 +6,10 @@ import { IFileTextModelService } from '../services/textmodelResolver/common/text
 import { IconLabel, type IconLabelValueOptions } from '../../base/browser/ui/iconlabel/iconlabel.js';
 import { getPathLabel, type IRelativePathProvider } from '../../base/common/labels.js';
 import { Emitter, Event } from '../../base/common/event.js';
-import { Disposable, type IDisposable } from '../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { basenameOrAuthority, dirnameResource, isEqualResource } from './resourceLabelHelpers.js';
 import { URI } from '../../base/common/uri.js';
+import { localize } from '../../nls.js';
 import { operatingSystem } from '../../base/common/platform.js';
 import { createServiceIdentifier } from '../../platform/instantiation/common/instantiation.js';
 import type { IFileIconTheme } from '../../platform/theme/common/themeService.js';
@@ -17,7 +18,7 @@ import { FileKind } from '../../platform/files/common/files.js';
 import { ILabelService } from '../../platform/label/common/labelService.js';
 import { IWorkspaceContextService } from '../../platform/workspace/common/workspace.js';
 import { IUntitledTextEditorService } from '../services/untitled/common/untitledTextEditorService.js';
-import { IFileLabelDecorationService, type IFileLabelDecoration, type IFileLabelDecorationChangeEvent } from '../services/labels/common/fileLabelDecorationService.js';
+import { IDecorationsService, type IDecoration, type IResourceDecorationChangeEvent } from '../services/decorations/common/decorations.js';
 
 export interface IResourceLabelProps {
 	readonly resource?: URI | { readonly primary?: URI; readonly secondary?: URI };
@@ -72,7 +73,7 @@ export interface ResourceLabelServices {
 	readonly workspaceContextService: IWorkspaceContextService;
 	readonly resourceIconRenderer: IResourceIconRenderer;
 	readonly untitledTextEditorService?: IUntitledTextEditorService;
-	readonly fileLabelDecorationService?: IFileLabelDecorationService;
+	readonly decorationsService?: IDecorationsService;
 	readonly labelService?: ILabelService;
 	readonly fileModels?: IFileTextModelService;
 	readonly languageService?: ILanguageService;
@@ -115,7 +116,7 @@ export class ResourceLabels extends Disposable {
 			this._register(services.untitledTextEditorService.onDidCreate(() => this.rerenderAll()));
 			this._register(services.untitledTextEditorService.onDidChangeLabel(() => this.rerenderAll()));
 		}
-		if (services.fileLabelDecorationService) this._register(services.fileLabelDecorationService.onDidChange(event => this.onDecorationChange(event)));
+		if (services.decorationsService) this._register(services.decorationsService.onDidChangeDecorations(event => this.onDecorationChange(event)));
 	}
 
 	create(container: HTMLElement, options?: { readonly supportIcons?: boolean }): IResourceLabel {
@@ -178,15 +179,10 @@ export class ResourceLabels extends Disposable {
 		}
 	}
 
-	private onDecorationChange(event: IFileLabelDecorationChangeEvent): void {
-		if (!event.resources) {
-			this.rerenderAll();
-			this.decorationChangeEmitter.fire();
-			return;
-		}
+	private onDecorationChange(event: IResourceDecorationChangeEvent): void {
 		let changed = false;
 		for (const widget of this.widgets) {
-			if (widget.resource && event.resources.some(resource => isEqualResource(resource, widget.resource))) {
+			if (widget.resource && event.affectsResource(widget.resource)) {
 				widget.rerender();
 				changed = true;
 			}
@@ -201,7 +197,7 @@ export class ResourceLabelService implements IResourceLabelService {
 		@IWorkspaceContextService private readonly workspaceContextService: IWorkspaceContextService,
 		@IResourceIconRenderer private readonly resourceIconRenderer: IResourceIconRenderer,
 		@IUntitledTextEditorService private readonly untitledTextEditorService: IUntitledTextEditorService,
-		@IFileLabelDecorationService private readonly fileLabelDecorationService: IFileLabelDecorationService,
+		@IDecorationsService private readonly decorationsService: IDecorationsService,
 		@ILabelService private readonly labelService: ILabelService,
 		@IFileTextModelService private readonly fileModels: IFileTextModelService,
 		@ILanguageService private readonly languageService: ILanguageService,
@@ -212,7 +208,7 @@ export class ResourceLabelService implements IResourceLabelService {
 			workspaceContextService: this.workspaceContextService,
 			resourceIconRenderer: this.resourceIconRenderer,
 			untitledTextEditorService: this.untitledTextEditorService,
-			fileLabelDecorationService: this.fileLabelDecorationService,
+			decorationsService: this.decorationsService,
 			labelService: this.labelService,
 			fileModels: this.fileModels,
 			languageService: this.languageService,
@@ -259,6 +255,7 @@ export class ResourceLabel extends Disposable implements IResourceLabel {
 
 class ResourceLabelWidget extends Disposable {
 	private readonly label: IconLabel;
+	private readonly decoration = this._register(new MutableDisposable<IDecoration>());
 	private readonly renderEmitter = this._register(new Emitter<void>());
 	private readonly services: ResourceLabelServices;
 	private readonly supportIcons: boolean;
@@ -334,6 +331,7 @@ class ResourceLabelWidget extends Disposable {
 	}
 
 	clear(): void {
+		this.decoration.clear();
 		this.current = undefined;
 		this.currentOptions = undefined;
 		this.currentTitle = undefined;
@@ -392,8 +390,9 @@ class ResourceLabelWidget extends Disposable {
 			}
 		}
 		const decoration = resource && options.fileDecorations
-			? this.services.fileLabelDecorationService?.getDecoration(resource, fileKind === FileKind.Directory)
+			? this.services.decorationsService?.getDecoration(resource, fileKind === FileKind.Directory)
 			: undefined;
+		this.decoration.value = decoration;
 		const extraClasses = decorationClasses(options, decoration);
 		let title = this.currentTitle ?? (resource ? pathLabel(resource, this.services.workspaceContextService, this.services.labelService) : undefined);
 		if (decoration?.tooltip) title = title ? `${title} • ${decoration.tooltip}` : decoration.tooltip;
@@ -411,6 +410,7 @@ class ResourceLabelWidget extends Disposable {
 			: undefined);
 		const iconOptions: IconLabelValueOptions = {
 			...options,
+			ariaLabel: decoration?.tooltip ? localize('workbench.explorerDecoratedFile', '{0}, {1}', options.ariaLabel ?? (typeof displayName === 'string' ? displayName : displayName?.join('/')), decoration.tooltip) : options.ariaLabel,
 			hideIcon,
 			title,
 			extraClasses,
@@ -468,11 +468,11 @@ function applyNameAffixes(
 	];
 }
 
-function decorationClasses(options: IResourceLabelOptions, decoration: IFileLabelDecoration | undefined): readonly string[] {
+function decorationClasses(options: IResourceLabelOptions, decoration: IDecoration | undefined): readonly string[] {
 	if (!decoration || !options.fileDecorations) return options.extraClasses ?? [];
 	return [
 		...(options.extraClasses ?? []),
-		...(options.fileDecorations.colors && decoration.colorClassName ? [decoration.colorClassName] : []),
+		...(options.fileDecorations.colors && decoration.labelClassName ? [decoration.labelClassName] : []),
 		...(options.fileDecorations.badges && decoration.badgeClassName ? [decoration.badgeClassName] : []),
 		...(options.fileDecorations.badges && decoration.iconClassName ? [decoration.iconClassName] : []),
 		...(decoration.strikethrough ? ['strikethrough'] : []),

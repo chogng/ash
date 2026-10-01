@@ -12,6 +12,8 @@ use ash_app_server_protocol::protocol::git::GitBranchDeleteParams;
 use ash_app_server_protocol::protocol::git::GitBranchListResult;
 use ash_app_server_protocol::protocol::git::GitBranchSwitchParams;
 use ash_app_server_protocol::protocol::git::GitChangeFileParams;
+use ash_app_server_protocol::protocol::git::GitCheckIgnoreParams;
+use ash_app_server_protocol::protocol::git::GitCheckIgnoreResult;
 use ash_app_server_protocol::protocol::git::GitCloneParams;
 use ash_app_server_protocol::protocol::git::GitCloneResult;
 use ash_app_server_protocol::protocol::git::GitCommitChangesParams;
@@ -111,6 +113,20 @@ impl AppServer {
                 .text_diff_for(params.repository_id.as_deref())
                 .map_err(git_error)?,
         )
+    }
+
+    pub(super) fn git_check_ignore(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitCheckIgnoreParams = decode(value)?;
+        let paths = paths(params.paths)?;
+        let ignored = self
+            .git_runtime_service()?
+            .check_ignore_for(params.repository_id.as_deref(), &paths)
+            .map_err(git_error)?;
+        let ignored_paths = ignored
+            .iter()
+            .map(|path| worktree_path(path))
+            .collect::<Result<Vec<_>, _>>()?;
+        result(&GitCheckIgnoreResult { ignored_paths })
     }
 
     pub(super) fn git_branch_list(&self, value: &Value) -> Result<Value, RpcError> {

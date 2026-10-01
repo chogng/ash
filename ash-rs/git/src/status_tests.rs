@@ -12,6 +12,89 @@ use crate::GitClient;
 use crate::test_support::TestRepository;
 
 #[tokio::test(flavor = "current_thread")]
+async fn check_ignore_honors_nested_negated_excluded_and_tracked_paths() {
+    let repository = TestRepository::init();
+    repository.write("tracked.log", "tracked\n");
+    repository.commit_all("initial");
+    repository.write(".gitignore", "*.log\n!keep.log\ncache/\n\\!literal\n");
+    repository.write("nested/.gitignore", "*.tmp\n!keep.tmp\n");
+    repository.write(".git/info/exclude", "excluded.txt\n");
+    for path in [
+        "ignored.log",
+        "keep.log",
+        "cache/file.txt",
+        "nested/ignored.tmp",
+        "nested/keep.tmp",
+        "excluded.txt",
+        "!literal",
+        "space name.log",
+    ] {
+        repository.write(path, "file\n");
+    }
+    let paths = [
+        "tracked.log",
+        "ignored.log",
+        "keep.log",
+        "cache",
+        "cache/file.txt",
+        "nested/ignored.tmp",
+        "nested/keep.tmp",
+        "excluded.txt",
+        "!literal",
+        "space name.log",
+    ]
+    .map(PathBuf::from);
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    assert_eq!(
+        client.check_ignore(&opened, &paths).await.unwrap(),
+        [
+            "ignored.log",
+            "cache",
+            "cache/file.txt",
+            "nested/ignored.tmp",
+            "excluded.txt",
+            "!literal",
+            "space name.log"
+        ]
+        .map(PathBuf::from)
+    );
+    assert_eq!(
+        client
+            .check_ignore(
+                &opened,
+                &[PathBuf::from("keep.log"), PathBuf::from("tracked.log")]
+            )
+            .await
+            .unwrap(),
+        Vec::<PathBuf>::new()
+    );
+    assert!(
+        client
+            .snapshot(&opened)
+            .await
+            .unwrap()
+            .changes()
+            .iter()
+            .all(|change| change.worktree_status() != GitChangeStatus::Ignored)
+    );
+    repository.write(".gitignore", "");
+    assert_eq!(
+        client
+            .check_ignore(&opened, &[PathBuf::from("ignored.log")])
+            .await
+            .unwrap(),
+        Vec::<PathBuf>::new()
+    );
+    assert!(
+        client
+            .check_ignore(&opened, &[PathBuf::from("../outside")])
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn snapshot_groups_index_worktree_and_untracked_changes() {
     let repository = TestRepository::init();
     repository.write("tracked.txt", "old\n");

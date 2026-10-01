@@ -170,6 +170,7 @@ export interface IGitService {
 	listRepositories(): Promise<readonly GitRepository[]>;
 	selectRepository(repositoryId: string): Promise<GitStatus>;
 	repositoryForResource(resource: URI): GitRepository | undefined;
+	checkIgnore(resources: readonly URI[]): Promise<readonly URI[]>;
 	status(repositoryId?: string): Promise<GitStatus>;
 	history(repositoryId?: string): Promise<readonly GitCommitSummary[]>;
 	branches(repositoryId?: string): Promise<readonly GitBranch[]>;

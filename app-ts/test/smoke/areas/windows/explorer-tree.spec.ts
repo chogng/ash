@@ -1,6 +1,48 @@
 import { cp, mkdir, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
+
+test.describe('Git ignore decorations', () => {
+	test.use({ gitRepository: true });
+	test.beforeEach(async ({ target, testWorkspace }) => {
+		if (target.kind !== 'electron' || target.appServerMode !== 'required') return;
+		const root = testWorkspace.directory;
+		await mkdir(join(root, 'ignored-dir'));
+		await writeFile(join(root, 'ignored-dir', 'child.txt'), 'ignored');
+		await writeFile(join(root, 'ignored.log'), 'ignored');
+		await writeFile(join(root, 'keep.tmp'), 'kept');
+		await writeFile(join(root, '.gitignore'), 'ignored.log\nignored-dir/\n*.tmp\n!keep.tmp\nmain.ts\n');
+	});
+
+	test('Explorer grays ignored files and expanded directories and updates after ignore rules change', async ({ target, testWorkspace, workbench }) => {
+		test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the desktop Git backend');
+		const page = workbench.page;
+		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+		if (await showSidebar.isVisible()) await showSidebar.click();
+		const explorer = page.locator('.ash-explorer');
+		const ignored = explorer.locator('.ash-icon-label').filter({ has: page.getByText('ignored.log', { exact: true }) });
+		const folder = explorer.getByRole('treeitem').filter({ has: page.getByText('ignored-dir', { exact: true }) });
+		await expect(ignored).toHaveAttribute('aria-label', 'ignored.log, Ignored by Git');
+		await expect(ignored.locator('.ash-icon-label-text')).toHaveCSS('color', 'rgb(140, 140, 140)');
+		await expect(folder.locator('.ash-icon-label')).toHaveAttribute('aria-label', 'ignored-dir, Ignored by Git');
+		await folder.locator('.ash-tree-twistie').click();
+		const child = explorer.locator('.ash-icon-label').filter({ has: page.getByText('child.txt', { exact: true }) });
+		await expect(child).toHaveAttribute('aria-label', 'child.txt, Ignored by Git');
+		await expect(child.locator('.ash-icon-label-text')).toHaveCSS('color', 'rgb(140, 140, 140)');
+		for (const name of ['main.ts', 'keep.tmp']) {
+			await expect(explorer.locator('.ash-icon-label').filter({ has: page.getByText(name, { exact: true }) })).not.toHaveAttribute('aria-label', /Ignored by Git/u);
+		}
+		await writeFile(join(testWorkspace.directory, '.gitignore'), '*.tmp\n!keep.tmp\nmain.ts\n');
+		await expect(ignored).not.toHaveAttribute('aria-label', /Ignored by Git/u);
+		await expect(child).not.toHaveAttribute('aria-label', /Ignored by Git/u);
+		await expect(ignored.locator('.ash-icon-label-text')).not.toHaveCSS('color', 'rgb(140, 140, 140)');
+		const run = promisify(execFile);
+		const status = await run('git', ['status', '--porcelain'], { cwd: testWorkspace.directory });
+		expect(status.stdout).toContain('keep.tmp');
+	});
+});
 
 test.beforeEach(async ({ target, testWorkspace }) => {
 	if (target.kind !== 'electron' || target.appServerMode !== 'required') return;

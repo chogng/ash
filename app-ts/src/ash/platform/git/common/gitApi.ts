@@ -1,4 +1,5 @@
 import type { ConfigCommandResult, ConfigReadResult, ConfigUpdateParams, GitBranchListResult, GitBranchSwitchParams, GitChangeFileParams, GitChangeFileResult, GitConflictFileParams, GitConflictFileResult, GitCompleteConflictParams, GitCloneParams, GitCloneResult, GitCommitChangesParams, GitCommitChangesResult, GitCommitFileParams, GitCommitFileResult, GitCommitParams, GitCommitResult, GitFetchParams, GitGraphParams, GitGraphResult, GitHistoryResult, GitOperationResult, GitPathsParams, GitRepositoriesResult, GitRepositoryParams, GitStatusResult } from "../../app-server/common/generated/index.js";
+import type { GitCheckIgnoreParams, GitCheckIgnoreResult } from '../../app-server/common/generated/index.js';
 
 export interface IGitApi {
 	clone(params: GitCloneParams): Promise<GitCloneResult>;
@@ -6,6 +7,7 @@ export interface IGitApi {
 	updateConfig(params: ConfigUpdateParams): Promise<ConfigCommandResult>;
 	repositories(): Promise<GitRepositoriesResult>;
 	status(params: GitRepositoryParams): Promise<GitStatusResult>;
+	checkIgnore(params: GitCheckIgnoreParams): Promise<GitCheckIgnoreResult>;
 	history(params: GitRepositoryParams): Promise<GitHistoryResult>;
 	branches(params: GitRepositoryParams): Promise<GitBranchListResult>;
 	switchBranch(params: GitBranchSwitchParams): Promise<GitOperationResult>;

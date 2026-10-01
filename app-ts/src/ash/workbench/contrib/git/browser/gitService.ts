@@ -147,6 +147,34 @@ export class GitService extends Disposable implements IGitService {
 		return toGitStatus(await this.api.status({ repositoryId: repository.id }), repository);
 	}
 
+	async checkIgnore(resources: readonly URI[]): Promise<readonly URI[]> {
+		const groups = new Map<string, Map<string, URI>>();
+		for (const resource of resources) {
+			const repository = this.repositoryForResource(resource);
+			if (!repository) continue;
+			const path = resource.path.slice(repository.root.path.replace(/\/$/u, '').length + 1);
+			if (!path) continue;
+			let paths = groups.get(repository.id);
+			if (!paths) {
+				paths = new Map();
+				groups.set(repository.id, paths);
+			}
+			paths.set(path, resource);
+		}
+		const results = await Promise.all([...groups].map(async ([repositoryId, resourcesByPath]) => {
+			const paths = [...resourcesByPath.keys()];
+			const ignored: URI[] = [];
+			for (let offset = 0; offset < paths.length; offset += 5000) {
+				const result = await this.api.checkIgnore({ repositoryId, paths: paths.slice(offset, offset + 5000) });
+				for (const path of result.ignoredPaths) {
+					ignored.push(resourcesByPath.get(path)!);
+				}
+			}
+			return ignored;
+		}));
+		return results.flat();
+	}
+
 	async history(repositoryId?: string): Promise<readonly GitCommitSummary[]> {
 		const repository = await this.requireRepository(repositoryId);
 		const result = await this.api.history({ repositoryId: repository.id });

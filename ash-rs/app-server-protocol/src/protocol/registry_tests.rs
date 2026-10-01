@@ -130,6 +130,7 @@ fn git_operations_declare_repository_access_and_validate_selectors() {
         "git/pull",
         "git/push",
         "git/stage",
+        "git/checkIgnore",
         "git/worktree/create",
     ] {
         assert_eq!(

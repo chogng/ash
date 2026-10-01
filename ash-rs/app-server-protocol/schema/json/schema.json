@@ -8078,6 +8078,22 @@
         {
           "properties": {
             "method": {
+              "const": "git/checkIgnore",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitCheckIgnoreParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "git/textDiff",
               "type": "string"
             },
@@ -12967,6 +12983,22 @@
             },
             "result": {
               "$ref": "#/$defs/GitStatusResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/checkIgnore",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitCheckIgnoreResult"
             }
           },
           "required": [
@@ -20183,6 +20215,43 @@
         "ignored"
       ],
       "type": "string"
+    },
+    "GitCheckIgnoreParams": {
+      "description": "Bounded paths relative to one authorized repository; directories do not expand recursively.",
+      "properties": {
+        "paths": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5000,
+          "minItems": 1,
+          "type": "array"
+        },
+        "repositoryId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "paths"
+      ],
+      "type": "object"
+    },
+    "GitCheckIgnoreResult": {
+      "properties": {
+        "ignoredPaths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "ignoredPaths"
+      ],
+      "type": "object"
     },
     "GitCloneParams": {
       "description": "Repository URL and host-selected parent directory for a desktop clone.",

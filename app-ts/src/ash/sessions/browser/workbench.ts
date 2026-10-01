@@ -60,8 +60,8 @@ import { BrowserDialogHandler } from '../../workbench/browser/parts/dialogs/dial
 import { DialogHandlerContribution } from '../../workbench/browser/parts/dialogs/dialog.web.contribution.js';
 import { ILabelService, LabelService } from '../../platform/label/common/labelService.js';
 import { IResourceIconRenderer, IResourceLabelService, ResourceLabelService } from '../../workbench/browser/labels.js';
-import { IFileLabelDecorationService } from '../../workbench/services/labels/common/fileLabelDecorationService.js';
-import { FileLabelDecorationService } from '../../workbench/services/labels/browser/fileLabelDecorationService.js';
+import { IDecorationsService } from '../../workbench/services/decorations/common/decorations.js';
+import { DecorationsService } from '../../workbench/services/decorations/browser/decorationsService.js';
 import { ITextFileService, TextFileService } from '../../workbench/services/textfile/common/textFileService.js';
 import { IWorkingCopyService } from '../../workbench/services/workingCopy/common/workingCopyService.js';
 import { BrowserWorkingCopyService } from '../../workbench/services/workingCopy/browser/browserWorkingCopyService.js';
@@ -265,7 +265,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ISystemFileTransferService, files);
 		services.registerInstance(ILabelService, this._register(new LabelService(workspace)));
 		services.registerInstance(IResourceIconRenderer, themeService);
-		services.registerInstance(IFileLabelDecorationService, this._register(new FileLabelDecorationService()));
+		services.registerInstance(IDecorationsService, this._register(services.createInstance(DecorationsService, ownerDocument)));
 		services.registerSingleton(IResourceLabelService, () => services.createInstance(ResourceLabelService));
 		services.registerSingleton(IExplorerService, () => services.createInstance(ExplorerService));
 		services.registerSingleton(IUntitledTextEditorService, () => services.createInstance(BrowserUntitledTextEditorService));

@@ -5,6 +5,7 @@ import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { clamp } from '../../../../base/common/numbers.js';
+import { ScrollbarVisibility } from '../../../../base/common/scrollable.js';
 import { isFullWidthCharacter } from '../../../../base/common/strings.js';
 import { Color } from '../../../../base/common/color.js';
 import { resolveSemanticTokenPresentation } from '../../../common/services/semanticTokensStyling.js';
@@ -118,6 +119,7 @@ export class Minimap extends ViewPart {
 		const geometry = this._context.configuration.options.get(EditorOption.layoutInfo).minimap;
 		const minimap = this._context.configuration.options.get(EditorOption.minimap);
 		const padding = this._context.configuration.options.get(EditorOption.padding);
+		const scrollbar = this._context.configuration.options.get(EditorOption.scrollbar);
 		const visible = minimap.enabled && geometry.renderMinimap !== RenderMinimap.None && geometry.minimapWidth > 0 && context.viewportHeight > 0;
 		this.domNode.style.display = visible ? '' : 'none';
 		this.slider.hidden = !visible;
@@ -127,19 +129,25 @@ export class Minimap extends ViewPart {
 		const lineHeight = Math.max(1, this.source.readLayout().lineHeight);
 		const rows = projection.visualLineCount + (padding.top + padding.bottom) / lineHeight;
 		const pixelRatio = geometry.minimapCanvasInnerHeight / Math.max(1, geometry.minimapCanvasOuterHeight);
-		this.contentHeight = Math.min(context.viewportHeight, Math.max(0, rows * geometry.minimapLineHeight / Math.max(1, pixelRatio)));
+		// The horizontal scrollbar occupies the bottom of the vertical track even
+		// when its auto thumb is faded out. Use that same extent for the document map.
+		const horizontalScrollbarHeight = scrollbar.horizontal === ScrollbarVisibility.Visible || (scrollbar.horizontal === ScrollbarVisibility.Auto && context.scrollWidth > context.viewportWidth)
+			? scrollbar.horizontalScrollbarSize : 0;
+		const trackHeight = Math.max(0, context.viewportHeight - horizontalScrollbarHeight);
+		this.contentHeight = Math.min(trackHeight, Math.max(0, rows * geometry.minimapLineHeight / Math.max(1, pixelRatio)));
 		const scaleY = geometry.minimapIsSampling ? this.contentHeight * pixelRatio / rows : geometry.minimapLineHeight;
 		const viewportRows = context.viewportHeight / lineHeight;
 		this.sliderHeight = Math.min(this.contentHeight, Math.max(8, viewportRows * scaleY / pixelRatio));
 		const scrollRange = Math.max(0, context.scrollHeight - context.viewportHeight);
 		const scrollRatio = scrollRange > 0 ? context.scrollTop / scrollRange : 0;
 		this.sliderTop = scrollRatio * (this.contentHeight - this.sliderHeight);
-		const rasterOffset = scrollRatio * Math.max(0, rows * scaleY - geometry.minimapCanvasInnerHeight);
+		const rasterHeight = this.contentHeight * pixelRatio;
+		const rasterOffset = scrollRatio * Math.max(0, rows * scaleY - rasterHeight);
 		this.domNode.classList.toggle('stanza-editor-minimap-hover-slider', minimap.showSlider === 'mouseover');
 		this.domNode.style.left = `${geometry.minimapLeft}px`;
 		this.domNode.style.top = '0px';
 		this.domNode.style.width = `${geometry.minimapWidth}px`;
-		this.domNode.style.height = `${context.viewportHeight}px`;
+		this.domNode.style.height = `${trackHeight}px`;
 		this.slider.style.top = `${this.sliderTop}px`;
 		this.slider.style.height = `${this.sliderHeight}px`;
 		this.canvas.style.width = `${geometry.minimapCanvasOuterWidth}px`;
@@ -247,7 +255,7 @@ export class Minimap extends ViewPart {
 				// a replacement glyph rather than a dedicated character bitmap.
 				for (let cell = 0; cell < characterColumns && (column + 1) * charWidth <= width; cell++, column++) {
 					const x = column * charWidth;
-					const alpha = Math.round(color.a * 0.55);
+					const alpha = color.a;
 					if (geometry.renderMinimap === RenderMinimap.Text) {
 						renderer.renderChar(image, x, y, charCode, color, alpha, background, 0, renderer.scale, colors.backgroundIsLight(), force1pxHeight);
 					} else {

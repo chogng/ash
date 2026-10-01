@@ -6,7 +6,7 @@ import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";
 import { IResourceIconRenderer } from "../../../../browser/labels.js";
 import { IHoverService } from "../../../../../platform/hover/browser/hoverService.js";
-import { IFileLabelDecorationService } from "../../../../services/labels/common/fileLabelDecorationService.js";
+import { IDecorationsService } from "../../../../services/decorations/common/decorations.js";
 import { ILabelService } from "../../../../../platform/label/common/labelService.js";
 import { ListConfiguration, WorkbenchAsyncDataTree, type ResourceOpenEvent, type TreeExpandMode } from "../../../../../platform/list/browser/listService.js";
 import { IEditorService } from "../../../../services/editor/common/editorService.js";
@@ -74,7 +74,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		@IAccessibleViewService accessibleViewService: IAccessibleViewService,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 		@ICommandService private readonly commandService: ICommandService,
-		@IFileLabelDecorationService fileLabelDecorationService?: IFileLabelDecorationService,
+		@IDecorationsService decorationsService: IDecorationsService,
 		@ILabelService labelService?: ILabelService,
 	) {
 		super(container, options);
@@ -89,7 +89,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			resourceIconRenderer,
 			hoverService,
 			instantiationService,
-			fileLabelDecorationService,
+			decorationsService,
 			labelService,
 		));
 		this.element.classList.add("ash-explorer-view-pane");

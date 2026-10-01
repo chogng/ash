@@ -11,6 +11,28 @@ import { GitService } from "../../browser/gitService.js";
 import { GitConfiguration } from '../../common/gitConfiguration.js';
 import { GitWorkspaceError } from '../../common/gitService.js';
 
+test('GitService queries ignore rules in the nearest repository and preserves resource identities', async () => {
+	const requests: unknown[] = [];
+	const api = {
+		repositories: async () => ({ repositories: [{ id: 'root', label: 'root', path: '' }, { id: 'nested', label: 'nested', path: 'nested' }] }),
+		status: async (params: { repositoryId: string }) => ({ repositoryId: params.repositoryId, streamInstanceId: 'ignore-test', revision: 1, path: '', head: { type: 'unborn', name: 'main' }, changes: [] }),
+		checkIgnore: async (params: { repositoryId: string; paths: string[] }) => {
+			requests.push(params);
+			return { ignoredPaths: params.paths };
+		},
+	} as unknown as IGitApi;
+	const appServerApi = { getConnectionState: async () => 'ready', onConnectionState: () => toDisposable(() => undefined) } as unknown as IAppServerApi;
+	const eventApi = { subscribe: () => toDisposable(() => undefined) } as unknown as IServerEventApi;
+	using workspaceContext = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using configuration = new WorkbenchConfigurationService();
+	using service = new GitService({ api, appServerApi, eventApi, workspaceContext, canCloneRepository: false }, configuration, new NullLoggerService());
+	await service.listRepositories();
+	const rootFile = URI.file('/workspace/file.log');
+	const nestedFile = URI.file('/workspace/nested/file.log');
+	assert.deepEqual(await service.checkIgnore([rootFile, nestedFile, URI.file('/outside/file'), URI.file('/workspace')]), [rootFile, nestedFile]);
+	assert.deepEqual(requests, [{ repositoryId: 'root', paths: ['file.log'] }, { repositoryId: 'nested', paths: ['file.log'] }]);
+});
+
 test('GitService clones from an empty desktop window through the Git API', async () => {
 	const requests: unknown[] = [];
 	const api = {

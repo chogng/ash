@@ -126,6 +126,22 @@ impl GitService {
         &self.projection_root
     }
 
+    pub(crate) fn check_ignore(&self, paths: &[PathBuf]) -> Result<Vec<PathBuf>, GitServiceError> {
+        self.ensure_readable()?;
+        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
+        runtime.block_on(async {
+            let repository = self
+                .client
+                .open_repository(&self.projection_root)
+                .await
+                .map_err(GitServiceError::Git)?;
+            self.client
+                .check_ignore(&repository, paths)
+                .await
+                .map_err(GitServiceError::Git)
+        })
+    }
+
     pub(crate) fn dir(&self) -> &Dir {
         self.authorization.dir()
     }

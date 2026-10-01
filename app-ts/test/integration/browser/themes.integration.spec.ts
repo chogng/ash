@@ -1,5 +1,32 @@
 import { expect, test } from '@playwright/test';
 
+test('resource decorations resolve asynchronously, follow themes and clear after provider removal', async ({ page }) => {
+	await page.goto('/themes.html');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	const label = page.locator('#decorated-label .ash-icon-label');
+	const name = label.locator('.ash-icon-label-text');
+	await page.evaluate(() => window.setLabelDecoration({ color: 'description.foreground', letter: 'I', tooltip: 'Ignored by Git' }));
+	await expect(label).toHaveAttribute('aria-label', 'ignored.log, Ignored by Git');
+	await expect.poll(() => label.evaluate(element => getComputedStyle(element, '::after').content)).toBe('"I"');
+	for (const id of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+		await page.evaluate(id => window.selectColorTheme(id), id);
+		await expect.poll(async () => {
+			return name.evaluate(element => {
+				const reference = document.createElement('span');
+				reference.style.color = 'var(--ash-description-foreground)';
+				element.parentElement!.append(reference);
+				const matches = getComputedStyle(element).color === getComputedStyle(reference).color;
+				reference.remove();
+				return matches;
+			});
+		}).toBe(true);
+	}
+	await page.evaluate(() => window.removeLabelDecorationProvider());
+	await expect(label).not.toHaveAttribute('aria-label', /Ignored/u);
+	await expect.poll(() => label.evaluate(element => getComputedStyle(element, '::after').content)).toBe('none');
+	await expect.poll(() => page.locator('[data-ash-decorations]').textContent()).toBe('');
+});
+
 test('an active workbench theme includes later colors and restores host variables on disposal', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));

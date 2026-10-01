@@ -347,6 +347,20 @@ impl GitClient {
             .await
     }
 
+    pub(crate) async fn run_query_with_stdin<I, S>(
+        &self,
+        cwd: &Path,
+        args: I,
+        input: Vec<u8>,
+    ) -> GitResult<GitCommandOutput>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        self.run(GitInvocation::query(cwd, args, FsmonitorOverride::Disabled).with_stdin(input))
+            .await
+    }
+
     pub(crate) async fn run_mutation_with_stdin<I, S>(
         &self,
         cwd: &Path,

@@ -6,7 +6,7 @@
 > [`docs/sandboxing.md`](../../docs/sandboxing.md) 维护。
 
 `ash-git` 是 Ash 中“如何调用 Git、如何解释 Git 结果”的唯一实现 owner。完整 owner 不等于
-当前已经实现完整 SCM：本阶段提供仓库打开、结构化状态快照、本地 branch、remote、分页 commit
+当前已经实现完整 SCM：本阶段提供仓库打开、结构化状态快照、按路径查询忽略规则、本地 branch、remote、分页 commit
 graph、local/remote-tracking refs、credential-free remote identity、最近 commit、revision file content、HEAD-to-working-tree 文本 Diff/增删行统计、typed
 stage/unstage/discard/commit/fetch/pull/push、local branch switch、worktree inventory、linked worktree mutation、
 不可变 tree/blob 操作和基于 tree 的事务提交；持续监听、状态缓存与 tag mutation 尚未实现。App Server 与 Desktop 已通过 Git SCM 纵向切片消费这些能力，但该 service/protocol/UI
@@ -38,7 +38,7 @@ Git domain owner 下，而不是建立平级的 `ash-git-utils`：
 | `src/client.rs` | Git executable identity、process profile、timeout、bounded capture、non-interactive config，以及流式 query process 生命周期 | `GitClient`、`GitExecutionLimits`、private `GitInvocation`、`GitCommandProfile`、`GitQueryStream`、`read_bounded` |
 | `src/repository.rs` | 从已有 path 打开 working tree，解析 worktree/git/common metadata path | `GitRepository`、`GitRepositoryKind`、`existing_directory` |
 | `src/discovery.rs` | 合并进行中的仓库探测、限制并发，并随最后一个调用方取消工作 | private `Coordinator` |
-| `src/status.rs` | porcelain-v2 snapshot 与 HEAD/change/submodule model | `GitRepositorySnapshot`、`GitHead`、private `parse_status` |
+| `src/status.rs` | porcelain-v2 snapshot、HEAD/change/submodule model 与忽略规则查询 | `GitRepositorySnapshot`、`GitHead`、`GitClient::check_ignore`、private `parse_status` |
 | `src/content.rs` | 有界读取 HEAD 或 index 中一个 repository-relative file | `GitFileRevision`、`GitClient::read_file_at_revision` |
 | `src/text_diff.rs` | 从同一次状态快照构建 repository-wide 或 path-scoped 的有界 UTF-8 HEAD/worktree Diff 与文件级、聚合增删行统计 | `GitTextDiffSnapshot`、`GitTextDiff`、`GitDiffStatistics`、`GitClient::text_diff_snapshot[_under]` |
 | `src/worktree.rs` | 解析 primary/linked/locked/prunable worktree inventory，不决定产品工作区替换 | `GitWorktree`、`GitWorktreeAvailability`、`GitClient::worktrees` |
@@ -89,6 +89,11 @@ GitClient::read_file_at_revision
    └─ git show --no-textconv HEAD:path | :path
       ├─ present bytes
       └─ missing path → None
+
+GitClient::check_ignore
+└─ GitClient::run_query_with_stdin
+   └─ git check-ignore --verbose -z --stdin
+      └─ 解析规则记录，排除反向匹配与已跟踪文件
 
 GitClient::text_diff_snapshot[_under]
 ├─ GitClient::snapshot
@@ -197,6 +202,11 @@ Git revision 或复制统计规则。
 数量。
 
 ## 变更契约
+
+`check_ignore` 接受 repository-relative 路径，通过 NUL 分隔的 stdin 批量查询 Git。
+它遵循 `.gitignore`、repository exclude 和用户全局 exclude 配置，排除反向规则及已跟踪文件。
+没有忽略匹配时 Git 的 exit code 1 表示空结果；其他失败保持 query 的错误语义。
+查询不递归列举忽略目录，也不把忽略文件加入 `snapshot` 的变更列表。
 
 `GitPathspecSet` 在启动 Git 前拒绝空集合、空路径、绝对路径、`.`/`..` component 和 NUL。
 `GitCommitRequest` 拒绝空白 message、NUL 和超过 64 KiB 的内容。`stage`、`unstage` 与

@@ -682,6 +682,10 @@ use crate::protocol::git::GitChangeFileResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitChangeStatusDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCheckIgnoreParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCheckIgnoreResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCloneParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCloneResult;
@@ -3563,6 +3567,11 @@ client_methods! {
         response: GitStatusResult,
         serialization: RepositoryExclusive,
     },
+    GitCheckIgnore => "git/checkIgnore" {
+        params: GitCheckIgnoreParams,
+        response: GitCheckIgnoreResult,
+        serialization: RepositoryExclusive,
+    },
     GitTextDiff => "git/textDiff" {
         params: GitRepositoryParams,
         response: GitTextDiffResult,
@@ -5039,6 +5048,8 @@ typescript_bindings! {
     GitRepositoriesResult,
     GitRepositoryChangeDto,
     GitStatusResult,
+    GitCheckIgnoreParams,
+    GitCheckIgnoreResult,
     GitStatusChanged,
     GitBranchDto,
     GitBranchCreateParams,

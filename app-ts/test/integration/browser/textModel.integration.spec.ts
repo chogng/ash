@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { getAxeResults, injectAxe } from "axe-playwright";
 import { ScrollType, type IEditor } from '../../../src/ash/editor/common/editorCommon.js';
+import { fileURLToPath } from 'node:url';
 
 const pageErrors = new WeakMap<object, string[]>();
 
@@ -164,6 +165,9 @@ for (const theme of ['light', 'dark', 'contrast', 'contrastLight'] as const) {
 			return Array.from(canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data);
 		});
 		await expect.poll(async () => (await readPixels()).some((value, index) => index % 4 === 3 && value > 0)).toBe(true);
+		// Glyph coverage already blends the foreground with the editor background.
+		// A second alpha reduction would wash out the same syntax colors again.
+		expect((await readPixels()).reduce((alpha, value, index) => index % 4 === 3 ? Math.max(alpha, value) : alpha, 0)).toBe(255);
 		const original = await readPixels();
 		const whitespaceIsEmpty = await canvas.evaluate(element => {
 			const canvas = element as HTMLCanvasElement;
@@ -183,6 +187,21 @@ for (const theme of ['light', 'dark', 'contrast', 'contrastLight'] as const) {
 		await expect(page.locator('.minimap')).toHaveAttribute('aria-hidden', 'true');
 	});
 }
+
+test('modern minimap corners apply to main and auxiliary hosts and leave flat hosts square', async ({ page }) => {
+	await openEditor(page);
+	await page.addStyleTag({ path: fileURLToPath(new URL('../../../src/ash/workbench/contrib/modernUI/browser/media/roundedCorners.css', import.meta.url)) });
+	const host = page.locator('body');
+	// This editor fixture has no Workbench theme service; provide its size token.
+	await host.evaluate(element => element.style.setProperty('--ash-corner-radius-small', '4px'));
+	const slider = page.locator('.stanza-editor-minimap-slider');
+	for (const root of ['ash-workbench', 'ash-auxiliary-window-container']) {
+		await host.evaluate((element, root) => element.setAttribute('class', `${root} modern-ui`), root);
+		await expect(slider).toHaveCSS('border-radius', '4px');
+		await host.evaluate(element => element.classList.remove('modern-ui'));
+		await expect(slider).toHaveCSS('border-radius', '0px');
+	}
+});
 
 test('syntax theme updates repaint text and minimap through the existing Worker', async ({ page }) => {
 	await openEditor(page);
@@ -234,6 +253,54 @@ test('proportional minimap preserves glyph height and repaints its document wind
 	await page.evaluate(() => window.ashTextModelIntegration.getControl().setScrollTop(0));
 	await expect.poll(readPixels).toEqual(before);
 });
+
+for (const deviceScaleFactor of [1, 2]) {
+	for (const size of ['proportional', 'fit', 'fill'] as const) {
+		test(`minimap shares scrollbar endpoints with size=${size} at pixel ratio ${deviceScaleFactor}`, async ({ browser }) => {
+			const context = await browser.newContext({ deviceScaleFactor });
+			const page = await context.newPage();
+			try {
+				await openEditor(page);
+				for (const horizontal of ['auto', 'visible', 'hidden'] as const) {
+					for (const longLines of [true, false]) {
+						await page.evaluate(({ size, horizontal, longLines }) => {
+							const editor = window.ashTextModelIntegration.getControl();
+							editor.getModel()!.setLanguage('plaintext');
+							editor.updateOptions({ lineHeight: 20, wordWrap: 'off', smoothScrolling: false, minimap: { enabled: true, size, showSlider: 'always' }, scrollbar: { horizontal, horizontalScrollbarSize: 14 }, padding: { top: 0, bottom: 0 } });
+							editor.setValue(Array.from({ length: 1_200 }, () => longLines ? 'long text '.repeat(100) : 'short').join('\n'));
+							editor.setScrollTop(0);
+						}, { size, horizontal, longLines });
+						const slider = page.locator('.stanza-editor-minimap-slider');
+						const thumb = page.locator('.ash-scrollbar-track-vertical .ash-scrollbar-thumb');
+						await expect.poll(async () => (await slider.boundingBox())!.y - (await thumb.boundingBox())!.y).toBeCloseTo(0, 1);
+						await page.evaluate(() => window.ashTextModelIntegration.getControl().setScrollTop(1_000_000));
+						await expect.poll(async () => {
+							const bar = (await thumb.boundingBox())!;
+							const track = (await page.locator('.ash-scrollbar-track-vertical').boundingBox())!;
+							return bar.y + bar.height - track.y - track.height;
+						}).toBeCloseTo(0, 1);
+						await expect.poll(async () => {
+							const map = (await slider.boundingBox())!;
+							const bar = (await thumb.boundingBox())!;
+							return map.y + map.height - bar.y - bar.height;
+						}).toBeCloseTo(0, 1);
+						// Dragging from the minimap uses the inverse of the same coordinate map.
+						const box = (await slider.boundingBox())!;
+						const root = (await page.locator('.minimap').boundingBox())!;
+						await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+						await page.mouse.down();
+						await page.mouse.move(box.x + box.width / 2, root.y - box.height);
+						await page.mouse.up();
+						await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBe(0);
+					}
+				}
+			} finally {
+				await page.evaluate(() => window.ashTextModelIntegration?.dispose());
+				await context.close();
+			}
+		});
+	}
+}
 
 test('large-file minimap samples one source row per raster row and isolates long text', async ({ page }) => {
 	await openEditor(page);

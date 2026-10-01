@@ -218,6 +218,39 @@ test('minimap reflects equal-length text edits in the workbench', async ({ targe
 	await expect(editor.element.locator('.minimap')).toHaveAttribute('aria-hidden', 'true');
 });
 
+test('minimap slider has modern corners and reaches the scrollbar bottom', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText(Array.from({ length: 1_200 }, () => 'long text '.repeat(100)).join('\n'));
+	const minimap = editor.element.locator('.minimap');
+	const slider = minimap.locator('.stanza-editor-minimap-slider');
+	const thumb = editor.element.locator('.ash-scrollbar-track-vertical .ash-scrollbar-thumb');
+	await expect(workbench.element).toHaveClass(/\bmodern-ui\b/u);
+	await expect(slider).toHaveCSS('border-radius', '4px');
+	await page.keyboard.press('ControlOrMeta+Home');
+	await expect.poll(async () => (await slider.boundingBox())!.y - (await thumb.boundingBox())!.y).toBeCloseTo(0, 1);
+	await page.keyboard.press('ControlOrMeta+End');
+	await expect.poll(() => editor.element.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop > 0 && element.scrollTop === element.scrollHeight - element.clientHeight)).toBe(true);
+	await expect.poll(async () => {
+		const map = (await slider.boundingBox())!;
+		const bar = (await thumb.boundingBox())!;
+		return map.y + map.height - bar.y - bar.height;
+	}).toBeCloseTo(0, 1);
+	await minimap.hover();
+	await expect(slider).toHaveCSS('opacity', '1');
+	const box = (await slider.boundingBox())!;
+	const root = (await minimap.boundingBox())!;
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(box.x + box.width / 2, root.y - box.height);
+	await page.mouse.up();
+	await expect.poll(() => editor.element.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(0);
+	await expect(editor.element.locator('.stanza-editor-input')).toBeFocused();
+});
+
 test('clicking inside editor text places insertion at the clicked character', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;

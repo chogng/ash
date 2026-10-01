@@ -146,6 +146,63 @@ impl GitRepositorySnapshot {
 }
 
 impl GitClient {
+    /// Queries ignore rules for repository-relative paths without listing ignored directory trees.
+    /// Tracked files are excluded by Git, and negated matches are not ignored decorations.
+    pub async fn check_ignore(
+        &self,
+        repository: &GitRepository,
+        paths: &[PathBuf],
+    ) -> GitResult<Vec<PathBuf>> {
+        if paths.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut input = Vec::new();
+        for path in paths {
+            if path.as_os_str().is_empty()
+                || path.as_os_str().as_encoded_bytes().contains(&0)
+                || path.is_absolute()
+                || path
+                    .components()
+                    .any(|component| !matches!(component, std::path::Component::Normal(_)))
+            {
+                return Err(crate::GitError::InvalidConfiguration {
+                    field: "ignore path",
+                    requirement: "must be a non-empty repository-relative path",
+                });
+            }
+            input.extend_from_slice(path.as_os_str().as_encoded_bytes());
+            input.push(0);
+        }
+        let output = self
+            .run_query_with_stdin(
+                repository.worktree_root(),
+                ["check-ignore", "--verbose", "-z", "--stdin"],
+                input,
+            )
+            .await?;
+        if !output.status.success() && output.status.code() != Some(1) {
+            return output.require_success().map(|_| Vec::new());
+        }
+        let mut fields = output.stdout.split(|byte| *byte == 0).collect::<Vec<_>>();
+        if fields.pop() != Some(&[][..]) {
+            return Err(crate::GitError::invalid_output(
+                &output.command,
+                "ignore output was not NUL-terminated",
+            ));
+        }
+        if fields.len() % 4 != 0 {
+            return Err(crate::GitError::invalid_output(
+                &output.command,
+                "ignore record did not contain source, line, pattern, and path",
+            ));
+        }
+        fields
+            .chunks_exact(4)
+            .filter(|record| !record[2].is_empty() && record[2][0] != b'!')
+            .map(|record| path_from_git_bytes(record[3], &output.command))
+            .collect()
+    }
+
     /// Captures HEAD and path state without taking optional Git locks.
     pub async fn snapshot(&self, repository: &GitRepository) -> GitResult<GitRepositorySnapshot> {
         let fsmonitor = detect_fsmonitor_override(self, repository).await;

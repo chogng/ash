@@ -18,6 +18,63 @@ use std::net::Shutdown;
 use std::time::Duration;
 
 #[test]
+fn check_ignore_dispatch_queries_authorized_paths_and_rejects_directory_escape() {
+    use ash_file_access::Dir;
+    use ash_file_access::Grant;
+    use ash_file_access::GrantSource;
+    use ash_file_access::Permission;
+    use ash_file_access::Permissions;
+    let root = tempfile::tempdir().unwrap();
+    let output = std::process::Command::new("git")
+        .args(["init", "--initial-branch=main"])
+        .current_dir(root.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    std::fs::write(root.path().join(".gitignore"), "*.log\n!keep.log\n").unwrap();
+    std::fs::write(root.path().join("ignored.log"), "ignored").unwrap();
+    std::fs::write(root.path().join("keep.log"), "kept").unwrap();
+    let authorization = Grant::for_environment(
+        Dir::open_local(root.path()).unwrap(),
+        GrantSource::HostConfiguration,
+        Permissions::new([Permission::InspectRepository]),
+    )
+    .authorize(Permission::InspectRepository)
+    .unwrap();
+    let server = Arc::new(server().with_git_root(authorization).unwrap());
+    let (mut client, host) = Client::pair();
+    let serving = Arc::clone(&server);
+    let served = thread::spawn(move || {
+        serving.serve_product_host_stream(BufReader::new(host.try_clone().unwrap()), host)
+    });
+    client.initialize();
+    for (id, paths, expected) in [
+        (
+            2,
+            json!(["ignored.log", "keep.log"]),
+            json!({"ignoredPaths":["ignored.log"]}),
+        ),
+        (3, json!(["../outside"]), Value::Null),
+        (4, json!([]), Value::Null),
+    ] {
+        client.send(id, "git/checkIgnore", json!({"paths":paths}));
+        let response = loop {
+            let message = client.read();
+            if message["id"] == id {
+                break message;
+            }
+        };
+        if expected.is_null() {
+            assert_eq!(response["error"]["code"], -32602, "{response}");
+        } else {
+            assert_eq!(response["result"], expected, "{response}");
+        }
+    }
+    client.close();
+    served.join().unwrap().unwrap();
+}
+
+#[test]
 fn repository_admission_preserves_alias_order_without_blocking_other_requests() {
     use ash_file_access::Dir;
     use ash_file_access::Grant;

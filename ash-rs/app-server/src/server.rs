@@ -2675,6 +2675,7 @@ impl AppServer {
                 self.git_clone(connection, &request.params, cancellation)
             }
             Some(ClientMethod::GitStatus) => self.git_status(&request.params),
+            Some(ClientMethod::GitCheckIgnore) => self.git_check_ignore(&request.params),
             Some(ClientMethod::GitTextDiff) => self.git_text_diff(&request.params),
             Some(ClientMethod::GitBranchList) => self.git_branch_list(&request.params),
             Some(ClientMethod::GitHistory) => self.git_history(&request.params),

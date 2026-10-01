@@ -325,6 +325,7 @@ Desktop 当前实现和 Playwright 后续边界见
 | `syntax/analyze` | stateless syntax | 返回同一 revision 的 bounded token/fold/symbol/diagnostic facts |
 | `syntax/selectionRanges` | stateless syntax | 只沿当前 UTF-16 selections 返回 bounded parser ancestor scopes |
 | `git/repositories` | authorized dirs | 列出从已授权 `Dir` 中发现的稳定 repository identity |
+| `git/checkIgnore` | repository | 批量查询 1–5000 个仓库相对路径，返回被忽略的路径；遵循嵌套规则、排除规则与 tracked 状态，不递归列出忽略目录，也不进入待提交列表 |
 | `git/status` | repository | 按可选 `repositoryId` 读取 HEAD、upstream 和 index/worktree change snapshot |
 | `git/textDiff` | repository | 读取 status 及有界 UTF-8 HEAD/worktree text diff projection |
 | `git/graph` | repository | 以 `limit`/`cursor` 读取一页 history、local/remote-tracking refs 和 credential-free remote identity，并返回 `hasMore`/`nextCursor` |

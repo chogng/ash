@@ -378,6 +378,7 @@ test('editor action labels use the selected Chinese language catalog', async () 
 		assert.equal(localize({ bundle: 'ash', key: 'workbench.newFileName' }, 'New File Name'), '新建文件名称');
 		assert.equal(localize({ bundle: 'ash', key: 'files.newFolder' }, 'New Folder...'), '新建文件夹...');
 		assert.equal(localize({ bundle: 'ash', key: 'files.deleteConfirm' }, 'Permanently delete {0}?', 'old.ts'), '永久删除 old.ts？');
+		assert.equal(localize('git.ignored', 'Ignored by Git'), '被 Git 忽略');
 		assert.equal(localize('workbench.explorerDecoratedFile', '{0}, {1}', 'link', localize('workbench.explorerSymbolicLink', 'Symbolic Link')), 'link，符号链接');
 		assert.equal(localize({ bundle: 'ash', key: 'workbench.downloadFile' }, 'Download File...'), '下载文件...');
 	} finally {

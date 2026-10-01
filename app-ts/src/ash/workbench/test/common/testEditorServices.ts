@@ -1,3 +1,4 @@
+import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 import { ContextKeyService, IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
 import { ILanguageService } from '../../../editor/common/languages/language.js';
 import { LanguageService } from '../../../editor/common/services/languageService.js';
@@ -9,8 +10,8 @@ import { IUntitledTextEditorService } from '../../services/untitled/common/untit
 import { BrowserUntitledTextEditorService } from '../../services/untitled/browser/browserUntitledTextEditorService.js';
 import { IWorkingCopyService } from '../../services/workingCopy/common/workingCopyService.js';
 import { BrowserWorkingCopyService } from '../../services/workingCopy/browser/browserWorkingCopyService.js';
-import { IFileLabelDecorationService } from '../../services/labels/common/fileLabelDecorationService.js';
-import { FileLabelDecorationService } from '../../services/labels/browser/fileLabelDecorationService.js';
+import { IDecorationsService } from '../../services/decorations/common/decorations.js';
+import { DecorationsService } from '../../services/decorations/browser/decorationsService.js';
 import { Event } from '../../../base/common/event.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
@@ -33,7 +34,8 @@ export function createTestEditorServices(configuration?: IConfigurationService, 
 	if (!services.has(ILabelService)) services.registerSingleton(ILabelService, () => new LabelService(services.get(IWorkspaceContextService)));
 	if (!services.has(IWorkingCopyService)) services.registerSingleton(IWorkingCopyService, () => new BrowserWorkingCopyService());
 	if (!services.has(IUntitledTextEditorService)) services.registerSingleton(IUntitledTextEditorService, () => services.createInstance(BrowserUntitledTextEditorService));
-	if (!services.has(IFileLabelDecorationService)) services.registerSingleton(IFileLabelDecorationService, () => new FileLabelDecorationService());
+	if (!services.has(ILogService)) services.registerInstance(ILogService, new NullLoggerService());
+	if (!services.has(IDecorationsService)) services.registerSingleton(IDecorationsService, () => services.createInstance(DecorationsService, globalThis.document));
 	if (!services.has(ILanguageService)) services.registerSingleton(ILanguageService, () => new LanguageService());
 	if (!services.has(IFileTextModelService)) services.registerSingleton(IFileTextModelService, () => new BrowserTextModelService({ onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: request.bootstrapText ?? '', revision: undefined }), save: async () => ({ revision: undefined }) }));
 	services.registerSingleton(IResourceLabelService, () => services.createInstance(ResourceLabelService));

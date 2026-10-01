@@ -238,6 +238,17 @@ impl GitRuntime {
         self.status_for(None)
     }
 
+    pub(super) fn check_ignore_for(
+        &self,
+        repository_id: Option<&str>,
+        paths: &[PathBuf],
+    ) -> Result<Vec<PathBuf>, GitRuntimeError> {
+        self.repository(repository_id)?
+            .service
+            .check_ignore(paths)
+            .map_err(GitRuntimeError::Service)
+    }
+
     pub(super) fn local_branches_for(
         &self,
         repository_id: Option<&str>,

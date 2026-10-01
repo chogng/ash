@@ -6,7 +6,7 @@ import type { IConfigurationService } from '../../../../../platform/configuratio
 import type { IHoverService } from '../../../../../platform/hover/browser/hoverService.js';
 import type { ILabelService } from '../../../../../platform/label/common/labelService.js';
 import type { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import type { IFileLabelDecorationService } from '../../../../services/labels/common/fileLabelDecorationService.js';
+import type { IDecorationsService } from '../../../../services/decorations/common/decorations.js';
 import type { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { DEFAULT_LABELS_CONTAINER, ResourceLabels, type IResourceIconRenderer } from '../../../../browser/labels.js';
 import { ExplorerItem } from '../../common/explorerModel.js';
@@ -117,14 +117,14 @@ export class FilesRenderer extends Disposable {
 		resourceIconRenderer: IResourceIconRenderer,
 		private readonly hoverService: IHoverService,
 		private readonly instantiationService: IInstantiationService,
-		fileLabelDecorationService?: IFileLabelDecorationService,
+		decorationsService: IDecorationsService,
 		labelService?: ILabelService,
 	) {
 		super();
 		this.labels = this._register(new ResourceLabels(DEFAULT_LABELS_CONTAINER, {
 			workspaceContextService,
 			resourceIconRenderer,
-			fileLabelDecorationService,
+			decorationsService,
 			labelService,
 		}));
 	}

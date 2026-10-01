@@ -5,6 +5,8 @@ import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../../../base/common/uri.js";
 import { Emitter } from "../../../../../base/common/event.js";
+import { DecorationsService } from '../../../../services/decorations/browser/decorationsService.js';
+import { NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { InMemoryConfigurationService } from "../../../../../platform/configuration/common/inMemoryConfigurationService.js";
 import { FileKind, type IFileService } from "../../../../../platform/files/common/files.js";
 import { WorkspaceContextService } from "../../../../../workbench/services/workspaces/browser/workspaceContextService.js";
@@ -199,6 +201,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 		await waitFor(() => folderOpens === 1);
 		assert.equal(openFolderButton?.disabled, false);
 
+		using decorations = new DecorationsService(browser.window.document, new NullLoggerService());
 		using pane = new ExplorerView(
 			browser.window.document.body,
 			{
@@ -217,6 +220,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 			accessibleViewService,
 			{ showContextMenu: delegate => { contextMenu = delegate as IContextMenuMenuDelegate; } } as IContextMenuService,
 			{ executeCommand: async () => undefined } as unknown as ICommandService,
+			decorations,
 		);
 		browser.window.document.body.append(pane.element);
 		assert.equal(
