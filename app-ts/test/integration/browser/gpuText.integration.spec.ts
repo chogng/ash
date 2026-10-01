@@ -88,6 +88,67 @@ test('GPU caret uses the same text origin as DOM rendering', async ({ page }) =>
 	}).toBeLessThan(2);
 });
 
+test('GPU text clicks retain the rendered insertion position through pointer capture', async ({ page }) => {
+	await page.goto('/gpuText.html');
+	await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
+	const text = await page.evaluate(() => window.ashGpuTextIntegration.initialText.split('\n')[0]!);
+	for (const offset of [text.length, 17]) {
+		const point = await page.evaluate(({ text, offset }) => {
+			const row = document.querySelector<HTMLElement>('.view-line')!;
+			const bounds = row.getBoundingClientRect();
+			return { x: bounds.left + window.ashGpuTextIntegration.measureGpuAdvance(text.slice(0, offset)) - 0.25, y: bounds.top + bounds.height / 2 };
+		}, { text, offset });
+		await page.mouse.move(point.x, point.y);
+		await page.mouse.down();
+		await page.mouse.move(point.x - 0.5, point.y + 0.25);
+		await page.mouse.up();
+		await expect.poll(async () => {
+			const caret = await page.locator('.stanza-editor-caret.primary').boundingBox();
+			return caret ? Math.abs(caret.x - point.x) : Number.POSITIVE_INFINITY;
+		}).toBeLessThan(2);
+		await page.keyboard.insertText('!');
+		await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.getValue().split('\n')[0])).toBe(`${text.slice(0, offset)}!${text.slice(offset)}`);
+		await page.keyboard.press('Backspace');
+		await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.getValue().split('\n')[0])).toBe(text);
+	}
+});
+
+test('GPU dragging keeps the highlight and active caret on the selected glyphs', async ({ page }) => {
+	await page.goto('/gpuText.html');
+	await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
+	const text = await page.evaluate(() => window.ashGpuTextIntegration.initialText.split('\n')[0]!);
+	for (const backward of [false, true]) {
+		const points = await page.evaluate(text => {
+			const row = document.querySelector<HTMLElement>('.view-line')!.getBoundingClientRect();
+			return [4, 17].map(offset => ({ x: row.left + window.ashGpuTextIntegration.measureGpuAdvance(text.slice(0, offset)), y: row.top + row.height / 2, top: row.top, height: row.height }));
+		}, text);
+		const anchor = backward ? 1 : 0;
+		const active = 1 - anchor;
+		await page.mouse.move(points[anchor]!.x - 0.25, points[anchor]!.y);
+		await page.mouse.down();
+		await page.mouse.move(points[active]!.x - 0.25, points[active]!.y, { steps: 8 });
+		await page.mouse.up();
+		await expect(page.locator('.stanza-editor-selection')).toHaveCount(1);
+		await expect.poll(async () => {
+			const selection = await page.locator('.stanza-editor-selection').boundingBox();
+			const caret = await page.locator('.stanza-editor-caret.primary').boundingBox();
+			if (!selection || !caret) return Number.POSITIVE_INFINITY;
+			return Math.max(
+				Math.abs(selection.x - points[0]!.x),
+				Math.abs(selection.width - (points[1]!.x - points[0]!.x)),
+				Math.abs(selection.y - points[0]!.top),
+				Math.abs(selection.height - points[0]!.height),
+				Math.abs(caret.x - points[active]!.x),
+				Math.abs(caret.y - points[active]!.top),
+			);
+		}).toBeLessThan(2);
+		await page.keyboard.insertText('!');
+		await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.getValue().split('\n')[0])).toBe(`${text.slice(0, 4)}!${text.slice(17)}`);
+		await page.keyboard.press('ControlOrMeta+z');
+		await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
+	}
+});
+
 async function expectGpuAdvanceMatchesDom(page: Page): Promise<void> {
 	// Ligatures select the DOM renderer; GPU rows need not retain hidden DOM text.
 	await page.evaluate(() => window.ashGpuTextIntegration.setFontLigatures(true));

@@ -101,7 +101,164 @@ for (const proportional of [false, true]) {
 			await expect(line).toHaveText(text);
 		}
 	});
+
+	test(`selection state, highlight, and active caret agree for pointer and keyboard with proportional=${proportional}`, async ({ page }) => {
+		await openEditor(page);
+		const text = '\tmode switcher > radiogroup 中文🙂';
+		await page.evaluate(({ text, proportional }) => {
+			const editor = window.ashTextModelIntegration.getControl();
+			editor.updateOptions({
+				fontFamily: proportional ? 'Arial' : 'monospace',
+				fontSize: 18,
+				letterSpacing: proportional ? 1 : 0,
+				lineNumbers: 'on',
+				lineNumbersMinChars: 8,
+				glyphMargin: true,
+				wordWrap: 'off',
+				smoothScrolling: false,
+				cursorBlinking: 'solid',
+			});
+			editor.setValue(`${text}\n${'wide '.repeat(100)}`);
+			editor.setScrollLeft(40);
+			if (proportional) {
+				editor.getDomNode().style.transform = 'scale(1.25)';
+				editor.getDomNode().style.transformOrigin = 'top left';
+			}
+		}, { text, proportional });
+		const line = page.locator('.view-lines > .view-line .stanza-editor-line-text').first();
+		await expect(line).toHaveText(text);
+		const points = await line.evaluate(element => [18, 24].map(offset => {
+			const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+			let remaining = offset;
+			for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+				const length = node.textContent!.length;
+				if (remaining <= length) {
+					const range = document.createRange();
+					range.setStart(node, remaining);
+					range.collapse(true);
+					const rect = range.getBoundingClientRect();
+					const row = element.closest('.view-line')!.getBoundingClientRect();
+					return { x: rect.left, y: rect.top + rect.height / 2, top: row.top, height: row.height };
+				}
+				remaining -= length;
+			}
+			throw new Error(`Missing rendered offset ${offset}`);
+		}));
+		for (const gesture of ['forward', 'backward', 'keyboard'] as const) {
+			const anchor = gesture === 'backward' ? 1 : 0;
+			const active = 1 - anchor;
+			await page.mouse.move(points[anchor]!.x - 0.25, points[anchor]!.y);
+			await page.mouse.down();
+			if (gesture !== 'keyboard') {
+				await page.mouse.move(points[active]!.x - 0.25, points[active]!.y, { steps: 8 });
+			}
+			await page.mouse.up();
+			if (gesture === 'keyboard') {
+				for (let i = 0; i < 6; i += 1) {
+					await page.keyboard.press('Shift+ArrowRight');
+				}
+			}
+			await expect.poll(() => page.evaluate(() => {
+				const editor = window.ashTextModelIntegration.getControl();
+				const selection = editor.getSelection()!;
+				return {
+					anchor: { lineNumber: selection.selectionStartLineNumber, column: selection.selectionStartColumn },
+					active: editor.getPosition(),
+					text: editor.getModel()!.getValueInRange(selection),
+				};
+			})).toEqual({ anchor: { lineNumber: 1, column: anchor === 0 ? 19 : 25 }, active: { lineNumber: 1, column: active === 0 ? 19 : 25 }, text: text.slice(18, 24) });
+			await expect(page.locator('.stanza-editor-selection')).toHaveCount(1);
+			await expect.poll(async () => {
+				const selection = await page.locator('.stanza-editor-selection').boundingBox();
+				const caret = await page.locator('.stanza-editor-caret.primary').boundingBox();
+				if (!selection || !caret) return Number.POSITIVE_INFINITY;
+				return Math.max(
+					Math.abs(selection.x - points[0]!.x),
+					Math.abs(selection.width - (points[1]!.x - points[0]!.x)),
+					Math.abs(selection.y - points[0]!.top),
+					Math.abs(selection.height - points[0]!.height),
+					Math.abs(caret.x - points[active]!.x),
+					Math.abs(caret.y - points[active]!.top),
+				);
+			}).toBeLessThan(2);
+			await page.keyboard.insertText('!');
+			await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getModel()!.getLineContent(1))).toBe(`${text.slice(0, 18)}!${text.slice(24)}`);
+			await page.keyboard.press('ControlOrMeta+z');
+			await expect(line).toHaveText(text);
+		}
+	});
 }
+
+test('dragging across wrapped rows selects exact model columns in both directions', async ({ page }) => {
+	await openEditor(page);
+	const text = '0123456789'.repeat(8);
+	await page.evaluate(text => {
+		const editor = window.ashTextModelIntegration.getControl();
+		editor.updateOptions({ fontFamily: 'monospace', fontSize: 16, lineNumbers: 'on', glyphMargin: true, wordWrap: 'wordWrapColumn', wordWrapColumn: 20, cursorBlinking: 'solid' });
+		editor.setValue(text);
+	}, text);
+	await expect.poll(() => page.locator('.view-lines > .view-line').count()).toBeGreaterThan(2);
+	const rows = await page.locator('.view-lines > .view-line').evaluateAll(elements => elements.slice(0, 3).map((row, index) => {
+		const text = row.querySelector('.stanza-editor-line-text')!;
+		const node = text.firstChild!.firstChild!;
+		const length = text.textContent!.length;
+		const start = index === 0 ? 3 : 0;
+		const end = index === 2 ? 7 : length;
+		const range = document.createRange();
+		range.setStart(node, start);
+		range.setEnd(node, end);
+		const selected = range.getBoundingClientRect();
+		const bounds = row.getBoundingClientRect();
+		return { length, x: selected.left, width: selected.width, y: bounds.top, height: bounds.height };
+	}));
+	const endOffset = rows[0]!.length + rows[1]!.length + 7;
+	const points = [
+		{ x: rows[0]!.x - 0.25, y: rows[0]!.y + rows[0]!.height / 2 },
+		{ x: rows[2]!.x + rows[2]!.width - 0.25, y: rows[2]!.y + rows[2]!.height / 2 },
+	];
+	for (const backward of [false, true]) {
+		const anchor = backward ? 1 : 0;
+		const active = 1 - anchor;
+		await page.mouse.move(points[anchor]!.x, points[anchor]!.y);
+		await page.mouse.down();
+		await page.mouse.move(points[active]!.x, points[active]!.y, { steps: 8 });
+		await page.mouse.up();
+		await expect.poll(() => page.evaluate(() => {
+			const editor = window.ashTextModelIntegration.getControl();
+			const selection = editor.getSelection()!;
+			return { anchor: selection.selectionStartColumn, active: editor.getPosition(), text: editor.getModel()!.getValueInRange(selection) };
+		})).toEqual({ anchor: backward ? endOffset + 1 : 4, active: { lineNumber: 1, column: backward ? 4 : endOffset + 1 }, text: text.slice(3, endOffset) });
+		await expect(page.locator('.stanza-editor-selection')).toHaveCount(3);
+		await expect.poll(() => page.locator('.stanza-editor-selection').evaluateAll((elements, rows) => Math.max(...elements.flatMap((element, index) => {
+			const bounds = element.getBoundingClientRect();
+			const expected = rows[index]!;
+			return [Math.abs(bounds.x - expected.x), Math.abs(bounds.y - expected.y), Math.abs(bounds.width - expected.width), Math.abs(bounds.height - expected.height)];
+		})), rows)).toBeLessThan(2);
+		await expect.poll(async () => {
+			const caret = await page.locator('.stanza-editor-caret.primary').boundingBox();
+			return caret ? Math.max(Math.abs(caret.x - points[active]!.x), Math.abs(caret.y - (backward ? rows[0]!.y : rows[2]!.y))) : Number.POSITIVE_INFINITY;
+		}).toBeLessThan(2);
+		await page.keyboard.insertText('!');
+		await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe(`${text.slice(0, 3)}!${text.slice(endOffset)}`);
+		await page.keyboard.press('ControlOrMeta+z');
+		await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe(text);
+	}
+	await page.evaluate(() => {
+		const editor = window.ashTextModelIntegration.getControl();
+		editor.setValue('0123456789'.repeat(100));
+		editor.setPosition({ lineNumber: 1, column: 1 });
+		editor.setScrollTop(0);
+	});
+	await page.locator('.stanza-editor-input').focus();
+	await page.keyboard.press('ControlOrMeta+End');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getPosition())).toEqual({ lineNumber: 1, column: 1001 });
+	await expect.poll(() => page.evaluate(() => {
+		const editor = window.ashTextModelIntegration.getControl();
+		const bounds = editor.getDomNode().getBoundingClientRect();
+		const caret = editor.getDomNode().querySelector('.stanza-editor-caret.primary')!.getBoundingClientRect();
+		return editor.getScrollTop() > 0 && caret.top >= bounds.top && caret.bottom <= bounds.bottom;
+	})).toBe(true);
+});
 
 test('common editor navigation uses wrapped and folded coordinates and retains keyboard focus', async ({ page }) => {
 	await openEditor(page);

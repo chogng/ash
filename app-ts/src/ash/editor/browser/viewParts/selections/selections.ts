@@ -80,7 +80,8 @@ function projectStanzaSelectionOverlays(context: RenderingContext, model: TextMo
 	}
 	for (const [selectionIndex, ranges] of domSelections) {
 		for (const line of ranges) {
-			for (const range of line.ranges) appendSelection(rows, selectionIndex, line.lineNumber - 1, range.left, range.width);
+			// Rendered ranges start at the text row; overlays are mounted beside the gutter.
+			for (const range of line.ranges) appendSelection(rows, selectionIndex, line.lineNumber - 1, textLeft + range.left, range.width);
 		}
 	}
 }

@@ -169,16 +169,13 @@ export class ViewLines extends ViewPart implements IViewLines {
 	public override onRevealRangeRequest(event: ViewRevealRangeRequestEvent): boolean {
 		const range = revealRange(event);
 		if (!range) return false;
-		this.model.offsetAt(range.getStartPosition());
-		this.model.offsetAt(range.getEndPosition());
 		const projection = this.readVisualProjection();
 		if (projection.modelVersion !== this.model.version) return false;
-		const startLineNumber = projection.visualLineIndexAt(range.getStartPosition()) + 1;
-		const endLineNumber = projection.visualLineIndexAt(range.getEndPosition()) + 1;
+		// Cursor and ViewModel reveal requests already use view coordinates, including wrapping and folding.
 		const layout = this._context.viewLayout;
 		const viewport = layout.getFutureViewport();
-		const boxTop = layout.getVerticalOffsetForLineNumber(startLineNumber);
-		const boxBottom = layout.getVerticalOffsetAfterLineNumber(endLineNumber);
+		const boxTop = layout.getVerticalOffsetForLineNumber(range.startLineNumber);
+		const boxBottom = layout.getVerticalOffsetAfterLineNumber(range.endLineNumber);
 		const viewportBottom = viewport.top + viewport.height;
 		const outside = boxTop < viewport.top || boxBottom > viewportBottom;
 		let scrollTop = viewport.top;
@@ -431,13 +428,12 @@ export class ViewLines extends ViewPart implements IViewLines {
 	private applyHorizontalReveal(viewportData: ViewportData): void {
 		const request = this.horizontalRevealRequest;
 		if (!request) return;
-		const projection = this.readVisualProjection();
-		const visualLineNumber = projection.visualLineIndexAt(request.range.getStartPosition()) + 1;
+		const visualLineNumber = request.range.startLineNumber;
 		if (visualLineNumber < viewportData.startLineNumber || visualLineNumber > viewportData.endLineNumber) return;
 		const ranges = this._visibleRangesForLineRange(
 			visualLineNumber,
-			request.range.startColumn - projection.lineAt(visualLineNumber - 1)!.startColumn,
-			request.range.endColumn - projection.lineAt(visualLineNumber - 1)!.startColumn,
+			request.range.startColumn,
+			request.range.endColumn,
 		);
 		if (!ranges || ranges.ranges.length === 0) return;
 		this.horizontalRevealRequest = undefined;

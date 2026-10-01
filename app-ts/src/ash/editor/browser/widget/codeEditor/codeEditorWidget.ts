@@ -760,8 +760,8 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 
 	private revealModelRange(range: IRange, verticalType: VerticalRevealType, scrollType = ScrollType.Smooth, revealHorizontal = true): void {
 		if (!this.currentModel) return;
-		// ViewModel converts model coordinates through wrapping and hidden lines exactly once.
-		this.viewModel.revealRange('api', revealHorizontal, this.currentModel.validateRange(range), verticalType, scrollType);
+		const viewRange = this.viewModel.coordinatesConverter.convertModelRangeToViewRange(this.currentModel.validateRange(range));
+		this.viewModel.revealRange('api', revealHorizontal, viewRange, verticalType, scrollType);
 	}
 
 	saveViewState(): CodeEditorViewState | null {

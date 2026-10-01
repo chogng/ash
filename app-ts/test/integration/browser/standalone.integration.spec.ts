@@ -3299,17 +3299,20 @@ test('pointer drag extends one editor selection and stops on release', async ({ 
 	expect((await page.evaluate(() => window.ashStandaloneIntegration.switchOwnedToCaller())).currentModelIsCaller).toBe(true);
 	await page.evaluate(() => window.ashStandaloneIntegration.preparePointerSelection());
 	const before = await page.evaluate(() => window.ashStandaloneIntegration.readPointerSelection());
-	const lines = await page.evaluate(() => [...document.querySelectorAll('#caller .view-line > span > span')].map(span => {
+	const lines = await page.evaluate(() => [...document.querySelectorAll('#caller .view-line > span > span')].map((span, index) => {
 		const box = span.getBoundingClientRect();
-		return { text: span.textContent, x: box.x, y: box.y, width: box.width, height: box.height };
+		const range = document.createRange();
+		range.setStart(span.firstChild!, index === 0 ? 3 : 8);
+		range.collapse(true);
+		return { text: span.textContent, x: range.getBoundingClientRect().left - 0.25, y: box.y + box.height / 2 };
 	}));
 	expect(lines.map(line => line.text)).toEqual(['alpha beta', 'second line']);
-	await page.mouse.move(lines[0]!.x + lines[0]!.width * 0.3, lines[0]!.y + lines[0]!.height / 2);
+	await page.mouse.move(lines[0]!.x, lines[0]!.y);
 	await page.mouse.down();
-	await page.mouse.move(lines[1]!.x + lines[1]!.width * 0.7, lines[1]!.y + lines[1]!.height / 2, { steps: 5 });
+	await page.mouse.move(lines[1]!.x, lines[1]!.y, { steps: 5 });
 	await page.mouse.up();
 	const selected = await page.evaluate(() => window.ashStandaloneIntegration.readPointerSelection());
-	expect(selected.selection).toMatch(/^\[1,\d+ -> 2,\d+\]$/u);
+	expect(selected.selection).toBe('[1,4 -> 2,9]');
 	expect({ value: selected.value, version: selected.version, ownedSelection: selected.ownedSelection, focused: selected.focused, mouseUpEvents: selected.mouseUpEvents }).toEqual({
 		value: before.value,
 		version: before.version,
@@ -3317,7 +3320,7 @@ test('pointer drag extends one editor selection and stops on release', async ({ 
 		focused: true,
 		mouseUpEvents: 1,
 	});
-	await page.mouse.move(lines[0]!.x + lines[0]!.width * 0.8, lines[0]!.y + lines[0]!.height / 2);
+	await page.mouse.move(lines[0]!.x, lines[0]!.y);
 	const released = await page.evaluate(() => window.ashStandaloneIntegration.readPointerSelection());
 	expect({ selection: released.selection, mouseUpEvents: released.mouseUpEvents }).toEqual({ selection: selected.selection, mouseUpEvents: 1 });
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
@@ -4140,6 +4143,10 @@ test('wrapped cursor and gutter markers stay on their model lines through naviga
 	expect(wrapped.caretTop).toBe(wrapped.lastTop);
 
 	await page.evaluate(() => window.ashStandaloneIntegration.moveGutterCaret(2, 1));
+	await expect.poll(async () => {
+		const geometry = await readGeometry();
+		return geometry.caretTop - geometry.secondTop;
+	}).toBe(0);
 	const moved = await readGeometry();
 	expect(moved.caretTop).toBe(moved.secondTop);
 	expect(moved.glyphTops).toEqual([moved.firstTop]);
@@ -4149,6 +4156,10 @@ test('wrapped cursor and gutter markers stay on their model lines through naviga
 
 	const editedVersion = await page.evaluate(() => window.ashStandaloneIntegration.shortenGutterLine());
 	expect(editedVersion).toBe(initial.version + 1);
+	await expect.poll(async () => {
+		const geometry = await readGeometry();
+		return geometry.caretTop - geometry.secondTop;
+	}).toBe(0);
 	const shortened = await readGeometry();
 	expect(shortened.secondTop).toBeLessThan(moved.secondTop);
 	expect(shortened.caretTop).toBe(shortened.secondTop);
