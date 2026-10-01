@@ -1,4 +1,56 @@
 import { expect, test } from '../../../automation/test.js';
+import type { ElectronApplication } from '@playwright/test';
+
+test('multiline text input is restored by one undo in the editor', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText('one\ntwo\nthree');
+	await editor.waitForEditorContents(contents => contents === 'one\ntwo\nthree');
+	await editor.input.press('ControlOrMeta+z');
+	await expect(editor.lines).toHaveText(['']);
+	await editor.input.press('ControlOrMeta+Shift+z');
+	await expect(editor.lines).toHaveText(['one', 'two', 'three']);
+	await expect(editor.input).toBeFocused();
+});
+
+test('multiline paste undo and redo preserve the final editor line', async ({ target, workbench, application }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	const original = 'alpha\nbravo\nlast';
+	await page.keyboard.insertText(original);
+	await editor.waitForEditorContents(contents => contents === original);
+	for (const replace of [false, true]) {
+		await editor.input.press('ControlOrMeta+Home');
+		if (replace) {
+			await editor.input.press('ControlOrMeta+A');
+		}
+		if (target.kind === 'electron') {
+			await (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.writeText('one\ntwo\nthree'));
+			await editor.input.press('ControlOrMeta+v');
+		} else {
+			await editor.input.evaluate(element => {
+				const clipboardData = new DataTransfer();
+				clipboardData.setData('text/plain', 'one\ntwo\nthree');
+				element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+			});
+		}
+		const pasted = replace ? 'one\ntwo\nthree' : `one\ntwo\nthree${original}`;
+		await editor.waitForEditorContents(contents => contents === pasted);
+		await editor.input.press('ControlOrMeta+z');
+		await editor.waitForEditorContents(contents => contents === original);
+		await editor.input.press('ControlOrMeta+Shift+z');
+		await editor.waitForEditorContents(contents => contents === pasted);
+		await editor.input.press('ControlOrMeta+z');
+		await editor.waitForEditorContents(contents => contents === original);
+		await expect(editor.input).toBeFocused();
+	}
+});
 
 test('minimap reflects equal-length text edits in the workbench', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');

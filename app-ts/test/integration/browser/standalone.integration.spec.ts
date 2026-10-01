@@ -3377,6 +3377,36 @@ test('Alt-click toggles editor-local cursors and one typing transaction edits bo
 });
 
 for (const inputKind of ['EditContext', 'textarea'] as const) {
+	for (const original of ['', 'prefix\nlast']) {
+		for (const text of ['one\ntwo\nthree', '    one\n  two\nthree\n']) {
+			test(`${inputKind} multiline input replaces ${original ? 'existing text' : 'empty text'} with one undo step${text.endsWith('\n') ? ' including a final newline' : ''}`, async ({ page }) => {
+				if (inputKind === 'textarea') {
+					await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+				}
+				await page.goto('/standalone.html');
+				const initial = await page.evaluate(original => window.ashStandaloneIntegration.prepareClipboard(original), original);
+				const input = page.locator('#caller .stanza-editor-input');
+				await input.focus();
+				await input.press('ControlOrMeta+A');
+				const before = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+				await page.keyboard.insertText(text);
+				const inserted = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+				expect({ value: inserted.value, version: inserted.version }).toEqual({ value: text, version: initial.version + 1 });
+				await page.keyboard.insertText('!');
+				await input.press('ControlOrMeta+z');
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).value).toBe(text);
+				await input.press('ControlOrMeta+z');
+				const undone = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+				expect({ value: undone.value, selection: undone.selection }).toEqual({ value: original, selection: before.selection });
+				await input.press('ControlOrMeta+Shift+z');
+				const redone = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+				expect({ value: redone.value, selection: redone.selection, focused: redone.focused }).toEqual({ value: text, selection: inserted.selection, focused: true });
+				await expect(page.locator('#caller .stanza-editor-line-text')).toHaveText(text.split('\n'));
+				await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+			});
+		}
+	}
+
 	test(`${inputKind} commits one Enter edit and restores its selection on undo`, async ({ page }) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.stack ?? error.message));

@@ -373,6 +373,11 @@ export class ViewController extends Disposable {
 
 	private executeType(selections: readonly Selection[], text: string, inputType: string): TextModelChange | undefined {
 		this.viewModel.setSelections(inputType, selections);
+		// A multiline input event is one transfer; typing it character by character
+		// would apply Enter rules and split its undo history at each line break.
+		if (text.length > 1 && /[\r\n]/u.test(text)) {
+			return this.runViewModelEdit(inputType, text, () => this.viewModel.paste(text, false, null, 'keyboard'));
+		}
 		return this.runViewModelEdit(inputType, text, () => this.viewModel.type(text, 'keyboard'));
 	}
 
