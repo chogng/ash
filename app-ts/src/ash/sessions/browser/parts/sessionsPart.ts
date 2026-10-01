@@ -75,7 +75,7 @@ export class SessionsPart extends WorkbenchPart {
 			const container = h(ownerDocument, 'div', { className: 'ash-sessions-contributed-page' });
 			container.dataset.sessionsPage = id;
 			container.hidden = true;
-			const view = this._register(services.createInstance(descriptor, ownerDocument));
+			const view = this._register(services.createInstance(descriptor, container));
 			container.append(view.domNode);
 			this.contentDomNode.append(container);
 			this.contributedPages.set(id, { container, view });

@@ -34,12 +34,13 @@ export class DesignCanvasView extends Disposable implements ISessionsPageView {
 	private readonly world: HTMLElement;
 
 	constructor(
-		ownerDocument: Document,
+		container: HTMLElement,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IConfigurationService configurationService: IConfigurationService,
 		@IThemeService private readonly themeService: IThemeService,
 	) {
 		super();
+		const ownerDocument = container.ownerDocument;
 		this.domNode = h(ownerDocument, 'section', {
 			className: 'ash-sessions-design-view',
 			attributes: { role: 'region', 'aria-label': localize('sessions.design.canvas', 'Design canvas'), tabindex: '0' },

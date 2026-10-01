@@ -2,6 +2,7 @@ import { mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ElectronApplication, Page } from "@playwright/test";
 import { expect, test } from "../../../automation/test.js";
+import { hasWorkingCopyBackup } from "../../../automation/workingCopyBackups.js";
 
 test('large YAML lockfiles highlight text and minimap without editor interaction', async ({ target, testWorkspace, workbench }, testInfo) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Bundled language grammars require the Code App Server product.');
@@ -1244,6 +1245,8 @@ test("Code restores an untitled draft and opens the next document separately", a
 
 	const page = workbench.page;
 	const group = workbench.editors.groupAt(0);
+	expect(await hasWorkingCopyBackup(page, "recovered untitled draft")).toBe(false);
+	expect(await page.evaluate(async () => (await indexedDB.databases()).some(database => database.name === "ash-working-copy-backups"))).toBe(false);
 	await page.keyboard.press("ControlOrMeta+N");
 	const input = group.content.locator(".stanza-editor-input");
 	await expect(input).toBeVisible();
@@ -1263,27 +1266,6 @@ test("Code restores an untitled draft and opens the next document separately", a
 	await restoredTab.click();
 	await expect(group.content.locator(".stanza-editor-line-text").first()).toContainText("recovered untitled draft");
 });
-
-async function hasWorkingCopyBackup(page: Page, content: string): Promise<boolean> {
-	return page.evaluate(async expectedContent => {
-		const database = await new Promise<IDBDatabase>((resolve, reject) => {
-			const opening = indexedDB.open("ash-working-copy-backups", 1);
-			opening.onsuccess = () => resolve(opening.result);
-			opening.onerror = () => reject(opening.error ?? new Error("Could not inspect working-copy backups"));
-		});
-		try {
-			const records = await new Promise<Array<{ readonly content?: string }>>((resolve, reject) => {
-				const request = database.transaction("backups", "readonly").objectStore("backups").getAll();
-				request.onsuccess = () => resolve(request.result);
-				request.onerror = () => reject(request.error ?? new Error("Could not read working-copy backups"));
-			});
-			return records.some(record => record.content === expectedContent);
-		} finally {
-			database.close();
-		}
-	}, content);
-}
-
 
 test('Code editor scrollbar follows wheel, keyboard and thumb dragging in the desktop window', async ({ target, testWorkspace, workbench }) => {
 	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires a Code workspace');

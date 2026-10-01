@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
+import { h } from '../../../base/browser/dom.js';
 import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../platform/configuration/common/configuration.js';
@@ -41,7 +42,7 @@ suiteTeardown(() => {
 interface ProjectedTransform { panX: number; panY: number; scale: number; }
 
 function createView(): InstanceType<typeof DesignCanvasView> {
-	const view = services.createInstance(DesignCanvasView, browser.window.document);
+	const view = services.createInstance(DesignCanvasView, browser.window.document.body);
 	browser.window.document.body.append(view.domNode);
 	return view;
 }
@@ -56,6 +57,22 @@ function dispatchWheel(view: InstanceType<typeof DesignCanvasView>, init: WheelE
 	view.domNode.querySelector<HTMLElement>('.ash-sessions-design-viewport')!
 		.dispatchEvent(new browser.window.WheelEvent('wheel', { cancelable: true, ...init }));
 }
+
+test('Design canvas derives its document and focus from the host in another window', () => {
+	const otherWindow = new JSDOM('<!doctype html><body></body>', { url: 'https://other.ash.test' });
+	try {
+		const container = h(otherWindow.window.document, 'div');
+		otherWindow.window.document.body.append(container);
+		using view = services.createInstance(DesignCanvasView, container);
+		container.append(view.domNode);
+		assert.equal(view.domNode.ownerDocument, container.ownerDocument);
+		assert.notEqual(view.domNode.ownerDocument, document);
+		view.focus();
+		assert.equal(container.ownerDocument.activeElement, view.domNode);
+	} finally {
+		otherWindow.window.close();
+	}
+});
 
 test('Design cursor follows configuration and theme changes and releases its subscriptions', async () => {
 	const view = createView();

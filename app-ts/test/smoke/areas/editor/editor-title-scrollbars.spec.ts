@@ -7,6 +7,10 @@ test('editor title scrollbars preserve overflow, focus and clipping through size
 	const page = workbench.page;
 	for (let i = 0; i < 9; i++) await page.keyboard.press('ControlOrMeta+N');
 	const group = workbench.editors.groupAt(0);
+	// New commands are queued; capture identity only after the final editor has opened and focused.
+	await expect(group.tabs).toHaveCount(9);
+	await expect(group.element.getByRole('tab', { name: 'Untitled-9', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await expect(group.content.getByRole('textbox', { name: 'Untitled-9', exact: true })).toBeFocused();
 	const tabs = group.title.locator('.ash-ordinary-editor-tabs-row .ash-tab-list');
 	const breadcrumbs = group.title.locator('.ash-breadcrumbs-widget');
 	await tabs.evaluate(element => { (element as HTMLElement).style.width = '220px'; });
