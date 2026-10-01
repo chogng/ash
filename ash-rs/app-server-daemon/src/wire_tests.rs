@@ -7,9 +7,10 @@ use crate::SshConnectionOptions;
 
 #[test]
 fn execution_scope_requires_a_versioned_host_grant_and_identity() {
+    let profile = tempfile::tempdir().unwrap();
     let options = ConnectionOptions::new(
-        "/profile",
-        Some("/remote".into()),
+        profile.path(),
+        Some(profile.path().join("workspace")),
         GrantSource::HostConfiguration,
         None,
     )

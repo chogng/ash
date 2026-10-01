@@ -752,8 +752,10 @@ export class AshApplication extends Disposable {
 			auxiliaryWindows.set(child.id, this.windowsMainService.registerAuxiliaryWindow(child));
 			child.once('closed', () => auxiliaryWindows.deleteAndDispose(child.id));
 		};
-		window.webContents.on('did-create-window', onDidCreateWindow);
-		windowDisposables.add(toDisposable(() => window.webContents.off('did-create-window', onDidCreateWindow)));
+		// BrowserWindow releases its webContents getter on close; cleanup owns the original emitter.
+		const webContents = window.webContents;
+		webContents.on('did-create-window', onDidCreateWindow);
+		windowDisposables.add(toDisposable(() => webContents.off('did-create-window', onDidCreateWindow)));
 		const workspaceHost = windowDisposables.add(new RendererWorkspaceHost(window.webContents));
 		windowDisposables.add(record.windowStateTracking);
 		const remoteTunnelService = new SshRemoteTunnelService({

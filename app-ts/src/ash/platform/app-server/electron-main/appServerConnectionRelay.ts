@@ -1,9 +1,12 @@
 import { AppServerProtocolIncompatibleError } from '../common/appServerProtocolCompatibility.js';
 import { MessageChannelMain } from 'electron/main';
 import type { WebContents } from 'electron/main';
-import { Disposable, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
+import { createCancelablePromise, disposableTimeout, TaskQueue, type CancelablePromise } from '../../../base/common/async.js';
+import type { CancellationToken } from '../../../base/common/cancellation.js';
+import { CancellationError } from '../../../base/common/errors.js';
 import { isRecord } from '../../../base/common/types.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import type { AppServerConnectionState } from '../common/appServerApi.js';
@@ -22,10 +25,15 @@ export class AppServerConnectionRelay extends Disposable {
 	private renderer: WebContents | undefined;
 	private diagnostic = '';
 	private nonce: string | undefined;
+	private readonly connectionOperations = new TaskQueue();
+	private pendingAcquisitions = 0;
+	private navigationGeneration = 0;
+	private startPromise: CancelablePromise<void> | undefined;
 
 	constructor(options: { readonly enabled: false } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher }) {
 		super();
 		this.connectionOptions = options;
+		this._register(toDisposable(() => this.startPromise?.cancel()));
 	}
 
 	public get options(): { readonly enabled: false } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher } { return this.connectionOptions; }
@@ -35,31 +43,68 @@ export class AppServerConnectionRelay extends Disposable {
 		this.connectionOptions = { enabled: true, processLauncher };
 	}
 
-	public async start(): Promise<void> {
+	/** Concurrent restart callers share the same preparation and renderer handshake. */
+	public start(): Promise<void> {
 		this.assertNotDisposed();
 		if (!this.options.enabled) { throw new Error('App Server is disabled'); }
-		await this.options.processLauncher.validate();
-		if (this.transport.value) { await this.stop(); }
-		// Development validation can wait for a shared restart while this window closes.
-		this.assertNotDisposed();
-		this.transport.value = new ChildProcessJsonlTransport(this.options.processLauncher.launch());
-		this.setState('starting');
-		if (this.renderer && !this.renderer.isDestroyed()) {
-			const ready = new Promise<void>((resolve, reject) => {
-				const timer = setTimeout(() => { listener.dispose(); reject(new Error('Renderer initialization timed out')); }, 15_000);
-				const listener = this.onStateChange(state => {
-					if (state !== 'ready' && state !== 'crashed') { return; }
-					clearTimeout(timer);
-					listener.dispose();
-					if (state === 'ready') { resolve(); } else { reject(new Error(this.diagnostics())); }
-				});
-			});
-			this.renderer.send('ash:app-server:restart');
-			await ready;
-		}
+		if (this.startPromise) { return this.startPromise; }
+		const operation = createCancelablePromise(token => this.startConnection(token));
+		this.startPromise = operation;
+		const settled = (): void => { if (this.startPromise === operation) { this.startPromise = undefined; } };
+		void operation.then(settled, settled);
+		return operation;
 	}
 
-	public async stop(): Promise<void> {
+	private async startConnection(token: CancellationToken): Promise<void> {
+		using resources = new DisposableStore();
+		if (!this.options.enabled) { throw new Error('App Server is disabled'); }
+		const navigationGeneration = this.navigationGeneration;
+		const previousTransport = this.transport.value;
+		// The profile reloader releases validation only after stopping its relays.
+		// Waiting for that barrier inside the connection queue would block its stop.
+		await this.options.processLauncher.validate();
+		let ready: Promise<void> | undefined;
+		await this.connectionOperations.schedule(async () => {
+			this.assertNotDisposed();
+			if (token.isCancellationRequested) { throw new CancellationError(); }
+			if (!this.options.enabled) { throw new Error('App Server is disabled'); }
+			if (previousTransport && this.transport.value === previousTransport) { await this.stopConnection(); }
+			// Validation and carrier shutdown can outlive the window that requested the restart.
+			this.assertNotDisposed();
+			if (token.isCancellationRequested) { throw new CancellationError(); }
+			// An acquisition or another start may already own the new connection generation.
+			if (!this.transport.value) {
+				this.transport.value = new ChildProcessJsonlTransport(this.options.processLauncher.launch());
+				this.setState('starting');
+			}
+			if (this.state === 'ready') { return; }
+			if (!this.renderer || this.renderer.isDestroyed()) { return; }
+			ready = new Promise<void>((resolve, reject) => {
+				resources.add(disposableTimeout(() => reject(new Error('Renderer initialization timed out')), 15_000));
+				resources.add(token.onCancellationRequested(() => reject(new CancellationError())));
+				resources.add(this.onStateChange(state => {
+					if (state !== 'ready' && state !== 'crashed') { return; }
+					if (state === 'ready') { resolve(); } else { reject(new Error(this.diagnostics())); }
+				}));
+			});
+			// A new document already acquires its own port. Restarting its initial client
+			// would interrupt that initialization; only wake the document we stopped.
+			if (this.nonce === undefined && this.navigationGeneration === navigationGeneration && this.pendingAcquisitions === 0) {
+				this.renderer.send('ash:app-server:restart');
+			}
+		});
+		// Port acquisition must enter the same queue while we await renderer initialization.
+		await ready;
+	}
+
+	public stop(): Promise<void> {
+		// Stop ends this restart's lifetime, including validation that has not returned yet.
+		this.startPromise?.cancel();
+		this.startPromise = undefined;
+		return this.connectionOperations.schedule(() => this.stopConnection());
+	}
+
+	private async stopConnection(): Promise<void> {
 		this.setState('stopping');
 		const transport = this.transport.value;
 		this.generation++;
@@ -77,7 +122,11 @@ export class AppServerConnectionRelay extends Disposable {
 		const reset = (): void => { void this.stop(); };
 		renderer.on('render-process-gone', reset);
 		// Initial navigation must keep the connection started before the window loaded.
-		const navigating = (_event: unknown, _url: string, inPlace: boolean, mainFrame: boolean): void => { if (mainFrame && !inPlace && this.nonce !== undefined) { reset(); } };
+		const navigating = (_event: unknown, _url: string, inPlace: boolean, mainFrame: boolean): void => {
+			if (!mainFrame || inPlace) { return; }
+			this.navigationGeneration++;
+			if (this.nonce !== undefined) { reset(); }
+		};
 		renderer.on('did-start-navigation', navigating);
 		this._register(toDisposable(() => renderer.removeListener('render-process-gone', reset)));
 		this._register(toDisposable(() => renderer.removeListener('did-start-navigation', navigating)));
@@ -88,17 +137,31 @@ export class AppServerConnectionRelay extends Disposable {
 				return value.nonce;
 			},
 			invoke: async nonce => {
-				const launcher = processLauncher();
-				if (!launcher) { return { enabled: false }; }
-				if (this.nonce !== undefined) { await this.stop(); }
-				let transport = this.transport.value;
-				if (!transport) {
+				const navigationGeneration = this.navigationGeneration;
+				this.pendingAcquisitions++;
+				try {
+					this.assertNotDisposed();
+					const launcher = processLauncher();
+					if (!launcher) { return { enabled: false }; }
 					await launcher.validate();
-					transport = new ChildProcessJsonlTransport(launcher.launch());
-					this.transport.value = transport;
+					return await this.connectionOperations.schedule(async () => {
+						this.assertNotDisposed();
+						// A delayed request from a replaced document must not detach its successor.
+						if (this.navigationGeneration !== navigationGeneration || processLauncher() !== launcher) { throw new CancellationError(); }
+						if (this.nonce !== undefined) { await this.stopConnection(); }
+						this.assertNotDisposed();
+						if (this.navigationGeneration !== navigationGeneration || processLauncher() !== launcher) { throw new CancellationError(); }
+						let transport = this.transport.value;
+						if (!transport) {
+							transport = new ChildProcessJsonlTransport(launcher.launch());
+							this.transport.value = transport;
+						}
+						this.attach(renderer, nonce as string, transport);
+						return { enabled: true, protocolVersion: 1, ...metadata() };
+					});
+				} finally {
+					this.pendingAcquisitions--;
 				}
-				this.attach(renderer, nonce as string, transport);
-				return { enabled: true, protocolVersion: 1, ...metadata() };
 			},
 		}, {
 			channel: 'ash:app-server:recover-runtime', validate: value => {
@@ -113,11 +176,15 @@ export class AppServerConnectionRelay extends Disposable {
 			}, invoke: value => processLauncher()?.recoverInitializationFailure?.(value) ?? false,
 		}, {
 			channel: 'ash:app-server:initialized', validate: value => value,
-			invoke: async value => {
+			invoke: value => this.connectionOperations.schedule(async () => {
+				this.assertNotDisposed();
 				if (!isRecord(value) || value.nonce !== this.nonce || this.nonce === undefined) { throw new Error('Connection initialization superseded'); }
+				const transport = this.transport.value;
 				await processLauncher()?.didInitialize?.();
+				this.assertNotDisposed();
+				if (value.nonce !== this.nonce || this.transport.value !== transport) { throw new CancellationError(); }
 				this.setState('ready');
-			},
+			}),
 		}];
 	}
 
@@ -133,12 +200,19 @@ export class AppServerConnectionRelay extends Disposable {
 		const close = (): void => {
 			if (closed) { return; }
 			closed = true;
-			this.nonce = undefined;
-			this.diagnostic = transport.diagnostics();
 			frames.dispose();
 			ended.dispose();
 			const intentional = this.state === 'stopping' || this.isDisposed;
-			if (!intentional) { this.setState('crashed'); }
+			// Delayed port/process events own only this attachment, never its replacement.
+			if (this.transport.value === transport && this.nonce === nonce) {
+				this.transport.clearAndLeak();
+				this.nonce = undefined;
+				this.diagnostic = transport.diagnostics();
+				if (!intentional) {
+					this.generation++;
+					this.setState('crashed');
+				}
+			}
 			port1.postMessage({ closed: 'App Server connection closed', intentional });
 			port1.close();
 			transport.dispose();
@@ -154,10 +228,10 @@ export class AppServerConnectionRelay extends Disposable {
 		const ended = transport.onClose(error => {
 			if (closed) { return; }
 			port1.postMessage({ closed: [error.message, transport.diagnostics()].filter(Boolean).join('\n') });
-			this.setState('crashed');
 			close();
 		});
 		port1.on('message', event => {
+			if (closed) { return; }
 			const value: unknown = event.data;
 			if (!isRecord(value)) { close(); return; }
 			if (value.ack === true) {
