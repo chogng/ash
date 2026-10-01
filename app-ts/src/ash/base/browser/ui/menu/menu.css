@@ -1,8 +1,8 @@
 .ash-context-view-menu {
   color: var(--ash-foreground);
   background: var(--ash-editor-background);
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-large);
+  border: var(--ash-strokeThickness) solid var(--ash-border);
+  border-radius: var(--ash-cornerRadius-large);
   box-shadow: 0 2px 8px var(--ash-widget-shadow);
   overflow: auto;
 }
@@ -18,15 +18,15 @@
   min-height: 24px;
   padding: 4px 8px;
   border: 0;
-  border-radius: var(--ash-corner-radius-small);
+  border-radius: var(--ash-cornerRadius-small);
   background: transparent;
   text-align: left;
   justify-content: flex-start;
   cursor: default;
 }
 .ash-menu .ash-action-view-item.focused > .ash-button {
-  color: var(--ash-menu-selection-foreground);
-  background: var(--ash-menu-selection-background);
+  color: var(--ash-menu-selectionForeground);
+  background: var(--ash-menu-selectionBackground);
 }
 .ash-menu-leading-slot {
   display: inline-flex;
@@ -77,7 +77,7 @@
 }
 /* Selected rows need their own foreground to keep the shortcut readable. */
 .ash-menu .ash-action-view-item.focused > .ash-button .ash-menu-keybinding {
-  color: var(--ash-menu-selection-foreground);
+  color: var(--ash-menu-selectionForeground);
 }
 /* User-agent kbd styling otherwise switches menu shortcuts to monospace. */
 .ash-menu .ash-menu-keybinding kbd {
@@ -86,11 +86,11 @@
 .ash-menu .ash-menu-badge {
   margin-left: auto;
   padding: 2px 6px;
-  border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-  border-radius: var(--ash-corner-radius-circle);
+  border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+  border-radius: var(--ash-cornerRadius-circle);
   color: var(--ash-description-foreground);
   font-size: 10px;
-  font-weight: var(--ash-font-weight-semi-bold);
+  font-weight: var(--ash-fontWeight-semiBold);
   line-height: 16px;
 }
 .ash-menu .ash-menu-badge + .ash-menu-keybinding {

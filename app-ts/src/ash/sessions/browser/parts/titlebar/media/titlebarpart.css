@@ -1,6 +1,6 @@
 .ash-workbench-titlebar.ash-sessions-titlebar {
   padding: 0;
-  background: var(--ash-title-bar-background);
+  background: var(--ash-titleBar-background);
 }
 
 .ash-sessions-titlebar > .ash-workbench-part-content {

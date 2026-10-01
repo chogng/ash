@@ -58,7 +58,7 @@ export interface ILocalTranscriptionService extends IDisposable {
 	deleteModel(model: string): Promise<void>;
 	prepareModel(model: string, onProgress: (status: ILocalTranscriptionModelStatus) => void): ILocalTranscriptionModelOperation;
 	importModel(options: { readonly model: string; readonly sourcePath: string }, onProgress: (status: ILocalTranscriptionModelStatus) => void): ILocalTranscriptionModelOperation;
-	start(options: { readonly model: string }): Promise<void>;
+	start(options: { readonly model: string; readonly inputDevice?: string }): Promise<void>;
 	/** Waits for capture to stop and returns the final transcript. */
 	stop(): Promise<string>;
 	/** Stops backend work and discards subsequent transcript delivery. */
@@ -79,6 +79,6 @@ export interface ILocalTranscriptionBackendService {
 	deleteModel(model: string): Promise<void>;
 	startModelOperation(resourceId: string, model: string, operation: LocalTranscriptionModelOperation): Promise<void>;
 	stopModelOperation(resourceId: string): Promise<void>;
-	start(resourceId: string, model: string): Promise<void>;
+	start(resourceId: string, model: string, inputDevice?: string): Promise<void>;
 	stop(resourceId: string): Promise<string | null>;
 }

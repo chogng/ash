@@ -5,7 +5,7 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	color: var(--ash-editor-gutter-folding-control-foreground);
+	color: var(--ash-editorGutter-foldingControlForeground);
 	cursor: pointer;
 	pointer-events: auto;
 	opacity: 0;
@@ -22,13 +22,13 @@
 .stanza-editor .inline-folded::after {
 	display: inline;
 	margin-inline: 0.2em;
-	color: var(--ash-editor-fold-placeholder-foreground);
+	color: var(--ash-editor-foldPlaceholderForeground);
 	content: "\22ef";
 	cursor: pointer;
 }
 
 .stanza-editor .folded-background {
-	background: var(--ash-editor-fold-background);
+	background: var(--ash-editor-foldBackground);
 }
 
 @media (prefers-reduced-motion: reduce) {

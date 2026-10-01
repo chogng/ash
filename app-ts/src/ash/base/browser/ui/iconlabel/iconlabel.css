@@ -81,10 +81,10 @@
   white-space: pre;
 }
 
-.ash-icon-label.bold { font-weight: var(--ash-font-weight-semi-bold); }
+.ash-icon-label.bold { font-weight: var(--ash-fontWeight-semiBold); }
 .ash-icon-label.italic { font-style: italic; }
 .ash-icon-label.strikethrough { text-decoration: line-through; }
-.ash-icon-label-highlight { background: var(--ash-search-match-background); }
+.ash-icon-label-highlight { background: var(--ash-search-matchBackground); }
 .ash-icon-label-inline-icon {
   display: inline-flex;
   width: 1em;

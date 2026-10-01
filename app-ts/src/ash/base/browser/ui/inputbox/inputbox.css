@@ -7,8 +7,8 @@
 .ash-input-box-field {
   min-height: 30px;
   box-sizing: border-box;
-  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-  border-radius: var(--ash-corner-radius-small);
+  border: var(--ash-strokeThickness) solid var(--ash-input-border);
+  border-radius: var(--ash-cornerRadius-small);
   color: var(--ash-input-foreground);
   background: var(--ash-input-background);
 }
@@ -32,7 +32,7 @@
 }
 
 .ash-input-box-field input::placeholder {
-  color: var(--ash-input-placeholder-foreground);
+  color: var(--ash-input-placeholderForeground);
 }
 
 .ash-input-box-field input[type="number"] {
@@ -47,7 +47,7 @@
 }
 
 .ash-input-box-field.is-focused {
-  border-color: var(--ash-focus-border);
+  border-color: var(--ash-focusBorder);
 }
 
 .ash-input-box.is-disabled {

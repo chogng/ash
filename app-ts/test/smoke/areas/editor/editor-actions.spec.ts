@@ -90,9 +90,9 @@ test('Code exposes editor view actions in the command palette', async ({ target,
 	const picker = workbench.page.locator('.ash-quick-pick');
 	const colors = await picker.evaluate(element => {
 		const initial = getComputedStyle(element).backgroundColor;
-		(element as HTMLElement).style.setProperty('--ash-quick-input-background', '#123456');
+		(element as HTMLElement).style.setProperty('--ash-quickInput-background', '#123456');
 		const overridden = getComputedStyle(element).backgroundColor;
-		(element as HTMLElement).style.removeProperty('--ash-quick-input-background');
+		(element as HTMLElement).style.removeProperty('--ash-quickInput-background');
 		return { initial, overridden, restored: getComputedStyle(element).backgroundColor };
 	});
 	expect(colors.initial).not.toBe('rgba(0, 0, 0, 0)');

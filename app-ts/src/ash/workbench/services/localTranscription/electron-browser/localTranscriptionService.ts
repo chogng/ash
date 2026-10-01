@@ -89,12 +89,12 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 		return handle;
 	}
 
-	public async start(options: { readonly model: string }): Promise<void> {
+	public async start(options: { readonly model: string; readonly inputDevice?: string }): Promise<void> {
 		this.assertNotDisposed();
 		if (!this.backend.isConnected) { throw new Error(localize('dictation.connectionUnavailable', 'Dictation connection is unavailable')); }
 		if (this.active) { throw new Error(localize('dictation.alreadyActive', 'Dictation is already active')); }
 		const resourceId = generateUuid();
-		const started = Promise.resolve().then(() => this.backend.start(resourceId, options.model));
+		const started = Promise.resolve().then(() => this.backend.start(resourceId, options.model, options.inputDevice));
 		const active: ActiveTranscription = { resourceId, started, text: '', finalDelivered: false, discard: false, hasEnded: false };
 		this.active = active;
 		try {

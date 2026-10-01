@@ -21,8 +21,8 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border-right: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-  background: var(--ash-side-bar-background);
+  border-right: var(--ash-strokeThickness) solid var(--ash-widget-border);
+  background: var(--ash-sideBar-background);
 }
 
 .ash-settings-sidebar-scrollable,
@@ -63,9 +63,9 @@
 
 .ash-settings-page h3 {
   margin: 0 0 8px;
-  color: var(--ash-settings-header-foreground);
-  font-size: var(--ash-font-size-heading2);
-  font-weight: var(--ash-font-weight-semi-bold);
+  color: var(--ash-settings-headerForeground);
+  font-size: var(--ash-fontSize-heading2);
+  font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-settings-page.has-navigation-target h3 {
@@ -73,7 +73,7 @@
   z-index: 2;
   top: 0;
   background: var(--ash-editor-background);
-  border-bottom: var(--ash-stroke-thickness) solid var(--ash-settings-header-border);
+  border-bottom: var(--ash-strokeThickness) solid var(--ash-settings-headerBorder);
 }
 
 .ash-settings-description {
@@ -116,7 +116,7 @@
 
   .ash-settings-sidebar {
     border-right: 0;
-    border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+    border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
   }
 
   .ash-settings-navigation-tree {

@@ -18,10 +18,10 @@ body { overflow: hidden; }
 button, input, textarea { font: inherit; }
 
 .ash-sessions-window {
-  --sessions-accent: var(--ash-button-primary-background);
-  --sessions-accent-strong: color-mix(in srgb, var(--ash-button-primary-background) 82%, var(--ash-foreground));
+  --sessions-accent: var(--ash-button-primaryBackground);
+  --sessions-accent-strong: color-mix(in srgb, var(--ash-button-primaryBackground) 82%, var(--ash-foreground));
   --sessions-soft-surface: color-mix(in srgb, var(--ash-editor-background) 88%, var(--ash-workbench-background));
-  --sessions-muted-surface: color-mix(in srgb, var(--ash-side-bar-background) 74%, var(--ash-workbench-background));
+  --sessions-muted-surface: color-mix(in srgb, var(--ash-sideBar-background) 74%, var(--ash-workbench-background));
   display: flex;
   width: 100%;
   min-width: 0;
@@ -30,11 +30,11 @@ button, input, textarea { font: inherit; }
   overflow: hidden;
   flex-direction: column;
   color: var(--ash-foreground);
-  background: var(--ash-title-bar-background);
+  background: var(--ash-titleBar-background);
 }
 
 .ash-sessions-window .ash-context-view-hover {
-  border-radius: var(--ash-corner-radius-x-large);
+  border-radius: var(--ash-cornerRadius-xLarge);
 }
 
 .ash-sessions-window .ash-context-view-hover::before {

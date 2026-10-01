@@ -6,6 +6,10 @@
 - 通过共享 App Server 管理账户、MCP 配置、已安装插件及历史会话。
 - 保留后台服务的配置版本检查、精确包身份和权限边界。
 
+`ash-rs/utils/cli` 负责通用解析退出码与命令格式化；命令定义与运行实现仍归 `ash-cli`。
+`ash-rs/utils/cargo-bin` 只用于测试中的 Cargo/Bazel 程序、资源定位与可执行脚本夹具，
+不依赖产品运行代码。
+
 `ash-cli/` 是独立命令入口。`app-ts/` 和 `app-rs/` 直接连接 App Server，不调用此程序。
 账户、MCP、插件、会话和后台服务命令作用于相同的 `ASH_HOME` profile；无子命令、`resume`、
 `remote connect` 和当前的 `update` 分别启动或维护 Ash Code 终端产品。
@@ -149,6 +153,8 @@ Thread, and exits through the terminal input path.
 
 ```text
 just check ash-cli
+just test ash-utils-cli
+just test ash-utils-cargo-bin
 just test ash-cli --lib
 python3 -B scripts/cargo.py build -p ash-cli --bin ash -p ash-app-server --bin ash-app-server
 just test ash-cli --test commands --test stdio
@@ -156,7 +162,7 @@ just rust-warnings ash-cli
 just dependencies
 ```
 
-- `cli_tests.rs` 和 `exec_tests.rs` 验证解析、帮助、透传与互斥选项。
+- `src/cli_tests.rs` 和 `src/exec_tests.rs` 验证命令图、帮助、透传与参数到实际执行模式的转换。
 - `login_tests.rs` 验证精确登录身份、失败与断线处理。
 - `tests/commands.rs` 使用独立的临时 `ASH_HOME`、`CODEX_HOME` 和真实 CLI；夹具启动并回收 daemon，验证跨进程配置、插件权限、会话生命周期、诊断和退出码。
 - `tests/stdio.rs` 保留 App Server stdio 握手与隔离检查；完整 TUI 行为使用产品已有 PTY 场景。

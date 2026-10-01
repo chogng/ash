@@ -257,6 +257,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "connectors",
+      "file": "connectors.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "copy",
       "file": "copy.svg",
       "rendering": "symbolic"

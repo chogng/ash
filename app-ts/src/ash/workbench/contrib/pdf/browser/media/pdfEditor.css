@@ -11,7 +11,7 @@
 
 .ash-pdf-editor-toolbar {
   background: var(--ash-editor-background);
-  border-block-end: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+  border-block-end: var(--ash-strokeThickness) solid var(--ash-widget-border);
   flex: 0 0 auto;
   min-block-size: 32px;
   padding-inline: 4px;
@@ -39,8 +39,8 @@
 
 .ash-pdf-page {
   background: var(--ash-input-background);
-  box-shadow: 0 1px 4px var(--ash-pdf-page-shadow);
-  outline: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
+  box-shadow: 0 1px 4px var(--ash-pdf-pageShadow);
+  outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
   flex: 0 0 auto;
   position: relative;
 }
@@ -73,7 +73,7 @@
 }
 
 .ash-pdf-annotation-highlight.selected {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 }
 
 .ash-pdf-annotation-ink {
@@ -86,7 +86,7 @@
 }
 
 .ash-pdf-annotation-ink.selected polyline {
-  filter: drop-shadow(0 0 1px var(--ash-focus-border));
+  filter: drop-shadow(0 0 1px var(--ash-focusBorder));
 }
 
 .ash-pdf-annotation-preview {
@@ -95,10 +95,10 @@
 
 .ash-pdf-annotation-note {
   background: var(--ash-input-background);
-  border: var(--ash-stroke-thickness) solid var(--ash-editor-foreground);
+  border: var(--ash-strokeThickness) solid var(--ash-editor-foreground);
   border-radius: 50%;
   block-size: 14px;
-  box-shadow: 0 1px 2px var(--ash-pdf-annotation-note-shadow);
+  box-shadow: 0 1px 2px var(--ash-pdf-annotationNoteShadow);
   inline-size: 14px;
   padding: 0;
   position: absolute;
@@ -106,13 +106,13 @@
 }
 
 .ash-pdf-annotation-note.selected {
-  outline: 2px solid var(--ash-focus-border);
-  outline-offset: var(--ash-stroke-thickness);
+  outline: 2px solid var(--ash-focusBorder);
+  outline-offset: var(--ash-strokeThickness);
 }
 
 .ash-pdf-annotation-sidebar {
-  background: var(--ash-side-bar-background);
-  border-inline-start: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+  background: var(--ash-sideBar-background);
+  border-inline-start: var(--ash-strokeThickness) solid var(--ash-widget-border);
   display: flex;
   flex: 0 0 248px;
   flex-direction: column;
@@ -125,7 +125,7 @@
 .ash-pdf-annotation-heading {
   color: var(--ash-editor-foreground);
   font-size: 12px;
-  font-weight: var(--ash-font-weight-semi-bold);
+  font-weight: var(--ash-fontWeight-semiBold);
   margin: 0;
 }
 
@@ -146,8 +146,8 @@
 
 .ash-pdf-annotation-text {
   background: var(--ash-input-background);
-  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-  border-radius: var(--ash-corner-radius-x-small);
+  border: var(--ash-strokeThickness) solid var(--ash-input-border);
+  border-radius: var(--ash-cornerRadius-xSmall);
   color: var(--ash-input-foreground);
   font: inherit;
   min-block-size: 70px;
@@ -156,7 +156,7 @@
 }
 
 .ash-pdf-annotation-text:focus {
-  border-color: var(--ash-focus-border);
+  border-color: var(--ash-focusBorder);
   outline: 0;
 }
 
@@ -180,8 +180,8 @@
 
 .ash-pdf-annotation-list-item:hover,
 .ash-pdf-annotation-list-item.selected {
-  background: var(--ash-list-active-selection-background);
-  color: var(--ash-list-active-selection-foreground);
+  background: var(--ash-list-activeSelectionBackground);
+  color: var(--ash-list-activeSelectionForeground);
 }
 
 .ash-pdf-annotation-status {

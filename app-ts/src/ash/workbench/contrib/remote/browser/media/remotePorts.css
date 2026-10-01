@@ -20,8 +20,8 @@
 .ash-remote-ports-input {
   min-width: 0;
   padding: 4px 6px;
-  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-  border-radius: var(--ash-corner-radius-small);
+  border: var(--ash-strokeThickness) solid var(--ash-input-border);
+  border-radius: var(--ash-cornerRadius-small);
   color: var(--ash-input-foreground);
   background: var(--ash-input-background);
   font: inherit;
@@ -32,7 +32,7 @@
 .ash-remote-port-stop {
   padding: 4px 8px;
   border: 0;
-  border-radius: var(--ash-corner-radius-small);
+  border-radius: var(--ash-cornerRadius-small);
   color: inherit;
   background: color-mix(in srgb, currentColor 8%, transparent);
   font: inherit;
@@ -42,14 +42,14 @@
 .ash-remote-ports-forward:hover:not(:disabled),
 .ash-remote-ports-stop-all:hover:not(:disabled),
 .ash-remote-port-stop:hover:not(:disabled) {
-  background: var(--ash-toolbar-hover-background);
+  background: var(--ash-toolbar-hoverBackground);
 }
 
 .ash-remote-ports-input:focus-visible,
 .ash-remote-ports-forward:focus-visible,
 .ash-remote-ports-stop-all:focus-visible,
 .ash-remote-port-stop:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
   outline-offset: -1px;
 }
 
@@ -87,7 +87,7 @@
   gap: 10px;
   align-items: center;
   padding: 6px 8px;
-  border-top: var(--ash-stroke-thickness) solid var(--ash-border);
+  border-top: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
 .ash-remote-port-endpoints {

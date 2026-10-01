@@ -7151,6 +7151,22 @@
         {
           "properties": {
             "method": {
+              "const": "dictation/options",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/DictationOptionsParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "dictation/stop",
               "type": "string"
             },
@@ -12211,6 +12227,22 @@
         {
           "properties": {
             "method": {
+              "const": "dictation/options",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/DictationOptions"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "dictation/stop",
               "type": "string"
             },
@@ -16866,6 +16898,25 @@
       ],
       "type": "object"
     },
+    "DictationInputDevice": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "isDefault": {
+          "type": "boolean"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "isDefault"
+      ],
+      "type": "object"
+    },
     "DictationModelChanged": {
       "properties": {
         "modelId": {
@@ -17111,6 +17162,40 @@
       ],
       "type": "object"
     },
+    "DictationOptions": {
+      "properties": {
+        "inputDevices": {
+          "items": {
+            "$ref": "#/$defs/DictationInputDevice"
+          },
+          "type": "array"
+        },
+        "languages": {
+          "description": "Empty means language hints are not supported by this backend/model.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "inputDevices",
+        "languages"
+      ],
+      "type": "object"
+    },
+    "DictationOptionsParams": {
+      "additionalProperties": false,
+      "properties": {
+        "backend": {
+          "$ref": "#/$defs/DictationBackend"
+        }
+      },
+      "required": [
+        "backend"
+      ],
+      "type": "object"
+    },
     "DictationResourceParams": {
       "additionalProperties": false,
       "properties": {
@@ -17130,6 +17215,22 @@
       "properties": {
         "backend": {
           "$ref": "#/$defs/DictationBackend"
+        },
+        "inputDevice": {
+          "description": "Physical microphone identity from dictation/options; None follows the system default.",
+          "maxLength": 2048,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "language": {
+          "description": "Explicit provider language hint; None delegates detection to the model.",
+          "maxLength": 32,
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "resourceId": {
           "maxLength": 128,

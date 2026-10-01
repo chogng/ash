@@ -20,6 +20,9 @@ import {
 } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
+import { SelectBox } from '../../../../../base/browser/ui/selectbox/selectbox.js';
+import { IChatSpeechToTextService } from './chatSpeechToTextService.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
@@ -47,6 +50,9 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 	private readonly controls: LocalTranscriptionModelControls;
 	private readonly cloud: HTMLElement;
 	private readonly connectionStatus: HTMLElement;
+	private readonly inputOptions: HTMLElement;
+	private readonly microphone: SelectBox;
+	private readonly language: SelectBox;
 	private visible = false;
 	private requestVersion = 0;
 
@@ -57,10 +63,18 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 		@IInstantiationService instantiation: IInstantiationService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IAccessibleViewService accessibleView: IAccessibleViewService,
+		@IChatSpeechToTextService private readonly speech: IChatSpeechToTextService,
+		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
 		const document = container.ownerDocument;
 		this.controls = this._register(instantiation.createInstance(LocalTranscriptionModelControls, h(document, 'div')));
+		this.inputOptions = h(document, 'div');
+		this.inputOptions.className = 'ash-dictation-input-options';
+		this.microphone = this._register(new SelectBox(this.inputOptions, { options: [], ariaLabel: localize({ bundle: 'ash', key: 'dictation.microphone' }, 'Microphone') }));
+		this.language = this._register(new SelectBox(this.inputOptions, { options: [], ariaLabel: localize({ bundle: 'ash', key: 'dictation.language' }, 'Transcription language') }));
+		this._register(this.microphone.onDidSelect(({ value }) => { void this.configure(DictationConfiguration.inputDevice, value); }));
+		this._register(this.language.onDidSelect(({ value }) => { void this.configure(DictationConfiguration.language, value); }));
 		const updateHint = (): void => {
 			const hint = accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.DictationModels);
 			this.controls.setAriaDescription(hint);
@@ -78,6 +92,7 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 				this.updateVisibility();
 				this.changed.fire();
 			}
+			if (event.affectsConfiguration(DictationConfiguration.inputDevice) || event.affectsConfiguration(DictationConfiguration.language)) { this.updateVisibility(); }
 		}));
 		this._register(chat.onDidChangeModels(() => this.updateVisibility()));
 		const scoped = this._register(contextKeys.createScoped(this.controls.domNode));
@@ -112,7 +127,11 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 				},
 			};
 		};
-		const children: SettingsTreeNode<ISetting | SettingsContentItem>[] = [settingNode(DictationConfiguration.backend)];
+		const children: SettingsTreeNode<ISetting | SettingsContentItem>[] = [settingNode(DictationConfiguration.backend), { element: {
+			kind: 'item', id: 'dictation.inputOptions', keywords: [DictationConfiguration.inputDevice, DictationConfiguration.language], title: localize({ bundle: 'ash', key: 'dictation.inputOptions' }, 'Microphone and language'),
+			description: localize({ bundle: 'ash', key: 'dictation.inputOptionsDescription' }, 'Select the microphone for dictation. Language hints are available for supported cloud services; local models use their own languages.'),
+			value: { domNode: this.inputOptions },
+		} }];
 		if (this.configuration.getValue(DictationConfiguration.backend) === 'cloud') {
 			children.push(settingNode(DictationConfiguration.cloudProvider), {
 				element: {
@@ -150,6 +169,36 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 		const cloud = this.configuration.getValue(DictationConfiguration.backend) === 'cloud';
 		this.controls.setVisible(this.visible && !cloud);
 		if (this.visible && cloud) { void this.readConnection(this.requestVersion); }
+		if (this.visible) { void this.readInputOptions(this.requestVersion); }
+	}
+
+	private async configure(key: string, value: string): Promise<void> {
+		try {
+			// Capture belongs to the selected device. Release it before persisting a new selection.
+			if (this.speech.isBusy) { await this.speech.stopAndTranscribe(); }
+			await this.configuration.updateValue(key, value);
+		} catch (error) { this.notifications.error(String(error)); }
+	}
+
+	private async readInputOptions(version: number): Promise<void> {
+		this.microphone.enabled = this.language.enabled = false;
+		if (!this.speech.isConfigured) { return; }
+		try {
+			const options = await this.speech.getOptions();
+			if (this.isDisposed || version !== this.requestVersion) { return; }
+			this.microphone.setOptions([{ value: '', label: localize({ bundle: 'ash', key: 'dictation.systemMicrophone' }, 'System default microphone') }, ...options.inputDevices.map(device => ({ value: device.id, label: device.label }))]);
+			const configuredDevice = this.configuration.getValue<string>(DictationConfiguration.inputDevice);
+			if (configuredDevice && !options.inputDevices.some(device => device.id === configuredDevice)) {
+				this.microphone.setOptions([...this.microphone.options, { value: configuredDevice, label: localize({ bundle: 'ash', key: 'dictation.missingMicrophone' }, 'Selected microphone is disconnected'), disabled: true }]);
+			}
+			this.microphone.value = configuredDevice;
+			this.microphone.enabled = true;
+			const configuredLanguage = this.configuration.getValue<string>(DictationConfiguration.language);
+			const unavailableLanguage = options.languages.length && configuredLanguage !== 'auto' && !options.languages.includes(configuredLanguage) ? [{ value: configuredLanguage, label: localize('dictation.unavailableLanguage', 'Language {0} is unavailable with this service', configuredLanguage), disabled: true }] : [];
+			this.language.setOptions([...unavailableLanguage, { value: 'auto', label: localize({ bundle: 'ash', key: 'dictation.autoLanguage' }, 'Automatic language detection') }, ...options.languages.map(value => ({ value, label: new Intl.DisplayNames([this.inputOptions.ownerDocument.documentElement.lang || 'en'], { type: 'language' }).of(value)! }))]);
+			this.language.value = options.languages.length ? this.configuration.getValue<string>(DictationConfiguration.language) : 'auto';
+			this.language.enabled = options.languages.length > 0;
+		} catch (error) { if (!this.isDisposed && version === this.requestVersion) { this.notifications.error(String(error)); } }
 	}
 
 	private async readConnection(version: number): Promise<void> {

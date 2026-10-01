@@ -164,6 +164,8 @@ members = [
     "ash-rs/utils/absolute-path",
     "ash-rs/utils/audio",
     "ash-rs/utils/cache",
+    "ash-rs/utils/cargo-bin",
+    "ash-rs/utils/cli",
     "ash-rs/utils/elapsed",
     "ash-rs/utils/home-dir",
     "ash-rs/utils/image",
@@ -228,6 +230,9 @@ publish = false
 version = "0.1.0"
 
 [workspace.dependencies]
+cli = { package = "ash-utils-cli", path = "ash-rs/utils/cli" }
+cargo-bin = { package = "ash-utils-cargo-bin", path = "ash-rs/utils/cargo-bin" }
+runfiles = { git = "https://github.com/dzbarsky/rules_rust", rev = "b56cbaa8465e74127f1ea216f813cd377295ad81" }
 aes-gcm = "0.10"
 whoami = "1"
 guardian-context = { package = "ash-guardian-context", path = "ash-rs/guardian-context" }

@@ -33,7 +33,7 @@ impl Drop for Device {
     }
 }
 
-fn unused(_: AudioConfig, _: u64) -> Result<Device, &'static str> {
+fn unused(_: AudioConfig, _: u64, _: Option<&str>) -> Result<Device, &'static str> {
     panic!("must not open devices")
 }
 
@@ -56,22 +56,35 @@ fn session_controls_invalidate_old_audio_and_drop_devices_before_reply() {
         processing: Processing::Unprocessed,
     };
     controller
-        .execute(Operation::Start { config }, |config, _| {
-            Ok(Device {
-                dropped: dropped.clone(),
-                processor: audio::CaptureProcessor::new(
-                    48_000,
-                    48_000,
-                    config.rate,
-                    config.processing,
-                )?,
-                playback: Vec::new(),
-            })
-        })
+        .execute(
+            Operation::Start {
+                config,
+                input_device: Some("usb-microphone".into()),
+            },
+            |config, _, input_device| {
+                assert_eq!(input_device, Some("usb-microphone"));
+                Ok(Device {
+                    dropped: dropped.clone(),
+                    processor: audio::CaptureProcessor::new(
+                        48_000,
+                        48_000,
+                        config.rate,
+                        config.processing,
+                    )?,
+                    playback: Vec::new(),
+                })
+            },
+        )
         .unwrap();
     assert!(
         controller
-            .execute(Operation::Start { config }, unused)
+            .execute(
+                Operation::Start {
+                    config,
+                    input_device: None
+                },
+                unused
+            )
             .is_err()
     );
     let old = controller.epoch;
@@ -139,6 +152,21 @@ fn session_controls_invalidate_old_audio_and_drop_devices_before_reply() {
     );
     controller.execute(Operation::Stop, unused).unwrap();
     assert_eq!(dropped.load(Ordering::SeqCst), 1);
+    assert!(
+        controller
+            .execute(
+                Operation::Start {
+                    config,
+                    input_device: Some("disconnected".into())
+                },
+                |_, _, id| {
+                    assert_eq!(id, Some("disconnected"));
+                    Err("device not found")
+                }
+            )
+            .is_err()
+    );
+    assert!(controller.device.is_none());
     assert!(controller.poll().unwrap().is_empty());
     assert!(
         controller

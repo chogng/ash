@@ -6,7 +6,7 @@
   gap: 8px;
   min-height: 34px;
   padding: 4px 12px;
-  border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
+  border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
   color: var(--ash-description-foreground, var(--ash-editor-foreground));
   background: var(--ash-editor-background);
 }
@@ -47,30 +47,30 @@
   padding: 4px 6px;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-small);
+  border: var(--ash-strokeThickness) solid var(--ash-border);
+  border-radius: var(--ash-cornerRadius-small);
   color: var(--ash-editor-foreground);
   background: var(--ash-input-background, var(--ash-editor-background));
   font: inherit;
 }
 
 .stanza-document-collaboration-invitation-token:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: var(--ash-stroke-thickness);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+  outline-offset: var(--ash-strokeThickness);
 }
 
 .stanza-document-collaboration-invitation-dismiss {
   padding: 4px 8px;
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-small);
+  border: var(--ash-strokeThickness) solid var(--ash-border);
+  border-radius: var(--ash-cornerRadius-small);
   color: var(--ash-editor-foreground);
-  background: var(--ash-toolbar-hover-background);
+  background: var(--ash-toolbar-hoverBackground);
   font: inherit;
 }
 
 .stanza-document-collaboration-invitation-dismiss:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: var(--ash-stroke-thickness);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+  outline-offset: var(--ash-strokeThickness);
 }
 
 .stanza-document-collaboration-members {
@@ -89,15 +89,15 @@
   align-items: center;
   gap: 8px;
   padding: 4px 6px;
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-small);
+  border: var(--ash-strokeThickness) solid var(--ash-border);
+  border-radius: var(--ash-cornerRadius-small);
   color: var(--ash-editor-foreground);
   background: var(--ash-input-background, var(--ash-editor-background));
 }
 
 .stanza-document-collaboration-member-identity {
   overflow: hidden;
-  font-weight: var(--ash-font-weight-semi-bold);
+  font-weight: var(--ash-fontWeight-semiBold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -117,10 +117,10 @@
 
 .stanza-document-collaboration-member-actions button {
   padding: 4px 6px;
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-small);
+  border: var(--ash-strokeThickness) solid var(--ash-border);
+  border-radius: var(--ash-cornerRadius-small);
   color: var(--ash-editor-foreground);
-  background: var(--ash-toolbar-hover-background);
+  background: var(--ash-toolbar-hoverBackground);
   font: inherit;
 }
 
@@ -130,8 +130,8 @@
 }
 
 .stanza-document-collaboration-member-actions button:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: var(--ash-stroke-thickness);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+  outline-offset: var(--ash-strokeThickness);
 }
 
 .stanza-document-collaboration-members-empty {

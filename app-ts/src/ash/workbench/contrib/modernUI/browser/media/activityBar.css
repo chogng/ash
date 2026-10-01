@@ -1,11 +1,11 @@
 .ash-workbench.modern-ui .ash-workbench-activitybar {
-	background: var(--ash-activity-bar-background);
+	background: var(--ash-activityBar-background);
 }
 
 .ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical > .ash-action-bar {
 	gap: var(--ash-spacing-size80);
 	align-items: center;
-	padding-top: calc(var(--ash-spacing-size80) / 2 - var(--ash-stroke-thickness));
+	padding-top: calc(var(--ash-spacing-size80) / 2 - var(--ash-strokeThickness));
 }
 
 .ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical.ash-composite-bar-icon > .ash-action-bar > .ash-composite-bar-item {
@@ -26,22 +26,22 @@
 	width: var(--ash-spacing-size320);
 	height: var(--ash-spacing-size320);
 	z-index: 0;
-	border-radius: var(--ash-corner-radius-small);
+	border-radius: var(--ash-cornerRadius-small);
 	content: '';
 	pointer-events: none;
 	transform: translateX(-50%);
 }
 
 .ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item:hover::after {
-	background: var(--ash-modern-activity-bar-item-hover-background);
+	background: var(--ash-modernActivityBarItem-hoverBackground);
 }
 
 .ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item.checked::after {
-	background: var(--ash-modern-activity-bar-item-active-background);
+	background: var(--ash-modernActivityBarItem-activeBackground);
 }
 
 .ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item.checked {
-	color: var(--ash-modern-activity-bar-item-active-foreground);
+	color: var(--ash-modernActivityBarItem-activeForeground);
 }
 
 .ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item > .ash-composite-bar-action,
@@ -56,13 +56,13 @@
 
 .ash-workbench.modern-ui .ash-workbench-activitybar .ash-global-composite-bar .ash-action-view-item > button:hover,
 .ash-workbench.modern-ui .ash-workbench-activitybar .ash-global-composite-bar .ash-action-view-item > button[aria-expanded='true'] {
-	color: var(--ash-modern-activity-bar-item-active-foreground);
-	background: var(--ash-modern-activity-bar-item-hover-background);
+	color: var(--ash-modernActivityBarItem-activeForeground);
+	background: var(--ash-modernActivityBarItem-hoverBackground);
 }
 
 .ash-workbench.modern-ui .ash-workbench-activitybar .ash-global-composite-bar > .ash-action-bar {
 	gap: var(--ash-spacing-size80);
-	padding-bottom: calc(var(--ash-spacing-size80) / 2 - var(--ash-stroke-thickness));
+	padding-bottom: calc(var(--ash-spacing-size80) / 2 - var(--ash-strokeThickness));
 }
 
 .ash-workbench.modern-ui .ash-workbench-activitybar.compact .ash-composite-bar-vertical > .ash-action-bar,
@@ -94,22 +94,22 @@
 
 .ash-workbench.modern-ui:is([data-color-scheme='high-contrast-dark'], [data-color-scheme='high-contrast-light']) .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item:hover::after {
 	background: transparent;
-	outline: var(--ash-stroke-thickness) dashed var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) dashed var(--ash-focusBorder);
 }
 
 .ash-workbench.modern-ui:is([data-color-scheme='high-contrast-dark'], [data-color-scheme='high-contrast-light']) .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item.checked::after {
 	background: transparent;
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 }
 
 @media (forced-colors: active) {
 	.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item:hover::after {
 		background: transparent;
-		outline: var(--ash-stroke-thickness) dashed Highlight;
+		outline: var(--ash-strokeThickness) dashed Highlight;
 	}
 
 	.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item.checked::after {
 		background: transparent;
-		outline: var(--ash-stroke-thickness) solid Highlight;
+		outline: var(--ash-strokeThickness) solid Highlight;
 	}
 }

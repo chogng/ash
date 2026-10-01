@@ -10,11 +10,11 @@
 }
 
 .stanza-editor .word-highlight-text {
-	background: var(--ash-search-match-background);
+	background: var(--ash-search-matchBackground);
 }
 
 .stanza-editor .word-highlight-strong {
-	background: color-mix(in srgb, var(--ash-focus-border) 28%, transparent);
+	background: color-mix(in srgb, var(--ash-focusBorder) 28%, transparent);
 }
 
 .stanza-editor.input-focused .selection-highlight {
@@ -26,6 +26,6 @@
 	.stanza-editor .word-highlight-text,
 	.stanza-editor .word-highlight-strong,
 	.stanza-editor .selection-highlight {
-		border: var(--ash-stroke-thickness) dotted CanvasText;
+		border: var(--ash-strokeThickness) dotted CanvasText;
 	}
 }

@@ -3,11 +3,11 @@
   z-index: 8;
   max-width: min(480px, calc(100% - 16px));
   padding: 6px 10px;
-  color: var(--ash-editor-hover-foreground, var(--ash-editor-foreground));
-  background: var(--ash-editor-hover-background, var(--ash-editor-background));
-  border: var(--ash-stroke-thickness) solid var(--ash-editor-hover-border, var(--ash-editor-border));
-  border-radius: var(--ash-corner-radius-small);
-  box-shadow: 0 4px 14px var(--ash-editor-widget-shadow);
+  color: var(--ash-editor-hoverForeground, var(--ash-editor-foreground));
+  background: var(--ash-editor-hoverBackground, var(--ash-editor-background));
+  border: var(--ash-strokeThickness) solid var(--ash-editor-hoverBorder, var(--ash-editor-border));
+  border-radius: var(--ash-cornerRadius-small);
+  box-shadow: 0 4px 14px var(--ash-editor-widgetShadow);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   pointer-events: none;

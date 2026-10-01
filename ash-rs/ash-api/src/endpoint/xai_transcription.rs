@@ -35,6 +35,7 @@ impl XaiTranscriptionSession {
         target: &ResolvedApiTarget,
         model: &str,
         limits: WebSocketSessionConfig,
+        language: Option<&str>,
         cancellation: &CancellationToken,
     ) -> Result<Self, ApiError> {
         if model != "grok-voice-transcribe-2.0" {
@@ -49,6 +50,9 @@ impl XaiTranscriptionSession {
             ("encoding", "pcm"),
             ("interim_results", "true"),
         ]);
+        if let Some(language) = language {
+            url.query_pairs_mut().append_pair("language", language);
+        }
         let request = WebSocketRequest::new(url.as_str(), target.headers.clone())
             .map_err(|error| ApiError::InvalidRequest(error.to_string()))?;
         let (mut socket, _) = JsonSocket::connect(connector, request, limits, cancellation).await?;

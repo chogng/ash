@@ -45,6 +45,7 @@ async fn xai_transcription_sends_binary_pcm_and_waits_for_session_completion() {
                         ("sample_rate", "16000"),
                         ("encoding", "pcm"),
                         ("interim_results", "true"),
+                        ("language", "en"),
                     ])
                 );
                 assert_eq!(request.headers()["authorization"], "Bearer xai-fixture");
@@ -77,6 +78,7 @@ async fn xai_transcription_sends_binary_pcm_and_waits_for_session_completion() {
         &target,
         "grok-voice-transcribe-2.0",
         limits(),
+        Some("en"),
         &token,
     )
     .await
@@ -131,6 +133,10 @@ async fn transcription_uses_dedicated_session_and_commits_one_audio_turn() {
             "gpt-live-transcribe"
         );
         assert_eq!(update["session"]["audio"]["input"]["format"]["rate"], 24000);
+        assert_eq!(
+            update["session"]["audio"]["input"]["transcription"]["languages"],
+            json!(["en"])
+        );
         assert!(update["session"]["audio"]["input"]["turn_detection"].is_null());
         send(&mut socket, json!({"type":"session.updated","session":{"id":"transcription-1","type":"transcription"}})).await;
         assert_eq!(
@@ -148,6 +154,7 @@ async fn transcription_uses_dedicated_session_and_commits_one_audio_turn() {
         &target,
         "gpt-live-transcribe",
         limits(),
+        Some("en"),
         &token,
     )
     .await

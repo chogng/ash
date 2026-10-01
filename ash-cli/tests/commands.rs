@@ -27,7 +27,8 @@ impl Harness {
         let root = tempfile::tempdir().unwrap();
         let profile = root.path().join("profile");
         std::fs::create_dir(root.path().join("codex")).unwrap();
-        let backend = PathBuf::from(env!("CARGO_BIN_EXE_ash"))
+        let backend = cargo_bin::cargo_bin!("ash")
+            .unwrap()
             .with_file_name(format!("ash-app-server{}", std::env::consts::EXE_SUFFIX));
         assert!(
             backend.is_file(),
@@ -50,9 +51,10 @@ impl Harness {
             Command::new(&self.backend)
                 .arg("--managed")
                 .current_dir(self.root.path())
-                // Grok login discovery uses the host home separately from ASH_HOME.
-                .env_remove("HOME")
-                .env_remove("USERPROFILE")
+                // Account discovery also reads the host home; removing HOME selects the OS
+                // user's real home on Unix rather than isolating it from this fixture.
+                .env("HOME", self.root.path())
+                .env("USERPROFILE", self.root.path())
                 .env("ASH_HOME", &self.profile)
                 .env("CODEX_HOME", self.root.path().join("codex"))
                 .env_remove("ASH_WORKSPACE_ROOT")
@@ -88,12 +90,12 @@ impl Harness {
     }
 
     fn command(&self, arguments: &[&str]) -> Command {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_ash"));
+        let mut command = Command::new(cargo_bin::cargo_bin!("ash").unwrap());
         command
             .args(arguments)
             .current_dir(self.root.path())
-            .env_remove("HOME")
-            .env_remove("USERPROFILE")
+            .env("HOME", self.root.path())
+            .env("USERPROFILE", self.root.path())
             .env("ASH_HOME", &self.profile)
             .env("CODEX_HOME", self.root.path().join("codex"))
             .env("ASH_APP_SERVER_PATH", &self.backend)
@@ -119,11 +121,11 @@ impl Harness {
 
     fn session(&self) -> AppServerSession {
         AppServerSession::start_stdio(
-            StdioAppServerCommand::new(env!("CARGO_BIN_EXE_ash"))
+            StdioAppServerCommand::new(cargo_bin::cargo_bin!("ash").unwrap())
                 .with_argument("app-server")
                 .with_argument("connect")
-                .without_environment_variable("HOME")
-                .without_environment_variable("USERPROFILE")
+                .with_environment_variable("HOME", self.root.path().as_os_str())
+                .with_environment_variable("USERPROFILE", self.root.path().as_os_str())
                 .with_environment_variable("ASH_HOME", self.profile.as_os_str())
                 .with_environment_variable(
                     "CODEX_HOME",
@@ -183,7 +185,7 @@ fn help_version_and_usage_errors_do_not_open_the_profile() {
         ),
         (vec!["update", "--channel", "unexpected"], 2),
     ] {
-        let output = Command::new(env!("CARGO_BIN_EXE_ash"))
+        let output = Command::new(cargo_bin::cargo_bin!("ash").unwrap())
             .args(&args)
             .env("ASH_HOME", &profile)
             .env("ASH_APP_SERVER_PATH", root.path().join("missing-backend"))
@@ -236,7 +238,9 @@ fn exec_reuses_the_profile_daemon_without_a_local_backend_executable() {
 }
 
 #[test]
-fn selected_managed_cli_switches_the_local_daemon_without_a_pinned_cli_switching_it_back() {
+fn selected_managed_cli_ensures_the_local_daemon_without_a_pinned_cli_switching_it_back() {
+    use sha2::Digest;
+
     let mut harness = Harness::new();
     harness.start_server();
     let initial = harness.json(&["app-server", "daemon", "version"]);
@@ -245,17 +249,56 @@ fn selected_managed_cli_switches_the_local_daemon_without_a_pinned_cli_switching
     let selected_package = install.join("versions/selected");
     let cli_name = format!("ash{}", std::env::consts::EXE_SUFFIX);
     let backend_name = format!("ash-app-server{}", std::env::consts::EXE_SUFFIX);
-    for (package, digit) in [(&old_package, "1"), (&selected_package, "2")] {
+    let mut selected_build_id = String::new();
+    for (package, version) in [(&old_package, "0.1.0"), (&selected_package, "0.2.0")] {
         let binaries = package.join("bin");
         std::fs::create_dir_all(&binaries).unwrap();
-        std::fs::copy(env!("CARGO_BIN_EXE_ash"), binaries.join(&cli_name)).unwrap();
-        std::fs::copy(&harness.backend, binaries.join(&backend_name)).unwrap();
+        cargo_bin::copy_executable(
+            &cargo_bin::cargo_bin!("ash").unwrap(),
+            &binaries.join(&cli_name),
+        )
+        .unwrap();
+        cargo_bin::copy_executable(&harness.backend, &binaries.join(&backend_name)).unwrap();
+        let files = [cli_name.as_str(), backend_name.as_str()]
+            .into_iter()
+            .map(|name| {
+                (
+                    format!("bin/{name}"),
+                    format!(
+                        "{:x}",
+                        sha2::Sha256::digest(std::fs::read(binaries.join(name)).unwrap())
+                    ),
+                )
+            })
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let mut metadata = serde_json::json!({
+            "version": version,
+            "buildProfile": "dev-small",
+            "javascriptRuntime": { "kind": "packagedNode" },
+            "protocol": { "major": 1, "revision": 2, "schemaHash": format!("sha256:{}", "a".repeat(64)) },
+            "target": build_info::TARGET,
+        });
+        metadata.sort_all_objects();
+        // Package-store validates the complete v2 identity before publishing this fixture.
+        let mut digest = sha2::Sha256::new();
+        digest.update(b"ash-package-build-v2\0");
+        digest.update(serde_json::to_vec(&metadata).unwrap());
+        digest.update(b"\0");
+        for (path, file_digest) in &files {
+            digest.update(path.as_bytes());
+            digest.update(b"\0");
+            digest.update(file_digest.as_bytes());
+            digest.update(b"\0");
+        }
+        let build_id = format!("sha256:{:x}", digest.finalize());
+        if package == &selected_package {
+            selected_build_id = build_id.clone();
+        }
+        metadata["buildId"] = build_id.into();
+        metadata["files"] = serde_json::to_value(files).unwrap();
         std::fs::write(
             package.join("ash-package.json"),
-            serde_json::to_vec(&serde_json::json!({
-                "buildId": format!("sha256:{}", digit.repeat(64))
-            }))
-            .unwrap(),
+            serde_json::to_vec(&metadata).unwrap(),
         )
         .unwrap();
     }
@@ -269,12 +312,12 @@ fn selected_managed_cli_switches_the_local_daemon_without_a_pinned_cli_switching
     #[cfg(windows)]
     std::fs::write(install.join("current"), "selected").unwrap();
 
-    let sessions = |package: &PathBuf| {
+    let command = |package: &PathBuf, arguments: &[&str]| {
         Command::new(package.join("bin").join(&cli_name))
-            .arg("sessions")
+            .args(arguments)
             .current_dir(harness.root.path())
-            .env_remove("HOME")
-            .env_remove("USERPROFILE")
+            .env("HOME", harness.root.path())
+            .env("USERPROFILE", harness.root.path())
             .env("ASH_HOME", &harness.profile)
             .env("CODEX_HOME", harness.root.path().join("codex"))
             .env(
@@ -288,9 +331,21 @@ fn selected_managed_cli_switches_the_local_daemon_without_a_pinned_cli_switching
             .unwrap()
     };
 
+    // Selecting the installed package's backend is explicit; reading sessions only connects
+    // to the profile's current daemon and must not replace it.
+    let ensured = command(
+        &selected_package,
+        &["app-server", "daemon", "ensure-selected"],
+    );
+    assert!(
+        ensured.status.success(),
+        "{}",
+        String::from_utf8_lossy(&ensured.stderr)
+    );
+
     let mut selected_pid = None;
     for package in [&selected_package, &old_package, &selected_package] {
-        let output = sessions(package);
+        let output = command(package, &["sessions"]);
         assert!(
             output.status.success(),
             "{}",
@@ -314,7 +369,7 @@ fn selected_managed_cli_switches_the_local_daemon_without_a_pinned_cli_switching
     let record: Value = serde_json::from_slice(&std::fs::read(record_path).unwrap()).unwrap();
     assert_eq!(
         record["executableIdentity"]["packageBuildId"],
-        format!("sha256:{}", "2".repeat(64))
+        selected_build_id
     );
 }
 
@@ -368,7 +423,7 @@ fn mcp_commands_persist_declarations_and_enablement_across_processes() {
         "user:mcp:stdio",
         "--disabled",
         "--",
-        env!("CARGO_BIN_EXE_ash"),
+        cargo_bin::cargo_bin!("ash").unwrap().to_str().unwrap(),
         "--version",
     ]);
     assert_eq!(
@@ -556,7 +611,7 @@ fn api_key_input_is_stored_without_appearing_in_command_output() {
 #[test]
 fn doctor_reports_missing_backend_and_fails() {
     let root = tempfile::tempdir().unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_ash"))
+    let output = Command::new(cargo_bin::cargo_bin!("ash").unwrap())
         .args(["doctor", "--json"])
         .env("ASH_HOME", root.path().join("profile"))
         .env("ASH_APP_SERVER_PATH", root.path().join("missing-backend"))

@@ -1,7 +1,7 @@
 .ash-sessions-window.modern-ui .ash-sessions-content-card {
 	display: block;
-	border: var(--ash-stroke-thickness) solid var(--ash-border);
-	border-radius: var(--ash-corner-radius-x-large);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-xLarge);
 	box-shadow: 0 2px 8px color-mix(in srgb, var(--ash-widget-shadow) 50%, transparent);
 }
 
@@ -10,20 +10,20 @@
 }
 
 .ash-sessions-window.modern-ui .ash-sessions-frame-start {
-	border-top-left-radius: var(--ash-corner-radius-x-large);
-	border-bottom-left-radius: var(--ash-corner-radius-x-large);
+	border-top-left-radius: var(--ash-cornerRadius-xLarge);
+	border-bottom-left-radius: var(--ash-cornerRadius-xLarge);
 }
 
 .ash-sessions-window.modern-ui .ash-workbench-editor {
-	border-left: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-left: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
 .ash-sessions-window.modern-ui .ash-sessions-frame-end {
-	border-top-right-radius: var(--ash-corner-radius-x-large);
-	border-bottom-right-radius: var(--ash-corner-radius-x-large);
+	border-top-right-radius: var(--ash-cornerRadius-xLarge);
+	border-bottom-right-radius: var(--ash-cornerRadius-xLarge);
 }
 
 .ash-sessions-window.modern-ui[data-color-scheme^="high-contrast-"] .ash-sessions-content-card {
-	border-color: var(--ash-contrast-border);
+	border-color: var(--ash-contrastBorder);
 	box-shadow: none;
 }

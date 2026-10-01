@@ -16,6 +16,34 @@ pub struct DictationStartParams {
     #[schemars(length(min = 1, max = 128))]
     pub resource_id: String,
     pub backend: DictationBackend,
+    /// Physical microphone identity from dictation/options; None follows the system default.
+    #[schemars(length(max = 2048))]
+    pub input_device: Option<String>,
+    /// Explicit provider language hint; None delegates detection to the model.
+    #[schemars(length(max = 32))]
+    pub language: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DictationOptionsParams {
+    pub backend: DictationBackend,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct DictationInputDevice {
+    pub id: String,
+    pub label: String,
+    pub is_default: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct DictationOptions {
+    pub input_devices: Vec<DictationInputDevice>,
+    /// Empty means language hints are not supported by this backend/model.
+    pub languages: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

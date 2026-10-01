@@ -7,7 +7,7 @@
 }
 
 .ash-scrollbar:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
   outline-offset: -1px;
 }
 
@@ -96,7 +96,7 @@
   position: absolute;
   box-sizing: border-box;
   border-radius: calc(var(--ash-scrollbar-size) / 2);
-  background: var(--ash-scrollbar-slider-background);
+  background: var(--ash-scrollbarSlider-background);
   cursor: default;
   forced-color-adjust: none;
   will-change: transform;
@@ -116,16 +116,16 @@
 }
 
 .ash-scrollbar-track:hover > .ash-scrollbar-thumb {
-  background: var(--ash-scrollbar-slider-hover-background);
+  background: var(--ash-scrollbarSlider-hoverBackground);
 }
 
 .ash-scrollbar-track.active > .ash-scrollbar-thumb {
-  background: var(--ash-scrollbar-slider-active-background);
+  background: var(--ash-scrollbarSlider-activeBackground);
 }
 
 .ash-scrollbar-track:focus-visible {
-  outline: var(--ash-stroke-thickness) solid
-    var(--ash-focus-border);
+  outline: var(--ash-strokeThickness) solid
+    var(--ash-focusBorder);
   outline-offset: -1px;
 }
 
@@ -189,11 +189,11 @@
 }
 
 .ash-scrollbar-arrow:hover:not(:disabled) {
-  background: var(--ash-scrollbar-slider-hover-background);
+  background: var(--ash-scrollbarSlider-hoverBackground);
 }
 
 .ash-scrollbar-arrow:active:not(:disabled) {
-  background: var(--ash-scrollbar-slider-active-background);
+  background: var(--ash-scrollbarSlider-activeBackground);
 }
 
 .ash-scrollbar-arrow:disabled:not([data-visibility="auto"]) {
@@ -201,7 +201,7 @@
 }
 
 .ash-scrollbar-arrow:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
   outline-offset: -1px;
 }
 

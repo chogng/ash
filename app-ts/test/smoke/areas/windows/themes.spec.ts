@@ -274,7 +274,7 @@ test('structured theme settings persist scoped colors and token rules after relo
 		await expect(row.locator('[data-pattern-part="value"]')).toBeEnabled();
 		await expect(setting.locator('.ash-string-map-row')).toHaveCount(1);
 	}
-	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-selection-background').trim())).toBe('#123456');
+	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-selectionBackground').trim())).toBe('#123456');
 	await page.getByRole('dialog', { name: 'Ash Settings' }).locator('.ash-modal-editor-close').click();
 	await page.reload();
 	await workbench.waitForReady();
@@ -284,5 +284,5 @@ test('structured theme settings persist scoped colors and token rules after relo
 		await expect(row.locator('[data-pattern-part="key"]')).toHaveValue(entry.key);
 		await expect(row.locator('[data-pattern-part="value"]')).toHaveValue(JSON.stringify(entry.value));
 	}
-	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-selection-background').trim())).toBe('#123456');
+	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-selectionBackground').trim())).toBe('#123456');
 });

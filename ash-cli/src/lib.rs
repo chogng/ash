@@ -100,12 +100,9 @@ struct ForwardArgs {
 /// The executable owns process hardening and internal helper dispatch before this entry.
 /// Help and version output do not start an App Server or access user configuration.
 pub fn run(arguments: impl IntoIterator<Item = impl Into<OsString> + Clone>) -> i32 {
-    let cli = match Cli::try_parse_from(arguments) {
-        Ok(cli) => cli,
-        Err(error) => {
-            let code = error.exit_code();
-            return if error.print().is_ok() { code } else { 1 };
-        }
+    let cli = match cli::parse_arguments::<Cli>(arguments) {
+        cli::ParseOutcome::Parsed(cli) => cli,
+        cli::ParseOutcome::Exit(code) => return code,
     };
     match dispatch(cli) {
         Ok(code) => code,

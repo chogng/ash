@@ -2543,6 +2543,9 @@ impl AppServer {
                 self.attachment_upload_start(connection, &request.params)
             }
             Some(ClientMethod::DictationStart) => self.dictation_start(connection, &request.params),
+            Some(ClientMethod::DictationOptions) => {
+                self.dictation_options(connection, &request.params)
+            }
             Some(ClientMethod::DictationStop) => self.dictation_stop(connection, &request.params),
             Some(ClientMethod::DictationModelRead) => {
                 self.dictation_model_read(connection, &request.params)

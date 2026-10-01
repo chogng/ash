@@ -1,24 +1,24 @@
 .ash-editor-title-control {
   position: relative;
   min-width: 0;
-  height: calc(var(--ash-pane-title-height) * var(--ash-editor-tab-rows, 1));
-  flex: 0 0 calc(var(--ash-pane-title-height) * var(--ash-editor-tab-rows, 1));
+  height: calc(var(--ash-pane-titleHeight) * var(--ash-editor-tab-rows, 1));
+  flex: 0 0 calc(var(--ash-pane-titleHeight) * var(--ash-editor-tab-rows, 1));
 }
 
 .ash-editor-title-control.ash-editor-title-with-breadcrumbs {
-  height: calc(var(--ash-pane-title-height) * var(--ash-editor-tab-rows, 1) + 22px);
-  flex-basis: calc(var(--ash-pane-title-height) * var(--ash-editor-tab-rows, 1) + 22px);
+  height: calc(var(--ash-pane-titleHeight) * var(--ash-editor-tab-rows, 1) + 22px);
+  flex-basis: calc(var(--ash-pane-titleHeight) * var(--ash-editor-tab-rows, 1) + 22px);
 }
 
 .ash-editor-tabs-and-actions {
   position: relative;
   display: flex;
   min-width: 0;
-  height: calc(var(--ash-pane-title-height) * var(--ash-editor-tab-rows, 1));
+  height: calc(var(--ash-pane-titleHeight) * var(--ash-editor-tab-rows, 1));
 }
 
 .ash-editor-tabs-and-actions.multiple {
-  background: var(--ash-editor-group-header-tabs-background);
+  background: var(--ash-editorGroupHeader-tabsBackground);
 }
 
 .ash-editor-title-control::after {
@@ -33,7 +33,7 @@
 
 .ash-editor-title-actions {
   display: flex;
-  height: var(--ash-pane-title-height);
+  height: var(--ash-pane-titleHeight);
   flex: 0 0 auto;
   align-items: center;
   margin-left: auto;

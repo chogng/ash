@@ -4,6 +4,18 @@ import { Extensions, type IConfigurationRegistry } from '../../../../platform/co
 import { Registry } from '../../../../platform/registry/common/platform.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.Dictation, defaultValue: true,
+	parse(value: unknown): boolean { if (typeof value !== 'boolean') throw new TypeError('Dictation verbosity must be boolean'); return value; },
+	setting: { valueType: 'boolean', title: localize('dictation.targetVerbosity', 'Dictation accessibility help'), description: localize('dictation.targetVerbosityDescription', 'Announce how to open accessibility help while dictating in an editor or terminal.') },
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.DictationOnboarding, defaultValue: true,
+	parse(value: unknown): boolean { if (typeof value !== 'boolean') { throw new TypeError('Dictation introduction verbosity must be boolean'); } return value; },
+	setting: { valueType: 'boolean', title: localize({ bundle: 'ash', key: 'dictation.verbosity' }, 'Dictation introduction accessibility help'), description: localize({ bundle: 'ash', key: 'dictation.verbosityDescription' }, 'Announce how to open accessibility help in the dictation introduction.') },
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.SessionsChanges,
 	defaultValue: true,
 	parse(value: unknown): boolean {

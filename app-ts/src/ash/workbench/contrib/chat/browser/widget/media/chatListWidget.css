@@ -24,11 +24,11 @@
   margin-bottom: 4px;
   color: var(--ash-description-foreground);
   font-size: 11px;
-  font-weight: var(--ash-font-weight-semi-bold);
+  font-weight: var(--ash-fontWeight-semiBold);
   text-transform: uppercase;
 }
 .ash-chat-item-userMessage pre {
-  border-radius: var(--ash-corner-radius-medium);
+  border-radius: var(--ash-cornerRadius-medium);
   background: var(--ash-input-background);
 }
 .ash-chat-item pre {
@@ -57,17 +57,17 @@
 .ash-chat-turn-error-action {
   margin: 0 8px 4px;
   padding: 4px 8px;
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-small);
+  border: var(--ash-strokeThickness) solid var(--ash-border);
+  border-radius: var(--ash-cornerRadius-small);
   color: var(--ash-button-foreground);
-  background: var(--ash-button-secondary-background);
+  background: var(--ash-button-secondaryBackground);
   font: inherit;
   cursor: pointer;
 }
 .ash-chat-turn-error-action:hover {
-  background: var(--ash-button-hover-background);
+  background: var(--ash-button-hoverBackground);
 }
 .ash-chat-turn-error-action:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: var(--ash-stroke-thickness);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+  outline-offset: var(--ash-strokeThickness);
 }

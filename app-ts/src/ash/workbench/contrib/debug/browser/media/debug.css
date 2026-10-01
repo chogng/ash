@@ -19,7 +19,7 @@
   padding: 4px 6px;
   color: inherit;
   background: var(--ash-input-background);
-  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+  border: var(--ash-strokeThickness) solid var(--ash-input-border);
 }
 
 .ash-debug button {
@@ -29,17 +29,17 @@
   cursor: pointer;
   background: color-mix(in srgb, currentColor 8%, transparent);
   border: 0;
-  border-radius: var(--ash-corner-radius-small);
+  border-radius: var(--ash-cornerRadius-small);
 }
 
 .ash-debug button:hover {
-  background: var(--ash-toolbar-hover-background);
+  background: var(--ash-toolbar-hoverBackground);
 }
 
 .ash-debug button:focus-visible,
 .ash-debug select:focus-visible,
 .ash-debug input:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
   outline-offset: -1px;
 }
 
@@ -61,8 +61,8 @@
 
 .ash-debug-section-heading {
   padding: 6px 4px;
-  font-weight: var(--ash-font-weight-semi-bold);
-  border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
+  font-weight: var(--ash-fontWeight-semiBold);
+  border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
 .ash-debug-section li:not(.ash-debug-section-heading) {
@@ -83,7 +83,7 @@
 }
 
 .ash-debug-frame.selected {
-  background: var(--ash-list-active-selection-background);
+  background: var(--ash-list-activeSelectionBackground);
 }
 
 .ash-debug-thread-select {
@@ -126,7 +126,7 @@
   padding: 4px 6px;
   color: inherit;
   background: var(--ash-input-background);
-  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+  border: var(--ash-strokeThickness) solid var(--ash-input-border);
 }
 
 .ash-debug-console-output {
@@ -144,7 +144,7 @@
 .ash-debug-console-form {
   flex: 0 0 auto;
   padding: 6px 8px;
-  border-top: var(--ash-stroke-thickness) solid var(--ash-border);
+  border-top: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
 .ash-debug-console-form input {
@@ -154,13 +154,13 @@
   color: inherit;
   font: inherit;
   background: var(--ash-input-background);
-  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+  border: var(--ash-strokeThickness) solid var(--ash-input-border);
 }
 
 .ash-debug-console-session:focus-visible,
 .ash-debug-console-output:focus-visible,
 .ash-debug-console-form input:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
   outline-offset: -1px;
 }
 

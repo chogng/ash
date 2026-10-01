@@ -35,8 +35,8 @@
 	flex-direction: column;
 	gap: var(--ash-spacing-size80);
 	padding: var(--ash-spacing-size80);
-	border-inline-start: var(--ash-stroke-thickness) solid var(--ash-border);
-	background: var(--ash-side-bar-background);
+	border-inline-start: var(--ash-strokeThickness) solid var(--ash-border);
+	background: var(--ash-sideBar-background);
 }
 
 .ash-chat-sessions-sidebar[hidden] {
@@ -55,8 +55,8 @@
 	min-width: 0;
 	margin: 0;
 	overflow: hidden;
-	font-size: var(--ash-font-size-label1);
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-size: var(--ash-fontSize-label1);
+	font-weight: var(--ash-fontWeight-semiBold);
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
@@ -65,7 +65,7 @@
 	flex: 0 0 auto;
 	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
 	border: 0;
-	border-radius: var(--ash-corner-radius-small);
+	border-radius: var(--ash-cornerRadius-small);
 	color: var(--ash-foreground);
 	background: transparent;
 	font: inherit;
@@ -73,12 +73,12 @@
 }
 
 .ash-chat-sessions-new:hover {
-	background: var(--ash-list-hover-background);
+	background: var(--ash-list-hoverBackground);
 }
 
 .ash-chat-sessions-new:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-	outline-offset: calc(-1 * var(--ash-stroke-thickness));
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
 }
 
 .ash-chat-body.compact.sessions-sidebar-visible .ash-chat-sessions-sidebar {
@@ -88,7 +88,7 @@
   width: min(92%, 360px);
   min-width: 0;
   box-shadow: -4px 0 12px var(--ash-widget-shadow);
-  border-inline-start: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
+  border-inline-start: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
 }
 
 .ash-chat-pane-host > .ash-chat {

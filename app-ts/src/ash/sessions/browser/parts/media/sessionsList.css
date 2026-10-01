@@ -5,7 +5,7 @@
   flex-direction: column;
   gap: var(--ash-spacing-size160);
   padding: var(--ash-spacing-size240) var(--ash-spacing-size120);
-  background: var(--ash-side-bar-background);
+  background: var(--ash-sideBar-background);
 }
 
 .ash-sessions-list h2 {
@@ -32,7 +32,7 @@
   align-items: center;
   gap: var(--ash-spacing-size80);
   padding: 0 var(--ash-spacing-size120);
-  border-radius: var(--ash-corner-radius-large);
+  border-radius: var(--ash-cornerRadius-large);
   color: var(--ash-description-foreground);
   background: var(--ash-input-background);
 }
@@ -49,7 +49,7 @@
 }
 
 .ash-sessions-list-search:focus-within {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 }
 
 .ash-sessions-list-add {
@@ -60,15 +60,15 @@
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: var(--ash-corner-radius-large);
+  border-radius: var(--ash-cornerRadius-large);
   color: var(--ash-foreground);
   background: var(--ash-input-background);
   cursor: pointer;
 }
 
 .ash-sessions-list-add svg { width: 20px; height: 20px; }
-.ash-sessions-list-add:hover { background: var(--ash-list-hover-background); }
-.ash-sessions-list-add:focus-visible { outline: var(--ash-stroke-thickness) solid var(--ash-focus-border); }
+.ash-sessions-list-add:hover { background: var(--ash-list-hoverBackground); }
+.ash-sessions-list-add:focus-visible { outline: var(--ash-strokeThickness) solid var(--ash-focusBorder); }
 
 .ash-sessions-list-items {
   display: flex;
@@ -87,11 +87,11 @@
   gap: var(--ash-spacing-size120);
   padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
   border: 0;
-  border-radius: var(--ash-corner-radius-x-large);
+  border-radius: var(--ash-cornerRadius-xLarge);
   color: var(--ash-foreground);
   background: transparent;
   cursor: pointer;
-  font-size: var(--ash-font-size-body1);
+  font-size: var(--ash-fontSize-body1);
   text-align: left;
 }
 
@@ -102,8 +102,8 @@
   flex: 0 0 auto;
   place-items: center;
   border-radius: 50%;
-  color: var(--ash-button-primary-foreground);
-  background: var(--ash-button-primary-background);
+  color: var(--ash-button-primaryForeground);
+  background: var(--ash-button-primaryBackground);
 }
 
 .ash-sessions-list-avatar svg { width: 24px; height: 24px; }
@@ -115,20 +115,20 @@
   white-space: nowrap;
 }
 
-.ash-sessions-list-item:hover { background: var(--ash-list-hover-background); }
+.ash-sessions-list-item:hover { background: var(--ash-list-hoverBackground); }
 
 .ash-sessions-list-item.selected {
   color: var(--ash-foreground);
-  background: var(--ash-sessions-selection-background);
+  background: var(--ash-sessions-selectionBackground);
 }
 
 .ash-sessions-list-item:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
   outline-offset: -1px;
 }
 
 .ash-sessions-empty {
   margin: var(--ash-spacing-size80) var(--ash-spacing-size20);
   color: var(--ash-description-foreground);
-  font-size: var(--ash-font-size-label1);
+  font-size: var(--ash-fontSize-label1);
 }

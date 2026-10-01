@@ -36,6 +36,7 @@ pub struct LocalDictationRequest {
     pub model_root: PathBuf,
     pub audio_host: PathBuf,
     pub network: OutboundNetworkSnapshot,
+    pub input_device: Option<String>,
 }
 
 #[cfg(feature = "cloud")]
@@ -47,6 +48,19 @@ pub struct CloudDictationRequest {
     pub provider_runtime: Arc<ModelProviderRuntime>,
     pub provider_config: ModelProviderConfig,
     pub connector: WebSocketConnector,
+    pub input_device: Option<String>,
+    pub language: Option<String>,
+}
+
+/// Language hints declared by the shipping transcription adapters, independent of UI locale.
+#[cfg(feature = "cloud")]
+pub fn transcription_languages(provider: CloudTranscriptionProvider) -> &'static [&'static str] {
+    match provider {
+        CloudTranscriptionProvider::OpenAi => {
+            &["en", "zh", "es", "fr", "de", "ja", "ko", "pt", "it", "ar"]
+        }
+        CloudTranscriptionProvider::Xai => &["en", "es", "fr", "de", "ja", "ko", "pt", "it", "ar"],
+    }
 }
 
 #[cfg(feature = "cloud")]
@@ -244,6 +258,27 @@ impl Default for DictationManager {
 }
 
 impl DictationManager {
+    /// Synchronous RPC handlers use a device-query worker, independently of any capture session.
+    pub fn input_devices(
+        &self,
+        executable: &std::path::Path,
+    ) -> Result<Vec<voice_host::InputDevice>, String> {
+        std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let runtime = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .map_err(|error| error.to_string())?;
+                    runtime
+                        .block_on(voice_host::input_devices(executable))
+                        .map_err(|error| error.to_string())
+                })
+                .join()
+                .map_err(|_| "Microphone enumeration worker failed".to_owned())?
+        })
+    }
+
     pub fn is_active(&self) -> bool {
         self.active.lock().is_ok_and(|active| {
             active

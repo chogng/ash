@@ -25,3 +25,9 @@ common:windows --host_platform=//:local_windows
 # discovering a machine-specific Apple C++ toolchain.
 common --repo_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
 common --repo_env=BAZEL_NO_APPLE_CPP_TOOLCHAIN=1
+
+# Artifact identity checks rehash complete programs during test startup. Keep the
+# sha2 0.10 dependency optimized like Cargo's test profile; do not skip validation
+# or override release builds. The filter is a rules_rs crate-root path prefix.
+test:ci --compilation_mode=fastbuild
+test:ci --@rules_rust//rust/settings:experimental_per_crate_rustc_flag=external/rules_rs++crate+crates__sha2-0.10.@-Copt-level=1

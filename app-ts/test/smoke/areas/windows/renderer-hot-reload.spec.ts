@@ -1,12 +1,12 @@
 /// <reference types="@webgpu/types" />
 /// <reference path="../../../../src/typings/editContext.d.ts" />
 
-import { _electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
+import { _electron, expect, test, type BrowserContext, type ElectronApplication, type Page, type Request } from '@playwright/test';
 import { readFile, writeFile, rename, mkdtemp, rm } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { spawn } from 'node:child_process';
-import { once } from 'node:events';
+import { createLogger, createServer, normalizePath, type ViteDevServer } from 'vite';
+import { prepareViteClient } from '../../../../../build/app_ts/vite/developmentServer.ts';
 import { resolveElectronConfiguration } from '../../../automation/electron.js';
 import type * as Stanza from '../../../../src/ash/editor/editor.main.js';
 
@@ -29,20 +29,28 @@ test('development Renderer replaces contribution initialization twice while reta
 	const sourceFile = resolve(desktopDirectory, 'src/ash/editor/contrib/placeholderText/browser/placeholderTextContribution.ts');
 	const original = await readFile(sourceFile, 'utf8');
 	let written = original;
-	const server = spawn(process.execPath, [resolve(desktopDirectory, 'node_modules/vite/bin/vite.js'), '--config', '../build/app_ts/vite/editor.vite.config.ts', '--port', '5198', '--strictPort'], { cwd: desktopDirectory, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
 	let serverOutput = '';
-	server.stdout.on('data', (chunk: Buffer) => { serverOutput += chunk.toString(); });
-	server.stderr.on('data', (chunk: Buffer) => { serverOutput += chunk.toString(); });
+	const serverErrors: string[] = [];
+	const logger = createLogger('silent');
+	for (const level of ['info', 'warn', 'warnOnce', 'error'] as const) {
+		logger[level] = message => {
+			serverOutput += `${message}\n`;
+			if (level === 'error') serverErrors.push(message);
+		};
+	}
 	const profile = await mkdtemp(join(tmpdir(), 'ash-hmr-'));
+	let server: ViteDevServer | undefined;
+	let tracingContext: BrowserContext | undefined;
 	let electron: ElectronApplication | undefined;
 	let browser: Awaited<ReturnType<typeof playwright.chromium.launch>> | undefined;
+	let originalFailure: { error: unknown } | undefined;
 	try {
-		await test.step('start the development server', async () => {
-			await expect.poll(() => {
-				if (server.exitCode !== null) throw new Error(serverOutput);
-				return serverOutput.includes('5198');
-			}, { timeout: 30_000 }).toBe(true);
-		});
+		await test.step('prepare the development entry and its static dependencies', async () => {
+			server = await createServer({ configFile: resolve(desktopDirectory, '../build/app_ts/vite/editor.vite.config.ts'), customLogger: logger, server: { port: 5198, strictPort: true } });
+			await server.listen();
+			const setup = `/@fs/${normalizePath(resolve(desktopDirectory, '../build/app_ts/vite/setup-dev.ts')).replace(/^\/+/, '')}`;
+			await prepareViteClient(server, [setup, '/index.ts'], serverErrors);
+		}, { timeout: 30_000 });
 		let page: Page;
 		if (testInfo.project.name.startsWith('electron')) {
 			const configuration = resolveElectronConfiguration({ desktopDirectory, appServerMode: 'disabled', userDataDirectory: profile });
@@ -55,13 +63,22 @@ test('development Renderer replaces contribution initialization twice while reta
 		}
 		const errors: string[] = [];
 		const consoleMessages: string[] = [];
+		const pendingRequests = new Map<Request, number>();
+		const failedRequests: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		page.on('console', message => consoleMessages.push(message.text()));
+		page.on('request', request => pendingRequests.set(request, Date.now()));
+		page.on('requestfinished', request => pendingRequests.delete(request));
+		page.on('requestfailed', request => { pendingRequests.delete(request); failedRequests.push(`${request.url()}: ${request.failure()?.errorText}`); });
+		page.on('response', response => { if (!response.ok()) failedRequests.push(`${response.status()} ${response.url()}`); });
+		await page.context().tracing.start({ screenshots: false, snapshots: true, sources: true });
+		tracingContext = page.context();
 		await test.step('open the editor through Vite', async () => {
 			try {
 				await page.goto('http://127.0.0.1:5198/', { waitUntil: 'domcontentloaded', timeout: 30_000 });
 			} catch (error) {
-				throw new Error(`Vite navigation failed: ${serverOutput}\n${errors.join('\n')}`, { cause: error });
+				const pending = [...pendingRequests].map(([request, start]) => `${Date.now() - start}ms ${request.method()} ${request.url()}`);
+				throw new Error(`Vite navigation failed at ${page.url()}: ${serverOutput}\nPending requests:\n${pending.join('\n')}\nFailed requests:\n${failedRequests.join('\n')}\nConsole:\n${consoleMessages.join('\n')}\n${errors.join('\n')}`, { cause: error });
 			}
 		});
 		await test.step('wait for the placeholder contribution', async () => {
@@ -114,27 +131,38 @@ test('development Renderer replaces contribution initialization twice while reta
 		await page.evaluate(() => globalThis.hotReloadEvidence.editor.dispose());
 		await expect(page.locator('.stanza-editor-placeholder-text')).toHaveCount(0);
 		expect(errors).toEqual([]);
+	} catch (error) {
+		originalFailure = { error };
+		throw error;
 	} finally {
-		// Do not overwrite an edit made by someone else while this scenario was running.
-		const current = await readFile(sourceFile, 'utf8');
-		if (current === written) {
-			await writeFile(sourceFile, original);
-		}
+		const cleanupErrors: unknown[] = [];
+		const cleanup = async (action: () => unknown | Promise<unknown>): Promise<void> => {
+			try { await action(); } catch (error) { cleanupErrors.push(error); }
+		};
+		await cleanup(async () => {
+			if (tracingContext) {
+				const path = testInfo.outputPath('hot-reload-trace.zip');
+				await tracingContext.tracing.stop({ path });
+				await testInfo.attach('hot-reload-trace', { path, contentType: 'application/zip' });
+			}
+		});
+		await cleanup(async () => {
+			// Do not overwrite an edit made by someone else while this scenario was running.
+			const current = await readFile(sourceFile, 'utf8');
+			if (current === written) await writeFile(sourceFile, original);
+			else if (current !== original) throw new Error(`Concurrent edit detected; preserve ${sourceFile}`);
+		});
 		if (electron) {
-			await electron.evaluate(({ BrowserWindow }) => {
+			await cleanup(() => electron!.evaluate(({ BrowserWindow }) => {
 				for (const window of BrowserWindow.getAllWindows()) window.destroy();
-			});
-			await electron.close();
+			}));
+			await cleanup(() => electron!.close());
 		}
-		await browser?.close();
-		if (server.exitCode === null) {
-			const stopped = once(server, 'exit');
-			server.kill();
-			await stopped;
-		}
-		await rm(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
-		if (current !== written && current !== original) {
-			throw new Error(`Concurrent edit detected; preserve ${sourceFile}`);
+		await cleanup(() => browser?.close());
+		await cleanup(() => server?.close());
+		await cleanup(() => rm(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
+		if (cleanupErrors.length > 0) {
+			throw new AggregateError([...(originalFailure ? [originalFailure.error] : []), ...cleanupErrors], 'Hot-reload cleanup failed', { cause: originalFailure?.error ?? cleanupErrors[0] });
 		}
 	}
 });

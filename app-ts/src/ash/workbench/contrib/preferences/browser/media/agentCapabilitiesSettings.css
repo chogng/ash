@@ -18,15 +18,15 @@
 .ash-agent-capabilities-list li {
 	min-width: 0;
 	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
-	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-corner-radius-medium);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-medium);
 }
 
 .ash-agent-capabilities-list h4,
 .ash-agent-capabilities-list h5 {
 	margin: 0;
-	font-size: var(--ash-font-size-body1);
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-agent-capabilities-list p {
@@ -36,5 +36,5 @@
 
 .ash-agent-capabilities-metadata {
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 }

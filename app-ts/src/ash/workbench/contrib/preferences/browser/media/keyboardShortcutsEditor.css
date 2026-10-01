@@ -25,8 +25,8 @@
 
 .ash-keybindings-header h1 {
   margin: 0;
-  font-size: var(--ash-font-size-heading1);
-  font-weight: var(--ash-font-weight-semi-bold);
+  font-size: var(--ash-fontSize-heading1);
+  font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-keybindings-header p {
@@ -57,8 +57,8 @@
   box-sizing: border-box;
   align-items: end;
   padding: 16px;
-  border: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  border-radius: var(--ash-corner-radius-medium);
+  border: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+  border-radius: var(--ash-cornerRadius-medium);
   margin-bottom: 16px;
   background: var(--ash-editor-background);
   gap: 12px;
@@ -71,8 +71,8 @@
 
 .ash-keybindings-recorder h2 {
   margin: 0;
-  font-size: var(--ash-font-size-heading2);
-  font-weight: var(--ash-font-weight-semi-bold);
+  font-size: var(--ash-fontSize-heading2);
+  font-weight: var(--ash-fontWeight-semiBold);
   grid-column: 1 / -1;
 }
 
@@ -138,8 +138,8 @@
 
 .ash-keybindings-list {
   overflow: hidden;
-  border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-  border-radius: var(--ash-corner-radius-medium);
+  border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+  border-radius: var(--ash-cornerRadius-medium);
   margin-bottom: 28px;
 }
 
@@ -154,9 +154,9 @@
 .ash-keybindings-table-header {
   min-height: 34px;
   color: var(--ash-description-foreground);
-  background: var(--ash-side-bar-background);
+  background: var(--ash-sideBar-background);
   font-size: 11px;
-  font-weight: var(--ash-font-weight-semi-bold);
+  font-weight: var(--ash-fontWeight-semiBold);
   text-transform: uppercase;
 }
 
@@ -168,16 +168,16 @@
 
 .ash-keybindings-row {
   min-height: 52px;
-  border-top: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+  border-top: var(--ash-strokeThickness) solid var(--ash-widget-border);
 }
 
 .ash-keybindings-row:hover,
 .ash-keybindings-row:focus-within {
-  background: var(--ash-list-hover-background);
+  background: var(--ash-list-hoverBackground);
 }
 
 .ash-keybindings-row.is-user {
-  box-shadow: inset 2px 0 var(--ash-focus-border);
+  box-shadow: inset 2px 0 var(--ash-focusBorder);
 }
 
 .ash-keybindings-command {
@@ -188,7 +188,7 @@
 
 .ash-keybindings-command-label {
   overflow: hidden;
-  font-weight: var(--ash-font-weight-semi-bold);
+  font-weight: var(--ash-fontWeight-semiBold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

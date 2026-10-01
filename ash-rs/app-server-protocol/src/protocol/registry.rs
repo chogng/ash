@@ -455,6 +455,8 @@ use crate::protocol::dictation::DictationBackend;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::dictation::DictationCloudProvider;
 use crate::protocol::dictation::DictationEnded;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::dictation::DictationInputDevice;
 use crate::protocol::dictation::DictationModelChanged;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::dictation::DictationModelList;
@@ -469,6 +471,10 @@ use crate::protocol::dictation::DictationModelStage;
 use crate::protocol::dictation::DictationModelStartParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::dictation::DictationModelStatus;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::dictation::DictationOptions;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::dictation::DictationOptionsParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::dictation::DictationResourceParams;
 #[cfg(any(test, feature = "export"))]
@@ -3280,6 +3286,11 @@ client_methods! {
         response: (),
         serialization: ConnectionExclusive("dictation"),
     },
+    DictationOptions => "dictation/options" {
+        params: DictationOptionsParams,
+        response: DictationOptions,
+        serialization: GlobalSharedRead,
+    },
     DictationStop => "dictation/stop" {
         params: DictationResourceParams,
         response: DictationStopResult,
@@ -4353,6 +4364,9 @@ typescript_bindings! {
     CallStatus,
     DictationResourceParams,
     DictationStartParams,
+    DictationOptions,
+    DictationOptionsParams,
+    DictationInputDevice,
     DictationBackend,
     DictationCloudProvider,
     DictationTranscript,

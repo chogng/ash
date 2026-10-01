@@ -62,7 +62,7 @@ import { WorkbenchConfiguration } from "../../../common/configuration.js";
 export { EditorOpenSupersededError } from "./editorGroupView.js";
 
 /** Keep the CSS variable reference so theme changes recolor existing Grid boundaries without restyling the Grid. */
-const EDITOR_GROUP_GRID_STYLES = { separatorBorder: "var(--ash-editor-group-border)" } as const;
+const EDITOR_GROUP_GRID_STYLES = { separatorBorder: "var(--ash-editorGroup-border)" } as const;
 
 // Matches the standard stroke token used by modernUI/browser/media/editorBorder.css.
 const EDITOR_FRAME_BORDER_WIDTH = 1;

@@ -175,6 +175,9 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 		this.lineBackend.clear();
 		this.tokenStore.clear();
 		this.scheduleAnalysis();
+		// Line tokenizers do not write the worker store, so clearing that store alone
+		// cannot invalidate retained token styling when a line provider is removed.
+		this.changeEmitter.fire(undefined);
 	}
 
 	async whenReady(signal: AbortSignal): Promise<void> {

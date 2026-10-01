@@ -39,7 +39,7 @@
 	gap: 8px;
 	padding: 6px 8px;
 	background: var(--ash-editor-background);
-	border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
 }
 
 .stanza-multi-diff-editor-toolbar-left,
@@ -69,7 +69,7 @@
 .stanza-multi-diff-editor-source-toolbar .ash-dropdown-with-primary-primary > .ash-button,
 .stanza-multi-diff-editor-repository-toolbar .ash-dropdown-with-primary-primary > .ash-button {
 	min-width: 104px;
-	border-radius: var(--ash-corner-radius-small) 0 0 var(--ash-corner-radius-small);
+	border-radius: var(--ash-cornerRadius-small) 0 0 var(--ash-cornerRadius-small);
 }
 
 .stanza-multi-diff-editor-file-actions .ash-toolbar {
@@ -106,21 +106,21 @@
 	gap: 12px;
 	padding: 16px;
 	color: var(--ash-foreground);
-	background: var(--ash-editor-widget-background, var(--ash-editor-background));
-	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-corner-radius-large);
+	background: var(--ash-editor-widgetBackground, var(--ash-editor-background));
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-large);
 	box-shadow: 0 8px 28px var(--ash-widget-shadow);
 }
 
 .stanza-multi-diff-commit-dialog h2 {
 	margin: 0;
-	font-size: var(--ash-font-size-heading2);
+	font-size: var(--ash-fontSize-heading2);
 }
 
 .stanza-multi-diff-commit-editor {
 	height: 112px;
-	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-small);
 	overflow: hidden;
 }
 

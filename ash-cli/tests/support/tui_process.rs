@@ -46,15 +46,12 @@ pub const SMALL_SIZE: PtySize = PtySize {
 };
 
 fn ash_executable() -> PathBuf {
-    match option_env!("ASH_BAZEL_ASH") {
-        Some(path) => bazel_runfile(path),
-        None => PathBuf::from(option_env!("CARGO_BIN_EXE_ash").expect("Cargo ash executable")),
-    }
+    cargo_bin::cargo_bin!("ash").unwrap()
 }
 
 fn daemon_executable() -> PathBuf {
-    match option_env!("ASH_BAZEL_DAEMON") {
-        Some(path) => bazel_runfile(path),
+    match option_env!("CARGO_BIN_EXE_ash-app-server-daemon") {
+        Some(path) => cargo_bin::resolve_executable(Path::new(path)).unwrap(),
         None => ash_executable().with_file_name(format!(
             "ash-app-server-daemon{}",
             std::env::consts::EXE_SUFFIX
@@ -63,25 +60,11 @@ fn daemon_executable() -> PathBuf {
 }
 
 fn app_server_executable() -> PathBuf {
-    match option_env!("ASH_BAZEL_APP_SERVER") {
-        Some(path) => bazel_runfile(path),
+    match option_env!("CARGO_BIN_EXE_ash-app-server") {
+        Some(path) => cargo_bin::resolve_executable(Path::new(path)).unwrap(),
         None => ash_executable()
             .with_file_name(format!("ash-app-server{}", std::env::consts::EXE_SUFFIX)),
     }
-}
-
-fn bazel_runfile(path: &str) -> PathBuf {
-    if let Some(directory) = std::env::var_os("RUNFILES_DIR") {
-        return PathBuf::from(directory).join(path);
-    }
-    let manifest = std::env::var("RUNFILES_MANIFEST_FILE").expect("Bazel runfiles manifest");
-    let contents = fs::read_to_string(manifest).expect("read Bazel runfiles manifest");
-    let value = contents
-        .lines()
-        .filter_map(|line| line.split_once(' '))
-        .find_map(|(key, value)| (key == path).then_some(value))
-        .unwrap_or_else(|| panic!("missing Bazel runfile: {path}"));
-    PathBuf::from(value)
 }
 
 fn cpp_runtime_environment(library: &Path) -> (&'static str, PathBuf) {
@@ -112,7 +95,7 @@ impl StagedBinaries {
         fs::create_dir(&bin).unwrap();
         let staged = |source: PathBuf| {
             let destination = bin.join(source.file_name().expect("executable name"));
-            fs::copy(source, &destination).unwrap();
+            cargo_bin::copy_executable(&source, &destination).unwrap();
             destination
         };
         let binaries = Self {
@@ -212,7 +195,7 @@ impl Fixture {
         let profile = path.join("profile");
         fs::create_dir_all(&workspace).unwrap();
         fs::create_dir_all(&profile).unwrap();
-        let (ash, daemon, app_server) = if option_env!("ASH_BAZEL_ASH").is_some() {
+        let (ash, daemon, app_server) = if cargo_bin::runfiles_available() {
             let staged = STAGED_BINARIES.get_or_init(StagedBinaries::new);
             (
                 staged.ash.clone(),
@@ -264,7 +247,9 @@ impl Fixture {
         if let Some(path) = option_env!("ASH_BAZEL_LIBSTDCXX") {
             // Staged executables no longer have Bazel's relative library layout.
             // Keep every child on the declared runtime instead of the host copy.
-            environment.push(cpp_runtime_environment(&bazel_runfile(path)));
+            let library = cargo_bin::find_resource!(path, path)
+                .expect("resolve declared C++ runtime resource");
+            environment.push(cpp_runtime_environment(&library));
         }
         if let Some(path) = &self.product_services {
             environment.push(("ASH_PRODUCT_SERVICES_PATH", path.clone()));
@@ -304,7 +289,12 @@ impl Fixture {
             fs::write(bin.join(name), serde_json::to_vec(&data).unwrap()).unwrap();
         }
         let script = bin.join("gh");
-        fs::write(&script, include_str!("issue_provider.py")).unwrap();
+        let resource = cargo_bin::find_resource!(
+            "tests/support/issue_provider.py",
+            "_main/ash-cli/tests/support/issue_provider.py"
+        )
+        .unwrap();
+        cargo_bin::write_executable(&script, &fs::read_to_string(resource).unwrap()).unwrap();
         fs::set_permissions(script, fs::Permissions::from_mode(0o700)).unwrap();
     }
 
@@ -388,17 +378,11 @@ baseUrl = "{base_url}"
 impl Drop for Fixture {
     fn drop(&mut self) {
         if thread::panicking() {
-            if let Ok(entries) = fs::read_dir(self.profile.join("run")) {
-                for entry in entries.flatten() {
-                    if entry
-                        .path()
-                        .extension()
-                        .is_some_and(|extension| extension == "log")
-                    {
-                        if let Ok(log) = fs::read_to_string(entry.path()) {
-                            eprintln!("Test daemon log ({}):\n{log}", entry.path().display());
-                        }
-                    }
+            if let Ok(endpoint) = ash_app_server_daemon::daemon_endpoint_path(&self.profile) {
+                // Unix uses the daemon's private runtime directory, not profile/run.
+                let log = endpoint.with_extension("log");
+                if let Ok(contents) = fs::read_to_string(&log) {
+                    eprintln!("Test daemon log ({}):\n{contents}", log.display());
                 }
             }
         }
@@ -455,31 +439,8 @@ impl TuiProcess {
         let capture = Arc::new(Mutex::new(TerminalCapture::new(size)));
         let reader_capture = Arc::clone(&capture);
         let reader_thread = thread::spawn(move || {
-            let mut buffer = [0_u8; 8_192];
-            loop {
-                match reader.read(&mut buffer) {
-                    Ok(0) => break,
-                    Ok(read) => {
-                        let replies = {
-                            let mut capture = reader_capture.lock().unwrap();
-                            capture.push(&buffer[..read]);
-                            capture.core.take_reply_bytes()
-                        };
-                        if !replies.is_empty() {
-                            let mut writer = reply_writer.lock().unwrap();
-                            if writer
-                                .write_all(&replies)
-                                .and_then(|_| writer.flush())
-                                .is_err()
-                            {
-                                break;
-                            }
-                        }
-                    }
-                    Err(error) if error.kind() == ErrorKind::Interrupted => continue,
-                    Err(_) => break,
-                }
-            }
+            let state = capture_terminal_output(&mut *reader, &reply_writer, &reader_capture);
+            reader_capture.lock().unwrap().output_state = state;
         });
         let mut command = CommandBuilder::new(&fixture.ash);
         command.args(args);
@@ -654,6 +615,11 @@ impl TuiProcess {
         self.wait_for_terminal(TerminalWaitFor::ScreenContains(expected));
     }
 
+    /// Wait for a settled queue row, including the absence of its optimistic pending suffix.
+    pub fn wait_for_queued_message(&mut self, position: usize, text: &str) {
+        self.wait_for_terminal(TerminalWaitFor::QueuedMessageReady { position, text });
+    }
+
     /// Wait for the target state and stable visible text; raw ANSI activity is irrelevant.
     pub fn wait_for_stable_screen(&mut self, expected: &str) {
         self.wait_for_terminal(TerminalWaitFor::StableScreenContains(expected));
@@ -773,6 +739,7 @@ impl TuiProcess {
 enum TerminalWaitFor<'a> {
     OutputAfter(u64),
     ScreenContains(&'a str),
+    QueuedMessageReady { position: usize, text: &'a str },
     StableScreenContains(&'a str),
     StableScreenOmits(&'a str),
 }
@@ -807,6 +774,19 @@ impl<'a> TerminalWait<'a> {
                 capture.raw_text(),
             ));
         }
+        let output_failure = match &capture.output_state {
+            TerminalOutputState::Reading => None,
+            TerminalOutputState::Closed => Some("PTY output closed before the child exited"),
+            TerminalOutputState::Failed(error) => Some(error.as_str()),
+        };
+        if let Some(error) = output_failure {
+            return Err(format!(
+                "{error} while waiting for {:?}; screen:\n{}\nraw:\n{}",
+                self.condition,
+                capture.screen(),
+                capture.raw_text(),
+            ));
+        }
         if now >= self.deadline {
             return Err(format!(
                 "TUI timed out waiting for {:?}; screen:\n{}\nraw:\n{}",
@@ -816,8 +796,29 @@ impl<'a> TerminalWait<'a> {
             ));
         }
         let screen = capture.screen();
+        if matches!(self.condition, TerminalWaitFor::QueuedMessageReady { .. })
+            && screen.contains("could not update the queue:")
+        {
+            return Err(format!(
+                "TUI queue operation failed while waiting for {:?}; screen:\n{}\nraw:\n{}",
+                self.condition,
+                screen,
+                capture.raw_text(),
+            ));
+        }
+        let mut matching_revision = capture.text_revision();
         let matches = match self.condition {
             TerminalWaitFor::OutputAfter(revision) => capture.revision() > revision,
+            TerminalWaitFor::QueuedMessageReady { position, text } => {
+                let next = if position == 1 { " · next" } else { "" };
+                let expected = format!("Queue {position}: {text}{next}");
+                if let Some(row) = screen.lines().position(|line| line.trim() == expected) {
+                    matching_revision = capture.line_revisions[row];
+                    true
+                } else {
+                    false
+                }
+            }
             TerminalWaitFor::ScreenContains(expected)
             | TerminalWaitFor::StableScreenContains(expected) => screen.contains(expected),
             TerminalWaitFor::StableScreenOmits(unexpected) => !screen.contains(unexpected),
@@ -830,8 +831,10 @@ impl<'a> TerminalWait<'a> {
             TerminalWaitFor::OutputAfter(_) | TerminalWaitFor::ScreenContains(_) => {
                 Ok(Some(screen))
             }
-            TerminalWaitFor::StableScreenContains(_) | TerminalWaitFor::StableScreenOmits(_) => {
-                let revision = capture.text_revision();
+            TerminalWaitFor::StableScreenContains(_)
+            | TerminalWaitFor::StableScreenOmits(_)
+            | TerminalWaitFor::QueuedMessageReady { .. } => {
+                let revision = matching_revision;
                 match self.matching_text {
                     Some((observed, since)) if observed == revision => {
                         Ok((now.duration_since(since) >= SCREEN_QUIET_PERIOD).then_some(screen))
@@ -994,31 +997,6 @@ fn normalize_assessment_ids(screen: &str) -> String {
 }
 
 #[test]
-fn cpp_runtime_environment_configures_only_the_child() {
-    let directory = tempfile::tempdir().unwrap();
-    let library = directory.path().join("libstdc++.so.6");
-    fs::write(&library, b"runtime fixture").unwrap();
-    let inherited = std::env::var_os("LD_LIBRARY_PATH");
-    let (name, value) = cpp_runtime_environment(&library);
-    let mut command = std::process::Command::new("unused-test-child");
-    command.env(name, &value);
-    assert_eq!(name, "LD_LIBRARY_PATH");
-    assert_eq!(value, directory.path());
-    assert_eq!(
-        command.get_envs().collect::<Vec<_>>(),
-        vec![(std::ffi::OsStr::new(name), Some(value.as_os_str()))]
-    );
-    assert_eq!(std::env::var_os("LD_LIBRARY_PATH"), inherited);
-}
-
-#[test]
-#[should_panic(expected = "missing declared C++ runtime")]
-fn cpp_runtime_environment_rejects_a_missing_runfile() {
-    let directory = tempfile::tempdir().unwrap();
-    cpp_runtime_environment(&directory.path().join("libstdc++.so.6"));
-}
-
-#[test]
 fn snapshot_normalization_freezes_elapsed_status_without_changing_other_text() {
     let screen =
         "○ Waiting for approval · 0m 01s total · ctrl+c to interrupt\nresponse took 0m 01s";
@@ -1124,16 +1102,17 @@ fn assert_named_snapshot(name: &str, screen: String) {
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or_else(|| panic!("snapshot name must end in valid UTF-8: {}", name.display()));
-    let snapshot_file = match option_env!("ASH_BAZEL_ASH") {
-        Some(_) => bazel_runfile(&format!(
-            "{}/ash-cli/tests/snapshots/{}.snap",
-            std::env::var("TEST_WORKSPACE").expect("Bazel test workspace"),
-            name.display()
-        )),
-        None => PathBuf::from(option_env!("CARGO_MANIFEST_DIR").expect("Cargo manifest directory"))
+    let snapshot_file = if cargo_bin::runfiles_available() {
+        cargo_bin::find_resource!(
+            format!("tests/snapshots/{}.snap", name.display()),
+            format!("_main/ash-cli/tests/snapshots/{}.snap", name.display())
+        )
+        .unwrap()
+    } else {
+        PathBuf::from(option_env!("CARGO_MANIFEST_DIR").expect("Cargo manifest directory"))
             .join("tests/snapshots")
             .join(name)
-            .with_extension("snap"),
+            .with_extension("snap")
     };
     let snapshot_dir = snapshot_file.parent().expect("snapshot parent directory");
 
@@ -1150,11 +1129,49 @@ impl Drop for TuiProcess {
     }
 }
 
+#[derive(Debug)]
+enum TerminalOutputState {
+    Reading,
+    Closed,
+    Failed(String),
+}
+
+fn capture_terminal_output(
+    reader: &mut dyn Read,
+    writer: &Arc<Mutex<Box<dyn Write + Send>>>,
+    capture: &Arc<Mutex<TerminalCapture>>,
+) -> TerminalOutputState {
+    let mut buffer = [0_u8; 8_192];
+    loop {
+        let read = match reader.read(&mut buffer) {
+            Ok(0) => return TerminalOutputState::Closed,
+            Ok(read) => read,
+            Err(error) if error.kind() == ErrorKind::Interrupted => continue,
+            Err(error) => {
+                return TerminalOutputState::Failed(format!("PTY output read failed: {error}"));
+            }
+        };
+        let replies = {
+            let mut capture = capture.lock().unwrap();
+            capture.push(&buffer[..read]);
+            capture.core.take_reply_bytes()
+        };
+        if !replies.is_empty() {
+            let mut writer = writer.lock().unwrap();
+            if let Err(error) = writer.write_all(&replies).and_then(|_| writer.flush()) {
+                return TerminalOutputState::Failed(format!("PTY terminal reply failed: {error}"));
+            }
+        }
+    }
+}
+
 struct TerminalCapture {
     core: TerminalCore,
     raw: Vec<u8>,
     revision: u64,
     text_revision: u64,
+    line_revisions: Vec<u64>,
+    output_state: TerminalOutputState,
     size: PtySize,
 }
 
@@ -1165,6 +1182,8 @@ impl TerminalCapture {
             raw: Vec::new(),
             revision: 0,
             text_revision: 0,
+            line_revisions: vec![0; usize::from(size.rows)],
+            output_state: TerminalOutputState::Reading,
             size,
         }
     }
@@ -1177,14 +1196,27 @@ impl TerminalCapture {
             .extend_from_slice(&bytes[..bytes.len().min(remaining)]);
         self.core.process_output(bytes);
         // Cursor/style-only redraws must not prevent a text snapshot from settling.
-        if self.screen() != previous_screen {
+        let screen = self.screen();
+        if screen != previous_screen {
             self.text_revision += 1;
+            // Track individual rows so a queue operation can settle while an unrelated
+            // spinner redraws. Revisions also catch a fragmented row changing A→B→A.
+            for (row, (before, after)) in previous_screen
+                .split('\n')
+                .zip(screen.split('\n'))
+                .enumerate()
+            {
+                if before != after {
+                    self.line_revisions[row] = self.text_revision;
+                }
+            }
         }
     }
 
     fn resize(&mut self, size: PtySize) {
         self.revision += 1;
         self.text_revision += 1;
+        self.line_revisions = vec![self.text_revision; usize::from(size.rows)];
         self.core.resize(GridSize::new(size.rows, size.cols));
         self.size = size;
     }

@@ -56,28 +56,8 @@ pub struct AudioHost {
 impl AudioHost {
     /// Launch an explicitly selected physical executable; no PATH search or runtime discovery.
     pub async fn spawn(executable: &Path) -> Result<Self, AudioError> {
-        if !executable.is_absolute()
-            || executable.canonicalize()? != executable
-            || !executable.is_file()
-        {
-            return Err(AudioError::Protocol);
-        }
-        let mut command = Command::new(executable);
-        command
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .kill_on_drop(true);
-        // Preserve OS device/session variables, but never inject a caller's dynamic libraries.
-        for key in [
-            "LD_PRELOAD",
-            "LD_LIBRARY_PATH",
-            "DYLD_INSERT_LIBRARIES",
-            "DYLD_LIBRARY_PATH",
-            "DYLD_FRAMEWORK_PATH",
-        ] {
-            command.env_remove(key);
-        }
+        let mut command = command(executable)?;
+        command.stdin(Stdio::piped());
         let mut child = command.spawn()?;
         let input = child.stdin.take().ok_or(AudioError::Protocol)?;
         let mut output = child.stdout.take().ok_or(AudioError::Protocol)?;
@@ -167,7 +147,21 @@ impl AudioHost {
     }
 
     pub async fn start(&mut self, config: AudioConfig) -> Result<(), AudioError> {
-        let epoch = self.request(Operation::Start { config }).await?;
+        self.start_input(config, None).await
+    }
+
+    /// A selected device must exist; absence means the system default, never an alternate input.
+    pub async fn start_input(
+        &mut self,
+        config: AudioConfig,
+        input_device: Option<String>,
+    ) -> Result<(), AudioError> {
+        let epoch = self
+            .request(Operation::Start {
+                config,
+                input_device,
+            })
+            .await?;
         self.capture_epoch = epoch;
         self.playback_epoch = epoch;
         self.config = Some(config);
@@ -246,3 +240,42 @@ impl Drop for AudioHost {
 #[cfg(all(test, unix))]
 #[path = "client_tests.rs"]
 mod tests;
+
+fn command(executable: &Path) -> Result<Command, AudioError> {
+    if !executable.is_absolute()
+        || executable.canonicalize()? != executable
+        || !executable.is_file()
+    {
+        return Err(AudioError::Protocol);
+    }
+    let mut command = Command::new(executable);
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true);
+    // Preserve OS device/session variables, but never inject a caller's dynamic libraries.
+    for key in [
+        "LD_PRELOAD",
+        "LD_LIBRARY_PATH",
+        "DYLD_INSERT_LIBRARIES",
+        "DYLD_LIBRARY_PATH",
+        "DYLD_FRAMEWORK_PATH",
+    ] {
+        command.env_remove(key);
+    }
+    Ok(command)
+}
+
+pub(super) async fn input_devices(executable: &Path) -> Result<Vec<wire::InputDevice>, AudioError> {
+    let output = timeout(
+        DEADLINE,
+        command(executable)?.arg("--list-input-devices").output(),
+    )
+    .await
+    .map_err(|_| AudioError::Timeout)??;
+    if !output.status.success() {
+        return Err(AudioError::Rejected("Microphone enumeration failed".into()));
+    }
+    serde_json::from_slice(&output.stdout).map_err(|_| AudioError::Protocol)
+}

@@ -1,6 +1,7 @@
 import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../speechToText/chatSpeechToTextService.js';
 import { DictationActionViewItem } from '../../speechToText/dictationActionViewItem.js';
 import { DictationSession } from '../../speechToText/dictationSession.js';
+import { IDictationOnboardingService } from '../../speechToText/dictationOnboarding.js';
 import { addDisposableListener, h } from "../../../../../../base/browser/dom.js";
 import { ButtonActionViewItem, type ActionViewItem } from "../../../../../../base/browser/ui/actionbar/actionViewItems.js";
 import { appendIcon } from "../../../../../../base/browser/ui/lxicons/lxicon.js";
@@ -122,6 +123,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		private readonly additionalActions: readonly IAction[] = [],
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IChatSpeechToTextService private readonly speechToText: IChatSpeechToTextService,
+		@IDictationOnboardingService private readonly onboarding: IDictationOnboardingService,
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
@@ -183,6 +185,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this._register(this.speechToText.onDidChangePreparation(() => { if (this.visible && this.speechToText.isConfigured) { void this.readPreparation(); } }));
 		if (this.speechToText.isConfigured) { void this.readPreparation(); }
 		this.element.append(this.status, this.dictationPreview, this.interaction, this.inputContainer);
+		this._register(onboarding.registerHost({ container: this.element, focusTarget: this.element, isVisible: () => this.visible }));
 		this._register(addDisposableListener(this.inputContainer, "focusin", () => this.inputContainer.classList.add("focused")));
 		this._register(addDisposableListener(this.inputContainer, "focusout", event => {
 			if (this.inputContainer.contains(event.relatedTarget as Node | null)) return;
@@ -336,6 +339,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (visible && this.speechToText.isConfigured) { void this.readPreparation(); }
 		if (visible) this.input.layout();
 		if (!visible) {
+			this.onboarding.hide(this.element);
 			void this.dictationSession.cancel().catch(error => {
 				if (!this.isDisposed) { this.notifications.error(localize('chat.input.dictationFailed', 'Dictation failed: {0}', String(error))); }
 			});

@@ -1,6 +1,6 @@
 import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
-import { IDictationService, type IDictationSession } from '../../../../../platform/dictation/common/dictationService.js';
+import { IDictationService, type IDictationSession, type IDictationOptions } from '../../../../../platform/dictation/common/dictationService.js';
 import { createDecorator } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { localize } from '../../../../../nls.js';
@@ -31,6 +31,7 @@ export interface IChatSpeechToTextService {
 	getPreparation(): Promise<ILocalTranscriptionModelSnapshot | undefined>;
 	prepareModel(): Promise<void>;
 	cancelPreparation(): Promise<void>;
+	getOptions(): Promise<IDictationOptions>;
 	start(): Promise<void>;
 	stopAndTranscribe(): Promise<string | undefined>;
 	cancel(): Promise<void>;
@@ -79,6 +80,10 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 
 	public cancelPreparation(): Promise<void> {
 		return this.backend!.cancelPreparation();
+	}
+
+	public getOptions(): Promise<IDictationOptions> {
+		return this.backend!.getOptions();
 	}
 
 	public async start(): Promise<void> {

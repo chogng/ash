@@ -17,8 +17,18 @@ import "../../contrib/terminal/common/terminalColorRegistry.js";
 import "../../../sessions/common/sessionsColors.js";
 import "../../contrib/welcomeGettingStarted/browser/gettingStartedColors.js";
 
+test('registered design tokens preserve identifier case in one collision-free CSS namespace', () => {
+	const tokens = [
+		...Colors.getColors().map(({ id }) => ({ id, variable: colorCssVariable(id) })),
+		...Sizes.getSizes().map(({ id }) => ({ id, variable: asCssVariableName(id) })),
+	];
+	assert.deepEqual(tokens.map(({ variable }) => variable), tokens.map(({ id }) => `--ash-${id.replaceAll('.', '-')}`));
+	assert.equal(new Set(tokens.map(({ variable }) => variable)).size, tokens.length);
+});
+
 test("CSS consumes registered design tokens and isolates intentional color samples", async () => {
 	const registered = new Set([...Colors.getColors().map(({ id }) => colorCssVariable(id)), ...Sizes.getSizes().map(({ id }) => asCssVariableName(id))]);
+	const retired = new Set([...registered].map(name => name.replace(/[A-Z]/g, character => `-${character.toLowerCase()}`)).filter(name => !registered.has(name)));
 	const platformVariables = new Set(["--ash-font-family", "--ash-font-family-monospace", "--ash-context-view-layer", "--ash-z-index-context-view", "--ash-z-index-quick-input", "--ash-z-index-sash"]);
 	const componentPresentationVariables = new Set([
 		"--ash-editor-token-foreground",
@@ -42,8 +52,12 @@ test("CSS consumes registered design tokens and isolates intentional color sampl
 		for (const variable of declaredComponentVariables(file, source)) componentPresentationVariables.add(variable);
 	}
 	const unknownVariables: string[] = [];
+	const retiredVariables: string[] = [];
 	const rawColors: string[] = [];
 	for (const { file, source } of sources) {
+		for (const [variable] of source.matchAll(/--ash-[a-zA-Z0-9-]+/g)) {
+			if (retired.has(variable)) retiredVariables.push(`${relative(sourceRoot, file)}: ${variable}`);
+		}
 		if (!file.endsWith('.css')) continue;
 		const name = relative(sourceRoot, file).replaceAll("\\", "/");
 		for (const match of source.matchAll(/var\((--ash-[a-zA-Z0-9-]+)/g)) {
@@ -56,6 +70,7 @@ test("CSS consumes registered design tokens and isolates intentional color sampl
 		}
 	}
 	assert.deepEqual(unknownVariables, []);
+	assert.deepEqual(retiredVariables, []);
 	assert.deepEqual(rawColors, []);
 });
 

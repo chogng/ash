@@ -22,9 +22,9 @@
 }
 
 .stanza-editor .line-numbers {
-	color: var(--ash-editor-line-number-foreground);
+	color: var(--ash-editorLineNumber-foreground);
 }
 
 .stanza-editor .line-numbers.active-line-number {
-	color: var(--ash-editor-line-number-active-foreground);
+	color: var(--ash-editorLineNumber-activeForeground);
 }

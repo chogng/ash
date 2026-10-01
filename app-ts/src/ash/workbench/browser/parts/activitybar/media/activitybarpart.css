@@ -1,5 +1,5 @@
 .ash-workbench-activitybar {
-	background: var(--ash-side-bar-background);
+	background: var(--ash-sideBar-background);
 }
 
 /* Keep sizing on the content so the same presentation survives sidebar rehosting. */

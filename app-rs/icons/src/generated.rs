@@ -59,6 +59,7 @@ mod artwork {
     pub(crate) const COLAB: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/colab.svg"));
     pub(crate) const COLAB_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/colab-filled.svg"));
     pub(crate) const COMMAND: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/command.svg"));
+    pub(crate) const CONNECTORS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/connectors.svg"));
     pub(crate) const COPY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/copy.svg"));
     pub(crate) const COPY_CODE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/copy-code.svg"));
     pub(crate) const COWORK: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/cowork.svg"));
@@ -285,6 +286,7 @@ pub mod icons {
     pub const COLAB: Icon = Icon::new(IconId::new("colab"), artwork::COLAB);
     pub const COLAB_FILLED: Icon = Icon::new(IconId::new("colab-filled"), artwork::COLAB_FILLED);
     pub const COMMAND: Icon = Icon::new(IconId::new("command"), artwork::COMMAND);
+    pub const CONNECTORS: Icon = Icon::new(IconId::new("connectors"), artwork::CONNECTORS);
     pub const COPY: Icon = Icon::new(IconId::new("copy"), artwork::COPY);
     pub const COPY_CODE: Icon = Icon::new(IconId::new("copy-code"), artwork::COPY_CODE);
     pub const COWORK: Icon = Icon::new(IconId::new("cowork"), artwork::COWORK);
@@ -507,6 +509,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::COLAB,
     icons::COLAB_FILLED,
     icons::COMMAND,
+    icons::CONNECTORS,
     icons::COPY,
     icons::COPY_CODE,
     icons::COWORK,
@@ -730,6 +733,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("colab", artwork::COLAB),
     ("colab-filled", artwork::COLAB_FILLED),
     ("command", artwork::COMMAND),
+    ("connectors", artwork::CONNECTORS),
     ("copy", artwork::COPY),
     ("copy-code", artwork::COPY_CODE),
     ("cowork", artwork::COWORK),

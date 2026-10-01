@@ -321,6 +321,34 @@ test('registered line tokenizers refresh existing models without clearing diagno
 	await waitFor(() => model.diagnostics.results.result?.modelVersion === model.version);
 });
 
+for (const action of ['remove', 'reset'] as const) {
+	test(`line tokenizer ${action} invalidates cached rendered tokens without a worker result`, () => {
+		const languageId = `line-tokenizer-${action}`;
+		const state: IState = { clone() { return this; }, equals(other) { return other === this; } };
+		using registration = TokenizationRegistry.register(languageId, {
+			getInitialState: () => state,
+			tokenize: () => ({ tokens: [{ offset: 0, type: 'comment', language: languageId }], endState: state }),
+		});
+		using model = new TextModel('alpha beta', { languageId });
+		model.tokenization.forceTokenization(1);
+		const rendered = model.tokenization.renderedTokens;
+		assert.equal(rendered.getLineTokens(0).length, 1);
+		const changes: number[] = [];
+		using listener = rendered.onDidChange(() => changes.push(rendered.getLineTokens(0).length));
+
+		if (action === 'remove') registration.dispose();
+		else model.tokenization.resetTokenization();
+
+		assert.deepEqual({ lexical: model.tokenization.getLanguageTokens(0), rendered: rendered.getLineTokens(0), changes }, {
+			lexical: [], rendered: [], changes: [0],
+		});
+		if (action === 'reset') {
+			model.tokenization.forceTokenization(1);
+			assert.deepEqual(changes, [0, 1]);
+		}
+	});
+}
+
 test('line tokenization reuses unchanged lines after a model edit', async () => {
 	let scanned = 0;
 	const state: IState = { clone() { return this; }, equals(other) { return other === this; } };

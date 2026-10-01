@@ -17,5 +17,5 @@ export function sizeValueToCss(value: SizeValue): string {
 }
 
 export function asCssVariableName(id: string): string {
-	return `--ash-${id.replaceAll('.', '-').replace(/[A-Z]/g, character => `-${character.toLowerCase()}`)}`;
+	return `--ash-${id.replaceAll('.', '-')}`;
 }

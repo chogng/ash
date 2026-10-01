@@ -8,7 +8,7 @@
 	min-height: 0;
 	color: var(--ash-editor-foreground);
 	background: var(--ash-editor-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
 }
 
 .stanza-accessible-diff-viewer[hidden] {
@@ -20,7 +20,7 @@
 	align-items: center;
 	gap: var(--ash-spacing-size80);
 	padding: var(--ash-spacing-size80);
-	border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
 }
 
 .stanza-accessible-diff-toolbar span {
@@ -30,8 +30,8 @@
 .stanza-accessible-diff-toolbar button {
 	color: var(--ash-editor-foreground);
 	background: var(--ash-editor-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-small);
 	padding: 2px var(--ash-spacing-size80);
 	font: inherit;
 	cursor: pointer;
@@ -39,7 +39,7 @@
 
 .stanza-accessible-diff-toolbar button:focus-visible,
 .stanza-accessible-diff-content:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 }
 
 .stanza-accessible-diff-content {
@@ -62,5 +62,5 @@
 [data-color-scheme="high-contrast-light"] .stanza-accessible-diff-viewer,
 [data-color-scheme="high-contrast-light"] .stanza-accessible-diff-toolbar,
 [data-color-scheme="high-contrast-light"] .stanza-accessible-diff-toolbar button {
-	border-color: var(--ash-contrast-border);
+	border-color: var(--ash-contrastBorder);
 }

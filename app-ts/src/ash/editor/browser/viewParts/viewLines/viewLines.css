@@ -5,7 +5,7 @@
 
 /* Selected text must take precedence over syntax and semantic token foregrounds. */
 .stanza-editor .view-lines .view-line .stanza-editor-line-text > .stanza-editor-token.stanza-editor-selected-text {
-	color: var(--ash-editor-selection-foreground);
+	color: var(--ash-editor-selectionForeground);
 }
 
 .stanza-editor.no-user-select .lines-content,
@@ -54,10 +54,10 @@
 }
 
 .stanza-editor .mtkw {
-	color: var(--ash-editor-whitespace-foreground) !important;
+	color: var(--ash-editorWhitespace-foreground) !important;
 }
 
 .stanza-editor .mtkz {
 	display: inline-block;
-	color: var(--ash-editor-whitespace-foreground) !important;
+	color: var(--ash-editorWhitespace-foreground) !important;
 }

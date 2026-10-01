@@ -12,9 +12,10 @@ import { SyncDescriptor } from '../../../../platform/instantiation/common/descri
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { SessionsPageRegistry } from '../../../browser/pages.js';
-import { DesignCanvasView } from './designCanvasView.js';
+import { DesignEditorPage } from './designEditorPage.js';
+import { DesignEditorWidget } from './widget/designEditorWidget.js';
 
-SessionsPageRegistry.registerPage('design', new SyncDescriptor(DesignCanvasView));
+SessionsPageRegistry.registerPage('design', new SyncDescriptor(DesignEditorPage));
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.DesignCanvas,
@@ -37,7 +38,7 @@ AccessibleViewRegistry.register({
 		return new AccessibleContentProvider(
 			AccessibleViewProviderId.DesignCanvas,
 			{ type: AccessibleViewType.Help },
-			() => localize('sessions.design.help', 'Design canvas\nOne design unit equals one pixel; grid lines are 12 units apart. Press R to add a rectangle or E to add an ellipse at the viewport center. Click a shape to select it, then drag or use arrow keys to move it; hold Shift for 10-pixel keyboard steps. Use Tab and Shift+Tab on the canvas to select shapes in paint order. Edit position, size, rotation and fill in Shape properties. Press Delete to remove the selection and Escape to cancel a drag or clear selection. <keybinding:sessions.design.undo> undoes an edit; <keybinding:sessions.design.redo> redoes it. Drag empty space or use the middle mouse button to pan. Arrow keys pan when no shape is selected. Hold Ctrl and scroll, or press Plus or Minus, to zoom. Press 0 to reset the view. Save design or <keybinding:sessions.design.save> writes an editable Ash design file; Open design loads one. Sessions Settings > Design lets you choose a pointer or hand cursor.'),
+			() => localize('sessions.design.help', 'Design canvas\nOne design unit equals one pixel; grid lines are 12 units apart. Press R to add a rectangle or E to add an ellipse at the viewport center. Click a shape to select it, then drag or use arrow keys to move it; hold Shift for 10-pixel keyboard steps. Use Tab and Shift+Tab on the canvas to select shapes in paint order. Edit position, size, rotation and fill in Shape properties. Press Delete to remove the selection and Escape to cancel a drag or clear selection. <keybinding:sessions.design.undo> undoes an edit; <keybinding:sessions.design.redo> redoes it. Drag empty space or use the middle mouse button to pan. Arrow keys pan when no shape is selected. Hold Ctrl and scroll, or press Plus or Minus, to zoom. Press 0 to reset the view. Save design or <keybinding:sessions.design.save> writes an editable Ash design file; Open design loads one. Sessions Settings > Design lets you choose a pointer or hand cursor. Press T to add text and edit its content and font size in Shape properties. Press P to add a Bézier path; drag its anchors and handles, or edit anchors and incoming/outgoing handles in path-local pixels, choose a node, add or remove nodes, and toggle Closed path. Shift-click toggles objects in the selection; N adds the next unselected object, and Select all selects every object. Press G to group the selection and U to ungroup. Groups move and rotate together and resize proportionally. Export SVG saves the artwork without the grid or selection; it keeps unsaved edits in the editable design.'),
 			() => focused.focus(),
 			AccessibilityVerbositySettingId.DesignCanvas,
 		);
@@ -51,7 +52,7 @@ AccessibleViewRegistry.register({
 	when: ContextKeyExpr.has('sessionsDesignCanvasFocused'),
 	getProvider: accessor => {
 		const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
-		const content = DesignCanvasView.getFocused(focused)?.getAccessibleContent();
+		const content = DesignEditorWidget.getFocused(focused)?.getAccessibleContent();
 		if (content === undefined) { return undefined; }
 		return new AccessibleContentProvider(
 			AccessibleViewProviderId.DesignCanvas,
@@ -69,7 +70,7 @@ registerAction2(class UndoDesign extends Action2 {
 	}
 	public override run(accessor: ServicesAccessor): void {
 		const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
-		DesignCanvasView.getFocused(focused)?.undo();
+		DesignEditorWidget.getFocused(focused)?.undo();
 	}
 });
 
@@ -79,7 +80,7 @@ registerAction2(class RedoDesign extends Action2 {
 	}
 	public override run(accessor: ServicesAccessor): void {
 		const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
-		DesignCanvasView.getFocused(focused)?.redo();
+		DesignEditorWidget.getFocused(focused)?.redo();
 	}
 });
 
@@ -89,6 +90,6 @@ registerAction2(class SaveDesign extends Action2 {
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> {
 		const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
-		await DesignCanvasView.getFocused(focused)?.saveDocument();
+		await DesignEditorWidget.getFocused(focused)?.saveDocument();
 	}
 });

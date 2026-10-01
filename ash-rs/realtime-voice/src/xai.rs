@@ -72,6 +72,7 @@ pub(super) async fn run(
             &model,
             &request.connector,
             model_provider::VoiceSessionLimits::default(),
+            request.language.as_deref(),
             &token,
         ) => result.map_err(|error| error.to_string())?,
         _ = &mut *stopped => return Ok(()),
@@ -80,11 +81,14 @@ pub(super) async fn run(
         .await
         .map_err(|error| error.to_string())?;
     audio
-        .start(AudioConfig {
-            rate: SampleRate::Hz16000,
-            direction: Direction::Capture,
-            processing: Processing::Speech,
-        })
+        .start_input(
+            AudioConfig {
+                rate: SampleRate::Hz16000,
+                direction: Direction::Capture,
+                processing: Processing::Speech,
+            },
+            request.input_device,
+        )
         .await
         .map_err(|error| error.to_string())?;
     let mut draft = Draft::default();

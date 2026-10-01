@@ -4,9 +4,9 @@
 	height: 18em;
 	resize: vertical;
 	padding: var(--ash-spacing-size80);
-	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
 	background: var(--ash-input-background);
 	color: var(--ash-input-foreground);
 	font-family: monospace;
-	font-size: var(--ash-font-size-body2);
+	font-size: var(--ash-fontSize-body2);
 }

@@ -91,6 +91,8 @@ import type { DictationModelList } from './types/DictationModelList.js';
 import type { DictationModelParams } from './types/DictationModelParams.js';
 import type { DictationModelStartParams } from './types/DictationModelStartParams.js';
 import type { DictationModelStatus } from './types/DictationModelStatus.js';
+import type { DictationOptions } from './types/DictationOptions.js';
+import type { DictationOptionsParams } from './types/DictationOptionsParams.js';
 import type { DictationResourceParams } from './types/DictationResourceParams.js';
 import type { DictationStartParams } from './types/DictationStartParams.js';
 import type { DictationStopResult } from './types/DictationStopResult.js';
@@ -643,6 +645,7 @@ export interface AppServerRequestMap {
   "attachment/upload/cancel": { params: AttachmentUploadCancelParams; response: null };
   "attachment/importRemote": { params: AttachmentImportRemoteParams; response: AttachmentMaterializeResult };
   "dictation/start": { params: DictationStartParams; response: null };
+  "dictation/options": { params: DictationOptionsParams; response: DictationOptions };
   "dictation/stop": { params: DictationResourceParams; response: DictationStopResult };
   "dictation/model/read": { params: DictationModelParams; response: DictationModelStatus };
   "dictation/model/list": { params: null; response: DictationModelList };
@@ -971,6 +974,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "attachment/upload/cancel": { method: "attachment/upload/cancel" },
   "attachment/importRemote": { method: "attachment/importRemote" },
   "dictation/start": { method: "dictation/start" },
+  "dictation/options": { method: "dictation/options" },
   "dictation/stop": { method: "dictation/stop" },
   "dictation/model/read": { method: "dictation/model/read" },
   "dictation/model/list": { method: "dictation/model/list" },

@@ -148,11 +148,10 @@ fn actual_tui_queues_restores_and_completes_messages() {
 
     process.type_text("第二条：应该保留并自动发送");
     process.enter();
-    process.wait_for_screen("第二条：应该保留并自动发送");
+    process.wait_for_queued_message(1, "第二条：应该保留并自动发送");
     process.type_text("第三条：稍后恢复到输入框");
     process.enter();
-    process.wait_for_screen("第三条：稍后恢复到输入框");
-    process.wait_for_screen("shift+tab mode");
+    process.wait_for_queued_message(2, "第三条：稍后恢复到输入框");
 
     process.alt_up();
     process.wait_for_screen("> Queue 2: 第三条：稍后恢复到输入框");

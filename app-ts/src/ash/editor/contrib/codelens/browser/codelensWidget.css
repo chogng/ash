@@ -31,14 +31,14 @@ button.stanza-editor-codelens-command {
 }
 
 button.stanza-editor-codelens-command:hover {
-  color: var(--ash-text-link-active-foreground, var(--ash-editor-foreground));
+  color: var(--ash-textLink-activeForeground, var(--ash-editor-foreground));
   text-decoration: underline;
 }
 
 button.stanza-editor-codelens-command:focus-visible {
-  color: var(--ash-text-link-active-foreground, var(--ash-editor-foreground));
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: var(--ash-stroke-thickness);
+  color: var(--ash-textLink-activeForeground, var(--ash-editor-foreground));
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+  outline-offset: var(--ash-strokeThickness);
 }
 
 .stanza-editor-codelens-separator {

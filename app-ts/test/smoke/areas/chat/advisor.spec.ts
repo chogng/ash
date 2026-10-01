@@ -56,7 +56,7 @@ test('Desktop model picker searches fixed models before account setup', async ({
 	await expect(activeRow).toBeVisible();
 	const activeColors = await activeRow.evaluate(row => {
 		const probe = row.ownerDocument.createElement('span');
-		probe.style.backgroundColor = 'var(--ash-menu-selection-background)';
+		probe.style.backgroundColor = 'var(--ash-menu-selectionBackground)';
 		row.append(probe);
 		const colors = {
 			foreground: getComputedStyle(row).color,

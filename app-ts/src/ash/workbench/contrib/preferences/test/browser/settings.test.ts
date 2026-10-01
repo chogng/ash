@@ -1,4 +1,5 @@
 import type { SettingsContentItem } from '../../browser/settingsTreeModels.js';
+import { registerTestDictationServices } from '../../../../test/common/testDictationServices.js';
 import { IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
@@ -583,7 +584,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		refreshModels: async () => [{ model, displayName: 'GPT Test' }],
 	} as unknown as IChatService;
 	const contextView = disposables.add(new BrowserContextViewService(root));
-	const services = new InstantiationService();
+	const services = disposables.add(new InstantiationService());
 	services.registerInstance(ClipboardServiceId, clipboardService);
 	services.registerInstance(ConfigurationServiceId, configuration);
 	services.registerInstance(IContextMenuService, contextMenuProvider);
@@ -592,6 +593,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(GitServiceId, gitService);
 	services.registerInstance(ChatServiceId, chatService);
 	services.registerInstance(ILocalTranscriptionService, disposables.add(new NullLocalTranscriptionService()));
+	registerTestDictationServices(services, undefined);
 	const descriptor = EditorPanes.getEditorPanes().find(candidate => candidate.id === SettingsEditorId);
 	assert.ok(descriptor);
 	assert.throws(() => descriptor.create({ instantiationService: services }), /Unknown service: localeService/);

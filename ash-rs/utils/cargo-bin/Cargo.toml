@@ -1,0 +1,19 @@
+[package]
+name = "ash-utils-cargo-bin"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+name = "cargo_bin"
+doctest = false
+
+[dependencies]
+runfiles = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

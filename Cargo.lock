@@ -1025,6 +1025,8 @@ dependencies = [
  "ash-remote-connections",
  "ash-terminal",
  "ash-tui",
+ "ash-utils-cargo-bin",
+ "ash-utils-cli",
  "ash-utils-home-dir",
  "clap",
  "ed25519-dalek",
@@ -3084,6 +3086,21 @@ dependencies = [
  "lru 0.18.3",
  "sha1",
  "tokio",
+]
+
+[[package]]
+name = "ash-utils-cargo-bin"
+version = "0.1.0"
+dependencies = [
+ "runfiles",
+ "tempfile",
+]
+
+[[package]]
+name = "ash-utils-cli"
+version = "0.1.0"
+dependencies = [
+ "clap",
 ]
 
 [[package]]
@@ -11752,6 +11769,11 @@ dependencies = [
  "visibility",
  "windowfunctions",
 ]
+
+[[package]]
+name = "runfiles"
+version = "0.1.0"
+source = "git+https://github.com/dzbarsky/rules_rust?rev=b56cbaa8465e74127f1ea216f813cd377295ad81#b56cbaa8465e74127f1ea216f813cd377295ad81"
 
 [[package]]
 name = "rusqlite"

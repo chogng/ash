@@ -1,3 +1,4 @@
+import '../../terminalContrib/voice/browser/terminal.voice.contribution.js';
 import { localizedString } from "../../../../platform/action/common/action.js";
 import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import { SyncDescriptor } from "../../../../platform/instantiation/common/descriptors.js";

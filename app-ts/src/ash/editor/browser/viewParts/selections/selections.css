@@ -3,15 +3,15 @@
 	inset-block: 0;
 	box-sizing: border-box;
 	pointer-events: none;
-	background: var(--ash-editor-inactive-selection-background);
+	background: var(--ash-editor-inactiveSelectionBackground);
 }
 
 .stanza-editor .view-overlays.focused .stanza-editor-selection {
-	background: var(--ash-editor-selection-background);
+	background: var(--ash-editor-selectionBackground);
 }
 
 [data-color-scheme="high-contrast-dark"] .stanza-editor-selection,
 [data-color-scheme="high-contrast-light"] .stanza-editor-selection {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }

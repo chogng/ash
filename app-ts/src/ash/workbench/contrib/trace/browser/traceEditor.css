@@ -8,7 +8,7 @@
 	gap: 8px;
 	overflow: auto;
 	color: var(--ash-foreground);
-	font-size: var(--ash-font-size-body1);
+	font-size: var(--ash-fontSize-body1);
 	background: var(--ash-editor-background);
 }
 .ash-trace-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
@@ -17,12 +17,12 @@
 .ash-trace-status, .ash-trace-count { overflow-wrap: anywhere; }
 .ash-trace-count { color: var(--ash-description-foreground); }
 .ash-trace-body { display: flex; flex-direction: column; flex: 1; min-height: 260px; gap: 8px; }
-.ash-trace-list { flex: 1; min-height: 120px; overflow: auto; border: var(--ash-stroke-thickness) solid var(--ash-widget-border); }
-.ash-trace-row { padding: 6px 8px; cursor: pointer; border: var(--ash-stroke-thickness) solid transparent; }
+.ash-trace-list { flex: 1; min-height: 120px; overflow: auto; border: var(--ash-strokeThickness) solid var(--ash-widget-border); }
+.ash-trace-row { padding: 6px 8px; cursor: pointer; border: var(--ash-strokeThickness) solid transparent; }
 .ash-trace-row.selected {
-	color: var(--ash-list-active-selection-foreground);
-	background: var(--ash-list-active-selection-background);
-	border-color: var(--ash-focus-border);
+	color: var(--ash-list-activeSelectionForeground);
+	background: var(--ash-list-activeSelectionBackground);
+	border-color: var(--ash-focusBorder);
 }
 .ash-trace-label { display: block; overflow-wrap: anywhere; }
 .ash-trace-track { display: block; height: 4px; margin-top: 4px; }
@@ -33,9 +33,9 @@
 	margin: 0;
 	padding: 8px;
 	overflow: auto;
-	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
 	font-family: var(--ash-font-family-monospace);
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
 }
-.ash-trace-list:focus-visible, .ash-trace-details:focus-visible { outline: var(--ash-stroke-thickness) solid var(--ash-focus-border); outline-offset: -1px; }
+.ash-trace-list:focus-visible, .ash-trace-details:focus-visible { outline: var(--ash-strokeThickness) solid var(--ash-focusBorder); outline-offset: -1px; }

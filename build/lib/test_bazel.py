@@ -312,6 +312,94 @@ class BazelMacroContractTests(unittest.TestCase):
                     )
 
 
+class BazelTestProfileTests(unittest.TestCase):
+    def test_identity_hash_optimization_is_scoped_to_the_ci_test_profile(self):
+        option = "--@rules_rust//rust/settings:experimental_per_crate_rustc_flag="
+        settings = []
+        for line in (
+            (REPOSITORY_ROOT / ".bazelrc").read_text(encoding="utf-8").splitlines()
+        ):
+            if option in line and not line.lstrip().startswith("#"):
+                scope, value = line.split()
+                settings.append((scope, value.removeprefix(option)))
+        self.assertEqual(
+            [("test:ci", "external/rules_rs++crate+crates__sha2-0.10.@-Copt-level=1")],
+            settings,
+        )
+        prefix, flag = settings[0][1].split("@")
+        workspace, _ = workspace_manifests(REPOSITORY_ROOT)
+        self.assertEqual(
+            "0.10",
+            workspace["dependencies"]["sha2"],
+            "Update the test-profile crate filter when the workspace sha2 requirement changes",
+        )
+        module = ast.parse(
+            (REPOSITORY_ROOT / "MODULE.bazel").read_text(encoding="utf-8")
+        )
+        crate_extension = next(
+            node.value
+            for node in module.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "crate"
+                for target in node.targets
+            )
+        )
+        self.assertEqual("use_extension", crate_extension.func.id)
+        self.assertEqual(
+            ["@rules_rs//rs:extensions.bzl", "crate"],
+            [ast.literal_eval(argument) for argument in crate_extension.args],
+        )
+        self.assertTrue(
+            any(
+                isinstance(node, ast.Expr)
+                and isinstance(node.value, ast.Call)
+                and isinstance(node.value.func, ast.Name)
+                and node.value.func.id == "use_repo"
+                and isinstance(node.value.args[0], ast.Name)
+                and node.value.args[0].id == "crate"
+                and ast.literal_eval(node.value.args[1]) == "crates"
+                for node in module.body
+            )
+        )
+        lock = tomllib.loads(
+            (REPOSITORY_ROOT / "Cargo.lock").read_text(encoding="utf-8")
+        )
+        versions = [
+            package["version"]
+            for package in lock["package"]
+            if package["name"] == "sha2" and package["version"].startswith("0.10.")
+        ]
+        self.assertTrue(versions)
+        # The pinned rules_rust setting matches an execution-path prefix, not a crate name.
+        for version in versions:
+            self.assertTrue(
+                f"external/rules_rs++crate+crates__sha2-{version}/src/lib.rs".startswith(
+                    prefix
+                )
+            )
+        for other in ("sha2-asm-0.6.4", "sha256-1.0.0", "sha2-0.11.0"):
+            self.assertFalse(
+                f"external/rules_rs++crate+crates__{other}/src/lib.rs".startswith(
+                    prefix
+                )
+            )
+        self.assertEqual("-Copt-level=1", flag)
+
+    def test_ci_workflow_and_local_instructions_use_the_same_bazel_test_profile(self):
+        workflow = (REPOSITORY_ROOT / ".github/workflows/bazel-boundary.yml").read_text(
+            encoding="utf-8"
+        )
+        commands = [
+            line.strip() for line in workflow.splitlines() if "bazel test " in line
+        ]
+        self.assertEqual(2, len(commands))
+        for command in commands:
+            self.assertIn("bazel test --config=ci ", command)
+        documentation = (REPOSITORY_ROOT / "docs/build.md").read_text(encoding="utf-8")
+        self.assertIn("bazelisk test --config=ci //app-rs:app_ci", documentation)
+
+
 class BazelDependencyContractFixtureTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()

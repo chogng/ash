@@ -20,7 +20,7 @@
 	user-select: none;
 	touch-action: none;
 	background-color: color-mix(in srgb, var(--ash-foreground) 3%, var(--ash-editor-background));
-	background-image: linear-gradient(to right, var(--ash-sessions-design-grid-line) var(--ash-stroke-thickness), transparent var(--ash-stroke-thickness)), linear-gradient(to bottom, var(--ash-sessions-design-grid-line) var(--ash-stroke-thickness), transparent var(--ash-stroke-thickness));
+	background-image: linear-gradient(to right, var(--ash-sessions-design-grid-line) var(--ash-strokeThickness), transparent var(--ash-strokeThickness)), linear-gradient(to bottom, var(--ash-sessions-design-grid-line) var(--ash-strokeThickness), transparent var(--ash-strokeThickness));
 	background-size: calc(var(--ash-sessions-design-grid-size) * var(--ash-sessions-design-scale, 1)) calc(var(--ash-sessions-design-grid-size) * var(--ash-sessions-design-scale, 1));
 	background-position: var(--ash-sessions-design-pan-x, 0px) var(--ash-sessions-design-pan-y, 0px);
 }
@@ -31,7 +31,7 @@
 
 [data-color-scheme="high-contrast-dark"] .ash-sessions-design-view,
 [data-color-scheme="high-contrast-light"] .ash-sessions-design-view {
-	--ash-sessions-design-grid-line: var(--ash-contrast-border);
+	--ash-sessions-design-grid-line: var(--ash-contrastBorder);
 }
 
 [data-color-scheme="high-contrast-dark"] .ash-sessions-design-viewport,
@@ -44,8 +44,8 @@
 }
 
 .ash-sessions-design-view:focus-visible .ash-sessions-design-viewport {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-	outline-offset: calc(-1 * var(--ash-stroke-thickness));
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
 }
 
 .ash-sessions-design-world {
@@ -70,7 +70,7 @@
 }
 
 .ash-sessions-design-zoom {
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 	color: var(--ash-description-foreground);
 }
 
@@ -85,7 +85,7 @@
 .ash-sessions-design-selection {
 	display: none;
 	fill: none;
-	stroke: var(--ash-focus-border);
+	stroke: var(--ash-focusBorder);
 	stroke-width: 2px;
 	vector-effect: non-scaling-stroke;
 }
@@ -100,11 +100,14 @@
 
 .ash-sessions-design-properties {
 	display: none;
+	min-height: 0;
+	max-height: 40%;
+	overflow: auto;
 	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--ash-spacing-size120);
 	padding: var(--ash-spacing-size80);
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-sessions-design-properties.visible {
@@ -123,21 +126,73 @@
 	min-height: 28px;
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-small);
 	font: inherit;
 }
 
 .ash-sessions-design-properties input:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 
 .ash-sessions-design-message {
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 	padding: 0 var(--ash-spacing-size80);
 }
 
 .ash-sessions-design-content {
 	display: none;
+}
+
+.ash-sessions-design-special-properties {
+	display: none;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size120);
+	width: 100%;
+}
+
+.ash-sessions-design-special-properties.visible {
+	display: flex;
+}
+
+.ash-sessions-design-properties textarea,
+.ash-sessions-design-properties select {
+	box-sizing: border-box;
+	max-width: 100%;
+	min-height: var(--ash-spacing-size280);
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-small);
+	font: inherit;
+}
+
+.ash-sessions-design-properties textarea {
+	width: 240px;
+	resize: vertical;
+}
+
+.ash-sessions-design-properties textarea:focus-visible,
+.ash-sessions-design-properties select:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-sessions-design-properties input[type="checkbox"] {
+	width: var(--ash-spacing-size160);
+	min-height: var(--ash-spacing-size160);
+}
+
+.ash-sessions-design-selection rect,
+.ash-sessions-design-selection line,
+.ash-sessions-design-path-handle {
+	vector-effect: non-scaling-stroke;
+}
+
+.ash-sessions-design-path-handle {
+	fill: var(--ash-editor-background);
+	pointer-events: all;
+	cursor: move;
 }

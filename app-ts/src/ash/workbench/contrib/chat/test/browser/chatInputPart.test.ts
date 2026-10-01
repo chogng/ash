@@ -1,4 +1,5 @@
 import { h as createDomElement } from '../../../../../base/browser/dom.js';
+import { registerTestDictationServices } from '../../../../test/common/testDictationServices.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ChatSpeechToTextService, ChatSpeechToTextState, IChatSpeechToTextService } from '../../browser/speechToText/chatSpeechToTextService.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
@@ -40,11 +41,10 @@ function inputPart(notifications: NotificationService, dictation?: Pick<IDictati
 	const container = createDomElement(document, 'div');
 	document.body.append(container);
 	let state: ChatInputState = { mode, queuedMessages: 0, phase: 'loading', canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
-	const service: IDictationService | undefined = dictation ? { onDidChangePreparation: AshEvent.None, getPreparation: async () => undefined, prepareModel: async () => {}, cancelPreparation: async () => {}, ...dictation } : undefined;
+	const service: IDictationService | undefined = dictation ? { onDidChangePreparation: AshEvent.None, getOptions: async () => ({ inputDevices: [], languages: [] }), getPreparation: async () => undefined, prepareModel: async () => {}, cancelPreparation: async () => {}, ...dictation } : undefined;
 	const services = sharedServices ?? inputResources.add(new InstantiationService());
 	if (!sharedServices) {
-		services.registerInstance(IDictationService, service);
-		services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+		registerTestDictationServices(services, service);
 	}
 	const part = services.createInstance(ChatInputPart,container, { ...delegate, selectMode: selected => { state = { ...state, mode: selected }; part.render(state); } } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, ChatInputEditors, []);
 	part.render(state);
@@ -262,7 +262,7 @@ test('Shared dictation only changes its owning input and returns the complete tr
 	let ended!: (error?: string) => void;
 	let stops = 0;
 	const backend: IDictationService = {
-		onDidChangePreparation: AshEvent.None,
+		onDidChangePreparation: AshEvent.None, getOptions: async () => ({ inputDevices: [], languages: [] }),
 		getPreparation: async () => undefined,
 		prepareModel: async () => {},
 		cancelPreparation: async () => {},
@@ -272,8 +272,7 @@ test('Shared dictation only changes its owning input and returns the complete tr
 			return { stop: async () => { stops++; transcript('second', true); ended(); } };
 		},
 	};
-	services.registerInstance(IDictationService, backend);
-	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	registerTestDictationServices(services, backend);
 	const speech = services.get(IChatSpeechToTextService);
 	using firstNotifications = new NotificationService();
 	using secondNotifications = new NotificationService();
@@ -299,7 +298,7 @@ test('Hiding the recording input discards stop-time text and permits another inp
 	let stopRequested!: () => void;
 	let stopReady = new Promise<void>(resolve => { stopRequested = resolve; });
 	const backend: IDictationService = {
-		onDidChangePreparation: AshEvent.None,
+		onDidChangePreparation: AshEvent.None, getOptions: async () => ({ inputDevices: [], languages: [] }),
 		getPreparation: async () => undefined,
 		prepareModel: async () => {},
 		cancelPreparation: async () => {},
@@ -308,8 +307,7 @@ test('Hiding the recording input discards stop-time text and permits another inp
 			return { stop: () => new Promise<void>(resolve => { finishStop = () => { transcript('discarded', true); resolve(); }; stopRequested(); }) };
 		},
 	};
-	services.registerInstance(IDictationService, backend);
-	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	registerTestDictationServices(services, backend);
 	const speech = services.get(IChatSpeechToTextService);
 	using first = inputPart(sharedNotifications, undefined, 'agent', {}, services);
 	using second = inputPart(sharedNotifications, undefined, 'agent', {}, services);
@@ -339,14 +337,13 @@ test('Hiding the recording input discards stop-time text and permits another inp
 test('A failed shared session notifies its owning input only', async () => {
 	using services = new InstantiationService();
 	let ended!: (error?: string) => void;
-	services.registerInstance(IDictationService, {
-		onDidChangePreparation: AshEvent.None,
+	registerTestDictationServices(services, {
+		onDidChangePreparation: AshEvent.None, getOptions: async () => ({ inputDevices: [], languages: [] }),
 		getPreparation: async () => undefined,
 		prepareModel: async () => {},
 		cancelPreparation: async () => {},
 		start: async (_onTranscript: (text: string, final: boolean) => void, onEnded: (error?: string) => void) => { ended = onEnded; return { stop: async () => {} }; },
 	});
-	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	const speech = services.get(IChatSpeechToTextService);
 	using firstNotifications = new NotificationService();
 	using secondNotifications = new NotificationService();
@@ -374,4 +371,7 @@ function waitForSpeechState(service: IChatSpeechToTextService, state: ChatSpeech
 test('Input construction rejects a missing window dictation service', () => {
 	using services = new InstantiationService();
 	assert.throws(() => services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, {} as IContextViewService, {} as IAccessibleViewService, sharedNotifications, ChatInputEditors, []), /Unknown service: chatSpeechToTextService/);
+	services.registerInstance(IDictationService, undefined);
+	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	assert.throws(() => services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, {} as IContextViewService, {} as IAccessibleViewService, sharedNotifications, ChatInputEditors, []), /Unknown service: dictationOnboardingService/);
 });

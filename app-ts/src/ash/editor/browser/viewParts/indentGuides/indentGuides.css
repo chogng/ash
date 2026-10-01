@@ -9,64 +9,64 @@
 .stanza-editor .stanza-editor-indent-guide {
 	top: 0;
 	height: 100%;
-	border-left: var(--ash-stroke-thickness) solid var(--ash-editor-indent-guide-background1);
+	border-left: var(--ash-strokeThickness) solid var(--ash-editorIndentGuide-background1);
 }
 
 .stanza-editor .stanza-editor-indent-guide.active {
-	border-left-width: calc(2 * var(--ash-stroke-thickness));
-	border-left-color: var(--ash-editor-indent-guide-active-background1);
+	border-left-width: calc(2 * var(--ash-strokeThickness));
+	border-left-color: var(--ash-editorIndentGuide-activeBackground1);
 }
 
 .stanza-editor .stanza-editor-bracket-guide {
-	border-left: var(--ash-stroke-thickness) solid currentColor;
+	border-left: var(--ash-strokeThickness) solid currentColor;
 }
 
 .stanza-editor .stanza-editor-bracket-guide.active {
-	border-left-width: calc(2 * var(--ash-stroke-thickness));
+	border-left-width: calc(2 * var(--ash-strokeThickness));
 }
 
 .stanza-editor .stanza-editor-bracket-guide-horizontal {
-	border-top: var(--ash-stroke-thickness) solid currentColor;
+	border-top: var(--ash-strokeThickness) solid currentColor;
 }
 
 .stanza-editor .stanza-editor-bracket-guide-horizontal.active {
-	border-top-width: calc(2 * var(--ash-stroke-thickness));
+	border-top-width: calc(2 * var(--ash-strokeThickness));
 }
 
 .stanza-editor .stanza-editor-guide-level-1 {
-	color: var(--ash-editor-bracket-pair-guide-background1);
+	color: var(--ash-editorBracketPairGuide-background1);
 }
 .stanza-editor .stanza-editor-guide-level-2 {
-	color: var(--ash-editor-bracket-pair-guide-background2);
+	color: var(--ash-editorBracketPairGuide-background2);
 }
 .stanza-editor .stanza-editor-guide-level-3 {
-	color: var(--ash-editor-bracket-pair-guide-background3);
+	color: var(--ash-editorBracketPairGuide-background3);
 }
 .stanza-editor .stanza-editor-guide-level-4 {
-	color: var(--ash-editor-bracket-pair-guide-background4);
+	color: var(--ash-editorBracketPairGuide-background4);
 }
 .stanza-editor .stanza-editor-guide-level-5 {
-	color: var(--ash-editor-bracket-pair-guide-background5);
+	color: var(--ash-editorBracketPairGuide-background5);
 }
 .stanza-editor .stanza-editor-guide-level-6 {
-	color: var(--ash-editor-bracket-pair-guide-background6);
+	color: var(--ash-editorBracketPairGuide-background6);
 }
 
 .stanza-editor .stanza-editor-guide-level-1.active {
-	color: var(--ash-editor-bracket-pair-guide-active-background1);
+	color: var(--ash-editorBracketPairGuide-activeBackground1);
 }
 .stanza-editor .stanza-editor-guide-level-2.active {
-	color: var(--ash-editor-bracket-pair-guide-active-background2);
+	color: var(--ash-editorBracketPairGuide-activeBackground2);
 }
 .stanza-editor .stanza-editor-guide-level-3.active {
-	color: var(--ash-editor-bracket-pair-guide-active-background3);
+	color: var(--ash-editorBracketPairGuide-activeBackground3);
 }
 .stanza-editor .stanza-editor-guide-level-4.active {
-	color: var(--ash-editor-bracket-pair-guide-active-background4);
+	color: var(--ash-editorBracketPairGuide-activeBackground4);
 }
 .stanza-editor .stanza-editor-guide-level-5.active {
-	color: var(--ash-editor-bracket-pair-guide-active-background5);
+	color: var(--ash-editorBracketPairGuide-activeBackground5);
 }
 .stanza-editor .stanza-editor-guide-level-6.active {
-	color: var(--ash-editor-bracket-pair-guide-active-background6);
+	color: var(--ash-editorBracketPairGuide-activeBackground6);
 }

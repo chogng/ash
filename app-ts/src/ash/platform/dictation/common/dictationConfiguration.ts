@@ -34,7 +34,30 @@ export function dictationBackend(document: IConfigurationDocument): { readonly t
 
 const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
+function parseInputDevice(value: unknown): string {
+	if (typeof value === 'string' && value.length <= 2048 && !/[\r\n\0]/u.test(value)) { return value; }
+	throw new TypeError('dictation.inputDevice must be a microphone identity');
+}
+
+function parseLanguage(value: unknown): string {
+	if (typeof value === 'string' && (value === 'auto' || /^[a-z]{2,3}(?:-[a-z]{2})?$/u.test(value))) { return value; }
+	throw new TypeError('dictation.language must be auto or a language code');
+}
+
+export function dictationInputOptions(document: IConfigurationDocument, backend: 'local' | 'cloud'): { inputDevice: string | null; language: string | null } {
+	const values = configurationValues(document);
+	const inputDevice = parseInputDevice(values['dictation.inputDevice'] ?? '');
+	const language = parseLanguage(values['dictation.language'] ?? 'auto');
+	return { inputDevice: inputDevice || null, language: backend === 'local' || language === 'auto' ? null : language };
+}
+
 export const DictationConfiguration = Object.freeze({
+	inputDevice: registry.registerConfiguration<string>({
+		key: 'dictation.inputDevice', defaultValue: '', parse: parseInputDevice,
+	}),
+	language: registry.registerConfiguration<string>({
+		key: 'dictation.language', defaultValue: 'auto', parse: parseLanguage,
+	}),
 	backend: registry.registerConfiguration<'local' | 'cloud'>({
 		key: 'dictation.backend',
 		defaultValue: 'local',

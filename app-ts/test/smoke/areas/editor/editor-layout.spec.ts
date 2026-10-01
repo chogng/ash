@@ -551,7 +551,7 @@ test("split editor groups keep visible boundaries", async ({ target, workbench }
 	await expect(borderedPanes).toHaveCount(2);
 	const borderColor = await editors.element.evaluate(element => {
 		const probe = element.ownerDocument.createElement("span");
-		probe.style.color = "var(--ash-editor-group-border)";
+		probe.style.color = "var(--ash-editorGroup-border)";
 		element.append(probe);
 		const color = getComputedStyle(probe).color;
 		probe.remove();

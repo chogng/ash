@@ -33,13 +33,13 @@ test('an active workbench theme includes later colors and restores host variable
 	await page.goto('/themes.html');
 	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 	const root = page.locator('#root');
-	await root.evaluate(element => element.style.setProperty('--ash-test-browser-late', '#fedcba', 'important'));
+	await root.evaluate(element => element.style.setProperty('--ash-test-browserLate', '#fedcba', 'important'));
 	await page.evaluate(() => window.registerLateThemeColor());
-	expect(await root.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-test-browser-late'))).toBe('#123456');
+	expect(await root.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-test-browserLate'))).toBe('#123456');
 	await page.getByRole('button', { name: 'Light', exact: true }).click();
-	expect(await root.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-test-browser-late'))).toBe('#abcdef');
+	expect(await root.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-test-browserLate'))).toBe('#abcdef');
 	await page.evaluate(() => window.disposeThemeRoot());
-	expect(await root.evaluate(element => [element.style.getPropertyValue('--ash-test-browser-late'), element.style.getPropertyPriority('--ash-test-browser-late')])).toEqual(['#fedcba', 'important']);
+	expect(await root.evaluate(element => [element.style.getPropertyValue('--ash-test-browserLate'), element.style.getPropertyPriority('--ash-test-browserLate')])).toEqual(['#fedcba', 'important']);
 	expect(errors).toEqual([]);
 });
 

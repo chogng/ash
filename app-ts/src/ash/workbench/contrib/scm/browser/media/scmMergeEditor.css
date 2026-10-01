@@ -13,19 +13,19 @@
 	align-items: center;
 	gap: var(--ash-spacing-size120);
 	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
-	border-bottom: var(--ash-stroke-thickness) solid var(--ash-editor-group-border);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-editorGroup-border);
 }
 
 .ash-scm-merge-header h2 {
 	margin: 0;
-	font-size: var(--ash-font-size-heading3);
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-size: var(--ash-fontSize-heading3);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-scm-merge-status {
 	flex: 1;
 	min-width: 0;
-	font-size: var(--ash-font-size-body2);
+	font-size: var(--ash-fontSize-body2);
 }
 
 .ash-scm-merge-actions {

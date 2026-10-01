@@ -1,9 +1,9 @@
 .view-line.section-header .stanza-editor-line-text {
-  font-weight: var(--ash-font-weight-semi-bold);
+  font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .view-line.section-header {
-  border-top: var(--ash-stroke-thickness) solid color-mix(in srgb, var(--ash-widget-border) 45%, transparent);
+  border-top: var(--ash-strokeThickness) solid color-mix(in srgb, var(--ash-widget-border) 45%, transparent);
 }
 
 .view-line.section-header-separator {

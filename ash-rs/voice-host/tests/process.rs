@@ -26,7 +26,7 @@ async fn ready() -> (
     let mut input = child.stdin.take().unwrap();
     let mut output = child.stdout.take().unwrap();
     // Establish readiness before measuring protocol rejection or EOF shutdown time.
-    let hello = br#"{"id":1,"command":{"operation":"hello","version":1}}"#;
+    let hello = br#"{"id":1,"command":{"operation":"hello","version":2}}"#;
     input.write_u32_le(hello.len() as u32).await.unwrap();
     input.write_all(hello).await.unwrap();
     timeout(Duration::from_secs(5), async {
@@ -126,4 +126,13 @@ async fn cancelled_control_retires_the_pipe_and_close_waits_for_process_cleanup(
         .await
         .unwrap()
         .unwrap();
+}
+
+#[tokio::test]
+async fn input_enumeration_exits_without_a_capture_session() {
+    let devices = voice_host::input_devices(&executable()).await.unwrap();
+    for device in devices {
+        assert!(!device.id.is_empty());
+        assert!(!device.label.is_empty());
+    }
 }

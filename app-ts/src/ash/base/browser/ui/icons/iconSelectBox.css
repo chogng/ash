@@ -34,16 +34,16 @@
 	box-sizing: border-box;
 	width: 36px;
 	height: 36px;
-	border: var(--ash-stroke-thickness) solid transparent;
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid transparent;
+	border-radius: var(--ash-cornerRadius-small);
 	color: inherit;
 	cursor: pointer;
 }
 
-.ash-icon-select-item:hover { background: var(--ash-list-hover-background); }
+.ash-icon-select-item:hover { background: var(--ash-list-hoverBackground); }
 .ash-icon-select-item.focused {
-	background: var(--ash-list-active-selection-background);
-	color: var(--ash-list-active-selection-foreground);
+	background: var(--ash-list-activeSelectionBackground);
+	color: var(--ash-list-activeSelectionForeground);
 }
 
 .ash-icon-select-info {
@@ -57,11 +57,11 @@
 .ash-icon-select-info mark {
 	color: var(--ash-accent-foreground);
 	background: transparent;
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-icon-select-empty { padding: 8px; }
 
 [data-color-scheme^='high-contrast'] .ash-icon-select-item.focused {
-	border-color: var(--ash-contrast-border);
+	border-color: var(--ash-contrastBorder);
 }

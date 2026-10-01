@@ -15,6 +15,7 @@ name = "ash"
 path = "src/main.rs"
 
 [dependencies]
+cli = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 rand = { workspace = true }
 ash-utils-home-dir = { workspace = true }
@@ -44,6 +45,7 @@ arg0 = { workspace = true }
 ash-tui = { workspace = true }
 
 [dev-dependencies]
+cargo-bin = { workspace = true }
 core-plugins = { package = "ash-core-plugins", path = "../ash-rs/core-plugins" }
 plugin = { package = "ash-plugin", path = "../ash-rs/plugin" }
 ed25519-dalek = { workspace = true }

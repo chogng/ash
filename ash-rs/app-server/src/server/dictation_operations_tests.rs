@@ -172,3 +172,27 @@ fn dictation_requires_product_authority_and_rejects_invalid_resource_ids() {
         "InternalError: Invalid dictation resource ID"
     );
 }
+
+#[test]
+fn unsupported_dictation_language_is_rejected_before_microphone_acquisition() {
+    let server = AppServer::new(
+        Arc::new(ThreadController::with_store(Arc::new(
+            InMemoryThreadStore::default(),
+        ))),
+        Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+    );
+    let owner = server.product_host_connection();
+    for backend in [
+        serde_json::json!({"type":"local", "modelId":"custom"}),
+        serde_json::json!({"type":"cloud", "provider":"xai", "modelId":"grok-voice-transcribe-2.0"}),
+    ] {
+        let error = server
+            .dictation_start(
+                &owner,
+                &serde_json::json!({"resourceId":"speech", "backend":backend, "language":"zh"}),
+            )
+            .unwrap_err();
+        assert!(format!("{error:?}").contains("selected transcription language"));
+        assert!(!server.dictation.is_active());
+    }
+}

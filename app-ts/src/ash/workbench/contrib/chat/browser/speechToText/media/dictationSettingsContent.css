@@ -9,3 +9,10 @@
 	margin: 0;
 	color: var(--ash-description-foreground);
 }
+
+.ash-dictation-input-options {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+}
