@@ -31,6 +31,10 @@ _BINARIES = {
     "ash-remote-server": ("ash-remote-server", "--remote-server-bin"),
     "ash-exec-server": ("ash-exec-server", "--exec-server-bin"),
     "ash-windows-sandbox": ("ash-windows-sandbox", "--windows-sandbox-bin"),
+    "ash-windows-sandbox-service": (
+        "ash-windows-sandbox-service",
+        "--windows-sandbox-service-bin",
+    ),
 }
 
 
@@ -50,7 +54,13 @@ def build_binaries(
     cargo_profile: str,
     host_build: bool = False,
 ) -> Dict[str, Path]:
-    if "ash-windows-sandbox" in inputs and not spec.is_windows:
+    if (
+        any(
+            name in inputs
+            for name in ("ash-windows-sandbox", "ash-windows-sandbox-service")
+        )
+        and not spec.is_windows
+    ):
         raise RuntimeError("Windows sandbox executable requires a Windows target")
     outputs = {
         name: validate_input_binary(path, name, _BINARIES[name][1], spec.is_windows)
@@ -83,7 +93,10 @@ def build_binaries(
         command,
         cwd=repository_root,
         env=cargo_environment(spec)
-        if any(name != "ash-windows-sandbox" for name in missing)
+        if any(
+            name not in {"ash-windows-sandbox", "ash-windows-sandbox-service"}
+            for name in missing
+        )
         else None,
         stdout=subprocess.PIPE,
         text=True,

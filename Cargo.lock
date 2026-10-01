@@ -3289,6 +3289,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-windows-sandbox-service"
+version = "0.1.0"
+dependencies = [
+ "ash-windows-sandbox",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "tokio",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "ash-workbench"
 version = "0.1.0"
 dependencies = [

@@ -49,6 +49,8 @@ mod artwork {
     pub(crate) const CHEVRON_LEFT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/chevron-left.svg"));
     pub(crate) const CHEVRON_RIGHT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/chevron-right.svg"));
     pub(crate) const CHEVRON_UP: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/chevron-up.svg"));
+    pub(crate) const CIRCLE_LARGE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/circle-large.svg"));
+    pub(crate) const CIRCLE_LARGE_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/circle-large-filled.svg"));
     pub(crate) const CIRCLE_SMALL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/circle-small.svg"));
     pub(crate) const CIRCLE_SMALL_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/circle-small-filled.svg"));
     pub(crate) const CLAUDE: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/claude.svg"));
@@ -279,6 +281,8 @@ pub mod icons {
     pub const CHEVRON_LEFT: Icon = Icon::new(IconId::new("chevron-left"), artwork::CHEVRON_LEFT);
     pub const CHEVRON_RIGHT: Icon = Icon::new(IconId::new("chevron-right"), artwork::CHEVRON_RIGHT);
     pub const CHEVRON_UP: Icon = Icon::new(IconId::new("chevron-up"), artwork::CHEVRON_UP);
+    pub const CIRCLE_LARGE: Icon = Icon::new(IconId::new("circle-large"), artwork::CIRCLE_LARGE);
+    pub const CIRCLE_LARGE_FILLED: Icon = Icon::new(IconId::new("circle-large-filled"), artwork::CIRCLE_LARGE_FILLED);
     pub const CIRCLE_SMALL: Icon = Icon::new(IconId::new("circle-small"), artwork::CIRCLE_SMALL);
     pub const CIRCLE_SMALL_FILLED: Icon = Icon::new(IconId::new("circle-small-filled"), artwork::CIRCLE_SMALL_FILLED);
     pub const CLAUDE: Icon = Icon::new(IconId::new("claude"), artwork::CLAUDE);
@@ -505,6 +509,8 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::CHEVRON_LEFT,
     icons::CHEVRON_RIGHT,
     icons::CHEVRON_UP,
+    icons::CIRCLE_LARGE,
+    icons::CIRCLE_LARGE_FILLED,
     icons::CIRCLE_SMALL,
     icons::CIRCLE_SMALL_FILLED,
     icons::CLAUDE,
@@ -732,6 +738,8 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("chevron-left", artwork::CHEVRON_LEFT),
     ("chevron-right", artwork::CHEVRON_RIGHT),
     ("chevron-up", artwork::CHEVRON_UP),
+    ("circle-large", artwork::CIRCLE_LARGE),
+    ("circle-large-filled", artwork::CIRCLE_LARGE_FILLED),
     ("circle-small", artwork::CIRCLE_SMALL),
     ("circle-small-filled", artwork::CIRCLE_SMALL_FILLED),
     ("claude", artwork::CLAUDE),

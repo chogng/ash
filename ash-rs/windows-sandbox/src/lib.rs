@@ -3,7 +3,9 @@
 extern crate windows_sys_061 as windows_sys;
 
 #[cfg(windows)]
-mod windows;
+pub(crate) mod windows;
+
+pub mod provisioning;
 
 use ash_file_access::Dir;
 use ash_sandboxing::PreparedCommand;

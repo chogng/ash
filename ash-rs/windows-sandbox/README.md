@@ -2,11 +2,21 @@
 
 - 实现 Windows 专用账户、限制令牌、文件授权、WFP 网络限制与进程树回收。
 - 隔离 Windows API 依赖，消费 `sandboxing` 的统一策略和 `install-context` 的安装身份。
-- 安装和删除由独立命令执行，必须提供当前变更清单的摘要；普通执行不自动安装或修复。
+- 安装、更新和删除通过独立 Windows 服务执行，必须提供当前变更清单的摘要；普通执行不自动安装或修复。
 - 每次执行独占账户、随机文件 SID、Job、桌面、代理路由和 ACL 恢复记录。
-- 产品包提供独立 helper；运行时校验 helper 路径与 SHA-256，不搜索 PATH。
+- 产品包提供执行 helper 和管理服务；运行时校验 helper 路径与 SHA-256，不搜索 PATH。
 
-Windows 11 23H2 本机已通过 21 项单元测试和 9 项完整执行用例，包括 PowerShell、目录与元数据保护、IPv4 受管网络、IPv6 断网、双账户并发、取消和后代回收。
+2026-09-11 的 Windows 11 23H2 验收覆盖 PowerShell、目录与元数据保护、IPv4 受管网络、IPv6 断网、双账户并发、取消和后代回收。2026-10-02 新增服务管理后，这份历史记录不证明新版 SCM 安装、更新和删除已通过管理员实机验收。
+
+| 归属 | 职责 |
+| --- | --- |
+| `windows-sandbox` | 账户、令牌、WFP、ACL、PTY、进程树及执行租约的 Windows 实现；helper 通过管理管道请求安装操作 |
+| [`windows-sandbox-service`](../windows-sandbox-service/README.md) | SCM 注册与生命周期、管理员持有的服务程序、本地管道认证，以及管理请求的调用者权限 |
+| `mxc-sandbox` | 独立 PSEC、Seatbelt、Bubblewrap 适配器；不承担旧版 Windows 的账户安装 |
+
+服务运行器和账户状态位于系统 ProgramData 下的 `AshWindowsSandbox`。账户状态仍以调用者的 DPAPI 身份加密；服务在同一操作系统线程上模拟经过认证的管道调用者完成管理操作。管理员持有状态和运行器的所有权，调用者只读；执行租约、运行目录和 ACL 日志具有各自所需的写权限。
+
+运行器更新先独占安装锁及全部账户租约，再记录新程序摘要并替换文件，保留账户和 WFP 对象。中断后执行保持拒绝；新的明确更新或删除请求处理记录中的程序。版本 3 的旧账户目录不被版本 4 服务接管，升级前须用原 helper 的明确删除命令移除旧安装。
 
 `FileSystemIsolation::WindowsAccount` 使用 Codex 的兼容令牌和有预算限制的可写路径审计，不承诺整个宿主只读。要求 `Strict` 时在启动前拒绝；未获授权的宿主审计修正不会自动执行。
 
@@ -18,10 +28,12 @@ Windows 11 23H2 本机已通过 21 项单元测试和 9 项完整执行用例，
 just test ash-windows-sandbox --lib --locked
 just check ash-windows-sandbox --tests --locked
 just rust-warnings ash-windows-sandbox
+just test ash-windows-sandbox-service
+just rust-warnings ash-windows-sandbox-service
 python -B scripts/cargo.py build -p ash-windows-sandbox --bin ash-windows-sandbox --locked
 bazel build //ash-rs/windows-sandbox:ash-windows-sandbox
 ```
 
-需要真实账户的测试显式标为忽略，须在获准配置的独立验收环境执行。`scripts/test-windows-sandbox.ps1` 提供构建、安装、全部用例及 finally 清理入口；调用方须已获得安装与验收授权。
+需要真实账户的测试显式标为忽略，须在获准配置的独立验收环境执行。`scripts/test-windows-sandbox.ps1` 提供服务与账户安装、全部用例、运行器更新后执行，以及 finally 清理入口；调用方须已获得安装与验收授权。
 
 网络连接进程归属实现参考 Codex `da20788df913189878ebca7f4963d8a363ee6bf2`；对应许可与归属保存在 `LICENSE-APACHE` 和 `NOTICE`。文件 ACL 日志复用固定版本的 `wxc_common`，不引入 Codex 的协议或产品配置。

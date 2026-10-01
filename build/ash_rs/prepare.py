@@ -324,6 +324,7 @@ def development_binary_inputs(spec: TargetSpec) -> dict[str, None]:
     )
     if spec.is_windows:
         binaries["ash-windows-sandbox"] = None
+        binaries["ash-windows-sandbox-service"] = None
     if spec.is_linux:
         binaries["bwrap"] = None
     return binaries
@@ -458,6 +459,7 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
             protocol_metadata=protocol,
             build_profile=PROFILE,
             windows_sandbox_binary=binaries.get("ash-windows-sandbox"),
+            windows_sandbox_service_binary=binaries.get("ash-windows-sandbox-service"),
             voice_host_binary=binaries["ash-voice-host"],
             collaboration_server_binary=binaries["ash-collaboration-server"],
             livekit=livekit,

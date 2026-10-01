@@ -113,6 +113,7 @@ members = [
     "ash-rs/network-proxy",
     "ash-rs/mxc-sandbox",
     "ash-rs/windows-sandbox",
+    "ash-rs/windows-sandbox-service",
     "ash-rs/websocket-client",
     "ash-rs/install-context",
     "ash-rs/instructions",

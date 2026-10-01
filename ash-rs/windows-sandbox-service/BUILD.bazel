@@ -1,0 +1,7 @@
+load("//:defs.bzl", "ash_rust_binary")
+
+ash_rust_binary(
+    name = "ash-windows-sandbox-service",
+    crate_name = "ash_windows_sandbox_service",
+    crate_root = "src/main.rs",
+)

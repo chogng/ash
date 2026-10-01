@@ -360,7 +360,13 @@ pub(super) fn seal(path: &Path, bytes: &mut [u8]) -> Result<()> {
     let encrypted = unsafe { std::slice::from_raw_parts(output.pbData, output.cbData as usize) };
     use std::io::Write;
     let pending = path.with_extension("pending");
-    let mut file = std::fs::File::create(&pending).map_err(|error| error.to_string())?;
+    let mut file = win::create_service_file(
+        &pending,
+        &format!(
+            "O:BAG:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;GR;;;{})",
+            win::current_user()?
+        ),
+    )?;
     file.write_all(encrypted)
         .map_err(|error| error.to_string())?;
     file.sync_all().map_err(|error| error.to_string())?;

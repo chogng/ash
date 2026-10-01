@@ -8,7 +8,8 @@ mod network;
 mod process;
 mod proxy;
 mod runtime;
-mod win;
+pub(crate) mod service;
+pub(crate) mod win;
 
 use account::NetworkMode;
 use ash_sandboxing::FileSystemAccess;
@@ -494,11 +495,13 @@ pub(super) fn run(arguments: impl Iterator<Item = std::ffi::OsString>) -> Result
         .collect::<Result<Vec<_>, _>>()?;
     match arguments.as_slice() {
         [command, path] if command == "run" => process::run(std::path::Path::new(path)),
-        [command] if command == "status" => { runtime::available(NetworkMode::Denied)?; println!("Windows sandbox is ready."); Ok(()) },
-        [command, operation, slots, count] if command == "plan" && operation == "setup" && slots == "--slots" => runtime::print_plan(runtime::setup_plan(count.parse().map_err(|_| "slots must be a number")?)?),
-        [command, operation] if command == "plan" && operation == "remove" => runtime::print_plan(runtime::removal_plan()?),
-        [command, slots, count, approve, digest] if command == "setup" && slots == "--slots" && approve == "--approve" => runtime::setup(count.parse().map_err(|_| "slots must be a number")?, digest),
-        [command, approve, digest] if command == "remove" && approve == "--approve" => runtime::remove(digest),
-        _ => Err("usage: ash-windows-sandbox plan setup --slots N | setup --slots N --approve SHA256 | plan remove | remove --approve SHA256 | status".into()),
+        [command] if command == "status" => service::print(crate::provisioning::Request::Status {}),
+        [command, operation, slots, count] if command == "plan" && operation == "setup" && slots == "--slots" => service::print(crate::provisioning::Request::SetupPlan { runner: std::env::current_exe().map_err(|error| error.to_string())?, slots: count.parse().map_err(|_| "slots must be a number")? }),
+        [command, operation] if command == "plan" && operation == "update" => service::print(crate::provisioning::Request::UpdatePlan { runner: std::env::current_exe().map_err(|error| error.to_string())? }),
+        [command, operation] if command == "plan" && operation == "remove" => service::print(crate::provisioning::Request::RemovePlan {}),
+        [command, slots, count, approve, digest] if command == "setup" && slots == "--slots" && approve == "--approve" => service::print(crate::provisioning::Request::Setup { runner: std::env::current_exe().map_err(|error| error.to_string())?, slots: count.parse().map_err(|_| "slots must be a number")?, approved: digest.clone() }),
+        [command, approve, digest] if command == "update" && approve == "--approve" => service::print(crate::provisioning::Request::Update { runner: std::env::current_exe().map_err(|error| error.to_string())?, approved: digest.clone() }),
+        [command, approve, digest] if command == "remove" && approve == "--approve" => service::print(crate::provisioning::Request::Remove { approved: digest.clone() }),
+        _ => Err("usage: ash-windows-sandbox plan setup --slots N | setup --slots N --approve SHA256 | plan update | update --approve SHA256 | plan remove | remove --approve SHA256 | status".into()),
     }
 }

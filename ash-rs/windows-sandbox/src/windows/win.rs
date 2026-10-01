@@ -108,8 +108,24 @@ pub(super) fn token_user(token: HANDLE) -> Result<String> {
 
 pub(super) fn current_user() -> Result<String> {
     let mut raw = std::ptr::null_mut();
-    if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut raw) } == 0 {
-        return Err(error("OpenProcessToken"));
+    // Management runs on one impersonating pipe thread. Execution has no thread
+    // token and uses its process identity; the service's SYSTEM identity is never
+    // used as the owner of a caller's accounts or DPAPI journal.
+    if unsafe {
+        windows_sys::Win32::System::Threading::OpenThreadToken(
+            windows_sys::Win32::System::Threading::GetCurrentThread(),
+            TOKEN_QUERY,
+            1,
+            &mut raw,
+        )
+    } == 0
+    {
+        if std::io::Error::last_os_error().raw_os_error() != Some(1008) {
+            return Err(error("OpenThreadToken"));
+        }
+        if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut raw) } == 0 {
+            return Err(error("OpenProcessToken"));
+        }
     }
     let token = Handle::new(raw, "OpenProcessToken")?;
     token_user(token.0)
@@ -217,9 +233,20 @@ pub(super) fn program_data() -> Result<std::path::PathBuf> {
 }
 
 pub(super) fn create_private_directory(path: &Path, owner: &str) -> Result<()> {
+    create_directory(path, &format!("D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;{owner})"))
+}
+
+pub(super) fn create_service_directory(path: &Path, owner: &str) -> Result<()> {
+    create_directory(
+        path,
+        &format!("O:BAG:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;GRGX;;;{owner})"),
+    )
+}
+
+fn create_directory(path: &Path, sddl: &str) -> Result<()> {
     use windows_sys::Win32::Security::SECURITY_ATTRIBUTES;
     use windows_sys::Win32::Storage::FileSystem::CreateDirectoryW;
-    let sd = descriptor(&format!("D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;{owner})"))?;
+    let sd = descriptor(sddl)?;
     let attributes = SECURITY_ATTRIBUTES {
         nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
         lpSecurityDescriptor: sd.0,
@@ -227,6 +254,68 @@ pub(super) fn create_private_directory(path: &Path, owner: &str) -> Result<()> {
     };
     if unsafe { CreateDirectoryW(wide(path).as_ptr(), &attributes) } == 0 {
         return Err(error("CreateDirectoryW(private runtime)"));
+    }
+    Ok(())
+}
+
+/// Credentials and approved executable identities must stay administrator-owned.
+/// A user-created DPAPI blob is not proof that an account belongs to this service.
+pub(crate) fn verify_service_path(path: &Path) -> Result<()> {
+    use windows_sys::Win32::Security::ACCESS_ALLOWED_ACE;
+    use windows_sys::Win32::Security::ACE_HEADER;
+    use windows_sys::Win32::Security::Authorization::GetNamedSecurityInfoW;
+    use windows_sys::Win32::Security::Authorization::SE_FILE_OBJECT;
+    use windows_sys::Win32::Security::DACL_SECURITY_INFORMATION;
+    use windows_sys::Win32::Security::EqualSid;
+    use windows_sys::Win32::Security::GetAce;
+    use windows_sys::Win32::Security::OWNER_SECURITY_INFORMATION;
+    let mut owner = std::ptr::null_mut();
+    let mut acl = std::ptr::null_mut();
+    let mut descriptor = std::ptr::null_mut();
+    let result = unsafe {
+        GetNamedSecurityInfoW(
+            wide(path).as_ptr(),
+            SE_FILE_OBJECT,
+            OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+            &mut owner,
+            std::ptr::null_mut(),
+            &mut acl,
+            std::ptr::null_mut(),
+            &mut descriptor,
+        )
+    };
+    if result != 0 {
+        return Err(format!(
+            "GetNamedSecurityInfoW(service path) failed ({result})"
+        ));
+    }
+    let _descriptor = Local(descriptor);
+    let system = sid("S-1-5-18")?;
+    let administrators = sid("S-1-5-32-544")?;
+    let privileged =
+        |value| unsafe { EqualSid(value, system.0) != 0 || EqualSid(value, administrators.0) != 0 };
+    if owner.is_null() || !privileged(owner) || acl.is_null() {
+        return Err("sandbox service path is not administrator-owned".into());
+    }
+    // Includes directory deletion/creation rights and ownership/DACL changes.
+    const WRITE: u32 = 0x500d_0156;
+    for index in 0..unsafe { (*acl).AceCount } as u32 {
+        let mut raw = std::ptr::null_mut();
+        if unsafe { GetAce(acl, index, &mut raw) } == 0 {
+            return Err(error("GetAce(service path)"));
+        }
+        let header = unsafe { &*raw.cast::<ACE_HEADER>() };
+        match header.AceType {
+            0 => {
+                let ace = unsafe { &*raw.cast::<ACCESS_ALLOWED_ACE>() };
+                if ace.Mask & WRITE != 0 && !privileged((&raw const ace.SidStart).cast_mut().cast())
+                {
+                    return Err("sandbox service path grants writes outside administrators".into());
+                }
+            }
+            1 => {}
+            _ => return Err("sandbox service path has an unsupported access entry".into()),
+        }
     }
     Ok(())
 }
@@ -285,4 +374,57 @@ pub(super) fn pin_executable(path: &Path) -> Result<Vec<Handle>> {
         handles.push(handle);
     }
     Ok(handles)
+}
+
+pub(super) fn create_service_file(target: &Path, sddl: &str) -> Result<std::fs::File> {
+    use std::os::windows::io::FromRawHandle;
+    use windows_sys::Win32::Foundation::GENERIC_READ;
+    use windows_sys::Win32::Foundation::GENERIC_WRITE;
+    use windows_sys::Win32::Security::SECURITY_ATTRIBUTES;
+    use windows_sys::Win32::Storage::FileSystem::CREATE_NEW;
+    use windows_sys::Win32::Storage::FileSystem::CreateFileW;
+    use windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_NORMAL;
+    let parent = target.parent().ok_or("service image has no parent")?;
+    let _parent = pin_executable(parent)?;
+    verify_service_path(parent)?;
+    if target.try_exists().map_err(|error| error.to_string())? {
+        let pinned = pin_executable(target)?;
+        verify_service_path(target)?;
+        drop(pinned);
+        std::fs::remove_file(target).map_err(|error| error.to_string())?;
+    }
+    let sd = descriptor(sddl)?;
+    let attributes = SECURITY_ATTRIBUTES {
+        nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
+        lpSecurityDescriptor: sd.0,
+        bInheritHandle: 0,
+    };
+    let raw = unsafe {
+        CreateFileW(
+            wide(target).as_ptr(),
+            GENERIC_READ | GENERIC_WRITE,
+            0,
+            &attributes,
+            CREATE_NEW,
+            FILE_ATTRIBUTE_NORMAL,
+            std::ptr::null_mut(),
+        )
+    };
+    let handle = Handle::new(raw, "CreateFileW(protected service image)")?;
+    let handle = std::mem::ManuallyDrop::new(handle);
+    Ok(unsafe { std::fs::File::from_raw_handle(handle.0) })
+}
+
+pub(crate) fn copy_service_image(source: &Path, target: &Path, readers: &[String]) -> Result<()> {
+    let source = std::fs::canonicalize(source).map_err(|error| error.to_string())?;
+    let _source = pin_executable(&source)?;
+    let mut sddl = "O:BAG:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)".to_owned();
+    for reader in readers {
+        let _sid = sid(reader)?;
+        sddl.push_str(&format!("(A;;GRGX;;;{reader})"));
+    }
+    let mut target = create_service_file(target, &sddl)?;
+    let mut source = std::fs::File::open(source).map_err(|error| error.to_string())?;
+    std::io::copy(&mut source, &mut target).map_err(|error| error.to_string())?;
+    target.sync_all().map_err(|error| error.to_string())
 }

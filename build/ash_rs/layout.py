@@ -60,15 +60,19 @@ def build_package_directory(
     update_public_key: Optional[str] = None,
     build_profile: str = "release",
     windows_sandbox_binary: Optional[Path] = None,
+    windows_sandbox_service_binary: Optional[Path] = None,
     voice_host_binary: Optional[Path] = None,
     collaboration_server_binary: Optional[Path] = None,
     livekit: Optional[Dict[str, str]] = None,
     remote_runtime_bundle: Optional[Path] = None,
     remote_runtime_release: Optional[Dict[str, str]] = None,
 ) -> None:
-    if spec.is_windows != (windows_sandbox_binary is not None):
+    if (
+        spec.is_windows != (windows_sandbox_binary is not None)
+        or spec.is_windows != (windows_sandbox_service_binary is not None)
+    ):
         raise RuntimeError(
-            "Windows packages require their sandbox executable; other targets must omit it"
+            "Windows packages require both sandbox executables; other targets must omit them"
         )
     if (
         voice_host_binary is None
@@ -104,6 +108,7 @@ def build_package_directory(
         }
         if windows_sandbox_binary is not None:
             executables["windowsSandbox"] = str(windows_sandbox_binary)
+            executables["windowsSandboxService"] = str(windows_sandbox_service_binary)
         if bubblewrap is not None:
             executables["bubblewrap"] = {
                 "binary": str(bubblewrap.executable),
@@ -281,6 +286,11 @@ def assemble_package(staging: Path, inputs: dict) -> None:
             binary_dir / "ash-windows-sandbox.exe",
             True,
         )
+        copy_executable(
+            Path(executables["windowsSandboxService"]),
+            binary_dir / "ash-windows-sandbox-service.exe",
+            True,
+        )
         copy_windows_sandbox_notices(source_root, resources / "licenses")
     ripgrep = inputs["ripgrep"]
     tgrep = inputs["tgrep"]
@@ -332,6 +342,10 @@ def assemble_package(staging: Path, inputs: dict) -> None:
         components["windowsSandbox"] = {
             "source": "cargo-build",
             "binarySha256": file_sha256(binary_dir / "ash-windows-sandbox.exe"),
+        }
+        components["windowsSandboxService"] = {
+            "source": "cargo-build",
+            "binarySha256": file_sha256(binary_dir / "ash-windows-sandbox-service.exe"),
         }
     if node is not None:
         components["node"] = {
@@ -462,6 +476,10 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
             package / "bin/ash-windows-sandbox.exe"
         )
         executables.append(package / "bin/ash-windows-sandbox.exe")
+        first_party_artifacts["windowsSandboxService"] = (
+            package / "bin/ash-windows-sandbox-service.exe"
+        )
+        executables.append(package / "bin/ash-windows-sandbox-service.exe")
     if "cli" in components:
         cli = components["cli"]
         if (
@@ -614,6 +632,7 @@ def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]
     }
     if spec.is_windows:
         artifacts["windowsSandbox"] = package / "bin/ash-windows-sandbox.exe"
+        artifacts["windowsSandboxService"] = package / "bin/ash-windows-sandbox-service.exe"
     if "cli" in components:
         artifacts["cli"] = package / "bin" / spec.cli_name
     if metadata.get("javascriptRuntime") == {"kind": "packagedNode"}:
@@ -675,6 +694,7 @@ def record_system_signing(
             "remoteServer",
             "execServer",
             "windowsSandbox",
+            "windowsSandboxService",
         }:
             component = components.get(name)
             if not isinstance(component, dict):

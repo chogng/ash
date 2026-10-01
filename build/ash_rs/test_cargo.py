@@ -173,6 +173,56 @@ class CargoBuildTests(unittest.TestCase):
         self.assertEqual(executable, result)
         environment.assert_not_called()
 
+    def test_windows_service_rejects_other_targets_before_building(self) -> None:
+        with (
+            patch("build.ash_rs.cargo.subprocess.run") as run,
+            self.assertRaisesRegex(RuntimeError, "requires a Windows target"),
+        ):
+            build_binaries(
+                self.root,
+                self.spec,
+                {"ash-windows-sandbox-service": None},
+                cargo="cargo",
+                cargo_profile="release",
+            )
+        run.assert_not_called()
+
+    def test_windows_helpers_build_together_without_speech_or_v8(self) -> None:
+        names = ("ash-windows-sandbox", "ash-windows-sandbox-service")
+        executables = {name: self.executable(name + ".exe") for name in names}
+        artifacts = "\n".join(
+            json.dumps(
+                {
+                    "reason": "compiler-artifact",
+                    "target": {"kind": ["bin"], "name": name},
+                    "executable": str(path),
+                }
+            )
+            for name, path in executables.items()
+        )
+        with (
+            patch(
+                "build.ash_rs.cargo.subprocess.run",
+                return_value=subprocess.CompletedProcess(["cargo"], 0, artifacts),
+            ) as run,
+            patch("build.ash_rs.cargo.cargo_environment") as environment,
+        ):
+            result = build_binaries(
+                self.root,
+                TARGETS["x86_64-pc-windows-msvc"],
+                dict.fromkeys(names),
+                cargo="cargo",
+                cargo_profile="release",
+            )
+        self.assertEqual(executables, result)
+        environment.assert_not_called()
+        run.assert_called_once()
+        command = run.call_args.args[0]
+        self.assertEqual(
+            list(names),
+            [command[i + 1] for i, value in enumerate(command) if value == "--bin"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

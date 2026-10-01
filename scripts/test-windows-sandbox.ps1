@@ -12,32 +12,83 @@ function Invoke-Checked([string]$Program, [string[]]$Arguments) {
 # The caller must run this explicit acceptance entry point as an administrator.
 # Normal product execution never invokes setup or requests elevation.
 Invoke-Checked python @('-B', 'scripts/cargo.py', 'build', '-p', 'ash-windows-sandbox', '--bin', 'ash-windows-sandbox', '--locked', '--target', $Target)
+Invoke-Checked python @('-B', 'scripts/cargo.py', 'build', '-p', 'ash-windows-sandbox-service', '--bin', 'ash-windows-sandbox-service', '--locked', '--target', $Target)
 Invoke-Checked python @('-B', 'scripts/cargo.py', 'build', '-p', 'ash-network-proxy', '--example', 'probe', '--locked', '--target', $Target)
 $bin = Join-Path $output 'bin'
 New-Item -ItemType Directory -Force -Path $bin | Out-Null
 $binary = Join-Path $bin 'ash-windows-sandbox.exe'
 Copy-Item -LiteralPath (Join-Path $workspace ".build/cargo/$Target/debug/ash-windows-sandbox.exe") -Destination $binary
+$service = Join-Path $bin 'ash-windows-sandbox-service.exe'
+Copy-Item -LiteralPath (Join-Path $workspace ".build/cargo/$Target/debug/ash-windows-sandbox-service.exe") -Destination $service
 $env:ASH_WINDOWS_SANDBOX_BIN = $binary
 $env:ASH_NETWORK_PROBE = Join-Path $workspace ".build/cargo/$Target/debug/examples/probe.exe"
-$setupFile = Join-Path $output 'setup-plan.json'
-& $binary plan setup --slots 1 | Set-Content -LiteralPath $setupFile -Encoding utf8
-if ($LASTEXITCODE -ne 0) { throw 'Could not prepare installation plan.' }
-$plan = Get-Content -LiteralPath $setupFile -Raw | ConvertFrom-Json
-$root = $plan.changes.runtimeDirectory
-if (Test-Path -LiteralPath $root) { throw 'A sandbox installation already exists; refusing to adopt or remove it.' }
+$servicePlanFile = Join-Path $output 'service-install-plan.json'
+& $service plan install | Set-Content -LiteralPath $servicePlanFile -Encoding utf8
+if ($LASTEXITCODE -ne 0) { throw 'Could not prepare service installation plan.' }
+$servicePlan = Get-Content -LiteralPath $servicePlanFile -Raw | ConvertFrom-Json
+$serviceRoot = $servicePlan.changes.serviceDirectory
+if ((Test-Path -LiteralPath $serviceRoot) -or (Get-Service -Name 'AshWindowsSandbox' -ErrorAction SilentlyContinue)) {
+    throw 'An Ash sandbox service already exists; refusing to adopt or remove it.'
+}
+$root = $null
+$setupAttempted = $false
 $failure = $null
 try {
+    Invoke-Checked $service @('install', '--approve', $servicePlan.sha256)
+    $setupFile = Join-Path $output 'setup-plan.json'
+    & $binary plan setup --slots 1 | Set-Content -LiteralPath $setupFile -Encoding utf8
+    if ($LASTEXITCODE -ne 0) { throw 'Could not prepare installation plan.' }
+    $plan = Get-Content -LiteralPath $setupFile -Raw | ConvertFrom-Json
+    $root = $plan.changes.runtimeDirectory
+    if (Test-Path -LiteralPath $root) { throw 'A sandbox installation already exists; refusing to adopt or remove it.' }
+    $setupAttempted = $true
     Invoke-Checked $binary @('setup', '--slots', '1', '--approve', $plan.sha256)
+    $blockedUninstallFile = Join-Path $output 'service-blocked-uninstall-plan.json'
+    & $service plan uninstall | Set-Content -LiteralPath $blockedUninstallFile -Encoding utf8
+    if ($LASTEXITCODE -ne 0) { throw 'Could not prepare occupied service removal plan.' }
+    $blockedUninstall = Get-Content -LiteralPath $blockedUninstallFile -Raw | ConvertFrom-Json
+    & $service uninstall --approve $blockedUninstall.sha256
+    if ($LASTEXITCODE -eq 0) { throw 'Service removal accepted a remaining user runtime.' }
+    Invoke-Checked $binary @('status')
+    Invoke-Checked python @('-B', 'scripts/cargo.py', 'test', '-p', 'ash-windows-sandbox-service', '--locked', '--target', $Target)
     Invoke-Checked python @('-B', 'scripts/cargo.py', 'test', '-p', 'ash-windows-sandbox', '--lib', '--test', 'windows', '--locked', '--target', $Target, '--', '--include-ignored', '--test-threads=1')
+    $beforeFile = Join-Path $output 'before-update-plan.json'
+    & $binary plan remove | Set-Content -LiteralPath $beforeFile -Encoding utf8
+    if ($LASTEXITCODE -ne 0) { throw 'Could not read account identities before update.' }
+    $before = Get-Content -LiteralPath $beforeFile -Raw | ConvertFrom-Json
+    # A PE overlay changes the approved executable identity without replacing
+    # the worker protocol. Only this disposable acceptance copy is changed.
+    $stream = [IO.File]::Open($binary, [IO.FileMode]::Append, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    try { $stream.WriteByte(1) } finally { $stream.Dispose() }
+    $updateFile = Join-Path $output 'update-plan.json'
+    & $binary plan update | Set-Content -LiteralPath $updateFile -Encoding utf8
+    if ($LASTEXITCODE -ne 0) { throw 'Could not prepare executable update plan.' }
+    $update = Get-Content -LiteralPath $updateFile -Raw | ConvertFrom-Json
+    if ($update.changes.runnerSha256 -eq $before.changes.runnerSha256) { throw 'Update did not change the executable identity.' }
+    Invoke-Checked $binary @('update', '--approve', $update.sha256)
+    $afterFile = Join-Path $output 'after-update-plan.json'
+    & $binary plan remove | Set-Content -LiteralPath $afterFile -Encoding utf8
+    if ($LASTEXITCODE -ne 0) { throw 'Could not inspect updated account identities.' }
+    $after = Get-Content -LiteralPath $afterFile -Raw | ConvertFrom-Json
+    if (($before.changes.accounts | ConvertTo-Json -Depth 10 -Compress) -ne ($after.changes.accounts | ConvertTo-Json -Depth 10 -Compress)) { throw 'Update changed the provisioned accounts.' }
+    if (($before.changes.networkObjects | ConvertTo-Json -Depth 30 -Compress) -ne ($after.changes.networkObjects | ConvertTo-Json -Depth 30 -Compress)) { throw 'Update changed the installed network objects.' }
+    Invoke-Checked python @('-B', 'scripts/cargo.py', 'test', '-p', 'ash-windows-sandbox', '--test', 'windows', '--locked', '--target', $Target, '--', '--include-ignored', '--test-threads=1')
 } catch {
     $failure = $_
 } finally {
-    if (Test-Path -LiteralPath (Join-Path $root 'state.dpapi')) {
+    if ($setupAttempted -and $root -and (Test-Path -LiteralPath $root)) {
         $removeFile = Join-Path $output 'remove-plan.json'
         & $binary plan remove | Set-Content -LiteralPath $removeFile -Encoding utf8
         if ($LASTEXITCODE -ne 0) { throw 'Could not read installation recovery plan.' }
         $removal = Get-Content -LiteralPath $removeFile -Raw | ConvertFrom-Json
         Invoke-Checked $binary @('remove', '--approve', $removal.sha256)
+    }
+    if (Test-Path -LiteralPath $serviceRoot) {
+        $serviceRemoveFile = Join-Path $output 'service-uninstall-plan.json'
+        & $service plan uninstall | Set-Content -LiteralPath $serviceRemoveFile -Encoding utf8
+        if ($LASTEXITCODE -ne 0) { throw 'Could not prepare service cleanup plan.' }
+        $serviceRemoval = Get-Content -LiteralPath $serviceRemoveFile -Raw | ConvertFrom-Json
+        Invoke-Checked $service @('uninstall', '--approve', $serviceRemoval.sha256)
     }
 }
 if ($failure) { throw $failure }
