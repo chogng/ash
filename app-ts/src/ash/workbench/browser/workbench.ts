@@ -1,3 +1,4 @@
+import { IDictationService } from '../../platform/dictation/common/dictationService.js';
 import { IHooksService } from '../../platform/hooks/common/hooksService.js';
 import { ExtensionColorThemeService } from '../services/extensions/browser/extensionColorThemeService.js';
 import { IWorkbenchThemeService } from '../services/themes/common/workbenchThemeService.js';
@@ -450,6 +451,7 @@ export class Workbench extends Disposable {
 		this.registerErrorHandler(logService);
 		services.registerInstance(ILogService, logService);
 		services.registerInstance(IRendererHostService, api);
+		services.registerInstance(IDictationService, api.dictation);
 		services.registerInstance(ILocalTranscriptionService, api.localTranscription ?? this._register(new NullLocalTranscriptionService()));
 		services.registerInstance(IAgentCapabilitiesService, api.agentCapabilities);
 		services.registerInstance(IHooksService, api.hooks);

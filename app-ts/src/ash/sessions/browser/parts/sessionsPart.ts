@@ -16,14 +16,12 @@ import type { ChatInputDelegate } from '../../../workbench/contrib/chat/browser/
 import type { ChatWidgetModel } from '../chatWidgetModel.js';
 import { h } from "../../../base/browser/dom.js";
 import { localize } from '../../../nls.js';
-import type { IDictationService } from '../../../platform/dictation/common/dictationService.js';
 import type { INotificationService } from '../../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../../platform/native/common/nativeHost.js';
 
 export interface SessionsPartOptions {
 	readonly sessionService: ISessionsManagementService;
 	readonly chatService: IChatService;
-	readonly dictation?: IDictationService;
 	readonly contextMenuService: IContextMenuService;
 	readonly contextViewService: IContextViewService;
 	readonly accessibleViewService: IAccessibleViewService;
@@ -50,7 +48,6 @@ export class SessionsPart extends WorkbenchPart {
 		const createView = (page: SessionsPage, container: HTMLElement): SessionsChatView => this._register(services.createInstance(SessionsChatView, container, {
 			page,
 			chatService: options.chatService,
-			dictation: options.dictation,
 			sessionService: options.sessionService,
 			contextMenuService: options.contextMenuService,
 			contextViewService: options.contextViewService,

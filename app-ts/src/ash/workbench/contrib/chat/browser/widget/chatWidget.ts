@@ -24,7 +24,8 @@ import { Schemas } from "../../../../../base/common/network.js";
 import { ASH_REMOTE_SCHEME, createSshRemoteWorkspaceUri, getRemoteWorkspacePath } from '../../../../../platform/remote/common/remote.js';
 import { OPEN_CHAT_SETTINGS_COMMAND_ID } from "../../common/chat.js";
 import { OpenSettingsCommandId } from '../../../preferences/common/preferences.js';
-import type { IDictationService } from '../../../../../platform/dictation/common/dictationService.js';
+import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { ChatInputEditors } from './input/chatInputEditorRegistry.js';
 import type { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/common/nativeHost.js';
 
@@ -71,11 +72,11 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		commandService: ICommandService,
 		accessibleViewService: IAccessibleViewService,
 		notifications: INotificationService,
-		openerService?: IOpenerService,
-		editorService?: IEditorService,
-		imageResourceLoader?: (resource: URI) => Promise<Blob>,
-		dictation?: IDictationService,
-		createInputPart?: (container: HTMLElement, delegate: ChatInputDelegate) => IChatInputPart,
+		openerService: IOpenerService | undefined,
+		editorService: IEditorService | undefined,
+		imageResourceLoader: ((resource: URI) => Promise<Blob>) | undefined,
+		createInputPart: ((container: HTMLElement, delegate: ChatInputDelegate) => IChatInputPart) | undefined,
+		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
@@ -115,7 +116,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		};
 		this.inputPart = this._register(createInputPart
 			? createInputPart(this.element, inputDelegate)
-			: new ChatInputPart(this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, notifications, dictation));
+			: instantiationService.createInstance(ChatInputPart, this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, notifications, ChatInputEditors, []));
 		this.element.append(this.goalElement, this.listWidget.element, this.inputPart.element);
 		this._register(this.model.onDidChange(() => this.render()));
 		this._register(toDisposable(() => this.element.remove()));

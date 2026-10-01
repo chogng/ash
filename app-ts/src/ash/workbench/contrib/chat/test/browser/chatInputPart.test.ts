@@ -1,10 +1,14 @@
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { ChatSpeechToTextService, ChatSpeechToTextState, IChatSpeechToTextService } from '../../browser/speechToText/chatSpeechToTextService.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { ChatInputEditors } from '../../browser/widget/input/chatInputEditorRegistry.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import type { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
-import type { IDictationService } from '../../../../../platform/dictation/common/dictationService.js';
+import { IDictationService } from '../../../../../platform/dictation/common/dictationService.js';
 import { Event as AshEvent, Emitter } from '../../../../../base/common/event.js';
 import { LocalTranscriptionModelState, type ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { NotificationSeverity } from '../../../../../platform/notification/common/notification.js';
@@ -25,16 +29,23 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
+const inputResources = new DisposableStore();
+suiteTeardown(() => inputResources.dispose());
 const sharedNotifications = new NotificationService();
 setARIAContainer(document.body);
 suiteTeardown(() => sharedNotifications.dispose());
 
-function inputPart(notifications: NotificationService, dictation?: Pick<IDictationService, 'start'> & Partial<IDictationService>, mode: ChatInputState['mode'] = 'agent', delegate: Partial<ChatInputDelegate> = {}): ChatInputPart {
+function inputPart(notifications: NotificationService, dictation?: Pick<IDictationService, 'start'> & Partial<IDictationService>, mode: ChatInputState['mode'] = 'agent', delegate: Partial<ChatInputDelegate> = {}, sharedServices?: InstantiationService): ChatInputPart {
 	const container = document.createElement('div');
 	document.body.append(container);
 	let state: ChatInputState = { mode, queuedMessages: 0, phase: 'loading', canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
 	const service: IDictationService | undefined = dictation ? { onDidChangePreparation: AshEvent.None, getPreparation: async () => undefined, prepareModel: async () => {}, cancelPreparation: async () => {}, ...dictation } : undefined;
-	const part = new ChatInputPart(container, { ...delegate, selectMode: selected => { state = { ...state, mode: selected }; part.render(state); } } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, service);
+	const services = sharedServices ?? inputResources.add(new InstantiationService());
+	if (!sharedServices) {
+		services.registerInstance(IDictationService, service);
+		services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	}
+	const part = services.createInstance(ChatInputPart,container, { ...delegate, selectMode: selected => { state = { ...state, mode: selected }; part.render(state); } } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, ChatInputEditors, []);
 	part.render(state);
 	return part;
 }
@@ -236,8 +247,130 @@ test('Closing an input during microphone acquisition closes the resulting sessio
 	const part = inputPart(sharedNotifications, { start: () => new Promise(resolve => { completeStart = resolve; }) });
 	part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')!.click();
 	await Promise.resolve();
+	assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')!.disabled, true);
 	part.dispose();
 	completeStart({ stop: async () => { stopped++; } });
 	await new Promise(resolve => setTimeout(resolve, 0));
 	assert.equal(stopped, 1);
+});
+
+
+test('Shared dictation only changes its owning input and returns the complete transcript', async () => {
+	using services = new InstantiationService();
+	let transcript!: (text: string, final: boolean) => void;
+	let ended!: (error?: string) => void;
+	let stops = 0;
+	const backend: IDictationService = {
+		onDidChangePreparation: AshEvent.None,
+		getPreparation: async () => undefined,
+		prepareModel: async () => {},
+		cancelPreparation: async () => {},
+		start: async (onTranscript, onEnded) => {
+			transcript = onTranscript;
+			ended = onEnded;
+			return { stop: async () => { stops++; transcript('second', true); ended(); } };
+		},
+	};
+	services.registerInstance(IDictationService, backend);
+	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	const speech = services.get(IChatSpeechToTextService);
+	using firstNotifications = new NotificationService();
+	using secondNotifications = new NotificationService();
+	using first = inputPart(firstNotifications, undefined, 'agent', {}, services);
+	using second = inputPart(secondNotifications, undefined, 'agent', {}, services);
+	const started = waitForSpeechState(speech, ChatSpeechToTextState.Recording);
+	first.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')!.click();
+	await started;
+	transcript('first', true);
+	assert.deepEqual([first.element.querySelector('textarea')!.value, second.element.querySelector('textarea')!.value], ['first', '']);
+	assert.equal(second.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')!.disabled, true);
+	second.setVisible(false);
+	assert.equal(stops, 0);
+	assert.equal(await speech.stopAndTranscribe(), 'first second');
+	assert.deepEqual([first.element.querySelector('textarea')!.value, second.element.querySelector('textarea')!.value, stops], ['first second', '', 1]);
+	assert.deepEqual([firstNotifications.getNotifications(), secondNotifications.getNotifications()], [[], []]);
+});
+
+test('Hiding the recording input discards stop-time text and permits another input to record', async () => {
+	using services = new InstantiationService();
+	let transcript!: (text: string, final: boolean) => void;
+	let finishStop!: () => void;
+	let stopRequested!: () => void;
+	let stopReady = new Promise<void>(resolve => { stopRequested = resolve; });
+	const backend: IDictationService = {
+		onDidChangePreparation: AshEvent.None,
+		getPreparation: async () => undefined,
+		prepareModel: async () => {},
+		cancelPreparation: async () => {},
+		start: async onTranscript => {
+			transcript = onTranscript;
+			return { stop: () => new Promise<void>(resolve => { finishStop = () => { transcript('discarded', true); resolve(); }; stopRequested(); }) };
+		},
+	};
+	services.registerInstance(IDictationService, backend);
+	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	const speech = services.get(IChatSpeechToTextService);
+	using first = inputPart(sharedNotifications, undefined, 'agent', {}, services);
+	using second = inputPart(sharedNotifications, undefined, 'agent', {}, services);
+	const started = waitForSpeechState(speech, ChatSpeechToTextState.Recording);
+	first.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')!.click();
+	await started;
+	transcript('interim', false);
+	first.setVisible(false);
+	await stopReady;
+	const idle = waitForSpeechState(speech, ChatSpeechToTextState.Idle);
+	finishStop();
+	await idle;
+	assert.deepEqual([first.element.querySelector('textarea')!.value, second.element.querySelector('textarea')!.value], ['', '']);
+	assert.equal(first.element.querySelector('.ash-chat-dictation-preview')!.textContent, '');
+	const restarted = waitForSpeechState(speech, ChatSpeechToTextState.Recording);
+	second.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')!.click();
+	await restarted;
+	transcript('new input', true);
+	assert.deepEqual([first.element.querySelector('textarea')!.value, second.element.querySelector('textarea')!.value], ['', 'new input']);
+	stopReady = new Promise<void>(resolve => { stopRequested = resolve; });
+	const stopped = speech.stopAndTranscribe();
+	await stopReady;
+	finishStop();
+	await stopped;
+});
+
+test('A failed shared session notifies its owning input only', async () => {
+	using services = new InstantiationService();
+	let ended!: (error?: string) => void;
+	services.registerInstance(IDictationService, {
+		onDidChangePreparation: AshEvent.None,
+		getPreparation: async () => undefined,
+		prepareModel: async () => {},
+		cancelPreparation: async () => {},
+		start: async (_onTranscript: (text: string, final: boolean) => void, onEnded: (error?: string) => void) => { ended = onEnded; return { stop: async () => {} }; },
+	});
+	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	const speech = services.get(IChatSpeechToTextService);
+	using firstNotifications = new NotificationService();
+	using secondNotifications = new NotificationService();
+	using first = inputPart(firstNotifications, undefined, 'agent', {}, services);
+	using second = inputPart(secondNotifications, undefined, 'agent', {}, services);
+	const started = waitForSpeechState(speech, ChatSpeechToTextState.Recording);
+	first.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')!.click();
+	await started;
+	ended('capture lost');
+	assert.deepEqual([firstNotifications.getNotifications().map(item => item.message), secondNotifications.getNotifications().map(item => item.message)], [['Dictation failed: capture lost'], []]);
+	assert.equal(speech.state, ChatSpeechToTextState.Idle);
+});
+
+function waitForSpeechState(service: IChatSpeechToTextService, state: ChatSpeechToTextState): Promise<void> {
+	return new Promise(resolve => {
+		const subscription = service.onDidChangeState(next => {
+			if (next === state) {
+				subscription.dispose();
+				resolve();
+			}
+		});
+	});
+}
+
+test('Input construction rejects a missing window dictation service', () => {
+	using services = new InstantiationService();
+	assert.throws(() => services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, {} as IContextViewService, {} as IAccessibleViewService, sharedNotifications, ChatInputEditors, []), /Unknown service: chatSpeechToTextService/);
 });

@@ -1,3 +1,5 @@
+import { IDictationService } from '../../../platform/dictation/common/dictationService.js';
+import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { observableValue } from '../../../base/common/observable.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
@@ -182,6 +184,8 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	};
 	using resources = new DisposableStore();
 	const services = resources.add(createCodeEditorServices(resources).createChild());
+	services.registerInstance(IDictationService, undefined);
+	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	using notifications = new NotificationService();
 	services.registerInstance(IContextMenuService, contextMenuService);
 	services.registerInstance(IContextViewService, contextViewService);
@@ -206,7 +210,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		notifications,
 		commandService,
 		createInputPart: (container, delegate, model, page) => {
-			const input = services.createInstance(NewChatInputWidget, container, delegate, model, undefined, undefined, page);
+			const input = services.createInstance(NewChatInputWidget, container, delegate, model, undefined, page);
 			inputs.push(input);
 			return input;
 		},
