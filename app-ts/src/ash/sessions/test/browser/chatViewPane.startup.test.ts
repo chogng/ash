@@ -1,3 +1,4 @@
+import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
 import { observableValue } from '../../../base/common/observable.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
@@ -47,6 +48,7 @@ test("opens a local Chat tab before the backend session request settles", () => 
 	using services = new InstantiationService();
 	services.registerInstance(IDictationService, undefined);
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	registerTestDictationOnboarding(services);
 	using view = new ChatViewPane(
 		document.body,
 		{ id: "workbench.chat", title: "Chat" },

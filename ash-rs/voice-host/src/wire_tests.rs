@@ -5,6 +5,7 @@ fn framed_control_round_trip_rejects_truncation_and_unknown_operations() {
     let frame = encode(&Request {
         id: 17,
         operation: Operation::Start {
+            input_device: Some("fixture-device".into()),
             config: AudioConfig {
                 rate: SampleRate::Hz24000,
                 direction: Direction::Capture,

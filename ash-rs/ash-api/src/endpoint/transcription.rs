@@ -31,6 +31,7 @@ impl TranscriptionSession {
         target: &ResolvedApiTarget,
         model: &str,
         limits: WebSocketSessionConfig,
+        language: Option<&str>,
         cancellation: &CancellationToken,
     ) -> Result<Self, ApiError> {
         if model != "gpt-live-transcribe" {
@@ -54,6 +55,10 @@ impl TranscriptionSession {
             .filter(|id| !id.is_empty())
             .ok_or_else(|| ApiError::InvalidResponse("Transcription session has no ID".into()))?
             .to_owned();
+        let mut transcription = json!({ "model": model });
+        if let Some(language) = language {
+            transcription["languages"] = json!([language]);
+        }
         socket
             .send(
                 json!({
@@ -62,7 +67,7 @@ impl TranscriptionSession {
                         "type": "transcription",
                         "audio": { "input": {
                             "format": { "type": "audio/pcm", "rate": 24000 },
-                            "transcription": { "model": model },
+                            "transcription": transcription,
                             "turn_detection": null
                         }}
                     }

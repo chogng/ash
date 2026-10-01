@@ -16,5 +16,11 @@ export interface IDictationService {
 	getPreparation(): Promise<ILocalTranscriptionModelSnapshot | undefined>;
 	prepareModel(): Promise<void>;
 	cancelPreparation(): Promise<void>;
+	getOptions(): Promise<IDictationOptions>;
 	start(onTranscript: (text: string, isFinal: boolean) => void, onEnded: (error?: string) => void): Promise<IDictationSession>;
+}
+
+export interface IDictationOptions {
+	readonly inputDevices: readonly { readonly id: string; readonly label: string; readonly isDefault: boolean }[];
+	readonly languages: readonly string[];
 }

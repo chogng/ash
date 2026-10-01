@@ -1,3 +1,4 @@
+import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
 import { IDictationService } from '../../../platform/dictation/common/dictationService.js';
 import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
@@ -63,6 +64,7 @@ function createInputServices(): InstantiationService {
 	const services = inputResources.add(new InstantiationService());
 	services.registerInstance(IDictationService, undefined);
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	registerTestDictationOnboarding(services);
 	return services;
 }
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -715,6 +717,7 @@ test('Code sending preserves the Chat draft when pages switch during first-sessi
 	editorServices.registerInstance(INotificationService, notifications);
 	const composerStorage = editorResources.add(createTestStorage());
 	editorServices.registerInstance(IStorageService, composerStorage);
+	registerTestDictationOnboarding(editorServices);
 	editorServices.registerInstance(IChatTipService, editorResources.add(editorServices.createInstance(ChatTipService)));
 	Object.defineProperty(dom.window.performance, 'getEntriesByType', { value: () => [] });
 	editorServices.registerInstance(ILifecycleService, editorResources.add(editorServices.createInstance(BrowserLifecycleService, { ownerWindow: dom.window as unknown as Window, onError: (error: unknown) => { throw error; } })));

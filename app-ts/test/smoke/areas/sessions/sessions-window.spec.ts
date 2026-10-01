@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import { launchElectron } from '../../../automation/playwrightElectron.js';
 import { Editor } from '../../../automation/editor.js';
+import { QuickAccess } from '../../../automation/quickaccess.js';
 
 async function replaceChatInput(editor: Editor, text: string): Promise<void> {
 	await editor.waitForEditorFocus();
@@ -12,6 +13,38 @@ async function replaceChatInput(editor: Editor, text: string): Promise<void> {
 	await editor.input.page().keyboard.press('Backspace');
 	await editor.input.page().keyboard.insertText(text);
 }
+
+test('Sessions dictation introduction preserves the draft and restores focus after accessible help', async ({ application, target, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'Uses the Sessions desktop window.');
+	if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
+	const opened = application.waitForEvent('window');
+	await workbench.page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
+	const page = await opened;
+	const chat = page.locator('.ash-sessions-chat-slot .ash-chat:visible').first();
+	const editor = new Editor(chat);
+	await replaceChatInput(editor, 'Keep the Sessions draft');
+	await new QuickAccess(page).runCommand('workbench.action.chat.dictation.showIntroduction');
+	const introduction = page.getByRole('region', { name: 'Dictation introduction', exact: true });
+	await expect(introduction).toBeVisible();
+	const done = introduction.getByRole('button', { name: 'Done', exact: true });
+	await done.focus();
+	await page.keyboard.press('Alt+F1');
+	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
+	await expect(help).toBeVisible();
+	await expect(help.getByRole('textbox')).toHaveValue(/Test text is never inserted/);
+	await page.keyboard.press('Escape');
+	await expect(help).toHaveCount(0);
+	await expect(done).toBeFocused();
+	await page.keyboard.press('Alt+F2');
+	const accessibleView = page.getByRole('dialog', { name: 'Accessible View', exact: true });
+	await expect(accessibleView).toBeVisible();
+	await expect(accessibleView.getByRole('textbox')).toHaveAttribute('readonly', '');
+	await page.keyboard.press('Escape');
+	await page.keyboard.press('Escape');
+	await expect(introduction).toHaveCount(0);
+	await editor.waitForEditorContents(text => text === 'Keep the Sessions draft');
+	await expect(editor.input).toBeFocused();
+});
 
 async function expectComposerFocusWithoutOutline(card: Locator, input: Locator, blurTarget: Locator): Promise<void> {
 	await blurTarget.hover();

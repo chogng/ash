@@ -1,3 +1,15 @@
+import '../../../src/ash/workbench/contrib/codeEditor/browser/dictation/editorDictation.js';
+import '../../../src/ash/workbench/contrib/chat/browser/actions/chatSpeechToTextActions.js';
+import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
+import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
+import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
+import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
+import { CodeEditorWidget } from '../../../src/ash/editor/browser/widget/codeEditor/codeEditorWidget.js';
+import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
+import { IStorageService, StorageScope } from '../../../src/ash/platform/storage/common/storage.js';
+import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
+import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { IDictationService } from '../../../src/ash/platform/dictation/common/dictationService.js';
 import { IChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import '../../../src/ash/base/browser/ui/button/button.css';
@@ -30,7 +42,7 @@ import type { ChatInputEditorOptions } from '../../../src/ash/workbench/contrib/
 import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import type { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
-import type { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
+
 import type { ChatInputDelegate } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInput.js';
 
 declare global {
@@ -43,6 +55,15 @@ declare global {
 			dispose(): void;
 			readonly operations: string[];
 			startDictation(): Promise<void>;
+			codeDictation(): Promise<void>;
+			readonly codeText: string;
+			freshIntroduction(): void;
+			readonly microphone: string;
+			readonly language: string;
+			readonly starts: number;
+			readonly stops: number;
+			holdCapture(): void;
+			releaseCapture(): void;
 			transcript(text: string, final: boolean): void;
 			readonly draft: string;
 			stopDictation(): Promise<string | undefined>;
@@ -110,12 +131,29 @@ const editor = resources.add(services.createInstance(ChatInputEditor, { containe
 const preview = document.createElement('div');
 preview.id = 'dictation-preview';
 document.body.append(preview);
+let starts = 0;
+let stops = 0;
+let captureReady = Promise.resolve();
+let releaseCapture!: () => void;
 let transcript!: (text: string, final: boolean) => void;
 services.registerInstance(IDictationService, {
-	onDidChangePreparation: Event.None, getPreparation: async () => undefined, prepareModel: async () => {}, cancelPreparation: async () => {},
-	start: async (onTranscript: (text: string, isFinal: boolean) => void) => { transcript = onTranscript; return { stop: async () => {} }; },
+	onDidChangePreparation: Event.None, getOptions: async () => ({ inputDevices: [{ id: 'microphone-1', label: 'Test microphone', isDefault: true }], languages: ['en', 'zh'] }), getPreparation: async () => undefined, prepareModel: async () => {}, cancelPreparation: async () => {},
+	start: async (onTranscript: (text: string, isFinal: boolean) => void) => { starts++; transcript = onTranscript; await captureReady; return { stop: async () => { stops++; } }; },
 });
 services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+registerTestDictationOnboarding(services);
+services.registerInstance(IPreferencesService, { openSettings: async () => {} } as unknown as IPreferencesService);
+services.registerInstance(IEditorService, { onDidVisibleEditorsChange: Event.None } as unknown as IEditorService);
+services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+const codeContainer = document.createElement('div');
+codeContainer.style.cssText = 'width:600px;height:220px';
+document.body.append(codeContainer);
+const codeModel = resources.add(new TextModel('before old after'));
+const codeEditor = resources.add(services.createInstance(CodeEditorWidget, { container: codeContainer, model: codeModel, ariaLabel: 'Ordinary dictation editor' }));
+codeEditor.setModel(codeModel);
+codeEditor.layout({ width: 600, height: 220 });
+services.get(IKeybindingService);
+
 const dictationSession = resources.add(services.createInstance(DictationSession, editor, preview, () => true, async () => {}));
 const contextViews = resources.add(new BrowserContextViewService(document.body));
 const notifications = resources.add(new NotificationService());
@@ -125,6 +163,15 @@ const secondInput = resources.add(services.createInstance(ChatInputPart, documen
 secondInput.element.id = 'second-input';
 secondInput.render({ mode: 'agent', queuedMessages: 0, phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 window.ashTableIntegration = {
+	codeDictation: async () => { codeEditor.focus(); await services.get(ICommandService).executeCommand('workbench.action.editorDictation.start'); },
+	get codeText() { return codeModel.getValue(); },
+	freshIntroduction: () => services.get(IStorageService).remove('dictation.introductionSeen', StorageScope.PROFILE),
+	get microphone() { return configuration.getValue<string>(DictationConfiguration.inputDevice); },
+	get language() { return configuration.getValue<string>(DictationConfiguration.language); },
+	get starts() { return starts; },
+	get stops() { return stops; },
+	holdCapture: () => { captureReady = new Promise(resolve => { releaseCapture = resolve; }); },
+	releaseCapture: () => releaseCapture(),
 	secondDraft: async () => (await secondInput.captureDraft())?.draft.text ?? '',
 	operations,
 	startDictation: async () => { await dictationSession.action.run(); },

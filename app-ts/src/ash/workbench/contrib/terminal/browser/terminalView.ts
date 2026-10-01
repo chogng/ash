@@ -1,3 +1,5 @@
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { TerminalVoiceSession } from '../../terminalContrib/voice/browser/terminalVoice.js';
 import { TabList, type TabListDropPosition } from "../../../../base/browser/ui/tablist/tabList.js";
 import { Disposable, DisposableMap } from "../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
@@ -30,12 +32,13 @@ export class TerminalViewPane extends ViewPane {
 	private readonly tabsLayout: TerminalTabsLayout;
 	private readonly widgetsElement: HTMLDivElement;
 	private readonly items = this._register(new DisposableMap<ITerminalInstance, TerminalViewItem>());
+	private readonly voice: TerminalVoiceSession;
 	private draggedTerminal: ITerminalInstance | undefined;
 	private creating = false;
 	private initializing = false;
 	private focusSource: Element | null | undefined;
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, @ITerminalService terminalService: ITerminalService, @IThemeService themeService: IThemeService, @IMenuService menuService: IMenuService, @IContextMenuService contextMenuService: IContextMenuService, @IContextKeyService contextKeyService: IContextKeyService, @IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService, @IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @ITerminalService terminalService: ITerminalService, @IThemeService themeService: IThemeService, @IMenuService menuService: IMenuService, @IContextMenuService contextMenuService: IContextMenuService, @IContextKeyService contextKeyService: IContextKeyService, @IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService, @IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService, @IInstantiationService instantiation: IInstantiationService) {
 		super(container, options);
 		this.terminalService = terminalService;
 		this.themeService = themeService;
@@ -92,6 +95,7 @@ export class TerminalViewPane extends ViewPane {
 		this.widgetsElement.className = "ash-terminal-widgets";
 		this.tabsLayout = this._register(new TerminalTabsLayout(this.widgetsElement, this.tabList.element));
 		this.contentElement.append(this.statusElement, this.tabsLayout.element);
+		this.voice = this._register(instantiation.createInstance(TerminalVoiceSession, this.contentElement, () => this.isBodyVisible() && !this.isDisposed, () => this.activeItem()?.widget.focus()));
 
 		for (const instance of terminalService.instances) this.addInstance(instance);
 		this._register(terminalService.onDidCreateInstance((instance) => {
@@ -112,6 +116,7 @@ export class TerminalViewPane extends ViewPane {
 				});
 			} else {
 				this.focusSource = undefined;
+				this.voice.hide();
 				this.updateInstances();
 			}
 		}));
@@ -130,6 +135,9 @@ export class TerminalViewPane extends ViewPane {
 			void this.initialize();
 		});
 	}
+
+	public startVoice(): Promise<void> { return this.voice.start(); }
+	public stopVoice(): Promise<void> { return this.voice.stop(); }
 
 	override focus(): void {
 		if (!this.isVisible() || this.isDisposed) return;

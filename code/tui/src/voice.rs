@@ -59,6 +59,7 @@ impl VoiceRuntime {
         )
         .map_err(|error| error.to_string())?;
         let request = LocalDictationRequest {
+            input_device: None,
             model_id: realtime_voice::DEFAULT_MODEL_ID.into(),
             model_root: self.model_root.clone(),
             audio_host,

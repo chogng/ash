@@ -15,6 +15,7 @@ import { TextDiffEditor } from "../../../browser/parts/editor/textDiffEditor.js"
 import { bindCodeLensCacheStorage } from "../../../../editor/contrib/codelens/browser/codeLensCache.js";
 import { IStorageService } from "../../../../platform/storage/common/storage.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
+import './dictation/editorDictation.js';
 import { CodeEditorConfiguration, type WrappingIndentSetting } from "../common/editorConfiguration.js";
 import { TextFileEditor } from '../../files/browser/editors/textFileEditor.js';
 import { TextFileSaveErrorHandler } from '../../files/browser/editors/textFileSaveErrorHandler.js';

@@ -1431,6 +1431,8 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
             DictationStartParams {
                 resource_id,
                 backend,
+                language: None,
+                input_device: None,
             },
         )
     }

@@ -14,7 +14,7 @@ type ConnectionState = Parameters<Parameters<AppServerProtocolClient['onStateCha
 class Client {
 	state: ConnectionState = 'ready';
 	stopText: string | null = null;
-	readonly requests: { method: string; resourceId: string; backend?: unknown }[] = [];
+	readonly requests: { method: string; resourceId: string; backend?: unknown; inputDevice?: string | null; language?: string | null }[] = [];
 	private readonly notifications = new Set<(notification: Notification) => void>();
 	private readonly states = new Set<(state: ConnectionState) => void>();
 
@@ -28,8 +28,9 @@ class Client {
 		return toDisposable(() => this.states.delete(listener));
 	}
 
-	async request(method: { method: string }, params: { resourceId: string; backend?: unknown }): Promise<{ text: string | null }> {
-		this.requests.push({ method: method.method, resourceId: params.resourceId, ...(params.backend ? { backend: params.backend } : {}) });
+	async request(method: { method: string }, params: { resourceId: string; backend?: unknown }): Promise<unknown> {
+		this.requests.push({ method: method.method, ...params });
+		if (method.method === 'dictation/options') return { inputDevices: [{ id: 'mic-2', label: 'USB microphone', isDefault: false }], languages: ['en', 'zh'] };
 		return { text: method.method === 'dictation/stop' ? this.stopText : null };
 	}
 
@@ -152,4 +153,26 @@ test('cloud dictation rejects an unknown provider before starting capture', asyn
 	using service = services.createInstance(AppServerDictationService, client as unknown as AppServerProtocolClient, configuration('{"dictation.backend":"cloud","dictation.cloudProvider":"unknown"}'));
 	await assert.rejects(service.start(() => {}, () => {}), /dictation.cloudProvider/);
 	assert.deepEqual(client.requests, []);
+});
+
+for (const backend of ['local', 'cloud']) {
+	test(`dictation forwards the selected microphone and uses language hints only in ${backend} capture`, async () => {
+		const client = new Client();
+		using services = new InstantiationService();
+		registerLocalTranscriptionService(services, client as unknown as AppServerProtocolClient);
+		using service = services.createInstance(AppServerDictationService, client as unknown as AppServerProtocolClient, configuration(JSON.stringify({ 'dictation.backend': backend, 'dictation.inputDevice': 'mic-2', 'dictation.language': 'zh' })));
+		const session = await service.start(() => {}, () => {});
+		const request = client.requests[0]!;
+		assert.deepEqual({ device: request.inputDevice, language: request.language }, { device: 'mic-2', language: backend === 'cloud' ? 'zh' : null });
+		await session.stop();
+	});
+}
+
+test('dictation options query uses the configured provider without opening capture', async () => {
+	const client = new Client();
+	using services = new InstantiationService();
+	registerLocalTranscriptionService(services, client as unknown as AppServerProtocolClient);
+	using service = services.createInstance(AppServerDictationService, client as unknown as AppServerProtocolClient, configuration('{"dictation.backend":"cloud"}'));
+	assert.deepEqual(await service.getOptions(), { inputDevices: [{ id: 'mic-2', label: 'USB microphone', isDefault: false }], languages: ['en', 'zh'] });
+	assert.deepEqual(client.requests, [{ method: 'dictation/options', backend: { type: 'cloud', provider: 'openAi', modelId: 'gpt-live-transcribe' } }]);
 });

@@ -192,3 +192,20 @@ test('terminal does not resize the process while its host has zero dimensions', 
 	expect(sizes.after).toEqual(sizes.before);
 	await page.evaluate(() => window.ashTerminalIntegration.dispose());
 });
+
+
+test('terminal dictation writes phrases without executing and cancels when the panel hides', async ({ page }) => {
+	await page.goto('/terminal.html?pane&existing');
+	await page.waitForFunction(() => window.ashTerminalPaneIntegration !== undefined);
+	await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
+	await page.getByRole('button', { name: 'Terminal: Start dictation', exact: true }).focus();
+	await page.keyboard.press('Space');
+	await expect(page.getByRole('button', { name: 'Stop dictation', exact: true })).toBeEnabled();
+	await page.evaluate(() => window.ashTerminalPaneIntegration.transcript('echo hello\n\u001b', true));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalIntegration.writes)).toEqual(['echo hello ']);
+	await page.evaluate(() => window.ashTerminalPaneIntegration.transcript('unfinished', false));
+	await page.evaluate(() => window.ashTerminalPaneIntegration.panel(false));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.stops())).toBe(1);
+	await page.evaluate(() => window.ashTerminalPaneIntegration.transcript('late', true));
+	expect(await page.evaluate(() => window.ashTerminalIntegration.writes)).toEqual(['echo hello ']);
+});

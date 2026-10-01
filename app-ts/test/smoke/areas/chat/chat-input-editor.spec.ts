@@ -301,9 +301,29 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 		const voice = page.getByRole('dialog', { name: 'Ash Settings' });
 		await expect(voice.getByRole('grid', { name: 'Local dictation models' })).toBeVisible();
 		await expect(voice.getByRole('row').filter({ hasText: 'ash-playwright-missing-model' })).toBeVisible();
+		const microphone = voice.getByRole('combobox', { name: 'Microphone', exact: true });
+		const language = voice.getByRole('combobox', { name: 'Transcription language', exact: true });
+		await expect(microphone).toBeEnabled();
+		await expect(language).toBeDisabled();
+		await microphone.click();
+		await page.getByRole('option', { name: 'System default microphone', exact: true }).click();
+		await voice.locator('[data-configuration-key="dictation.backend"]').getByRole('combobox').click();
+		await page.getByRole('option', { name: 'Cloud', exact: true }).click();
+		await expect(language).toBeEnabled();
+		await language.focus();
+		await page.keyboard.press('Home');
+		await page.keyboard.press('Enter');
 		await voice.locator('.ash-modal-editor-close').click();
 		await expect(page.locator('.ash-chat-view-pane .ash-chat:visible .ash-chat-status')).not.toContainText('Could not read dictation model package');
 	await expect(button).not.toHaveAttribute('aria-pressed', 'true');
+		await button.focus();
+		await workbench.quickaccess.runCommand('workbench.action.chat.dictation.showIntroduction');
+		const introduction = page.getByRole('region', { name: 'Dictation introduction', exact: true });
+		await expect(introduction).toBeVisible();
+		await expect(introduction.getByRole('combobox', { name: 'Microphone', exact: true })).toBeEnabled();
+		await introduction.getByRole('button', { name: 'Done', exact: true }).focus();
+		await page.keyboard.press('Escape');
+		await expect(introduction).toHaveCount(0);
 	} finally {
 		await page.evaluate(async source => {
 			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;

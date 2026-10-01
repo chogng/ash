@@ -6,7 +6,7 @@ use std::io::Read;
 #[cfg(feature = "host")]
 use std::io::Write;
 
-pub(crate) const VERSION: u32 = 1;
+pub(crate) const VERSION: u32 = 2;
 pub(crate) const MAX_BYTES: usize = 16 * 1024;
 
 /// Mono PCM16 rates accepted by local audio sessions; each packet spans 20 milliseconds.
@@ -63,6 +63,15 @@ pub struct AudioConfig {
     pub processing: Processing,
 }
 
+/// Stable host identity, suitable for selecting the same physical input on a later launch.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InputDevice {
+    pub id: String,
+    pub label: String,
+    pub is_default: bool,
+}
+
 /// Epochs invalidate queued capture on mute/stop. Sequence gaps indicate dropped live packets.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -75,10 +84,20 @@ pub struct Capture {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "operation", rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) enum Operation {
-    Hello { version: u32 },
-    Start { config: AudioConfig },
-    Capture { state: CaptureState },
-    Play { epoch: u64, samples: Vec<i16> },
+    Hello {
+        version: u32,
+    },
+    Start {
+        config: AudioConfig,
+        input_device: Option<String>,
+    },
+    Capture {
+        state: CaptureState,
+    },
+    Play {
+        epoch: u64,
+        samples: Vec<i16>,
+    },
     Interrupt,
     Stop,
     Shutdown,

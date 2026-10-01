@@ -63,6 +63,7 @@ async fn xai_transcription_uses_the_direct_api_key() {
             &model_ref("xai", "grok-voice-transcribe-2.0"),
             &local_connector(),
             WebSocketSessionConfig::default(),
+            None,
             &cancellation,
         )
         .await
@@ -75,6 +76,7 @@ async fn xai_transcription_uses_the_direct_api_key() {
                 &model_ref("xai", "grok-voice-transcribe-2.0"),
                 &local_connector(),
                 WebSocketSessionConfig::default(),
+                None,
                 &cancellation,
             )
             .await,

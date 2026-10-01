@@ -20,6 +20,26 @@ use std::time::Instant;
 const BLOCK: usize = 256;
 const AGE: Duration = Duration::from_millis(200);
 
+pub(super) fn input_devices() -> Result<Vec<crate::InputDevice>, String> {
+    let host = cpal::default_host();
+    let default = host
+        .default_input_device()
+        .map(|device| device.id())
+        .transpose()
+        .map_err(|error| error.to_string())?;
+    host.input_devices()
+        .map_err(|error| error.to_string())?
+        .map(|device| {
+            let id = device.id().map_err(|error| error.to_string())?;
+            Ok(crate::InputDevice {
+                is_default: default.as_ref() == Some(&id),
+                id: id.to_string(),
+                label: device.to_string(),
+            })
+        })
+        .collect()
+}
+
 struct Block {
     epoch: u64,
     at: Instant,
@@ -89,12 +109,21 @@ fn configuration(
 }
 
 impl Devices {
-    pub(super) fn open(config: AudioConfig, epoch: u64) -> Result<Self, &'static str> {
+    pub(super) fn open(
+        config: AudioConfig,
+        epoch: u64,
+        input_device: Option<&str>,
+    ) -> Result<Self, &'static str> {
         let host = cpal::default_host();
         let input = if config.direction != Direction::Playback {
-            let device = host
-                .default_input_device()
-                .ok_or("microphone unavailable")?;
+            let device = match input_device {
+                Some(id) => host
+                    .device_by_id(&id.parse().map_err(|_| "invalid microphone identity")?)
+                    .ok_or("selected microphone unavailable")?,
+                None => host
+                    .default_input_device()
+                    .ok_or("microphone unavailable")?,
+            };
             let settings = configuration(&device, true)?;
             Some((device, settings))
         } else {

@@ -6,6 +6,7 @@ use super::result;
 use ash_app_server_protocol::protocol::dictation::DictationBackend;
 use ash_app_server_protocol::protocol::dictation::DictationCloudProvider;
 use ash_app_server_protocol::protocol::dictation::DictationEnded;
+use ash_app_server_protocol::protocol::dictation::DictationInputDevice;
 use ash_app_server_protocol::protocol::dictation::DictationModelList;
 use ash_app_server_protocol::protocol::dictation::DictationModelOperation;
 use ash_app_server_protocol::protocol::dictation::DictationModelParams;
@@ -13,6 +14,8 @@ use ash_app_server_protocol::protocol::dictation::DictationModelProgress;
 use ash_app_server_protocol::protocol::dictation::DictationModelStage;
 use ash_app_server_protocol::protocol::dictation::DictationModelStartParams;
 use ash_app_server_protocol::protocol::dictation::DictationModelStatus;
+use ash_app_server_protocol::protocol::dictation::DictationOptions;
+use ash_app_server_protocol::protocol::dictation::DictationOptionsParams;
 use ash_app_server_protocol::protocol::dictation::DictationResourceParams;
 use ash_app_server_protocol::protocol::dictation::DictationStartParams;
 use ash_app_server_protocol::protocol::dictation::DictationStopResult;
@@ -30,6 +33,35 @@ use std::sync::Arc;
 use super::update_broker::notification;
 
 impl AppServer {
+    pub(super) fn dictation_options(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        require_product_host(connection)?;
+        let params: DictationOptionsParams = decode(params)?;
+        let audio_host = super::call_runtime::executable("ASH_VOICE_HOST_PATH", "ash-voice-host")
+            .map_err(dictation_error)?;
+        let input_devices = self
+            .dictation
+            .input_devices(&audio_host)
+            .map_err(dictation_error)?
+            .into_iter()
+            .map(|device| DictationInputDevice {
+                id: device.id,
+                label: device.label,
+                is_default: device.is_default,
+            })
+            .collect();
+        result(&DictationOptions {
+            input_devices,
+            languages: languages(&params.backend)
+                .iter()
+                .map(|language| (*language).to_owned())
+                .collect(),
+        })
+    }
+
     pub(super) fn dictation_start(
         &self,
         connection: &ConnectionState,
@@ -42,6 +74,15 @@ impl AppServer {
             ));
         }
         let params: DictationStartParams = decode(params)?;
+        if params
+            .language
+            .as_ref()
+            .is_some_and(|language| !languages(&params.backend).contains(&language.as_str()))
+        {
+            return Err(dictation_error(
+                "The selected transcription language is not supported".into(),
+            ));
+        }
         realtime_voice::DictationManager::validate_resource_id(&params.resource_id)
             .map_err(dictation_error)?;
         let _microphone = self
@@ -62,6 +103,7 @@ impl AppServer {
                     model_root: self.dictation_model_root()?,
                     audio_host,
                     network: self.dictation_model_network()?,
+                    input_device: params.input_device,
                 })
             }
             DictationBackend::Cloud { provider, model_id } => {
@@ -115,6 +157,8 @@ impl AppServer {
                     provider_runtime,
                     provider_config,
                     connector: ash_websocket_client::WebSocketConnector::new(network),
+                    input_device: params.input_device,
+                    language: params.language,
                 })
             }
         };
@@ -345,6 +389,20 @@ impl AppServer {
             self.calls.network_policy(),
         )
         .map_err(|error| dictation_error(error.to_string()))
+    }
+}
+
+fn languages(backend: &DictationBackend) -> &'static [&'static str] {
+    match backend {
+        DictationBackend::Local { .. } => &[],
+        DictationBackend::Cloud {
+            provider: DictationCloudProvider::OpenAi,
+            ..
+        } => realtime_voice::transcription_languages(CloudTranscriptionProvider::OpenAi),
+        DictationBackend::Cloud {
+            provider: DictationCloudProvider::Xai,
+            ..
+        } => realtime_voice::transcription_languages(CloudTranscriptionProvider::Xai),
     }
 }
 

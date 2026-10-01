@@ -37,8 +37,8 @@ export function createAppServerLocalTranscriptionBackendService(client: AppServe
 			await client.request(APP_SERVER_METHODS['dictation/model/start'], { resourceId, modelId: model, operation });
 		},
 		stopModelOperation: async resourceId => { await client.request(APP_SERVER_METHODS['dictation/model/stop'], { resourceId }); },
-		start: async (resourceId, model) => {
-			await client.request(APP_SERVER_METHODS['dictation/start'], { resourceId, backend: { type: 'local', modelId: model } });
+		start: async (resourceId, model, inputDevice) => {
+			await client.request(APP_SERVER_METHODS['dictation/start'], { resourceId, backend: { type: 'local', modelId: model }, inputDevice: inputDevice ?? null, language: null });
 		},
 		stop: async resourceId => (await client.request(APP_SERVER_METHODS['dictation/stop'], { resourceId })).text,
 	};

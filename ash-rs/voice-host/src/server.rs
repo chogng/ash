@@ -57,7 +57,7 @@ impl<D: AudioDevice> Controller<D> {
     fn execute(
         &mut self,
         op: Operation,
-        open: impl FnOnce(AudioConfig, u64) -> Result<D, &'static str>,
+        open: impl FnOnce(AudioConfig, u64, Option<&str>) -> Result<D, &'static str>,
     ) -> Result<(), &'static str> {
         if !self.greeted {
             return match op {
@@ -71,7 +71,10 @@ impl<D: AudioDevice> Controller<D> {
             };
         }
         match op {
-            Operation::Start { config } => {
+            Operation::Start {
+                config,
+                input_device,
+            } => {
                 if self.device.is_some() {
                     return Err("audio session already active");
                 }
@@ -79,7 +82,7 @@ impl<D: AudioDevice> Controller<D> {
                 self.advance()?;
                 self.capture_epoch = self.epoch;
                 self.playback_epoch = self.epoch;
-                let device = open(config, self.epoch)?;
+                let device = open(config, self.epoch, input_device.as_deref())?;
                 self.device = Some(device);
                 self.config = Some(config);
                 self.sequence = 0;
@@ -151,6 +154,10 @@ impl<D: AudioDevice> Controller<D> {
         }
         Ok(result)
     }
+}
+
+pub fn input_devices() -> Result<Vec<crate::InputDevice>, String> {
+    devices::input_devices()
 }
 
 pub fn run() -> io::Result<()> {

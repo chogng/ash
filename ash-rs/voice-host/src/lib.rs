@@ -9,8 +9,14 @@ pub use wire::AudioConfig;
 pub use wire::Capture;
 pub use wire::CaptureState;
 pub use wire::Direction;
+pub use wire::InputDevice;
 pub use wire::Processing;
 pub use wire::SampleRate;
+
+/// Enumerates inputs without opening capture; the helper exits after producing the device list.
+pub async fn input_devices(executable: &std::path::Path) -> Result<Vec<InputDevice>, AudioError> {
+    client::input_devices(executable).await
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum AudioError {

@@ -1,3 +1,14 @@
+import '../../../src/ash/workbench/contrib/terminalContrib/voice/browser/terminal.voice.contribution.js';
+import { IViewsService } from '../../../src/ash/workbench/services/views/browser/viewsService.js';
+import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
+import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
+import { ITerminalService } from '../../../src/ash/workbench/services/terminal/common/terminal.js';
+import { IDictationService } from '../../../src/ash/platform/dictation/common/dictationService.js';
+import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
+import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
+import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
+import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
+import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { Disposable, DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { extUri } from '../../../src/ash/base/common/resources.js';
@@ -78,7 +89,8 @@ if (new URLSearchParams(location.search).has('pane')) {
 	const workspaceChanged = store.add(new Emitter<import('../../../src/ash/platform/workspace/common/workspace.js').IWorkspaceChangeEvent>());
 	const created = store.add(new Emitter<ITerminalInstance>());
 	const context = store.add(new ContextKeyService());
-	const commands = new CommandService(new InstantiationService());
+	const services = store.add(new InstantiationService());
+	const commands = new CommandService(services);
 	const menu = new MenuService(commands, context);
 	let visible = false;
 	let selected = true;
@@ -93,7 +105,7 @@ if (new URLSearchParams(location.search).has('pane')) {
 		visibility.fire({ partId: 'panel', visible });
 		pane.setVisible(visible && selected);
 	};
-	const pane = store.add(new TerminalViewPane(document.querySelector<HTMLElement>('#terminal')!, { id: 'terminal', title: 'Terminal' }, {
+	const terminals: ITerminalService = {
 		...Disposable.None,
 		instances,
 		get activeInstance() { return instances[0]; },
@@ -107,7 +119,19 @@ if (new URLSearchParams(location.search).has('pane')) {
 		setActiveInstance: () => {},
 		moveTerminal: () => {},
 		closeTerminal: async () => {},
-	}, theme, menu, {
+	};
+	services.registerInstance(ITerminalService, terminals);
+	let transcript!: (text: string, isFinal: boolean) => void;
+	let stops = 0;
+	services.registerInstance(IDictationService, { onDidChangePreparation: Event.None, getPreparation: async () => undefined, getOptions: async () => ({ inputDevices: [], languages: [] }), prepareModel: async () => {}, cancelPreparation: async () => {}, start: async (callback) => { transcript = callback; return { stop: async () => { stops++; } }; } });
+	services.registerInstance(IContextKeyService, context);
+	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+	services.registerInstance(IViewsService, { openView: () => pane, getViewWithId: () => pane, focusView: () => { pane.focus(); return true; } });
+	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	registerTestDictationOnboarding(services);
+	services.registerInstance(IPreferencesService, { openSettings: async () => {} } as unknown as IPreferencesService);
+	services.registerInstance(INotificationService, store.add(new NotificationService()));
+	const pane = store.add(new TerminalViewPane(document.querySelector<HTMLElement>('#terminal')!, { id: 'terminal', title: 'Terminal' }, terminals, theme, menu, {
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
 		showContextMenu: () => {},
@@ -129,10 +153,12 @@ if (new URLSearchParams(location.search).has('pane')) {
 		getWorkspace: () => workspace,
 		getWorkbenchState: () => 2,
 		getWorkspaceFolder: resource => workspace.folders.find(folder => extUri.isEqualOrParent(resource, folder.uri)) ?? null,
-	}));
+	}, services));
 	document.querySelector<HTMLElement>('#terminal')!.append(pane.partTitleProjection.actions!);
 	window.ashTerminalPaneIntegration = {
 		counts: () => ({ profiles, creates }),
+		transcript: (text, final) => transcript(text, final),
+		stops: () => stops,
 		panel: setPanel,
 		view: value => { selected = value; pane.setVisible(visible && selected); },
 		expand: value => pane.setExpanded(value),
@@ -147,6 +173,8 @@ declare global {
 	interface Window {
 		ashTerminalPaneIntegration: {
 			counts(): { profiles: number; creates: number };
+			transcript(text: string, final: boolean): void;
+			stops(): number;
 			panel(visible: boolean): void;
 			view(visible: boolean): void;
 			expand(expanded: boolean): boolean;

@@ -43,6 +43,7 @@ impl ModelProviderRuntime {
         model: &ModelRef,
         connector: &WebSocketConnector,
         limits: WebSocketSessionConfig,
+        language: Option<&str>,
         cancellation: &CancellationToken,
     ) -> Result<TranscriptionSession, ModelProviderError> {
         super::check_cancellation(cancellation)?;
@@ -70,6 +71,7 @@ impl ModelProviderRuntime {
             target.api_target(),
             model.model.as_str(),
             limits,
+            language,
             cancellation,
         )
         .await
@@ -83,6 +85,7 @@ impl ModelProviderRuntime {
         model: &ModelRef,
         connector: &WebSocketConnector,
         limits: WebSocketSessionConfig,
+        language: Option<&str>,
         cancellation: &CancellationToken,
     ) -> Result<XaiTranscriptionSession, ModelProviderError> {
         super::check_cancellation(cancellation)?;
@@ -110,6 +113,7 @@ impl ModelProviderRuntime {
             target.api_target(),
             model.model.as_str(),
             limits,
+            language,
             cancellation,
         )
         .await

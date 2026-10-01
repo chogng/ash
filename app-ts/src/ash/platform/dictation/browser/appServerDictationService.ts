@@ -4,8 +4,8 @@ import { generateUuid } from '../../../base/common/uuid.js';
 import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
 import { APP_SERVER_METHODS } from '../../app-server/common/generated/index.js';
 import { validateConfigurationSnapshot, type IConfigurationApi } from '../../configuration/common/configurationIpc.js';
-import { dictationBackend } from '../common/dictationConfiguration.js';
-import type { IDictationService, IDictationSession } from '../common/dictationService.js';
+import { dictationBackend, dictationInputOptions } from '../common/dictationConfiguration.js';
+import type { IDictationService, IDictationSession, IDictationOptions } from '../common/dictationService.js';
 import { ILocalTranscriptionService } from '../../localTranscription/common/localTranscription.js';
 import { localize } from '../../../nls.js';
 
@@ -85,13 +85,20 @@ export class AppServerDictationService extends Disposable implements IDictationS
 		if (backend.type === 'local') { await this.localTranscription.cancelModel(backend.modelId); }
 	}
 
+	public async getOptions(): Promise<IDictationOptions> {
+		const backend = dictationBackend(validateConfigurationSnapshot(await this.configuration.read()).document);
+		return this.client.request(APP_SERVER_METHODS['dictation/options'], { backend });
+	}
+
 	async start(onTranscript: (text: string, isFinal: boolean) => void, onEnded: (error?: string) => void): Promise<IDictationSession> {
 		this.assertNotDisposed();
 		if (this.client.state !== 'ready') { throw new Error(localize('dictation.connectionUnavailable', 'Dictation connection is unavailable')); }
 		if (this.active || this.starting) { throw new Error(localize('dictation.alreadyActive', 'Dictation is already active')); }
 		this.starting = true;
 		try {
-			const backend = dictationBackend(validateConfigurationSnapshot(await this.configuration.read()).document);
+			const document = validateConfigurationSnapshot(await this.configuration.read()).document;
+			const backend = dictationBackend(document);
+			const options = dictationInputOptions(document, backend.type);
 			this.assertNotDisposed();
 			const callbacks: DictationCallbacks = { onTranscript, onEnded, stopping: false };
 			const active: ActiveDictation = backend.type === 'local'
@@ -100,9 +107,9 @@ export class AppServerDictationService extends Disposable implements IDictationS
 			this.active = active;
 			try {
 				if (active.source === 'local') {
-					await this.localTranscription.start({ model: backend.modelId });
+					await this.localTranscription.start({ model: backend.modelId, inputDevice: options.inputDevice ?? undefined });
 				} else {
-					await this.client.request(APP_SERVER_METHODS['dictation/start'], { resourceId: active.resourceId, backend });
+					await this.client.request(APP_SERVER_METHODS['dictation/start'], { resourceId: active.resourceId, backend, ...options });
 				}
 			} catch (error) {
 				if (this.active === active) { this.active = undefined; }

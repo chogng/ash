@@ -1,5 +1,8 @@
+import '../../workbench/contrib/chat/browser/actions/chatSpeechToTextActions.js';
+import '../../workbench/contrib/quickaccess/browser/quickAccess.contribution.js';
 import { IDictationService } from '../../platform/dictation/common/dictationService.js';
 import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
+import { DictationOnboardingService, IDictationOnboardingService } from '../../workbench/contrib/chat/browser/speechToText/dictationOnboarding.js';
 import "../../workbench/browser/style.js";
 import "./media/workbench.css";
 import "./actions/sessionsChatActions.js";
@@ -216,6 +219,7 @@ export class Workbench extends Disposable {
 		const services = this._register(new InstantiationService());
 		services.registerInstance(IDictationService, options.api.dictation);
 		services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+		services.registerSingleton(IDictationOnboardingService, () => services.createInstance(DictationOnboardingService));
 		services.registerInstance(ILocalTranscriptionService, options.api.localTranscription ?? this._register(new NullLocalTranscriptionService()));
 		services.registerInstance(IConfigurationService, configurationService);
 		if (options.nativeHostApi) services.registerInstance(INativeHostService, options.nativeHostApi);

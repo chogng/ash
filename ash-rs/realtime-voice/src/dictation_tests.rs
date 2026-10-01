@@ -10,7 +10,9 @@ type EventSink = Box<dyn Fn(DictationEvent) + Send + Sync>;
 async fn real_microphone_capture_and_local_session_release_the_device() {
     use std::time::Duration;
     let directory = PathBuf::from(std::env::var("ASH_TEST_DICTATION_MODEL_DIR").unwrap());
-    let executable = PathBuf::from(std::env::var("ASH_TEST_VOICE_HOST_PATH").unwrap()).canonicalize().unwrap();
+    let executable = PathBuf::from(std::env::var("ASH_TEST_VOICE_HOST_PATH").unwrap())
+        .canonicalize()
+        .unwrap();
     // Inspect one real frame before running the production recognizer, without persisting audio.
     let mut audio = voice_host::AudioHost::spawn(&executable).await.unwrap();
     audio
@@ -31,6 +33,7 @@ async fn real_microphone_capture_and_local_session_release_the_device() {
     let (send, receive) = std::sync::mpsc::channel();
     let mut session = LocalSpeechSession::start(
         LocalDictationRequest {
+            input_device: None,
             model_id: directory.file_name().unwrap().to_str().unwrap().into(),
             model_root: directory.parent().unwrap().into(),
             audio_host: executable,
@@ -114,6 +117,7 @@ fn manager() -> (
 
 fn request() -> DictationRequest {
     DictationRequest::Local(LocalDictationRequest {
+        input_device: None,
         model_id: DEFAULT_MODEL_ID.into(),
         model_root: PathBuf::new(),
         audio_host: PathBuf::new(),

@@ -8,6 +8,7 @@ import { IContextMenuService, IContextViewService } from '../../../../platform/c
 import { IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IChatSpeechToTextService } from '../../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
+import { IDictationOnboardingService } from '../../../../workbench/contrib/chat/browser/speechToText/dictationOnboarding.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
@@ -51,6 +52,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		initialDraft: IOpenAgentsWindowOptions['draft'],
 		private readonly page: SessionsPage,
 		@IChatSpeechToTextService speechToText: IChatSpeechToTextService,
+		@IDictationOnboardingService onboarding: IDictationOnboardingService,
 		@IContextMenuService contextMenus: IContextMenuService,
 		@IContextViewService contextViews: IContextViewService,
 		@IAccessibleViewService accessibleViews: IAccessibleViewService,
@@ -88,7 +90,7 @@ export class NewChatInputWidget extends ChatInputPart {
 			icon: Lxicon.add,
 			enabled: true,
 			run: () => this.contextAttachments.showPicker(),
-		}], instantiationService, speechToText);
+		}], instantiationService, speechToText, onboarding);
 		this.draftNotifications = notifications;
 		this.element.classList.add('ash-sessions-chat-input', 'floating-card');
 		this.element.classList.add(`${page}-composer`);

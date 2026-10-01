@@ -6,6 +6,8 @@ use serde_json::json;
 fn cloud_start_requires_a_declared_provider_and_model() {
     let request = json!({
         "resourceId": "speech-1",
+        "inputDevice": "device-1",
+        "language": "en",
         "backend": {
             "type": "cloud",
             "provider": "xai",
@@ -51,4 +53,11 @@ fn model_list_serializes_shared_preparation_and_installed_size() {
     let changed = json!({"modelId":"custom"});
     let decoded: super::DictationModelChanged = serde_json::from_value(changed.clone()).unwrap();
     assert_eq!(serde_json::to_value(decoded).unwrap(), changed);
+}
+
+#[test]
+fn microphone_options_preserve_device_identity_and_model_language_capability() {
+    let value = json!({"inputDevices":[{"id":"usb-1","label":"USB microphone","isDefault":true}],"languages":["en","zh"]});
+    let decoded: super::DictationOptions = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(serde_json::to_value(decoded).unwrap(), value);
 }
