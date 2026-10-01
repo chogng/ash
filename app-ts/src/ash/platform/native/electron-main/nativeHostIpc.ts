@@ -87,11 +87,7 @@ export function nativeHostIpcRoutes(
 			validate: validatePickFolder,
 			invoke: () => service.pickFolder(),
 		},
-		{
-			channel: NATIVE_HOST_PICK_FILE_CHANNEL,
-			validate: validatePickFile,
-			invoke: options => service.pickFile(options as INativeOpenDialogOptions),
-		},
+		...fileDialogIpcRoutes(service),
 		{
 			channel: NATIVE_HOST_OPEN_WORKSPACE_CHANNEL,
 			validate: validateOpenWorkspace,
@@ -112,11 +108,6 @@ export function nativeHostIpcRoutes(
 			validate: validateRevealFilePath,
 			invoke: path => service.revealFile(path as string),
 		},
-		{
-			channel: NATIVE_HOST_SAVE_FILE_CHANNEL,
-			validate: validateSaveFileOptions,
-			invoke: (options) => service.saveFile(options as INativeSaveFileOptions),
-		},
 		...windowAppearanceIpcRoutes(service),
 		{
 			channel: NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL,
@@ -127,6 +118,22 @@ export function nativeHostIpcRoutes(
 			channel: NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL,
 			validate: validateSystemWideKeybindings,
 			invoke: bindings => service.syncSystemWideKeybindings(bindings as readonly INativeSystemWideKeybinding[]),
+		},
+	];
+}
+
+/** File pickers belong to their requesting window; picking a path grants no file access. */
+export function fileDialogIpcRoutes(service: Pick<INativeHostMainService, 'pickFile' | 'saveFile'>): readonly IpcRoute<unknown, unknown>[] {
+	return [
+		{
+			channel: NATIVE_HOST_PICK_FILE_CHANNEL,
+			validate: validatePickFile,
+			invoke: options => service.pickFile(options as INativeOpenDialogOptions),
+		},
+		{
+			channel: NATIVE_HOST_SAVE_FILE_CHANNEL,
+			validate: validateSaveFileOptions,
+			invoke: options => service.saveFile(options as INativeSaveFileOptions),
 		},
 	];
 }

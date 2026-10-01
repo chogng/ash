@@ -46,7 +46,7 @@ import { NativeKeyboardLayoutMainService } from "../../platform/keyboardLayout/e
 import { UserKeyboardLayoutMainService } from "../../platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js";
 import { NativeMenubarMainService, nativeMenubarIpcRoutes } from "../../platform/menubar/electron-main/menubarMainService.js";
 import { clearElectronApplicationMenu, createElectronMenubarHost } from "../../platform/menubar/electron-main/menubar.js";
-import { colorSchemeChannel, nativeHostIpcRoutes, windowAppearanceIpcRoutes } from "../../platform/native/electron-main/nativeHostIpc.js";
+import { colorSchemeChannel, fileDialogIpcRoutes, nativeHostIpcRoutes, windowAppearanceIpcRoutes, type INativeHostMainService } from "../../platform/native/electron-main/nativeHostIpc.js";
 import { UpdateMainService, updateIpcRoutes } from '../../platform/update/electron-main/updateMainService.js';
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, type IOpenAgentsWindowOptions } from "../../platform/native/common/nativeHost.js";
 import { DialogMainService } from '../../platform/dialogs/electron-main/dialogMainService.js';
@@ -1006,34 +1006,12 @@ export class AshApplication extends Disposable {
 					}, window);
 					return result.canceled || !result.filePaths[0] ? undefined : result.filePaths[0];
 				},
-				pickFile: async (options) => {
-					const result = await this.dialogs.showOpenDialog({
-						title: options.title ?? 'Open File',
-						...(options.defaultPath ? { defaultPath: options.defaultPath } : {}),
-						...(options.buttonLabel ? { buttonLabel: options.buttonLabel } : {}),
-						...(options.filters ? { filters: options.filters.map(filter => ({ name: filter.name, extensions: [...filter.extensions] })) } : {}),
-						properties: [
-							...(options.canSelectFiles ? ['openFile' as const] : []),
-							...(options.canSelectFolders ? ['openDirectory' as const] : []),
-							...(options.canSelectMany ? ['multiSelections' as const] : []),
-						],
-					}, window);
-					return result.canceled || result.filePaths.length === 0 ? undefined : result.filePaths;
-				},
+				...this.windowFileDialogs(window),
 				openWorkspace: (root) => transitionToFolder(root, true),
 				openAgentsWindow: options => this.openSessionsWindow(record.workspaceContext.getWorkspace(), record.workspaceContext.getResolvedWorkspace(), record.modeId, options),
 				revealFile: path => {
 					if (!isAbsolute(path)) throw new TypeError('File path to reveal must be absolute');
 					shell.showItemInFolder(path);
-				},
-				saveFile: async (options) => {
-					const result = await this.dialogs.showSaveDialog({
-						title: options.title ?? "Save File",
-						...(options.defaultPath || options.defaultName ? { defaultPath: options.defaultPath ?? options.defaultName } : {}),
-						...(options.buttonLabel ? { buttonLabel: options.buttonLabel } : {}),
-						...(options.filters ? { filters: options.filters.map(filter => ({ name: filter.name, extensions: [...filter.extensions] })) } : {}),
-					}, window);
-					return result.canceled || !result.filePath ? undefined : result.filePath;
 				},
 				isAccessibilitySupportEnabled: () => app.isAccessibilitySupportEnabled(),
 				setWindowTheme: theme => {
@@ -1089,6 +1067,34 @@ export class AshApplication extends Disposable {
 			});
 	}
 
+	private windowFileDialogs(window: BrowserWindow): Pick<INativeHostMainService, 'pickFile' | 'saveFile'> {
+		return {
+			pickFile: async (options) => {
+				const result = await this.dialogs.showOpenDialog({
+					title: options.title ?? 'Open File',
+					...(options.defaultPath ? { defaultPath: options.defaultPath } : {}),
+					...(options.buttonLabel ? { buttonLabel: options.buttonLabel } : {}),
+					...(options.filters ? { filters: options.filters.map(filter => ({ name: filter.name, extensions: [...filter.extensions] })) } : {}),
+					properties: [
+						...(options.canSelectFiles ? ['openFile' as const] : []),
+						...(options.canSelectFolders ? ['openDirectory' as const] : []),
+						...(options.canSelectMany ? ['multiSelections' as const] : []),
+					],
+				}, window);
+				return result.canceled || result.filePaths.length === 0 ? undefined : result.filePaths;
+			},
+			saveFile: async (options) => {
+				const result = await this.dialogs.showSaveDialog({
+					title: options.title ?? "Save File",
+					...(options.defaultPath || options.defaultName ? { defaultPath: options.defaultPath ?? options.defaultName } : {}),
+					...(options.buttonLabel ? { buttonLabel: options.buttonLabel } : {}),
+					...(options.filters ? { filters: options.filters.map(filter => ({ name: filter.name, extensions: [...filter.extensions] })) } : {}),
+				}, window);
+				return result.canceled || !result.filePath ? undefined : result.filePath;
+			},
+		};
+	}
+
 	private openSessionsWindow(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace, modeId: WorkbenchModeId, handoff?: IOpenAgentsWindowOptions): Promise<void> {
 		const opening = this.sessionsWindowOpenQueue.then(() => this.performOpenSessionsWindow(workspace, resolvedWorkspace, modeId, handoff));
 		this.sessionsWindowOpenQueue = opening.then(() => undefined, () => undefined);
@@ -1129,6 +1135,7 @@ export class AshApplication extends Disposable {
 				webPreferences: this.createSandboxWebPreferences(),
 				initialize: async (window, windowDisposables) => {
 					windowDisposables.add(sessionsWindowState.trackWindow(window));
+					windowDisposables.add(toDisposable(() => this.dialogs.cancelWindow(window)));
 					const onFocus = (): void => {
 						this.windowSessionStateHandler.windowFocused(window.id);
 					};
@@ -1186,6 +1193,7 @@ export class AshApplication extends Disposable {
 						hooksConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(session.workspaceContext.getWorkspace()), openHooksTextFile),
 						...remoteWindowContext.ipcRoutes,
 						...windowResourceIpcRoutes(windowResources),
+						...fileDialogIpcRoutes(this.windowFileDialogs(window)),
 						...windowAppearanceIpcRoutes({
 							setWindowTheme: theme => {
 								windowControlsOverlay.setTheme(theme);

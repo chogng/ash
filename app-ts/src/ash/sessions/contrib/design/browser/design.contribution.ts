@@ -1,3 +1,7 @@
+import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
+import { localizedString } from '../../../../platform/action/common/action.js';
+import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { getActiveElement } from '../../../../base/browser/dom.js';
 import { localize } from '../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -33,9 +37,58 @@ AccessibleViewRegistry.register({
 		return new AccessibleContentProvider(
 			AccessibleViewProviderId.DesignCanvas,
 			{ type: AccessibleViewType.Help },
-			() => localize('sessions.design.help', 'Design canvas\nThe Design page offers an infinite canvas. Drag with the mouse or touch, or use the arrow keys, to pan. Hold Ctrl and scroll, or press Plus or Minus, to zoom toward the pointer or the center. Press 0 to reset the view. Sessions Settings > Design lets you choose a pointer or hand cursor.'),
+			() => localize('sessions.design.help', 'Design canvas\nOne design unit equals one pixel; grid lines are 12 units apart. Press R to add a rectangle or E to add an ellipse at the viewport center. Click a shape to select it, then drag or use arrow keys to move it; hold Shift for 10-pixel keyboard steps. Use Tab and Shift+Tab on the canvas to select shapes in paint order. Edit position, size, rotation and fill in Shape properties. Press Delete to remove the selection and Escape to cancel a drag or clear selection. <keybinding:sessions.design.undo> undoes an edit; <keybinding:sessions.design.redo> redoes it. Drag empty space or use the middle mouse button to pan. Arrow keys pan when no shape is selected. Hold Ctrl and scroll, or press Plus or Minus, to zoom. Press 0 to reset the view. Save design or <keybinding:sessions.design.save> writes an editable Ash design file; Open design loads one. Sessions Settings > Design lets you choose a pointer or hand cursor.'),
 			() => focused.focus(),
 			AccessibilityVerbositySettingId.DesignCanvas,
 		);
 	},
+});
+
+AccessibleViewRegistry.register({
+	type: AccessibleViewType.View,
+	priority: 100,
+	name: 'sessionsDesignCanvasContent',
+	when: ContextKeyExpr.has('sessionsDesignCanvasFocused'),
+	getProvider: accessor => {
+		const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
+		const content = DesignCanvasView.getFocused(focused)?.getAccessibleContent();
+		if (content === undefined) { return undefined; }
+		return new AccessibleContentProvider(
+			AccessibleViewProviderId.DesignCanvas,
+			{ type: AccessibleViewType.View },
+			() => content,
+			() => focused.focus(),
+			AccessibilityVerbositySettingId.DesignCanvas,
+		);
+	},
+});
+
+registerAction2(class UndoDesign extends Action2 {
+	constructor() {
+		super({ id: 'sessions.design.undo', title: localizedString('ash', 'sessions.design.undo', 'Undo'), keybinding: { primary: Keybinding.single(logicalKey('z', { primaryKey: true })), when: ContextKeyExpr.has('sessionsDesignCanvasActive'), priority: 1000 } });
+	}
+	public override run(accessor: ServicesAccessor): void {
+		const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
+		DesignCanvasView.getFocused(focused)?.undo();
+	}
+});
+
+registerAction2(class RedoDesign extends Action2 {
+	constructor() {
+		super({ id: 'sessions.design.redo', title: localizedString('ash', 'sessions.design.redo', 'Redo'), keybinding: { primary: Keybinding.single(logicalKey('z', { primaryKey: true, shiftKey: true })), secondary: [Keybinding.single(logicalKey('y', { primaryKey: true }))], when: ContextKeyExpr.has('sessionsDesignCanvasActive'), priority: 1000 } });
+	}
+	public override run(accessor: ServicesAccessor): void {
+		const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
+		DesignCanvasView.getFocused(focused)?.redo();
+	}
+});
+
+registerAction2(class SaveDesign extends Action2 {
+	constructor() {
+		super({ id: 'sessions.design.save', title: localizedString('ash', 'sessions.design.save', 'Save design'), keybinding: { primary: Keybinding.single(logicalKey('s', { primaryKey: true })), when: ContextKeyExpr.has('sessionsDesignCanvasActive'), priority: 1000 } });
+	}
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
+		await DesignCanvasView.getFocused(focused)?.saveDocument();
+	}
 });

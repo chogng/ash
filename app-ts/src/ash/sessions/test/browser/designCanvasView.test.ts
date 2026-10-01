@@ -9,6 +9,15 @@ import { darkColorTheme, lightColorTheme } from '../../../platform/theme/common/
 import { TestThemeService } from '../../../platform/theme/test/common/testThemeService.js';
 import { WorkbenchConfigurationService } from '../../../workbench/services/configuration/browser/configurationService.js';
 import { DesignConfiguration } from '../../contrib/design/common/designConfiguration.js';
+import { Event as AshEvent } from '../../../base/common/event.js';
+import { URI } from '../../../base/common/uri.js';
+import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
+import { ConfirmResult, IDialogService, IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
+import { FileKind, FileRevisionConflictError, IFileService, type IFileWriteRequest } from '../../../platform/files/common/files.js';
+import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
+import { WorkspaceContextService } from '../../../workbench/services/workspaces/browser/workspaceContextService.js';
+import { ILifecycleService, LifecyclePhase, StartupKind } from '../../../workbench/services/lifecycle/common/lifecycle.js';
+
 
 const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 for (const [name, value] of Object.entries({
@@ -30,6 +39,31 @@ const theme = new TestThemeService(lightColorTheme);
 services.registerInstance(IContextKeyService, contextKeys);
 services.registerInstance(IConfigurationService, configuration);
 services.registerInstance(IThemeService, theme);
+services.registerInstance(IWorkspaceContextService, new WorkspaceContextService({ id: 'design-test', folders: [] }));
+const resource = URI.file('/design.ash-design.json');
+let fileContent = '';
+let revision = '0';
+let errors: string[] = [];
+let saveDecision = ConfirmResult.DONT_SAVE;
+const writes: IFileWriteRequest[] = [];
+const unexpected = async (): Promise<never> => { throw new Error('Unexpected service call'); };
+services.registerInstance(IContextMenuService, { onDidShowContextMenu: AshEvent.None, onDidHideContextMenu: AshEvent.None, showContextMenu: () => { throw new Error('Unexpected context menu'); }, hideContextMenu: () => {} });
+services.registerInstance(IFileDialogService, { pickFileToSave: unexpected, showSaveConfirm: async () => saveDecision, showSaveDialog: async () => resource, showOpenDialog: async () => [resource] });
+services.registerInstance(IDialogService, { onWillShowDialog: AshEvent.None, onDidShowDialog: AshEvent.None, showMessage: unexpected, info: unexpected, warn: unexpected, error: async message => { errors.push(message); }, confirm: unexpected, prompt: unexpected, input: unexpected, about: unexpected });
+services.registerInstance(IFileService, {
+	onDidChangeFiles: AshEvent.None,
+	stat: unexpected, readDirectory: unexpected, readFileBytes: unexpected, writeFileBytes: unexpected, createFile: unexpected, createDirectory: unexpected, copy: unexpected, rename: unexpected, delete: unexpected,
+	readFile: async () => ({ resource, content: fileContent, revision }),
+	writeFile: async request => {
+		writes.push(request);
+		if (request.expectedRevision !== undefined && request.expectedRevision !== revision) { throw new FileRevisionConflictError(resource); }
+		fileContent = request.content;
+		revision = `${Number(revision) + 1}`;
+		return { revision, stat: { resource, kind: FileKind.File, sizeBytes: fileContent.length, readonly: false, modifiedAtMillis: undefined } };
+	},
+});
+services.registerInstance(ILifecycleService, { startupKind: StartupKind.NewWindow, phase: LifecyclePhase.Ready, willShutdown: false, onBeforeShutdown: AshEvent.None, onBeforeShutdownError: AshEvent.None, onShutdownVeto: AshEvent.None, onWillShutdown: AshEvent.None, onDidShutdown: AshEvent.None, when: async () => {}, shutdown: async () => {} });
+
 suiteTeardown(() => {
 	services.dispose();
 	contextKeys.dispose();
@@ -42,6 +76,12 @@ interface ProjectedTransform { panX: number; panY: number; scale: number; }
 
 function createView(): InstanceType<typeof DesignCanvasView> {
 	const view = services.createInstance(DesignCanvasView, browser.window.document);
+	const viewport = view.domNode.querySelector<HTMLElement>('.ash-sessions-design-viewport')!;
+	let captured: number | undefined;
+	viewport.setPointerCapture = id => { captured = id; };
+	viewport.hasPointerCapture = id => captured === id;
+	viewport.releasePointerCapture = () => { captured = undefined; };
+	Object.defineProperty(viewport, 'clientHeight', { configurable: true, value: 100 });
 	browser.window.document.body.append(view.domNode);
 	return view;
 }
@@ -184,4 +224,97 @@ test('Design canvas resolves its accessible name from the Chinese language pack'
 		view.dispose();
 		resetNlsResolver();
 	}
+});
+
+function pressCanvas(view: InstanceType<typeof DesignCanvasView>, key: string, options: KeyboardEventInit = {}): void {
+	view.domNode.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key, cancelable: true, bubbles: true, ...options }));
+}
+
+async function clickAction(view: InstanceType<typeof DesignCanvasView>, name: string): Promise<void> {
+	const button = Array.from(view.domNode.querySelectorAll('button')).find(button => button.textContent === name)!;
+	button.click();
+	// File-service promises are immediate in this fixture, but the action crosses several async boundaries.
+	for (let index = 0; index < 20; index++) { await Promise.resolve(); }
+}
+
+test('Design edits render fractional geometry, keep input editing separate and undo a whole drag', () => {
+	using view = createView();
+	view.layout({ width: 200, height: 100 });
+	pressCanvas(view, 'r');
+	const rect = view.domNode.querySelector<SVGRectElement>('[data-shape-id]')!;
+	const width = view.domNode.querySelector<HTMLInputElement>('input[aria-label="Width"]')!;
+	width.value = '120.5';
+	width.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
+	width.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
+	assert.equal(rect.getAttribute('width'), '120.5');
+	pressCanvas(view, '+');
+	const viewport = view.domNode.querySelector<HTMLElement>('.ash-sessions-design-viewport')!;
+	const fire = (type: string, x: number): void => { viewport.dispatchEvent(new browser.window.PointerEvent(type, { pointerId: 1, isPrimary: true, button: 0, clientX: x, clientY: 50, bubbles: true })); };
+	const before = Number(rect.getAttribute('x'));
+	fire('pointerdown', 100);
+	fire('pointermove', 124);
+	fire('pointermove', 148);
+	fire('pointerup', 148);
+	assert.equal(Number(rect.getAttribute('x')), before + 40);
+	view.undo();
+	assert.equal(Number(rect.getAttribute('x')), before);
+	view.redo();
+	assert.equal(Number(rect.getAttribute('x')), before + 40);
+	fire('pointerdown', 148);
+	fire('pointermove', 172);
+	pressCanvas(view, 'Escape');
+	fire('pointerup', 172);
+	assert.equal(Number(rect.getAttribute('x')), before + 40);
+});
+
+test('Design saves and reopens the complete document, rejecting stale writes and invalid files', async () => {
+	using view = createView();
+	view.layout({ width: 200, height: 100 });
+	errors = [];
+	writes.length = 0;
+	revision = '0';
+	saveDecision = ConfirmResult.DONT_SAVE;
+	pressCanvas(view, 'r');
+	await clickAction(view, 'Save design');
+	const saved = fileContent;
+	assert.equal(view.domNode.classList.contains('dirty'), false);
+	pressCanvas(view, 'e');
+	await clickAction(view, 'Open design');
+	assert.equal(view.domNode.querySelectorAll('[data-shape-id]').length, 1);
+	assert.equal(JSON.parse(saved).shapes[0].kind, 'rectangle');
+	pressCanvas(view, 'Tab');
+	pressCanvas(view, 'ArrowRight');
+	revision = '99';
+	await clickAction(view, 'Save design');
+	assert.equal(writes.at(-1)!.expectedRevision, '1');
+	assert.equal(view.domNode.classList.contains('dirty'), true);
+	assert.equal(fileContent, saved);
+	assert.equal(errors.length, 1);
+	fileContent = '{"version":1,"shapes":[{"kind":"rectangle"}]}';
+	await clickAction(view, 'Open design');
+	assert.equal(view.domNode.querySelectorAll('[data-shape-id]').length, 1);
+	assert.equal(view.domNode.classList.contains('dirty'), true);
+	assert.equal(errors.length, 2);
+	saveDecision = ConfirmResult.CANCEL;
+	await clickAction(view, 'Open design');
+	assert.equal(errors.length, 2);
+	saveDecision = ConfirmResult.DONT_SAVE;
+});
+
+test('Design keyboard selection and Chinese properties expose the document content', async () => {
+	const { builtinLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	try {
+		using view = createView();
+		pressCanvas(view, 'r');
+		pressCanvas(view, 'e');
+		pressCanvas(view, 'Escape');
+		pressCanvas(view, 'Tab');
+		assert.equal(view.domNode.querySelector('input[aria-label="宽度"]') !== null, true);
+		assert.match(DesignCanvasView.getFocused(view.domNode)!.getAccessibleContent(), /矩形[\s\S]*椭圆/u);
+		pressCanvas(view, 'Delete');
+		assert.equal(view.domNode.querySelector('[data-shape-id]')!.tagName, 'ellipse');
+	} finally { resetNlsResolver(); }
 });
