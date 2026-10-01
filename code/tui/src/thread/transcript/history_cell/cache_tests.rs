@@ -2,11 +2,14 @@ use super::CellLines;
 use super::ChatHistoryRenderCache;
 use super::MAX_CELL_CELLS;
 use super::PreparedCell;
+use crate::render::RenderTheme;
+use crate::render::ThemePalette;
 use crate::render::highlight_code;
 use crate::render::styled_text_lines;
 use crate::render::test_context;
 use crate::thread::transcript::CellView;
 use crate::thread::transcript::MessageRole;
+use ash_terminal_detection::ColorLevel;
 use ratatui::style::Style;
 use std::cell::Cell;
 
@@ -49,7 +52,7 @@ fn revision_width_theme_and_mode_replace_the_same_cell_entry() {
             message,
             width,
             crate::render::RenderContext::new(
-                &crate::render::RenderTheme::fallback(),
+                &RenderTheme::from_palette(ThemePalette::initial(), ColorLevel::TrueColor),
                 theme_revision,
             ),
             || {

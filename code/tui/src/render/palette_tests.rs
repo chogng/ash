@@ -93,6 +93,16 @@ fn render_theme_maps_its_colors_for_each_terminal_capability() {
 fn built_in_palettes_keep_the_documented_semantic_colors() {
     let cases = [
         (
+            ThemePalette::initial(),
+            Color::Rgb(105, 170, 255),
+            Color::Rgb(154, 145, 235),
+            Color::Rgb(47, 43, 82),
+            Color::Rgb(37, 35, 58),
+            Color::Rgb(59, 53, 104),
+            Color::Rgb(48, 48, 48),
+            Color::Rgb(22, 27, 34),
+        ),
+        (
             ThemePalette::dark(),
             Color::Rgb(88, 166, 255),
             Color::Rgb(154, 145, 235),
