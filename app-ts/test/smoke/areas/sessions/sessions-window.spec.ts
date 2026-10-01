@@ -204,6 +204,33 @@ test('Sessions composer configuration leaves Workbench input defaults unchanged'
 	await expect(parent.locator('.ash-sessions-chat-input')).toHaveCount(0);
 });
 
+test('Sessions chat fills its content area without a duplicate session title', async ({ application, target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code');
+	let page = workbench.page;
+	if (target.kind === 'browser') {
+		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+	} else {
+		if (!('windows' in application)) throw new Error('Expected Electron windows');
+		const opened = application.waitForEvent('window');
+		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
+		page = await opened;
+	}
+	const sessionsContent = page.locator('[data-part="sessions"] > .ash-workbench-part-content');
+	const navigation = page.locator('.ash-sessions-activity-content');
+	for (const width of [1_200, 760]) {
+		await page.setViewportSize({ width, height: 760 });
+		await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+		await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
+		await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
+		await expect(sessionsContent.getByRole('heading', { name: 'What can we work on?' })).toBeVisible();
+		await expect.poll(() => sessionsContent.evaluate(content => {
+			const contentBounds = content.getBoundingClientRect();
+			const viewBounds = content.querySelector('.ash-sessions-chat-view')!.getBoundingClientRect();
+			return [Math.round(viewBounds.y - contentBounds.y), Math.round(viewBounds.height - contentBounds.height)];
+		})).toEqual([0, 0]);
+	}
+});
+
 test('Sessions empty chat centers a growing input card and keeps the draft across themes and navigation', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	let page = workbench.page;
@@ -498,7 +525,7 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await expect(collaboration.locator('svg')).toHaveAttribute('data-ash-icon-id', 'colab-filled');
 	await expect(collaboration).toHaveAttribute('aria-current', 'page');
 	await expect(page.locator('.ash-sessions-list-controls')).toBeHidden();
-	await expect(page.locator('.ash-sessions-surface-header')).toBeHidden();
+	await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 	await expect(page.locator('[data-part="auxiliarybar"] h2')).toBeHidden();
 	await library.click();
 	await expect(library.locator('svg')).toHaveAttribute('data-ash-icon-id', 'library-filled');
@@ -507,7 +534,7 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await chat.click();
 	await expect(chat).toHaveAttribute('aria-current', 'page');
 	await expect(page.locator('.ash-sessions-list-controls')).toBeVisible();
-	await expect(page.locator('.ash-sessions-surface-header')).toBeVisible();
+	await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 	await expect(chat).toHaveCSS('background-color', 'rgb(240, 240, 240)');
 	await expect(page.locator('.ash-sessions-list-item.selected').first()).toHaveCSS('background-color', 'rgb(240, 240, 240)');
 	await expect(activityBar.locator('.ash-sessions-activity-bottom button svg').first()).toHaveAttribute('data-ash-icon-id', 'device-mobile');
@@ -788,7 +815,7 @@ test('Electron Code Sessions Activity Bar follows its position and size settings
 		await expect(page.locator('.ash-sessions-list-controls')).toBeHidden();
 		await library.click();
 		await expect(library.locator('svg')).toHaveAttribute('data-ash-icon-id', 'library-filled');
-		await expect(page.locator('.ash-sessions-surface-header')).toBeHidden();
+		await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 		await expect(page.locator('[data-part="auxiliarybar"] h2')).toBeHidden();
 		await page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Chat' }).click();
 		await expect(page.locator('.ash-sessions-list-controls')).toBeVisible();
@@ -1421,9 +1448,9 @@ test('Sessions titlebar aligns its application menu and actions', async ({ appli
 	await activityNavigation.getByRole('button', { name: 'Code' }).click();
 	await expect(activityNavigation.getByRole('button', { name: 'Code' })).toHaveAttribute('aria-current', 'page');
 	await expect(sessionsPage.getByRole('region', { name: 'Code' })).toBeVisible();
-	await expect(sessionsPage.locator('.ash-sessions-surface-header')).toBeHidden();
+	await expect(sessionsPage.locator('.ash-sessions-surface-header')).toHaveCount(0);
 	await activityNavigation.getByRole('button', { name: 'Chat' }).click();
-	await expect(sessionsPage.locator('.ash-sessions-surface-header')).toBeVisible();
+	await expect(sessionsPage.locator('.ash-sessions-surface-header')).toHaveCount(0);
 	expect(await buttons.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')))).toEqual(['Application menu', 'Hide sidebar', 'Back', 'Forward']);
 	const columnOffset = await sessionsPage.evaluate(() => {
 		const menu = document.querySelector<HTMLElement>('[data-action-id="ash.applicationMenu"] button')!;
@@ -1744,12 +1771,12 @@ test('Sessions Activity Bar switches Chat and Code with the keyboard with indepe
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Attachments can be sent without text/u);
 	await page.keyboard.press('Escape');
 	await expect(editor.input).toBeFocused();
-	await expect(page.locator('.ash-sessions-surface-header')).toBeHidden();
+	await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 	await expect(page.locator('.ash-sessions-list')).toBeVisible();
 	await activityNavigation.getByRole('button', { name: 'Chat' }).focus();
 	await page.keyboard.press('Space');
 	await expect(activityNavigation.getByRole('button', { name: 'Chat' })).toHaveAttribute('aria-current', 'page');
-	await expect(page.locator('.ash-sessions-surface-header')).toBeVisible();
+	await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 	await expect(composer).toHaveClass(/chat-composer/u);
 	await expect(composer).not.toHaveClass(/code-composer/u);
 	await expect(card).toHaveCSS('border-radius', '4px');

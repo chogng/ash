@@ -38,21 +38,13 @@ export interface SessionsPartOptions {
 export class SessionsPart extends WorkbenchPart {
 	private readonly views: Record<SessionsPage, SessionsChatView>;
 	private page: SessionsPage | "empty" = "chat";
-	private readonly header: HTMLDivElement;
 	private readonly codePage: HTMLDivElement;
-	private readonly heading: HTMLHeadingElement;
-	private readonly description: HTMLParagraphElement;
 
 	override get minimumWidth(): number { return 420; }
 
 	constructor(container: HTMLElement, options: SessionsPartOptions, @IInstantiationService services: IInstantiationService) {
 		super(container, "sessions");
 		const ownerDocument = container.ownerDocument;
-		this.header = h(ownerDocument, "div");
-		this.header.className = "ash-sessions-surface-header";
-		this.heading = h(ownerDocument, "h1");
-		this.description = h(ownerDocument, "p");
-		this.header.append(this.heading, this.description);
 		const createView = (page: SessionsPage, container: HTMLElement): SessionsChatView => this._register(services.createInstance(SessionsChatView, container, {
 			page,
 			chatService: options.chatService,
@@ -68,7 +60,6 @@ export class SessionsPart extends WorkbenchPart {
 			closeSelection: selection => options.closeSelection(selection, page),
 			createNewSession: () => options.createNewSession(page),
 		} satisfies SessionsChatViewOptions));
-		this.contentDomNode.prepend(this.header);
 		this.codePage = h(ownerDocument, 'div');
 		this.codePage.className = 'ash-sessions-code-page';
 		this.codePage.setAttribute('role', 'region');
@@ -88,7 +79,6 @@ export class SessionsPart extends WorkbenchPart {
 	setPage(page: 'chat' | 'code' | 'empty'): void {
 		this.page = page;
 		this.contentDomNode.classList.toggle('empty-page', page === 'empty');
-		this.header.hidden = page !== 'chat';
 		this.views.chat.domNode.hidden = page !== 'chat';
 		this.views.code.domNode.hidden = page !== 'code';
 		this.views.chat.setVisible(page === 'chat');
@@ -98,18 +88,6 @@ export class SessionsPart extends WorkbenchPart {
 	}
 
 	updateVisibleSelections(selections: readonly SessionsViewSelection[], active: SessionsViewSelection | undefined, page: SessionsPage = "chat"): void {
-		if (page === "chat") {
-			if (active?.kind === "session") {
-				this.heading.textContent = active.active.session.title.trim() || "Agent session";
-				this.description.textContent = localize('sessions.header.chatCount', '{0} chats', active.active.session.chats.length);
-			} else if (active?.kind === "untitled") {
-				this.heading.textContent = active.session.title.trim() || "New code session";
-				this.description.textContent = localize('sessions.header.draft', 'Draft session');
-			} else {
-				this.heading.textContent = "Agent sessions";
-				this.description.textContent = "Plan, implement, and review work in a focused agent workspace.";
-			}
-		}
 		this.views[page].updateVisibleSelections(selections, active);
 	}
 

@@ -17,36 +17,6 @@
   background: var(--ash-editor-background);
 }
 
-.ash-sessions-surface-header {
-  display: flex;
-  min-height: 56px;
-  flex: 0 0 auto;
-  flex-direction: column;
-  justify-content: center;
-  padding: var(--ash-spacing-size120) var(--ash-spacing-size240);
-  border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
-}
-
-.ash-sessions-surface-header h1 {
-  min-width: 0;
-  overflow: hidden;
-  margin: 0;
-  font-size: var(--ash-font-size-heading2);
-  font-weight: var(--ash-font-weight-semi-bold);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ash-sessions-surface-header p {
-  min-width: 0;
-  overflow: hidden;
-  margin: 0;
-  color: var(--ash-description-foreground);
-  font-size: var(--ash-font-size-label1);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .ash-workbench-sessions > .ash-workbench-part-content > .ash-sessions-chat-view {
   min-height: 0;
   flex: 1 1 auto;

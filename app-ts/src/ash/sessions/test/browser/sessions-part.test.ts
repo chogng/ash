@@ -222,7 +222,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	updatePart();
 
 	assert.equal(part.domNode.dataset.part, "sessions");
-	assert.equal(part.domNode.querySelector(".ash-sessions-surface-header h1")?.textContent, "New code session");
+	assert.equal(part.domNode.querySelector(".ash-sessions-surface-header"), null);
 	assert.ok(part.domNode.querySelector(".ash-sessions-chat-view"));
 	assert.equal(part.domNode.querySelectorAll(".ash-sessions-chat-slot").length, 2);
 	assert.equal(part.domNode.querySelectorAll(".ash-chat-input-part").length, 2);
