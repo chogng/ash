@@ -3,7 +3,7 @@ import { h } from '../../../base/browser/dom.js';
 import { ActionBar } from '../../../base/browser/ui/actionbar/actionbar.js';
 import type { ActionViewItem, ActionViewItemOptions } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import { DropdownMenuActionViewItem } from '../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
-import { AnchorAlignment, AnchorAxisAlignment } from '../../../base/browser/ui/contextview/contextview.js';
+import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from '../../../base/browser/ui/contextview/contextview.js';
 import { Separator, SubmenuAction, type IAction } from '../../../base/common/actions.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
@@ -54,9 +54,18 @@ export class GlobalCompositeBar extends Disposable {
 		this.actionBar = this._register(new ActionBar(this.domNode, {
 			ariaLabel: this.label('workbench.activityBarGlobalActions', 'Activity Bar global actions'),
 			orientation: 'vertical',
-			actionViewItemProvider: (action, options) => this.createActionViewItem(action, options),
+			actionViewItemProvider: (action, options) => this.createActionViewItem(action, {
+				...options,
+				hoverAnchorAxisAlignment: AnchorAxisAlignment.Horizontal,
+				hoverAnchorPosition: this.configurationService.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation) === 'left' ? AnchorPosition.Below : AnchorPosition.Above,
+			}),
 		}));
 		this.renderActions();
+		this._register(this.configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(WorkbenchConfiguration.sideBarLocation)) {
+				this.renderActions();
+			}
+		}));
 		this._register(this.localizationService.onDidChange(() => {
 			this.actionBar.element.setAttribute('aria-label', this.label('workbench.activityBarGlobalActions', 'Activity Bar global actions'));
 			this.renderActions();
@@ -100,7 +109,7 @@ export class GlobalCompositeBar extends Disposable {
 				? this.accountActions()
 				: getFlatContextMenuActions(this.manageMenu.getActions()),
 			this.contextMenuService,
-			options,
+			{ hoverAnchorPosition: AnchorPosition.Below, ...options },
 			// The title bar renders separate action items; the trigger's owner determines its menu direction.
 			(anchor) => this.domNode.contains(anchor)
 				? {

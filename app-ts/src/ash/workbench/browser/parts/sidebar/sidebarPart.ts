@@ -1,5 +1,6 @@
 import "./sidebarpart.css";
 import { h } from "../../../../base/browser/dom.js";
+import { AnchorAxisAlignment, AnchorPosition } from "../../../../base/browser/ui/contextview/contextview.js";
 import { MutableDisposable } from "../../../../base/common/lifecycle.js";
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { ViewContainerLocation, type IViewContainerDescriptor } from "../../../common/views.js";
@@ -87,6 +88,10 @@ export class SidebarPart extends PaneCompositePart {
 		this.bottomCompositeBarDomNode.hidden = !isBottom;
 		if (isTop || isBottom) {
 			this.compositeBar.setOrientation('horizontal');
+			this.compositeBar.setHoverOptions({
+				hoverAnchorAxisAlignment: AnchorAxisAlignment.Vertical,
+				hoverAnchorPosition: isTop ? AnchorPosition.Below : AnchorPosition.Above,
+			});
 			(isTop ? this.topCompositeBarDomNode : this.bottomCompositeBarDomNode).append(this.compositeBar.domNode);
 		} else {
 			this.compositeBar.setOrientation('vertical');

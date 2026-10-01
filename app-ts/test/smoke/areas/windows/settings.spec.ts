@@ -381,7 +381,7 @@ test.describe('without an open workspace', () => {
 		const viewportWidth = await page.evaluate(() => window.innerWidth);
 		expect(tooltipBounds!.x).toBeGreaterThanOrEqual(0);
 		expect(tooltipBounds!.x + tooltipBounds!.width).toBeLessThanOrEqual(viewportWidth);
-		expect(tooltipBounds!.x).toBeLessThan(buttonBounds!.x + buttonBounds!.width);
+		expect(tooltipBounds!.x).toBeGreaterThanOrEqual(buttonBounds!.x + buttonBounds!.width);
 		await manageButton.click();
 		await expect(manageButton).toHaveAttribute('aria-expanded', 'true');
 		const menu = page.getByRole('menu').last();

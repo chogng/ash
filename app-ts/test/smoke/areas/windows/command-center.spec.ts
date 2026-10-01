@@ -1,4 +1,4 @@
-import type { ElectronApplication } from '@playwright/test';
+import type { ElectronApplication, Locator } from '@playwright/test';
 import type { BrowserWindow, MessageBoxOptions } from 'electron';
 import { expect, test } from '../../../automation/test.js';
 
@@ -278,6 +278,76 @@ test('activity bar remains visible and reopens a selected sidebar view', async (
 	await expect(search).toHaveAttribute('aria-selected', 'true');
 });
 
+test('activity bar tooltips follow left, right, top and bottom placement', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	const activitybar = page.locator('[data-part="activitybar"]');
+	const sidebar = page.locator('[data-part="sidebar"]');
+	const titlebar = page.locator('[data-part="titlebar"]');
+	await activitybar.getByRole('tab', { name: 'Search', exact: true }).click();
+	await expect(sidebar).toBeVisible();
+
+	const checkTooltip = async (trigger: Locator, direction: 'left' | 'right' | 'above' | 'below', keyboard = false): Promise<void> => {
+		await page.mouse.move(600, 400);
+		if (keyboard) {
+			await page.getByRole('button', { name: 'Search commands', exact: true }).focus();
+			await trigger.focus();
+		} else {
+			await trigger.hover();
+		}
+		const tooltip = page.getByRole('tooltip');
+		await expect(tooltip).toBeVisible();
+		await expect(tooltip).toHaveText(await trigger.getAttribute('aria-label') ?? '');
+		const [anchor, hover] = await Promise.all([trigger.boundingBox(), page.locator('.ash-context-view-hover', { has: tooltip }).boundingBox()]);
+		expect(anchor).not.toBeNull();
+		expect(hover).not.toBeNull();
+		if (direction === 'right') expect(hover!.x).toBeGreaterThanOrEqual(anchor!.x + anchor!.width);
+		if (direction === 'left') expect(hover!.x + hover!.width).toBeLessThanOrEqual(anchor!.x);
+		if (direction === 'below') expect(hover!.y).toBeGreaterThanOrEqual(anchor!.y + anchor!.height);
+		if (direction === 'above') expect(hover!.y + hover!.height).toBeLessThanOrEqual(anchor!.y);
+		await expect(trigger).toHaveAttribute('aria-describedby', await tooltip.getAttribute('id') ?? '');
+		await page.keyboard.press('Escape');
+		await expect(tooltip).toHaveCount(0);
+		await expect(trigger).not.toHaveAttribute('aria-describedby');
+		if (keyboard) await expect(trigger).toBeFocused();
+	};
+	const setPosition = async (trigger: Locator, position: string): Promise<void> => {
+		await trigger.click({ button: 'right' });
+		await page.getByRole('menu').last().getByRole('menuitem', { name: 'Activity Bar Position' }).hover();
+		await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: position, exact: true }).click();
+	};
+
+	for (const name of ['Search', 'Skills']) {
+		await checkTooltip(activitybar.getByRole('tab', { name, exact: true }), 'right');
+	}
+	for (const name of ['Accounts', 'Manage']) {
+		await checkTooltip(activitybar.getByRole('button', { name, exact: true }), 'right', true);
+	}
+	await activitybar.getByRole('button', { name: 'Manage', exact: true }).click({ button: 'right' });
+	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Move Primary Side Bar Right' }).click();
+	await expect(activitybar).toHaveClass(/sidebar-right/);
+	await checkTooltip(activitybar.getByRole('tab', { name: 'Skills', exact: true }), 'left', true);
+	await checkTooltip(activitybar.getByRole('button', { name: 'Manage', exact: true }), 'left');
+	await checkTooltip(activitybar.getByRole('button', { name: 'Accounts', exact: true }), 'left');
+
+	await setPosition(activitybar.getByRole('button', { name: 'Manage', exact: true }), 'Top');
+	await expect(activitybar).toBeHidden();
+	await checkTooltip(sidebar.getByRole('tab', { name: 'Search', exact: true }), 'below');
+	await checkTooltip(titlebar.getByRole('button', { name: 'Manage', exact: true }), 'below', true);
+	await checkTooltip(titlebar.getByRole('button', { name: 'Accounts', exact: true }), 'below');
+	await setPosition(titlebar.getByRole('button', { name: 'Manage', exact: true }), 'Bottom');
+	await checkTooltip(sidebar.getByRole('tab', { name: 'Search', exact: true }), 'above', true);
+	await checkTooltip(titlebar.getByRole('button', { name: 'Manage', exact: true }), 'below');
+
+	await setPosition(sidebar.getByRole('tab', { name: 'Search', exact: true }), 'Default');
+	await expect(activitybar).toBeVisible();
+	await checkTooltip(activitybar.getByRole('tab', { name: 'Search', exact: true }), 'left');
+	await activitybar.getByRole('button', { name: 'Manage', exact: true }).click({ button: 'right' });
+	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Move Primary Side Bar Left' }).click();
+	await checkTooltip(activitybar.getByRole('tab', { name: 'Skills', exact: true }), 'right');
+	await checkTooltip(activitybar.getByRole('button', { name: 'Manage', exact: true }), 'right');
+});
+
 test('activity bar keeps global actions visible and moves excess views into a menu', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
@@ -287,6 +357,12 @@ test('activity bar keeps global actions visible and moves excess views into a me
 	await expect(activitybar.getByRole('button', { name: 'Manage' })).toBeVisible();
 	const overflow = activitybar.getByRole('tab', { name: 'Additional views' });
 	await expect(overflow).toBeVisible();
+	await overflow.hover();
+	const tooltip = page.getByRole('tooltip', { name: 'Additional views' });
+	await expect(tooltip).toBeVisible();
+	const [overflowBounds, tooltipBounds] = await Promise.all([overflow.boundingBox(), page.locator('.ash-context-view-hover', { has: tooltip }).boundingBox()]);
+	expect(tooltipBounds!.x).toBeGreaterThanOrEqual(overflowBounds!.x + overflowBounds!.width);
+	await page.keyboard.press('Escape');
 	const overflowIcon = overflow.locator('.ash-icon');
 	await expect(overflowIcon).toHaveCSS('width', '24px');
 	await expect(overflowIcon).toHaveCSS('height', '24px');

@@ -5,7 +5,7 @@ import { assertDefined } from "../../../common/types.js";
 import { addDisposableListener, h } from "../../dom.js";
 import { setAriaAttribute } from "../aria/aria.js";
 import { Button, type ButtonOptions } from "../button/button.js";
-import type { AnchorPosition } from "../contextview/contextview.js";
+import type { AnchorAxisAlignment, AnchorPosition } from "../contextview/contextview.js";
 import { getHoverDelegate, type IManagedHover } from "../hover/hoverDelegate.js";
 import { appendIcon } from "../lxicons/lxicon.js";
 
@@ -17,6 +17,8 @@ export interface ActionViewItemOptions {
 	readonly draggable?: boolean;
 	/** Places the item's managed tooltip relative to its trigger. */
 	readonly hoverAnchorPosition?: AnchorPosition;
+	/** On the horizontal axis, Below/Above places the tooltip to the right/left. */
+	readonly hoverAnchorAxisAlignment?: AnchorAxisAlignment;
 }
 
 /**
@@ -50,6 +52,7 @@ export abstract class ActionViewItem extends Disposable {
 			...options,
 			hoverGroupId: options.hoverGroupId ?? ActionHoverGroupId,
 			hoverAnchorPosition: options.hoverAnchorPosition ?? this.actionViewItemOptions.hoverAnchorPosition,
+			hoverAnchorAxisAlignment: options.hoverAnchorAxisAlignment ?? this.actionViewItemOptions.hoverAnchorAxisAlignment,
 		}));
 	}
 
@@ -60,6 +63,7 @@ export abstract class ActionViewItem extends Disposable {
 			content,
 			groupId: ActionHoverGroupId,
 			anchorPosition: this.actionViewItemOptions.hoverAnchorPosition,
+			anchorAxisAlignment: this.actionViewItemOptions.hoverAnchorAxisAlignment,
 		}));
 	}
 }

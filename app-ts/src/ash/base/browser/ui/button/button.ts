@@ -5,7 +5,7 @@ import type { Icon } from "../../../common/icon.js";
 import type { Event } from "../../../common/event.js";
 import { Disposable, MutableDisposable, toDisposable } from "../../../common/lifecycle.js";
 import { setAriaAttribute } from "../aria/aria.js";
-import type { AnchorPosition } from "../contextview/contextview.js";
+import type { AnchorAxisAlignment, AnchorPosition } from "../contextview/contextview.js";
 import { getHoverDelegate, type IManagedHover } from "../hover/hoverDelegate.js";
 import { IconLabel } from "../iconlabel/iconlabel.js";
 
@@ -30,6 +30,7 @@ export interface ButtonOptions {
 	title?: string;
 	hoverGroupId?: string;
 	hoverAnchorPosition?: AnchorPosition;
+	hoverAnchorAxisAlignment?: AnchorAxisAlignment;
 	enabled?: boolean;
 	checked?: boolean;
 	onClick?: (event: DOMEventMap["click"]) => void;
@@ -43,6 +44,7 @@ export class Button extends Disposable {
 	private readonly hover = this._register(new MutableDisposable<IManagedHover>());
 	private readonly hoverGroupId: string | undefined;
 	private readonly hoverAnchorPosition: AnchorPosition | undefined;
+	private readonly hoverAnchorAxisAlignment: AnchorAxisAlignment | undefined;
 	private readonly usesLabelAsAriaLabel: boolean;
 	private currentIcon: Icon | undefined;
 	readonly onDidClick: Event<DOMEventMap["click"]>;
@@ -52,6 +54,7 @@ export class Button extends Disposable {
 		const ownerDocument = container.ownerDocument;
 		this.hoverGroupId = options.hoverGroupId;
 		this.hoverAnchorPosition = options.hoverAnchorPosition;
+		this.hoverAnchorAxisAlignment = options.hoverAnchorAxisAlignment;
 		this.usesLabelAsAriaLabel = options.iconOnly === true && options.ariaLabel === undefined;
 		this.currentIcon = options.icon;
 		const domNode = h(ownerDocument, "button", {
@@ -139,6 +142,7 @@ export class Button extends Disposable {
 			content: title,
 			groupId: this.hoverGroupId,
 			anchorPosition: this.hoverAnchorPosition,
+			anchorAxisAlignment: this.hoverAnchorAxisAlignment,
 		});
 	}
 }

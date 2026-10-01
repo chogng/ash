@@ -1,6 +1,6 @@
 import "./compositebar.css";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
-import type { ActionViewItem } from "../../../../base/browser/ui/actionbar/actionViewItems.js";
+import type { ActionViewItem, ActionViewItemOptions } from "../../../../base/browser/ui/actionbar/actionViewItems.js";
 import { ActionBar, type ActionBarDropPosition, type ActionBarOrientation } from "../../../../base/browser/ui/actionbar/actionbar.js";
 import { Separator, type IAction } from "../../../../base/common/actions.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
@@ -54,6 +54,7 @@ export class CompositeBar extends Disposable {
 	private readonly location: ViewContainerLocation;
 	private orientation: ActionBarOrientation;
 	private readonly actionBar: ActionBar;
+	private hoverOptions: ActionViewItemOptions = {};
 	private readonly contextMenuProvider: IContextMenuProvider | undefined;
 	private readonly storageService: IStorageService | undefined;
 	private readonly overflowEnabled: boolean;
@@ -101,13 +102,14 @@ export class CompositeBar extends Disposable {
 			orientation: options.orientation,
 			actionViewItemProvider: (action): ActionViewItem => {
 				if (action instanceof CompositeBarAction) {
-					return new CompositeBarActionViewItem(action);
+					return new CompositeBarActionViewItem(action, this.hoverOptions);
 				}
 				if (action instanceof CompositeBarOverflowAction) {
 					return new CompositeBarOverflowViewItem(
 						action,
 						() => this.createOverflowActions(),
 						this.contextMenuProvider!,
+						this.hoverOptions,
 					);
 				}
 				throw new TypeError(`Unsupported CompositeBar action: ${action.id}`);
@@ -172,6 +174,15 @@ export class CompositeBar extends Disposable {
 		this.domNode.classList.toggle('ash-composite-bar-vertical', orientation === 'vertical');
 		this.domNode.classList.toggle('ash-composite-bar-horizontal', orientation === 'horizontal');
 		this.actionBar.setOrientation(orientation);
+		this.render();
+	}
+
+	/** The host changes tooltip placement when it moves this selector between Parts. */
+	public setHoverOptions(options: Pick<ActionViewItemOptions, 'hoverAnchorPosition' | 'hoverAnchorAxisAlignment'>): void {
+		if (this.hoverOptions.hoverAnchorPosition === options.hoverAnchorPosition && this.hoverOptions.hoverAnchorAxisAlignment === options.hoverAnchorAxisAlignment) {
+			return;
+		}
+		this.hoverOptions = options;
 		this.render();
 	}
 

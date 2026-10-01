@@ -148,8 +148,17 @@ test('Sessions composer configuration leaves Workbench input defaults unchanged'
 		await parent.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const defaultInput = parent.locator('.ash-chat-view-pane .ash-chat-input-part').first();
+	const defaultCard = defaultInput.locator('.ash-chat-input-container');
+	const workbenchBlurTarget = parent.getByRole('tab', { name: 'Explorer', exact: true });
 	await expect(defaultInput.locator('.ash-chat-input-container')).toHaveCSS('border-radius', '8px');
 	await expect(defaultInput.locator('.ash-chat-input-editor')).toHaveCSS('height', '100px');
+	await workbenchBlurTarget.focus();
+	await expect(defaultCard).not.toHaveClass(/focused/u);
+	const restingBorder = await defaultCard.evaluate(element => getComputedStyle(element).borderTopColor);
+	await defaultCard.hover();
+	await expect(defaultCard).toHaveCSS('border-top-color', restingBorder);
+	await expect(defaultCard).toHaveCSS('box-shadow', 'none');
+	await expect(defaultCard).toHaveCSS('transition-duration', '0s');
 	await defaultInput.getByRole('textbox', { name: 'Chat message' }).focus();
 	const focusBorder = await defaultInput.evaluate(element => {
 		const probe = document.createElement('span');
@@ -162,6 +171,8 @@ test('Sessions composer configuration leaves Workbench input defaults unchanged'
 	await expect(defaultInput.locator('.ash-chat-input-container')).toHaveCSS('border-top-color', focusBorder);
 	await expect(defaultInput.locator('.ash-chat-input-container')).toHaveCSS('outline-style', 'none');
 	await expect(defaultInput.locator('.ash-chat-input-container')).toHaveCSS('box-shadow', 'none');
+	await parent.mouse.move(0, 0);
+	await expect(defaultCard).toHaveCSS('border-top-color', focusBorder);
 	let page = parent;
 	if (target.kind === 'browser') {
 		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
@@ -183,6 +194,13 @@ test('Sessions composer configuration leaves Workbench input defaults unchanged'
 	}
 	await expect(defaultInput.locator('.ash-chat-input-container')).toHaveCSS('border-radius', '8px');
 	await expect(defaultInput.locator('.ash-chat-input-editor')).toHaveCSS('height', '100px');
+	await defaultInput.getByRole('textbox', { name: 'Chat message' }).focus();
+	await defaultCard.hover();
+	await expect(defaultCard).toHaveCSS('border-top-color', focusBorder);
+	await expect(defaultCard).toHaveCSS('box-shadow', 'none');
+	await expect(defaultCard).toHaveCSS('transition-duration', '0s');
+	await workbenchBlurTarget.focus();
+	await expect(defaultCard).toHaveCSS('border-top-color', restingBorder);
 	await expect(parent.locator('.ash-sessions-chat-input')).toHaveCount(0);
 });
 

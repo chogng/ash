@@ -1,6 +1,6 @@
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
-import { ActionViewItem } from "../../../../base/browser/ui/actionbar/actionViewItems.js";
+import { ActionViewItem, type ActionViewItemOptions } from "../../../../base/browser/ui/actionbar/actionViewItems.js";
 import { IconLabel } from "../../../../base/browser/ui/iconlabel/iconlabel.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import type { Icon } from "../../../../base/common/icon.js";
@@ -54,8 +54,8 @@ export class CompositeBarAction implements IAction {
 export class CompositeBarActionViewItem extends ActionViewItem {
 	private renderedContainer: HTMLElement | undefined;
 
-	constructor(private readonly compositeAction: CompositeBarAction) {
-		super(compositeAction, { draggable: true });
+	constructor(private readonly compositeAction: CompositeBarAction, options: ActionViewItemOptions = {}) {
+		super(compositeAction, { ...options, draggable: true });
 	}
 
 	override render(container: HTMLElement): void {
@@ -122,8 +122,9 @@ export class CompositeBarOverflowViewItem extends ActionViewItem {
 		action: IAction,
 		private readonly getActions: () => readonly IAction[],
 		private readonly contextMenuProvider: IContextMenuProvider,
+		options: ActionViewItemOptions = {},
 	) {
-		super(action);
+		super(action, options);
 	}
 
 	override render(container: HTMLElement): void {
