@@ -84,6 +84,19 @@ test('dragging editor text after horizontal scrolling replaces the selected char
 			Math.abs(caret.y - points[1]!.top),
 		);
 	}).toBeLessThan(2);
+	await expect.poll(() => editor.element.locator('.stanza-editor-selection').evaluate(element => {
+		const rect = element.getBoundingClientRect();
+		const pointerEvents = (element as HTMLElement).style.pointerEvents;
+		// Test browser paint order even though the selection background ignores pointer input.
+		(element as HTMLElement).style.pointerEvents = 'auto';
+		try {
+			const stack = document.elementsFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+			const textIndex = stack.findIndex(node => node.closest('.view-lines'));
+			return textIndex >= 0 && stack.indexOf(element) > textIndex;
+		} finally {
+			(element as HTMLElement).style.pointerEvents = pointerEvents;
+		}
+	})).toBe(true);
 	await page.keyboard.insertText('!');
 	await expect(line).toHaveText('mode switcher > !');
 });

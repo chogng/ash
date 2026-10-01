@@ -45,6 +45,66 @@ test("text-model editor public API, pane, undo, save, and browser worker", async
 	await expect.poll(() => workers.length).toBeGreaterThan(0);
 });
 
+for (const theme of ['light', 'dark', 'contrast', 'contrastLight'] as const) {
+	test(`dragged selection backgrounds stay behind readable text in ${theme}`, async ({ page }) => {
+		await openEditor(page);
+		await page.evaluate(theme => {
+			window.ashTextModelIntegration.setTheme(theme);
+			const editor = window.ashTextModelIntegration.getControl();
+			editor.updateOptions({ fontFamily: 'monospace', wordWrap: 'off', cursorBlinking: 'solid' });
+			editor.setValue('session rename > selected content');
+		}, theme);
+		const line = page.locator('.view-lines .stanza-editor-line-text').first();
+		await expect(line).toHaveText('session rename > selected content');
+		const points = await line.evaluate(element => {
+			const node = element.firstChild!.firstChild!;
+			return [17, 33].map(offset => {
+				const range = document.createRange();
+				range.setStart(node, offset);
+				range.collapse(true);
+				const rect = range.getBoundingClientRect();
+				return { x: rect.left - 0.25, y: rect.top + rect.height / 2 };
+			});
+		});
+		await page.mouse.move(points[0]!.x, points[0]!.y);
+		await page.mouse.down();
+		await page.mouse.move(points[1]!.x, points[1]!.y, { steps: 8 });
+		await page.mouse.up();
+		await expect.poll(() => page.evaluate(() => {
+			const editor = window.ashTextModelIntegration.getControl();
+			return editor.getModel()!.getValueInRange(editor.getSelection()!);
+		})).toBe('selected content');
+		const selection = page.locator('.stanza-editor-selection');
+		await expect(selection).toHaveCount(1);
+		for (const focused of [true, false]) {
+			if (!focused) {
+				await page.locator('.stanza-editor-input').evaluate(element => (element as HTMLElement).blur());
+			}
+			await expect(page.locator('.view-overlays')).toHaveClass(focused ? /focused/u : /^(?!.*focused)/u);
+			await expect.poll(() => selection.evaluate((element, focused) => {
+				const rect = element.getBoundingClientRect();
+				const pointerEvents = (element as HTMLElement).style.pointerEvents;
+				// Include the non-interactive background in the browser's paint-order hit test.
+				(element as HTMLElement).style.pointerEvents = 'auto';
+				try {
+					const stack = document.elementsFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+					const textIndex = stack.findIndex(node => node.closest('.view-lines'));
+					const backgroundIndex = stack.indexOf(element);
+					const root = element.closest('.stanza-editor')!;
+					const backgroundToken = focused ? '--ash-editor-selection-background' : '--ash-editor-inactive-selection-background';
+					return {
+						textAboveBackground: textIndex >= 0 && backgroundIndex > textIndex,
+						hasBackground: getComputedStyle(element).backgroundColor !== 'rgba(0, 0, 0, 0)',
+						hasThemeColor: getComputedStyle(root).getPropertyValue(backgroundToken).trim().length > 0,
+					};
+				} finally {
+					(element as HTMLElement).style.pointerEvents = pointerEvents;
+				}
+			}, focused)).toEqual({ textAboveBackground: true, hasBackground: true, hasThemeColor: true });
+		}
+	});
+}
+
 for (const proportional of [false, true]) {
 	test(`pointer insertion and caret share rendered text coordinates with proportional=${proportional}`, async ({ page }) => {
 		await openEditor(page);

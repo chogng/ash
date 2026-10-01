@@ -401,10 +401,11 @@ export class View extends ViewEventHandler {
 		const decorationsOverviewRuler = this.registerViewPart(new DecorationsOverviewRuler(this.viewContext));
 		const scrollDecoration = this.registerViewPart(new ScrollDecorationViewPart(this.viewContext, this.domNode.domNode));
 
-		// Root order is the visual stacking contract; Parts own nodes but do not choose their host.
+		// Paint selection and decoration backgrounds before glyphs, including opaque theme colors.
+		// Parts own their nodes; the host owns the visual stacking order.
 		this.contentElement.append(
-			this.viewLines.getDomNode().domNode,
 			this.contentViewOverlays.getDomNode().domNode,
+			this.viewLines.getDomNode().domNode,
 			this.viewCursors.getDomNode().domNode,
 			this.contentWidgets.domNode.domNode,
 			this.margin.getDomNode().domNode,
