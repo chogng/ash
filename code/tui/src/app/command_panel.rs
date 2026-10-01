@@ -56,6 +56,11 @@ use std::collections::BTreeMap;
 #[derive(Clone, Copy, Debug)]
 pub(super) enum CommandPanelBody<'a> {
     Selection(&'a ListSelectionState),
+    Details {
+        detail: &'a crate::widgets::detail_list::DetailList,
+        scroll: u16,
+        actions: &'a ListSelectionState,
+    },
     Prompt(&'a TextPrompt),
     Dialog(&'a crate::widgets::dialog::Dialog),
     Memories(&'a crate::memories::Panel),
@@ -75,7 +80,7 @@ pub(super) enum CommandPanelPointerTarget {
 impl CommandPanelBody<'_> {
     pub(super) fn allows_backdrop_dismiss(&self) -> bool {
         match self {
-            Self::Selection(_) | Self::Status(_) => true,
+            Self::Selection(_) | Self::Status(_) | Self::Details { .. } => true,
             Self::Memories(panel) => panel.allows_backdrop_dismiss(),
             Self::Prompt(_) | Self::Provider(_) | Self::KeyCapture(_) | Self::Dialog(_) => false,
         }
@@ -198,6 +203,16 @@ impl CommandPanel {
             CommandPanelBody::Provider(provider) => provider
                 .target_at(body, position)
                 .map(CommandPanelPointerTarget::Provider),
+            CommandPanelBody::Details { actions, .. } => list_selection::pointer_target_at(
+                actions,
+                tabs,
+                crate::widgets::detail_list::split_with_actions(
+                    body,
+                    actions.body_rows(body.width),
+                )[1],
+                position,
+            )
+            .map(CommandPanelPointerTarget::List),
             CommandPanelBody::Memories(memories) => memories
                 .target_at(tabs, body, position)
                 .map(CommandPanelPointerTarget::Memories),
@@ -385,7 +400,7 @@ impl CommandPanel {
             }
             Self::Lsp(content) => CommandPanelOutcome::Lsp(content.handle_key(key)),
             Self::Mcp(content) => map_selection(content.handle_key(key), CommandPanelOutcome::Mcp),
-            Self::Hooks(content) => CommandPanelOutcome::Hooks(content.handle_key(key)),
+            Self::Hooks(content) => CommandPanelOutcome::Hooks(content.handle_key(key, area)),
             Self::ComposerOptions(content) => {
                 map_selection(content.handle_key(key), CommandPanelOutcome::ComposerOption)
             }
@@ -503,10 +518,7 @@ impl CommandPanel {
             Self::Marketplace(selection) => Some(selection.state()),
             Self::Lsp(selection) => Some(selection.state()),
             Self::Mcp(selection) => Some(selection.state()),
-            Self::Hooks(panel) => match panel.page() {
-                crate::hooks::PageView::Selection(selection) => Some(selection),
-                crate::hooks::PageView::Prompt(_) => None,
-            },
+            Self::Hooks(panel) => Some(panel.page()),
             Self::ComposerOptions(selection) => Some(selection.state()),
             Self::Model(selection) => Some(selection.state()),
             Self::ProjectRoots(selection) => Some(selection.state()),
@@ -622,11 +634,13 @@ impl CommandPanel {
             Self::Marketplace(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Lsp(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Mcp(selection) => CommandPanelBody::Selection(selection.state()),
-            Self::Hooks(panel) => match panel.page() {
-                crate::hooks::PageView::Selection(selection) => {
-                    CommandPanelBody::Selection(selection)
-                }
-                crate::hooks::PageView::Prompt(prompt) => CommandPanelBody::Prompt(prompt),
+            Self::Hooks(panel) => match panel.detail() {
+                Some((detail, scroll)) => CommandPanelBody::Details {
+                    detail,
+                    scroll,
+                    actions: panel.page(),
+                },
+                None => CommandPanelBody::Selection(panel.page()),
             },
             Self::ComposerOptions(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Model(selection) => CommandPanelBody::Selection(selection.state()),
@@ -886,6 +900,7 @@ impl<'a> CommandPanelBody<'a> {
             Self::Selection(selection) => {
                 return std::borrow::Cow::Owned(selection.localized_title(language));
             }
+            Self::Details { detail, .. } => return std::borrow::Cow::Borrowed(detail.title()),
             Self::Memories(panel) => panel.title(),
             Self::Prompt(prompt) => prompt.title(),
             Self::Dialog(dialog) => dialog.title(),
@@ -898,6 +913,7 @@ impl<'a> CommandPanelBody<'a> {
 
     pub(super) fn tab_rows(self, width: u16) -> u16 {
         match self {
+            Self::Details { .. } => 0,
             Self::Selection(selection) => selection.tab_rows(width),
             Self::Status(panel) => panel.tab_rows(width),
             Self::Memories(panel) => panel.tab_rows(width),
@@ -907,6 +923,11 @@ impl<'a> CommandPanelBody<'a> {
 
     pub(super) fn body_rows(self, width: u16) -> u16 {
         match self {
+            Self::Details {
+                detail, actions, ..
+            } => (detail.content_height(width).min(usize::from(u16::MAX)) as u16)
+                .saturating_add(1)
+                .saturating_add(actions.body_rows(width)),
             Self::Selection(selection) => selection.body_rows(width),
             Self::Memories(panel) => panel.body_rows(width),
             Self::Prompt(prompt) => prompt.desired_height(),
@@ -920,7 +941,8 @@ impl<'a> CommandPanelBody<'a> {
     pub(super) fn presentation_focus(self) -> Option<ratatui::style::Color> {
         match self {
             Self::Selection(selection) => selection.presentation_focus(),
-            Self::Memories(_)
+            Self::Details { .. }
+            | Self::Memories(_)
             | Self::Prompt(_)
             | Self::Dialog(_)
             | Self::KeyCapture(_)
@@ -945,7 +967,11 @@ impl<'a> CommandPanelBody<'a> {
             Self::Memories(panel) => {
                 panel.draw_tabs(frame, area, hovered_tab, pressed_tab, context)
             }
-            Self::Provider(_) | Self::Prompt(_) | Self::KeyCapture(_) | Self::Dialog(_) => {}
+            Self::Details { .. }
+            | Self::Provider(_)
+            | Self::Prompt(_)
+            | Self::KeyCapture(_)
+            | Self::Dialog(_) => {}
         }
     }
 
@@ -976,6 +1002,35 @@ impl<'a> CommandPanelBody<'a> {
             _ => None,
         };
         match self {
+            Self::Details {
+                detail,
+                scroll,
+                actions,
+            } => {
+                let [detail_area, action_area] = crate::widgets::detail_list::split_with_actions(
+                    area,
+                    actions.body_rows(area.width),
+                );
+                let limit = detail
+                    .content_height(detail_area.width)
+                    .saturating_sub(usize::from(detail_area.height))
+                    .min(usize::from(u16::MAX)) as u16;
+                crate::widgets::detail_list::draw_body_scrolled(
+                    frame,
+                    detail_area,
+                    detail,
+                    scroll.min(limit),
+                    context,
+                );
+                list_selection::draw_body_with_pointer(
+                    frame,
+                    action_area,
+                    actions,
+                    list(hovered),
+                    list(pressed),
+                    context,
+                );
+            }
             Self::Selection(selection) => list_selection::draw_body_with_pointer(
                 frame,
                 area,

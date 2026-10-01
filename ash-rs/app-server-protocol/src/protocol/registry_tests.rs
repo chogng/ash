@@ -318,3 +318,31 @@ fn marketplace_search_supports_capabilities_and_exact_language_routes() {
         .is_err()
     );
 }
+
+#[test]
+fn hook_catalog_request_and_sources_round_trip_without_granting_execution() {
+    use crate::protocol::config::{HookListParams, HookListResult};
+    for wire in [
+        serde_json::json!({}),
+        serde_json::json!({"sessionId": "session-1"}),
+    ] {
+        let params: HookListParams = serde_json::from_value(wire.clone()).unwrap();
+        assert_eq!(serde_json::to_value(params).unwrap(), wire);
+        assert_eq!(
+            definition("hook/list").serialization_scope(&wire).unwrap(),
+            Some(ClientRequestSerializationScope::Global {
+                access: SerializationAccess::SharedRead
+            })
+        );
+    }
+    assert!(
+        serde_json::from_value::<HookListParams>(serde_json::json!({"path": "/untrusted"}))
+            .is_err()
+    );
+    let wire = serde_json::json!({"sources": [{"namespace": "user", "configPath": "/profile/config.toml", "hooks": [{
+        "id": "user:hook:check", "event": "preToolUse", "matcher": {"toolNames": []},
+        "action": {"type": "process", "program": "check", "args": ["--verify"]}, "enablement": "disabled"
+    }]}]});
+    let result: HookListResult = serde_json::from_value(wire.clone()).unwrap();
+    assert_eq!(serde_json::to_value(result).unwrap(), wire);
+}

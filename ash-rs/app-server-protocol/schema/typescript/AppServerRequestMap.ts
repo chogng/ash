@@ -180,6 +180,8 @@ import type { GitWorktreeResolveResult } from './types/GitWorktreeResolveResult.
 import type { GrepIndexDisableAndDeleteParams } from './types/GrepIndexDisableAndDeleteParams.js';
 import type { GrepIndexDisableAndDeleteResult } from './types/GrepIndexDisableAndDeleteResult.js';
 import type { GrepIndexStatusResult } from './types/GrepIndexStatusResult.js';
+import type { HookListParams } from './types/HookListParams.js';
+import type { HookListResult } from './types/HookListResult.js';
 import type { HookRemoveParams } from './types/HookRemoveParams.js';
 import type { HookSetEnablementParams } from './types/HookSetEnablementParams.js';
 import type { HookUpsertParams } from './types/HookUpsertParams.js';
@@ -600,6 +602,7 @@ export interface AppServerRequestMap {
   "plugin/request/upsert": { params: PluginRequestUpsertParams; response: ConfigCommandResult };
   "plugin/request/remove": { params: PluginRequestRemoveParams; response: ConfigCommandResult };
   "plugin/request/enablement/set": { params: PluginRequestSetEnablementParams; response: ConfigCommandResult };
+  "hook/list": { params: HookListParams; response: HookListResult };
   "hook/upsert": { params: HookUpsertParams; response: ConfigCommandResult };
   "hook/remove": { params: HookRemoveParams; response: ConfigCommandResult };
   "hook/enablement/set": { params: HookSetEnablementParams; response: ConfigCommandResult };
@@ -914,6 +917,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "plugin/request/upsert": { method: "plugin/request/upsert" },
   "plugin/request/remove": { method: "plugin/request/remove" },
   "plugin/request/enablement/set": { method: "plugin/request/enablement/set" },
+  "hook/list": { method: "hook/list" },
   "hook/upsert": { method: "hook/upsert" },
   "hook/remove": { method: "hook/remove" },
   "hook/enablement/set": { method: "hook/enablement/set" },

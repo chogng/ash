@@ -289,10 +289,10 @@ pub enum HookEventDto {
     UserPromptSubmit,     // 对话：用户提交提示词时
     UserPromptExpansion,  // 对话：用户输入的命令展开为提示词时
     SessionStart,         // 会话：新会话开始时
-    Stop,                 // 对话：助手正常结束回复前
+    Stop,                 // 对话：助手正常完成回复后
     StopFailure,          // 对话：因错误结束回复时
     SubagentStart,        // 多代理：子代理启动时
-    SubagentStop,         // 多代理：子代理结束时
+    SubagentStop,         // 多代理：子代理产生结果后
     PreCompact,           // 上下文：压缩前
     PostCompact,          // 上下文：压缩后
     PreModelSwitch,       // 模型：请求切换前
@@ -404,6 +404,30 @@ pub struct HookConfigDto {
     pub matcher: HookMatcherDto,
     pub action: HookActionDto,
     pub enablement: HookEnablementDto,
+}
+
+/// Reads user declarations and directory declarations discoverable by one Session.
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct HookListParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_id: Option<ash_protocol::SessionId>,
+}
+
+/// One validated configuration source; declarations are not execution grants or run status.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct HookSourceDto {
+    pub namespace: String,
+    pub config_path: std::path::PathBuf,
+    pub hooks: Vec<HookConfigDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct HookListResult {
+    pub sources: Vec<HookSourceDto>,
 }
 
 /// Durable user intent for one language server.

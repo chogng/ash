@@ -38,6 +38,19 @@
 
 `memory/changed` 只向产品 host 发布作用域和新 catalog revision；客户端随后重新读取。`queue/changed` 是无内容的失效通知。Config 的 Feature 来源由 `ash-features` 解释。反馈待审阅包在 connection 关闭时释放，持久队列由 profile 后台调度器恢复。
 
+## Hook 配置来源查询
+
+`hook/list` 接受可选 `sessionId`，返回 `HookListResult.sources`。每个来源包含 `namespace`、
+`configPath` 与 `hooks` 声明；路径属于连接的 App Server 主机。用户来源始终返回，省略会话时
+只返回用户来源。指定会话时，只读取同时拥有 `LoadConfig` 与 `DiscoverHooks` 的会话目录。
+来源即使没有声明也保留，使配置工具能使用后端确定的目录身份。
+
+该查询采用全局共享读，不提交 Hook 配置变更、不更改权限、不执行 Hook。读取仍遵循 Config
+owner 的版本迁移规则。无效会话、获准来源的读取失败或配置
+校验失败均明确报错；不把无效 TOML 当作空声明。配置数量包含禁用声明，不能作为已生效程序数。
+用户写入继续使用带 `commandId` 和 `expectedRevision` 的 `hook/upsert`、`hook/remove`、
+`hook/enablement/set`。用户指南和运行时约定集中在 [Hooks crate](../hooks/README.md)。
+
 ## 协作模式
 
 `session/request.startTurn.mode` 与 `queue/enqueue.mode` 选择模式；省略时为 `agent`。公开 `Turn.mode` 独立返回模式，`TurnInstructions.modeInstructions` 保存所选资产；客户端不通过提示词 ID 推断模式。Steer 沿用已接受模式，改变模式的消息启动新 Turn。完整行为、子任务规则和兼容版本见 [五种协作模式](../collaboration-mode-templates/collaboration-modes.md)。

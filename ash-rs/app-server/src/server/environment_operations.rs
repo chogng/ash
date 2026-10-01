@@ -523,7 +523,7 @@ fn require_dir_permissions_host(connection: &ConnectionState) -> Result<(), RpcE
     }
 }
 
-fn environment_runtime_error(error: EnvRuntimeError) -> RpcError {
+pub(super) fn environment_runtime_error(error: EnvRuntimeError) -> RpcError {
     match error {
         EnvRuntimeError::Unavailable => {
             RpcError::new(-32070, AppServerErrorName::EnvironmentUnavailable)

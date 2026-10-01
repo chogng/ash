@@ -246,10 +246,14 @@ impl AppDriver {
             }
             AppCommand::Hooks(command) => {
                 let mut client = self.client.clone();
+                let session_id = self
+                    .conversation
+                    .as_ref()
+                    .map(|current| current.conversation.session_id().clone());
                 self.requests.spawn_presentation(
                     request_key,
                     "ash-tui-hooks",
-                    move || hooks::execute(&mut client, command),
+                    move || hooks::execute(&mut client, session_id.as_ref(), command),
                     &mut self.app,
                     origin,
                 );
@@ -421,6 +425,10 @@ impl AppDriver {
         origin: RequestOrigin,
     ) {
         let operation = match command {
+            HostCommand::OpenTextFile { path } => HostOperation::OpenTextFile {
+                path,
+                language: self.app.language(),
+            },
             HostCommand::CopyLastResponse => HostOperation::CopyLastResponse(
                 self.app
                     .latest_agent_response()

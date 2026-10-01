@@ -132,6 +132,8 @@ pub struct DirConfigDocument {
 - 执行 Hook；
 - 使用 `AllowUnsandboxed` 放宽执行策略。
 
+Hook 的配置示例、事件目录和浏览方式统一见 [Hooks crate](../ash-rs/hooks/README.md)。
+
 ## 目录权限
 
 `DirPermissionsConfig` 按 `DirId` 保存明确的 `Capability` 集合。缺失条目表示没有持久授权；系统不

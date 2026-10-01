@@ -165,7 +165,7 @@ where
         TuiSlashCommandAction::Hooks => {
             output
                 .events
-                .push(hooks::Event::Opened(hooks::load(client)?).into());
+                .push(hooks::Event::Opened(hooks::load(client, conversation.as_ref().map(ActiveConversation::session_id))?).into());
         }
         TuiSlashCommandAction::Connectors => {
             output.events.push(

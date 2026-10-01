@@ -298,6 +298,15 @@ impl ChatInput {
         self.sync_completion();
     }
 
+    /// Feature handoffs append to the draft without replacing the user's active text selection.
+    pub(crate) fn append_text(&mut self, text: &str) {
+        self.pointer_scroll_row = None;
+        self.reset_history_navigation();
+        self.textarea.set_cursor(self.textarea.text().len());
+        self.textarea.insert_text(text);
+        self.sync_completion();
+    }
+
     pub(crate) fn begin_dictation(&mut self) {
         self.dictation = Some(DictationDraft::Waiting);
     }

@@ -310,11 +310,17 @@ use crate::protocol::config::HookEnablementDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::config::HookEventDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::config::HookListParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::config::HookListResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::config::HookMatcherDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::config::HookRemoveParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::config::HookSetEnablementParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::config::HookSourceDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::config::HookUpsertParams;
 #[cfg(any(test, feature = "export"))]
@@ -3087,6 +3093,11 @@ client_methods! {
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
     },
+    HookList => "hook/list" {
+        params: HookListParams,
+        response: HookListResult,
+        serialization: GlobalSharedRead,
+    },
     HookUpsert => "hook/upsert" {
         params: HookUpsertParams,
         response: ConfigCommandResult,
@@ -4336,6 +4347,9 @@ typescript_bindings! {
     PluginRequestUpsertParams,
     PluginRequestRemoveParams,
     PluginRequestSetEnablementParams,
+    HookListParams,
+    HookListResult,
+    HookSourceDto,
     HookUpsertParams,
     HookRemoveParams,
     HookSetEnablementParams,

@@ -1659,7 +1659,7 @@ fn hooks_panel_opens_fullscreen_and_restores_input_after_close() {
     let mut app = App::new();
     app.insert_text("keep this draft");
     app.update(crate::hooks::Event::Opened(
-        std::collections::BTreeMap::new(),
+        crate::test_support::hook_catalog(vec![]),
     ));
     assert_eq!(app.list_selection().unwrap().title(), "Extensions");
     crate::tui_assert_snapshot!("hooks_fullscreen", render(&app, 80, 20));
@@ -1669,16 +1669,15 @@ fn hooks_panel_opens_fullscreen_and_restores_input_after_close() {
 }
 
 #[test]
-fn hooks_detail_and_editor_render_fullscreen() {
+fn hooks_event_details_and_configuration_render_fullscreen() {
     use ash_app_server_protocol::protocol::config::HookActionDto;
     use ash_app_server_protocol::protocol::config::HookConfigDto;
     use ash_app_server_protocol::protocol::config::HookEnablementDto;
     use ash_app_server_protocol::protocol::config::HookEventDto;
     use ash_app_server_protocol::protocol::config::HookMatcherDto;
-
     let hook = HookConfigDto {
         id: "user:hook:review".into(),
-        event: HookEventDto::BeforeTool,
+        event: HookEventDto::PreToolUse,
         matcher: HookMatcherDto {
             tool_names: vec!["exec_command".into()],
         },
@@ -1690,31 +1689,28 @@ fn hooks_detail_and_editor_render_fullscreen() {
     };
     let mut app = App::new();
     app.update(crate::hooks::Event::Opened(
-        std::collections::BTreeMap::from([(hook.id.clone(), hook)]),
+        crate::test_support::hook_catalog(vec![hook]),
     ));
-    let Some(CommandPanel::Hooks(panel)) = app.fullscreen.panels.command_mut() else {
-        panic!("expected Hooks panel");
-    };
-    panel.selection_mut().unwrap().focus_item(
-        &crate::widgets::list_selection::ListSelectionItemId::new("user:hook:review"),
+    assert_eq!(
+        app.list_selection().unwrap().visible_items()[0].label(),
+        "PreToolUse (1)"
     );
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(app.list_selection().unwrap().title(), "PreToolUse");
+    crate::tui_assert_snapshot!("hooks_event_picker", render(&app, 80, 20));
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert_eq!(app.list_selection().unwrap().title(), "user:hook:review");
     crate::tui_assert_snapshot!("hooks_detail", render(&app, 80, 20));
-
-    let Some(CommandPanel::Hooks(panel)) = app.fullscreen.panels.command_mut() else {
-        panic!("expected Hooks panel");
-    };
-    panel.selection_mut().unwrap().focus_item(
-        &crate::widgets::list_selection::ListSelectionItemId::new("hook-action-1"),
-    );
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    app.panels_mut()
+        .command_mut()
+        .unwrap()
+        .list_selection_mut()
+        .unwrap()
+        .focus_pointer(&crate::widgets::list_selection::ListSelectionPointerTarget::Action);
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert_eq!(app.list_selection().unwrap().title(), "Edit Hook");
+    assert_eq!(app.list_selection().unwrap().title(), "Configure Hooks");
     crate::tui_assert_snapshot!("hooks_editor", render(&app, 80, 20));
-
-    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert_eq!(app.list_selection().unwrap().title(), "Hook events");
-    crate::tui_assert_snapshot!("hooks_event_picker", render(&app, 80, 20));
 }
 
 #[test]

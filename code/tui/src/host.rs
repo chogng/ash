@@ -1,6 +1,7 @@
 pub(crate) mod browser;
 pub(crate) mod clipboard;
 mod termination;
+pub(crate) mod text_editor;
 pub(crate) mod transcript_export;
 
 /// A completed host operation delivered to the TUI state owner.
@@ -17,6 +18,9 @@ pub(crate) enum Event {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
+    OpenTextFile {
+        path: std::path::PathBuf,
+    },
     CopyLastResponse,
     ExportTranscript {
         requested_path: Option<std::path::PathBuf>,
@@ -28,6 +32,10 @@ pub(crate) enum Command {
 }
 
 pub(crate) enum Operation {
+    OpenTextFile {
+        path: std::path::PathBuf,
+        language: crate::nls::Language,
+    },
     CopyLastResponse(Result<String, String>),
     ExportTranscript {
         root: std::path::PathBuf,
@@ -43,6 +51,7 @@ pub(crate) enum Operation {
 impl Operation {
     pub(crate) const fn name(&self) -> &'static str {
         match self {
+            Self::OpenTextFile { .. } => "ash-tui-open-text-file",
             Self::CopyLastResponse(_) => "ash-tui-copy-last-response",
             Self::ExportTranscript { .. } => "ash-tui-export-transcript",
             Self::ReadClipboardImage { .. } => "ash-tui-read-clipboard-image",
@@ -54,6 +63,9 @@ impl Operation {
 
     pub(crate) fn execute(self) -> Event {
         match self {
+            Self::OpenTextFile { path, language } => {
+                Event::OperationCompleted(text_editor::open(&path, language))
+            }
             Self::CopyLastResponse(response) => copy_last_response(response),
             Self::ExportTranscript {
                 root,

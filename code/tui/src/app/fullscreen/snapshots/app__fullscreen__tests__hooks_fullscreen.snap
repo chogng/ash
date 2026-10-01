@@ -8,15 +8,15 @@ expression: "render(&app, 80, 20)"
         │                                                              │        
         │   Skills    Marketplace    MCP    Hooks    Plugins           │        
         │                                                              │        
-        │> Add Hook                                                    │        
+        │  Configure Hooks                                             │        
         │                                                              │        
         │  ╭─────────────────────────────────────────────────────────╮ │        
-        │  │ Search Hooks                                            │ │        
+        │  │ Search Hook events                                      │ │        
         │  ╰─────────────────────────────────────────────────────────╯ │        
-        │  No Hooks found                                              │        
-        │                                                              │        
-        │                                                              │        
-        │                                                              │        
-  ──────│                                                              │──────  
-  > keep│  Enter confirm · Tab tabs · / search · Esc close             │        
+        │> PreToolUse (0)  ·  Before tool execution                    │        
+        │  PostToolUse (0)  ·  After successful tool execution         │        
+        │  PostToolUseFailure (0)  ·  After tool execution fails       │        
+        │  PostToolBatch (0)  ·  After a batch of tool calls resolves  │        
+  ──────│  29 more below                                               │──────  
+  > keep│  Enter confirm · Tab tabs · / search · r refresh · Esc close │        
   ──────└──────────────────────────────────────────────────────────────┘model

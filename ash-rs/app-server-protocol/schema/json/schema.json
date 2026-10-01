@@ -6702,6 +6702,22 @@
         {
           "properties": {
             "method": {
+              "const": "hook/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/HookListParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "hook/upsert",
               "type": "string"
             },
@@ -11527,6 +11543,22 @@
             },
             "result": {
               "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "hook/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/HookListResult"
             }
           },
           "required": [
@@ -21205,6 +21237,37 @@
         }
       ]
     },
+    "HookListParams": {
+      "additionalProperties": false,
+      "description": "Reads user declarations and directory declarations discoverable by one Session.",
+      "properties": {
+        "sessionId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "HookListResult": {
+      "properties": {
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/HookSourceDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "sources"
+      ],
+      "type": "object"
+    },
     "HookMatcherDto": {
       "description": "Optional exact tool-name matcher for tool-related Hook events.",
       "properties": {
@@ -21267,6 +21330,29 @@
         "expectedRevision",
         "hookId",
         "enablement"
+      ],
+      "type": "object"
+    },
+    "HookSourceDto": {
+      "description": "One validated configuration source; declarations are not execution grants or run status.",
+      "properties": {
+        "configPath": {
+          "type": "string"
+        },
+        "hooks": {
+          "items": {
+            "$ref": "#/$defs/HookConfigDto"
+          },
+          "type": "array"
+        },
+        "namespace": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "namespace",
+        "configPath",
+        "hooks"
       ],
       "type": "object"
     },

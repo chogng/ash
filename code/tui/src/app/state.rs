@@ -649,6 +649,18 @@ impl App {
                 .into(),
             ),
             CommandPanelOutcome::Hooks(HooksOutcome::Command(command)) => Some(command.into()),
+            CommandPanelOutcome::Hooks(HooksOutcome::Edit(path)) => {
+                Some(crate::host::Command::OpenTextFile { path }.into())
+            }
+            CommandPanelOutcome::Hooks(HooksOutcome::Draft(prompt)) => {
+                self.close_command_panel();
+                let input = self.input_state_mut();
+                // Keep the user's existing draft and attachments; configuration is never auto-submitted.
+                let separator = if input.text().is_empty() { "" } else { "\n\n" };
+                input.append_text(&format!("{separator}{prompt}"));
+                self.dismiss_fullscreen_welcome_on_input();
+                None
+            }
             CommandPanelOutcome::Hooks(HooksOutcome::Consumed) => None,
             CommandPanelOutcome::Hooks(HooksOutcome::Dismiss) => {
                 self.close_command_panel();
@@ -2759,9 +2771,9 @@ impl App {
             }
             AppEvent::Mcp(event) => self.apply_mcp_event(event),
             AppEvent::Hooks(event) => match event {
-                HooksEvent::Opened(hooks) => {
-                    self.open_command_panel(CommandPanel::Hooks(crate::hooks::Panel::new(hooks)))
-                }
+                HooksEvent::Opened(hooks) => self.open_command_panel(CommandPanel::Hooks(
+                    crate::hooks::Panel::new(hooks, &self.startup_context),
+                )),
                 HooksEvent::Updated(hooks) => {
                     if let Some(CommandPanel::Hooks(panel)) = self.panels_mut().command_mut() {
                         panel.update(hooks);

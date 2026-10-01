@@ -48,11 +48,6 @@ impl TextPrompt {
         }
     }
 
-    pub(crate) fn with_initial_value(mut self, value: String) -> Self {
-        self.input.set_query(value);
-        self
-    }
-
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> TextPromptOutcome {
         if key.kind != KeyEventKind::Press {
             return TextPromptOutcome::Consumed;
@@ -80,10 +75,6 @@ impl TextPrompt {
 
     pub(crate) fn handle_paste(&mut self, value: String) {
         self.input.handle_paste(value);
-    }
-
-    pub(crate) fn localize(&mut self, language: crate::nls::Language) {
-        self.input.localize(language);
     }
 
     pub(crate) fn title(&self) -> &str {

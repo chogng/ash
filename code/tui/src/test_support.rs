@@ -39,6 +39,18 @@ pub(crate) fn in_process_test_guard() -> MutexGuard<'static, ()> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+pub(crate) fn hook_catalog(
+    hooks: Vec<ash_app_server_protocol::protocol::config::HookConfigDto>,
+) -> ash_app_server_protocol::protocol::config::HookListResult {
+    ash_app_server_protocol::protocol::config::HookListResult {
+        sources: vec![ash_app_server_protocol::protocol::config::HookSourceDto {
+            namespace: "user".into(),
+            config_path: "/profile/config.toml".into(),
+            hooks,
+        }],
+    }
+}
+
 pub(crate) fn empty_config_snapshot() -> ConfigReadResult {
     ConfigReadResult {
         connections: Default::default(),

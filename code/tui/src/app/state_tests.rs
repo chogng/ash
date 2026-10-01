@@ -4061,3 +4061,74 @@ fn zai_subscription_shows_account_and_sign_out_hint() {
     assert!(screen.contains("l to sign out"));
     crate::tui_assert_snapshot!("zai_subscription_configured", screen);
 }
+
+#[test]
+fn hooks_assistance_preserves_existing_draft_and_returns_to_input_without_submission() {
+    for mode in [
+        crate::terminal::ScreenMode::Fullscreen,
+        crate::terminal::ScreenMode::Inline,
+    ] {
+        let mut app = App::for_dir(Path::new("/workspace"));
+        let mut settings = TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        app.set_terminal_settings(settings);
+        app.insert_text("keep my draft");
+        app.update(HostEvent::ClipboardImageRead {
+            target: app.draft_target(),
+            result: Ok(ClipboardImage {
+                png: b"\x89PNG\r\n\x1a\npayload".to_vec(),
+                fingerprint: ClipboardImageFingerprint(1),
+                width: 1,
+                height: 1,
+            }),
+        });
+        let original_draft = app.input().to_string();
+        app.handle_key(KeyEvent::new(KeyCode::Home, KeyModifiers::SHIFT));
+        app.update(crate::hooks::Event::Opened(
+            crate::test_support::hook_catalog(vec![]),
+        ));
+        app.panels_mut()
+            .command_mut()
+            .unwrap()
+            .list_selection_mut()
+            .unwrap()
+            .focus_pointer(&crate::widgets::list_selection::ListSelectionPointerTarget::Action);
+        assert!(
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+                .is_none()
+        );
+        app.panels_mut()
+            .command_mut()
+            .unwrap()
+            .list_selection_mut()
+            .unwrap()
+            .focus_item(&crate::widgets::list_selection::ListSelectionItemId::new(
+                "ask-ash",
+            ));
+        assert!(
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+                .is_none()
+        );
+        assert!(
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+                .is_none()
+        );
+        assert!(app.command_panel().is_none());
+        assert!(app.input().starts_with(&original_draft));
+        assert!(app.input().contains("/profile/config.toml"));
+        assert!(app.input().contains("My requirement:"));
+        assert!(app.input().contains("custom Hooks"));
+        assert!(app.active_turn().is_none());
+        let Some(AppCommand::Thread(ThreadCommand::SubmitTurn { submission, .. })) =
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        else {
+            panic!("expected explicit submission")
+        };
+        assert!(
+            submission
+                .input
+                .iter()
+                .any(|item| matches!(item, ChatInputItem::Image { .. }))
+        );
+    }
+}

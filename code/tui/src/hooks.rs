@@ -1,8 +1,8 @@
-//! TUI editor for declarative user Hooks.
+//! Read-only Hook event browser and configuration handoff.
 
-use crate::client::new_command_id;
 use crate::keymap::bindings;
 use crate::nls::Text;
+use crate::widgets::detail_list::{DetailList, DetailListRow};
 use crate::widgets::key_hint::KeyHints;
 use crate::widgets::list_selection::ListSelection;
 use crate::widgets::list_selection::ListSelectionGroup;
@@ -12,9 +12,6 @@ use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::list_selection::ListSelectionOutcome;
 use crate::widgets::list_selection::ListSelectionState;
 use crate::widgets::search_box::SearchBoxModel;
-use crate::widgets::text_prompt::TextPrompt;
-use crate::widgets::text_prompt::TextPromptOutcome;
-use crate::widgets::text_prompt::TextPromptSpec;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::ClientError;
 use ash_app_server_client::JsonRpcTransport;
@@ -22,114 +19,80 @@ use ash_app_server_protocol::protocol::config::HookActionDto;
 use ash_app_server_protocol::protocol::config::HookConfigDto;
 use ash_app_server_protocol::protocol::config::HookEnablementDto;
 use ash_app_server_protocol::protocol::config::HookEventDto;
-use ash_app_server_protocol::protocol::config::HookMatcherDto;
-use ash_app_server_protocol::protocol::config::HookRemoveParams;
-use ash_app_server_protocol::protocol::config::HookSetEnablementParams;
-use ash_app_server_protocol::protocol::config::HookUpsertParams;
-use crossterm::event::KeyCode;
+use ash_app_server_protocol::protocol::config::HookListParams;
+use ash_app_server_protocol::protocol::config::HookListResult;
+use ash_app_server_protocol::protocol::config::HookSourceDto;
+use ash_protocol::SessionId;
 use crossterm::event::KeyEvent;
+use ratatui::layout::Rect;
 use std::collections::BTreeMap;
+use std::path::PathBuf;
+
+const REFRESH: bindings::Keybinding = bindings::HOOK_REFRESH;
 
 pub(crate) enum Event {
-    Opened(BTreeMap<String, HookConfigDto>),
-    Updated(BTreeMap<String, HookConfigDto>),
+    Opened(HookListResult),
+    Updated(HookListResult),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
-    Upsert(HookConfigDto),
-    Remove(String),
-    SetEnablement(String, HookEnablementDto),
+    Refresh,
 }
 
 pub(crate) fn load<T>(
     client: &mut AppServerClient<T>,
-) -> Result<BTreeMap<String, HookConfigDto>, ClientError>
+    session_id: Option<&SessionId>,
+) -> Result<HookListResult, ClientError>
 where
     T: JsonRpcTransport,
 {
-    Ok(client.read_config()?.hooks)
+    client.list_hooks(HookListParams {
+        session_id: session_id.cloned(),
+    })
 }
 
-pub(crate) fn execute<T>(client: &mut AppServerClient<T>, command: Command) -> Result<Event, String>
+pub(crate) fn execute<T>(
+    client: &mut AppServerClient<T>,
+    session_id: Option<&SessionId>,
+    command: Command,
+) -> Result<Event, String>
 where
     T: JsonRpcTransport,
 {
-    let config = client.read_config().map_err(|error| error.to_string())?;
     match command {
-        Command::Upsert(hook) => client.upsert_hook(HookUpsertParams {
-            command_id: new_command_id("hook-upsert"),
-            expected_revision: config.revision,
-            hook,
-        }),
-        Command::Remove(hook_id) => client.remove_hook(HookRemoveParams {
-            command_id: new_command_id("hook-remove"),
-            expected_revision: config.revision,
-            hook_id,
-        }),
-        Command::SetEnablement(hook_id, enablement) => {
-            client.set_hook_enablement(HookSetEnablementParams {
-                command_id: new_command_id("hook-enablement"),
-                expected_revision: config.revision,
-                hook_id,
-                enablement,
-            })
-        }
+        Command::Refresh => load(client, session_id)
+            .map(Event::Updated)
+            .map_err(|error| error.to_string()),
     }
-    .map_err(|error| error.to_string())?;
-    load(client)
-        .map(Event::Updated)
-        .map_err(|error| error.to_string())
 }
 
 #[derive(Clone, Debug)]
 enum Action {
-    Add,
-    Open(String),
-    Toggle,
-    Edit,
-    Delete,
-    ConfirmDelete,
-    CancelDelete,
-    Field(Field),
-    ChooseEvent,
-    SelectEvent(HookEventDto),
-    Save,
+    Event(HookEventDto),
+    Hook(String),
+    Configure,
+    Edit(PathBuf),
+    Assist,
+    Draft(PathBuf),
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum Field {
-    Id,
-    ToolNames,
-    Program,
-    Arguments,
+#[derive(Clone, Debug)]
+enum Location {
+    Root,
+    Event(HookEventDto),
+    Hook(String),
+    Configure,
+    Assist,
 }
 
-enum Page {
-    Root(ListSelection<Action>),
-    Detail(String, ListSelection<Action>),
-    Editor {
-        original_id: Option<String>,
-        draft: HookConfigDto,
-        selection: ListSelection<Action>,
-    },
-    EventPicker {
-        original_id: Option<String>,
-        draft: HookConfigDto,
-        selection: ListSelection<Action>,
-    },
-    Prompt {
-        original_id: Option<String>,
-        draft: HookConfigDto,
-        field: Field,
-        prompt: TextPrompt,
-    },
-    ConfirmDelete(String, ListSelection<Action>),
-}
-
-pub(crate) enum PageView<'a> {
-    Selection(&'a ListSelectionState),
-    Prompt(&'a TextPrompt),
+#[derive(Debug)]
+struct Page {
+    location: Location,
+    selection: ListSelection<Action>,
+    detail: Option<DetailList>,
+    detail_scroll: u16,
+    hints: KeyHints,
 }
 
 #[derive(Debug)]
@@ -137,628 +100,480 @@ pub(crate) enum Outcome {
     Consumed,
     Dismiss,
     Command(Command),
+    Edit(PathBuf),
+    Draft(String),
 }
 
+#[derive(Debug)]
 pub(crate) struct Panel {
-    hooks: BTreeMap<String, HookConfigDto>,
-    page: Option<Page>,
-    prompt_hints: KeyHints,
+    catalog: HookListResult,
+    project_config: PathBuf,
+    connection: crate::TuiConnectionKind,
+    page: Page,
+    history: Vec<Page>,
     language: crate::nls::Language,
-    pending_saved_id: Option<String>,
-}
-
-impl std::fmt::Debug for Panel {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.debug_struct("HooksPanel").finish_non_exhaustive()
-    }
 }
 
 impl Panel {
-    pub(crate) fn new(hooks: BTreeMap<String, HookConfigDto>) -> Self {
-        let root = root_selection(&hooks);
-        Self {
-            hooks,
-            page: Some(Page::Root(root)),
-            prompt_hints: KeyHints::new()
-                .with_binding(bindings::SAVE)
-                .with_action("Ctrl+U", "clear input")
-                .with_binding(bindings::CANCEL),
+    pub(crate) fn new(catalog: HookListResult, context: &crate::TuiStartupContext) -> Self {
+        let page = Page {
+            location: Location::Root,
+            selection: ListSelection::new(root_model(&catalog), root_actions(&catalog)),
+            detail: None,
+            detail_scroll: 0,
+            hints: KeyHints::new(),
+        };
+        let mut panel = Self {
+            catalog,
+            project_config: context.workspace.join(".ash/config.toml"),
+            connection: context.connection,
+            page,
+            history: Vec::new(),
             language: crate::nls::Language::English,
-            pending_saved_id: None,
-        }
+        };
+        panel.localize(panel.language);
+        panel
     }
 
-    pub(crate) fn update(&mut self, hooks: BTreeMap<String, HookConfigDto>) {
-        self.hooks = hooks;
-        if let Some(id) = self.pending_saved_id.take()
-            && let Some(hook) = self.hooks.get(&id)
-        {
-            self.page = Some(Page::Detail(id, detail_selection(hook)));
-        }
-        match self.page.as_mut() {
-            Some(Page::Root(_)) => {
-                self.page = Some(Page::Root(root_selection(&self.hooks)));
-            }
-            Some(Page::Detail(id, _)) => {
-                self.page = Some(self.hooks.get(id).map_or_else(
-                    || Page::Root(root_selection(&self.hooks)),
-                    |hook| Page::Detail(id.clone(), detail_selection(hook)),
-                ));
-            }
-            Some(Page::ConfirmDelete(id, _)) if !self.hooks.contains_key(id) => {
-                self.page = Some(Page::Root(root_selection(&self.hooks)));
-            }
-            _ => {}
+    pub(crate) fn update(&mut self, catalog: HookListResult) {
+        self.catalog = catalog;
+        let (model, actions) = self.selection_model(&self.page.location);
+        self.page.selection.replace(model, actions);
+        // Saved pages retain focus and search, but must not retain stale configuration contents.
+        let models: Vec<_> = self
+            .history
+            .iter()
+            .map(|page| self.selection_model(&page.location))
+            .collect();
+        for (page, (model, actions)) in self.history.iter_mut().zip(models) {
+            page.selection.replace(model, actions);
         }
         self.localize(self.language);
     }
 
-    pub(crate) fn page(&self) -> PageView<'_> {
-        match self.page.as_ref().expect("Hooks panel page exists") {
-            Page::Root(selection)
-            | Page::Detail(_, selection)
-            | Page::Editor { selection, .. }
-            | Page::EventPicker { selection, .. }
-            | Page::ConfirmDelete(_, selection) => PageView::Selection(selection.state()),
-            Page::Prompt { prompt, .. } => PageView::Prompt(prompt),
-        }
+    pub(crate) fn page(&self) -> &ListSelectionState {
+        self.page.selection.state()
     }
-
     pub(crate) fn selection_mut(&mut self) -> Option<&mut ListSelectionState> {
-        match self.page.as_mut()? {
-            Page::Root(selection)
-            | Page::Detail(_, selection)
-            | Page::Editor { selection, .. }
-            | Page::EventPicker { selection, .. }
-            | Page::ConfirmDelete(_, selection) => Some(selection.state_mut()),
-            Page::Prompt { .. } => None,
-        }
+        Some(self.page.selection.state_mut())
     }
-
     pub(crate) fn key_hints(&self) -> &KeyHints {
-        match self.page.as_ref().expect("Hooks panel page exists") {
-            Page::Root(selection)
-            | Page::Detail(_, selection)
-            | Page::Editor { selection, .. }
-            | Page::EventPicker { selection, .. }
-            | Page::ConfirmDelete(_, selection) => selection.key_hints(),
-            Page::Prompt { .. } => &self.prompt_hints,
+        if self
+            .page()
+            .search()
+            .is_some_and(|search| search.input_active())
+        {
+            self.page.selection.key_hints()
+        } else {
+            &self.page.hints
         }
     }
-
     pub(crate) fn parent_title(&self) -> Option<&'static str> {
-        match self.page.as_ref() {
-            Some(Page::Root(_)) | None => None,
-            _ => Some("Hooks"),
+        (!self.history.is_empty()).then_some("Hooks")
+    }
+    pub(crate) fn return_to_parent(&mut self) {
+        if let Some(page) = self.history.pop() {
+            self.page = page;
         }
     }
-
-    pub(crate) fn return_to_parent(&mut self) {
-        self.pending_saved_id = None;
-        self.page = Some(match self.page.take().expect("Hooks panel page exists") {
-            Page::Prompt {
-                original_id, draft, ..
-            } => editor_page(original_id, draft),
-            Page::EventPicker {
-                original_id, draft, ..
-            } => editor_page(original_id, draft),
-            Page::ConfirmDelete(id, _) => {
-                Page::Detail(id.clone(), detail_selection(&self.hooks[&id]))
-            }
-            Page::Editor {
-                original_id: Some(id),
-                ..
-            } => Page::Detail(id.clone(), detail_selection(&self.hooks[&id])),
-            Page::Root(_)
-            | Page::Detail(_, _)
-            | Page::Editor {
-                original_id: None, ..
-            } => Page::Root(root_selection(&self.hooks)),
-        });
-        self.localize(self.language);
-    }
-
     pub(crate) fn localize(&mut self, language: crate::nls::Language) {
         self.language = language;
-        match self.page.as_mut() {
-            Some(Page::Prompt { prompt, .. }) => prompt.localize(language),
-            _ => {
-                if let Some(selection) = self.selection_mut() {
-                    selection.localize(language);
+        let details: Vec<_> = std::iter::once(&self.page)
+            .chain(self.history.iter())
+            .map(|page| self.detail_model(&page.location))
+            .collect();
+        for (page, detail) in std::iter::once(&mut self.page)
+            .chain(self.history.iter_mut())
+            .zip(details)
+        {
+            page.detail = detail;
+            page.selection.state_mut().localize(language);
+            let mut hints = KeyHints::compact()
+                .with_compact_action(bindings::ACCEPT.keys(), bindings::ACCEPT.action());
+            if matches!(page.location, Location::Root) {
+                hints = hints.with_compact_action("Tab", "tabs");
+            }
+            if matches!(page.location, Location::Root | Location::Event(_)) {
+                hints =
+                    hints.with_compact_action(bindings::SEARCH.keys(), bindings::SEARCH.action());
+            }
+            if page.detail.is_some() {
+                hints = hints.with_compact_action("PgUp/PgDn", "scroll");
+            }
+            page.hints = hints
+                .with_compact_action(REFRESH.keys(), REFRESH.action())
+                .with_compact_action(
+                    "Esc",
+                    if matches!(page.location, Location::Root) {
+                        "close"
+                    } else {
+                        "return"
+                    },
+                );
+        }
+    }
+    pub(crate) fn detail(&self) -> Option<(&DetailList, u16)> {
+        self.page
+            .detail
+            .as_ref()
+            .map(|detail| (detail, self.page.detail_scroll))
+    }
+    pub(crate) fn handle_paste(&mut self, pasted: String) {
+        self.page.selection.handle_paste(pasted);
+    }
+
+    pub(crate) fn handle_key(&mut self, key: KeyEvent, area: Rect) -> Outcome {
+        if key.kind == crossterm::event::KeyEventKind::Release {
+            return Outcome::Consumed;
+        }
+        if let Some(detail) = self.page.detail.as_ref() {
+            let detail_area = crate::widgets::detail_list::split_with_actions(
+                area,
+                self.page().body_rows(area.width),
+            )[0];
+            let limit = detail
+                .content_height(detail_area.width)
+                .saturating_sub(usize::from(detail_area.height))
+                .min(usize::from(u16::MAX)) as u16;
+            self.page.detail_scroll = self.page.detail_scroll.min(limit);
+            if bindings::PAGE_PREVIOUS.matches(key) {
+                self.page.detail_scroll =
+                    self.page.detail_scroll.saturating_sub(detail_area.height);
+                return Outcome::Consumed;
+            }
+            if bindings::PAGE_NEXT.matches(key) {
+                self.page.detail_scroll = self
+                    .page
+                    .detail_scroll
+                    .saturating_add(detail_area.height)
+                    .min(limit);
+                return Outcome::Consumed;
+            }
+        }
+        if !self
+            .page()
+            .search()
+            .is_some_and(|search| search.input_active())
+            && REFRESH.matches(key)
+        {
+            return Outcome::Command(Command::Refresh);
+        }
+        match self.page.selection.handle_key(key) {
+            ListSelectionOutcome::Activate(action) => match action {
+                Action::Event(event) => self.open(Location::Event(event)),
+                Action::Hook(id) => self.open(Location::Hook(id)),
+                Action::Configure => self.open(Location::Configure),
+                Action::Assist => self.open(Location::Assist),
+                Action::Edit(path) => return Outcome::Edit(path),
+                Action::Draft(path) => return Outcome::Draft(self.assistance_prompt(&path)),
+            },
+            ListSelectionOutcome::Dismiss if self.history.is_empty() => return Outcome::Dismiss,
+            ListSelectionOutcome::Dismiss => self.return_to_parent(),
+            _ => {}
+        }
+        Outcome::Consumed
+    }
+
+    fn open(&mut self, location: Location) {
+        let (model, actions) = self.selection_model(&location);
+        let mut selection = ListSelection::new(model, actions);
+        selection.state_mut().localize(self.language);
+        let old = std::mem::replace(
+            &mut self.page,
+            Page {
+                location,
+                selection,
+                detail: None,
+                detail_scroll: 0,
+                hints: KeyHints::new(),
+            },
+        );
+        self.history.push(old);
+        self.localize(self.language);
+    }
+
+    fn selected_event(&self) -> Option<HookEventDto> {
+        std::iter::once(&self.page)
+            .chain(self.history.iter().rev())
+            .find_map(|page| match &page.location {
+                Location::Event(event) => Some(*event),
+                Location::Hook(id) => self.find_hook(id).map(|(_, hook)| hook.event),
+                _ => None,
+            })
+    }
+
+    fn find_hook(&self, id: &str) -> Option<(&HookSourceDto, &HookConfigDto)> {
+        self.catalog.sources.iter().find_map(|source| {
+            source
+                .hooks
+                .iter()
+                .find(|hook| hook.id == id)
+                .map(|hook| (source, hook))
+        })
+    }
+
+    fn detail_model(&self, location: &Location) -> Option<DetailList> {
+        let Location::Hook(id) = location else {
+            return None;
+        };
+        let (source, hook) = self.find_hook(id)?;
+        let HookActionDto::Process { program, args } = &hook.action;
+        Some(DetailList::new(
+            id,
+            [
+                ("Event", event_label(hook.event).to_owned()),
+                (
+                    "Enablement",
+                    crate::nls::localize_owned(self.language, enablement_label(hook.enablement)),
+                ),
+                ("Source file", source.config_path.display().to_string()),
+                (
+                    "Tool names",
+                    serde_json::to_string(&hook.matcher.tool_names).expect("tool names serialize"),
+                ),
+                ("Program", program.clone()),
+                (
+                    "Arguments",
+                    serde_json::to_string(args).expect("Hook arguments serialize"),
+                ),
+            ]
+            .into_iter()
+            .map(|(label, value)| {
+                DetailListRow::new(crate::nls::localize_owned(self.language, label), value)
+            })
+            .collect(),
+        ))
+    }
+
+    fn assistance_prompt(&self, path: &std::path::Path) -> String {
+        let event = match self.selected_event() {
+            Some(event) => Text::literal(event_label(event)),
+            None => Text::from("custom"),
+        };
+        let namespace = self
+            .catalog
+            .sources
+            .iter()
+            .find(|source| source.config_path == path)
+            .map(|source| source.namespace.as_str());
+        let template = if namespace.is_some() {
+            "Help me configure {0} Hooks in {1}. Inspect the existing TOML and preserve other settings. Use the configuration source's namespace ({2}) for Hook IDs. Explain the trigger, command and scope, then validate the configuration. My requirement: "
+        } else {
+            "Help me configure {0} Hooks in {1}. Inspect the existing TOML and preserve other settings. Resolve the project directory's namespace through App Server before choosing Hook IDs. Explain the trigger, command and scope, then validate the configuration. My requirement: "
+        };
+        let mut args = vec![event, Text::literal(path.display().to_string())];
+        if let Some(namespace) = namespace {
+            args.push(Text::literal(namespace));
+        }
+        let mut prompt = Text::template(template, args);
+        prompt.localize(self.language);
+        prompt.to_string()
+    }
+
+    fn selection_model(
+        &self,
+        location: &Location,
+    ) -> (ListSelectionModel, BTreeMap<ListSelectionItemId, Action>) {
+        match location {
+            Location::Root => (root_model(&self.catalog), root_actions(&self.catalog)),
+            Location::Event(event) => {
+                let mut actions = BTreeMap::new();
+                let mut items = Vec::new();
+                for source in &self.catalog.sources {
+                    for hook in source.hooks.iter().filter(|hook| hook.event == *event) {
+                        let id = ListSelectionItemId::new(&hook.id);
+                        actions.insert(id.clone(), Action::Hook(hook.id.clone()));
+                        items.push(
+                            ListSelectionItem::new(Text::literal(&hook.id))
+                                .with_id(id)
+                                .with_description(Text::template(
+                                    "{0}  ·  {1}",
+                                    vec![
+                                        enablement_label(hook.enablement).into(),
+                                        Text::literal(source.config_path.display().to_string()),
+                                    ],
+                                )),
+                        );
+                    }
                 }
+                let model = simple_model(Text::literal(event_label(*event)), items)
+                    .with_action(configure_item())
+                    .with_search(SearchBoxModel::new("Search Hooks"))
+                    .with_empty_message("No configured Hooks for this event");
+                actions.insert(
+                    ListSelectionItemId::new("configure-hooks"),
+                    Action::Configure,
+                );
+                (model, actions)
+            }
+            Location::Hook(id) => {
+                let mut items = Vec::new();
+                let mut actions = BTreeMap::new();
+                if let Some((source, _)) = self.find_hook(id) {
+                    if self.connection == crate::TuiConnectionKind::Local {
+                        items.push(
+                            ListSelectionItem::new("Edit configuration")
+                                .with_id(ListSelectionItemId::new("edit-source")),
+                        );
+                        actions.insert(
+                            ListSelectionItemId::new("edit-source"),
+                            Action::Edit(source.config_path.clone()),
+                        );
+                    }
+                    items.push(
+                        ListSelectionItem::new("Ask Ash to configure")
+                            .with_id(ListSelectionItemId::new("ask-ash")),
+                    );
+                    actions.insert(
+                        ListSelectionItemId::new("ask-ash"),
+                        Action::Draft(source.config_path.clone()),
+                    );
+                }
+                (
+                    simple_model(Text::literal(id), items)
+                        .with_empty_message("This Hook was removed from its configuration"),
+                    actions,
+                )
+            }
+            Location::Configure | Location::Assist => {
+                let mut actions = BTreeMap::new();
+                let mut items = Vec::new();
+                let assist = matches!(location, Location::Assist);
+                if assist || self.connection == crate::TuiConnectionKind::Local {
+                    for (id, label, path) in [
+                        (
+                            "edit-user-config",
+                            "User configuration",
+                            self.catalog
+                                .sources
+                                .iter()
+                                .find(|source| source.namespace == "user")
+                                .expect("Hook catalog includes user source")
+                                .config_path
+                                .clone(),
+                        ),
+                        (
+                            "edit-project-config",
+                            "Project configuration",
+                            self.project_config.clone(),
+                        ),
+                    ] {
+                        items.push(
+                            ListSelectionItem::new(label)
+                                .with_id(ListSelectionItemId::new(id))
+                                .with_description(Text::literal(path.display().to_string())),
+                        );
+                        actions.insert(
+                            ListSelectionItemId::new(id),
+                            if assist {
+                                Action::Draft(path)
+                            } else {
+                                Action::Edit(path)
+                            },
+                        );
+                    }
+                } else {
+                    items.push(ListSelectionItem::new(
+                        "Edit the configuration on the connected host",
+                    ));
+                }
+                if !assist {
+                    items.push(
+                        ListSelectionItem::new("Ask Ash to configure")
+                            .with_id(ListSelectionItemId::new("ask-ash")),
+                    );
+                    actions.insert(ListSelectionItemId::new("ask-ash"), Action::Assist);
+                }
+                (
+                    simple_model(
+                        if assist {
+                            "Choose configuration scope"
+                        } else {
+                            "Configure Hooks"
+                        }
+                        .into(),
+                        items,
+                    ),
+                    actions,
+                )
             }
         }
     }
-
-    pub(crate) fn handle_paste(&mut self, pasted: String) {
-        match self.page.as_mut().expect("Hooks panel page exists") {
-            Page::Root(selection)
-            | Page::Detail(_, selection)
-            | Page::Editor { selection, .. }
-            | Page::EventPicker { selection, .. }
-            | Page::ConfirmDelete(_, selection) => selection.handle_paste(pasted),
-            Page::Prompt { prompt, .. } => prompt.handle_paste(pasted),
-        }
-    }
-
-    pub(crate) fn handle_key(&mut self, key: KeyEvent) -> Outcome {
-        if key.code == KeyCode::Esc {
-            self.pending_saved_id = None;
-        }
-        let page = self.page.take().expect("Hooks panel page exists");
-        let (next, outcome) = match page {
-            Page::Root(mut selection) => match selection.handle_key(key) {
-                ListSelectionOutcome::Activate(Action::Add) => {
-                    (editor_page(None, empty_hook()), Outcome::Consumed)
-                }
-                ListSelectionOutcome::Activate(Action::Open(id)) => (
-                    Page::Detail(id.clone(), detail_selection(&self.hooks[&id])),
-                    Outcome::Consumed,
-                ),
-                ListSelectionOutcome::Dismiss => (Page::Root(selection), Outcome::Dismiss),
-                _ => (Page::Root(selection), Outcome::Consumed),
-            },
-            Page::Detail(id, mut selection) => match selection.handle_key(key) {
-                ListSelectionOutcome::Activate(Action::Toggle) => {
-                    let hook = &self.hooks[&id];
-                    let next = match hook.enablement {
-                        HookEnablementDto::Enabled => HookEnablementDto::Disabled,
-                        HookEnablementDto::Disabled => HookEnablementDto::Enabled,
-                    };
-                    (
-                        Page::Detail(id.clone(), selection),
-                        Outcome::Command(Command::SetEnablement(id, next)),
-                    )
-                }
-                ListSelectionOutcome::Activate(Action::Edit) => (
-                    editor_page(Some(id.clone()), self.hooks[&id].clone()),
-                    Outcome::Consumed,
-                ),
-                ListSelectionOutcome::Activate(Action::Delete) => (
-                    Page::ConfirmDelete(id.clone(), delete_selection(&id)),
-                    Outcome::Consumed,
-                ),
-                ListSelectionOutcome::Dismiss => {
-                    (Page::Root(root_selection(&self.hooks)), Outcome::Consumed)
-                }
-                _ => (Page::Detail(id, selection), Outcome::Consumed),
-            },
-            Page::ConfirmDelete(id, mut selection) => match selection.handle_key(key) {
-                ListSelectionOutcome::Activate(Action::ConfirmDelete) => (
-                    Page::ConfirmDelete(id.clone(), selection),
-                    Outcome::Command(Command::Remove(id)),
-                ),
-                ListSelectionOutcome::Activate(Action::CancelDelete)
-                | ListSelectionOutcome::Dismiss => (
-                    Page::Detail(id.clone(), detail_selection(&self.hooks[&id])),
-                    Outcome::Consumed,
-                ),
-                _ => (Page::ConfirmDelete(id, selection), Outcome::Consumed),
-            },
-            Page::Editor {
-                original_id,
-                draft,
-                mut selection,
-            } => match selection.handle_key(key) {
-                ListSelectionOutcome::Activate(Action::Field(field)) => {
-                    let prompt = prompt_for(field, &draft, None);
-                    (
-                        Page::Prompt {
-                            original_id,
-                            draft,
-                            field,
-                            prompt,
-                        },
-                        Outcome::Consumed,
-                    )
-                }
-                ListSelectionOutcome::Activate(Action::ChooseEvent) => (
-                    Page::EventPicker {
-                        original_id,
-                        selection: event_selection(),
-                        draft,
-                    },
-                    Outcome::Consumed,
-                ),
-                ListSelectionOutcome::Activate(Action::Save)
-                    if !draft.id.is_empty() && !process_program(&draft).is_empty() =>
-                {
-                    if original_id.is_none() && self.hooks.contains_key(&draft.id) {
-                        let prompt =
-                            prompt_for(Field::Id, &draft, Some("Hook name already exists"));
-                        (
-                            Page::Prompt {
-                                original_id,
-                                draft,
-                                field: Field::Id,
-                                prompt,
-                            },
-                            Outcome::Consumed,
-                        )
-                    } else {
-                        (
-                            Page::Editor {
-                                original_id,
-                                draft: draft.clone(),
-                                selection,
-                            },
-                            Outcome::Command(Command::Upsert(draft)),
-                        )
-                    }
-                }
-                ListSelectionOutcome::Dismiss => {
-                    let next = original_id
-                        .as_ref()
-                        .map(|id| Page::Detail(id.clone(), detail_selection(&self.hooks[id])))
-                        .unwrap_or_else(|| Page::Root(root_selection(&self.hooks)));
-                    (next, Outcome::Consumed)
-                }
-                _ => (
-                    Page::Editor {
-                        original_id,
-                        draft,
-                        selection,
-                    },
-                    Outcome::Consumed,
-                ),
-            },
-            Page::EventPicker {
-                original_id,
-                mut draft,
-                mut selection,
-            } => match selection.handle_key(key) {
-                ListSelectionOutcome::Activate(Action::SelectEvent(event)) => {
-                    draft.event = event;
-                    if !event.accepts_tool_matcher() {
-                        draft.matcher.tool_names.clear();
-                    }
-                    (editor_page(original_id, draft), Outcome::Consumed)
-                }
-                ListSelectionOutcome::Dismiss => {
-                    (editor_page(original_id, draft), Outcome::Consumed)
-                }
-                _ => (
-                    Page::EventPicker {
-                        original_id,
-                        draft,
-                        selection,
-                    },
-                    Outcome::Consumed,
-                ),
-            },
-            Page::Prompt {
-                original_id,
-                mut draft,
-                field,
-                mut prompt,
-            } => match prompt.handle_key(key) {
-                TextPromptOutcome::Dismiss => (editor_page(original_id, draft), Outcome::Consumed),
-                TextPromptOutcome::Consumed => (
-                    Page::Prompt {
-                        original_id,
-                        draft,
-                        field,
-                        prompt,
-                    },
-                    Outcome::Consumed,
-                ),
-                TextPromptOutcome::Submit(value) => {
-                    let result = apply_field(&mut draft, field, &value);
-                    if let Err(message) = result {
-                        let prompt =
-                            prompt_for(field, &draft, Some(message)).with_initial_value(value);
-                        (
-                            Page::Prompt {
-                                original_id,
-                                draft,
-                                field,
-                                prompt,
-                            },
-                            Outcome::Consumed,
-                        )
-                    } else {
-                        (editor_page(original_id, draft), Outcome::Consumed)
-                    }
-                }
-            },
-        };
-        self.page = Some(next);
-        if let Outcome::Command(Command::Upsert(hook)) = &outcome {
-            self.pending_saved_id = Some(hook.id.clone());
-        }
-        self.localize(self.language);
-        outcome
-    }
 }
 
-fn empty_hook() -> HookConfigDto {
-    HookConfigDto {
-        id: String::new(),
-        event: HookEventDto::PreToolUse,
-        matcher: HookMatcherDto {
-            tool_names: Vec::new(),
-        },
-        action: HookActionDto::Process {
-            program: String::new(),
-            args: Vec::new(),
-        },
-        enablement: HookEnablementDto::Disabled,
-    }
+fn event_id(event: HookEventDto) -> ListSelectionItemId {
+    ListSelectionItemId::new(format!("hook-event-{}", event_label(event)))
 }
 
-fn root_actions(hooks: &BTreeMap<String, HookConfigDto>) -> BTreeMap<ListSelectionItemId, Action> {
-    hooks
-        .keys()
-        .map(|id| (ListSelectionItemId::new(id), Action::Open(id.clone())))
-        .chain([(ListSelectionItemId::new("add-hook"), Action::Add)])
+fn events(catalog: &HookListResult) -> Vec<HookEventDto> {
+    let mut events = HookEventDto::ALL.to_vec();
+    // Older declarations retain their event semantics and remain inspectable without adding them to the new catalog.
+    for event in [
+        HookEventDto::BeforeTool,
+        HookEventDto::AfterTool,
+        HookEventDto::TurnCompleted,
+    ] {
+        if catalog
+            .sources
+            .iter()
+            .any(|source| source.hooks.iter().any(|hook| hook.event == event))
+        {
+            events.push(event);
+        }
+    }
+    events
+}
+
+fn configure_item() -> ListSelectionItem {
+    ListSelectionItem::new("Configure Hooks").with_id(ListSelectionItemId::new("configure-hooks"))
+}
+
+fn root_actions(catalog: &HookListResult) -> BTreeMap<ListSelectionItemId, Action> {
+    events(catalog)
+        .into_iter()
+        .map(|event| (event_id(event), Action::Event(event)))
+        .chain([(
+            ListSelectionItemId::new("configure-hooks"),
+            Action::Configure,
+        )])
         .collect()
 }
 
-fn root_selection(hooks: &BTreeMap<String, HookConfigDto>) -> ListSelection<Action> {
-    let items = hooks
-        .values()
-        .map(|hook| {
-            let description = Text::template(
-                "{0}  ·  {1}",
+fn root_model(catalog: &HookListResult) -> ListSelectionModel {
+    let items = events(catalog)
+        .into_iter()
+        .map(|event| {
+            let count = catalog
+                .sources
+                .iter()
+                .flat_map(|source| &source.hooks)
+                .filter(|hook| hook.event == event)
+                .count();
+            ListSelectionItem::new(Text::template(
+                "{0} ({1})",
                 vec![
-                    event_label(hook.event).into(),
-                    enablement_label(hook.enablement).into(),
+                    Text::literal(event_label(event)),
+                    Text::literal(count.to_string()),
                 ],
-            );
-            let item = ListSelectionItem::new(crate::extensions::title(
-                &hook.id,
-                hook.enablement == HookEnablementDto::Enabled,
             ))
-            .with_id(ListSelectionItemId::new(&hook.id))
-            .with_description(description.clone())
-            .with_details(description);
-            if hook.enablement == HookEnablementDto::Disabled {
-                item.with_disabled_suffix()
-            } else {
-                item
-            }
+            .with_id(event_id(event))
+            .with_description(event_description(event))
         })
         .collect();
-    let model = crate::extensions::model(crate::extensions::Tab::Hooks, items)
-        .with_expandable_descriptions()
+    crate::extensions::model(crate::extensions::Tab::Hooks, items)
         .with_activation(bindings::ACCEPT)
-        .with_action(
-            ListSelectionItem::new("Add Hook").with_id(ListSelectionItemId::new("add-hook")),
-        )
-        .with_search(SearchBoxModel::new("Search Hooks"))
-        .with_empty_message("No Hooks found");
-    let mut selection = ListSelection::new(model, root_actions(hooks));
-    if hooks.is_empty() {
-        selection
-            .state_mut()
-            .focus_pointer(&crate::widgets::list_selection::ListSelectionPointerTarget::Action);
-    }
-    selection
+        .with_action(configure_item())
+        .with_search(SearchBoxModel::new("Search Hook events"))
+        .with_empty_message("No Hook events found")
+        .with_key_hint_action(REFRESH)
 }
 
-fn event_selection() -> ListSelection<Action> {
-    let mut actions = BTreeMap::new();
-    let items = HookEventDto::ALL
-        .into_iter()
-        .enumerate()
-        .map(|(index, event)| {
-            let id = ListSelectionItemId::new(format!("hook-event-{index}"));
-            actions.insert(id.clone(), Action::SelectEvent(event));
-            ListSelectionItem::new(Text::literal(event_label(event)))
-                .with_id(id)
-                .with_description(Text::template(event_description(event), vec![]))
-        })
-        .collect();
-    ListSelection::new(
-        ListSelectionModel::new("Hook events", vec![ListSelectionGroup::new("", items)])
-            .without_tab_bar()
-            .with_activation(bindings::ACCEPT)
-            .with_dismiss(bindings::RETURN_LIST)
-            .with_search(SearchBoxModel::new("Search Hook events"))
-            .with_empty_message("No Hook events found"),
-        actions,
-    )
-}
-
-fn detail_selection(hook: &HookConfigDto) -> ListSelection<Action> {
-    let items = vec![
-        (
-            "Enablement",
-            enablement_label(hook.enablement).into(),
-            Action::Toggle,
-        ),
-        (
-            "Edit Hook",
-            Text::template(
-                "{0}  ·  {1}",
-                vec![
-                    event_label(hook.event).into(),
-                    Text::literal(process_program(hook)),
-                ],
-            ),
-            Action::Edit,
-        ),
-        ("Delete Hook", Text::literal(&hook.id), Action::Delete),
-    ];
-    simple_selection(&hook.id, items)
-}
-
-fn delete_selection(id: &str) -> ListSelection<Action> {
-    simple_selection(
-        "Delete Hook?",
-        vec![
-            ("Cancel", Text::literal(id), Action::CancelDelete),
-            ("Delete Hook", Text::literal(id), Action::ConfirmDelete),
-        ],
-    )
-}
-
-fn editor_page(original_id: Option<String>, draft: HookConfigDto) -> Page {
-    let program = process_program(&draft);
-    let args = process_args(&draft);
-    let mut fields = Vec::new();
-    if original_id.is_none() {
-        fields.push(("ID", Text::literal(&draft.id), Action::Field(Field::Id)));
-    }
-    fields.extend([
-        (
-            "Event",
-            event_label(draft.event).into(),
-            Action::ChooseEvent,
-        ),
-        (
-            "Tool names",
-            Text::literal(draft.matcher.tool_names.join(", ")),
-            Action::Field(Field::ToolNames),
-        ),
-        (
-            "Program",
-            Text::literal(program),
-            Action::Field(Field::Program),
-        ),
-        (
-            "Arguments",
-            Text::literal(serde_json::to_string(args).expect("Hook arguments serialize")),
-            Action::Field(Field::Arguments),
-        ),
-        (
-            "Save Hook",
-            if draft.id.is_empty() || program.is_empty() {
-                "ID and program required".into()
-            } else {
-                Text::literal("")
-            },
-            Action::Save,
-        ),
-    ]);
-    let selection = simple_selection(
-        if original_id.is_some() {
-            "Edit Hook"
-        } else {
-            "Add Hook"
-        },
-        fields,
-    );
-    Page::Editor {
-        original_id,
-        draft,
-        selection,
-    }
-}
-
-fn simple_selection(title: &str, items: Vec<(&str, Text, Action)>) -> ListSelection<Action> {
-    let mut actions = BTreeMap::new();
-    let items = items
-        .into_iter()
-        .enumerate()
-        .map(|(index, (label, description, action))| {
-            let id = ListSelectionItemId::new(format!("hook-action-{index}"));
-            actions.insert(id.clone(), action);
-            let item = ListSelectionItem::new(label).with_id(id);
-            if description.is_empty() {
-                item
-            } else {
-                item.with_description(description)
-            }
-        })
-        .collect();
-    ListSelection::new(
-        ListSelectionModel::new(title, vec![ListSelectionGroup::new("", items)])
-            .without_tab_bar()
-            .with_activation(bindings::ACCEPT)
-            .with_dismiss(bindings::RETURN_LIST),
-        actions,
-    )
-}
-
-fn prompt_for(field: Field, draft: &HookConfigDto, error: Option<&str>) -> TextPrompt {
-    let (title, explanation, value) = match field {
-        Field::Id => (
-            "Hook ID",
-            "Enter a unique Hook name",
-            if draft.id.is_empty() {
-                String::new()
-            } else {
-                draft
-                    .id
-                    .strip_prefix("user:hook:")
-                    .expect("new Hook uses user namespace")
-                    .to_owned()
-            },
-        ),
-        Field::ToolNames => (
-            "Tool names",
-            "Comma-separated exact tool names; enter - to clear",
-            draft.matcher.tool_names.join(", "),
-        ),
-        Field::Program => (
-            "Program",
-            "Executable to run",
-            process_program(draft).to_owned(),
-        ),
-        Field::Arguments => (
-            "Arguments",
-            "Enter a JSON array of arguments, for example [\"--flag\"]",
-            serde_json::to_string(process_args(draft)).expect("Hook arguments serialize"),
-        ),
-    };
-    TextPrompt::new(TextPromptSpec {
-        title: title.into(),
-        explanation: error.unwrap_or(explanation).into(),
-        placeholder: title.into(),
-        masked: false,
-    })
-    .with_initial_value(value)
-}
-
-fn apply_field(draft: &mut HookConfigDto, field: Field, value: &str) -> Result<(), &'static str> {
-    match field {
-        Field::Id => {
-            if value.contains(':') || value.chars().any(char::is_whitespace) {
-                return Err("Hook name cannot contain spaces or colons");
-            }
-            // User Hooks must use the user namespace; the editor asks only for the local name.
-            draft.id = format!("user:hook:{value}");
-        }
-        Field::ToolNames => {
-            if !draft.event.accepts_tool_matcher() && value != "-" {
-                return Err("This Hook event cannot match tools");
-            }
-            draft.matcher.tool_names = if value == "-" {
-                Vec::new()
-            } else {
-                value
-                    .split(',')
-                    .map(str::trim)
-                    .filter(|name| !name.is_empty())
-                    .map(str::to_owned)
-                    .collect()
-            };
-        }
-        Field::Program => {
-            let HookActionDto::Process { program, .. } = &mut draft.action;
-            *program = value.to_owned();
-        }
-        Field::Arguments => {
-            let parsed = serde_json::from_str::<Vec<String>>(value)
-                .map_err(|_| "Enter a JSON array of strings")?;
-            let HookActionDto::Process { args, .. } = &mut draft.action;
-            *args = parsed;
-        }
-    }
-    Ok(())
-}
-
-fn process_program(hook: &HookConfigDto) -> &str {
-    match &hook.action {
-        HookActionDto::Process { program, .. } => program,
-    }
-}
-
-fn process_args(hook: &HookConfigDto) -> &[String] {
-    match &hook.action {
-        HookActionDto::Process { args, .. } => args,
-    }
+fn simple_model(title: Text, items: Vec<ListSelectionItem>) -> ListSelectionModel {
+    ListSelectionModel::new(title, vec![ListSelectionGroup::new("", items)])
+        .without_tab_bar()
+        .with_activation(bindings::ACCEPT)
+        .with_dismiss(bindings::RETURN_LIST)
+        .with_key_hint_action(REFRESH)
 }
 
 fn event_label(event: HookEventDto) -> &'static str {
@@ -813,10 +628,10 @@ fn event_description(event: HookEventDto) -> &'static str {
         HookEventDto::UserPromptSubmit => "When the user submits a prompt",
         HookEventDto::UserPromptExpansion => "When a slash command expands",
         HookEventDto::SessionStart => "When a session starts",
-        HookEventDto::Stop => "Before the assistant concludes its response",
+        HookEventDto::Stop => "After a turn completes",
         HookEventDto::StopFailure => "When a turn ends in failure",
         HookEventDto::SubagentStart => "When a subagent starts",
-        HookEventDto::SubagentStop => "Before a subagent concludes its response",
+        HookEventDto::SubagentStop => "After a subagent produces its result",
         HookEventDto::PreCompact => "Before conversation compaction",
         HookEventDto::PostCompact => "After conversation compaction",
         HookEventDto::PreModelSwitch => "Before a requested model switch",

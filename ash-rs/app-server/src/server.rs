@@ -2496,6 +2496,7 @@ impl AppServer {
             Some(ClientMethod::PluginRequestSetEnablement) => {
                 self.plugin_request_set_enablement(&request.params)
             }
+            Some(ClientMethod::HookList) => self.hook_list(&request.params),
             Some(ClientMethod::HookUpsert) => self.hook_upsert(&request.params),
             Some(ClientMethod::HookRemove) => self.hook_remove(&request.params),
             Some(ClientMethod::HookSetEnablement) => self.hook_set_enablement(&request.params),

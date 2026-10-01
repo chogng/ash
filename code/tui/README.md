@@ -35,7 +35,7 @@ just ash
 | 链接范围、换行与 OSC 8 输出 | [hyperlinks.rs](src/terminal/hyperlinks.rs) |
 | 会话列表、预览、切换和详情 | [sessions](src/sessions) |
 | 设置、主题、快捷键 | [config](src/config)、[theme](src/theme)、[keymap](src/keymap) |
-| 用户 Hook 配置 | [hooks.rs](src/hooks.rs)；App Server 保存并执行 Hook |
+| Hook 事件与来源浏览 | [hooks.rs](src/hooks.rs)；App Server 提供配置来源并执行 Hook |
 | 持续内存诊断 | [memory.rs](src/memory.rs)；Config 提供开关，Status 只读展示 |
 | 界面语言与类型化文案 | [nls.rs](src/nls.rs)；持久化由 [config/settings.rs](src/config/settings.rs) 负责 |
 | 状态信息和本机资源 | [status](src/status)、[process_resources.rs](../../ash-rs/memory-diagnostics/src/process_resources.rs) |
@@ -380,7 +380,7 @@ inline 的真实边界检查使用 `just test-tui inline_repeated_status_keeps_h
 
 ## Marketplace 与语言服务器
 
-- `/skills`、`/marketplace [query]`、`/mcp`、`/hooks`、`/plugins` 打开同一个扩展面板的对应页签。Skills、MCP、Hooks、Plugins 的停用项在标题后显示红色 `[disable]`；技能、MCP 和插件用 Enter 切换启停，Hook 在详情中启停。
+- `/skills`、`/marketplace [query]`、`/mcp`、`/hooks`、`/plugins` 打开同一个扩展面板的对应页签。Skills、MCP、Plugins 的停用项在标题后显示红色 `[disable]`，用 Enter 切换启停；Hooks 按事件显示配置数量，在详情显示声明的启用状态。
 - Marketplace 按包身份中的来源分组，Enter 或左右键展开收起来源；来源下用技能、插件、MCP、连接器、可执行程序、编程语言、主题、语言包和资源作为分类行标题。安装前审阅整个包的版本、能力和权限。
 - Plugins 展示已安装插件的启停状态，按准确版本、摘要和配置版本提交 Enable / Disable；包的更新与卸载仍由 Marketplace 提供，使用中的包等待消费方释放后删除。
 - `/lsp [language-id]` 查看当前目录可用服务器，修改启用状态、程序路径或恢复配置默认值。
@@ -391,7 +391,9 @@ inline 的真实边界检查使用 `just test-tui inline_repeated_status_keeps_h
 
 ## Hooks
 
-`/hooks` 打开用户 Hook 列表，可搜索、查看详情、新增、编辑、启停和确认删除。新增时输入简短名称，TUI 保存为 `user:hook:<名称>`，初始为停用。编辑页可轮换事件、设置准确工具名、程序和 JSON 字符串数组形式的参数。`turnCompleted` 事件不接受工具名。配置读写由 App Server 负责，交互由 [hooks.rs](src/hooks.rs) 负责。
+`/hooks` 按 33 种事件浏览用户和会话获准发现的项目 Hook，查看来源文件、工具匹配与完整程序参数。
+配置入口打开 TOML 或把配置需求填入草稿，浏览页不直接修改声明；`r` 刷新、`/` 搜索、`Esc` 逐级返回。
+配置方法、事件目录和执行约定统一见 [Hooks crate](../../ash-rs/hooks/README.md)。
 
 ## Memories
 

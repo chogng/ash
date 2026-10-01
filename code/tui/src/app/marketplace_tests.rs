@@ -1043,7 +1043,9 @@ fn management_tabs_cycle_through_feature_commands_and_empty_pages_focus_tabs() {
             "mcp" => app.update(crate::mcp::Event::SettingsOpened(crate::mcp::mcp_choices(
                 &Default::default(),
             ))),
-            "hooks" => app.update(crate::hooks::Event::Opened(Default::default())),
+            "hooks" => app.update(crate::hooks::Event::Opened(
+                crate::test_support::hook_catalog(vec![]),
+            )),
             "plugins" => app.update(marketplace::Event(marketplace::Page::Plugins(
                 serde_json::from_value(
                     json!({"revision":1,"activationGeneration":1,"packages":[]}),
@@ -1068,19 +1070,72 @@ fn management_tabs_cycle_through_feature_commands_and_empty_pages_focus_tabs() {
 fn management_hook_details_return_to_the_same_tab_without_another_request() {
     let mut app = App::new();
     app.update(crate::hooks::Event::Opened(
-        serde_json::from_value(json!({"review":{
-            "id":"review","event":"afterTool","matcher":{"toolNames":[]},
+        crate::test_support::hook_catalog(vec![
+        serde_json::from_value(json!({
+            "id":"user:hook:review","event":"preToolUse","matcher":{"toolNames":[]},
             "action":{"type":"process","program":"review-hook","args":[]},"enablement":"disabled"
-        }}))
-        .unwrap(),
+        })).unwrap(),
+    ]),
     ));
     assert_eq!(
         app.list_selection().unwrap().visible_items()[0].label(),
-        "review [disable]"
+        "PreToolUse (1)"
     );
-    assert!(app.handle_key(key(KeyCode::Enter)).is_none());
-    assert_eq!(app.list_selection().unwrap().title(), "review");
-    assert!(app.handle_key(key(KeyCode::Esc)).is_none());
+    app.handle_key(key(KeyCode::Enter));
+    app.handle_key(key(KeyCode::Enter));
+    assert_eq!(app.list_selection().unwrap().title(), "user:hook:review");
+    app.handle_key(key(KeyCode::Esc));
+    assert_eq!(app.list_selection().unwrap().title(), "PreToolUse");
+    app.handle_key(key(KeyCode::Esc));
     assert_eq!(app.list_selection().unwrap().title(), "Extensions");
     assert_eq!(app.list_selection().unwrap().active_tab().label(), "Hooks");
+}
+
+#[test]
+fn hooks_detail_pointer_targets_use_the_rendered_action_area() {
+    use crate::app::command_panel::{CommandPanel, CommandPanelOutcome, CommandPanelPointerTarget};
+    use crate::widgets::list_selection::{ListSelectionItemId, ListSelectionPointerTarget};
+    let mut app = App::new();
+    app.update(crate::hooks::Event::Opened(
+        crate::test_support::hook_catalog(vec![
+            serde_json::from_value(
+                json!({"id":"user:hook:review","event":"preToolUse","matcher":{"toolNames":[]},
+        "action":{"type":"process","program":"review-hook","args":[]},"enablement":"disabled"}),
+            )
+            .unwrap(),
+        ]),
+    ));
+    app.handle_key(key(KeyCode::Enter));
+    app.handle_key(key(KeyCode::Enter));
+    let panel = app.panels_mut().command_mut().unwrap();
+    assert!(matches!(panel, CommandPanel::Hooks(_)));
+    let body = ratatui::layout::Rect::new(5, 7, 60, 12);
+    let actions = crate::widgets::detail_list::split_with_actions(
+        body,
+        panel.list_selection().unwrap().body_rows(body.width),
+    )[1];
+    let target = CommandPanelPointerTarget::List(ListSelectionPointerTarget::Item(
+        ListSelectionItemId::new("edit-source"),
+    ));
+    for x in actions.x + 2..actions.right() {
+        assert_eq!(
+            panel.pointer_target_at(
+                Default::default(),
+                body,
+                ratatui::layout::Position::new(x, actions.y)
+            ),
+            Some(target.clone())
+        );
+    }
+    assert_eq!(
+        panel.pointer_target_at(
+            Default::default(),
+            body,
+            ratatui::layout::Position::new(body.x + 2, body.y)
+        ),
+        None
+    );
+    assert!(
+        matches!(panel.activate_pointer_target(target, body, crate::widgets::list_selection::ListSelectionClick::Single), CommandPanelOutcome::Hooks(crate::hooks::Outcome::Edit(path)) if path == std::path::PathBuf::from("/profile/config.toml"))
+    );
 }

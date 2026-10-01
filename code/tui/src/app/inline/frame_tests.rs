@@ -43,13 +43,59 @@ fn hooks_panel_opens_inline_and_restores_draft_after_close() {
     let mut app = app();
     app.insert_text("keep this draft");
     app.update(crate::hooks::Event::Opened(
-        std::collections::BTreeMap::new(),
+        crate::test_support::hook_catalog(vec![]),
     ));
     assert_eq!(app.list_selection().unwrap().title(), "Extensions");
     crate::tui_assert_snapshot!("hooks_inline", text(&render(&app, 80, 24)));
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_none());
     assert!(app.input().contains("keep this draft"));
+}
+
+#[test]
+fn hooks_inline_details_wrap_and_scroll_without_losing_actions() {
+    use ash_app_server_protocol::protocol::config::{
+        HookActionDto, HookConfigDto, HookEnablementDto, HookEventDto, HookMatcherDto,
+    };
+    let hook = HookConfigDto {
+        id: "user:hook:check".into(),
+        event: HookEventDto::PreToolUse,
+        matcher: HookMatcherDto { tool_names: vec![] },
+        action: HookActionDto::Process {
+            program: "/project with spaces/scripts/validate-changes.py".into(),
+            args: vec![
+                "--require-review-before-running-tools".into(),
+                "--project=/long/path/to/current/project".into(),
+                "--configuration-from=/long/path/to/.ash/config.toml".into(),
+            ],
+        },
+        enablement: HookEnablementDto::Disabled,
+    };
+    let mut app = app();
+    app.update(crate::hooks::Event::Opened(
+        crate::test_support::hook_catalog(vec![hook]),
+    ));
+    for _ in 0..2 {
+        app.handle_key_in_area(
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+            Rect::new(0, 0, 48, 14),
+        );
+    }
+    assert_eq!(app.list_selection().unwrap().title(), "user:hook:check");
+    crate::tui_assert_snapshot!("hooks_inline_detail_wrapped", text(&render(&app, 48, 14)));
+    app.handle_key_in_area(
+        KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE),
+        Rect::new(0, 0, 48, 14),
+    );
+    let Some(crate::app::command_panel::CommandPanel::Hooks(panel)) = app.command_panel() else {
+        panic!("expected Hooks panel")
+    };
+    assert!(panel.detail().unwrap().1 > 0);
+    crate::tui_assert_snapshot!("hooks_inline_detail_scrolled", text(&render(&app, 48, 14)));
+    assert!(matches!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Host(crate::host::Command::OpenTextFile { .. }))
+    ));
 }
 
 #[test]

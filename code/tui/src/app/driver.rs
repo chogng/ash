@@ -72,6 +72,7 @@ pub(super) enum CommandEffect {
 #[derive(Default)]
 struct ServerRefresh {
     config: bool,
+    hooks: bool,
     connectors: bool,
     sessions: bool,
     thread: bool,
@@ -83,6 +84,7 @@ struct ServerRefresh {
 impl ServerRefresh {
     fn merge(&mut self, refresh: Self) {
         self.config |= refresh.config;
+        self.hooks |= refresh.config || refresh.hooks;
         self.connectors |= refresh.connectors;
         self.sessions |= refresh.sessions;
         self.thread |= refresh.thread;
@@ -540,6 +542,34 @@ impl AppDriver {
                     &mut self.app,
                     origin,
                 );
+            }
+        }
+        if self.refresh.hooks {
+            if !matches!(
+                self.app.command_panel(),
+                Some(super::command_panel::CommandPanel::Hooks(_))
+            ) {
+                self.refresh.hooks = false;
+            } else if self.requests.is_idle(Some(RequestKey::Hooks)) {
+                let mut client = self.client.clone();
+                let session_id = self
+                    .conversation
+                    .as_ref()
+                    .map(|current| current.conversation.session_id().clone());
+                self.requests.spawn_presentation(
+                    Some(RequestKey::Hooks),
+                    "ash-tui-refresh-hooks",
+                    move || {
+                        crate::hooks::execute(
+                            &mut client,
+                            session_id.as_ref(),
+                            crate::hooks::Command::Refresh,
+                        )
+                    },
+                    &mut self.app,
+                    origin,
+                );
+                self.refresh.hooks = false;
             }
         }
         if self.requests.is_idle(Some(RequestKey::Config)) && self.refresh.config {

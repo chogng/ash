@@ -4,13 +4,13 @@ expression: "render(&app, 80, 20)"
 ---
   .                                                        [— / —] [Dashboard]  
                                                                                 
-        ┌── Hooks › Edit Hook ─────────────────────────────────────[✗]─┐        
+        ┌── Hooks › Configure Hooks ───────────────────────────────[✗]─┐        
         │                                                              │        
-        │> Event  ·  Before tool                                       │        
-        │  Tool names  ·  exec_command                                 │        
-        │  Program  ·  review-hook                                     │        
-        │  Arguments  ·  ["--check"]                                   │        
-        │  Save Hook                                                   │        
+        │> User configuration  ·  /profile/config.toml                 │        
+        │  Project configuration  ·  ./.ash/config.toml                │        
+        │  Ask Ash to configure                                        │        
+        │                                                              │        
+        │                                                              │        
         │                                                              │        
         │                                                              │        
         │                                                              │        
@@ -18,5 +18,5 @@ expression: "render(&app, 80, 20)"
         │                                                              │        
         │                                                              │        
   ──────│                                                              │──────  
-  > Buil│  Enter to confirm  ·  Esc to return                          │        
+  > Buil│  Enter confirm · r refresh · Esc return                      │        
   ──────└──────────────────────────────────────────────────────────────┘model

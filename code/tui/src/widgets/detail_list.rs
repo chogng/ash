@@ -101,6 +101,19 @@ pub(crate) fn draw_scrolled(
     );
 }
 
+/// Both rendering and pointer handling reserve the same bottom rows for actions.
+pub(crate) fn split_with_actions(area: Rect, action_rows: u16) -> [Rect; 2] {
+    let actions = action_rows.min(area.height.saturating_sub(2));
+    let detail = Rect::new(
+        area.x,
+        area.y,
+        area.width,
+        area.height.saturating_sub(actions + 1),
+    );
+    let actions = Rect::new(area.x, area.bottom() - actions, area.width, actions);
+    [detail, actions]
+}
+
 pub(crate) fn draw_body_scrolled(
     frame: &mut Frame<'_>,
     area: Rect,

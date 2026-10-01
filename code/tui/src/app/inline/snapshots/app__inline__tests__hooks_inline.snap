@@ -2,27 +2,27 @@
 source: code/tui/src/app/inline/frame_tests.rs
 expression: "text(&render(&app, 80, 24))"
 ---
-                                                                                
-    ▄  ▄     Ash Code v0.1.0                                                    
-  ▗█▛██▜█▖   Automatic model                                                    
-  ▝▜████▛▘   .                                                                  
-    ▝  ▘                                                                        
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
 ─ Extensions ───────────────────────────────────────────────────────────────────
                                                                                 
    Skills    Marketplace    MCP    Hooks    Plugins                             
-> Add Hook                                                                      
+  Configure Hooks                                                               
                                                                                 
   ╭──────────────────────────────────────────────────────────────────────────╮  
-  │ Search Hooks                                                             │  
+  │ Search Hook events                                                       │  
   ╰──────────────────────────────────────────────────────────────────────────╯  
-  No Hooks found                                                                
+> PreToolUse (0)  ·  Before tool execution                                      
+  PostToolUse (0)  ·  After successful tool execution                           
+  PostToolUseFailure (0)  ·  After tool execution fails                         
+  PostToolBatch (0)  ·  After a batch of tool calls resolves                    
+  PermissionDenied (0)  ·  After tool permission is denied                      
+  Notification (0)  ·  When a user notification is sent                         
+  UserPromptSubmit (0)  ·  When the user submits a prompt                       
+  UserPromptExpansion (0)  ·  When a slash command expands                      
+  SessionStart (0)  ·  When a session starts                                    
+  Stop (0)  ·  After a turn completes                                           
+  StopFailure (0)  ·  When a turn ends in failure                               
+  SubagentStart (0)  ·  When a subagent starts                                  
+  SubagentStop (0)  ·  After a subagent produces its result                     
+  20 more below                                                                 
                                                                                 
-  Enter confirm · Tab tabs · / search · Esc close
+  Enter confirm · Tab tabs · / search · r refresh · Esc close

@@ -386,7 +386,8 @@ fn status_mcp_connectors_and_skills_return_real_surfaces() {
 }
 
 #[test]
-fn hooks_command_opens_configured_hooks_and_persists_enablement() {
+fn hooks_browser_reads_external_toml_edits_and_refreshes_without_writing() {
+    use ash_app_server_protocol::protocol::config::HookListParams;
     let (mut client, state_root) = client();
     let revision = client.read_config().unwrap().revision;
     client
@@ -395,7 +396,7 @@ fn hooks_command_opens_configured_hooks_and_persists_enablement() {
             expected_revision: revision,
             hook: HookConfigDto {
                 id: "user:hook:review".into(),
-                event: HookEventDto::BeforeTool,
+                event: HookEventDto::PreToolUse,
                 matcher: HookMatcherDto { tool_names: vec![] },
                 action: HookActionDto::Process {
                     program: "review-hook".into(),
@@ -405,62 +406,163 @@ fn hooks_command_opens_configured_hooks_and_persists_enablement() {
             },
         })
         .unwrap();
-    let mut conversation = ActiveConversation::start(&mut client, "hooks".into()).unwrap();
+    let catalog = client.list_hooks(HookListParams::default()).unwrap();
+    let path = catalog.sources[0].config_path.clone();
+    let before = fs::read_to_string(&path).unwrap();
     let mut app = App::new();
-
-    execute(
-        &mut conversation,
-        &mut client,
-        invocation(TuiSlashCommandAction::Hooks, ""),
-        &mut app,
-    );
-    let Some(CommandPanel::Hooks(panel)) = app.panels_mut().command_mut() else {
-        panic!("expected Hooks panel");
-    };
-    panel.selection_mut().unwrap().focus_item(
-        &crate::widgets::list_selection::ListSelectionItemId::new("user:hook:review"),
-    );
+    app.update(crate::hooks::Event::Opened(catalog));
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    let Some(AppCommand::Hooks(crate::hooks::Command::SetEnablement(id, enablement))) =
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(app.list_selection().unwrap().title(), "user:hook:review");
+    assert!(
+        matches!(app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)), Some(AppCommand::Host(crate::host::Command::OpenTextFile { path: target })) if target == path)
+    );
+    assert_eq!(fs::read_to_string(&path).unwrap(), before);
+    fs::write(&path, before.replace("review-hook", "review-hook-v2")).unwrap();
+    let Some(AppCommand::Hooks(command)) =
+        app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE))
     else {
-        panic!("expected Hook enablement command");
+        panic!("expected refresh")
     };
-    assert_eq!(id, "user:hook:review");
-    assert_eq!(enablement, HookEnablementDto::Enabled);
-    app.update(
-        crate::hooks::execute(
-            &mut client,
-            crate::hooks::Command::SetEnablement(id, enablement),
-        )
-        .unwrap(),
+    app.update(crate::hooks::execute(&mut client, None, command).unwrap());
+    let Some(CommandPanel::Hooks(panel)) = app.command_panel() else {
+        panic!("expected Hook browser")
+    };
+    assert!(
+        panel
+            .detail()
+            .unwrap()
+            .0
+            .rows()
+            .iter()
+            .any(|row| row.label() == "Program" && row.value() == "review-hook-v2")
     );
     assert_eq!(
         client.read_config().unwrap().hooks["user:hook:review"].enablement,
-        HookEnablementDto::Enabled
+        HookEnablementDto::Disabled
     );
-
-    let mut edited = client.read_config().unwrap().hooks["user:hook:review"].clone();
-    edited.action = HookActionDto::Process {
-        program: "review-hook-v2".into(),
-        args: vec!["--check".into()],
-    };
-    app.update(crate::hooks::execute(&mut client, crate::hooks::Command::Upsert(edited)).unwrap());
-    assert!(matches!(
-        &client.read_config().unwrap().hooks["user:hook:review"].action,
-        HookActionDto::Process { program, args } if program == "review-hook-v2" && args.len() == 1 && args[0] == "--check"
-    ));
-    app.update(
-        crate::hooks::execute(
-            &mut client,
-            crate::hooks::Command::Remove("user:hook:review".into()),
-        )
-        .unwrap(),
-    );
-    assert!(client.read_config().unwrap().hooks.is_empty());
-
     drop(client);
     let _ = fs::remove_dir_all(state_root);
+}
+
+#[test]
+fn hooks_documented_user_examples_pass_backend_configuration_validation() {
+    let (mut client, state_root) = client();
+    let catalog = client.list_hooks(Default::default()).unwrap();
+    let path = &catalog.sources[0].config_path;
+    let mut document = fs::read_to_string(path).unwrap();
+    let readme = include_str!("../../../../ash-rs/hooks/README.md");
+    for example in readme.split("```toml\n").skip(1) {
+        document.push('\n');
+        document.push_str(example.split("```").next().unwrap());
+    }
+    fs::write(path, document).unwrap();
+    let catalog = client.list_hooks(Default::default()).unwrap();
+    assert_eq!(catalog.sources[0].hooks.len(), 2);
+    assert!(
+        catalog.sources[0]
+            .hooks
+            .iter()
+            .all(|hook| hook.enablement == HookEnablementDto::Disabled)
+    );
+    drop(client);
+    let _ = fs::remove_dir_all(state_root);
+}
+
+#[test]
+fn hooks_catalog_reads_only_session_directories_with_configuration_and_hook_permissions() {
+    use ash_app_server_protocol::protocol::config::HookListParams;
+    use ash_app_server_protocol::protocol::environment::SessionDirAddParams;
+    let _guard = dispatch_test_guard();
+    let root = tempfile::tempdir().unwrap();
+    let workspace = root.path().join("workspace");
+    fs::create_dir_all(workspace.join(".ash")).unwrap();
+    let dir = ash_file_access::Dir::open_local(&workspace).unwrap();
+    let id = format!("dir:{}:hook:project-check", dir.id());
+    fs::write(
+        workspace.join(".ash/config.toml"),
+        format!(
+            r#"
+[hooks.hooks."{id}"]
+id = "{id}"
+event = "preToolUse"
+enablement = "disabled"
+[hooks.hooks."{id}".action]
+type = "process"
+program = "project-check"
+args = ["--check"]
+"#
+        ),
+    )
+    .unwrap();
+    let mut client = start_in_process_client(
+        InProcessClientOptions::new(
+            root.path().join("profile"),
+            ClientInfo {
+                name: "ash-tui-test".into(),
+                version: "1".into(),
+            },
+        )
+        .with_capabilities(crate::client_capabilities())
+        .with_codex_home(root.path().join("codex"))
+        .with_dir_root(&workspace)
+        .with_model_operation_client(Arc::new(OfflineOperationClient::default())),
+    )
+    .unwrap();
+    let conversation = ActiveConversation::start(&mut client, "hooks".into()).unwrap();
+    let added = client
+        .add_session_dir(SessionDirAddParams {
+            session_id: conversation.session_id().clone(),
+            path: workspace.clone(),
+            // Adding a directory also reconciles its execution consumers. The disabled Hook
+            // keeps this fixture runtime-free while satisfying that existing host contract.
+            permissions: vec![
+                PermissionDto::LoadConfig,
+                PermissionDto::DiscoverHooks,
+                PermissionDto::ExecuteCommands,
+            ],
+        })
+        .unwrap();
+    let catalog = client
+        .list_hooks(HookListParams {
+            session_id: Some(conversation.session_id().clone()),
+        })
+        .unwrap();
+    assert_eq!(catalog.sources.len(), 2);
+    assert_eq!(catalog.sources[1].hooks[0].id, id);
+    assert_eq!(
+        catalog.sources[1].config_path,
+        dir.canonical_path().join(".ash/config.toml")
+    );
+    client
+        .set_session_dir_permissions(
+            ash_app_server_protocol::protocol::environment::SessionDirPermissionsSetParams {
+                session_id: conversation.session_id().clone(),
+                path: workspace.clone(),
+                expected_revision: added.revision,
+                permissions: vec![PermissionDto::ReadFiles],
+            },
+        )
+        .unwrap();
+    // Invalid config must remain unread while discovery is revoked.
+    fs::write(workspace.join(".ash/config.toml"), "invalid TOML").unwrap();
+    assert_eq!(
+        client
+            .list_hooks(HookListParams {
+                session_id: Some(conversation.session_id().clone())
+            })
+            .unwrap()
+            .sources
+            .len(),
+        1
+    );
+    assert!(
+        client
+            .list_hooks(HookListParams {
+                session_id: Some(ash_protocol::SessionId::new("missing-session").unwrap())
+            })
+            .is_err()
+    );
 }
 
 #[test]

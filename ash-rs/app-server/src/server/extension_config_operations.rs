@@ -79,6 +79,59 @@ impl AppServer {
         result(&config_command_result(outcome))
     }
 
+    pub(super) fn hook_list(&self, params: &Value) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::config::HookListParams;
+        use ash_app_server_protocol::protocol::config::HookListResult;
+        use ash_app_server_protocol::protocol::config::HookSourceDto;
+        use ash_file_access::Dir;
+        use ash_file_access::Permission;
+
+        let params: HookListParams = decode(params)?;
+        let store = self.config_store()?;
+        let snapshot = store
+            .read_snapshot()
+            .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let mut sources = vec![HookSourceDto {
+            namespace: "user".into(),
+            config_path: store.config_path().to_path_buf(),
+            hooks: snapshot
+                .values
+                .hooks
+                .hooks
+                .into_values()
+                .map(hook_config_dto)
+                .collect(),
+        }];
+        if let Some(session_id) = params.session_id {
+            let dirs = self
+                .list_session_dirs(&session_id)
+                .map_err(super::environment_operations::environment_runtime_error)?;
+            for entry in dirs.dirs {
+                // A Session may expose a directory without granting configuration discovery.
+                if !entry.permissions.allows(Permission::LoadConfig)
+                    || !entry.permissions.allows(Permission::DiscoverHooks)
+                {
+                    continue;
+                }
+                let dir = Dir::open_local(&entry.path)
+                    .map_err(|_| RpcError::new(-32072, AppServerErrorName::EnvironmentFailed))?;
+                let document = super::environment_runtime::read_dir_config(&dir)
+                    .map_err(super::environment_operations::environment_runtime_error)?;
+                sources.push(HookSourceDto {
+                    namespace: format!("dir:{}", dir.id()),
+                    config_path: dir.canonical_path().join(".ash/config.toml"),
+                    hooks: document
+                        .hooks
+                        .hooks
+                        .into_values()
+                        .map(hook_config_dto)
+                        .collect(),
+                });
+            }
+        }
+        result(&HookListResult { sources })
+    }
+
     pub(super) fn hook_upsert(&self, params: &Value) -> Result<Value, RpcError> {
         let params: HookUpsertParams = decode(params)?;
         let hook = hook_config_from_dto(params.hook)?;

@@ -640,6 +640,7 @@ pub(crate) const CANCEL: Keybinding = Keybinding::new(
 pub(crate) const CANCEL_ANSWER: Keybinding = Keybinding::new(ESC, "cancel");
 pub(crate) const RETURN_INPUT: Keybinding = Keybinding::new(ESC, "return to input");
 pub(crate) const ESC_RETURN: Keybinding = Keybinding::new(ESC, "return");
+pub(crate) const HOOK_REFRESH: Keybinding = Keybinding::new(&[(NONE, KeyCode::Char('r'))], "refresh");
 pub(crate) const SEARCH: Keybinding = Keybinding::new(&[(NONE, KeyCode::Char('/'))], "search");
 pub(crate) const SEARCH_RETURN: Keybinding = Keybinding::new(
     &[

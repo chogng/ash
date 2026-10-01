@@ -171,7 +171,9 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
             | HostCommand::ReadClipboardImage { .. }
             | HostCommand::RefreshClipboardImageAvailability,
         ) => Some(RequestKey::Clipboard),
-        AppCommand::Host(HostCommand::ExportTranscript { .. }) => Some(RequestKey::FileExport),
+        AppCommand::Host(
+            HostCommand::ExportTranscript { .. } | HostCommand::OpenTextFile { .. },
+        ) => Some(RequestKey::FileExport),
         AppCommand::Quit
         | AppCommand::Suspend
         | AppCommand::OpenWorkspace { .. }

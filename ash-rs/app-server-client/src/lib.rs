@@ -1184,6 +1184,13 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::McpServerSetEnablement, params)
     }
 
+    pub fn list_hooks(
+        &mut self,
+        params: ash_app_server_protocol::protocol::config::HookListParams,
+    ) -> Result<ash_app_server_protocol::protocol::config::HookListResult, ClientError> {
+        self.call(ClientMethod::HookList, params)
+    }
+
     pub fn upsert_hook(
         &mut self,
         params: HookUpsertParams,

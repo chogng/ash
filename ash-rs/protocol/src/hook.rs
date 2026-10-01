@@ -16,10 +16,10 @@ pub enum HookEvent {
     UserPromptSubmit,     // 对话：用户提交提示词时
     UserPromptExpansion,  // 对话：用户输入的命令展开为提示词时
     SessionStart,         // 会话：新会话开始时
-    Stop,                 // 对话：助手正常结束回复前
+    Stop,                 // 对话：助手正常完成回复后
     StopFailure,          // 对话：因错误结束回复时
     SubagentStart,        // 多代理：子代理启动时
-    SubagentStop,         // 多代理：子代理结束时
+    SubagentStop,         // 多代理：子代理产生结果后
     PreCompact,           // 上下文：压缩前
     PostCompact,          // 上下文：压缩后
     PreModelSwitch,       // 模型：请求切换前
