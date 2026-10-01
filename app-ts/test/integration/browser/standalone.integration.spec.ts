@@ -4295,9 +4295,15 @@ test('reference Peek embeds a read-only editor that follows parent configuration
 test('minimap repaints token colors when the registry palette changes', async ({ page }) => {
 	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.setMinimapColor('#ff0000'));
-	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readMinimapPixel().slice(0, 3))).toEqual([255, 0, 0]);
+	await expect.poll(async () => {
+		const [red, green, blue] = await page.evaluate(() => window.ashStandaloneIntegration.readMinimapPixel());
+		return red > green && red > blue && green === blue;
+	}).toBe(true);
 	await page.evaluate(() => window.ashStandaloneIntegration.setMinimapColor('#0000ff'));
-	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readMinimapPixel().slice(0, 3))).toEqual([0, 0, 255]);
+	await expect.poll(async () => {
+		const [red, green, blue] = await page.evaluate(() => window.ashStandaloneIntegration.readMinimapPixel());
+		return blue > red && blue > green && red === green;
+	}).toBe(true);
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 });
 

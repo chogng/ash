@@ -1513,10 +1513,10 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `browser/viewParts/linesDecorations/linesDecorations.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `browser/viewParts/margin/margin.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
 | `browser/viewParts/marginDecorations/marginDecorations.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
-| `browser/viewParts/minimap/minimap.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/viewParts/minimap/minimap.ts` | 1 / 1 | 字符绘制已接入现有字形 renderer，替换整行色条；浏览器验证等长文字差异、空行、空格、Tab、宽字符列、文本/块模式、编辑撤销与四种主题。未作整文件逐行行为结论。 |
 | `browser/viewParts/minimap/minimapCharRenderer.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
-| `browser/viewParts/minimap/minimapCharRendererFactory.ts` | 0 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 未发现直接生产导入，保留并核对装配。 |
-| `browser/viewParts/minimap/minimapCharSheet.ts` | 2 / 1 | 人工检查：字符码 128 可返回表外索引；反查仅到未接入生产的字形 renderer/factory，暂未确认可达渲染链，未修改。 |
+| `browser/viewParts/minimap/minimapCharRendererFactory.ts` | 0 / 1 | 已由 Minimap 的生产绘制链直接调用，提供当前字号与字体的字符 renderer；未作整文件逐行行为结论。 |
+| `browser/viewParts/minimap/minimapCharSheet.ts` | 2 / 1 | 已修复字符码 128 等非 ASCII 字符返回表外索引的问题；小字号映射与大字号替代字形均有索引边界回归测试，浏览器验证宽字符占列。 |
 | `browser/viewParts/minimap/minimapPreBaked.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
 | `browser/viewParts/overlayWidgets/overlayWidgets.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `browser/viewParts/overviewRuler/decorationsOverviewRuler.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |

@@ -4,6 +4,72 @@ import { ScrollType, type IEditor } from '../../../src/ash/editor/common/editorC
 
 const pageErrors = new WeakMap<object, string[]>();
 
+for (const theme of ['light', 'dark', 'contrast', 'contrastLight'] as const) {
+	test(`minimap renders distinct characters and preserves whitespace in ${theme}`, async ({ page }) => {
+		await openEditor(page);
+		await page.evaluate(theme => {
+			const harness = window.ashTextModelIntegration;
+			harness.setTheme(theme);
+			const editor = harness.getControl();
+			editor.getModel()!.setLanguage('plaintext');
+			editor.updateOptions({ wordWrap: 'off', padding: { top: 0, bottom: 0 }, minimap: { enabled: true, scale: 4, renderCharacters: true } });
+			editor.setValue('iiii\n\n \t \niiii');
+		}, theme);
+		const canvas = page.locator('.minimap canvas');
+		const readPixels = () => canvas.evaluate(element => {
+			const canvas = element as HTMLCanvasElement;
+			return Array.from(canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data);
+		});
+		await expect.poll(async () => (await readPixels()).some((value, index) => index % 4 === 3 && value > 0)).toBe(true);
+		const original = await readPixels();
+		const whitespaceIsEmpty = await canvas.evaluate(element => {
+			const canvas = element as HTMLCanvasElement;
+			const rowHeight = window.ashTextModelIntegration.getControl().getLayoutInfo().minimap.minimapLineHeight;
+			const data = canvas.getContext('2d')!.getImageData(0, rowHeight, canvas.width, rowHeight * 2).data;
+			return data.every((value, index) => index % 4 !== 3 || value === 0);
+		});
+		expect(whitespaceIsEmpty).toBe(true);
+		await page.evaluate(() => {
+			const editor = window.ashTextModelIntegration.getControl();
+			editor.executeEdits('minimap-test', [{ range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 5 }, text: 'WWWW' }]);
+		});
+		await expect.poll(readPixels).not.toEqual(original);
+		await page.locator('.stanza-editor-input').focus();
+		await page.keyboard.press('ControlOrMeta+z');
+		await expect.poll(readPixels).toEqual(original);
+		await expect(page.locator('.minimap')).toHaveAttribute('aria-hidden', 'true');
+	});
+}
+
+for (const renderCharacters of [true, false]) {
+	test(`minimap preserves spaces, tabs and wide-character columns with renderCharacters=${renderCharacters}`, async ({ page }) => {
+		await openEditor(page);
+		await page.evaluate(renderCharacters => {
+			const editor = window.ashTextModelIntegration.getControl();
+			editor.getModel()!.setLanguage('plaintext');
+			editor.updateOptions({ wordWrap: 'off', padding: { top: 0, bottom: 0 }, minimap: { enabled: true, scale: 4, renderCharacters } });
+			editor.getModel()!.updateOptions({ tabSize: 4 });
+			editor.setValue('i i\ni\ti\ni   i\n中i\n');
+		}, renderCharacters);
+		await expect.poll(() => page.locator('.minimap canvas').evaluate(element => {
+			const canvas = element as HTMLCanvasElement;
+			const layout = window.ashTextModelIntegration.getControl().getLayoutInfo().minimap;
+			const rows = [];
+			for (let row = 0; row < 5; row++) {
+				const data = canvas.getContext('2d')!.getImageData(0, row * layout.minimapLineHeight, canvas.width, layout.minimapLineHeight).data;
+				const columns = [];
+				for (let x = 0; x < canvas.width; x += layout.minimapScale) {
+					if (Array.from({ length: layout.minimapLineHeight }, (_, y) => data[(y * canvas.width + x) * 4 + 3]).some(alpha => alpha > 0)) {
+						columns.push(x / layout.minimapScale);
+					}
+				}
+				rows.push(columns);
+			}
+			return rows;
+		})).toEqual([[0, 2], [0, 4], [0, 4], [0, 1, 2], []]);
+	});
+}
+
 test.beforeEach(async ({ page }) => {
 	const errors: string[] = [];
 	pageErrors.set(page, errors);
@@ -591,9 +657,9 @@ test("short documents have no false scroll range and use a proportional hover sl
 	const minimap = page.locator('.minimap');
 	const slider = page.locator('.stanza-editor-minimap-slider');
 	await page.locator('.stanza-editor').evaluate(element => {
-		element.style.setProperty('--ash-scrollbar-slider-background', '#010203');
-		element.style.setProperty('--ash-scrollbar-slider-hover-background', '#040506');
-		element.style.setProperty('--ash-scrollbar-slider-active-background', '#070809');
+		element.style.setProperty('--ash-minimap-slider-background', '#010203');
+		element.style.setProperty('--ash-minimap-slider-hover-background', '#040506');
+		element.style.setProperty('--ash-minimap-slider-active-background', '#070809');
 	});
 	await expect(slider).toHaveCSS('opacity', '0');
 	await expect(slider).toHaveCSS('background-color', 'rgb(1, 2, 3)');

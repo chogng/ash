@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { MinimapCharRendererFactory } from '../../browser/viewParts/minimap/minimapCharRendererFactory.js';
-import { Constants } from '../../browser/viewParts/minimap/minimapCharSheet.js';
+import { Constants, getCharIndex } from '../../browser/viewParts/minimap/minimapCharSheet.js';
 import { RGBA8 } from '../../common/core/misc/rgba.js';
 
 test('Minimap character renderer downsamples one glyph sheet into deterministic pixels', () => {
@@ -49,3 +49,15 @@ function createImageData(width: number, height: number): ImageData {
 		data: new Uint8ClampedArray(width * height * Constants.RGBA_CHANNELS_CNT),
 	};
 }
+
+test('Minimap maps non-ASCII characters to an existing glyph at every font scale', () => {
+	for (const scale of [1, 2, 4]) {
+		for (const code of [0, 31, 32, 126, 127, 128, 129, 20013, 65533]) {
+			const index = getCharIndex(code, scale);
+			assert.ok(index >= 0 && index < Constants.CHAR_COUNT, `character ${code}, scale ${scale}`);
+		}
+		if (scale > 2) {
+			assert.equal(getCharIndex(128, scale), Constants.CHAR_COUNT - 1);
+		}
+	}
+});

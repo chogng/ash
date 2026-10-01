@@ -5,6 +5,11 @@ import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { clamp } from '../../../../base/common/numbers.js';
+import { isFullWidthCharacter } from '../../../../base/common/strings.js';
+import { editorBackground, editorForeground } from '../../../../platform/theme/common/colors/editorColors.js';
+import { RGBA8 } from '../../../common/core/misc/rgba.js';
+import { MinimapCharRendererFactory } from './minimapCharRendererFactory.js';
+import { Constants } from './minimapCharSheet.js';
 import { type EditorMinimapLayoutInfo, EditorOption, RenderMinimap } from '../../../common/config/editorOptions.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type SemanticTokenSource } from '../../../common/tokens/languageTokens.js';
@@ -40,7 +45,6 @@ export class Minimap extends ViewPart {
 	private sliderTop = 0;
 	private rasterKey: string | undefined;
 	private rasterDirty = true;
-	private foreground = '';
 
 	constructor(context: ViewContext, private readonly source: MinimapOptions) {
 		super(context);
@@ -104,12 +108,6 @@ export class Minimap extends ViewPart {
 	public override onThemeChanged(): boolean { return this.invalidateRaster(); }
 	public override onDecorationsChanged(event: viewEvents.ViewDecorationsChangedEvent): boolean {
 		return event.affectsMinimap ? this.invalidateRaster() : false;
-	}
-
-	public override prepareRender(): void {
-		if (this.rasterDirty) {
-			this.foreground = this.source.host.ownerDocument.defaultView!.getComputedStyle(this.source.host).color;
-		}
 	}
 
 	render(context: RestrictedRenderingContext): void {
@@ -182,36 +180,54 @@ export class Minimap extends ViewPart {
 		const lineHeight = Math.max(1, this.source.readLayout().lineHeight);
 		const paddingRows = padding.top / lineHeight;
 		const scaleY = this.contentHeight * height / context.viewportHeight / Math.max(1, projection.visualLineCount + (padding.top + padding.bottom) / lineHeight);
-		const rowHeight = Math.max(1, scaleY);
-		const charWidth = Math.max(1, geometry.minimapScale);
+		const fontInfo = this._context.configuration.options.get(EditorOption.fontInfo);
+		const renderer = MinimapCharRendererFactory.create(geometry.minimapScale, fontInfo.fontFamily);
+		const charWidth = Constants.BASE_CHAR_WIDTH * renderer.scale;
+		const force1pxHeight = scaleY < Constants.BASE_CHAR_HEIGHT * renderer.scale;
+		const glyphHeight = force1pxHeight ? 1 : Constants.BASE_CHAR_HEIGHT * renderer.scale;
+		const innerLinePadding = Math.max(0, Math.floor((scaleY - glyphHeight) / 2));
 		const colors = MinimapTokensColorTracker.getInstance();
 		const hasTokenColors = (TokenizationRegistry.getColorMap()?.length ?? 0) > 2;
-		painter.globalAlpha = 0.55;
+		const backgroundColor = this._context.theme.getColor(editorBackground)!.rgba;
+		const foregroundColor = this._context.theme.getColor(editorForeground)!.rgba;
+		const background = new RGBA8(backgroundColor.r, backgroundColor.g, backgroundColor.b, Math.round(backgroundColor.a * 255));
+		const foreground = new RGBA8(foregroundColor.r, foregroundColor.g, foregroundColor.b, Math.round(foregroundColor.a * 255));
+		const image = painter.createImageData(width, height);
 		for (const line of projection.lines) {
 			const text = this.source.model.getLineContent(line.logicalLineIndex + 1).slice(line.startColumn, line.endColumn);
-			const indentation = leadingWidth(text, tabSize);
-			const visibleWidth = Math.max(1, Math.min(width - indentation * charWidth, (text.length - indentation) * charWidth));
-			const y = Math.floor((line.visualLineIndex + paddingRows) * scaleY);
-			if (!hasTokenColors) {
-				painter.fillStyle = this.foreground;
-				painter.fillRect(indentation * charWidth, y, visibleWidth, rowHeight);
+			const y = Math.floor((line.visualLineIndex + paddingRows) * scaleY) + innerLinePadding;
+			if (y + glyphHeight > height) {
 				continue;
 			}
 			const tokens = this.source.model.tokenization.getLineTokens(line.logicalLineIndex + 1);
-			const firstCharacter = text.search(/\S/u);
-			if (firstCharacter < 0) continue;
-			for (let index = 0; index < tokens.getCount(); index++) {
-				const start = Math.max(line.startColumn + firstCharacter, tokens.getStartOffset(index));
-				const end = Math.min(line.endColumn, tokens.getEndOffset(index));
-				if (end <= start) continue;
-				const color = colors.getColor(tokens.getForeground(index));
-				painter.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a / 255})`;
-				const left = displayWidth(text.slice(0, start - line.startColumn), tabSize) * charWidth;
-				const right = displayWidth(text.slice(0, end - line.startColumn), tabSize) * charWidth;
-				painter.fillRect(left, y, Math.max(0, Math.min(width, right) - left), rowHeight);
+			let column = Math.round((line.wrappedTextIndentWidth ?? 0) / fontInfo.typicalHalfwidthCharacterWidth);
+			for (let offset = 0; offset < text.length && (column + 1) * charWidth <= width; offset++) {
+				const charCode = text.charCodeAt(offset);
+				if (charCode === 9) {
+					column += tabSize - column % tabSize;
+					continue;
+				}
+				if (charCode === 32) {
+					column++;
+					continue;
+				}
+				const tokenIndex = tokens.findTokenIndexAtOffset(line.startColumn + offset);
+				const color = hasTokenColors ? colors.getColor(tokens.getForeground(tokenIndex)) : foreground;
+				const characterColumns = isFullWidthCharacter(charCode) ? 2 : 1;
+				// Wide characters still occupy two cells when the compact font uses
+				// a replacement glyph rather than a dedicated character bitmap.
+				for (let cell = 0; cell < characterColumns && (column + 1) * charWidth <= width; cell++, column++) {
+					const x = column * charWidth;
+					const alpha = Math.round(color.a * 0.55);
+					if (geometry.renderMinimap === RenderMinimap.Text) {
+						renderer.renderChar(image, x, y, charCode, color, alpha, background, 0, renderer.scale, colors.backgroundIsLight(), force1pxHeight);
+					} else {
+						renderer.blockRenderChar(image, x, y, color, alpha, background, 0, force1pxHeight);
+					}
+				}
 			}
 		}
-		painter.globalAlpha = 1;
+		painter.putImageData(image, 0, 0);
 
 		const fullRange = new Range(1, 1, this._context.viewModel.getLineCount(), this._context.viewModel.getLineMaxColumn(this._context.viewModel.getLineCount()));
 		for (const decoration of this._context.viewModel.getMinimapDecorationsInRange(fullRange)) {
@@ -235,20 +251,4 @@ export class Minimap extends ViewPart {
 		const ratio = travel > 0 ? clamp((clientY - bounds.top - this.dragOffset) / travel, 0, 1) : 0;
 		this.source.scrollTo({ left: layout.scrollPosition.left, top: ratio * layout.maximumScrollPosition.top });
 	}
-}
-
-function leadingWidth(text: string, tabSize: number): number {
-	let width = 0;
-	for (const character of text) {
-		if (character === ' ') width += 1;
-		else if (character === '\t') width += tabSize - width % tabSize;
-		else break;
-	}
-	return width;
-}
-
-function displayWidth(text: string, tabSize: number): number {
-	let width = 0;
-	for (const character of text) width += character === '\t' ? tabSize - width % tabSize : 1;
-	return width;
 }

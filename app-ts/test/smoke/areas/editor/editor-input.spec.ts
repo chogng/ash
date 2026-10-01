@@ -1,5 +1,30 @@
 import { expect, test } from '../../../automation/test.js';
 
+test('minimap reflects equal-length text edits in the workbench', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText('iiii\n\n \t \niiii');
+	await expect(editor.lines).toHaveText(['iiii', '', ' \t ', 'iiii']);
+	const canvas = editor.element.locator('.minimap canvas');
+	const readPixels = () => canvas.evaluate(element => {
+		const canvas = element as HTMLCanvasElement;
+		return Array.from(canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data);
+	});
+	await expect.poll(async () => (await readPixels()).some((value, index) => index % 4 === 3 && value > 0)).toBe(true);
+	const original = await readPixels();
+	await page.keyboard.press('ControlOrMeta+Home');
+	for (let index = 0; index < 4; index++) {
+		await page.keyboard.press('Shift+ArrowRight');
+	}
+	await page.keyboard.insertText('WWWW');
+	await expect(editor.lines.first()).toHaveText('WWWW');
+	await expect.poll(readPixels).not.toEqual(original);
+	await expect(editor.element.locator('.minimap')).toHaveAttribute('aria-hidden', 'true');
+});
+
 test('clicking inside editor text places insertion at the clicked character', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
