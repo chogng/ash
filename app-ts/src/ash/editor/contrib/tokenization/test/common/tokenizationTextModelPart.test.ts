@@ -306,11 +306,11 @@ test('registered line tokenizers refresh existing models without clearing diagno
 		tokenize: () => ({ tokens: [{ offset: 0, type: 'comment', language: 'registry-test' }], endState: state }),
 	});
 	try {
-		await waitFor(() => model.tokenization.hasAccurateTokensForLine(2));
+		model.tokenization.forceTokenization(2);
 		assert.equal(model.tokenization.getLineTokens(2).getStandardTokenType(0), StandardTokenType.Comment);
 		model.tokenization.resetTokenization();
 		assert.equal(model.diagnostics.results.result, result);
-		await waitFor(() => model.tokenization.hasAccurateTokensForLine(2));
+		model.tokenization.forceTokenization(2);
 	} finally {
 		first.dispose();
 	}
@@ -332,10 +332,10 @@ test('line tokenization reuses unchanged lines after a model edit', async () => 
 		},
 	});
 	using model = new TextModel('first\nsecond\nthird', { languageId: 'incremental-test' });
-	await waitFor(() => model.tokenization.hasAccurateTokensForLine(3));
+	model.tokenization.forceTokenization(3);
 	assert.equal(scanned, 3);
 	model.applyEdits([{ range: new Range(2, 1, 2, 7), text: 'changed' }]);
-	await waitFor(() => model.tokenization.hasAccurateTokensForLine(3));
+	model.tokenization.forceTokenization(3);
 	assert.equal(scanned, 4);
 	assert.equal(model.tokenization.getLineTokens(2).getLineContent(), 'changed');
 });
@@ -394,4 +394,55 @@ test('hypothetical tokenization reports unavailable lexers and rejects malformed
 	using model = new TextModel('x', { languageId: 'demo', tokenization: { syntaxProviderRegistry: registry } });
 	await assert.rejects(model.tokenization.tokenizeLinesAtAsync(1, ['()'], signal), /range|column/i);
 	await assert.rejects(model.tokenization.tokenizeLinesAtAsync(1, ['a\nb'], signal), /line endings/);
+});
+
+
+test('file readiness computes only the first line and attached view ranges drive coloring without a worker', async () => {
+	let scanned = 0;
+	let workers = 0;
+	const state: IState = { clone() { return this; }, equals(other) { return other === this; } };
+	using registration = TokenizationRegistry.register('viewport-test', {
+		getInitialState: () => state,
+		tokenize: () => { scanned++; return { tokens: [{ offset: 0, type: 'keyword', language: 'viewport-test' }], endState: state }; },
+	});
+	using model = new TextModel(Array.from({ length: 5000 }, () => 'keyword').join('\n'), {
+		languageId: 'viewport-test', tokenization: { syntaxService: { workerFactory: () => { workers++; throw new Error('Line tokenizers do not start workers'); } } },
+	});
+	await model.tokenization.whenReady(new AbortController().signal);
+	assert.deepEqual([scanned, workers, model.tokenization.hasAccurateTokensForLine(1), model.tokenization.hasAccurateTokensForLine(5000)], [1, 0, true, false]);
+	const view = model.onBeforeAttached();
+	try {
+		view.setVisibleLines([{ startLineNumber: 1, endLineNumber: 40 }], true);
+		assert.deepEqual([scanned, model.tokenization.hasAccurateTokensForLine(40), model.tokenization.hasAccurateTokensForLine(41)], [40, true, false]);
+		view.setVisibleLines([{ startLineNumber: 4900, endLineNumber: 4940 }], true);
+		assert.deepEqual([scanned, model.tokenization.getLanguageTokens(4899)[0]?.tokenType, model.tokenization.hasAccurateTokensForLine(4900)], [81, 'keyword', false]);
+		view.setVisibleLines([{ startLineNumber: 4900, endLineNumber: 4940 }], true);
+		assert.equal(scanned, 81);
+		assert.equal(model.tokenization.tokenCount, 81);
+	} finally { model.onBeforeDetached(view); }
+});
+
+test('idle tokenization publishes bounded batches and stops when the last view detaches', async () => {
+	let scanned = 0;
+	const state: IState = { clone() { return this; }, equals(other) { return other === this; } };
+	using registration = TokenizationRegistry.register('idle-test', {
+		getInitialState: () => state,
+		tokenize: () => { scanned++; return { tokens: [{ offset: 0, type: 'keyword', language: 'idle-test' }], endState: state }; },
+	});
+	using model = new TextModel(Array.from({ length: 350 }, () => 'keyword').join('\n'), { languageId: 'idle-test' });
+	const ranges: { readonly fromLineNumber: number; readonly toLineNumber: number }[][] = [];
+	using listener = model.onDidChangeTokens(event => ranges.push(event.ranges));
+	const view = model.onBeforeAttached();
+	try {
+		await waitFor(() => model.tokenization.hasAccurateTokensForLine(350));
+		assert.ok(ranges.length >= 4 && ranges.every(batch => batch.every(range => range.toLineNumber - range.fromLineNumber < 100)));
+	} finally { model.onBeforeDetached(view); }
+	model.applyEdits([{ range: new Range(1, 1, 1, 8), text: 'changed' }]);
+	await new Promise<void>(resolve => setTimeout(resolve, 0));
+	assert.deepEqual([scanned, model.tokenization.hasAccurateTokensForLine(1)], [350, false]);
+	const changed: { fromLineNumber: number; toLineNumber: number }[] = [];
+	using changes = model.onDidChangeTokens(event => changed.push(...event.ranges));
+	model.tokenization.forceTokenization(350);
+	assert.deepEqual([scanned, changed], [351, [{ fromLineNumber: 1, toLineNumber: 1 }]]);
+	assert.equal(model.tokenization.tokenCount, 350);
 });

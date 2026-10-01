@@ -203,13 +203,13 @@ test('modern minimap corners apply to main and auxiliary hosts and leave flat ho
 	}
 });
 
-test('syntax theme updates repaint text and minimap through the existing Worker', async ({ page }) => {
+test('syntax theme updates repaint text and minimap through shared line support', async ({ page }) => {
 	await openEditor(page);
 	const editor = page.locator('.stanza-editor');
 	const token = editor.locator('.stanza-editor-token').filter({ hasText: /^fn$/u });
 	await expect(token).toBeVisible();
 	const workers = page.workers().filter(worker => worker.url().includes('textMateSyntaxWorkerMain'));
-	expect(workers).toHaveLength(1);
+	expect(workers).toHaveLength(0);
 	for (const [color, expected] of [['#149b37', 'rgb(20, 155, 55)'], ['#9a41da', 'rgb(154, 65, 218)']] as const) {
 		await page.evaluate(color => window.ashTextModelIntegration.setSyntaxColor(color), color);
 		await expect(token).toHaveCSS('color', expected);
