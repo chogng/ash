@@ -19,7 +19,7 @@ test('desktop dialog and shell routes reject malformed requests', async () => {
 		openWindow: async options => { operations.push(options); },
 		openAgentsWindow: async options => { operations.push(options ?? 'openAgentsWindow'); },
 		revealFile: () => {},
-		saveFile: async () => undefined, getOSColorScheme: () => ({ dark: false, highContrast: false }),
+		saveFile: async () => undefined,
 		isAccessibilitySupportEnabled: () => false,
 		setWindowTheme: () => {}, setWindowDimmed: () => {}, toggleDeveloperTools: () => {},
 		syncSystemWideKeybindings: () => ({ failed: [] }),

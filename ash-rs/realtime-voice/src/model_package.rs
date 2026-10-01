@@ -1,3 +1,5 @@
+use crate::LocalSpeechMode;
+use crate::ModelProgress;
 use async_utils::CancellationToken;
 use http_client::HttpBodySink;
 use http_client::HttpClient;
@@ -11,6 +13,7 @@ use sha2::Sha256;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 
@@ -25,12 +28,7 @@ pub(crate) struct ModelPackage {
 }
 
 impl ModelPackage {
-    pub async fn resolve(
-        cache_root: &Path,
-        model_id: &str,
-        network: OutboundNetworkSnapshot,
-        cancellation: &CancellationToken,
-    ) -> Result<Self, String> {
+    pub(crate) fn validate_id(model_id: &str) -> Result<(), String> {
         if model_id.is_empty()
             || model_id.len() > 128
             || !model_id
@@ -39,13 +37,45 @@ impl ModelPackage {
         {
             return Err("Invalid local dictation model ID".into());
         }
+        Ok(())
+    }
+
+    pub async fn resolve(
+        cache_root: &Path,
+        model_id: &str,
+        network: OutboundNetworkSnapshot,
+        cancellation: &CancellationToken,
+        progress: Arc<dyn Fn(ModelProgress) + Send + Sync>,
+    ) -> Result<Self, String> {
+        Self::validate_id(model_id)?;
+        cancellation.check().map_err(|error| error.to_string())?;
+        progress(ModelProgress::Checking);
         let directory = cache_root.join(model_id);
         if model_id == DEFAULT_MODEL_ID && !directory.join("dictation-model.json").is_file() {
-            prepare_default(&directory, network, cancellation).await?;
+            let install = Installation::new(cache_root, model_id)?;
+            // Recheck after acquiring the cross-process lock: another client may have published it.
+            if !directory.join("dictation-model.json").is_file() {
+                prepare_default(
+                    &install.staging,
+                    network,
+                    cancellation,
+                    Arc::clone(&progress),
+                )
+                .await?;
+                progress(ModelProgress::Loading);
+                let package = Self::read(&install.staging)?;
+                let recognizer = package.recognizer(LocalSpeechMode::Dictation)?;
+                drop(recognizer);
+                cancellation.check().map_err(|error| error.to_string())?;
+                install.publish(&directory)?;
+            }
         }
+        Self::read(&directory)
+    }
+
+    pub(crate) fn read(directory: &Path) -> Result<Self, String> {
         let manifest: serde_json::Value = serde_json::from_slice(
-            &fs::read(directory.join("dictation-model.json"))
-                .await
+            &std::fs::read(directory.join("dictation-model.json"))
                 .map_err(|error| format!("Could not read dictation model package: {error}"))?,
         )
         .map_err(|error| format!("Invalid dictation model package: {error}"))?;
@@ -67,12 +97,167 @@ impl ModelPackage {
         }
         Ok(package)
     }
+
+    pub(crate) fn recognizer(
+        &self,
+        mode: LocalSpeechMode,
+    ) -> Result<sherpa_onnx::OnlineRecognizer, String> {
+        let mut config = sherpa_onnx::OnlineRecognizerConfig::default();
+        config.model_config.paraformer.encoder = Some(self.encoder.to_string_lossy().into_owned());
+        config.model_config.paraformer.decoder = Some(self.decoder.to_string_lossy().into_owned());
+        config.model_config.tokens = Some(self.tokens.to_string_lossy().into_owned());
+        config.model_config.num_threads = 2;
+        if mode == LocalSpeechMode::Conversation {
+            config.enable_endpoint = true;
+            config.rule1_min_trailing_silence = 2.4;
+            config.rule2_min_trailing_silence = 0.9;
+            config.rule3_min_utterance_length = 20.0;
+        }
+        sherpa_onnx::OnlineRecognizer::create(&config)
+            .ok_or_else(|| "Could not load Paraformer dictation model".into())
+    }
+
+    pub(crate) async fn import(
+        root: &Path,
+        model_id: &str,
+        source: &Path,
+        cancellation: &CancellationToken,
+        progress: &(dyn Fn(ModelProgress) + Send + Sync),
+    ) -> Result<(), String> {
+        Self::validate_id(model_id)?;
+        if !source.is_absolute() {
+            return Err("Dictation model source must be an absolute directory".into());
+        }
+        let install = Installation::new(root, model_id)?;
+        let destination = root.join(model_id);
+        if destination.exists() {
+            return Err("Dictation model already exists; import with a different model ID".into());
+        }
+        progress(ModelProgress::Checking);
+        Self::read(source)?;
+        for name in [
+            "encoder.onnx",
+            "decoder.onnx",
+            "tokens.txt",
+            "dictation-model.json",
+        ] {
+            cancellation.check().map_err(|error| error.to_string())?;
+            let mut input = fs::File::open(source.join(name))
+                .await
+                .map_err(|error| error.to_string())?;
+            let mut output = fs::File::create(install.staging.join(name))
+                .await
+                .map_err(|error| error.to_string())?;
+            // Chunked copy observes cancellation between reads, without abandoning an active writer.
+            use tokio::io::AsyncReadExt;
+            let mut bytes = vec![0; 64 * 1024];
+            loop {
+                cancellation.check().map_err(|error| error.to_string())?;
+                let count = input
+                    .read(&mut bytes)
+                    .await
+                    .map_err(|error| error.to_string())?;
+                if count == 0 {
+                    break;
+                }
+                output
+                    .write_all(&bytes[..count])
+                    .await
+                    .map_err(|error| error.to_string())?;
+            }
+            output.sync_all().await.map_err(|error| error.to_string())?;
+        }
+        progress(ModelProgress::Loading);
+        let package = Self::read(&install.staging)?;
+        let recognizer = package.recognizer(LocalSpeechMode::Dictation)?;
+        drop(recognizer);
+        cancellation.check().map_err(|error| error.to_string())?;
+        install.publish(&destination)
+    }
+}
+
+struct Installation {
+    staging: PathBuf,
+    _lock: std::fs::File,
+}
+
+impl Installation {
+    fn new(root: &Path, model_id: &str) -> Result<Self, String> {
+        std::fs::create_dir_all(root).map_err(|error| error.to_string())?;
+        let lock = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(root.join(format!(".{model_id}.lock")))
+            .map_err(|error| error.to_string())?;
+        lock.try_lock().map_err(|error| {
+            format!("Dictation model is being prepared by another operation: {error}")
+        })?;
+        // Only this lock holder owns this staging directory, including leftovers from a crash.
+        let staging = root.join(format!(".{model_id}.installing"));
+        if staging.exists() {
+            std::fs::remove_dir_all(&staging).map_err(|error| error.to_string())?;
+        }
+        std::fs::create_dir(&staging).map_err(|error| error.to_string())?;
+        Ok(Self {
+            staging,
+            _lock: lock,
+        })
+    }
+
+    fn publish(&self, destination: &Path) -> Result<(), String> {
+        if destination.exists() {
+            let outputs = [
+                "encoder.onnx.download",
+                "decoder.onnx.download",
+                "tokens.txt.download",
+                "encoder.onnx",
+                "decoder.onnx",
+                "tokens.txt",
+                "tokens.json",
+                "am.mvn",
+            ];
+            for entry in std::fs::read_dir(destination).map_err(|error| error.to_string())? {
+                let entry = entry.map_err(|error| error.to_string())?;
+                if !outputs.iter().any(|name| entry.file_name() == *name)
+                    || !entry
+                        .file_type()
+                        .map_err(|error| error.to_string())?
+                        .is_file()
+                {
+                    return Err("Dictation model destination contains files outside an unfinished installation".into());
+                }
+            }
+            // An install without its marker is unfinished. Remove only known package outputs;
+            // remove_dir rejects unknown user files instead of recursively deleting them.
+            for name in outputs {
+                let file = destination.join(name);
+                match std::fs::remove_file(file) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => return Err(error.to_string()),
+                }
+            }
+            std::fs::remove_dir(destination).map_err(|error| error.to_string())?;
+        }
+        std::fs::rename(&self.staging, destination).map_err(|error| error.to_string())
+    }
+}
+
+impl Drop for Installation {
+    fn drop(&mut self) {
+        if self.staging.exists() {
+            let _ = std::fs::remove_dir_all(&self.staging);
+        }
+    }
 }
 
 async fn prepare_default(
     directory: &Path,
     network: OutboundNetworkSnapshot,
     cancellation: &CancellationToken,
+    progress: Arc<dyn Fn(ModelProgress) + Send + Sync>,
 ) -> Result<(), String> {
     fs::create_dir_all(directory)
         .await
@@ -84,6 +269,7 @@ async fn prepare_default(
         &directory.join("encoder.onnx.download"),
         "dd4121cf45102018c26f9256f0b862df416edfcd06b0863ef4ce378a63c7d5e2",
         cancellation,
+        Arc::clone(&progress),
     )
     .await?;
     download(
@@ -92,6 +278,7 @@ async fn prepare_default(
         &directory.join("decoder.onnx.download"),
         "873d21ee80c7345bfc27944b843699fe16bba021fd020747d38aef2dfc103681",
         cancellation,
+        Arc::clone(&progress),
     )
     .await?;
     download(
@@ -100,6 +287,7 @@ async fn prepare_default(
         &directory.join("tokens.json"),
         "2b20c2b12572d682afff84ce1c8d560f67b8b32a4c1f21567411d141ed352127",
         cancellation,
+        Arc::clone(&progress),
     )
     .await?;
     download(
@@ -108,6 +296,7 @@ async fn prepare_default(
         &directory.join("am.mvn"),
         "29b3c740a2c0cfc6b308126d31d7f265fa2be74f3bb095cd2f143ea970896ae5",
         cancellation,
+        Arc::clone(&progress),
     )
     .await?;
     let tokens: Vec<String> = serde_json::from_slice(
@@ -188,6 +377,7 @@ async fn download(
     path: &Path,
     expected_sha256: &str,
     cancellation: &CancellationToken,
+    progress: Arc<dyn Fn(ModelProgress) + Send + Sync>,
 ) -> Result<(), String> {
     let client = client.clone();
     let name = name.to_owned();
@@ -198,6 +388,10 @@ async fn download(
         struct FileSink {
             file: std::fs::File,
             digest: Sha256,
+            downloaded_bytes: u64,
+            reported_bytes: u64,
+            progress: Arc<dyn Fn(ModelProgress) + Send + Sync>,
+            name: String,
         }
         impl HttpBodySink for FileSink {
             fn emit(&mut self, chunk: &[u8]) -> Result<(), HttpClientError> {
@@ -205,19 +399,35 @@ async fn download(
                     .write_all(chunk)
                     .map_err(|error| HttpClientError::Transport(error.to_string()))?;
                 self.digest.update(chunk);
+                self.downloaded_bytes += chunk.len() as u64;
+                if self.downloaded_bytes - self.reported_bytes >= 1024 * 1024 {
+                    self.reported_bytes = self.downloaded_bytes;
+                    (self.progress)(ModelProgress::Downloading {
+                        file: self.name.clone(),
+                        downloaded_bytes: self.downloaded_bytes,
+                    });
+                }
                 Ok(())
             }
         }
         let request = HttpRequest::new(
             HttpMethod::Get,
             format!("{BASE_URL}/{name}"),
-            vec![],
+            // ModelScope rejects requests with an empty User-Agent at its CDN.
+            vec![http_client::HttpHeader::new(
+                "User-Agent",
+                concat!("Ash/", env!("CARGO_PKG_VERSION")),
+            )],
             vec![],
         )
         .map_err(|error| error.to_string())?;
         let mut sink = FileSink {
             file: std::fs::File::create(path).map_err(|error| error.to_string())?,
             digest: Sha256::new(),
+            downloaded_bytes: 0,
+            reported_bytes: 0,
+            progress: Arc::clone(&progress),
+            name: name.clone(),
         };
         let response = client
             .execute_streaming_with_cancellation(&request, &cancellation, &mut sink)
@@ -229,6 +439,11 @@ async fn download(
             ));
         }
         sink.file.sync_all().map_err(|error| error.to_string())?;
+        progress(ModelProgress::Downloading {
+            file: name.clone(),
+            downloaded_bytes: sink.downloaded_bytes,
+        });
+        progress(ModelProgress::Checking);
         if format!("{:x}", sink.digest.finalize()) != expected_sha256 {
             return Err(format!(
                 "Dictation model {name} failed SHA-256 verification"

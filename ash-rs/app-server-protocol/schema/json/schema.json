@@ -7150,6 +7150,54 @@
         {
           "properties": {
             "method": {
+              "const": "dictation/model/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/DictationModelParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "dictation/model/start",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/DictationModelStartParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "dictation/model/stop",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/DictationResourceParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "fs/getMetadata",
               "type": "string"
             },
@@ -12002,6 +12050,54 @@
         {
           "properties": {
             "method": {
+              "const": "dictation/model/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/DictationModelStatus"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "dictation/model/start",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "dictation/model/stop",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "fs/getMetadata",
               "type": "string"
             },
@@ -16446,6 +16542,209 @@
       },
       "required": [
         "resourceId"
+      ],
+      "type": "object"
+    },
+    "DictationModelOperation": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "prepare",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "sourceDirectory": {
+              "type": "string"
+            },
+            "type": {
+              "const": "import",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "sourceDirectory"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "DictationModelParams": {
+      "additionalProperties": false,
+      "properties": {
+        "modelId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "modelId"
+      ],
+      "type": "object"
+    },
+    "DictationModelProgress": {
+      "properties": {
+        "modelId": {
+          "type": "string"
+        },
+        "resourceId": {
+          "type": "string"
+        },
+        "stage": {
+          "$ref": "#/$defs/DictationModelStage"
+        }
+      },
+      "required": [
+        "resourceId",
+        "modelId",
+        "stage"
+      ],
+      "type": "object"
+    },
+    "DictationModelStage": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "checking",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "downloadedBytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "file": {
+              "type": "string"
+            },
+            "type": {
+              "const": "downloading",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "file",
+            "downloadedBytes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "loading",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "ready",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "cancelled",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "error": {
+              "type": "string"
+            },
+            "type": {
+              "const": "failed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "error"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "DictationModelStartParams": {
+      "additionalProperties": false,
+      "properties": {
+        "modelId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "operation": {
+          "$ref": "#/$defs/DictationModelOperation"
+        },
+        "resourceId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "resourceId",
+        "modelId",
+        "operation"
+      ],
+      "type": "object"
+    },
+    "DictationModelStatus": {
+      "properties": {
+        "available": {
+          "description": "Installed package availability does not imply an active loaded recognizer.",
+          "type": "boolean"
+        },
+        "modelId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "modelId",
+        "available"
       ],
       "type": "object"
     },
@@ -31221,6 +31520,22 @@
             },
             "params": {
               "$ref": "#/$defs/DictationEnded"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "dictation/model/progress",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/DictationModelProgress"
             }
           },
           "required": [

@@ -1,9 +1,10 @@
 import { Emitter } from '../../../../base/common/event.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { DeferredPromise } from '../../../../base/common/async.js';
+import { Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import type { AppServerProtocolClient } from '../../../../platform/app-server/browser/appServerProtocolClient.js';
 import { createAppServerLocalTranscriptionBackendService } from '../../../../platform/localTranscription/browser/appServerLocalTranscriptionBackendService.js';
-import { ILocalTranscriptionBackendService, ILocalTranscriptionService, type ILocalTranscriptionResult } from '../../../../platform/localTranscription/common/localTranscription.js';
+import { ILocalTranscriptionBackendService, ILocalTranscriptionService, LocalTranscriptionModelState, type ILocalTranscriptionResult, type ILocalTranscriptionModelStatus, type ILocalTranscriptionModelOperation, type LocalTranscriptionModelOperation } from '../../../../platform/localTranscription/common/localTranscription.js';
 import type { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
 import type { RendererHostCapabilities } from '../../../../platform/renderer/common/rendererHost.js';
 import { localize } from '../../../../nls.js';
@@ -27,9 +28,17 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 	private readonly ended = this._register(new Emitter<{ readonly error?: string }>());
 	public readonly onDidEnd = this.ended.event;
 	private active: ActiveTranscription | undefined;
+	private readonly modelStatus = this._register(new Emitter<{ readonly model: string; readonly status: ILocalTranscriptionModelStatus }>());
+	public readonly onDidChangeModelStatus = this.modelStatus.event;
+	private readonly models = this._register(new DisposableMap<string, ModelOperation>());
 
 	constructor(@ILocalTranscriptionBackendService private readonly backend: ILocalTranscriptionBackendService) {
 		super();
+		this._register(backend.onDidChangeModelStatus(result => {
+			if (result.resourceId === this.active?.resourceId && !this.active.discard && !this.active.hasEnded) {
+				this.modelStatus.fire({ model: result.model, status: result.status });
+			}
+		}));
 		this._register(backend.onDidTranscribe(result => {
 			const active = this.active;
 			if (!active || result.resourceId !== active.resourceId || active.discard || active.finalDelivered || active.hasEnded) { return; }
@@ -51,6 +60,29 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 			this.active = undefined;
 			this.ended.fire({ error: localize('dictation.connectionLost', 'Dictation connection lost') });
 		}));
+	}
+
+	public getModelStatus(model: string): Promise<{ readonly model: string; readonly available: boolean }> {
+		this.assertNotDisposed();
+		return this.backend.getModelStatus(model);
+	}
+
+	public prepareModel(model: string, onProgress: (status: ILocalTranscriptionModelStatus) => void): ILocalTranscriptionModelOperation {
+		return this.startModelOperation(model, { type: 'prepare' }, onProgress);
+	}
+
+	public importModel(options: { readonly model: string; readonly sourcePath: string }, onProgress: (status: ILocalTranscriptionModelStatus) => void): ILocalTranscriptionModelOperation {
+		return this.startModelOperation(options.model, { type: 'import', sourceDirectory: options.sourcePath }, onProgress);
+	}
+
+	private startModelOperation(model: string, operation: LocalTranscriptionModelOperation, onProgress: (status: ILocalTranscriptionModelStatus) => void): ILocalTranscriptionModelOperation {
+		this.assertNotDisposed();
+		if (!this.backend.isConnected) { throw new Error(localize('dictation.connectionUnavailable', 'Dictation connection is unavailable')); }
+		const resourceId = generateUuid();
+		const handle = this.models.set(resourceId, new ModelOperation(this.backend, resourceId, onProgress));
+		void handle.completed.then(() => this.models.deleteAndDispose(resourceId), () => this.models.deleteAndDispose(resourceId));
+		handle.start(model, operation);
+		return handle;
 	}
 
 	public async start(options: { readonly model: string }): Promise<void> {
@@ -113,6 +145,62 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 
 	protected override disposeCore(): void {
 		void this.cancel().catch(() => undefined);
+		super.disposeCore();
+	}
+}
+
+class ModelOperation extends Disposable implements ILocalTranscriptionModelOperation {
+	private readonly completion = new DeferredPromise<LocalTranscriptionModelState.Ready | LocalTranscriptionModelState.Cancelled>();
+	public readonly completed = this.completion.p;
+	private started: Promise<void> = Promise.resolve();
+	private released: Promise<void> | undefined;
+	private terminal: ILocalTranscriptionModelStatus | undefined;
+
+	constructor(private readonly backend: ILocalTranscriptionBackendService, private readonly resourceId: string, private readonly onProgress: (status: ILocalTranscriptionModelStatus) => void) {
+		super();
+		this._register(backend.onDidChangeModelStatus(event => {
+			if (event.resourceId !== resourceId || this.terminal || this.completion.isSettled) { return; }
+			const status = event.status;
+			if (status.state === LocalTranscriptionModelState.Ready || status.state === LocalTranscriptionModelState.Cancelled || status.state === LocalTranscriptionModelState.Error) {
+				this.terminal = status;
+				void this.release();
+			}
+			if (!this.isDisposed) { this.onProgress(status); }
+		}));
+		this._register(backend.onDidDisconnect(() => {
+			void this.completion.error(new Error(localize('dictation.connectionLost', 'Dictation connection lost')));
+		}));
+	}
+
+	public start(model: string, operation: LocalTranscriptionModelOperation): void {
+		// Register delivery before issuing start: a cached model may finish before acceptance arrives.
+		this.started = Promise.resolve().then(() => this.backend.startModelOperation(this.resourceId, model, operation));
+		void this.started.catch(error => { void this.completion.error(error); });
+	}
+
+	public cancel(): Promise<void> {
+		return this.completion.isSettled ? Promise.resolve() : this.release();
+	}
+
+	private release(): Promise<void> {
+		this.released ??= this.releaseBackend();
+		return this.released;
+	}
+
+	private async releaseBackend(): Promise<void> {
+		try {
+			await this.started;
+			if (this.backend.isConnected) { await this.backend.stopModelOperation(this.resourceId); }
+			const terminal = this.terminal;
+			if (terminal?.state === LocalTranscriptionModelState.Error) { throw new Error(terminal.error); }
+			await this.completion.complete(terminal?.state === LocalTranscriptionModelState.Ready ? LocalTranscriptionModelState.Ready : LocalTranscriptionModelState.Cancelled);
+		} catch (error) {
+			await this.completion.error(error);
+		}
+	}
+
+	protected override disposeCore(): void {
+		void this.cancel();
 		super.disposeCore();
 	}
 }

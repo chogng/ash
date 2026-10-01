@@ -1,6 +1,7 @@
 import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
 import { APP_SERVER_METHODS } from '../../app-server/common/generated/index.js';
-import type { ILocalTranscriptionBackendService } from '../common/localTranscription.js';
+import { LocalTranscriptionModelState, type ILocalTranscriptionBackendService, type ILocalTranscriptionModelStatus } from '../common/localTranscription.js';
+import type { DictationModelStage } from '../../app-server/common/generated/index.js';
 
 /** Converts only this domain's messages on the renderer's existing connection. */
 export function createAppServerLocalTranscriptionBackendService(client: AppServerProtocolClient): ILocalTranscriptionBackendService {
@@ -17,9 +18,33 @@ export function createAppServerLocalTranscriptionBackendService(client: AppServe
 				listener({ resourceId: notification.params.resourceId, error: notification.params.error ?? undefined });
 			}
 		}),
+		onDidChangeModelStatus: listener => client.onNotification(notification => {
+			if (notification.method === 'dictation/model/progress') {
+				listener({ resourceId: notification.params.resourceId, model: notification.params.modelId, status: modelStatus(notification.params.stage) });
+			}
+		}),
+		getModelStatus: async model => {
+			const status = await client.request(APP_SERVER_METHODS['dictation/model/read'], { modelId: model });
+			return { model: status.modelId, available: status.available };
+		},
+		startModelOperation: async (resourceId, model, operation) => {
+			await client.request(APP_SERVER_METHODS['dictation/model/start'], { resourceId, modelId: model, operation });
+		},
+		stopModelOperation: async resourceId => { await client.request(APP_SERVER_METHODS['dictation/model/stop'], { resourceId }); },
 		start: async (resourceId, model) => {
 			await client.request(APP_SERVER_METHODS['dictation/start'], { resourceId, backend: { type: 'local', modelId: model } });
 		},
 		stop: async resourceId => (await client.request(APP_SERVER_METHODS['dictation/stop'], { resourceId })).text,
 	};
+}
+
+function modelStatus(stage: DictationModelStage): ILocalTranscriptionModelStatus {
+	switch (stage.type) {
+		case 'checking': return { state: LocalTranscriptionModelState.Checking };
+		case 'downloading': return { state: LocalTranscriptionModelState.Downloading, file: stage.file, downloadedBytes: stage.downloadedBytes };
+		case 'loading': return { state: LocalTranscriptionModelState.Loading };
+		case 'ready': return { state: LocalTranscriptionModelState.Ready };
+		case 'cancelled': return { state: LocalTranscriptionModelState.Cancelled };
+		case 'failed': return { state: LocalTranscriptionModelState.Error, error: stage.error };
+	}
 }

@@ -143,6 +143,8 @@ enum DictationTarget {
 pub(crate) struct App {
     next_panel_generation: u64,
     dictation_resource_id: Option<String>,
+    dictation_model_progress:
+        Option<ash_app_server_protocol::protocol::dictation::DictationModelStage>,
     dictation_target: Option<DictationTarget>,
     dictation_pending: bool,
     dictation_stop_requested: bool,
@@ -156,6 +158,7 @@ pub(crate) struct App {
     voice_thread_id: Option<ash_protocol::ThreadId>,
     voice_stopping: bool,
     voice_ready: bool,
+    voice_model_progress: Option<realtime_voice::ModelProgress>,
     voice_partial: String,
     voice_next_id: u64,
     pub(super) chat_panel: ChatPanel,
@@ -186,6 +189,7 @@ impl App {
         let mut app = Self {
             next_panel_generation: 1,
             dictation_resource_id: None,
+            dictation_model_progress: None,
             dictation_target: None,
             dictation_pending: false,
             dictation_stop_requested: false,
@@ -198,6 +202,7 @@ impl App {
             voice_thread_id: None,
             voice_stopping: false,
             voice_ready: false,
+            voice_model_progress: None,
             voice_partial: String::new(),
             voice_next_id: 0,
             chat_panel: ChatPanel::new(),
@@ -290,6 +295,7 @@ impl App {
         Self {
             next_panel_generation: 1,
             dictation_resource_id: None,
+            dictation_model_progress: None,
             dictation_target: None,
             dictation_pending: false,
             dictation_stop_requested: false,
@@ -302,6 +308,7 @@ impl App {
             voice_thread_id: None,
             voice_stopping: false,
             voice_ready: false,
+            voice_model_progress: None,
             voice_partial: String::new(),
             voice_next_id: 0,
             chat_panel: ChatPanel::new(),
@@ -1011,11 +1018,41 @@ impl App {
     }
 
     pub(crate) fn voice_status(&self) -> Option<String> {
+        if self.dictation_resource_id.is_some()
+            && let Some(stage) = &self.dictation_model_progress
+        {
+            use ash_app_server_protocol::protocol::dictation::DictationModelStage;
+            let progress = match stage {
+                DictationModelStage::Checking => realtime_voice::ModelProgress::Checking,
+                DictationModelStage::Downloading {
+                    file,
+                    downloaded_bytes,
+                } => realtime_voice::ModelProgress::Downloading {
+                    file: file.clone(),
+                    downloaded_bytes: *downloaded_bytes,
+                },
+                DictationModelStage::Loading => realtime_voice::ModelProgress::Loading,
+                DictationModelStage::Ready => realtime_voice::ModelProgress::Ready,
+                DictationModelStage::Cancelled => realtime_voice::ModelProgress::Cancelled,
+                DictationModelStage::Failed { error } => realtime_voice::ModelProgress::Failed {
+                    error: error.clone(),
+                },
+            };
+            if let Some(text) = model_progress_text(self.language(), &progress) {
+                return Some(text);
+            }
+        }
         self.voice_resource_id.as_ref()?;
         let status = if self.voice_stopping {
             crate::nls::localize(self.language(), "Voice · stopping").into_owned()
         } else if !self.voice_ready {
-            crate::nls::localize(self.language(), "Voice · preparing microphone").into_owned()
+            self.voice_model_progress
+                .as_ref()
+                .and_then(|progress| model_progress_text(self.language(), progress))
+                .unwrap_or_else(|| {
+                    crate::nls::localize(self.language(), "Voice · preparing microphone")
+                        .into_owned()
+                })
         } else if self.voice_partial.is_empty() {
             crate::nls::localize(self.language(), "Voice · listening · /voice to stop").into_owned()
         } else {
@@ -1034,6 +1071,28 @@ impl App {
             && self.voice_thread_id.as_ref() == Some(self.thread_presentations.active_id())
         {
             self.voice_partial = text;
+        }
+    }
+
+    pub(crate) fn voice_model_progress(
+        &mut self,
+        resource_id: &str,
+        progress: realtime_voice::ModelProgress,
+    ) {
+        if self.voice_resource_id.as_deref() == Some(resource_id) && !self.voice_stopping {
+            self.voice_model_progress = Some(progress);
+        }
+    }
+
+    pub(crate) fn dictation_model_progress(
+        &mut self,
+        resource_id: &str,
+        progress: ash_app_server_protocol::protocol::dictation::DictationModelStage,
+    ) {
+        if self.dictation_resource_id.as_deref() == Some(resource_id)
+            && !self.dictation_stop_requested
+        {
+            self.dictation_model_progress = Some(progress);
         }
     }
 
@@ -1110,6 +1169,7 @@ impl App {
         self.voice_thread_id = Some(self.thread_presentations.active_id().clone());
         self.voice_resource_id = Some(resource_id.clone());
         self.voice_ready = false;
+        self.voice_model_progress = None;
         self.voice_partial.clear();
         Some(AppCommand::VoiceStart { resource_id })
     }
@@ -1173,6 +1233,7 @@ impl App {
         self.dictation_next_id += 1;
         let resource_id = format!("tui-dictation-{}", self.dictation_next_id);
         self.dictation_resource_id = Some(resource_id.clone());
+        self.dictation_model_progress = None;
         self.dictation_target = Some(self.current_dictation_target());
         self.dictation_pending = true;
         self.dictation_stop_requested = false;
@@ -3895,6 +3956,35 @@ fn is_advisor_config_argument(argument: &str) -> bool {
         || argument.split_once('/').is_some_and(|(provider, model)| {
             !provider.is_empty() && !model.is_empty() && !argument.chars().any(char::is_whitespace)
         })
+}
+
+fn model_progress_text(
+    language: crate::nls::Language,
+    progress: &realtime_voice::ModelProgress,
+) -> Option<String> {
+    use realtime_voice::ModelProgress;
+    let mut text = match progress {
+        ModelProgress::Checking => crate::nls::Text::from("Voice · checking model files"),
+        ModelProgress::Loading => crate::nls::Text::from("Voice · loading model"),
+        ModelProgress::Downloading {
+            file,
+            downloaded_bytes,
+        } => crate::nls::Text::template(
+            "Voice · downloading {0}: {1} MiB",
+            vec![
+                crate::nls::Text::literal(file),
+                crate::nls::Text::literal(format!(
+                    "{:.1}",
+                    *downloaded_bytes as f64 / (1024.0 * 1024.0)
+                )),
+            ],
+        ),
+        ModelProgress::Ready | ModelProgress::Cancelled | ModelProgress::Failed { .. } => {
+            return None;
+        }
+    };
+    text.localize(language);
+    Some(text.to_string())
 }
 
 #[cfg(test)]

@@ -1,4 +1,46 @@
 import { expect, test } from '../../../automation/test.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+test('Local model management reports backend import errors and unavailable capture', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'Requires Code Settings');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+Shift+P');
+	await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
+	await page.keyboard.press('Enter');
+	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+	await settings.locator('[data-settings-group-id="agents"]').click();
+	await settings.locator('[data-settings-category-id="models"]').click();
+	const controls = settings.locator('.ash-local-transcription-model-controls');
+	await expect(controls).toBeVisible();
+	const prepare = controls.getByRole('button', { name: 'Prepare model', exact: true });
+	const importModel = controls.getByRole('button', { name: 'Import model', exact: true });
+	const cancel = controls.getByRole('button', { name: 'Cancel', exact: true });
+	const status = controls.getByRole('status');
+	await expect(cancel).toBeDisabled();
+	if (target.kind === 'browser' || target.appServerMode !== 'required') {
+		await expect(prepare).toBeDisabled();
+		await expect(importModel).toBeDisabled();
+		await expect(status).toHaveText('Dictation connection is unavailable');
+		return;
+	}
+	await expect(status).toContainText('Model package not installed:');
+	await expect(prepare).toBeEnabled();
+	await expect(importModel).toBeDisabled();
+	const source = await mkdtemp(join(tmpdir(), 'ash-model-import-'));
+	try {
+		await controls.getByRole('textbox', { name: 'Prepared Paraformer model directory' }).fill(source);
+		await expect(importModel).toBeEnabled();
+		await importModel.click();
+		await expect(status).toContainText('Model preparation failed:');
+		await expect(status).toContainText('Could not read dictation model package');
+		await expect(importModel).toBeEnabled();
+		await expect(cancel).toBeDisabled();
+	} finally {
+		await rm(source, { recursive: true, force: true });
+	}
+});
 
 test('Workbench exposes current Tools and Sandbox capabilities', async ({ target, workbench }) => {
 	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires Code with App Server');
@@ -66,6 +108,8 @@ test('Workbench and Sessions Models share model visibility', async ({ applicatio
 	await sessionsPage.getByRole('menuitem', { name: 'Settings' }).click();
 	const sessionsSettings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
 	await sessionsSettings.getByRole('navigation', { name: 'Settings categories' }).getByRole('button', { name: 'Models' }).click();
+	await expect(sessionsSettings.locator('.ash-local-transcription-model-controls').getByRole('button', { name: 'Prepare model', exact: true })).toBeEnabled();
+	await expect(sessionsSettings.locator('.ash-local-transcription-model-status')).toContainText('Model package not installed:');
 	const sessionSwitch = sessionsSettings.getByRole('switch', { name: modelLabel });
 	await expect(sessionSwitch).toHaveAttribute('aria-checked', String(!initiallyVisible));
 	await sessionSwitch.locator('..').locator('.ash-switch-track').click();

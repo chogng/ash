@@ -15,6 +15,7 @@ import type { IRemoteAgentService } from '../../../../../workbench/services/remo
 import type { RemoteConnectionState } from '../../../../../platform/remote/common/remote.js';
 import type { IDirPermissionsService } from '../../../../../platform/dirPermissions/common/dirPermissionsService.js';
 import type { ILanguagePackService, LanguagePackInfo } from '../../../../../platform/languagePacks/common/languagePacksService.js';
+import type { ILocalTranscriptionModelStatus, ILocalTranscriptionService as LocalTranscriptionService, LocalTranscriptionModelState as ModelState } from '../../../../../platform/localTranscription/common/localTranscription.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>', {
 	pretendToBeVisual: true,
@@ -80,7 +81,9 @@ const { EditorPaneRegistry, EditorPanes } = await import('../../../../browser/ed
 const { SettingsSearchQuery } = await import('../../../../../workbench/contrib/preferences/browser/settingsSearch.js');
 const { createSettingsLayout, SettingsCategories, SettingsLayout } = await import('../../../../../workbench/contrib/preferences/browser/settingsLayout.js');
 const { SettingsEditorId } = await import('../../../../../workbench/contrib/preferences/browser/settingsEditor.js');
-const { ModelsSettings } = await import('../../../../../workbench/contrib/preferences/browser/modelsSettings.js');
+const { ILocalTranscriptionService, LocalTranscriptionModelState } = await import('../../../../../platform/localTranscription/common/localTranscription.js');
+const { NullLocalTranscriptionService } = await import('../../../../../workbench/services/localTranscription/browser/localTranscriptionService.js');
+const { ModelsSettings, LocalTranscriptionModelControls } = await import('../../../../../workbench/contrib/preferences/browser/modelsSettings.js');
 const { SettingsTree } = await import('../../../../../workbench/contrib/preferences/browser/settingsTree.js');
 const { SettingsTreeModel } = await import('../../../../../workbench/contrib/preferences/browser/settingsTreeModels.js');
 const { PreferencesService } = await import('../../../../../workbench/services/preferences/browser/preferencesService.js');
@@ -340,7 +343,10 @@ test('Models Settings keeps loading API connections when the model catalog chang
 		listModelProviders: () => providers,
 		isModelVisible: () => true,
 	} as unknown as IChatService;
-	const panel = disposables.add(new ModelsSettings(root, {
+	const services = disposables.add(new InstantiationService());
+	services.registerInstance(ILocalTranscriptionService, disposables.add(new NullLocalTranscriptionService()));
+	services.registerInstance(ConfigurationServiceId, configuration);
+	const panel = disposables.add(services.createInstance(ModelsSettings, root, {
 		chatService: chat,
 		clipboardService: {} as IClipboardService,
 		configurationService: configuration,
@@ -488,6 +494,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(LocalizationServiceId, workbenchLocalization);
 	services.registerInstance(GitServiceId, gitService);
 	services.registerInstance(ChatServiceId, chatService);
+	services.registerInstance(ILocalTranscriptionService, disposables.add(new NullLocalTranscriptionService()));
 	const descriptor = EditorPanes.getEditorPanes().find(candidate => candidate.id === SettingsEditorId);
 	assert.ok(descriptor);
 	assert.throws(() => descriptor.create({ instantiationService: services }), /Unknown service: localeService/);
@@ -665,7 +672,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	modelSearch.value = '';
 	modelSearch.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	const apiInput = root.querySelector<HTMLInputElement>('.ash-models-settings-api-controls input[type="password"]');
-	const saveKey = root.querySelector<HTMLButtonElement>('.ash-models-settings-api-controls button');
+	const saveKey = apiInput?.closest('.ash-models-settings-api-controls')?.querySelector<HTMLButtonElement>('button');
 	assert.ok(apiInput && saveKey);
 	apiInput.value = 'test-secret';
 	apiInput.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
@@ -751,3 +758,56 @@ function findSettingCategory(layout: ReturnType<typeof createSettingsLayout>, se
 async function nextTurn(): Promise<void> {
 	await new Promise<void>(resolve => setTimeout(resolve, 0));
 }
+
+test('Local model controls translate progress, import the selected package and cancel on close', async () => {
+	using resources = new DisposableStore();
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	resources.add(toDisposable(resetNlsResolver));
+	const configuration = resources.add(new WorkbenchConfigurationService());
+	await configuration.updateValue(DictationConfiguration.localModel, 'imported-model');
+	const services = resources.add(new InstantiationService());
+	services.registerInstance(ConfigurationServiceId, configuration);
+	let progress!: (status: ILocalTranscriptionModelStatus) => void;
+	let finish!: (state: ModelState.Cancelled) => void;
+	let cancellations = 0;
+	const imported: unknown[] = [];
+	services.registerInstance(ILocalTranscriptionService, {
+		isSupported: true,
+		getModelStatus: async (model: string) => ({ model, available: false }),
+		importModel: (options: unknown, onProgress: typeof progress) => {
+			imported.push(options);
+			progress = onProgress;
+			return {
+				completed: new Promise<ModelState.Cancelled>(resolve => { finish = resolve; }),
+				cancel: async () => { cancellations++; progress({ state: LocalTranscriptionModelState.Cancelled }); finish(LocalTranscriptionModelState.Cancelled); },
+				dispose() {},
+			};
+		},
+	} as unknown as LocalTranscriptionService);
+	const root = h(browserEnvironment.window.document, 'div');
+	const controls = resources.add(services.createInstance(LocalTranscriptionModelControls, root));
+	controls.setVisible(true);
+	await nextTurn();
+	const status = root.querySelector<HTMLElement>('[role="status"]')!;
+	assert.equal(status.textContent, '模型包尚未安装：imported-model');
+	const source = root.querySelector<HTMLInputElement>('input')!;
+	assert.equal(source.getAttribute('aria-label'), '已准备好的 Paraformer 模型目录');
+	assert.equal(root.querySelector('label')?.htmlFor, source.id);
+	source.value = 'C:\\prepared-model';
+	source.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+	const buttons = [...root.querySelectorAll<HTMLButtonElement>('button')];
+	const importButton = buttons.find(button => button.textContent === '导入模型')!;
+	assert.equal(importButton.disabled, false);
+	importButton.click();
+	assert.deepEqual(imported, [{ model: 'imported-model', sourcePath: 'C:\\prepared-model' }]);
+	assert.equal(importButton.disabled, true);
+	progress({ state: LocalTranscriptionModelState.Downloading, file: 'encoder.onnx', downloadedBytes: 2 * 1024 * 1024 });
+	assert.equal(status.textContent, '正在下载 encoder.onnx：2.0 MiB');
+	assert.equal(status.getAttribute('aria-atomic'), 'true');
+	controls.setVisible(false);
+	await nextTurn();
+	assert.equal(cancellations, 1);
+	assert.equal(importButton.disabled, false);
+	assert.equal(buttons.find(button => button.textContent === '取消')?.disabled, true);
+});

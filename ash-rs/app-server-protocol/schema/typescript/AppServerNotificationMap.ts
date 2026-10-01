@@ -6,6 +6,7 @@ import type { CallStatus } from './types/CallStatus.js';
 import type { ConfigChanged } from './types/ConfigChanged.js';
 import type { ConnectorsChanged } from './types/ConnectorsChanged.js';
 import type { DictationEnded } from './types/DictationEnded.js';
+import type { DictationModelProgress } from './types/DictationModelProgress.js';
 import type { DictationTranscript } from './types/DictationTranscript.js';
 import type { DocumentCollaborationPresenceSnapshot } from './types/DocumentCollaborationPresenceSnapshot.js';
 import type { DocumentCollaborationUpdate } from './types/DocumentCollaborationUpdate.js';
@@ -41,6 +42,7 @@ export interface AppServerNotificationMap {
   "call/changed": CallStatus;
   "dictation/transcript": DictationTranscript;
   "dictation/ended": DictationEnded;
+  "dictation/model/progress": DictationModelProgress;
   "document/collaboration/update": DocumentCollaborationUpdate;
   "document/collaboration/presence": DocumentCollaborationPresenceSnapshot;
   "session/thread/update": ThreadUpdateEnvelope;
@@ -89,6 +91,7 @@ export const APP_SERVER_NOTIFICATIONS: {
   "call/changed": { method: "call/changed" },
   "dictation/transcript": { method: "dictation/transcript" },
   "dictation/ended": { method: "dictation/ended" },
+  "dictation/model/progress": { method: "dictation/model/progress" },
   "document/collaboration/update": { method: "document/collaboration/update" },
   "document/collaboration/presence": { method: "document/collaboration/presence" },
   "session/thread/update": { method: "session/thread/update" },

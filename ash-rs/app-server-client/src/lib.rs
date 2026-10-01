@@ -50,6 +50,9 @@ use ash_app_server_protocol::protocol::connectors::ConnectorOAuthRefreshParams;
 use ash_app_server_protocol::protocol::connectors::ConnectorOAuthStartParams;
 use ash_app_server_protocol::protocol::connectors::ConnectorOAuthStartResult;
 use ash_app_server_protocol::protocol::dictation::DictationBackend;
+use ash_app_server_protocol::protocol::dictation::DictationModelParams;
+use ash_app_server_protocol::protocol::dictation::DictationModelStartParams;
+use ash_app_server_protocol::protocol::dictation::DictationModelStatus;
 use ash_app_server_protocol::protocol::dictation::DictationResourceParams;
 use ash_app_server_protocol::protocol::dictation::DictationStartParams;
 use ash_app_server_protocol::protocol::dictation::DictationStopResult;
@@ -1438,6 +1441,32 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
     ) -> Result<DictationStopResult, ClientError> {
         self.call(
             ClientMethod::DictationStop,
+            DictationResourceParams { resource_id },
+        )
+    }
+
+    pub fn read_dictation_model(
+        &mut self,
+        model_id: String,
+    ) -> Result<DictationModelStatus, ClientError> {
+        self.call(
+            ClientMethod::DictationModelRead,
+            DictationModelParams { model_id },
+        )
+    }
+
+    /// Returns after acceptance; progress and the terminal outcome arrive on this connection.
+    pub fn start_dictation_model(
+        &mut self,
+        params: DictationModelStartParams,
+    ) -> Result<(), ClientError> {
+        self.call(ClientMethod::DictationModelStart, params)
+    }
+
+    /// Returns only after the model worker has stopped and released its installation lock.
+    pub fn stop_dictation_model(&mut self, resource_id: String) -> Result<(), ClientError> {
+        self.call(
+            ClientMethod::DictationModelStop,
             DictationResourceParams { resource_id },
         )
     }

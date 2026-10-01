@@ -3307,3 +3307,29 @@ fn persistent_queue_snapshot_distinguishes_pending_and_paused_messages() {
     });
     crate::tui_assert_snapshot!("persistent_queue", render(&app, 80, 20));
 }
+
+#[test]
+fn voice_model_preparation_shows_real_download_bytes_in_chinese() {
+    let mut app = App::new();
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_language(crate::nls::Language::Chinese);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    app.insert_text("/voice");
+    let Some(AppCommand::VoiceStart { resource_id }) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("expected voice start");
+    };
+    app.voice_model_progress(
+        &resource_id,
+        realtime_voice::ModelProgress::Downloading {
+            file: "encoder.onnx".into(),
+            downloaded_bytes: 2 * 1024 * 1024,
+        },
+    );
+    assert_eq!(
+        app.voice_status().unwrap(),
+        "语音 · 正在下载 encoder.onnx：2.0 MiB"
+    );
+    crate::tui_assert_snapshot!("voice_model_downloading_zh", render(&app, 80, 20));
+}

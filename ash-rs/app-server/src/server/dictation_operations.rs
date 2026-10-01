@@ -6,6 +6,12 @@ use super::result;
 use ash_app_server_protocol::protocol::dictation::DictationBackend;
 use ash_app_server_protocol::protocol::dictation::DictationCloudProvider;
 use ash_app_server_protocol::protocol::dictation::DictationEnded;
+use ash_app_server_protocol::protocol::dictation::DictationModelOperation;
+use ash_app_server_protocol::protocol::dictation::DictationModelParams;
+use ash_app_server_protocol::protocol::dictation::DictationModelProgress;
+use ash_app_server_protocol::protocol::dictation::DictationModelStage;
+use ash_app_server_protocol::protocol::dictation::DictationModelStartParams;
+use ash_app_server_protocol::protocol::dictation::DictationModelStatus;
 use ash_app_server_protocol::protocol::dictation::DictationResourceParams;
 use ash_app_server_protocol::protocol::dictation::DictationStartParams;
 use ash_app_server_protocol::protocol::dictation::DictationStopResult;
@@ -51,37 +57,9 @@ impl AppServer {
             DictationBackend::Local { model_id } => {
                 DictationRequest::Local(LocalDictationRequest {
                     model_id,
-                    model_root: self
-                        .home
-                        .as_ref()
-                        .ok_or_else(|| dictation_error("Ash home is unavailable".into()))?
-                        .root()
-                        .join("dictation-models"),
+                    model_root: self.dictation_model_root()?,
                     audio_host,
-                    network: ash_http_client::OutboundNetworkSnapshot::with_policy(
-                        ash_http_client::HttpClientConfig::new()
-                            .with_redirect_policy(ash_http_client::RedirectPolicy::Follow {
-                                max_hops: std::num::NonZeroU8::new(4)
-                                    .expect("nonzero redirect limit"),
-                            })
-                            .with_streaming_response_body_limit(
-                                ash_http_client::ResponseBodyLimit::new(
-                                    std::num::NonZeroUsize::new(300 * 1024 * 1024)
-                                        .expect("nonzero model limit"),
-                                )
-                                .map_err(|error| dictation_error(error.to_string()))?,
-                            )
-                            .with_timeouts(ash_http_client::TransportTimeouts::new(
-                                ash_http_client::Timeout::After(std::time::Duration::from_secs(30)),
-                                ash_http_client::Timeout::Disabled,
-                                ash_http_client::Timeout::Disabled,
-                                ash_http_client::Timeout::After(std::time::Duration::from_secs(
-                                    300,
-                                )),
-                            )),
-                        self.calls.network_policy(),
-                    )
-                    .map_err(|error| dictation_error(error.to_string()))?,
+                    network: self.dictation_model_network()?,
                 })
             }
             DictationBackend::Cloud { provider, model_id } => {
@@ -139,6 +117,10 @@ impl AppServer {
             }
         };
         let resource_id = params.resource_id.clone();
+        let model_id = match &request {
+            DictationRequest::Local(request) => Some(request.model_id.clone()),
+            DictationRequest::Cloud(_) => None,
+        };
         let notifications = connection.outbound_notifications.clone();
         self.dictation
             .start(
@@ -146,6 +128,14 @@ impl AppServer {
                 params.resource_id,
                 request,
                 move |event| match event {
+                    DictationEvent::ModelProgress(progress) => notifications.push(notification(
+                        ServerNotificationMethod::DictationModelProgress,
+                        &DictationModelProgress {
+                            resource_id: resource_id.clone(),
+                            model_id: model_id.clone().expect("local model progress"),
+                            stage: model_stage(progress),
+                        },
+                    )),
                     DictationEvent::Transcript { text, is_final } => {
                         notifications.push(notification(
                             ServerNotificationMethod::DictationTranscript,
@@ -181,6 +171,145 @@ impl AppServer {
             .map_err(dictation_error)?;
         result(&DictationStopResult { text })
     }
+
+    pub(super) fn dictation_model_read(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        require_product_host(connection)?;
+        let params: DictationModelParams = decode(params)?;
+        let available = realtime_voice::DictationModelManager::is_available(
+            &self.dictation_model_root()?,
+            &params.model_id,
+        )
+        .map_err(dictation_error)?;
+        result(&DictationModelStatus {
+            model_id: params.model_id,
+            available,
+        })
+    }
+
+    pub(super) fn dictation_model_start(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        require_product_host(connection)?;
+        let params: DictationModelStartParams = decode(params)?;
+        let operation = match params.operation {
+            DictationModelOperation::Prepare => realtime_voice::ModelOperation::Prepare {
+                network: self.dictation_model_network()?,
+            },
+            DictationModelOperation::Import { source_directory } => {
+                realtime_voice::ModelOperation::Import {
+                    source: source_directory.into(),
+                }
+            }
+        };
+        let model_id = params.model_id.clone();
+        let resource_id = params.resource_id.clone();
+        let notifications = connection.outbound_notifications.clone();
+        self.dictation_models
+            .start(
+                connection.connection_id,
+                params.resource_id,
+                realtime_voice::ModelRequest {
+                    model_root: self.dictation_model_root()?,
+                    model_id: params.model_id,
+                    operation,
+                },
+                move |progress| {
+                    notifications.push(notification(
+                        ServerNotificationMethod::DictationModelProgress,
+                        &DictationModelProgress {
+                            resource_id: resource_id.clone(),
+                            model_id: model_id.clone(),
+                            stage: model_stage(progress),
+                        },
+                    ))
+                },
+            )
+            .map_err(dictation_error)?;
+        result(&())
+    }
+
+    pub(super) fn dictation_model_stop(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        require_product_host(connection)?;
+        let params: DictationResourceParams = decode(params)?;
+        realtime_voice::DictationManager::validate_resource_id(&params.resource_id)
+            .map_err(dictation_error)?;
+        self.dictation_models
+            .stop(connection.connection_id, &params.resource_id)
+            .map_err(dictation_error)?;
+        result(&())
+    }
+
+    fn dictation_model_root(&self) -> Result<std::path::PathBuf, RpcError> {
+        Ok(self
+            .home
+            .as_ref()
+            .ok_or_else(|| dictation_error("Ash home is unavailable".into()))?
+            .root()
+            .join("dictation-models"))
+    }
+
+    fn dictation_model_network(
+        &self,
+    ) -> Result<ash_http_client::OutboundNetworkSnapshot, RpcError> {
+        ash_http_client::OutboundNetworkSnapshot::with_policy(
+            ash_http_client::HttpClientConfig::new()
+                .with_redirect_policy(ash_http_client::RedirectPolicy::Follow {
+                    max_hops: std::num::NonZeroU8::new(4).expect("nonzero redirect limit"),
+                })
+                .with_streaming_response_body_limit(
+                    ash_http_client::ResponseBodyLimit::new(
+                        std::num::NonZeroUsize::new(300 * 1024 * 1024)
+                            .expect("nonzero model limit"),
+                    )
+                    .map_err(|error| dictation_error(error.to_string()))?,
+                )
+                .with_timeouts(ash_http_client::TransportTimeouts::new(
+                    ash_http_client::Timeout::After(std::time::Duration::from_secs(30)),
+                    ash_http_client::Timeout::Disabled,
+                    ash_http_client::Timeout::Disabled,
+                    ash_http_client::Timeout::After(std::time::Duration::from_secs(300)),
+                )),
+            self.calls.network_policy(),
+        )
+        .map_err(|error| dictation_error(error.to_string()))
+    }
+}
+
+fn require_product_host(connection: &ConnectionState) -> Result<(), RpcError> {
+    if !connection.allows_product_host_capabilities() {
+        return Err(RpcError::new(
+            -32073,
+            AppServerErrorName::PermissionRequired,
+        ));
+    }
+    Ok(())
+}
+
+fn model_stage(progress: realtime_voice::ModelProgress) -> DictationModelStage {
+    match progress {
+        realtime_voice::ModelProgress::Checking => DictationModelStage::Checking,
+        realtime_voice::ModelProgress::Downloading {
+            file,
+            downloaded_bytes,
+        } => DictationModelStage::Downloading {
+            file,
+            downloaded_bytes,
+        },
+        realtime_voice::ModelProgress::Loading => DictationModelStage::Loading,
+        realtime_voice::ModelProgress::Ready => DictationModelStage::Ready,
+        realtime_voice::ModelProgress::Cancelled => DictationModelStage::Cancelled,
+        realtime_voice::ModelProgress::Failed { error } => DictationModelStage::Failed { error },
+    }
 }
 
 fn dictation_error(detail: String) -> RpcError {
@@ -190,37 +319,5 @@ fn dictation_error(detail: String) -> RpcError {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::local::ProviderModelService;
-    use ash_core::{InMemoryThreadStore, ThreadController};
-    use ash_model_provider::EchoModel;
-    use std::sync::Arc;
-
-    #[test]
-    fn dictation_requires_product_authority_and_rejects_invalid_resource_ids() {
-        let server = AppServer::new(
-            Arc::new(ThreadController::with_store(Arc::new(
-                InMemoryThreadStore::default(),
-            ))),
-            Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
-        );
-        let mut client = server.connection();
-        let mut host = server.product_host_connection();
-        for connection in [&mut client, &mut host] {
-            let response: serde_json::Value = serde_json::from_str(&server.handle_json(connection,
-                &serde_json::json!({"jsonrpc":"2.0", "id":1, "method":"initialize", "params":{"clientInfo":{"name":"dictation-test","version":"1"},"capabilities":{}}}).to_string())).unwrap();
-            assert!(response.get("result").is_some());
-        }
-        let request = serde_json::json!({"jsonrpc":"2.0", "id":2, "method":"dictation/start", "params":{"resourceId":"bad/id","backend":{"type":"local","modelId":"paraformer-large-online-ec6a3c64"}}}).to_string();
-        let denied: serde_json::Value =
-            serde_json::from_str(&server.handle_json(&mut client, &request)).unwrap();
-        assert_eq!(denied["error"]["message"], "PermissionRequired");
-        let rejected: serde_json::Value =
-            serde_json::from_str(&server.handle_json(&mut host, &request)).unwrap();
-        assert_eq!(
-            rejected["error"]["message"],
-            "InternalError: Invalid dictation resource ID"
-        );
-    }
-}
+#[path = "dictation_operations_tests.rs"]
+mod tests;

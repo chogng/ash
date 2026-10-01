@@ -161,6 +161,35 @@ fn voice_status_is_visible_below_the_inline_input() {
 }
 
 #[test]
+fn voice_model_preparation_shows_real_download_bytes_in_chinese() {
+    let mut app = app();
+    let mut settings = TerminalSettings::default();
+    settings.set_screen_mode(ScreenMode::Inline);
+    settings.set_language(crate::nls::Language::Chinese);
+    app.update(ConfigEvent::SettingsReceived(settings));
+    app.insert_text("/voice");
+    let Some(AppCommand::VoiceStart { resource_id }) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("expected voice start");
+    };
+    app.voice_model_progress("another-resource", realtime_voice::ModelProgress::Loading);
+    assert!(app.voice_status().unwrap().contains("正在准备麦克风"));
+    app.voice_model_progress(
+        &resource_id,
+        realtime_voice::ModelProgress::Downloading {
+            file: "encoder.onnx".into(),
+            downloaded_bytes: 2 * 1024 * 1024,
+        },
+    );
+    assert_eq!(
+        app.voice_status().unwrap(),
+        "语音 · 正在下载 encoder.onnx：2.0 MiB"
+    );
+    crate::tui_assert_snapshot!("voice_model_downloading_zh", text(&render(&app, 80, 20)));
+}
+
+#[test]
 fn running_tip_appears_below_the_inline_spinner() {
     let mut app = app();
     app.set_active_turn(ash_protocol::TurnId::new("inline-tip").unwrap());

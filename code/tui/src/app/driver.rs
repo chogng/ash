@@ -305,6 +305,11 @@ impl AppDriver {
             return;
         };
         match event {
+            crate::voice::Event::Speech(realtime_voice::LocalSpeechEvent::ModelProgress(
+                progress,
+            )) => {
+                self.app.voice_model_progress(&resource_id, progress);
+            }
             crate::voice::Event::Speech(realtime_voice::LocalSpeechEvent::Ready) => {
                 self.app.update(AppEvent::VoiceStarted {
                     resource_id,
@@ -774,6 +779,10 @@ fn refresh_server_event(
     app: &mut App,
 ) -> ServerRefresh {
     match event {
+        client::ClientEvent::DictationModelProgress(progress) => {
+            app.dictation_model_progress(&progress.resource_id, progress.stage);
+            ServerRefresh::default()
+        }
         client::ClientEvent::DictationTranscript(transcript) => {
             app.dictation_transcript(
                 &transcript.resource_id,

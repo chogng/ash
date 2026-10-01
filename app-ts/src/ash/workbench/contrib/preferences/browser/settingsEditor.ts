@@ -14,6 +14,7 @@ import { ILanguagePackService } from '../../../../platform/languagePacks/common/
 import type { IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { DESKTOP_UPDATE_POLICY_SETTING, type DesktopUpdatePolicy } from '../../../../platform/update/common/updateService.js';
 import { localize } from '../../../../nls.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
@@ -82,6 +83,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		@IRemoteAgentService private readonly remoteAgentService: IRemoteAgentService,
 		@IDirPermissionsService private readonly dirPermissionsService: IDirPermissionsService,
 		@IPreferencesService private readonly preferencesService: IPreferencesService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
 		this.configurationService = configurationService;
@@ -200,7 +202,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 			updateItem: item => settingsRenderer.update(item.value),
 			disposeItem: item => settingsRenderer.disposeSetting(item.id),
 		}));
-		this.modelsSettings = this._register(new ModelsSettings(settingsContent, {
+		this.modelsSettings = this._register(this.instantiationService.createInstance(ModelsSettings, settingsContent, {
 			chatService: this.chatService,
 			clipboardService: this.clipboardService,
 			configurationService: this.configurationService,

@@ -3,7 +3,69 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
-type EventSink = Box<dyn Fn(DictationEvent) + Send>;
+type EventSink = Box<dyn Fn(DictationEvent) + Send + Sync>;
+
+#[tokio::test]
+#[ignore = "requires ASH_TEST_DICTATION_MODEL_DIR and ASH_TEST_VOICE_HOST_PATH and a microphone"]
+async fn real_microphone_capture_and_local_session_release_the_device() {
+    use std::time::Duration;
+    let directory = PathBuf::from(std::env::var("ASH_TEST_DICTATION_MODEL_DIR").unwrap());
+    let executable = PathBuf::from(std::env::var("ASH_TEST_VOICE_HOST_PATH").unwrap()).canonicalize().unwrap();
+    // Inspect one real frame before running the production recognizer, without persisting audio.
+    let mut audio = voice_host::AudioHost::spawn(&executable).await.unwrap();
+    audio
+        .start(voice_host::AudioConfig {
+            rate: voice_host::SampleRate::Hz16000,
+            direction: voice_host::Direction::Capture,
+            processing: voice_host::Processing::Speech,
+        })
+        .await
+        .unwrap();
+    let capture = tokio::time::timeout(Duration::from_secs(10), audio.next_capture())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!capture.samples.is_empty());
+    audio.stop().await.unwrap();
+    audio.close().await.unwrap();
+    let (send, receive) = std::sync::mpsc::channel();
+    let mut session = LocalSpeechSession::start(
+        LocalDictationRequest {
+            model_id: directory.file_name().unwrap().to_str().unwrap().into(),
+            model_root: directory.parent().unwrap().into(),
+            audio_host: executable,
+            network:
+                http_client::OutboundNetworkSnapshot::new(http_client::HttpClientConfig::new())
+                    .unwrap(),
+        },
+        LocalSpeechMode::Dictation,
+        move |event| {
+            send.send(event).unwrap();
+        },
+    )
+    .unwrap();
+    loop {
+        let event = receive.recv_timeout(Duration::from_secs(30)).unwrap();
+        assert!(
+            !matches!(event, LocalSpeechEvent::Ended { .. }),
+            "{event:?}"
+        );
+        if event == LocalSpeechEvent::Ready {
+            break;
+        }
+    }
+    session.stop().unwrap();
+    let events = receive.try_iter().collect::<Vec<_>>();
+    assert!(
+        events
+            .iter()
+            .any(|event| matches!(event, LocalSpeechEvent::Utterance { .. }))
+    );
+    assert_eq!(
+        events.last(),
+        Some(&LocalSpeechEvent::Ended { error: None })
+    );
+}
 
 struct TestRecognizer {
     sink: Arc<Mutex<Option<EventSink>>>,

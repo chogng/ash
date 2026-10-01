@@ -4,6 +4,7 @@
 mod cloud;
 mod local;
 mod model_package;
+mod models;
 mod xai;
 
 use http_client::OutboundNetworkSnapshot;
@@ -19,6 +20,10 @@ use tokio::sync::oneshot;
 use websocket_client::WebSocketConnector;
 
 pub use model_package::DEFAULT_MODEL_ID;
+pub use models::DictationModelManager;
+pub use models::ModelOperation;
+pub use models::ModelProgress;
+pub use models::ModelRequest;
 
 /// Selects the installed local model package and the audio helper for one session.
 pub struct LocalDictationRequest {
@@ -59,6 +64,7 @@ pub enum LocalSpeechMode {
 /// Ordered recognition facts; only `Utterance` is suitable for submitting a user turn.
 #[derive(Debug, Eq, PartialEq)]
 pub enum LocalSpeechEvent {
+    ModelProgress(ModelProgress),
     Ready,
     Partial { text: String },
     Utterance { text: String },
@@ -75,9 +81,10 @@ impl LocalSpeechSession {
     pub fn start(
         request: LocalDictationRequest,
         mode: LocalSpeechMode,
-        on_event: impl Fn(LocalSpeechEvent) + Send + 'static,
+        on_event: impl Fn(LocalSpeechEvent) + Send + Sync + 'static,
     ) -> Result<Self, String> {
         let (stop, mut stopped) = oneshot::channel();
+        let on_event: Arc<dyn Fn(LocalSpeechEvent) + Send + Sync> = Arc::new(on_event);
         let worker = thread::Builder::new()
             .name("ash-local-speech".into())
             .spawn(move || {
@@ -86,7 +93,12 @@ impl LocalSpeechSession {
                     .build()
                     .map_err(|error| error.to_string())
                     .and_then(|runtime| {
-                        runtime.block_on(local::run_session(request, &mut stopped, mode, &on_event))
+                        runtime.block_on(local::run_session(
+                            request,
+                            &mut stopped,
+                            mode,
+                            Arc::clone(&on_event),
+                        ))
                     });
                 on_event(LocalSpeechEvent::Ended {
                     error: result.err(),
@@ -121,6 +133,7 @@ impl Drop for LocalSpeechSession {
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum DictationEvent {
+    ModelProgress(ModelProgress),
     Transcript { text: String, is_final: bool },
     Ended { error: Option<String> },
 }
@@ -131,7 +144,7 @@ trait Recognizer: Send + Sync {
     fn start(
         &self,
         request: DictationRequest,
-        on_event: Box<dyn Fn(DictationEvent) + Send>,
+        on_event: Box<dyn Fn(DictationEvent) + Send + Sync>,
     ) -> Result<Box<dyn RecognitionSession>, String>;
 }
 
@@ -151,9 +164,10 @@ impl Recognizer for SessionRecognizer {
     fn start(
         &self,
         request: DictationRequest,
-        on_event: Box<dyn Fn(DictationEvent) + Send>,
+        on_event: Box<dyn Fn(DictationEvent) + Send + Sync>,
     ) -> Result<Box<dyn RecognitionSession>, String> {
         let (stop, mut stopped) = oneshot::channel();
+        let on_event: Arc<dyn Fn(DictationEvent) + Send + Sync> = Arc::from(on_event);
         let worker = thread::Builder::new()
             .name("ash-dictation".into())
             .spawn(move || {
@@ -165,10 +179,10 @@ impl Recognizer for SessionRecognizer {
                         runtime.block_on(async {
                             match request {
                                 DictationRequest::Local(request) => {
-                                    local::run(request, &mut stopped, &on_event).await
+                                    local::run(request, &mut stopped, Arc::clone(&on_event)).await
                                 }
                                 DictationRequest::Cloud(request) => {
-                                    cloud::run(request, &mut stopped, &on_event).await
+                                    cloud::run(request, &mut stopped, on_event.as_ref()).await
                                 }
                             }
                         })
@@ -246,7 +260,7 @@ impl DictationManager {
         owner: u64,
         resource_id: String,
         request: DictationRequest,
-        on_event: impl Fn(DictationEvent) + Send + 'static,
+        on_event: impl Fn(DictationEvent) + Send + Sync + 'static,
     ) -> Result<(), String> {
         Self::validate_resource_id(&resource_id)?;
         let mut active = self

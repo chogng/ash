@@ -55,7 +55,9 @@ Session、Thread、Turn 和更新流，不建立第二套领域模型。
 - `backend` 明确选择本地模型，或选择 `openAi` / `xai` 云端供应商及其转写模型。云端识别使用该供应商的直接 API 凭据，不读取当前文字模型的订阅凭据。
 - [realtime-voice](../ash-rs/realtime-voice/README.md) 管理设备所在进程的识别会话，一个进程同时只占用一个麦克风。`dictation/transcript` 携带临时或最终文本，`dictation/ended` 携带结束及错误；这些通知只送给发起连接。停止响应也携带最终文本。
 - 停止请求或连接关闭会释放听写资源。App Server 在所在设备上采集音频；远端客户端需要由本机语音会话持有麦克风。
-- TypeScript 的 `platform/localTranscription/common/localTranscription.ts` 定义前端契约，Workbench 的 `services/localTranscription/electron-browser/localTranscriptionService.ts` 通过现有 renderer connection 接入上述听写资源。Workbench 与 Sessions 的本地听写共用该服务；停止等待最终文本，取消停止后端资源并丢弃后续文本，连接关闭结束当前输入。浏览器和 SSH 窗口不提供设备本地采集。采集、模型缓存和识别仍由共享 Rust 后端负责，前端不推送 PCM、不启动转写工作进程；现有协议尚未提供模型准备进度或模型导入接口。
+- `dictation/model/read` 查询模型包是否已安装，不加载识别器、不采集麦克风。`dictation/model/start` 使用连接所属的 `resourceId` 接受准备或导入操作，立即响应；`dictation/model/progress` 报告检查、下载字节数、加载及最终结果。停止请求和连接关闭取消该连接的操作，等待写入与工作线程结束后释放资源。模型发布成功与取消竞争时，已发布的包保留；可重复停止，不恢复断线前的操作。
+- Rust 统一决定模型缓存目录。导入参数只包含模型 ID 和源目录；源目录包含 `dictation-model.json`、`encoder.onnx`、`decoder.onnx`、`tokens.txt`。下载校验和导入均在临时目录中完成，实际加载通过后再发布；跨进程文件锁阻止同一模型同时安装，已安装的包不可覆盖。下载进度为每个文件实际收到的字节数，没有未知总大小的百分比。
+- TypeScript 的 `platform/localTranscription/common/localTranscription.ts` 定义前端契约，Workbench 的 `services/localTranscription/electron-browser/localTranscriptionService.ts` 通过现有 renderer connection 接入上述资源。Workbench 与 Sessions 的本地听写共用该服务和模型管理表单；关闭模型设置页取消其未完成操作。停止听写等待最终文本，取消丢弃后续文本，连接关闭结束当前输入。浏览器和 SSH 窗口不提供设备本地采集或模型操作。采集、模型缓存和识别由共享 Rust 后端负责，前端不推送 PCM、不启动转写工作进程。
 
 ### 唯一外部门禁
 

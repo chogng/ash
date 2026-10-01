@@ -87,6 +87,9 @@ import type { DebugAdapterSendParams } from './types/DebugAdapterSendParams.js';
 import type { DebugAdapterStartParams } from './types/DebugAdapterStartParams.js';
 import type { DebugAdapterStartResult } from './types/DebugAdapterStartResult.js';
 import type { DiagnosticSnapshot } from './types/DiagnosticSnapshot.js';
+import type { DictationModelParams } from './types/DictationModelParams.js';
+import type { DictationModelStartParams } from './types/DictationModelStartParams.js';
+import type { DictationModelStatus } from './types/DictationModelStatus.js';
 import type { DictationResourceParams } from './types/DictationResourceParams.js';
 import type { DictationStartParams } from './types/DictationStartParams.js';
 import type { DictationStopResult } from './types/DictationStopResult.js';
@@ -630,6 +633,9 @@ export interface AppServerRequestMap {
   "attachment/importRemote": { params: AttachmentImportRemoteParams; response: AttachmentMaterializeResult };
   "dictation/start": { params: DictationStartParams; response: null };
   "dictation/stop": { params: DictationResourceParams; response: DictationStopResult };
+  "dictation/model/read": { params: DictationModelParams; response: DictationModelStatus };
+  "dictation/model/start": { params: DictationModelStartParams; response: null };
+  "dictation/model/stop": { params: DictationResourceParams; response: null };
   "fs/getMetadata": { params: FsGetMetadataParams; response: FsGetMetadataResult };
   "fs/readDirectory": { params: FsReadDirectoryParams; response: FsReadDirectoryResult };
   "fs/readFile": { params: FsReadFileParams; response: FsReadFileResult };
@@ -945,6 +951,9 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "attachment/importRemote": { method: "attachment/importRemote" },
   "dictation/start": { method: "dictation/start" },
   "dictation/stop": { method: "dictation/stop" },
+  "dictation/model/read": { method: "dictation/model/read" },
+  "dictation/model/start": { method: "dictation/model/start" },
+  "dictation/model/stop": { method: "dictation/model/stop" },
   "fs/getMetadata": { method: "fs/getMetadata" },
   "fs/readDirectory": { method: "fs/readDirectory" },
   "fs/readFile": { method: "fs/readFile" },

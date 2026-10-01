@@ -4,7 +4,7 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import type { AppServerProtocolClient } from '../../../../../platform/app-server/browser/appServerProtocolClient.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { ILocalTranscriptionService, type ILocalTranscriptionResult } from '../../../../../platform/localTranscription/common/localTranscription.js';
+import { ILocalTranscriptionService, LocalTranscriptionModelState, type ILocalTranscriptionResult, type ILocalTranscriptionModelStatus } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { LocalTranscriptionService, registerLocalTranscriptionService } from '../../electron-browser/localTranscriptionService.js';
 import { NullLocalTranscriptionService } from '../../browser/localTranscriptionService.js';
 
@@ -35,7 +35,7 @@ class Client {
 
 	public async request(method: { readonly method: string }, params: { readonly resourceId: string; readonly backend?: unknown }): Promise<unknown> {
 		this.requests.push({ method: method.method, ...params });
-		if (method.method === 'dictation/start') {
+		if (method.method === 'dictation/start' || method.method === 'dictation/model/start') {
 			await this.accepted.complete();
 			await this.startBarrier?.p;
 			return null;
@@ -73,9 +73,73 @@ class Fixture extends Disposable {
 	public transcript(text: string, isFinal: boolean, resourceId = this.resourceId): void {
 		this.client.emit({ method: 'dictation/transcript', params: { resourceId, text, isFinal } });
 	}
+
+	public modelProgress(stage: { type: 'checking' | 'loading' | 'ready' | 'cancelled' } | { type: 'failed'; error: string }, resourceId = this.resourceId): void {
+		this.client.emit({ method: 'dictation/model/progress', params: { resourceId, modelId: 'selected-model', stage } });
+	}
 }
 
 suite('LocalTranscriptionService', () => {
+	test('model import maps its source and releases before reporting completion', async () => {
+		using fixture = new Fixture();
+		fixture.client.startBarrier = new DeferredPromise<void>();
+		fixture.client.stopBarrier = new DeferredPromise<void>();
+		const progress: ILocalTranscriptionModelStatus[] = [];
+		const operation = fixture.service.importModel({ model: 'selected-model', sourcePath: 'C:\\models\\prepared' }, status => progress.push(status));
+		await fixture.client.accepted.p;
+		fixture.modelProgress({ type: 'loading' }, 'another-resource');
+		fixture.modelProgress({ type: 'loading' });
+		fixture.modelProgress({ type: 'ready' });
+		await fixture.client.startBarrier.complete();
+		await fixture.client.stopped.p;
+		assert.deepEqual(progress, [{ state: LocalTranscriptionModelState.Loading }, { state: LocalTranscriptionModelState.Ready }]);
+		await fixture.client.stopBarrier.complete();
+		assert.equal(await operation.completed, LocalTranscriptionModelState.Ready);
+		fixture.modelProgress({ type: 'loading' });
+		assert.deepEqual(fixture.client.requests, [
+			{ method: 'dictation/model/start', resourceId: fixture.resourceId, modelId: 'selected-model', operation: { type: 'import', sourceDirectory: 'C:\\models\\prepared' } },
+			{ method: 'dictation/model/stop', resourceId: fixture.resourceId },
+		]);
+	});
+
+	test('model cancellation during acceptance waits and sends one backend stop', async () => {
+		using fixture = new Fixture();
+		fixture.client.startBarrier = new DeferredPromise<void>();
+		const operation = fixture.service.prepareModel('selected-model', () => {});
+		await fixture.client.accepted.p;
+		const cancelled = operation.cancel();
+		const repeated = operation.cancel();
+		await fixture.client.startBarrier.complete();
+		await Promise.all([cancelled, repeated]);
+		assert.equal(await operation.completed, LocalTranscriptionModelState.Cancelled);
+		assert.deepEqual(fixture.client.requests.map(request => request.method), ['dictation/model/start', 'dictation/model/stop']);
+	});
+
+	test('model failure and connection loss reject completion and remove operation listeners', async () => {
+		using fixture = new Fixture();
+		const baseline = fixture.client.notifications.size + fixture.client.states.size;
+		const failed = fixture.service.prepareModel('selected-model', () => {});
+		await fixture.client.accepted.p;
+		fixture.modelProgress({ type: 'failed', error: 'Invalid model format' });
+		await assert.rejects(failed.completed, /Invalid model format/);
+		assert.equal(fixture.client.notifications.size + fixture.client.states.size, baseline);
+		const disconnected = fixture.service.prepareModel('selected-model', () => {});
+		fixture.client.disconnect();
+		await assert.rejects(disconnected.completed, /connection lost/);
+		assert.equal(fixture.client.notifications.size + fixture.client.states.size, baseline);
+	});
+
+	test('capture model progress reaches only the owning session', async () => {
+		using fixture = new Fixture();
+		const progress: unknown[] = [];
+		using listener = fixture.service.onDidChangeModelStatus(status => progress.push(status));
+		await fixture.service.start({ model: 'selected-model' });
+		fixture.modelProgress({ type: 'checking' }, 'other');
+		fixture.modelProgress({ type: 'loading' });
+		await fixture.service.cancel();
+		fixture.modelProgress({ type: 'ready' });
+		assert.deepEqual(progress, [{ model: 'selected-model', status: { state: LocalTranscriptionModelState.Loading } }]);
+	});
 	test('production assembly rejects a missing backend registration', () => {
 		using services = new InstantiationService();
 		assert.throws(() => services.createInstance(LocalTranscriptionService), /localTranscriptionBackendService/);

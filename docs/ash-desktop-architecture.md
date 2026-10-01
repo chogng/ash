@@ -364,12 +364,11 @@ App Server 连接并重新读取 Session/Thread；Renderer 不直接读写 SQLit
 ## 5. 沙箱桥接与 Renderer API
 
 Electron sandbox 边界分为两层。`ISandboxGlobals` 是 preload 唯一暴露到主世界的底层桥接：
-它只包含只读进程元数据，以及受 `ash:` 频道前缀约束的 `invoke` / `on`。preload 必须保持
+它包含只读进程元数据、受 `ash:` 频道前缀约束的 `send` / `invoke` / `on`，以及按 nonce 交付和取消等待的 MessagePort 桥接。preload 必须保持
 自包含，运行时除 `electron` 外不得加载任何模块，也不得把 Electron event 对象传给 Renderer。
 构建后的 preload 由 `build/app_ts/host.ts` 检查这一约束。
 
-`createElectronRendererApi()` 是该桥接的唯一产品适配器。它在普通 Renderer bundle 中引用频道
-常量，并组装领域化、强类型、可枚举的 `AshElectronRendererApi`。跨宿主领域能力由其父接口
+`createElectronRendererApi()` 组装领域化、强类型、可枚举的 `AshElectronRendererApi`。Electron 系统能力经平台适配器读取；跨宿主领域能力由其父接口
 `IRendererHost` 定义，Electron 专属能力保持以下精确形状：
 
 ```ts
@@ -387,8 +386,7 @@ interface AshElectronRendererApi extends IRendererHost {
 Workbench composition root 是聚合 `IRendererHost` 的唯一产品消费者：它把每个 transport
 capability 注入对应的领域 Service。Contribution 只能依赖 `IChatService`、`IGitService`、
 `IContentSearchService`、`ITerminalService` 等前端契约和前端自有领域类型，不能取得整个
-Renderer Host，也不能导入生成 DTO。所有产品代码禁止直接导入 sandbox globals，并禁止提供
-绕过领域 capability 的通用 App Server 调用：
+Renderer Host，也不能导入生成 DTO。UI 与领域代码不能直接导入 sandbox globals；该桥接只由 IPC 等平台传输适配器消费。禁止提供绕过领域 capability 的通用 App Server 调用：
 
 ```ts
 execute(method: string, params?: unknown): Promise<unknown>
@@ -412,6 +410,10 @@ execute(method: string, params?: unknown): Promise<unknown>
 context bridge API 与 host validation 留在 `*Ipc.ts` 或具体运行时实现中；UI contribution 不得负责
 创建 service。`workbenchServiceContributions.ts` 只描述 service、依赖与安装函数，composition root
 负责提供原始 capability，并在缺失依赖或依赖环时启动失败。
+
+Electron 主进程连接由 `IMainProcessService` 提供 channel。Workbench 和 Sessions 在创建领域 API 前，先取得可信路由确认的窗口 ID，再连接当前文档的 MessagePort；构造函数不发起连接。Main 根据已校验的发送窗口赋予连接上下文，Renderer 只能提交回复 nonce。窗口重载或关闭会取消该连接的请求并释放订阅，其他窗口的连接继续使用。
+
+`base/parts/ipc` 拥有 JSON 消息帧、调用取消和事件订阅生命周期；`platform/ipc` 拥有服务契约与 Electron 适配。channel 的命令、事件和参数由领域适配器校验，当前系统颜色读取与变化通知使用 `colorScheme` channel。其余系统能力仍通过可信路由提供，App Server 业务调用继续由 `AppServerProtocolClient` 和 Rust 协议负责。
 
 Ash 当前没有 VS Code `externalServices` 中的 telemetry machine ID / Marketplace header 组合语义，
 也没有构建时替换的 Copilot license endpoint，因此不建立同名空目录。Marketplace 请求继续由

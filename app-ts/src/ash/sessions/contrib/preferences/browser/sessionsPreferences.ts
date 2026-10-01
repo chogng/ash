@@ -22,11 +22,13 @@ import type { IContextKeyService } from '../../../../platform/contextkey/browser
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { CLOUD_DICTATION_MODEL, DEFAULT_LOCAL_DICTATION_MODEL, DictationConfiguration, XAI_DICTATION_MODEL } from '../../../../platform/dictation/common/dictationConfiguration.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ActivityBarPosition } from '../../../../workbench/common/configuration.js';
 import type { IChatService, ModelProviderCredentialStatus } from '../../../../workbench/services/chat/common/chatService.js';
 import type { ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import '../../../../workbench/contrib/preferences/common/settingsEditorColorRegistry.js';
 import { SettingsRenderer } from '../../../../workbench/contrib/preferences/browser/settingsRenderers.js';
+import { LocalTranscriptionModelControls } from '../../../../workbench/contrib/preferences/browser/modelsSettings.js';
 import { SettingsSearchQuery } from '../../../../workbench/contrib/preferences/browser/settingsSearch.js';
 import type { SettingWidgetOptions } from '../../../../workbench/contrib/preferences/browser/settingsWidgets.js';
 import type { ISetting } from '../../../../workbench/services/preferences/common/preferences.js';
@@ -73,6 +75,7 @@ export class SessionsPreferences extends Disposable {
 		private readonly contextKeys: IContextKeyService,
 		private readonly accessibleView: IAccessibleViewService,
 		private readonly chatService: IChatService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
 		this._register(AccessibleViewRegistry.register({
@@ -85,7 +88,7 @@ export class SessionsPreferences extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsSettings,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. Models contains chat models, voice input settings, and API connections. Search models and APIs filters these sections. Use Tab and Shift+Tab to move between controls, arrow keys to choose menu values, and Space to toggle switches. Press Escape to close Settings.'),
+					() => localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. Models contains chat models, voice input settings, and API connections. Search models and APIs filters these sections. Voice input lets you prepare or import a local model; Cancel stops preparation, and closing Settings cancels it. Use Tab and Shift+Tab to move between controls, arrow keys to choose menu values, and Space to toggle switches. Press Escape to close Settings.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsSettings,
 				);
@@ -217,6 +220,7 @@ export class SessionsPreferences extends Disposable {
 		};
 		const renderer = resources.add(new SettingsRenderer(list, settingOptions));
 		const voiceRenderer = resources.add(new SettingsRenderer(voiceList, settingOptions));
+		const localModelControls = resources.add(this.instantiationService.createInstance(LocalTranscriptionModelControls, voiceList));
 		const modelRows = resources.add(new MutableDisposable<DisposableStore>());
 		const apiRows = resources.add(new MutableDisposable<DisposableStore>());
 		const { sections, voiceSettings } = this.sections();
@@ -321,6 +325,7 @@ export class SessionsPreferences extends Disposable {
 			const version = ++renderVersion;
 			const query = new SettingsSearchQuery(searchInput.value);
 			const isModels = query.isEmpty && categories[activeCategory].models;
+			localModelControls.setVisible(!!isModels);
 			const visible = query.isEmpty ? categories[activeCategory].settings : categories.flatMap(category => category.settings).filter(setting => query.matches(setting));
 			heading.textContent = query.isEmpty ? categories[activeCategory].title : localize('sessions.settings.results', 'Search results');
 			heading.hidden = query.isEmpty && visible.length === 0 && !isModels;
@@ -343,7 +348,7 @@ export class SessionsPreferences extends Disposable {
 			if (isModels) {
 				empty.textContent = localize('sessions.settings.modelsLoading', 'Loading models…');
 				empty.hidden = false;
-				voiceList.replaceChildren(...voiceSettings.map(setting => voiceRenderer.render(setting)));
+				voiceList.replaceChildren(...voiceSettings.map(setting => voiceRenderer.render(setting)), localModelControls.domNode);
 				apiList.replaceChildren();
 				apiList.hidden = true;
 				apiEmpty.textContent = localize('sessions.settings.apiLoading', 'Loading API connections…');

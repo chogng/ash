@@ -4103,6 +4103,24 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Voix · préparation du microphone",
     ),
     translation(
+        "Voice · checking model files",
+        "音声 · モデルを確認中",
+        "语音 · 正在检查模型文件",
+        "Voix · vérification du modèle",
+    ),
+    translation(
+        "Voice · loading model",
+        "音声 · モデルを読み込み中",
+        "语音 · 正在加载模型",
+        "Voix · chargement du modèle",
+    ),
+    translation(
+        "Voice · downloading {0}: {1} MiB",
+        "音声 · {0} をダウンロード中: {1} MiB",
+        "语音 · 正在下载 {0}：{1} MiB",
+        "Voix · téléchargement de {0} : {1} MiB",
+    ),
+    translation(
         "Voice · listening · /voice to stop",
         "音声 · 聞き取り中 · /voice で停止",
         "语音 · 正在听 · 输入 /voice 停止",

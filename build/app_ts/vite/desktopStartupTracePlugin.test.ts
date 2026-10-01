@@ -16,7 +16,7 @@ for (const [lineEndingName, lineEnding] of [['LF', '\n'], ['CRLF', '\r\n']] as c
 			['src/ash/code/electron-browser/workbench/modes/academic.ts', ['ash.desktop.contributions-ready']],
 			['src/ash/platform/app-server/common/generated/AppServerProtocolDecoder.ts', ['ash.decoder.schema-start', 'ash.decoder.schema-ready']],
 			['src/ash/platform/native/electron-browser/rendererApi.ts', ['ash.rendererApi.start', 'ash.rendererApi.acquire-start', 'ash.rendererApi.acquired', 'ash.rendererApi.initialized', 'ash.rendererApi.workspace-initialized']],
-			['src/ash/workbench/electron-browser/desktop.main.ts', ['ash.desktop.open-start', 'ash.desktop.lifecycle-ready']],
+			['src/ash/workbench/electron-browser/desktop.main.ts', ['ash.desktop.open-start', 'ash.desktop.api-ready', 'ash.desktop.workbench-start', 'ash.desktop.lifecycle-ready']],
 			['src/ash/workbench/browser/workbench.ts', ['ash.workbench.constructor-start', 'ash.workbench.auxiliary-restore-start', 'ash.workbench.constructor-done']],
 		] as const) {
 			const file = resolve(desktopRoot, path);

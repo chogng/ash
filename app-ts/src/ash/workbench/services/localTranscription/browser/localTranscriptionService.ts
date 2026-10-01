@@ -9,6 +9,10 @@ export class NullLocalTranscriptionService extends AbstractDisposable implements
 	public readonly isSupported = false;
 	public readonly onDidTranscribe = Event.None;
 	public readonly onDidEnd = Event.None;
+	public readonly onDidChangeModelStatus = Event.None;
+	public async getModelStatus(): Promise<never> { throw unavailable(); }
+	public prepareModel(): never { throw unavailable(); }
+	public importModel(): never { throw unavailable(); }
 	public async start(): Promise<never> {
 		throw new Error(localize('dictation.connectionUnavailable', 'Dictation connection is unavailable'));
 	}
@@ -16,3 +20,5 @@ export class NullLocalTranscriptionService extends AbstractDisposable implements
 	public async cancel(): Promise<void> {}
 	protected override disposeCore(): void {}
 }
+
+function unavailable(): Error { return new Error(localize('dictation.connectionUnavailable', 'Dictation connection is unavailable')); }

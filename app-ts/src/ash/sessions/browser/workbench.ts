@@ -376,7 +376,7 @@ export class Workbench extends Disposable {
 		void keybindingsResourceService.reload().catch((error: unknown) => console.error("Failed to initialize keybindings resource", error));
 		const accessibleViewService = this._register(services.createInstance(AccessibleViewService));
 		services.registerInstance(IAccessibleViewService, accessibleViewService);
-		const preferences = this._register(new SessionsPreferences(
+		const preferences = this._register(services.createInstance(SessionsPreferences,
 			this.domNode,
 			configurationService,
 			new BrowserClipboardService(ownerWindow.navigator.clipboard),

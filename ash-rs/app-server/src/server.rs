@@ -203,6 +203,7 @@ pub struct AppServer {
     pub(super) attachment_uploads: Mutex<AttachmentUploadStore>,
     calls: call_runtime::Calls,
     dictation: realtime_voice::DictationManager,
+    dictation_models: realtime_voice::DictationModelManager,
     microphone_gate: Mutex<()>,
     pub(super) collaboration: Mutex<collaboration_runtime::DocumentCollaborationStore>,
     pub(super) extensions: Mutex<ExtensionCatalog>,
@@ -518,6 +519,7 @@ impl AppServer {
             attachment_uploads: Mutex::new(AttachmentUploadStore::default()),
             calls: call_runtime::Calls::default(),
             dictation: realtime_voice::DictationManager::default(),
+            dictation_models: realtime_voice::DictationModelManager::default(),
             microphone_gate: Mutex::new(()),
             collaboration: Mutex::new(collaboration_runtime::DocumentCollaborationStore::default()),
             extensions: Mutex::new(ExtensionCatalog::default()),
@@ -864,6 +866,7 @@ impl AppServer {
         self.feedback.close(connection.connection_id);
         self.calls.close(connection.connection_id);
         self.dictation.close(connection.connection_id);
+        self.dictation_models.close(connection.connection_id);
         self.request_scheduler
             .cancel_connection(connection.connection_id);
         self.request_cancellations
@@ -2539,6 +2542,15 @@ impl AppServer {
             }
             Some(ClientMethod::DictationStart) => self.dictation_start(connection, &request.params),
             Some(ClientMethod::DictationStop) => self.dictation_stop(connection, &request.params),
+            Some(ClientMethod::DictationModelRead) => {
+                self.dictation_model_read(connection, &request.params)
+            }
+            Some(ClientMethod::DictationModelStart) => {
+                self.dictation_model_start(connection, &request.params)
+            }
+            Some(ClientMethod::DictationModelStop) => {
+                self.dictation_model_stop(connection, &request.params)
+            }
             Some(ClientMethod::AttachmentUploadWrite) => {
                 self.attachment_upload_write(connection, &request.params)
             }

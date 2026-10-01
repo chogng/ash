@@ -32,11 +32,11 @@ const marksByFile: Readonly<Record<string, readonly StartupMark[]>> = {
 	],
 	'src/ash/workbench/electron-browser/desktop.main.ts': [
 		{ name: 'ash.desktop.open-start', anchor: '\t\tthis.opened = true;', position: 'after' },
-		{ name: 'ash.desktop.api-ready', anchor: '\t\t\tconst api = this._register(await createElectronRendererApi(this.rendererCapabilities, { browser: true }, permissionDialog));', position: 'after' },
+		{ name: 'ash.desktop.api-ready', anchor: '\t\t\tprofileServices.registerInstance(IFileService, api.localFiles);', position: 'before' },
 		{ name: 'ash.desktop.themes-ready', anchor: '\t\t\tconst workspace = parseWorkspace(await api.workspace.getWorkspace());', position: 'before' },
 		{ name: 'ash.desktop.workspace-ready', anchor: '\t\t\tconst workspace = parseWorkspace(await api.workspace.getWorkspace());', position: 'after' },
 		{ name: 'ash.desktop.configuration-ready', anchor: '\t\t\tconst initialConfigurationSnapshot = validateConfigurationSnapshot(await api.configuration.read());', position: 'after' },
-		{ name: 'ash.desktop.workbench-start', anchor: '\t\t\tconst workbench = this._register(startWorkbench({', position: 'before' },
+		{ name: 'ash.desktop.workbench-start', anchor: '\t\t\tconst workbench = this._register(await startWorkbench({', position: 'before' },
 		{ name: 'ash.desktop.workbench-created', anchor: '\t\t\tconst subscription = api.workspace.onDidChange(workspace => {', position: 'before' },
 		{ name: 'ash.desktop.lifecycle-ready', anchor: '\t\t\tawait lifecycleService.initialize();', position: 'after' },
 	],

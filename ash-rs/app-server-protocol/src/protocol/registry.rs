@@ -456,6 +456,17 @@ use crate::protocol::dictation::DictationBackend;
 use crate::protocol::dictation::DictationCloudProvider;
 use crate::protocol::dictation::DictationEnded;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::dictation::DictationModelOperation;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::dictation::DictationModelParams;
+use crate::protocol::dictation::DictationModelProgress;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::dictation::DictationModelStage;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::dictation::DictationModelStartParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::dictation::DictationModelStatus;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::dictation::DictationResourceParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::dictation::DictationStartParams;
@@ -3233,6 +3244,21 @@ client_methods! {
         response: DictationStopResult,
         serialization: ConnectionExclusive("dictation"),
     },
+    DictationModelRead => "dictation/model/read" {
+        params: DictationModelParams,
+        response: DictationModelStatus,
+        serialization: GlobalSharedRead,
+    },
+    DictationModelStart => "dictation/model/start" {
+        params: DictationModelStartParams,
+        response: (),
+        serialization: ConnectionExclusive("dictationModel"),
+    },
+    DictationModelStop => "dictation/model/stop" {
+        params: DictationResourceParams,
+        response: (),
+        serialization: ConnectionExclusive("dictationModel"),
+    },
     FsGetMetadata => "fs/getMetadata" {
         params: FsGetMetadataParams,
         response: FsGetMetadataResult,
@@ -4001,6 +4027,7 @@ server_notifications! {
     CallChanged => "call/changed" { params: CallStatus, },
     DictationTranscript => "dictation/transcript" { params: DictationTranscript, },
     DictationEnded => "dictation/ended" { params: DictationEnded, },
+    DictationModelProgress => "dictation/model/progress" { params: DictationModelProgress, },
     DocumentCollaborationUpdate => "document/collaboration/update" {
         params: DocumentCollaborationUpdate,
     },
@@ -4258,6 +4285,12 @@ typescript_bindings! {
     DictationTranscript,
     DictationEnded,
     DictationStopResult,
+    DictationModelParams,
+    DictationModelStatus,
+    DictationModelOperation,
+    DictationModelStartParams,
+    DictationModelStage,
+    DictationModelProgress,
     CallScreenSource,
     CallScreenSources,
     CallScreenFrame,

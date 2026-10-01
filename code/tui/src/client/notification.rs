@@ -12,6 +12,7 @@ use ash_protocol::ThreadUpdateEnvelope;
 pub(crate) enum ClientEvent {
     DictationTranscript(ash_app_server_protocol::protocol::dictation::DictationTranscript),
     DictationEnded(ash_app_server_protocol::protocol::dictation::DictationEnded),
+    DictationModelProgress(ash_app_server_protocol::protocol::dictation::DictationModelProgress),
     Subscription(crate::config::SubscriptionEvent),
     AgentRequest(Box<AgentRequestEnvelope>),
     ConfigChanged,
@@ -40,6 +41,9 @@ fn project_notification(notification: ServerNotification) -> Option<ClientEvent>
             Some(ClientEvent::DictationTranscript(transcript))
         }
         ServerNotification::DictationEnded(ended) => Some(ClientEvent::DictationEnded(ended)),
+        ServerNotification::DictationModelProgress(progress) => {
+            Some(ClientEvent::DictationModelProgress(progress))
+        }
         ServerNotification::AccountUpdated(updated) => Some(ClientEvent::Subscription(
             crate::config::SubscriptionEvent::Updated(updated.account),
         )),

@@ -5,8 +5,7 @@ use crate::LocalSpeechEvent;
 use crate::LocalSpeechMode;
 use crate::model_package::ModelPackage;
 use async_utils::CancellationSource;
-use sherpa_onnx::OnlineRecognizer;
-use sherpa_onnx::OnlineRecognizerConfig;
+use std::sync::Arc;
 use tokio::sync::oneshot;
 use voice_host::AudioConfig;
 use voice_host::AudioHost;
@@ -17,13 +16,16 @@ use voice_host::SampleRate;
 pub(super) async fn run(
     request: LocalDictationRequest,
     stopped: &mut oneshot::Receiver<()>,
-    on_event: &dyn Fn(DictationEvent),
+    on_event: Arc<dyn Fn(DictationEvent) + Send + Sync>,
 ) -> Result<(), String> {
     run_session(
         request,
         stopped,
         LocalSpeechMode::Dictation,
-        &|event| match event {
+        Arc::new(move |event| match event {
+            LocalSpeechEvent::ModelProgress(progress) => {
+                on_event(DictationEvent::ModelProgress(progress))
+            }
             LocalSpeechEvent::Ready => {}
             LocalSpeechEvent::Partial { text } => on_event(DictationEvent::Transcript {
                 text,
@@ -34,7 +36,7 @@ pub(super) async fn run(
                 is_final: true,
             }),
             LocalSpeechEvent::Ended { .. } => unreachable!("the session owner reports completion"),
-        },
+        }),
     )
     .await
 }
@@ -43,15 +45,17 @@ pub(super) async fn run_session(
     request: LocalDictationRequest,
     stopped: &mut oneshot::Receiver<()>,
     mode: LocalSpeechMode,
-    on_event: &dyn Fn(LocalSpeechEvent),
+    on_event: Arc<dyn Fn(LocalSpeechEvent) + Send + Sync>,
 ) -> Result<(), String> {
     let cancellation = CancellationSource::new();
     let token = cancellation.token();
+    let progress_events = Arc::clone(&on_event);
     let package_future = ModelPackage::resolve(
         &request.model_root,
         &request.model_id,
         request.network,
         &token,
+        Arc::new(move |progress| progress_events(LocalSpeechEvent::ModelProgress(progress))),
     );
     tokio::pin!(package_future);
     let package = tokio::select! {
@@ -62,19 +66,11 @@ pub(super) async fn run_session(
             return Ok(());
         },
     };
-    let mut config = OnlineRecognizerConfig::default();
-    config.model_config.paraformer.encoder = Some(package.encoder.to_string_lossy().into_owned());
-    config.model_config.paraformer.decoder = Some(package.decoder.to_string_lossy().into_owned());
-    config.model_config.tokens = Some(package.tokens.to_string_lossy().into_owned());
-    config.model_config.num_threads = 2;
-    if mode == LocalSpeechMode::Conversation {
-        config.enable_endpoint = true;
-        config.rule1_min_trailing_silence = 2.4;
-        config.rule2_min_trailing_silence = 0.9;
-        config.rule3_min_utterance_length = 20.0;
-    }
-    let recognizer =
-        OnlineRecognizer::create(&config).ok_or("Could not load Paraformer dictation model")?;
+    on_event(LocalSpeechEvent::ModelProgress(
+        crate::ModelProgress::Loading,
+    ));
+    let recognizer = package.recognizer(mode)?;
+    on_event(LocalSpeechEvent::ModelProgress(crate::ModelProgress::Ready));
     let stream = recognizer.create_stream();
     let mut audio = AudioHost::spawn(&request.audio_host)
         .await
