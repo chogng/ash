@@ -3,13 +3,14 @@ import typescript from '../../../../extensions/typescript-basics/package.json' w
 import json from '../../../../extensions/json/package.json' with { type: 'json' };
 import rust from '../../../../extensions/rust/package.json' with { type: 'json' };
 import shellscript from '../../../../extensions/shellscript/package.json' with { type: 'json' };
+import bazel from '../../../../extensions/bazel/package.json' with { type: 'json' };
 import type { ExtensionDescriptor } from '../../../src/ash/platform/extensions/common/extensionApi.js';
 import { AppServerExtensionService, type AppServerExtensionServiceOptions } from '../../../src/ash/workbench/services/extensions/browser/appServerExtensionService.js';
 
 const resourceUrls = import.meta.glob<string>([
-	'../../../../extensions/{javascript,typescript-basics,json,rust,shellscript}/syntaxes/*',
-	'../../../../extensions/{javascript,typescript-basics,json,rust,shellscript}/*language-configuration.json',
-	'../../../../extensions/{javascript,typescript-basics,json,rust,shellscript}/snippets/*',
+	'../../../../extensions/{javascript,typescript-basics,json,rust,shellscript,bazel}/syntaxes/*',
+	'../../../../extensions/{javascript,typescript-basics,json,rust,shellscript,bazel}/*language-configuration.json',
+	'../../../../extensions/{javascript,typescript-basics,json,rust,shellscript,bazel}/snippets/*',
 ], { eager: true, query: '?url', import: 'default' });
 
 export async function createLanguageExtensions(options: Omit<AppServerExtensionServiceOptions, 'api' | 'eventApi'>): Promise<AppServerExtensionService> {
@@ -21,6 +22,7 @@ export async function createLanguageExtensions(options: Omit<AppServerExtensionS
 		['json', json],
 		['rust', rust],
 		['shellscript', shellscript],
+		['bazel', bazel],
 	] as const;
 	for (const [directory, manifest] of manifests) {
 		const manifestJson = JSON.stringify(manifest);

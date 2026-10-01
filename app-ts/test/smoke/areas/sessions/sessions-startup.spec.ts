@@ -1,6 +1,7 @@
 import type { App } from 'electron';
 import { resolve } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
+import { Editor } from '../../../automation/editor.js';
 import type { AppServerDaemonLauncher } from '../../../../src/ash/platform/app-server-daemon/electron-main/appServerDaemonLauncher.js';
 
 interface StartupProbeApp extends App {
@@ -37,13 +38,18 @@ test('Agents starts its connection before loading the page and reconnects on rel
 		const agents = await opened;
 		const input = agents.getByRole('textbox', { name: 'Chat message', exact: true });
 		await expect(input).toBeEditable();
-		await input.fill('Keep this draft after reload');
-		await expect(input).toHaveValue('Keep this draft after reload');
+		const editor = new Editor(agents.locator('.ash-sessions-chat-input').first());
+		await editor.waitForEditorFocus();
+		await agents.keyboard.insertText('Keep this draft after reload');
+		await editor.waitForEditorContents(value => value === 'Keep this draft after reload');
 		expect(await application.evaluate(({ app }) => (app as StartupProbeApp).sessionsStartupProbe.events)).toEqual(['connection-started', 'page-loading']);
 		await agents.reload();
 		await expect(input).toBeEditable();
-		await input.fill('Connection reinitialized');
-		await expect(input).toHaveValue('Connection reinitialized');
+		await editor.waitForEditorFocus();
+		await agents.keyboard.press('ControlOrMeta+A');
+		await agents.keyboard.press('Backspace');
+		await agents.keyboard.insertText('Connection reinitialized');
+		await editor.waitForEditorContents(value => value === 'Connection reinitialized');
 		expect(await application.evaluate(({ app }) => (app as StartupProbeApp).sessionsStartupProbe.events)).toEqual(['connection-started', 'page-loading', 'connection-started']);
 	} finally {
 		await application.evaluate(({ app }) => (app as StartupProbeApp).sessionsStartupProbe.dispose());

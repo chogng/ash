@@ -121,6 +121,19 @@ test('bundled Markdown grammar preserves authored styles in every Ash theme', as
 	}
 });
 
+test('raw tokenizer exposes Markdown scopes and reflects replaced grammars', async () => {
+	using registry = new TextMateGrammarRegistry();
+	const content = await readFile(resolve('../extensions/markdown-basics/syntaxes/markdown.tmLanguage.json'), 'utf8');
+	const registration = registry.register({ languageId: 'markdown', scopeName: 'text.html.markdown', loadGrammar: () => content });
+	using tokenization = new TextMateTokenizationService(registry, onigLib);
+	const grammar = (await tokenization.createTokenizer('markdown'))!;
+	assert.ok(grammar.tokenizeLine('# Heading', null).tokens.some(token => token.scopes.includes('markup.heading.markdown')));
+	registration.dispose();
+	assert.equal(await tokenization.createTokenizer('markdown'), null);
+	using replacement = registry.register({ languageId: 'demo', scopeName: 'source.demo', loadGrammar: () => demoGrammar('string.quoted.demo') });
+	assert.ok((await tokenization.createTokenizer('demo'))!.tokenizeLine('if', null).tokens.some(token => token.scopes.includes('string.quoted.demo')));
+});
+
 test("TextMate grammar metadata reaches runtime configuration and token projection", async () => {
 	using registry = new TextMateGrammarRegistry();
 	using registration = registry.register({

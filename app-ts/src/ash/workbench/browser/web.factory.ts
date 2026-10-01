@@ -32,10 +32,10 @@ import { EMPTY_WORKSPACE_ID_KEY } from '../services/host/browser/browserHostServ
 import { IndexedDbConfigurationApi } from '../../platform/configuration/browser/indexedDbConfigurationApi.js';
 
 /** Creates a browser-hosted Workbench with the shared Web adapters. */
-export function createWebWorkbench(
+export async function createWebWorkbench(
 	modeId: WorkbenchModeId,
 	options: IWebWorkbenchConstructionOptions,
-): IWebWorkbench {
+): Promise<IWebWorkbench> {
 	installBaseUiStyles();
 	const ownerWindow = options.container.ownerDocument.defaultView;
 	if (!ownerWindow) throw new Error('Workbench requires an owner window');
@@ -85,7 +85,7 @@ export async function startWebWorkbench(
 		const browserFileSystemProvider = !host && picker.showDirectoryPicker && globalThis.indexedDB
 			? new HTMLFileSystemProvider(globalThis.indexedDB)
 			: undefined;
-		const instance = createWebWorkbench(modeId, {
+		const instance = await createWebWorkbench(modeId, {
 			api: host?.api ?? createDisconnectedRendererApi(),
 			configurationApi,
 			initialConfigurationSnapshot,

@@ -21,5 +21,6 @@
 		"modernActivityBarItem.activeForeground": "#000000",
 		"statusBar.background": "#ffffff",
 		"statusBar.foreground": "#000000"
-	}
+	},
+	"include": "./hc_light_syntax.json"
 }

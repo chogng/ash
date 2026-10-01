@@ -5,11 +5,19 @@ import type { IResourceApi } from "../../app-server/common/appServerApi.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
 import { appServerRequest } from "../../app-server/browser/appServerRequest.js";
+import bundledThemes from '../common/generated/theme-defaults.json' with { type: 'json' };
 
 export function createDisconnectedExtensionApi(unavailable: UnavailableOperation): IExtensionApi {
+	const catalog = normalizeExtensionCatalog({ generation: 1, diagnostics: [], extensions: [bundledThemes.descriptor] });
+	const resources: Readonly<Record<string, string>> = bundledThemes.resources;
 	return {
-		list: () => unavailable("extensions.list"),
-		readResource: () => unavailable("extensions.readResource"),
+		list: async () => catalog,
+		readResource: async request => {
+			if (request.generation !== catalog.generation || request.extensionId !== bundledThemes.descriptor.id || !Object.hasOwn(resources, request.path)) {
+				return unavailable('extensions.readResource');
+			}
+			return new TextEncoder().encode(resources[request.path]);
+		},
 	};
 }
 

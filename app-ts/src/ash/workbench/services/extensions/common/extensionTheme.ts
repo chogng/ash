@@ -112,6 +112,8 @@ export async function loadExtensionTheme(
 
 /** Produces the stable Workbench theme identity owned by one manifest contribution. */
 export function extensionWorkbenchThemeId(extensionId: string, contributionId: string | undefined, index: number): string {
+	// Product themes retain the IDs already persisted in settings; their resources use ordinary contributions.
+	if (extensionId === 'vscode.theme-defaults' && contributionId?.startsWith('ash-')) return contributionId;
 	const extension = themeIdSegment(extensionId, "Extension theme extension ID");
 	const contribution = themeIdSegment(contributionId ?? String(index + 1), "Extension theme contribution ID");
 	return `extension-${extension}-${contribution}`;

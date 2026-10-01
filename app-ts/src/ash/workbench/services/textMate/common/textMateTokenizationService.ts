@@ -114,6 +114,17 @@ export class TextMateTokenizationService implements Disposable {
 		return this.grammars.currentSnapshot.languageIds;
 	}
 
+	/** Exposes raw grammar scopes to the inspector without retaining them in every rendered token. */
+	async createTokenizer(languageId: string): Promise<IGrammar | null> {
+		this.ensureAlive();
+		const snapshot = this.grammars.currentSnapshot;
+		const definition = snapshot.getDefinitionForLanguage(languageId);
+		if (!definition) return null;
+		const state = this.acquireState(snapshot);
+		try { return await this.getGrammar(state, definition.scopeName) ?? null; }
+		finally { this.releaseState(state); }
+	}
+
 	async tokenize(languageId: string, snapshot: TextSnapshot, signal: AbortSignal): Promise<LanguageTokenResult | undefined> {
 		return this.withCache(languageId, signal, cache => cache.getTokens(snapshot, signal));
 	}

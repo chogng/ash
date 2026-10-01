@@ -73,6 +73,12 @@ registry. The service owns the shared grammar catalog and scope theme; each
 Stanza editor part creates and disposes only its dedicated TextMate Syntax Worker.
 Languages without a grammar remain plain text.
 
+`ITextMateService.createTokenizer(languageId)` supplies a raw `IGrammar` for on-demand scope
+inspection. `BrowserTextMateService` materializes the same current grammar catalog and lazily
+loads a renderer TextMate runtime with the shared Oniguruma loader. The inspector requests raw
+scope stacks only when opened; rendered token arrays do not retain them. The renderer runtime
+and catalog store are owned and disposed by the browser service.
+
 Direct `createBrowserEditorPart` callers may omit the service and get a
 private `BrowserTextMateService`; that compatibility path is session-owned and
 does not change Workbench ownership.
@@ -152,13 +158,13 @@ lane contract.
 ## Current limitations
 
 - The bundled pack includes CSS, HTML, JavaScript, JSON/JSONC, Markdown, Python, Rust, Shell,
-  SQL, TypeScript, XML, YAML, and four self-contained default themes. Rust still owns discovery
+  SQL, TypeScript, XML, YAML, and the default theme package. Rust still owns discovery
   and bounded resource reads; this adapter does not scan arbitrary directories;
 - `embeddedLanguages`, `tokenTypes`, `balancedBracketScopes`, and
   `unbalancedBracketScopes` are validated, transported into `vscode-textmate`, and projected as
   Stanza `LanguageToken` language/bracket metadata for embedded editing and bracket matching;
-- extension `themes` are parsed into a versioned catalog. The active Workbench color scheme selects
-  the matching extension theme and projects its token colors, including exact foreground,
+- `ExtensionColorThemeService` registers extension color themes. The active Workbench theme
+  supplies token colors, including exact foreground,
   background, and font styles, into the TextMate scope theme;
 - `configurationDefaults`, `semanticTokenScopes`, extension JavaScript, and LSP declarations are
   intentionally ignored by this declarative loader. LSP providers must enter through the separate

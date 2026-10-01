@@ -1,3 +1,4 @@
+import { loadColorThemeDocument } from '../../services/themes/common/colorThemeData.js';
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { readFile } from 'node:fs/promises';
@@ -5,25 +6,12 @@ import { resolve } from 'node:path';
 import { createColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from "../../../platform/theme/common/colorTheme.js";
 import { ColorScheme } from "../../../platform/theme/common/theme.js";
 import { WorkbenchThemeRegistry, WorkbenchThemesRegistry, getWorkbenchColorTheme, resolveWorkbenchColorTheme } from "../../common/theme.js";
-import darkThemeDocument from "../../common/themes/ash-dark.json" with { type: "json" };
-import lightThemeDocument from "../../common/themes/ash-light.json" with { type: "json" };
-import highContrastDarkThemeDocument from "../../common/themes/ash-high-contrast-dark.json" with { type: "json" };
-import highContrastLightThemeDocument from "../../common/themes/ash-high-contrast-light.json" with { type: "json" };
-import darkBaseThemeDocument from "../../common/themes/ash-dark-base.json" with { type: "json" };
-import lightBaseThemeDocument from "../../common/themes/ash-light-base.json" with { type: "json" };
-import themeManifest from "../../common/themes/package.json" with { type: "json" };
-
-test('built-in Workbench themes apply every color in their JSON documents', () => {
-	assert.deepEqual(WorkbenchThemesRegistry.getColorThemes().map(theme => theme.id), themeManifest.contributes.themes.map(theme => theme.id));
-	for (const [id, document, inherited] of [
-		['ash-dark', darkThemeDocument, darkBaseThemeDocument],
-		['ash-light', lightThemeDocument, lightBaseThemeDocument],
-		['ash-high-contrast-dark', highContrastDarkThemeDocument, undefined],
-		['ash-high-contrast-light', highContrastLightThemeDocument, undefined],
-	] as const) {
+test('contributed Ash themes resolve authored window colors and included syntax resources', async () => {
+	for (const id of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+		const document = JSON.parse(await readFile(resolve(`../extensions/theme-defaults/themes/${id}.json`), 'utf8'));
 		const theme = getWorkbenchColorTheme(id);
 		assert.equal(theme.label, document.name);
-		for (const [color, value] of Object.entries({ ...inherited?.colors, ...document.colors })) {
+		for (const [color, value] of Object.entries(document.colors)) {
 			assert.equal(theme.getColorCss(color), value, `${id}: ${color}`);
 		}
 	}
@@ -32,7 +20,7 @@ test('built-in Workbench themes apply every color in their JSON documents', () =
 });
 
 test('built-in high contrast themes keep common foreground and background pairs readable', () => {
-	assert.deepEqual(WorkbenchThemesRegistry.getColorThemes().filter(theme => theme.colorScheme.startsWith('high-contrast')).map(theme => theme.id), [
+	assert.deepEqual(WorkbenchThemesRegistry.getColorThemes().filter(theme => theme.id.startsWith('ash-high-contrast-')).map(theme => theme.id), [
 		highContrastLightColorTheme.id,
 		highContrastDarkColorTheme.id,
 	]);
@@ -74,7 +62,8 @@ test('built-in syntax rules use the theme-defaults extension resources', async (
 		['ash-high-contrast-dark', 'hc_black'],
 		['ash-high-contrast-light', 'hc_light'],
 	] as const) {
-		const document = JSON.parse(await readFile(resolve(`../extensions/theme-defaults/themes/${file}.json`), 'utf8'));
+		const document = await loadColorThemeDocument(`themes/${file}.json`, async resource => JSON.parse(await readFile(resolve('../extensions/theme-defaults', resource), 'utf8')));
+		assert.ok(Array.isArray(document.tokenColors));
 		const actual = getWorkbenchColorTheme(id).tokenColors!.map(rule => ({ scopes: rule.scopes, settings: rule.settings }));
 		const expected = document.tokenColors.map((rule: { scope?: string | string[]; settings: object }) => ({ scopes: typeof rule.scope === 'string' ? [rule.scope] : rule.scope ?? [], settings: rule.settings }));
 		assert.deepEqual(actual, expected, id);

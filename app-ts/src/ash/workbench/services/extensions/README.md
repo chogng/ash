@@ -21,6 +21,7 @@ filesystem access.
 | Workbench catalog/domain types | `common/extensionService.ts` | Does not expose generated DTO or manifest JSON |
 | Supported manifest parsing | `parseExtensionManifest` | Identity plus languages, grammars, snippets, color/icon themes, and debuggers |
 | Workbench lifecycle | `AppServerExtensionService` | Serialized/coalesced refresh with full candidate preparation and one event-barrier commit |
+| Selectable color themes | `ExtensionColorThemeService` | Manifest/resource loading, replaceable Workbench registrations, and renderer-owned lifetime |
 | Grammar/Worker materialization | `workbench/services/textMate` | Latest complete catalog and independent failure event |
 | Language/configuration/completion | Stanza language services | Caller-owned disposable registrations |
 | Declarative Debug Adapter lookup | `ExtensionDebugAdapterRegistry` | Unique debugger type to bounded command descriptor |
@@ -33,7 +34,7 @@ filesystem access.
 | language `configuration` | Parsed JSONC to Stanza language configuration | Only the existing Stanza configuration vocabulary |
 | `snippets` | Prefix-bearing snippets become completion providers; file templates power `New File from Template` | Template bodies create language-tagged untitled editors |
 | `grammars` | Root/injection loader plus advanced embedded/token/bracket metadata | TextMate service owns later materialization |
-| `themes` | Strictly parsed versioned catalog, selectable Workbench color themes, and active TextMate token projection | Package-relative JSON `include` is resolved before registration; manifest NLS placeholders use deterministic fallback labels |
+| `themes` | Parsed metadata catalog; `ExtensionColorThemeService` independently owns selectable color themes | Package-relative JSON `include` is resolved before registration; manifest NLS placeholders use deterministic fallback labels |
 | `iconThemes` | Package-relative fonts and SVG/PNG file icons; selectable through `workbench.iconTheme` | File associations and light variants; folder-specific associations are not consumed by the current file label contract |
 | `productIconThemes` | Package-relative SVG artwork for semantic product icon IDs; selectable through `workbench.productIconTheme` | Unspecified IDs keep Ash's built-in SVG artwork |
 | `debuggers` | Unique type, label, adapter program, and args | Discovery only; no VS Code Debug Extension API |
@@ -82,10 +83,17 @@ does not expose cancellation, so disposal suppresses commit and follow-up work b
 abort an already dispatched RPC.
 
 Candidate resources and grammars are fully parsed before commit. Commit runs behind the shared
-synchronous event barrier: language, completion, file-template, Workbench-theme, extension-theme,
+synchronous event barrier: language, completion, file-template, extension-theme,
 debugger, grammar, and `IExtensionService` events are delivered only after every live owner holds
 the same candidate generation. A synchronous commit failure discards buffered candidate events and
 restores the previous generation.
+
+`ExtensionColorThemeService` loads color-theme contributions through the same generation-bound
+resource API and owns their Workbench registrations. Code and Sessions await its initial load
+before constructing their theme service. The UI-only transport serves a build-generated copy of
+`extensions/theme-defaults`; connected windows read the packaged extension resources. Both use
+the same manifest parser, `include` resolver, and registry. The metadata catalog above does not
+register color themes a second time. Active-theme changes reach TextMate through `IThemeService`.
 
 Candidate resources are always read with the candidate catalog generation. A Rust refresh therefore
 cannot make one parsed manifest load resource bytes from another generation. Generation conflict is
@@ -112,7 +120,8 @@ failures remain TextMate-owned and must not move grammar parsing into this servi
 | `AppServerExtensionService.loadAndRegister` | One candidate generation prepare/commit/rollback | Reload queue, last-good, dispose, TextMate readiness tests |
 | reload runner state | Coalesce concurrent refreshes and settle all waiters | Concurrency and disposal tests |
 | `loadLanguageConfiguration` / `loadSnippetFile` / `loadTheme` / `loadGrammar` | Generation-bound UTF-8 resource decoding | Invalid UTF-8, path, size, resource adapter tests |
-| `ExtensionThemeRegistry` / `WorkbenchThemesRegistry` | Parsed catalog and replaceable Workbench themes | Selection, fallback label, token projection tests |
+| `ExtensionThemeRegistry` | Parsed metadata catalog | Catalog prepare/commit tests |
+| `ExtensionColorThemeService` / `WorkbenchThemesRegistry` | Manifest-contributed selectable color themes | Selection, registration lifetime, theme inheritance, and token styling tests |
 | `ExtensionFileTemplateRegistry` | Immutable queryable template catalog | Materialization and create-from-template command tests |
 | `ExtensionDebugAdapterRegistry` | Immutable unique-type command lookup | Debug fallback/duplicate tests |
 

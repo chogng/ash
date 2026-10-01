@@ -1,0 +1,12 @@
+.ash-inspect-editor-tokens-content {
+	box-sizing: border-box;
+	width: 100%;
+	height: 18em;
+	resize: vertical;
+	padding: var(--ash-spacing-size80);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	background: var(--ash-input-background);
+	color: var(--ash-input-foreground);
+	font-family: monospace;
+	font-size: var(--ash-fontSize-body2);
+}

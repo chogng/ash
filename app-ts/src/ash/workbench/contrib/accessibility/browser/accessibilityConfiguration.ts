@@ -114,3 +114,17 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 		description: localize('accessibility.openEditorsVerbosityDescription', 'Announce how to open accessibility help when the Open Editors list receives focus.'),
 	},
 });
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.InspectEditorTokens,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError(localize('inspectEditorTokens.invalidVerbosity', 'Token inspection accessibility verbosity must be boolean'));
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('inspectEditorTokens.verbosityTitle', 'Token inspection accessibility help'); },
+		get description() { return localize('inspectEditorTokens.verbosityDescription', 'Announce how to open accessibility help in token inspection.'); },
+	},
+});

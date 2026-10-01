@@ -3,21 +3,6 @@ import { type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { registerColor } from "../../platform/theme/common/colorUtils.js";
 import { accentBackground, border, contrastBorder, descriptionForeground, foreground, selectionBackground } from "../../platform/theme/common/colors/baseColors.js";
 import type { IColorTheme } from "../../platform/theme/common/themeService.js";
-import { colorThemeType, resolveColorThemeDocument } from "../services/themes/common/colorThemeData.js";
-import { parseExtensionManifest } from "../services/extensions/common/extensionManifest.js";
-import { createExtensionWorkbenchColorTheme, parseExtensionTheme } from "../services/extensions/common/extensionTheme.js";
-import themeManifest from "./themes/package.json" with { type: "json" };
-import darkThemeDocument from "./themes/ash-dark.json" with { type: "json" };
-import lightThemeDocument from "./themes/ash-light.json" with { type: "json" };
-import highContrastDarkThemeDocument from "./themes/ash-high-contrast-dark.json" with { type: "json" };
-import highContrastLightThemeDocument from "./themes/ash-high-contrast-light.json" with { type: "json" };
-import darkBaseThemeDocument from "./themes/ash-dark-base.json" with { type: "json" };
-import lightBaseThemeDocument from "./themes/ash-light-base.json" with { type: "json" };
-import syntaxThemeManifest from '../../../../../extensions/theme-defaults/package.json' with { type: 'json' };
-import darkSyntaxThemeDocument from '../../../../../extensions/theme-defaults/themes/dark_vs.json' with { type: 'json' };
-import lightSyntaxThemeDocument from '../../../../../extensions/theme-defaults/themes/light_vs.json' with { type: 'json' };
-import highContrastDarkSyntaxThemeDocument from '../../../../../extensions/theme-defaults/themes/hc_black.json' with { type: 'json' };
-import highContrastLightSyntaxThemeDocument from '../../../../../extensions/theme-defaults/themes/hc_light.json' with { type: 'json' };
 
 const colorOwner = "workbench.shell";
 const color = (id: string, dark: string, light: string, highContrastDark: string, highContrastLight: string, description: string): string =>
@@ -164,57 +149,8 @@ export class WorkbenchThemeRegistry {
 	}
 }
 
-// Compile after shell token registration; configuration and Sessions need these themes before window creation.
-// The manifest owns selectable identities while the bundled documents supply their colors and syntax rules.
-const builtInThemeDocuments = new Map<string, unknown>([
-	["ash-light.json", lightThemeDocument],
-	["ash-dark.json", darkThemeDocument],
-	["ash-high-contrast-light.json", highContrastLightThemeDocument],
-	["ash-high-contrast-dark.json", highContrastDarkThemeDocument],
-	["ash-light-base.json", lightBaseThemeDocument],
-	["ash-dark-base.json", darkBaseThemeDocument],
-]);
-const builtInThemeExtensionId = `${themeManifest.publisher}.${themeManifest.name}`;
-const syntaxThemeDocuments = new Map<string, unknown>([
-	['themes/dark_vs.json', darkSyntaxThemeDocument],
-	['themes/light_vs.json', lightSyntaxThemeDocument],
-	['themes/hc_black.json', highContrastDarkSyntaxThemeDocument],
-	['themes/hc_light.json', highContrastLightSyntaxThemeDocument],
-]);
-const syntaxThemeExtensionId = `${syntaxThemeManifest.publisher}.${syntaxThemeManifest.name}`;
-const defaultSyntaxThemes = parseExtensionManifest(JSON.stringify(syntaxThemeManifest), {
-	id: syntaxThemeExtensionId,
-	name: syntaxThemeManifest.name,
-	publisher: syntaxThemeManifest.publisher,
-	version: syntaxThemeManifest.version,
-});
-const defaultSyntaxRules = new Map(defaultSyntaxThemes.contributes.themes.map(contribution => [
-	contribution.uiTheme,
-	resolveColorThemeDocument(contribution.path, path => syntaxThemeDocuments.get(path)).tokenColors,
-]));
-const builtInThemeManifest = parseExtensionManifest(JSON.stringify(themeManifest), {
-	id: builtInThemeExtensionId,
-	name: themeManifest.name,
-	publisher: themeManifest.publisher,
-	version: themeManifest.version,
-});
-const builtInWorkbenchThemes = builtInThemeManifest.contributes.themes.map(contribution => {
-	if (!contribution.id || !contribution.uiTheme) throw new Error(`Incomplete built-in theme contribution: ${contribution.path}`);
-	// Bundle the extension's authored syntax data so themes are complete before any window or backend starts.
-	const tokenColors = defaultSyntaxRules.get(contribution.uiTheme);
-	if (!tokenColors) throw new Error(`Missing built-in syntax theme: ${contribution.uiTheme}`);
-	const document = { ...resolveColorThemeDocument(contribution.path, path => builtInThemeDocuments.get(path)), tokenColors };
-	const theme = createExtensionWorkbenchColorTheme(parseExtensionTheme(
-		document, contribution.id, builtInThemeExtensionId, contribution.label, contribution.uiTheme, contribution.path,
-	));
-	if (!document.type || colorThemeType(document.type) !== theme.colorScheme) throw new Error(`Built-in theme scheme mismatch: ${contribution.path}`);
-	return theme;
-});
-
-/** Built-in and contributed color themes selectable by configuration. */
-export const WorkbenchThemesRegistry = new WorkbenchThemeRegistry([
-	...builtInWorkbenchThemes,
-]);
+/** Color themes contributed by loaded extension and user resources. */
+export const WorkbenchThemesRegistry = new WorkbenchThemeRegistry();
 
 /** Theme preference used before persisted configuration has been loaded. */
 export const defaultWorkbenchColorThemePreference =

@@ -1,3 +1,5 @@
+import { ExtensionColorThemeService } from '../../../src/ash/workbench/services/extensions/browser/extensionColorThemeService.js';
+import { createDisconnectedExtensionApi } from '../../../src/ash/platform/extensions/browser/extensionApi.js';
 import '../../../src/ash/workbench/browser/parts/notifications/media/notifications.css';
 import { IHostColorSchemeService } from '../../../src/ash/workbench/services/themes/common/hostColorSchemeService.js';
 import { BrowserHostColorSchemeService } from '../../../src/ash/workbench/services/themes/browser/browserHostColorSchemeService.js';
@@ -116,6 +118,10 @@ window.tokenizeInTextMateWorker = async () => {
 };
 
 const resources = new DisposableStore();
+const extensionThemes = resources.add(new ExtensionColorThemeService(createDisconnectedExtensionApi(operation => { throw new Error(operation); }), {
+	subscribe: () => ({ dispose() {} }),
+}));
+await extensionThemes.start();
 const configuration = resources.add(new WorkbenchConfigurationService());
 await configuration.updateValue(WorkbenchConfiguration.colorTheme, 'ash-dark');
 const services = resources.add(new ServiceContainer());
