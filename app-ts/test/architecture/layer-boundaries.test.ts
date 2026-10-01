@@ -127,3 +127,28 @@ function localImports(file: string): string[] {
 function sourceName(file: string): string {
 	return relative(sourceRoot, file).replaceAll("\\", "/");
 }
+
+
+test("Design editor stays within its Sessions contribution and keeps document code independent from the page", () => {
+	const designRoot = join(sourceRoot, "sessions/contrib/design");
+	const commonRoot = join(designRoot, "common");
+	const coreRoot = join(commonRoot, "core");
+	const violations: string[] = [];
+	for (const file of productionTypeScriptFiles(commonRoot)) {
+		for (const target of localImports(file)) {
+			if (target.includes(`${sep}browser${sep}`) || target.startsWith(join(sourceRoot, "workbench")) || target.startsWith(join(sourceRoot, "editor"))) {
+				violations.push(`${sourceName(file)} -> ${sourceName(target)}`);
+			}
+			if (file.startsWith(`${coreRoot}${sep}`) && target.startsWith(designRoot) && !target.startsWith(`${coreRoot}${sep}`)) {
+				violations.push(`${sourceName(file)} -> ${sourceName(target)}`);
+			}
+		}
+	}
+	const widget = join(designRoot, "browser/widget/designEditorWidget.ts");
+	for (const target of localImports(widget)) {
+		if (target.startsWith(join(sourceRoot, "sessions")) && !target.startsWith(`${designRoot}${sep}`)) {
+			violations.push(`${sourceName(widget)} -> ${sourceName(target)}`);
+		}
+	}
+	assert.deepEqual(violations, []);
+});

@@ -8,7 +8,7 @@ import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { darkColorTheme, lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../platform/theme/test/common/testThemeService.js';
 import { WorkbenchConfigurationService } from '../../../workbench/services/configuration/browser/configurationService.js';
-import { DesignConfiguration } from '../../contrib/design/common/designConfiguration.js';
+import { DesignConfiguration } from '../../contrib/design/common/config/editorConfiguration.js';
 import { Event as AshEvent } from '../../../base/common/event.js';
 import { URI } from '../../../base/common/uri.js';
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
@@ -31,7 +31,9 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { DesignCanvasView } = await import('../../contrib/design/browser/designCanvasView.js');
+const { DesignEditorWidget } = await import('../../contrib/design/browser/widget/designEditorWidget.js');
+const { DesignDocumentController } = await import('../../contrib/design/browser/designDocumentController.js');
+const { DesignEditorPage } = await import('../../contrib/design/browser/designEditorPage.js');
 const services = new InstantiationService();
 const contextKeys = new ContextKeyService();
 const configuration = new WorkbenchConfigurationService();
@@ -74,8 +76,8 @@ suiteTeardown(() => {
 
 interface ProjectedTransform { panX: number; panY: number; scale: number; }
 
-function createView(): InstanceType<typeof DesignCanvasView> {
-	const view = services.createInstance(DesignCanvasView, browser.window.document);
+function createView(): InstanceType<typeof DesignEditorPage> {
+	const view = services.createInstance(DesignEditorPage, browser.window.document);
 	const viewport = view.domNode.querySelector<HTMLElement>('.ash-sessions-design-viewport')!;
 	let captured: number | undefined;
 	viewport.setPointerCapture = id => { captured = id; };
@@ -86,13 +88,13 @@ function createView(): InstanceType<typeof DesignCanvasView> {
 	return view;
 }
 
-function projectedTransform(view: InstanceType<typeof DesignCanvasView>): ProjectedTransform {
+function projectedTransform(view: { readonly domNode: HTMLElement }): ProjectedTransform {
 	const transform = view.domNode.querySelector<HTMLElement>('.ash-sessions-design-world')!.style.transform;
 	const match = transform.match(/translate\((-?[\d.]+)px, (-?[\d.]+)px\) scale\(([\d.]+)\)/)!;
 	return { panX: Number(match[1]), panY: Number(match[2]), scale: Number(match[3]) };
 }
 
-function dispatchWheel(view: InstanceType<typeof DesignCanvasView>, init: WheelEventInit & { clientX?: number; clientY?: number }): void {
+function dispatchWheel(view: { readonly domNode: HTMLElement }, init: WheelEventInit & { clientX?: number; clientY?: number }): void {
 	view.domNode.querySelector<HTMLElement>('.ash-sessions-design-viewport')!
 		.dispatchEvent(new browser.window.WheelEvent('wheel', { cancelable: true, ...init }));
 }
@@ -226,11 +228,11 @@ test('Design canvas resolves its accessible name from the Chinese language pack'
 	}
 });
 
-function pressCanvas(view: InstanceType<typeof DesignCanvasView>, key: string, options: KeyboardEventInit = {}): void {
+function pressCanvas(view: { readonly domNode: HTMLElement }, key: string, options: KeyboardEventInit = {}): void {
 	view.domNode.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key, cancelable: true, bubbles: true, ...options }));
 }
 
-async function clickAction(view: InstanceType<typeof DesignCanvasView>, name: string): Promise<void> {
+async function clickAction(view: { readonly domNode: HTMLElement }, name: string): Promise<void> {
 	const button = Array.from(view.domNode.querySelectorAll('button')).find(button => button.textContent === name)!;
 	button.click();
 	// File-service promises are immediate in this fixture, but the action crosses several async boundaries.
@@ -256,9 +258,9 @@ test('Design edits render fractional geometry, keep input editing separate and u
 	fire('pointermove', 148);
 	fire('pointerup', 148);
 	assert.equal(Number(rect.getAttribute('x')), before + 40);
-	view.undo();
+	DesignEditorWidget.getFocused(view.domNode)!.undo();
 	assert.equal(Number(rect.getAttribute('x')), before);
-	view.redo();
+	DesignEditorWidget.getFocused(view.domNode)!.redo();
 	assert.equal(Number(rect.getAttribute('x')), before + 40);
 	fire('pointerdown', 148);
 	fire('pointermove', 172);
@@ -313,8 +315,123 @@ test('Design keyboard selection and Chinese properties expose the document conte
 		pressCanvas(view, 'Escape');
 		pressCanvas(view, 'Tab');
 		assert.equal(view.domNode.querySelector('input[aria-label="宽度"]') !== null, true);
-		assert.match(DesignCanvasView.getFocused(view.domNode)!.getAccessibleContent(), /矩形[\s\S]*椭圆/u);
+		assert.match(DesignEditorWidget.getFocused(view.domNode)!.getAccessibleContent(), /矩形[\s\S]*椭圆/u);
 		pressCanvas(view, 'Delete');
 		assert.equal(view.domNode.querySelector('[data-shape-id]')!.tagName, 'ellipse');
 	} finally { resetNlsResolver(); }
+});
+
+test('Design edits text and path nodes, groups a selection, and exports safe SVG without changing save state', async () => {
+	using view = createView();
+	view.layout({ width: 400, height: 300 });
+	pressCanvas(view, 't');
+	const text = view.domNode.querySelector<HTMLTextAreaElement>('textarea[aria-label="Text content"]')!;
+	text.value = '中文 <script>alert(1)</script>\nSecond line';
+	text.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
+	assert.match(DesignEditorWidget.getFocused(view.domNode)!.getAccessibleContent(), /中文 <script>/u);
+	assert.equal(view.domNode.querySelector('script'), null);
+	assert.equal(view.domNode.querySelectorAll('tspan').length, 2);
+	pressCanvas(view, 'p');
+	const outgoing = view.domNode.querySelector<HTMLInputElement>('input[aria-label="Outgoing handle X"]')!;
+	outgoing.value = '48';
+	outgoing.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
+	assert.match(view.domNode.querySelector('path[data-shape-id]')!.getAttribute('d')!, /C 188 10/u);
+	await clickAction(view, 'Add node');
+	assert.equal(view.domNode.querySelector<HTMLSelectElement>('select')!.options.length, 3);
+	await clickAction(view, 'Remove node');
+	const closed = view.domNode.querySelector<HTMLInputElement>('input[aria-label="Closed path"]')!;
+	closed.click();
+	assert.match(view.domNode.querySelector('path[data-shape-id]')!.getAttribute('d')!, / Z$/u);
+	pressCanvas(view, 'n');
+	pressCanvas(view, 'g');
+	assert.equal(view.domNode.querySelectorAll('svg[data-shape-id] > [data-shape-id]').length, 2);
+	const width = view.domNode.querySelector<HTMLInputElement>('input[aria-label="Width"]')!;
+	width.value = '480';
+	width.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
+	assert.equal(view.domNode.querySelector('input[aria-label="Height"]')!.getAttribute('type'), 'number');
+	await DesignEditorWidget.getFocused(view.domNode)!.saveDocument();
+	const saved = fileContent;
+	pressCanvas(view, 'ArrowRight');
+	await clickAction(view, 'Export SVG');
+	const exported = fileContent;
+	assert.equal(view.domNode.classList.contains('dirty'), true);
+	const svg = new browser.window.DOMParser().parseFromString(exported, 'image/svg+xml');
+	assert.equal(svg.querySelector('parsererror'), null);
+	assert.equal(svg.querySelector('script'), null);
+	assert.equal(svg.querySelector('[data-shape-id]'), null);
+	assert.equal(svg.querySelector('.ash-sessions-design-selection'), null);
+	assert.equal(svg.querySelector('text')!.textContent, '中文 <script>alert(1)</script>Second line');
+	assert.match(svg.querySelector('path')!.getAttribute('d')!, / Z$/u);
+	fileContent = saved;
+	await clickAction(view, 'Open design');
+	pressCanvas(view, 'Tab');
+	pressCanvas(view, 'u');
+	assert.equal(view.domNode.querySelectorAll('.ash-sessions-design-shapes > [data-shape-id]').length, 2);
+	DesignEditorWidget.getFocused(view.domNode)!.undo();
+	assert.equal(view.domNode.querySelectorAll('.ash-sessions-design-shapes > [data-shape-id]').length, 1);
+});
+
+test('Chinese Design actions and new property labels are localized', async () => {
+	const { builtinLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	try {
+		using view = createView();
+		pressCanvas(view, 't');
+		assert.equal(view.domNode.querySelector('textarea')!.getAttribute('aria-label'), '文字内容');
+		pressCanvas(view, 'p');
+		assert.ok(view.domNode.querySelector('input[aria-label="出控制点 X"]'));
+		assert.ok(Array.from(view.domNode.querySelectorAll('button')).some(button => button.textContent === '导出 SVG'));
+		pressCanvas(view, 'n');
+		pressCanvas(view, 'g');
+		assert.match(DesignEditorWidget.getFocused(view.domNode)!.getAccessibleContent(), /组合[\s\S]*文字[\s\S]*贝塞尔路径/u);
+	} finally { resetNlsResolver(); }
+});
+
+test('Design editors share document edits and history while keeping selection, camera and lifetime separate', () => {
+	using document = services.createInstance(DesignDocumentController);
+	using first = services.createInstance(DesignEditorWidget, browser.window.document, document);
+	using second = services.createInstance(DesignEditorWidget, browser.window.document, document);
+	for (const editor of [first, second]) {
+		editor.initialize();
+		editor.layout({ width: 400, height: 300 });
+		browser.window.document.body.append(editor.domNode);
+	}
+	pressCanvas(first, 'r');
+	assert.equal(second.domNode.querySelectorAll('[data-shape-id]').length, 1);
+	assert.match(first.getAccessibleContent(), /Selected/u);
+	assert.doesNotMatch(second.getAccessibleContent(), /Selected/u);
+	pressCanvas(second, 'ArrowRight');
+	assert.deepEqual(projectedTransform(first), { panX: 0, panY: 0, scale: 1 });
+	assert.deepEqual(projectedTransform(second), { panX: -60, panY: 0, scale: 1 });
+	pressCanvas(second, 'Tab');
+	pressCanvas(second, 'ArrowRight');
+	assert.equal(first.domNode.querySelector('[data-shape-id]')!.getAttribute('x'), '141');
+	first.undo();
+	assert.equal(second.domNode.querySelector('[data-shape-id]')!.getAttribute('x'), '140');
+	first.undo();
+	assert.equal(second.domNode.querySelectorAll('[data-shape-id]').length, 0);
+	second.redo();
+	assert.equal(first.domNode.querySelectorAll('[data-shape-id]').length, 1);
+	first.dispose();
+	assert.equal(DesignEditorWidget.getFocused(first.domNode), undefined);
+	pressCanvas(second, 'e');
+	assert.equal(document.model.value.shapes.length, 2);
+	assert.equal(first.domNode.querySelectorAll('[data-shape-id]').length, 1);
+});
+
+test('Sessions page owns the unsaved browser-close check and releases it with the page', () => {
+	const page = createView();
+	try {
+		pressCanvas(page, 'r');
+		const before = new browser.window.Event('beforeunload', { cancelable: true });
+		browser.window.dispatchEvent(before);
+		assert.equal(before.defaultPrevented, true);
+		page.dispose();
+		const after = new browser.window.Event('beforeunload', { cancelable: true });
+		browser.window.dispatchEvent(after);
+		assert.equal(after.defaultPrevented, false);
+		assert.equal(DesignEditorWidget.getFocused(page.domNode), undefined);
+	} finally { page.dispose(); }
 });

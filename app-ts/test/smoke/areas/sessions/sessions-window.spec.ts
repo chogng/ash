@@ -429,6 +429,164 @@ test('Sessions Design saves and opens a browser folder without replacing the wor
 	await expect(canvas.locator('.ash-sessions-design-zoom')).not.toContainText('Unsaved changes');
 });
 
+test('Sessions Design edits text and Bézier handles and transforms groups with keyboard and pointer', async ({ application, target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code');
+	let page = workbench.page;
+	if (target.kind === 'browser') {
+		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+	} else {
+		if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
+		const opened = application.waitForEvent('window');
+		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
+		page = await opened;
+	}
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
+	const canvas = page.getByRole('region', { name: 'Design canvas' });
+	await canvas.focus();
+	await page.keyboard.press('t');
+	const content = canvas.getByRole('textbox', { name: 'Text content', exact: true });
+	await content.fill('中文 <script>alert(1)</script>\nSecond line');
+	await content.press('Tab');
+	const fontSize = canvas.getByRole('spinbutton', { name: 'Font size', exact: true });
+	await fontSize.fill('32');
+	await fontSize.press('Tab');
+	await expect(canvas.locator('text')).toContainText('中文 <script>alert(1)</script>');
+	await expect(canvas.locator('text')).toHaveAttribute('font-size', '32');
+	await expect(canvas.locator('script')).toHaveCount(0);
+	await canvas.getByRole('button', { name: 'Bézier path', exact: true }).click();
+	const path = canvas.locator('path[data-shape-id]');
+	const initial = await path.getAttribute('d');
+	const outgoing = canvas.getByRole('spinbutton', { name: 'Outgoing handle X', exact: true });
+	await outgoing.fill('48');
+	await outgoing.press('Tab');
+	await expect(path).not.toHaveAttribute('d', initial!);
+	const edited = await path.getAttribute('d');
+	const handle = canvas.locator('.ash-sessions-design-path-handle[data-path-node="0"][data-path-point="outgoing"]');
+	const box = await handle.boundingBox();
+	expect(box).not.toBeNull();
+	await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(box!.x + box!.width / 2 + 24, box!.y + box!.height / 2 + 12, { steps: 3 });
+	await page.mouse.up();
+	await expect(path).not.toHaveAttribute('d', edited!);
+	await page.keyboard.press('ControlOrMeta+z');
+	await expect(path).toHaveAttribute('d', edited!);
+	await canvas.getByRole('button', { name: 'Add node', exact: true }).click();
+	await expect(canvas.getByRole('combobox', { name: 'Path node', exact: true }).locator('option')).toHaveCount(3);
+	await canvas.getByRole('button', { name: 'Remove node', exact: true }).click();
+	await canvas.getByRole('checkbox', { name: 'Closed path', exact: true }).check();
+	await expect(path).toHaveAttribute('d', / Z$/u);
+	await canvas.focus();
+	await page.keyboard.press('n');
+	await page.keyboard.press('g');
+	const group = canvas.locator('.ash-sessions-design-shapes > svg[data-shape-id]');
+	await expect(group).toHaveCount(1);
+	const width = canvas.getByRole('spinbutton', { name: 'Width', exact: true });
+	const height = canvas.getByRole('spinbutton', { name: 'Height', exact: true });
+	const beforeWidth = Number(await width.inputValue());
+	const beforeHeight = Number(await height.inputValue());
+	await width.fill(`${beforeWidth * 1.5}`);
+	await width.press('Tab');
+	await expect.poll(async () => Number(await height.inputValue())).toBeCloseTo(beforeHeight * 1.5, 5);
+	const rotation = canvas.getByRole('spinbutton', { name: 'Rotation', exact: true });
+	await rotation.fill('45');
+	await rotation.press('Tab');
+	await canvas.focus();
+	await page.keyboard.press('u');
+	await expect(canvas.locator('.ash-sessions-design-shapes > [data-shape-id]')).toHaveCount(2);
+	await expect(canvas.locator('text')).toHaveAttribute('font-size', '48');
+	await page.keyboard.press('ControlOrMeta+z');
+	await expect(group).toHaveCount(1);
+	await page.keyboard.press('Tab');
+	await page.keyboard.press('Alt+F2');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Group[\s\S]*Text[\s\S]*中文[\s\S]*Bézier path/u);
+	await page.keyboard.press('Escape');
+	await expect(canvas).toBeFocused();
+	await expect(canvas.getByRole('button', { name: 'Export SVG', exact: true })).toBeEnabled();
+	if (target.kind === 'browser') { await page.setViewportSize({ width: 600, height: 600 }); }
+	else if ('windows' in application) {
+		await application.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows().find(window => window.getTitle().includes('Sessions'))!.setBounds({ width: 600, height: 600 }); });
+	}
+	await canvas.getByRole('button', { name: 'Bézier path', exact: true }).click();
+	await expect(canvas.getByRole('spinbutton', { name: 'Outgoing handle Y', exact: true })).toBeVisible();
+	await expect.poll(async () => (await canvas.locator('.ash-sessions-design-viewport').boundingBox())!.height).toBeGreaterThan(100);
+});
+
+test('Sessions Design exports SVG and reopens grouped text and paths through the file service', async ({ application, target, testWorkspace, workbench }) => {
+	test.skip(target.workbenchMode !== 'code' || (target.kind === 'electron' && target.appServerMode !== 'required'));
+	test.skip(target.kind === 'browser' && target.appServerMode !== 'disabled');
+	let page = workbench.page;
+	let folderName = '';
+	const directory = await realpath(testWorkspace.directory);
+	if (target.kind === 'browser') {
+		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+		folderName = await page.evaluate(async () => {
+			const name = `ash-design-${crypto.randomUUID()}`;
+			const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name, { create: true });
+			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
+			return name;
+		});
+	} else {
+		if (!('windows' in application)) { throw new Error('Expected Electron application'); }
+		await application.evaluate(({ dialog }, folder) => {
+			dialog.showSaveDialog = async () => ({ canceled: false, filePath: `${folder}/design.ash-design.json` });
+			dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [`${folder}/design.ash-design.json`] });
+		}, directory);
+		const opened = application.waitForEvent('window');
+		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
+		page = await opened;
+	}
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
+	const canvas = page.getByRole('region', { name: 'Design canvas' });
+	await canvas.getByRole('button', { name: 'Text', exact: true }).click();
+	const text = canvas.getByRole('textbox', { name: 'Text content', exact: true });
+	await text.fill('中文 <script>');
+	await text.press('Tab');
+	await canvas.getByRole('button', { name: 'Bézier path', exact: true }).click();
+	await canvas.getByRole('button', { name: 'Select all', exact: true }).click();
+	await canvas.getByRole('button', { name: 'Group', exact: true }).click();
+	await canvas.getByRole('button', { name: 'Save design', exact: true }).click();
+	if (target.kind === 'browser') {
+		const dialog = page.getByRole('dialog', { name: 'Save design', exact: true });
+		await dialog.getByRole('textbox', { name: 'File name, field 1' }).fill('design.ash-design.json');
+		await dialog.getByRole('button', { name: 'OK', exact: true }).click();
+	}
+	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Saved design.ash-design.json');
+	await canvas.focus();
+	await page.keyboard.press('ArrowRight');
+	if (target.kind === 'electron' && 'windows' in application) {
+		await application.evaluate(({ dialog }, folder) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: `${folder}/design.svg` }); }, directory);
+	}
+	await canvas.getByRole('button', { name: 'Export SVG', exact: true }).click();
+	if (target.kind === 'browser') {
+		const dialog = page.getByRole('dialog', { name: 'Export SVG', exact: true });
+		await dialog.getByRole('textbox', { name: 'File name, field 1' }).fill('design.svg');
+		await dialog.getByRole('button', { name: 'OK', exact: true }).click();
+	}
+	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Exported design.svg');
+	await expect(canvas.locator('.ash-sessions-design-zoom')).toContainText('Unsaved changes');
+	const read = async (filename: string): Promise<string> => target.kind === 'electron' ? readFile(join(directory, filename), 'utf8') : page.evaluate(async ({ folderName, filename }) => {
+		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(folderName);
+		return (await (await folder.getFileHandle(filename)).getFile()).text();
+	}, { folderName, filename });
+	const svg = await read('design.svg');
+	const saved = JSON.parse(await read('design.ash-design.json'));
+	expect(saved.shapes[0]).toMatchObject({ kind: 'group', children: [{ kind: 'text', text: '中文 <script>' }, { kind: 'path' }] });
+	const parsed = await page.evaluate(content => {
+		const svg = new DOMParser().parseFromString(content, 'image/svg+xml');
+		return { text: svg.querySelector('text')?.textContent, path: svg.querySelector('path')?.getAttribute('d'), selection: svg.querySelector('.ash-sessions-design-selection') !== null, script: svg.querySelector('script') !== null, error: svg.querySelector('parsererror') !== null };
+	}, svg);
+	expect(parsed).toMatchObject({ text: '中文 <script>', selection: false, script: false, error: false });
+	expect(parsed.path).toContain(' C ');
+	await page.keyboard.press('ControlOrMeta+z');
+	await canvas.getByRole('button', { name: 'Open design', exact: true }).click();
+	if (target.kind === 'browser') { await page.locator('.ash-quick-pick-row-label').filter({ hasText: /^design\.ash-design\.json$/u }).click(); }
+	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Opened design.ash-design.json');
+	await expect(canvas.locator('.ash-sessions-design-shapes > svg[data-shape-id]')).toHaveCount(1);
+	await expect(canvas.locator('text')).toContainText('中文 <script>');
+	await expect(canvas.locator('path[data-shape-id]')).toHaveCount(1);
+});
+
 test('Sessions composer attaches files, chooses permissions, and restores the unsent draft', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	let page = workbench.page;

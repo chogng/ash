@@ -1,6 +1,6 @@
-import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
-import { Registry } from '../../../../platform/registry/common/platform.js';
-import { localize } from '../../../../nls.js';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { Registry } from '../../../../../platform/registry/common/platform.js';
+import { localize } from '../../../../../nls.js';
 
 /** Canvas input preferences follow the UI profile, independently of the active workspace or Session. */
 export const DesignConfiguration = Object.freeze({

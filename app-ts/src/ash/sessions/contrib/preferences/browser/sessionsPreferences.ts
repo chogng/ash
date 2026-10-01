@@ -32,7 +32,7 @@ import { SettingsSearchQuery } from '../../../../workbench/contrib/preferences/b
 import type { SettingWidgetOptions } from '../../../../workbench/contrib/preferences/browser/settingsWidgets.js';
 import type { ISetting } from '../../../../workbench/services/preferences/common/preferences.js';
 import { SessionsConfiguration } from '../../../common/configuration.js';
-import { DesignConfiguration } from '../../design/common/designConfiguration.js';
+import { DesignConfiguration } from '../../design/common/config/editorConfiguration.js';
 
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.SessionsSettings,

@@ -100,6 +100,9 @@
 
 .ash-sessions-design-properties {
 	display: none;
+	min-height: 0;
+	max-height: 40%;
+	overflow: auto;
 	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--ash-spacing-size120);
@@ -140,4 +143,56 @@
 
 .ash-sessions-design-content {
 	display: none;
+}
+
+.ash-sessions-design-special-properties {
+	display: none;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size120);
+	width: 100%;
+}
+
+.ash-sessions-design-special-properties.visible {
+	display: flex;
+}
+
+.ash-sessions-design-properties textarea,
+.ash-sessions-design-properties select {
+	box-sizing: border-box;
+	max-width: 100%;
+	min-height: var(--ash-spacing-size280);
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-small);
+	font: inherit;
+}
+
+.ash-sessions-design-properties textarea {
+	width: 240px;
+	resize: vertical;
+}
+
+.ash-sessions-design-properties textarea:focus-visible,
+.ash-sessions-design-properties select:focus-visible {
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
+}
+
+.ash-sessions-design-properties input[type="checkbox"] {
+	width: var(--ash-spacing-size160);
+	min-height: var(--ash-spacing-size160);
+}
+
+.ash-sessions-design-selection rect,
+.ash-sessions-design-selection line,
+.ash-sessions-design-path-handle {
+	vector-effect: non-scaling-stroke;
+}
+
+.ash-sessions-design-path-handle {
+	fill: var(--ash-editor-background);
+	pointer-events: all;
+	cursor: move;
 }
