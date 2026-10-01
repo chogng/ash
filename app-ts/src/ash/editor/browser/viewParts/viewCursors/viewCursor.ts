@@ -10,7 +10,7 @@ import { TextDirection } from '../../../common/model.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type SemanticTokenSource } from '../../../common/tokens/languageTokens.js';
 import { createStanzaVisualSelectionGeometry } from '../../../common/viewModel/visualSelectionGeometry.js';
-import { type HorizontalRange, type RenderingContext } from '../../view/renderingContext.js';
+import { HorizontalRange, type RenderingContext } from '../../view/renderingContext.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { type ViewConfigurationChangedEvent } from '../../../common/viewEvents.js';
@@ -239,9 +239,12 @@ export class ViewCursor {
 		const caret = context.visibleRangeForPosition(grapheme.position);
 		if (caret) {
 			const visualLineIndex = grapheme.position.lineNumber - 1;
+			// Line measurements start at the text origin; this cursor is mounted in
+			// the content layer, which also includes the editor gutter.
+			const textLeft = this.readTextLeft();
 			const geometry: DomCaretGeometry = Object.freeze({
 				visualLineIndex,
-				left: caret.originalLeft,
+				left: textLeft + caret.originalLeft,
 				isRightToLeft: this.isRightToLeftAtPosition(grapheme.position),
 			});
 			if (grapheme.endColumn === grapheme.position.column) return geometry;
@@ -249,7 +252,13 @@ export class ViewCursor {
 			const characterRange = context.linesVisibleRangesForRange(range, false)
 				?.find(candidate => candidate.lineNumber === visualLineIndex + 1)
 				?.ranges[0];
-			return characterRange ? Object.freeze({ ...geometry, characterRange }) : geometry;
+			if (!characterRange) {
+				return geometry;
+			}
+			return Object.freeze({
+				...geometry,
+				characterRange: new HorizontalRange(textLeft + characterRange.left, characterRange.width),
+			});
 		}
 		const modelPosition = this.context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(grapheme.position);
 		const geometry = createStanzaVisualSelectionGeometry(

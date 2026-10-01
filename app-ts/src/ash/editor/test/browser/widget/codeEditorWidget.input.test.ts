@@ -698,7 +698,14 @@ test('ViewUserInputEvents converts view targets once and CodeEditorWidget publis
 		clientX: editor.getLayoutInfo().contentLeft + 2,
 		clientY: 10,
 	});
-	requiredElement<HTMLElement>(editor.getDomNode(), '.view-line .stanza-editor-line-text > span').dispatchEvent(browserEvent);
+	const span = requiredElement<HTMLElement>(editor.getDomNode(), '.view-line .stanza-editor-line-text > span');
+	dom.window.document.caretRangeFromPoint = () => {
+		const range = dom.window.document.createRange();
+		range.setStart(span.firstChild!, 1);
+		range.collapse(true);
+		return range;
+	};
+	span.dispatchEvent(browserEvent);
 	editor.controller.textArea!.dispatchEvent(new dom.window.KeyboardEvent('keyup', { bubbles: true, key: 'a' }));
 	editor.getDomNode().dispatchEvent(new dom.window.MouseEvent('drop', { bubbles: true, clientX: 80, clientY: 10 }) as unknown as DragEvent);
 
@@ -706,7 +713,7 @@ test('ViewUserInputEvents converts view targets once and CodeEditorWidget publis
 	assert.ok(received.event instanceof StandardMouseEvent);
 	assert.strictEqual(received.event.browserEvent, browserEvent);
 	assert.equal(received.target.type, MouseTargetType.CONTENT_TEXT);
-	assert.equal(received.target.position?.lineNumber, 1);
+	assert.deepEqual(received.target.position, new Position(1, 2));
 	assert.equal(releasedKey, 'a');
 	assert.equal(dropped, true);
 	assert.deepEqual(dropPosition, new Position(1, 6));

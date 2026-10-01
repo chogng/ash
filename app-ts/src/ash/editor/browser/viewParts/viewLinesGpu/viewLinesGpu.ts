@@ -365,11 +365,13 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 			const leftByOffset = new Array<number>(lineData.content.length + 1);
 			let deviceX = (lineData.minColumn - 1) * viewLineOptions.spaceWidth * devicePixelRatio;
 			let tabColumnOffset = 0;
-			leftByOffset[0] = this.contentLeft + deviceX / devicePixelRatio;
+			// Measurement consumers use the text origin, as ViewLines does. The
+			// GPU render strategy applies the gutter offset when drawing the frame.
+			leftByOffset[0] = deviceX / devicePixelRatio;
 			for (let index = 0; index < lineData.content.length; index++) {
 				const chars = segmenter.getSegmentAtIndex(index);
 				if (chars === undefined) continue;
-				const start = this.contentLeft + deviceX / devicePixelRatio;
+				const start = deviceX / devicePixelRatio;
 				const useFixedAdvance = lineData.isBasicASCII && viewLineOptions.useMonospaceOptimizations;
 				const advance = useFixedAdvance
 					? viewLineOptions.spaceWidth * devicePixelRatio
@@ -383,7 +385,7 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 					deviceX += advance;
 				}
 				for (let offset = index; offset < index + chars.length; offset++) leftByOffset[offset] = start;
-				leftByOffset[index + chars.length] = this.contentLeft + deviceX / devicePixelRatio;
+				leftByOffset[index + chars.length] = deviceX / devicePixelRatio;
 			}
 			result.set(lineIndex, Object.freeze({
 				leftByOffset: Object.freeze(leftByOffset),
@@ -391,10 +393,6 @@ export class ViewLinesGpu extends ViewPart implements IViewLines {
 			}));
 		}
 		return result;
-	}
-
-	private get contentLeft(): number {
-		return this._context.configuration.options.get(EditorOption.layoutInfo).contentLeft;
 	}
 
 	private ensureRenderStrategy(viewportData: ViewportData): void {

@@ -67,6 +67,27 @@ test('GPU text keeps wrapped rows disjoint and the gutter in VS Code order', asy
 	await expectGpuAdvanceMatchesDom(page);
 });
 
+test('GPU caret uses the same text origin as DOM rendering', async ({ page }) => {
+	await page.goto('/gpuText.html');
+	await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
+	await page.locator('.stanza-editor-input').focus();
+	await page.keyboard.press('Control+Home');
+	await page.keyboard.press('ArrowRight');
+	await page.keyboard.press('ArrowRight');
+	await page.keyboard.press('ArrowRight');
+	await page.evaluate(() => window.ashGpuTextIntegration.setFontLigatures(true));
+	await expect(page.locator('.view-line.gpu-rendered')).toHaveCount(0);
+	const caret = page.locator('.stanza-editor-caret.primary');
+	const domBounds = await caret.boundingBox();
+	expect(domBounds).not.toBeNull();
+	await page.evaluate(() => window.ashGpuTextIntegration.setFontLigatures(false));
+	await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
+	await expect.poll(async () => {
+		const gpuBounds = await caret.boundingBox();
+		return gpuBounds ? Math.abs(gpuBounds.x - domBounds!.x) : Number.POSITIVE_INFINITY;
+	}).toBeLessThan(2);
+});
+
 async function expectGpuAdvanceMatchesDom(page: Page): Promise<void> {
 	// Ligatures select the DOM renderer; GPU rows need not retain hidden DOM text.
 	await page.evaluate(() => window.ashGpuTextIntegration.setFontLigatures(true));

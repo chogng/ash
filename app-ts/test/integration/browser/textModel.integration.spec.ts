@@ -45,6 +45,64 @@ test("text-model editor public API, pane, undo, save, and browser worker", async
 	await expect.poll(() => workers.length).toBeGreaterThan(0);
 });
 
+for (const proportional of [false, true]) {
+	test(`pointer insertion and caret share rendered text coordinates with proportional=${proportional}`, async ({ page }) => {
+		await openEditor(page);
+		const text = '\tmode switcher > radiogroup 中文🙂';
+		await page.evaluate(({ text, proportional }) => {
+			const editor = window.ashTextModelIntegration.getControl();
+			editor.updateOptions({
+				fontFamily: proportional ? 'Arial' : 'monospace',
+				fontSize: proportional ? 18 : 16,
+				letterSpacing: proportional ? 1 : 0,
+				lineNumbers: proportional ? 'on' : 'off',
+				lineNumbersMinChars: 8,
+				glyphMargin: proportional,
+				cursorStyle: proportional ? 'block' : 'line',
+				wordWrap: 'off',
+				smoothScrolling: false,
+			});
+			editor.setValue(`fn main() {}\n${text}\n${'wide '.repeat(100)}`);
+			editor.setScrollLeft(40);
+			if (proportional) {
+				editor.getDomNode().style.transform = 'scale(1.25)';
+				editor.getDomNode().style.transformOrigin = 'top left';
+			}
+		}, { text, proportional });
+		const line = page.locator('.view-lines > .view-line .stanza-editor-line-text').nth(1);
+		await expect(line).toHaveText(text);
+		for (const offset of [text.length, 24, 18]) {
+			const point = await line.evaluate((element, offset) => {
+				const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+				let remaining = offset;
+				for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+					const length = node.textContent!.length;
+					if (remaining <= length) {
+						const range = document.createRange();
+						range.setStart(node, remaining);
+						range.collapse(true);
+						const rect = range.getBoundingClientRect();
+						return { x: rect.left - 0.5, y: rect.top + rect.height / 2 };
+					}
+					remaining -= length;
+				}
+				throw new Error(`Missing rendered offset ${offset}`);
+			}, offset);
+			await page.mouse.click(point.x, point.y);
+			await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getPosition())).toEqual({ lineNumber: 2, column: offset + 1 });
+			await expect.poll(async () => {
+				const caret = await page.locator('.stanza-editor-caret.primary').boundingBox();
+				return caret ? Math.abs(caret.x - point.x) : Number.POSITIVE_INFINITY;
+			}).toBeLessThan(3);
+			await expect(page.locator('.stanza-editor-input')).toBeFocused();
+			await page.keyboard.insertText('!');
+			await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getModel()!.getLineContent(2))).toBe(`${text.slice(0, offset)}!${text.slice(offset)}`);
+			await page.keyboard.press('Backspace');
+			await expect(line).toHaveText(text);
+		}
+	});
+}
+
 test('common editor navigation uses wrapped and folded coordinates and retains keyboard focus', async ({ page }) => {
 	await openEditor(page);
 	const result = await page.evaluate((scrollType: ScrollType) => {

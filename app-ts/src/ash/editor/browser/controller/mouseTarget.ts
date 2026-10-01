@@ -8,6 +8,7 @@ import { GlyphMarginLane, TextDirection } from '../../common/model.js';
 import { type ViewContext } from '../../common/viewModel/viewContext.js';
 import { type IViewCursorRenderData } from '../viewParts/viewCursors/viewCursor.js';
 import { PartFingerprint, PartFingerprints } from '../view/viewPart.js';
+import { ViewLine } from '../viewParts/viewLines/viewLine.js';
 
 export class PointerHandlerLastRenderData {
 	constructor(
@@ -98,13 +99,13 @@ export class MouseTargetFactory {
 	public createMouseTarget(
 		_lastRenderData: PointerHandlerLastRenderData,
 		_editorPos: EditorPagePosition,
-		_pos: PageCoordinates,
+		pos: PageCoordinates,
 		relativePos: CoordinatesRelativeToEditor,
 		target: HTMLElement | null,
 	): IMouseTarget {
 		const mouseColumn = this.getMouseColumn(relativePos);
 		const elementTarget = classifyElement(target, this.viewHelper.viewDomNode);
-		const domPosition = target ? this.viewHelper.getPositionFromDOMInfo(target, 0) : null;
+		const domPosition = target ? this.domPositionAt(pos, target) : null;
 		const position = domPosition ?? this.positionAt(relativePos);
 		if (elementTarget?.kind === ElementTargetKind.Textarea) return MouseTarget.createTextarea(target, mouseColumn);
 		if (elementTarget?.kind === ElementTargetKind.ContentWidget) return MouseTarget.createContentWidget(target, mouseColumn, elementTarget.widgetId ?? '');
@@ -171,6 +172,29 @@ export class MouseTargetFactory {
 	public static _getMouseColumn(mouseContentHorizontalOffset: number, typicalHalfwidthCharacterWidth: number): number {
 		if (mouseContentHorizontalOffset < 0) return 1;
 		return Math.round(mouseContentHorizontalOffset / Math.max(1, typicalHalfwidthCharacterWidth)) + 1;
+	}
+
+	private domPositionAt(pos: PageCoordinates, target: HTMLElement): Position | null {
+		const row = target.closest(`.${ViewLine.CLASS_NAME}`);
+		if (!row || !this.viewHelper.viewLinesDomNode.contains(row)) {
+			return null;
+		}
+		const ownerDocument = target.ownerDocument;
+		const client = pos.toClientCoordinates(ownerDocument.defaultView!);
+		// The event target identifies a span, not the character within that span.
+		// Browser caret hit testing retains shaping, bidi and transformed geometry.
+		const caret = ownerDocument.caretPositionFromPoint?.(client.clientX, client.clientY)
+			?? ownerDocument.caretRangeFromPoint?.(client.clientX, client.clientY);
+		if (!caret) {
+			return null;
+		}
+		const node = 'offsetNode' in caret ? caret.offsetNode : caret.startContainer;
+		const offset = 'offsetNode' in caret ? caret.offset : caret.startOffset;
+		const element = node.nodeType === node.TEXT_NODE ? node.parentElement : node as HTMLElement;
+		if (!element || !row.contains(element)) {
+			return null;
+		}
+		return this.viewHelper.getPositionFromDOMInfo(element, offset);
 	}
 
 	private positionAt(relativePos: CoordinatesRelativeToEditor): Position | null {
