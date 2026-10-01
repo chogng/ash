@@ -137,12 +137,38 @@ export class ActionBar extends Disposable {
 	setActions(actions: readonly IAction[]): void {
 		const activeElement = this.element.ownerDocument.activeElement;
 		const focusedActionId = this.entries.find(({ container }) => container.contains(activeElement))?.action.id;
-		this.clearActions();
-		this.tabStop = undefined;
-		this.element.replaceChildren();
-		for (const action of actions) this.add(action);
-		if (focusedActionId) {
-			const entry = this.entries.find(({ action }) => action.id === focusedActionId && action.enabled);
+		// Retained action identities keep their view and DOM through selection and reordering.
+		const retained = new Map(this.entries.map(entry => [entry.action, entry]));
+		const next = actions.map(action => {
+			const entry = retained.get(action);
+			if (entry) {
+				retained.delete(action);
+				return entry;
+			}
+			const container = h(this.element.ownerDocument, "div");
+			container.className = "ash-action-view-item";
+			container.classList.toggle("icon", action.icon !== undefined);
+			container.dataset.actionId = action.id;
+			container.setAttribute("role", "presentation");
+			return this.createEntry(action, container);
+		});
+		for (const entry of retained.values()) {
+			entry.store.dispose();
+			entry.container.remove();
+		}
+		this.entries.splice(0, this.entries.length, ...next);
+		for (let index = 0; index < next.length; index += 1) {
+			const container = next[index]!.container;
+			if (this.element.children[index] !== container) {
+				this.element.insertBefore(container, this.element.children[index] ?? null);
+			}
+		}
+		const tabStop = next.find(entry => entry.action.enabled && entry.item === this.tabStop)
+			?? next.find(entry => entry.action.enabled);
+		this.tabStop = tabStop?.item;
+		for (const entry of next) entry.item.setTabbable(entry === tabStop);
+		if (focusedActionId && this.element.ownerDocument.activeElement !== activeElement) {
+			const entry = next.find(({ action }) => action.id === focusedActionId && action.enabled);
 			if (entry) {
 				this._setTabStop(entry.item);
 				entry.item.focus();
@@ -157,7 +183,9 @@ export class ActionBar extends Disposable {
 			return;
 		}
 		for (let index = 0; index < actions.length; index += 1) {
-			this.replaceEntry(this.entries[index]!, actions[index]!);
+			if (this.entries[index]!.action !== actions[index]) {
+				this.replaceEntry(this.entries[index]!, actions[index]!);
+			}
 		}
 	}
 

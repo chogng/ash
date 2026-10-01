@@ -1,5 +1,4 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
-import { Separator, type IAction } from "../../../../base/common/actions.js";
 import { Dimension, type IDimension } from "../../../../base/browser/dom.js";
 import { CancellationError, isCancellationError } from "../../../../base/common/errors.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
@@ -20,6 +19,9 @@ import type { IAccessibilityService } from "../../../../platform/accessibility/c
 import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { EditorInput, EditorOpenOptions } from "./editorInput.js";
+import type { EditorCloseOptions } from '../../../services/editor/common/editorGroupsService.js';
+import type { IEditorGroupView } from './editor.js';
+import { ActiveEditorPinnedContext, ActiveEditorStickyContext } from '../../../common/contextkeys.js';
 import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
 import type { IEditorPane } from "./editorPane.js";
 import { isEditorPaneWithSelection } from '../../../common/editor.js';
@@ -54,48 +56,6 @@ import type { Range } from '../../../../editor/common/core/range.js';
 import { isDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
 import { associatedEditorId, DiffEditorAssociationsConfiguration, EditorAssociationsConfiguration, type EditorAssociations } from './editorConfiguration.js';
 
-/** Operations and state owned independently by one EditorGroup. */
-export interface IEditorGroup {
-	readonly id: EditorGroupId;
-	readonly domNode: HTMLElement;
-	readonly onDidChangeEditors: Event<EditorGroupChangeEvent>;
-	readonly inputs: readonly EditorInput[];
-	readonly selectedInputs: readonly EditorInput[];
-	readonly editors: readonly EditorInstanceState[];
-	readonly activeInput: EditorInput | undefined;
-	readonly isLocked: boolean;
-	setLocked(locked: boolean): void;
-	readonly activePane: IEditorPane | undefined;
-	getEditorState(): EditorGroupState;
-	saveEditorViewState(input: EditorInput): SerializedEditorViewState | undefined;
-	restoreEditorViewState(input: EditorInput, state: SerializedEditorViewState | undefined): boolean;
-	isPreview(input: EditorInput): boolean;
-	isSticky(input: EditorInput): boolean;
-	/** Keeps a preview open as an ordinary tab; fixed tab placement is a separate operation. */
-	pinEditor(input?: EditorInput): void;
-	toggleSticky(input: EditorInput): void;
-
-	openEditor(
-		input: EditorInput,
-		options?: EditorOpenOptions,
-		instanceId?: EditorInstanceId,
-	): Promise<IEditorPane>;
-	activateEditor(input: EditorInput): IEditorPane;
-	confirmCloseEditor(input: EditorInput): Promise<boolean>;
-	closeEditor(input: EditorInput, options?: EditorCloseOptions): Promise<boolean>;
-	replaceEditor(input: EditorInput, replacement: EditorInput): Promise<void>;
-	moveEditorTo(input: EditorInput, target: IEditorGroup, targetIndex: number): Promise<void>;
-	setContent(content: Element): Promise<boolean>;
-	layout(dimension: IDimension): void;
-	focus(): void;
-}
-
-/** Internal lifecycle controls used when an editor is moved instead of closed. */
-export interface EditorCloseOptions {
-	readonly skipConfirmation?: boolean;
-	readonly reason?: EditorCloseReason;
-}
-
 /** Construction inputs for one independently navigable EditorGroup. */
 export interface EditorGroupOptions {
 	readonly id?: EditorGroupId;
@@ -115,8 +75,8 @@ export interface EditorGroupOptions {
 	readonly documentCollaborationApi?: IDocumentCollaborationApi;
 	readonly serverEvents?: IServerEventApi;
 	readonly workingCopyService?: IWorkingCopyService;
-	readonly onSave?: (group: IEditorGroup, input: EditorInput, pane: IEditorPane) => Promise<boolean>;
-	readonly onWillCloseEditor?: (group: IEditorGroup, input: EditorInput, pane: IEditorPane) => Promise<boolean>;
+	readonly onSave?: (group: IEditorGroupView, input: EditorInput, pane: IEditorPane) => Promise<boolean>;
+	readonly onWillCloseEditor?: (group: IEditorGroupView, input: EditorInput, pane: IEditorPane) => Promise<boolean>;
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
 	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
 	readonly titleActions?: EditorHeaderActions;
@@ -153,7 +113,7 @@ class EditorGroupEntry extends Disposable implements EditorTabDescriptor {
  * Assembles one editor group and owns its DOM and pane lifetimes.
  * Tab state belongs to EditorGroupModel.
  */
-export class EditorGroupView extends Disposable implements IEditorGroup {
+export class EditorGroupView extends Disposable implements IEditorGroupView {
 	readonly id: EditorGroupId;
 	readonly domNode: HTMLElement;
 	private readonly editorChangeEmitter = this._register(new Emitter<EditorGroupChangeEvent>());
@@ -180,8 +140,8 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 	private readonly documentCollaborationApi: IDocumentCollaborationApi | undefined;
 	private readonly serverEvents: IServerEventApi | undefined;
 	private readonly workingCopyService: IWorkingCopyService | undefined;
-	private readonly onSave: ((group: IEditorGroup, input: EditorInput, pane: IEditorPane) => Promise<boolean>) | undefined;
-	private readonly onWillCloseEditor: ((group: IEditorGroup, input: EditorInput, pane: IEditorPane) => Promise<boolean>) | undefined;
+	private readonly onSave: ((group: IEditorGroupView, input: EditorInput, pane: IEditorPane) => Promise<boolean>) | undefined;
+	private readonly onWillCloseEditor: ((group: IEditorGroupView, input: EditorInput, pane: IEditorPane) => Promise<boolean>) | undefined;
 	private readonly onOpenLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined;
 	private readonly onApplyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined;
 	private readonly titleActions: EditorHeaderActions | undefined;
@@ -244,7 +204,6 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 			},
 			showContextMenu: (input, event, tab) => this.showTabContextMenu(input, event, tab),
 			pinEditor: input => this.pinEditor(input),
-			toggleSticky: input => this.toggleSticky(input),
 			startDrag: input => options.dragAndDrop?.start(this, input),
 			isDragging: () => options.dragAndDrop?.isDragging() ?? false,
 			drop: (target, position) => options.dragAndDrop?.drop(this, target, position),
@@ -323,39 +282,17 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 		const anchor = event.type === "contextmenu"
 			? { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY, targetWindow: tab.ownerDocument.defaultView ?? undefined }
 			: tab;
-		const pinAction: IAction = {
-			id: "workbench.action.toggleEditorPin",
-			label: entry.sticky
-				? localize("workbench.unpinEditor", "Unpin Editor")
-				: localize("workbench.pinEditor", "Pin Editor"),
-			tooltip: "",
-			enabled: true,
-			run: () => this.toggleSticky(entry.input),
-		};
-		const closeOthersAction: IAction = {
-			id: "workbench.action.closeOtherEditorsInGroup",
-			label: localize("workbench.closeOtherEditors", "Close Other Editors"),
-			tooltip: "",
-			enabled: this.entries.length > 1,
-			run: async () => {
-				for (const other of [...this.entries]) {
-					if (other !== entry) {
-						if (!await this.closeEditor(other.input)) {
-							break;
-						}
-					}
-				}
-			},
-		};
+		const menuContext = this.scopedContextKeyService?.createScoped(tab);
+		menuContext?.bufferChangeEvents(() => {
+			menuContext.setContext(ActiveEditorPinnedContext.key, !entry.preview);
+			menuContext.setContext(ActiveEditorStickyContext.key, entry.sticky);
+		});
 		actions.contextMenuProvider.showContextMenu({
 			getAnchor: () => anchor,
-			getActions: () => Separator.join(
-				[pinAction],
-				getFlatContextMenuActions(actions.menuService.getMenuActions(MenuId.EditorTitleContext, { arg: context }, this.scopedContextKeyService), undefined, tab.ownerDocument.defaultView ?? undefined),
-				[closeOthersAction],
-			),
+			getActions: () => getFlatContextMenuActions(actions.menuService.getMenuActions(MenuId.EditorTitleContext, { arg: context }, menuContext), undefined, tab.ownerDocument.defaultView ?? undefined),
 			getActionsContext: () => context,
 			onHide: didCancel => {
+				menuContext?.dispose();
 				const survivingTab = tab.ownerDocument.getElementById(entry.tabId);
 				if (didCancel && survivingTab) {
 					survivingTab.focus();
@@ -439,18 +376,38 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 		if (restoreTabFocus) this.domNode.ownerDocument.getElementById(entry.tabId)?.focus();
 	}
 
-	toggleSticky(input: EditorInput): void {
+	stickEditor(input: EditorInput | undefined = this.activeInput): void {
+		if (input) {
+			this.setSticky(input, true);
+		}
+	}
+
+	unstickEditor(input: EditorInput | undefined = this.activeInput): void {
+		if (input) {
+			this.setSticky(input, false);
+		}
+	}
+
+	private setSticky(input: EditorInput, sticky: boolean): void {
 		const entry = this.requireEntry(input);
+		if (entry.sticky === sticky) {
+			return;
+		}
 		const previousIndex = this.model.indexOf(input);
 		const focusedTab = this.domNode.ownerDocument.activeElement?.closest(".ash-tab");
-		const restoreTabFocus = !!focusedTab && this.domNode.contains(focusedTab);
-		if (entry.sticky) this.model.unstick(input);
-		else this.model.stick(input);
+		const focusedTabId = focusedTab && this.domNode.contains(focusedTab) ? this.domNode.ownerDocument.activeElement?.id : undefined;
+		if (sticky) {
+			this.model.stick(input);
+		} else {
+			this.model.unstick(input);
+		}
 		if (this.model.indexOf(input) !== previousIndex) {
 			this.editorChangeEmitter.fire(Object.freeze({ kind: "editorMoved", editor: this.editorState(entry), previousIndex }));
 		}
 		this.publishEditorState(entry);
-		if (restoreTabFocus) this.domNode.ownerDocument.getElementById(entry.tabId)?.focus();
+		if (focusedTabId) {
+			this.domNode.ownerDocument.getElementById(focusedTabId)?.focus();
+		}
 	}
 
 	async openEditor(
@@ -676,7 +633,7 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 		const previouslyActive = this.activeInput;
 		const wasActive = this.activeEntry === this.entry(input);
 		await this.openEditor(replacement, { index });
-		if (wasSticky) this.toggleSticky(replacement);
+		if (wasSticky) this.stickEditor(replacement);
 		await this.closeEditor(input, { skipConfirmation: true, reason: "replace" });
 		if (previouslyActive && !wasActive) this.activateEditor(previouslyActive);
 	}
@@ -708,14 +665,14 @@ export class EditorGroupView extends Disposable implements IEditorGroup {
 		}
 	}
 
-	async moveEditorTo(input: EditorInput, target: IEditorGroup, targetIndex: number): Promise<void> {
+	async moveEditorTo(input: EditorInput, target: IEditorGroupView, targetIndex: number): Promise<void> {
 		if (target === this) {
 			this.moveEditor(input, targetIndex);
 			return;
 		}
 		const entry = this.requireEntry(input);
 		await target.openEditor(input, { index: targetIndex }, entry.instanceId);
-		if (entry.sticky) target.toggleSticky(input);
+		if (entry.sticky) target.stickEditor(input);
 		await this.closeEditor(input, { skipConfirmation: true, reason: "move" });
 		target.activateEditor(input);
 	}

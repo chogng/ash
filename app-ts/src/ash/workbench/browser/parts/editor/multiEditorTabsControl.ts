@@ -11,12 +11,14 @@ import { clearConnectedTabClipping, updateConnectedTabClipping } from "./connect
 import { CONNECTED_EDITOR_TABS_CLASS } from "./editor.js";
 import type { EditorInput } from "./editorInput.js";
 import { EditorTabsControl, editorInputKey, type EditorTabDescriptor, type EditorTabsDelegate } from "./editorTabsControl.js";
-import { IResourceLabelService, type ResourceLabels } from "../../labels.js";
+import { IResourceLabelService, type IResourceLabel, type ResourceLabels } from "../../labels.js";
+import { DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
+import { IContextKeyService, type IScopedContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import { ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorTabsFocusContext } from "../../../common/contextkeys.js";
 import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { EditorShowIconsConfiguration } from "../../../services/editor/common/editorConfiguration.js";
 
 const DRAG_OVER_ACTIVATE_DELAY = 1500;
-const DOUBLE_CLICK_MAX_INTERVAL = 500;
 
 /** Renders every open Editor in one reorderable tab list. */
 export class MultiEditorTabsControl extends EditorTabsControl {
@@ -27,16 +29,19 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 	private connected = true;
 	private previewedInput: EditorInput | undefined;
 	private editors: readonly EditorTabDescriptor[] = [];
-	private previousLabelClick: { readonly tabId: string; readonly time: number } | undefined;
+	private readonly tabContext: IScopedContextKeyService;
+	private readonly renderedLabels = new Map<string, { readonly label: IResourceLabel; readonly context: IScopedContextKeyService; signature: string | undefined }>();
 
 	constructor(
 		container: HTMLElement,
 		private readonly delegate: EditorTabsDelegate,
 		@IResourceLabelService resourceLabels: IResourceLabelService,
 		@IConfigurationService configurationService: IConfigurationService,
+		@IContextKeyService contextKeyService: IContextKeyService,
 	) {
 		super(container);
 		this.domNode.classList.add("ash-multi-editor-tabs-control");
+		this.tabContext = this._register(contextKeyService.createScoped(this.domNode));
 		this.labels = this._register(resourceLabels.createGroup());
 		this.labels.setIconVisibility(configurationService.getValue<boolean>(EditorShowIconsConfiguration));
 		this._register(configurationService.onDidChangeConfiguration(event => {
@@ -81,7 +86,6 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			onActivate: (editor) => delegate.activate(editor.input),
 			onSelect: (editor, event) => delegate.select?.(editor.input, { toggle: event.ctrlKey || event.metaKey, range: event.shiftKey }) ?? false,
 			onClose: (editor) => delegate.close(editor.input),
-			onSecondaryActivate: (editor) => delegate.toggleSticky(editor.input),
 		}));
 		const viewport = this.tabList.element.querySelector<HTMLElement>(".ash-scrollbar-viewport");
 		if (!viewport) throw new Error("Editor tabs require a scroll viewport");
@@ -98,24 +102,17 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			}
 			this.showTabContextMenu(event);
 		}));
-		// Activation rebuilds tabs, so the browser's dblclick event may lose its original target.
-		this._register(addDisposableListener(this.domNode, "click", event => {
-			if (event.detail === 0) return;
+		this._register(addDisposableListener(this.tabList.element, "dblclick", event => {
 			const label = (event.target as Element).closest<HTMLButtonElement>(".ash-tab-label");
 			if (!label || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
-				this.previousLabelClick = undefined;
 				return;
 			}
-			const previous = this.previousLabelClick;
-			this.previousLabelClick = { tabId: label.id, time: event.timeStamp };
-			if (previous?.tabId !== label.id || event.timeStamp - previous.time > DOUBLE_CLICK_MAX_INTERVAL) return;
-			this.previousLabelClick = undefined;
 			const editor = this.editors.find(candidate => candidate.tabId === label.id);
 			assertDefined(editor, `Editor tab is not available: ${label.id}`);
 			event.preventDefault();
 			event.stopPropagation();
 			this.delegate.pinEditor(editor.input);
-		}, true));
+		}));
 	}
 
 	private showTabContextMenu(event: MouseEvent | KeyboardEvent): void {
@@ -143,11 +140,11 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			const label = editorInputLabel(editor.input);
 			const state = editor.hasExternalChange ? "conflict" : editor.isDirty ? "dirty" : undefined;
 			const stateLabel = editor.hasExternalChange ? "conflict with changes on disk" : editor.isDirty ? "unsaved changes" : undefined;
-			let ariaDescription = localize("workbench.editorUnpinnedTabHint", "Press Alt+Enter to pin this tab.");
+			let ariaDescription = localize("workbench.editorUnpinnedTabHint", "Use Pin Editor to pin this tab.");
 			if (editor.sticky) {
-				ariaDescription = localize("workbench.editorPinnedTabHint", "Pinned tab. Press Alt+Enter to unpin.");
+				ariaDescription = localize("workbench.editorPinnedTabHint", "Pinned tab. Use Unpin Editor to unpin.");
 			} else if (editor.preview) {
-				ariaDescription = localize("workbench.editorPreviewTabHint", "Double-click to keep this tab open. Press Alt+Enter to pin this tab.");
+				ariaDescription = localize("workbench.editorPreviewTabHint", "Double-click or use Keep Open to keep this tab open. Use Pin Editor to pin this tab.");
 			}
 			return {
 				id: editor.instanceId,
@@ -155,13 +152,13 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 				label: label.name,
 				description: label.description,
 				renderLabel: container => {
-					const resourceLabel = this.labels.create(container);
-					resourceLabel.setResource({
-						resource: editor.input.resource,
-						name: label.name,
-						description: label.description,
-					}, { forceLabel: true, icon: editor.input.getIcon?.() });
-					return resourceLabel;
+					const store = new DisposableStore();
+					const resourceLabel = store.add(this.labels.create(container));
+					const context = store.add(this.tabContext.createScoped(container));
+					EditorTabsFocusContext.bindTo(context).set(true);
+					this.renderedLabels.set(editor.instanceId, { label: resourceLabel, context, signature: undefined });
+					store.add(toDisposable(() => this.renderedLabels.delete(editor.instanceId)));
+					return store;
 				},
 				tooltip: stateLabel ? `${editor.input.resource.toString()} — ${stateLabel}` : editor.input.resource.toString(),
 				ariaLabel: stateLabel ? `${label.name}, ${stateLabel}` : label.name,
@@ -173,6 +170,21 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 				panelId: editor.panelId,
 			};
 		}), activeKey, selectedIds);
+		for (const editor of editors) {
+			const rendered = this.renderedLabels.get(editor.instanceId)!;
+			rendered.context.bufferChangeEvents(() => {
+				rendered.context.setContext(ActiveEditorPinnedContext.key, !editor.preview);
+				rendered.context.setContext(ActiveEditorStickyContext.key, editor.sticky);
+			});
+			const label = editorInputLabel(editor.input);
+			const icon = editor.input.getIcon?.();
+			const signature = JSON.stringify([editor.input.resource.toString(), label.name, label.description, icon]);
+			// Resource labels recreate their text when updated; selection must retain the click target.
+			if (rendered.signature !== signature) {
+				rendered.signature = signature;
+				rendered.label.setResource({ resource: editor.input.resource, name: label.name, description: label.description }, { forceLabel: true, icon });
+			}
+		}
 		clearConnectedTabClipping(this.connectedTab, this.tabList.element);
 		this.connectedTab = this.tabList.element.querySelector<HTMLElement>(".ash-tab.checked") ?? undefined;
 		this.updateConnectedTab();

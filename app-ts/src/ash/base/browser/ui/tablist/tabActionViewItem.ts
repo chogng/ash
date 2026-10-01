@@ -2,6 +2,8 @@ import { addDisposableListener, h } from "../../dom.js";
 import type { IAction } from "../../../common/actions.js";
 import type { Icon } from "../../../common/icon.js";
 import { Lxicon } from "../../../common/lxicons.js";
+import { MutableDisposable } from "../../../common/lifecycle.js";
+import type { IManagedHover } from "../hover/hoverDelegate.js";
 import { assertDefined } from "../../../common/types.js";
 import { ActionBar } from "../actionbar/actionbar.js";
 import { ActionViewItem } from "../actionbar/actionViewItems.js";
@@ -13,19 +15,21 @@ export const TAB_CLOSE_ACTION_ID = "ash.tab.close";
 
 /** Internal action representation of one selectable TabList item. */
 export class TabAction<T> implements IAction {
-	readonly label: string;
-	readonly tooltip: string;
+	get label(): string {
+		return this.tab.label;
+	}
+	get tooltip(): string {
+		return this.tab.tooltip ?? this.tab.label;
+	}
 	readonly enabled = true;
 
 	constructor(
-		readonly tab: TabListItem<T>,
-		readonly checked: boolean,
-		readonly selected: boolean,
+		public tab: TabListItem<T>,
+		public checked: boolean,
+		public selected: boolean,
 		readonly activate: (value: T) => void,
 		readonly select?: (value: T, event: MouseEvent | KeyboardEvent) => boolean,
 	) {
-		this.label = tab.label;
-		this.tooltip = tab.tooltip ?? tab.label;
 	}
 
 	get id(): string {
@@ -42,15 +46,18 @@ export class TabActionViewItem<T> extends ActionViewItem {
 	private readonly tabAction: TabAction<T>;
 	private readonly onClose: ((value: T) => void) | undefined;
 	private readonly closeActionIcon: Icon | undefined;
-	private readonly onSecondaryActivate: ((value: T) => void) | undefined;
 	private tabElement: HTMLButtonElement | undefined;
+	private container: HTMLElement | undefined;
+	private label: IconLabel | undefined;
+	private rendered: TabListItem<T> | undefined;
+	private hover: IManagedHover | undefined;
+	private readonly toolbar = this._register(new MutableDisposable<ActionBar>());
 
-	constructor(action: TabAction<T>, onClose: ((value: T) => void) | undefined, closeActionIcon: Icon | undefined, onSecondaryActivate: ((value: T) => void) | undefined, draggable: boolean) {
+	constructor(action: TabAction<T>, onClose: ((value: T) => void) | undefined, closeActionIcon: Icon | undefined, draggable: boolean) {
 		super(action, { draggable });
 		this.tabAction = action;
 		this.onClose = onClose;
 		this.closeActionIcon = closeActionIcon;
-		this.onSecondaryActivate = onSecondaryActivate;
 	}
 
 	override render(container: HTMLElement): void {
@@ -59,11 +66,7 @@ export class TabActionViewItem<T> extends ActionViewItem {
 		}
 		const item = this.tabAction.tab;
 		container.classList.add("ash-tab");
-		container.classList.toggle("checked", this.tabAction.checked);
-		container.classList.toggle("selected", this.tabAction.selected);
-		container.classList.toggle("icon", item.icon !== undefined);
-		container.classList.toggle("preview", item.preview === true);
-		if (item.state !== undefined) container.dataset.state = item.state;
+		this.container = container;
 
 		const tab = h(container.ownerDocument, "button");
 		this.tabElement = tab;
@@ -73,52 +76,94 @@ export class TabActionViewItem<T> extends ActionViewItem {
 		tab.setAttribute("role", "tab");
 		tab.setAttribute("aria-selected", String(this.tabAction.selected));
 		tab.setAttribute("aria-label", item.ariaLabel ?? item.label);
-		if (item.ariaDescription) tab.setAttribute("aria-description", item.ariaDescription);
-		if (item.panelId) tab.setAttribute("aria-controls", item.panelId);
-		this.setupHover(tab, this.tabAction.tooltip);
-		this._register(item.renderLabel ? item.renderLabel(tab) : new IconLabel(tab, {
-			label: item.label,
-			icon: item.icon,
-			description: item.description,
-		}));
+		if (item.ariaDescription) {
+			tab.setAttribute("aria-description", item.ariaDescription);
+		}
+		if (item.panelId) {
+			tab.setAttribute("aria-controls", item.panelId);
+		}
+		this.hover = this.setupHover(tab, this.tabAction.tooltip);
+		if (item.renderLabel) {
+			this._register(item.renderLabel(tab));
+		} else {
+			this.label = this._register(new IconLabel(tab, { label: item.label, icon: item.icon, description: item.description }));
+		}
 		container.append(tab);
 
 		this._register(addDisposableListener(tab, "click", (event) => {
 			event.preventDefault();
 			event.stopPropagation();
-			if (this.tabAction.select?.(item.value, event)) return;
+			if (this.tabAction.select?.(this.tabAction.tab.value, event)) {
+				return;
+			}
 			this.tabAction.run();
 		}));
-		if (this.onClose || this.tabAction.select || this.onSecondaryActivate) {
-			tab.setAttribute("aria-keyshortcuts", [this.onClose ? "Delete" : "", this.tabAction.select ? "Control+Space Shift+Space" : "", this.onSecondaryActivate ? "Alt+Enter" : ""].filter(Boolean).join(" "));
+		if (this.onClose || this.tabAction.select) {
+			tab.setAttribute("aria-keyshortcuts", [this.onClose ? "Delete" : "", this.tabAction.select ? "Control+Space Shift+Space" : ""].filter(Boolean).join(" "));
 			this._register(addDisposableListener(tab, "keydown", (event) => {
-				if (this.onSecondaryActivate && event.key === "Enter" && event.altKey) {
-					event.preventDefault();
-					event.stopPropagation();
-					this.onSecondaryActivate(item.value);
-					return;
-				}
 				if (this.tabAction.select && event.key === " " && (event.ctrlKey || event.metaKey || event.shiftKey)) {
 					event.preventDefault();
 					event.stopPropagation();
-					this.tabAction.select(item.value, event);
+					this.tabAction.select(this.tabAction.tab.value, event);
 					return;
 				}
-				if (!this.onClose || event.key !== "Delete") return;
+				if (!this.onClose || event.key !== "Delete") {
+					return;
+				}
 				event.preventDefault();
 				event.stopPropagation();
-				this.onClose(item.value);
+				this.onClose(this.tabAction.tab.value);
 			}));
 		}
+		this.update();
+	}
+
+	update(): void {
+		const item = this.tabAction.tab;
+		const container = this.container!;
+		const tab = this.tab;
+		container.classList.toggle("checked", this.tabAction.checked);
+		container.classList.toggle("selected", this.tabAction.selected);
+		container.classList.toggle("icon", item.icon !== undefined);
+		container.classList.toggle("preview", item.preview === true);
+		if (item.state === undefined) {
+			delete container.dataset.state;
+		} else {
+			container.dataset.state = item.state;
+		}
+		tab.id = item.tabId;
+		tab.setAttribute("aria-selected", String(this.tabAction.selected));
+		tab.setAttribute("aria-label", item.ariaLabel ?? item.label);
+		if (item.ariaDescription) {
+			tab.setAttribute("aria-description", item.ariaDescription);
+		} else {
+			tab.removeAttribute("aria-description");
+		}
+		if (item.panelId) {
+			tab.setAttribute("aria-controls", item.panelId);
+		} else {
+			tab.removeAttribute("aria-controls");
+		}
+		this.hover?.update(this.tabAction.tooltip);
+		const previous = this.rendered;
+		this.rendered = item;
+		if (this.label && (previous?.label !== item.label || previous.description !== item.description || previous.icon !== item.icon)) {
+			this.label.setLabel(item.label, item.description, { icon: item.icon });
+		}
+		if (previous && previous.label === item.label && previous.actions === item.actions && previous.closeActionIndicatorIcon === item.closeActionIndicatorIcon) {
+			return;
+		}
+		this.toolbar.clear();
 		const actions = [
 			...(item.actions?.items ?? []),
-			...(this.onClose ? [closeTabAction(item, this.onClose, this.closeActionIcon)] : []),
+			...(this.onClose ? [closeTabAction(this.tabAction, this.onClose, this.closeActionIcon)] : []),
 		];
 		if (actions.length > 0) {
-			const actionBar = this._register(new ActionBar(container, {
+			const actionBar = new ActionBar(container, {
 				actions,
 				ariaLabel: item.actions?.ariaLabel ?? `${item.label} actions`,
-			}));
+			});
+			this.toolbar.value = actionBar;
 			actionBar.element.classList.add("ash-tab-actions");
 			if (this.onClose) {
 				const closeActionContainer = actionBar.element.querySelector<HTMLElement>(`[data-action-id="${TAB_CLOSE_ACTION_ID}"]`);
@@ -128,7 +173,9 @@ export class TabActionViewItem<T> extends ActionViewItem {
 				closeActionContainer.classList.add("ash-tab-close-action");
 				if (item.closeActionIndicatorIcon) {
 					const button = closeActionContainer.querySelector<HTMLButtonElement>("button");
-					if (!button) throw new Error("TabList close action button was not rendered");
+					if (!button) {
+						throw new Error("TabList close action button was not rendered");
+					}
 					appendIcon(item.closeActionIndicatorIcon, button).classList.add("ash-tab-close-indicator");
 					closeActionContainer.classList.add("has-indicator");
 				}
@@ -150,14 +197,14 @@ export class TabActionViewItem<T> extends ActionViewItem {
 	}
 }
 
-function closeTabAction<T>(item: TabListItem<T>, close: (value: T) => void, icon: Icon | undefined): IAction {
-	const label = `Close ${item.label}`;
+function closeTabAction<T>(action: TabAction<T>, close: (value: T) => void, icon: Icon | undefined): IAction {
+	const label = `Close ${action.tab.label}`;
 	return {
 		id: TAB_CLOSE_ACTION_ID,
 		label,
 		tooltip: label,
 		icon: icon ?? Lxicon.close,
 		enabled: true,
-		run: () => close(item.value),
+		run: () => close(action.tab.value),
 	};
 }

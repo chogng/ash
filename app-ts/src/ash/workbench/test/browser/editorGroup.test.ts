@@ -5,7 +5,7 @@ import { JSDOM } from "jsdom";
 import { URI } from "../../../base/common/uri.js";
 import type { EditorInput } from "../../browser/parts/editor/editorInput.js";
 import type { IEditorPane } from "../../browser/parts/editor/editorPane.js";
-import type { IEditorPart } from "../../browser/parts/editor/editorPart.js";
+import type { IEditorGroupsService } from "../../services/editor/common/editorGroupsService.js";
 
 test("EditorGroupView reorders tabs and moves them between groups", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
@@ -39,6 +39,21 @@ test("EditorGroupView reorders tabs and moves them between groups", async () => 
 		assert.deepEqual(target.inputs, [second]);
 		assert.equal(target.activeInput, second);
 		assert.equal(target.editors[0]?.instanceId, secondInstanceId);
+		await source.openEditor(second);
+		source.stickEditor(second);
+		target.stickEditor(second);
+		const targetInstanceId = target.editors[0]!.instanceId;
+		const changes: string[] = [];
+		using listener = target.onDidChangeEditors(event => changes.push(event.kind));
+		target.stickEditor(second);
+		assert.deepEqual(changes, []);
+		await source.moveEditorTo(second, target, 0);
+		assert.deepEqual({ source: source.inputs, target: target.inputs, sticky: target.isSticky(second), identity: target.editors[0]!.instanceId }, { source: [first], target: [second], sticky: true, identity: targetInstanceId });
+		await target.openEditor(first);
+		target.stickEditor(first);
+		await target.replaceEditor(second, first);
+		assert.deepEqual({ inputs: target.inputs, sticky: target.isSticky(first) }, { inputs: [first], sticky: true });
+
 		source.dispose();
 		target.dispose();
 	} finally {
@@ -79,7 +94,7 @@ test("EditorGroupView selects a range of tabs and resolves close-command targets
 			assert.equal(tab("first").getAttribute("aria-selected"), "true");
 			assert.equal(tab("second").getAttribute("aria-selected"), "true");
 			assert.equal(tab("third").getAttribute("aria-selected"), "false");
-			const context = resolveCommandsContext([{ groupId: group.id, editorIndex: 0 }], { groups: [group] } as unknown as IEditorPart);
+			const context = resolveCommandsContext([{ groupId: group.id, editorIndex: 0 }], { groups: [group], getGroup: (id: string) => id === group.id ? group : undefined } as unknown as IEditorGroupsService);
 			assert.deepEqual(context.groupedEditors[0]?.editors, [first, second]);
 			for (const editor of context.groupedEditors[0]!.editors) await group.closeEditor(editor);
 			assert.deepEqual(group.inputs, [third]);

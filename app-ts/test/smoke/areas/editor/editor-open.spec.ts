@@ -35,12 +35,18 @@ test("App Server workspace files open in Stanza and save through the editor regi
 	await tab.getByRole('tab').dblclick();
 	await expect(tab).not.toHaveClass(/preview/);
 	await expect(group.title.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(0);
-	await expect(tab.getByRole('tab')).toBeFocused();
+	await expect(group.content.getByRole('textbox', { name: 'main.ts', exact: true })).toBeFocused();
 	await fileRow.dblclick();
 	await expect(tab).not.toHaveClass(/preview/);
 	await explorer.locator('.ash-tree-row').filter({ hasText: 'main.rs' }).click();
 	await expect(group.tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
 	await expect(group.tabs.filter({ hasText: 'main.rs' })).toHaveCount(1);
+	const rustTab = group.title.locator('.ash-tab').filter({ hasText: 'main.rs' });
+	await expect(rustTab).toHaveClass(/preview/u);
+	await rustTab.getByRole('tab').press('ControlOrMeta+k');
+	await rustTab.getByRole('tab').press('Enter');
+	await expect(rustTab).not.toHaveClass(/preview/u);
+	await expect(group.title.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(0);
 	await tab.getByRole('tab').click();
 
 	const input = group.content.getByRole('textbox', { name: 'main.ts', exact: true });

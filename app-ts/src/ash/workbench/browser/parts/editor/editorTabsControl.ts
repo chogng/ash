@@ -25,7 +25,6 @@ export interface EditorTabsDelegate {
 	close(input: EditorInput): void;
 	showContextMenu?(input: EditorInput, event: MouseEvent | KeyboardEvent, tab: HTMLElement): void;
 	pinEditor(input: EditorInput): void;
-	toggleSticky(input: EditorInput): void;
 	startDrag(input: EditorInput): void;
 	isDragging(): boolean;
 	drop(target: EditorInput | undefined, position: TabListDropPosition): void;

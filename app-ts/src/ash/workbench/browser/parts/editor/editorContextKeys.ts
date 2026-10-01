@@ -3,7 +3,7 @@ import { Disposable, MutableDisposable, type IDisposable, toDisposable } from '.
 import type { IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { isTextResourceLanguageInput, resolveTextResourceLanguageId, type TextResourceLanguageResolver } from '../../../../platform/language/common/textResourceLanguage.js';
-import { ActiveEditorAvailableEditorIdsContext, ActiveEditorCanRevertContext, ActiveEditorContext, ActiveEditorDirtyContext, ActiveEditorFirstInGroupContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorReadonlyContext, EditorGroupEditorsCountContext, EditorPartModalVisibleContext, ResourceContext, ResourceDirnameContext, ResourceExtensionContext, ResourceFilenameContext, ResourceLanguageIdContext, ResourcePathContext, ResourceSchemeContext, ResourceSetContext } from '../../../common/contextkeys.js';
+import { ActiveEditorAvailableEditorIdsContext, ActiveEditorCanRevertContext, ActiveEditorContext, ActiveEditorDirtyContext, ActiveEditorFirstInGroupContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, ActiveEditorReadonlyContext, EditorGroupEditorsCountContext, EditorPartModalVisibleContext, ResourceContext, ResourceDirnameContext, ResourceExtensionContext, ResourceFilenameContext, ResourceLanguageIdContext, ResourcePathContext, ResourceSchemeContext, ResourceSetContext } from '../../../common/contextkeys.js';
 import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import type { EditorGroupChangeEvent, EditorGroupState, IEditorStateSource } from '../../../services/editor/common/editorState.js';
 import type { IWorkingCopy } from '../../../services/workingCopy/common/workingCopyService.js';
@@ -56,6 +56,7 @@ export class EditorContextKeyController extends Disposable {
 				paneId: state.isModalEditorVisible ? pane?.id : activeEditor?.paneId,
 				isDirty: state.isModalEditorVisible ? workingCopy?.isDirty ?? false : activeEditor?.isDirty ?? false,
 				isPreview: state.isModalEditorVisible ? false : activeEditor?.isPreview ?? false,
+				isSticky: state.isModalEditorVisible ? false : activeEditor?.isSticky ?? false,
 				canRevert: state.isModalEditorVisible ? workingCopy !== undefined : activeEditor?.canRevert ?? false,
 				index: state.isModalEditorVisible ? -1 : activeEditor?.index ?? -1,
 				groupEditorCount: group?.editors.length ?? 0,
@@ -109,6 +110,7 @@ export class EditorGroupContextKeyController extends Disposable {
 			paneId: activeEditor?.paneId,
 			isDirty: activeEditor?.isDirty ?? false,
 			isPreview: activeEditor?.isPreview ?? false,
+			isSticky: activeEditor?.isSticky ?? false,
 			canRevert: activeEditor?.canRevert ?? false,
 			index: activeEditor?.index ?? -1,
 			groupEditorCount: state.editors.length,
@@ -122,6 +124,7 @@ function createEditorContextKeyBindings(contextKeyService: IContextKeyService) {
 		activeEditor: ActiveEditorContext.bindTo(contextKeyService),
 		activeEditorDirty: ActiveEditorDirtyContext.bindTo(contextKeyService),
 		activeEditorPinned: ActiveEditorPinnedContext.bindTo(contextKeyService),
+		activeEditorSticky: ActiveEditorStickyContext.bindTo(contextKeyService),
 		activeEditorFirstInGroup: ActiveEditorFirstInGroupContext.bindTo(contextKeyService),
 		activeEditorLastInGroup: ActiveEditorLastInGroupContext.bindTo(contextKeyService),
 		activeEditorReadonly: ActiveEditorReadonlyContext.bindTo(contextKeyService),
@@ -151,6 +154,7 @@ interface EditorContextKeyProjection {
 	readonly paneId: string | undefined;
 	readonly isDirty: boolean;
 	readonly isPreview: boolean;
+	readonly isSticky: boolean;
 	readonly canRevert: boolean;
 	readonly index: number;
 	readonly groupEditorCount: number;
@@ -171,6 +175,7 @@ function applyEditorContextKeys(
 		keys.activeEditor.set(projection.paneId ?? '');
 		keys.activeEditorDirty.set(projection.isDirty);
 		keys.activeEditorPinned.set(Boolean(projection.input && (projection.isModal || !projection.isPreview)));
+		keys.activeEditorSticky.set(projection.isSticky);
 		keys.activeEditorFirstInGroup.set(projection.index === 0);
 		keys.activeEditorLastInGroup.set(projection.index >= 0 && projection.index === projection.groupEditorCount - 1);
 		keys.activeEditorReadonly.set(projection.input?.readOnly === true);

@@ -34,7 +34,8 @@ import type { IAccessibilityService } from "../../../../platform/accessibility/c
 import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import { WorkbenchPart } from "../../part.js";
-import { EditorGroupView, type EditorGroupOptions, type IEditorGroup } from "./editorGroupView.js";
+import { EditorGroupView, type EditorGroupOptions } from "./editorGroupView.js";
+import type { IEditorGroupView } from "./editor.js";
 import { AutoLockGroupsConfiguration, DefaultBinaryEditorConfiguration, EditorLargeFileConfirmationConfiguration, EditorOpenErrorDialogConfiguration, type AutoLockGroups } from "./editorConfiguration.js";
 import type { FileElement } from "./breadcrumbsModel.js";
 import type { IBreadcrumbsService } from "./breadcrumbs.js";
@@ -70,8 +71,8 @@ const EDITOR_FRAME_BORDER_WIDTH = 1;
 export interface IEditorPart extends IEditorStateSource, IDisposable {
 	readonly domNode: HTMLElement;
 	readonly onDidChangeEditors: Event<EditorPartChangeEvent>;
-	readonly groups: readonly IEditorGroup[];
-	readonly activeGroup: IEditorGroup;
+	readonly groups: readonly IEditorGroupView[];
+	readonly activeGroup: IEditorGroupView;
 	toggleActiveGroupLock(): boolean;
 	readonly activeInput: EditorInput | undefined;
 	readonly activePane: IEditorPane | undefined;
@@ -145,7 +146,7 @@ export interface IEditorPartOptions {
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 	readonly showBreadcrumbSymbolPicker?: (symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => void;
 	readonly saveAsResource?: (defaultName: string) => Promise<URI | undefined>;
-	readonly replaceEditorResource?: (source: IEditorGroup, input: EditorInput, replacement: EditorInput) => Promise<void>;
+	readonly replaceEditorResource?: (source: IEditorGroupView, input: EditorInput, replacement: EditorInput) => Promise<void>;
 	readonly inputSerializers?: EditorInputSerializerRegistry;
 }
 
@@ -163,7 +164,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	private readonly tabDragAndDrop: EditorTabDragAndDropController;
 	private dimension = Dimension.Zero;
 	private readonly saveAsResource: ((defaultName: string) => Promise<URI | undefined>) | undefined;
-	private readonly replaceEditorResource: ((source: IEditorGroup, input: EditorInput, replacement: EditorInput) => Promise<void>) | undefined;
+	private readonly replaceEditorResource: ((source: IEditorGroupView, input: EditorInput, replacement: EditorInput) => Promise<void>) | undefined;
 	private readonly inputSerializers: EditorInputSerializerRegistry;
 	private readonly dialogService: IDialogService | undefined;
 	private readonly fileDialogService: IFileDialogService | undefined;
@@ -213,7 +214,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			languageFeaturesService: options.languageFeaturesService,
 			showBreadcrumbSymbolPicker: options.showBreadcrumbSymbolPicker,
 			...(options.saveAsResource ? {
-				onSave: (group: IEditorGroup, input: EditorInput, pane: IEditorPane) => this.saveEditor(group, input, pane),
+				onSave: (group: IEditorGroupView, input: EditorInput, pane: IEditorPane) => this.saveEditor(group, input, pane),
 			} : {}),
 		};
 		this.saveAsResource = options.saveAsResource;
@@ -279,11 +280,11 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		}));
 	}
 
-	get groups(): readonly IEditorGroup[] {
+	get groups(): readonly IEditorGroupView[] {
 		return this._groups.map(({ group }) => group);
 	}
 
-	get activeGroup(): IEditorGroup {
+	get activeGroup(): IEditorGroupView {
 		return this._activeGroup;
 	}
 
@@ -624,7 +625,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		return await this.closeEditor(input);
 	}
 
-	private async confirmEditorClose(group: IEditorGroup | undefined, input: EditorInput, pane: IEditorPane): Promise<boolean> {
+	private async confirmEditorClose(group: IEditorGroupView | undefined, input: EditorInput, pane: IEditorPane): Promise<boolean> {
 		const workingCopy = pane.workingCopy;
 		if (!workingCopy?.isDirty) return true;
 		if (!this.fileDialogService) return false;
@@ -643,7 +644,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		return !workingCopy.isDirty;
 	}
 
-	private async saveEditor(group: IEditorGroup, input: EditorInput, pane: IEditorPane): Promise<boolean> {
+	private async saveEditor(group: IEditorGroupView, input: EditorInput, pane: IEditorPane): Promise<boolean> {
 		if (input.resource.scheme !== "untitled") throw new Error("Save As is only available for untitled editors");
 		if (!this.saveAsResource) throw new Error("Editor Save As is unavailable in this host");
 		if (!pane.saveAs) throw new Error("The active editor cannot save this document");
@@ -803,7 +804,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 					preserveFocus: true,
 				});
 				group.restoreEditorViewState(input, state.editors[inputIndex]!.viewState);
-				if (state.editors[inputIndex]!.sticky) group.toggleSticky(input);
+				if (state.editors[inputIndex]!.sticky) group.stickEditor(input);
 			}
 			const activeInput = state.inputs[state.activeEditorIndex];
 			if (activeInput) group.activateEditor(activeInput);

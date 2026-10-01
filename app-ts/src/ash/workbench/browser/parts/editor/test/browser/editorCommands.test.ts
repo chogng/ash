@@ -7,6 +7,7 @@ import { ServiceContainer } from "../../../../../../platform/instantiation/commo
 import { IQuickInputService } from "../../../../../../platform/quickinput/common/quickInput.js";
 import { CommandService } from "../../../../../services/commands/common/commandService.js";
 import { WorkbenchQuickInputService } from "../../../../../services/quickinput/browser/quickInputService.js";
+import { IEditorGroupsService } from "../../../../../services/editor/common/editorGroupsService.js";
 import { IEditorPart, type IEditorPart as EditorPartContract } from "../../editorPart.js";
 import { registerAction2, MenuId } from '../../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../../platform/actions/common/menuService.js';
@@ -62,13 +63,14 @@ test("editor commands close the active tab and reopen it with a chosen editor", 
 		const otherInput = { resource: URI.file("C:\\project\\other.ts") };
 		const additionalInput = { resource: URI.file("C:\\project\\additional.ts") };
 		const closedInputs: typeof activeInput[] = [];
+		let cancelClose = false;
 		const activeGroup = {
 			id: "main",
 			inputs: [activeInput],
 			selectedInputs: [activeInput],
 			editors: [{ input: activeInput }],
 			activeInput,
-			closeEditor: async (input: typeof activeInput) => { closed = input; closedInputs.push(input); return true; },
+			closeEditor: async (input: typeof activeInput) => { closed = input; closedInputs.push(input); return !cancelClose; },
 		};
 		const otherGroup = {
 			id: "other",
@@ -92,6 +94,7 @@ test("editor commands close the active tab and reopen it with a chosen editor", 
 				closed = input;
 				return Promise.resolve(true);
 			},
+			getEditorState: () => ({ isModalEditorVisible: false }),
 			getEditorPaneChoices: () => editorTypes,
 			reopenActiveEditorWith: (id: string) => {
 				chosen = id;
@@ -103,6 +106,7 @@ test("editor commands close the active tab and reopen it with a chosen editor", 
 		using contextKeys = new ContextKeyService();
 		services.registerInstance(IContextKeyService, contextKeys);
 		services.registerInstance(IEditorPart, editorPart);
+		services.registerInstance(IEditorGroupsService, { groups: [activeGroup, otherGroup], activeGroup, getGroup: (id: string) => [activeGroup, otherGroup].find(group => group.id === id) } as unknown as import("../../../../../services/editor/common/editorGroupsService.js").IEditorGroupsService);
 		using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
 		services.registerInstance(IQuickInputService, quickInput);
 		using commands = new CommandService(services);
@@ -116,6 +120,11 @@ test("editor commands close the active tab and reopen it with a chosen editor", 
 		activeGroup.selectedInputs.push(additionalInput);
 		await commands.executeCommand(CLOSE_EDITOR_COMMAND_ID);
 		assert.deepEqual(closedInputs.slice(-2), [activeInput, additionalInput]);
+		cancelClose = true;
+		const closeCount = closedInputs.length;
+		await commands.executeCommand(CLOSE_EDITOR_COMMAND_ID);
+		assert.deepEqual(closedInputs.slice(closeCount), [activeInput]);
+		cancelClose = false;
 		await commands.executeCommand(REOPEN_WITH_COMMAND_ID);
 		const picker = dom.window.document.querySelector(".ash-quick-pick");
 		assert.ok(picker);

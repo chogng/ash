@@ -37,7 +37,10 @@ import type {
 	CommandId,
 } from "../../../../../../platform/commands/common/commands.js";
 import { type Context } from "../../../../../../platform/contextkey/common/contextkey.js";
-import { ContextKeyService } from "../../../../../../platform/contextkey/browser/contextKeyService.js";
+import { MenuId } from "../../../../../../platform/actions/common/actions.js";
+import { MenuService } from "../../../../../../platform/actions/common/menuService.js";
+import { IEditorGroupsService } from "../../../../../services/editor/common/editorGroupsService.js";
+import { ContextKeyService, IContextKeyService } from "../../../../../../platform/contextkey/browser/contextKeyService.js";
 import { ServiceContainer } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { highContrastDarkColorTheme, lightColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
 import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
@@ -800,6 +803,65 @@ test("EditorPart saves and restores groups, tabs, previews, active state, and pa
 	dom.window.close();
 });
 
+test('editor commands share group state for keep open, selected pins and close others', async () => {
+	const prototype = browserEnvironment.window.HTMLElement.prototype;
+	const scrollTo = Object.getOwnPropertyDescriptor(prototype, 'scrollTo');
+	Object.defineProperty(prototype, 'scrollTo', { configurable: true, value: () => undefined });
+	using scrollCleanup = toDisposable(() => {
+		if (scrollTo) Object.defineProperty(prototype, 'scrollTo', scrollTo);
+		else Reflect.deleteProperty(prototype, 'scrollTo');
+	});
+	const container = browserEnvironment.window.document.createElement('div');
+	browserEnvironment.window.document.body.append(container);
+	using cleanup = toDisposable(() => container.remove());
+	using services = createTestEditorServices();
+	const contextKeys = services.get(IContextKeyService);
+	const registry = new EditorPaneRegistry();
+	registry.registerEditorPane(descriptor('stanza.editor.code', '.ts', () => new TestEditorPane('stanza.editor.code')));
+	using editor = services.createInstance(EditorPart, container, { registry, contextKeyService: contextKeys });
+	using groups = new BrowserEditorService(editor);
+	services.registerInstance(IEditorPart, editor);
+	services.registerInstance(IEditorGroupsService, groups);
+	using commands = new CommandService(services);
+	using bindings = createTestWorkbenchContextKeysHandler(contextKeys, { editorService: groups, editorGroupsService: groups });
+	const { CLOSE_EDITOR_COMMAND_ID, KEEP_EDITOR_COMMAND_ID, PIN_EDITOR_COMMAND_ID, UNPIN_EDITOR_COMMAND_ID, CLOSE_OTHER_EDITORS_IN_GROUP_COMMAND_ID } = await import('../../editorCommands.js');
+	const menus = new MenuService(commands, contextKeys);
+	using editorBindings = new EditorContextKeyController(contextKeys, editor, registry, undefined);
+	const first = input('C:/project/first.ts');
+	const second = input('C:/project/second.ts');
+	const third = input('C:/project/third.ts');
+	await editor.openEditor(first, { pinned: false });
+	const group = groups.activeGroup;
+	assert.equal(groups.getGroup(group.id), editor.activeGroup);
+	await commands.executeCommand(KEEP_EDITOR_COMMAND_ID);
+	assert.deepEqual({ preview: group.isPreview(first), sticky: group.isSticky(first) }, { preview: false, sticky: false });
+	await editor.openEditor(second);
+	await editor.openEditor(third);
+	const label = (name: string) => container.querySelector<HTMLButtonElement>(`.ash-tab-label[aria-label="${name}"]`)!;
+	label('first.ts').focus();
+	// Keyboard commands follow the focused inactive tab, rather than the visible editor.
+	await commands.executeCommand(PIN_EDITOR_COMMAND_ID);
+	await commands.executeCommand(PIN_EDITOR_COMMAND_ID);
+	assert.deepEqual({ sticky: group.isSticky(first), active: group.activeInput, focused: browserEnvironment.window.document.activeElement }, { sticky: true, active: third, focused: label('first.ts') });
+	await commands.executeCommand(UNPIN_EDITOR_COMMAND_ID);
+	assert.equal(group.isSticky(first), false);
+	label('first.ts').dispatchEvent(new browserEnvironment.window.MouseEvent('click', { bubbles: true, ctrlKey: true }));
+	await commands.executeCommand(PIN_EDITOR_COMMAND_ID, { groupId: group.id, editorIndex: 0 });
+	assert.deepEqual(group.editors.map(state => state.isSticky), [true, true, false]);
+	await commands.executeCommand(CLOSE_OTHER_EDITORS_IN_GROUP_COMMAND_ID, { groupId: group.id, editorIndex: 2 });
+	assert.deepEqual(group.inputs, [first, third, second]);
+	await commands.executeCommand(UNPIN_EDITOR_COMMAND_ID, { groupId: group.id, editorIndex: 0 });
+	await commands.executeCommand(CLOSE_OTHER_EDITORS_IN_GROUP_COMMAND_ID, { groupId: group.id, editorIndex: 2 });
+	assert.deepEqual(group.inputs, [second]);
+	const pin = menus.getMenuActions(MenuId.EditorTitleContext).flatMap(([, actions]) => actions).find(action => action.id === PIN_EDITOR_COMMAND_ID)!;
+	await pin.run();
+	assert.equal(group.isSticky(second), true);
+	await editor.openEditor(third, {}, 'modalGroup');
+	assert.equal(editor.isModalEditorVisible, true);
+	await commands.executeCommand(CLOSE_EDITOR_COMMAND_ID);
+	assert.deepEqual({ modal: editor.isModalEditorVisible, inputs: group.inputs }, { modal: false, inputs: [second] });
+});
+
 test('double-clicking a preview keeps the tab without making it sticky', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
@@ -817,7 +879,8 @@ test('double-clicking a preview keeps the tab without making it sticky', async (
 		label.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, detail: 1 }));
 		const activeLabel = dom.window.document.getElementById(tabId)!;
 		activeLabel.focus();
-		activeLabel.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, detail: 2 }));
+		assert.equal(activeLabel, label);
+		activeLabel.dispatchEvent(new dom.window.MouseEvent('dblclick', { bubbles: true }));
 		assert.deepEqual({ preview: group.isPreview(current), sticky: group.isSticky(current), focused: dom.window.document.activeElement?.id }, { preview: false, sticky: false, focused: tabId });
 		assert.deepEqual(changes, ['editorStateChanged']);
 		group.pinEditor();
@@ -846,7 +909,7 @@ test("Editor tabs keep sticky editors in their own row across working-set restor
 		'.ash-ordinary-editor-tabs-row .ash-tab:first-child .ash-tab-label',
 	);
 	assert.ok(stick);
-	stick.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true }));
+	editor.activeGroup.stickEditor(first);
 	assert.equal(editor.activeGroup.isSticky(first), true);
 	assert.equal(editor.activeGroup.isPreview(first), false);
 	assert.equal(editor.domNode.querySelectorAll(".ash-sticky-editor-tabs-row .ash-tab").length, 1);
@@ -863,7 +926,7 @@ test("Editor tabs keep sticky editors in their own row across working-set restor
 	);
 	assert.ok(unstick);
 	assert.ok(editor.domNode.querySelector('.ash-sticky-editor-tabs-row .ash-tab-close-indicator'));
-	unstick.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true }));
+	editor.activeGroup.unstickEditor(first);
 	assert.equal(editor.activeGroup.isSticky(first), false);
 	assert.equal(editor.domNode.querySelectorAll(".ash-sticky-editor-tabs-row .ash-tab").length, 0);
 

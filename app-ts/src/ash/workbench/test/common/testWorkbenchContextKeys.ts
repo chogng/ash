@@ -3,7 +3,7 @@ import { noneDisposable } from '../../../base/common/lifecycle.js';
 import type { IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
 import { WorkbenchState, type IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { WorkbenchContextKeysHandler } from '../../browser/contextkeys.js';
-import type { IEditorGroupsService } from '../../services/editor/common/editorGroupsService.js';
+import type { IEditorGroup, IEditorGroupsService } from '../../services/editor/common/editorGroupsService.js';
 import type { IEditorService } from '../../services/editor/common/editorService.js';
 import type { EditorGroupState } from '../../services/editor/common/editorState.js';
 import type { IWorkbenchLayoutService } from '../../services/layout/browser/layoutService.js';
@@ -34,7 +34,24 @@ export function createTestWorkbenchContextKeysHandler(contextKeyService: IContex
 	);
 }
 
-const emptyGroup: EditorGroupState = Object.freeze({ id: 'test-group', editors: Object.freeze([]), activeEditorInstanceId: undefined });
+const emptyGroupState: EditorGroupState = Object.freeze({ id: 'test-group', editors: Object.freeze([]), activeEditorInstanceId: undefined });
+const emptyGroup: IEditorGroup = Object.freeze({
+	...emptyGroupState,
+	onDidChangeEditors: Event.None,
+	inputs: Object.freeze([]),
+	selectedInputs: Object.freeze([]),
+	activeInput: undefined,
+	isLocked: false,
+	setLocked() {},
+	getEditorState: () => emptyGroupState,
+	isPreview: () => false,
+	isSticky: () => false,
+	pinEditor() {},
+	stickEditor() {},
+	unstickEditor() {},
+	closeEditor: async () => true,
+	focus() {},
+});
 
 const emptyWorkspaceContextService: IWorkspaceContextService = Object.freeze({
 	onDidChangeWorkspace: Event.None,
@@ -52,6 +69,7 @@ const emptyEditorGroupsService: IEditorGroupsService = Object.freeze({
 	groups: Object.freeze([emptyGroup]),
 	activeGroup: emptyGroup,
 	count: 1,
+	getGroup: (id: string) => id === emptyGroup.id ? emptyGroup : undefined,
 });
 
 const emptyEditorService: IEditorService = Object.freeze({

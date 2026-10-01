@@ -213,6 +213,32 @@ test("browser service executes chords and restores IME state", async () => {
 	);
 });
 
+test("browser layout observation preserves a chord ending with Shift+Enter", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	using cleanup = toDisposable(() => dom.window.close());
+	using registrations = new DisposableStore();
+	using contexts = new ContextKeyService();
+	using layouts = new BrowserKeyboardLayoutService({ navigator: fakeNavigator(usLetterLayout()), operatingSystem: OperatingSystem.Windows });
+	await layouts.refreshKeyboardLayout();
+	const registry = new KeybindingRegistry();
+	const commands = new CommandRegistry();
+	let executions = 0;
+	registrations.add(commands.register("test.shiftEnter", () => { executions += 1; }));
+	registrations.add(registry.registerKeybindingRule({ command: "test.shiftEnter", keybinding: Keybinding.chord(physicalKey("KeyK", { ctrlKey: true }), logicalKey("Enter", { shiftKey: true })) }));
+	using services = new ServiceContainer();
+	using commandService = new CommandService(services, commands);
+	using notifications = new NotificationService();
+	using keybindings = new WorkbenchKeybindingService({ ownerDocument: dom.window.document, commandService, contextKeyService: contexts, keyboardLayoutService: layouts, registry }, notifications);
+	let layoutChanges = 0;
+	using listener = layouts.onDidChangeKeyboardLayout(() => { layoutChanges += 1; });
+	assert.equal(keybindings.dispatchEvent(keyboardEvent({ code: "KeyK", key: "k" }).event), true);
+	keybindings.dispatchEvent(keyboardEvent({ code: "ShiftLeft", key: "Shift", keyCode: 16, ctrlKey: false, shiftKey: true }).event);
+	assert.equal(keybindings.inChordMode, true);
+	assert.equal(keybindings.dispatchEvent(keyboardEvent({ code: "Enter", key: "Enter", keyCode: 13, ctrlKey: false, shiftKey: true }).event), true);
+	await Promise.resolve();
+	assert.deepEqual({ executions, layoutChanges, chord: keybindings.inChordMode }, { executions: 1, layoutChanges: 0, chord: false });
+});
+
 test("browser service dispatches Ctrl+Shift+P with a shifted key value", async () => {
 	using registrations = new DisposableStore();
 	const dom = new JSDOM("<!doctype html><body></body>");

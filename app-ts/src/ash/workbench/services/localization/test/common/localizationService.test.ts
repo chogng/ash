@@ -165,10 +165,10 @@ test("localization lookup falls back to English and formats parameters", async (
 	assert.equal(localization.translate('ash', 'quickHelp.dialog', 'Quick Access Help'), '快速访问帮助');
 	assert.equal(localization.translate('ash', 'quickCommand.placeholder', 'Type > for commands, ? for help, or @ for symbols'), '输入 > 查找命令、? 查看帮助，或 @ 查找符号');
 	assert.deepEqual([
-		localization.translate('ash', 'workbench.editorPinnedTabHint', 'Pinned tab. Press Alt+Enter to unpin.'),
-		localization.translate('ash', 'workbench.editorPreviewTabHint', 'Double-click to keep this tab open. Press Alt+Enter to pin this tab.'),
-		localization.translate('ash', 'workbench.editorUnpinnedTabHint', 'Press Alt+Enter to pin this tab.'),
-	], ['已固定的标签。按 Alt+Enter 可取消固定。', '双击可保留此标签。按 Alt+Enter 可固定此标签。', '按 Alt+Enter 可固定此标签。']);
+		localization.translate('ash', 'workbench.editorPinnedTabHint', 'Pinned tab. Use Unpin Editor to unpin.'),
+		localization.translate('ash', 'workbench.editorPreviewTabHint', 'Double-click or use Keep Open to keep this tab open. Use Pin Editor to pin this tab.'),
+		localization.translate('ash', 'workbench.editorUnpinnedTabHint', 'Use Pin Editor to pin this tab.'),
+	], ['已固定的标签。使用“取消固定编辑器”可取消固定。', '双击或使用“保持打开”可保留此标签。使用“固定编辑器”可固定此标签。', '使用“固定编辑器”可固定此标签。']);
 	assert.deepEqual([
 		localization.translate('ash', 'workbench.closeOtherEditors', 'Close Other Editors'),
 		localization.translate('ash', 'workbench.pinEditor', 'Pin Editor'),

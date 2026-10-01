@@ -5,6 +5,7 @@ import { editorInputKey } from "./editorTabsControl.js";
 import { MultiEditorTabsControl } from "./multiEditorTabsControl.js";
 
 import { IResourceLabelService } from "../../labels.js";
+import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 
 /** Presents only the active editor while retaining the normal tab interactions. */
@@ -14,8 +15,9 @@ export class SingleEditorTabsControl extends MultiEditorTabsControl {
 		delegate: EditorTabsDelegate,
 		@IResourceLabelService resourceLabels: IResourceLabelService,
 		@IConfigurationService configurationService: IConfigurationService,
+		@IContextKeyService contextKeyService: IContextKeyService,
 	) {
-		super(container, delegate, resourceLabels, configurationService);
+		super(container, delegate, resourceLabels, configurationService, contextKeyService);
 		this.domNode.classList.add("ash-single-editor-tabs-control");
 	}
 

@@ -1,3 +1,4 @@
+import { IMMUTABLE_CODE_TO_KEY_CODE, KeyCode, ScanCodeUtils } from '../../../../base/common/keyCodes.js';
 import { Emitter } from '../../../../base/common/event.js';
 import type { KeybindingEvent } from '../../../../base/common/keybindings.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -143,6 +144,10 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 
 	public validateCurrentKeyboardMapping(event: KeybindingEvent): void {
 		if (this.hasExplicitLayoutSelection() || this.layout.source === 'native' || this.layout.source === 'user' || !this.navigator.keyboard || !this.mapping || !event.code || event.isComposing) {
+			return;
+		}
+		// Fixed keys do not describe a text layout. Observing Shift would cancel the current chord as a layout change.
+		if (IMMUTABLE_CODE_TO_KEY_CODE[ScanCodeUtils.toEnum(event.code)] !== KeyCode.DependsOnKeyboardLayout) {
 			return;
 		}
 		const entry = this.mapping[event.code];

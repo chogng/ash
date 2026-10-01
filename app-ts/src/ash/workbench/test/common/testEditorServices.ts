@@ -1,3 +1,4 @@
+import { ContextKeyService, IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
 import { ILanguageService } from '../../../editor/common/languages/language.js';
 import { LanguageService } from '../../../editor/common/services/languageService.js';
 import { IFileTextModelService } from '../../services/textmodelResolver/common/textModelResourceService.js';
@@ -21,6 +22,7 @@ import { WorkspaceContextService } from '../../services/workspaces/browser/works
 /** Assembles the real label owner for editor tests without an extension icon theme. */
 export function createTestEditorServices(configuration?: IConfigurationService, parent?: ServiceContainer): ServiceContainer {
 	const services = new ServiceContainer(parent);
+	if (!services.has(IContextKeyService)) services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	if (configuration) {
 		services.registerInstance(IConfigurationService, configuration);
 	} else if (!services.has(IConfigurationService)) {

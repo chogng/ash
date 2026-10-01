@@ -2,7 +2,7 @@ import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
 import type { EditorInput, EditorOpenOptions, EditorOpenTarget, IEditorService } from "../common/editorService.js";
-import type { IEditorGroupsService } from '../common/editorGroupsService.js';
+import type { IEditorGroup, IEditorGroupsService } from '../common/editorGroupsService.js';
 import type { EditorGroupId, EditorGroupState, EditorPartChangeEvent, EditorPartState } from "../common/editorState.js";
 
 /** Projects the Editor Part into the resource-oriented Workbench editor contract. */
@@ -50,12 +50,16 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 		return Object.freeze(editors);
 	}
 
-	get groups(): readonly EditorGroupState[] {
-		return Object.freeze(this.editorPart.groups.map(group => group.getEditorState()));
+	get groups(): readonly IEditorGroup[] {
+		return this.editorPart.groups;
 	}
 
-	get activeGroup(): EditorGroupState {
-		return this.editorPart.activeGroup.getEditorState();
+	get activeGroup(): IEditorGroup {
+		return this.editorPart.activeGroup;
+	}
+
+	getGroup(id: EditorGroupId): IEditorGroup | undefined {
+		return this.editorPart.groups.find(group => group.id === id);
 	}
 
 	get count(): number {
@@ -74,7 +78,7 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 	private publishState(event: EditorPartChangeEvent): void {
 		if (event.kind === 'groupAdded') this.groupAddEmitter.fire(event.group);
 		else if (event.kind === 'groupRemoved') this.groupRemoveEmitter.fire(event.groupId);
-		else if (event.kind === 'activeGroupChanged') this.groupActivateEmitter.fire(this.activeGroup);
+		else if (event.kind === 'activeGroupChanged') this.groupActivateEmitter.fire(this.activeGroup.getEditorState());
 		this.groupsChangeEmitter.fire();
 
 		const activeEditorSignature = this.getActiveEditorSignature();

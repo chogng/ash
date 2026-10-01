@@ -2,7 +2,7 @@ import "./tablist.css";
 import { addDisposableListener } from "../../dom.js";
 import type { Icon } from "../../../common/icon.js";
 import type { IAction } from "../../../common/actions.js";
-import { Disposable, type IDisposable } from "../../../common/lifecycle.js";
+import { Disposable, toDisposable, type IDisposable } from "../../../common/lifecycle.js";
 import { ActionBar, type ActionBarDragAndDrop, type ActionBarDropPosition, type ActionBarOrientation } from "../actionbar/actionbar.js";
 import { ScrollableElement } from "../scrollbar/scrollableElement.js";
 import { TabAction, TabActionViewItem } from "./tabActionViewItem.js";
@@ -25,7 +25,7 @@ export interface TabListItem<T> {
 	readonly ariaDescription?: string;
 	readonly tooltip?: string;
 	readonly icon?: Icon;
-	/** Replaces the default icon and text; the action view owns the returned content. */
+	/** Creates a custom label once per item identity; the caller updates it and the view owns its lifetime. */
 	readonly renderLabel?: (container: HTMLElement) => IDisposable;
 	readonly state?: string;
 	/** Presents transient preview content without changing tab selection semantics. */
@@ -61,8 +61,6 @@ export interface TabListOptions<T> {
 	/** Returns true when a modifier selection consumed the activation. */
 	readonly onSelect?: (value: T, event: MouseEvent | KeyboardEvent) => boolean;
 	readonly onClose?: (value: T) => void;
-	/** Invoked by Alt+Enter on a tab label. */
-	readonly onSecondaryActivate?: (value: T) => void;
 	readonly closeActionIcon?: Icon;
 	/** Makes tab items native drag sources without defining any drop behavior. */
 	readonly draggable?: boolean;
@@ -78,6 +76,8 @@ export interface TabListOptions<T> {
 export class TabList<T> extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly actionBar: ActionBar;
+	private readonly actions = new Map<string, TabAction<T>>();
+	private readonly views = new Map<string, TabActionViewItem<T>>();
 	private readonly scrollable: ScrollableElement;
 	private readonly activate: (value: T) => void;
 	private readonly select: ((value: T, event: MouseEvent | KeyboardEvent) => boolean) | undefined;
@@ -85,6 +85,10 @@ export class TabList<T> extends Disposable {
 
 	constructor(container: HTMLElement, options: TabListOptions<T>) {
 		super();
+		this._register(toDisposable(() => {
+			this.actions.clear();
+			this.views.clear();
+		}));
 		this.activate = options.onActivate;
 		this.select = options.onSelect;
 		const onClose = options.onClose;
@@ -125,7 +129,9 @@ export class TabList<T> extends Disposable {
 				if (!(action instanceof TabAction)) {
 					throw new TypeError(`Unsupported TabList action: ${action.id}`);
 				}
-				return new TabActionViewItem(action, onClose, closeActionIcon, options.onSecondaryActivate, options.draggable === true);
+				const view = new TabActionViewItem<T>(action, onClose, closeActionIcon, options.draggable === true);
+				this.views.set(action.id, view);
+				return view;
 			},
 		}));
 		this.scrollable.element.classList.add("ash-tab-list");
@@ -164,13 +170,28 @@ export class TabList<T> extends Disposable {
 		if (selectedId !== undefined && !ids.has(selectedId)) {
 			throw new RangeError(`Selected TabList item is not available: ${selectedId}`);
 		}
-		this.actionBar.setActions(tabs.map((tab) => new TabAction(
-			tab,
-			tab.id === selectedId,
-			selectedIds?.has(tab.id) ?? tab.id === selectedId,
-			this.activate,
-			this.select,
-		)));
+		const actions = tabs.map(tab => {
+			let action = this.actions.get(tab.id);
+			const checked = tab.id === selectedId;
+			const selected = selectedIds?.has(tab.id) ?? checked;
+			if (action) {
+				action.tab = tab;
+				action.checked = checked;
+				action.selected = selected;
+				this.views.get(tab.id)!.update();
+			} else {
+				action = new TabAction(tab, checked, selected, this.activate, this.select);
+				this.actions.set(tab.id, action);
+			}
+			return action;
+		});
+		this.actionBar.setActions(actions);
+		for (const id of this.actions.keys()) {
+			if (!ids.has(id)) {
+				this.actions.delete(id);
+				this.views.delete(id);
+			}
+		}
 		if (selectedId !== undefined) this.actionBar.setTabStop(selectedId);
 		this.scrollable.layout();
 		if (selectedId !== undefined) {

@@ -9,7 +9,7 @@ import { ContextKeyService } from '../../../../../platform/contextkey/browser/co
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import type { IResourceIconRenderer } from '../../../../browser/labels.js';
 import type { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
-import type { IEditorGroup } from '../../../../browser/parts/editor/editorGroupView.js';
+import type { IEditorGroup } from '../../../../services/editor/common/editorGroupsService.js';
 import type { EditorInstanceState, EditorPartChangeEvent } from '../../../../services/editor/common/editorState.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { NumberBadge, type IActivityService } from '../../../../services/activity/common/activity.js';

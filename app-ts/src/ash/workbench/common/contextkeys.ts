@@ -55,6 +55,12 @@ export const ActiveEditorDirtyContext = new RawContextKey<boolean>('activeEditor
 /** Whether the active editor is pinned instead of previewed. */
 export const ActiveEditorPinnedContext = new RawContextKey<boolean>('activeEditorIsNotPreview', false);
 
+/** Whether the target editor is fixed at the start of its tab strip. */
+export const ActiveEditorStickyContext = new RawContextKey<boolean>('activeEditorIsPinned', false);
+
+/** Scoped to tab labels so tab-only keybindings do not capture editor input. */
+export const EditorTabsFocusContext = new RawContextKey<boolean>('editorTabsFocus', false);
+
 /** Whether the active editor is first in its group. */
 export const ActiveEditorFirstInGroupContext = new RawContextKey<boolean>('activeEditorIsFirstInGroup', false);
 

@@ -72,7 +72,7 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		const group = new EditorGroupModel();
 		const input = { resource: URI.file('C:/project/main.ts') };
 		group.openEditor(input);
-		const delegate: EditorTabsDelegate = { activate() {}, preview() {}, close() {}, pinEditor() {}, toggleSticky() {}, startDrag() {}, isDragging: () => false, drop() {}, dropExternal() {}, endDrag() {} };
+		const delegate: EditorTabsDelegate = { activate() {}, preview() {}, close() {}, pinEditor() {}, startDrag() {}, isDragging: () => false, drop() {}, dropExternal() {}, endDrag() {} };
 		using title = editorServices.createInstance(EditorTitleControl, browser.window.document.body, delegate, group, undefined, configuration, undefined, undefined, undefined, undefined, undefined);
 		const editors = [{ instanceId: 'main', input, panelId: 'main-panel', tabId: 'main-tab' }];
 		title.setEditors(editors, input);

@@ -81,6 +81,34 @@ test("TabList owns manual selection semantics and roving focus", () => {
 	dom.window.close();
 });
 
+test("TabList retains label targets and focus while selection, state and order change", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	try {
+		const activated: string[] = [];
+		const closed: string[] = [];
+		using tabs = new TabList(dom.window.document.body, { ariaLabel: "Documents", onActivate: (value: string) => activated.push(value), onClose: value => closed.push(value) });
+		const first = tab("first");
+		const second = tab("second");
+		tabs.setTabs([first, second], "second");
+		const label = tabs.element.querySelector<HTMLButtonElement>("#first-tab")!;
+		const text = label.querySelector(".ash-icon-label-text")!.firstElementChild;
+		label.focus();
+		tabs.setTabs([{ ...second }, { ...first, value: "updated", preview: true, state: "dirty" }], "first");
+		assert.equal(tabs.element.querySelector("#first-tab"), label);
+		assert.equal(label.querySelector(".ash-icon-label-text")!.firstElementChild, text);
+		assert.equal(dom.window.document.activeElement, label);
+		assert.deepEqual([label.getAttribute("aria-selected"), label.closest(".ash-tab")?.classList.contains("preview"), label.closest<HTMLElement>(".ash-tab")?.dataset.state], ["true", true, "dirty"]);
+		label.click();
+		label.closest(".ash-tab")!.querySelector<HTMLButtonElement>(".ash-tab-close-action button")!.click();
+		assert.deepEqual({ activated, closed }, { activated: ["updated"], closed: ["updated"] });
+		tabs.setTabs([first], "first");
+		assert.equal(tabs.element.querySelector("#first-tab"), label);
+		assert.equal(label.closest<HTMLElement>(".ash-tab")?.dataset.state, undefined);
+	} finally {
+		dom.window.close();
+	}
+});
+
 test("TabList exposes its ActionBar edge treatment as a presentation", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const tabList = new TabList<string>(dom.window.document.body, {
