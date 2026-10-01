@@ -818,11 +818,9 @@ App Server 的 [`TranscriptAccumulator`](../ash-rs/thread-transcript/src/accumul
 
 | 客户端 | 当前显示职责 |
 | --- | --- |
-| Ash Code TUI | 将条目组织成可绘制的消息和工具单元；`fullscreen` 在应用内整屏布局和滚动，`inline` 将已定稿单元逐块写入终端历史，活动内容留在稳定视口。实现与终端边界见 [TUI README](../code/tui/README.md#终端生命周期)。 |
+| Ash Code TUI | 将条目组织成可绘制的消息和工具单元，布局、滚动与终端输出由客户端拥有；fullscreen 与 inline 的行为见 [LAYOUT.md](../code/LAYOUT.md)。 |
 | Rust 桌面界面 | 保存正文快照及更新，将条目排成会话时间线；见 [正文状态](../app-rs/session/src/pane/transcript.rs)和[时间线](../app-rs/session/src/pane/timeline.rs)。 |
 | TypeScript 桌面界面 | 通过 Chat 服务保留后端条目字段，再映射为聊天列表单元；见 [服务接口](../app-ts/src/ash/workbench/services/chat/common/chatService.ts)和[列表映射](../app-ts/src/ash/workbench/contrib/chat/browser/widget/chatListItems.ts)。 |
-
-最初报告的 inline 空行增长发生在终端排版层，不是后端增加了空消息。[inline 输出](../code/tui/src/app/inline/output.rs)现在只把定稿单元按身份写入主屏历史一次，输入与活动回复在有界视口内重绘；临时面板关闭后回到原历史。重复 `/status`、多轮回复、面板和尺寸变化有 [真实 CLI/PTY 测试](../ash-cli/tests/tui/terminal.rs)覆盖。自动化用例不能代替所有宿主终端的实际显示检查，其他终端组合的验证范围见 [TUI README](../code/tui/README.md#全屏终端兼容性验证)。
 
 工具执行产生的 `ToolCall`、`ToolResult` 是后端条目；`/status` 等本地斜杠命令是客户端操作，TUI 可在自己的正文中显示操作与结果，但不把它们伪装成持久化的 Thread 条目。当前三端都接入了后端语义条目，具体显示能力仍有差异：TypeScript 聊天列表和 Rust 桌面时间线主要以文字显示工具结果；TypeScript 服务虽保留工具结果的富内容字段，列表尚未逐种呈现这些内容。这是客户端显示范围，不改变后端的内容归属。
 

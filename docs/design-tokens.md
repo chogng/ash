@@ -20,7 +20,7 @@ Desktop 的 [IThemeService](../app-ts/src/ash/platform/theme/common/themeService
 
 [colorUtils.ts](../app-ts/src/ash/platform/theme/common/colorUtils.ts) 提供颜色注册、变换与 CSS 变量名；[colorRegistry.ts](../app-ts/src/ash/platform/theme/common/colorRegistry.ts) 保存默认值和英文说明，读取颜色目录时按当前语言解析说明，供主题 JSON Schema 使用。颜色文件不在加载时固定翻译结果，切换界面语言后说明会随之更新。
 
-Ash Code TUI 的调色板、用户主题和 `[tui].theme` 由 [code/tui](../code/tui/README.md) 独立拥有。
+Ash Code TUI 的调色板、用户主题和 `[tui].theme` 由 [code](../code/README.md#tui-主题文件) 独立拥有。
 
 ## 构建边界
 

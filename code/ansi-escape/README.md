@@ -1,6 +1,6 @@
 # `ash-ansi-escape`
 
-> 当前 transcript 调用路径见 [`ash-tui`](../tui/README.md)。本文拥有 ANSI 到 Ratatui 转换的当前实现契约、
+> 当前 transcript 调用路径见 [Ash Code README](../README.md#正文更新与容量)。本文拥有 ANSI 到 Ratatui 转换的当前实现契约、
 > failure semantics、测试和扩展边界。
 
 `ash-ansi-escape` 是 `ash code` 产品边界内的窄 presentation adapter。它把可能包含 ANSI SGR

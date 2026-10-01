@@ -89,7 +89,7 @@ Desktop 用户主题与根部 [extensions/theme-defaults](../extensions/theme-de
 
 Rust GUI 继续使用 [独立模板](../app-rs/theme/resources/color-theme.template.json) 和 [Schema](../app-rs/theme/resources/color-theme.schema.json)，文件位于 profile 的 app/themes/*.json，主题选择由 config.toml 的 [gui].theme 保存。其 version、id、label、colorScheme、别名和变换规则保持原样；不要用 Desktop 的新文件替换 Rust 文件。
 
-Ash Code TUI 使用 [自己的格式](../code/tui/README.md) 与 [tui].theme。各界面的主题边界见 [design-tokens.md](design-tokens.md)。
+Ash Code TUI 使用 [自己的格式](../code/README.md#tui-主题文件) 与 [tui].theme。各界面的主题边界见 [design-tokens.md](design-tokens.md)。
 
 ## 验证
 
