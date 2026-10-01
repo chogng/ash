@@ -173,8 +173,8 @@ test("Stanza diff pane acquires both models, lays out the review view, and relea
 	pane.create(parent);
 	pane.layout({ width: 640, height: 480 });
 	await pane.setInput(createDiffEditorInput(
-		{ resource: URI.file("C:\\project\\before.ts"), initialText: "const oldValue = 1;", label: "before.ts" },
-		{ resource: URI.file("C:\\project\\after.ts"), initialText: "const newValue = 2;", label: "after.ts" },
+		{ resource: URI.file("C:/project/before.ts"), initialText: "const oldValue = 1;", label: "before.ts" },
+		{ resource: URI.file("C:/project/after.ts"), initialText: "const newValue = 2;", label: "after.ts" },
 	), new AbortController().signal);
 
 	assert.equal(parent.querySelectorAll(".stanza-diff-editor-pane").length, 1);

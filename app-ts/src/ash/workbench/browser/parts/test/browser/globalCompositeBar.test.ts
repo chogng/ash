@@ -1,3 +1,4 @@
+import { h as createDomElement } from '../../../../../base/browser/dom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -140,7 +141,7 @@ test('Activity Bar global actions open account and management menus', async () =
 	manageButton.click();
 	assert.deepEqual(placement, { anchorAlignment: AnchorAlignment.Left, anchorAxisAlignment: AnchorAxisAlignment.Horizontal });
 	closeMenu(false);
-	const titlebarContainer = ownerDocument.createElement('div');
+	const titlebarContainer = createDomElement(ownerDocument, 'div');
 	ownerDocument.body.append(titlebarContainer);
 	disposables.add(toDisposable(() => titlebarContainer.remove()));
 	const titlebarManage = bar.getActions().find(action => action.id === 'ash.activityBar.manage');

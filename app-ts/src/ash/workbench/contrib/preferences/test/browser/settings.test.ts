@@ -648,7 +648,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(IFileService, disposables.add(new DiskFileSystemProvider([URI.file(hooksFolder)])));
 	const editorPanes = new EditorPaneRegistry();
 	disposables.add(editorPanes.registerEditorPane(descriptor));
-	const editorServices = disposables.add(createTestEditorServices(undefined, services));
+	const editorServices = disposables.add(createTestEditorServices(ownerDocument, undefined, services));
 	const editor = disposables.add(editorServices.createInstance(EditorPart, root, { registry: editorPanes }));
 	editorServices.registerInstance(IEditorPart, editor);
 	editorServices.registerInstance(ICommandService, disposables.add(new CommandService(editorServices)));

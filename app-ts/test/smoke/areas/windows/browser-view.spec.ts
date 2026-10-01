@@ -36,18 +36,20 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 		await expect(page.getByRole('tab', { name: 'First page' })).toBeVisible();
 		const views = () => electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).filter(view => 'webContents' in view).map(view => ({ bounds: view.getBounds(), visible: view.getVisible(), url: (view as Electron.WebContentsView).webContents.getURL() })));
 		await expect.poll(async () => (await views()).filter(view => view.url === url && view.visible).length).toBe(1);
-		await electron.evaluate(async ({ BrowserWindow }) => {
-			const view = BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL().endsWith('/')) as Electron.WebContentsView;
+		// A focused address field preserves the user's draft while the webpage navigates.
+		await location.press('Tab');
+		await electron.evaluate(async ({ BrowserWindow }, url) => {
+			const view = BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL() === url) as Electron.WebContentsView;
 			await view.webContents.executeJavaScript("history.pushState({}, '', '/routed'); document.title = 'Routed page';");
-		});
+		}, url);
 		await expect(location).toHaveValue(`${url}routed`);
 		await expect(page.getByRole('tab', { name: 'Routed page' })).toBeVisible();
 		await editor.getByRole('button', { name: 'Back', exact: true }).click();
 		await expect(location).toHaveValue(url);
-		await electron.evaluate(async ({ BrowserWindow }) => {
+		await electron.evaluate(async ({ BrowserWindow }, url) => {
 			const view = BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL() === url) as Electron.WebContentsView;
 			await view.webContents.executeJavaScript("document.title = 'First page';");
-		});
+		}, url);
 		await location.fill(`${url}second`); await location.press('Enter');
 		await expect(editor.getByRole('status')).toHaveText('Second page');
 		await page.keyboard.press('ControlOrMeta+Shift+P');

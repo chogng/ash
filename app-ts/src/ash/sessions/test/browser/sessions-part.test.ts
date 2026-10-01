@@ -1,9 +1,15 @@
+import { h as createDomElement, Dimension } from '../../../base/browser/dom.js';
+import type { IPositionedRectangle } from '../../../base/browser/geometry.js';
+import type { IView } from '../../../base/browser/ui/grid/grid.js';
+import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
+import type { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
+import { SessionGridLayout } from '../../browser/parts/sessionGridLayout.js';
 import { observableValue } from '../../../base/common/observable.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../../../base/common/event.js";
-import { DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import type { ICommandEvent, ICommandService } from "../../../platform/commands/common/commands.js";
 import { IContextMenuService, IContextViewService } from "../../../platform/contextview/browser/contextView.js";
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
@@ -367,4 +373,81 @@ test('Closing Sessions file acquisition cancels its readers and does not mutate 
 	await pending;
 	assert.equal(model.size, 0);
 	assert.deepEqual(notifications.getNotifications(), []);
+});
+
+test('Sessions page changes restore asymmetric grids only after side-part layout settles', async () => {
+	const document = browserEnvironment.window.document;
+	const container = createDomElement(document, 'div');
+	document.body.append(container);
+	using cleanup = toDisposable(() => container.remove());
+	using storage = new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, applicationId: 'page-geometry', workspaceId: 'test', flushInterval: 0 });
+	storage.store('sessions.gridState.chat', JSON.stringify({ version: 1, widths: [{ id: 'first', width: 500 }, { id: 'second', width: 700 }] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	storage.store('sessions.gridState.code', JSON.stringify({ version: 1, widths: [{ id: 'first', width: 450 }, { id: 'second', width: 550 }] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	using services = new InstantiationService();
+	services.registerInstance(IStorageService, storage);
+	class Pane implements IView {
+		readonly element = createDomElement(document, 'div');
+		readonly minimumWidth = 100;
+		readonly maximumWidth = Number.POSITIVE_INFINITY;
+		readonly minimumHeight = 0;
+		readonly maximumHeight = Number.POSITIVE_INFINITY;
+		width = 0;
+		constructor() { this.element.append(createDomElement(document, 'input')); }
+		layout(bounds: IPositionedRectangle): void { this.width = bounds.width; }
+	}
+	class PageView extends Disposable {
+		readonly domNode = createDomElement(document, 'section');
+		readonly panes = [new Pane(), new Pane()];
+		readonly visibility: boolean[] = [];
+		private readonly grid: SessionGridLayout;
+		constructor(parent: HTMLElement, page: 'chat' | 'code') {
+			super();
+			parent.append(this.domNode);
+			this.grid = this._register(services.createInstance(SessionGridLayout, this.domNode, this.panes[0]!, page));
+			this.grid.reconcile(this.panes.map((view, index) => ({ id: index === 0 ? 'first' : 'second', view })), 'first');
+		}
+		setVisible(visible: boolean): void { this.visibility.push(visible); }
+		updateVisibleSelections(): void {}
+		layout(dimension: Dimension): void { this.grid.layout(dimension.width, dimension.height); }
+	}
+	const pages = new Map<'chat' | 'code', PageView>();
+	const createPart = (): InstanceType<typeof SessionsPart> => {
+		const part = new SessionsPart(container, {} as SessionsPartOptions, {
+			createInstance: (_constructor: unknown, parent: HTMLElement, options: { page: 'chat' | 'code' }) => {
+				const page = new PageView(parent, options.page);
+				pages.set(options.page, page);
+				return page;
+			},
+		} as unknown as IInstantiationService);
+		Object.defineProperties(part.domNode.querySelector('.ash-workbench-part-content')!, { clientWidth: { get: () => 1_200 }, clientHeight: { get: () => 800 } });
+		return part;
+	};
+	const widths = (page: 'chat' | 'code'): readonly number[] => pages.get(page)!.panes.map(pane => pane.width);
+	const exercise = async (part: InstanceType<typeof SessionsPart>): Promise<void> => {
+		part.layout(new Dimension(1_200, 800));
+		assert.deepEqual(widths('chat'), [500, 700]);
+		part.setPage('code', () => {
+			part.layout(new Dimension(1_100, 800));
+			part.layout(new Dimension(1_000, 800));
+		});
+		assert.deepEqual({ chat: widths('chat'), code: widths('code') }, { chat: [500, 700], code: [450, 550] });
+		const code = pages.get('code')!;
+		const input = code.panes[0]!.element.querySelector('input')!;
+		input.value = 'Unsent Code draft';
+		input.focus();
+		const visibility = [...code.visibility];
+		part.setPage('code', () => part.layout(new Dimension(1_000, 800)));
+		assert.deepEqual({ visibility: code.visibility, focused: document.activeElement, draft: input.value }, { visibility, focused: input, draft: 'Unsent Code draft' });
+		part.setPage('chat', () => part.layout(new Dimension(1_200, 800)));
+		assert.deepEqual({ chat: widths('chat'), code: widths('code') }, { chat: [500, 700], code: [450, 550] });
+		await storage.flush();
+	};
+	{
+		using part = createPart();
+		await exercise(part);
+	}
+	{
+		using reloaded = createPart();
+		await exercise(reloaded);
+	}
 });

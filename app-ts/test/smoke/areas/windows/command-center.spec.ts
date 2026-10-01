@@ -1298,8 +1298,7 @@ test('titlebar command center opens command search and restores focus', async ({
 	await page.mouse.move(0, 100);
 	await commandCenter.hover();
 	await expect(commandCenter).toHaveCSS('background-color', 'rgb(235, 235, 235)');
-	await page.waitForTimeout(600);
-	await expect(page.locator('.ash-hover')).toHaveCount(0);
+	await expect(page.getByRole('tooltip')).toHaveText(await page.title());
 
 	await commandCenter.click();
 	await expect(commandCenter).toHaveAttribute('aria-expanded', 'true');

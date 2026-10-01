@@ -13,11 +13,11 @@
 .ash-open-editors-empty {
 	padding: var(--ash-spacing-size80);
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-fontSize-body2);
+	font-size: var(--ash-font-size-body2);
 }
 
 .ash-open-editors-empty:focus-visible {
-	outline: var(--ash-strokeThickness) solid var(--ash-focus-border);
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
 	outline-offset: -1px;
 }
 
@@ -30,13 +30,13 @@
 }
 
 .ash-open-editors-group {
-	font-weight: var(--ash-fontWeight-semiBold);
+	font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .ash-open-editors-icon {
 	display: inline-flex;
-	width: var(--ash-lxiconFontSize);
-	flex: 0 0 var(--ash-lxiconFontSize);
+	width: var(--ash-lxicon-font-size);
+	flex: 0 0 var(--ash-lxicon-font-size);
 	align-items: center;
 }
 
@@ -49,7 +49,7 @@
 }
 
 .ash-open-editors-row.active .ash-open-editors-label {
-	font-weight: var(--ash-fontWeight-semiBold);
+	font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .ash-open-editors-row.preview .ash-open-editors-label {
@@ -58,7 +58,7 @@
 
 .ash-open-editors-dirty {
 	flex: 0 0 auto;
-	font-size: var(--ash-fontSize-body2);
+	font-size: var(--ash-font-size-body2);
 }
 
 .ash-open-editors-close {
@@ -70,7 +70,7 @@
 	justify-content: center;
 	padding: 0;
 	border: 0;
-	border-radius: var(--ash-cornerRadius-small);
+	border-radius: var(--ash-corner-radius-small);
 	color: inherit;
 	background: transparent;
 	cursor: pointer;
@@ -81,6 +81,6 @@
 }
 
 .ash-open-editors-close:focus-visible {
-	outline: var(--ash-strokeThickness) solid var(--ash-focus-border);
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
 	outline-offset: -1px;
 }

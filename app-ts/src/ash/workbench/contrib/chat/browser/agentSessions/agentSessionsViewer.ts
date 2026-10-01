@@ -41,7 +41,7 @@ export class AgentSessionsViewer extends Disposable {
 		const sessions: AgentSessionRow[] = [];
 		const present = new Set<string>();
 		for (const item of items) {
-			const row = this.rows.get(item.id) ?? this.rows.set(item.id, new AgentSessionRow(this.domNode.ownerDocument));
+			const row = this.rows.get(item.id) ?? this.rows.set(item.id, new AgentSessionRow(item.kind === 'draft' ? this.draftsList : this.sessionsList));
 			row.update(item);
 			(item.kind === 'draft' ? drafts : sessions).push(row);
 			present.add(item.id);
@@ -94,8 +94,9 @@ class AgentSessionRow extends Disposable {
 	private readonly description: HTMLSpanElement;
 	private open: () => void = () => {};
 
-	constructor(document: Document) {
+	constructor(container: HTMLElement) {
 		super();
+		const document = container.ownerDocument;
 		this.domNode = h(document, 'li');
 		this.button = h(document, 'button');
 		this.button.type = 'button';

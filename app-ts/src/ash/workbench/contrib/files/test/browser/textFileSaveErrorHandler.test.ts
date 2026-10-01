@@ -21,7 +21,7 @@ test('File save errors distinguish disk conflicts and retain the user edits', as
 		input: async () => { throw new Error('Unexpected input'); },
 	};
 	const handler = new TextFileSaveErrorHandler(dialogs);
-	const resource = URI.file('C:\\project\\notes.txt');
+	const resource = URI.file('C:/project/notes.txt');
 	await handler.onSaveError(new TextModelConflictError(resource), resource);
 	assert.equal(messages[0]?.severity, DialogSeverity.Warning);
 	assert.match(messages[0]?.message ?? '', /notes\.txt.*changed on disk.*unsaved changes/i);

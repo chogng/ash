@@ -93,7 +93,7 @@ test("Stanza editor pane loads, lays out, focuses, hides, and clears one editor 
 	pane.create(parent);
 	pane.layout({ width: 640, height: 480 });
 	await pane.setInput({
-		resource: URI.file("C:\\project\\main.ts"),
+		resource: URI.file("C:/project/main.ts"),
 		label: "main.ts",
 		initialText: "const alpha = 1;",
 	}, new AbortController().signal);
@@ -123,7 +123,7 @@ test("Stanza editor pane loads, lays out, focuses, hides, and clears one editor 
 
 	pane.clearInput();
 	assert.equal(pane.getValue(), "");
-	await assert.rejects(() => pane.saveAs(URI.file("C:\\project\\empty.ts")), /unloaded text editor/);
+	await assert.rejects(() => pane.saveAs(URI.file("C:/project/empty.ts")), /unloaded text editor/);
 	assert.equal(parent.querySelectorAll(".stanza-editor").length, 0);
 	pane.dispose();
 	assert.equal(parent.children.length, 0);
@@ -342,7 +342,7 @@ test("Stanza editor pane acquires the Workbench language service for its detecte
 	const diagnostics = new RecordingLanguageDiagnosticsService();
 	const pane = createPane(services, resourceStore, { languageDiagnosticsService: diagnostics });
 	pane.create(parent);
-	const resource = URI.file("C:\\project\\main.ts");
+	const resource = URI.file("C:/project/main.ts");
 
 	await pane.setInput({ resource }, new AbortController().signal);
 
@@ -380,10 +380,10 @@ test("Stanza editor pane releases a load cancelled before content resolution", a
 	const pane = createPane(services, resourceStore, {});
 	pane.create(parent);
 	const controller = new AbortController();
-	const opening = pane.setInput({ resource: URI.file("C:\\project\\slow.ts") }, controller.signal);
+	const opening = pane.setInput({ resource: URI.file("C:/project/slow.ts") }, controller.signal);
 	controller.abort();
 	pending.resolve({
-		resource: URI.file("C:\\project\\slow.ts"),
+		resource: URI.file("C:/project/slow.ts"),
 		text: "late",
 		source: TextFileContentSource.FileSystem,
 		revision: "revision-1",
@@ -404,7 +404,7 @@ test("Stanza editor pane saves and reverts its shared model reference", async ()
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using models = new BrowserTextModelService(resourceStore);
 	using services = paneServices(models);
-	const resource = URI.file("C:\\project\\main.ts");
+	const resource = URI.file("C:/project/main.ts");
 	const reference = await models.acquire({ resource }, new AbortController().signal);
 	const pane = createPane(services, resourceStore, {});
 	pane.create(parent);
@@ -445,7 +445,7 @@ test("Stanza editor pane trims trailing whitespace before saving", async () => {
 		createPart: createInertEditorPart,
 	});
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\trim.ts") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/trim.ts") }, new AbortController().signal);
 
 	await pane.save();
 
@@ -466,7 +466,7 @@ test("Stanza editor pane inserts the configured final newline before saving", as
 		createPart: createInertEditorPart,
 	});
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\final-newline.ts") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/final-newline.ts") }, new AbortController().signal);
 
 	await pane.save();
 
@@ -494,7 +494,7 @@ test("Stanza editor pane resolves extension first-line languages after loading a
 	});
 	pane.create(parent);
 
-	await pane.setInput({ resource: URI.file("C:\\project\\script.cgi") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/script.cgi") }, new AbortController().signal);
 
 	assert.equal(languageId, "demo");
 	pane.dispose();
@@ -553,7 +553,7 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 		},
 	});
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\configured.ts"), label: 'Configured file', readOnly: true }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/configured.ts"), label: 'Configured file', readOnly: true }, new AbortController().signal);
 
 	assert.equal(received?.ariaLabel, 'Configured file');
 	assert.equal(received?.readOnly, true);
@@ -611,7 +611,7 @@ test("Workbench owns the code editor save shortcut and reports failures", async 
 		onSaveError: (error, resource) => { errors.push(error); failedResources.push(resource); },
 	});
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\save.ts") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/save.ts") }, new AbortController().signal);
 
 	const input = parent.querySelector<HTMLTextAreaElement>(".stanza-editor-input")!;
 	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, ctrlKey: true, key: "s" }));

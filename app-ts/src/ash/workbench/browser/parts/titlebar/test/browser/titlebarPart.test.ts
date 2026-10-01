@@ -353,7 +353,7 @@ test("browser titlebar hosts the application menu in an ActionBar", () => {
 	}));
 	const updatedButton = menubar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.applicationMenu"] button');
 	assert.ok(updatedButton);
-	assert.notEqual(updatedButton, button);
+	assert.equal(updatedButton, button);
 	assert.equal(ownerDocument.activeElement, updatedButton);
 	assert.equal(updatedButton.getAttribute("aria-label"), applicationMenuLabel);
 	updatedButton.dispatchEvent(new browserEnvironment.window.KeyboardEvent("keydown", {

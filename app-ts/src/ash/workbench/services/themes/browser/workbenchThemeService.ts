@@ -1,3 +1,4 @@
+import { h as createDomElement, } from '../../../../base/browser/dom.js';
 import { IconsStyleSheet } from '../../../../platform/theme/browser/iconsStyleSheet.js';
 import { IHostColorSchemeService } from '../common/hostColorSchemeService.js';
 import { WorkbenchFileIconThemesRegistry, WorkbenchProductIconThemesRegistry } from '../common/themeExtensionPoints.js';
@@ -62,7 +63,7 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 		}
 		this.initialized = true;
 		this._register(new IconsStyleSheet(this.container.ownerDocument, this));
-		const iconStyles = this.container.ownerDocument.createElement('style');
+		const iconStyles = createDomElement(this.container.ownerDocument, 'style');
 		this.container.ownerDocument.head.append(iconStyles);
 		this.iconStyles = iconStyles;
 		this._register(toDisposable(() => iconStyles.remove()));

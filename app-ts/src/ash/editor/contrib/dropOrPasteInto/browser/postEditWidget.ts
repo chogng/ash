@@ -1,5 +1,5 @@
 import './postEditWidget.css';
-import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { h as createDomElement, addDisposableListener } from '../../../../base/browser/dom.js';
 import { type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
@@ -39,13 +39,13 @@ class PostEditWidget<T extends TransferEdit> extends Disposable implements ICont
 	) {
 		super();
 		const document = editor.getDomNode()!.ownerDocument;
-		this.select = document.createElement('select');
+		this.select = createDomElement(document, 'select');
 		this.select.className = 'stanza-editor-post-edit-selector';
 		this.select.setAttribute('aria-label', label);
 		this.select.setAttribute('aria-description', localize('dropOrPaste.selectorHelp', 'Use arrow keys to choose an edit. Press Escape to return to the editor.'));
 		this.select.title = label;
 		for (const [index, edit] of edits.allEdits.entries()) {
-			const option = document.createElement('option');
+			const option = createDomElement(document, 'option');
 			option.value = String(index);
 			option.textContent = edit.title;
 			this.select.add(option);

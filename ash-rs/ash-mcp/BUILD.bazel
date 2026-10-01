@@ -1,7 +1,7 @@
 load("//:defs.bzl", "ash_rust_crate")
 
 ash_rust_crate(
-    name = "mcp",
+    name = "ash-mcp",
     data = ["//ash-rs/utils/audio:tests/fixtures/tone.wav"],
     crate_name = "ash_mcp",
 )

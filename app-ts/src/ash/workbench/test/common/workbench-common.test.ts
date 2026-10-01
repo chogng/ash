@@ -38,6 +38,7 @@ import {
 	getWorkbenchColorTheme,
 	SystemColorThemePreference,
 	WorkbenchThemeRegistry,
+	WorkbenchThemesRegistry,
 } from "../../../workbench/common/theme.js";
 import {
 	type IView,
@@ -54,7 +55,7 @@ test("workbench context keys describe the current workspace", () => {
 	using contextKeys = new ContextKeyService();
 	using workspace = new WorkspaceContextService({
 		id: "workspace",
-		uri: URI.file("C:\\project"),
+		uri: URI.file("C:/project"),
 	});
 	using workingCopies = new BrowserWorkingCopyService();
 	const initialChanges: string[][] = [];
@@ -67,6 +68,7 @@ test("workbench context keys describe the current workspace", () => {
 		'activeEditorGroupLast',
 		'agentSidebarVisible',
 		'auxiliaryBarVisible',
+		'browserLocalFolderSupport',
 		'dirtyWorkingCopies',
 		'editorAreaVisible',
 		'editorIsOpen',
@@ -76,6 +78,7 @@ test("workbench context keys describe the current workspace", () => {
 		'isWeb',
 		'isWindows',
 		'multipleEditorGroups',
+		'openFolderWorkspaceSupport',
 		'panelMaximized',
 		'panelVisible',
 		'sideBarVisible',
@@ -87,16 +90,18 @@ test("workbench context keys describe the current workspace", () => {
 	assert.equal(contextKeys.getValue('dirtyWorkingCopies'), false);
 	assert.equal(contextKeys.getValue('isNative'), true);
 	assert.equal(contextKeys.getValue('isWeb'), false);
+	assert.equal(contextKeys.getValue('browserLocalFolderSupport'), false);
+	assert.equal(contextKeys.getValue('openFolderWorkspaceSupport'), false);
 	assert.equal(
 		getVisibleViewContextKey("ash.explorer"),
 		"view.ash.explorer.visible",
 	);
 	workspace.updateWorkspace({
 		id: 'workspace',
-		configuration: URI.file('C:\\project\\ash.code-workspace'),
+		configuration: URI.file('C:/project/ash.code-workspace'),
 		folders: [
-			{ id: 'first', uri: URI.file('C:\\project'), name: 'project', index: 0 },
-			{ id: 'second', uri: URI.file('C:\\library'), name: 'library', index: 1 },
+			{ id: 'first', uri: URI.file('C:/project'), name: 'project', index: 0 },
+			{ id: 'second', uri: URI.file('C:/library'), name: 'library', index: 1 },
 		],
 	});
 	assert.equal(contextKeys.getValue('workbenchState'), 'workspace');
@@ -106,7 +111,7 @@ test("workbench context keys describe the current workspace", () => {
 	assert.equal(contextKeys.getValue("workbenchState"), "empty");
 	assert.equal(contextKeys.getValue("workspaceFolderCount"), 0);
 
-	using copy = new TestWorkingCopy(URI.file('C:\\project\\main.ts'));
+	using copy = new TestWorkingCopy(URI.file('C:/project/main.ts'));
 	using registration = workingCopies.register(copy);
 	copy.setDirty(true);
 	assert.equal(contextKeys.getValue('dirtyWorkingCopies'), true);
@@ -155,7 +160,7 @@ test("workbench contributions start once at their declared phases", async () => 
 	]);
 });
 
-test("workbench configuration resolves registered color themes", () => {
+test("workbench configuration validates theme preferences before resolving registered themes", () => {
 	assert.equal(
 		configurationRegistry.owns(WorkbenchConfiguration.colorTheme),
 		true,
@@ -174,14 +179,16 @@ test("workbench configuration resolves registered color themes", () => {
 		colorTheme.parse(lightColorTheme.id),
 		lightColorTheme.id,
 	);
-	assert.throws(
-		() => colorTheme.parse("missing-theme"),
-		/Unknown workbench color theme preference/,
-	);
-	assert.equal(
-		getWorkbenchColorTheme(lightColorTheme.id),
-		lightColorTheme,
-	);
+	assert.equal(colorTheme.parse("not-yet-installed-theme"), "not-yet-installed-theme");
+	for (const invalid of ["", "theme with spaces", "../theme", 42]) {
+		assert.throws(() => colorTheme.parse(invalid), TypeError);
+	}
+	assert.throws(() => getWorkbenchColorTheme("not-yet-installed-theme"), /Unknown workbench color theme/);
+	assert.equal(getWorkbenchColorTheme(lightColorTheme.id).id, lightColorTheme.id);
+	const contributed = { ...lightColorTheme, id: 'test-contributed-light' };
+	using registration = WorkbenchThemesRegistry.registerColorTheme(contributed);
+	assert.equal(colorTheme.parse(contributed.id), contributed.id);
+	assert.equal(getWorkbenchColorTheme(contributed.id), contributed);
 });
 
 test("workbench configuration exposes modern and flat layout styles", () => {
@@ -308,6 +315,7 @@ test("file views register after their host container", async () => {
 		location: ViewContainerLocation.Sidebar,
 	});
 	const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+	const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 	Object.defineProperty(globalThis, "window", {
 		configurable: true,
 		value: browserEnvironment.window,
@@ -324,6 +332,7 @@ test("file views register after their host container", async () => {
 		const { VIEW_ID } = await import(
 			"../../../workbench/contrib/files/common/files.js"
 		);
+		const { OpenEditorsView } = await import("../../../workbench/contrib/files/browser/views/openEditorsView.js");
 
 		registerFilesViews(registry);
 
@@ -331,8 +340,12 @@ test("file views register after their host container", async () => {
 			registry.getViews(WorkbenchViewContainerId.Sidebar).map(
 				(view) => view.id,
 			),
-			[VIEW_ID, EmptyView.ID],
+			[OpenEditorsView.ID, VIEW_ID, EmptyView.ID],
 		);
+		const openEditors = registry.getView(OpenEditorsView.ID);
+		assert.ok(openEditors);
+		assert.equal(openEditors.hideByDefault, true);
+		assert.equal(openEditors.canToggleVisibility, true);
 		using contextKeys = new ContextKeyService();
 		const explorer = registry.getView(VIEW_ID);
 		const empty = registry.getView(EmptyView.ID);
@@ -348,7 +361,8 @@ test("file views register after their host container", async () => {
 		assert.equal(contextKeys.contextMatchesRules(empty.when), false);
 	} finally {
 		browserEnvironment.window.close();
-		Reflect.deleteProperty(globalThis, "window");
+		if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow);
+		else Reflect.deleteProperty(globalThis, "window");
 	}
 });
 

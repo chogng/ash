@@ -1,3 +1,4 @@
+import { h as createDomElement } from '../../../../../base/browser/dom.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -35,8 +36,8 @@ test('active code editor follows the pane control when two editors share a model
 	services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
 	const service = services.get(ICodeEditorService);
 	using model = new TextModel('shared');
-	const firstContainer = document.createElement('div');
-	const secondContainer = document.createElement('div');
+	const firstContainer = createDomElement(document, 'div');
+	const secondContainer = createDomElement(document, 'div');
 	document.body.append(firstContainer, secondContainer);
 	const options = {
 		model,

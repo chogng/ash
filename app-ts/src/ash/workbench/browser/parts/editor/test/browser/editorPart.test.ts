@@ -7,8 +7,8 @@ import { DialogService } from '../../../../../services/dialogs/common/dialogServ
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
-import type {
-	IDimension,
+import { h as createDomElement,
+	type IDimension,
 } from "../../../../../../base/browser/dom.js";
 import { Emitter, Event } from "../../../../../../base/common/event.js";
 import type { IAccessibilityService } from "../../../../../../platform/accessibility/common/accessibility.js";
@@ -128,7 +128,7 @@ const editorTestServices = new DisposableStore();
 suiteTeardown(() => { editorTestServices.dispose(); browserEnvironment.window.close(); });
 
 function createEditorPart(container: HTMLElement, options: IEditorPartOptions, parent?: InstantiationService): InstanceType<typeof EditorPart> {
-	const services = editorTestServices.add(createTestEditorServices(options.configurationService, parent));
+	const services = editorTestServices.add(createTestEditorServices(container.ownerDocument, options.configurationService, parent));
 	return services.createInstance(EditorPart, container, options);
 }
 
@@ -171,8 +171,8 @@ test("editor registry resolves defaults and explicit Open With choices", () => {
 	const alphaRegistration = registry.registerEditorPane(alpha);
 	const codeBlockEditorWidgetRegistration = registry.registerEditorPane(codeBlockEditorWidget);
 
-	const typescript = input("C:\\project\\main.ts");
-	const markdown = input("C:\\project\\paper.md");
+	const typescript = input("C:/project/main.ts");
+	const markdown = input("C:/project/paper.md");
 	assert.equal(registry.getEditorPane(typescript), alpha);
 	assert.equal(registry.getEditorPane(markdown), codeBlockEditorWidget);
 	assert.deepEqual(registry.getEditorPanesForInput(markdown), [
@@ -242,10 +242,10 @@ test("EditorPart chooses a registered editor from file associations", async () =
 	using configuration = new InMemoryConfigurationService();
 	await configuration.updateValue(EditorAssociationsConfiguration, { "*.ts": "ash.test.associated" });
 	const editor = createEditorPart(dom.window.document.body, { registry, configurationService: configuration });
-	await editor.openEditor(input("C:\\project\\associated.ts"));
+	await editor.openEditor(input("C:/project/associated.ts"));
 	assert.equal(editor.activePane?.id, "ash.test.associated");
 	await configuration.updateValue(EditorAssociationsConfiguration, {});
-	await editor.openEditor(input("C:\\project\\default.ts"));
+	await editor.openEditor(input("C:/project/default.ts"));
 	assert.equal(editor.activePane?.id, "ash.test.default");
 	editor.dispose();
 	dom.window.close();
@@ -259,7 +259,7 @@ test("EditorPart applies diff editor associations to the modified resource", asy
 	using configuration = new InMemoryConfigurationService();
 	await configuration.updateValue(DiffEditorAssociationsConfiguration, { "*.ts": "ash.test.associatedDiff" });
 	const editor = createEditorPart(dom.window.document.body, { registry, configurationService: configuration });
-	await editor.openEditor(createDiffEditorInput(input("C:\\project\\old.ts"), input("C:\\project\\new.ts")));
+	await editor.openEditor(createDiffEditorInput(input("C:/project/old.ts"), input("C:/project/new.ts")));
 	assert.equal(editor.activePane?.id, "ash.test.associatedDiff");
 	editor.dispose();
 	dom.window.close();
@@ -272,8 +272,8 @@ test("EditorPart routes implicit opens away from automatically locked groups", a
 	using configuration = new InMemoryConfigurationService();
 	await configuration.updateValue(AutoLockGroupsConfiguration, { "ash.test.locked": true });
 	const editor = createEditorPart(dom.window.document.body, { registry, configurationService: configuration });
-	const original = input("C:\\project\\original.ts");
-	const next = input("C:\\project\\next.ts");
+	const original = input("C:/project/original.ts");
+	const next = input("C:/project/next.ts");
 	await editor.openEditor(original);
 	await editor.splitActiveGroupHorizontal();
 	assert.equal(editor.activeGroup.isLocked, true);
@@ -306,7 +306,7 @@ test("EditorPart confirms a large file before changing the active editor", async
 	let allow = false;
 	const dialogService = { confirm: async () => ({ confirmed: allow }) } as unknown as IDialogService;
 	const editor = createEditorPart(dom.window.document.body, { registry, configurationService: configuration, fileService, dialogService });
-	const large = input("C:\\project\\large.ts");
+	const large = input("C:/project/large.ts");
 	await assert.rejects(editor.openEditor(large), /cancelled/);
 	assert.equal(editor.activeInput, undefined);
 	allow = true;
@@ -350,7 +350,7 @@ test("EditorPart passes Workbench file services to pane factories", async () => 
 		textFileService,
 	});
 
-	await editor.openEditor(input("C:\\project\\main.ts"));
+	await editor.openEditor(input("C:/project/main.ts"));
 
 	assert.equal(observedTextFileService, textFileService);
 	assert.equal(observedFileService, fileService);
@@ -395,7 +395,7 @@ test("EditorPart applies empty-editor tips changes without showing them over an 
 	assert.equal(editor.domNode.querySelector('.ash-editor-group-watermark-shortcuts')?.childElementCount, 0);
 	await configuration.updateValue('workbench.tips.enabled', true);
 	assert.match(editor.domNode.textContent ?? '', /Open Editor.*(?:Ctrl\+|⌘)O/);
-	await editor.openEditor(input("C:\\project\\main.ts"));
+	await editor.openEditor(input("C:/project/main.ts"));
 	await configuration.updateValue('workbench.tips.enabled', false);
 	await configuration.updateValue('workbench.tips.enabled', true);
 	assert.equal(
@@ -425,7 +425,7 @@ test("EditorPart saves the active pane through the editor contract", async () =>
 	));
 	const editor = createEditorPart(dom.window.document.body, { registry });
 
-	await editor.openEditor(input("C:\\project\\document.save"));
+	await editor.openEditor(input("C:/project/document.save"));
 	await editor.saveActiveEditor();
 
 	assert.equal(pane.saveCount, 1);
@@ -448,8 +448,8 @@ test("EditorPart opens cross-resource language targets and reveals their selecti
 		},
 	});
 	const editor = createEditorPart(dom.window.document.body, { registry });
-	await editor.openEditor(input("C:\\project\\main.ts"));
-	const target = URI.file("C:\\project\\target.ts");
+	await editor.openEditor(input("C:/project/main.ts"));
+	const target = URI.file("C:/project/target.ts");
 	const range = Range.fromPositions(new Position((4) + 1, (1) + 1), new Position((4) + 1, (8) + 1));
 
 	await openLocation!({ resource: target, range });
@@ -480,7 +480,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 	const editor = createEditorPart(dom.window.document.body, { registry });
 	dom.window.document.body.append(editor.domNode);
 
-	const typescript = input("C:\\project\\main.ts");
+	const typescript = input("C:/project/main.ts");
 	const alphaPane = await editor.openEditor(typescript);
 	assert.equal(editor.groups.length, 1);
 	assert.equal(editor.activeGroup, editor.groups[0]);
@@ -540,7 +540,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 	editor.focus();
 	assert.equal(panes[0]?.focusCount, 1);
 
-	const markdown = input("C:\\project\\paper.md");
+	const markdown = input("C:/project/paper.md");
 	const codeBlockEditorWidgetPane = await editor.openEditor(markdown);
 	assert.equal(editor.activePane, codeBlockEditorWidgetPane);
 	assert.equal(editor.activeInput, markdown);
@@ -607,9 +607,9 @@ test("EditorPart replaces preview tabs and preserves pinned tabs", async () => {
 	));
 	const editor = createEditorPart(dom.window.document.body, { registry });
 	dom.window.document.body.append(editor.domNode);
-	const first = input("C:\\project\\first.ts");
-	const second = input("C:\\project\\second.ts");
-	const third = input("C:\\project\\third.ts");
+	const first = input("C:/project/first.ts");
+	const second = input("C:/project/second.ts");
+	const third = input("C:/project/third.ts");
 
 	await editor.openEditor(first, { pinned: false });
 	assert.deepEqual(editor.activeGroup.inputs, [first]);
@@ -668,15 +668,15 @@ test("EditorPart saves before closing and pins a dirty preview", async () => {
 		"stanza.editor.code",
 		".ts",
 		() => {
-			const workingCopy = new TestWorkingCopy(URI.file("C:\\project\\current.ts"));
+			const workingCopy = new TestWorkingCopy(URI.file("C:/project/current.ts"));
 			copies.set("current", workingCopy);
 			return new TestEditorPane("stanza.editor.code", workingCopy);
 		},
 	));
 	const fileDialogs = new TestFileDialogService(ConfirmResult.SAVE);
 	const editor = createEditorPart(dom.window.document.body, { registry, fileDialogService: fileDialogs });
-	const current = input("C:\\project\\current.ts");
-	const next = input("C:\\project\\next.ts");
+	const current = input("C:/project/current.ts");
+	const next = input("C:/project/next.ts");
 	await editor.openEditor(current, { pinned: false });
 	const currentWorkingCopy = copies.get("current")!;
 	currentWorkingCopy.markDirty();
@@ -699,13 +699,13 @@ test('EditorPart pins an already dirty working copy before opening another previ
 		const registry = new EditorPaneRegistry();
 		let created = 0;
 		using registration = registry.registerEditorPane(descriptor('stanza.editor.code', '.ts', () => {
-			const workingCopy = new TestWorkingCopy(URI.file('C:\\project\\current.ts'));
+			const workingCopy = new TestWorkingCopy(URI.file('C:/project/current.ts'));
 			if (created++ === 0) workingCopy.markDirty();
 			return new TestEditorPane('stanza.editor.code', workingCopy);
 		}));
 		using editor = createEditorPart(dom.window.document.body, { registry });
-		const dirty = input('C:\\project\\dirty.ts');
-		const clean = input('C:\\project\\clean.ts');
+		const dirty = input('C:/project/dirty.ts');
+		const clean = input('C:/project/clean.ts');
 		await editor.openEditor(dirty, { pinned: false });
 		await editor.openEditor(clean, { pinned: false });
 		assert.deepEqual(editor.activeGroup.editors.map(entry => ({ input: entry.input, preview: entry.isPreview, dirty: entry.isDirty })), [
@@ -724,9 +724,9 @@ test("EditorPart opens beside the active group without stealing caller focus", a
 	registry.registerEditorPane(descriptor("stanza.editor.code", ".ts", () => trackPane(panes, "stanza.editor.code")));
 	const editor = createEditorPart(dom.window.document.body, { registry });
 	dom.window.document.body.append(editor.domNode);
-	const sourceInput = input("C:\\project\\source.ts");
-	const previewInput = input("C:\\project\\preview.ts");
-	const pinnedInput = input("C:\\project\\pinned.ts");
+	const sourceInput = input("C:/project/source.ts");
+	const previewInput = input("C:/project/preview.ts");
+	const pinnedInput = input("C:/project/pinned.ts");
 	await editor.openEditor(sourceInput);
 	const sourceGroup = editor.activeGroup;
 	using service = new BrowserEditorService(editor);
@@ -768,9 +768,9 @@ test("EditorPart saves and restores groups, tabs, previews, active state, and pa
 	const editor = createEditorPart(dom.window.document.body, { registry });
 	dom.window.document.body.append(editor.domNode);
 	editor.layout({ width: 900, height: 600 });
-	const first = input("C:\\project\\first.ts");
-	const second = input("C:\\project\\second.ts");
-	const third = input("C:\\project\\third.ts");
+	const first = input("C:/project/first.ts");
+	const second = input("C:/project/second.ts");
+	const third = input("C:/project/third.ts");
 
 	await editor.openEditor(first, { pinned: true });
 	await editor.openEditor(second, { pinned: false });
@@ -811,10 +811,10 @@ test('editor commands share group state for keep open, selected pins and close o
 		if (scrollTo) Object.defineProperty(prototype, 'scrollTo', scrollTo);
 		else Reflect.deleteProperty(prototype, 'scrollTo');
 	});
-	const container = browserEnvironment.window.document.createElement('div');
+	const container = createDomElement(browserEnvironment.window.document, 'div');
 	browserEnvironment.window.document.body.append(container);
 	using cleanup = toDisposable(() => container.remove());
-	using services = createTestEditorServices();
+	using services = createTestEditorServices(container.ownerDocument);
 	const contextKeys = services.get(IContextKeyService);
 	const registry = new EditorPaneRegistry();
 	registry.registerEditorPane(descriptor('stanza.editor.code', '.ts', () => new TestEditorPane('stanza.editor.code')));
@@ -900,8 +900,8 @@ test("Editor tabs keep sticky editors in their own row across working-set restor
 	const registry = new EditorPaneRegistry();
 	registry.registerEditorPane(descriptor("stanza.editor.code", ".ts", () => new TestEditorPane("stanza.editor.code")));
 	const editor = createEditorPart(dom.window.document.body, { registry });
-	const first = input("C:\\project\\first.ts");
-	const second = input("C:\\project\\second.ts");
+	const first = input("C:/project/first.ts");
+	const second = input("C:/project/second.ts");
 	await editor.openEditor(first);
 	await editor.openEditor(second);
 
@@ -946,7 +946,7 @@ test("EditorPart publishes stable editor identities and working-copy state chang
 	const registry = new EditorPaneRegistry();
 	const workingCopies: TestWorkingCopy[] = [];
 	registry.registerEditorPane(descriptor("stanza.editor.code", ".ts", () => {
-		const workingCopy = new TestWorkingCopy(URI.file(`C:\\project\\state-${workingCopies.length}.ts`));
+		const workingCopy = new TestWorkingCopy(URI.file(`C:/project/state-${workingCopies.length}.ts`));
 		workingCopies.push(workingCopy);
 		return new TestEditorPane("stanza.editor.code", workingCopy);
 	}));
@@ -955,8 +955,8 @@ test("EditorPart publishes stable editor identities and working-copy state chang
 	editor.onDidChangeEditors(event => {
 		events.push(event.kind === "groupChanged" ? event.event.kind : event.kind);
 	});
-	const first = input("C:\\project\\first.ts");
-	const second = input("C:\\project\\second.ts");
+	const first = input("C:/project/first.ts");
+	const second = input("C:/project/second.ts");
 	await editor.openEditor(first);
 	await editor.openEditor(second);
 	const beforeDirty = editor.getEditorState();
@@ -984,8 +984,8 @@ test("EditorPart tracks MRU editors, reopens closed inputs, and reopens with ano
 	registry.registerEditorPane(descriptor("test.editor.default", ".ts", () => new TestEditorPane("test.editor.default")));
 	registry.registerEditorPane(descriptor("test.editor.alternate", ".ts", () => new TestEditorPane("test.editor.alternate")));
 	const editor = createEditorPart(dom.window.document.body, { registry });
-	const first = input("C:\\project\\first.ts");
-	const second = input("C:\\project\\second.ts");
+	const first = input("C:/project/first.ts");
+	const second = input("C:/project/second.ts");
 	await editor.openEditor(first);
 	await editor.openEditor(second);
 
@@ -1061,8 +1061,8 @@ test("EditorPart keeps MRU order across groups and removes closed editors", asyn
 	const registry = new EditorPaneRegistry();
 	registry.registerEditorPane(descriptor("test.editor.default", ".ts", () => new TestEditorPane("test.editor.default")));
 	const editor = createEditorPart(dom.window.document.body, { registry });
-	const first = input("C:\\project\\first.ts");
-	const second = input("C:\\project\\second.ts");
+	const first = input("C:/project/first.ts");
+	const second = input("C:/project/second.ts");
 
 	await editor.openEditor(first);
 	const firstEditor = editor.editorsMru[0]!;
@@ -1088,7 +1088,7 @@ test("EditorPart persists JSON-safe pane view state in working sets", async () =
 		return pane;
 	}));
 	const editor = createEditorPart(dom.window.document.body, { registry });
-	const resourceInput = { ...input("C:\\project\\view-state.ts"), showBreadcrumbs: false };
+	const resourceInput = { ...input("C:/project/view-state.ts"), showBreadcrumbs: false };
 	await editor.openEditor(resourceInput);
 	panes[0]!.viewState = { cursorLine: 42, scrollTop: 320 };
 	const saved = editor.saveWorkingSet("view-state");
@@ -1138,9 +1138,9 @@ test("HistoryService navigates backward and forward through opened editors", asy
 	const editor = createEditorPart(dom.window.document.body, { registry });
 	const contextKeys = new ContextKeyService();
 	const history = new HistoryService(editor, contextKeys);
-	const first = input("C:\\project\\first.ts");
-	const second = input("C:\\project\\second.ts");
-	const third = input("C:\\project\\third.ts");
+	const first = input("C:/project/first.ts");
+	const second = input("C:/project/second.ts");
+	const third = input("C:/project/third.ts");
 	await editor.openEditor(first, { pinned: true });
 	await editor.openEditor(second, { pinned: true });
 	await editor.openEditor(third, { pinned: true });
@@ -1154,7 +1154,7 @@ test("HistoryService navigates backward and forward through opened editors", asy
 	assert.equal(contextKeys.getValue('canNavigateForward'), true);
 	await history.goForward();
 	assert.equal(editor.activeInput?.resource.toString(), second.resource.toString());
-	await editor.openEditor(input("C:\\project\\new.ts"), { pinned: true });
+	await editor.openEditor(input("C:/project/new.ts"), { pinned: true });
 	assert.equal(contextKeys.getValue('canNavigateForward'), false);
 	history.dispose();
 	contextKeys.dispose();
@@ -1170,7 +1170,7 @@ test('HistoryService restores cursor, edit, and navigation locations', async () 
 	const editor = createEditorPart(dom.window.document.body, { registry });
 	const contextKeys = new ContextKeyService();
 	const history = new HistoryService(editor, contextKeys);
-	await editor.openEditor(input('C:\\project\\locations.ts'), { pinned: true });
+	await editor.openEditor(input('C:/project/locations.ts'), { pinned: true });
 	assert.ok(pane);
 	using services = new InstantiationService();
 	services.registerInstance(IHistoryService, history);
@@ -1208,7 +1208,7 @@ test('HistoryService restores cursor, edit, and navigation locations', async () 
 	assert.equal(activePane.getSelection()?.startLineNumber, 55);
 	await commands.executeCommand('workbench.action.navigateForwardInNavigationLocations');
 	assert.equal(activePane.getSelection()?.startLineNumber, 80);
-	const nextPane = await editor.openEditor(input('C:\\project\\jump-target.ts'), {
+	const nextPane = await editor.openEditor(input('C:/project/jump-target.ts'), {
 		pinned: true,
 		selection: new Range(12, 3, 12, 3),
 		selectionSource: TextEditorSelectionSource.JUMP,
@@ -1271,11 +1271,11 @@ test("EditorPart restores nested horizontal and vertical Grid layouts", async ()
 	registry.registerEditorPane(descriptor("stanza.editor.code", ".ts", () => new TestEditorPane("stanza.editor.code")));
 	const editor = createEditorPart(dom.window.document.body, { registry });
 	editor.layout({ width: 960, height: 640 });
-	await editor.openEditor(input("C:\\project\\left.ts"));
+	await editor.openEditor(input("C:/project/left.ts"));
 	await editor.splitActiveGroupHorizontal();
-	await editor.openEditor(input("C:\\project\\top-right.ts"));
+	await editor.openEditor(input("C:/project/top-right.ts"));
 	await editor.splitActiveGroupVertical();
-	await editor.openEditor(input("C:\\project\\bottom-right.ts"));
+	await editor.openEditor(input("C:/project/bottom-right.ts"));
 	assert.equal(editor.domNode.querySelectorAll(".ash-split-view-separator-border").length, 2);
 	const saved = editor.saveWorkingSet("nested-grid");
 
@@ -1306,7 +1306,7 @@ test("EditorPart validates Grid layouts before closing current editors", async (
 	const registry = new EditorPaneRegistry();
 	registry.registerEditorPane(descriptor("stanza.editor.code", ".ts", () => new TestEditorPane("stanza.editor.code")));
 	const editor = createEditorPart(dom.window.document.body, { registry });
-	const current = input("C:\\project\\safe.ts");
+	const current = input("C:/project/safe.ts");
 	await editor.openEditor(current);
 	const saved = editor.saveWorkingSet("safe");
 	const invalid = {
@@ -1363,7 +1363,7 @@ test("Editor title toolbar splits the active group and owns More Actions", async
 	using editorService = new BrowserEditorService(editor);
 	services.registerInstance(IEditorGroupsService, editorService);
 	dom.window.document.body.append(editor.domNode);
-	const activeInput = input("C:\\project\\main.ts");
+	const activeInput = input("C:/project/main.ts");
 	await editor.openEditor(activeInput);
 	assert.equal(contextKeys.getContext(editor.activeGroup.domNode).getValue(ActiveEditorContext.key), "stanza.editor.code");
 	editor.layout({ width: 800, height: 600 });
@@ -1440,10 +1440,10 @@ test("EditorPart preserves working tabs and opens a failure in its own tab", asy
 	));
 	const editor = createEditorPart(dom.window.document.body, { registry });
 	dom.window.document.body.append(editor.domNode);
-	const workingInput = input("C:\\project\\document.ok");
+	const workingInput = input("C:/project/document.ok");
 	const workingPane = await editor.openEditor(workingInput);
 
-	const failedInput = input("C:\\project\\document.bad");
+	const failedInput = input("C:/project/document.bad");
 	await editor.openEditor(failedInput);
 	assert.equal(editor.activePane?.id, "workbench.editor.openError");
 	assert.equal(editor.activeInput, failedInput);
@@ -1460,7 +1460,7 @@ test('editor context keys follow preview, readonly, dirty, and close transitions
 	const dom = new JSDOM('<!doctype html><body></body>');
 	dom.window.HTMLElement.prototype.scrollTo = () => undefined;
 	const registry = new EditorPaneRegistry();
-	const resource = URI.file('C:\\project\\readonly.ts');
+	const resource = URI.file('C:/project/readonly.ts');
 	let workingCopy: TestWorkingCopy | undefined;
 	registry.registerEditorPane(descriptor(
 		'stanza.editor.code',
@@ -1593,7 +1593,7 @@ test("Editor open error offers a registered Binary Editor for unsafe text conten
 	const registry = new EditorPaneRegistry();
 	registry.registerEditorPane(descriptor("ash.editor.text", ".bin", () => {
 		const pane = new TestEditorPane("ash.editor.text");
-		pane.inputError = new TextFileBinaryError(URI.file("C:\\project\\unsafe.bin"));
+		pane.inputError = new TextFileBinaryError(URI.file("C:/project/unsafe.bin"));
 		return pane;
 	}));
 	registry.registerEditorPane({
@@ -1603,7 +1603,7 @@ test("Editor open error offers a registered Binary Editor for unsafe text conten
 		create: () => new TestEditorPane("ash.editor.binary"),
 	});
 	const editor = createEditorPart(dom.window.document.body, { registry });
-	await editor.openEditor(input("C:\\project\\unsafe.bin"));
+	await editor.openEditor(input("C:/project/unsafe.bin"));
 	const button = [...editor.domNode.querySelectorAll<HTMLButtonElement>(".ash-editor-open-error-actions button")]
 		.find(candidate => candidate.textContent === "Open as Binary");
 	assert.ok(button);
@@ -1632,7 +1632,7 @@ test("EditorPart rejects an open superseded by ordinary content", async () => {
 	));
 	const editor = createEditorPart(dom.window.document.body, { registry });
 	dom.window.document.body.append(editor.domNode);
-	const opening = editor.openEditor(input("C:\\project\\document.slow"));
+	const opening = editor.openEditor(input("C:/project/document.slow"));
 	const content = h(dom.window.document, "div");
 	content.textContent = "Replacement";
 	await editor.setContent(content);
@@ -1653,7 +1653,7 @@ test("EditorPart rejects an open superseded by ordinary content", async () => {
 test("EditorParts moves an editor to an auxiliary window without changing its instance identity", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>", { url: 'http://localhost' });
 	const registry = new EditorPaneRegistry();
-	const workingCopy = new TestWorkingCopy(URI.file("C:\\project\\detached.ts"));
+	const workingCopy = new TestWorkingCopy(URI.file("C:/project/detached.ts"));
 	registry.registerEditorPane(descriptor("stanza.editor.code", ".ts", () => new TestEditorPane("stanza.editor.code", workingCopy)));
 	const main = createEditorPart(dom.window.document.body, { registry });
 	const windows = new TestAuxiliaryWindowService();
@@ -1664,7 +1664,7 @@ test("EditorParts moves an editor to an auxiliary window without changing its in
 	} as unknown as IAccessibilityService, storage);
 	using contextKeys = new ContextKeyService();
 	using editorContexts = new EditorContextKeyController(contextKeys, editorParts, registry, undefined);
-	const resourceInput = input("C:\\project\\detached.ts");
+	const resourceInput = input("C:/project/detached.ts");
 	await editorParts.openEditor(resourceInput);
 	const instanceId = editorParts.getEditorState().activeEditor?.instanceId;
 	assert.equal(contextKeys.getValue('resource'), resourceInput.resource.toString());
@@ -1683,7 +1683,7 @@ test("EditorParts moves an editor to an auxiliary window without changing its in
 	assert.equal(await editorParts.closeAuxiliaryEditorPart(auxiliary), false);
 
 	await workingCopy.save();
-	const secondInput = input("C:\\project\\second.ts");
+	const secondInput = input("C:/project/second.ts");
 	await auxiliary.openEditor(secondInput);
 	auxiliary.activateEditor(resourceInput);
 	windows.lastWindow?.dispose();
@@ -1752,9 +1752,9 @@ test('EditorParts restores main and auxiliary editor windows with their active p
 	using firstStorage = new BrowserStorageService({ ownerWindow: firstDom.window as unknown as Window, applicationId: 'editor-parts-test', workspaceId: 'workspace', flushInterval: 0 });
 	using firstParts = new EditorParts(firstMain, firstWindows, container => ({ part: createEditorPart(container, { registry }) }), accessibility, firstStorage);
 	await firstParts.restoreSavedState(true);
-	await firstMain.openEditor(input('C:\\project\\main.txt'));
+	await firstMain.openEditor(input('C:/project/main.txt'));
 	const detached = await firstParts.createAuxiliaryEditorPart();
-	await detached.openEditor(input('C:\\project\\detached.txt'));
+	await detached.openEditor(input('C:/project/detached.txt'));
 	await firstStorage.flush(WillSaveStateReason.SHUTDOWN);
 	const saved = firstStorage.get('editorparts.state', StorageScope.WORKSPACE);
 	assert.ok(saved);
@@ -1770,8 +1770,8 @@ test('EditorParts restores main and auxiliary editor windows with their active p
 	restoredStorage.store('editorparts.state', saved, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	await restoredParts.restoreSavedState(true);
 	assert.deepEqual(restoredParts.parts.map(part => part.groups.flatMap(group => group.inputs.map(editor => editor.resource.fsPath))), [
-		['C:\\project\\main.txt'],
-		['C:\\project\\detached.txt'],
+		[URI.file('C:/project/main.txt').fsPath],
+		[URI.file('C:/project/detached.txt').fsPath],
 	]);
 	assert.equal(restoredParts.activePart, restoredParts.parts[1]);
 	restoredParts.dispose();
@@ -1791,7 +1791,7 @@ test('EditorParts replaces an untitled resource in every group and window', asyn
 		isScreenReaderOptimized: () => false,
 	} as unknown as IAccessibilityService, storage);
 	const untitled: EditorInput = { resource: URI.parse('untitled:/Untitled-1'), label: 'Untitled-1' };
-	const saved: EditorInput = { resource: URI.file('C:\\project\\draft.txt'), label: 'draft.txt' };
+	const saved: EditorInput = { resource: URI.file('C:/project/draft.txt'), label: 'draft.txt' };
 	await editorParts.openEditor(untitled);
 	await main.openEditor(untitled, {}, 'sideGroup');
 	const auxiliary = await editorParts.createAuxiliaryEditorPart();
@@ -1811,7 +1811,7 @@ test("BrowserAuxiliaryWindowService opens, registers, mirrors styles, and releas
 	let nextPopup = popup;
 	let openFeatures = '';
 	opener.window.document.documentElement.lang = "zh-Hans";
-	const root = opener.window.document.createElement("main");
+	const root = createDomElement(opener.window.document, "main");
 	root.className = "ash-workbench ash-reduce-motion";
 	root.setAttribute("data-os", "windows");
 	root.setAttribute("data-runtime", "electron");

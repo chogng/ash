@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
+import { WorkbenchContributionRegistry, WorkbenchPhase } from '../../../../common/contributions.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { Event } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
@@ -37,6 +39,7 @@ test('Startup editor setting opens Welcome only when the selected workspace perm
 	} satisfies IEditorService;
 	using workspace = new WorkspaceContextService({ id: 'empty', folders: [] });
 	using runner = new StartupPageRunnerContribution(configuration, editor, workspace);
+	assert.equal(opened.length, 0);
 	await runner.onWorkspaceRestored();
 	assert.equal(opened.length, 1);
 	assert.equal(isGettingStartedInput(opened[0]!), true);
@@ -85,4 +88,34 @@ test('Welcome waits for restored editors and accepts only implemented startup mo
 	await runner.onWorkspaceRestored();
 	assert.equal(opened.length, 1);
 	assert.equal(isGettingStartedInput(opened[0]!), false);
+});
+
+test('Workspace restoration waits for the startup editor to finish opening', async () => {
+	using configuration = new InMemoryConfigurationService();
+	using workspace = new WorkspaceContextService({ id: 'empty', folders: [] });
+	using services = new InstantiationService();
+	let finishOpening!: () => void;
+	const opening = new Promise<void>(resolve => { finishOpening = resolve; });
+	const opened: EditorInput[] = [];
+	const editor = {
+		onDidActiveEditorChange: Event.None,
+		onDidVisibleEditorsChange: Event.None,
+		get activeEditor() { return opened.at(-1); },
+		get visibleEditors() { return opened; },
+		async openEditor(input: EditorInput) { await opening; opened.push(input); },
+		focusActiveEditor() {},
+	} satisfies IEditorService;
+	const registry = new WorkbenchContributionRegistry();
+	using registration = registry.register('test.startupPage', WorkbenchPhase.AfterRestored,
+		() => new StartupPageRunnerContribution(configuration, editor, workspace));
+	using host = registry.createHost(services);
+	host.advance(WorkbenchPhase.AfterRestored);
+	let restored = false;
+	const restoration = host.workspaceRestored().then(() => { restored = true; });
+	await Promise.resolve();
+	assert.equal(restored, false);
+	finishOpening();
+	await restoration;
+	assert.deepEqual({ restored, count: opened.length, welcome: isGettingStartedInput(opened[0]!) },
+		{ restored: true, count: 1, welcome: true });
 });

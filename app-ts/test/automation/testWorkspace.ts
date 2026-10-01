@@ -44,17 +44,20 @@ export async function createTestWorkspace(options: TestWorkspaceOptions = {}): P
 	await writeFile(pdfFile, createPdfDocument());
 	if (options.gitRepository) {
 		await run('git', ['init', '-b', 'main'], { cwd: directory });
+		// Merge and later UI commits need the same identity as fixture commits.
+		await run('git', ['config', 'user.name', 'Ash Test'], { cwd: directory });
+		await run('git', ['config', 'user.email', 'ash-test@example.invalid'], { cwd: directory });
 		await run('git', ['add', 'main.ts'], { cwd: directory });
-		await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Initial'], { cwd: directory });
+		await run('git', ['commit', '-m', 'Initial'], { cwd: directory });
 		if (options.gitMergeConflict) {
 			await run('git', ['switch', '-c', 'topic'], { cwd: directory });
 			await writeFile(file, 'const value = 2;\n');
 			await run('git', ['add', 'main.ts'], { cwd: directory });
-			await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Topic'], { cwd: directory });
+			await run('git', ['commit', '-m', 'Topic'], { cwd: directory });
 			await run('git', ['switch', 'main'], { cwd: directory });
 			await writeFile(file, 'const value = 3;\n');
 			await run('git', ['add', 'main.ts'], { cwd: directory });
-			await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Main'], { cwd: directory });
+			await run('git', ['commit', '-m', 'Main'], { cwd: directory });
 			const rejected = await run('git', ['merge', 'topic'], { cwd: directory }).then(() => false, () => true);
 			if (!rejected || !(await run('git', ['ls-files', '--unmerged', 'main.ts'], { cwd: directory })).stdout.trim()) {
 				throw new Error('Test repository did not produce a merge conflict');

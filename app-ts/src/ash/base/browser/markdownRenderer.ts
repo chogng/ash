@@ -12,6 +12,7 @@ import { markdownEscapeEscapedIcons } from '../common/iconLabels.js';
 import { onUnexpectedError } from '../common/errors.js';
 import { appendIcon, getRegisteredIcon } from "./ui/lxicons/lxicon.js";
 import { renderLabelWithIcons } from "./ui/iconlabel/iconLabels.js";
+import { Lxicon } from '../common/lxicons.js';
 import { Schemas } from '../common/network.js';
 import { URI } from '../common/uri.js';
 import { localize } from '../../nls.js';
@@ -160,11 +161,11 @@ const SANITIZER_CONFIG: DomSanitizerConfig = {
 	allowDataAttributes: false,
 };
 const ALERT_ICON_IDS = {
-	note: "info",
-	tip: "lightning",
-	important: "chat",
-	warning: "warning",
-	caution: "error",
+	note: Lxicon.info.id,
+	tip: Lxicon.lightning.id,
+	important: Lxicon.chat4.id,
+	warning: Lxicon.warning.id,
+	caution: Lxicon.error.id,
 } as const;
 const MARKDOWN_COMMAND_RESOURCE_ID = "_workbench.downloadResource";
 

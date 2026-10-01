@@ -42,8 +42,8 @@ test("Show All Editors opens the MRU quick access mode and activates the chosen 
 			formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		await import("../../editor.contribution.js");
 		const { ShowAllEditorsCommandId } = await import("../../editorActions.js");
-		const selected = { groupId: "group-1", instanceId: "editor-1", paneId: "pane-1", input: { resource: URI.file("C:\\project\\main.ts") } };
-		const changes = new Emitter<EditorPartChangeEvent>();
+		const selected = { groupId: "group-1", instanceId: "editor-1", paneId: "pane-1", input: { resource: URI.file("C:/project/main.ts") } };
+		using changes = new Emitter<EditorPartChangeEvent>();
 		let activated: string | undefined;
 		let focused = false;
 		const editorPart = {
@@ -82,7 +82,6 @@ test("Show All Editors opens the MRU quick access mode and activates the chosen 
 		assert.equal(focused, true);
 		assert.equal(dom.window.document.querySelector(".ash-quick-pick"), null);
 		assert.equal(dom.window.document.activeElement, focusTarget);
-		changes.dispose();
 	} finally {
 		resetNlsResolver();
 		for (const [name, descriptor] of previousGlobals) {

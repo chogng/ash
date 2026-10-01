@@ -1,3 +1,4 @@
+import { h as createDomElement } from '../../../base/browser/dom.js';
 import { JSDOM } from 'jsdom';
 import { suiteTeardown } from 'mocha';
 import { TextModel } from '../../common/model/textModel.js';
@@ -17,7 +18,7 @@ const { createTestCodeEditor } = await import('./testCodeEditor.js');
 suiteTeardown(() => environment.window.close());
 
 export function createLanguageFeatureEditor() {
-	const container = environment.window.document.createElement('main');
+	const container = createDomElement(environment.window.document, 'main');
 	environment.window.document.body.append(container);
 	const model = new TextModel('function root() {}', { languageId: 'typescript' });
 	const features = new LanguageFeaturesService();

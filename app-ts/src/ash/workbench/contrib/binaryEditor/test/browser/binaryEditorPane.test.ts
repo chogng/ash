@@ -17,7 +17,7 @@ import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.j
 
 test("BinaryEditorPane renders a bounded hexadecimal and ascii preview", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	const resource = URI.file("C:\\project\\sample.bin");
+	const resource = URI.file("C:/project/sample.bin");
 	using services = new InstantiationService();
 	services.registerInstance(IFileService, new TestFileService(new Uint8Array([0x48, 0x69, 0x00, 0xff])));
 	const pane = binaryEditorDescriptor().create({ instantiationService: services });
@@ -36,8 +36,8 @@ test("BinaryEditorPane renders a bounded hexadecimal and ascii preview", async (
 
 test("binary editor descriptor is default for explicit binary content and optional for files", () => {
 	const descriptor = binaryEditorDescriptor();
-	assert.equal(descriptor.canOpen({ resource: URI.file("C:\\project\\sample.bin"), contentType: "application/octet-stream" }), EditorPaneMatch.Default);
-	assert.equal(descriptor.canOpen({ resource: URI.file("C:\\project\\sample.bin") }), EditorPaneMatch.Optional);
+	assert.equal(descriptor.canOpen({ resource: URI.file("C:/project/sample.bin"), contentType: "application/octet-stream" }), EditorPaneMatch.Default);
+	assert.equal(descriptor.canOpen({ resource: URI.file("C:/project/sample.bin") }), EditorPaneMatch.Optional);
 	assert.equal(descriptor.canOpen({ resource: URI.parse("untitled:/sample.bin") }), EditorPaneMatch.None);
 });
 
@@ -73,7 +73,7 @@ test('Binary editor rejects oversized files before reading their bytes', async (
 
 test('Binary file editor opens a bounded read-only text preview', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const resource = URI.file('C:\\project\\sample.bin');
+	const resource = URI.file('C:/project/sample.bin');
 	let opened: EditorInput | undefined;
 	let openOptions: EditorOpenOptions | undefined;
 	const dialogs: IDialogService = {
@@ -111,8 +111,8 @@ test('Binary file editor opens a bounded read-only text preview', async () => {
 
 test("Binary diff keeps both byte previews and metadata through working-set serialization", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	const original = { resource: URI.file("C:\\project\\before.bin"), label: "before.bin" };
-	const modified = { resource: URI.file("C:\\project\\after.bin"), label: "after.bin" };
+	const original = { resource: URI.file("C:/project/before.bin"), label: "before.bin" };
+	const modified = { resource: URI.file("C:/project/after.bin"), label: "after.bin" };
 	const input = createBinaryDiffEditorInput(original, modified);
 	const restored = EditorInputSerializers.deserialize(EditorInputSerializers.serialize(input));
 	assert.equal(binaryDiffEditorDescriptor().canOpen(restored), EditorPaneMatch.Default);

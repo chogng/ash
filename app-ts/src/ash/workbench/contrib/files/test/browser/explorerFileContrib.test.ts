@@ -1,3 +1,4 @@
+import { h as createDomElement } from '../../../../../base/browser/dom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -10,14 +11,14 @@ test('Explorer file contributions are created per row and disposed with the row'
 	using registry = new ExplorerFileContributionRegistry();
 	using row = new DisposableStore();
 	const document = new JSDOM('<!doctype html><body></body>').window.document;
-	const container = document.createElement('span');
+	const container = createDomElement(document, 'span');
 	const resources: string[] = [];
 	let registered = 0;
 	let disposed = 0;
 	registry.onDidRegisterDescriptor(() => registered++);
 	registry.register({
 		create: (_instantiationService, host) => {
-			const badge = document.createElement('span');
+			const badge = createDomElement(document, 'span');
 			host.append(badge);
 			return {
 				setResource(resource) {

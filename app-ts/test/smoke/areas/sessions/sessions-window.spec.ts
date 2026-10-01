@@ -435,7 +435,7 @@ test('Code chat mode menu shows the available icons and selection', async ({ app
 	const inputContainer = page.locator('.ash-chat-input-container').filter({ has: modeButton });
 	await inputContainer.evaluate(element => element.style.width = '230px');
 	await expect(modeButton.locator('.ash-chat-input-mode-action-label')).toBeHidden();
-	await expect(modeButton).toHaveAttribute('aria-label', 'Agent');
+	await expect(modeButton).toHaveAttribute('aria-label', 'Mode: Agent');
 	await inputContainer.evaluate(element => element.style.width = '');
 	await expect(modeButton.locator('.ash-chat-input-mode-action-label')).toBeVisible();
 	await modeButton.click();
@@ -1181,10 +1181,10 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-workbench-mode", "code");
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-runtime", "electron");
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-workbench-state", "empty");
-	await sessionsPage.emulateMedia({ colorScheme: "dark" });
+	await application.evaluate(({ nativeTheme }) => { nativeTheme.themeSource = 'dark'; });
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-color-theme", "ash-dark");
 	await expect.poll(() => sessionsPage.locator("#app").evaluate(element => getComputedStyle(element).getPropertyValue("--ash-title-bar-background").trim())).toBe("#1e1e1e");
-	await sessionsPage.emulateMedia({ colorScheme: "light" });
+	await application.evaluate(({ nativeTheme }) => { nativeTheme.themeSource = 'light'; });
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-color-theme", "ash-light");
 	await expect.poll(() => sessionsPage.locator("#app").evaluate(element => getComputedStyle(element).getPropertyValue("--ash-title-bar-background").trim())).toBe("#ffffff");
 	const originalThemeSettings = await sessionsPage.evaluate(async () => {
@@ -1197,7 +1197,7 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	});
 	await expect(sessionsPage.locator('#app')).toHaveAttribute('data-color-theme', 'ash-dark');
 	await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-dark');
-	await sessionsPage.emulateMedia({ colorScheme: 'dark' });
+	await application.evaluate(({ nativeTheme }) => { nativeTheme.themeSource = 'dark'; });
 	await sessionsPage.evaluate(async document => {
 		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
 		const snapshot = await ipc.invoke('ash:configuration:read') as { readonly revision: number };
@@ -1516,7 +1516,11 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 	const library = navigation.getByRole('button', { name: 'Library' });
 	const menu = page.getByRole('button', { name: 'Application menu', exact: true });
 	for (const colorScheme of ['light', 'dark'] as const) {
-		await page.emulateMedia({ colorScheme });
+		if ('windows' in application) {
+			await application.evaluate(({ nativeTheme }, source) => { nativeTheme.themeSource = source; }, colorScheme);
+		} else {
+			await page.emulateMedia({ colorScheme });
+		}
 		await expect(page.locator('#app')).toHaveAttribute('data-color-theme', `ash-${colorScheme}`);
 		await page.mouse.move(400, 180);
 		await expect(toggle).toHaveAttribute('aria-pressed', 'true');

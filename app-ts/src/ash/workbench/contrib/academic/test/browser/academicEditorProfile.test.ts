@@ -8,11 +8,11 @@ import { createDocumentEditorPaneOptions, findEditorProfile, matchEditorProfiles
 
 test("Stanza input matching is supplied by the active Workbench profile", () => {
 	const matcher = { contentTypes: ["application/vnd.ash.document+json"], extensions: [".ash-doc"] };
-	assert.equal(matchDocumentEditor({ resource: URI.file("C:\\project\\paper.ASH-DOC") }, matcher), EditorPaneMatch.Default);
-	assert.equal(matchDocumentEditor({ resource: URI.file("C:\\project\\paper.bin"), contentType: "application/vnd.ash.document+json" }, matcher), EditorPaneMatch.Default);
-	assert.equal(matchDocumentEditor({ resource: URI.file("C:\\project\\paper.bin"), contentType: "text/plain" }, matcher), EditorPaneMatch.None);
-	assert.equal(matchEditorProfiles({ resource: URI.file("C:\\project\\paper.ash-academic") }, [academicProfile]), EditorPaneMatch.Default);
-	assert.equal(findEditorProfile({ resource: URI.file("C:\\project\\paper.txt") }, [academicProfile]), undefined);
+	assert.equal(matchDocumentEditor({ resource: URI.file("C:/project/paper.ASH-DOC") }, matcher), EditorPaneMatch.Default);
+	assert.equal(matchDocumentEditor({ resource: URI.file("C:/project/paper.bin"), contentType: "application/vnd.ash.document+json" }, matcher), EditorPaneMatch.Default);
+	assert.equal(matchDocumentEditor({ resource: URI.file("C:/project/paper.bin"), contentType: "text/plain" }, matcher), EditorPaneMatch.None);
+	assert.equal(matchEditorProfiles({ resource: URI.file("C:/project/paper.ash-academic") }, [academicProfile]), EditorPaneMatch.Default);
+	assert.equal(findEditorProfile({ resource: URI.file("C:/project/paper.txt") }, [academicProfile]), undefined);
 });
 
 test("Stanza profile materialization keeps schema and browser extensions together", () => {

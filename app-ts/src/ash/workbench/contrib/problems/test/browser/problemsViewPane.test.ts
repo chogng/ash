@@ -11,8 +11,8 @@ import { emptyEditorServiceState } from '../../../../../workbench/test/common/te
 test("ProblemsViewPane filters diagnostics and opens the selected range", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
-	const main = URI.file("C:\\project\\src\\main.rs");
-	const library = URI.file("C:\\project\\src\\lib.rs");
+	const main = URI.file("C:/project/src/main.rs");
+	const library = URI.file("C:/project/src/lib.rs");
 	using markerService = new MarkerService();
 	markerService.set("fixture", [
 		marker(main, MarkerSeverity.Error, "cannot find value", 1),

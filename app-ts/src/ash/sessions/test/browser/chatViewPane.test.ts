@@ -263,7 +263,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	let preferencesEditorTarget: string | undefined;
 	using chat = createChatService(api);
 	using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
-	using editorServices = createTestEditorServices();
+	using editorServices = createTestEditorServices(dom.window.document);
 	using preferences: PreferencesService = new BrowserPreferencesService({
 		...emptyEditorServiceState,
 		openEditor: async (_input, _options, target) => { preferencesEditorTarget = target; },
@@ -2777,7 +2777,7 @@ test("Chat Settings toggles Advisor while keeping its selected model", async () 
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IDialogService, recordingDialogService([]));
-	using editorServices = createTestEditorServices();
+	using editorServices = createTestEditorServices(dom.window.document);
 	using preferences = new BrowserPreferencesService({
 		...emptyEditorServiceState,
 		openEditor: async () => undefined,
@@ -2815,7 +2815,7 @@ test('Chat Settings saves a masked provider key through the model API and refres
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IDialogService, recordingDialogService(messages));
-	using editorServices = createTestEditorServices();
+	using editorServices = createTestEditorServices(dom.window.document);
 	using preferences = new BrowserPreferencesService({
 		...emptyEditorServiceState,
 		openEditor: async () => undefined,
@@ -2878,7 +2878,7 @@ test("Advisor transcript groups the call and renders advice as a disclosure", ()
 	const items = chatTranscriptListItems(entries);
 	assert.equal(items.length, 1);
 	assert.equal(items[0]?.type, "advisor");
-	const container = document.createElement("div");
+	const container = h(document, "div");
 	using widget = new ChatListWidget(container);
 	widget.render(items);
 	assert.equal(container.querySelector("summary")?.textContent, "Advisor · test/reviewer");

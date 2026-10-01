@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
+import { URI } from "../../../base/common/uri.js";
 import { extractExternalEditorInputs } from "../../browser/parts/editor/editorDropData.js";
 
 test("external editor drop data preserves URIs and snapshots browser files", async () => {
@@ -21,7 +22,7 @@ test("external editor drop data preserves URIs and snapshots browser files", asy
 test("external editor drop data keeps native file paths loadable", async () => {
 	const dataTransfer = {
 		getData: () => "",
-		files: [{ name: "native.ts", type: "text/typescript", path: "C:\\project\\native.ts", text: async () => "unused" }],
+		files: [{ name: "native.ts", type: "text/typescript", path: URI.file("C:/project/native.ts").fsPath, text: async () => "unused" }],
 	} as unknown as DataTransfer;
 
 	const [input] = await extractExternalEditorInputs(dataTransfer);

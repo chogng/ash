@@ -9,11 +9,11 @@ import { ExplorerItem } from '../../common/explorerModel.js';
 import { ExplorerDataSource, FileSorter } from '../../browser/views/explorerViewer.js';
 
 test('Explorer model groups generated files and keeps directories as separate roots', async () => {
-	const root = URI.file('C:\\project');
+	const root = URI.file('C:/project');
 	const entries = [
-		{ resource: URI.file('C:\\project\\main.ts'), name: 'main.ts', kind: FileKind.File },
-		{ resource: URI.file('C:\\project\\main.js'), name: 'main.js', kind: FileKind.File },
-		{ resource: URI.file('C:\\project\\src'), name: 'src', kind: FileKind.Directory },
+		{ resource: URI.file('C:/project/main.ts'), name: 'main.ts', kind: FileKind.File },
+		{ resource: URI.file('C:/project/main.js'), name: 'main.js', kind: FileKind.File },
+		{ resource: URI.file('C:/project/src'), name: 'src', kind: FileKind.Directory },
 	];
 	const files = { readDirectory: async () => entries } as unknown as IFileService;
 	const registry = new ConfigurationRegistry();

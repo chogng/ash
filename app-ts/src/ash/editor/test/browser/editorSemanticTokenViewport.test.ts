@@ -15,6 +15,7 @@ const { EditorLineWrapping } = await import("../../common/config/editorOptions.j
 
 test("Viewport projects tokens only for virtualized lines and preserves overlapping rows", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using model = new TextModel(lines(12).join("\n"));
 	using store = createLanguageTokenStore(model);
@@ -49,6 +50,7 @@ test("Viewport projects tokens only for virtualized lines and preserves overlapp
 
 test("Same-version token replacement rerenders visible text and model edits clear stale spans", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using model = new TextModel("<tag> value");
 	using store = createLanguageTokenStore(model);
@@ -93,6 +95,7 @@ test("Same-version token replacement rerenders visible text and model edits clea
 
 test("Viewport clips semantic token spans to every soft-wrapped text fragment", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using model = new TextModel("abcdef");
 	using store = createLanguageTokenStore(model);
@@ -135,6 +138,7 @@ test("Viewport clips semantic token spans to every soft-wrapped text fragment", 
 
 test("Viewport rejects cross-model token sources and owns none of their common state", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using model = new TextModel("alpha");
 	using otherModel = new TextModel("other");
@@ -173,6 +177,7 @@ test("Viewport rejects cross-model token sources and owns none of their common s
 
 test("Viewport resolves semantic tokens only for virtualized lines", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using model = new TextModel(lines(1_000).join("\n"));
 	using store = createLanguageTokenStore(model);
@@ -250,7 +255,7 @@ function lineTokenFragments(root: ParentNode): { readonly lineIndex: string | un
 }
 
 function requiredLine(root: ParentNode, lineIndex: number): HTMLElement {
-	return requiredElement(root, `[data-line-index="${lineIndex}"]`);
+	return requiredElement(root, `.view-line[data-line-index="${lineIndex}"]`);
 }
 
 function requiredElement<T extends Element = HTMLElement>(root: ParentNode, selector: string): T {

@@ -10,8 +10,8 @@ import { type BulkEditPreviewModel } from "../../common/bulkEdit.js";
 test("bulk edit preview applies only the selected valid entries", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
-	const first = URI.file("C:\\workspace\\first.ts");
-	const second = URI.file("C:\\workspace\\second.ts");
+	const first = URI.file("C:/workspace/first.ts");
+	const second = URI.file("C:/workspace/second.ts");
 	const edit: LanguageWorkspaceEdit = {
 		entries: [
 			{ kind: "textDocument", resource: first, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "one" }] },
@@ -53,7 +53,7 @@ test("bulk edit preview applies only the selected valid entries", async () => {
 test("disposing a bulk edit preview settles the pending approval", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
-	const resource = URI.file("C:\\workspace\\first.ts");
+	const resource = URI.file("C:/workspace/first.ts");
 	const edit: LanguageWorkspaceEdit = { entries: [{ kind: "textDocument", resource, edits: [] }] };
 	const model: BulkEditPreviewModel = {
 		edit,
@@ -76,8 +76,8 @@ test("disposing a bulk edit preview settles the pending approval", async () => {
 test("bulk edit preview keeps resource operations linked to dependent text edits", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
-	const created = URI.file("C:\\workspace\\created.ts");
-	const independent = URI.file("C:\\workspace\\independent.ts");
+	const created = URI.file("C:/workspace/created.ts");
+	const independent = URI.file("C:/workspace/independent.ts");
 	const edit: LanguageWorkspaceEdit = {
 		entries: [
 			{ kind: "create", resource: created, existing: "error" },

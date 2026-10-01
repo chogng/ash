@@ -4,7 +4,7 @@ import * as paths from './path.js';
 import { isWindows } from './platform.js';
 
 const URI_SCHEME = /^[A-Za-z][A-Za-z\d+.-]*:/;
-const WINDOWS_DRIVE_PATH = /^[A-Za-z]:[\\/]/;
+const WINDOWS_DRIVE_PATH = /^[A-Za-z]:\//;
 
 /** URI components are decoded; `toString()` retains their encoded spelling. */
 export interface UriComponents {
@@ -142,11 +142,11 @@ export class URI {
 			return new URI(url);
 		}
 
-		if (!normalized.startsWith("/") && !WINDOWS_DRIVE_PATH.test(path)) {
+		if (!normalized.startsWith("/") && !WINDOWS_DRIVE_PATH.test(normalized)) {
 			throw new TypeError(`File path must be absolute: ${path}`);
 		}
 
-		const resourcePath = WINDOWS_DRIVE_PATH.test(path)
+		const resourcePath = WINDOWS_DRIVE_PATH.test(normalized)
 			? `/${normalized}`
 			: normalized;
 		const url = new URL("file:///");

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
+import { join } from "node:path";
 import { Emitter } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { type IDebugAdapterProcessReadResult, type IDebugAdapterProcessService } from "../../../../../platform/debug/common/debugAdapterProcessService.js";
@@ -8,52 +9,57 @@ import { createSshRemoteWorkspaceUri } from "../../../../../platform/remote/comm
 import { DebugAdapterSession } from "../../browser/debugAdapterSession.js";
 import { type IDebugBreakpoint, type IDebugConfiguration } from "../../common/debugService.js";
 
+// Local adapters use host filesystem paths; Remote adapters retain their own workspace authority.
+const workspacePath = process.platform === "win32" ? "C:\\workspace" : "/workspace";
+const sourcePath = join(workspacePath, "main.ts");
+
 test("DebugAdapterSession performs DAP configuration, clears breakpoints, and resolves an omitted stopped thread", async () => {
 	using processes = new FakeDebugAdapterProcessService();
 	let breakpoints: readonly IDebugBreakpoint[] = [breakpoint(4)];
 	const updates: Array<{ readonly id: string; readonly verified: boolean; readonly message?: string }> = [];
 	const terminalRequests: unknown[] = [];
-	const session = await DebugAdapterSession.start({ configuration: configuration(), processService: processes, breakpoints: () => breakpoints, workspace: URI.file("C:\\workspace"), runInTerminal: async value => { terminalRequests.push(value); return {}; }, updateBreakpoints: values => updates.push(...values) });
+	const session = await DebugAdapterSession.start({ configuration: configuration(), processService: processes, breakpoints: () => breakpoints, workspace: URI.file(workspacePath), runInTerminal: async value => { terminalRequests.push(value); return {}; }, updateBreakpoints: values => updates.push(...values) });
+	try {
+		assert.equal(session.state, "running");
+		assert.deepEqual(processes.started, { program: join(workspacePath, "adapter"), arguments: ["--stdio", workspacePath] });
+		assert.deepEqual(processes.request("launch").arguments, { program: join(workspacePath, "bin", "app"), cwd: workspacePath });
+		assert.deepEqual(processes.request("setBreakpoints").arguments, { source: { path: sourcePath }, breakpoints: [{ line: 4 }] });
+		assert.deepEqual(processes.request("setExceptionBreakpoints").arguments, { filters: ["uncaught"] });
+		assert.deepEqual(updates, [{ id: "main:4", verified: true }]);
+		assert.deepEqual(session.capabilities, { supportsRestart: true, supportsTerminate: true, exceptionBreakpointFilters: [{ filter: "uncaught", label: "Uncaught Exceptions", default: true }, { filter: "caught", label: "Caught Exceptions", default: false }] });
+		processes.event("output", { output: "adapter ready\n" });
+		await waitFor(() => session.output === "adapter ready\n");
 
-	assert.equal(session.state, "running");
-	assert.deepEqual(processes.started, { program: "C:\\workspace\\adapter", arguments: ["--stdio", "C:\\workspace"] });
-	assert.deepEqual(processes.request("launch").arguments, { program: "C:\\workspace\\bin\\app", cwd: "C:\\workspace" });
-	assert.deepEqual(processes.request("setBreakpoints").arguments, { source: { path: "C:\\workspace\\main.ts" }, breakpoints: [{ line: 4 }] });
-	assert.deepEqual(processes.request("setExceptionBreakpoints").arguments, { filters: ["uncaught"] });
-	assert.deepEqual(updates, [{ id: "main:4", verified: true }]);
-	assert.deepEqual(session.capabilities, { supportsRestart: true, supportsTerminate: true, exceptionBreakpointFilters: [{ filter: "uncaught", label: "Uncaught Exceptions", default: true }, { filter: "caught", label: "Caught Exceptions", default: false }] });
-	processes.event("output", { output: "adapter ready\n" });
-	await waitFor(() => session.output === "adapter ready\n");
+		processes.reverseRequest("runInTerminal", { kind: "integrated", args: ["app"] });
+		await waitFor(() => processes.responses("runInTerminal").length === 1);
+		assert.deepEqual(terminalRequests, [{ kind: "integrated", args: ["app"] }]);
+		assert.equal(processes.responses("runInTerminal")[0]?.success, true);
 
-	processes.reverseRequest("runInTerminal", { kind: "integrated", args: ["app"] });
-	await waitFor(() => processes.responses("runInTerminal").length === 1);
-	assert.deepEqual(terminalRequests, [{ kind: "integrated", args: ["app"] }]);
-	assert.equal(processes.responses("runInTerminal")[0]?.success, true);
+		breakpoints = [];
+		await session.syncBreakpoints();
+		assert.deepEqual(processes.requests("setBreakpoints").at(-1)?.arguments, { source: { path: sourcePath }, breakpoints: [] });
 
-	breakpoints = [];
-	await session.syncBreakpoints();
-	assert.deepEqual(processes.requests("setBreakpoints").at(-1)?.arguments, { source: { path: "C:\\workspace\\main.ts" }, breakpoints: [] });
+		processes.event("stopped", { reason: "breakpoint", allThreadsStopped: true });
+		await waitFor(() => session.state === "stopped");
+		const frames = await session.stackTrace();
+		assert.equal(processes.requests("threads").length, 1);
+		assert.deepEqual(frames.map(frame => ({ ...frame, source: frame.source ? { ...frame.source, resource: frame.source.resource?.toString() } : undefined })), [{ id: 11, name: "main", source: { name: "main.ts", path: sourcePath, resource: process.platform === "win32" ? "file:///C:/workspace/main.ts" : "file:///workspace/main.ts" }, lineNumber: 4, columnNumber: 1 }]);
 
-	processes.event("stopped", { reason: "breakpoint", allThreadsStopped: true });
-	await waitFor(() => session.state === "stopped");
-	const frames = await session.stackTrace();
-	assert.equal(processes.requests("threads").length, 1);
-	assert.deepEqual(frames.map(frame => ({ ...frame, source: frame.source ? { ...frame.source, resource: frame.source.resource?.toString() } : undefined })), [{ id: 11, name: "main", source: { name: "main.ts", path: "C:\\workspace\\main.ts", resource: "file:///C:/workspace/main.ts" }, lineNumber: 4, columnNumber: 1 }]);
-
-	assert.deepEqual(await session.threads(), [{ id: 7, name: "main" }, { id: 8, name: "worker" }]);
-	session.selectThread(8);
-	await session.stackTrace();
-	assert.equal((processes.requests("stackTrace").at(-1)?.arguments as Record<string, unknown>).threadId, 8);
-	assert.deepEqual(await session.scopes(11), [{ name: "Locals", variablesReference: 20, expensive: false }]);
-	assert.deepEqual(await session.variables(20), [{ name: "answer", value: "42", variablesReference: 0, type: "number" }]);
-	assert.deepEqual(await session.evaluate("answer", 11, "watch"), { result: "42", variablesReference: 0, type: "number" });
-	assert.deepEqual(await session.source({ name: "generated.ts", sourceReference: 33 }), { content: "const generated = true;", mimeType: "text/typescript" });
-	await session.setExceptionBreakpoints(["caught"]);
-	assert.deepEqual(processes.requests("setExceptionBreakpoints").at(-1)?.arguments, { filters: ["caught"] });
-	await session.restart();
-	assert.equal(processes.requests("restart").length, 1);
-
-	await session.disconnect();
+		assert.deepEqual(await session.threads(), [{ id: 7, name: "main" }, { id: 8, name: "worker" }]);
+		session.selectThread(8);
+		await session.stackTrace();
+		assert.equal((processes.requests("stackTrace").at(-1)?.arguments as Record<string, unknown>).threadId, 8);
+		assert.deepEqual(await session.scopes(11), [{ name: "Locals", variablesReference: 20, expensive: false }]);
+		assert.deepEqual(await session.variables(20), [{ name: "answer", value: "42", variablesReference: 0, type: "number" }]);
+		assert.deepEqual(await session.evaluate("answer", 11, "watch"), { result: "42", variablesReference: 0, type: "number" });
+		assert.deepEqual(await session.source({ name: "generated.ts", sourceReference: 33 }), { content: "const generated = true;", mimeType: "text/typescript" });
+		await session.setExceptionBreakpoints(["caught"]);
+		assert.deepEqual(processes.requests("setExceptionBreakpoints").at(-1)?.arguments, { filters: ["caught"] });
+		await session.restart();
+		assert.equal(processes.requests("restart").length, 1);
+	} finally {
+		await session.disconnect();
+	}
 	assert.equal(processes.closed, true);
 });
 
@@ -63,17 +69,18 @@ test("DebugAdapterSession keeps Remote adapter paths on the Remote Workspace aut
 	const configurationValue: IDebugConfiguration = { ...configuration(), adapter: { program: "${workspaceFolder}/adapter", arguments: ["--stdio"] }, arguments: { program: "${workspaceFolder}/bin/app", cwd: "${workspaceFolder}" } };
 	const remoteBreakpoint: IDebugBreakpoint = { id: "remote:4", resource: createSshRemoteWorkspaceUri("work-server", "/srv/project/src/main file.ts"), lineNumber: 4, enabled: true, verified: false };
 	const session = await DebugAdapterSession.start({ configuration: configurationValue, processService: processes, breakpoints: () => [remoteBreakpoint], workspace });
-
-	assert.deepEqual(processes.started, { program: "/srv/project/adapter", arguments: ["--stdio"] });
-	assert.deepEqual(processes.request("launch").arguments, { program: "/srv/project/bin/app", cwd: "/srv/project" });
-	assert.deepEqual(processes.request("setBreakpoints").arguments, { source: { path: "/srv/project/src/main file.ts" }, breakpoints: [{ line: 4 }] });
-	processes.event("stopped", { reason: "breakpoint", allThreadsStopped: true });
-	await waitFor(() => session.state === "stopped");
-	const frame = (await session.stackTrace())[0];
-	assert.equal(frame?.source?.path, "/srv/project/src/main file.ts");
-	assert.equal(frame?.source?.resource?.toString(), "ash-remote://ssh+work-server/srv/project/src/main%20file.ts");
-
-	await session.disconnect();
+	try {
+		assert.deepEqual(processes.started, { program: "/srv/project/adapter", arguments: ["--stdio"] });
+		assert.deepEqual(processes.request("launch").arguments, { program: "/srv/project/bin/app", cwd: "/srv/project" });
+		assert.deepEqual(processes.request("setBreakpoints").arguments, { source: { path: "/srv/project/src/main file.ts" }, breakpoints: [{ line: 4 }] });
+		processes.event("stopped", { reason: "breakpoint", allThreadsStopped: true });
+		await waitFor(() => session.state === "stopped");
+		const frame = (await session.stackTrace())[0];
+		assert.equal(frame?.source?.path, "/srv/project/src/main file.ts");
+		assert.equal(frame?.source?.resource?.toString(), "ash-remote://ssh+work-server/srv/project/src/main%20file.ts");
+	} finally {
+		await session.disconnect();
+	}
 });
 
 class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
@@ -86,7 +93,7 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 	closed = false;
 	readonly onConnectionState = this.connectionEmitter.event;
 
-	constructor(private readonly stackFramePath = "C:\\workspace\\main.ts") {}
+	constructor(private readonly stackFramePath = sourcePath) {}
 
 	async start(options: unknown): Promise<string> { this.started = options; return "debug-1"; }
 
@@ -127,11 +134,11 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 }
 
 function configuration(): IDebugConfiguration {
-	return { id: "launch:0:test", name: "Test", type: "example", request: "launch", adapter: { program: "${workspaceFolder}\\adapter", arguments: ["--stdio", "${workspaceFolder}"] }, arguments: { program: "${workspaceFolder}\\bin\\app", cwd: "${workspaceFolder}" } };
+	return { id: "launch:0:test", name: "Test", type: "example", request: "launch", adapter: { program: join("${workspaceFolder}", "adapter"), arguments: ["--stdio", "${workspaceFolder}"] }, arguments: { program: join("${workspaceFolder}", "bin", "app"), cwd: "${workspaceFolder}" } };
 }
 
 function breakpoint(lineNumber: number): IDebugBreakpoint {
-	return { id: `main:${lineNumber}`, resource: URI.file("C:\\workspace\\main.ts"), lineNumber, enabled: true, verified: false };
+	return { id: `main:${lineNumber}`, resource: URI.file(sourcePath), lineNumber, enabled: true, verified: false };
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {

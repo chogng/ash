@@ -5,7 +5,7 @@ import createDOMPurify, {
 } from './dompurify/dompurify.js';
 import type { TrustedHTML } from 'trusted-types/lib/index.js';
 import { Schemas } from '../common/network.js';
-import { reset } from './dom.js';
+import { fragment as createDomFragment, text as createDomText, reset } from './dom.js';
 
 /** Safe markup that does not accept user input. */
 export const basicMarkupHtmlTags = Object.freeze([
@@ -88,9 +88,9 @@ export function convertTagToPlaintext(node: Node): DocumentFragment | undefined 
 	if (!ownerDocument) {
 		return undefined;
 	}
-	const fragment = ownerDocument.createDocumentFragment();
+	const fragment = createDomFragment(ownerDocument);
 	if (node.nodeType === 8) {
-		fragment.append(ownerDocument.createTextNode(`<!--${node.textContent ?? ''}-->`));
+		fragment.append(createDomText(ownerDocument, `<!--${node.textContent ?? ''}-->`));
 		return fragment;
 	}
 	if (node.nodeType !== 1) {
@@ -99,12 +99,12 @@ export function convertTagToPlaintext(node: Node): DocumentFragment | undefined 
 	const element = node as Element;
 	const tagName = element.localName.toLowerCase();
 	const attributes = Array.from(element.attributes, attribute => ` ${attribute.name}="${attribute.value}"`).join('');
-	fragment.append(ownerDocument.createTextNode(`<${tagName}${attributes}>`));
+	fragment.append(createDomText(ownerDocument, `<${tagName}${attributes}>`));
 	while (element.firstChild) {
 		fragment.append(element.firstChild);
 	}
 	if (!selfClosingTags.has(tagName)) {
-		fragment.append(ownerDocument.createTextNode(`</${tagName}>`));
+		fragment.append(createDomText(ownerDocument, `</${tagName}>`));
 	}
 	return fragment;
 }

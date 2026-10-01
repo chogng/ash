@@ -1,3 +1,4 @@
+import { h as createDomElement } from '../../../base/browser/dom.js';
 import './testEditorDom.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -67,7 +68,7 @@ test('editors finish text rendering before measuring widgets and writing widget 
 		for (const [name, view] of [['first', first], ['second', second]] as const) {
 			view.addContentWidget({
 				getId: () => name,
-				getDomNode: () => dom.window.document.createElement('div'),
+				getDomNode: () => createDomElement(dom.window.document, 'div'),
 				getPosition: () => ({ position: new Position(1, 1), preference: [ContentWidgetPositionPreference.EXACT] }),
 				beforeRender: () => {
 					phases.push(`measure ${name}`);
@@ -116,7 +117,7 @@ test('clean editor parts stay untouched and immediate rendering cancels queued w
 	try {
 		view.addContentWidget({
 			getId: () => 'widget',
-			getDomNode: () => dom.window.document.createElement('div'),
+			getDomNode: () => createDomElement(dom.window.document, 'div'),
 			getPosition: () => ({ position: new Position(1, 1), preference: [ContentWidgetPositionPreference.EXACT] }),
 			beforeRender: () => { measurements += 1; return { width: 10, height: 10 }; },
 		});
@@ -170,7 +171,7 @@ test('one window frame renders all queued editors and later window frames do not
 	const measurements = [0, 0];
 	try {
 		for (const [index, view] of [first, second].entries()) {
-			const node = view.domNode.domNode.ownerDocument.createElement('div');
+			const node = createDomElement(view.domNode.domNode.ownerDocument, 'div');
 			view.addContentWidget({
 				getId: () => 'widget',
 				getDomNode: () => node,
@@ -311,7 +312,7 @@ test('rendered widths update scroll layout before widget measurements and shrink
 		let measuredScrollRange = 0;
 		view.addContentWidget({
 			getId: () => 'width-observer',
-			getDomNode: () => dom.window.document.createElement('div'),
+			getDomNode: () => createDomElement(dom.window.document, 'div'),
 			getPosition: () => ({ position: new Position(1, 1), preference: [ContentWidgetPositionPreference.EXACT] }),
 			beforeRender: () => { measuredScrollRange = view.viewportLayout.maximumScrollPosition.left; return { width: 10, height: 10 }; },
 		});
@@ -369,7 +370,7 @@ test('glyph lanes reuse scans for cursor movement and resize and track margin ch
 		view.render(true, false);
 		assert.equal(scans, 3);
 		let lane = GlyphMarginLane.Right;
-		const widget = { getId: () => 'glyph-widget', getDomNode: () => dom.window.document.createElement('div'), getPosition: () => ({ range: new Range(1, 1, 1, 1), lane, zIndex: 0 }) };
+		const widget = { getId: () => 'glyph-widget', getDomNode: () => createDomElement(dom.window.document, 'div'), getPosition: () => ({ range: new Range(1, 1, 1, 1), lane, zIndex: 0 }) };
 		view.addGlyphMarginWidget(widget);
 		view.render(true, false);
 		lane = GlyphMarginLane.Left;

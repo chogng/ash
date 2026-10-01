@@ -63,28 +63,33 @@ test.describe('Sessions from an Electron Workbench', () => {
 	});
 });
 
-browserTest('Browser Sessions Code shows Files and Changes and retains the selected view across pages and reload', async ({ page }, testInfo) => {
-	browserTest.skip(testInfo.project.name !== 'browser-ui');
-	const failures: string[] = [];
-	page.on('pageerror', error => failures.push(error.message));
-	await page.goto('/browser/sessions/sessions-code.html');
-	const navigation = page.locator('.ash-sessions-activity-content');
-	const auxiliary = page.locator('[data-part="auxiliarybar"]');
-	await expect(auxiliary).toBeHidden();
-	await expect(page.getByText('Session details', { exact: true })).toHaveCount(0);
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
-	await expect(auxiliary.getByRole('tab', { name: 'Files', exact: true })).toHaveAttribute('aria-selected', 'true');
-	await auxiliary.getByRole('tab', { name: 'Changes', exact: true }).click();
-	await expect(auxiliary.getByRole('status')).toHaveText('Changes appear after the agent edits files.');
-	await expect(auxiliary.getByRole('button', { name: 'Review all changes', exact: true })).toBeDisabled();
-	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
-	await expect(auxiliary).toBeHidden();
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
-	await expect(auxiliary.getByRole('tab', { name: 'Changes', exact: true })).toHaveAttribute('aria-selected', 'true');
-	await page.setViewportSize({ width: 1_000, height: 760 });
-	await expect(auxiliary).toBeVisible();
-	await page.reload();
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
-	await expect(auxiliary.getByRole('tab', { name: 'Changes', exact: true })).toHaveAttribute('aria-selected', 'true');
-	expect(failures).toEqual([]);
+browserTest.describe('Browser Sessions Code', () => {
+	browserTest.beforeEach(({}, testInfo) => {
+		browserTest.skip(testInfo.project.name !== 'browser-ui', 'This fixture runs in the browser-ui project.');
+	});
+
+	browserTest('Browser Sessions Code shows Files and Changes and retains the selected view across pages and reload', async ({ page }) => {
+		const failures: string[] = [];
+		page.on('pageerror', error => failures.push(error.message));
+		await page.goto('/browser/sessions/sessions-code.html');
+		const navigation = page.locator('.ash-sessions-activity-content');
+		const auxiliary = page.locator('[data-part="auxiliarybar"]');
+		await expect(auxiliary).toBeHidden();
+		await expect(page.getByText('Session details', { exact: true })).toHaveCount(0);
+		await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+		await expect(auxiliary.getByRole('tab', { name: 'Files', exact: true })).toHaveAttribute('aria-selected', 'true');
+		await auxiliary.getByRole('tab', { name: 'Changes', exact: true }).click();
+		await expect(auxiliary.getByRole('status')).toHaveText('Changes appear after the agent edits files.');
+		await expect(auxiliary.getByRole('button', { name: 'Review all changes', exact: true })).toBeDisabled();
+		await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
+		await expect(auxiliary).toBeHidden();
+		await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+		await expect(auxiliary.getByRole('tab', { name: 'Changes', exact: true })).toHaveAttribute('aria-selected', 'true');
+		await page.setViewportSize({ width: 1_000, height: 760 });
+		await expect(auxiliary).toBeVisible();
+		await page.reload();
+		await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+		await expect(auxiliary.getByRole('tab', { name: 'Changes', exact: true })).toHaveAttribute('aria-selected', 'true');
+		expect(failures).toEqual([]);
+	});
 });

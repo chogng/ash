@@ -85,7 +85,7 @@ function textEdit(name: string, text: string): LanguageWorkspaceEdit {
 	return {
 		entries: [{
 			kind: "textDocument",
-			resource: URI.file(`C:\\workspace\\${name}`),
+			resource: URI.file(`C:/workspace/${name}`),
 			edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text }],
 		}],
 	};

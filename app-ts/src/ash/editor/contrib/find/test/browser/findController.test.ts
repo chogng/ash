@@ -30,6 +30,18 @@ suiteTeardown(() => {
 	browserEnvironment.window.close();
 });
 
+test('find controls and top spacing belong to the editor host document', () => {
+	using fixture = createFixture('alpha', new Position(1, 1), new Position(1, 1), { addExtraSpaceOnTop: true });
+	startFind(fixture);
+	const container = fixture.editor.getContainerDomNode();
+	const zone = requiredElement<HTMLElement>(container, '.stanza-editor-find-view-zone');
+	assert.equal(zone.ownerDocument, fixture.dom.window.document);
+	assert.equal(fixture.findElement.ownerDocument, fixture.dom.window.document);
+	assert.ok([...fixture.findElement.querySelectorAll('button')].every(button => button.ownerDocument === fixture.dom.window.document));
+	fixture.find.closeFindWidget();
+	assert.equal(container.querySelector('.stanza-editor-find-view-zone'), null);
+});
+
 test("find opens, highlights matches, navigates, and restores focus", () => {
 	const fixture = createFixture("alpha beta alpha", new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1));
 	using resources = fixture;

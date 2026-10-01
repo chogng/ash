@@ -1,6 +1,6 @@
 import './findWidget.css';
 import '../../../../base/browser/ui/sash/sash.css';
-import { addDisposableListener, h, isHTMLElement, isNode, stopEvent } from '../../../../base/browser/dom.js';
+import { text as createDomText, addDisposableListener, h, isHTMLElement, isNode, stopEvent } from '../../../../base/browser/dom.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { type IHoverLifecycleOptions } from '../../../../base/browser/ui/hover/hover.js';
 import { Sash, SashState } from '../../../../base/browser/ui/sash/sash.js';
@@ -58,8 +58,8 @@ export class FindWidgetViewZone implements IViewZone {
 	public readonly suppressMouseDown = false;
 	public readonly domNode: HTMLElement;
 	public heightInPx = 33;
-	constructor(public readonly afterLineNumber: number, ownerDocument: Document = document) {
-		this.domNode = h(ownerDocument, 'div');
+	constructor(container: HTMLElement, public readonly afterLineNumber: number) {
+		this.domNode = h(container.ownerDocument, 'div');
 		this.domNode.className = 'stanza-editor-find-view-zone';
 	}
 }
@@ -76,9 +76,9 @@ export interface ISimpleButtonOpts {
 /** An HTML button with the focus and enabled controls used by the find widget. */
 export class SimpleButton extends Disposable {
 	public readonly domNode: HTMLButtonElement;
-	constructor(options: ISimpleButtonOpts, hoverService: IHoverService, ownerDocument: Document = document) {
+	constructor(container: HTMLElement, options: ISimpleButtonOpts, hoverService: IHoverService) {
 		super();
-		this.domNode = h(ownerDocument, 'button');
+		this.domNode = h(container.ownerDocument, 'button');
 		this.domNode.type = 'button';
 		this.domNode.className = `stanza-editor-find-button${options.className ? ` ${options.className}` : ''}`;
 		this.domNode.setAttribute('aria-label', options.label);
@@ -158,7 +158,6 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 		const findRow = h(ownerDocument, 'div');
 		findRow.className = 'stanza-editor-find-row';
 		this.replaceToggle = this.button(
-			ownerDocument,
 			localize('label.toggleReplace', 'Toggle replace'),
 			'›',
 			() => this.state.change({ isReplaceRevealed: !this.state.isReplaceRevealed }, false),
@@ -176,13 +175,13 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 		this.resultLabel = h(ownerDocument, 'span');
 		this.resultLabel.className = 'stanza-editor-find-result';
 		this.resultLabel.setAttribute('aria-live', 'polite');
-		this.matchCaseButton = this.toggle(ownerDocument, localize('label.matchCase', 'Match case'), 'Aa', () => this.state.change({ matchCase: !this.state.matchCase }, true));
-		this.wholeWordButton = this.toggle(ownerDocument, localize('label.wholeWord', 'Match whole word'), 'W', () => this.state.change({ wholeWord: !this.state.wholeWord }, true));
-		this.regexButton = this.toggle(ownerDocument, localize('label.regex', 'Use regular expression'), '.*', () => this.state.change({ isRegex: !this.state.isRegex }, true));
-		this.scopeButton = this.toggle(ownerDocument, localize('label.findInSelection', 'Find in selection'), '', () => this.controller.toggleSearchScope(), findSelectionIcon);
-		this.previousButton = this.button(ownerDocument, localize('label.previousMatch', 'Previous match'), '', () => this.controller.moveToPrevMatch(), findPreviousMatchIcon);
-		this.nextButton = this.button(ownerDocument, localize('label.nextMatch', 'Next match'), '', () => this.controller.moveToNextMatch(), findNextMatchIcon);
-		const close = this.button(ownerDocument, localize('label.closeFind', 'Close find'), '×', () => this.controller.closeFindWidget());
+		this.matchCaseButton = this.toggle(localize('label.matchCase', 'Match case'), 'Aa', () => this.state.change({ matchCase: !this.state.matchCase }, true));
+		this.wholeWordButton = this.toggle(localize('label.wholeWord', 'Match whole word'), 'W', () => this.state.change({ wholeWord: !this.state.wholeWord }, true));
+		this.regexButton = this.toggle(localize('label.regex', 'Use regular expression'), '.*', () => this.state.change({ isRegex: !this.state.isRegex }, true));
+		this.scopeButton = this.toggle(localize('label.findInSelection', 'Find in selection'), '', () => this.controller.toggleSearchScope(), findSelectionIcon);
+		this.previousButton = this.button(localize('label.previousMatch', 'Previous match'), '', () => this.controller.moveToPrevMatch(), findPreviousMatchIcon);
+		this.nextButton = this.button(localize('label.nextMatch', 'Next match'), '', () => this.controller.moveToNextMatch(), findNextMatchIcon);
+		const close = this.button(localize('label.closeFind', 'Close find'), '×', () => this.controller.closeFindWidget());
 		findRow.append(
 			this.replaceToggle.domNode, this.findControl.domNode, this.resultLabel,
 			this.matchCaseButton.domNode, this.wholeWordButton.domNode, this.regexButton.domNode,
@@ -204,15 +203,15 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 		this.replaceControl.domNode.classList.add('stanza-editor-find-input-box');
 		this.replaceInput.classList.add('stanza-editor-find-input');
 		this.preserveCaseButton = this.toggle(
-			ownerDocument, localize('label.preserveCase', 'Preserve case'), 'AB',
+			localize('label.preserveCase', 'Preserve case'), 'AB',
 			() => this.state.change({ preserveCase: !this.state.preserveCase }, false),
 		);
 		this.replaceButton = this.button(
-			ownerDocument, localize('label.replaceOne', 'Replace current match'),
+			localize('label.replaceOne', 'Replace current match'),
 			localize('label.replaceButton', 'Replace'), () => this.controller.replace(), findReplaceIcon,
 		);
 		this.replaceAllButton = this.button(
-			ownerDocument, localize('label.replaceAll', 'Replace all matches'),
+			localize('label.replaceAll', 'Replace all matches'),
 			localize('label.replaceAllButton', 'All'), () => this.controller.replaceAll(), findReplaceAllIcon,
 		);
 		this.replaceRow.append(spacer, this.replaceControl.domNode, this.preserveCaseButton.domNode, this.replaceButton.domNode, this.replaceAllButton.domNode);
@@ -295,18 +294,18 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 	}
 	public updateSearchScopeAvailability(): void { this.scopeButton.setEnabled(this.state.searchScope !== null || this.controller.isSearchScopeAvailable()); }
 
-	private button(ownerDocument: Document, label: string, text: string, onTrigger: () => void, icon?: Icon): SimpleButton {
-		const button = this._register(new SimpleButton({
+	private button(label: string, text: string, onTrigger: () => void, icon?: Icon): SimpleButton {
+		const button = this._register(new SimpleButton(this.root, {
 			label,
 			onTrigger,
 			icon,
 			hoverLifecycleOptions: { groupId: 'find-widget' },
-		}, this.hoverService, ownerDocument));
-		if (text) button.domNode.append(ownerDocument.createTextNode(text));
+		}, this.hoverService));
+		if (text) button.domNode.append(createDomText(this.root.ownerDocument, text));
 		return button;
 	}
-	private toggle(ownerDocument: Document, label: string, text: string, onTrigger: () => void, icon?: Icon): SimpleButton {
-		const button = this.button(ownerDocument, label, text, onTrigger, icon);
+	private toggle(label: string, text: string, onTrigger: () => void, icon?: Icon): SimpleButton {
+		const button = this.button(label, text, onTrigger, icon);
 		button.domNode.setAttribute('aria-pressed', 'false');
 		return button;
 	}
@@ -379,7 +378,7 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 	private updateViewZone(): void {
 		const shouldShow = this.state.isRevealed && this.editor.getOption(EditorOption.find).addExtraSpaceOnTop;
 		if (shouldShow && !this.viewZoneId) {
-			this.editor.changeViewZones(accessor => { this.viewZoneId = accessor.addZone(new FindWidgetViewZone(0, this.root.ownerDocument)); });
+			this.editor.changeViewZones(accessor => { this.viewZoneId = accessor.addZone(new FindWidgetViewZone(this.editor.getContainerDomNode(), 0)); });
 		} else if (!shouldShow && this.viewZoneId) {
 			const id = this.viewZoneId;
 			this.editor.changeViewZones(accessor => accessor.removeZone(id));

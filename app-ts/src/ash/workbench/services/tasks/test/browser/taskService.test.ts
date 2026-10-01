@@ -10,7 +10,7 @@ import { TaskService } from "../../browser/taskService.js";
 import { OutputService } from "../../../output/browser/outputService.js";
 
 test("TaskService discovers tasks, writes one terminal command, and tracks its exit", async () => {
-	const root = URI.file("C:\\project");
+	const root = URI.file("C:/project");
 	const files = new FakeFileService(root, {
 		".vscode/tasks.json": '{"version":"2.0.0","tasks":[{"label":"Lint","command":"cargo lint","group":"build"}]}',
 		"package.json": '{"scripts":{"test":"node --test"}}',
@@ -51,7 +51,7 @@ test("TaskService discovers tasks, writes one terminal command, and tracks its e
 });
 
 test("TaskService atomically owns dynamic providers and merges their tasks on refresh", async () => {
-	const root = URI.file("C:\\project");
+	const root = URI.file("C:/project");
 	const files = new FakeFileService(root, { ".vscode/tasks.json": '{"version":"2.0.0","tasks":[{"label":"Build","command":"build","group":"build"}]}' });
 	const workspace: IWorkspaceContextService = {
 		onDidChangeWorkspace: Event.None,
@@ -82,7 +82,7 @@ test("TaskService atomically owns dynamic providers and merges their tasks on re
 });
 
 test("TaskService retains the last good task set when a provider refresh fails", async () => {
-	const root = URI.file("C:\\project");
+	const root = URI.file("C:/project");
 	const workspace: IWorkspaceContextService = {
 		onDidChangeWorkspace: Event.None,
 		getWorkspace: () => ({ id: "workspace", folders: [{ id: "workspace", uri: root, name: "project", index: 0 }] }),

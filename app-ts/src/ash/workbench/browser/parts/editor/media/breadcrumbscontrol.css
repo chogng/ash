@@ -7,7 +7,7 @@
 	overflow: hidden;
 	padding: 0 var(--ash-spacing-size100);
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-fontSize-label1);
+	font-size: var(--ash-font-size-label1);
 	white-space: nowrap;
 }
 

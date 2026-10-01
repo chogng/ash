@@ -34,7 +34,7 @@ export class ChatInputTipPresenter extends Disposable {
 			return;
 		}
 		if (this.part.value) return;
-		const part = new ChatTipContentPart(this.options.container.ownerDocument, tip, () => {
+		const part = new ChatTipContentPart(this.options.container, tip, () => {
 			this.options.focusInput();
 			this.tips.dismissTip();
 		});

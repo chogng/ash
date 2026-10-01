@@ -1,3 +1,4 @@
+import { h as createDomElement } from '../../../../../base/browser/dom.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import { IResourceIconRenderer } from '../../../../browser/labels.js';
 import { Event } from '../../../../../base/common/event.js';
@@ -51,7 +52,7 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		using themes = services.createInstance(WorkbenchThemeService, browser.window.document.body);
 		themes.initialize();
 		const render = (name: string): HTMLElement => {
-			const icon = browser.window.document.createElement('span');
+			const icon = createDomElement(browser.window.document, 'span');
 			themes.renderFileIcon(URI.file('C:/project/' + name), icon);
 			return icon;
 		};
@@ -73,7 +74,7 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		const label = labels.create(browser.window.document.body);
 		label.setFile(URI.file('C:/project/source.custom'));
 		services.registerInstance(IResourceIconRenderer, themes);
-		using editorServices = createTestEditorServices(configuration, services);
+		using editorServices = createTestEditorServices(browser.window.document, configuration, services);
 		const group = new EditorGroupModel();
 		const input = { resource: URI.file('C:/project/main.ts') };
 		group.openEditor(input);
@@ -139,6 +140,7 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		assert.equal(themeStateChanges, 2);
 		modelLabel.dispose();
 		title.dispose();
+		editorServices.dispose();
 		assert.equal(labels.get(1), undefined);
 		themes.dispose();
 		assert.equal(browser.window.document.head.querySelector('style'), null);

@@ -12,7 +12,7 @@ import { WINDOW_OPEN_FILES_CHANNEL, validateWindowFilesRequest, validateWindowFi
 
 test('window restoration selection respects the setting, explicit target, and update restart', () => {
 	using service = new WindowsMainService<TestWindow>(() => [], async () => undefined);
-	const folder = { workspace: getSingleFolderWorkspaceIdentifier(URI.file('C:\\project')) };
+	const folder = { workspace: getSingleFolderWorkspaceIdentifier(URI.file('C:/project')) };
 	const empty = { workspace: createEmptyWorkspaceIdentifier() };
 	const session = { windows: [folder, empty], active: 1 };
 	assert.deepEqual(service.selectWindowsToRestore(session, undefined, false, false), { windows: [folder, empty], active: empty });

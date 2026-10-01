@@ -7,7 +7,7 @@
   max-height: min(420px, calc(100vh - var(--ash-spacing-size240)));
   flex-direction: column;
   overflow: visible;
-  font-size: var(--ash-fontSize-label1);
+  font-size: var(--ash-font-size-label1);
 }
 
 .ash-chat-model-picker-empty {
@@ -23,13 +23,13 @@
 
 .ash-chat-model-picker-empty-message {
   color: var(--ash-foreground);
-  font-size: var(--ash-fontSize-body1);
-  font-weight: var(--ash-fontWeight-semiBold);
+  font-size: var(--ash-font-size-body1);
+  font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .ash-chat-model-picker-empty-guidance {
   color: var(--ash-description-foreground);
-  font-size: var(--ash-fontSize-label2);
+  font-size: var(--ash-font-size-label2);
 }
 
 .ash-chat-model-picker-empty > .ash-button {
@@ -46,7 +46,7 @@
   height: var(--ash-spacing-size320);
   padding: 0 var(--ash-spacing-size100);
   border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-  border-radius: var(--ash-cornerRadius-small);
+  border-radius: var(--ash-corner-radius-small);
   color: var(--ash-input-foreground);
   background: var(--ash-input-background);
 }
@@ -81,13 +81,13 @@
 
 .ash-chat-model-configuration-menu {
   min-width: 160px;
-  font-size: var(--ash-fontSize-label1);
+  font-size: var(--ash-font-size-label1);
 }
 
 .ash-chat-model-configuration-heading {
   padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
   color: var(--ash-description-foreground);
-  font-size: var(--ash-fontSize-label2);
+  font-size: var(--ash-font-size-label2);
 }
 
 .ash-chat-model-picker .ash-quick-pick-row-content {
@@ -124,7 +124,7 @@
   min-height: var(--ash-spacing-size320);
   padding: 0 var(--ash-spacing-size80);
   border: 0;
-  border-radius: var(--ash-cornerRadius-small);
+  border-radius: var(--ash-corner-radius-small);
   color: var(--ash-foreground);
   background: transparent;
   text-align: left;

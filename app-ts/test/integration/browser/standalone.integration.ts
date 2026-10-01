@@ -690,7 +690,7 @@ window.ashStandaloneIntegration = {
 	},
 	colorizePreview: async () => {
 		const modelsBefore = stanza.editor.getModels().length;
-		const element = document.createElement('pre');
+		const element = h(document, 'pre');
 		element.id = 'colorized-preview';
 		element.setAttribute('data-lang', callerModel.getLanguageId());
 		element.textContent = 'alpha\t<img src=x onerror=alert(1)>\n/* hello */';
@@ -719,7 +719,7 @@ window.ashStandaloneIntegration = {
 	createEmptyEditor: () => {
 		listener.dispose();
 		emptyResources.clear();
-		const container = document.createElement('div');
+		const container = h(document, 'div');
 		container.id = 'empty';
 		document.body.append(container);
 		emptyResources.add(toDisposable(() => container.remove()));
@@ -1761,8 +1761,8 @@ window.ashStandaloneIntegration = {
 	},
 	runEditorActivity: async () => {
 		const editors = StandaloneServices.get(ICodeEditorService);
-		const outside = document.createElement('button');
-		const container = document.createElement('div');
+		const outside = h(document, 'button');
+		const container = h(document, 'div');
 		document.body.append(outside, container);
 		callerEditor.focus();
 		ownedEditor.focus();
@@ -1843,7 +1843,7 @@ window.ashStandaloneIntegration = {
 	releaseStandaloneCommands: () => standaloneCommands.clear(),
 	runHistoryCommands: async useAlias => {
 		const services = StandaloneServices.get(IInstantiationService);
-		const outside = document.createElement('button');
+		const outside = h(document, 'button');
 		document.body.append(outside);
 		callerEditor.setValue('alpha');
 		ownedEditor.setValue('bravo');
@@ -1895,7 +1895,7 @@ window.ashStandaloneIntegration = {
 	runSelectAllCommand: async () => {
 		const services = StandaloneServices.get(IInstantiationService);
 		const command = CommandsRegistry.getCommand('editor.action.selectAll')!;
-		const outside = document.createElement('button');
+		const outside = h(document, 'button');
 		document.body.append(outside);
 		callerEditor.setValue('one\ntwo');
 		ownedEditor.setValue('other');
@@ -1929,7 +1929,7 @@ window.ashStandaloneIntegration = {
 	runFocusRouting: async () => {
 		callerEditor.setValue('alpha');
 		ownedEditor.setValue('bravo');
-		const outside = document.createElement('button');
+		const outside = h(document, 'button');
 		outside.textContent = 'Editor action';
 		document.body.append(outside);
 		outside.focus();
@@ -2018,7 +2018,7 @@ window.ashStandaloneIntegration = {
 		ownedEditor.focus();
 		callerEditor.focus();
 		callerEditor.updateOptions({ readOnly: target === 'readonly' });
-		const outside = document.createElement('button');
+		const outside = h(document, 'button');
 		document.body.append(outside);
 		const clipboard = StandaloneServices.get(IClipboardService);
 		const readText = clipboard.readText;
@@ -2054,7 +2054,7 @@ window.ashStandaloneIntegration = {
 		callerEditor.setValue('alpha');
 		callerEditor.setSelection(new stanza.Selection(1, 1, 1, 6));
 		callerEditor.focus();
-		const outside = document.createElement('button');
+		const outside = h(document, 'button');
 		document.body.append(outside);
 		if (fromOutside) outside.focus();
 		const clipboard = callerEditor.invokeWithinContext(accessor => accessor.get(IClipboardService));
@@ -2420,7 +2420,7 @@ window.ashStandaloneIntegration = {
 		TokenizationRegistry.setColorMap([Color.fromHex('#000000'), Color.fromHex(color), Color.fromHex('#ffffff')]);
 	},
 	exerciseRenderOwnership: () => {
-		const host = document.createElement('div');
+		const host = h(document, 'div');
 		host.style.cssText = 'position:relative;width:300px;height:160px';
 		document.body.append(host);
 		const instance = stanza.editor.create(host, {

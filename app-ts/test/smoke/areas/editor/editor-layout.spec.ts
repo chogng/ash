@@ -162,7 +162,7 @@ test.describe('startup layout defaults', () => {
 		const page = workbench.page;
 		await page.getByRole('tab', { name: 'Git', exact: true }).click();
 		await expect(page.locator('[data-view-container-id="ash.git"]')).toHaveClass(/ash-scm-viewlet/u);
-		await expect(page.locator('.ash-scm-status')).toHaveText('Open a folder to use Git.');
+		await expect(page.locator('.ash-scm-status')).toHaveText('Open a folder to use source control.');
 		await expect(page.locator('.ash-scm-change')).toHaveCount(0);
 		const sidebar = page.locator('[data-part="sidebar"]');
 		const sash = sidebar.locator('xpath=../../..').locator(':scope > .ash-sash').first();

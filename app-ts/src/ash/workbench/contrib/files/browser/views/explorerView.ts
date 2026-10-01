@@ -84,7 +84,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		this.editorService = editorService;
 		this.explorerService = explorerService;
 		const renderer = this._register(new FilesRenderer(
-			container.ownerDocument,
+			this.contentElement,
 			workspaceContextService,
 			resourceIconRenderer,
 			hoverService,

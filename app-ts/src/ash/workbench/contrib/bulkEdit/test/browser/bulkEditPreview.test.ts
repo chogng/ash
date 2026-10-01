@@ -16,8 +16,8 @@ import { type BulkEditPreviewModel } from "../../common/bulkEdit.js";
 test("bulk edit preview follows ordered create and text operations without mutating files", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
-	const existing = URI.file("C:\\workspace\\existing.ts");
-	const created = URI.file("C:\\workspace\\created.ts");
+	const existing = URI.file("C:/workspace/existing.ts");
+	const created = URI.file("C:/workspace/created.ts");
 	const files = new PreviewFileService([[existing, "alpha"]]);
 	const models = new PreviewTextModelService([[existing, "alpha"]], [existing]);
 	const edit: LanguageWorkspaceEdit = {

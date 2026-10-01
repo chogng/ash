@@ -1,4 +1,4 @@
-import type { Locator, Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import { Editors } from "./editors.js";
 import { QuickAccess } from "./quickaccess.js";
 
@@ -17,6 +17,7 @@ export class Workbench {
 	async waitForReady(): Promise<void> {
 		await this.page.waitForFunction(() => document.readyState === "complete");
 		await this.element.waitFor({ state: "visible" });
+		await expect(this.element).toHaveAttribute('aria-busy', 'false');
 		await this.editors.waitForReady();
 		await this.waitForUiIdle();
 	}

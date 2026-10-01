@@ -9,6 +9,13 @@ from scripts.cargo import main, prepare_test_executable
 
 
 class CodeModeHostTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # Windows platform discovery invokes subprocess.run too; keep the Cargo
+        # process mock isolated from host detection, which is tested separately.
+        self.enterContext(
+            patch("scripts.cargo.default_target", return_value="x86_64-pc-windows-msvc")
+        )
+
     @patch.dict("scripts.cargo.os.environ", {}, clear=True)
     @patch("scripts.cargo.subprocess.run")
     @patch("scripts.cargo.prepare_test_executable", return_value="/runtime/app-server")

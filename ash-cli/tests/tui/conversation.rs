@@ -183,6 +183,9 @@ fn actual_tui_sandbox_approves_and_declines_real_file_tool_calls() {
     approve.type_text("请创建 approved-by-tui.txt");
     approve.enter();
     approve.wait_for_screen("Approval required");
+    // Approval can arrive before or after the transient startup policy hint expires.
+    approve.wait_for_screen_to_omit("/policy to change permissions");
+    approve.wait_for_stable_screen("> Approve once");
     approve.assert_snapshot("real/03-approval/00-approve-request");
     approve.down();
     approve.up();
@@ -234,6 +237,8 @@ fn actual_tui_sandbox_approves_and_declines_real_file_tool_calls() {
     decline.submit("请尝试创建 declined-by-tui.txt");
     decline.wait_for_screen("Approval required");
     decline.down();
+    decline.wait_for_screen_to_omit("/policy to change permissions");
+    decline.wait_for_stable_screen("> Decline");
     decline.assert_snapshot("real/03-approval/02-decline-selected");
     decline.enter();
     decline_gate.wait_until_reached();

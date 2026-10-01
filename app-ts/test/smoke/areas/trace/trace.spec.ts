@@ -6,8 +6,9 @@ import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { developmentAshPackagePath } from '../../../../../build/app_ts/runtimeStore.ts';
 import { expect, test } from '../../../automation/test.js';
+import { expectHelpDialog } from '../../../automation/helpDialog.js';
 
-test('developer trace viewer validates connection settings and restores focus after keyboard help', async ({ workbench }) => {
+test('developer trace viewer validates connection settings and restores focus after keyboard help', async ({ application, workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+Shift+P');
 	await page.getByPlaceholder('Type the name of a command to run').fill('Developer: Open trace viewer');
@@ -20,9 +21,7 @@ test('developer trace viewer validates connection settings and restores focus af
 	await expect(viewer.getByRole('button', { name: 'Export filtered OTLP' })).toBeDisabled();
 	const filter = viewer.getByLabel('Filter by name, outcome or trace ID', { exact: true });
 	await filter.focus();
-	await page.keyboard.press('Alt+F1');
-	await expect(page.getByRole('dialog', { name: 'Trace viewer help' })).toBeVisible();
-	await page.keyboard.press('Escape');
+	await expectHelpDialog(application, page, 'Trace viewer help', () => page.keyboard.press('Alt+F1'));
 	await expect(filter).toBeFocused();
 	await page.getByRole('button', { name: 'Close Trace viewer', exact: true }).click();
 	await expect(viewer).toHaveCount(0);

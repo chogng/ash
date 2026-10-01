@@ -1,3 +1,4 @@
+import { h as createDomElement, } from '../../../../base/browser/dom.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
@@ -38,7 +39,7 @@ export class DecorationsService extends Disposable implements IDecorationsServic
 
 	constructor(document: Document, @ILogService private readonly logService: ILogService) {
 		super();
-		this.style = document.createElement('style');
+		this.style = createDomElement(document, 'style');
 		this.style.dataset.ashDecorations = '';
 		document.head.append(this.style);
 		this._register(toDisposable(() => this.style.remove()));

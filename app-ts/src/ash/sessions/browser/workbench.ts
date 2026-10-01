@@ -392,15 +392,15 @@ export class Workbench extends Disposable {
 		let activitybar: ActivityBarPart;
 		const selectActivityPage = (page: SessionsActivityPage): void => {
 			activitybar.selectPage(page);
-			sidebar.setEmptyPage(page === 'colab' || page === 'library');
-			if (page === 'chat' || page === 'code') {
-				view.selectPage(page);
-				sessionsPart?.setPage(page);
-			}
-			else sessionsPart?.setPage('empty');
-			layout.setPartAvailable('sidebar', page === 'chat' || page === 'code');
-			layout.setPartAvailable('auxiliarybar', page === 'code');
-			layout.setPartAvailable('editor', page === 'code');
+			const updateLayout = (): void => {
+				sidebar.setEmptyPage(page === 'colab' || page === 'library');
+				if (page === 'chat' || page === 'code') view.selectPage(page);
+				layout.setPartAvailable('sidebar', page === 'chat' || page === 'code');
+				layout.setPartAvailable('auxiliarybar', page === 'code');
+				layout.setPartAvailable('editor', page === 'code');
+			};
+			if (sessionsPart) sessionsPart.setPage(page === 'chat' || page === 'code' ? page : 'empty', updateLayout);
+			else updateLayout();
 		};
 		this.showChat = () => selectActivityPage('chat');
 		activitybar = this._register(services.createInstance(ActivityBarPart, this.domNode, {

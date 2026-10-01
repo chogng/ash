@@ -1,6 +1,6 @@
 import './iconSelectBox.css';
 import { localize } from '../../../../nls.js';
-import { addDisposableListener, h, type IDimension } from '../../dom.js';
+import { fragment as createDomFragment, addDisposableListener, h, type IDimension } from '../../dom.js';
 import { Emitter } from '../../../common/event.js';
 import { Disposable, toDisposable } from '../../../common/lifecycle.js';
 import type { ThemeIcon } from '../../../common/themables.js';
@@ -37,8 +37,9 @@ export class IconSelectBox extends Disposable {
 	private numberOfElementsPerRow = 1;
 	private selectedIconId: string | undefined;
 
-	constructor(options: IIconSelectBoxOptions, ownerDocument: Document = document) {
+	constructor(container: HTMLElement, options: IIconSelectBoxOptions) {
 		super();
+		const ownerDocument = container.ownerDocument;
 		this.icons = options.icons;
 		this.domNode = h(ownerDocument, 'div');
 		this.domNode.className = 'ash-icon-select-box';
@@ -125,7 +126,7 @@ export class IconSelectBox extends Disposable {
 		const needle = query.trim().toLowerCase();
 		const icons = this.icons.filter(icon => icon.id.toLowerCase().includes(needle));
 		const ownerDocument = this.domNode.ownerDocument;
-		const fragment = ownerDocument.createDocumentFragment();
+		const fragment = createDomFragment(ownerDocument);
 		this.renderedIcons = icons.map((icon, index) => {
 			const element = h(ownerDocument, 'div');
 			element.className = 'ash-icon-select-item';

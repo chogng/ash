@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { h } from '../../../../base/browser/dom.js';
+import { setIconResolver } from '../../../../base/browser/ui/lxicons/lxicon.js';
+import { getIconDefinition } from '../../../../platform/theme/common/iconRegistry.js';
 import { type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Event } from '../../../../base/common/event.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
@@ -37,6 +39,7 @@ test('MultiDiffEditorWidget presents ordered file sections with one outer viewpo
 	const services = createCodeEditorServices(resources);
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	setIconResolver(dom.window.document, icon => getIconDefinition(icon));
 	const container = requiredElement<HTMLElement>(dom.window.document, 'main');
 	using firstOriginal = new TextModel('old\nsame');
 	using firstModified = new TextModel('new\nsame');

@@ -15,12 +15,12 @@ test('Save As passes the suggested file name to the owning desktop window', asyn
 	services.registerInstance(INativeHostService, {
 		async saveFile(options) {
 			calls.push(options);
-			return 'C:\\Users\\test\\report.txt';
+			return URI.file('C:/Users/test/report.txt').fsPath;
 		},
 	} as INativeHostApi);
 	const service = services.createInstance(FileDialogService);
 
-	assert.deepEqual(await service.pickFileToSave(URI.file('/report.txt')), URI.file('C:\\Users\\test\\report.txt'));
+	assert.deepEqual(await service.pickFileToSave(URI.file('/report.txt')), URI.file('C:/Users/test/report.txt'));
 	assert.deepEqual(calls, [{ defaultName: 'report.txt' }]);
 });
 
@@ -39,11 +39,11 @@ test('desktop Open File returns the path selected by its window', async () => {
 	using services = new InstantiationService();
 	services.registerInstance(IDialogService, new DialogService());
 	services.registerInstance(INativeHostService, {
-		async pickFile() { return ['C:\\Users\\test\\paper.md']; },
+		async pickFile() { return [URI.file('C:/Users/test/paper.md').fsPath]; },
 	} as unknown as INativeHostApi);
 	const service = services.createInstance(FileDialogService);
 
-	assert.deepEqual(await service.showOpenDialog({ canSelectFiles: true, canSelectFolders: false }), [URI.file('C:\\Users\\test\\paper.md')]);
+	assert.deepEqual(await service.showOpenDialog({ canSelectFiles: true, canSelectFolders: false }), [URI.file('C:/Users/test/paper.md')]);
 });
 
 test('desktop open and save dialogs pass VS Code file options through to the window', async () => {
@@ -51,16 +51,16 @@ test('desktop open and save dialogs pass VS Code file options through to the win
 	using services = new InstantiationService();
 	services.registerInstance(IDialogService, new DialogService());
 	services.registerInstance(INativeHostService, {
-		async pickFile(options: unknown) { calls.push(options); return ['C:\\work\\one.md', 'C:\\work\\two.md']; },
-		async saveFile(options: unknown) { calls.push(options); return 'C:\\work\\report.md'; },
+		async pickFile(options: unknown) { calls.push(options); return [URI.file('C:/work/one.md').fsPath, URI.file('C:/work/two.md').fsPath]; },
+		async saveFile(options: unknown) { calls.push(options); return URI.file('C:/work/report.md').fsPath; },
 	} as unknown as INativeHostApi);
 	const service = services.createInstance(FileDialogService);
 	const filters = [{ name: 'Markdown', extensions: ['md'] }];
-	assert.deepEqual(await service.showOpenDialog({ title: 'Choose', openLabel: 'Import', defaultUri: URI.file('C:\\work'), canSelectMany: true, filters }), [URI.file('C:\\work\\one.md'), URI.file('C:\\work\\two.md')]);
-	assert.deepEqual(await service.showSaveDialog({ title: 'Export', saveLabel: 'Write', defaultUri: URI.file('C:\\work\\report.md'), filters }), URI.file('C:\\work\\report.md'));
+	assert.deepEqual(await service.showOpenDialog({ title: 'Choose', openLabel: 'Import', defaultUri: URI.file('C:/work'), canSelectMany: true, filters }), [URI.file('C:/work/one.md'), URI.file('C:/work/two.md')]);
+	assert.deepEqual(await service.showSaveDialog({ title: 'Export', saveLabel: 'Write', defaultUri: URI.file('C:/work/report.md'), filters }), URI.file('C:/work/report.md'));
 	assert.deepEqual(calls, [
-		{ canSelectFiles: true, canSelectFolders: false, canSelectMany: true, defaultPath: 'C:\\work', title: 'Choose', buttonLabel: 'Import', filters },
-		{ defaultPath: 'C:\\work\\report.md', title: 'Export', buttonLabel: 'Write', filters },
+		{ canSelectFiles: true, canSelectFolders: false, canSelectMany: true, defaultPath: URI.file('C:/work').fsPath, title: 'Choose', buttonLabel: 'Import', filters },
+		{ defaultPath: URI.file('C:/work/report.md').fsPath, title: 'Export', buttonLabel: 'Write', filters },
 	]);
 	await assert.rejects(service.showOpenDialog({ canSelectFiles: false, canSelectFolders: false }), /must allow files or folders/);
 	await assert.rejects(service.showSaveDialog({ availableFileSystems: ['other'] }), /file scheme only/);

@@ -1,4 +1,5 @@
 import { expect, test } from '../../../automation/test.js';
+import { expectHelpDialog } from '../../../automation/helpDialog.js';
 
 test('Marketplace view tab uses the extensions icon', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
@@ -13,7 +14,7 @@ test('Marketplace view tab uses the extensions icon', async ({ target, workbench
 	await expect(marketplaceTab).toHaveAttribute('aria-selected', 'true');
 });
 
-test('Marketplace slash commands open their Workbench owners without sending a chat message', async ({ target, workbench }) => {
+test('Marketplace slash commands open their Workbench owners without sending a chat message', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
@@ -35,9 +36,7 @@ test('Marketplace slash commands open their Workbench owners without sending a c
 	await expect(page.locator('.ash-chat-item-userMessage')).toHaveCount(0);
 	const lsp = page.locator('.ash-language-servers');
 	await lsp.getByLabel('Language ID', { exact: true }).focus();
-	await page.keyboard.press('Alt+F1');
-	await expect(page.getByRole('dialog', { name: 'Language servers help' })).toBeVisible();
-	await page.keyboard.press('Escape');
+	await expectHelpDialog(application, page, 'Language servers help', () => page.keyboard.press('Alt+F1'));
 	await expect(lsp.getByLabel('Language ID', { exact: true })).toBeFocused();
 	if (target.appServerMode === 'required') {
 		await expect(lsp.getByRole('button', { name: 'Save server configuration', exact: true })).toBeEnabled();

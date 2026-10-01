@@ -192,14 +192,15 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 	await expect(page.locator('.ash-settings-page h3')).toHaveText('Minimap');
 	await expect(page.locator('[data-configuration-key="editor.minimap.enabled"]')).toBeVisible();
 	if (target.kind === 'electron') {
-		await page.locator('[data-settings-category-id="general"]').click();
+		await page.locator('[data-settings-group-id="agents"]').click();
+		await page.locator('[data-settings-category-id="models"]').click();
 		await expect(rootTitle).toHaveCount(0);
 		await expect(rootDescription).toHaveCount(0);
-		await page.locator('[data-settings-target-id="general.group.dictation"]').click();
-		await expect(page.locator('.ash-settings-page h3')).toHaveText('Voice input');
+		await expect(page.locator('.ash-settings-page h3')).toHaveText('Models');
 		await expect(page.locator('.ash-settings-content-tree > .is-settings-root > .ash-settings-tree-group-title')).toHaveCount(0);
 		await expect(page.locator('.ash-settings-content-tree > .is-settings-root > .ash-settings-tree-group-description')).toHaveCount(0);
-		const voiceInput = page.getByRole('main', { name: 'Voice input' });
+		const voiceInput = page.locator('[data-settings-tree-group-id="models.group.dictation"]');
+		await expect(voiceInput.getByRole('heading', { name: 'Voice input', exact: true })).toBeVisible();
 		await expect(voiceInput.getByRole('combobox', { name: 'Dictation service' })).toBeVisible();
 		await expect(voiceInput.getByRole('textbox', { name: 'Local dictation model' })).toBeVisible();
 	}
@@ -470,15 +471,18 @@ test.describe('without an open workspace', () => {
 		expect(await appearanceRow.getAttribute('aria-expanded')).toBeNull();
 		await expect(page.locator('[data-settings-target-id="appearance.group.theme"]')).toHaveCount(0);
 		await page.locator('[data-settings-category-id="appearance"]').click();
-		const appearanceGroup = page.locator('.ash-settings-content-group:not(.is-settings-root)');
-		await expect(appearanceGroup.locator('.ash-settings-tree-group-title')).toBeHidden();
-		await expect(appearanceGroup.locator('.ash-settings-tree-group-description')).toBeHidden();
+		const appearanceGroup = page.locator('[data-settings-tree-group-id="appearance.group.theme"]');
+		await expect(appearanceGroup.getByRole('heading', { name: 'Color theme', exact: true })).toBeVisible();
+		await expect(appearanceGroup.locator('.ash-settings-tree-group-description')).toBeVisible();
+		const tipsGroup = page.locator('[data-settings-tree-group-id="appearance.group.editor-tips"]');
+		await expect(tipsGroup.getByRole('heading', { name: 'Editor tips', exact: true })).toBeVisible();
+		await expect(tipsGroup.locator('[data-configuration-key="workbench.tips.enabled"]')).toBeVisible();
 		await expect(appearanceGroup.locator('.ash-settings-card')).toHaveCSS('border-radius', '8px');
 		await expect(page.locator('[data-configuration-key="workbench.colorTheme"]')).toBeVisible();
 		await expect(page.locator('[data-configuration-key="workbench.colorTheme"]').getByRole('combobox')).toBeVisible();
-		const appearanceSettings = appearanceGroup.locator('.ash-configuration-setting');
-		await expect(appearanceSettings).toHaveCount(3);
-		for (const setting of await appearanceSettings.all()) {
+		for (const key of ['workbench.colorTheme', 'workbench.iconTheme', 'workbench.productIconTheme']) {
+			const setting = appearanceGroup.locator(`[data-settings-item-id="${key}"]`);
+			await expect(setting).toBeVisible();
 			await expect(setting.locator('.ash-settings-indicators')).toHaveCSS('display', 'none');
 			await expect(setting).toHaveCSS('height', '68px');
 		}
@@ -538,8 +542,9 @@ test.describe('without an open workspace', () => {
 		const page = workbench.page;
 		await page.getByRole('button', { name: 'Manage' }).click();
 		await page.getByRole('menu').last().getByRole('menuitem', { name: 'Check for Updates...' }).click();
-		await expect(page.getByText(/Could not check for updates\.|Ash .* is up to date\.|Ash .* is available\./)).toBeVisible({ timeout: 45_000 });
-		await expect(page.getByText('Checking for updates...')).toHaveCount(0);
+		const notifications = page.getByRole('region', { name: 'Notifications', exact: true });
+		await expect(notifications.getByText(/Could not check for updates\.|Ash .* is up to date\.|Ash .* is available\./)).toBeVisible({ timeout: 45_000 });
+		await expect(notifications.getByText('Checking for updates...')).toHaveCount(0);
 	});
 
 	test('editor More Actions tooltip clears the window controls', async ({ workbench }) => {

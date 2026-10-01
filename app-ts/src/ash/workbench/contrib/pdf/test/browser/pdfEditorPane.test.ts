@@ -104,7 +104,7 @@ test("PDF editor observes cancellation before rendering pages", async () => {
 });
 
 test("workspace PDF loader reads only through the binary file contract", async () => {
-	const resource = URI.file("C:\\project\\paper.pdf");
+	const resource = URI.file("C:/project/paper.pdf");
 	const loader = new WorkspacePdfDocumentLoader({
 		onDidChangeFiles: () => ({ dispose() {}, [Symbol.dispose]() {} }),
 		stat: async () => ({ resource, kind: FileKind.File, sizeBytes: 4, readonly: true, modifiedAtMillis: undefined }),
@@ -124,7 +124,7 @@ test("workspace PDF loader reads only through the binary file contract", async (
 });
 
 function input(name: string): EditorInput {
-	return { resource: URI.file(`C:\\project\\${name}`), label: name };
+	return { resource: URI.file(`C:/project/${name}`), label: name };
 }
 
 function actionButton(dom: JSDOM, id: string): HTMLButtonElement {

@@ -50,7 +50,7 @@ test('Pinned editor action preserves its target and keyboard focus across state 
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
 		const unpinned: EditorInput[] = [];
-		using services = createTestEditorServices();
+		using services = createTestEditorServices(dom.window.document);
 		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
 		using control = services.createInstance(MultiEditorTabsControl, dom.window.document.body, {
@@ -85,7 +85,7 @@ test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion 
 	const previews: EditorInput[] = [];
 	const keptEditors: EditorInput[] = [];
 	let dragging = false;
-	using services = createTestEditorServices();
+	using services = createTestEditorServices(dom.window.document);
 	const control = services.createInstance(MultiEditorTabsControl,dom.window.document.body, {
 		activate: () => undefined,
 		preview: (input) => previews.push(input),
@@ -137,7 +137,7 @@ test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion 
 test("MultiEditorTabsControl forwards external resource drops to the target tab", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const drops: Array<{ target: EditorInput | undefined; position: "before" | "after" }> = [];
-	using services = createTestEditorServices();
+	using services = createTestEditorServices(dom.window.document);
 	const control = services.createInstance(MultiEditorTabsControl,dom.window.document.body, {
 		activate: () => undefined,
 		preview: () => undefined,
@@ -197,7 +197,7 @@ test("EditorTitleControl switches tab modes and breadcrumbs from configuration",
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const configuration = new InMemoryConfigurationService();
 	const group = new EditorGroupModel();
-	using services = createTestEditorServices(configuration);
+	using services = createTestEditorServices(dom.window.document, configuration);
 	const control = services.createInstance(EditorTitleControl, dom.window.document.body, inertDelegate, group, undefined, configuration, undefined, undefined, undefined, undefined, undefined);
 	const first = input("folder/first");
 	const second = input("folder/second");
@@ -259,7 +259,7 @@ test("EditorTitleControl follows nested document symbols and opens outline selec
 		revealRange: (range: Range) => { revealed = range; },
 	} as unknown as IEditorPane;
 	const group = new EditorGroupModel();
-	using services = createTestEditorServices(configuration);
+	using services = createTestEditorServices(dom.window.document, configuration);
 	const control = services.createInstance(EditorTitleControl, dom.window.document.body, inertDelegate, group, undefined, configuration, undefined, undefined, undefined, features,
 		(_symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => { chosen = selected; reveal(selected.selectionRange); });
 	const resource = input("folder/symbols.ts");

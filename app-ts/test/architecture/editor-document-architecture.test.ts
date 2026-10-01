@@ -143,9 +143,12 @@ test("document editing keeps lines and orthogonal rich semantics in one TextMode
 	assert.match(documentPane, /new CollaborationContribution/u);
 	assert.doesNotMatch(collaborationWidget, /createInvite|listMembers|accessToken|RoomRole/u);
 	assert.doesNotMatch(collaborationWidget, /AppServerDocumentCollaborationService|endpoint|bearerToken/u);
-	assert.match(collaborationRouter, /ownerWindow\.prompt/u);
+	assert.match(collaborationRouter, /@IDialogService/u);
+	assert.match(collaborationRouter, /this\.dialogs\.input\(/u);
+	assert.match(collaborationRouter, /type: 'password'/u);
+	assert.doesNotMatch(collaborationRouter, /ownerWindow\.prompt|window\.prompt/u);
 	assert.match(collaborationRouter, /RemoteDocumentCollaborationService/u);
-	assert.match(documentPane, /createDocumentCollaborationService\(ownerWindow\)/u);
+	assert.match(documentPane, /createDocumentCollaborationService\(\)/u);
 	assert.doesNotMatch(editor, /Session/u);
 	assert.doesNotMatch(editorAll, /academicEditor\.contribution|workbench/u);
 });

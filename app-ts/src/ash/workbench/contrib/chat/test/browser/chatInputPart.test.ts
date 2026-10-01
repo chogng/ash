@@ -1,3 +1,4 @@
+import { h as createDomElement } from '../../../../../base/browser/dom.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -26,7 +27,7 @@ const sharedNotifications = new NotificationService();
 suiteTeardown(() => sharedNotifications.dispose());
 
 function inputPart(notifications: NotificationService, dictation?: IDictationService, mode: ChatInputState['mode'] = 'agent', delegate: Partial<ChatInputDelegate> = {}): ChatInputPart {
-	const container = document.createElement('div');
+	const container = createDomElement(document, 'div');
 	document.body.append(container);
 	let state: ChatInputState = { mode, queuedMessages: 0, phase: 'loading', canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
 	const part = new ChatInputPart(container, { ...delegate, selectMode: selected => { state = { ...state, mode: selected }; part.render(state); } } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, dictation);

@@ -50,9 +50,9 @@ test("untitled service creates stable virtual editor identities", () => {
 	assert.equal(second.initialText, "draft");
 	assert.equal(second.languageId, "typescript");
 	assert.equal(service.get(first.resource), first);
-	assert.equal(service.get(URI.file("C:\\project\\main.ts")), undefined);
+	assert.equal(service.get(URI.file("C:/project/main.ts")), undefined);
 	assert.equal(service.isUntitled(first.resource), true);
-	assert.equal(service.isUntitled(URI.file("C:\\project\\main.ts")), false);
+	assert.equal(service.isUntitled(URI.file("C:/project/main.ts")), false);
 });
 
 test("untitled service publishes display-label changes without changing resource identity", () => {
@@ -72,7 +72,7 @@ test("untitled service publishes display-label changes without changing resource
 	assert.equal(editor.label, "Scratch");
 	assert.equal(service.get(editor.resource)?.label, "Scratch");
 	assert.deepEqual(changes, ["input:Scratch", "Scratch"]);
-	assert.equal(service.rename(URI.file("C:\\project\\main.ts"), "Other"), undefined);
+	assert.equal(service.rename(URI.file("C:/project/main.ts"), "Other"), undefined);
 });
 
 test("restored untitled resources are reused and reserve their document numbers", () => {

@@ -1,5 +1,5 @@
 import './iPadShowKeyboard.css';
-import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { h as createDomElement, addDisposableListener } from '../../../../base/browser/dom.js';
 import { isIOS } from '../../../../base/browser/browser.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
@@ -43,9 +43,9 @@ class ShowKeyboardWidget extends Disposable implements IOverlayWidget {
 	constructor(private readonly editor: ICodeEditor) {
 		super();
 		const document = editor.getContainerDomNode().ownerDocument;
-		this.domNode = document.createElement('div');
+		this.domNode = createDomElement(document, 'div');
 		this.domNode.className = 'stanza-editor-show-keyboard';
-		const input = document.createElement('textarea');
+		const input = createDomElement(document, 'textarea');
 		input.setAttribute('role', 'button');
 		input.setAttribute('aria-label', localize('iPadShowKeyboard.label', 'Show Keyboard'));
 		input.spellcheck = false;

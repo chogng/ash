@@ -13,7 +13,7 @@ test("working-copy backup tracker persists the latest dirty content and deletes 
 	const backups = new MemoryBackups();
 	const ownerWindow = new TestWindow();
 	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, ownerWindow as unknown as Window);
-	using copy = new TestWorkingCopy(URI.file("C:\\project\\main.ts"));
+	using copy = new TestWorkingCopy(URI.file("C:/project/main.ts"));
 	using registration = workingCopies.register(copy);
 
 	copy.change("first");
@@ -61,7 +61,7 @@ test('working-copy backup tracker keeps a dirty copy when another copy of the re
 	using backups = new MemoryBackups();
 	const ownerWindow = new TestWindow();
 	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, ownerWindow as unknown as Window);
-	const resource = URI.file('C:\\project\\main.ts');
+	const resource = URI.file('C:/project/main.ts');
 	using dirty = new TestWorkingCopy(resource);
 	using clean = new TestWorkingCopy(resource);
 	using dirtyRegistration = workingCopies.register(dirty);
@@ -83,7 +83,7 @@ test('working-copy backup tracker retains a crash backup while a clean editor op
 	using backups = new MemoryBackups();
 	const ownerWindow = new TestWindow();
 	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, ownerWindow as unknown as Window);
-	const resource = URI.file('C:\\project\\recovered.ts');
+	const resource = URI.file('C:/project/recovered.ts');
 	await backups.store({ resource, kind: 'text', content: 'recovered', updatedAt: Date.now() });
 	using copy = new TestWorkingCopy(resource);
 	using registration = workingCopies.register(copy);

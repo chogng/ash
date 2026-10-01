@@ -13,7 +13,7 @@ test('language identity, configuration, and feature providers have separate owne
 	using languageFeaturesService = new LanguageFeaturesService();
 	using model = new TextModel('', { languageId: 'demo' });
 
-	assert.equal(languageService.resolveLanguageId({ resource: URI.file('C:\\project\\source.ts') }), undefined);
+	assert.equal(languageService.resolveLanguageId({ resource: URI.file('C:/project/source.ts') }), undefined);
 	assert.equal(languageConfigurationService.getLanguageConfiguration('typescript').comments?.lineCommentToken, undefined);
 	assert.deepEqual(languageFeaturesService.hoverProvider.ordered(model), []);
 
@@ -21,7 +21,7 @@ test('language identity, configuration, and feature providers have separate owne
 	using configuration = languageConfigurationService.register('demo', { comments: { lineComment: '//' } });
 	using hover = languageFeaturesService.hoverProvider.register('demo', { provideHover: () => undefined });
 
-	assert.equal(languageService.resolveLanguageId({ resource: URI.file('C:\\project\\source.demo') }), 'demo');
+	assert.equal(languageService.resolveLanguageId({ resource: URI.file('C:/project/source.demo') }), 'demo');
 	assert.equal(languageConfigurationService.getLanguageConfiguration('demo').comments?.lineCommentToken, '//');
 	assert.equal(languageFeaturesService.hoverProvider.ordered(model).length, 1);
 });

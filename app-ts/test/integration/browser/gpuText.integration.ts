@@ -1,3 +1,4 @@
+import { h as createDomElement } from '../../../src/ash/base/browser/dom.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import * as stanzaApi from '../../../src/ash/editor/editor.main.js';
 import { GlyphRasterizer } from '../../../src/ash/editor/browser/gpu/raster/glyphRasterizer.js';
@@ -115,7 +116,7 @@ window.ashGpuTextIntegration = {
 	},
 	mountDomSemanticEditor: () => {
 		window.ashGpuTextIntegration.prepareSemanticText();
-		const domContainer = document.createElement('div');
+		const domContainer = createDomElement(document, 'div');
 		domContainer.id = 'dom-semantic-editor';
 		Object.assign(domContainer.style, { position: 'absolute', inset: '0', width: '800px', height: '300px' });
 		document.body.append(domContainer);

@@ -44,7 +44,7 @@ test('Save File command saves the active editor', async () => {
 		const { IEditorPart } = await import('../../../../browser/parts/editor/editorPart.js');
 		await import('../../browser/fileActions.contribution.js');
 		let saves = 0;
-		const services = new InstantiationService();
+		using services = new InstantiationService();
 		services.registerInstance(IEditorPart, {
 			saveActiveEditor: async () => { saves += 1; },
 		} as unknown as EditorPartContract);
@@ -71,7 +71,7 @@ test('Open File command opens every file selected by the dialog', async () => {
 		await import('../../browser/fileActions.contribution.js');
 		const resources = [URI.file('/work/one.md'), URI.file('/work/two.md')];
 		const opened: URI[] = [];
-		const services = new InstantiationService();
+		using services = new InstantiationService();
 		services.registerInstance(IFileDialogService, {
 			pickFileToSave: async () => { throw new Error('Unexpected Save As'); },
 			showSaveConfirm: async () => { throw new Error('Unexpected save confirmation'); },
@@ -98,11 +98,11 @@ test('New File command creates and opens a file in the active workspace folder',
 	Object.defineProperty(globalThis, 'document', { configurable: true, value: browser.window.document });
 	try {
 		await import('../../browser/fileActions.contribution.js');
-		const root = URI.file('C:\\project');
+		const root = URI.file('C:/project');
 		const created: URI[] = [];
 		const opened: URI[] = [];
 		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
-		const services = new InstantiationService();
+		using services = new InstantiationService();
 		using explorerService = createExplorerService(workspace);
 		services.registerInstance(IWorkspaceContextService, workspace);
 		services.registerInstance(IExplorerService, explorerService);
@@ -130,17 +130,17 @@ test('New File command creates and opens a file in the active workspace folder',
 
 		await commands.executeCommand(NEW_FILE_COMMAND_ID);
 
-		assert.deepEqual(created.map(resource => resource.fsPath), ['C:\\project\\new %中.txt']);
+		assert.deepEqual(created.map(resource => resource.fsPath), [URI.file('C:/project/new %中.txt').fsPath]);
 		assert.deepEqual(opened.map(resource => resource.toString()), created.map(resource => resource.toString()));
 
 		using viewRegistration = explorerService.registerView({
-			getContext: () => [new ExplorerItem(URI.file('C:\\project\\src'), 'src', FileKind.Directory)],
+			getContext: () => [new ExplorerItem(URI.file('C:/project/src'), 'src', FileKind.Directory)],
 			getAccessibleContent: () => '',
 			selectResource: async () => {},
 			focus() {},
 		});
 		await commands.executeCommand(NEW_FILE_COMMAND_ID);
-		assert.equal(created.at(-1)?.fsPath, 'C:\\project\\src\\new %中.txt');
+		assert.equal(created.at(-1)?.fsPath, URI.file('C:/project/src/new %中.txt').fsPath);
 	} finally {
 		if (previousDocument) Object.defineProperty(globalThis, 'document', previousDocument);
 		else Reflect.deleteProperty(globalThis, 'document');
@@ -416,11 +416,11 @@ test('Copy Path commands copy the active file and its workspace-relative path', 
 	Object.defineProperty(globalThis, 'document', { configurable: true, value: browser.window.document });
 	try {
 		await import('../../browser/fileActions.contribution.js');
-		const root = URI.file('C:\\project');
-		const file = URI.file('C:\\project\\src\\main.ts');
+		const root = URI.file('C:/project');
+		const file = URI.file('C:/project/src/main.ts');
 		const copied: string[] = [];
 		using workspace = new WorkspaceContextService({ id: 'project', folders: [{ id: 'project', uri: root, name: 'project', index: 0 }] });
-		const services = new InstantiationService();
+		using services = new InstantiationService();
 		services.registerInstance(IEditorService, {
 			activeEditor: { resource: file },
 		} as EditorServiceContract);
@@ -437,8 +437,8 @@ test('Copy Path commands copy the active file and its workspace-relative path', 
 		await commands.executeCommand(COPY_PATH_COMMAND_ID);
 		await commands.executeCommand(COPY_RELATIVE_PATH_COMMAND_ID);
 
-		assert.deepEqual(copied, ['C:\\project\\src\\main.ts', 'src/main.ts']);
-		await assert.rejects(commands.executeCommand(COPY_RELATIVE_PATH_COMMAND_ID, URI.file('C:\\outside\\other.ts')), /outside the current workspace/);
+		assert.deepEqual(copied, [file.fsPath, 'src/main.ts']);
+		await assert.rejects(commands.executeCommand(COPY_RELATIVE_PATH_COMMAND_ID, URI.file('C:/outside/other.ts')), /outside the current workspace/);
 		assert.equal(copied.length, 2);
 	} finally {
 		if (previousDocument) {
@@ -456,7 +456,7 @@ test('Download File command preserves the active file bytes and filename', async
 	Object.defineProperty(globalThis, 'document', { configurable: true, value: browser.window.document });
 	try {
 		await import('../../browser/fileActions.contribution.js');
-		const resource = URI.file('C:\\project\\100% payload.bin');
+		const resource = URI.file('C:/project/100% payload.bin');
 		const reads: URI[] = [];
 		let downloadedName: string | undefined;
 		let downloadedBlob: Blob | undefined;
@@ -468,7 +468,7 @@ test('Download File command preserves the active file bytes and filename', async
 		browser.window.HTMLAnchorElement.prototype.click = function () {
 			downloadedName = this.download;
 		};
-		const services = new InstantiationService();
+		using services = new InstantiationService();
 		services.registerInstance(IEditorService, { activeEditor: { resource } } as EditorServiceContract);
 		services.registerInstance(IFileService, {
 			readFileBytes: async requested => {
@@ -554,8 +554,8 @@ test('Reveal in OS command sends the selected local file to the desktop host', a
 	const locations = [MenuId.ExplorerContext, MenuId.EditorTitleContext, MenuId.EditorTitle, MenuId.CommandPalette].filter(menu =>
 		MenusRegistry.getMenuItems(menu).some(item => isMenuItem(item) && item.command.id === REVEAL_IN_OS_COMMAND_ID));
 	assert.deepEqual(locations, [MenuId.ExplorerContext, MenuId.EditorTitleContext, MenuId.CommandPalette]);
-	const root = URI.file('C:\\project');
-	const selected = URI.file('C:\\project\\src\\main.ts');
+	const root = URI.file('C:/project');
+	const selected = URI.file('C:/project/src/main.ts');
 	const revealed: string[] = [];
 	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
 	using explorer = createExplorerService(workspace);
@@ -576,8 +576,8 @@ test('Reveal in OS command sends the selected local file to the desktop host', a
 
 	await commands.executeCommand(REVEAL_IN_OS_COMMAND_ID);
 	assert.deepEqual(revealed, [selected.fsPath]);
-	await commands.executeCommand(REVEAL_IN_OS_COMMAND_ID, URI.file('C:\\project\\other.ts'));
-	assert.deepEqual(revealed, [selected.fsPath, 'C:\\project\\other.ts']);
+	await commands.executeCommand(REVEAL_IN_OS_COMMAND_ID, URI.file('C:/project/other.ts'));
+	assert.deepEqual(revealed, [selected.fsPath, URI.file('C:/project/other.ts').fsPath]);
 });
 
 test('Reveal file IPC validates the requested path before calling the desktop host', async () => {

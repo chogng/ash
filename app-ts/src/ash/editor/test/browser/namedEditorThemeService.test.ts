@@ -37,7 +37,6 @@ function createThemeService(): { readonly mediaQuery: TestMediaQueryList; readon
 	return { mediaQuery, service: new StandaloneThemeService(ownerWindow) };
 }
 
-const colorsBeforeEditor = lightColorTheme.colors;
 const {
 	editorCursorForeground,
 	editorMultiCursorSecondaryBackground,
@@ -71,8 +70,11 @@ test('all bracket nesting colors remain readable in light, dark and high contras
 	}
 });
 
-test('themes created before the editor loads include its color contributions', () => {
-	assert.deepEqual({ before: colorsBeforeEditor[editorCursorForeground], after: lightColorTheme.getColorCss(editorCursorForeground) }, {
+test('existing themes resolve later color contributions without changing earlier color snapshots', () => {
+	const color = 'test.editorLateContribution';
+	const before = lightColorTheme.colors;
+	registerColor(color, { dark: editorCursorForeground, light: editorCursorForeground, highContrastDark: editorCursorForeground, highContrastLight: editorCursorForeground }, { description: 'Late editor contribution test.', owner: 'test' });
+	assert.deepEqual({ before: before[color], after: lightColorTheme.getColorCss(color) }, {
 		before: undefined, after: '#000000',
 	});
 });

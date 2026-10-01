@@ -39,6 +39,8 @@ export class SessionsPart extends WorkbenchPart {
 	private readonly views: Record<SessionsPage, SessionsChatView>;
 	private page: SessionsPage | "empty" = "chat";
 	private readonly codePage: HTMLDivElement;
+	private dimension: Dimension | undefined;
+	private isChangingPage = false;
 
 	override get minimumWidth(): number { return 420; }
 
@@ -76,15 +78,26 @@ export class SessionsPart extends WorkbenchPart {
 
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>, page: SessionsPage = this.page === 'code' ? 'code' : 'chat'): void { this.views[page].restoreDraft(draft); }
 
-	setPage(page: 'chat' | 'code' | 'empty'): void {
-		this.page = page;
-		this.contentDomNode.classList.toggle('empty-page', page === 'empty');
-		this.views.chat.domNode.hidden = page !== 'chat';
-		this.views.code.domNode.hidden = page !== 'code';
-		this.views.chat.setVisible(page === 'chat');
-		this.views.code.setVisible(page === 'code');
-		this.codePage.hidden = page !== 'code';
-		if (page !== 'empty') this.layout(new Dimension(this.contentDomNode.clientWidth, this.contentDomNode.clientHeight));
+	setPage(page: 'chat' | 'code' | 'empty', updateLayout?: () => void): void {
+		if (page === this.page) {
+			updateLayout?.();
+			return;
+		}
+		// Side-part policy must settle before either retained page receives the new geometry.
+		this.isChangingPage = true;
+		try {
+			updateLayout?.();
+			this.page = page;
+			this.contentDomNode.classList.toggle('empty-page', page === 'empty');
+			this.views.chat.domNode.hidden = page !== 'chat';
+			this.views.code.domNode.hidden = page !== 'code';
+			this.views.chat.setVisible(page === 'chat');
+			this.views.code.setVisible(page === 'code');
+			this.codePage.hidden = page !== 'code';
+		} finally {
+			this.isChangingPage = false;
+		}
+		if (page !== 'empty') this.layout(this.dimension ?? new Dimension(this.contentDomNode.clientWidth, this.contentDomNode.clientHeight));
 	}
 
 	updateVisibleSelections(selections: readonly SessionsViewSelection[], active: SessionsViewSelection | undefined, page: SessionsPage = "chat"): void {
@@ -92,8 +105,9 @@ export class SessionsPart extends WorkbenchPart {
 	}
 
 	override layout(dimension: Dimension): void {
+		this.dimension = dimension;
 		// Empty pages resize the Part, not the retained Chat or Code geometry beneath it.
-		if (this.page === 'empty') {
+		if (this.page === 'empty' || this.isChangingPage) {
 			return;
 		}
 		const view = this.views[this.page === "code" ? "code" : "chat"];

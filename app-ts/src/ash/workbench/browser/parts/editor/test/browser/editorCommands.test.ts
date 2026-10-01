@@ -114,9 +114,9 @@ test("editor commands close the active tab and reopen it with a chosen editor", 
 
 	try {
 		const { CLOSE_EDITOR_COMMAND_ID, REOPEN_WITH_COMMAND_ID } = await import("../../editorCommands.js");
-		const activeInput = { resource: URI.file("C:\\project\\main.ts") };
-		const otherInput = { resource: URI.file("C:\\project\\other.ts") };
-		const additionalInput = { resource: URI.file("C:\\project\\additional.ts") };
+		const activeInput = { resource: URI.file("C:/project/main.ts") };
+		const otherInput = { resource: URI.file("C:/project/other.ts") };
+		const additionalInput = { resource: URI.file("C:/project/additional.ts") };
 		const closedInputs: typeof activeInput[] = [];
 		let cancelClose = false;
 		const activeGroup = {

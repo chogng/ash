@@ -82,6 +82,7 @@ export class SuggestController extends Disposable {
 			this._register(view.onWillBeforeInput(event => this.handleBeforeInput(event)));
 			this._register(view.onWillTextUpdate(event => this.handleTextUpdate(event)));
 			this._register(view.onWillKeydown(event => this.handleKeydown(event)));
+			this._register(editor.onDidType(text => this.requestAfterInsert(text, this.readIsIncomplete())));
 			this._register(view.onDidEdit(event => this.handleDidEdit(event)));
 			this._register(service.textModel.onDidChangeLanguage(() => this.cancel()));
 			this._register(service.onDidChangeProviderCatalog(() => this.cancel()));
@@ -186,6 +187,9 @@ export class SuggestController extends Disposable {
 	}
 
 	private handleDidEdit(event: EditorViewDidEditEvent): void {
+		// Typed input is published by the editor after command delegation, including
+		// browser replacement updates. Its onDidType listener owns that request.
+		if (event.inputType === 'insertText' || event.inputType === 'insertReplacementText') return;
 		const refreshIncomplete = this.readIsIncomplete();
 		if (event.insertedText !== undefined) {
 			this.requestAfterInsert(event.insertedText, refreshIncomplete);

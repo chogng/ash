@@ -1,3 +1,4 @@
+import { h as createDomElement } from '../../../src/ash/base/browser/dom.js';
 import { MarkdownElement } from '../../../src/ash/base/browser/markdownRenderer.js';
 import dompurify from '../../../src/ash/base/browser/dompurify/dompurify.js';
 import { safeSetInnerHtml, sanitizeHtml, sanitizeHtmlToFragment } from '../../../src/ash/base/browser/domSanitize.js';
@@ -84,7 +85,7 @@ window.ashMarkdownIntegration = {
 		const plaintext = sanitizeHtml('<div><unknown-tag>visible</unknown-tag></div>', {
 			replaceWithPlaintext: true,
 		}).toString();
-		const target = document.createElement('div');
+		const target = createDomElement(document, 'div');
 		safeSetInnerHtml(target, '<b>safe</b><script>alert(1)</script>');
 		const fragment = sanitizeHtmlToFragment('<a href="https://example.com">safe</a>', { ownerDocument: document });
 		return {
@@ -99,9 +100,9 @@ window.ashMarkdownIntegration = {
 	},
 	checkDomPurify(): { version: string; fragment: string; inPlace: string; hooked: string } {
 		const fragment = dompurify.sanitize('<a href="javascript:alert(1)" onclick="alert(1)">safe</a><script>alert(1)</script>', { RETURN_DOM_FRAGMENT: true });
-		const fragmentContainer = document.createElement('div');
+		const fragmentContainer = createDomElement(document, 'div');
 		fragmentContainer.append(fragment);
-		const inPlaceNode = document.createElement('div');
+		const inPlaceNode = createDomElement(document, 'div');
 		inPlaceNode.innerHTML = '<img src="javascript:alert(1)" onerror="alert(1)"><strong>safe</strong>';
 		dompurify.sanitize(inPlaceNode, { IN_PLACE: true });
 		dompurify.addHook('afterSanitizeAttributes', element => element.removeAttribute('title'));

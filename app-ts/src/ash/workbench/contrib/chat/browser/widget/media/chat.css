@@ -371,9 +371,9 @@
 .ash-chat-input-toolbars.ash-toolbar .ash-chat-input-effort-selector .ash-chat-input-effort-action {
   min-width: 0;
   padding: 0 var(--ash-spacing-size40);
-  border-radius: var(--ash-cornerRadius-small);
+  border-radius: var(--ash-corner-radius-small);
   color: var(--ash-description-foreground);
-  font-size: var(--ash-fontSize-label1);
+  font-size: var(--ash-font-size-label1);
 }
 
 .ash-chat-input-toolbars .ash-chat-input-effort-label {

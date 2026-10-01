@@ -1,3 +1,4 @@
+import { h as createDomElement } from '../../../../base/browser/dom.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -68,7 +69,7 @@ test('DiffEditorWidget owns two editors, keeps source models caller-owned, and r
 	using computation = new WidgetTestDiffComputationService();
 	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
 	await waitForReady(model);
-	const container = browserEnvironment.window.document.createElement('main');
+	const container = createDomElement(browserEnvironment.window.document, 'main');
 	const codeEditorService = services.get(ICodeEditorService);
 	const lifecycle: string[] = [];
 	using added = codeEditorService.onDiffEditorAdd(() => lifecycle.push('add'));
@@ -107,7 +108,7 @@ test('DiffEditorWidget applies the split ratio and disables its separator when r
 	using computation = new WidgetTestDiffComputationService();
 	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
 	await waitForReady(model);
-	const container = browserEnvironment.window.document.createElement('main');
+	const container = createDomElement(browserEnvironment.window.document, 'main');
 	using editor = services.createInstance(DiffEditorWidget, {
 		container, model, splitViewDefaultRatio: 0.3, enableSplitViewResizing: false,
 	});
@@ -130,7 +131,7 @@ test('DiffEditorWidget inserts paired view space for added lines and navigates w
 	using computation = new WidgetTestDiffComputationService();
 	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
 	await waitForReady(model);
-	const container = browserEnvironment.window.document.createElement('main');
+	const container = createDomElement(browserEnvironment.window.document, 'main');
 	using editor = services.createInstance(DiffEditorWidget, {
 		container,
 		model,
@@ -162,7 +163,7 @@ test('DiffEditorWidget hides paired unchanged lines and reveals them from either
 	using computation = new WidgetTestDiffComputationService();
 	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
 	await waitForReady(model);
-	const container = browserEnvironment.window.document.createElement('main');
+	const container = createDomElement(browserEnvironment.window.document, 'main');
 	using editor = services.createInstance(DiffEditorWidget, {
 		container,
 		model,
