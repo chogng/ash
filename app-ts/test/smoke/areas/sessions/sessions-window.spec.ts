@@ -456,9 +456,9 @@ test('Code chat mode menu shows the available icons and selection', async ({ app
 		await expect(item.locator('.ash-menu-leading-slot .ash-icon-label-icon svg.ash-icon')).toHaveCount(iconId ? 1 : 0);
 		if (iconId) await expect(item.locator('.ash-menu-leading-slot .ash-icon-label-icon svg.ash-icon')).toHaveAttribute('data-ash-icon-id', iconId);
 	}
-	await expect(menu.getByRole('menuitemradio', { name: 'Agent' })).toHaveAttribute('aria-checked', 'true');
+	await expect(menu.getByRole('menuitemradio', { name: 'Agent', exact: true })).toHaveAttribute('aria-checked', 'true');
 	await expect(menu.locator("[data-action-id='ash.chat.input.agent.error']")).toHaveCount(0);
-	const selectedAgent = menu.getByRole('menuitemradio', { name: 'Agent' });
+	const selectedAgent = menu.getByRole('menuitemradio', { name: 'Agent', exact: true });
 	const agentIcon = selectedAgent.locator('.ash-icon-label-icon svg.ash-icon');
 	const selectionCheck = selectedAgent.locator('.ash-menu-leading-check > svg.ash-icon');
 	await expect(agentIcon).toBeVisible();
@@ -1258,7 +1258,7 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	}
 	await expect(sessionsPage.locator("[data-part='activitybar']")).toBeVisible();
 	const activityButtons = sessionsPage.locator("[data-part='activitybar'] button");
-	expect(await activityButtons.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['chat-2-filled', 'colab', 'library', 'device-mobile', 'account']);
+	expect(await activityButtons.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['chat-2-filled', 'colab', 'library', 'code', 'device-mobile', 'account']);
 	await expect(sessionsPage.locator('.ash-sessions-activity-bottom button')).toHaveCount(2);
 	const chatButton = activityButtons.first();
 	const chatButtonBounds = await chatButton.boundingBox();

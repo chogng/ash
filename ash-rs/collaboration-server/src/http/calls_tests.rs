@@ -47,6 +47,9 @@ impl MediaServer {
                     }
                     Err(error) => panic!("{error}"),
                 };
+                // Windows accepts inherit the nonblocking listener mode, but this
+                // fixture reads complete HTTP requests synchronously.
+                stream.set_nonblocking(false).unwrap();
                 stream
                     .set_read_timeout(Some(Duration::from_secs(2)))
                     .unwrap();

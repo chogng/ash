@@ -678,12 +678,12 @@ impl TuiProcess {
         loop {
             let (screen, revision) = {
                 let capture = self.capture.lock().unwrap();
-                (capture.screen(), capture.revision())
+                (capture.screen(), capture.text_revision())
             };
             if screen.contains(expected) {
                 thread::sleep(Duration::from_millis(250));
                 let capture = self.capture.lock().unwrap();
-                if capture.revision() == revision && capture.screen().contains(expected) {
+                if capture.text_revision() == revision && capture.screen().contains(expected) {
                     return;
                 }
             }
@@ -712,12 +712,12 @@ impl TuiProcess {
         loop {
             let (screen, revision) = {
                 let capture = self.capture.lock().unwrap();
-                (capture.screen(), capture.revision())
+                (capture.screen(), capture.text_revision())
             };
             if !screen.contains(unexpected) {
                 thread::sleep(Duration::from_millis(250));
                 let capture = self.capture.lock().unwrap();
-                if capture.revision() == revision && !capture.screen().contains(unexpected) {
+                if capture.text_revision() == revision && !capture.screen().contains(unexpected) {
                     return;
                 }
             }
@@ -729,7 +729,7 @@ impl TuiProcess {
             }
             if Instant::now() >= deadline {
                 panic!(
-                    "TUI screen still contained {unexpected:?}; screen:\n{}",
+                    "TUI screen did not stabilize without {unexpected:?}; screen:\n{}",
                     self.screen()
                 );
             }
@@ -1032,6 +1032,35 @@ fn terminal_revision_advances_after_raw_capture_reaches_its_limit() {
 }
 
 #[test]
+fn terminal_text_revision_ignores_cursor_and_style_only_redraws() {
+    let mut capture = TerminalCapture::new(LARGE_SIZE);
+    capture.push(b"> Approve once\r\n/policy to change permissions");
+    capture.push(b"\r\x1b[2K");
+    let text_revision = capture.text_revision();
+    let output_revision = capture.revision();
+    for _ in 0..20 {
+        capture.push(b"\x1b[?25l\x1b[2;1H\x1b[0m");
+    }
+    assert_eq!(capture.text_revision(), text_revision);
+    assert_eq!(capture.revision(), output_revision + 20);
+    assert!(capture.screen().contains("> Approve once"));
+    assert!(!capture.screen().contains("/policy to change permissions"));
+}
+
+#[test]
+fn terminal_text_revision_tracks_changes_even_when_the_text_returns() {
+    let mut capture = TerminalCapture::new(LARGE_SIZE);
+    capture.push(b"old");
+    let screen = capture.screen();
+    let revision = capture.text_revision();
+    capture.push(b"\rnew");
+    assert_eq!(capture.text_revision(), revision + 1);
+    capture.push(b"\rold");
+    assert_eq!(capture.screen(), screen);
+    assert_eq!(capture.text_revision(), revision + 2);
+}
+
+#[test]
 fn terminal_capture_answers_fragmented_cursor_queries() {
     let mut capture = TerminalCapture::new(LARGE_SIZE);
     capture.push(b"\x1b[");
@@ -1078,6 +1107,7 @@ struct TerminalCapture {
     core: TerminalCore,
     raw: Vec<u8>,
     revision: u64,
+    text_revision: u64,
     size: PtySize,
 }
 
@@ -1087,20 +1117,27 @@ impl TerminalCapture {
             core: TerminalCore::new(GridSize::new(size.rows, size.cols)),
             raw: Vec::new(),
             revision: 0,
+            text_revision: 0,
             size,
         }
     }
 
     fn push(&mut self, bytes: &[u8]) {
+        let previous_screen = self.screen();
         self.revision += 1;
         let remaining = OUTPUT_LIMIT.saturating_sub(self.raw.len());
         self.raw
             .extend_from_slice(&bytes[..bytes.len().min(remaining)]);
         self.core.process_output(bytes);
+        // Cursor/style-only redraws must not prevent a text snapshot from settling.
+        if self.screen() != previous_screen {
+            self.text_revision += 1;
+        }
     }
 
     fn resize(&mut self, size: PtySize) {
         self.revision += 1;
+        self.text_revision += 1;
         self.core.resize(GridSize::new(size.rows, size.cols));
         self.size = size;
     }
@@ -1121,6 +1158,10 @@ impl TerminalCapture {
 
     fn revision(&self) -> u64 {
         self.revision
+    }
+
+    fn text_revision(&self) -> u64 {
+        self.text_revision
     }
 }
 

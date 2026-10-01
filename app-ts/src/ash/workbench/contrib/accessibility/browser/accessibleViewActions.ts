@@ -1,6 +1,7 @@
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { localizedString } from '../../../../platform/action/common/action.js';
-import { AccessibleViewType, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewType, IAccessibleViewService, LocalAccessibilityHelpContext } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 
@@ -10,7 +11,7 @@ registerAction2(class OpenAccessibilityHelpAction extends Action2 {
 			id: 'editor.action.accessibilityHelp',
 			title: localizedString('ash', 'accessibility.openHelp', 'Open Accessibility Help'),
 			f1: true,
-			keybinding: { primary: Keybinding.single(logicalKey('F1', { altKey: true })) },
+			keybinding: { primary: Keybinding.single(logicalKey('F1', { altKey: true })), when: ContextKeyExpr.not(LocalAccessibilityHelpContext.key) },
 		});
 	}
 

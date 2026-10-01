@@ -5,6 +5,11 @@ The repository pins `rules_rs 0.0.96` through the archive override in the root
 
 - `module_dot_bazel_version.patch`, which preserves module version metadata
   when the archive override bypasses the Bazel Central Registry patch set.
+- `linux_zlib_snapshot.patch`, which downloads the existing pinned Linux zlib
+  packages from the official Ubuntu snapshot dated 2026-08-01. The rolling
+  archive retired these package URLs; both architectures retain upstream SHA-256
+  digests and identical package bytes. Remove this patch when upstream pins
+  durable package URLs.
 - `windows_gnullvm_exec_triples.patch`, which makes Windows Rust host tools use
   the same gnullvm ABI as the repository's hermetic LLVM/MinGW C++ toolchain.
   This is required for `rustc` to load proc-macro DLLs and link Bazel host tools

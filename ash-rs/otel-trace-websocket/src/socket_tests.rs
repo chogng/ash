@@ -105,7 +105,7 @@ async fn bounded_stream_reports_loss_to_a_slow_viewer() {
         let task = connection(server_stream, TOKEN.parse().unwrap(), frames.clone());
         tokio::pin!(task);
         // The client branch has no yield between ready and publishing the whole batch.
-        tokio::select! { _ = &mut task => panic!("connection ended early"), _ = wait => {} }
+        wait_for_published_frames(&mut task, wait).await;
         task.await;
     };
     tokio::time::timeout(Duration::from_secs(5), async {
@@ -113,6 +113,34 @@ async fn bounded_stream_reports_loss_to_a_slow_viewer() {
     })
     .await
     .unwrap();
+}
+
+async fn wait_for_published_frames(
+    connection: impl std::future::Future<Output = ()>,
+    published: tokio::sync::oneshot::Receiver<()>,
+) {
+    tokio::select! {
+        // Once publication completes, a viewer may consume the loss notice and close.
+        // That normal close must not race the publication barrier.
+        biased;
+        result = published => result.expect("frame publisher ended before publishing"),
+        _ = connection => panic!("connection ended early"),
+    }
+}
+
+#[tokio::test]
+async fn published_frames_take_priority_over_a_completed_connection() {
+    let (release, wait) = tokio::sync::oneshot::channel();
+    release.send(()).unwrap();
+    wait_for_published_frames(std::future::ready(()), wait).await;
+}
+
+#[tokio::test]
+#[should_panic(expected = "connection ended early")]
+async fn connection_completion_before_publication_is_rejected() {
+    let (release, wait) = tokio::sync::oneshot::channel();
+    wait_for_published_frames(std::future::ready(()), wait).await;
+    drop(release);
 }
 
 #[tokio::test]

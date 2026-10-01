@@ -1,3 +1,5 @@
+import { LocalAccessibilityHelpContext } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
@@ -37,10 +39,12 @@ export class LanguageServersViewPane extends ViewPane {
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super(container, options);
 		const document = container.ownerDocument;
 		this.contentElement.classList.add('ash-language-servers');
+		LocalAccessibilityHelpContext.bindTo(this._register(contextKeys.createScoped(this.contentElement))).set(true);
 		this.directory = h(document, 'select'); this.field('Workspace folder', this.directory);
 		this.language = this.input('Language ID');
 		this.contentElement.append(this.button('Find language servers in Marketplace', async () => {

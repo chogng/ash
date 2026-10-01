@@ -14,6 +14,7 @@ archive_override(
     patch_strip = 1,
     patches = [
         "//third_party/rules_rs:module_dot_bazel_version.patch",
+        "//third_party/rules_rs:linux_zlib_snapshot.patch",
         "//third_party/rules_rs:windows_gnullvm_exec_triples.patch",
     ],
     strip_prefix = "rules_rs-0.0.96",

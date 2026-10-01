@@ -1,3 +1,5 @@
+import { LocalAccessibilityHelpContext } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import './traceEditor.css';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { scheduleAtNextAnimationFrame } from '../../../../base/browser/scheduler.js';
@@ -37,13 +39,14 @@ export class TraceEditor extends Disposable implements IEditorPane {
 	private shown = true;
 	private readonly listId = 'ash-trace-list-' + nextListId++;
 
-	constructor(@IDialogService private readonly dialogs: IDialogService, @IConfigurationService private readonly configuration: IConfigurationService) { super(); }
+	constructor(@IDialogService private readonly dialogs: IDialogService, @IConfigurationService private readonly configuration: IConfigurationService, @IContextKeyService private readonly contextKeys: IContextKeyService) { super(); }
 
 	create(parent: HTMLElement): void {
 		const document = parent.ownerDocument;
 		this.domNode = h(document, 'div');
 		this.domNode.className = 'ash-trace';
 		parent.append(this.domNode);
+		LocalAccessibilityHelpContext.bindTo(this._register(this.contextKeys.createScoped(this.domNode))).set(true);
 		this._register(toDisposable(() => this.domNode.remove()));
 		const toolbar = h(document, 'div');
 		toolbar.className = 'ash-trace-toolbar';

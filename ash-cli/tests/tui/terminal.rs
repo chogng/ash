@@ -32,9 +32,9 @@ fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_chang
     process.wait_for_stable_screen("GPT-6 Luna (high)");
     process.type_text("BOUND-DRAFT");
     process.send(b"\x1b[1;2A");
-    process.wait_for_stable_screen("Thinking effort: extra high");
+    process.wait_for_stable_screen("Thinking effort: xhigh");
     assert!(process.screen().contains("BOUND-DRAFT"));
-    assert!(process.screen().contains("GPT-6 Luna (extra high)"));
+    assert!(process.screen().contains("GPT-6 Luna (xhigh)"));
     assert!(!process.screen().contains("/effort"));
     assert!(
         fixture
@@ -46,7 +46,7 @@ fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_chang
         (b"\x1b[1;2B".as_slice(), "Thinking effort: high", "high"),
         (
             b"\x1b[1;2A".as_slice(),
-            "Thinking effort: extra high",
+            "Thinking effort: xhigh",
             "extraHigh",
         ),
         (b"\x1b[1;2B".as_slice(), "Thinking effort: high", "high"),
@@ -61,7 +61,7 @@ fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_chang
         );
     }
     process.send(b"\x1b[1;2A");
-    process.wait_for_stable_screen("Thinking effort: extra high");
+    process.wait_for_stable_screen("Thinking effort: xhigh");
     process.send(b"\x1b[1;2A");
     process.wait_for_stable_screen("Thinking effort: max");
     let config_at_max = fixture.config_source();
@@ -606,6 +606,8 @@ fn actual_tui_sandbox_process_details_show_enforcement() {
     assert_eq!(server.request_count(), 3);
     assert!(server.request_bodies()[2].contains("sandbox"));
 
+    // Detail snapshots must not depend on time spent navigating before the hint expires.
+    process.wait_for_screen_to_omit("/policy to change permissions");
     process.control_up();
     process.up();
     process.space();

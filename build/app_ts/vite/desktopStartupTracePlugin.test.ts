@@ -25,6 +25,13 @@ for (const [lineEndingName, lineEnding] of [['LF', '\n'], ['CRLF', '\r\n']] as c
 			const output = transform(source, file)?.code;
 			assert.ok(output, path);
 			for (const mark of marks) assert.ok(output.includes(`performance.mark('${mark}')`), `${path}: ${mark}`);
+			if (path === 'src/ash/workbench/browser/workbench.ts') {
+				const restorationScheduled = output.indexOf('this.whenRestored = this.completeStartupRestoration(');
+				const callbackEnd = output.indexOf('\n\t\t});', restorationScheduled) + '\n\t\t});'.length;
+				const createWindow = output.indexOf('\t\tif (createWindow) {', callbackEnd);
+				assert.equal(output.slice(callbackEnd, createWindow).trim(), "performance.mark('ash.workbench.constructor-done');");
+				assert.equal(output.split("performance.mark('ash.workbench.constructor-done');").length - 1, 1);
+			}
 			if (path.endsWith('/rendererApi.ts')) {
 				const backendStart = output.indexOf('backend = createRendererHost(');
 				const initialized = 'await initialize();';

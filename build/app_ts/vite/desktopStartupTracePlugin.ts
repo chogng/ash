@@ -48,7 +48,7 @@ const marksByFile: Readonly<Record<string, readonly StartupMark[]>> = {
 		{ name: 'ash.workbench.panel-restore-start', anchor: '\t\t\topenPanelComposite(requiredViewContainerToRestore(', position: 'before' },
 		{ name: 'ash.workbench.auxiliary-restore-start', anchor: '\t\t\topenAuxiliaryComposite(requiredViewContainerToRestore(', position: 'before' },
 		{ name: 'ash.workbench.views-restored', anchor: '\t\tthis.restoreActiveViewContainers();', position: 'after' },
-		{ name: 'ash.workbench.constructor-done', anchor: '\t\tthis.whenRestored = this.completeStartupRestoration([extensionReady, ...serviceContributionReady], workingCopyBackups, editor, editorParts, contributions);', position: 'after' },
+		{ name: 'ash.workbench.constructor-done', anchor: '\t\tif (createWindow) {', position: 'before' },
 	],
 };
 
