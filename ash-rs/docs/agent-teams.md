@@ -42,7 +42,7 @@ Team 的任务列表从 `TeamRunId` 关联和所属 Session 的事实构成。�
 
 长期产品入口分别提供 Team 的创建、成员管理、讨论、任务启动和历史查看。Agents Window 展示 Team 列表、成员、团队讨论和关联任务；进入某次任务后继续使用现有 Agent 树视图。直接与某个成员交谈时，明确选择 Team 和成员，建立归属于该成员的新 Thread，而不修改其旧 Thread。
 
-当前 `/team <任务>`、`/team status|resume|cancel` 实际管理一次临时协作工作，属于任务调度入口。目标命名将这种无持久 Team 的执行方式称为 `multitask`；`team` 只指持久组织及其明确选择的任务。历史 `/team` 工作记录保持原 Session 和委托事实，不推断或补造 Team 成员身份。`/develop` 的阶段工作可以选择一个已有 Team；阶段版本和验收仍由 `/develop` 管理。
+当前 `/team <任务>`、`/team status|resume|cancel` 实际管理一次临时协作工作，属于任务调度入口。它与 Multitask 模式的关系及入口命名候选集中说明在 [Multitask 的执行边界](../collaboration-mode-templates/collaboration-modes.md#multitask-的执行边界)。历史 `/team` 工作记录保持原 Session 和委托事实，不推断或补造 Team 成员身份。`/develop` 的阶段工作可以选择一个已有 Team；阶段版本和验收仍由 `/develop` 管理。
 
 ## 所有权与接口
 

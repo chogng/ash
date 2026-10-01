@@ -40,7 +40,7 @@
 
 ## 协作模式
 
-`session/request.startTurn.mode` 与 `queue/enqueue.mode` 选择模式；省略时为 `agent`。公开 `Turn.mode` 独立返回模式，`TurnInstructions.modeInstructions` 保存所选资产；客户端不通过提示词 ID 推断模式。Steer 沿用已接受模式，改变模式的消息启动新 Turn。完整行为、子任务规则和兼容版本见 [五种协作模式](../docs/collaboration-modes.md)。
+`session/request.startTurn.mode` 与 `queue/enqueue.mode` 选择模式；省略时为 `agent`。公开 `Turn.mode` 独立返回模式，`TurnInstructions.modeInstructions` 保存所选资产；客户端不通过提示词 ID 推断模式。Steer 沿用已接受模式，改变模式的消息启动新 Turn。完整行为、子任务规则和兼容版本见 [五种协作模式](../collaboration-mode-templates/collaboration-modes.md)。
 
 ## 指令导入
 
