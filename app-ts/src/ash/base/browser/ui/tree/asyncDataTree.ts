@@ -105,6 +105,7 @@ interface AsyncTreeView<T> extends IDisposable {
 	readonly onDidChangeCollapseState: Event<AsyncTreeCollapseEvent<T>>;
 	readonly focus: T | undefined;
 	readonly selection: readonly T[];
+	setFocus(element: T, browserEvent?: UIEvent): void;
 	setSelection(elements: readonly T[], browserEvent?: UIEvent): void;
 	getVisibleElements(): readonly T[];
 	domFocus(): void;
@@ -178,6 +179,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 	get focus(): T | undefined { return this.tree.focus; }
 	get selection(): readonly T[] { return this.tree.selection; }
 	getVisibleElements(): readonly T[] { return this.tree.getVisibleElements(); }
+	setFocus(element: T, browserEvent?: UIEvent): void { this.tree.setFocus(element, browserEvent); }
 	setSelection(elements: readonly T[], browserEvent?: UIEvent): void { this.tree.setSelection(elements, browserEvent); }
 	domFocus(): void { this.tree.domFocus(); }
 	setFindPattern(pattern: string): void { this.tree.setFindPattern(pattern); }
@@ -404,6 +406,7 @@ function objectTreeView<T>(tree: ObjectTree<T>, getId: (element: T) => string): 
 		onDidChangeCollapseState: tree.onDidChangeCollapseState,
 		get focus() { return tree.focus; },
 		get selection() { return tree.selection; },
+		setFocus: (element, browserEvent) => tree.setFocus(getId(element), browserEvent),
 		setSelection: (elements, browserEvent) => tree.setSelection(elements.map(getId), browserEvent),
 		getVisibleElements: () => tree.getVisibleElements(),
 		domFocus: () => tree.domFocus(),
@@ -437,6 +440,7 @@ function compressibleTreeView<T>(tree: CompressibleObjectTree<T>): AsyncTreeView
 		onDidChangeCollapseState: tree.onDidChangeCollapseState,
 		get focus() { return tree.focus; },
 		get selection() { return tree.selection; },
+		setFocus: (element, browserEvent) => tree.setFocus(element, browserEvent),
 		setSelection: (elements, browserEvent) => tree.setSelection(elements, browserEvent),
 		getVisibleElements: () => tree.getVisibleElements(),
 		domFocus: () => tree.domFocus(),

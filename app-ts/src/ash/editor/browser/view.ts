@@ -275,6 +275,8 @@ export class View extends ViewEventHandler {
 		this.viewport = viewport;
 		this.onDidChangeLayout = viewport.onDidChange;
 		this.viewContext = new ViewContext(this.editorConfiguration, options.theme, this.viewModel);
+		this.scrollbar = this.registerViewPart(new EditorScrollbar(this.viewContext, this.contentNode, this.domNode, this.domNode));
+		this.domNode.domNode.prepend(this.scrollbar.getDomNode().domNode);
 		this.viewGpuContext = this.editorConfiguration.options.get(EditorOption.experimentalGpuAcceleration) === 'on'
 			? this._register(new ViewGpuContext(this.viewContext, lineNumber => {
 				const visualLine = this.visualProjection.lineAt(lineNumber - 1);
@@ -298,7 +300,7 @@ export class View extends ViewEventHandler {
 			}));
 		}
 		this.controller = this._register(new ViewController(this, options.viewModel, options.controller ?? {}, options.commandDelegate, controller => {
-			const input = createEditContext(this.viewContext, this.domNode.domNode, {
+			const input = createEditContext(this.viewContext, this.scrollbar.getDomNode().domNode, {
 				...options.controller,
 				readOnly: options.viewModel.cursorConfig.readOnly,
 				textDirection: this.editorTextDirection,
@@ -307,7 +309,7 @@ export class View extends ViewEventHandler {
 				viewController: controller,
 				viewport: this,
 			});
-			this.domNode.domNode.append(input.domNode.domNode);
+			this.scrollbar.getDomNode().domNode.append(input.domNode.domNode);
 			return this.registerViewPart(input);
 		}));
 		this.onWillCopy = this.controller.editContext.onWillCopy;
@@ -393,8 +395,6 @@ export class View extends ViewEventHandler {
 				readTextLeft: () => this.textLeft,
 			})).domNode.domNode;
 		}
-		this.scrollbar = this.registerViewPart(new EditorScrollbar(this.viewContext, this.contentNode, this.domNode, this.domNode));
-		this.domNode.domNode.prepend(this.scrollbar.getDomNode().domNode);
 		const minimapPart = this.registerViewPart(new Minimap(this.viewContext, {
 			host: this.domNode.domNode,
 			model: this.model,
@@ -414,16 +414,16 @@ export class View extends ViewEventHandler {
 			this.viewLines.getDomNode().domNode,
 			this.viewCursors.getDomNode().domNode,
 			this.contentWidgets.domNode.domNode,
-			this.margin.getDomNode().domNode,
-			blockDecorations.domNode.domNode,
+			this.viewZones.domNode.domNode,
 			...(rulersDomNode ? [rulersDomNode] : []),
 		);
 		this.domNode.domNode.append(
 			...(this.viewGpuContext ? [this.viewGpuContext.canvas.domNode] : []),
+			blockDecorations.domNode.domNode,
+			this.margin.getDomNode().domNode,
 			this.overlayWidgets.getDomNode().domNode,
 			minimapPart.getDomNode().domNode,
 			scrollDecoration.getDomNode().domNode,
-			this.viewZones.domNode.domNode,
 		);
 		const overviewRulerLayout = this.scrollbar.getOverviewRulerLayoutInfo();
 		overviewRulerLayout.parent.insertBefore(decorationsOverviewRuler.getDomNode(), overviewRulerLayout.insertBefore);
@@ -434,11 +434,12 @@ export class View extends ViewEventHandler {
 			this.overlayWidgets.overflowingOverlayWidgetsDomNode.domNode,
 		);
 		this._register(MinimapTokensColorTracker.getInstance().onDidChange(() => this.scheduleProjection()));
-		this._register(addDisposableListener(this.domNode.domNode, "scroll", () => {
-			if (this.domNode.domNode.scrollLeft === this.syncedScrollLeft && this.domNode.domNode.scrollTop === this.syncedScrollTop) return;
+		const scrollDomNode = this.scrollbar.getDomNode().domNode;
+		this._register(addDisposableListener(scrollDomNode, "scroll", () => {
+			if (scrollDomNode.scrollLeft === this.syncedScrollLeft && scrollDomNode.scrollTop === this.syncedScrollTop) return;
 			viewport.setScrollPosition({
-				scrollLeft: this.domNode.domNode.scrollLeft,
-				scrollTop: this.domNode.domNode.scrollTop,
+				scrollLeft: scrollDomNode.scrollLeft,
+				scrollTop: scrollDomNode.scrollTop,
 			}, ScrollType.Immediate);
 			this.syncScrollPosition(viewport.layout);
 		}));
@@ -1076,14 +1077,17 @@ export class View extends ViewEventHandler {
 	}
 
 	private syncScrollPosition(layout: EditorViewportLayout): void {
-		if (this.domNode.domNode.scrollLeft !== layout.scrollPosition.left) {
-			this.domNode.domNode.scrollLeft = layout.scrollPosition.left;
+		// Only the scrollbar wrapper scrolls physically. Viewport Parts are its
+		// siblings and consume the same ViewLayout state without browser scrolling.
+		const scrollDomNode = this.scrollbar.getDomNode().domNode;
+		if (scrollDomNode.scrollLeft !== layout.scrollPosition.left) {
+			scrollDomNode.scrollLeft = layout.scrollPosition.left;
 		}
-		if (this.domNode.domNode.scrollTop !== layout.scrollPosition.top) {
-			this.domNode.domNode.scrollTop = layout.scrollPosition.top;
+		if (scrollDomNode.scrollTop !== layout.scrollPosition.top) {
+			scrollDomNode.scrollTop = layout.scrollPosition.top;
 		}
-		this.syncedScrollLeft = this.domNode.domNode.scrollLeft;
-		this.syncedScrollTop = this.domNode.domNode.scrollTop;
+		this.syncedScrollLeft = scrollDomNode.scrollLeft;
+		this.syncedScrollTop = scrollDomNode.scrollTop;
 	}
 
 	public override handleEvents(events: viewEvents.ViewEvent[]): void {

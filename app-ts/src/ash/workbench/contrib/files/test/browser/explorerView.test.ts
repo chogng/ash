@@ -324,6 +324,13 @@ test("ExplorerView opens workspace files on single click", async () => {
 			root.toString(),
 			URI.file("/project/src").toString(),
 		]);
+		await explorerService.select(URI.file('/project/README.md'), 'force');
+		assert.equal(explorerService.getContext()[0]?.name, 'README.md');
+		await explorerService.select(URI.file('/project/src/main.ts'), 'force');
+		pane.focus();
+		assert.equal(explorerService.getContext()[0]?.name, 'main.ts');
+		assert.equal(pane.element.querySelector('.ash-tree')?.getAttribute('aria-activedescendant'), mainRow.id);
+		assert.equal(Boolean(openedInput), false);
 		sourceFolder.click();
 		await configurationService.updateValue(ListConfiguration.treeExpandMode, "doubleClick");
 		sourceFolder.click();

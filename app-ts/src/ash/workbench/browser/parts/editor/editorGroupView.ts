@@ -21,7 +21,7 @@ import type { IServerEventApi } from "../../../../platform/app-server/common/app
 import type { EditorInput, EditorOpenOptions } from "./editorInput.js";
 import type { EditorCloseOptions } from '../../../services/editor/common/editorGroupsService.js';
 import type { IEditorGroupView } from './editor.js';
-import { ActiveEditorPinnedContext, ActiveEditorStickyContext } from '../../../common/contextkeys.js';
+import { ActiveEditorPinnedContext, ActiveEditorStickyContext, MultipleEditorsSelectedInGroupContext, ResourceContext, ResourceSchemeContext } from '../../../common/contextkeys.js';
 import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
 import type { IEditorPane } from "./editorPane.js";
 import { isEditorPaneWithSelection } from '../../../common/editor.js';
@@ -285,6 +285,10 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			: tab;
 		const menuContext = this.scopedContextKeyService?.createScoped(tab);
 		menuContext?.bufferChangeEvents(() => {
+			// Menu visibility follows the clicked tab, even while another editor stays active.
+			menuContext.setContext(ResourceContext.key, input.resource.toString());
+			menuContext.setContext(ResourceSchemeContext.key, input.resource.scheme);
+			menuContext.setContext(MultipleEditorsSelectedInGroupContext.key, this.selectedInputs.includes(input) && this.selectedInputs.length > 1);
 			menuContext.setContext(ActiveEditorPinnedContext.key, !entry.preview);
 			menuContext.setContext(ActiveEditorStickyContext.key, entry.sticky);
 		});

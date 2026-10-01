@@ -79,6 +79,9 @@ export const ActiveEditorAvailableEditorIdsContext = new RawContextKey<string>('
 /** Number of editors in the active editor group. */
 export const EditorGroupEditorsCountContext = new RawContextKey<number>('groupEditorsCount', 0);
 
+/** Whether a tab context menu targets multiple selected editors. */
+export const MultipleEditorsSelectedInGroupContext = new RawContextKey<boolean>('multipleEditorsSelectedInGroup', false);
+
 /** Whether the active editor group contains no editors. */
 export const ActiveEditorGroupEmptyContext = new RawContextKey<boolean>('activeEditorGroupEmpty', false);
 

@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
+import { isMenuItem, MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../../../platform/actions/common/menuService.js';
+import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IEditorGroupsService } from '../../../../services/editor/common/editorGroupsService.js';
+import { IViewsService } from '../../../../services/views/browser/viewsService.js';
+import { FileEditorInput } from '../../browser/editors/fileEditorInput.js';
+import { REVEAL_IN_EXPLORER_COMMAND_ID } from '../../browser/fileConstants.js';
+import { MultipleEditorsSelectedInGroupContext, ResourceSchemeContext } from '../../../../common/contextkeys.js';
 import { JSDOM } from 'jsdom';
 import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -127,6 +135,7 @@ test('New File command creates and opens a file in the active workspace folder',
 		using viewRegistration = explorerService.registerView({
 			getContext: () => [new ExplorerItem(URI.file('C:\\project\\src'), 'src', FileKind.Directory)],
 			getAccessibleContent: () => '',
+			selectResource: async () => {},
 			focus() {},
 		});
 		await commands.executeCommand(NEW_FILE_COMMAND_ID);
@@ -148,6 +157,7 @@ test('New Folder command creates a directory under the selected folder', async (
 	using registration = explorer.registerView({
 		getContext: () => [new ExplorerItem(folder, 'src', FileKind.Directory)],
 		getAccessibleContent: () => '',
+		selectResource: async () => {},
 		focus() {},
 	});
 	using services = new InstantiationService();
@@ -182,7 +192,7 @@ test('Explorer copy and cut paste selected files with conflict names', async () 
 	let selected: readonly ExplorerItem[] = [first, second];
 	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
 	using explorer = createExplorerService(workspace);
-	using registration = explorer.registerView({ getContext: () => selected, getAccessibleContent: () => '', focus() {} });
+	using registration = explorer.registerView({ getContext: () => selected, getAccessibleContent: () => '', selectResource: async () => {}, focus() {} });
 	const existing = new Set(['/project/one.txt', '/project/two.txt', '/project/dest', '/project/dest/one.txt']);
 	const copied: string[] = [];
 	const renamed: string[] = [];
@@ -242,8 +252,8 @@ test('Explorer paste keeps copy and cut operations across windows', async () => 
 	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
 	using first = createExplorerService(workspace);
 	using second = createExplorerService(workspace);
-	using firstView = first.registerView({ getContext: () => [new ExplorerItem(source, '100% ready.bin', FileKind.File)], getAccessibleContent: () => '', focus() {} });
-	using secondView = second.registerView({ getContext: () => [new ExplorerItem(pasteDestination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', focus() {} });
+	using firstView = first.registerView({ getContext: () => [new ExplorerItem(source, '100% ready.bin', FileKind.File)], getAccessibleContent: () => '', selectResource: async () => {}, focus() {} });
+	using secondView = second.registerView({ getContext: () => [new ExplorerItem(pasteDestination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', selectResource: async () => {}, focus() {} });
 	using firstServices = new InstantiationService();
 	firstServices.registerInstance(IWorkspaceContextService, workspace);
 	firstServices.registerInstance(IExplorerService, first);
@@ -290,7 +300,7 @@ test('Explorer cut across nested workspace roots copies before deleting the sour
 		],
 	});
 	using explorer = createExplorerService(workspace);
-	using view = explorer.registerView({ getContext: () => [selected], getAccessibleContent: () => '', focus() {} });
+	using view = explorer.registerView({ getContext: () => [selected], getAccessibleContent: () => '', selectResource: async () => {}, focus() {} });
 	let clipboardResources: IClipboardResources = { resources: [], operation: 'copy' };
 	const operations: string[] = [];
 	using services = new InstantiationService();
@@ -327,7 +337,7 @@ test('Explorer paste forwards copy and move requests to the system file transfer
 		const destination = URI.file('/project/destination');
 		using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
 		using explorer = createExplorerService(workspace);
-		using view = explorer.registerView({ getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', focus() {} });
+		using view = explorer.registerView({ getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', selectResource: async () => {}, focus() {} });
 		const pastes: { directory: string; moveRequested: boolean }[] = [];
 		using services = new InstantiationService();
 		services.registerInstance(IWorkspaceContextService, workspace);
@@ -371,7 +381,7 @@ test('Explorer paste imports exact bytes from the system file list', async () =>
 		});
 		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
 		using explorer = createExplorerService(workspace);
-		using view = explorer.registerView({ getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', focus() {} });
+		using view = explorer.registerView({ getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', selectResource: async () => {}, focus() {} });
 		const writes: { resource: string; bytes: number[] }[] = [];
 		const attemptedTransfers: string[] = [];
 		using services = new InstantiationService();
@@ -491,6 +501,7 @@ test('Explorer menu commands rename, open beside the editor, and delete the sele
 	using registration = explorer.registerView({
 		getContext: () => [new ExplorerItem(selected, 'old.ts', FileKind.File)],
 		getAccessibleContent: () => '',
+		selectResource: async () => {},
 		focus() {},
 	});
 	using services = new InstantiationService();
@@ -539,6 +550,9 @@ test('Explorer menu commands rename, open beside the editor, and delete the sele
 });
 
 test('Reveal in OS command sends the selected local file to the desktop host', async () => {
+	const locations = [MenuId.ExplorerContext, MenuId.EditorTitleContext, MenuId.EditorTitle, MenuId.CommandPalette].filter(menu =>
+		MenusRegistry.getMenuItems(menu).some(item => isMenuItem(item) && item.command.id === REVEAL_IN_OS_COMMAND_ID));
+	assert.deepEqual(locations, [MenuId.ExplorerContext, MenuId.EditorTitleContext, MenuId.CommandPalette]);
 	const root = URI.file('C:\\project');
 	const selected = URI.file('C:\\project\\src\\main.ts');
 	const revealed: string[] = [];
@@ -547,6 +561,7 @@ test('Reveal in OS command sends the selected local file to the desktop host', a
 	using registration = explorer.registerView({
 		getContext: () => [new ExplorerItem(selected, 'main.ts', FileKind.File)],
 		getAccessibleContent: () => '',
+		selectResource: async () => {},
 		focus() {},
 	});
 	using services = new InstantiationService();
@@ -572,6 +587,47 @@ test('Reveal file IPC validates the requested path before calling the desktop ho
 	assert.throws(() => route.validate('bad\0path'), /Invalid file path/);
 	await route.invoke(route.validate('C:\\project\\main.ts'));
 	assert.deepEqual(revealed, ['C:\\project\\main.ts']);
+});
+
+test('Reveal tab menu groups both destinations and targets the clicked inactive file', async () => {
+	await import('../../browser/fileActions.contribution.js');
+	const active = new FileEditorInput(URI.file('/project/active.ts'));
+	const clicked = new FileEditorInput(URI.file('/project/src/clicked.ts'));
+	const group = { id: 'main', inputs: [active, clicked], selectedInputs: [active], editors: [{ input: active }, { input: clicked }], activeInput: active };
+	const effects: unknown[] = [];
+	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+	using explorer = createExplorerService(workspace);
+	using view = explorer.registerView({
+		getContext: () => [new ExplorerItem(active.resource, active.label, FileKind.File)],
+		getAccessibleContent: () => '',
+		selectResource: async (resource, reveal) => { effects.push(['select', resource?.toString(), reveal]); },
+		focus() {},
+	});
+	using services = new InstantiationService();
+	services.registerInstance(IWorkspaceContextService, workspace);
+	services.registerInstance(IExplorerService, explorer);
+	services.registerInstance(IEditorService, { activeEditor: active } as unknown as EditorServiceContract);
+	services.registerInstance(IEditorGroupsService, { getGroup: (id: string) => id === group.id ? group : undefined } as unknown as IEditorGroupsService);
+	services.registerInstance(INativeHostService, { revealFile: async path => { effects.push(['finder', path]); } } as INativeHostApi);
+	services.registerInstance(IViewsService, {
+		openView: id => {
+			effects.push(['open', id]);
+			return { id, focus: () => { effects.push(['focus']); }, isVisible: () => true, setVisible() {} };
+		},
+		focusView: () => false,
+		getViewWithId: () => undefined,
+	});
+	using commands = new CommandService(services);
+	using context = new ContextKeyService();
+	context.setContext(ResourceSchemeContext.key, clicked.resource.scheme);
+	context.setContext(MultipleEditorsSelectedInGroupContext.key, false);
+	const menus = new MenuService(commands, context);
+	const actions = menus.getMenuActions(MenuId.EditorTitleContext, { arg: { groupId: group.id, editorIndex: 1 } }).find(([name]) => name === '2_files')![1];
+	assert.deepEqual(actions.map(action => action.id), [REVEAL_IN_OS_COMMAND_ID, REVEAL_IN_EXPLORER_COMMAND_ID]);
+	for (const action of actions) await action.run();
+	assert.deepEqual(effects, [['finder', clicked.resource.fsPath], ['open', 'ash.explorer'], ['select', clicked.resource.toString(), 'force'], ['focus']]);
+	context.setContext(MultipleEditorsSelectedInGroupContext.key, true);
+	assert.deepEqual(menus.getMenuActions(MenuId.EditorTitleContext).find(([name]) => name === '2_files')![1].map(action => action.enabled), [false, false]);
 });
 
 function createExplorerService(workspace: WorkspaceContextService): ExplorerService {

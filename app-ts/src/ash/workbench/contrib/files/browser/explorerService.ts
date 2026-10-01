@@ -43,6 +43,11 @@ export class ExplorerService extends Disposable implements IExplorerService {
 		return this.view?.getContext() ?? [];
 	}
 
+	public select(resource: URI, reveal?: boolean | string): Promise<void> {
+		if (!this.view) throw new Error('Open the Explorer view before selecting a resource.');
+		return this.view.selectResource(resource, reveal);
+	}
+
 	public getAccessibleContent(): string | undefined {
 		return this.view?.getAccessibleContent();
 	}

@@ -1,11 +1,100 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Page } from "@playwright/test";
+import type { ElectronApplication, Page } from "@playwright/test";
 import { expect, test } from "../../../automation/test.js";
 
 test.beforeEach(async ({ workbench }) => {
 	const showSidebar = workbench.page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
 	if (await showSidebar.isVisible()) { await showSidebar.click(); }
+});
+
+test('file tab reveal actions share a menu group and reveal the inactive file', async ({ application, target, testWorkspace, workbench }) => {
+	test.skip(target.workbenchMode !== 'code' || target.kind === 'electron' && target.appServerMode !== 'required', 'Desktop files require App Server');
+	const page = workbench.page;
+	if (target.kind === 'browser' && target.appServerMode === 'disabled') {
+		await page.evaluate(async () => {
+			const root = await navigator.storage.getDirectory();
+			const folder = await root.getDirectoryHandle(`reveal-${crypto.randomUUID()}`, { create: true });
+			const child = await folder.getDirectoryHandle('reveal-folder', { create: true });
+			for (const [directory, name] of [[folder, 'main.ts'], [child, 'target.ts']] as const) {
+				const file = await directory.getFileHandle(name, { create: true });
+				const writer = await file.createWritable();
+				await writer.write('const value = 1;');
+				await writer.close();
+			}
+			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
+		});
+		await workbench.editors.groupAt(0).welcome.getByRole('button', { name: 'Open folder', exact: true }).click();
+	} else {
+		await mkdir(join(testWorkspace.directory, 'reveal-folder'), { recursive: true });
+		await writeFile(join(testWorkspace.directory, 'reveal-folder', 'target.ts'), 'const target = 1;');
+	}
+	if (target.kind === 'electron' && process.platform === 'darwin') {
+		await workbench.quickaccess.runCommand('workbench.action.openSettings');
+		const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+		await settings.locator('[data-settings-group-id="workbench"]').click();
+		await settings.locator('[data-settings-category-id="layout"]').click();
+		await settings.locator('[data-configuration-key="window.menuStyle"]').getByRole('combobox').click();
+		await page.getByRole('option', { name: 'Custom', exact: true }).click();
+		await settings.locator('.ash-modal-editor-close').click();
+	}
+	const sidebar = page.locator('[data-part="sidebar"]');
+	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+	if (await showSidebar.isVisible()) await showSidebar.click();
+	const explorer = page.locator('.ash-explorer');
+	const folder = explorer.getByRole('treeitem', { name: 'reveal-folder', exact: true });
+	await folder.locator('.ash-tree-twistie').click();
+	const file = explorer.getByRole('treeitem').filter({ has: page.getByText('target.ts', { exact: true }) });
+	await file.dblclick();
+	const group = workbench.editors.groupAt(0);
+	const clicked = group.tabs.filter({ hasText: 'target.ts' });
+	await expect(clicked).toHaveAttribute('aria-selected', 'true');
+	await explorer.getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
+	await expect(clicked).toHaveAttribute('aria-selected', 'false');
+	await folder.locator('.ash-tree-twistie').click();
+	await expect(file).toHaveCount(0);
+	await workbench.quickaccess.runCommand('workbench.action.toggleSideBar');
+	await expect(sidebar).toBeHidden();
+	await expect(group.title.locator('[data-action-id="revealFileInOS"], [data-action-id="revealInExplorer"]')).toHaveCount(0);
+	await clicked.click({ button: 'right' });
+	const menu = page.getByRole('menu').last();
+	const explorerAction = menu.getByRole('menuitem', { name: 'Reveal in Explorer View', exact: true });
+	await expect(explorerAction).toBeVisible();
+	if (target.kind === 'electron') {
+		const labels = await menu.getByRole('menuitem').allTextContents();
+		const osLabel = process.platform === 'darwin' ? 'Reveal in Finder' : process.platform === 'win32' ? 'Reveal in File Explorer' : 'Open Containing Folder';
+		expect(labels.indexOf('Reveal in Explorer View')).toBe(labels.indexOf(osLabel) + 1);
+		const electron = application as ElectronApplication;
+		await electron.evaluate(({ shell }) => {
+			const paths: string[] = [];
+			(globalThis as typeof globalThis & { ashRevealedPaths: string[] }).ashRevealedPaths = paths;
+			shell.showItemInFolder = path => { paths.push(path); };
+		});
+		await menu.getByRole('menuitem', { name: osLabel, exact: true }).click();
+		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashRevealedPaths: string[] }).ashRevealedPaths)).toEqual([await realpath(join(testWorkspace.directory, 'reveal-folder', 'target.ts'))]);
+		await expect(sidebar).toBeHidden();
+		await clicked.focus();
+		await clicked.press('Shift+F10');
+	}
+	await explorerAction.click();
+	await expect(sidebar).toBeVisible();
+	await expect(folder).toHaveAttribute('aria-expanded', 'true');
+	await expect(file).toHaveAttribute('aria-selected', 'true');
+	await expect(explorer.locator('.ash-tree')).toBeFocused();
+	await expect(clicked).toHaveAttribute('aria-selected', 'false');
+	await page.keyboard.press('ControlOrMeta+N');
+	const untitled = group.tabs.filter({ hasText: /Untitled-/u });
+	await expect(untitled).toHaveAttribute('aria-selected', 'true');
+	await clicked.focus();
+	await clicked.press('Shift+F10');
+	await expect(explorerAction).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(clicked).toBeFocused();
+	await untitled.focus();
+	await untitled.press('Shift+F10');
+	await expect(menu).toBeVisible();
+	await expect(explorerAction).toHaveCount(0);
+	await page.keyboard.press('Escape');
 });
 
 test("App Server workspace files open in Stanza and save through the editor region", async ({ target, testWorkspace, workbench }) => {
@@ -26,6 +115,7 @@ test("App Server workspace files open in Stanza and save through the editor regi
 	await expect(group.tabs).toHaveCount(2);
 	await expect(group.tabs.filter({ hasText: "Welcome" })).toHaveCount(1);
 	await expect(group.tabs.filter({ hasText: "main.ts" })).toHaveAttribute("aria-selected", "true");
+	await expect(group.title.locator('[data-action-id="revealFileInOS"]')).toHaveCount(0);
 	const tab = group.title.locator('.ash-tab').filter({ hasText: "main.ts" });
 	await expect(tab).toHaveClass(/preview/);
 	await expect(explorer.locator('.ash-explorer-error')).toHaveCount(0);
@@ -1087,15 +1177,15 @@ test('Code editor scrollbar follows wheel, keyboard and thumb dragging in the de
 	await expect(vertical).toBeVisible();
 	await vertical.focus();
 	await page.keyboard.press('Home');
-	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBe(0);
+	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(0);
 	await editor.hover();
 	await page.mouse.wheel(0, 180);
-	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(0);
 	await vertical.focus();
 	await page.keyboard.press('End');
 	await expect.poll(async () => vertical.evaluate(element => element.getAttribute('aria-valuenow') === element.getAttribute('aria-valuemax'))).toBe(true);
 	await page.keyboard.press('Home');
-	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBe(0);
+	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(0);
 	const thumb = await vertical.locator('.ash-scrollbar-thumb').boundingBox();
 	if (!thumb) {
 		throw new Error('Missing scrollbar thumb');
@@ -1104,7 +1194,7 @@ test('Code editor scrollbar follows wheel, keyboard and thumb dragging in the de
 	await page.mouse.down();
 	await page.mouse.move(thumb.x + thumb.width / 2, thumb.y + thumb.height / 2 + 80, { steps: 5 });
 	await page.mouse.up();
-	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBeGreaterThan(180);
+	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(180);
 });
 
 test('Code replaces a selection with multiline text and remains editable', async ({ target, testWorkspace, workbench }) => {

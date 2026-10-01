@@ -34,6 +34,7 @@ import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { FileEditorInput } from '../editors/fileEditorInput.js';
 import { ResourceSchemeContext } from '../../../../common/contextkeys.js';
 import { PASTE_FILE_COMMAND_ID } from '../fileActions.js';
+import type { URI } from '../../../../../base/common/uri.js';
 
 /** Workspace file tree backed by `IFileService` and the Workbench editor. */
 export class ExplorerView extends ViewPane implements IExplorerView {
@@ -49,6 +50,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	private treeError = false;
 	private treeErrorElement: ExplorerItem | undefined;
 	private workspaceGeneration = 0;
+	private initialization: Promise<void>;
 	private readonly loadedNests = new Set<string>();
 	private readonly scopedContext: IScopedContextKeyService;
 	private readonly hasContextResource: IContextKey<boolean>;
@@ -222,7 +224,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			const roots = this.root?.children ?? (this.root ? [this.root] : []);
 			for (const root of roots) void this.refreshRoot(root);
 		}));
-		this._register(explorerService.onDidChangeRoot(() => { void this.initialize(); }));
+		this._register(explorerService.onDidChangeRoot(() => { this.initialization = this.initialize(); }));
 		this._register(explorerService.onDidChangeResources(resources => {
 			const roots = this.root?.children ?? (this.root ? [this.root] : []);
 			for (const root of roots) {
@@ -254,7 +256,33 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			}
 		}));
 		this.render();
-		void this.initialize();
+		this.initialization = this.initialize();
+	}
+
+	public async selectResource(resource: URI | undefined, reveal: boolean | string = true): Promise<void> {
+		this.setExpanded(true);
+		await this.initialization;
+		if (!resource) {
+			this.tree.setSelection([]);
+			return;
+		}
+		const generation = this.workspaceGeneration;
+		const expanded = new Set<string>();
+		// Only load ancestors of the requested file; nested file groups may contain sibling paths.
+		while (!this.isDisposed && generation === this.workspaceGeneration) {
+			const item = this.tree.getVisibleElements().find(candidate =>
+				!expanded.has(extUriBiasedIgnorePathCase.getComparisonKey(candidate.resource)) && containsResource(candidate, resource));
+			if (!item) return;
+			if (extUriBiasedIgnorePathCase.isEqual(item.resource, resource)) {
+				this.tree.setSelection([item]);
+				if (reveal) this.tree.setFocus(item);
+				return;
+			}
+			expanded.add(extUriBiasedIgnorePathCase.getComparisonKey(item.resource));
+			await this.tree.updateChildren(item, { recursive: false });
+			if (this.isDisposed || generation !== this.workspaceGeneration) return;
+			this.tree.expand(item);
+		}
 	}
 
 	public getContext(): readonly ExplorerItem[] {
@@ -410,4 +438,10 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		if (this.tree.domNode.parentElement !== this.scrollContent) this.scrollContent.append(this.tree.domNode);
 	}
 
+}
+
+function containsResource(item: ExplorerItem, resource: URI): boolean {
+	return extUriBiasedIgnorePathCase.isEqual(item.resource, resource)
+		|| item.kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqualOrParent(resource, item.resource)
+		|| item.children?.some(child => containsResource(child, resource)) === true;
 }

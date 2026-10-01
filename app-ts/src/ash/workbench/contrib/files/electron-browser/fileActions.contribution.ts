@@ -1,5 +1,4 @@
 import { isMacintosh, isWindows } from '../../../../base/common/platform.js';
-import { URI } from '../../../../base/common/uri.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { localize } from '../../../../nls.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
@@ -7,10 +6,11 @@ import type { ServicesAccessor } from '../../../../platform/instantiation/common
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { INativeHostService } from '../../../common/services.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { ResourceSchemeContext } from '../../../common/contextkeys.js';
+import { MultipleEditorsSelectedInGroupContext, ResourceSchemeContext } from '../../../common/contextkeys.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IExplorerService } from '../browser/files.js';
 import { revealResourcesInOS } from './fileCommands.js';
+import { resolveFileResource } from '../browser/fileCommands.js';
 
 export const REVEAL_IN_OS_COMMAND_ID = 'revealFileInOS';
 export const REVEAL_ACTIVE_FILE_IN_OS_COMMAND_ID = 'workbench.action.files.revealActiveFileInWindows';
@@ -28,19 +28,22 @@ registerAction2(class RevealFileInOSAction extends Action2 {
 		super({
 			id: REVEAL_IN_OS_COMMAND_ID,
 			title: revealLabel(),
+			precondition: ContextKeyExpr.not(MultipleEditorsSelectedInGroupContext.key),
 			f1: true,
 			menu: [
 				{ id: MenuId.ExplorerContext, when: ContextKeyExpr.and(ContextKeyExpr.has('ashExplorerHasResource'), ResourceSchemeContext.isEqualTo(Schemas.file)), group: 'navigation', order: 20 },
-				{ id: MenuId.EditorTitle, when: ResourceSchemeContext.isEqualTo(Schemas.file), group: 'navigation', order: 20 },
+				{ id: MenuId.EditorTitleContext, when: ResourceSchemeContext.isEqualTo(Schemas.file), group: '2_files', order: 0 },
 			],
 		});
 	}
 
 	override run(accessor: ServicesAccessor, resource?: unknown): Promise<void> {
-		if (resource !== undefined && !(resource instanceof URI)) throw new TypeError('Reveal requires a resource URI');
+		if (resource !== undefined) {
+			return revealResourcesInOS([resolveFileResource(accessor, resource)], accessor.get(INativeHostService), accessor.get(IWorkspaceContextService));
+		}
 		const selected = accessor.get(IExplorerService).getContext().map(item => item.resource);
 		const active = accessor.get(IEditorService).activeEditor?.resource;
-		const resources = resource instanceof URI ? [resource] : selected.length > 0 ? selected : active ? [active] : [];
+		const resources = selected.length > 0 ? selected : active ? [active] : [];
 		return revealResourcesInOS(resources, accessor.get(INativeHostService), accessor.get(IWorkspaceContextService));
 	}
 });

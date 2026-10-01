@@ -7,6 +7,7 @@ import { RawContextKey } from '../../../../platform/contextkey/common/contextkey
 import type { ExplorerItem } from '../common/explorerModel.js';
 
 export interface IExplorerView {
+	selectResource(resource: URI | undefined, reveal?: boolean | string): Promise<void>;
 	getContext(): readonly ExplorerItem[];
 	getAccessibleContent(): string;
 	focus(): void;
@@ -29,6 +30,8 @@ export interface IExplorerService {
 	readonly onDidChangeResources: Event<readonly URI[] | undefined>;
 	getRoot(): ExplorerItem | undefined;
 	getContext(): readonly ExplorerItem[];
+	/** The caller opens the Explorer view before requesting selection. */
+	select(resource: URI, reveal?: boolean | string): Promise<void>;
 	getAccessibleContent(): string | undefined;
 	focus(): void;
 	registerView(view: IExplorerView): IDisposable;

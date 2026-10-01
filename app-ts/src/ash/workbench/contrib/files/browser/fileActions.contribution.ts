@@ -8,7 +8,7 @@ import type { ServicesAccessor } from '../../../../platform/instantiation/common
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { KeybindingsRegistry, KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
-import { EditorsVisibleContext, ResourceSchemeContext, WorkspaceFolderCountContext } from '../../../common/contextkeys.js';
+import { EditorsVisibleContext, MultipleEditorsSelectedInGroupContext, ResourceSchemeContext, WorkspaceFolderCountContext } from '../../../common/contextkeys.js';
 import { IUntitledTextEditorService } from '../../../services/untitled/common/untitledTextEditorService.js';
 import { ASH_REMOTE_SCHEME } from '../../../../platform/remote/common/remote.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
@@ -16,8 +16,8 @@ import { IsWebContext } from '../../../../platform/contextkey/common/contextkeys
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { COPY_PATH_COMMAND_ID, COPY_RELATIVE_PATH_COMMAND_ID, NEW_UNTITLED_FILE_COMMAND_ID, OPEN_FILE_COMMAND_ID, SAVE_FILE_COMMAND_ID } from './fileConstants.js';
-import { copyFilePath, copyRelativeFilePath, resolveFileResource } from './fileCommands.js';
+import { COPY_PATH_COMMAND_ID, COPY_RELATIVE_PATH_COMMAND_ID, NEW_UNTITLED_FILE_COMMAND_ID, OPEN_FILE_COMMAND_ID, REVEAL_IN_EXPLORER_COMMAND_ID, SAVE_FILE_COMMAND_ID } from './fileConstants.js';
+import { copyFilePath, copyRelativeFilePath, resolveFileResource, revealInExplorer } from './fileCommands.js';
 import { cancelExplorerCut, CANCEL_CUT_COMMAND_ID, copyExplorerItems, COPY_FILE_COMMAND_ID, createNewFile, createNewFolder, CUT_FILE_COMMAND_ID, deleteExplorerItem, DELETE_FILE_COMMAND_ID, DOWNLOAD_COMMAND_ID, NEW_FILE_COMMAND_ID, NEW_FOLDER_COMMAND_ID, openExplorerItemToSide, OPEN_TO_SIDE_COMMAND_ID, pasteExplorerItems, PASTE_FILE_COMMAND_ID, renameExplorerItem, RENAME_FILE_COMMAND_ID } from './fileActions.js';
 import { FileDownload } from './fileImportExport.js';
 import { FileEditorInput } from './editors/fileEditorInput.js';
@@ -89,6 +89,27 @@ const fileResourceWhen = ContextKeyExpr.or(
 	ResourceSchemeContext.isEqualTo(Schemas.file),
 	ResourceSchemeContext.isEqualTo(ASH_REMOTE_SCHEME),
 );
+
+registerAction2(class RevealInExplorerAction extends Action2 {
+	constructor() {
+		super({
+			id: REVEAL_IN_EXPLORER_COMMAND_ID,
+			title: localizedString('ash', 'files.revealInExplorer', 'Reveal in Explorer View'),
+			precondition: ContextKeyExpr.not(MultipleEditorsSelectedInGroupContext.key),
+			menu: {
+				id: MenuId.EditorTitleContext,
+				when: fileResourceWhen,
+				group: '2_files',
+				order: 1,
+			},
+		});
+	}
+
+	override run(accessor: ServicesAccessor, resource?: unknown): Promise<void> {
+		return revealInExplorer(accessor, resource);
+	}
+});
+
 const selectedFileWhen = ContextKeyExpr.has('ashExplorerIsFile');
 const canCreateWhen = ContextKeyExpr.has('ashExplorerCanCreate');
 const selectedResourceWhen = ContextKeyExpr.and(ContextKeyExpr.has('ashExplorerHasResource'), fileResourceWhen);

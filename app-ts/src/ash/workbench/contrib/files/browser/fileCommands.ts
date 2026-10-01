@@ -5,6 +5,11 @@ import type { ServicesAccessor } from '../../../../platform/instantiation/common
 import { getRemoteWorkspacePath, isRemoteResource } from '../../../../platform/remote/common/remote.js';
 import { IWorkspaceContextService, workspaceRelativePath } from '../../../../platform/workspace/common/workspace.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
+import { resolveCommandsContext } from '../../../browser/parts/editor/editorCommandsContext.js';
+import { IViewsService } from '../../../services/views/browser/viewsService.js';
+import { IExplorerService } from './files.js';
+import { VIEW_ID } from '../common/files.js';
 
 export async function copyFilePath(accessor: ServicesAccessor, resourceArgument?: unknown): Promise<void> {
 	const resource = resolveFileResource(accessor, resourceArgument);
@@ -22,10 +27,15 @@ export async function copyRelativeFilePath(accessor: ServicesAccessor, resourceA
 }
 
 export function resolveFileResource(accessor: ServicesAccessor, resourceArgument: unknown): URI {
-	if (resourceArgument !== undefined && !(resourceArgument instanceof URI)) {
-		throw new TypeError('File path command requires a resource URI');
+	let resource: URI | undefined;
+	if (resourceArgument instanceof URI) {
+		resource = resourceArgument;
+	} else if (resourceArgument === undefined) {
+		resource = accessor.get(IEditorService).activeEditor?.resource;
+	} else {
+		resource = resolveCommandsContext([resourceArgument], accessor.get(IEditorGroupsService)).groupedEditors[0]?.editors[0]?.resource;
+		if (!resource) throw new TypeError('File command requires a resource URI or editor context');
 	}
-	const resource = resourceArgument ?? accessor.get(IEditorService).activeEditor?.resource;
 	if (!resource) {
 		throw new Error(localize({ bundle: 'ash', key: 'workbench.copyPathNoFile' }, 'Open a file to copy its path.'));
 	}
@@ -33,4 +43,13 @@ export function resolveFileResource(accessor: ServicesAccessor, resourceArgument
 		throw new Error(localize({ bundle: 'ash', key: 'workbench.copyPathUnsupported' }, 'This editor does not have a file path.'));
 	}
 	return resource;
+}
+
+export async function revealInExplorer(accessor: ServicesAccessor, resourceArgument?: unknown): Promise<void> {
+	const resource = resolveFileResource(accessor, resourceArgument);
+	if (!accessor.get(IWorkspaceContextService).getWorkspaceFolder(resource)) return;
+	const view = accessor.get(IViewsService).openView(VIEW_ID);
+	if (!view) return;
+	await accessor.get(IExplorerService).select(resource, 'force');
+	view.focus();
 }
