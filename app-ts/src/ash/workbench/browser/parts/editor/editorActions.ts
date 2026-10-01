@@ -16,6 +16,9 @@ import { IEditorPartsService } from "./editorParts.js";
 import { AllEditorsByMostRecentlyUsedQuickAccess } from "./editorQuickAccess.js";
 import { IBreadcrumbsService } from "./breadcrumbs.js";
 import { GoFilter, IHistoryService } from '../../../services/history/common/history.js';
+import { Direction } from '../../../../base/browser/ui/grid/grid.js';
+import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
+import { resolveCommandsContext } from './editorCommandsContext.js';
 
 export const FocusBreadcrumbsCommandId = "workbench.action.focusBreadcrumbs";
 export const ToggleEditorGroupLockCommandId = "workbench.action.toggleEditorGroupLock";
@@ -56,8 +59,8 @@ registerAction2(class SplitEditorHorizontalAction extends Action2 {
 	constructor() {
 		super({
 			id: SplitEditorHorizontalCommandId,
-			title: "Split Editor Horizontal",
-			tooltip: "Split Editor Horizontal",
+			title: localizedString('ash', 'workbench.splitEditorHorizontal', 'Split Editor Horizontal'),
+			tooltip: localizedString('ash', 'workbench.splitEditorHorizontal', 'Split Editor Horizontal'),
 			icon: Lxicon.splitHorizontal,
 			f1: true,
 			menu: {
@@ -68,8 +71,8 @@ registerAction2(class SplitEditorHorizontalAction extends Action2 {
 		});
 	}
 
-	override run(accessor: ServicesAccessor): Promise<void> {
-		return accessor.get(IEditorPart).splitActiveGroupHorizontal();
+	override run(accessor: ServicesAccessor, ...args: readonly unknown[]): Promise<void> {
+		return splitEditors(accessor, args, Direction.Right);
 	}
 });
 
@@ -79,16 +82,52 @@ registerAction2(class SplitEditorVerticalAction extends Action2 {
 	constructor() {
 		super({
 			id: SplitEditorVerticalCommandId,
-			title: "Split Editor Vertical",
-			tooltip: "Split Editor Vertical",
+			title: localizedString('ash', 'workbench.splitEditorVertical', 'Split Editor Vertical'),
+			tooltip: localizedString('ash', 'workbench.splitEditorVertical', 'Split Editor Vertical'),
 			f1: true,
 		});
 	}
 
-	override run(accessor: ServicesAccessor): Promise<void> {
-		return accessor.get(IEditorPart).splitActiveGroupVertical();
+	override run(accessor: ServicesAccessor, ...args: readonly unknown[]): Promise<void> {
+		return splitEditors(accessor, args, Direction.Down);
 	}
 });
+
+for (const definition of [
+	{ id: 'workbench.action.splitEditorUp', key: 'workbench.splitEditorUp', title: 'Split Up', direction: Direction.Up, order: 10 },
+	{ id: 'workbench.action.splitEditorDown', key: 'workbench.splitEditorDown', title: 'Split Down', direction: Direction.Down, order: 20 },
+	{ id: 'workbench.action.splitEditorLeft', key: 'workbench.splitEditorLeft', title: 'Split Left', direction: Direction.Left, order: 30 },
+	{ id: 'workbench.action.splitEditorRight', key: 'workbench.splitEditorRight', title: 'Split Right', direction: Direction.Right, order: 40 },
+]) {
+	registerAction2(class SplitEditorAction extends Action2 {
+		constructor() {
+			super({
+				id: definition.id,
+				title: localizedString('ash', definition.key, definition.title),
+				f1: true,
+				precondition: EditorsVisibleContext.isEqualTo(true),
+				menu: { id: MenuId.EditorTitleContext, group: '5_split', order: definition.order },
+			});
+		}
+
+		override run(accessor: ServicesAccessor, ...args: readonly unknown[]): Promise<void> {
+			return splitEditors(accessor, args, definition.direction);
+		}
+	});
+}
+
+async function splitEditors(accessor: ServicesAccessor, args: readonly unknown[], direction: Direction): Promise<void> {
+	const part = accessor.get(IEditorPart);
+	const groups = accessor.get(IEditorGroupsService);
+	if (args.length === 0 && groups.activeGroup.inputs.length === 0) {
+		await part.splitActiveGroup(direction);
+		return;
+	}
+	const context = resolveCommandsContext(args, groups);
+	for (const { group, editors } of context.groupedEditors) {
+		await part.splitEditors(group.id, editors, direction);
+	}
+}
 
 export const CloseAllEditorsCommandId = "workbench.action.closeAllEditors";
 

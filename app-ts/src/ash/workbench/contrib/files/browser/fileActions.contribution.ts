@@ -137,6 +137,19 @@ MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: NEW_FOLDER_
 MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: COPY_PATH_COMMAND_ID, title: localizedString('ash', 'workbench.copyPath', 'Copy Path') }, when: fileResourceWhen });
 MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: COPY_RELATIVE_PATH_COMMAND_ID, title: localizedString('ash', 'workbench.copyRelativePath', 'Copy Relative Path') }, when: fileResourceWhen });
 
+MenusRegistry.appendMenuItem(MenuId.EditorTitleContext, {
+	command: { id: COPY_PATH_COMMAND_ID, title: localizedString('ash', 'workbench.copyPath', 'Copy Path') },
+	when: fileResourceWhen,
+	group: '1_cutcopypaste',
+	order: 10,
+});
+MenusRegistry.appendMenuItem(MenuId.EditorTitleContext, {
+	command: { id: COPY_RELATIVE_PATH_COMMAND_ID, title: localizedString('ash', 'workbench.copyRelativePath', 'Copy Relative Path') },
+	when: fileResourceWhen,
+	group: '1_cutcopypaste',
+	order: 20,
+});
+
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
 	command: { id: NEW_FILE_COMMAND_ID, title: localizedString('ash', 'workbench.newFile', 'New File...') },
 	when: canCreateWhen,

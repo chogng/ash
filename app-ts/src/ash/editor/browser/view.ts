@@ -955,7 +955,9 @@ export class View extends ViewEventHandler {
 			owner: this,
 			renderText: () => {
 				const contentOffsetLeft = this.contentOffsetLeft;
-				this.contentNode.setTransform(contentOffsetLeft > 0 ? `translate3d(${contentOffsetLeft}px, 0, 0)` : '');
+				// Text layers retain their editor-relative geometry inside the body viewport.
+				const bodyOffsetLeft = contentOffsetLeft - this.getLayoutInfo().contentLeft;
+				this.contentNode.setTransform(`translate3d(${bodyOffsetLeft}px, 0, 0)`);
 				if (this.viewLines.shouldRender()) {
 					this.viewLines.renderText(viewportData);
 					this.viewLines.onDidRender();
@@ -1056,7 +1058,7 @@ export class View extends ViewEventHandler {
 		const start = this.getPositionContentCoordinates(position);
 		const end = this.getPositionContentCoordinates(next);
 		return Object.freeze({
-			left: Math.min(start.left, end.left),
+			left: Math.min(start.left, end.left) - this.getLayoutInfo().contentLeft,
 			top: start.top,
 			width: position.lineNumber === next.lineNumber ? Math.max(1, Math.abs(end.left - start.left)) : Math.max(1, this.measureTextWidth(' ')),
 			height: start.height,

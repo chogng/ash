@@ -1228,6 +1228,43 @@ test('HistoryService restores cursor, edit, and navigation locations', async () 
 	dom.window.close();
 });
 
+test('tab split commands copy multiple inactive tabs beside their source group', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('stanza.editor.code', '.ts', () => new TestEditorPane('stanza.editor.code')));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		using services = new InstantiationService();
+		using editorService = new BrowserEditorService(editor);
+		services.registerInstance(IEditorPart, editor);
+		services.registerInstance(IEditorGroupsService, editorService);
+		using commands = new CommandService(services);
+		dom.window.document.body.append(editor.domNode);
+		editor.layout({ width: 960, height: 640 });
+		const first = input('/project/first.ts');
+		const second = input('/project/second.ts');
+		const active = input('/project/active.ts');
+		await editor.openEditor(first);
+		await editor.openEditor(second);
+		await editor.openEditor(active);
+		const source = editor.activeGroup;
+		const tabs = source.domNode.querySelectorAll<HTMLElement>('[role="tab"]');
+		tabs[0]!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+		tabs[1]!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, metaKey: true, ctrlKey: true }));
+		assert.deepEqual(source.selectedInputs, [first, second]);
+		await commands.executeCommand('workbench.action.splitEditorLeft', { groupId: source.id, editorIndex: 0 });
+		assert.deepEqual(editor.groups.map(group => group.inputs), [[first, second, active], [first, second]]);
+		assert.equal(editor.activeGroup.activeInput, second);
+		assert.equal(editor.activeGroup.isPreview(first), false);
+		assert.equal(editor.activeGroup.isPreview(second), false);
+		const sourceBounds = source.domNode.parentElement!.style.left;
+		const copiedBounds = editor.activeGroup.domNode.parentElement!.style.left;
+		assert.ok(parseFloat(copiedBounds) < parseFloat(sourceBounds));
+	} finally {
+		dom.window.close();
+	}
+});
+
 test("EditorPart restores nested horizontal and vertical Grid layouts", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
@@ -1323,6 +1360,8 @@ test("Editor title toolbar splits the active group and owns More Actions", async
 		},
 	});
 	services.registerInstance(IEditorPart, editor);
+	using editorService = new BrowserEditorService(editor);
+	services.registerInstance(IEditorGroupsService, editorService);
 	dom.window.document.body.append(editor.domNode);
 	const activeInput = input("C:\\project\\main.ts");
 	await editor.openEditor(activeInput);
@@ -1664,6 +1703,40 @@ test("EditorParts moves an editor to an auxiliary window without changing its in
 	main.dispose();
 	workingCopy.dispose();
 	dom.window.close();
+});
+
+test('tab split commands route to an inactive auxiliary window by source group', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
+	try {
+		const registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('stanza.editor.code', '.ts', () => new TestEditorPane('stanza.editor.code')));
+		using main = createEditorPart(dom.window.document.body, { registry });
+		using windows = new TestAuxiliaryWindowService();
+		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, applicationId: 'tab-split-test', workspaceId: 'workspace', flushInterval: 0 });
+		using parts = new EditorParts(main, windows, container => ({ part: createEditorPart(container, { registry }) }), {
+			onDidChangeScreenReaderOptimized: Event.None,
+			isScreenReaderOptimized: () => false,
+		} as unknown as IAccessibilityService, storage);
+		const auxiliary = await parts.createAuxiliaryEditorPart();
+		const clicked = input('/project/clicked.ts');
+		const active = input('/project/active.ts');
+		await auxiliary.openEditor(clicked);
+		await main.openEditor(active);
+		main.domNode.dispatchEvent(new dom.window.Event('focusin', { bubbles: true }));
+		assert.equal(parts.activePart, main);
+		using services = new InstantiationService();
+		using editorService = new BrowserEditorService(parts);
+		services.registerInstance(IEditorPart, parts);
+		services.registerInstance(IEditorGroupsService, editorService);
+		using commands = new CommandService(services);
+		const source = auxiliary.activeGroup;
+		await commands.executeCommand('workbench.action.splitEditorUp', { groupId: source.id, editorIndex: 0 });
+		assert.deepEqual(main.groups.map(group => group.inputs), [[active]]);
+		assert.deepEqual(auxiliary.groups.map(group => group.inputs), [[clicked], [clicked]]);
+		assert.equal(parts.activePart, auxiliary);
+	} finally {
+		dom.window.close();
+	}
 });
 
 test('EditorParts restores main and auxiliary editor windows with their active part', async () => {

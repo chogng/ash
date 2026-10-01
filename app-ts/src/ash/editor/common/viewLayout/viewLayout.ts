@@ -390,10 +390,9 @@ export class ViewLayout extends Disposable {
 		if (event.hasChanged(EditorOption.layoutInfo)) {
 			const layoutInfo = options.get(EditorOption.layoutInfo);
 			const size = readSize({ width: layoutInfo.width, height: layoutInfo.height }, 'viewportSize');
-			if (!sizesEqual(this.viewportSize, size)) {
-				this.viewportSize = size;
-				changed = true;
-			}
+			this.viewportSize = size;
+			// Gutter and minimap changes can move the scroll viewport without resizing the editor.
+			changed = true;
 		}
 		if (changed) this.publish(reason, scrollPosition);
 	}
@@ -567,9 +566,12 @@ export class ViewLayout extends Disposable {
 	private readScrollDimensions(): { width: number; scrollWidth: number; height: number; scrollHeight: number } {
 		const contentWidth = Math.max(this.viewportSize.width, this.maxLineWidth, this.overlayWidgetsMinWidth, this.linesLayout.getWhitespaceMinWidth());
 		const contentHeight = Math.max(this.viewportSize.height, this.linesLayout.getLinesTotalHeight());
+		// Public layout coordinates include the fixed gutter; scrollbar dimensions
+		// address only the body. Subtracting the same origin preserves the scroll range.
+		const contentLeft = this.configuration.options.get(EditorOption.layoutInfo).contentLeft;
 		return {
-			width: this.viewportSize.width,
-			scrollWidth: contentWidth,
+			width: Math.max(0, this.viewportSize.width - contentLeft),
+			scrollWidth: Math.max(0, contentWidth - contentLeft),
 			height: this.viewportSize.height,
 			scrollHeight: contentHeight,
 		};

@@ -40,7 +40,7 @@ function testConfiguration(lineHeight: number, padding: EditorViewportVerticalPa
 	const values = new Map<EditorOption, unknown>([
 		[EditorOption.lineHeight, lineHeight],
 		[EditorOption.padding, padding ?? { top: 0, bottom: 0 }],
-		[EditorOption.layoutInfo, { width: 0, height: 0 }],
+		[EditorOption.layoutInfo, { width: 0, height: 0, contentLeft: 0 }],
 		[EditorOption.smoothScrolling, false],
 	]);
 	return {

@@ -11,6 +11,7 @@ import { MultipleEditorsSelectedInGroupContext, ResourceSchemeContext } from '..
 import { JSDOM } from 'jsdom';
 import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import { URI } from '../../../../../base/common/uri.js';
+import { Schemas } from '../../../../../base/common/network.js';
 import { IClipboardService, type IClipboardResources } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IDialogService, type IConfirmationDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
@@ -587,6 +588,37 @@ test('Reveal file IPC validates the requested path before calling the desktop ho
 	assert.throws(() => route.validate('bad\0path'), /Invalid file path/);
 	await route.invoke(route.validate('C:\\project\\main.ts'));
 	assert.deepEqual(revealed, ['C:\\project\\main.ts']);
+});
+
+test('tab copy actions copy clicked and selected file paths without changing the active editor', async () => {
+	await import('../../browser/fileActions.contribution.js');
+	const active = new FileEditorInput(URI.file('/project/active.ts'));
+	const clicked = new FileEditorInput(URI.file('/project/src/clicked.ts'));
+	const second = new FileEditorInput(URI.file('/project/src/second.ts'));
+	const group = { id: 'main', inputs: [active, clicked, second], selectedInputs: [active], editors: [active, clicked, second].map(input => ({ input })), activeInput: active };
+	const copied: string[] = [];
+	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+	using services = new InstantiationService();
+	services.registerInstance(IWorkspaceContextService, workspace);
+	services.registerInstance(IEditorGroupsService, { getGroup: (id: string) => id === group.id ? group : undefined } as unknown as IEditorGroupsService);
+	services.registerInstance(IEditorService, { activeEditor: active } as unknown as EditorServiceContract);
+	services.registerInstance(IClipboardService, { writeText: async text => { copied.push(text); } } as IClipboardService);
+	using commands = new CommandService(services);
+	using context = new ContextKeyService();
+	context.setContext(ResourceSchemeContext.key, clicked.resource.scheme);
+	const menus = new MenuService(commands, context);
+	const actions = menus.getMenuActions(MenuId.EditorTitleContext, { arg: { groupId: group.id, editorIndex: 1 } }).find(([name]) => name === '1_cutcopypaste')![1];
+	assert.deepEqual(actions.map(action => action.id), [COPY_PATH_COMMAND_ID, COPY_RELATIVE_PATH_COMMAND_ID]);
+	for (const action of actions) await action.run();
+	group.selectedInputs = [clicked, second];
+	for (const action of actions) await action.run();
+	const separator = process.platform === 'win32' ? '\r\n' : '\n';
+	assert.deepEqual(copied, [clicked.resource.fsPath, 'src/clicked.ts', [clicked.resource.fsPath, second.resource.fsPath].join(separator), ['src/clicked.ts', 'src/second.ts'].join(separator)]);
+	assert.equal(group.activeInput, active);
+	await assert.rejects(commands.executeCommand(COPY_PATH_COMMAND_ID, { groupId: 'missing' }), TypeError);
+	assert.equal(copied.length, 4);
+	context.setContext(ResourceSchemeContext.key, Schemas.untitled);
+	assert.equal(menus.getMenuActions(MenuId.EditorTitleContext).some(([name]) => name === '1_cutcopypaste'), false);
 });
 
 test('Reveal tab menu groups both destinations and targets the clicked inactive file', async () => {

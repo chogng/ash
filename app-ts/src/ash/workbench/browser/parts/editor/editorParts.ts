@@ -11,7 +11,7 @@ import { type IStorageService, StorageScope, StorageTarget } from "../../../../p
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import type { EditorInput, EditorOpenOptions, EditorOpenTarget } from "../../../services/editor/common/editorService.js";
 import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetTarget } from "../../../services/editor/common/editorWorkingSet.js";
-import type { EditorIdentifier, EditorPartChangeEvent, EditorPartState } from "../../../services/editor/common/editorState.js";
+import type { EditorGroupId, EditorIdentifier, EditorPartChangeEvent, EditorPartState } from "../../../services/editor/common/editorState.js";
 import type { IAuxiliaryWindow, IAuxiliaryWindowService } from "../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js";
 import type { IEditorPane } from "./editorPane.js";
 import { editorInputKey } from "./editorTabsControl.js";
@@ -247,6 +247,11 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	splitActiveGroup(direction: GridDirection): Promise<void> { return this._activePart.splitActiveGroup(direction); }
 	splitActiveGroupHorizontal(): Promise<void> { return this._activePart.splitActiveGroupHorizontal(); }
 	splitActiveGroupVertical(): Promise<void> { return this._activePart.splitActiveGroupVertical(); }
+	splitEditors(groupId: EditorGroupId, inputs: readonly EditorInput[], direction: GridDirection): Promise<void> {
+		const part = this.parts.find(candidate => candidate.groups.some(group => group.id === groupId));
+		if (!part) throw new RangeError(`Editor group is not open: ${groupId}`);
+		return part.splitEditors(groupId, inputs, direction);
+	}
 	getEditorPaneChoices(input?: EditorInput): readonly IEditorPaneDescriptor[] { return this._activePart.getEditorPaneChoices(input); }
 	reopenActiveEditorWith(preferredEditorId: string): Promise<IEditorPane | undefined> { return this._activePart.reopenActiveEditorWith(preferredEditorId); }
 	reopenClosedEditor(): Promise<boolean> { return this._activePart.reopenClosedEditor(); }

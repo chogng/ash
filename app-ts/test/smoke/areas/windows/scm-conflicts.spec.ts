@@ -208,12 +208,12 @@ test('SCM merge editors synchronize scrolling across the three sources and resul
 		await expect(editor).toBeVisible();
 		expect(await editor.evaluate(node => node.getBoundingClientRect().height)).toBeGreaterThan(0);
 	}
-	await editors[0].evaluate(node => { node.scrollTop = 600; node.dispatchEvent(new Event('scroll')); });
-	await expect.poll(async () => Promise.all(editors.map(editor => editor.evaluate(node => node.scrollTop)))).toEqual([600, 600, 600]);
+	await editors[0].locator(':scope > .ash-smooth-scrollable').evaluate(node => { node.scrollTop = 600; node.dispatchEvent(new Event('scroll')); });
+	await expect.poll(async () => Promise.all(editors.map(editor => editor.locator(':scope > .ash-smooth-scrollable').evaluate(node => node.scrollTop)))).toEqual([600, 600, 600]);
 	await page.getByRole('button', { name: 'Show Base' }).click();
 	const baseEditor = group.content.locator('.ash-merge-input-base .stanza-editor');
 	await expect(baseEditor).toBeVisible();
-	await expect.poll(async () => baseEditor.evaluate(node => node.scrollTop)).toBe(600);
+	await expect.poll(async () => baseEditor.locator(':scope > .ash-smooth-scrollable').evaluate(node => node.scrollTop)).toBe(600);
 	await page.getByRole('button', { name: 'Conflict 1' }).click();
 	const alignedTops = await Promise.all(['.ash-merge-input-base', '.ash-merge-input-current', '.ash-merge-input-incoming', '.ash-merge-result-editor'].map(selector => group.content.locator(`${selector} .ash-merge-inline-actions[data-visible-view-zone]`).evaluate(node => {
 		const editor = node.closest('.stanza-editor')!;
@@ -254,18 +254,18 @@ test('SCM merge editors synchronize scrolling across the three sources and resul
 	await expect.poll(readActionTopSpread).toBeLessThan(2);
 	await expect(currentAction).toBeFocused();
 	await page.setViewportSize(viewport);
-	const actionScrollTop = await editors[0].evaluate(node => node.scrollTop);
-	await editors[0].evaluate(node => {
+	const actionScrollTop = await editors[0].locator(':scope > .ash-smooth-scrollable').evaluate(node => node.scrollTop);
+	await editors[0].locator(':scope > .ash-smooth-scrollable').evaluate(node => {
 		const line = [...node.querySelectorAll('.view-line')].find(row => row.textContent?.includes('const currentExtra = 30;'));
 		if (!line) throw new Error('Current conflict line is not rendered');
 		node.scrollTop += line.getBoundingClientRect().top - node.getBoundingClientRect().top + 8;
 		node.dispatchEvent(new Event('scroll'));
 	});
 	await expect.poll(async () => {
-		const scrollTops = await Promise.all([...editors, baseEditor].map(editor => editor.evaluate(node => node.scrollTop)));
+		const scrollTops = await Promise.all([...editors, baseEditor].map(editor => editor.locator(':scope > .ash-smooth-scrollable').evaluate(node => node.scrollTop)));
 		return Math.max(...scrollTops) - Math.min(...scrollTops);
 	}).toBeLessThan(2);
-	await editors[0].evaluate((node, scrollTop) => {
+	await editors[0].locator(':scope > .ash-smooth-scrollable').evaluate((node, scrollTop) => {
 		node.scrollTop = scrollTop;
 		node.dispatchEvent(new Event('scroll'));
 	}, actionScrollTop);

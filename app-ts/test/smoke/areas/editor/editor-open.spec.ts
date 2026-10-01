@@ -8,7 +8,7 @@ test.beforeEach(async ({ workbench }) => {
 	if (await showSidebar.isVisible()) { await showSidebar.click(); }
 });
 
-test('file tab reveal actions share a menu group and reveal the inactive file', async ({ application, target, testWorkspace, workbench }) => {
+test('file tab copy and reveal actions target inactive and selected files', async ({ application, target, testWorkspace, workbench }) => {
 	test.skip(target.workbenchMode !== 'code' || target.kind === 'electron' && target.appServerMode !== 'required', 'Desktop files require App Server');
 	const page = workbench.page;
 	if (target.kind === 'browser' && target.appServerMode === 'disabled') {
@@ -51,6 +51,39 @@ test('file tab reveal actions share a menu group and reveal the inactive file', 
 	await expect(clicked).toHaveAttribute('aria-selected', 'true');
 	await explorer.getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
 	await expect(clicked).toHaveAttribute('aria-selected', 'false');
+	if (target.kind === 'browser') await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+	const readClipboard = (): Promise<string> => target.kind === 'electron'
+		? (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText())
+		: page.evaluate(() => navigator.clipboard.readText());
+	const previousClipboard = await readClipboard();
+	try {
+		await clicked.click({ button: 'right' });
+		const copyMenu = page.getByRole('menu').last();
+		await copyMenu.getByRole('menuitem', { name: 'Copy Path', exact: true }).click();
+		if (target.kind === 'electron') {
+			expect(await readClipboard()).toBe(await realpath(join(testWorkspace.directory, 'reveal-folder', 'target.ts')));
+		} else {
+			expect(await readClipboard()).toMatch(/\/reveal-folder\/target\.ts$/u);
+		}
+		await expect(clicked).toHaveAttribute('aria-selected', 'false');
+		await clicked.focus();
+		await clicked.press('Shift+F10');
+		await copyMenu.getByRole('menuitem', { name: 'Copy Relative Path', exact: true }).click();
+		expect(await readClipboard()).toBe('reveal-folder/target.ts');
+		await clicked.click();
+		const mainTab = group.tabs.filter({ hasText: 'main.ts' });
+		await mainTab.click({ modifiers: ['ControlOrMeta'] });
+		await clicked.click({ button: 'right' });
+		await copyMenu.getByRole('menuitem', { name: 'Copy Relative Path', exact: true }).click();
+		expect((await readClipboard()).split(/\r?\n/u)).toEqual(['reveal-folder/target.ts', 'main.ts']);
+		await mainTab.click();
+	} finally {
+		if (target.kind === 'electron') {
+			await (application as ElectronApplication).evaluate(({ clipboard }, text) => clipboard.writeText(text), previousClipboard);
+		} else {
+			await page.evaluate(text => navigator.clipboard.writeText(text), previousClipboard);
+		}
+	}
 	await folder.locator('.ash-tree-twistie').click();
 	await expect(file).toHaveCount(0);
 	await workbench.quickaccess.runCommand('workbench.action.toggleSideBar');

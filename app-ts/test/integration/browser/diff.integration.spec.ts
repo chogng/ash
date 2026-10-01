@@ -29,6 +29,21 @@ test('diff editors preserve source indentation on both sides', async ({ page }) 
 	}
 });
 
+test('both diff scroll viewports start after their fixed line-number gutter', async ({ page }) => {
+	await openDiffPage(page);
+	await page.evaluate(() => window.ashDiffIntegration.setComparisonText('long line '.repeat(100), `${'long line '.repeat(100)}changed`));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	for (const side of ['original', 'modified']) {
+		const editor = page.locator(`#single .stanza-diff-editor-side.${side} .stanza-editor`);
+		await expect.poll(() => editor.evaluate(root => {
+			const margin = root.querySelector('.margin')!.getBoundingClientRect();
+			const viewport = root.querySelector('.ash-smooth-scrollable')!.getBoundingClientRect();
+			const track = root.querySelector('.ash-scrollbar-track-horizontal')!.getBoundingClientRect();
+			return { gutterWidth: margin.width > 0, viewportDelta: viewport.left - margin.right, trackDelta: track.left - viewport.left };
+		})).toEqual({ gutterWidth: true, viewportDelta: 0, trackDelta: 0 });
+	}
+});
+
 test('editable diff renders Unicode changes and shares models with Multi Diff', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));

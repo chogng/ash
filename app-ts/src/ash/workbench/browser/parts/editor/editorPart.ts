@@ -92,6 +92,8 @@ export interface IEditorPart extends IEditorStateSource, IDisposable {
 	saveActiveEditor(): Promise<void>;
 	setContent(content: Element): Promise<void>;
 	splitActiveGroup(direction: GridDirection): Promise<void>;
+	/** Copies the requested tabs beside their source group without activating a source tab. */
+	splitEditors(groupId: EditorGroupId, inputs: readonly EditorInput[], direction: GridDirection): Promise<void>;
 	splitActiveGroupHorizontal(): Promise<void>;
 	splitActiveGroupVertical(): Promise<void>;
 	getEditorPaneChoices(input?: EditorInput): readonly IEditorPaneDescriptor[];
@@ -550,17 +552,22 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	}
 
 	async splitActiveGroup(direction: GridDirection): Promise<void> {
-		const source = this._activeGroup;
+		await this.splitEditors(this._activeGroup.id, this._activeGroup.activeInput ? [this._activeGroup.activeInput] : [], direction);
+	}
+
+	async splitEditors(groupId: EditorGroupId, inputs: readonly EditorInput[], direction: GridDirection): Promise<void> {
+		const source = this.groupHosts.get(groupId)!.group;
+		const previousActive = this._activeGroup;
 		const created = this.insertGroup(source, direction);
 		this.setActiveGroup(created.group);
 		try {
-			if (source.activeInput) {
-				await created.group.openEditor(source.activeInput);
+			for (const input of inputs) {
+				await created.group.openEditor(input, { pinned: true });
 			}
 			created.group.focus();
 		} catch (error) {
 			this.removeGroup(created);
-			this.setActiveGroup(source);
+			this.setActiveGroup(previousActive);
 			throw error;
 		}
 	}

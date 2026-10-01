@@ -45,6 +45,77 @@ test('line numbers and glyph markers share text coordinates after vertical and h
 	}))).toEqual({ fixedRoot: true, marginOutsideContent: true, inputInScrollViewport: true });
 });
 
+test('scroll viewport and horizontal thumb exclude the fixed gutter after layout changes', async ({ page }) => {
+	await openEditor(page);
+	await page.evaluate(() => {
+		const editor = window.ashTextModelIntegration.getControl();
+		editor.getModel()!.setLanguage('plaintext');
+		editor.updateOptions({ lineNumbers: 'on', glyphMargin: true, wordWrap: 'off', smoothScrolling: false, minimap: { enabled: false }, scrollbar: { horizontal: 'visible' } });
+		editor.setValue(Array.from({ length: 100 }, () => 'long line '.repeat(100)).join('\n'));
+	});
+	const editor = page.locator('.stanza-editor');
+	for (const side of ['disabled', 'left', 'right'] as const) {
+		await page.evaluate(side => {
+			const control = window.ashTextModelIntegration.getControl();
+			control.updateOptions({ minimap: { enabled: side !== 'disabled', side: side === 'left' ? 'left' : 'right' } });
+			control.setScrollPosition({ scrollLeft: 0, scrollTop: 400 });
+		}, side);
+		await expect.poll(() => editor.evaluate(root => {
+			const layout = window.ashTextModelIntegration.getControl().getLayoutInfo();
+			const viewport = root.querySelector<HTMLElement>(':scope > .ash-smooth-scrollable')!;
+			const track = viewport.querySelector('.ash-scrollbar-track-horizontal')!;
+			return {
+				viewportLeft: viewport.getBoundingClientRect().left - root.getBoundingClientRect().left - layout.contentLeft,
+				viewportWidth: viewport.clientWidth - (layout.width - layout.contentLeft),
+				trackLeft: track.getBoundingClientRect().left - viewport.getBoundingClientRect().left,
+			};
+		})).toEqual({ viewportLeft: 0, viewportWidth: 0, trackLeft: 0 });
+		const thumb = editor.locator('.ash-scrollbar-track-horizontal > .ash-scrollbar-thumb');
+		const thumbBox = await thumb.boundingBox();
+		assertBox(thumbBox, 'horizontal thumb');
+		const rootBox = await editor.boundingBox();
+		assertBox(rootBox, 'editor');
+		await page.mouse.move(thumbBox.x + thumbBox.width / 2, thumbBox.y + thumbBox.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(rootBox.x + rootBox.width + 200, thumbBox.y + thumbBox.height / 2);
+		await page.mouse.up();
+		await expect.poll(() => editor.evaluate(root => {
+			const viewport = root.querySelector<HTMLElement>(':scope > .ash-smooth-scrollable')!;
+			return { remaining: viewport.scrollWidth - viewport.clientWidth - viewport.scrollLeft, delta: window.ashTextModelIntegration.getControl().getScrollLeft() - viewport.scrollLeft };
+		})).toEqual({ remaining: 0, delta: 0 });
+	}
+	await page.evaluate(() => window.ashTextModelIntegration.getControl().updateOptions({ lineNumbers: 'off', glyphMargin: false }));
+	await expect.poll(() => editor.evaluate(root => {
+		const viewport = root.querySelector<HTMLElement>(':scope > .ash-smooth-scrollable')!;
+		return viewport.getBoundingClientRect().left - root.getBoundingClientRect().left - window.ashTextModelIntegration.getControl().getLayoutInfo().contentLeft;
+	})).toBe(0);
+});
+
+for (const inputMode of ['EditContext', 'textarea'] as const) {
+	test(`composition anchor follows the caret inside the scrolling body with ${inputMode}`, async ({ page }) => {
+		if (inputMode === 'textarea') await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		await openEditor(page);
+		await page.evaluate(() => {
+			const editor = window.ashTextModelIntegration.getControl();
+			editor.updateOptions({ wordWrap: 'off', smoothScrolling: false, minimap: { enabled: true, side: 'left' } });
+			editor.setValue('long line '.repeat(100));
+			editor.setPosition({ lineNumber: 1, column: 50 });
+			editor.setScrollLeft(80);
+			editor.focus();
+		});
+		const input = page.locator('.stanza-editor-input');
+		await input.evaluate(element => {
+			const target = (element as HTMLElement & { editContext?: EventTarget }).editContext ?? element;
+			target.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }));
+		});
+		await expect(page.locator('.stanza-editor')).toHaveClass(/\bcomposing\b/u);
+		await expect.poll(() => input.evaluate(element => {
+			const caret = element.closest('.stanza-editor')!.querySelector('.stanza-editor-caret')!;
+			return Math.abs(element.getBoundingClientRect().left - caret.getBoundingClientRect().left);
+		})).toBeLessThanOrEqual(1);
+	});
+}
+
 test('margin numbers and view zones retain one coordinate origin beyond the large-file offset', async ({ page }) => {
 	await openEditor(page);
 	await page.evaluate(() => {
@@ -1332,6 +1403,7 @@ test('view zones use the standard accessor, whitespace geometry, and disposal ch
 		});
 		return {
 			clientWidth: element.clientWidth,
+			contentLeft: window.ashTextModelIntegration.getControl().getLayoutInfo().contentLeft,
 			clientHeight: element.clientHeight,
 			lineHeight: firstLine.getBoundingClientRect().height,
 			lineCount: element.querySelectorAll('.view-line[data-logical-line-index]').length,
@@ -1347,13 +1419,13 @@ test('view zones use the standard accessor, whitespace geometry, and disposal ch
 	await expect(zone).toHaveCSS('top', `${baseGeometry.lineHeight}px`);
 	await expect(zone).toHaveCSS('height', '500px');
 	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => ({ scrollWidth: element.scrollWidth, scrollHeight: element.scrollHeight }))).toEqual({
-		scrollWidth: 1_200,
+		scrollWidth: 1_200 - baseGeometry.contentLeft,
 		scrollHeight: baseGeometry.lineHeight * baseGeometry.lineCount + 500,
 	});
 	await page.evaluate(() => window.ashTextModelIntegration.removeViewZone());
 	await expect(zone).toHaveCount(0);
 	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => ({ scrollWidth: element.scrollWidth, scrollHeight: element.scrollHeight }))).toEqual({
-		scrollWidth: baseGeometry.clientWidth,
+		scrollWidth: baseGeometry.clientWidth - baseGeometry.contentLeft,
 		scrollHeight: baseGeometry.clientHeight,
 	});
 });

@@ -16,6 +16,61 @@ import { IHostService } from '../../../../../services/host/browser/host.js';
 import { IWorkspaceContextService } from '../../../../../../platform/workspace/common/workspace.js';
 import { WorkspaceContextService } from '../../../../../services/workspaces/browser/workspaceContextService.js';
 import { createTestWorkbenchContextKeysHandler } from '../../../../../test/common/testWorkbenchContextKeys.js';
+import { ActiveEditorLastInGroupContext, EditorGroupEditorsCountContext, EditorsVisibleContext, MultipleEditorsSelectedInGroupContext } from '../../../../../common/contextkeys.js';
+import type { IEditorGroup } from '../../../../../services/editor/common/editorGroupsService.js';
+import { Direction } from '../../../../../../base/browser/ui/grid/grid.js';
+
+test('tab close and split menus operate on the clicked group and selected editors', async () => {
+	const { CLOSE_EDITORS_TO_THE_RIGHT_COMMAND_ID, CLOSE_SAVED_EDITORS_COMMAND_ID, CLOSE_EDITORS_IN_GROUP_COMMAND_ID, CLOSE_OTHER_EDITORS_IN_GROUP_COMMAND_ID } = await import('../../editorCommands.js');
+	await import('../../editorActions.js');
+	const inputs = ['sticky', 'clicked', 'dirty', 'saved'].map(name => ({ resource: URI.file(`/project/${name}.ts`) }));
+	const closed: unknown[] = [];
+	const splits: unknown[] = [];
+	let cancelled = false;
+	const group = {
+		id: 'clicked-group', inputs, selectedInputs: [inputs[2]], activeInput: inputs[2],
+		editors: inputs.map((input, index) => ({ input, index, isSticky: index === 0, isDirty: index === 2 })),
+		isSticky: (input: unknown) => input === inputs[0],
+		closeEditor: async (input: unknown) => { closed.push(input); return !cancelled; },
+	} as unknown as IEditorGroup;
+	using services = new InstantiationService();
+	services.registerInstance(IEditorGroupsService, { getGroup: id => id === group.id ? group : undefined } as IEditorGroupsService);
+	services.registerInstance(IEditorPart, { splitEditors: async (id, editors, direction) => { splits.push([id, editors, direction]); } } as EditorPartContract);
+	using commands = new CommandService(services);
+	using context = new ContextKeyService();
+	context.setContext(EditorsVisibleContext.key, true);
+	context.setContext(EditorGroupEditorsCountContext.key, 4);
+	context.setContext(ActiveEditorLastInGroupContext.key, false);
+	context.setContext(MultipleEditorsSelectedInGroupContext.key, false);
+	const menus = new MenuService(commands, context);
+	const argument = { groupId: group.id, editorIndex: 1 };
+	const close = () => menus.getMenuActions(MenuId.EditorTitleContext, { arg: argument }).find(([name]) => name === '1_close')![1];
+	assert.deepEqual(close().map(action => action.id), ['workbench.action.closeActiveEditor', CLOSE_OTHER_EDITORS_IN_GROUP_COMMAND_ID, CLOSE_EDITORS_TO_THE_RIGHT_COMMAND_ID, CLOSE_SAVED_EDITORS_COMMAND_ID, CLOSE_EDITORS_IN_GROUP_COMMAND_ID]);
+	for (const [id, expected] of [
+		[CLOSE_OTHER_EDITORS_IN_GROUP_COMMAND_ID, [inputs[2], inputs[3]]],
+		[CLOSE_EDITORS_TO_THE_RIGHT_COMMAND_ID, [inputs[2], inputs[3]]],
+		[CLOSE_SAVED_EDITORS_COMMAND_ID, [inputs[1], inputs[3]]],
+		[CLOSE_EDITORS_IN_GROUP_COMMAND_ID, inputs.slice(1)],
+	] as const) {
+		closed.length = 0;
+		await close().find(action => action.id === id)!.run();
+		assert.deepEqual(closed, expected);
+	}
+	cancelled = true;
+	closed.length = 0;
+	await close().find(action => action.id === CLOSE_EDITORS_IN_GROUP_COMMAND_ID)!.run();
+	assert.deepEqual(closed, [inputs[1]]);
+	context.setContext(ActiveEditorLastInGroupContext.key, true);
+	assert.equal(close().find(action => action.id === CLOSE_EDITORS_TO_THE_RIGHT_COMMAND_ID)!.enabled, false);
+	context.setContext(ActiveEditorLastInGroupContext.key, false);
+	context.setContext(MultipleEditorsSelectedInGroupContext.key, true);
+	assert.equal(close().find(action => action.id === CLOSE_EDITORS_TO_THE_RIGHT_COMMAND_ID)!.enabled, false);
+	Object.assign(group, { selectedInputs: [inputs[1], inputs[3]] });
+	const split = menus.getMenuActions(MenuId.EditorTitleContext, { arg: argument }).find(([name]) => name === '5_split')![1];
+	assert.deepEqual(split.map(action => action.label), ['Split Up', 'Split Down', 'Split Left', 'Split Right']);
+	for (const action of split) await action.run();
+	assert.deepEqual(splits, [Direction.Up, Direction.Down, Direction.Left, Direction.Right].map(direction => [group.id, [inputs[1], inputs[3]], direction]));
+});
 
 test('Close Workspace delegates an empty window to the host and follows workspace menu state', async () => {
 	using registration = registerAction2(CloseWorkspaceAction);

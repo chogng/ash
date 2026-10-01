@@ -21,6 +21,8 @@
 	display: none;
 }
 .stanza-editor-content {
+	/* Layout owns the document extent; overlay paint must not enlarge the scroll range. */
+	overflow: clip;
 	position: absolute;
 	top: 0;
 	left: 0;

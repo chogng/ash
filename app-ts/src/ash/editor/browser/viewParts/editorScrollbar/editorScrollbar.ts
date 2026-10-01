@@ -62,6 +62,10 @@ export class EditorScrollbar extends ViewPart {
 	}
 
 	public render(_context: RestrictedRenderingContext): void {
+		const layout = this._context.configuration.options.get(EditorOption.layoutInfo);
+		this.domNode.setLeft(layout.contentLeft);
+		this.domNode.setWidth(Math.max(0, layout.width - layout.contentLeft));
+		this.domNode.setHeight(layout.height);
 		this.scrollbar.renderNow();
 	}
 

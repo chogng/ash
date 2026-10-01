@@ -21,7 +21,7 @@ import type { IServerEventApi } from "../../../../platform/app-server/common/app
 import type { EditorInput, EditorOpenOptions } from "./editorInput.js";
 import type { EditorCloseOptions } from '../../../services/editor/common/editorGroupsService.js';
 import type { IEditorGroupView } from './editor.js';
-import { ActiveEditorPinnedContext, ActiveEditorStickyContext, MultipleEditorsSelectedInGroupContext, ResourceContext, ResourceSchemeContext } from '../../../common/contextkeys.js';
+import { ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext, MultipleEditorsSelectedInGroupContext, ResourceContext, ResourceSchemeContext } from '../../../common/contextkeys.js';
 import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
 import type { IEditorPane } from "./editorPane.js";
 import { isEditorPaneWithSelection } from '../../../common/editor.js';
@@ -291,6 +291,8 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			menuContext.setContext(MultipleEditorsSelectedInGroupContext.key, this.selectedInputs.includes(input) && this.selectedInputs.length > 1);
 			menuContext.setContext(ActiveEditorPinnedContext.key, !entry.preview);
 			menuContext.setContext(ActiveEditorStickyContext.key, entry.sticky);
+			menuContext.setContext(ActiveEditorLastInGroupContext.key, editorIndex === this.inputs.length - 1);
+			menuContext.setContext(EditorGroupEditorsCountContext.key, this.inputs.length);
 		});
 		actions.contextMenuProvider.showContextMenu({
 			getAnchor: () => anchor,

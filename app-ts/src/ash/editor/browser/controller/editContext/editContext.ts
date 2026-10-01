@@ -81,7 +81,7 @@ export interface EditContextOptions {
 	readonly textDirection: string;
 	/** Stable editor-view identity used by host integrations. */
 	readonly ownerId: string;
-	/** Resolves model-relative character geometry for native IME requests. */
+	/** Resolves character geometry in the scrolling body for browser IME requests. */
 	readonly characterBoundsProvider: (
 		modelOffset: number,
 	) => EditContextCharacterBounds | undefined;
@@ -232,7 +232,8 @@ export abstract class AbstractEditContext extends ViewPart {
 	protected readPosition(): EditContextPosition {
 		const viewport = this.requireViewport();
 		const position = this._context.viewModel.getSelections()[0]!.getPosition();
-		return viewport.getPositionContentCoordinates(position);
+		const coordinates = viewport.getPositionContentCoordinates(position);
+		return { ...coordinates, left: coordinates.left - viewport.getLayoutInfo().contentLeft };
 	}
 
 	protected fireWillCopy(browserEvent: ClipboardEvent, isCut: boolean): IClipboardCopyEvent {
@@ -558,7 +559,7 @@ export class CompositionController extends Disposable {
 
 	private positionInput(position: Position): void {
 		const coordinates = this.viewport.getPositionContentCoordinates(position);
-		this.input.positionComposition(coordinates);
+		this.input.positionComposition({ ...coordinates, left: coordinates.left - this.viewport.getLayoutInfo().contentLeft });
 	}
 
 	private finishPresentation(): void {

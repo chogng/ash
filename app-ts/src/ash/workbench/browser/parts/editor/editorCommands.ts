@@ -4,7 +4,7 @@ import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/c
 import { ContextKeyExpr } from "../../../../platform/contextkey/common/contextkey.js";
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService } from "../../../../platform/quickinput/common/quickInput.js";
-import { ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorPartModalVisibleContext, EditorTabsFocusContext, EditorsVisibleContext } from "../../../common/contextkeys.js";
+import { ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext, EditorPartModalVisibleContext, EditorTabsFocusContext, EditorsVisibleContext, MultipleEditorsSelectedInGroupContext } from "../../../common/contextkeys.js";
 import { IEditorPart } from "./editorPart.js";
 import { IEditorGroupsService } from "../../../services/editor/common/editorGroupsService.js";
 import { resolveCommandsContext } from "./editorCommandsContext.js";
@@ -21,7 +21,7 @@ registerAction2(class CloseActiveEditorAction extends Action2 {
 			precondition: EditorsVisibleContext.isEqualTo(true),
 			menu: [
 				{ id: MenuId.MenubarFileMenu, group: "6_close", order: 2 },
-				{ id: MenuId.EditorTitleContext, group: "4_close", order: 1 },
+				{ id: MenuId.EditorTitleContext, group: "1_close", order: 10 },
 			],
 			keybinding: { primary: Keybinding.single(logicalKey("w", { primaryKey: true })) },
 		});
@@ -140,8 +140,8 @@ registerAction2(class CloseOtherEditorsAction extends Action2 {
 			id: CLOSE_OTHER_EDITORS_IN_GROUP_COMMAND_ID,
 			title: localizedString('ash', 'workbench.closeOtherEditors', 'Close Other Editors'),
 			f1: true,
-			precondition: EditorsVisibleContext.isEqualTo(true),
-			menu: { id: MenuId.EditorTitleContext, group: '4_close', order: 2 },
+			precondition: ContextKeyExpr.and(EditorsVisibleContext.isEqualTo(true), ContextKeyExpr.notEquals(EditorGroupEditorsCountContext.key, 1)),
+			menu: { id: MenuId.EditorTitleContext, group: '1_close', order: 20 },
 		});
 	}
 
@@ -155,3 +155,43 @@ registerAction2(class CloseOtherEditorsAction extends Action2 {
 		}
 	}
 });
+
+export const CLOSE_EDITORS_TO_THE_RIGHT_COMMAND_ID = 'workbench.action.closeEditorsToTheRight';
+export const CLOSE_SAVED_EDITORS_COMMAND_ID = 'workbench.action.closeUnmodifiedEditors';
+export const CLOSE_EDITORS_IN_GROUP_COMMAND_ID = 'workbench.action.closeEditorsInGroup';
+
+for (const definition of [
+	{ id: CLOSE_EDITORS_TO_THE_RIGHT_COMMAND_ID, key: 'workbench.closeEditorsToTheRight', title: 'Close to the Right', order: 30, precondition: ContextKeyExpr.and(EditorsVisibleContext.isEqualTo(true), ActiveEditorLastInGroupContext.isEqualTo(false), ContextKeyExpr.not(MultipleEditorsSelectedInGroupContext.key)) },
+	{ id: CLOSE_SAVED_EDITORS_COMMAND_ID, key: 'workbench.closeSavedEditors', title: 'Close Saved', order: 40, precondition: EditorsVisibleContext.isEqualTo(true) },
+	{ id: CLOSE_EDITORS_IN_GROUP_COMMAND_ID, key: 'workbench.closeEditorsInGroup', title: 'Close All in Group', order: 50, precondition: EditorsVisibleContext.isEqualTo(true) },
+]) {
+	registerAction2(class CloseEditorsInGroupAction extends Action2 {
+		constructor() {
+			super({
+				id: definition.id,
+				title: localizedString('ash', definition.key, definition.title),
+				f1: true,
+				precondition: definition.precondition,
+				menu: { id: MenuId.EditorTitleContext, group: '1_close', order: definition.order },
+			});
+		}
+
+		override async run(accessor: ServicesAccessor, ...args: readonly unknown[]): Promise<void> {
+			for (const { group, editors } of resolveCommandsContext(args, accessor.get(IEditorGroupsService)).groupedEditors) {
+				if (definition.id === CLOSE_EDITORS_TO_THE_RIGHT_COMMAND_ID && editors.length !== 1) {
+					continue;
+				}
+				const boundary = group.inputs.indexOf(editors[0]!);
+				const targets = group.editors.filter(editor => {
+					if (editor.isSticky) return false;
+					if (definition.id === CLOSE_SAVED_EDITORS_COMMAND_ID) return !editor.isDirty;
+					if (definition.id === CLOSE_EDITORS_TO_THE_RIGHT_COMMAND_ID) return editor.index > boundary;
+					return true;
+				});
+				for (const { input } of targets) {
+					if (!await group.closeEditor(input)) return;
+				}
+			}
+		}
+	});
+}
