@@ -102,6 +102,94 @@ def prepare_test_executable(
     return executable
 
 
+def run_process_tests(
+    cargo: str, arguments: list[str], environment: dict[str, str]
+) -> int:
+    """Compile selected integration tests, then run them independently of Cargo's Job."""
+    separator = arguments.index("--") if "--" in arguments else len(arguments)
+    compile_arguments = arguments[:separator]
+    test_arguments = arguments[separator + 1 :]
+    value_options = {
+        "-p",
+        "--package",
+        "--test",
+        "--target",
+        "--target-dir",
+        "--profile",
+        "--config",
+        "--jobs",
+        "-j",
+        "-Z",
+        "--features",
+        "-F",
+        "--exclude",
+        "--manifest-path",
+        "--color",
+    }
+    result = subprocess.run(
+        [cargo, *compile_arguments, "--no-run", "--message-format=json"],
+        cwd=REPOSITORY_ROOT,
+        env=environment,
+        stdout=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    tests = []
+    binaries: dict[str, dict[str, str]] = {}
+    for line in result.stdout.splitlines():
+        message = parse_cargo_message(line)
+        if diagnostic := cargo_rendered_diagnostic(message):
+            sys.stderr.write(diagnostic)
+        if message is None:
+            print(line)
+        elif message.get("reason") == "compiler-artifact" and message.get("executable"):
+            if message["profile"]["test"] and "test" in message["target"]["kind"]:
+                tests.append(message)
+            elif "bin" in message["target"]["kind"]:
+                binaries.setdefault(message["package_id"], {})[
+                    "CARGO_BIN_EXE_" + message["target"]["name"]
+                ] = message["executable"]
+    if result.returncode:
+        return result.returncode
+    iterator = iter(compile_arguments[1:])
+    for argument in iterator:
+        if argument in value_options:
+            next(iterator)
+        elif not argument.startswith("-"):
+            test_arguments.insert(0, argument)
+    if not tests:
+        raise RuntimeError(
+            "Cargo did not report any selected integration test executables"
+        )
+    exit_code = 0
+    for artifact in tests:
+        executable = Path(artifact["executable"])
+        manifest = Path(artifact["manifest_path"])
+        test_environment = environment.copy()
+        test_environment.update(binaries.get(artifact["package_id"], {}))
+        test_environment["CARGO_MANIFEST_DIR"] = str(manifest.parent)
+        test_environment["CARGO_MANIFEST_PATH"] = str(manifest)
+        test_environment["PATH"] = os.pathsep.join(
+            [
+                str(executable.parent),
+                str(executable.parent.parent),
+                environment.get("PATH", ""),
+            ]
+        )
+        print(f"Running {artifact['target']['name']} ({executable})", flush=True)
+        completed = subprocess.run(
+            [str(executable), *test_arguments],
+            cwd=manifest.parent,
+            env=test_environment,
+            check=False,
+        )
+        if completed.returncode:
+            exit_code = completed.returncode
+            if "--no-fail-fast" not in compile_arguments:
+                break
+    return exit_code
+
+
 def main(arguments: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Run Cargo with the locked sandbox-enabled rusty_v8 archive and binding."
@@ -111,6 +199,7 @@ def main(arguments: list[str] | None = None) -> int:
     parser.add_argument("--v8-lock", type=Path, default=DEFAULT_LOCK)
     parser.add_argument("--v8-cache-root", type=Path, default=DEFAULT_CACHE)
     parser.add_argument("--deny-warnings", action="store_true")
+    parser.add_argument("--process-tests", action="store_true")
     parser.add_argument("cargo_arguments", nargs=argparse.REMAINDER)
     args = parser.parse_args(arguments)
     cargo_arguments = list(args.cargo_arguments)
@@ -118,6 +207,43 @@ def main(arguments: list[str] | None = None) -> int:
         cargo_arguments = cargo_arguments[1:]
     if not cargo_arguments:
         parser.error("a Cargo command is required")
+    if args.process_tests:
+        cargo_options = (
+            cargo_arguments[: cargo_arguments.index("--")]
+            if "--" in cargo_arguments
+            else cargo_arguments
+        )
+        if (
+            cargo_options[0] != "test"
+            or not any(
+                option == "--test" or option.startswith("--test=")
+                for option in cargo_options
+            )
+            or any(
+                option
+                in {
+                    "--lib",
+                    "--bins",
+                    "--bin",
+                    "--examples",
+                    "--example",
+                    "--benches",
+                    "--bench",
+                    "--doc",
+                    "--all-targets",
+                    "--tests",
+                    "--no-run",
+                    "--message-format",
+                }
+                or option.startswith(
+                    ("--bin=", "--example=", "--bench=", "--message-format=")
+                )
+                for option in cargo_options
+            )
+        ):
+            parser.error(
+                "--process-tests requires test with explicit --test targets only; Cargo JSON output is managed by the runner"
+            )
 
     target = args.v8_target or cargo_target(cargo_arguments) or default_target()
     if target not in TARGETS:
@@ -189,6 +315,10 @@ def main(arguments: list[str] | None = None) -> int:
         environment["ASH_APP_SERVER_PATH"] = prepare_test_executable(
             args.cargo, cargo_arguments, environment, "ash-app-server"
         )
+    if args.process_tests:
+        # Windows Cargo owns a Job that forbids CREATE_BREAKAWAY_FROM_JOB. A process
+        # lifecycle test must exercise the daemon's independent lifetime unchanged.
+        return run_process_tests(args.cargo, cargo_arguments, environment)
     return subprocess.run(
         [args.cargo, *cargo_arguments], cwd=REPOSITORY_ROOT, env=environment
     ).returncode

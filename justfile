@@ -1,5 +1,5 @@
 set working-directory := "."
-set positional-arguments := true
+set positional-arguments
 set shell := ["sh", "-cu"]
 set windows-shell := ["pwsh", "-NoLogo", "-NoProfile", "-CommandWithArgs"]
 
@@ -66,6 +66,10 @@ build-rust *args:
 # Test one Rust package. V8 inputs are configured only when its dependency graph needs them.
 test *args:
     {{ python }} -B scripts/cargo.py test -p {{ recipe_args }}
+
+# Run selected process integration tests independently of Cargo's Windows Job.
+test-processes *args:
+    {{ python }} -B scripts/cargo.py --process-tests test -p {{ recipe_args }}
 
 # Run TUI library tests with the shared test profile.
 test-tui-unit *args:

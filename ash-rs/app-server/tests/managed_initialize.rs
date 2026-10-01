@@ -226,12 +226,22 @@ fn agents_connection_keeps_sessions_in_two_local_directories() {
         if id == 4 {
             let sessions = response["result"]["sessions"].as_array().unwrap();
             assert_eq!(sessions.len(), 2, "{response}");
-            assert!(sessions.iter().any(|session| session["title"] == "First"
-                && session["executionTarget"]["root"]
-                    == first.canonicalize().unwrap().to_string_lossy().as_ref()));
-            assert!(sessions.iter().any(|session| session["title"] == "Second"
-                && session["executionTarget"]["root"]
-                    == second.canonicalize().unwrap().to_string_lossy().as_ref()));
+            assert!(sessions.iter().any(|session| {
+                session["title"] == "First"
+                    && session["executionTarget"]["root"]
+                        == dunce::canonicalize(&first)
+                            .unwrap()
+                            .to_string_lossy()
+                            .as_ref()
+            }));
+            assert!(sessions.iter().any(|session| {
+                session["title"] == "Second"
+                    && session["executionTarget"]["root"]
+                        == dunce::canonicalize(&second)
+                            .unwrap()
+                            .to_string_lossy()
+                            .as_ref()
+            }));
         }
     }
 }
@@ -245,11 +255,16 @@ fn agents_connection_routes_ssh_sessions_and_merges_the_catalog() {
     fs::create_dir(&profile).unwrap();
     fs::create_dir(&remote_home).unwrap();
     fs::create_dir(&remote_dir).unwrap();
-    let remote_root = remote_dir
-        .canonicalize()
-        .unwrap()
-        .to_string_lossy()
-        .into_owned();
+    // The SSH identity belongs to the remote host; the stub stores its data in a
+    // local temporary directory, which can have a Windows path.
+    let remote_root = if cfg!(windows) {
+        "/remote/project".to_owned()
+    } else {
+        dunce::canonicalize(&remote_dir)
+            .unwrap()
+            .to_string_lossy()
+            .into_owned()
+    };
     let remote_profile = RemoteProfile::new(
         SshTarget::new(
             SshHost::parse("test-host").unwrap(),
@@ -261,15 +276,26 @@ fn agents_connection_routes_ssh_sessions_and_merges_the_catalog() {
         .activate(&remote_profile)
         .unwrap();
     let ssh_stub = root.path().join(if cfg!(windows) {
-        "ssh-stub.cmd"
+        "ssh-stub.exe"
     } else {
         "ssh-stub.sh"
     });
     let executable = env!("CARGO_BIN_EXE_ash-app-server");
     if cfg!(windows) {
-        fs::write(&ssh_stub, format!("@echo off\r\nset \"ASH_HOME={}\"\r\nset \"ASH_WORKSPACE_ROOT={}\"\r\necho {{\"jsonrpc\":\"2.0\",\"method\":\"queue/changed\",\"params\":{{}}}}\r\n\"{}\" --listen stdio://\r\n", remote_home.display(), remote_root, executable)).unwrap();
+        let source = root.path().join("ssh-stub.rs");
+        fs::write(&source, include_str!("support/ssh_stub.rs")).unwrap();
+        assert!(
+            Command::new("rustc")
+                .args(["--edition=2024", "-Dwarnings"])
+                .arg(&source)
+                .arg("-o")
+                .arg(&ssh_stub)
+                .status()
+                .unwrap()
+                .success()
+        );
     } else {
-        fs::write(&ssh_stub, format!("#!/bin/sh\nexport ASH_HOME='{}'\nexport ASH_WORKSPACE_ROOT='{}'\nprintf '%s\\n' '{{\"jsonrpc\":\"2.0\",\"method\":\"queue/changed\",\"params\":{{}}}}'\nexec '{}' --listen stdio://\n", remote_home.display(), remote_root, executable)).unwrap();
+        fs::write(&ssh_stub, format!("#!/bin/sh\nexport ASH_HOME='{}'\nexport ASH_WORKSPACE_ROOT='{}'\nprintf '%s\\n' '{{\"jsonrpc\":\"2.0\",\"method\":\"queue/changed\",\"params\":{{}}}}'\nexec '{}' --listen stdio://\n", remote_home.display(), remote_dir.display(), executable)).unwrap();
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -282,6 +308,13 @@ fn agents_connection_routes_ssh_sessions_and_merges_the_catalog() {
         .env("ASH_HOME", &profile)
         .env("ASH_SSH_PATH", &ssh_stub)
         .env("ASH_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS", "5000")
+        .env("ASH_TEST_SERVER", executable)
+        .env(
+            "ASH_TEST_LOCAL_ROOT_JSON",
+            serde_json::to_string(&dunce::canonicalize(&remote_dir).unwrap()).unwrap(),
+        )
+        .env("ASH_TEST_REMOTE_HOME", &remote_home)
+        .env("ASH_TEST_REMOTE_DIR", &remote_dir)
         .spawn()
         .unwrap();
     let _daemon = Daemon(daemon);

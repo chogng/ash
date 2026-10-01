@@ -40,6 +40,8 @@ RPC trace 从请求接收开始计时，记录资源等待、执行队列等待�
 just test ash-app-server
 ```
 
+Windows 的后台进程生命周期集成测试使用 `just test-processes ash-app-server --test managed_lifecycle`，避免 Cargo 的测试 Job 阻止后台独立存活。入口及过滤方式见[构建测试说明](../../docs/build.md#测试)。
+
 ## 执行环境
 
 - Core 执行作用域结束时释放防休眠租约，包括完成、失败、中断及让出执行的审批或能力等待；恢复执行时重新获取。

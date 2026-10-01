@@ -1,11 +1,12 @@
 """Test runtime executable preparation for Cargo library tests."""
 
 import json
+from pathlib import Path
 import subprocess
 import unittest
 from unittest.mock import patch
 
-from scripts.cargo import main, prepare_test_executable
+from scripts.cargo import main, prepare_test_executable, run_process_tests
 
 
 class CodeModeHostTests(unittest.TestCase):
@@ -234,6 +235,126 @@ class CodeModeHostTests(unittest.TestCase):
                 self.assertEqual(run.call_args.kwargs["env"], environment)
         prepare.assert_not_called()
         resolve_v8.assert_not_called()
+
+
+class ProcessTestRunnerTests(unittest.TestCase):
+    def artifact(self, name: str, kind: str = "test") -> dict:
+        return {
+            "reason": "compiler-artifact",
+            "package_id": "app-server",
+            "manifest_path": str(Path("ash-rs/app-server/Cargo.toml").resolve()),
+            "target": {"name": name, "kind": [kind]},
+            "profile": {"test": kind == "test"},
+            "executable": str(Path("test-output", name).resolve()),
+        }
+
+    @patch("scripts.cargo.subprocess.run")
+    def test_runs_only_reported_tests_with_filters_runtime_and_package_directory(
+        self, run
+    ):
+        test = self.artifact("managed_lifecycle")
+        binary = self.artifact("ash-app-server", "bin")
+        run.side_effect = [
+            subprocess.CompletedProcess(
+                [], 0, "\n".join(map(json.dumps, [binary, test]))
+            ),
+            subprocess.CompletedProcess([], 0),
+        ]
+        environment = {"PATH": "tools", "ASH_CODE_MODE_HOST_BIN": "host"}
+        arguments = [
+            "test",
+            "-p",
+            "ash-app-server",
+            "--test=managed_lifecycle",
+            "--profile",
+            "ci-test",
+            "stop_",
+            "--",
+            "--exact",
+        ]
+        self.assertEqual(run_process_tests("cargo", arguments, environment), 0)
+        build, execute = run.call_args_list
+        self.assertEqual(
+            build.args[0],
+            [
+                "cargo",
+                *arguments[: arguments.index("--")],
+                "--no-run",
+                "--message-format=json",
+            ],
+        )
+        self.assertEqual(execute.args[0], [test["executable"], "stop_", "--exact"])
+        self.assertEqual(execute.kwargs["cwd"], Path(test["manifest_path"]).parent)
+        self.assertEqual(
+            execute.kwargs["env"]["CARGO_BIN_EXE_ash-app-server"], binary["executable"]
+        )
+        self.assertEqual(execute.kwargs["env"]["ASH_CODE_MODE_HOST_BIN"], "host")
+        self.assertEqual(
+            environment, {"PATH": "tools", "ASH_CODE_MODE_HOST_BIN": "host"}
+        )
+
+    @patch("scripts.cargo.subprocess.run")
+    def test_compile_failure_never_executes_partial_artifacts(self, run):
+        run.return_value = subprocess.CompletedProcess(
+            [], 23, json.dumps(self.artifact("partial"))
+        )
+        self.assertEqual(
+            run_process_tests("cargo", ["test", "--test", "partial"], {}), 23
+        )
+        self.assertEqual(run.call_count, 1)
+
+    @patch("scripts.cargo.subprocess.run")
+    def test_no_selected_test_artifact_is_an_error(self, run):
+        run.return_value = subprocess.CompletedProcess(
+            [], 0, json.dumps(self.artifact("server", "bin"))
+        )
+        with self.assertRaisesRegex(RuntimeError, "integration test executables"):
+            run_process_tests("cargo", ["test", "--test", "missing"], {})
+
+    @patch("scripts.cargo.subprocess.run")
+    def test_failure_is_preserved_and_no_fail_fast_runs_remaining_targets(self, run):
+        artifacts = "\n".join(
+            json.dumps(self.artifact(name)) for name in ["first", "second"]
+        )
+        for options, calls in [([], 2), (["--no-fail-fast"], 3)]:
+            with self.subTest(options=options):
+                run.reset_mock()
+                run.side_effect = [
+                    subprocess.CompletedProcess([], 0, artifacts),
+                    subprocess.CompletedProcess([], 17),
+                    subprocess.CompletedProcess([], 0),
+                ]
+                self.assertEqual(
+                    run_process_tests("cargo", ["test", "--test", "*", *options], {}),
+                    17,
+                )
+                self.assertEqual(run.call_count, calls)
+
+    @patch("scripts.cargo.cargo_command_uses_package")
+    @patch("scripts.cargo.sys.stderr")
+    def test_rejects_target_selection_that_would_omit_unit_or_documentation_tests(
+        self, stderr, uses_package
+    ):
+        for options in [
+            [],
+            ["--lib"],
+            ["--doc"],
+            ["--no-run"],
+            ["--message-format=json"],
+        ]:
+            with self.subTest(options=options), self.assertRaises(SystemExit) as error:
+                main(
+                    [
+                        "--process-tests",
+                        "test",
+                        "-p",
+                        "ash-app-server",
+                        *(["--test", "managed_lifecycle"] if options else []),
+                        *options,
+                    ]
+                )
+            self.assertEqual(error.exception.code, 2)
+        uses_package.assert_not_called()
 
 
 if __name__ == "__main__":

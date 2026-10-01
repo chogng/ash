@@ -79,6 +79,7 @@
 | 命令 | 覆盖范围 |
 | --- | --- |
 | `just test <package>` | 指定 Rust 包 |
+| `just test-processes <package> --test <target>` | 独立运行指定进程集成测试，支持多个 `--test` 和测试名过滤 |
 | `just test-tui-unit <filter>` | TUI 库单测，默认使用 `ci-test` |
 | `just test-tui <filter>` | 真实 CLI/TUI PTY 场景，服务程序与测试统一使用 `ci-test` |
 | `just test-python` / `just test-python build` | 全部仓库 Python 测试，或仅构建工具测试 |
@@ -86,6 +87,8 @@
 | `pnpm test:build` | TypeScript 构建工具单测 |
 
 Electron、Browser、编辑器的构建和测试命令，以及测试是否启动 App Server，见 [前端验证命令](../app-ts/README.md#常用命令)。
+
+Windows Cargo 的测试 Job 禁止子进程脱离，而共享 App Server 必须独立于启动者存活。验证这种进程生命周期时，使用 `just test-processes ash-app-server --test managed_lifecycle`：Cargo 负责编译，仓库脚本按 Cargo 报告的路径独立运行测试程序，保留后台的脱离标志。该入口只接受显式选择的集成测试，不包含库单测或文档测试；普通测试继续使用 `just test`。
 
 修改 TUI 后先运行受影响的单测，需要验证真实进程、终端信号或恢复时再运行 PTY 场景：
 
