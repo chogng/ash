@@ -4,7 +4,6 @@ import { test } from "mocha";
 import { readFile } from 'node:fs/promises';
 import { ColorScheme } from '../../../../../platform/theme/common/theme.js';
 import { WorkbenchFileIconThemesRegistry } from '../../../themes/common/themeExtensionPoints.js';
-import { WorkbenchThemesRegistry } from '../../../../common/theme.js';
 import { DisposableTracker, installDisposableTracker, toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { ExtensionCatalog, ExtensionDescriptor, IExtensionApi } from "../../../../../platform/extensions/common/extensionApi.js";
 import type { IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
@@ -319,7 +318,7 @@ test('loads an extension theme include through its package resources', async () 
 	assert.deepEqual(reads, ['themes/child.json', 'themes/base.json']);
 	assert.deepEqual(theme.colors, { 'editor.background': '#445566', 'statusBar.background': '#223344' });
 	assert.deepEqual(theme.tokenColors.map(rule => rule.scopes), [['comment'], ['string']]);
-	assert.equal(WorkbenchThemesRegistry.getColorTheme(theme.id)?.getColorCss('statusBar.background'), '#223344');
+	assert.equal(theme.colors['statusBar.background'], '#223344');
 });
 
 test('loads an extension theme with a TextMate tokenColors resource', async () => {

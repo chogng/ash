@@ -6,7 +6,7 @@ import { WorkbenchThemesRegistry } from '../../../common/theme.js';
 import { parseExtensionManifest, verifyExtensionManifestDigest } from '../common/extensionManifest.js';
 import { createExtensionWorkbenchColorTheme, loadExtensionTheme } from '../common/extensionTheme.js';
 
-/** Registers declarative extension color themes in a renderer without an editor extension service. */
+/** Owns manifest-contributed color theme loading and registration for one renderer. */
 export class ExtensionColorThemeService extends Disposable {
 	private readonly registration = this._register(WorkbenchThemesRegistry.registerColorThemes([]));
 	private loading: Promise<void> | undefined;

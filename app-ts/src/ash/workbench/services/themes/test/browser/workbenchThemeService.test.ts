@@ -21,7 +21,7 @@ import { WorkbenchThemesRegistry } from '../../../../common/theme.js';
 import { loadUserThemes, WorkbenchThemeService } from '../../browser/workbenchThemeService.js';
 import { createExtensionWorkbenchColorTheme, parseExtensionTheme } from '../../../extensions/common/extensionTheme.js';
 import { projectColorThemeTokens } from '../../../textMate/common/textMateThemeProjection.js';
-import { loadColorThemeDocument, parseUserColorTheme, resolveColorThemeDocument, serializeUserColorThemeDraft } from '../../common/colorThemeData.js';
+import { loadColorThemeDocument, loadUserColorTheme, parseUserColorTheme, resolveColorThemeDocument, serializeUserColorThemeDraft } from '../../common/colorThemeData.js';
 import { colorThemeSchemaId, registerColorThemeSchemas } from '../../common/colorThemeSchema.js';
 import { JsonSchemasRegistry } from '../../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
 import { DiskFileSystemProvider } from '../../../../../platform/files/node/diskFileSystemProvider.js';
@@ -249,8 +249,8 @@ test('root theme extensions use the same document validator as user themes', asy
 	const directory = join(process.cwd(), '../extensions/theme-defaults');
 	const manifest = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'));
 	for (const contribution of manifest.contributes.themes) {
-		const source = await readFile(join(directory, contribution.path), 'utf8');
-		assert.ok(parseUserColorTheme(source, 'bundled-theme').getColorCss('editor.background'));
+		const theme = await loadUserColorTheme(contribution.path, resource => readFile(join(directory, resource), 'utf8'), 'bundled-theme');
+		assert.ok(theme.getColorCss('editor.background'));
 	}
 });
 

@@ -19,9 +19,7 @@ import type { ILanguageFeaturesService } from '../../../../editor/common/service
 import type { IAshLanguageService } from '../../../../editor/common/languages/language.js';
 import type { IExtensionApi, ExtensionCatalog as TransportExtensionCatalog, ExtensionDescriptor as TransportExtensionDescriptor } from "../../../../platform/extensions/common/extensionApi.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
-import type { IColorTheme } from "../../../../platform/theme/common/themeService.js";
 import { ColorScheme } from "../../../../platform/theme/common/theme.js";
-import { WorkbenchThemesRegistry, type WorkbenchThemeRegistration } from "../../../common/theme.js";
 import { DebugAdapterFactoriesRegistry, createStaticDebugAdapterFactory, type DebugAdapterFactory, type DebugAdapterFactoryRegistration } from "../../debug/common/debugAdapterFactory.js";
 import type { ITextMateService } from "../../textMate/common/textMateService.js";
 import type { TextMateGrammarDefinition } from "../../textMate/common/textMateGrammarRegistry.js";
@@ -32,7 +30,7 @@ import { parseJsonc } from "../common/jsonc.js";
 import { parseExtensionManifest, verifyExtensionManifestDigest } from '../common/extensionManifest.js';
 import { ExtensionFileTemplateRegistry, type ExtensionFileTemplateDefinition, type ExtensionFileTemplateSource } from "../common/extensionFileTemplate.js";
 import { createExtensionSnippetProvider, materializeExtensionFileTemplate, parseExtensionSnippetFile, type ExtensionSnippetDefinition } from "../common/extensionSnippetProvider.js";
-import { createExtensionWorkbenchColorTheme, ExtensionThemeRegistry, loadExtensionTheme, type ExtensionThemeDefinition, type ExtensionThemeSource } from "../common/extensionTheme.js";
+import { ExtensionThemeRegistry, loadExtensionTheme, type ExtensionThemeDefinition, type ExtensionThemeSource } from "../common/extensionTheme.js";
 import type { ExtensionCatalog, ExtensionDescriptor, ExtensionServiceFailure, IExtensionService } from "../common/extensionService.js";
 import { ExtensionDebugAdapterRegistry, validateExtensionDebugAdapterDefinitions, type ExtensionDebugAdapterDefinition, type ExtensionDebugAdapterSource } from "../common/extensionDebugAdapter.js";
 
@@ -70,7 +68,6 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	private readonly languageRegistration: LanguageDescriptionRegistration | undefined;
 	private languageConfigurationRegistrations = new DisposableStore();
 	private readonly completionRegistration: LanguageCompletionProviderRegistration | undefined;
-	private readonly workbenchThemeRegistration: WorkbenchThemeRegistration;
 	private readonly debugAdapterFactoryRegistration: DebugAdapterFactoryRegistration;
 	private readonly themeRegistry: ExtensionThemeRegistry;
 	private readonly fileTemplateRegistry: ExtensionFileTemplateRegistry;
@@ -83,7 +80,6 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	private activeFileIconThemes: readonly IWorkbenchFileIconTheme[] = [];
 	private readonly productIconRegistration = this._register(WorkbenchProductIconThemesRegistry.registerThemes());
 	private activeProductIconThemes: readonly IWorkbenchProductIconTheme[] = [];
-	private activeWorkbenchThemes: readonly IColorTheme[] = Object.freeze([]);
 	private activeDebugAdapterFactories: readonly DebugAdapterFactory[] = Object.freeze([]);
 	readonly themes: ExtensionThemeSource;
 	readonly fileTemplates: ExtensionFileTemplateSource;
@@ -127,7 +123,6 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		}
 		this.languageRegistration = options.languageService ? this._register(options.languageService.registerLanguages([])) : undefined;
 		this.completionRegistration = options.languageFeaturesService ? this._register(options.languageFeaturesService.completionProvider.registerGroup([])) : undefined;
-		this.workbenchThemeRegistration = this._register(WorkbenchThemesRegistry.registerColorThemes([]));
 		this.debugAdapterFactoryRegistration = this._register(DebugAdapterFactoriesRegistry.registerFactories([]));
 		if (options.eventApi) {
 			let activationGeneration: number | undefined;
@@ -189,7 +184,6 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		const themes: ExtensionThemeDefinition[] = [];
 		const fileIconThemes: IWorkbenchFileIconTheme[] = [];
 		const productIconThemes: IWorkbenchProductIconTheme[] = [];
-		const workbenchThemes: IColorTheme[] = [];
 		const fileTemplates: ExtensionFileTemplateDefinition[] = [];
 		const debugAdapters: ExtensionDebugAdapterDefinition[] = [];
 		let activeExtension: ExtensionDescriptor | undefined;
@@ -260,7 +254,6 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				for (const [themeIndex, theme] of manifest.contributes.themes.entries()) {
 					const definition = await loadExtensionTheme(path => this.loadResource(resources, catalog.generation, extension.id, path), extension.id, theme, themeIndex);
 					themes.push(definition);
-					workbenchThemes.push(createExtensionWorkbenchColorTheme(definition));
 					if (this.isDisposed) return;
 				}
 				for (const theme of manifest.contributes.iconThemes) {
@@ -297,7 +290,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					grammars.push(definition);
 				}
 			}
-			this.validateContributions(themes, workbenchThemes, fileTemplates, debugAdapters);
+			this.validateContributions(themes, fileTemplates, debugAdapters);
 			const debugAdapterFactories = debugAdapters.map(definition => createStaticDebugAdapterFactory(definition.type, definition.label, `declarative:${definition.extensionId}`, { program: definition.program, arguments: definition.arguments }));
 			const previousGrammars = this.activeGrammars;
 			const preparedGrammars = await this.options.textMateService.grammars.prepareGrammars(this.grammarRegistration, grammars);
@@ -305,13 +298,12 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			try {
 				runWithBufferedEvents(() => {
 					preparedGrammars.commit();
-					this.replaceContributions(languages, languageConfigurations, completionProviders, themes, workbenchThemes, fileTemplates, debugAdapters, debugAdapterFactories, fileIconThemes, productIconThemes, themeContributions);
+					this.replaceContributions(languages, languageConfigurations, completionProviders, themes, fileTemplates, debugAdapters, debugAdapterFactories, fileIconThemes, productIconThemes, themeContributions);
 					this.activeThemeContributions = themeContributions;
 					this.activeGrammars = Object.freeze([...grammars]);
 					this.activeLanguages = Object.freeze([...languages]);
 					this.activeLanguageConfigurations = Object.freeze([...languageConfigurations]);
 					this.activeCompletionProviders = Object.freeze([...completionProviders]);
-					this.activeWorkbenchThemes = Object.freeze([...workbenchThemes]);
 					this.activeFileIconThemes = Object.freeze([...fileIconThemes]);
 					this.activeProductIconThemes = Object.freeze([...productIconThemes]);
 					this.activeDebugAdapterFactories = Object.freeze([...debugAdapterFactories]);
@@ -329,7 +321,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		}
 	}
 
-	private replaceContributions(languages: readonly LanguageDescriptionContribution[], languageConfigurations: readonly LanguageConfigurationContribution[], completionProviders: readonly LanguageCompletionProvider[], themes: readonly ExtensionThemeDefinition[], workbenchThemes: readonly IColorTheme[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[], debugAdapterFactories: readonly DebugAdapterFactory[], fileIconThemes: readonly IWorkbenchFileIconTheme[], productIconThemes: readonly IWorkbenchProductIconTheme[], themeContributions: ThemeContributions): void {
+	private replaceContributions(languages: readonly LanguageDescriptionContribution[], languageConfigurations: readonly LanguageConfigurationContribution[], completionProviders: readonly LanguageCompletionProvider[], themes: readonly ExtensionThemeDefinition[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[], debugAdapterFactories: readonly DebugAdapterFactory[], fileIconThemes: readonly IWorkbenchFileIconTheme[], productIconThemes: readonly IWorkbenchProductIconTheme[], themeContributions: ThemeContributions): void {
 		const previousThemes = this.themeRegistry.currentCatalog.themes;
 		const previousFileTemplates = this.fileTemplateRegistry.currentCatalog.templates;
 		const previousDebugAdapters = this.debugAdapterRegistry.definitions;
@@ -338,7 +330,6 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			this.languageRegistration?.replace(languages);
 			this.replaceLanguageConfigurations(languageConfigurations);
 			this.completionRegistration?.replace(completionProviders);
-			this.workbenchThemeRegistration.replace(workbenchThemes);
 			this.themeRegistry.replace(themes);
 			this.fileTemplateRegistry.replace(fileTemplates);
 			this.debugAdapterRegistry.replace(debugAdapters);
@@ -351,7 +342,6 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				this.languageRegistration?.replace(this.activeLanguages);
 				this.replaceLanguageConfigurations(this.activeLanguageConfigurations);
 				this.completionRegistration?.replace(this.activeCompletionProviders);
-				this.workbenchThemeRegistration.replace(this.activeWorkbenchThemes);
 				this.themeRegistry.replace(previousThemes);
 				this.fileTemplateRegistry.replace(previousFileTemplates);
 				this.debugAdapterRegistry.replace(previousDebugAdapters);
@@ -391,14 +381,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		previous.dispose();
 	}
 
-	private validateContributions(themes: readonly ExtensionThemeDefinition[], workbenchThemes: readonly IColorTheme[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[]): void {
-		const themeIds = new Set<string>();
-		for (const theme of workbenchThemes) {
-			if (themeIds.has(theme.id)) throw new Error(`Workbench color theme is already contributed: ${theme.id}`);
-			themeIds.add(theme.id);
-			const existing = WorkbenchThemesRegistry.getColorTheme(theme.id);
-			if (existing && !this.activeWorkbenchThemes.some(candidate => candidate.id === theme.id)) throw new Error(`Workbench color theme is already registered: ${theme.id}`);
-		}
+	private validateContributions(themes: readonly ExtensionThemeDefinition[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[]): void {
 		const validationThemes = new ExtensionThemeRegistry();
 		try { validationThemes.replace(themes); }
 		finally { validationThemes.dispose(); }

@@ -95,7 +95,7 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 	});
 	sessions.add(toDisposable(() => workspaceSubscription.dispose()));
 	const hostColorScheme = await api.nativeHost.getOSColorScheme();
-	workbench = sessions.add(new Workbench({
+	workbench = sessions.add(await Workbench.create({
 		modeId,
 		profile,
 		api,

@@ -50,7 +50,7 @@ export class DesktopMain extends Disposable {
 			const initialConfigurationSnapshot = validateConfigurationSnapshot(await api.configuration.read());
 			let lifecycleService!: ElectronLifecycleService;
 			const hostColorScheme = await api.nativeHost.getOSColorScheme();
-			const workbench = this._register(startWorkbench({
+			const workbench = this._register(await startWorkbench({
 				modeId: this.modeId,
 				api,
 				browserViewApi: api.browserView,

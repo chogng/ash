@@ -52,12 +52,18 @@ function observeModel(): void {
 observeModel();
 
 const integration = {
-	open(languageId: string, text: string): void {
+	open(languageId: string, text: string, path?: string): void {
 		const previous = model;
-		model = services.modelService.createModel(text, services.languageService.createById(languageId));
+		model = services.modelService.createModel(text, services.languageService.createById(languageId), path === undefined ? undefined : stanza.URI.file(path));
 		editor.setModel(model);
 		observeModel();
 		previous.dispose();
+	},
+	openResource(path: string, text: string): string {
+		const resource = stanza.URI.file(path);
+		const languageId = resolveTextResourceLanguageId({ resource, firstLine: text.split('\n')[0] }, services.languageService);
+		integration.open(languageId, text, path);
+		return model.getLanguageId();
 	},
 	state() {
 		return {

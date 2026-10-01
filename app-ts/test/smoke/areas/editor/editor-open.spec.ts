@@ -62,6 +62,26 @@ test("App Server workspace files open in Stanza and save through the editor regi
 	).toBe("const value = 2;");
 });
 
+test('Bazel workspace files load bundled Starlark and bazelrc grammars', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires extension resources from App Server');
+	const samples = [
+		['BUILD.bazel', 'cc_library(name = "bazel_smoke")', 'string', 'bazel_smoke'],
+		['defs.bzl', 'def impl(ctx):\n    return 42\n', 'keyword', 'return'],
+		['user.bazelrc', 'build --jobs=8\n', 'keyword', 'build'],
+	] as const;
+	for (const [filename, text] of samples) {
+		await writeFile(join(testWorkspace.directory, filename), text, 'utf8');
+	}
+	const group = workbench.editors.groupAt(0);
+	for (const [filename, , tokenType, lexeme] of samples) {
+		const row = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: filename });
+		await expect(row).toHaveCount(1);
+		await row.click();
+		await expect(group.content.getByRole('textbox', { name: filename, exact: true })).toBeVisible();
+		await expect(group.content.locator(`.stanza-editor:visible .stanza-editor-token.token-${tokenType}`).filter({ hasText: lexeme })).toBeVisible();
+	}
+});
+
 test('Find input recalls saved searches with arrow keys and restores the draft', async ({ target, workbench }) => {
 	test.skip(
 		target.appServerMode !== 'required' || target.workbenchMode !== 'code',

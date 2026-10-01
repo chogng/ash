@@ -1,3 +1,4 @@
+import { ExtensionColorThemeService } from '../services/extensions/browser/extensionColorThemeService.js';
 import { IWorkbenchThemeService } from '../services/themes/common/workbenchThemeService.js';
 import { IHostColorSchemeService, type IHostColorSchemeService as HostColorSchemeService } from '../services/themes/common/hostColorSchemeService.js';
 import { BrowserHostColorSchemeService } from '../services/themes/browser/browserHostColorSchemeService.js';
@@ -323,7 +324,7 @@ export interface IStartWorkbenchOptions {
 }
 
 /** Starts the browser workbench and binds its commands to the initial UI. */
-export function startWorkbench({
+export async function startWorkbench({
 	modeId,
 	defaultLayout,
 	api,
@@ -346,31 +347,39 @@ export function startWorkbench({
 	createTitlebarPart,
 	switchWorkbenchMode,
 	browserViewApi,
-}: IStartWorkbenchOptions): Workbench {
-	return new Workbench(
-		modeId,
-		defaultLayout,
-		api,
-		container,
-		workspace,
-		createLifecycleService,
-		configurationApi,
-		initialConfigurationSnapshot,
-		keybindingsResourceApi,
-		keyboardLayoutProvider,
-		userKeyboardLayoutApi,
-		nativeHostApi,
-		createHostColorSchemeService,
-		clipboardService,
-		dialogHandler,
-		userThemeService,
-		createContextMenuService,
-		createTitlebarPart,
-		switchWorkbenchMode,
-		browserViewApi,
-		browserFileSystemProvider,
-		webWorkspaceClient,
-	);
+}: IStartWorkbenchOptions): Promise<Workbench> {
+	const themes = new ExtensionColorThemeService(api.extensions, api.events);
+	try {
+		await themes.start();
+		return new Workbench(
+			modeId,
+			defaultLayout,
+			api,
+			container,
+			workspace,
+			createLifecycleService,
+			configurationApi,
+			initialConfigurationSnapshot,
+			keybindingsResourceApi,
+			keyboardLayoutProvider,
+			userKeyboardLayoutApi,
+			nativeHostApi,
+			createHostColorSchemeService,
+			clipboardService,
+			dialogHandler,
+			userThemeService,
+			createContextMenuService,
+			createTitlebarPart,
+			switchWorkbenchMode,
+			browserViewApi,
+			browserFileSystemProvider,
+			webWorkspaceClient,
+			themes,
+		);
+	} catch (error) {
+		themes.dispose();
+		throw error;
+	}
 }
 
 /** Owns the renderer workbench, its parts, commands, and runtime layout. */
@@ -414,11 +423,13 @@ export class Workbench extends Disposable {
 		createContextMenuService: ContextMenuServiceFactory,
 		createTitlebarPart: TitlebarPartFactory,
 		switchWorkbenchMode: (modeId: WorkbenchModeId) => Promise<void>,
-		browserViewApi?: IBrowserViewApi,
-		browserFileSystemProvider?: HTMLFileSystemProvider,
-		webWorkspaceClient?: IWebWorkspaceClient,
+		browserViewApi: IBrowserViewApi | undefined,
+		browserFileSystemProvider: HTMLFileSystemProvider | undefined,
+		webWorkspaceClient: IWebWorkspaceClient | undefined,
+		themes: ExtensionColorThemeService,
 	) {
 		super();
+		this._register(themes);
 		this._register(FormattingConflicts.setFormatterSelector(async formatters => formatters[0]));
 		const mode = WorkbenchModeRegistry.get(modeId);
 		const services = this._register(new ServiceContainer());
@@ -717,7 +728,6 @@ export class Workbench extends Disposable {
 			try { model.replace(projectColorThemeTokens(activeTheme, ++textMateThemeRevision)); }
 			catch (error) { logService.error("theme", "Failed to apply extension token theme", error); }
 		};
-		this._register(extensionService.themes.onDidChange(() => updateTextMateTheme()));
 		this._register(themeService.onDidColorThemeChange(() => updateTextMateTheme()));
 		updateTextMateTheme();
 		services.registerInstance(IUserThemeService, userThemeService ?? UnavailableUserThemeService);

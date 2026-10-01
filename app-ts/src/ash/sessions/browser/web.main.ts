@@ -45,7 +45,7 @@ async function mountBrowserSessions(modeId: WorkbenchModeId, profile: SessionsPr
 		if (!container) throw new Error("Sessions renderer requires an #app container");
 		const ownerWindow = container.ownerDocument.defaultView;
 		if (!ownerWindow) throw new Error('Sessions renderer requires an owner window');
-		const workbench = sessions.add(new Workbench({
+		const workbench = sessions.add(await Workbench.create({
 			modeId,
 			profile,
 			api: host?.api ?? createDisconnectedRendererApi(),

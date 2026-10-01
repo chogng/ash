@@ -23,13 +23,6 @@ export function runUnitTests(patterns: readonly string[], editorEnvironment: boo
 		mkdirSync(dirname(output), { recursive: true });
 		copyFileSync(resolve(desktopDirectory, path), output);
 	}
-	// JSON imports outside the compiler root remain external; mirror their relative paths for compiled tests.
-	const themeResources = resolve(desktopDirectory, '../extensions/theme-defaults');
-	for (const path of ['package.json', ...globSync('themes/*.json', { cwd: themeResources })]) {
-		const output = resolve(outputDirectory, '../extensions/theme-defaults', path);
-		mkdirSync(dirname(output), { recursive: true });
-		copyFileSync(resolve(themeResources, path), output);
-	}
 	const selection = parseSelection(process.argv.slice(2));
 	let names: string[];
 	if (selection.runs.length > 0) {
@@ -51,6 +44,7 @@ export function runUnitTests(patterns: readonly string[], editorEnvironment: boo
 		}
 		const result = spawnSync(process.execPath, [
 			'--import', './test/unit/ignore-css-imports.ts',
+			'--import', './test/unit/theme-resources.ts',
 			...(editorEnvironment ? ['--import', './test/unit/editor-environment.ts'] : []),
 			'node_modules/mocha/bin/mocha.js',
 			'--ui', 'tdd',

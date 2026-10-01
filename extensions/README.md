@@ -49,16 +49,21 @@ The current declarative pack contains the following package directories:
   Starlark; `.bazelrc` and `bazel.rc` use a separate configuration grammar. Starlark
   editing includes comment toggling, bracket/quote pairs, block indentation, and folding.
 - `theme-seti` provides the Seti file icon document, font, and third-party notices.
-- `theme-defaults` currently provides four self-contained VS Code-derived color-theme documents.
+- `theme-defaults` provides VS Code-derived syntax themes and the four Ash color themes.
   The Workbench loader also resolves package-relative JSON `include` files when a theme uses them.
-  Ash's built-in themes bundle the syntax rules from this same package, while their Workbench
-  documents supply Ash's window colors. Markdown grammar and language settings stay in
-  `markdown-basics`; Markdown colors and font styles belong to `theme-defaults`.
+  Each Ash theme declares its syntax parent using `include` and supplies its own window colors.
+  All themes load through manifest contributions before the window's theme service starts.
+  UI-only hosts read a generated bundle of these same package resources through the extension API.
+  Markdown grammar and language settings stay in `markdown-basics`; Markdown colors and font
+  styles belong to `theme-defaults`. Users override syntax styles with
+  `editor.tokenColorCustomizations.textMateRules`. The `editor.action.inspectTMScopes` command
+  reports the cursor's TextMate scopes and resolved syntax style.
 
 The manifest is the only source of contribution metadata. `AppServerExtensionService` receives
-Rust-validated package resources and projects languages/configuration/snippets/grammars/themes/
-debuggers into their Workbench-owned registries; the browser TextMate runtime never imports package
-files directly. Theme documents register selectable Workbench color themes and provide the active
+Rust-validated package resources and projects languages/configuration/snippets/grammars/theme metadata/
+debuggers into their Workbench-owned registries. `ExtensionColorThemeService` owns selectable color
+theme registrations; the browser TextMate runtime never imports package files directly.
+Theme documents provide the active
 TextMate token scope rules.
 
 Supported declarative fields are deliberately narrower than a VS Code extension host:

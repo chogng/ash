@@ -36,6 +36,57 @@ test('all eight parser languages use bundled TextMate grammars in the frontend W
 	expect(page.workers().some(worker => worker.url().includes('textMateSyntaxWorkerMain'))).toBe(true);
 });
 
+test('Bazel files select Starlark or bazelrc and tokenize through the bundled grammars', async ({ page }) => {
+	const samples = [
+		['BUILD', 'starlark', 'cc_library(name = "demo")', 'string', 'demo'],
+		['BUILD.bazel', 'starlark', 'cc_library(name = "demo")', 'string', 'demo'],
+		['WORKSPACE', 'starlark', 'workspace(name = "demo")', 'string', 'demo'],
+		['WORKSPACE.bazel', 'starlark', 'workspace(name = "demo")', 'string', 'demo'],
+		['WORKSPACE.bzlmod', 'starlark', 'workspace(name = "demo")', 'string', 'demo'],
+		['MODULE.bazel', 'starlark', 'bazel_dep(name = "rules_rust", version = "1.0.0")', 'string', 'rules_rust'],
+		['defs.bzl', 'starlark', 'def rule_impl(ctx):\n    return 42\n# a rule', 'keyword', 'return'],
+		['custom.BUILD', 'starlark', 'cc_library(name = "demo")', 'string', 'demo'],
+		['.bazelrc', 'bazelrc', 'build:release --jobs=8\n# a config', 'keyword', 'build'],
+		['user.bazelrc', 'bazelrc', 'try-import %workspace%/local.bazelrc', 'keyword', 'try-import'],
+		['bazel.rc', 'bazelrc', 'build --jobs=8', 'number', '8'],
+	] as const;
+	for (const [filename, languageId, text, type, lexeme] of samples) {
+		const actualLanguage = await page.evaluate(({ filename, text }) => window.tokenizationIntegration.openResource(`/project/${filename}`, text), { filename, text });
+		expect(actualLanguage, filename).toBe(languageId);
+		await expect.poll(() => page.evaluate(({ type, lexeme }) => window.tokenizationIntegration.state().tokens.some(token => token.type === type && token.text.includes(lexeme)), { type, lexeme }), { message: filename }).toBe(true);
+	}
+	expect((await page.evaluate(() => window.tokenizationIntegration.state())).errors).toEqual([]);
+});
+
+test('Starlark editing indents blocks, closes brackets, toggles comments and folds by indentation', async ({ page }) => {
+	await page.evaluate(() => window.tokenizationIntegration.openResource('/project/defs.bzl', 'def impl(ctx):'));
+	const input = page.locator('.stanza-editor-input');
+	await input.focus();
+	await page.keyboard.press('ControlOrMeta+End');
+	await page.keyboard.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().text)).toMatch(/^def impl\(ctx\):\n[\t ]+$/u);
+	await page.keyboard.type('return ');
+	await page.keyboard.type('(');
+	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().text)).toMatch(/\n[\t ]+return \(\)$/u);
+	await page.keyboard.press('ControlOrMeta+/');
+	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().text)).toMatch(/\n[\t ]+#\s*return \(\)$/u);
+	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokens.some(token => token.type === 'comment' && token.text.includes('return')))).toBe(true);
+
+	await page.evaluate(() => window.tokenizationIntegration.openResource('/project/folding.bzl', 'def impl(ctx):\n    value = 42\n    return value\n'));
+	const returnToken = page.locator('.stanza-editor-token.token-keyword').filter({ hasText: /^return$/u });
+	await expect(returnToken).toBeVisible();
+	await page.locator('.ash-icon-folding-expanded').first().click();
+	await expect(returnToken).toHaveCount(0);
+	await page.locator('.ash-icon-folding-collapsed').first().click();
+	await expect(returnToken).toBeVisible();
+
+	await page.evaluate(() => window.tokenizationIntegration.openResource('/project/.bazelrc', 'build --jobs=8'));
+	await input.focus();
+	await page.keyboard.press('ControlOrMeta+/');
+	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().text)).toMatch(/^#\s*build --jobs=8$/u);
+	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokens.some(token => token.type === 'comment' && token.text.includes('build')))).toBe(true);
+});
+
 test('Force Retokenize action invalidates and refreshes visible tokens', async ({ page }) => {
 	await expect(page.locator('.stanza-editor-token.token-keyword').filter({ hasText: /^fn$/ })).toBeVisible();
 	const before = await page.evaluate(() => window.tokenizationIntegration.state());

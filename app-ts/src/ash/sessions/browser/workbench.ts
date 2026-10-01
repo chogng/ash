@@ -178,8 +178,20 @@ export class Workbench extends Disposable {
 	private readonly workspaceSelection: () => SessionWorkspaceSelection;
 	private readonly initialized: Promise<void>;
 
-	constructor(options: IWorkbenchOptions) {
+	public static async create(options: IWorkbenchOptions): Promise<Workbench> {
+		const themes = new ExtensionColorThemeService(options.api.extensions, options.api.events);
+		try {
+			await themes.start();
+			return new Workbench(options, themes);
+		} catch (error) {
+			themes.dispose();
+			throw error;
+		}
+	}
+
+	private constructor(options: IWorkbenchOptions, themes: ExtensionColorThemeService) {
 		super();
+		this._register(themes);
 		this.workspaceSelection = options.workspaceSelection;
 		if (options.profile.modeId !== options.modeId) {
 			throw new TypeError(`Sessions profile '${options.profile.id}' belongs to '${options.profile.modeId}', not '${options.modeId}'`);
@@ -205,8 +217,6 @@ export class Workbench extends Disposable {
 		const themeService = this.themeService = this._register(services.createInstance(WorkbenchThemeService, options.container));
 		services.registerInstance(IThemeService, themeService);
 		themeService.initialize();
-		const extensionColorThemes = this._register(new ExtensionColorThemeService(options.api.extensions, options.api.events));
-		void extensionColorThemes.start().catch(error => console.error('Sessions extension color themes failed to load', error));
 		const workbenchWindow = this._register(new WorkbenchWindow({
 			root: options.container,
 			modeId: options.modeId,

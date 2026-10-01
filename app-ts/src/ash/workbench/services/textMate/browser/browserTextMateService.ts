@@ -6,9 +6,14 @@ import { type TextMateGrammarDefinition } from "../common/textMateGrammarRegistr
 import { TextMateScopeThemeModel, type TextMateScopeThemeSource } from "../common/textMateScopeTheme.js";
 import { BrowserTextMateGrammarService } from "./browserTextMateGrammarService.js";
 import { createTextMateSyntaxWorkerFactory } from "./textMateSyntaxWorkerClient.js";
+import { TextMateGrammarCatalogStore } from '../common/textMateGrammarCatalogStore.js';
+import type { TextMateTokenizationService } from '../common/textMateTokenizationService.js';
+import type { IGrammar } from 'vscode-textmate';
 
 /** Browser implementation of the Workbench TextMate service. */
 export class BrowserTextMateService extends Disposable implements ITextMateService {
+	private readonly inspectionGrammars = this._register(new TextMateGrammarCatalogStore());
+	private inspectionTokens: Promise<TextMateTokenizationService> | undefined;
 	private readonly changeEmitter = this._register(new Emitter<void>());
 	readonly grammars = this._register(new BrowserTextMateGrammarService());
 	readonly scopeTheme: TextMateScopeThemeSource;
@@ -36,6 +41,18 @@ export class BrowserTextMateService extends Disposable implements ITextMateServi
 			this.dispose();
 			throw error;
 		}
+	}
+
+	public async createTokenizer(languageId: string): Promise<IGrammar | null> {
+		this.assertNotDisposed();
+		const catalog = await this.grammars.whenReady();
+		this.assertNotDisposed();
+		if (catalog.revision > this.inspectionGrammars.catalogRevision) this.inspectionGrammars.replace(catalog);
+		this.inspectionTokens ??= import('./browserTextMateTokenization.js').then(runtime => {
+			this.assertNotDisposed();
+			return this._register(runtime.createBrowserTextMateTokenizationService(this.inspectionGrammars));
+		});
+		return (await this.inspectionTokens).createTokenizer(languageId);
 	}
 }
 

@@ -1,0 +1,73 @@
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { expect, test } from '../../../automation/test.js';
+
+test('Markdown customization updates rendered styles and the token scope report', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Requires the Code product grammar resources');
+	const page = workbench.page;
+	await writeFile(join(testWorkspace.directory, 'inspect.md'), '# Heading\n');
+	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+	if (await showSidebar.isVisible()) await showSidebar.click();
+	const row = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'inspect.md' });
+	await expect(row).toHaveCount(1);
+	await row.click();
+	const editor = workbench.editors.groupAt(0).content.locator('.stanza-editor');
+	const heading = editor.locator('.stanza-editor-token').filter({ hasText: 'Heading' });
+	await expect(heading).toHaveCSS('font-weight', '700');
+	await workbench.quickaccess.runCommand('workbench.action.openSettings');
+	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+	await settings.locator('[data-settings-group-id="workbench"]').click();
+	await settings.locator('[data-settings-category-id="appearance"]').click();
+	const setting = settings.locator('[data-configuration-key="editor.tokenColorCustomizations"]');
+	await setting.getByRole('button', { name: /^Add / }).click();
+	const rule = setting.locator('.ash-string-map-row').last();
+	await rule.locator('[data-pattern-part="key"]').fill('textMateRules');
+	await rule.locator('[data-pattern-part="value"]').fill(JSON.stringify([
+		{ scope: 'markup.heading.markdown', settings: { foreground: '#654321', fontStyle: 'italic' } },
+	]));
+	await rule.locator('[data-pattern-part="value"]').press('Tab');
+	await settings.locator('.ash-modal-editor-close').click();
+	await expect(heading).toHaveCSS('color', 'rgb(101, 67, 33)');
+	await expect(heading).toHaveCSS('font-weight', '400');
+	await expect(heading).toHaveCSS('font-style', 'italic');
+	const input = editor.getByRole('textbox', { name: 'inspect.md', exact: true });
+	await input.focus();
+	await input.press('ControlOrMeta+Home');
+	await input.press('ArrowRight');
+	await input.press('ArrowRight');
+	await input.press('ArrowRight');
+	await workbench.quickaccess.runCommand('editor.action.inspectTMScopes');
+	const report = page.getByRole('textbox', { name: 'Editor token inspection', exact: true });
+	await expect(report).toBeFocused();
+	await expect(report).toHaveValue(/Syntax color: #654321\nSyntax font style: italic/u);
+	await expect(report).toHaveValue(/text.html.markdown[\s\S]*markup.heading.markdown/u);
+	await page.keyboard.press('Alt+F1');
+	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
+	await expect(help.getByRole('textbox')).toHaveValue(/editor.tokenColorCustomizations.textMateRules/u);
+	await page.keyboard.press('Escape');
+	await expect(report).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(input).toBeFocused();
+	await page.reload();
+	await workbench.waitForReady();
+	await expect(heading).toHaveCSS('color', 'rgb(101, 67, 33)');
+});
+
+test('token inspection handles plaintext, Chinese labels, keyboard close and focus restoration', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'Requires the Code product');
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+	const picker = page.getByRole('dialog', { name: 'Select Display Language' });
+	await picker.getByRole('combobox').fill('简体中文');
+	await picker.getByRole('combobox').press('Enter');
+	await page.keyboard.press('ControlOrMeta+N');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText('plain text');
+	await workbench.quickaccess.runCommand('editor.action.inspectTMScopes');
+	const dialog = page.getByRole('dialog', { name: '编辑器词法单元和作用域', exact: true });
+	await expect(dialog.getByRole('textbox', { name: '编辑器词法单元检查', exact: true })).toHaveValue(/语言：plaintext[\s\S]*该语言尚未注册 TextMate 语法/u);
+	await page.keyboard.press('Escape');
+	await expect(dialog).toHaveCount(0);
+	await expect(editor.input).toBeFocused();
+});

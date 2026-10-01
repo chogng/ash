@@ -1,4 +1,5 @@
 import './quickaccess/gotoLineQuickAccess.js';
+import './inspectEditorTokens/inspectEditorTokens.js';
 import './toggleMinimap.js';
 import './toggleRenderWhitespace.js';
 import './toggleRenderControlCharacter.js';

@@ -215,6 +215,10 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 		page = await opened;
 	}
+	// Electron observes the main-process appearance service; media emulation drives the Web host.
+	const setColorScheme = 'windows' in application
+		? (colorScheme: 'light' | 'dark') => application.evaluate(({ nativeTheme }, source) => { nativeTheme.themeSource = source; }, colorScheme)
+		: (colorScheme: 'light' | 'dark') => page.emulateMedia({ colorScheme });
 	const chat = page.locator('.ash-sessions-chat-slot .ash-chat:visible').first();
 	const card = chat.locator('.ash-chat-input-container:visible');
 	const editor = new Editor(chat);
@@ -244,7 +248,7 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 	await editor.waitForEditorContents(contents => contents.startsWith('Draft line 1\n'));
 	await replaceChatInput(editor, 'Keep this draft');
 	for (const colorScheme of ['light', 'dark'] as const) {
-		await page.emulateMedia({ colorScheme });
+		await setColorScheme(colorScheme);
 		await expect(page.locator('#app')).toHaveAttribute('data-color-theme', `ash-${colorScheme}`);
 		await expectComposerFocusWithoutOutline(card, input, page.getByRole('button', { name: 'Hide sidebar', exact: true }));
 		await expectFloatingComposerHover(card, input, page.getByRole('button', { name: 'Hide sidebar', exact: true }));
@@ -259,7 +263,7 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 	await expect(chat.locator('.ash-chat-input-editor:visible')).toHaveCSS('height', '240px');
 	await replaceChatInput(editor, 'Keep this draft');
 	for (const colorScheme of ['light', 'dark'] as const) {
-		await page.emulateMedia({ colorScheme });
+		await setColorScheme(colorScheme);
 		await expect(page.locator('#app')).toHaveAttribute('data-color-theme', `ash-${colorScheme}`);
 		await expectComposerFocusWithoutOutline(card, input, page.getByRole('button', { name: 'Hide sidebar', exact: true }));
 		await expectFloatingComposerHover(card, input, page.getByRole('button', { name: 'Hide sidebar', exact: true }));
