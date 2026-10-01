@@ -1,3 +1,5 @@
+import { HoverPosition } from "../../../base/browser/ui/hover/hoverWidget.js";
+import type { IActivityHoverOptions } from "./compositeBarActions.js";
 import { toDisposable } from "../../../base/common/lifecycle.js";
 import "./paneCompositePart.css";
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
@@ -12,7 +14,7 @@ import { ActiveAgentSidebarContext, ActiveAuxiliaryContext, ActivePanelContext, 
 import { ViewContainerLocation, type IViewContainerDescriptor } from "../../common/views.js";
 import type { IViewDescriptorService } from "../../services/views/common/viewDescriptorService.js";
 import { CompositePart } from "./compositePart.js";
-import { CompositeBar, type CompositeBarPresentation, type CompositeBarSelectionEvent } from "./compositebar/compositeBar.js";
+import { CompositeBar, type CompositeBarPresentation, type CompositeBarSelectionEvent } from "./compositeBar.js";
 import type { PartTitleProjection } from "./views/viewPane.js";
 import { h } from "../../../base/browser/dom.js";
 import { type IStorageService, StorageScope, StorageTarget } from "../../../platform/storage/common/storage.js";
@@ -27,6 +29,7 @@ export interface PaneCompositeTitleActions {
 
 /** Construction inputs shared by Sidebars, Auxiliary Bar, and Panel. */
 export interface PaneCompositePartOptions {
+	readonly activityHoverOptions?: IActivityHoverOptions;
 	readonly viewDescriptorService: IViewDescriptorService;
 	readonly contextKeyService?: IContextKeyService;
 	readonly storageService?: IStorageService;
@@ -84,6 +87,7 @@ export class PaneCompositePart extends CompositePart {
 		this.titleContentDomNode = h(ownerDocument, "div");
 		this.titleContentDomNode.className = "ash-pane-composite-title-content";
 		this.compositeBar = this._register(new CompositeBar(this.titleContentDomNode, {
+			activityHoverOptions: options.activityHoverOptions ?? { position: () => HoverPosition.ABOVE },
 			viewDescriptorService: options.viewDescriptorService,
 			localizationService: options.localizationService,
 			location: options.location,

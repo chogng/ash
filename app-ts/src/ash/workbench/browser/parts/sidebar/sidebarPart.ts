@@ -1,6 +1,6 @@
+import type { IActivityHoverOptions } from "../compositeBarActions.js";
 import "./sidebarpart.css";
 import { h } from "../../../../base/browser/dom.js";
-import { AnchorAxisAlignment, AnchorPosition } from "../../../../base/browser/ui/contextview/contextview.js";
 import { MutableDisposable } from "../../../../base/common/lifecycle.js";
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { ViewContainerLocation, type IViewContainerDescriptor } from "../../../common/views.js";
@@ -13,6 +13,7 @@ import { ActivityBarPosition } from '../../../common/configuration.js';
 
 /** Construction inputs for a Sidebar Composite host. */
 export interface SidebarPartOptions {
+	readonly activityHoverOptions?: IActivityHoverOptions;
 	readonly viewDescriptorService: IViewDescriptorService;
 	readonly contextKeyService?: IContextKeyService;
 	readonly storageService?: IStorageService;
@@ -47,6 +48,7 @@ export class SidebarPart extends PaneCompositePart {
 	constructor(container: HTMLElement, options: SidebarPartOptions) {
 		const location = options.location ?? ViewContainerLocation.Sidebar;
 		super(container, {
+			activityHoverOptions: options.activityHoverOptions,
 			viewDescriptorService: options.viewDescriptorService,
 			contextKeyService: options.contextKeyService,
 			storageService: options.storageService,
@@ -88,10 +90,6 @@ export class SidebarPart extends PaneCompositePart {
 		this.bottomCompositeBarDomNode.hidden = !isBottom;
 		if (isTop || isBottom) {
 			this.compositeBar.setOrientation('horizontal');
-			this.compositeBar.setHoverOptions({
-				hoverAnchorAxisAlignment: AnchorAxisAlignment.Vertical,
-				hoverAnchorPosition: isTop ? AnchorPosition.Below : AnchorPosition.Above,
-			});
 			(isTop ? this.topCompositeBarDomNode : this.bottomCompositeBarDomNode).append(this.compositeBar.domNode);
 		} else {
 			this.compositeBar.setOrientation('vertical');

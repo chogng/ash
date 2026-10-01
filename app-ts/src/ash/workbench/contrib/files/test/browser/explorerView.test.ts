@@ -142,6 +142,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 		},
 	};
 	const hoverService: IHoverService = {
+		setupDelayedHover() { throw new Error("Unexpected delayed hover registration"); },
 		setupHover: () => {
 			hoverCreations += 1;
 			return testManagedHover(() => { hoverDisposals += 1; });

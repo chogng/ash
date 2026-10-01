@@ -4,11 +4,22 @@ import { addDisposableListener, getWindow, isHTMLElement, isNode, h } from "../.
 import { disposableWindowTimeout } from "../../scheduler.js";
 import { getAriaAttribute, setAriaAttribute } from "../aria/aria.js";
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextView, type ContextViewHideReason, type IContextViewProvider } from "../contextview/contextview.js";
+import { HoverPosition } from './hoverWidget.js';
 
 export type HoverContentValue = string | HTMLElement | undefined;
 export type HoverContent = HoverContentValue | (() => HoverContentValue);
 export type HoverDelay = number | (() => number);
 export type HoverPersistence = "transient" | "sticky";
+
+export interface IHoverPositionOptions {
+	hoverPosition?: HoverPosition;
+}
+
+/** Element hover inputs resolved together after the delay, immediately before display. */
+export interface IDelayedHoverOptions {
+	content: string | HTMLElement;
+	position?: IHoverPositionOptions;
+}
 
 export interface IHoverLifecycleOptions {
 	/** Related targets skip the delay when moving between their hovers. */
@@ -22,6 +33,7 @@ export interface IHoverLifecycleOptions {
 export interface HoverOptions {
 	readonly target: HTMLElement;
 	readonly content: HoverContent;
+	readonly getHoverOptions?: () => IDelayedHoverOptions;
 	readonly delayMs?: HoverDelay;
 	readonly persistence?: HoverPersistence;
 	readonly enabled?: () => boolean;
@@ -56,6 +68,7 @@ export class Hover extends Disposable {
 	private readonly anchorPosition: AnchorPosition;
 	private readonly gap: number;
 	private content: HoverContent;
+	private readonly getHoverOptions: (() => IDelayedHoverOptions) | undefined;
 	private tooltip: HTMLDivElement | undefined;
 	private previousTitle: string | undefined;
 	private previousDescription: string | undefined;
@@ -68,6 +81,7 @@ export class Hover extends Disposable {
 		const target = options.target;
 		this.element = target;
 		this.content = options.content;
+		this.getHoverOptions = options.getHoverOptions;
 		this.delayMs = options.delayMs ?? 300;
 		this.persistence = options.persistence ?? "transient";
 		this.enabled = options.enabled;
@@ -153,7 +167,28 @@ export class Hover extends Disposable {
 		tooltip.id = `ash-hover-${hoverId}`;
 		tooltip.className = "ash-hover";
 		tooltip.setAttribute("role", "tooltip");
-		if (!this.renderContent(tooltip)) return;
+		const hoverOptions = this.getHoverOptions?.();
+		if (!this.renderContent(tooltip, hoverOptions ? hoverOptions.content : this.content)) return;
+		let anchorAxisAlignment = this.anchorAxisAlignment;
+		let anchorPosition = this.anchorPosition;
+		switch (hoverOptions?.position?.hoverPosition) {
+			case HoverPosition.LEFT:
+				anchorAxisAlignment = AnchorAxisAlignment.Horizontal;
+				anchorPosition = AnchorPosition.Above;
+				break;
+			case HoverPosition.RIGHT:
+				anchorAxisAlignment = AnchorAxisAlignment.Horizontal;
+				anchorPosition = AnchorPosition.Below;
+				break;
+			case HoverPosition.BELOW:
+				anchorAxisAlignment = AnchorAxisAlignment.Vertical;
+				anchorPosition = AnchorPosition.Below;
+				break;
+			case HoverPosition.ABOVE:
+				anchorAxisAlignment = AnchorAxisAlignment.Vertical;
+				anchorPosition = AnchorPosition.Above;
+				break;
+		}
 		this.tooltipListeners.clear();
 		this.tooltipListeners.add(addDisposableListener(
 			tooltip,
@@ -206,8 +241,8 @@ export class Hover extends Disposable {
 			anchor: this.element,
 			content: tooltip,
 			anchorAlignment: this.anchorAlignment,
-			anchorAxisAlignment: this.anchorAxisAlignment,
-			anchorPosition: this.anchorPosition,
+			anchorAxisAlignment,
+			anchorPosition,
 			gap: this.gap,
 			presentation: "hover",
 			onHide: (reason) => this.didHide(reason),
@@ -272,10 +307,8 @@ export class Hover extends Disposable {
 		);
 	}
 
-	private renderContent(container: HTMLElement): boolean {
-		const content = typeof this.content === "function"
-			? this.content()
-			: this.content;
+	private renderContent(container: HTMLElement, source: HoverContent = this.content): boolean {
+		const content = typeof source === "function" ? source() : source;
 		container.replaceChildren();
 		if (content === undefined || content === "") return false;
 		if (typeof content === "string") {

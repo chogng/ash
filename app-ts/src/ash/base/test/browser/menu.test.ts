@@ -76,6 +76,7 @@ test("Menu items keep accessible names without installing action tooltips", asyn
 		import("../../browser/ui/hover/hoverDelegate.js"),
 	]);
 	using hoverDelegate = setHoverDelegate({
+		setupDelayedHover() { throw new Error("Unexpected delayed hover registration"); },
 		setupHover(): never {
 			throw new Error("Menu items must not install tooltips");
 		},

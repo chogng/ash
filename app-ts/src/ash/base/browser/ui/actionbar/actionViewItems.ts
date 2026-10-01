@@ -1,12 +1,14 @@
 import { Separator, type IAction } from "../../../common/actions.js";
 import type { Icon } from "../../../common/icon.js";
-import { Disposable, toDisposable } from "../../../common/lifecycle.js";
+import { Disposable, toDisposable, type IDisposable } from "../../../common/lifecycle.js";
 import { assertDefined } from "../../../common/types.js";
 import { addDisposableListener, h } from "../../dom.js";
 import { setAriaAttribute } from "../aria/aria.js";
 import { Button, type ButtonOptions } from "../button/button.js";
-import type { AnchorAxisAlignment, AnchorPosition } from "../contextview/contextview.js";
+import { AnchorPosition } from "../contextview/contextview.js";
 import { getHoverDelegate, type IManagedHover } from "../hover/hoverDelegate.js";
+import type { IDelayedHoverOptions } from '../hover/hover.js';
+import { HoverPosition } from '../hover/hoverWidget.js';
 import { appendIcon } from "../lxicons/lxicon.js";
 
 const ActionHoverGroupId = "actions";
@@ -17,8 +19,6 @@ export interface ActionViewItemOptions {
 	readonly draggable?: boolean;
 	/** Places the item's managed tooltip relative to its trigger. */
 	readonly hoverAnchorPosition?: AnchorPosition;
-	/** On the horizontal axis, Below/Above places the tooltip to the right/left. */
-	readonly hoverAnchorAxisAlignment?: AnchorAxisAlignment;
 }
 
 /**
@@ -48,23 +48,42 @@ export abstract class ActionViewItem extends Disposable {
 
 	/** Creates a Button using the shared delay group for adjacent actions. */
 	protected createButton(container: HTMLElement, options: ButtonOptions): Button {
-		return this._register(new Button(container, {
+		const button = this._register(new Button(container, {
 			...options,
+			title: undefined,
 			hoverGroupId: options.hoverGroupId ?? ActionHoverGroupId,
 			hoverAnchorPosition: options.hoverAnchorPosition ?? this.actionViewItemOptions.hoverAnchorPosition,
-			hoverAnchorAxisAlignment: options.hoverAnchorAxisAlignment ?? this.actionViewItemOptions.hoverAnchorAxisAlignment,
 		}));
+		if (options.title) {
+			this.setupDelayedHover(button.domNode, options.title);
+		}
+		return button;
 	}
 
 	/** Installs an action tooltip for view items that render a custom target. */
+	protected setupDelayedHover(target: HTMLElement, content: string): IDisposable {
+		return this._register(getHoverDelegate().setupDelayedHover(target, () => ({
+			content,
+			...this.getHoverOptions(),
+		}), { groupId: ActionHoverGroupId }));
+	}
+
+	/** Mutable tooltips are retained for items whose labels change while visible. */
 	protected setupHover(target: HTMLElement, content: string): IManagedHover {
 		return this._register(getHoverDelegate().setupHover({
 			target,
 			content,
 			groupId: ActionHoverGroupId,
 			anchorPosition: this.actionViewItemOptions.hoverAnchorPosition,
-			anchorAxisAlignment: this.actionViewItemOptions.hoverAnchorAxisAlignment,
 		}));
+	}
+
+	protected getHoverOptions(): Pick<IDelayedHoverOptions, 'position'> {
+		return {
+			position: {
+				hoverPosition: this.actionViewItemOptions.hoverAnchorPosition === AnchorPosition.Below ? HoverPosition.BELOW : HoverPosition.ABOVE,
+			},
+		};
 	}
 }
 

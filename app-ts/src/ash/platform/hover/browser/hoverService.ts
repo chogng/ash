@@ -1,9 +1,9 @@
 import "../../../base/browser/ui/hover/hover.css";
 import type { HoverDelegateSetupOptions, IHoverDelegate, IManagedHover as IBaseManagedHover } from "../../../base/browser/ui/hover/hoverDelegate.js";
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
-import { Hover, type HoverContent } from "../../../base/browser/ui/hover/hover.js";
+import { Hover, type HoverContent, type IDelayedHoverOptions, type IHoverLifecycleOptions } from "../../../base/browser/ui/hover/hover.js";
 import { addDisposableListener, isHTMLElement } from "../../../base/browser/dom.js";
-import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import type { IConfigurationService } from "../../configuration/common/configuration.js";
 import type { IContextMenuService } from "../../contextview/browser/contextView.js";
 import type { IContextViewService } from "../../contextview/browser/contextView.js";
@@ -82,11 +82,26 @@ export class HoverService extends Disposable implements IHoverService {
 	}
 
 	setupHover(options: HoverSetupOptions): IManagedHover {
+		return this.createManagedHover(options);
+	}
+
+	public setupDelayedHover(target: HTMLElement, hoverOptions: (() => IDelayedHoverOptions) | IDelayedHoverOptions, lifecycleOptions?: IHoverLifecycleOptions): IDisposable {
+		return this.createManagedHover({
+			target,
+			content: undefined,
+			groupId: lifecycleOptions?.groupId,
+			delay: lifecycleOptions?.reducedDelay ? 'reduced' : undefined,
+			setupKeyboardEvents: lifecycleOptions?.setupKeyboardEvents,
+		}, typeof hoverOptions === 'function' ? hoverOptions : () => hoverOptions);
+	}
+
+	private createManagedHover(options: HoverSetupOptions, getHoverOptions?: () => IDelayedHoverOptions): IManagedHover {
 		let managed!: ManagedHover;
 		managed = new ManagedHover({
 			hover: new Hover({
 				target: options.target,
 				content: options.content,
+				getHoverOptions,
 				delayMs: () => this.resolveDelay(options.delay, options.groupId),
 				persistence: options.persistence,
 				enabled: () => !this.contextMenuVisible,

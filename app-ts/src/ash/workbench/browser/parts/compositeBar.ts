@@ -1,18 +1,18 @@
-import "./compositebar.css";
-import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
-import type { ActionViewItem, ActionViewItemOptions } from "../../../../base/browser/ui/actionbar/actionViewItems.js";
-import { ActionBar, type ActionBarDropPosition, type ActionBarOrientation } from "../../../../base/browser/ui/actionbar/actionbar.js";
-import { Separator, type IAction } from "../../../../base/common/actions.js";
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { Lxicon } from "../../../../base/common/lxicons.js";
-import { localize, type ILocalizationService } from "../../../services/localization/common/localizationService.js";
-import { ViewContainerLocation, type IViewContainerDescriptor } from "../../../common/views.js";
-import type { IViewDescriptorService } from "../../../services/views/common/viewDescriptorService.js";
-import { CompositeBarAction, CompositeBarActionViewItem, CompositeBarOverflowViewItem } from "./compositeBarActionViewItem.js";
-import { h } from "../../../../base/browser/dom.js";
-import { observeResize } from "../../../../base/browser/observer.js";
-import { StorageScope, StorageTarget, type IStorageService } from '../../../../platform/storage/common/storage.js';
+import "./compositebar/compositebar.css";
+import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
+import type { ActionViewItem } from "../../../base/browser/ui/actionbar/actionViewItems.js";
+import { ActionBar, type ActionBarDropPosition, type ActionBarOrientation } from "../../../base/browser/ui/actionbar/actionbar.js";
+import { Separator, type IAction } from "../../../base/common/actions.js";
+import { Emitter, type Event } from "../../../base/common/event.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
+
+import { localize, type ILocalizationService } from "../../services/localization/common/localizationService.js";
+import { ViewContainerLocation, type IViewContainerDescriptor } from "../../common/views.js";
+import type { IViewDescriptorService } from "../../services/views/common/viewDescriptorService.js";
+import { CompositeBarAction, CompositeActionViewItem, CompositeOverflowActivityAction, CompositeOverflowActivityActionViewItem, type IActivityHoverOptions } from "./compositeBarActions.js";
+import { h } from "../../../base/browser/dom.js";
+import { observeResize } from "../../../base/browser/observer.js";
+import { StorageScope, StorageTarget, type IStorageService } from '../../../platform/storage/common/storage.js';
 
 /** Selection of an inactive Composite requested from a CompositeBar. */
 export interface CompositeBarSelectionEvent {
@@ -20,7 +20,8 @@ export interface CompositeBarSelectionEvent {
 }
 
 /** Construction inputs for a location-specific Composite selector. */
-export interface CompositeBarOptions {
+export interface ICompositeBarOptions {
+	readonly activityHoverOptions: IActivityHoverOptions;
 	readonly viewDescriptorService: IViewDescriptorService;
 	readonly localizationService?: ILocalizationService;
 	readonly location: ViewContainerLocation;
@@ -38,7 +39,7 @@ export interface CompositeBarOptions {
 export type CompositeBarPresentation = "icon" | "label";
 
 const OVERFLOW_BUTTON_WIDTH = 24;
-const OVERFLOW_ACTION_ID = "ash.compositeBar.overflow";
+
 const HIDDEN_VIEW_CONTAINERS_KEY = 'workbench.activityBar.hiddenViewContainers';
 
 /**
@@ -54,7 +55,7 @@ export class CompositeBar extends Disposable {
 	private readonly location: ViewContainerLocation;
 	private orientation: ActionBarOrientation;
 	private readonly actionBar: ActionBar;
-	private hoverOptions: ActionViewItemOptions = {};
+	private readonly activityHoverOptions: IActivityHoverOptions;
 	private readonly contextMenuProvider: IContextMenuProvider | undefined;
 	private readonly storageService: IStorageService | undefined;
 	private readonly overflowEnabled: boolean;
@@ -76,9 +77,10 @@ export class CompositeBar extends Disposable {
 	readonly onDidSelectComposite: Event<CompositeBarSelectionEvent> =
 		this._onDidSelectComposite.event;
 
-	constructor(container: HTMLElement, options: CompositeBarOptions) {
+	constructor(container: HTMLElement, options: ICompositeBarOptions) {
 		super();
 		const presentation = options.presentation ?? "icon";
+		this.activityHoverOptions = options.activityHoverOptions;
 		this.viewDescriptorService = options.viewDescriptorService;
 		this.localizationService = options.localizationService;
 		this.location = options.location;
@@ -102,14 +104,14 @@ export class CompositeBar extends Disposable {
 			orientation: options.orientation,
 			actionViewItemProvider: (action): ActionViewItem => {
 				if (action instanceof CompositeBarAction) {
-					return new CompositeBarActionViewItem(action, this.hoverOptions);
+					return new CompositeActionViewItem(action, { hoverOptions: this.activityHoverOptions });
 				}
-				if (action instanceof CompositeBarOverflowAction) {
-					return new CompositeBarOverflowViewItem(
+				if (action instanceof CompositeOverflowActivityAction) {
+					return new CompositeOverflowActivityActionViewItem(
 						action,
 						() => this.createOverflowActions(),
 						this.contextMenuProvider!,
-						this.hoverOptions,
+						this.activityHoverOptions,
 					);
 				}
 				throw new TypeError(`Unsupported CompositeBar action: ${action.id}`);
@@ -174,15 +176,6 @@ export class CompositeBar extends Disposable {
 		this.domNode.classList.toggle('ash-composite-bar-vertical', orientation === 'vertical');
 		this.domNode.classList.toggle('ash-composite-bar-horizontal', orientation === 'horizontal');
 		this.actionBar.setOrientation(orientation);
-		this.render();
-	}
-
-	/** The host changes tooltip placement when it moves this selector between Parts. */
-	public setHoverOptions(options: Pick<ActionViewItemOptions, 'hoverAnchorPosition' | 'hoverAnchorAxisAlignment'>): void {
-		if (this.hoverOptions.hoverAnchorPosition === options.hoverAnchorPosition && this.hoverOptions.hoverAnchorAxisAlignment === options.hoverAnchorAxisAlignment) {
-			return;
-		}
-		this.hoverOptions = options;
 		this.render();
 	}
 
@@ -295,7 +288,7 @@ export class CompositeBar extends Disposable {
 					onActivate: (compositeId) => this._onDidSelectComposite.fire({ compositeId }),
 				});
 			}),
-			...(showOverflow ? [new CompositeBarOverflowAction(localize(this.localizationService, { bundle: "ash.regions", key: "additionalViews" }, "Additional views"))] : []),
+			...(showOverflow ? [new CompositeOverflowActivityAction(localize(this.localizationService, { bundle: "ash.regions", key: "additionalViews" }, "Additional views"))] : []),
 		]);
 		if (this.renderedContainerIds.includes(this._activeCompositeId ?? "")) {
 			this.actionBar.setTabStop(this._activeCompositeId!);
@@ -427,21 +420,6 @@ export class CompositeBar extends Disposable {
 		if (sameIds([...this.overflowingContainerIds], [...ids])) return;
 		this.overflowingContainerIds = ids;
 	}
-}
-
-class CompositeBarOverflowAction implements IAction {
-	readonly id = OVERFLOW_ACTION_ID;
-	readonly label: string;
-	readonly tooltip: string;
-	readonly icon = Lxicon.ellipsis;
-	readonly enabled = true;
-
-	constructor(label: string) {
-		this.label = label;
-		this.tooltip = label;
-	}
-
-	run(): void {}
 }
 
 function sameIds(left: readonly string[], right: readonly string[]): boolean {

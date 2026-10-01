@@ -195,6 +195,7 @@ test("status bar item tooltips use the managed statusbar hover group", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const setups: Array<{ target: HTMLElement; content: unknown; groupId?: string }> = [];
 	using delegateRegistration = setHoverDelegate({
+		setupDelayedHover() { throw new Error("Unexpected delayed hover registration"); },
 		setupHover(options) {
 			setups.push(options);
 			return managedHover();

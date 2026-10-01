@@ -1,9 +1,8 @@
 import './media/activitybarpart.css';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
-import { AnchorAxisAlignment, AnchorPosition } from '../../../../base/browser/ui/contextview/contextview.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../base/common/actions.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import type { CompositeBar } from '../compositebar/compositeBar.js';
+import type { CompositeBar } from '../compositeBar.js';
 import { ActivityBarPosition, WorkbenchConfiguration, type SideBarLocation, type WorkbenchLayoutStyle } from '../../../common/configuration.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import type { GlobalCompositeBar } from '../globalCompositeBar.js';
@@ -75,10 +74,6 @@ export class ActivitybarPart extends WorkbenchPart {
 		if (this.sideBarLocation === location) return;
 		this.sideBarLocation = location;
 		this.domNode.classList.toggle('sidebar-right', location === 'right');
-		// A horizontal selector is owned by the sidebar until it returns to this rail.
-		if (this.domNode.contains(this.compositeBar.domNode)) {
-			this.applyPosition();
-		}
 	}
 
 	public setLayoutStyle(style: WorkbenchLayoutStyle): void {
@@ -95,10 +90,6 @@ export class ActivitybarPart extends WorkbenchPart {
 		this.domNode.classList.toggle('compact', this.compact);
 		this.domNode.classList.toggle('sidebar-right', this.sideBarLocation === 'right');
 		this.compositeBar.setOrientation('vertical');
-		this.compositeBar.setHoverOptions({
-			hoverAnchorAxisAlignment: AnchorAxisAlignment.Horizontal,
-			hoverAnchorPosition: this.sideBarLocation === 'left' ? AnchorPosition.Below : AnchorPosition.Above,
-		});
 	}
 
 	private getContextMenuActions(): readonly IAction[] {

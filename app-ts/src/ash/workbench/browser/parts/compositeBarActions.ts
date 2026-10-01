@@ -1,10 +1,21 @@
-import { addDisposableListener, h } from "../../../../base/browser/dom.js";
-import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
-import { ActionViewItem, type ActionViewItemOptions } from "../../../../base/browser/ui/actionbar/actionViewItems.js";
-import { IconLabel } from "../../../../base/browser/ui/iconlabel/iconlabel.js";
-import type { IAction } from "../../../../base/common/actions.js";
-import type { Icon } from "../../../../base/common/icon.js";
-import { assertDefined } from "../../../../base/common/types.js";
+import { addDisposableListener, h } from "../../../base/browser/dom.js";
+import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
+import { ActionViewItem, type ActionViewItemOptions } from "../../../base/browser/ui/actionbar/actionViewItems.js";
+import { IconLabel } from "../../../base/browser/ui/iconlabel/iconlabel.js";
+import type { IAction } from "../../../base/common/actions.js";
+import type { Icon } from "../../../base/common/icon.js";
+import { assertDefined } from "../../../base/common/types.js";
+import type { IDelayedHoverOptions } from '../../../base/browser/ui/hover/hover.js';
+import { HoverPosition } from '../../../base/browser/ui/hover/hoverWidget.js';
+import { Lxicon } from '../../../base/common/lxicons.js';
+
+export interface IActivityHoverOptions {
+	readonly position: () => HoverPosition;
+}
+
+export interface ICompositeBarActionViewItemOptions extends ActionViewItemOptions {
+	readonly hoverOptions: IActivityHoverOptions;
+}
 
 /** Inputs for one View Container selector rendered by a CompositeBar. */
 export interface CompositeBarActionOptions {
@@ -51,11 +62,15 @@ export class CompositeBarAction implements IAction {
 }
 
 /** DOM representation of one CompositeBar action inside its ActionBar tablist. */
-export class CompositeBarActionViewItem extends ActionViewItem {
+export class CompositeActionViewItem extends ActionViewItem {
 	private renderedContainer: HTMLElement | undefined;
 
-	constructor(private readonly compositeAction: CompositeBarAction, options: ActionViewItemOptions = {}) {
+	constructor(private readonly compositeAction: CompositeBarAction, private readonly options: ICompositeBarActionViewItemOptions) {
 		super(compositeAction, { ...options, draggable: true });
+	}
+
+	protected override getHoverOptions(): Pick<IDelayedHoverOptions, 'position'> {
+		return { position: { hoverPosition: this.options.hoverOptions.position() } };
 	}
 
 	override render(container: HTMLElement): void {
@@ -72,7 +87,7 @@ export class CompositeBarActionViewItem extends ActionViewItem {
 		container.setAttribute("aria-selected", String(options.checked));
 		container.setAttribute("aria-label", options.badge ? `${options.label}, ${options.badge.description}` : options.label);
 		if (options.panelId) container.setAttribute("aria-controls", options.panelId);
-		this.setupHover(container, this.compositeAction.tooltip);
+		this.setupDelayedHover(container, this.compositeAction.tooltip);
 		const action = h(container.ownerDocument, "span");
 		action.className = "ash-composite-bar-action";
 		const label = this._register(new IconLabel(action, {
@@ -115,16 +130,20 @@ export class CompositeBarActionViewItem extends ActionViewItem {
 }
 
 /** Overflow selector that remains a Composite tab while opening a menu of hidden destinations. */
-export class CompositeBarOverflowViewItem extends ActionViewItem {
+export class CompositeOverflowActivityActionViewItem extends ActionViewItem {
 	private renderedContainer: HTMLElement | undefined;
 
 	constructor(
 		action: IAction,
 		private readonly getActions: () => readonly IAction[],
 		private readonly contextMenuProvider: IContextMenuProvider,
-		options: ActionViewItemOptions = {},
+		private readonly hoverOptions: IActivityHoverOptions,
 	) {
-		super(action, options);
+		super(action);
+	}
+
+	protected override getHoverOptions(): Pick<IDelayedHoverOptions, 'position'> {
+		return { position: { hoverPosition: this.hoverOptions.position() } };
 	}
 
 	override render(container: HTMLElement): void {
@@ -139,7 +158,7 @@ export class CompositeBarOverflowViewItem extends ActionViewItem {
 		container.setAttribute("aria-label", this.action.label);
 		container.setAttribute("aria-haspopup", "menu");
 		container.setAttribute("aria-expanded", "false");
-		this.setupHover(container, this.action.tooltip);
+		this.setupDelayedHover(container, this.action.tooltip);
 		const action = h(container.ownerDocument, "span");
 		action.className = "ash-composite-bar-action";
 		const label = this._register(new IconLabel(action, {
@@ -188,4 +207,17 @@ export class CompositeBarOverflowViewItem extends ActionViewItem {
 		assertDefined(this.renderedContainer, `CompositeBar overflow action is not rendered: ${this.action.id}`);
 		return this.renderedContainer;
 	}
+}
+
+export class CompositeOverflowActivityAction implements IAction {
+	readonly id = "ash.compositeBar.overflow";
+	readonly icon = Lxicon.ellipsis;
+	readonly enabled = true;
+	readonly tooltip: string;
+
+	constructor(readonly label: string) {
+		this.tooltip = label;
+	}
+
+	run(): void {}
 }

@@ -323,9 +323,16 @@ test('activity bar tooltips follow left, right, top and bottom placement', async
 	for (const name of ['Accounts', 'Manage']) {
 		await checkTooltip(activitybar.getByRole('button', { name, exact: true }), 'right', true);
 	}
+	const skillsElement = await activitybar.getByRole('tab', { name: 'Skills', exact: true }).elementHandle();
+	const manageElement = await activitybar.getByRole('button', { name: 'Manage', exact: true }).elementHandle();
 	await activitybar.getByRole('button', { name: 'Manage', exact: true }).click({ button: 'right' });
 	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Move Primary Side Bar Right' }).click();
 	await expect(activitybar).toHaveClass(/sidebar-right/);
+	// Direction changes must be read by the retained actions without replacing their DOM.
+	expect(await skillsElement!.evaluate(element => element.isConnected)).toBe(true);
+	expect(await manageElement!.evaluate(element => element.isConnected)).toBe(true);
+	await skillsElement!.dispose();
+	await manageElement!.dispose();
 	await checkTooltip(activitybar.getByRole('tab', { name: 'Skills', exact: true }), 'left', true);
 	await checkTooltip(activitybar.getByRole('button', { name: 'Manage', exact: true }), 'left');
 	await checkTooltip(activitybar.getByRole('button', { name: 'Accounts', exact: true }), 'left');

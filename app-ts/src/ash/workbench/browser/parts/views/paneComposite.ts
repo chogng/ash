@@ -1,4 +1,4 @@
-import { compositePanelId, compositeTabId } from "../compositebar/compositeBar.js";
+import { compositePanelId, compositeTabId } from "../compositeBar.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { localize } from "../../../services/localization/common/localizationService.js";
 import { ViewPaneContainer, type ViewPaneContainerOptions } from "./viewPaneContainer.js";

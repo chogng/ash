@@ -75,7 +75,7 @@ PaneCompositePart
 - ❌ 用 `showHeader` 之类含糊布尔值同时控制 title、bar、item 或 pane header。
 - ❌ 让 contribution 根据 DOM 层级查找并迁移 action item。
 
-当父层只是把配置转发给明确的子组件时，父层选项应保留子组件命名空间，例如 `compositeBarContainerFilter`；进入 `CompositeBarOptions` 后收敛为 `containerFilter`。这样调用点和实现点都能看出配置边界。
+当父层只是把配置转发给明确的子组件时，父层选项应保留子组件命名空间，例如 `compositeBarContainerFilter`；进入 `ICompositeBarOptions` 后收敛为 `containerFilter`。这样调用点和实现点都能看出配置边界。
 
 ## 4. 状态与显隐契约
 
@@ -139,7 +139,7 @@ Agent Sidebar 的空 `CompositeBar` root 仍是统一标题结构的一部分，
 - `app-ts/src/ash/workbench/browser/parts/sidebar/sidebarPart.ts`
 - `app-ts/src/ash/workbench/browser/parts/auxiliarybar/auxiliarybarPart.ts`
 - `app-ts/src/ash/workbench/browser/parts/panel/panelPart.ts`
-- `app-ts/src/ash/workbench/browser/parts/compositebar/compositeBar.ts`
+- `app-ts/src/ash/workbench/browser/parts/compositeBar.ts`
 - `app-ts/src/ash/workbench/browser/workbench.ts`
 
 相关改动至少运行 Desktop TypeScript 编译，以及 Workbench layout、Chat view、toolbar/action view item 和 UI styling ownership 测试。视觉改动还需要在 Browser Workbench 中验证收起、展开、hover、拖拽与窄宽度 overflow。

@@ -181,6 +181,7 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 	let workspaceError: GitWorkspaceError | undefined;
 	let readySubscriptions = 0;
 	const hoverService: IHoverService = {
+		setupDelayedHover() { throw new Error("Unexpected delayed hover registration"); },
 		setupHover: (options) => {
 			hoverOptions.push(options);
 			return testManagedHover();
@@ -319,6 +320,7 @@ test("SCMHistoryViewPane loads the complete history across graph pages", async (
 	using contextKeyService = new ContextKeyService();
 	const menuService = new MenuService(new CommandService(new ServiceContainer()), contextKeyService);
 	const hoverService: IHoverService = {
+		setupDelayedHover() { throw new Error("Unexpected delayed hover registration"); },
 		setupHover: () => testManagedHover(),
 		showHover: () => testManagedHover(),
 		hideHover() {},
@@ -419,6 +421,7 @@ test("SCMHistoryViewPane virtualizes loaded history rows", async () => {
 		graph: async (_query: GraphQuery) => ({ commits, references: [], remotes: [], hasMore: false, nextCursor: undefined }),
 	} as unknown as IGitService;
 	const hoverService: IHoverService = {
+		setupDelayedHover() { throw new Error("Unexpected delayed hover registration"); },
 		setupHover: () => testManagedHover(),
 		showHover: () => testManagedHover(),
 		hideHover() {},
@@ -505,6 +508,7 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 	const opened: Array<{ readonly input: EditorInput; readonly options: EditorOpenOptions | undefined }> = [];
 	const editorService = testEditorService(opened);
 	const hoverService: IHoverService = {
+		setupDelayedHover() { throw new Error("Unexpected delayed hover registration"); },
 		setupHover: () => testManagedHover(),
 		showHover: () => testManagedHover(),
 		hideHover() {},

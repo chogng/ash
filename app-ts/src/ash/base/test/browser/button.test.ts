@@ -9,6 +9,7 @@ test("Button only installs a Hover for an explicit title", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const contents: unknown[] = [];
 	using delegateRegistration = setHoverDelegate({
+		setupDelayedHover() { throw new Error("Unexpected delayed hover registration"); },
 		setupHover(options) {
 			contents.push(options.content);
 			return managedHover();

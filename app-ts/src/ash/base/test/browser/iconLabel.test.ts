@@ -13,6 +13,7 @@ test('IconLabel updates name, description, suffix, and semantic icons in place',
 	const icon = registerLxicon('test-icon-label-inline', () => '<svg viewBox="0 0 16 16"></svg>');
 	const hoverContents: unknown[] = [];
 	using delegate = setHoverDelegate({
+		setupDelayedHover() { throw new Error("Unexpected delayed hover registration"); },
 		setupHover(options) {
 			hoverContents.push(options.content);
 			return managedHover();

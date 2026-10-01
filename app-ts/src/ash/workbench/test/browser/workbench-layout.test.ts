@@ -1,3 +1,4 @@
+import { HoverPosition } from "../../../base/browser/ui/hover/hoverWidget.js";
 import { createTestEditorServices } from '../common/testEditorServices.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -58,7 +59,7 @@ const { ActivitybarPart } = await import(
 const { PanelPart } = await import(
 	"../../../workbench/browser/parts/panel/panelPart.js"
 );
-const { CompositeBar } = await import("../../../workbench/browser/parts/compositebar/compositeBar.js");
+const { CompositeBar } = await import("../../../workbench/browser/parts/compositeBar.js");
 const { AuxiliarybarPart } = await import(
 	"../../../workbench/browser/parts/auxiliarybar/auxiliarybarPart.js"
 );
@@ -1381,6 +1382,7 @@ test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
 		},
 	};
 	const compositeBar = disposables.add(new CompositeBar(dom.window.document.body, {
+		activityHoverOptions: { position: () => HoverPosition.ABOVE },
 		viewDescriptorService: viewDescriptors,
 		location: ViewContainerLocation.Panel,
 		ariaLabel: "Panel views",
@@ -1449,6 +1451,7 @@ test('Activity Bar context menu persists hidden views and keeps one pinned view'
 	let actions: readonly IAction[] = [];
 	const contextMenuProvider: IContextMenuProvider = { showContextMenu(options) { actions = options.getActions(); } };
 	const compositeBar = firstBar.add(new CompositeBar(dom.window.document.body, {
+		activityHoverOptions: { position: () => HoverPosition.ABOVE },
 		viewDescriptorService: viewDescriptors,
 		location: ViewContainerLocation.Sidebar,
 		ariaLabel: 'Primary side bar views',
@@ -1478,6 +1481,7 @@ test('Activity Bar context menu persists hidden views and keeps one pinned view'
 
 	const restoredStorage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, applicationId: 'code', workspaceId: 'other', backend: dom.window.localStorage, flushInterval: 0 });
 	const restored = new CompositeBar(dom.window.document.body, {
+		activityHoverOptions: { position: () => HoverPosition.ABOVE },
 		viewDescriptorService: viewDescriptors,
 		location: ViewContainerLocation.Sidebar,
 		ariaLabel: 'Primary side bar views',
@@ -1510,6 +1514,7 @@ test("CompositeBar refreshes localized View Container labels", () => {
 		translate: (_bundle: string, key: string, fallback: string) => key === "terminal" && locale === "zh-CN" ? "终端" : fallback,
 	} as unknown as ILocalizationService;
 	const compositeBar = disposables.add(new CompositeBar(dom.window.document.body, {
+		activityHoverOptions: { position: () => HoverPosition.ABOVE },
 		viewDescriptorService: viewDescriptors,
 		localizationService: localization,
 		location: ViewContainerLocation.Panel,
@@ -1684,6 +1689,7 @@ test("CompositeBar reorders view container tabs through drag and drop", () => {
 	const contextKeys = disposables.add(new ContextKeyService());
 	const viewDescriptors = disposables.add(new ViewDescriptorService({ contextKeyService: contextKeys, registry }));
 	const compositeBar = disposables.add(new CompositeBar(dom.window.document.body, {
+		activityHoverOptions: { position: () => HoverPosition.ABOVE },
 		viewDescriptorService: viewDescriptors,
 		location: ViewContainerLocation.Panel,
 		ariaLabel: "Panel views",

@@ -1,3 +1,4 @@
+import { HoverPosition } from "../../../../base/browser/ui/hover/hoverWidget.js";
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -169,6 +170,53 @@ test('HoverService focuses a requested keyboard hover', () => {
 	contextMenus.dispose();
 	contextViews.dispose();
 	target.remove();
+});
+
+test('HoverService resolves delayed content and position once at display time', async () => {
+	const container = requiredElement<HTMLElement>('main');
+	const target = requiredElement<HTMLButtonElement>('#first');
+	target.getBoundingClientRect = () => rectangle(200, 200, 80, 24);
+	using contextViews = new BrowserContextViewService(container);
+	const contextViewElement = container.querySelector<HTMLElement>('.ash-context-view');
+	assert.ok(contextViewElement);
+	contextViewElement.getBoundingClientRect = () => rectangle(0, 0, 120, 40);
+	using contextMenus = new TestContextMenuService();
+	using configuration = new InMemoryConfigurationService();
+	await configuration.updateValue(HoverConfiguration.delay, 0);
+	using hoverService = new HoverService(configuration, contextViews, contextMenus);
+	let position = HoverPosition.RIGHT;
+	let content = 'Initial';
+	let evaluations = 0;
+	using registration = hoverService.setupDelayedHover(target, () => {
+		evaluations++;
+		return { content, position: { hoverPosition: position } };
+	});
+	assert.equal(evaluations, 0);
+
+	const displayed = new Promise<void>(resolve => {
+		const observer = new environment.window.MutationObserver(() => {
+			if (!contextViewElement.querySelector('[role="tooltip"]')) return;
+			observer.disconnect();
+			resolve();
+		});
+		observer.observe(contextViewElement, { childList: true, subtree: true });
+	});
+	target.dispatchEvent(new environment.window.MouseEvent('pointerenter'));
+	position = HoverPosition.LEFT;
+	content = 'Current';
+	await displayed;
+	assert.equal(evaluations, 1);
+	assert.equal(contextViewElement.textContent, 'Current');
+	assert.equal(contextViewElement.style.left, '74px');
+	assert.equal(contextViewElement.classList.contains('ash-context-view-axis-horizontal'), true);
+	assert.ok(target.hasAttribute('aria-describedby'));
+	hoverService.hideHover();
+	assert.equal(target.hasAttribute('aria-describedby'), false);
+
+	position = HoverPosition.BELOW;
+	registration.dispose();
+	target.dispatchEvent(new environment.window.MouseEvent('pointerenter'));
+	assert.equal(evaluations, 1);
 });
 
 class TestContextMenuService extends Disposable implements IContextMenuService {

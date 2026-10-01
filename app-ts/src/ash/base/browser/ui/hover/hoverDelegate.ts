@@ -1,5 +1,5 @@
 import type { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../contextview/contextview.js";
-import type { HoverContent, HoverPersistence } from "./hover.js";
+import type { HoverContent, HoverPersistence, IDelayedHoverOptions, IHoverLifecycleOptions } from "./hover.js";
 import type { IDisposable } from "../../../common/lifecycle.js";
 import { toDisposable } from "../../../common/lifecycle.js";
 
@@ -30,9 +30,13 @@ export interface IManagedHover extends IDisposable {
  */
 export interface IHoverDelegate {
 	setupHover(options: HoverDelegateSetupOptions): IManagedHover;
+	setupDelayedHover(target: HTMLElement, hoverOptions: (() => IDelayedHoverOptions) | IDelayedHoverOptions, lifecycleOptions?: IHoverLifecycleOptions): IDisposable;
 }
 
 const defaultHoverDelegate: IHoverDelegate = {
+	setupDelayedHover: (target, options) => new NativeTitleHover(target, () => {
+		return (typeof options === 'function' ? options() : options).content;
+	}),
 	setupHover: (options) => new NativeTitleHover(
 		options.target,
 		options.content,

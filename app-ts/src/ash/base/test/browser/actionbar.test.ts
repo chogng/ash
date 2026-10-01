@@ -13,6 +13,7 @@ test("ActionViewItem routes its tooltip through the shared action Hover group", 
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const setups: HoverDelegateSetupOptions[] = [];
 	using delegateRegistration = setHoverDelegate({
+		setupDelayedHover() { throw new Error("Unexpected delayed hover registration"); },
 		setupHover(options) {
 			setups.push(options);
 			options.target.removeAttribute("title");

@@ -1,8 +1,10 @@
+import type { IDelayedHoverOptions } from "../../browser/ui/hover/hover.js";
+import { HoverPosition } from "../../browser/ui/hover/hoverWidget.js";
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import type { IContextMenuDelegate, IContextMenuProvider } from "../../browser/contextmenu.js";
-import { setHoverDelegate, type HoverDelegateSetupOptions, type IManagedHover } from "../../browser/ui/hover/hoverDelegate.js";
+import { setHoverDelegate, type IManagedHover } from "../../browser/ui/hover/hoverDelegate.js";
 import { ToolBar } from "../../browser/ui/toolbar/toolbar.js";
 import type { IAction } from "../../common/actions.js";
 import { Separator } from "../../common/actions.js";
@@ -79,10 +81,15 @@ test("ToolBar highlights checked actions only when requested", () => {
 
 test("ToolBar applies its hover anchor position to primary and More Actions items", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	const setups: HoverDelegateSetupOptions[] = [];
+	const setups: Pick<IDelayedHoverOptions, 'position'>[] = [];
 	using delegateRegistration = setHoverDelegate({
 		setupHover(options) {
-			setups.push(options);
+			setups.push({ position: { hoverPosition: options.anchorPosition === AnchorPosition.Below ? HoverPosition.BELOW : HoverPosition.ABOVE } });
+			return managedHover();
+		},
+		setupDelayedHover(target, options, lifecycleOptions) {
+			setups.push({ ...(typeof options === 'function' ? options() : options), ...lifecycleOptions });
+			target.removeAttribute("title");
 			return managedHover();
 		},
 	});
@@ -92,7 +99,7 @@ test("ToolBar applies its hover anchor position to primary and More Actions item
 	});
 	toolbar.setActions([action("primary")], [action("secondary")]);
 
-	assert.deepEqual(setups.map(({ anchorPosition }) => anchorPosition), [AnchorPosition.Below, AnchorPosition.Below]);
+	assert.deepEqual(setups.map(({ position }) => position?.hoverPosition), [HoverPosition.BELOW, HoverPosition.BELOW]);
 
 	dom.window.close();
 });

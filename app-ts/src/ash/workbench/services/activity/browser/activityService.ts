@@ -1,5 +1,5 @@
 import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import type { CompositeBar } from '../../../browser/parts/compositebar/compositeBar.js';
+import type { CompositeBar } from '../../../browser/parts/compositeBar.js';
 import { NumberBadge, type IActivityService } from '../common/activity.js';
 
 /** Projects View Container activity onto the Workbench's sidebar selectors. */
