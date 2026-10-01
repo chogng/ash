@@ -3,6 +3,38 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
+test('editor tabs distinguish the active document from the tab strip across themes', async ({ workbench }) => {
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	await page.keyboard.press('ControlOrMeta+N');
+	const group = workbench.editors.groupAt(0);
+	const strip = group.title.locator('.ash-editor-tabs-and-actions');
+	const active = strip.locator('.ash-tab.checked');
+	const inactive = strip.locator('.ash-tab:not(.checked):not(.selected)').first();
+	for (const [theme, documentColor, stripColor, inactiveColor] of [
+		['Ash Dark', 'rgb(30, 30, 30)', 'rgb(37, 37, 38)', 'rgb(37, 37, 38)'],
+		['Ash Light', 'rgb(255, 255, 255)', 'rgb(243, 243, 243)', 'rgb(238, 238, 238)'],
+		['Ash High Contrast Dark', 'rgb(0, 0, 0)', 'rgb(0, 0, 0)', 'rgb(0, 0, 0)'],
+		['Ash High Contrast Light', 'rgb(255, 255, 255)', 'rgb(255, 255, 255)', 'rgb(255, 255, 255)'],
+	] as const) {
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+		const picker = page.locator('.ash-quick-pick').getByRole('combobox');
+		await picker.fill(theme);
+		await picker.press('Enter');
+		await expect(page.locator('.ash-quick-pick')).toHaveCount(0);
+		await expect(strip).toHaveCSS('background-color', stripColor);
+		await expect(active).toHaveCSS('background-color', documentColor);
+		await expect(inactive).toHaveCSS('background-color', inactiveColor);
+		const tab = active.getByRole('tab');
+		await tab.focus();
+		await expect(tab).toHaveCSS('outline-style', 'solid');
+		await tab.press('Alt+Enter');
+		await expect(group.title.locator('.ash-sticky-editor-tabs-row .ash-tab.checked')).toHaveCSS('background-color', documentColor);
+		await expect(strip).toHaveCSS('background-color', stripColor);
+		await active.getByRole('button', { name: 'Unpin Editor', exact: true }).click();
+	}
+});
+
 test('double-clicking Welcome keeps it in the ordinary row and preserves an explicit pin', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
@@ -86,6 +118,7 @@ test('pinned editor action stays Unpin on hover and returns the editor to the or
 		return { tab: getComputedStyle(element).backgroundColor, editor };
 	});
 	expect(colors.tab).toBe(colors.editor);
+	await expect(ordinary).toHaveCSS('border-bottom-width', '0px');
 	const closeGeometry = await ordinary.locator('.ash-tab-close-action button').evaluate(button => {
 		const rect = button.getBoundingClientRect();
 		const icon = button.querySelector('.ash-icon')!.getBoundingClientRect();
@@ -96,6 +129,7 @@ test('pinned editor action stays Unpin on hover and returns the editor to the or
 	await ordinary.getByRole('tab').press('Alt+Enter');
 	const sticky = page.locator('.ash-sticky-editor-tabs-row .ash-tab.checked');
 	await expect(sticky).toHaveCount(1);
+	await expect(sticky).toHaveCSS('border-bottom-width', '0px');
 	const unpin = sticky.getByRole('button', { name: 'Unpin Editor', exact: true });
 	await expect(sticky.locator('.ash-tab-close-action')).toHaveCount(0);
 	await expect(unpin.locator('svg')).toHaveAttribute('data-ash-icon-id', 'pinned');

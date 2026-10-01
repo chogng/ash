@@ -93,6 +93,24 @@ test("ScrollableElement reveals a descendant at the nearest horizontal edge", ()
 	dom.window.close();
 });
 
+test('ScrollableElement updates thin scrollbar presentation without replacing scroll state or focus', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using scrollable = new ScrollableElement(dom.window.document.body, { direction: 'horizontal', scrollbarSize: 3 });
+	const viewport = scrollable.scrollableElement;
+	installMetrics(viewport, { width: 100, height: 22, scrollWidth: 400, scrollHeight: 22 });
+	scrollable.layout();
+	scrollable.scrollTo(80, 0);
+	const horizontal = requireElement(scrollable.element, '.ash-scrollbar-track-horizontal');
+	horizontal.focus();
+	scrollable.updateOptions({ scrollbarSize: 10, horizontal: 'hidden', vertical: 'visible' });
+	assert.equal(horizontal.hidden, true);
+	assert.equal(requireElement(scrollable.element, '.ash-scrollbar-track-vertical').hidden, true);
+	scrollable.updateOptions({ horizontal: 'auto' });
+	assert.deepEqual({ viewport: scrollable.scrollableElement === viewport, position: scrollable.state.left, size: scrollable.element.style.getPropertyValue('--ash-scrollbar-size'), focus: dom.window.document.activeElement === horizontal, visibility: horizontal.dataset.visibility },
+		{ viewport: true, position: 80, size: '10px', focus: true, visibility: 'visible' });
+	dom.window.close();
+});
+
 test("Scrollbar owns two-axis state, elements, visibility, and ARIA", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const scrollbar = new Scrollbar(dom.window.document.body, {

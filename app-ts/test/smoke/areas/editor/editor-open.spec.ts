@@ -350,7 +350,7 @@ test("Connected editor tab follows horizontal tab scrolling", async ({ target, w
 	})).toBe(true);
 	await viewport.evaluate(element => { element.scrollLeft = element.scrollWidth; });
 	await expect(selected).not.toHaveClass(/connected-tab-right-clipped/u);
-	await expect.poll(() => selected.evaluate(tab => getComputedStyle(tab).borderBottomWidth)).toBe("2px");
+	await expect.poll(() => selected.evaluate(tab => getComputedStyle(tab).borderBottomWidth)).toBe("0px");
 });
 
 test("Single editor tab uses the available title width", async ({ target, workbench }) => {

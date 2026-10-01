@@ -17,6 +17,10 @@
   height: calc(var(--ash-pane-title-height) * var(--ash-editor-tab-rows, 1));
 }
 
+.ash-editor-tabs-and-actions.multiple {
+  background: var(--ash-editor-group-header-tabs-background);
+}
+
 .ash-editor-title-control::after {
   position: absolute;
   right: 0;

@@ -1,5 +1,5 @@
 import { localize } from "../../../../nls.js";
-import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
+import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
 import { Registry } from "../../../../platform/registry/common/platform.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { EditorLineWrapping } from "../../../../editor/common/config/editorOptions.js";
@@ -7,8 +7,45 @@ import type { IDocumentDiffProviderOptions } from "../../../../editor/common/dif
 
 export type EditorAutoSaveMode = "off" | "afterDelay" | "onFocusChange" | "onWindowChange";
 export type EditorTabsMode = "multiple" | "single" | "none";
+export type EditorTitleScrollbarSizing = 'default' | 'large';
+export type EditorTitleScrollbarVisibility = 'auto' | 'visible' | 'hidden';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+
+export const EditorTitleScrollbarSizingConfiguration = configurationRegistry.registerConfiguration<EditorTitleScrollbarSizing>({
+	key: 'workbench.editor.titleScrollbarSizing',
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'string', enum: ['default', 'large'] },
+	defaultValue: 'default',
+	parse: value => value === 'large' ? 'large' : 'default',
+	setting: {
+		get title() { return localize('workbench.editor.titleScrollbarSizing.title', 'Workbench › Editor: Title Scrollbar Sizing'); },
+		get description() { return localize('workbench.editor.titleScrollbarSizing.description', 'Controls the size of the scrollbars for editor tabs and breadcrumbs.'); },
+		valueType: 'select',
+		get options() { return [
+			{ value: 'default' as const, label: localize('workbench.editor.titleScrollbarSizing.default', 'Default') },
+			{ value: 'large' as const, label: localize('workbench.editor.titleScrollbarSizing.large', 'Large') },
+		]; },
+	},
+});
+
+export const EditorTitleScrollbarVisibilityConfiguration = configurationRegistry.registerConfiguration<EditorTitleScrollbarVisibility>({
+	key: 'workbench.editor.titleScrollbarVisibility',
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'string', enum: ['auto', 'visible', 'hidden'] },
+	defaultValue: 'auto',
+	parse: value => value === 'visible' || value === 'hidden' ? value : 'auto',
+	setting: {
+		get title() { return localize('workbench.editor.titleScrollbarVisibility.title', 'Workbench › Editor: Title Scrollbar Visibility'); },
+		get description() { return localize('workbench.editor.titleScrollbarVisibility.description', 'Controls when scrollbars for editor tabs and breadcrumbs are visible.'); },
+		valueType: 'select',
+		get options() { return [
+			{ value: 'auto' as const, label: localize('workbench.editor.titleScrollbarVisibility.auto', 'Auto') },
+			{ value: 'visible' as const, label: localize('workbench.editor.titleScrollbarVisibility.visible', 'Visible') },
+			{ value: 'hidden' as const, label: localize('workbench.editor.titleScrollbarVisibility.hidden', 'Hidden') },
+		]; },
+	},
+});
 
 export const EditorTabsModeConfiguration = configurationRegistry.registerConfiguration<EditorTabsMode>({
 	key: "workbench.editor.showTabs",

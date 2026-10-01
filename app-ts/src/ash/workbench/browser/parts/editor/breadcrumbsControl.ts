@@ -8,6 +8,8 @@ import { localize, onDidChangeNls } from "../../../../nls.js";
 import { BreadcrumbsModel, FileElement, SymbolElement } from "./breadcrumbsModel.js";
 import type { BreadcrumbsPathMode } from "./breadcrumbs.js";
 import type { EditorInput } from "./editorInput.js";
+import { ScrollbarVisibility } from '../../../../base/common/scrollable.js';
+import type { EditorTitleScrollbarSizing, EditorTitleScrollbarVisibility } from '../../../services/editor/common/editorConfiguration.js';
 
 /** Renders the active editor's resource path in one group title. */
 export class EditorBreadcrumbsControl extends Disposable {
@@ -54,6 +56,12 @@ export class EditorBreadcrumbsControl extends Disposable {
 		if (!item) return false;
 		this.widget.setFocused(item);
 		return true;
+	}
+
+	setScrollbarOptions(sizing: EditorTitleScrollbarSizing, visibility: EditorTitleScrollbarVisibility): void {
+		this.widget.setHorizontalScrollbarSize(sizing === 'large' ? 8 : 3);
+		const values = { auto: ScrollbarVisibility.Auto, visible: ScrollbarVisibility.Visible, hidden: ScrollbarVisibility.Hidden };
+		this.widget.setHorizontalScrollbarVisibility(values[visibility]);
 	}
 
 	setInput(input: EditorInput | undefined): void {

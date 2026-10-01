@@ -133,6 +133,15 @@ export class BreadcrumbsWidget extends Disposable {
 		return this.entries.map(entry => entry.item);
 	}
 
+	public setHorizontalScrollbarSize(size: number): void {
+		this.scrollable.updateOptions({ scrollbarSize: size });
+	}
+
+	public setHorizontalScrollbarVisibility(visibility: ScrollbarVisibility): void {
+		const values = { [ScrollbarVisibility.Auto]: 'auto', [ScrollbarVisibility.Visible]: 'visible', [ScrollbarVisibility.Hidden]: 'hidden' } as const;
+		this.scrollable.updateOptions({ horizontal: values[visibility] });
+	}
+
 	public setItems(items: BreadcrumbsItem[]): void {
 		this.pendingReveal.clear();
 		const previous = this.entries;

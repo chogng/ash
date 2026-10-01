@@ -5,6 +5,7 @@ import type { IAction } from "../../../common/actions.js";
 import { Disposable, toDisposable, type IDisposable } from "../../../common/lifecycle.js";
 import { ActionBar, type ActionBarDragAndDrop, type ActionBarDropPosition, type ActionBarOrientation } from "../actionbar/actionbar.js";
 import { ScrollableElement } from "../scrollbar/scrollableElement.js";
+import type { ScrollableElementUpdateOptions } from '../scrollbar/scrollableElementOptions.js';
 import { TabAction, TabActionViewItem } from "./tabActionViewItem.js";
 
 export { TAB_CLOSE_ACTION_ID } from "./tabActionViewItem.js";
@@ -75,6 +76,7 @@ export interface TabListOptions<T> {
  */
 export class TabList<T> extends Disposable {
 	readonly element: HTMLDivElement;
+	readonly scrollableElement: HTMLDivElement;
 	private readonly actionBar: ActionBar;
 	private readonly actions = new Map<string, TabAction<T>>();
 	private readonly views = new Map<string, TabActionViewItem<T>>();
@@ -140,7 +142,14 @@ export class TabList<T> extends Disposable {
 			"ash-tab-list-scroll-content",
 		);
 		this.element = this.scrollable.element;
+		this.scrollableElement = this.scrollable.scrollableElement;
 		if (this.select) this.actionBar.element.setAttribute("aria-multiselectable", "true");
+	}
+
+	public get onDidScroll(): ScrollableElement['onDidScroll'] { return this.scrollable.onDidScroll; }
+
+	public updateScrollbarOptions(options: ScrollableElementUpdateOptions): void {
+		this.scrollable.updateOptions(options);
 	}
 
 	setPresentation(presentation: TabListPresentation): void {

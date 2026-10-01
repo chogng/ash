@@ -17,7 +17,7 @@ import { DisposableStore, toDisposable } from "../../../../base/common/lifecycle
 import { IContextKeyService, type IScopedContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorTabsFocusContext } from "../../../common/contextkeys.js";
 import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
-import { EditorShowIconsConfiguration } from "../../../services/editor/common/editorConfiguration.js";
+import { EditorShowIconsConfiguration, EditorTitleScrollbarSizingConfiguration, EditorTitleScrollbarVisibilityConfiguration, type EditorTitleScrollbarSizing, type EditorTitleScrollbarVisibility } from "../../../services/editor/common/editorConfiguration.js";
 
 const DRAG_OVER_ACTIVATE_DELAY = 1500;
 
@@ -38,7 +38,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 		container: HTMLElement,
 		private readonly delegate: EditorTabsDelegate,
 		@IResourceLabelService resourceLabels: IResourceLabelService,
-		@IConfigurationService configurationService: IConfigurationService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 	) {
 		super(container);
@@ -48,6 +48,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 		this.labels.setIconVisibility(configurationService.getValue<boolean>(EditorShowIconsConfiguration));
 		this._register(configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(EditorShowIconsConfiguration)) this.labels.setIconVisibility(configurationService.getValue<boolean>(EditorShowIconsConfiguration));
+			if (event.affectsConfiguration(EditorTitleScrollbarSizingConfiguration) || event.affectsConfiguration(EditorTitleScrollbarVisibilityConfiguration)) this.updateScrollbarOptions();
 		}));
 		this.tabList = this._register(new TabList(this.domNode, {
 			ariaLabel: "Open editors",
@@ -89,11 +90,11 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			onSelect: (editor, event) => delegate.select?.(editor.input, { toggle: event.ctrlKey || event.metaKey, range: event.shiftKey }) ?? false,
 			onClose: (editor) => delegate.close(editor.input),
 		}));
-		const viewport = this.tabList.element.querySelector<HTMLElement>(".ash-scrollbar-viewport");
-		if (!viewport) throw new Error("Editor tabs require a scroll viewport");
+		this.updateScrollbarOptions();
+		const viewport = this.tabList.scrollableElement;
 		this.viewport = viewport;
 		this.domNode.classList.add(CONNECTED_EDITOR_TABS_CLASS);
-		this._register(addDisposableListener(viewport, "scroll", () => this.updateConnectedTab()));
+		this._register(this.tabList.onDidScroll(() => this.updateConnectedTab()));
 		this._register(observeResize(viewport, () => this.updateConnectedTab()));
 		this._register(addDisposableListener(this.tabList.element, "contextmenu", event => {
 			this.showTabContextMenu(event);
@@ -115,6 +116,13 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			event.stopPropagation();
 			this.delegate.pinEditor(editor.input);
 		}));
+	}
+
+	private updateScrollbarOptions(): void {
+		this.tabList.updateScrollbarOptions({
+			scrollbarSize: this.configurationService.getValue<EditorTitleScrollbarSizing>(EditorTitleScrollbarSizingConfiguration) === 'large' ? 10 : 3,
+			horizontal: this.configurationService.getValue<EditorTitleScrollbarVisibility>(EditorTitleScrollbarVisibilityConfiguration),
+		});
 	}
 
 	private showTabContextMenu(event: MouseEvent | KeyboardEvent): void {

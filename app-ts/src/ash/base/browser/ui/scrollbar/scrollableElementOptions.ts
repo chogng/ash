@@ -67,6 +67,13 @@ export interface ResolvedScrollableElementOptions {
 	};
 }
 
+/** Runtime presentation changes preserve the viewport and its scroll position. */
+export interface ScrollableElementUpdateOptions {
+	readonly horizontal?: ScrollbarVisibility;
+	readonly vertical?: ScrollbarVisibility;
+	readonly scrollbarSize?: number;
+}
+
 export function resolveScrollableElementOptions(
 	options: ScrollableElementOptions,
 ): ResolvedScrollableElementOptions {

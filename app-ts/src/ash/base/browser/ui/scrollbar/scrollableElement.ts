@@ -20,6 +20,7 @@ import {
 } from "./scrollbarState.js";
 import {
 	resolveScrollableElementOptions,
+	type ScrollableElementUpdateOptions,
 	type ResolvedScrollableElementOptions,
 	type ScrollableElementOptions,
 	type ScrollbarVisibility,
@@ -81,7 +82,10 @@ export class ScrollableElement extends Disposable {
 	private readonly vertical: VerticalScrollbar;
 	private readonly corner: HTMLDivElement;
 	private readonly cornerNode: FastDomNode<HTMLDivElement>;
-	private readonly options: ResolvedScrollableElementOptions;
+	private options: ResolvedScrollableElementOptions;
+	private hovered = false;
+	private focused = false;
+	private scrolling = false;
 	private readonly onScrollOption: ((position: ScrollPosition) => void) | undefined;
 	private readonly onDidScrollEmitter: Emitter<ScrollableScrollEvent>;
 	private _state = initialState;
@@ -135,8 +139,8 @@ export class ScrollableElement extends Disposable {
 		}
 		viewport.className = "ash-scrollbar-viewport";
 		content.className = "ash-scrollbar-content";
-		horizontal.track.dataset.visibility = this.options.horizontal;
-		vertical.track.dataset.visibility = this.options.vertical;
+		horizontal.setVisibility(scrollbarVisibility(this.options.horizontal));
+		vertical.setVisibility(scrollbarVisibility(this.options.vertical));
 		this.cornerNode.setClassName("ash-scrollbar-corner");
 		viewport.append(content);
 		element.append(
@@ -146,6 +150,25 @@ export class ScrollableElement extends Disposable {
 			corner,
 		);
 		container.append(element);
+		this.hovered = element.matches(':hover');
+		this.focused = element.contains(ownerDocument.activeElement);
+		this._register(addDisposableListener(element, 'mouseenter', () => {
+			this.hovered = true;
+			this.updateVisibility();
+		}));
+		this._register(addDisposableListener(element, 'mouseleave', () => {
+			this.hovered = false;
+			this.updateVisibility();
+		}));
+		this._register(addDisposableListener(element, 'focusin', () => {
+			this.focused = true;
+			this.updateVisibility();
+		}));
+		this._register(addDisposableListener(element, 'focusout', (event: FocusEvent) => {
+			this.focused = element.contains(event.relatedTarget as Node | null);
+			this.updateVisibility();
+		}));
+		this.updateVisibility();
 
 		this._register(toDisposable(() => {
 			this.pendingReveal = undefined;
@@ -167,6 +190,22 @@ export class ScrollableElement extends Disposable {
 
 	get state(): ScrollableElementState {
 		return this._state;
+	}
+
+	public updateOptions(options: ScrollableElementUpdateOptions): void {
+		const direction = this.options.direction;
+		const resolved = resolveScrollableElementOptions({ ...this.options, ...options, direction: 'both' });
+		// Axis ownership is fixed at creation; changing presentation must not enable another axis.
+		this.options = {
+			...resolved,
+			direction,
+			horizontal: direction === 'vertical' ? 'hidden' : resolved.horizontal,
+			vertical: direction === 'horizontal' ? 'hidden' : resolved.vertical,
+		};
+		this.element.style.setProperty('--ash-scrollbar-size', `${this.options.scrollbarSize}px`);
+		this.horizontal.setVisibility(scrollbarVisibility(this.options.horizontal));
+		this.vertical.setVisibility(scrollbarVisibility(this.options.vertical));
+		this.layout();
 	}
 
 	setContent(content: Element): void {
@@ -494,11 +533,27 @@ export class ScrollableElement extends Disposable {
 
 	private showScrollbars(): void {
 		const targetWindow = ownerWindow(this.element);
-		this.element.classList.add("ash-scrollbar-scrolling");
+		this.scrolling = true;
+		this.updateVisibility();
 		this.scrollActivityTimeout.value = disposableWindowTimeout(targetWindow, () => {
 			this.scrollActivityTimeout.clear();
-			this.element.classList.remove("ash-scrollbar-scrolling");
+			this.scrolling = false;
+			this.updateVisibility();
 		}, 700);
+	}
+
+	private updateVisibility(): void {
+		const visible = this.hovered || this.focused || this.scrolling;
+		this.horizontal.setShouldBeVisible(visible);
+		this.vertical.setShouldBeVisible(visible);
+	}
+}
+
+function scrollbarVisibility(visibility: ScrollbarVisibility): ScrollbarVisibilityOption {
+	switch (visibility) {
+		case 'visible': return ScrollbarVisibilityOption.Visible;
+		case 'hidden': return ScrollbarVisibilityOption.Hidden;
+		case 'auto': return ScrollbarVisibilityOption.Auto;
 	}
 }
 
@@ -854,8 +909,10 @@ export class SmoothScrollableElement extends Disposable {
 
 	private updateVisibility(): void {
 		const reveal = this.hovered || this.focused || this.scrolling;
-		this.horizontal.track.dataset.visibility = this.options.horizontal === ScrollbarVisibilityOption.Visible || reveal ? 'visible' : 'auto';
-		this.vertical.track.dataset.visibility = this.options.vertical === ScrollbarVisibilityOption.Visible || reveal ? 'visible' : 'auto';
+		this.horizontal.setVisibility(this.options.horizontal ?? ScrollbarVisibilityOption.Auto);
+		this.vertical.setVisibility(this.options.vertical ?? ScrollbarVisibilityOption.Auto);
+		this.horizontal.setShouldBeVisible(reveal);
+		this.vertical.setShouldBeVisible(reveal);
 		for (const { button, axis } of this.arrows) {
 			button.dataset.visibility = axis === 'horizontal' ? this.horizontal.track.dataset.visibility : this.vertical.track.dataset.visibility;
 		}

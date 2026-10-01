@@ -27,7 +27,6 @@
 }
 
 .ash-connected-editor-tabs .ash-tab.checked {
-	border-bottom: 2px solid var(--ash-border);
 	border-bottom-right-radius: 0;
 	border-bottom-left-radius: 0;
 }

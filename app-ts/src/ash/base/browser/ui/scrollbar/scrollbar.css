@@ -83,12 +83,6 @@
   pointer-events: none;
 }
 
-.ash-scrollbar:hover >
-  .ash-scrollbar-track[data-visibility="auto"],
-.ash-scrollbar:focus-within >
-  .ash-scrollbar-track[data-visibility="auto"],
-.ash-scrollbar-scrolling >
-  .ash-scrollbar-track[data-visibility="auto"],
 .ash-scrollbar-track.active {
   opacity: 1;
   pointer-events: auto;

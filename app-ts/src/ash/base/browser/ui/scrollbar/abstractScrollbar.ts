@@ -8,6 +8,8 @@ import {
 	toDisposable,
 } from "../../../common/lifecycle.js";
 import type { ScrollbarAxisMetrics } from "./scrollbarState.js";
+import { ScrollbarVisibility } from '../../../common/scrollable.js';
+import { ScrollbarVisibilityController } from './scrollbarVisibilityController.js';
 
 export type ScrollbarAxis = "horizontal" | "vertical";
 
@@ -28,6 +30,7 @@ export abstract class AbstractScrollbar extends Disposable {
 	private readonly getMetrics: () => ScrollbarAxisMetrics;
 	private readonly setPosition: (position: number) => void;
 	private readonly dragListeners: DisposableStore;
+	private readonly visibility = this._register(new ScrollbarVisibilityController(ScrollbarVisibility.Auto, 'ash-scrollbar-visible', 'ash-scrollbar-invisible'));
 
 	protected constructor(
 		container: HTMLElement,
@@ -50,6 +53,7 @@ export abstract class AbstractScrollbar extends Disposable {
 		this.trackNode.setClassName(
 			`ash-scrollbar-track ash-scrollbar-track-${axis}`,
 		);
+		this.visibility.setDomNode(this.trackNode);
 		track.setAttribute("role", "scrollbar");
 		track.setAttribute("aria-label", `${capitalize(axis)} scrollbar`);
 		track.setAttribute("aria-orientation", axis);
@@ -83,6 +87,14 @@ export abstract class AbstractScrollbar extends Disposable {
 		return !this.track.hidden;
 	}
 
+	public setVisibility(visibility: ScrollbarVisibility): void {
+		this.visibility.setVisibility(visibility);
+	}
+
+	public setShouldBeVisible(visible: boolean): void {
+		this.visibility.setShouldBeVisible(visible);
+	}
+
 	protected abstract applyThumbMetrics(
 		metrics: ScrollbarAxisMetrics,
 	): void;
@@ -102,8 +114,7 @@ export abstract class AbstractScrollbar extends Disposable {
 	): number | undefined;
 
 	render(metrics: ScrollbarAxisMetrics, rendered: boolean): void {
-		const hidden = !rendered;
-		if (this.track.hidden !== hidden) this.track.hidden = hidden;
+		this.visibility.setIsNeeded(rendered);
 		const tabIndex = rendered && metrics.maximumPosition > 0 ? 0 : -1;
 		if (this.track.tabIndex !== tabIndex) this.track.tabIndex = tabIndex;
 		this.track.setAttribute(

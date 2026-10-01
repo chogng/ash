@@ -26,6 +26,7 @@ import { EditorBreadcrumbsControl } from "./breadcrumbsControl.js";
 import { BreadcrumbsModel, type FileElement, type SymbolElement } from "./breadcrumbsModel.js";
 import type { EditorInput } from "./editorInput.js";
 import type { IEditorPane } from "./editorPane.js";
+import { EditorTitleScrollbarSizingConfiguration, EditorTitleScrollbarVisibilityConfiguration, type EditorTitleScrollbarSizing, type EditorTitleScrollbarVisibility } from '../../../services/editor/common/editorConfiguration.js';
 
 export interface EditorHeaderActions {
 	readonly menuService: IMenuService;
@@ -96,7 +97,13 @@ export class EditorHeaderControl extends Disposable {
 		this.breadcrumbs.setPathModes(this.filePath, this.symbolPath);
 		this.updateBreadcrumbVisibility();
 		if (configurationService) {
+			const updateScrollbar = (): void => this.breadcrumbs.setScrollbarOptions(
+				configurationService.getValue<EditorTitleScrollbarSizing>(EditorTitleScrollbarSizingConfiguration),
+				configurationService.getValue<EditorTitleScrollbarVisibility>(EditorTitleScrollbarVisibilityConfiguration),
+			);
+			updateScrollbar();
 			this._register(configurationService.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration(EditorTitleScrollbarSizingConfiguration) || event.affectsConfiguration(EditorTitleScrollbarVisibilityConfiguration)) updateScrollbar();
 				if (event.affectsConfiguration(BreadcrumbsEnabledConfiguration)) {
 					this.breadcrumbsEnabled = configurationService.getValue<boolean>(BreadcrumbsEnabledConfiguration);
 					this.updateBreadcrumbVisibility();

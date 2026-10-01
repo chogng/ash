@@ -19,6 +19,7 @@ registerColor("editorGroup.border", {
 	highContrastLight: contrastBorder,
 }, { description: "Border between editor groups.", owner: colorOwner });
 color("editor.tabBackground", "#252526", "#EEEEEE", "#000000", "#ffffff", "Background for inactive Editor tabs.");
+color("editorGroupHeader.tabsBackground", "#252526", "#F3F3F3", "#000000", "#ffffff", "Background of the Editor tab strip.");
 
 export const titleBarBackground = color("titleBar.background", workbenchBackground, "#FFFFFF", "#000000", "#ffffff", "Title bar background.");
 color('modernActivityBarItem.activeBackground', '#373737', '#e6e6e6', '#000000', '#ffffff', 'Selected Activity Bar item background.');
