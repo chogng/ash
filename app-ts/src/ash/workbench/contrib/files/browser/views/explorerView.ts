@@ -8,7 +8,7 @@ import { IResourceIconRenderer } from "../../../../browser/labels.js";
 import { IHoverService } from "../../../../../platform/hover/browser/hoverService.js";
 import { IFileLabelDecorationService } from "../../../../services/labels/common/fileLabelDecorationService.js";
 import { ILabelService } from "../../../../../platform/label/common/labelService.js";
-import { WorkbenchAsyncDataTree, type ResourceOpenEvent } from "../../../../../platform/list/browser/listService.js";
+import { ListConfiguration, WorkbenchAsyncDataTree, type ResourceOpenEvent, type TreeExpandMode } from "../../../../../platform/list/browser/listService.js";
 import { IEditorService } from "../../../../services/editor/common/editorService.js";
 import { ViewPane, type IViewPaneOptions } from "../../../../browser/parts/views/viewPane.js";
 import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
@@ -32,7 +32,6 @@ import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../.
 import { localize, onDidChangeNls } from '../../../../../nls.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { FileEditorInput } from '../editors/fileEditorInput.js';
-import { ListConfiguration, type TreeExpandMode } from '../../../../../platform/list/common/listConfiguration.js';
 import { ResourceSchemeContext } from '../../../../common/contextkeys.js';
 import { PASTE_FILE_COMMAND_ID } from '../fileActions.js';
 

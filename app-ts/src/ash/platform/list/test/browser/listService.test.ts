@@ -4,8 +4,7 @@ import { JSDOM } from "jsdom";
 import { InMemoryConfigurationService } from "../../../configuration/common/inMemoryConfigurationService.js";
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../configuration/common/configurationRegistry.js";
 import { Registry } from "../../../registry/common/platform.js";
-import { WorkbenchObjectTree, type ResourceOpenEvent } from "../../browser/listService.js";
-import { ListConfiguration } from "../../common/listConfiguration.js";
+import { ListConfiguration, WorkbenchObjectTree, type ResourceOpenEvent } from "../../browser/listService.js";
 import { h } from "../../../../base/browser/dom.js";
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);

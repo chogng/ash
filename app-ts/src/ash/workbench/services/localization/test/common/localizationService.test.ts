@@ -17,7 +17,7 @@ import { JsonSchemasRegistry } from '../../../../../platform/jsonschemas/common/
 import { colorThemeSchemaId, registerColorThemeSchemas } from '../../../themes/common/colorThemeSchema.js';
 import '../../../../common/theme.js';
 import { DefaultSettings } from '../../../preferences/common/settingsModels.js';
-import { ListConfiguration } from '../../../../../platform/list/common/listConfiguration.js';
+import { ListConfiguration } from '../../../../../platform/list/browser/listService.js';
 
 test('Tree settings use Chinese titles and guide options', async () => {
 	using configuration = new InMemoryConfigurationService();
