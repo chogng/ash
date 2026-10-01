@@ -12,7 +12,6 @@ use ash_app_server_daemon::GrantSource;
 use ash_app_server_daemon::ManagedEndpoint;
 use ash_app_server_transport::LocalConnections;
 use std::io;
-use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
@@ -25,7 +24,6 @@ const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 const IDLE_POLL_INTERVAL: Duration = Duration::from_millis(50);
 const IDLE_TIMEOUT_ENV: &str = "ASH_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS";
 const STOP_GRACE_TIMEOUT: Duration = Duration::from_secs(5);
-const STOP_CONNECTION_DRAIN_TIMEOUT: Duration = Duration::from_secs(1);
 
 pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> Result<(), String> {
     let history = ash_state::SqliteThreadStore::open(profile_root.join("state.sqlite3"))
@@ -49,6 +47,9 @@ pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> R
     drop(history);
     let idle_timeout = configured_idle_timeout()?;
     let mut endpoint = ManagedEndpoint::bind(&profile_root)?;
+    // Keep the endpoint leased until directory and profile destructors finish, so a
+    // new generation cannot open the same profile while its old services stop.
+    let registry = registry;
     let _automatic_updates = ash_app_server_daemon::start_automatic_updates(&profile_root)?;
     let mut automation = registry
         .as_ref()
@@ -60,10 +61,14 @@ pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> R
         .transpose()?;
     let active_connections = Arc::new(LocalConnections::new());
     let execution = Arc::new(execution::ExecutionRegistry::default());
+    let mut connection_workers = ConnectionWorkers {
+        connections: Arc::clone(&active_connections),
+        workers: Vec::new(),
+    };
     let mut idle_since = None;
     let mut stopping_since = None;
-    let mut connection_shutdown_since = None;
     loop {
+        connection_workers.reap();
         if endpoint.is_stopping() {
             if stopping_since.is_none() {
                 execution.stop()?;
@@ -77,18 +82,12 @@ pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> R
                     .is_none_or(|registry| registry.active_terminal_count() == 0)
                 && !execution.needs_host()?
             {
-                exit_after_stop(endpoint);
+                return Ok(());
             }
             if stopping_since.elapsed() >= STOP_GRACE_TIMEOUT {
-                let shutdown_since = connection_shutdown_since.get_or_insert_with(|| {
-                    active_connections.shutdown_all();
-                    Instant::now()
-                });
-                if active_connections.is_empty()
-                    || shutdown_since.elapsed() >= STOP_CONNECTION_DRAIN_TIMEOUT
-                {
-                    exit_after_stop(endpoint);
-                }
+                // The connection owner closes sockets and joins their workers before
+                // directory services drop. The daemon owns the process stop deadline.
+                return Ok(());
             }
             thread::sleep(IDLE_POLL_INTERVAL);
             continue;
@@ -104,7 +103,7 @@ pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> R
                 .map_err(|error| error.to_string())?;
             let web_registry = registry.clone();
             let execution_registry = Arc::clone(&execution);
-            thread::Builder::new()
+            let worker = thread::Builder::new()
                 .name("ash-local-app-server-connection".into())
                 .spawn(move || {
                     let _registration = registration;
@@ -157,6 +156,7 @@ pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> R
                     }
                 })
                 .map_err(|error| error.to_string())?;
+            connection_workers.workers.push(worker);
         } else {
             if endpoint.is_stopping() {
                 continue;
@@ -188,12 +188,35 @@ fn profile_needs_host(registry: &Option<Arc<ProfileAppServerRegistry>>) -> Resul
     }
 }
 
-fn exit_after_stop(endpoint: ManagedEndpoint) -> ! {
-    eprintln!("managed App Server stopped");
-    let _ = io::stderr().flush();
-    drop(endpoint);
-    // Background runtime destructors must not exceed the managed shutdown deadline.
-    std::process::exit(0);
+struct ConnectionWorkers {
+    connections: Arc<LocalConnections>,
+    workers: Vec<thread::JoinHandle<()>>,
+}
+
+impl ConnectionWorkers {
+    fn reap(&mut self) {
+        let mut index = 0;
+        while index < self.workers.len() {
+            if self.workers[index].is_finished() {
+                if self.workers.swap_remove(index).join().is_err() {
+                    eprintln!("managed App Server connection worker panicked");
+                }
+            } else {
+                index += 1;
+            }
+        }
+    }
+}
+
+impl Drop for ConnectionWorkers {
+    fn drop(&mut self) {
+        self.connections.shutdown_all();
+        for worker in self.workers.drain(..) {
+            if worker.join().is_err() {
+                eprintln!("managed App Server connection worker panicked");
+            }
+        }
+    }
 }
 
 fn configured_idle_timeout() -> Result<Duration, String> {
