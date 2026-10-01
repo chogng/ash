@@ -85,14 +85,16 @@ impl Request {
             .validate()
             .map_err(|error| unavailable(error.to_string()))?;
         #[cfg(windows)]
-        appcontainer_common::base_container_runner::BaseContainerRunner::require_psec(&self.inner)
-            .map_err(|error| {
-                if error.code == wxc_common::mxc_error::MxcErrorCode::UnsupportedContainment {
-                    SandboxError::UnsupportedPolicy(error.to_string())
-                } else {
-                    unavailable(error.to_string())
-                }
-            })?;
+        process_container_common::base_container_runner::BaseContainerRunner::require_psec(
+            &self.inner,
+        )
+        .map_err(|error| {
+            if error.code == wxc_common::mxc_error::MxcErrorCode::UnsupportedContainment {
+                SandboxError::UnsupportedPolicy(error.to_string())
+            } else {
+                unavailable(error.to_string())
+            }
+        })?;
         Ok(())
     }
 
@@ -130,17 +132,15 @@ impl Request {
         }
         let mut logger = Logger::new(Mode::Buffer);
         #[cfg(windows)]
-        let mut backend = appcontainer_common::base_container_runner::BaseContainerRunner::new();
+        let mut backend =
+            process_container_common::base_container_runner::BaseContainerRunner::new();
         #[cfg(target_os = "linux")]
         let mut backend = bwrap_common::bwrap_runner::BubblewrapScriptRunner::new();
         #[cfg(target_os = "macos")]
         let mut backend = seatbelt_common::seatbelt_runner::SeatbeltScriptRunner::new();
         let result = backend
             .spawn(&self.inner, &mut logger, stdio)
-            .map_err(|error| ash_sandboxing::SandboxError::StartFailed {
-                timing: ash_sandboxing::SandboxDenialTiming::ProcessMayHaveStarted,
-                message: error.error_message,
-            });
+            .map_err(spawn_error);
         for warning in logger.take_warnings() {
             log::warn!(target: "sandbox", "MXC execution diagnostic: {warning}");
         }
@@ -158,6 +158,29 @@ impl Request {
         policy.network_proxy.address = self
             .proxy_port
             .map(|port| wxc_common::models::ProxyAddress::new("127.0.0.1".into(), port));
+    }
+}
+
+fn spawn_error(error: wxc_common::models::ScriptResponse) -> SandboxError {
+    use wxc_common::models::FailurePhase;
+    let code = match error.failure_phase {
+        FailurePhase::BackendUnavailable => "backend_unavailable",
+        FailurePhase::Rejected => "policy_validation",
+        FailurePhase::None
+        | FailurePhase::LaunchFailed
+        | FailurePhase::PostLaunchFailed
+        | FailurePhase::ProcessExited
+        | FailurePhase::Timeout => "backend_error",
+    };
+    let mut message = format!("{code}: {}", error.error_message);
+    if !error.extended_error.is_empty() {
+        message.push_str(&format!(" ({})", error.extended_error));
+    }
+    // A launch error never reopens backend selection. SDK failure categories
+    // describe the diagnosis, but do not attest that user code never started.
+    SandboxError::StartFailed {
+        timing: ash_sandboxing::SandboxDenialTiming::ProcessMayHaveStarted,
+        message,
     }
 }
 

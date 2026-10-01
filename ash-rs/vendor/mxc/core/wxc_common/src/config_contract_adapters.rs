@@ -7,4 +7,8 @@ pub(crate) mod v0_7;
 
 pub(crate) mod v0_8;
 
+pub(crate) mod v0_9;
+
+pub(crate) mod v1_0;
+
 pub(crate) mod dev;

@@ -11,8 +11,8 @@ use std::collections::HashSet;
 
 use wxc_common::filesystem_resolve::FsIntent;
 use wxc_common::models::{
-    ContainerPolicy, ExecutionRequest, NetworkAction, NetworkEnforcementMode, NetworkPolicy,
-    ProxyAddress,
+    ContainerPolicy, ExecutionRequest, NetworkAction, NetworkEnforcementCompatibility,
+    NetworkEnforcementMode, NetworkPolicy, ProxyAddress,
 };
 
 /// The fixed prefix of the command bwrap is asked to run.
@@ -119,34 +119,9 @@ pub(crate) enum ResolvedNetworkMode {
     ProxyOnly,
 }
 
-/// Whether a schema version opts into the 0.8 network contract, under which a
-/// network element Bubblewrap cannot enforce is a hard error rather than a
-/// warning.
-///
-/// An absent version stays lenient: the parser accepts it, and programmatic
-/// callers who never set one are the pre-0.8 population. A malformed non-empty
-/// version is treated as strict instead of lenient -- the parser would reject
-/// it outright, so the only way one reaches here is a hand-built
-/// `ExecutionRequest` that skipped the parser, and a typo like `"0.8"` must not
-/// silently buy pre-0.8 leniency.
-pub fn schema_enforces_network_strictly(version: &str) -> bool {
-    if version.is_empty() {
-        return false;
-    }
-    semver::Version::parse(version)
-        .map(|parsed| (parsed.major, parsed.minor) >= (0, 8))
-        .unwrap_or(true)
-}
-
-/// Whether this schema opts into the 0.8 private network-namespace contract.
-///
-/// Gates both the proxy path (`LegacyProxy` → `ProxyOnly`) and the firewall
-/// path (`FirewallFiltered` → `FirewallEnforced`). Everything the private
-/// namespace brings — slirp, in-namespace rules, IP/CIDR-only rule addresses —
-/// is a behavior change for callers already running on 0.6/0.7, so it is
-/// introduced on the dev line rather than retrofitted.
-fn uses_private_network_contract(request: &ExecutionRequest) -> bool {
-    schema_enforces_network_strictly(&request.schema_version)
+/// Whether this request uses strict network-contract behavior.
+fn uses_strict_network_contract(request: &ExecutionRequest) -> bool {
+    request.network_enforcement_compatibility == NetworkEnforcementCompatibility::Strict
 }
 
 /// Whether the policy carries the 0.8 directional shape.
@@ -167,7 +142,7 @@ impl ResolvedNetworkMode {
     /// Classify the internal request using the proxy's resolved runtime state.
     pub(crate) fn from_request(request: &ExecutionRequest, proxy_active: bool) -> Self {
         if proxy_active {
-            return if uses_private_network_contract(request) {
+            return if uses_strict_network_contract(request) {
                 Self::ProxyOnly
             } else {
                 Self::LegacyProxy
@@ -194,7 +169,7 @@ impl ResolvedNetworkMode {
             // Off the 0.8 contract there is no private namespace to program.
             // Report the unfiltered truth and let `validate` refuse it rather
             // than pretending the posture was applied.
-            if !uses_private_network_contract(request) {
+            if !uses_strict_network_contract(request) {
                 return Self::Shared;
             }
             let egress = request.policy.network_egress.clone().unwrap_or_default();
@@ -217,7 +192,7 @@ impl ResolvedNetworkMode {
             !request.policy.allowed_hosts.is_empty() || !request.policy.blocked_hosts.is_empty();
 
         if uses_firewall && has_host_rules {
-            if uses_private_network_contract(request) {
+            if uses_strict_network_contract(request) {
                 Self::FirewallEnforced
             } else {
                 Self::FirewallFiltered
@@ -263,12 +238,6 @@ impl ResolvedNetworkMode {
     pub(crate) fn enforces_host_rules(self) -> bool {
         matches!(self, Self::FirewallEnforced | Self::ProxyOnly)
     }
-}
-
-/// Whether this schema opts into rejecting network elements Bubblewrap cannot
-/// honor. Pre-0.8 callers keep the warning, so existing configs still run.
-fn rejects_unhonorable_network(request: &ExecutionRequest) -> bool {
-    schema_enforces_network_strictly(&request.schema_version)
 }
 
 /// Rejection text for host lists no mechanism will enforce, on schema 0.8+.
@@ -323,7 +292,7 @@ pub fn directional_network_rejection(request: &ExecutionRequest) -> Option<&'sta
         return None;
     }
 
-    if !rejects_unhonorable_network(request) {
+    if !uses_strict_network_contract(request) {
         return Some(BWRAP_DIRECTIONAL_PRE_0_8);
     }
 
@@ -371,7 +340,7 @@ pub const BWRAP_HOST_LOOPBACK_ALLOW: &str =
 /// `ExecutionRequest` — reaches a runner, while only JSON configs reach the
 /// parser.
 pub fn unenforced_host_rules_rejection(request: &ExecutionRequest) -> Option<&'static str> {
-    if !rejects_unhonorable_network(request) {
+    if !uses_strict_network_contract(request) {
         return None;
     }
     let has_host_rules =
@@ -505,7 +474,7 @@ pub fn proxy_with_firewall_rejection(request: &ExecutionRequest) -> Option<&'sta
 /// the exposure with `allowLocalNetwork=true`. The warning path keeps the
 /// looser check: it only logs.
 pub fn local_network_rejection(request: &ExecutionRequest) -> Option<&'static str> {
-    if !rejects_unhonorable_network(request) {
+    if !uses_strict_network_contract(request) {
         return None;
     }
     let mode =
@@ -556,6 +525,71 @@ pub(crate) fn local_network_diagnostic_for_mode(
         (true, true) => Some(BWRAP_LOCAL_NETWORK_PRIVATE_NS),
         _ => None,
     }
+}
+
+/// `PATH` for the sandboxed child, from schema 0.9.
+///
+/// `--clearenv` leaves the child with no `PATH`, so resolution fell through to
+/// the shell's compiled-in default. That value varies: it matches this one on
+/// Debian and Ubuntu, so nothing changes there, but on RHEL it omitted the
+/// `sbin` directories. Setting it explicitly removes the dependency.
+const DEFAULT_PATH: &str = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+
+/// `TERM` for the sandboxed child. Curses-based tools error out when it is
+/// unset; it does not make a tool believe it has a terminal, which is `isatty`.
+const DEFAULT_TERM: &str = "xterm-256color";
+
+/// The directory the child is actually started in, if any.
+///
+/// [`build_args_classified_with_mode`] emits `--chdir` for exactly this value
+/// and [`default_env`] points `HOME` at it, so the two cannot name different
+/// directories — a relative `--chdir` would otherwise resolve against whatever
+/// cwd bwrap carried into the namespace, leaving `HOME` naming a different
+/// directory than the one the child landed in. Normalizing against the sandbox
+/// root is what makes them agree, so it is gated on the schema that introduced
+/// `HOME`; below 0.9 the caller's spelling reaches `--chdir` untouched.
+///
+/// A policy grant is deliberately *not* consulted: bwrap enters one only when
+/// `process.cwd` names it, so treating it as the start directory would put
+/// `HOME` somewhere the child never went.
+fn start_directory(request: &ExecutionRequest) -> Option<String> {
+    Some(request.working_directory.as_str())
+        .filter(|dir| !dir.is_empty())
+        .map(|dir| {
+            if request.supplies_default_env() {
+                wxc_common::models::sandbox_absolute_path(dir)
+            } else {
+                dir.to_string()
+            }
+        })
+}
+
+/// The default environment: `PATH`, `TERM`, and — when one resolves — `HOME`.
+///
+/// `HOME` names the directory the child actually runs in, so it is a path the
+/// sandbox can reach rather than the launching user's real home, which the
+/// bind-mount policy would not have made visible. With no start directory it
+/// is left unset: policy mounts are emitted after `--tmpfs /tmp` and therefore
+/// win, so a `/tmp` fallback could be the host's shared directory rather than
+/// a private one.
+fn default_env(request: &ExecutionRequest) -> Vec<(String, String)> {
+    let mut entries = vec![("PATH".to_string(), DEFAULT_PATH.to_string())];
+
+    if let Some(home) = start_directory(request) {
+        entries.push(("HOME".to_string(), home));
+    }
+
+    entries.push(("TERM".to_string(), DEFAULT_TERM.to_string()));
+    entries
+}
+
+/// The entries the child should get, as `KEY=VALUE` strings.
+///
+/// The state dispatch and overlay merge are shared; see
+/// [`wxc_common::default_env::resolve_env`]. Below 0.9 the caller's entries are
+/// passed through untouched.
+fn resolved_env(request: &ExecutionRequest) -> Vec<String> {
+    wxc_common::default_env::resolve_env(request, || default_env(request))
 }
 
 /// Build the complete `bwrap` argument list, masking **every** denied path as a
@@ -720,17 +754,16 @@ pub(crate) fn build_args_classified_with_mode(
     args.push("--new-session".into());
 
     // -- Working directory -------------------------------------------------
-    if !request.working_directory.is_empty() {
-        args.extend(["--chdir".into(), request.working_directory.clone()]);
+    if let Some(dir) = start_directory(request) {
+        args.extend(["--chdir".into(), dir]);
     }
 
     // Bind the complete environment to the namespace-visible proxy endpoint.
     args.push("--clearenv".into());
+    let resolved = resolved_env(request);
     let env = match proxy_address {
-        Some(address) => {
-            wxc_common::proxy_env::apply_cooperative_proxy_env(request.env_entries(), &address.to_url())
-        }
-        None => request.env_entries().to_vec(),
+        Some(address) => wxc_common::proxy_env::apply_cooperative_proxy_env(&resolved, &address.to_url()),
+        None => resolved,
     };
     for entry in env {
         if let Some((key, value)) = entry.split_once('=') {
@@ -759,46 +792,244 @@ mod tests {
         }
     }
 
+    /// `process.env` resolution, which schema 0.9 gave a default block.
+    mod env {
+        use super::*;
+        use wxc_common::models::DefaultEnvCompatibility;
+
+        fn request(compatibility: DefaultEnvCompatibility) -> ExecutionRequest {
+            ExecutionRequest {
+                default_env_compatibility: compatibility,
+                ..Default::default()
+            }
+        }
+
+        fn value<'a>(entries: &'a [String], key: &str) -> Option<&'a str> {
+            entries
+                .iter()
+                .find_map(|kv| kv.strip_prefix(&format!("{key}=")))
+        }
+
+        #[test]
+        fn below_0_9_nothing_is_supplied() {
+            // The pre-0.9 behavior this backend shipped: --clearenv and no
+            // PATH, so command resolution fell through to the shell default.
+            let mut r = request(DefaultEnvCompatibility::LegacyCompatible);
+            r.env = None;
+            assert!(resolved_env(&r).is_empty());
+
+            r.env = Some(vec!["FOO=bar".into()]);
+            assert_eq!(resolved_env(&r), vec!["FOO=bar".to_string()]);
+        }
+
+        /// A direct typed SDK request that named no contract takes the current
+        /// behavior.
+        #[test]
+        fn a_direct_sdk_request_gets_the_default_block() {
+            let r = ExecutionRequest::default();
+            assert_eq!(value(&resolved_env(&r), "PATH"), Some(DEFAULT_PATH));
+        }
+
+        #[test]
+        fn an_omitted_env_gets_the_default_block() {
+            let mut r = request(DefaultEnvCompatibility::DefaultBlock);
+            r.env = None;
+            r.working_directory = "/workspace".into();
+            let entries = resolved_env(&r);
+            assert_eq!(value(&entries, "PATH"), Some(DEFAULT_PATH));
+            assert_eq!(value(&entries, "HOME"), Some("/workspace"));
+            assert_eq!(value(&entries, "TERM"), Some(DEFAULT_TERM));
+        }
+
+        #[test]
+        fn the_default_path_covers_sbin() {
+            // The RHEL failure this default exists to prevent.
+            for dir in ["/usr/sbin", "/sbin", "/usr/bin", "/bin"] {
+                assert!(
+                    DEFAULT_PATH.split(':').any(|entry| entry == dir),
+                    "{dir} must be on the default PATH"
+                );
+            }
+        }
+
+        #[test]
+        fn an_explicitly_empty_env_stays_empty() {
+            let mut r = request(DefaultEnvCompatibility::DefaultBlock);
+            r.env = Some(vec![]);
+            assert!(resolved_env(&r).is_empty());
+        }
+
+        #[test]
+        fn a_supplied_env_is_used_verbatim() {
+            let mut r = request(DefaultEnvCompatibility::DefaultBlock);
+            r.env = Some(vec!["FOO=bar".into()]);
+            assert_eq!(resolved_env(&r), vec!["FOO=bar".to_string()]);
+        }
+
+        #[test]
+        fn inherit_default_env_layers_over_the_default_block() {
+            let mut r = request(DefaultEnvCompatibility::DefaultBlock);
+            r.env = Some(vec!["FOO=bar".into(), "PATH=/only/mine".into()]);
+            r.inherit_default_env = true;
+            let entries = resolved_env(&r);
+
+            assert_eq!(value(&entries, "FOO"), Some("bar"));
+            assert_eq!(value(&entries, "TERM"), Some(DEFAULT_TERM));
+            // Replaced, not appended: --setenv twice for one name is
+            // order-dependent.
+            assert_eq!(value(&entries, "PATH"), Some("/only/mine"));
+            assert_eq!(
+                entries.iter().filter(|kv| kv.starts_with("PATH=")).count(),
+                1
+            );
+        }
+
+        #[test]
+        fn home_follows_the_directory_the_child_starts_in() {
+            let mut r = request(DefaultEnvCompatibility::DefaultBlock);
+            r.env = None;
+            r.working_directory = "/workspace".into();
+            assert_eq!(value(&resolved_env(&r), "HOME"), Some("/workspace"));
+        }
+
+        #[test]
+
+        fn a_caller_entry_without_a_value_reaches_no_setenv() {
+            for inherit in [false, true] {
+                let mut r = base_request();
+                r.default_env_compatibility = DefaultEnvCompatibility::DefaultBlock;
+                r.env = Some(vec!["FEATURE_FLAG".into(), "FOO=bar".into()]);
+                r.inherit_default_env = inherit;
+                let args = build_args(&r, None);
+
+                assert!(
+                    !args.iter().any(|a| a == "FEATURE_FLAG"),
+                    "a valueless entry must not be set (inherit {inherit}): {args:?}"
+                );
+                assert!(
+                    args.windows(3)
+                        .any(|w| w[0] == "--setenv" && w[1] == "FOO" && w[2] == "bar"),
+                    "the well-formed entry must survive (inherit {inherit}): {args:?}"
+                );
+            }
+        }
+
+        /// A policy grant is not a working directory: bwrap emits `--chdir`
+        /// only for `process.cwd`, so a granted directory the child never
+        /// enters must not become its `HOME`.
+        #[test]
+        fn a_policy_grant_alone_does_not_become_home() {
+            let mut r = request(DefaultEnvCompatibility::DefaultBlock);
+            r.env = None;
+            r.working_directory = String::new();
+            // A real directory, so the shared resolver's `is_dir` probe would
+            // accept it if `HOME` consulted the policy.
+            r.policy.readwrite_paths = vec![std::env::temp_dir().display().to_string()];
+
+            assert_eq!(value(&resolved_env(&r), "HOME"), None);
+            let args = build_args(&r, None);
+            assert!(
+                !args.iter().any(|a| a == "--chdir"),
+                "a policy grant must not chdir the child: {args:?}"
+            );
+        }
+
+        /// `HOME` and `--chdir` come from one resolution, so they cannot name
+        /// different directories.
+        #[test]
+        fn home_and_chdir_agree() {
+            for cwd in ["", "/workspace", "work", "./work", "a/../b", "/x/../y/./z"] {
+                let mut r = request(DefaultEnvCompatibility::DefaultBlock);
+                r.env = None;
+                r.working_directory = cwd.into();
+                let args = build_args(&r, None);
+
+                let chdir = args
+                    .windows(2)
+                    .find(|w| w[0] == "--chdir")
+                    .map(|w| w[1].clone());
+                let home = value(&resolved_env(&r), "HOME").map(str::to_string);
+                assert_eq!(
+                    home, chdir,
+                    "HOME must name the directory the child starts in (cwd {cwd:?})"
+                );
+            }
+        }
+
+        #[test]
+        fn a_relative_start_directory_is_anchored_to_the_sandbox_root() {
+            for (cwd, expected) in [
+                ("work", "/work"),
+                ("./work", "/work"),
+                ("a/../b", "/b"),
+                ("/x/../y/./z", "/y/z"),
+            ] {
+                let mut r = request(DefaultEnvCompatibility::DefaultBlock);
+                r.env = None;
+                r.working_directory = cwd.into();
+                assert_eq!(value(&resolved_env(&r), "HOME"), Some(expected));
+            }
+        }
+
+        #[test]
+        fn below_0_9_a_relative_start_directory_reaches_chdir_untouched() {
+            for cwd in ["work", "./work", "a/../b"] {
+                let mut r = request(DefaultEnvCompatibility::LegacyCompatible);
+                r.working_directory = cwd.into();
+                let args = build_args(&r, None);
+
+                let chdir = args
+                    .windows(2)
+                    .find(|w| w[0] == "--chdir")
+                    .map(|w| w[1].clone());
+                assert_eq!(chdir.as_deref(), Some(cwd), "cwd {cwd:?}");
+            }
+        }
+
+        #[test]
+        fn the_default_block_reaches_the_argument_list() {
+            let mut r = base_request();
+            r.default_env_compatibility = DefaultEnvCompatibility::DefaultBlock;
+            r.env = None;
+            let args = build_args(&r, None);
+
+            let pos = args
+                .windows(3)
+                .position(|w| w[0] == "--setenv" && w[1] == "PATH" && w[2] == DEFAULT_PATH);
+            assert!(pos.is_some(), "PATH must be set via --setenv: {args:?}");
+            let clearenv = args.iter().position(|a| a == "--clearenv").unwrap();
+            assert!(
+                pos.unwrap() > clearenv,
+                "--setenv must follow --clearenv, else it is wiped"
+            );
+        }
+    }
+
     #[test]
     fn the_schema_gate_selects_the_private_namespace_only_from_0_8_onward() {
         // The gate decides whether a proxy run gets the 0.8 private namespace
         // or keeps the legacy shared-host-network behavior GHCP depends on, so
         // its boundaries are pinned explicitly.
         let cases = [
-            ("0.6.0-alpha", ResolvedNetworkMode::LegacyProxy),
-            ("0.7.0-alpha", ResolvedNetworkMode::LegacyProxy),
-            ("0.7.99", ResolvedNetworkMode::LegacyProxy),
-            ("0.8.0", ResolvedNetworkMode::ProxyOnly),
-            ("0.8.0-alpha", ResolvedNetworkMode::ProxyOnly),
-            ("0.8.0-beta", ResolvedNetworkMode::ProxyOnly),
-            ("0.9.0", ResolvedNetworkMode::ProxyOnly),
-            ("0.10.0", ResolvedNetworkMode::ProxyOnly),
-            ("1.0.0", ResolvedNetworkMode::ProxyOnly),
-            ("2.1.0", ResolvedNetworkMode::ProxyOnly),
-            // An absent version stays legacy: programmatic callers who never
-            // set one are the pre-0.8 population. Anything non-empty but
-            // unparsable cannot have come from the parser (it validates the
-            // version first), so it is a hand-built request whose typo must not
-            // buy pre-0.8 leniency -- it resolves strictly, matching
-            // `schema_enforces_network_strictly`, which the rejection gates
-            // share.
-            ("", ResolvedNetworkMode::LegacyProxy),
-            ("0.8", ResolvedNetworkMode::ProxyOnly),
-            ("0", ResolvedNetworkMode::ProxyOnly),
-            ("0.8-beta", ResolvedNetworkMode::ProxyOnly),
-            ("v0.8.0", ResolvedNetworkMode::ProxyOnly),
-            ("not-a-version", ResolvedNetworkMode::ProxyOnly),
+            (
+                NetworkEnforcementCompatibility::LegacyCompatible,
+                ResolvedNetworkMode::LegacyProxy,
+            ),
+            (
+                NetworkEnforcementCompatibility::Strict,
+                ResolvedNetworkMode::ProxyOnly,
+            ),
         ];
 
-        for (version, expected) in cases {
+        for (compatibility, expected) in cases {
             let request = ExecutionRequest {
-                schema_version: version.into(),
+                network_enforcement_compatibility: compatibility,
                 ..base_request()
             };
             assert_eq!(
                 ResolvedNetworkMode::from_request(&request, true),
                 expected,
-                "schema version {version:?} resolved to the wrong network mode"
+                "{compatibility:?} resolved to the wrong network mode"
             );
         }
     }
@@ -812,21 +1043,19 @@ mod tests {
         // actually apply, and into the IP/CIDR-only rule addresses that come
         // with them.
         let cases = [
-            ("0.6.0-alpha", ResolvedNetworkMode::FirewallFiltered),
-            ("0.7.0-alpha", ResolvedNetworkMode::FirewallFiltered),
-            ("0.7.99", ResolvedNetworkMode::FirewallFiltered),
-            ("0.8.0-alpha", ResolvedNetworkMode::FirewallEnforced),
-            ("0.9.0", ResolvedNetworkMode::FirewallEnforced),
-            ("1.0.0", ResolvedNetworkMode::FirewallEnforced),
-            // Absent stays legacy; a non-empty unparsable version resolves
-            // strictly, for the same reason it does on the proxy path.
-            ("", ResolvedNetworkMode::FirewallFiltered),
-            ("not-a-version", ResolvedNetworkMode::FirewallEnforced),
+            (
+                NetworkEnforcementCompatibility::LegacyCompatible,
+                ResolvedNetworkMode::FirewallFiltered,
+            ),
+            (
+                NetworkEnforcementCompatibility::Strict,
+                ResolvedNetworkMode::FirewallEnforced,
+            ),
         ];
 
-        for (version, expected) in cases {
+        for (compatibility, expected) in cases {
             let request = ExecutionRequest {
-                schema_version: version.into(),
+                network_enforcement_compatibility: compatibility,
                 policy: ContainerPolicy {
                     network_enforcement_mode: NetworkEnforcementMode::Firewall,
                     allowed_hosts: vec!["203.0.113.7".into()],
@@ -837,7 +1066,7 @@ mod tests {
             assert_eq!(
                 ResolvedNetworkMode::from_request(&request, false),
                 expected,
-                "schema version {version:?} resolved to the wrong firewall mode"
+                "{compatibility:?} resolved to the wrong firewall mode"
             );
         }
     }
@@ -848,7 +1077,7 @@ mod tests {
         // still classifies on policy alone (default policy is block, so this
         // lands on the plain isolated namespace, not the proxy one).
         let request = ExecutionRequest {
-            schema_version: "0.8.0".into(),
+            network_enforcement_compatibility: NetworkEnforcementCompatibility::Strict,
             ..base_request()
         };
         assert_eq!(
@@ -877,7 +1106,7 @@ mod tests {
 
     struct NetworkPlanCase {
         name: &'static str,
-        schema_version: &'static str,
+        compatibility: NetworkEnforcementCompatibility,
         default_policy: NetworkPolicy,
         enforcement_mode: NetworkEnforcementMode,
         allowed_hosts: &'static [&'static str],
@@ -891,7 +1120,7 @@ mod tests {
         let cases = [
             NetworkPlanCase {
                 name: "default block is isolated",
-                schema_version: "0.8.0-alpha",
+                compatibility: NetworkEnforcementCompatibility::Strict,
                 default_policy: NetworkPolicy::Block,
                 enforcement_mode: NetworkEnforcementMode::Capabilities,
                 allowed_hosts: &[],
@@ -901,7 +1130,7 @@ mod tests {
             },
             NetworkPlanCase {
                 name: "default allow is shared",
-                schema_version: "0.8.0-alpha",
+                compatibility: NetworkEnforcementCompatibility::Strict,
                 default_policy: NetworkPolicy::Allow,
                 enforcement_mode: NetworkEnforcementMode::Capabilities,
                 allowed_hosts: &[],
@@ -911,7 +1140,7 @@ mod tests {
             },
             NetworkPlanCase {
                 name: "firewall allow rules are enforced in-namespace at 0.8",
-                schema_version: "0.8.0-alpha",
+                compatibility: NetworkEnforcementCompatibility::Strict,
                 default_policy: NetworkPolicy::Block,
                 enforcement_mode: NetworkEnforcementMode::Firewall,
                 allowed_hosts: &["203.0.113.7"],
@@ -921,7 +1150,7 @@ mod tests {
             },
             NetworkPlanCase {
                 name: "firewall allow rules keep the legacy host chain pre-0.8",
-                schema_version: "0.7.0-alpha",
+                compatibility: NetworkEnforcementCompatibility::LegacyCompatible,
                 default_policy: NetworkPolicy::Block,
                 enforcement_mode: NetworkEnforcementMode::Firewall,
                 allowed_hosts: &["example.com"],
@@ -931,7 +1160,7 @@ mod tests {
             },
             NetworkPlanCase {
                 name: "combined enforcement block rules are enforced at 0.8",
-                schema_version: "0.8.0-alpha",
+                compatibility: NetworkEnforcementCompatibility::Strict,
                 default_policy: NetworkPolicy::Allow,
                 enforcement_mode: NetworkEnforcementMode::Both,
                 allowed_hosts: &[],
@@ -941,7 +1170,7 @@ mod tests {
             },
             NetworkPlanCase {
                 name: "combined enforcement block rules keep the host chain pre-0.8",
-                schema_version: "0.6.0-alpha",
+                compatibility: NetworkEnforcementCompatibility::LegacyCompatible,
                 default_policy: NetworkPolicy::Allow,
                 enforcement_mode: NetworkEnforcementMode::Both,
                 allowed_hosts: &[],
@@ -951,7 +1180,7 @@ mod tests {
             },
             NetworkPlanCase {
                 name: "capabilities mode with host rules stays shared",
-                schema_version: "0.8.0-alpha",
+                compatibility: NetworkEnforcementCompatibility::Strict,
                 default_policy: NetworkPolicy::Block,
                 enforcement_mode: NetworkEnforcementMode::Capabilities,
                 allowed_hosts: &["example.com"],
@@ -961,7 +1190,7 @@ mod tests {
             },
             NetworkPlanCase {
                 name: "proxy takes precedence over isolation",
-                schema_version: "0.8.0-alpha",
+                compatibility: NetworkEnforcementCompatibility::Strict,
                 default_policy: NetworkPolicy::Block,
                 enforcement_mode: NetworkEnforcementMode::Capabilities,
                 allowed_hosts: &[],
@@ -971,7 +1200,7 @@ mod tests {
             },
             NetworkPlanCase {
                 name: "proxy takes precedence over firewall filtering",
-                schema_version: "0.8.0-alpha",
+                compatibility: NetworkEnforcementCompatibility::Strict,
                 default_policy: NetworkPolicy::Allow,
                 enforcement_mode: NetworkEnforcementMode::Firewall,
                 allowed_hosts: &[],
@@ -983,7 +1212,7 @@ mod tests {
 
         for case in cases {
             let mut request = ExecutionRequest {
-                schema_version: case.schema_version.into(),
+                network_enforcement_compatibility: case.compatibility,
                 ..Default::default()
             };
             request.policy.default_network_policy = case.default_policy;
@@ -1080,7 +1309,8 @@ mod tests {
 
     #[test]
     fn local_network_denied_with_legacy_proxy_warns() {
-        let r = base_request();
+        let mut r = base_request();
+        r.network_enforcement_compatibility = NetworkEnforcementCompatibility::LegacyCompatible;
         let addr = ProxyAddress::new("127.0.0.1".into(), 8080);
         assert!(local_network_diagnostic(&r, Some(&addr)).is_some());
     }
@@ -1088,7 +1318,7 @@ mod tests {
     #[test]
     fn local_network_denied_with_0_8_proxy_is_not_warned() {
         let mut r = base_request();
-        r.schema_version = "0.8.0-alpha".into();
+        r.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         let addr = ProxyAddress::new("127.0.0.1".into(), 8080);
         assert!(local_network_diagnostic(&r, Some(&addr)).is_none());
     }
@@ -1117,7 +1347,7 @@ mod tests {
         // at its default false. That combination must keep warning rather than
         // start failing, or every existing 0.6/0.7 proxy caller breaks.
         let mut r = base_request();
-        r.schema_version = "0.7.0-alpha".into();
+        r.network_enforcement_compatibility = NetworkEnforcementCompatibility::LegacyCompatible;
         r.policy.network_proxy.address = Some(ProxyAddress::new("127.0.0.1".into(), 8080));
         assert!(local_network_diagnostic(&r, r.policy.network_proxy.address.as_ref()).is_some());
         assert!(local_network_rejection(&r).is_none());
@@ -1126,7 +1356,7 @@ mod tests {
     #[test]
     fn local_network_mismatch_is_rejected_at_0_8() {
         let mut r = base_request();
-        r.schema_version = "0.8.0-alpha".into();
+        r.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         r.policy.default_network_policy = NetworkPolicy::Allow;
         let msg = local_network_rejection(&r).expect("shared netns cannot honor the deny");
         assert!(msg.contains("allowLocalNetwork=false"));
@@ -1139,7 +1369,7 @@ mod tests {
         // `false` is the schema default *and* a deny, so silence still asks for
         // inbound denial.
         let mut r = base_request();
-        r.schema_version = "0.8.0-alpha".into();
+        r.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         r.policy.default_network_policy = NetworkPolicy::Allow;
         assert!(!r.policy.allow_local_network, "default is the deny posture");
         let msg = local_network_rejection(&r).expect("an omitted deny is still a deny");
@@ -1152,7 +1382,7 @@ mod tests {
     fn acknowledged_local_network_exposure_is_accepted_at_0_8() {
         // The escape hatch from the rejection above.
         let mut r = base_request();
-        r.schema_version = "0.8.0-alpha".into();
+        r.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         r.policy.default_network_policy = NetworkPolicy::Allow;
         r.policy.allow_local_network = true;
         assert!(local_network_rejection(&r).is_none());
@@ -1163,7 +1393,7 @@ mod tests {
         // block + no host rules + no proxy is a private netns, which satisfies
         // allowLocalNetwork=false; nothing to reject.
         let mut r = base_request();
-        r.schema_version = "0.8.0-alpha".into();
+        r.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         assert!(local_network_rejection(&r).is_none());
     }
 
@@ -1174,7 +1404,7 @@ mod tests {
         // defaultPolicy='allow' would be a shared namespace on its own, so the
         // rejection fires only if the proxy is recognized without an address.
         let mut r = base_request();
-        r.schema_version = "0.8.0-alpha".into();
+        r.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         r.policy.default_network_policy = NetworkPolicy::Allow;
         r.policy.allow_local_network = true;
         assert!(local_network_rejection(&r).is_none());
@@ -1189,7 +1419,7 @@ mod tests {
     #[test]
     fn external_proxy_with_host_rules_is_rejected() {
         let mut r = base_request();
-        r.schema_version = "0.8.0-alpha".into();
+        r.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         r.policy.default_network_policy = NetworkPolicy::Allow;
         r.policy.network_proxy.address = Some(ProxyAddress::new("proxy.example.com".into(), 3128));
         assert!(external_proxy_host_rules_rejection(&r).is_none());
@@ -1211,7 +1441,7 @@ mod tests {
     #[test]
     fn builtin_test_server_with_host_rules_is_not_rejected() {
         let mut r = base_request();
-        r.schema_version = "0.8.0-alpha".into();
+        r.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         r.policy.network_proxy.builtin_test_server = true;
         r.policy.allowed_hosts = vec!["10.0.0.1".into()];
         assert!(external_proxy_host_rules_rejection(&r).is_none());
@@ -1307,7 +1537,7 @@ mod tests {
         use wxc_common::models::{NetworkEgressPolicy, NetworkRule};
 
         let mut r = base_request();
-        r.schema_version = "0.8.0-alpha".into();
+        r.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         r.policy.network_proxy.address = Some(ProxyAddress::new("127.0.0.1".into(), 3128));
 
         // Legacy shape, defaulted `Block`: still refused, as before.
@@ -1421,7 +1651,11 @@ mod tests {
     /// the gate that decides whether it is ever called.
     #[test]
     fn a_directional_rule_selects_the_namespace_whose_chain_is_programmed() {
-        let request = directional_egress_request("0.8.0-alpha", NetworkAction::Deny, true);
+        let request = directional_egress_request(
+            NetworkEnforcementCompatibility::Strict,
+            NetworkAction::Deny,
+            true,
+        );
         assert_eq!(
             ResolvedNetworkMode::from_request(&request, false),
             ResolvedNetworkMode::FirewallEnforced
@@ -1435,13 +1669,21 @@ mod tests {
     /// because the host namespace could not deny inbound at all.
     #[test]
     fn a_ruleless_directional_policy_still_honors_the_inbound_posture() {
-        let denied = directional_egress_request("0.8.0-alpha", NetworkAction::Deny, false);
+        let denied = directional_egress_request(
+            NetworkEnforcementCompatibility::Strict,
+            NetworkAction::Deny,
+            false,
+        );
         assert_eq!(
             ResolvedNetworkMode::from_request(&denied, false),
             ResolvedNetworkMode::Isolated
         );
 
-        let allowed = directional_egress_request("0.8.0-alpha", NetworkAction::Allow, false);
+        let allowed = directional_egress_request(
+            NetworkEnforcementCompatibility::Strict,
+            NetworkAction::Allow,
+            false,
+        );
         let mode = ResolvedNetworkMode::from_request(&allowed, false);
         assert_eq!(mode, ResolvedNetworkMode::FirewallEnforced);
         assert!(mode.uses_private_netns());
@@ -1455,7 +1697,11 @@ mod tests {
     fn no_directional_posture_shares_the_host_namespace() {
         for default in [NetworkAction::Allow, NetworkAction::Deny] {
             for with_rule in [false, true] {
-                let request = directional_egress_request("0.8.0-alpha", default, with_rule);
+                let request = directional_egress_request(
+                    NetworkEnforcementCompatibility::Strict,
+                    default,
+                    with_rule,
+                );
                 let mode = ResolvedNetworkMode::from_request(&request, false);
                 assert!(
                     mode.uses_private_netns(),
@@ -1471,7 +1717,11 @@ mod tests {
     /// never silently promotes a pre-0.8 request into the private namespace.
     #[test]
     fn a_directional_rule_off_the_0_8_contract_is_not_claimed_as_filtered() {
-        let request = directional_egress_request("0.7.0-alpha", NetworkAction::Deny, true);
+        let request = directional_egress_request(
+            NetworkEnforcementCompatibility::LegacyCompatible,
+            NetworkAction::Deny,
+            true,
+        );
         let mode = ResolvedNetworkMode::from_request(&request, false);
         assert_eq!(mode, ResolvedNetworkMode::Shared);
         assert!(!mode.uses_private_netns());
@@ -1482,7 +1732,11 @@ mod tests {
     /// mode derives its chain from the resolved proxy endpoint.
     #[test]
     fn a_directional_section_does_not_divert_a_proxy_run() {
-        let mut request = directional_egress_request("0.8.0-alpha", NetworkAction::Deny, true);
+        let mut request = directional_egress_request(
+            NetworkEnforcementCompatibility::Strict,
+            NetworkAction::Deny,
+            true,
+        );
         request.policy.network_proxy.builtin_test_server = true;
         assert_eq!(
             ResolvedNetworkMode::from_request(&request, true),
@@ -1501,7 +1755,7 @@ mod tests {
         use wxc_common::models::{NetworkIngressPolicy, NetworkPolicy};
 
         let mut request = base_request();
-        request.schema_version = "0.8.0-alpha".into();
+        request.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         request.policy.network_ingress = Some(NetworkIngressPolicy::default());
         request.policy.default_network_policy = NetworkPolicy::Allow;
 
@@ -1550,14 +1804,14 @@ mod tests {
     /// Build a directional request: no legacy network field is touched, which
     /// is exactly what the parser produces on that path.
     fn directional_egress_request(
-        schema: &str,
+        compatibility: NetworkEnforcementCompatibility,
         default: NetworkAction,
         with_rule: bool,
     ) -> ExecutionRequest {
         use wxc_common::models::{NetworkEgressPolicy, NetworkRule};
 
         let mut request = base_request();
-        request.schema_version = schema.into();
+        request.network_enforcement_compatibility = compatibility;
         request.policy.network_egress = Some(NetworkEgressPolicy {
             default,
             allow: if with_rule {
@@ -1572,14 +1826,14 @@ mod tests {
 
     /// Build a directional request carrying both sections.
     fn directional_request(
-        schema: &str,
+        compatibility: NetworkEnforcementCompatibility,
         ingress_default: NetworkAction,
         host_loopback: NetworkAction,
     ) -> ExecutionRequest {
         use wxc_common::models::{NetworkEgressPolicy, NetworkIngressPolicy};
 
         let mut request = base_request();
-        request.schema_version = schema.into();
+        request.network_enforcement_compatibility = compatibility;
         request.policy.network_egress = Some(NetworkEgressPolicy::default());
         request.policy.network_ingress = Some(NetworkIngressPolicy {
             default: ingress_default,
@@ -1592,7 +1846,11 @@ mod tests {
     /// list to forward one, so an inbound-accepting posture cannot be honored.
     #[test]
     fn an_inbound_accepting_directional_posture_is_refused() {
-        let request = directional_request("0.8.0-alpha", NetworkAction::Allow, NetworkAction::Deny);
+        let request = directional_request(
+            NetworkEnforcementCompatibility::Strict,
+            NetworkAction::Allow,
+            NetworkAction::Deny,
+        );
         assert_eq!(
             directional_network_rejection(&request),
             Some(BWRAP_INGRESS_DEFAULT_ALLOW)
@@ -1602,7 +1860,11 @@ mod tests {
     /// The sandbox's loopback is its own namespace's, not the host's.
     #[test]
     fn a_host_loopback_accepting_posture_is_refused() {
-        let request = directional_request("0.8.0-alpha", NetworkAction::Deny, NetworkAction::Allow);
+        let request = directional_request(
+            NetworkEnforcementCompatibility::Strict,
+            NetworkAction::Deny,
+            NetworkAction::Allow,
+        );
         assert_eq!(
             directional_network_rejection(&request),
             Some(BWRAP_HOST_LOOPBACK_ALLOW)
@@ -1614,21 +1876,26 @@ mod tests {
     /// hence a rejection that is deliberately not schema-gated.
     #[test]
     fn a_directional_section_before_0_8_is_refused() {
-        for schema in ["", "0.6.0-alpha", "0.7.0-alpha"] {
-            let request = directional_request(schema, NetworkAction::Deny, NetworkAction::Deny);
-            assert_eq!(
-                directional_network_rejection(&request),
-                Some(BWRAP_DIRECTIONAL_PRE_0_8),
-                "schema={schema}"
-            );
-        }
+        let request = directional_request(
+            NetworkEnforcementCompatibility::LegacyCompatible,
+            NetworkAction::Deny,
+            NetworkAction::Deny,
+        );
+        assert_eq!(
+            directional_network_rejection(&request),
+            Some(BWRAP_DIRECTIONAL_PRE_0_8)
+        );
     }
 
     /// Positive control: the honorable posture must pass, or the gate above is
     /// just refusing every directional config.
     #[test]
     fn a_fully_denied_directional_posture_is_accepted() {
-        let request = directional_request("0.8.0-alpha", NetworkAction::Deny, NetworkAction::Deny);
+        let request = directional_request(
+            NetworkEnforcementCompatibility::Strict,
+            NetworkAction::Deny,
+            NetworkAction::Deny,
+        );
         assert_eq!(directional_network_rejection(&request), None);
     }
 
@@ -1637,52 +1904,10 @@ mod tests {
     #[test]
     fn a_legacy_request_is_untouched_by_the_directional_gate() {
         let mut request = base_request();
-        request.schema_version = "0.8.0-alpha".into();
+        request.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         request.policy.default_network_policy = NetworkPolicy::Allow;
         request.policy.allowed_hosts = vec!["10.0.0.1".into()];
         assert_eq!(directional_network_rejection(&request), None);
-    }
-
-    // The predicate gates whether an unenforceable network element is a hard
-    // error or a warning, so a regression in it changes security behavior
-    // silently. Pinned directly rather than only through the call sites.
-    #[test]
-    fn strict_network_enforcement_starts_at_0_8() {
-        assert!(!schema_enforces_network_strictly("0.7.9"));
-        assert!(!schema_enforces_network_strictly("0.7.0-alpha"));
-        assert!(schema_enforces_network_strictly("0.8.0-alpha"));
-        assert!(schema_enforces_network_strictly("0.8.0"));
-        assert!(schema_enforces_network_strictly("0.9.0"));
-    }
-
-    #[test]
-    fn strict_network_enforcement_holds_past_1_0() {
-        // A tuple compare, so a major bump must not wrap back to lenient.
-        assert!(schema_enforces_network_strictly("1.0.0"));
-        assert!(schema_enforces_network_strictly("2.3.4"));
-    }
-
-    #[test]
-    fn a_pre_release_label_does_not_lower_the_version() {
-        // semver orders 0.8.0-alpha *below* 0.8.0; comparing (major, minor)
-        // sidesteps that, which is the whole reason for the tuple.
-        assert!(
-            semver::Version::parse("0.8.0-alpha").unwrap()
-                < semver::Version::parse("0.8.0").unwrap()
-        );
-        assert!(schema_enforces_network_strictly("0.8.0-alpha"));
-    }
-
-    #[test]
-    fn an_absent_version_is_lenient_but_a_malformed_one_is_not() {
-        // Absent is the pre-0.8 programmatic caller: the parser accepts it, so
-        // it keeps its behavior. Malformed cannot come from the parser at all
-        // (it rejects these), so it is a hand-built request whose typo must not
-        // buy leniency.
-        assert!(!schema_enforces_network_strictly(""));
-        assert!(schema_enforces_network_strictly("x"));
-        assert!(schema_enforces_network_strictly("0.8"));
-        assert!(schema_enforces_network_strictly("0.7"));
     }
 
     /// `ResolvedNetworkMode` is now the only implementation of the namespace
@@ -1691,8 +1916,11 @@ mod tests {
     /// that could drift with it.
     #[test]
     fn the_resolved_mode_matches_the_namespace_it_claims_across_the_matrix() {
-        for schema in ["", "0.7.0-alpha", "0.8.0-alpha"] {
-            let strict = schema == "0.8.0-alpha";
+        for compatibility in [
+            NetworkEnforcementCompatibility::LegacyCompatible,
+            NetworkEnforcementCompatibility::Strict,
+        ] {
+            let strict = compatibility == NetworkEnforcementCompatibility::Strict;
             for proxy in [false, true] {
                 for mode in [
                     NetworkEnforcementMode::Capabilities,
@@ -1702,7 +1930,7 @@ mod tests {
                     for policy in [NetworkPolicy::Allow, NetworkPolicy::Block] {
                         for hosts in [false, true] {
                             let mut r = base_request();
-                            r.schema_version = schema.into();
+                            r.network_enforcement_compatibility = compatibility;
                             r.policy.network_proxy.builtin_test_server = proxy;
                             r.policy.network_enforcement_mode = mode.clone();
                             r.policy.default_network_policy = policy.clone();
@@ -1730,7 +1958,7 @@ mod tests {
                             assert_eq!(
                                 resolved.uses_private_netns(),
                                 expected,
-                                "schema={schema} proxy={proxy} mode={mode:?} \
+                                "compatibility={compatibility:?} proxy={proxy} mode={mode:?} \
                                  policy={policy:?} hosts={hosts}"
                             );
                         }
@@ -2004,7 +2232,7 @@ mod tests {
     #[test]
     fn proxy_active_uses_private_network_and_external_user_namespace() {
         let mut r = base_request();
-        r.schema_version = "0.8.0-alpha".into();
+        r.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         r.policy.default_network_policy = NetworkPolicy::Block;
         let addr = ProxyAddress::new("127.0.0.1".into(), 12345);
         let args = build_args(&r, Some(&addr));
@@ -2020,21 +2248,20 @@ mod tests {
 
     #[test]
     fn pre_0_8_proxy_keeps_existing_shared_network_behavior() {
-        for version in ["", "0.6.0-alpha", "0.7.0-alpha"] {
-            let mut request = base_request();
-            request.schema_version = version.into();
-            let address = ProxyAddress::new("127.0.0.1".into(), 12345);
-            let args = build_args(&request, Some(&address));
+        let mut request = base_request();
+        request.network_enforcement_compatibility =
+            NetworkEnforcementCompatibility::LegacyCompatible;
+        let address = ProxyAddress::new("127.0.0.1".into(), 12345);
+        let args = build_args(&request, Some(&address));
 
-            assert!(
-                args.contains(&"--unshare-user".to_string()),
-                "{version:?} should retain Bubblewrap's existing user namespace setup"
-            );
-            assert!(
-                !args.contains(&"--unshare-net".to_string()),
-                "{version:?} should retain shared-network proxy behavior"
-            );
-        }
+        assert!(
+            args.contains(&"--unshare-user".to_string()),
+            "compatibility mode should retain Bubblewrap's existing user namespace setup"
+        );
+        assert!(
+            !args.contains(&"--unshare-net".to_string()),
+            "compatibility mode should retain shared-network proxy behavior"
+        );
     }
 
     #[test]

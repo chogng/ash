@@ -12,6 +12,7 @@ doctest = false
 [dependencies]
 log = { workspace = true }
 wxc_common = { workspace = true }
+mxc_config_contract = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 ash-utils-pty = { workspace = true }
@@ -22,7 +23,7 @@ ash-sandboxing = { workspace = true }
 ash-file-access = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
-appcontainer_common = { workspace = true }
+process_container_common = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 bwrap_common = { workspace = true }

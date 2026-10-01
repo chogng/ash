@@ -4,7 +4,7 @@ Ash 保留 macOS/Linux 使用 MXC、Windows 按请求能力选择 PSEC 或账户
 
 > 状态：已有普通命令、PTY 适配、精确路径与执行前模式快照、结构化 PSEC 准备门禁和 Windows UI 请求策略。可配置路径授权、PSEC 受管代理及完整跨平台验收尚未完成。
 >
-> Owner：`ash-rs` 沙箱系统。MXC 接口更新日期：2026-09-22；原始 Codex 对比基线保留。
+> Owner：`ash-rs` 沙箱系统。MXC 接口更新日期：2026-10-02；原始 Codex 对比基线保留。
 
 本文维护 Codex 对齐范围、MXC 文档依据、平台选择、接入方式及实施验收。权限类型、宿主 ACL 授权、账户模型及所有权由 [沙箱架构](../../docs/sandboxing.md) 维护；系统操作与历史证据由 [Windows 验收手册](../../docs/windows-sandbox-acceptance-runbook.md) 维护。本文是实现要求，不是功能对齐或安全验收通过声明。
 
@@ -38,7 +38,7 @@ Codex 源码依据：[文件权限模型](https://github.com/openai/codex/blob/d
 
 ## MXC 文档复核与接入纠正
 
-核对两个版本：产品固定的 `6cd3d58f05d3447e67109cfb75e042803b843ca4`，以及本地 `../mxc` 的 `567570084f1ebaca539b0a3186aeb68bca77788a`。后者提供补充解释和升级差异，未被写入产品依赖。以下将文档契约、代码证据和待验证推断分开；相似错误不自动归为相同根因。
+本节保留历史核对基线 `6cd3d58f05d3447e67109cfb75e042803b843ca4` 和 `567570084f1ebaca539b0a3186aeb68bca77788a`。当前产品固定 `46ce71d0da7b97bb531a33e175bf4166ffa730c0`，直接构造发布的 1.0 请求类型；SDK 的高层请求仍不能承载 Ash 的宿主 ACL 授权、文件对象身份和完整 PTY 交接，所以继续使用平台运行器及受审查补丁。新的 Windows 能力列表仍用于诊断；完整请求准备门禁继续实际创建临时 PSEC 环境并保留系统错误。以下将文档契约、代码证据和待验证推断分开；相似错误不自动归为相同根因。
 
 | 来源与约束 | 对 Ash 的影响与决定 |
 | --- | --- |
@@ -101,7 +101,7 @@ flowchart TD
 
 ### Windows 系统版本与能力
 
-最初对比的 Ash 和 Codex 固定 MXC `6cd3d58f05d3447e67109cfb75e042803b843ca4`；Ash 现已升级至 `ca7ea12ac6bd9f5420d6adecb37e32a8158da476`，使用发布的 0.8 契约。以下历史基线的 [官方支持表](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/docs/process-container/os-version-support.md) 区分 ProcessContainer 产品支持与 PSEC 能力：
+最初对比的 Ash 和 Codex 固定 MXC `6cd3d58f05d3447e67109cfb75e042803b843ca4`；Ash 现已升级至 `46ce71d0da7b97bb531a33e175bf4166ffa730c0`，使用发布的 1.0 契约。以下历史基线的 [官方支持表](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/docs/process-container/os-version-support.md) 区分 ProcessContainer 产品支持与 PSEC 能力：
 
 | 系统范围 | 固定 MXC 版本描述 | Ash 选择依据 |
 | --- | --- | --- |
@@ -146,7 +146,7 @@ MXC 只保证允许的代理路径；HTTP/S 客户端还需要正确使用 WinHT
 
 ### Windows UI 与启动失败
 
-Ash 当前 [MXC 请求](../mxc-sandbox/src/policy.rs) 使用 `ui: None`。在固定版本的 Windows 解析与默认策略中，这不表示兼容的桌面配置；`UiPolicy::default()` 仍关闭 Win32k。上游文档还说明，单纯启用 UI 但保留全部桌面句柄/原子限制也可能令 PowerShell 返回 `0xC0000142`。
+Ash 当前 [MXC 请求](../mxc-sandbox/src/policy.rs) 明确允许窗口与桌面资源，同时禁止剪贴板、输入注入、桌面控制和系统设置。默认 UI 会关闭 Win32k；上游文档还说明，单纯启用 UI 但保留全部桌面句柄/原子限制也可能令 PowerShell 返回 `0xC0000142`。当前配置已由请求转换测试覆盖，PSEC 成功启动仍需实机验证。
 
 - 明确构造顶层 UI 意图和 `ProcessContainer.ui`。PowerShell/ConPTY 工作负载的兼容配置需要允许必需的 Win32k/桌面资源；剪贴板、输入注入、桌面切换及系统设置限制分别保持。
 - `isolation: desktop` 只改变相关句柄/原子限制，本身不创建独立桌面。必须核查实际进程所在桌面和隔离范围；不能把该字符串当作安全隔离措施。
@@ -199,7 +199,7 @@ Ash 直接通过 MXC 平台运行器的 `SandboxBackend::spawn` 获取持续双�
 PSEC 检查分为宿主能力和本次请求两部分，由现有 MXC 平台实现执行，`mxc-sandbox` 只转换结果：
 
 1. 加载所需 API，实际创建并关闭最小 PSEC 环境，并检查启动所需属性。导出符号存在不能证明系统功能已启用。
-2. 按本次请求检查路径规则、隐藏例外、schema 0.8 网络方向与代理身份、UI、IPC 和管道/PTY 能力。`deniedPaths` 需要对应的文件拒绝能力；各维度必须同时支持。
+2. 按本次请求检查路径规则、隐藏例外、1.0 契约的网络方向与代理身份、UI、IPC 和管道/PTY 能力。`deniedPaths` 需要对应的文件拒绝能力；各维度必须同时支持。
 3. 只有请求使用拒绝捕获时，才要求相应 Learning Mode 能力；普通执行不额外要求未使用的可选功能。
 4. 检查成功后保留准备结果；启动前复核文件对象身份和所选能力。能力变化导致本次执行失败，不重新选择后端。
 

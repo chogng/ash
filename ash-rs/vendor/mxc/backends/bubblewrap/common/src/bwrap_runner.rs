@@ -27,19 +27,21 @@
 
 use std::collections::HashSet;
 use std::fmt::Write as FmtWrite;
+use std::os::fd::AsFd;
 use std::os::unix::process::CommandExt;
 use std::path::{Component, Path, PathBuf};
-use std::process::{Child, ChildStdin, Command, Stdio};
-use std::time::Duration;
+use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::time::{Duration, Instant};
 
 use lxc_common::network_iptables::{EgressHookPoint, NetworkIptablesManager};
 use wxc_common::interruptible_reader::{wrap_pipe, InterruptibleReader, ReadCanceller};
 use wxc_common::logger::Logger;
 use wxc_common::models::{ExecutionRequest, ScriptResponse};
 use wxc_common::sandbox_process::{
-    boxed_closer, cancel_and_join_discard, group_kill, spawn_discard, take_boxed_read,
-    take_boxed_write, wait_with_timeout, SandboxBackend, SandboxProcess, StdioMode, StreamCloser,
-    WaitError,
+    boxed_closer, cancel_and_join_discard, duplicate_and_take_native_stdio, group_kill,
+    spawn_discard, take_boxed_read, take_boxed_write, NativeStdio, SandboxBackend, SandboxProcess,
+    StdioMode, StreamCloser,
 };
 use wxc_common::unix_proxy_coordinator::UnixProxyCoordinator;
 use wxc_common::validator::{
@@ -48,7 +50,9 @@ use wxc_common::validator::{
 
 use crate::{
     bwrap_command::{self, ResolvedNetworkMode},
-    bwrap_version, network_rules, proxy_network,
+    bwrap_version, network_rules,
+    provider_monitor::ProviderMonitor,
+    proxy_network,
 };
 
 /// Bubblewrap sandbox runner. Uses only shared `ContainerPolicy` fields —
@@ -647,13 +651,11 @@ impl BubblewrapScriptRunner {
             let startup_result = startup
                 .child_pid(&mut child)
                 .and_then(|child_pid| {
-                    proxy_network
-                        .as_mut()
-                        .ok_or_else(|| {
-                            "Bubblewrap: proxy network lifecycle disappeared during startup"
-                                .to_string()
-                        })?
-                        .attach(child_pid, logger)
+                    let network = proxy_network.as_mut().ok_or_else(|| {
+                        "Bubblewrap: proxy network lifecycle disappeared during startup".to_string()
+                    })?;
+                    network.attach(child_pid, logger)?;
+                    network.check_alive()
                 })
                 .and_then(|()| startup.release());
             if let Err(error) = startup_result {
@@ -700,6 +702,14 @@ impl BubblewrapScriptRunner {
             Some(Duration::from_millis(u64::from(request.script_timeout)))
         };
 
+        let child = Arc::new(Mutex::new(child));
+        // Armed only now: until the gate was released a dead provider surfaced
+        // as a startup failure instead.
+        let monitor = proxy_network
+            .as_mut()
+            .and_then(|network| network.take_liveness_watch())
+            .map(|watch| ProviderMonitor::watch(watch, Arc::clone(&child), group));
+
         Ok(BwrapChild {
             child,
             stdin,
@@ -711,6 +721,7 @@ impl BubblewrapScriptRunner {
             proxy,
             proxy_network,
             fw_manager,
+            monitor,
             timeout,
         })
     }
@@ -719,7 +730,9 @@ impl BubblewrapScriptRunner {
 /// A spawned `bwrap` sandbox: the child process, its parent-side pipe ends,
 /// and the per-run network proxy / iptables state torn down once it exits.
 struct BwrapChild {
-    child: Child,
+    /// Exit observation leaves the leader unreaped until the monitor is joined
+    /// and the process group is terminated, keeping its PID reserved throughout.
+    child: Arc<Mutex<Child>>,
     stdin: Option<ChildStdin>,
     stdout: Option<InterruptibleReader>,
     stderr: Option<InterruptibleReader>,
@@ -734,13 +747,22 @@ struct BwrapChild {
     proxy: UnixProxyCoordinator,
     proxy_network: Option<proxy_network::ProxyNetworkNamespace>,
     fw_manager: Option<NetworkIptablesManager>,
+    monitor: Option<ProviderMonitor>,
     timeout: Option<Duration>,
 }
 
 impl BwrapChild {
+    fn lock_child(&self) -> MutexGuard<'_, Child> {
+        self.child.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
     /// Tear down per-run network state (iptables rules + proxy). Idempotent at
     /// the manager level.
     fn cleanup(&mut self, logger: &mut Logger) {
+        // Stopping the supervisor closes the descriptor the monitor watches, so
+        // disarming first is what keeps a normal teardown from reading as a
+        // provider that died.
+        self.monitor.take();
         cleanup_iptables(&mut self.fw_manager, logger);
         if let Some(mut network) = self.proxy_network.take() {
             network.stop(logger);
@@ -775,9 +797,109 @@ impl BubblewrapSandboxProcess {
         let mut logger = Logger::new(wxc_common::logger::Mode::Buffer);
         self.inner.cleanup(&mut logger);
     }
+
+    fn provider_lost(&self) -> bool {
+        self.inner
+            .monitor
+            .as_ref()
+            .is_some_and(ProviderMonitor::provider_lost)
+    }
+
+    /// Wait for the sandbox to exit, its deadline to pass, or its network
+    /// provider to disappear.
+    fn await_outcome(&mut self) -> BwrapOutcome {
+        const MIN_POLL: Duration = Duration::from_millis(1);
+        const MAX_POLL: Duration = Duration::from_millis(50);
+
+        if self.reaped {
+            return match self.inner.lock_child().wait() {
+                Ok(status) => BwrapOutcome::Exited(status),
+                Err(error) => BwrapOutcome::Io(error),
+            };
+        }
+
+        let deadline = self.inner.timeout.map(|timeout| Instant::now() + timeout);
+        let mut interval = MIN_POLL;
+        loop {
+            let exited =
+                match wxc_common::sandbox_process::poll_child_exit(&self.inner.lock_child()) {
+                    Ok(exited) => exited,
+                    Err(error) => return BwrapOutcome::Io(error),
+                };
+            // Checked after the exit rather than before it: the monitor kills
+            // the sandbox, so a provider death shows up here as an ordinary
+            // exit that would otherwise be reported as the workload's own.
+            if self.provider_lost() {
+                return BwrapOutcome::ProviderLost;
+            }
+            if exited.is_some() {
+                // Join the monitor before reaping so it cannot inspect a PID
+                // after the leader's ownership has ended.
+                let lost = self
+                    .inner
+                    .monitor
+                    .take()
+                    .is_some_and(|mut monitor| monitor.disarm());
+                if lost {
+                    return BwrapOutcome::ProviderLost;
+                }
+                if let Err(error) = self.kill() {
+                    return BwrapOutcome::Io(error);
+                }
+                return match self.inner.lock_child().wait() {
+                    Ok(status) => BwrapOutcome::Exited(status),
+                    Err(error) => BwrapOutcome::Io(error),
+                };
+            }
+
+            let now = Instant::now();
+            let mut nap = interval;
+            if let Some(deadline) = deadline {
+                if now >= deadline {
+                    return BwrapOutcome::Timeout;
+                }
+                nap = nap.min(deadline - now);
+            }
+            std::thread::sleep(nap);
+            interval = (interval * 2).min(MAX_POLL);
+        }
+    }
+
+    fn lost_provider_message(&mut self) -> String {
+        match self.inner.proxy_network.as_mut() {
+            Some(network) => network.lost_provider_detail(),
+            None => "Bubblewrap: the sandbox lost its network provider while the workload \
+                     was running"
+                .to_string(),
+        }
+    }
+}
+
+/// How a `bwrap` run ended.
+enum BwrapOutcome {
+    Exited(ExitStatus),
+    Timeout,
+    ProviderLost,
+    Io(std::io::Error),
 }
 
 impl SandboxProcess for BubblewrapSandboxProcess {
+    fn take_native_stdio(&mut self) -> std::io::Result<Option<NativeStdio>> {
+        let stdio = duplicate_and_take_native_stdio(
+            &mut self.inner.stdin,
+            &mut self.inner.stdout,
+            &mut self.inner.stderr,
+            |stream| stream.as_fd().try_clone_to_owned(),
+            InterruptibleReader::try_clone_owned_fd,
+            InterruptibleReader::try_clone_owned_fd,
+        )?;
+        if stdio.is_some() {
+            self.inner.stdout_canceller.take();
+            self.inner.stderr_canceller.take();
+        }
+        Ok(stdio)
+    }
+
     fn take_stdin(&mut self) -> Option<Box<dyn std::io::Write + Send>> {
         take_boxed_write(&mut self.inner.stdin)
     }
@@ -802,15 +924,15 @@ impl SandboxProcess for BubblewrapSandboxProcess {
         if self.reaped {
             return Ok(self
                 .inner
-                .child
+                .lock_child()
                 .try_wait()?
                 .map(|status| status.code().unwrap_or(-1)));
         }
-        wxc_common::sandbox_process::poll_child_exit(&self.inner.child)
+        wxc_common::sandbox_process::poll_child_exit(&self.inner.lock_child())
     }
 
     fn id(&self) -> u32 {
-        self.inner.child.id()
+        self.inner.lock_child().id()
     }
 
     fn kill(&mut self) -> std::io::Result<()> {
@@ -820,16 +942,17 @@ impl SandboxProcess for BubblewrapSandboxProcess {
         if self.reaped {
             return Ok(());
         }
+        let mut child = self.inner.lock_child();
         if self.inner.group {
             // Pipes mode: bwrap leads its own process group — tree-kill it.
-            group_kill(&mut self.inner.child)
+            group_kill(&mut child)
         } else {
             // Inherit mode: bwrap shares the executor's group (no
             // `process_group(0)`), so a group-kill would hit the executor.
             // Killing bwrap alone suffices because `--die-with-parent` makes
             // the sandbox die with it — bwrap is *not* pid 1 of the namespace
             // (it forks), so without that flag descendants would survive.
-            self.inner.child.kill()
+            child.kill()
         }
     }
 
@@ -843,26 +966,33 @@ impl SandboxProcess for BubblewrapSandboxProcess {
         let stdout_thread = spawn_discard(self.inner.stdout.take());
         let stderr_thread = spawn_discard(self.inner.stderr.take());
 
-        let result = match wait_with_timeout(&mut self.inner.child, self.inner.timeout) {
-            Ok(status) => Ok(status.code().unwrap_or(-1)),
-            Err(WaitError::Timeout) => {
+        let outcome = self.await_outcome();
+        self.inner.monitor.take();
+        let result = match outcome {
+            BwrapOutcome::Exited(status) => Ok(status.code().unwrap_or(-1)),
+            BwrapOutcome::ProviderLost => {
+                let _ = self.kill();
+                let _ = self.inner.lock_child().wait();
+                Err(std::io::Error::other(self.lost_provider_message()))
+            }
+            BwrapOutcome::Timeout => {
                 // Tree-kill so descendants die too and release any stdout/stderr
                 // pipe write-ends (else the drain threads below could block).
                 // `kill()` group-kills in Pipes mode; in Inherit mode it kills
                 // bwrap, which `--die-with-parent` turns into a full teardown.
                 let _ = self.kill();
-                let _ = self.inner.child.wait();
+                let _ = self.inner.lock_child().wait();
                 Err(std::io::Error::new(
                     std::io::ErrorKind::TimedOut,
                     "Bubblewrap: script timed out",
                 ))
             }
-            Err(WaitError::Io(error)) => {
+            BwrapOutcome::Io(error) => {
                 // The child may still be alive; kill+reap it before
                 // `run_teardown()` removes the iptables/proxy enforcement out
                 // from under it.
                 let _ = self.kill();
-                let _ = self.inner.child.wait();
+                let _ = self.inner.lock_child().wait();
                 Err(std::io::Error::other(format!(
                     "Bubblewrap: wait failed: {error}"
                 )))
@@ -879,16 +1009,23 @@ impl SandboxProcess for BubblewrapSandboxProcess {
 
 impl Drop for BubblewrapSandboxProcess {
     fn drop(&mut self) {
+        // Disarmed first so the monitor cannot be holding the child lock while
+        // the reap below waits on it.
+        self.inner.monitor.take();
         // Kill and reap the child *before* removing network enforcement —
         // otherwise an abandoned-but-running sandbox would keep egressing after
         // its iptables/proxy rules were torn down, and the child would leak as
         // a zombie. `kill()` group-kills in `Pipes` mode and relies on
         // `--die-with-parent` otherwise, then we reap.
         let _ = self.kill();
-        let _ = self.inner.child.wait();
+        let _ = self.inner.lock_child().wait();
         self.run_teardown();
     }
 }
+
+#[cfg(test)]
+#[path = "bwrap_runner_tests.rs"]
+mod lifecycle_tests;
 
 /// Build the iptables manager for a Bubblewrap sandbox.
 ///
@@ -1051,7 +1188,9 @@ fn resolve_through_symlinks(path: &Path) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wxc_common::models::{NetworkEnforcementMode, ProxyAddress, ProxyConfig};
+    use wxc_common::models::{
+        NetworkEnforcementCompatibility, NetworkEnforcementMode, ProxyAddress, ProxyConfig,
+    };
 
     fn base_request() -> ExecutionRequest {
         ExecutionRequest {
@@ -1100,7 +1239,7 @@ mod tests {
             (NetworkAction::Deny, NetworkAction::Allow),
         ] {
             let mut request = base_request();
-            request.schema_version = "0.8.0-alpha".into();
+            request.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
             request.policy.network_egress = Some(NetworkEgressPolicy::default());
             request.policy.network_ingress = Some(NetworkIngressPolicy {
                 default,
@@ -1160,7 +1299,7 @@ mod tests {
         // produces (`apply_directional_network` fills them in together).
         fn directional() -> ExecutionRequest {
             let mut request = base_request();
-            request.schema_version = "0.8.0-alpha".into();
+            request.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
             request.policy.network_mode_specified = true;
             request.policy.network_egress = Some(NetworkEgressPolicy::default());
             request.policy.network_ingress = Some(NetworkIngressPolicy::default());
@@ -1520,7 +1659,7 @@ mod tests {
     #[test]
     fn validate_rejects_an_ipv6_loopback_proxy_endpoint_before_the_environment_probe() {
         let mut req = base_request();
-        req.schema_version = "0.8.0-alpha".into();
+        req.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         // An external proxy with the default 'block' would be refused earlier,
         // by the host-policy gate; this test is about the endpoint itself.
         req.policy.default_network_policy = wxc_common::models::NetworkPolicy::Allow;
@@ -1567,7 +1706,7 @@ mod tests {
         for egress in unhonorable {
             for builtin in [false, true] {
                 let mut req = base_request();
-                req.schema_version = "0.8.0-alpha".into();
+                req.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
                 req.policy.network_egress = Some(egress.clone());
                 req.policy.network_proxy = ProxyConfig {
                     address: (!builtin).then(|| ProxyAddress::new("127.0.0.1".into(), 3128)),
@@ -1592,7 +1731,7 @@ mod tests {
         use wxc_common::models::{NetworkAction, NetworkEgressPolicy};
 
         let mut req = base_request();
-        req.schema_version = "0.8.0-alpha".into();
+        req.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         req.policy.network_egress = Some(NetworkEgressPolicy {
             default: NetworkAction::Deny,
             ..Default::default()
@@ -1616,7 +1755,7 @@ mod tests {
         // The egress rules are IPv4-only, so this endpoint could never be
         // opened -- `run` would discover that only after starting slirp.
         let mut req = base_request();
-        req.schema_version = "0.8.0-alpha".into();
+        req.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         req.policy.network_proxy = ProxyConfig {
             address: Some(ProxyAddress::new("2001:db8::1".into(), 3128)),
             builtin_test_server: false,
@@ -1639,7 +1778,7 @@ mod tests {
     #[test]
     fn validate_leaves_a_legacy_schema_proxy_endpoint_untouched() {
         let mut req = base_request();
-        req.schema_version = "0.7.0-alpha".into();
+        req.network_enforcement_compatibility = NetworkEnforcementCompatibility::LegacyCompatible;
         req.policy.network_proxy = ProxyConfig {
             address: Some(ProxyAddress::new("[::1]".into(), 3128)),
             builtin_test_server: false,
@@ -1666,7 +1805,7 @@ mod tests {
     #[test]
     fn validate_does_not_apply_the_endpoint_check_to_the_builtin_test_server() {
         let mut req = base_request();
-        req.schema_version = "0.8.0-alpha".into();
+        req.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         req.policy.network_proxy = ProxyConfig {
             address: Some(ProxyAddress::new("127.0.0.1".into(), 0)),
             builtin_test_server: true,
@@ -1692,7 +1831,7 @@ mod tests {
     #[test]
     fn validate_rejects_a_hostname_proxy_that_would_defeat_a_denied_hosts_file() {
         let mut req = base_request();
-        req.schema_version = "0.8.0-alpha".into();
+        req.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         req.policy.default_network_policy = wxc_common::models::NetworkPolicy::Allow;
         req.policy.denied_paths = vec!["/etc/hosts".into()];
         req.policy.network_proxy = ProxyConfig {
@@ -1718,7 +1857,7 @@ mod tests {
     #[test]
     fn a_dotdot_spelling_of_a_denied_hosts_file_still_refuses_the_pin() {
         let mut req = base_request();
-        req.schema_version = "0.8.0-alpha".into();
+        req.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         req.policy.network_proxy = ProxyConfig {
             address: Some(ProxyAddress::new("proxy.example.com".into(), 3128)),
             builtin_test_server: false,
@@ -1745,7 +1884,7 @@ mod tests {
     #[test]
     fn validate_accepts_an_ip_proxy_endpoint_alongside_a_denied_hosts_file() {
         let mut req = base_request();
-        req.schema_version = "0.8.0-alpha".into();
+        req.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         req.policy.denied_paths = vec!["/etc/hosts".into()];
         req.policy.network_proxy = ProxyConfig {
             address: Some(ProxyAddress::new("10.1.2.3".into(), 3128)),
@@ -1772,7 +1911,7 @@ mod tests {
     #[test]
     fn validate_rejects_a_hostname_rule_address_at_0_8() {
         let mut req = base_request();
-        req.schema_version = "0.8.0-alpha".into();
+        req.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         req.policy.network_enforcement_mode = wxc_common::models::NetworkEnforcementMode::Firewall;
         req.policy.allowed_hosts = vec!["api.github.com".into()];
 
@@ -1792,7 +1931,7 @@ mod tests {
     #[test]
     fn validate_accepts_literal_and_cidr_rule_addresses_at_0_8() {
         let mut req = base_request();
-        req.schema_version = "0.8.0-alpha".into();
+        req.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         req.policy.network_enforcement_mode = wxc_common::models::NetworkEnforcementMode::Firewall;
         req.policy.allowed_hosts = vec!["203.0.113.7".into(), "10.0.0.0/8".into()];
         req.policy.blocked_hosts = vec!["2001:db8::/32".into()];
@@ -1816,25 +1955,22 @@ mod tests {
     /// leaves alone rather than the behavior it introduces.
     #[test]
     fn validate_leaves_a_pre_0_8_hostname_rule_address_untouched() {
-        for version in ["0.6.0-alpha", "0.7.0-alpha"] {
-            let mut req = base_request();
-            req.schema_version = version.into();
-            req.policy.network_enforcement_mode =
-                wxc_common::models::NetworkEnforcementMode::Firewall;
-            req.policy.allowed_hosts = vec!["api.github.com".into()];
+        let mut req = base_request();
+        req.network_enforcement_compatibility = NetworkEnforcementCompatibility::LegacyCompatible;
+        req.policy.network_enforcement_mode = wxc_common::models::NetworkEnforcementMode::Firewall;
+        req.policy.allowed_hosts = vec!["api.github.com".into()];
 
-            let runner = BubblewrapScriptRunner::new();
-            let message = runner
-                .validate(&req)
-                .err()
-                .map(|err| err.error_message)
-                .unwrap_or_default();
+        let runner = BubblewrapScriptRunner::new();
+        let message = runner
+            .validate(&req)
+            .err()
+            .map(|err| err.error_message)
+            .unwrap_or_default();
 
-            assert!(
-                !message.contains("not an IP address or CIDR"),
-                "schema {version} must keep parsing hostname rule addresses: {message}"
-            );
-        }
+        assert!(
+            !message.contains("not an IP address or CIDR"),
+            "compatibility mode must keep accepting hostname rule addresses: {message}"
+        );
     }
 
     /// Legacy proxy mode shares the host's network, never translates the
@@ -1843,7 +1979,7 @@ mod tests {
     #[test]
     fn validate_leaves_a_legacy_schema_hosts_denial_untouched() {
         let mut req = base_request();
-        req.schema_version = "0.7.0-alpha".into();
+        req.network_enforcement_compatibility = NetworkEnforcementCompatibility::LegacyCompatible;
         req.policy.denied_paths = vec!["/etc/hosts".into()];
         req.policy.network_proxy = ProxyConfig {
             address: Some(ProxyAddress::new("proxy.example.com".into(), 3128)),
@@ -1872,7 +2008,7 @@ mod tests {
         // vehicle for this: at 0.8 they resolve to a private namespace under
         // either enforcement mechanism.
         let mut req = base_request();
-        req.schema_version = "0.8.0-alpha".into();
+        req.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         req.policy.default_network_policy = wxc_common::models::NetworkPolicy::Allow;
 
         let err = BubblewrapScriptRunner::new().validate(&req).unwrap_err();
@@ -1891,7 +2027,7 @@ mod tests {
         // refuses the combination. Without this test, relaxing the rejection
         // would silently open inbound rather than fail a build.
         let mut req = base_request();
-        req.schema_version = "0.8.0-alpha".into();
+        req.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         req.policy.network_enforcement_mode = NetworkEnforcementMode::Firewall;
         req.policy.allowed_hosts = vec!["10.0.2.2/32".into()];
         req.policy.allow_local_network = true;
@@ -1910,7 +2046,7 @@ mod tests {
         // unaffected. Tolerant of a host without bwrap: it only rules out the
         // local-network rejection.
         let mut req = base_request();
-        req.schema_version = "0.7.0-alpha".into();
+        req.network_enforcement_compatibility = NetworkEnforcementCompatibility::LegacyCompatible;
         req.policy.default_network_policy = wxc_common::models::NetworkPolicy::Allow;
 
         if let Err(err) = BubblewrapScriptRunner::new().validate(&req) {
@@ -1927,7 +2063,7 @@ mod tests {
         // Firewall mode is the enforcement mechanism at 0.8, so the
         // unenforced-host-rules gate must not fire for it.
         let mut req = base_request();
-        req.schema_version = "0.8.0-alpha".into();
+        req.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         req.policy.network_enforcement_mode = NetworkEnforcementMode::Firewall;
         req.policy.allowed_hosts = vec!["10.0.2.2/32".into()];
         req.policy.allow_local_network = true;
@@ -1946,7 +2082,7 @@ mod tests {
     fn validate_accepts_a_firewall_mode_request_before_0_8() {
         // GHCP consumes Bubblewrap on 0.6/0.7; the gate must not reach them.
         let mut req = base_request();
-        req.schema_version = "0.7.0-alpha".into();
+        req.network_enforcement_compatibility = NetworkEnforcementCompatibility::LegacyCompatible;
         req.policy.network_enforcement_mode = NetworkEnforcementMode::Firewall;
         req.policy.allowed_hosts = vec!["api.github.com".into()];
         req.policy.allow_local_network = true;
@@ -1966,7 +2102,7 @@ mod tests {
         // 'capabilities' with no proxy nothing applies them, so a default-deny
         // policy ran with fully open egress on the host's namespace.
         let mut req = base_request();
-        req.schema_version = "0.8.0-alpha".into();
+        req.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
         req.policy.default_network_policy = wxc_common::models::NetworkPolicy::Block;
         req.policy.allowed_hosts = vec!["api.github.com".into()];
         req.policy.allow_local_network = true;
@@ -1982,59 +2118,61 @@ mod tests {
 
     #[test]
     fn validate_accepts_host_rules_when_a_proxy_enforces_them_at_0_8() {
-        // The proxy is the mechanism, so the same lists are fine with one.
+        // The proxy is the mechanism, so a valid allow-default blocklist
+        // reaches the environmental probe instead of failing policy validation.
         let mut req = base_request();
-        req.schema_version = "0.8.0-alpha".into();
+        req.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
+        req.policy.default_network_policy = wxc_common::models::NetworkPolicy::Allow;
         req.policy.blocked_hosts = vec!["evil.example.com".into()];
         req.policy.network_proxy = ProxyConfig {
             address: Some(ProxyAddress::new("127.0.0.1".into(), 3128)),
             builtin_test_server: false,
         };
 
-        if let Err(err) = BubblewrapScriptRunner::new().validate(&req) {
-            assert!(
-                !err.error_message
-                    .contains("require an enforcement mechanism"),
-                "a proxy enforces the lists: {}",
-                err.error_message
-            );
-        }
+        let unavailable = bwrap_version::BwrapUnavailable::NotFound;
+        let expected = unavailable.to_string();
+        let error = BubblewrapScriptRunner::new()
+            .validate_prepared_with_probe(&req, || Err(unavailable))
+            .unwrap_err();
+        assert_eq!(error.error_message, expected);
+    }
+
+    #[test]
+    fn validate_rejects_block_default_blocklist_without_allowlist() {
+        let mut req = base_request();
+        req.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
+        req.policy.default_network_policy = wxc_common::models::NetworkPolicy::Block;
+        req.policy.blocked_hosts = vec!["evil.example.com".into()];
+        req.policy.network_proxy = ProxyConfig {
+            address: Some(ProxyAddress::new("127.0.0.1".into(), 3128)),
+            builtin_test_server: false,
+        };
+
+        let error = BubblewrapScriptRunner::new()
+            .validate_prepared_with_probe(&req, || {
+                panic!("environment probe must not run for an invalid legacy host list")
+            })
+            .unwrap_err();
+        assert_eq!(
+            error.error_message,
+            "blockedHosts requires allowedHosts when network.defaultPolicy='block'"
+        );
     }
 
     #[test]
     fn validate_accepts_host_rules_without_a_mechanism_before_0_8() {
         // GHCP consumes Bubblewrap on 0.6/0.7 with exactly this shape.
         let mut req = base_request();
-        req.schema_version = "0.7.0-alpha".into();
+        req.network_enforcement_compatibility = NetworkEnforcementCompatibility::LegacyCompatible;
         req.policy.default_network_policy = wxc_common::models::NetworkPolicy::Block;
         req.policy.allowed_hosts = vec!["api.github.com".into()];
 
-        if let Err(err) = BubblewrapScriptRunner::new().validate(&req) {
-            assert!(
-                !err.error_message
-                    .contains("require an enforcement mechanism"),
-                "0.7 must not be rejected: {}",
-                err.error_message
-            );
-        }
-    }
-
-    /// A malformed non-empty version cannot come from the parser, so it is a
-    /// hand-built request; the typo must not buy pre-0.8 leniency.
-    #[test]
-    fn validate_rejects_unenforced_host_rules_with_a_malformed_version() {
-        let mut req = base_request();
-        req.schema_version = "0.8".into();
-        req.policy.allowed_hosts = vec!["api.github.com".into()];
-        req.policy.allow_local_network = true;
-
-        let err = BubblewrapScriptRunner::new().validate(&req).unwrap_err();
-        assert!(
-            err.error_message
-                .contains("require an enforcement mechanism"),
-            "unexpected error: {}",
-            err.error_message
-        );
+        let unavailable = bwrap_version::BwrapUnavailable::NotFound;
+        let expected = unavailable.to_string();
+        let error = BubblewrapScriptRunner::new()
+            .validate_prepared_with_probe(&req, || Err(unavailable))
+            .unwrap_err();
+        assert_eq!(error.error_message, expected);
     }
 
     #[test]

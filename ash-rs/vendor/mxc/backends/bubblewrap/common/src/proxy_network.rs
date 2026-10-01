@@ -15,7 +15,9 @@ use std::sync::{mpsc, Condvar, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use nix::errno::Errno;
 use nix::fcntl::{fcntl, FcntlArg, FdFlag, OFlag};
+use nix::sys::socket::{socket, AddressFamily, SockFlag, SockType};
 use nix::unistd::{access, dup2, pipe2, AccessFlags};
 use tempfile::TempDir;
 use wxc_common::filesystem_resolve::{resolve_mount_order, FsIntent};
@@ -114,6 +116,12 @@ const INGRESS_CHAIN: &str = "MXC_INGRESS";
 /// a redirection, which is the whole reason the parent pins them.
 const SUPERVISOR_PID_FD: RawFd = 3;
 const SUPERVISOR_EXIT_FD: RawFd = 4;
+/// Held open by the supervisor and inherited by slirp, never written to.
+///
+/// The parent keeps only the read end, so it reaches EOF exactly when both
+/// have exited -- an orphaned slirp still carries the sandbox's route, and
+/// holding the descriptor is what keeps that case from reading as a loss.
+const SUPERVISOR_LIVENESS_FD: RawFd = 5;
 /// Descriptors are staged above every target before being landed, so a source
 /// already sitting on a target cannot be clobbered mid-remap.
 const FD_STAGING_BASE: RawFd = 10;
@@ -197,7 +205,12 @@ connection-state match requires, and an unprivileged sandbox cannot load it."
 for payload in "$state_dir"/rules.v4.*; do
     nsenter --net="$ns" -- iptables-restore -w "$lock_wait" -n "$payload" || { echo "$conntrack_hint" >&2; exit 1; }
 done
+# No IPv6 payload is written when the kernel has no IPv6 stack (see
+# `rule_families`), and an unmatched glob expands to itself. IPv4 has no such
+# guard, so a missing IPv4 payload still fails the restore and kills the
+# supervisor.
 for payload in "$state_dir"/rules.v6.*; do
+    [ -e "$payload" ] || continue
     nsenter --net="$ns" -- ip6tables-restore -w "$lock_wait" -n "$payload" || { echo "$conntrack_hint" >&2; exit 1; }
 done
 
@@ -618,6 +631,59 @@ impl BwrapStartup {
     }
 }
 
+/// The rule families the supervisor installs.
+///
+/// IPv6 is dropped only when the kernel has no IPv6 stack at all. The sandbox
+/// then cannot open an IPv6 socket, so there is no IPv6 traffic to filter, and
+/// `ip6tables-restore` would fail because the kernel has no IPv6 tables to
+/// program. Every other host keeps both families.
+fn rule_families(kernel_ipv6: bool) -> &'static [RuleFamily] {
+    if kernel_ipv6 {
+        &[RuleFamily::V4, RuleFamily::V6]
+    } else {
+        &[RuleFamily::V4]
+    }
+}
+
+/// Whether the kernel can create IPv6 sockets.
+///
+/// Answered by opening one rather than by reading `/proc/net/if_inet6`. Where
+/// IPv6 is a module, a socket request loads it, so a later request (including
+/// one from inside the sandbox) could bring IPv6 up after a file check had
+/// reported it absent. Opening the socket here triggers that load first, so
+/// only a kernel that cannot provide IPv6 at all answers `EAFNOSUPPORT`.
+fn kernel_supports_ipv6() -> bool {
+    ipv6_probe_means_supported(socket(
+        AddressFamily::Inet6,
+        SockType::Datagram,
+        SockFlag::SOCK_CLOEXEC,
+        None,
+    ))
+}
+
+/// Only `EAFNOSUPPORT` proves IPv6 is absent. Any other failure, such as
+/// descriptor exhaustion, says nothing about IPv6, so the IPv6 rules are kept
+/// and `ip6tables-restore` gets the final word.
+fn ipv6_probe_means_supported(probe: nix::Result<OwnedFd>) -> bool {
+    !matches!(probe, Err(Errno::EAFNOSUPPORT))
+}
+
+/// Warn that the IPv6 firewall rules were not installed.
+///
+/// Uses [`Logger::warning_line`], not `log_line`, so that callers see it in
+/// `Output::warnings`; `warn_unreachable_v6_targets` in `bwrap_runner` explains
+/// why the debug buffer is not a channel either path reads.
+fn warn_skipped_ipv6_rules(kernel_ipv6: bool, logger: &mut Logger) {
+    if kernel_ipv6 {
+        return;
+    }
+    logger.warning_line(
+        "WARNING: Bubblewrap did not install IPv6 firewall rules: the kernel reports \
+         no IPv6 support (EAFNOSUPPORT), so the sandbox cannot send IPv6 traffic and \
+         the IPv4 rules alone enforce the network policy.",
+    );
+}
+
 /// A same-UID user-namespace supervisor and its `slirp4netns` process.
 pub(crate) struct ProxyNetworkNamespace {
     state_dir: TempDir,
@@ -631,6 +697,9 @@ pub(crate) struct ProxyNetworkNamespace {
     userns: Option<File>,
     /// Hosts file mounted over `/etc/hosts`, when the endpoint is a hostname.
     hosts: Option<PathBuf>,
+    /// Read end of the descriptor the supervisor and slirp hold open, taken by
+    /// the monitor that watches for the network provider dying mid-run.
+    liveness_reader: Option<OwnedFd>,
     /// Restore transactions the supervisor will apply, which sizes the
     /// readiness budget in [`Self::attach`].
     transactions: usize,
@@ -667,8 +736,10 @@ impl ProxyNetworkNamespace {
         // during startup, so a missing or partial file must not be possible.
         // A family renders to as many transactions as its size needs; the
         // supervisor applies them in name order.
+        let kernel_ipv6 = kernel_supports_ipv6();
+        warn_skipped_ipv6_rules(kernel_ipv6, logger);
         let mut transactions = 0usize;
-        for family in [RuleFamily::V4, RuleFamily::V6] {
+        for &family in rule_families(kernel_ipv6) {
             let payloads =
                 render_filter_payloads(plan, ingress, family, EGRESS_CHAIN, INGRESS_CHAIN);
             transactions += payloads.len();
@@ -689,6 +760,9 @@ impl ProxyNetworkNamespace {
             pipe2(OFlag::O_CLOEXEC).map_err(|error| format!("Bubblewrap: pipe failed: {error}"))?;
         let (pid_reader, pid_writer) =
             pipe2(OFlag::O_CLOEXEC).map_err(|error| format!("Bubblewrap: pipe failed: {error}"))?;
+        let (liveness_reader, liveness_writer) =
+            pipe2(OFlag::O_CLOEXEC).map_err(|error| format!("Bubblewrap: pipe failed: {error}"))?;
+        set_nonblocking(liveness_reader.as_raw_fd())?;
 
         let mut command = Command::new("unshare");
         command
@@ -715,6 +789,7 @@ impl ProxyNetworkNamespace {
             [
                 (pid_reader.as_raw_fd(), SUPERVISOR_PID_FD),
                 (exit_reader.as_raw_fd(), SUPERVISOR_EXIT_FD),
+                (liveness_writer.as_raw_fd(), SUPERVISOR_LIVENESS_FD),
             ],
         );
 
@@ -723,6 +798,10 @@ impl ProxyNetworkNamespace {
         })?;
         drop(exit_reader);
         drop(pid_reader);
+
+        // The supervisor tree is now the only holder of the write end, which is
+        // what makes the read end reach EOF when it dies.
+        drop(liveness_writer);
 
         if let Err(error) = wait_for_file(
             state_dir.path().join("userns.ready"),
@@ -771,6 +850,7 @@ impl ProxyNetworkNamespace {
             pid_writer: Some(pid_writer),
             userns: Some(userns),
             hosts,
+            liveness_reader: Some(liveness_reader),
             transactions,
             script_timeout_ms,
         })
@@ -863,6 +943,50 @@ impl ProxyNetworkNamespace {
              rules are in force",
         );
         Ok(())
+    }
+
+    /// Confirm the network provider is still alive, immediately before the
+    /// workload's startup gate opens.
+    ///
+    /// `slirp.ready` is a latch that stays on disk after slirp dies, so the
+    /// readiness [`Self::attach`] waited for can already be stale here.
+    pub(crate) fn check_alive(&mut self) -> Result<(), String> {
+        match self.supervisor.try_wait() {
+            Ok(None) => Ok(()),
+
+            // The supervisor's last act is to wait on slirp, so it outlives
+            // slirp and any exit at all leaves the sandbox with no route.
+            Ok(Some(status)) => Err(format!(
+                "Bubblewrap: the proxy network supervisor exited ({status}) after signalling \
+                 readiness but before the workload started, leaving the sandbox with no \
+                 network provider ({})",
+                stderr_detail(&self.state_dir.path().join("supervisor.stderr"))
+            )),
+            Err(error) => Err(format!(
+                "Bubblewrap: failed to inspect the proxy network supervisor before starting \
+                 the workload: {error}"
+            )),
+        }
+    }
+
+    /// Take the descriptor a [`ProviderMonitor`] watches for provider loss.
+    pub(crate) fn take_liveness_watch(&mut self) -> Option<OwnedFd> {
+        self.liveness_reader.take()
+    }
+
+    /// Describe the provider loss a monitor observed, for the error the run
+    /// fails with.
+    pub(crate) fn lost_provider_detail(&mut self) -> String {
+        let status = match self.supervisor.try_wait() {
+            Ok(Some(status)) => format!("exited with {status}"),
+            Ok(None) => "is still running, so slirp4netns died on its own".to_string(),
+            Err(error) => format!("could not be inspected: {error}"),
+        };
+        format!(
+            "Bubblewrap: the sandbox lost its network provider while the workload was \
+             running; the proxy network supervisor {status} ({})",
+            stderr_detail(&self.state_dir.path().join("supervisor.stderr"))
+        )
     }
 
     /// Stop slirp and reap the namespace supervisor.
@@ -1605,7 +1729,7 @@ enum SupervisorCommandCoverage {
 /// Digest of the reviewed [`SUPERVISOR_SCRIPT`], line-ending independent.
 /// Bumping it acknowledges that the command list below was re-checked.
 #[cfg(test)]
-const EXPECTED_SUPERVISOR_SCRIPT_DIGEST: u64 = 0xb726_55e7_6c6b_8de2;
+const EXPECTED_SUPERVISOR_SCRIPT_DIGEST: u64 = 0x5855_540d_dc42_997c;
 
 /// Every external command [`SUPERVISOR_SCRIPT`] runs, and how the pre-flight
 /// walk accounts for it.
@@ -1942,6 +2066,7 @@ fn terminate_child(child: &mut Child) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wxc_common::models::NetworkEnforcementCompatibility;
 
     /// The reported concern: a hostname proxy resolves through the host's
     /// resolver during setup, before the script timeout applies, so an
@@ -2881,7 +3006,7 @@ mod tests {
     /// public constructor so the count matches what the supervisor installs.
     fn plan_with_rule_count(count: usize) -> EgressPlan {
         let mut request = wxc_common::models::ExecutionRequest {
-            schema_version: "0.8.0-alpha".into(),
+            network_enforcement_compatibility: NetworkEnforcementCompatibility::Strict,
             ..Default::default()
         };
         request.policy.allowed_hosts = (0..count)
@@ -2941,6 +3066,61 @@ mod tests {
             !SUPERVISOR_SCRIPT.contains("--enable-ipv6"),
             "slirp4netns must not offer IPv6 while the ingress chain lacks ICMPv6 exemptions"
         );
+    }
+
+    #[test]
+    fn ipv6_rules_are_dropped_only_when_the_kernel_lacks_ipv6() {
+        assert_eq!(rule_families(true), [RuleFamily::V4, RuleFamily::V6]);
+        assert_eq!(rule_families(false), [RuleFamily::V4]);
+    }
+
+    #[test]
+    fn skipping_the_ipv6_rules_is_a_retained_warning() {
+        let mut logger = Logger::new(wxc_common::logger::Mode::Buffer);
+        warn_skipped_ipv6_rules(false, &mut logger);
+        let out = logger.warnings().join("\n");
+        assert!(
+            out.contains("did not install IPv6 firewall rules"),
+            "must say the IPv6 rules were skipped: {out}"
+        );
+        // The debug buffer is not read back by `mxc_engine::spawn`, so a
+        // warning left there would never reach the caller.
+        assert!(
+            logger.get_buffer().is_empty(),
+            "the warning must travel as a retained warning, not as buffer output"
+        );
+
+        let mut logger = Logger::new(wxc_common::logger::Mode::Buffer);
+        warn_skipped_ipv6_rules(true, &mut logger);
+        assert!(
+            logger.warnings().is_empty(),
+            "IPv6 rules installed, no warning"
+        );
+    }
+
+    /// Dropping the IPv6 rules is only safe when the kernel has proven it has
+    /// no IPv6. Any other probe failure keeps them.
+    #[test]
+    fn only_eafnosupport_counts_as_a_kernel_without_ipv6() {
+        assert!(!ipv6_probe_means_supported(Err(Errno::EAFNOSUPPORT)));
+        for errno in [
+            Errno::EMFILE,
+            Errno::ENFILE,
+            Errno::ENOBUFS,
+            Errno::ENOMEM,
+            Errno::EACCES,
+            Errno::EPROTONOSUPPORT,
+        ] {
+            assert!(ipv6_probe_means_supported(Err(errno)), "{errno}");
+        }
+        let socket = socket(
+            AddressFamily::Inet,
+            SockType::Datagram,
+            SockFlag::SOCK_CLOEXEC,
+            None,
+        )
+        .expect("an IPv4 socket stands in for a successful probe");
+        assert!(ipv6_probe_means_supported(Ok(socket)));
     }
 
     #[test]
@@ -4021,7 +4201,9 @@ mod tests {
     /// `<tool> <line>`, so tests can still assert on the rules that reached
     /// iptables rather than only on the argument vector. The payload is found
     /// by being the one argument that names an existing file, so the stub does
-    /// not have to track the renderer's filename scheme.
+    /// not have to track the renderer's filename scheme. A restore with no such
+    /// argument fails, as the real one does when a glob matched nothing and
+    /// reached it unexpanded.
     const FAKE_NSENTER: &str = r#"#!/bin/sh
 count=$(cat "$MXC_TEST_COUNT" 2>/dev/null || echo 0)
 count=$((count + 1))
@@ -4040,6 +4222,10 @@ for arg in "$@"; do
         *) [ -f "$arg" ] && payload="$arg" ;;
     esac
 done
+if [ -n "$tool" ] && [ -z "$payload" ]; then
+    echo "fake nsenter: ${tool}-restore was given no payload file" >&2
+    exit 1
+fi
 if [ -n "$tool" ] && [ -n "$payload" ]; then
     while IFS= read -r line; do
         printf '%s %s\n' "$tool" "$line" >> "$MXC_TEST_PAYLOAD"
@@ -4228,12 +4414,24 @@ exec sleep 30
         fail_at: Option<u32>,
         slirp_dies: bool,
     ) -> FakeSupervisor {
+        spawn_fake_supervisor_with_families(plan, ingress, rule_families(true), fail_at, slirp_dies)
+    }
+
+    /// [`spawn_fake_supervisor_with_plan`] with only `families` written to the
+    /// state directory, as `start` does for a kernel without IPv6.
+    fn spawn_fake_supervisor_with_families(
+        plan: &EgressPlan,
+        ingress: &IngressPlan,
+        families: &[RuleFamily],
+        fail_at: Option<u32>,
+        slirp_dies: bool,
+    ) -> FakeSupervisor {
         let dir = tempfile::tempdir().expect("tempdir");
         let bin = dir.path().join("bin");
         let state = dir.path().join("state");
         fs::create_dir_all(&bin).expect("bin dir");
         fs::create_dir_all(&state).expect("state dir");
-        for family in [RuleFamily::V4, RuleFamily::V6] {
+        for &family in families {
             let payloads =
                 render_filter_payloads(plan, ingress, family, TEST_CHAIN, TEST_INGRESS_CHAIN);
             for (index, payload) in payloads.iter().enumerate() {
@@ -4329,6 +4527,65 @@ exec sleep 30
             );
             assert_eq!(lines.last().map(String::as_str), Some("COMMIT"), "{tool}");
         }
+    }
+
+    /// A kernel without IPv6 gets no IPv6 payload, and the supervisor must
+    /// still come up on the IPv4 rules alone rather than hand the unmatched
+    /// glob to `ip6tables-restore`.
+    #[test]
+    fn a_kernel_without_ipv6_is_enforced_by_the_ipv4_rules_alone() {
+        let mut supervisor = spawn_fake_supervisor_with_families(
+            &EgressPlan::for_proxy(SLIRP_HOST_GATEWAY_IP, 3128),
+            &denied_ingress(),
+            rule_families(false),
+            None,
+            false,
+        );
+        supervisor.publish_sandbox_pid();
+        supervisor.wait_until_ready();
+
+        let calls = supervisor.rule_log();
+        assert_eq!(calls.len(), 1, "{calls:?}");
+        assert!(calls[0].contains("iptables-restore"), "{calls:?}");
+        assert!(!calls[0].contains("ip6tables-restore"), "{calls:?}");
+        let lines = supervisor.payload_lines();
+        assert!(
+            lines.contains(&format!("iptables -A OUTPUT -j {TEST_CHAIN}")),
+            "the IPv4 egress hook must still be installed: {lines:?}"
+        );
+        assert!(
+            lines.iter().all(|line| line.starts_with("iptables ")),
+            "{lines:?}"
+        );
+    }
+
+    /// The IPv6 loop's tolerance of a missing payload must not reach IPv4: an
+    /// absent IPv4 payload means the parent failed, not that the family is
+    /// unnecessary, so the supervisor has to die instead of signalling ready.
+    #[test]
+    fn a_missing_ipv4_payload_still_kills_the_supervisor() {
+        let mut supervisor = spawn_fake_supervisor_with_families(
+            &EgressPlan::for_proxy(SLIRP_HOST_GATEWAY_IP, 3128),
+            &denied_ingress(),
+            &[RuleFamily::V6],
+            None,
+            false,
+        );
+        supervisor.publish_sandbox_pid();
+
+        let status = supervisor.wait_for_exit();
+        assert!(!status.success(), "{status}");
+        assert!(
+            !supervisor.signalled_ready(),
+            "readiness must never follow a missing IPv4 payload"
+        );
+        assert!(
+            !supervisor
+                .rule_log()
+                .iter()
+                .any(|call| call.contains("ip6tables-restore")),
+            "the supervisor must stop at the first failed family"
+        );
     }
 
     /// The inbound chain has to survive the trip through the supervisor, not
@@ -4638,5 +4895,84 @@ exec sleep 30
             supervisor.stderr()
         );
         assert_eq!(supervisor.rule_invocations(), 0);
+    }
+
+    /// A namespace whose supervisor is `script`, every other field inert, for
+    /// exercising the pre-gate liveness check on its own.
+    fn namespace_running(script: &str) -> ProxyNetworkNamespace {
+        let state_dir = tempfile::tempdir().expect("tempdir");
+        let stderr = File::create(state_dir.path().join("supervisor.stderr")).expect("stderr");
+        let supervisor = Command::new("sh")
+            .args(["-c", script])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::from(stderr))
+            .spawn()
+            .expect("spawn supervisor");
+
+        ProxyNetworkNamespace {
+            state_dir,
+            supervisor,
+            exit_writer: None,
+            pid_writer: None,
+            userns: None,
+            hosts: None,
+            liveness_reader: None,
+            transactions: 0,
+            script_timeout_ms: 0,
+        }
+    }
+
+    fn await_exit(namespace: &mut ProxyNetworkNamespace) {
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while Instant::now() < deadline {
+            if namespace.supervisor.try_wait().expect("try_wait").is_some() {
+                return;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        panic!("supervisor did not exit");
+    }
+
+    #[test]
+    fn the_gate_check_passes_while_the_supervisor_is_running() {
+        let mut network = namespace_running("sleep 30");
+
+        assert!(
+            network.check_alive().is_ok(),
+            "a running supervisor must not block the workload"
+        );
+    }
+
+    #[test]
+    fn the_gate_check_refuses_a_supervisor_that_died_after_signalling_readiness() {
+        let mut network = namespace_running("echo 'slirp4netns: crashed' >&2; exit 1");
+        await_exit(&mut network);
+
+        let error = network
+            .check_alive()
+            .expect_err("a dead supervisor must not reach the workload");
+        assert!(
+            error.contains("no network provider"),
+            "the failure must name the lost provider rather than read as a workload \
+             error: {error}"
+        );
+        assert!(
+            error.contains("slirp4netns: crashed"),
+            "the failure must carry what the supervisor wrote: {error}"
+        );
+    }
+
+    /// Slirp carries the sandbox's only route, so its exit code says nothing
+    /// about whether the sandbox still has a network.
+    #[test]
+    fn the_gate_check_refuses_even_a_supervisor_that_exited_cleanly() {
+        let mut network = namespace_running("exit 0");
+        await_exit(&mut network);
+
+        assert!(
+            network.check_alive().is_err(),
+            "a successful exit still leaves the sandbox with no route"
+        );
     }
 }

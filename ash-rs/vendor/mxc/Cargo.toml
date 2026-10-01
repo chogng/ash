@@ -3,12 +3,12 @@ resolver = "3"
 members = ["backends/process_container/common", "core/wxc_common", "backends/bubblewrap/common", "backends/seatbelt/common"]
 
 [workspace.package]
-version = "0.8.0"
+version = "0.9.0"
 edition = "2021"
 license = "MIT"
 
 [patch."https://github.com/microsoft/mxc"]
-appcontainer_common = { path = "backends/process_container/common" }
+process_container_common = { path = "backends/process_container/common" }
 wxc_common = { path = "core/wxc_common" }
 bwrap_common = { path = "backends/bubblewrap/common" }
 seatbelt_common = { path = "backends/seatbelt/common" }
