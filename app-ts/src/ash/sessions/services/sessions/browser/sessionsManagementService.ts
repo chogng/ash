@@ -97,6 +97,11 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this._onDidChange.fire();
 	}
 
+	restoreUntitledSession(session: IUntitledChatSession): void {
+		this._untitledSessions = [session, ...this._untitledSessions.filter(candidate => candidate.untitledSessionId !== session.untitledSessionId)];
+		this._onDidChange.fire();
+	}
+
 	discardUntitledSession(untitledSessionId: string): void {
 		const sessions = this._untitledSessions.filter(session => session.untitledSessionId !== untitledSessionId);
 		if (sessions.length === this._untitledSessions.length) return;

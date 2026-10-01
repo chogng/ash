@@ -10,15 +10,16 @@ import { IAccessibleViewService } from '../../../platform/accessibility/browser/
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
 import type { IChatService, ThreadUpdateEnvelope } from "../../../workbench/services/chat/common/chatService.js";
-import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
+import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import type { IUntitledChatSession } from "../../services/sessions/common/session.js";
 import { SessionsService } from "../../../sessions/services/sessions/browser/sessionsService.js";
-import { IStorageService } from '../../../platform/storage/common/storage.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { ChatTipService, IChatTipService } from '../../../workbench/contrib/chat/browser/chatTipService.js';
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 import { BrowserLifecycleService } from '../../../workbench/services/lifecycle/browser/lifecycleService.js';
-import { readNewChatDraftState, writeNewChatDraftState } from '../../contrib/chat/common/newChatDraftState.js';
+import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState } from '../../contrib/chat/common/newChatDraftState.js';
+import type { SessionsPartOptions } from '../../browser/parts/sessionsPart.js';
 import { builtinLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 import { formatNlsMessage, setNlsResolver, resetNlsResolver } from '../../../nls.js';
 import { ChatAttachmentModel } from '../../../workbench/contrib/chat/browser/attachments/chatAttachmentModel.js';
@@ -75,6 +76,10 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 			activeUntitledSessionId = untitledSession.untitledSessionId;
 			onDidChange.fire();
 			return untitledSession;
+		},
+		restoreUntitledSession(session) {
+			untitledSessions = [session, ...untitledSessions];
+			onDidChange.fire();
 		},
 		selectUntitledSession(untitledSessionId) {
 			activeUntitledSessionId = untitledSessionId;
@@ -154,9 +159,6 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		async commitTurnChange() { return []; },
 		async discardThreadChanges() { return []; },
 	};
-	const viewService = new SessionsService(sessionService);
-	viewService.openNewSession("New code session");
-	viewService.openNewSession("New code session");
 	const contextMenuEvents = new Emitter<void>();
 	const contextMenuService: IContextMenuService = {
 		onDidShowContextMenu: contextMenuEvents.event,
@@ -185,10 +187,14 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	services.registerInstance(INotificationService, notifications);
 	const storage = resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, applicationId: 'test', workspaceId: 'test', flushInterval: 0 }));
 	services.registerInstance(IStorageService, storage);
+	services.registerInstance(ISessionsManagementService, sessionService);
+	const viewService = services.createInstance(SessionsService);
+	viewService.openNewSession("New code session");
+	viewService.openNewSession("New code session");
 	services.registerInstance(IChatTipService, resources.add(services.createInstance(ChatTipService)));
 	services.registerInstance(ILifecycleService, resources.add(new BrowserLifecycleService({ ownerWindow: dom.window as unknown as Window, onError: error => { throw error; } })));
 	const inputs: InstanceType<typeof NewChatInputWidget>[] = [];
-	const part = new SessionsPart(dom.window.document.body, {
+	const part = services.createInstance(SessionsPart, dom.window.document.body, {
 		sessionService,
 		chatService,
 		contextMenuService,
@@ -204,7 +210,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		activateSelection: (selection, page) => viewService.activateSelection(selection, page),
 		closeSelection: (selection, page) => viewService.closeVisibleSelection(selection, page),
 		createNewSession: page => { viewService.openNewSession(undefined, page); },
-	});
+	} satisfies SessionsPartOptions);
 	const updatePart = (): void => {
 		for (const page of ['chat', 'code'] as const) {
 			const selection = viewService.getPageSelection(page);
@@ -265,8 +271,11 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	const codeDraft = await inputs[2]!.captureDraft();
 	assert.ok(codeDraft);
 	assert.deepEqual(codeDraft.draft, separateDraft);
-	assert.deepEqual(readNewChatDraftState(storage, 'chat'), draft);
-	assert.deepEqual(readNewChatDraftState(storage, 'code'), separateDraft);
+	const chatSelection = viewService.getPageSelection('chat').activeSelection;
+	const codeSelection = viewService.activeSelection;
+	assert.ok(chatSelection?.kind === 'untitled' && codeSelection?.kind === 'untitled');
+	assert.deepEqual(readNewChatDraftState(storage, 'chat', `untitled:${chatSelection.session.untitledSessionId}`), draft);
+	assert.deepEqual(readNewChatDraftState(storage, 'code', `untitled:${codeSelection.session.untitledSessionId}`), separateDraft);
 	viewService.openNewSession('Another Code draft');
 	assert.equal(part.domNode.querySelectorAll('.code-composer').length, 2);
 	part.setPage('empty');
@@ -297,25 +306,44 @@ test('Sessions draft state restores text and images while isolating Threads and 
 	const ownerWindow = browserEnvironment.window as unknown as Window;
 	using storage = new BrowserStorageService({ ownerWindow, applicationId: 'draft-test', workspaceId: 'workspace-a', flushInterval: 0 });
 	const draft = { mode: 'debug' as const, text: 'Review this', contexts: [{ id: 'image', kind: 'image', name: 'image.png', content: 'data:image/png;base64,aGVsbG8=' }] };
-	writeNewChatDraftState(storage, 'chat', draft);
+	writeNewChatDraftState(storage, 'chat', draft, 'untitled:first');
 	writeNewChatDraftState(storage, 'chat', { mode: 'plan', text: 'Thread draft', contexts: [] }, 'thread-1');
-	writeNewChatDraftState(storage, 'code', { mode: 'agent', text: 'Code draft', contexts: [] });
+	writeNewChatDraftState(storage, 'code', { mode: 'agent', text: 'Code draft', contexts: [] }, 'untitled:first');
 	writeNewChatDraftState(storage, 'code', { mode: 'agent', text: 'Code Thread draft', contexts: [] }, 'thread-1');
 	await storage.flush();
 	using restored = new BrowserStorageService({ ownerWindow, applicationId: 'draft-test', workspaceId: 'workspace-a', flushInterval: 0 });
-	assert.deepEqual(readNewChatDraftState(restored, 'chat'), draft);
+	assert.deepEqual(readNewChatDraftState(restored, 'chat', 'untitled:first'), draft);
 	assert.deepEqual(readNewChatDraftState(restored, 'chat', 'thread-1'), { mode: 'plan', text: 'Thread draft', contexts: [] });
 	assert.equal(readNewChatDraftState(restored, 'chat', 'thread-2'), undefined);
-	assert.equal(readNewChatDraftState(restored, 'code')?.text, 'Code draft');
+	assert.equal(readNewChatDraftState(restored, 'code', 'untitled:first')?.text, 'Code draft');
 	assert.equal(readNewChatDraftState(restored, 'code', 'thread-1')?.text, 'Code Thread draft');
 	restored.switchWorkspace('workspace-b');
-	assert.equal(readNewChatDraftState(restored, 'chat'), undefined);
-	assert.equal(readNewChatDraftState(restored, 'code'), undefined);
+	assert.equal(readNewChatDraftState(restored, 'chat', 'untitled:first'), undefined);
+	assert.equal(readNewChatDraftState(restored, 'code', 'untitled:first'), undefined);
 	restored.switchWorkspace('workspace-a');
-	writeNewChatDraftState(restored, 'chat', undefined);
-	assert.equal(readNewChatDraftState(restored, 'chat'), undefined);
+	writeNewChatDraftState(restored, 'chat', undefined, 'untitled:first');
+	assert.equal(readNewChatDraftState(restored, 'chat', 'untitled:first'), undefined);
 	assert.equal(readNewChatDraftState(restored, 'chat', 'thread-1')?.text, 'Thread draft');
-	assert.equal(readNewChatDraftState(restored, 'code')?.text, 'Code draft');
+	assert.equal(readNewChatDraftState(restored, 'code', 'untitled:first')?.text, 'Code draft');
+});
+
+test('untitled draft migration moves the page draft once and isolates subsequent pane identities', async () => {
+	const ownerWindow = browserEnvironment.window as unknown as Window;
+	using storage = new BrowserStorageService({ ownerWindow, applicationId: 'draft-migration-test', workspaceId: 'sessions', flushInterval: 0 });
+	const legacy = { mode: 'agent' as const, text: 'Old page draft', contexts: [] };
+	storage.store('sessions.draftState', JSON.stringify(legacy), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	migrateNewChatDraftState(storage, 'chat', 'first');
+	migrateNewChatDraftState(storage, 'chat', 'second');
+	writeNewChatDraftState(storage, 'chat', { ...legacy, text: 'Second pane draft' }, 'untitled:second');
+	await storage.flush();
+	using restored = new BrowserStorageService({ ownerWindow, applicationId: 'draft-migration-test', workspaceId: 'sessions', flushInterval: 0 });
+	assert.deepEqual({ legacy: restored.get('sessions.draftState', StorageScope.WORKSPACE), first: readNewChatDraftState(restored, 'chat', 'untitled:first'), second: readNewChatDraftState(restored, 'chat', 'untitled:second') }, {
+		legacy: undefined, first: legacy, second: { ...legacy, text: 'Second pane draft' },
+	});
+	const conflict = JSON.stringify({ ...legacy, text: 'Conflicting legacy draft' });
+	restored.store('sessions.draftState', conflict, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	assert.throws(() => migrateNewChatDraftState(restored, 'chat', 'first'), /Conflicting/);
+	assert.equal(restored.get('sessions.draftState', StorageScope.WORKSPACE), conflict);
 });
 
 test('Sessions file acquisition preserves valid UTF-8 and rejects binary content without adding it', async () => {

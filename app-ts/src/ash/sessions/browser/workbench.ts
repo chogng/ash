@@ -28,7 +28,7 @@ import { ILanguageFeaturesService } from '../../editor/common/services/languageF
 import { LanguageFeaturesService } from '../../editor/common/services/languageFeaturesService.js';
 import { NewChatInputWidget } from '../contrib/chat/browser/newChatInput.js';
 import { ChatTipService, IChatTipService } from '../../workbench/contrib/chat/browser/chatTipService.js';
-import { readNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
+import { migrateNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
 import { IAccessibilityService } from '../../platform/accessibility/common/accessibility.js';
 import { AccessibilityService } from '../../platform/accessibility/browser/accessibilityService.js';
 import { ILogService } from '../../platform/log/common/log.js';
@@ -109,7 +109,7 @@ import { ISessionsService, SessionsService } from "../services/sessions/browser/
 import { registerLayoutActions } from './layoutActions.js';
 import { AuxiliaryBarPart } from "./parts/auxiliaryBarPart.js";
 import { ActivityBarPart, type SessionsActivityPage } from './parts/activitybar/activityBarPart.js';
-import { SessionsPart } from "./parts/sessionsPart.js";
+import { SessionsPart, type SessionsPartOptions } from "./parts/sessionsPart.js";
 import { SidebarPart } from "./parts/sidebarPart.js";
 import { TitlebarPart } from "./parts/titlebar/titlebarPart.js";
 
@@ -187,13 +187,15 @@ export class Workbench extends Disposable {
 		})));
 		const teams = new TeamsManagementService(new AppServerTeamsProvider(options.api.teams));
 		services.registerInstance(ITeamsManagementService, teams);
-		const view = this.sessionsView = this._register(new SessionsService(sessions));
 		const storage = this._register(new BrowserStorageService({
 			ownerWindow,
 			applicationId: WorkbenchModeRegistry.get(options.modeId).storageNamespace,
 			workspaceId: "sessions",
 			profileId: options.profile.id,
 		}));
+		services.registerInstance(IStorageService, storage);
+		services.registerInstance(ISessionsManagementService, sessions);
+		const view = this.sessionsView = this._register(services.createInstance(SessionsService));
 		const chat = this._register(new ChatService({
 			modelApi: options.api.model,
 			threadApi: options.api.thread,
@@ -205,12 +207,10 @@ export class Workbench extends Disposable {
 			configurationService,
 			storageService: storage,
 		}));
-		services.registerInstance(ISessionsManagementService, sessions);
 		services.registerInstance(ISessionsService, view);
 		services.registerInstance(IChatService, chat);
 		const accountService = this._register(new AppServerAccountService(options.api.accounts, options.api.events));
 		services.registerInstance(IAccountService, accountService);
-		services.registerInstance(IStorageService, storage);
 		services.registerInstance(IChatTipService, this._register(services.createInstance(ChatTipService)));
 		this.lifecycleService = this._register(options.lifecycleService);
 		services.registerInstance(ILifecycleService, this.lifecycleService);
@@ -361,8 +361,7 @@ export class Workbench extends Disposable {
 			if (event.affectsConfiguration(AccessibilityVerbositySettingId.SessionsActivityBar)) updateActivityBarHelpHint();
 		}));
 		updateActivityBarHelpHint();
-		const restoredDraftPages = new Set<'chat' | 'code'>();
-		sessionsPart = this.sessionsPart = this._register(new SessionsPart(this.domNode, {
+		sessionsPart = this.sessionsPart = this._register(services.createInstance(SessionsPart, this.domNode, {
 			sessionService: sessions,
 			chatService: chat,
 			dictation: options.api.dictation,
@@ -372,14 +371,20 @@ export class Workbench extends Disposable {
 			notifications: notificationService,
 			commandService,
 			createInputPart: (container, delegate, model, page) => {
-				const draft = model.untitledSessionId && !restoredDraftPages.has(page) ? readNewChatDraftState(storage, page) : undefined;
-				if (model.untitledSessionId) restoredDraftPages.add(page);
-				return services.createInstance(NewChatInputWidget, container, delegate, model, options.api.dictation, draft, page);
+				if (model.untitledSessionId) {
+					migrateNewChatDraftState(storage, page, model.untitledSessionId);
+				}
+				return services.createInstance(NewChatInputWidget, container, delegate, model, options.api.dictation, undefined, page);
 			},
 			activateSelection: (selection, page) => view.activateSelection(selection, page),
-			closeSelection: (selection, page) => view.closeVisibleSelection(selection, page),
+			closeSelection: (selection, page) => {
+				view.closeVisibleSelection(selection, page);
+				if (selection.kind === 'untitled') {
+					writeNewChatDraftState(storage, page, undefined, `untitled:${selection.session.untitledSessionId}`);
+				}
+			},
 			createNewSession: page => { view.openNewSession(page === 'code' ? 'New code session' : 'New chat', page); },
-		}));
+		} satisfies SessionsPartOptions));
 		const updateSessionsPart = (): void => {
 			for (const page of ['chat', 'code'] as const) {
 				const selection = view.getPageSelection(page);

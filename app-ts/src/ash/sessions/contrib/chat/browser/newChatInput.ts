@@ -1,6 +1,7 @@
 import './media/chatInput.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
+import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize, onDidChangeNls } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
@@ -33,12 +34,13 @@ export class NewChatInputWidget extends ChatInputPart {
 	private readonly heading: HTMLHeadingElement;
 	private submittedMessage = false;
 	private displayedThreadId: string | undefined;
+	private displayedDraftId: string;
 	private readonly contextAttachments: NewChatContextAttachments;
 	private readonly tips: ChatInputTipPresenter;
 	private readonly permissionButton: HTMLButtonElement;
 	private draftVisible = false;
 	private restoringDraft = false;
-	private readonly draftWriteRevisions = new Map<string | undefined, number>();
+	private readonly draftWriteRevisions = new Map<string, number>();
 	private readonly draftWrites = new Set<Promise<void>>();
 	private readonly draftNotifications: INotificationService;
 
@@ -144,7 +146,8 @@ export class NewChatInputWidget extends ChatInputPart {
 		this.heading.textContent = localize('sessions.chat.welcome', 'What can we work on?');
 		this.element.prepend(this.heading);
 		this.displayedThreadId = model.threadId;
-		const storedDraft = model.threadId ? readNewChatDraftState(storage, this.page, model.threadId) : initialDraft;
+		this.displayedDraftId = model.threadId ?? `untitled:${model.untitledSessionId!}`;
+		const storedDraft = readNewChatDraftState(storage, this.page, this.displayedDraftId) ?? initialDraft;
 		if (storedDraft) this.restoreDraft(storedDraft);
 		this._register(this.onDidChangeInput(() => {
 			if (!this.restoringDraft) {
@@ -153,6 +156,12 @@ export class NewChatInputWidget extends ChatInputPart {
 		}));
 		this._register(lifecycle.onWillShutdown(event => {
 			event.join(Promise.all([...this.draftWrites]).then(() => storage.flush()), 'Sessions composer draft');
+		}));
+		this._register(toDisposable(() => {
+			// A pane can close while attachment resolution is still running; it must not recreate its draft.
+			for (const [identity, revision] of this.draftWriteRevisions) {
+				this.draftWriteRevisions.set(identity, revision + 1);
+			}
 		}));
 		this._register(model.onDidChange(() => {
 			approvalMode.set(this.model.inputState.approvalMode);
@@ -164,15 +173,16 @@ export class NewChatInputWidget extends ChatInputPart {
 					this.restoringDraft = true;
 					this.input.value = '';
 					this.attachmentModel.clear();
-					const draft = readNewChatDraftState(storage, this.page, model.threadId);
+					const draft = readNewChatDraftState(storage, this.page, model.threadId ?? `untitled:${model.untitledSessionId!}`);
 					if (draft) this.restoreDraft(draft);
 					this.restoringDraft = false;
 				} else {
 					// A successful materialization consumes the new-session identity and its persisted draft.
-					this.draftWriteRevisions.set(undefined, (this.draftWriteRevisions.get(undefined) ?? 0) + 1);
-					writeNewChatDraftState(storage, this.page, undefined);
+					this.draftWriteRevisions.set(this.displayedDraftId, (this.draftWriteRevisions.get(this.displayedDraftId) ?? 0) + 1);
+					writeNewChatDraftState(storage, this.page, undefined, this.displayedDraftId);
 				}
 				this.displayedThreadId = model.threadId;
+				this.displayedDraftId = model.threadId ?? `untitled:${model.untitledSessionId!}`;
 				this.saveDraft();
 			}
 			this.updateConversation();
@@ -202,22 +212,22 @@ export class NewChatInputWidget extends ChatInputPart {
 	}
 
 	private async writeDraft(): Promise<void> {
-		const threadId = this.displayedThreadId;
-		const revision = (this.draftWriteRevisions.get(threadId) ?? 0) + 1;
-		this.draftWriteRevisions.set(threadId, revision);
+		const draftId = this.displayedDraftId;
+		const revision = (this.draftWriteRevisions.get(draftId) ?? 0) + 1;
+		this.draftWriteRevisions.set(draftId, revision);
 		const text = this.input.value;
 		const mode = this.model.inputState.mode;
 		const attachments = this.attachmentModel.attachments;
 		if (attachments.length === 0) {
-			writeNewChatDraftState(this.storage, this.page, { mode, text, contexts: [] }, threadId);
+			writeNewChatDraftState(this.storage, this.page, { mode, text, contexts: [] }, draftId);
 			return;
 		}
 		const contexts = await Promise.all(attachments.map(async attachment => ({
 			id: attachment.id, kind: attachment.kind, name: attachment.name,
 			content: (await attachment.resolve()).content,
 		})));
-		if (revision !== this.draftWriteRevisions.get(threadId)) return;
-		writeNewChatDraftState(this.storage, this.page, { mode, text, contexts }, threadId);
+		if (revision !== this.draftWriteRevisions.get(draftId)) return;
+		writeNewChatDraftState(this.storage, this.page, { mode, text, contexts }, draftId);
 	}
 
 	private updateConversation(): void {

@@ -95,6 +95,7 @@ class PendingSessionService implements ISessionsManagementService {
 	}
 
 	selectUntitledSession(untitledSessionId: string): void { this._activeUntitledSessionId = untitledSessionId; }
+	restoreUntitledSession(session: IUntitledChatSession): void { this._untitledSessions = [session, ...this._untitledSessions]; }
 	discardUntitledSession(_untitledSessionId: string): void {}
 	setUntitledSessionModel(_untitledSessionId: string, _model: ModelRef): void {}
 	setUntitledSessionDefaultModel(_untitledSessionId: string, _model: ModelRef | undefined): void {}

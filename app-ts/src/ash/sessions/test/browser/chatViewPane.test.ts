@@ -709,7 +709,8 @@ test('Code sending preserves the Chat draft when pages switch during first-sessi
 	});
 	using sessions = new SessionsManagementService(fake.api);
 	await sessions.initialize();
-	using view = new SessionsService(sessions);
+	editorServices.registerInstance(ISessionsManagementService, sessions);
+	using view = editorServices.createInstance(SessionsService);
 	await view.initialize();
 	view.selectPage('code');
 	const draft = view.activeSelection;
@@ -760,7 +761,7 @@ test('Code sending preserves the Chat draft when pages switch during first-sessi
 	assert.equal(widget.element.querySelector('.ash-chat-input-part'), input);
 	assert.equal(widget.sessionId, 'session-1');
 	assert.deepEqual((await chatWidget.captureDraft())?.draft, chatDraft);
-	assert.deepEqual(readNewChatDraftState(composerStorage, 'chat'), chatDraft);
+	assert.deepEqual(readNewChatDraftState(composerStorage, 'chat', `untitled:${chatSelection.session.untitledSessionId}`), chatDraft);
 	assert.equal(readNewChatDraftState(composerStorage, 'chat', 'thread-1'), undefined);
 	assert.equal(view.activeSelection?.kind, 'untitled');
 	assert.equal(chatWidget.sessionId, undefined);

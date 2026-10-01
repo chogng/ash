@@ -1,5 +1,8 @@
 import { Direction, Grid, Sizing, type IView } from '../../../base/browser/ui/grid/grid.js';
-import { Disposable } from '../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable } from '../../../base/common/lifecycle.js';
+import { isRecord } from '../../../base/common/types.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
+import type { SessionsPage } from '../../services/sessions/browser/sessionsService.js';
 
 export interface ISessionGridEntry {
 	readonly id: string;
@@ -8,16 +11,30 @@ export interface ISessionGridEntry {
 
 /** Owns split geometry; its caller owns membership, active identity, and view lifetimes. */
 export class SessionGridLayout extends Disposable {
-	public readonly element: HTMLDivElement;
-	private readonly grid: Grid<IView>;
+	private readonly gridResource = this._register(new MutableDisposable<Grid<IView>>());
+	private get grid(): Grid<IView> { return this.gridResource.value!; }
+	public get element(): HTMLDivElement { return this.grid.element; }
 	private views: readonly IView[];
+	private entries: readonly ISessionGridEntry[] = [];
+	private pendingWidths: ReadonlyMap<string, number> | undefined;
+	private readonly storageKey: string;
+	private dimension: { width: number; height: number } | undefined;
 
-	constructor(container: HTMLElement, initialView: IView) {
+	constructor(private readonly container: HTMLElement, initialView: IView, page: SessionsPage, @IStorageService private readonly storage: IStorageService) {
 		super();
-		this.grid = this._register(new Grid<IView>(container, { type: 'leaf', view: initialView, size: 800 }, { sashPresentation: { type: 'inset', gap: 8 } }));
-		this.element = this.grid.element;
+		this.storageKey = `sessions.gridState.${page}`;
+		const raw = storage.get(this.storageKey, StorageScope.WORKSPACE);
+		this.pendingWidths = raw === undefined ? undefined : parseStoredWidths(JSON.parse(raw));
+		this.gridResource.value = new Grid<IView>(container, { type: 'leaf', view: initialView, size: 800 }, { sashPresentation: { type: 'inset', gap: 8 } });
 		this.element.classList.add('ash-sessions-chat-grid');
 		this.views = [initialView];
+		this._register(storage.onWillSaveState(() => {
+			if (this.pendingWidths || !this.dimension || this.dimension.width <= 0 || this.entries.length === 0) {
+				return;
+			}
+			const widths = this.entries.map(entry => ({ id: entry.id, width: this.grid.getViewSize(entry.view).width }));
+			this.storage.store(this.storageKey, JSON.stringify({ version: 1, widths }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		}));
 	}
 
 	public reconcile(entries: readonly ISessionGridEntry[], active: string): void {
@@ -51,12 +68,57 @@ export class SessionGridLayout extends Disposable {
 			}
 		}
 		this.views = nextViews;
+		this.entries = entries.filter(entry => entry.id !== 'empty');
+		if (this.dimension) {
+			this.restoreWidths(this.dimension.width, this.dimension.height);
+		}
 		if (restoreFocus && focused.isConnected) {
 			focused.focus({ preventScroll: true });
 		}
 	}
 
 	public layout(width: number, height: number): void {
+		this.dimension = { width, height };
+		this.restoreWidths(width, height);
 		this.grid.layout(width, height);
 	}
+
+	private restoreWidths(width: number, height: number): void {
+		if (!this.pendingWidths || this.entries.length === 0 || width <= 0 || height <= 0) {
+			return;
+		}
+		const sizes = this.entries.map(entry => this.pendingWidths!.get(entry.id) ?? this.grid.getViewSize(entry.view).width);
+		const total = sizes.reduce((sum, size) => sum + size, 0);
+		const focused = this.element.ownerDocument.activeElement;
+		const restoreFocus = focused instanceof this.element.ownerDocument.defaultView!.HTMLElement && this.entries.some(entry => entry.view.element.contains(focused));
+		this.pendingWidths = undefined;
+		// Replace only the initial geometry, keeping the page's already-restored widgets alive.
+		this.gridResource.clear();
+		this.gridResource.value = new Grid<IView>(this.container, {
+			type: 'branch',
+			orientation: 'horizontal',
+			size: width,
+			children: this.entries.map((entry, index) => ({ type: 'leaf', view: entry.view, size: sizes[index]! / total * width })),
+		}, { sashPresentation: { type: 'inset', gap: 8 } });
+		this.element.classList.add('ash-sessions-chat-grid');
+		this.grid.layout(width, height);
+		if (restoreFocus && focused.isConnected) {
+			focused.focus({ preventScroll: true });
+		}
+	}
+}
+
+function parseStoredWidths(value: unknown): ReadonlyMap<string, number> {
+	if (!isRecord(value) || value.version !== 1 || !Array.isArray(value.widths) || value.widths.length === 0) {
+		throw new TypeError('Invalid stored Sessions grid state');
+	}
+	const widths = new Map<string, number>();
+	for (const entry of value.widths) {
+		if (!isRecord(entry) || typeof entry.id !== 'string' || entry.id.length === 0 || widths.has(entry.id)
+			|| typeof entry.width !== 'number' || !Number.isFinite(entry.width) || entry.width <= 0) {
+			throw new TypeError('Invalid stored Sessions pane width');
+		}
+		widths.set(entry.id, entry.width);
+	}
+	return widths;
 }

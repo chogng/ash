@@ -70,3 +70,96 @@ test('Sessions shared layout preserves user geometry across pages, resize and re
 	await input?.dispose();
 	expect(failures).toEqual([]);
 });
+
+test('Sessions restores independent pane arrangements, active selections and drafts after reload', async ({ application, target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code');
+	let page = workbench.page;
+	if (target.kind === 'browser') {
+		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+	} else {
+		if (!('windows' in application)) throw new Error('Expected Electron windows');
+		const opened = application.waitForEvent('window');
+		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
+		page = await opened;
+	}
+	const failures: string[] = [];
+	page.on('pageerror', error => failures.push(error.message));
+	await page.setViewportSize({ width: 1_900, height: 950 });
+	const navigation = page.locator('.ash-sessions-activity-content');
+	const panes = page.locator('.ash-sessions-chat-view:visible .ash-sessions-chat-slot');
+	const add = page.locator('.ash-sessions-list-controls').getByRole('button', { name: 'New session', exact: true });
+	const typeDraft = async (text: string): Promise<void> => {
+		const editor = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
+		await editor.waitForEditorFocus();
+		await editor.waitForTypeInEditor(text);
+	};
+	const drag = async (delta: number): Promise<void> => {
+		const sash = (await page.locator('.ash-sessions-chat-view:visible .ash-sash').first().boundingBox())!;
+		await page.mouse.move(sash.x + sash.width / 2, sash.y + sash.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(sash.x + sash.width / 2 + delta, sash.y + sash.height / 2, { steps: 5 });
+		await page.mouse.up();
+	};
+	const snapshot = async (): Promise<{ identity: string | undefined; active: boolean; text: string; width: number }[]> => panes.evaluateAll(elements => elements.map(element => {
+		const chat = element.querySelector<HTMLElement>('.ash-chat')!;
+		return {
+			identity: chat.dataset.untitledSessionId ?? chat.dataset.sessionId,
+			active: element.classList.contains('active'),
+			text: [...element.querySelectorAll('.view-lines > .view-line .stanza-editor-line-text')].map(line => line.textContent).join('\n').replace(/\u00a0/g, ' '),
+			width: element.getBoundingClientRect().width,
+		};
+	}));
+	await typeDraft('Chat first draft');
+	await add.click();
+	await typeDraft('Chat second draft');
+	await add.click();
+	await typeDraft('Chat third draft');
+	await expect(panes).toHaveCount(3);
+	await panes.first().locator('.ash-sessions-chat-slot-title').click();
+	const beforeDrag = (await panes.first().boundingBox())!.width;
+	await drag(-80);
+	await expect.poll(async () => (await panes.first().boundingBox())!.width).toBeLessThan(beforeDrag - 50);
+	const chat = await snapshot();
+	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await typeDraft('Code first draft');
+	await add.click();
+	await typeDraft('Code second draft');
+	await expect(panes).toHaveCount(2);
+	await drag(-60);
+	const code = await snapshot();
+	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
+	await page.reload({ waitUntil: 'domcontentloaded' });
+	await expect(panes).toHaveCount(3);
+	await expect.poll(async () => (await snapshot()).map(({ width, ...state }) => state)).toEqual(chat.map(({ width, ...state }) => state));
+	for (let index = 0; index < chat.length; index++) {
+		expect(Math.abs((await panes.nth(index).boundingBox())!.width - chat[index]!.width)).toBeLessThanOrEqual(1);
+	}
+	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(panes).toHaveCount(2);
+	await expect.poll(async () => (await snapshot()).map(({ width, ...state }) => state)).toEqual(code.map(({ width, ...state }) => state));
+	for (let index = 0; index < code.length; index++) {
+		expect(Math.abs((await panes.nth(index).boundingBox())!.width - code[index]!.width)).toBeLessThanOrEqual(1);
+	}
+	await panes.first().locator('.ash-sessions-chat-slot-close').click();
+	await expect(panes).toHaveCount(1);
+	await page.reload({ waitUntil: 'domcontentloaded' });
+	await expect(panes).toHaveCount(3);
+	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(panes).toHaveCount(1);
+	await new Editor(panes.first()).waitForEditorContents(text => text === 'Code second draft');
+	await expect.poll(async () => page.evaluate(identities => {
+		for (let index = 0; index < localStorage.length; index++) {
+			const name = localStorage.key(index)!;
+			if (!name.endsWith('.storage.workspace.sessions')) continue;
+			const state = JSON.parse(localStorage.getItem(name)!);
+			if (state.entries['sessions.viewState']) {
+				return {
+					removed: Boolean(state.entries[`sessions.codeDraftState:untitled:${identities[0]}`]),
+					retained: Boolean(state.entries[`sessions.codeDraftState:untitled:${identities[1]}`]),
+				};
+			}
+		}
+		return undefined;
+	}, code.map(pane => pane.identity))).toEqual({ removed: false, retained: true });
+	expect(failures).toEqual([]);
+});

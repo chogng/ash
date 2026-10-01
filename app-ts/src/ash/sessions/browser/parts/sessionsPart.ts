@@ -8,7 +8,8 @@ import type { IChatService } from "../../../workbench/services/chat/common/chatS
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import { WorkbenchPart } from "../../../workbench/browser/part.js";
 import type { SessionsViewSelection, SessionsPage } from "../../services/sessions/browser/sessionsService.js";
-import { SessionsChatView } from "./sessionsChatView.js";
+import { SessionsChatView, type SessionsChatViewOptions } from "./sessionsChatView.js";
+import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import type { IChatInputPart } from '../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import type { ChatInputDelegate } from '../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import type { ChatWidgetModel } from '../chatWidgetModel.js';
@@ -44,7 +45,7 @@ export class SessionsPart extends WorkbenchPart {
 
 	override get minimumWidth(): number { return 420; }
 
-	constructor(container: HTMLElement, options: SessionsPartOptions) {
+	constructor(container: HTMLElement, options: SessionsPartOptions, @IInstantiationService services: IInstantiationService) {
 		super(container, "sessions");
 		const ownerDocument = container.ownerDocument;
 		this.header = h(ownerDocument, "div");
@@ -52,7 +53,8 @@ export class SessionsPart extends WorkbenchPart {
 		this.heading = h(ownerDocument, "h1");
 		this.description = h(ownerDocument, "p");
 		this.header.append(this.heading, this.description);
-		const createView = (page: SessionsPage, container: HTMLElement): SessionsChatView => this._register(new SessionsChatView(container, {
+		const createView = (page: SessionsPage, container: HTMLElement): SessionsChatView => this._register(services.createInstance(SessionsChatView, container, {
+			page,
 			chatService: options.chatService,
 			dictation: options.dictation,
 			sessionService: options.sessionService,
@@ -65,7 +67,7 @@ export class SessionsPart extends WorkbenchPart {
 			activateSelection: selection => options.activateSelection(selection, page),
 			closeSelection: selection => options.closeSelection(selection, page),
 			createNewSession: () => options.createNewSession(page),
-		}));
+		} satisfies SessionsChatViewOptions));
 		this.contentDomNode.prepend(this.header);
 		this.codePage = h(ownerDocument, 'div');
 		this.codePage.className = 'ash-sessions-code-page';
@@ -112,6 +114,10 @@ export class SessionsPart extends WorkbenchPart {
 	}
 
 	override layout(dimension: Dimension): void {
+		// Empty pages resize the Part, not the retained Chat or Code geometry beneath it.
+		if (this.page === 'empty') {
+			return;
+		}
 		const view = this.views[this.page === "code" ? "code" : "chat"];
 		const bounds = view.domNode.getBoundingClientRect();
 		view.layout(new Dimension(bounds.width || dimension.width, bounds.height || dimension.height));

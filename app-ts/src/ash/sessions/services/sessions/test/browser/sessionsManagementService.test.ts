@@ -6,7 +6,7 @@ import type { IServerEventApi } from "../../../../../platform/app-server/common/
 import type { ISessionApi, ITurnApi } from "../../../../../platform/sessions/common/sessionApi.js";
 import { SessionsManagementService } from "../../browser/sessionsManagementService.js";
 import { AppServerSessionsProvider } from "../../../../contrib/providers/appServer/browser/appServerSessionsProvider.js";
-import type { SessionExecutionTarget, SessionWorkspaceSelection } from "../../common/session.js";
+import type { IUntitledChatSession, SessionExecutionTarget, SessionWorkspaceSelection } from "../../common/session.js";
 
 test("management initializes the catalog from provider-owned Session mapping", async () => {
 	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
@@ -44,6 +44,18 @@ test("an untitled Session keeps its selected directory when the Agents window ch
 		{ type: 'local', root: '/work/first' },
 		{ type: 'local', root: '/work/second' },
 	]);
+});
+
+test('restoring an untitled identity keeps its workspace, model and Agent without creating a backend Session', () => {
+	const fake = sessionHost([]);
+	using service = new SessionsManagementService(new AppServerSessionsProvider(fake.host));
+	const draft: IUntitledChatSession = {
+		untitledSessionId: 'saved-draft', title: 'Saved task', model: { provider: 'provider', model: 'model' }, modelSelectionKind: 'manual',
+		agent: { name: 'worker', description: 'Implementation', sourceId: 'workspace-agent' }, workspace: { type: 'ssh', host: 'build', root: '/work/project' },
+	};
+	service.restoreUntitledSession(draft);
+	service.selectUntitledSession(draft.untitledSessionId);
+	assert.deepEqual({ active: service.activeUntitledSession, sessions: service.sessions, backend: fake.sessions }, { active: draft, sessions: [], backend: [] });
 });
 
 test("a multi-root Workspace sends the selected folder as the execution target", async () => {

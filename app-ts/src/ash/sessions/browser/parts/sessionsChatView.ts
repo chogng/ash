@@ -15,7 +15,8 @@ import type { IChatInputPart } from '../../../workbench/contrib/chat/browser/wid
 import type { IChatService } from "../../../workbench/services/chat/common/chatService.js";
 import type { SessionId } from "../../services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
-import type { SessionsViewSelection } from "../../services/sessions/browser/sessionsService.js";
+import type { SessionsViewSelection, SessionsPage } from "../../services/sessions/browser/sessionsService.js";
+import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import type { IDictationService } from '../../../platform/dictation/common/dictationService.js';
 import type { INotificationService } from '../../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../../platform/native/common/nativeHost.js';
@@ -26,6 +27,7 @@ import { SessionGridLayout, type ISessionGridEntry } from './sessionGridLayout.j
 let sessionsChatPaneInstanceId = 0;
 
 export interface SessionsChatViewOptions {
+	readonly page: SessionsPage;
 	readonly chatService: IChatService;
 	readonly dictation?: IDictationService;
 	readonly sessionService: ISessionsManagementService;
@@ -63,7 +65,7 @@ export class SessionsChatView extends Disposable {
 	private readonly closeSelection: (selection: SessionsViewSelection) => void;
 	private readonly createNewSession: () => void;
 
-	constructor(container: HTMLElement, options: SessionsChatViewOptions) {
+	constructor(container: HTMLElement, options: SessionsChatViewOptions, @IInstantiationService services: IInstantiationService) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.chatService = options.chatService;
@@ -82,7 +84,7 @@ export class SessionsChatView extends Disposable {
 		this.domNode.className = "ash-sessions-chat-view";
 		container.append(this.domNode);
 		this.empty = new SessionsChatEmptyView(this.domNode);
-		this.grid = this._register(new SessionGridLayout(this.domNode, this.empty));
+		this.grid = this._register(services.createInstance(SessionGridLayout, this.domNode, this.empty, options.page));
 		this._register(toDisposable(() => {
 			for (const entry of this.entries.values()) entry.dispose();
 			this.entries.clear();
@@ -211,7 +213,7 @@ class SessionsChatEmptyView implements IView {
 	}
 }
 
-interface SessionsChatGridEntryOptions extends SessionsChatViewOptions {
+interface SessionsChatGridEntryOptions extends Omit<SessionsChatViewOptions, 'page'> {
 	readonly selection: SessionsViewSelection;
 }
 
