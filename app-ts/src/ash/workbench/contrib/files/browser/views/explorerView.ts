@@ -124,10 +124,10 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			this.tree.updateOptions({ twistieAdditionalCssClass: item => {
 				// Nested file groups keep their arrow even when the theme hides directory arrows.
 				if (item.kind !== FileKind.Directory && item.children?.length) {
-					return undefined;
+					return 'ash-tree-twistie-with-icon-gap';
 				}
 				const hideTwistie = theme.hidesExplorerArrows || theme.hasFileIcons && !theme.hasFolderIcons && item.kind !== FileKind.Directory;
-				return hideTwistie ? 'ash-tree-twistie-hidden' : undefined;
+				return hideTwistie ? 'ash-tree-twistie-hidden' : 'ash-tree-twistie-with-icon-gap';
 			} });
 		};
 		updateTwistieLayout();

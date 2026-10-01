@@ -141,6 +141,7 @@ export class FilesRenderer extends Disposable {
 		const label = resources.add(this.labels.create(content));
 		const decoration = provideDecorations(item);
 		label.setFile(item.resource, {
+			hidePath: true,
 			fileKind: item.kind,
 			fileDecorations: { colors: true, badges: true },
 			...(decoration ? {

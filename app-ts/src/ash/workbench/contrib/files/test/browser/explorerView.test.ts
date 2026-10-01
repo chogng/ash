@@ -236,6 +236,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 			true,
 		);
 		assert.deepEqual(rowLabels(pane.element), ["src", "README.md"]);
+		assert.equal(pane.element.querySelector('.ash-icon-label-description'), null);
 		assert.match(explorerService.getAccessibleContent() ?? '', /README\.md/);
 		assert.match(pane.element.querySelector('.ash-tree')?.getAttribute('aria-label') ?? '', /Alt\+F1/);
 		assert.equal(
@@ -269,6 +270,9 @@ test("ExplorerView opens workspace files on single click", async () => {
 		assert.ok(mainRow);
 		const readmeRow = [...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => rowLabel(row) === 'README.md');
 		assert.ok(readmeRow);
+		assert.equal(mainRow.querySelector('.ash-icon-label-description'), null);
+		assert.equal(mainRow.querySelector('.ash-icon-label')?.getAttribute('aria-label'), 'src/main.ts');
+		assert.equal(sourceFolder.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-with-icon-gap'), true);
 		assert.equal(readmeRow.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-hidden'), true);
 		assert.equal(mainRow.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-hidden'), true);
 		assert.equal(sourceFolder.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-hidden'), false);

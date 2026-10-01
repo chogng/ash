@@ -53,16 +53,24 @@ test('Explorer tree guides align with ancestor arrows and settings update withou
 	await leaf.hover();
 	await expect(guide).not.toHaveCSS('border-left-color', 'rgba(0, 0, 0, 0)');
 	const geometry = async () => {
-		const arrow = await parent.locator('.ash-tree-twistie').boundingBox();
-		const childArrow = await child.locator('.ash-tree-twistie').boundingBox();
+		const arrow = await parent.locator('.ash-tree-twistie .ash-icon').boundingBox();
+		const childArrow = await child.locator('.ash-tree-twistie .ash-icon').boundingBox();
 		const line = await guide.boundingBox();
 		const rootContent = await rootFile.locator('.ash-tree-contents').boundingBox();
 		const leafContent = await leaf.locator('.ash-tree-contents').boundingBox();
-		return { alignment: line!.x - arrow!.x - arrow!.width / 2, indent: childArrow!.x - arrow!.x, rootContent: rootContent!.x - arrow!.x, leafContent: leafContent!.x - childArrow!.x };
+		const folderText = await parent.locator('.ash-icon-label-text').boundingBox();
+		const childText = await child.locator('.ash-icon-label-text').boundingBox();
+		const rootText = await rootFile.locator('.ash-icon-label-text').boundingBox();
+		const leafText = await leaf.locator('.ash-icon-label-text').boundingBox();
+		return { alignment: line!.x - arrow!.x - arrow!.width / 2, indent: childArrow!.x - arrow!.x, rootContent: rootContent!.x - arrow!.x, leafContent: leafContent!.x - childArrow!.x, rootText: rootText!.x - folderText!.x, leafText: leafText!.x - childText!.x };
 	};
-	const reservedTwistieWidth = hasFileIcons ? 0 : 16;
+	const reservedTwistieWidth = hasFileIcons ? 0 : 20;
 	if (hasFileIcons) await expect(rootFile.locator('.ash-file-icon')).toBeVisible();
-	expect(await geometry()).toEqual({ alignment: 0, indent: 8, rootContent: reservedTwistieWidth, leafContent: 8 + reservedTwistieWidth });
+	expect(await geometry()).toEqual({ alignment: 0, indent: 8, rootContent: reservedTwistieWidth, leafContent: 8 + reservedTwistieWidth, rootText: 0, leafText: 8 });
+	await expect(explorer.locator('.ash-icon-label-description:visible')).toHaveCount(0);
+	await leaf.locator('.ash-icon-label').hover();
+	await expect(page.locator('.ash-hover').filter({ hasText: /tree-parent\/tree-child\/leaf\.txt/u })).toBeVisible();
+	await page.mouse.move(0, 0);
 	const leafRow = await leaf.elementHandle();
 	await leaf.locator('.ash-tree-contents').click();
 	await expect(leaf.locator('.ash-tree-indent-guide.active')).toHaveCount(1);
@@ -83,14 +91,14 @@ test('Explorer tree guides align with ancestor arrows and settings update withou
 		await indent.fill(String(value));
 		await indent.press('Tab');
 		await expect(indent).toHaveValue(String(value));
-		await expect.poll(geometry).toEqual({ alignment: 0, indent: value, rootContent: reservedTwistieWidth, leafContent: value + reservedTwistieWidth });
+		await expect.poll(geometry).toEqual({ alignment: 0, indent: value, rootContent: reservedTwistieWidth, leafContent: value + reservedTwistieWidth, rootText: 0, leafText: value });
 	}
 	await indent.fill('6');
 	for (const value of [5, 4]) {
 		await indent.press('ArrowDown');
 		await indent.press('Tab');
 		await expect(indent).toHaveValue(String(value));
-		await expect.poll(geometry).toEqual({ alignment: 0, indent: value, rootContent: reservedTwistieWidth, leafContent: value + reservedTwistieWidth });
+		await expect.poll(geometry).toEqual({ alignment: 0, indent: value, rootContent: reservedTwistieWidth, leafContent: value + reservedTwistieWidth, rootText: 0, leafText: value });
 	}
 	await search.fill('@id:workbench.tree.renderIndentGuides');
 	const mode = settings.locator('[data-configuration-key="workbench.tree.renderIndentGuides"]').getByRole('combobox');
@@ -119,7 +127,7 @@ test('Explorer tree guides align with ancestor arrows and settings update withou
 				values['workbench.iconTheme'] = id;
 				await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(values) } });
 			}, id);
-			await expect.poll(geometry).toEqual({ alignment: 0, indent: 4, rootContent: id === null ? 16 : 0, leafContent: id === null ? 20 : 4 });
+			await expect.poll(geometry).toEqual({ alignment: 0, indent: 4, rootContent: id === null ? 20 : 0, leafContent: id === null ? 24 : 4, rootText: 0, leafText: 4 });
 			expect(await leafRow!.evaluate(row => row.isConnected)).toBe(true);
 		}
 	}

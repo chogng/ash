@@ -130,6 +130,11 @@
   justify-content: center;
 }
 
+.ash-tree-twistie.ash-tree-twistie-with-icon-gap {
+  /* Match an icon label's gap while keeping the arrow on the guide axis. */
+  margin-right: var(--ash-spacing-size40);
+}
+
 .ash-tree-twistie.ash-tree-twistie-hidden {
   width: 0;
   flex-basis: 0;
