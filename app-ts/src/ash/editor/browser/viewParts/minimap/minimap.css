@@ -1,5 +1,7 @@
 .stanza-editor .minimap {
 	z-index: 5;
+	overflow: hidden;
+	background-color: var(--ash-editor-background);
 }
 
 .stanza-editor .minimap canvas {

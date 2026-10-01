@@ -6,6 +6,9 @@ import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { clamp } from '../../../../base/common/numbers.js';
 import { isFullWidthCharacter } from '../../../../base/common/strings.js';
+import { Color } from '../../../../base/common/color.js';
+import { resolveSemanticTokenPresentation } from '../../../common/services/semanticTokensStyling.js';
+import { type IColorTheme } from '../../../../platform/theme/common/themeService.js';
 import { editorBackground, editorForeground } from '../../../../platform/theme/common/colors/editorColors.js';
 import { RGBA8 } from '../../../common/core/misc/rgba.js';
 import { MinimapCharRendererFactory } from './minimapCharRendererFactory.js';
@@ -26,6 +29,7 @@ export interface MinimapOptions {
 	readonly host: HTMLElement;
 	readonly model: TextModel;
 	readonly semanticTokenSource?: SemanticTokenSource;
+	readonly semanticHighlightingEnabled: (theme: IColorTheme) => boolean;
 	readonly readLayout: () => EditorViewportLayout;
 	readonly readVisualProjection: () => EditorVisualLineProjection;
 	readonly readProjectionRevision: () => number;
@@ -124,9 +128,13 @@ export class Minimap extends ViewPart {
 		const rows = projection.visualLineCount + (padding.top + padding.bottom) / lineHeight;
 		const pixelRatio = geometry.minimapCanvasInnerHeight / Math.max(1, geometry.minimapCanvasOuterHeight);
 		this.contentHeight = Math.min(context.viewportHeight, Math.max(0, rows * geometry.minimapLineHeight / Math.max(1, pixelRatio)));
-		this.sliderHeight = Math.min(this.contentHeight, Math.max(8, this.contentHeight * context.viewportHeight / Math.max(1, context.scrollHeight)));
+		const scaleY = geometry.minimapIsSampling ? this.contentHeight * pixelRatio / rows : geometry.minimapLineHeight;
+		const viewportRows = context.viewportHeight / lineHeight;
+		this.sliderHeight = Math.min(this.contentHeight, Math.max(8, viewportRows * scaleY / pixelRatio));
 		const scrollRange = Math.max(0, context.scrollHeight - context.viewportHeight);
-		this.sliderTop = scrollRange > 0 ? context.scrollTop / scrollRange * (this.contentHeight - this.sliderHeight) : 0;
+		const scrollRatio = scrollRange > 0 ? context.scrollTop / scrollRange : 0;
+		this.sliderTop = scrollRatio * (this.contentHeight - this.sliderHeight);
+		const rasterOffset = scrollRatio * Math.max(0, rows * scaleY - geometry.minimapCanvasInnerHeight);
 		this.domNode.classList.toggle('stanza-editor-minimap-hover-slider', minimap.showSlider === 'mouseover');
 		this.domNode.style.left = `${geometry.minimapLeft}px`;
 		this.domNode.style.top = '0px';
@@ -138,13 +146,15 @@ export class Minimap extends ViewPart {
 		this.canvas.style.height = `${geometry.minimapCanvasOuterHeight}px`;
 		const width = Math.max(1, Math.round(geometry.minimapCanvasInnerWidth));
 		const height = Math.max(1, Math.round(geometry.minimapCanvasInnerHeight));
-		// Placement and the slider change during sash drags and scrolling without
-		// changing the document raster. Setting canvas dimensions also clears it.
+		// Placement-only changes reuse the raster. Proportional scrolling changes
+		// its document window; sampling keeps the whole-document raster stable.
 		const rasterKey = [
 			width,
 			height,
 			geometry.minimapScale,
 			geometry.minimapLineHeight,
+			scaleY,
+			rasterOffset,
 			this.contentHeight,
 			context.viewportHeight,
 			padding.top,
@@ -156,7 +166,7 @@ export class Minimap extends ViewPart {
 		if (this.rasterDirty || this.rasterKey !== rasterKey) {
 			if (this.canvas.width !== width) this.canvas.width = width;
 			if (this.canvas.height !== height) this.canvas.height = height;
-			this.paint(context, geometry);
+			this.paint(geometry, scaleY, rasterOffset);
 			this.rasterKey = rasterKey;
 			this.rasterDirty = false;
 		}
@@ -168,7 +178,7 @@ export class Minimap extends ViewPart {
 		return true;
 	}
 
-	private paint(context: RestrictedRenderingContext, geometry: EditorMinimapLayoutInfo): void {
+	private paint(geometry: EditorMinimapLayoutInfo, scaleY: number, rasterOffset: number): void {
 		const painter = this.canvas.getContext('2d');
 		if (!painter) return;
 		const padding = this._context.configuration.options.get(EditorOption.padding);
@@ -179,7 +189,6 @@ export class Minimap extends ViewPart {
 		const projection = this.source.readVisualProjection();
 		const lineHeight = Math.max(1, this.source.readLayout().lineHeight);
 		const paddingRows = padding.top / lineHeight;
-		const scaleY = this.contentHeight * height / context.viewportHeight / Math.max(1, projection.visualLineCount + (padding.top + padding.bottom) / lineHeight);
 		const fontInfo = this._context.configuration.options.get(EditorOption.fontInfo);
 		const renderer = MinimapCharRendererFactory.create(geometry.minimapScale, fontInfo.fontFamily);
 		const charWidth = Constants.BASE_CHAR_WIDTH * renderer.scale;
@@ -193,13 +202,27 @@ export class Minimap extends ViewPart {
 		const background = new RGBA8(backgroundColor.r, backgroundColor.g, backgroundColor.b, Math.round(backgroundColor.a * 255));
 		const foreground = new RGBA8(foregroundColor.r, foregroundColor.g, foregroundColor.b, Math.round(foregroundColor.a * 255));
 		const image = painter.createImageData(width, height);
-		for (const line of projection.lines) {
+		// A raster row can represent many source rows. Sample before reading text
+		// and tokens, so large files neither overpaint rows nor block text rendering.
+		const startLine = Math.max(0, Math.floor(rasterOffset / scaleY - paddingRows));
+		const endLine = Math.min(projection.visualLineCount, Math.ceil((rasterOffset + height) / scaleY - paddingRows));
+		const lineCount = endLine - startLine;
+		const sampleCount = Math.min(lineCount, Math.ceil(lineCount * scaleY));
+		for (let sample = 0; sample < sampleCount; sample++) {
+			const line = projection.lineAt(startLine + Math.floor(sample * lineCount / sampleCount))!;
 			const text = this.source.model.getLineContent(line.logicalLineIndex + 1).slice(line.startColumn, line.endColumn);
-			const y = Math.floor((line.visualLineIndex + paddingRows) * scaleY) + innerLinePadding;
-			if (y + glyphHeight > height) {
+			const y = Math.floor((line.visualLineIndex + paddingRows) * scaleY - rasterOffset) + innerLinePadding;
+			if (y < 0 || y + glyphHeight > height) {
 				continue;
 			}
 			const tokens = this.source.model.tokenization.getLineTokens(line.logicalLineIndex + 1);
+			const renderedTokens = this.source.semanticTokenSource?.getLineTokens(line.logicalLineIndex) ?? [];
+			const tokenColors = renderedTokens.map(token => {
+				const presentation = resolveSemanticTokenPresentation(token, this._context.theme.value, this.source.semanticHighlightingEnabled(this._context.theme.value));
+				const color = presentation.foreground === undefined ? undefined : Color.fromHex(presentation.foreground).rgba;
+				return color ? new RGBA8(color.r, color.g, color.b, Math.round(color.a * 255)) : undefined;
+			});
+			let renderedTokenIndex = 0;
 			let column = Math.round((line.wrappedTextIndentWidth ?? 0) / fontInfo.typicalHalfwidthCharacterWidth);
 			for (let offset = 0; offset < text.length && (column + 1) * charWidth <= width; offset++) {
 				const charCode = text.charCodeAt(offset);
@@ -212,7 +235,13 @@ export class Minimap extends ViewPart {
 					continue;
 				}
 				const tokenIndex = tokens.findTokenIndexAtOffset(line.startColumn + offset);
-				const color = hasTokenColors ? colors.getColor(tokens.getForeground(tokenIndex)) : foreground;
+				const sourceOffset = line.startColumn + offset;
+				while (renderedTokenIndex < renderedTokens.length && renderedTokens[renderedTokenIndex].endColumn <= sourceOffset) {
+					renderedTokenIndex++;
+				}
+				const renderedToken = renderedTokens[renderedTokenIndex];
+				const renderedColor = renderedToken && renderedToken.startColumn <= sourceOffset ? tokenColors[renderedTokenIndex] : undefined;
+				const color = renderedColor ?? (hasTokenColors ? colors.getColor(tokens.getForeground(tokenIndex)) : foreground);
 				const characterColumns = isFullWidthCharacter(charCode) ? 2 : 1;
 				// Wide characters still occupy two cells when the compact font uses
 				// a replacement glyph rather than a dedicated character bitmap.
@@ -236,7 +265,7 @@ export class Minimap extends ViewPart {
 			const color = typeof minimap.color === 'string' ? minimap.color : this._context.theme.getColor(minimap.color.id)?.toString();
 			if (!color) continue;
 			painter.fillStyle = color;
-			const top = Math.floor((decoration.range.startLineNumber - 1) / Math.max(1, this._context.viewModel.getLineCount()) * height);
+			const top = Math.floor((decoration.range.startLineNumber - 1 + paddingRows) * scaleY - rasterOffset);
 			const markerHeight = Math.max(2, Math.ceil((decoration.range.endLineNumber - decoration.range.startLineNumber + 1) * scaleY));
 			painter.fillRect(Math.max(0, width - 3), top, 3, markerHeight);
 		}

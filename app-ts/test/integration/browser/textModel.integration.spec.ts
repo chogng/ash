@@ -184,6 +184,92 @@ for (const theme of ['light', 'dark', 'contrast', 'contrastLight'] as const) {
 	});
 }
 
+test('syntax theme updates repaint text and minimap through the existing Worker', async ({ page }) => {
+	await openEditor(page);
+	const editor = page.locator('.stanza-editor');
+	const token = editor.locator('.stanza-editor-token').filter({ hasText: /^fn$/u });
+	await expect(token).toBeVisible();
+	const workers = page.workers().filter(worker => worker.url().includes('textMateSyntaxWorkerMain'));
+	expect(workers).toHaveLength(1);
+	for (const [color, expected] of [['#149b37', 'rgb(20, 155, 55)'], ['#9a41da', 'rgb(154, 65, 218)']] as const) {
+		await page.evaluate(color => window.ashTextModelIntegration.setSyntaxColor(color), color);
+		await expect(token).toHaveCSS('color', expected);
+		await expect.poll(() => editor.locator('.minimap canvas').evaluate((element, color) => {
+			const canvas = element as HTMLCanvasElement;
+			const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+			const channel = color === '#149b37' ? 1 : 2;
+			for (let offset = 0; offset < pixels.length; offset += 4) {
+				if (pixels[offset + 3]! > 0 && pixels[offset + channel]! > pixels[offset]! && pixels[offset + channel]! > pixels[offset + 3 - channel]!) return true;
+			}
+			return false;
+		}, color)).toBe(true);
+		expect(page.workers().filter(worker => worker.url().includes('textMateSyntaxWorkerMain'))).toEqual(workers);
+	}
+});
+
+test('proportional minimap preserves glyph height and repaints its document window when scrolling', async ({ page }) => {
+	await openEditor(page);
+	await page.evaluate(() => {
+		const editor = window.ashTextModelIntegration.getControl();
+		editor.getModel()!.setLanguage('plaintext');
+		editor.updateOptions({ lineHeight: 20, wordWrap: 'off', minimap: { enabled: true, size: 'proportional', scale: 2, renderCharacters: false }, padding: { top: 0, bottom: 0 } });
+		editor.setValue(Array.from({ length: 2_000 }, (_, index) => index < 1_000 ? 'WWWWWWWW' : 'ii').join('\n'));
+	});
+	const canvas = page.locator('.minimap canvas');
+	const readPixels = () => canvas.evaluate(element => {
+		const canvas = element as HTMLCanvasElement;
+		return Array.from(canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data);
+	});
+	await expect.poll(() => canvas.evaluate(element => {
+		const canvas = element as HTMLCanvasElement;
+		const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, 6).data;
+		return Array.from({ length: 6 }, (_, row) => data.slice(row * canvas.width * 4, (row + 1) * canvas.width * 4).some((value, index) => index % 4 === 3 && value > 0)).filter(Boolean).length;
+	})).toBe(4);
+	const before = await readPixels();
+	await page.evaluate(() => {
+		const editor = window.ashTextModelIntegration.getControl();
+		editor.setScrollTop(2_000 * 20);
+	});
+	await expect.poll(readPixels).not.toEqual(before);
+	await page.evaluate(() => window.ashTextModelIntegration.getControl().setScrollTop(0));
+	await expect.poll(readPixels).toEqual(before);
+});
+
+test('large-file minimap samples one source row per raster row and isolates long text', async ({ page }) => {
+	await openEditor(page);
+	const result = await page.evaluate(async () => {
+		const editor = window.ashTextModelIntegration.getControl();
+		const model = editor.getModel()!;
+		model.setLanguage('plaintext');
+		editor.updateOptions({ wordWrap: 'off', minimap: { enabled: true, size: 'fit' }, padding: { top: 0, bottom: 0 } });
+		const original = model.tokenization.getLineTokens;
+		const root = document.querySelector<HTMLElement>('.stanza-editor')!;
+		const minimap = root.querySelector<HTMLElement>('.minimap')!;
+		const canvas = minimap.querySelector('canvas')!;
+		const painter = canvas.getContext('2d')!;
+		const clear = painter.clearRect;
+		const put = painter.putImageData;
+		const readsPerPaint: number[] = [];
+		let reads = 0;
+		model.tokenization.getLineTokens = function (lineNumber) { reads++; return original.call(this, lineNumber); };
+		painter.clearRect = function (...args) { reads = 0; clear.apply(this, args); };
+		painter.putImageData = function (data, x, y) { readsPerPaint.push(reads); Reflect.apply(put, this, [data, x, y]); };
+		try {
+			editor.setValue(Array.from({ length: 20_000 }, (_, index) => `${index} ${'long text '.repeat(50)}`).join('\n'));
+			await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+			return { readsPerPaint, height: canvas.height, minimapBackground: getComputedStyle(minimap).backgroundColor, editorBackground: getComputedStyle(root).backgroundColor, overflow: getComputedStyle(minimap).overflow };
+		} finally {
+			model.tokenization.getLineTokens = original;
+			painter.clearRect = clear;
+			painter.putImageData = put;
+		}
+	});
+	expect(result.readsPerPaint.length).toBeGreaterThan(0);
+	expect(Math.max(...result.readsPerPaint)).toBeLessThanOrEqual(result.height);
+	expect(result.minimapBackground).toBe(result.editorBackground);
+	expect(result.overflow).toBe('hidden');
+});
+
 for (const renderCharacters of [true, false]) {
 	test(`minimap preserves spaces, tabs and wide-character columns with renderCharacters=${renderCharacters}`, async ({ page }) => {
 		await openEditor(page);

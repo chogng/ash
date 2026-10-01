@@ -294,6 +294,7 @@ export class View extends ViewEventHandler {
 				if (!event.affectsConfiguration(EditorSemanticHighlightingConfiguration)) return;
 				this.viewGpuContext?.refreshSemanticStyles(this.viewContext.theme.value);
 				this.viewLines.onTokensChanged();
+				minimapPart.onTokensChanged();
 				this.scheduleProjection();
 			}));
 		}
@@ -398,6 +399,10 @@ export class View extends ViewEventHandler {
 			model: this.model,
 			semanticTokenSource: options.semanticTokenSource,
 			readLayout: () => this.viewport.layout,
+			semanticHighlightingEnabled: theme => {
+				const preference = options.configurationService?.getValue<boolean | 'configuredByTheme'>(EditorSemanticHighlightingConfiguration);
+				return preference === true || (preference !== false && theme.semanticHighlighting === true);
+			},
 			readVisualProjection: () => this.visualProjection,
 			readProjectionRevision: () => this.projectionRevision,
 			scrollTo: position => this.scrollTo(position),

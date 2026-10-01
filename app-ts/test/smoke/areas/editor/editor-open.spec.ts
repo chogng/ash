@@ -3,6 +3,37 @@ import { join } from "node:path";
 import type { ElectronApplication, Page } from "@playwright/test";
 import { expect, test } from "../../../automation/test.js";
 
+test('large YAML lockfiles highlight text and minimap without editor interaction', async ({ target, testWorkspace, workbench }, testInfo) => {
+	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Bundled language grammars require the Code App Server product.');
+	const text = await readFile(new URL('../../../../../pnpm-lock.yaml', import.meta.url), 'utf8');
+	const page = workbench.page;
+	await writeFile(join(testWorkspace.directory, 'pnpm-lock.yaml'), text);
+	const file = page.locator('.ash-explorer').getByRole('treeitem', { name: 'pnpm-lock.yaml', exact: true });
+	await expect(file).toBeVisible();
+	const start = Date.now();
+	await file.dblclick();
+	const editor = workbench.editors.groupAt(0).content.locator('.stanza-editor');
+	await expect(editor).toBeVisible();
+	const key = editor.locator('.stanza-editor-token').filter({ hasText: /^lockfileVersion$/u });
+	await expect(key).toBeVisible();
+	const foreground = await editor.evaluate(element => getComputedStyle(element).color);
+	await expect(key).not.toHaveCSS('color', foreground);
+	await expect.poll(() => editor.locator('.minimap canvas').evaluate(element => {
+		const canvas = element as HTMLCanvasElement;
+		const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+		for (let offset = 0; offset < pixels.length; offset += 4) {
+			if (pixels[offset + 3]! > 0 && Math.max(pixels[offset]!, pixels[offset + 1]!, pixels[offset + 2]!) - Math.min(pixels[offset]!, pixels[offset + 1]!, pixels[offset + 2]!) > 15) return true;
+		}
+		return false;
+	})).toBe(true);
+	await testInfo.attach('yaml-first-highlight', { body: JSON.stringify({ bytes: Buffer.byteLength(text), lines: text.split('\n').length, milliseconds: Date.now() - start }), contentType: 'application/json' });
+	await editor.locator('.stanza-editor-input').focus();
+	await page.keyboard.press('ControlOrMeta+End');
+	await expect(editor.locator('.stanza-editor-token').first()).toBeVisible();
+	await page.keyboard.press('ControlOrMeta+Home');
+	await expect(key).toBeVisible();
+});
+
 test.beforeEach(async ({ workbench }) => {
 	const showSidebar = workbench.page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
 	if (await showSidebar.isVisible()) { await showSidebar.click(); }

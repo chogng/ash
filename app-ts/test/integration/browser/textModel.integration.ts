@@ -86,6 +86,7 @@ interface IntegrationHarness {
 	runWorkbenchCommand(id: string): Promise<void>;
 	getViewSettings(): { readonly minimap: boolean; readonly renderWhitespace: string; readonly renderControlCharacters: boolean; readonly wordWrap: string; readonly wordWrapOverride: string; readonly wrappingColumn: number };
 	setTheme(theme: 'dark' | 'light' | 'contrast' | 'contrastLight'): void;
+	setSyntaxColor(color: string): void;
 	setSelectionColors(colors: Record<string, string>): void;
 	setRenderRichScreenReaderContent(enabled: boolean): void;
 	showViewZone(): void;
@@ -248,6 +249,10 @@ window.ashTextModelIntegration = {
 		wrappingColumn: requiredEditorPart().getOption(EditorOption.wrappingInfo).wrappingColumn,
 	}),
 	setTheme: theme => themeService.setColorTheme({ dark: darkColorTheme, light: lightColorTheme, contrast: highContrastDarkColorTheme, contrastLight: highContrastLightColorTheme }[theme]),
+	setSyntaxColor: color => {
+		const scopeTheme = textMateService.mutableScopeTheme!;
+		scopeTheme.replace({ revision: scopeTheme.currentTheme.revision + 1, rules: [{ selector: '*', foreground: color }] });
+	},
 	setSelectionColors: colors => themeService.setColorTheme(createColorTheme({
 		...themeService.getColorTheme(), id: 'text-model-selection', baseTheme: themeService.getColorTheme(), colorOverrides: colors,
 	})),

@@ -199,6 +199,9 @@ test('minimap reflects equal-length text edits in the workbench', async ({ targe
 	await page.keyboard.insertText('iiii\n\n \t \niiii');
 	await expect(editor.lines).toHaveText(['iiii', '', ' \t ', 'iiii']);
 	const canvas = editor.element.locator('.minimap canvas');
+	const minimap = editor.element.locator('.minimap');
+	await expect(minimap).toHaveCSS('overflow', 'hidden');
+	await expect(minimap).toHaveCSS('background-color', await editor.element.evaluate(element => getComputedStyle(element).backgroundColor));
 	const readPixels = () => canvas.evaluate(element => {
 		const canvas = element as HTMLCanvasElement;
 		return Array.from(canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data);
