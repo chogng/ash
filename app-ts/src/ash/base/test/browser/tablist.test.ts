@@ -277,6 +277,41 @@ test("TabList renders IconLabel content, custom actions, and its standard close 
 	dom.window.close();
 });
 
+test('TabList replaces the close button with a primary action while Delete still closes', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const effects: string[] = [];
+		using tabs = new TabList(dom.window.document.body, {
+			ariaLabel: 'Documents',
+			onActivate: () => undefined,
+			onClose: (value: string) => effects.push(`close:${value}`),
+		});
+		const primaryAction: IAction = {
+			id: 'archive',
+			label: 'Archive',
+			tooltip: 'Archive',
+			icon: customCloseIcon,
+			enabled: true,
+			run: () => { effects.push('archive'); },
+		};
+		tabs.setTabs([{ ...tab('first'), primaryAction }], 'first');
+		const button = tabs.element.querySelector<HTMLButtonElement>('.ash-tab-primary-action button')!;
+		assert.equal(button.getAttribute('aria-label'), 'Archive');
+		assert.equal(tabs.element.querySelector('.ash-tab-close-action'), null);
+		button.focus();
+		tabs.setTabs([{ ...tab('first'), primaryAction, state: 'dirty' }], 'first');
+		assert.equal(dom.window.document.activeElement, button);
+		button.click();
+		tabs.element.querySelector('[role="tab"]')!.dispatchEvent(keyboardEvent(dom.window, 'Delete'));
+		assert.deepEqual(effects, ['archive', 'close:first']);
+		tabs.setTabs([tab('first')], 'first');
+		tabs.element.querySelector<HTMLButtonElement>('.ash-tab-close-action button')!.click();
+		assert.deepEqual(effects, ['archive', 'close:first', 'close:first']);
+	} finally {
+		dom.window.close();
+	}
+});
+
 test("TabList supports vertical ActionBar navigation and scrolling", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const tabList = new TabList(dom.window.document.body, {

@@ -925,9 +925,16 @@ test("Editor tabs keep sticky editors in their own row across working-set restor
 		'.ash-sticky-editor-tabs-row .ash-tab .ash-tab-label',
 	);
 	assert.ok(unstick);
-	assert.ok(editor.domNode.querySelector('.ash-sticky-editor-tabs-row .ash-tab-close-indicator'));
-	editor.activeGroup.unstickEditor(first);
+	const unpin = editor.domNode.querySelector<HTMLButtonElement>('.ash-sticky-editor-tabs-row .ash-tab-primary-action button')!;
+	assert.equal(unpin.getAttribute('aria-label'), 'Unpin Editor');
+	assert.equal(editor.domNode.querySelector('.ash-sticky-editor-tabs-row .ash-tab-close-action'), null);
+	const activeBeforeUnpin = editor.activeGroup.activeInput;
+	unpin.focus();
+	unpin.click();
 	assert.equal(editor.activeGroup.isSticky(first), false);
+	assert.deepEqual(editor.activeGroup.inputs, [first, second]);
+	assert.equal(editor.activeGroup.activeInput, activeBeforeUnpin);
+	assert.equal(dom.window.document.activeElement?.id, unstick.id);
 	assert.equal(editor.domNode.querySelectorAll(".ash-sticky-editor-tabs-row .ash-tab").length, 0);
 
 	editor.dispose();

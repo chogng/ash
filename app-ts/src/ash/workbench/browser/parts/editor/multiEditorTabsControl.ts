@@ -3,6 +3,7 @@ import { DataTransfers } from "../../../../base/browser/dnd.js";
 import { addDisposableListener, isElement } from "../../../../base/browser/dom.js";
 import { observeResize } from "../../../../base/browser/observer.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
+import type { IAction } from "../../../../base/common/actions.js";
 import { assertDefined } from "../../../../base/common/types.js";
 import { TabList, type TabListPresentation } from "../../../../base/browser/ui/tablist/tabList.js";
 import { localize } from "../../../../nls.js";
@@ -31,6 +32,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 	private editors: readonly EditorTabDescriptor[] = [];
 	private readonly tabContext: IScopedContextKeyService;
 	private readonly renderedLabels = new Map<string, { readonly label: IResourceLabel; readonly context: IScopedContextKeyService; signature: string | undefined }>();
+	private readonly unpinActions = new Map<string, IAction>();
 
 	constructor(
 		container: HTMLElement,
@@ -138,6 +140,23 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 		const activeKey = activeInput ? editors.find(editor => editorInputKey(editor.input) === editorInputKey(activeInput))?.instanceId : undefined;
 		this.tabList.setTabs(editors.map((editor) => {
 			const label = editorInputLabel(editor.input);
+			let primaryAction = this.unpinActions.get(editor.instanceId);
+			if (editor.sticky && !primaryAction) {
+				const unpinLabel = localize("workbench.unpinEditor", "Unpin Editor");
+				primaryAction = {
+					id: "workbench.action.unpinActiveEditor",
+					label: unpinLabel,
+					tooltip: unpinLabel,
+					icon: Lxicon.pinned,
+					enabled: true,
+					run: () => {
+						const current = this.editors.find(candidate => candidate.instanceId === editor.instanceId)!;
+						this.delegate.unstickEditor(current.input);
+					},
+				};
+				// Retain the action across state updates so its focused button stays in place.
+				this.unpinActions.set(editor.instanceId, primaryAction);
+			}
 			const state = editor.hasExternalChange ? "conflict" : editor.isDirty ? "dirty" : undefined;
 			const stateLabel = editor.hasExternalChange ? "conflict with changes on disk" : editor.isDirty ? "unsaved changes" : undefined;
 			let ariaDescription = localize("workbench.editorUnpinnedTabHint", "Use Pin Editor to pin this tab.");
@@ -158,6 +177,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 					EditorTabsFocusContext.bindTo(context).set(true);
 					this.renderedLabels.set(editor.instanceId, { label: resourceLabel, context, signature: undefined });
 					store.add(toDisposable(() => this.renderedLabels.delete(editor.instanceId)));
+					store.add(toDisposable(() => this.unpinActions.delete(editor.instanceId)));
 					return store;
 				},
 				tooltip: stateLabel ? `${editor.input.resource.toString()} — ${stateLabel}` : editor.input.resource.toString(),
@@ -165,7 +185,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 				ariaDescription,
 				...(state ? { state } : {}),
 				preview: editor.preview,
-				closeActionIndicatorIcon: editor.sticky ? Lxicon.pinned : undefined,
+				primaryAction: editor.sticky ? primaryAction : undefined,
 				tabId: editor.tabId,
 				panelId: editor.panelId,
 			};

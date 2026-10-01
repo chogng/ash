@@ -58,9 +58,15 @@ test('pin commands follow the focused inactive tab and preserve editor selection
 	await expect(group.title.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(0);
 	await expect(second).toHaveAttribute('aria-selected', 'true');
 	await expect(first).toBeFocused();
+	await first.press('Alt+Enter');
+	await group.title.locator('.ash-sticky-editor-tabs-row').getByRole('button', { name: 'Unpin Editor', exact: true }).click();
+	await expect(group.title.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(0);
+	await expect(second).toHaveAttribute('aria-selected', 'true');
+	await expect(first).toHaveAttribute('aria-selected', 'false');
+	await expect(first).toBeFocused();
 });
 
-test('editor tab uses the editor surface and shares its pin and close slot', async ({ target, workbench }) => {
+test('pinned editor action stays Unpin on hover and returns the editor to the ordinary row', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
@@ -70,7 +76,6 @@ test('editor tab uses the editor surface and shares its pin and close slot', asy
 	const untitledName = await ordinary.getByRole('tab').getAttribute('aria-label');
 	expect(untitledName).toMatch(/^Untitled-/u);
 	await expect(ordinary.locator('.ash-tab-close-action')).toHaveCount(1);
-	await expect(ordinary.locator('.ash-tab-close-indicator')).toHaveCount(0);
 	await expect(ordinary.getByRole('tab')).toHaveAttribute('aria-description', /Pin Editor to pin/u);
 	const colors = await ordinary.evaluate(element => {
 		const reference = document.createElement('span');
@@ -91,18 +96,26 @@ test('editor tab uses the editor surface and shares its pin and close slot', asy
 	await ordinary.getByRole('tab').press('Alt+Enter');
 	const sticky = page.locator('.ash-sticky-editor-tabs-row .ash-tab.checked');
 	await expect(sticky).toHaveCount(1);
-	const close = sticky.locator('.ash-tab-close-action');
-	await expect(close).toHaveCount(1);
-	await expect(close.locator('button > .ash-tab-close-indicator')).toHaveCount(1);
+	const unpin = sticky.getByRole('button', { name: 'Unpin Editor', exact: true });
+	await expect(sticky.locator('.ash-tab-close-action')).toHaveCount(0);
+	await expect(unpin.locator('svg')).toHaveAttribute('data-ash-icon-id', 'pinned');
 	await expect(sticky.getByRole('tab')).toHaveAttribute('aria-description', /Unpin Editor to unpin/u);
 	await page.mouse.move(0, 0);
 	await sticky.getByRole('tab').blur();
-	await expect(close.locator('.ash-tab-close-indicator')).toBeVisible();
+	await expect(unpin).toBeVisible();
 	await sticky.getByRole('tab').hover();
-	await expect(close.locator('.ash-tab-close-indicator')).toBeHidden();
-	await expect(close.locator('button')).toBeVisible();
-	await sticky.getByRole('tab').press('Alt+Enter');
+	await unpin.hover();
+	await expect(unpin.locator('svg')).toBeVisible();
+	await expect(unpin.locator('svg')).toHaveAttribute('data-ash-icon-id', 'pinned');
+	await expect(sticky.getByRole('button', { name: /^Close /u })).toHaveCount(0);
+	await unpin.click();
 	await expect(page.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(0);
+	await expect(ordinary.getByRole('tab')).toHaveAttribute('aria-label', untitledName!);
+	await ordinary.getByRole('tab').press('Alt+Enter');
+	await unpin.focus();
+	await unpin.press('Enter');
+	await expect(page.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(0);
+	await expect(ordinary.getByRole('tab')).toBeFocused();
 	await ordinary.locator('.ash-tab-close-action button').click();
 	await expect(page.getByRole('tab', { name: untitledName! })).toHaveCount(0);
 });

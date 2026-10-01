@@ -8,7 +8,6 @@ import { assertDefined } from "../../../common/types.js";
 import { ActionBar } from "../actionbar/actionbar.js";
 import { ActionViewItem } from "../actionbar/actionViewItems.js";
 import { IconLabel } from "../iconlabel/iconlabel.js";
-import { appendIcon } from "../lxicons/lxicon.js";
 import type { TabListItem } from "./tabList.js";
 
 export const TAB_CLOSE_ACTION_ID = "ash.tab.close";
@@ -150,13 +149,14 @@ export class TabActionViewItem<T> extends ActionViewItem {
 		if (this.label && (previous?.label !== item.label || previous.description !== item.description || previous.icon !== item.icon)) {
 			this.label.setLabel(item.label, item.description, { icon: item.icon });
 		}
-		if (previous && previous.label === item.label && previous.actions === item.actions && previous.closeActionIndicatorIcon === item.closeActionIndicatorIcon) {
+		if (previous && previous.label === item.label && previous.actions === item.actions && previous.primaryAction === item.primaryAction) {
 			return;
 		}
 		this.toolbar.clear();
+		const primaryAction = item.primaryAction ?? (this.onClose ? closeTabAction(this.tabAction, this.onClose, this.closeActionIcon) : undefined);
 		const actions = [
 			...(item.actions?.items ?? []),
-			...(this.onClose ? [closeTabAction(this.tabAction, this.onClose, this.closeActionIcon)] : []),
+			...(primaryAction ? [primaryAction] : []),
 		];
 		if (actions.length > 0) {
 			const actionBar = new ActionBar(container, {
@@ -165,20 +165,12 @@ export class TabActionViewItem<T> extends ActionViewItem {
 			});
 			this.toolbar.value = actionBar;
 			actionBar.element.classList.add("ash-tab-actions");
-			if (this.onClose) {
-				const closeActionContainer = actionBar.element.querySelector<HTMLElement>(`[data-action-id="${TAB_CLOSE_ACTION_ID}"]`);
-				if (!closeActionContainer) {
-					throw new Error("TabList close action was not rendered");
-				}
-				closeActionContainer.classList.add("ash-tab-close-action");
-				if (item.closeActionIndicatorIcon) {
-					const button = closeActionContainer.querySelector<HTMLButtonElement>("button");
-					if (!button) {
-						throw new Error("TabList close action button was not rendered");
-					}
-					appendIcon(item.closeActionIndicatorIcon, button).classList.add("ash-tab-close-indicator");
-					closeActionContainer.classList.add("has-indicator");
-				}
+			if (primaryAction) {
+				const actionContainer = [...actionBar.element.children].find(element => (element as HTMLElement).dataset.actionId === primaryAction.id);
+				assertDefined(actionContainer, "TabList primary action was not rendered");
+				actionContainer.classList.add("ash-tab-primary-action");
+				actionContainer.classList.toggle("ash-tab-close-action", item.primaryAction === undefined);
+				actionContainer.classList.toggle("custom-action", item.primaryAction !== undefined);
 			}
 		}
 	}

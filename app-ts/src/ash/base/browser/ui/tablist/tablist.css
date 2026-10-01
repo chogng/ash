@@ -170,31 +170,16 @@
   gap: 0;
 }
 
-.ash-tab-close-action {
+.ash-tab-primary-action {
   position: relative;
   visibility: hidden;
 }
 
-.ash-tab.checked .ash-tab-close-action,
-.ash-tab:hover .ash-tab-close-action,
-.ash-tab-close-action.has-indicator {
+.ash-tab.checked .ash-tab-primary-action,
+.ash-tab:hover .ash-tab-primary-action,
+.ash-tab:focus-within .ash-tab-primary-action,
+.ash-tab-primary-action.custom-action {
   visibility: visible;
-}
-
-.ash-tab-close-indicator {
-  display: none;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
-
-.ash-tab:not(:hover):not(:focus-within) .ash-tab-close-action.has-indicator .ash-button-content {
-  visibility: hidden;
-}
-
-.ash-tab:not(:hover):not(:focus-within) .ash-tab-close-indicator {
-  display: block;
 }
 
 .ash-tab-actions .ash-action-view-item.icon .ash-button {

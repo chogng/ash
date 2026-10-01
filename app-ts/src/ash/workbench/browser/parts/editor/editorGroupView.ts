@@ -204,6 +204,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			},
 			showContextMenu: (input, event, tab) => this.showTabContextMenu(input, event, tab),
 			pinEditor: input => this.pinEditor(input),
+			unstickEditor: input => this.unstickEditor(input),
 			startDrag: input => options.dragAndDrop?.start(this, input),
 			isDragging: () => options.dragAndDrop?.isDragging() ?? false,
 			drop: (target, position) => options.dragAndDrop?.drop(this, target, position),
@@ -395,7 +396,8 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		}
 		const previousIndex = this.model.indexOf(input);
 		const focusedTab = this.domNode.ownerDocument.activeElement?.closest(".ash-tab");
-		const focusedTabId = focusedTab && this.domNode.contains(focusedTab) ? this.domNode.ownerDocument.activeElement?.id : undefined;
+		// Moving rows replaces the tab's action button; restore focus to its stable tab identity.
+		const focusedTabId = focusedTab && this.domNode.contains(focusedTab) ? focusedTab.querySelector<HTMLElement>(".ash-tab-label")?.id : undefined;
 		if (sticky) {
 			this.model.stick(input);
 		} else {

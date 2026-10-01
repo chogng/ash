@@ -269,9 +269,7 @@ test("Sticky and ordinary editors occupy separate tab rows", async ({ target, wo
 	await expect(sticky.getByRole("tab", { name: "main.ts" })).toBeFocused();
 	const pinnedTab = sticky.locator('.ash-tab');
 	const appearance = await pinnedTab.evaluate(element => {
-		const close = element.querySelector<HTMLElement>('.ash-tab-close-action')!;
-		const indicator = close.querySelector<SVGElement>('.ash-tab-close-indicator')!;
-		const button = close.querySelector<HTMLButtonElement>('button')!;
+		const button = element.querySelector<HTMLButtonElement>('.ash-tab-primary-action button')!;
 		const reference = document.createElement('span');
 		reference.style.background = 'var(--ash-editor-background)';
 		element.append(reference);
@@ -280,24 +278,33 @@ test("Sticky and ordinary editors occupy separate tab rows", async ({ target, wo
 		return {
 			background: getComputedStyle(element).backgroundColor,
 			editorBackground,
-			indicatorInsideClose: button.contains(indicator),
+			actionLabel: button.getAttribute('aria-label'),
+			icon: button.querySelector('svg')?.getAttribute('data-ash-icon-id'),
 			closeActions: element.querySelectorAll('.ash-tab-close-action').length,
 		};
 	});
 	expect(appearance.background).toBe(appearance.editorBackground);
-	expect(appearance.indicatorInsideClose).toBe(true);
-	expect(appearance.closeActions).toBe(1);
+	expect(appearance.actionLabel).toBe('Unpin Editor');
+	expect(appearance.icon).toBe('pinned');
+	expect(appearance.closeActions).toBe(0);
 	const stickyBox = await sticky.boundingBox();
 	const ordinaryBox = await ordinary.boundingBox();
 	expect(stickyBox).not.toBeNull();
 	expect(ordinaryBox).not.toBeNull();
 	expect(ordinaryBox!.y).toBeGreaterThanOrEqual(stickyBox!.y + stickyBox!.height);
-	await expect(sticky.locator('.ash-tab-close-indicator')).toHaveCount(1);
+	const unpin = sticky.getByRole('button', { name: 'Unpin Editor', exact: true });
+	await expect(unpin).toBeVisible();
+	const editorInput = group.content.getByRole('textbox', { name: 'main.ts', exact: true });
+	await editorInput.focus();
+	await editorInput.type('// pinned editor changes');
+	await expect(pinnedTab).toHaveAttribute('data-state', 'dirty');
 	await sticky.getByRole('tab', { name: 'main.ts' }).hover();
-	await expect.poll(() => sticky.locator('.ash-tab-close-indicator').evaluate(element => getComputedStyle(element).display)).toBe('none');
-	await sticky.getByRole('tab', { name: 'main.ts' }).press('Alt+Enter');
+	await unpin.hover();
+	await expect(unpin.locator('svg')).toBeVisible();
+	await unpin.click();
 	await expect(sticky.locator(".ash-tab")).toHaveCount(0);
 	await expect(ordinary.locator(".ash-tab")).toHaveCount(2);
+	await expect(ordinary.locator('.ash-tab').filter({ hasText: 'main.ts' })).toHaveAttribute('data-state', 'dirty');
 });
 
 test("Connected editor tab follows horizontal tab scrolling", async ({ target, workbench }) => {

@@ -33,8 +33,8 @@ export interface TabListItem<T> {
 	readonly tabId: string;
 	readonly panelId?: string;
 	readonly actions?: TabListActions;
-	/** Passive icon shown in the close action slot until the tab is hovered or focused. */
-	readonly closeActionIndicatorIcon?: Icon;
+	/** Replaces the default close button with an actual action; Delete still invokes onClose. */
+	readonly primaryAction?: IAction;
 }
 
 /** Named visual presentation for the ActionBar and tabs rendered by a TabList. */

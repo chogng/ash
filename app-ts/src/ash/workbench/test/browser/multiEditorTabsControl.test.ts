@@ -46,6 +46,39 @@ test('Editor breadcrumbs localize their navigation label when the language chang
 	}
 });
 
+test('Pinned editor action preserves its target and keyboard focus across state updates', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const unpinned: EditorInput[] = [];
+		using services = createTestEditorServices();
+		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
+		using control = services.createInstance(MultiEditorTabsControl, dom.window.document.body, {
+			...inertDelegate,
+			unstickEditor: (input: EditorInput) => { unpinned.push(input); },
+		});
+		const first = input('first');
+		const second = input('second');
+		const pinned = { ...descriptor(first), sticky: true };
+		control.setEditors([pinned, descriptor(second)], second);
+		const unpin = control.domNode.querySelector<HTMLButtonElement>('.ash-tab-primary-action.custom-action button')!;
+		assert.equal(unpin.getAttribute('aria-label'), '取消固定编辑器');
+		assert.equal(unpin.title, '取消固定编辑器');
+		unpin.focus();
+		control.setEditors([{ ...pinned, isDirty: true }, descriptor(second)], second);
+		assert.equal(dom.window.document.activeElement, unpin);
+		unpin.click();
+		assert.deepEqual(unpinned, [first]);
+		const renamed = input('renamed');
+		control.setEditors([{ ...pinned, input: renamed }, descriptor(second)], second);
+		control.domNode.querySelector<HTMLButtonElement>('.ash-tab-primary-action.custom-action button')!.click();
+		assert.deepEqual(unpinned, [first, renamed]);
+	} finally {
+		resetNlsResolver();
+		dom.window.close();
+	}
+});
+
 test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion point", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const drops: Array<{ target: EditorInput | undefined; position: "before" | "after" }> = [];
@@ -58,6 +91,7 @@ test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion 
 		preview: (input) => previews.push(input),
 		close: () => undefined,
 		pinEditor: input => keptEditors.push(input),
+		unstickEditor: () => undefined,
 		startDrag: () => {
 			dragging = true;
 		},
@@ -109,6 +143,7 @@ test("MultiEditorTabsControl forwards external resource drops to the target tab"
 		preview: () => undefined,
 		close: () => undefined,
 		pinEditor: () => undefined,
+		unstickEditor: () => undefined,
 		startDrag: () => undefined,
 		isDragging: () => false,
 		drop: () => undefined,
@@ -256,6 +291,7 @@ const inertDelegate: EditorTabsDelegate = {
 	preview: () => undefined,
 	close: () => undefined,
 	pinEditor: () => undefined,
+	unstickEditor: () => undefined,
 	startDrag: () => undefined,
 	isDragging: () => false,
 	drop: () => undefined,
