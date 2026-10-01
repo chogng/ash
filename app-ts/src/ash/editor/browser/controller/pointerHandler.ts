@@ -19,7 +19,7 @@ export interface EditorPointerDownEvent {
 export class PointerHandler extends Disposable {
 	private readonly pointerDownEmitter = this._register(new Emitter<EditorPointerDownEvent>());
 	private readonly contextMenuEmitter = this._register(new Emitter<EditorMouseEvent>());
-	private pendingMousePointerId: number | undefined;
+	private pendingMousePointerDown: EditorPointerDownEvent | undefined;
 
 	readonly onDidPointerDown: Event<EditorPointerDownEvent> = this.pointerDownEmitter.event;
 	readonly onDidContextMenu: Event<EditorMouseEvent> = this.contextMenuEmitter.event;
@@ -32,19 +32,25 @@ export class PointerHandler extends Disposable {
 		const mouseEvents = new EditorMouseEventFactory(element);
 		this._register(pointerEvents.onPointerDown(element, (event, pointerId) => {
 			if ((event.browserEvent as PointerEvent).pointerType === 'mouse') {
-				this.pendingMousePointerId = pointerId;
+				this.pendingMousePointerDown = { event, pointerId };
 				return;
 			}
 			this.pointerDownEmitter.fire({ event, pointerId });
 		}));
 		this._register(mouseEvents.onMouseDown(element, event => {
-			const pointerId = this.pendingMousePointerId;
-			this.pendingMousePointerId = undefined;
-			if (pointerId !== undefined) this.pointerDownEmitter.fire({ event, pointerId });
+			const pointerDown = this.pendingMousePointerDown;
+			this.pendingMousePointerDown = undefined;
+			if (!pointerDown) return;
+			// Chromium rounds compatibility mouse coordinates, but only that event
+			// carries the click count. Keep pointer coordinates throughout the gesture.
+			pointerDown.event.detail = event.detail;
+			if (event.defaultPrevented) pointerDown.event.preventDefault();
+			this.pointerDownEmitter.fire(pointerDown);
+			if (pointerDown.event.defaultPrevented) event.preventDefault();
 		}));
-		this._register(pointerEvents.onPointerUp(element, () => { this.pendingMousePointerId = undefined; }));
-		this._register(addDisposableListener<PointerEvent>(element, 'pointercancel', () => { this.pendingMousePointerId = undefined; }));
-		this._register(addDisposableListener(this.targetWindow, 'blur', () => { this.pendingMousePointerId = undefined; }));
+		this._register(pointerEvents.onPointerUp(element, () => { this.pendingMousePointerDown = undefined; }));
+		this._register(addDisposableListener<PointerEvent>(element, 'pointercancel', () => { this.pendingMousePointerDown = undefined; }));
+		this._register(addDisposableListener(this.targetWindow, 'blur', () => { this.pendingMousePointerDown = undefined; }));
 		this._register(mouseEvents.onContextMenu(element, event => this.contextMenuEmitter.fire(event)));
 	}
 

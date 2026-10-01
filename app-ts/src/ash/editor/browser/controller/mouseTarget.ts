@@ -105,7 +105,7 @@ export class MouseTargetFactory {
 	): IMouseTarget {
 		const mouseColumn = this.getMouseColumn(relativePos);
 		const elementTarget = classifyElement(target, this.viewHelper.viewDomNode);
-		const domPosition = target ? this.domPositionAt(pos, target) : null;
+		const domPosition = this.domPositionAt(pos);
 		const position = domPosition ?? this.positionAt(relativePos);
 		if (elementTarget?.kind === ElementTargetKind.Textarea) return MouseTarget.createTextarea(target, mouseColumn);
 		if (elementTarget?.kind === ElementTargetKind.ContentWidget) return MouseTarget.createContentWidget(target, mouseColumn, elementTarget.widgetId ?? '');
@@ -174,15 +174,11 @@ export class MouseTargetFactory {
 		return Math.round(mouseContentHorizontalOffset / Math.max(1, typicalHalfwidthCharacterWidth)) + 1;
 	}
 
-	private domPositionAt(pos: PageCoordinates, target: HTMLElement): Position | null {
-		const row = target.closest(`.${ViewLine.CLASS_NAME}`);
-		if (!row || !this.viewHelper.viewLinesDomNode.contains(row)) {
-			return null;
-		}
-		const ownerDocument = target.ownerDocument;
+	private domPositionAt(pos: PageCoordinates): Position | null {
+		const ownerDocument = this.viewHelper.viewLinesDomNode.ownerDocument;
 		const client = pos.toClientCoordinates(ownerDocument.defaultView!);
-		// The event target identifies a span, not the character within that span.
-		// Browser caret hit testing retains shaping, bidi and transformed geometry.
+		// Captured pointers target the editor root. Use the same browser character
+		// boundaries for press, drag and release, independent of that event target.
 		const caret = ownerDocument.caretPositionFromPoint?.(client.clientX, client.clientY)
 			?? ownerDocument.caretRangeFromPoint?.(client.clientX, client.clientY);
 		if (!caret) {
@@ -191,7 +187,8 @@ export class MouseTargetFactory {
 		const node = 'offsetNode' in caret ? caret.offsetNode : caret.startContainer;
 		const offset = 'offsetNode' in caret ? caret.offset : caret.startOffset;
 		const element = node.nodeType === node.TEXT_NODE ? node.parentElement : node as HTMLElement;
-		if (!element || !row.contains(element)) {
+		const row = element?.closest(`.${ViewLine.CLASS_NAME}`);
+		if (!element || !row || !this.viewHelper.viewLinesDomNode.contains(row)) {
 			return null;
 		}
 		return this.viewHelper.getPositionFromDOMInfo(element, offset);

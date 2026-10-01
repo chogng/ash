@@ -203,6 +203,52 @@ test('selection foreground applies only to selected characters and clears when s
 	await expect(page.locator('.view-lines .stanza-editor-selected-text')).toHaveCount(0);
 });
 
+for (const theme of ['light', 'dark', 'contrast', 'contrastLight'] as const) {
+	test(`Chinese drag selection keeps character boundaries stable in ${theme}`, async ({ page }) => {
+		await openEditor(page);
+		const text = '是否带个电饭锅电饭锅的方法蛋糕';
+		await page.evaluate(({ text, theme }) => {
+			const harness = window.ashTextModelIntegration;
+			harness.setTheme(theme);
+			const editor = harness.getControl();
+			editor.getModel()!.setLanguage('plaintext');
+			editor.updateOptions({ fontSize: 13, wordWrap: 'off', cursorBlinking: 'solid' });
+			editor.setValue(text);
+		}, { text, theme });
+		const line = page.locator('.view-lines .stanza-editor-line-text').first();
+		await expect(line).toHaveText(text);
+		const points = await line.evaluate(element => {
+			const node = element.firstChild!.firstChild!;
+			return [0, 3, 8, 12].map(offset => {
+				const range = document.createRange();
+				range.setStart(node, offset);
+				range.setEnd(node, offset + 1);
+				const rect = range.getBoundingClientRect();
+				return { x: rect.left + rect.width / 2 + 0.25, y: rect.top + rect.height / 2, width: rect.width };
+			});
+		});
+		for (const point of points) {
+			await page.mouse.move(point.x, point.y);
+			await page.mouse.down();
+			const anchor = await page.evaluate(() => window.ashTextModelIntegration.getControl().getPosition());
+			try {
+				for (const distance of [0, point.width, 0]) {
+					// Pointer capture changes the event target; tiny vertical motion must not change the column.
+					await page.mouse.move(point.x + distance, point.y + 0.05);
+					const expected = { lineNumber: 1, column: anchor!.column + (distance === 0 ? 0 : 1) };
+					expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getPosition())).toEqual(expected);
+					await expect(page.locator('.stanza-editor-selection')).toHaveCount(distance === 0 ? 0 : 1);
+					await expect(page.locator('.stanza-editor-input')).toBeFocused();
+				}
+			} finally {
+				await page.mouse.up();
+			}
+			expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getPosition())).toEqual(anchor);
+			await expect(page.locator('.stanza-editor-selection')).toHaveCount(0);
+		}
+	});
+}
+
 for (const proportional of [false, true]) {
 	test(`pointer insertion and caret share rendered text coordinates with proportional=${proportional}`, async ({ page }) => {
 		await openEditor(page);

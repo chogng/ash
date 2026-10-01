@@ -208,6 +208,46 @@ test('dragging editor text after horizontal scrolling replaces the selected char
 	await expect(line).toHaveText('mode switcher > !');
 });
 
+test('Chinese drag selection does not jump when pointer capture starts or ends', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	const text = '是否带个电饭锅电饭锅的方法蛋糕';
+	await page.keyboard.insertText(text);
+	await expect(editor.lines.first()).toHaveText(text);
+	const point = await editor.lines.first().evaluate(element => {
+		const node = element.firstChild!.firstChild!;
+		const range = document.createRange();
+		range.setStart(node, 0);
+		range.setEnd(node, 1);
+		const rect = range.getBoundingClientRect();
+		return { x: rect.left + rect.width / 2 + 0.25, y: rect.top + rect.height / 2, width: rect.width, left: rect.left };
+	});
+	await page.mouse.move(point.x, point.y);
+	await page.mouse.down();
+	const caret = editor.element.locator('.stanza-editor-caret.primary');
+	await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+	const anchor = await caret.boundingBox();
+	expect(anchor).not.toBeNull();
+	const anchorOffset = Math.abs(anchor!.x - point.left) < 1 ? 0 : 1;
+	try {
+		for (const distance of [0, point.width, 0]) {
+			await page.mouse.move(point.x + distance, point.y + 0.05);
+			await expect(editor.element.locator('.stanza-editor-selection')).toHaveCount(distance === 0 ? 0 : 1);
+			await expect.poll(async () => (await caret.boundingBox())!.x).toBeCloseTo(anchor!.x + distance, 0);
+			await expect(editor.input).toBeFocused();
+		}
+	} finally {
+		await page.mouse.up();
+	}
+	await expect(editor.element.locator('.stanza-editor-selection')).toHaveCount(0);
+	await expect.poll(async () => (await caret.boundingBox())!.x).toBe(anchor!.x);
+	await page.keyboard.insertText('!');
+	await expect(editor.lines.first()).toHaveText(`${text.slice(0, anchorOffset)}!${text.slice(anchorOffset)}`);
+});
+
 test('text editor automation follows input, replacement, and folding in its group', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;

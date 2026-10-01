@@ -79,6 +79,7 @@ export function createCoordinatesRelativeToEditor(
 /** A normalized browser event with editor-aware page and relative coordinates. */
 export class EditorMouseEvent extends StandardMouseEvent {
 	declare readonly _editorMouseEventBrand: void;
+	public declare detail: number;
 	readonly pos: PageCoordinates;
 	private editorPagePosition: EditorPagePosition | undefined;
 	private relativeEditorPosition: CoordinatesRelativeToEditor | undefined;
