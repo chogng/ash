@@ -12,6 +12,8 @@ export interface ITokenizationTextModelPart {
 	hasCompleteSemanticTokens(): boolean;
 	hasSomeSemanticTokens(): boolean;
 	resetTokenization(): void;
+	/** Waits for accepted lexical tokens for the current model version; caller cancellation does not cancel shared analysis. */
+	whenReady(signal: AbortSignal): Promise<void>;
 	forceTokenization(lineNumber: number): void;
 	tokenizeIfCheap(lineNumber: number): void;
 	hasAccurateTokensForLine(lineNumber: number): boolean;

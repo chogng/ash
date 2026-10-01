@@ -20,6 +20,8 @@ import { LanguageRequestCoordinator } from '../languageRequestCoordinator.js';
 import { toStandardTokenType } from '../../languages/supports/tokenization.js';
 import { PLAINTEXT_LANGUAGE_ID } from '../../languages/modesRegistry.js';
 import { Color } from '../../../../base/common/color.js';
+import { raceCancellationError } from '../../../../base/common/async.js';
+import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 
 export interface TokenizationTextModelPartOptions {
 	readonly languageIdCodec?: ILanguageIdCodec;
@@ -39,6 +41,7 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	private readonly semanticTokensStore: SparseTokensStore;
 	private readonly hasWorkerProvider: boolean;
 	private requestGeneration = 0;
+	private pendingAnalysis: Promise<void> = Promise.resolve();
 
 	readonly onDidChange: Event<void> = this.changeEmitter.event;
 	readonly onDidEncounterError: Event<unknown> = this.errorEmitter.event;
@@ -160,6 +163,22 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 		this.scheduleAnalysis();
 	}
 
+	async whenReady(signal: AbortSignal): Promise<void> {
+		throwIfCancelled(signal);
+		this.assertNotDisposed();
+		while (!this.hasAccurateTokensForLine(1)) {
+			const analysis = this.pendingAnalysis;
+			try {
+				await raceCancellationError(analysis, signal);
+			} catch (error) {
+				if (signal.aborted || analysis === this.pendingAnalysis) {
+					throw error;
+				}
+			}
+			this.assertNotDisposed();
+		}
+	}
+
 	forceTokenization(lineNumber: number): void {
 		this.validateLineNumber(lineNumber);
 		if (this.hasAccurateTokensForLine(lineNumber)) return;
@@ -268,26 +287,28 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 
 	private scheduleAnalysis(): void {
 		const generation = ++this.requestGeneration;
-		if (this.textModel.largeFile.tooLargeForTokenization) return;
 		const languageId = this.textModel.getLanguageId();
-		if (!this.hasTokenProvider()) return;
-		queueMicrotask(() => void this.requestAnalysis(generation, languageId));
+		if (!this.hasTokenProvider()) {
+			this.pendingAnalysis = Promise.resolve();
+			return;
+		}
+		// Readers join the same scheduled request; opening another view must not restart its worker.
+		this.pendingAnalysis = Promise.resolve().then(() => this.requestAnalysis(generation, languageId));
+		void this.pendingAnalysis.catch(error => {
+			if (this.isDisposed || generation !== this.requestGeneration || isCancellation(error)) return;
+			this.errorEmitter.fire(error);
+		});
 	}
 
 	private async requestAnalysis(generation: number, languageId: string): Promise<void> {
-		try {
-			if (this.isDisposed || generation !== this.requestGeneration || languageId !== this.textModel.getLanguageId()) return;
-			await this.coordinator.runLatest(SYNTAX_TOKEN_LANE, { languageId }, result => {
-				if (result.value.lane !== SYNTAX_TOKEN_LANE) throw new TypeError('Token request returned a different lane');
-				const acceptance = this.tokenStore.accept({ ...result, value: result.value.value });
-				if (acceptance !== LanguageResultAcceptance.Applied) {
-					throw new Error(`Token store rejected current result as '${acceptance}'`);
-				}
-			});
-		} catch (error) {
-			if (this.isDisposed || generation !== this.requestGeneration || isCancellation(error)) return;
-			this.errorEmitter.fire(error);
-		}
+		if (this.isDisposed || generation !== this.requestGeneration || languageId !== this.textModel.getLanguageId()) return;
+		await this.coordinator.runLatest(SYNTAX_TOKEN_LANE, { languageId }, result => {
+			if (result.value.lane !== SYNTAX_TOKEN_LANE) throw new TypeError('Token request returned a different lane');
+			const acceptance = this.tokenStore.accept({ ...result, value: result.value.value });
+			if (acceptance !== LanguageResultAcceptance.Applied) {
+				throw new Error(`Token store rejected current result as '${acceptance}'`);
+			}
+		});
 	}
 
 	private validateLineNumber(lineNumber: number): void {
