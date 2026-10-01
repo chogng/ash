@@ -45,6 +45,8 @@ PaneCompositePart
 
 `PaneCompositePart` 创建标题的左右槽位并持有 Composite 生命周期。`CompositeBar` 只负责把可用 View Container 投影为可切换 item。`MenuWorkbenchToolBar` 只负责把指定 `MenuId` 投影到标题右侧。`PaneComposite` 负责当前 container 的 pane、内容和 view-owned title control。
 
+Activity Bar 的首选 tooltip 方向由组件层的 `getActivityHoverPosition` 统一计算：侧栏向内、顶部向下、底部向上。Workbench 和 Sessions 的宿主各自读取所属窗口的位置配置，在 `setupDelayedHover` 的回调中取值；位置切换保留按钮和监听器。Hover 服务负责显示生命周期，底层布局负责坐标计算和空间不足时的方向调整。
+
 | 层级 | 拥有 | 不拥有 |
 | --- | --- | --- |
 | `WorkbenchLayout` | Part 拓扑、尺寸、可见性、sash、持久化 | Part 内部标题和 action item |

@@ -1,4 +1,4 @@
-import { HoverPosition } from "../../base/browser/ui/hover/hoverWidget.js";
+import { getActivityHoverPosition } from "./parts/compositeBarActions.js";
 import { ISkillService } from "../../platform/skills/common/skillService.js";
 import { ILanguageServerService } from "../../platform/language/common/languageServerService.js";
 import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../editor/common/services/languageFeatureDebounce.js';
@@ -800,13 +800,10 @@ export class Workbench extends Disposable {
 		const sidebar = this._register(new SidebarPart(workbenchRoot, {
 			activityHoverOptions: {
 				// Read at display time so a pending hover follows the current host placement.
-				position: () => {
-					switch (configuration.getValue<ActivityBarPosition>(WorkbenchConfiguration.activityBarLocation)) {
-						case ActivityBarPosition.TOP: return HoverPosition.BELOW;
-						case ActivityBarPosition.BOTTOM: return HoverPosition.ABOVE;
-						default: return configuration.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation) === 'left' ? HoverPosition.RIGHT : HoverPosition.LEFT;
-					}
-				},
+				position: () => getActivityHoverPosition(
+					configuration.getValue<ActivityBarPosition>(WorkbenchConfiguration.activityBarLocation),
+					configuration.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation),
+				),
 			},
 			viewDescriptorService: viewDescriptors,
 			compositeBarContextMenuProvider: contextMenus,

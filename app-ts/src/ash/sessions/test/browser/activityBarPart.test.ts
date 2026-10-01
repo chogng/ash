@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import type { IAction } from '../../../base/common/actions.js';
-import type { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
+import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
+import type { SessionsActivityPage } from '../../browser/parts/activitybar/activityBarPart.js';
 
 const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 for (const [name, value] of Object.entries({
@@ -17,6 +18,10 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
+const { ServiceContainer } = await import('../../../platform/instantiation/common/instantiation.js');
+const { IConfigurationService } = await import('../../../platform/configuration/common/configuration.js');
+const { BrowserContextViewService } = await import('../../../platform/contextview/browser/contextViewService.js');
+const { HoverService, IHoverService } = await import('../../../platform/hover/browser/hoverService.js');
 const { Event } = await import('../../../base/common/event.js');
 const { ActivityBarPart } = await import('../../browser/parts/activitybar/activityBarPart.js');
 const { SessionsConfiguration } = await import('../../common/configuration.js');
@@ -36,11 +41,17 @@ test('Sessions Activity Bar selects Chat, Collaboration, Library, and Code pages
 		hideContextMenu() {},
 	};
 	const configuration = new WorkbenchConfigurationService();
-	const bar = new ActivityBarPart(ownerDocument.body, {
+	using contextViews = new BrowserContextViewService(ownerDocument.body);
+	using hovers = new HoverService(configuration, contextViews, contextMenu);
+	using services = new ServiceContainer();
+	services.registerInstance(IConfigurationService, configuration);
+	services.registerInstance(IContextMenuService, contextMenu);
+	services.registerInstance(IHoverService, hovers);
+	const bar = services.createInstance(ActivityBarPart, ownerDocument.body, {
 		focusList: () => { listFocuses++; },
-		selectPage: page => { selectedPages.push(page); },
-		showAccountMenu: async anchor => { accountAnchor = anchor; },
-	}, configuration, contextMenu);
+		selectPage: (page: SessionsActivityPage) => { selectedPages.push(page); },
+		showAccountMenu: async (anchor: HTMLElement) => { accountAnchor = anchor; },
+	});
 	try {
 		const buttons = [...bar.domNode.querySelectorAll<HTMLButtonElement>('button')];
 		assert.deepEqual(buttons.map(button => ({
@@ -100,7 +111,13 @@ test('Sessions Activity Bar context menu changes its own position and size setti
 		hideContextMenu() {},
 	};
 	const configuration = new WorkbenchConfigurationService();
-	const bar = new ActivityBarPart(ownerDocument.body, { focusList() {}, selectPage() {}, async showAccountMenu() {} }, configuration, contextMenu);
+	using contextViews = new BrowserContextViewService(ownerDocument.body);
+	using hovers = new HoverService(configuration, contextViews, contextMenu);
+	using services = new ServiceContainer();
+	services.registerInstance(IConfigurationService, configuration);
+	services.registerInstance(IContextMenuService, contextMenu);
+	services.registerInstance(IHoverService, hovers);
+	const bar = services.createInstance(ActivityBarPart, ownerDocument.body, { focusList() {}, selectPage() {}, async showAccountMenu() {} });
 	try {
 		bar.domNode.querySelector('.ash-sessions-activity-content')?.dispatchEvent(new browser.window.MouseEvent('contextmenu', { bubbles: true, button: 2 }));
 		assert.deepEqual(shownActions.map(action => action.label), ['Activity Bar Position', 'Activity Bar Size']);
@@ -123,4 +140,19 @@ test('Sessions Activity Bar context menu changes its own position and size setti
 		bar.dispose();
 		configuration.dispose();
 	}
+});
+
+test('Sessions Activity Bar requires its window Hover service during creation', () => {
+	using configuration = new WorkbenchConfigurationService();
+	using services = new ServiceContainer();
+	services.registerInstance(IConfigurationService, configuration);
+	services.registerInstance(IContextMenuService, {
+		onDidShowContextMenu: Event.None,
+		onDidHideContextMenu: Event.None,
+		showContextMenu() {},
+		hideContextMenu() {},
+	});
+	assert.throws(() => services.createInstance(ActivityBarPart, browser.window.document.body, {
+		focusList() {}, selectPage() {}, showAccountMenu() {},
+	}), /hoverService/);
 });

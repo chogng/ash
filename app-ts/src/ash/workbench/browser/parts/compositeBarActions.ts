@@ -8,9 +8,19 @@ import { assertDefined } from "../../../base/common/types.js";
 import type { IDelayedHoverOptions } from '../../../base/browser/ui/hover/hover.js';
 import { HoverPosition } from '../../../base/browser/ui/hover/hoverWidget.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
+import { ActivityBarPosition, type SideBarLocation } from '../../common/configuration.js';
 
 export interface IActivityHoverOptions {
 	readonly position: () => HoverPosition;
+}
+
+/** Window hosts supply their own placement; both products share the inward-facing direction rule. */
+export function getActivityHoverPosition(location: ActivityBarPosition, sideBarLocation: SideBarLocation): HoverPosition {
+	switch (location) {
+		case ActivityBarPosition.TOP: return HoverPosition.BELOW;
+		case ActivityBarPosition.BOTTOM: return HoverPosition.ABOVE;
+		default: return sideBarLocation === 'left' ? HoverPosition.RIGHT : HoverPosition.LEFT;
+	}
 }
 
 export interface ICompositeBarActionViewItemOptions extends ActionViewItemOptions {

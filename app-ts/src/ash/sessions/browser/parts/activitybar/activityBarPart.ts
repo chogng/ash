@@ -1,12 +1,14 @@
 import './media/activityBarPart.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { Button } from '../../../../base/browser/ui/button/button.js';
+import { Button, type ButtonOptions } from '../../../../base/browser/ui/button/button.js';
 import { SubmenuAction, type IAction } from '../../../../base/common/actions.js';
 import type { Icon } from '../../../../base/common/icon.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
+import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
+import { getActivityHoverPosition } from '../../../../workbench/browser/parts/compositeBarActions.js';
 import { ActivityBarPosition } from '../../../../workbench/common/configuration.js';
 import { WorkbenchPart } from '../../../../workbench/browser/part.js';
 import { SessionsConfiguration } from '../../../common/configuration.js';
@@ -37,6 +39,7 @@ export class ActivityBarPart extends WorkbenchPart {
 		delegate: ActivityBarPartDelegate,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
+		@IHoverService private readonly hoverService: IHoverService,
 	) {
 		super(container, 'activitybar');
 		this.domNode.classList.replace('ash-workbench-activitybar', 'ash-sessions-activitybar');
@@ -47,7 +50,7 @@ export class ActivityBarPart extends WorkbenchPart {
 		bottom.className = 'ash-sessions-activity-bottom';
 
 		const chatLabel = localize('sessions.activity.chat', 'Chat');
-		this.chatButton = this._register(new Button(top, {
+		this.chatButton = this.createActivityButton(top, {
 			label: chatLabel,
 			icon: Lxicon.chat2Filled,
 			iconOnly: true,
@@ -57,51 +60,51 @@ export class ActivityBarPart extends WorkbenchPart {
 				delegate.selectPage('chat');
 				delegate.focusList();
 			},
-		}));
+		});
 		this.chatButton.domNode.classList.add('ash-sessions-activity-item', 'selected');
 		this.chatButton.domNode.setAttribute('aria-current', 'page');
 
 		const colabLabel = localize('sessions.activity.colab', 'Collaboration');
-		this.colabButton = this._register(new Button(top, {
+		this.colabButton = this.createActivityButton(top, {
 			label: colabLabel,
 			icon: Lxicon.colab,
 			iconOnly: true,
 			ariaLabel: colabLabel,
 			title: colabLabel,
 			onClick: () => delegate.selectPage('colab'),
-		}));
+		});
 		this.colabButton.domNode.classList.add('ash-sessions-activity-item');
 		const libraryLabel = localize('sessions.activity.library', 'Library');
-		this.libraryButton = this._register(new Button(top, {
+		this.libraryButton = this.createActivityButton(top, {
 			label: libraryLabel,
 			icon: Lxicon.library,
 			iconOnly: true,
 			ariaLabel: libraryLabel,
 			title: libraryLabel,
 			onClick: () => delegate.selectPage('library'),
-		}));
+		});
 		this.libraryButton.domNode.classList.add('ash-sessions-activity-item');
 		const codeLabel = localize('sessions.mode.code', 'Code');
-		this.codeButton = this._register(new Button(top, {
+		this.codeButton = this.createActivityButton(top, {
 			label: codeLabel,
 			icon: Lxicon.code,
 			iconOnly: true,
 			ariaLabel: codeLabel,
 			title: codeLabel,
 			onClick: () => delegate.selectPage('code'),
-		}));
+		});
 		this.codeButton.domNode.classList.add('ash-sessions-activity-item');
 		this.addUnavailableButton(bottom, Lxicon.deviceMobile, localize('sessions.activity.mobile', 'Mobile devices'));
 
 		const accountLabel = localize('workbench.accounts', 'Accounts');
-		const accountButton = this._register(new Button(bottom, {
+		const accountButton = this.createActivityButton(bottom, {
 			label: accountLabel,
 			icon: Lxicon.account,
 			iconOnly: true,
 			ariaLabel: accountLabel,
 			title: accountLabel,
 			onClick: () => delegate.showAccountMenu(accountButton.domNode),
-		}));
+		});
 		accountButton.domNode.classList.add('ash-sessions-activity-item');
 		accountButton.domNode.setAttribute('aria-haspopup', 'menu');
 		accountButton.domNode.setAttribute('aria-expanded', 'false');
@@ -174,16 +177,28 @@ export class ActivityBarPart extends WorkbenchPart {
 		return actions;
 	}
 
+	private createActivityButton(container: HTMLElement, options: ButtonOptions & { title: string }): Button {
+		const button = this._register(new Button(container, { ...options, title: undefined }));
+		this._register(this.hoverService.setupDelayedHover(button.domNode, () => ({
+			content: options.title,
+			position: {
+				// Sessions keeps its own placement setting and always hosts the side rail on the left.
+				hoverPosition: getActivityHoverPosition(this.configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation), 'left'),
+			},
+		}), { groupId: 'actions' }));
+		return button;
+	}
+
 	private addUnavailableButton(container: HTMLElement, icon: Icon, label: string): void {
 		const unavailableLabel = localize('sessions.activity.unavailable', '{0} (coming soon)', label);
-		const button = this._register(new Button(container, {
+		const button = this.createActivityButton(container, {
 			label: unavailableLabel,
 			icon,
 			iconOnly: true,
 			ariaLabel: unavailableLabel,
 			title: unavailableLabel,
 			enabled: false,
-		}));
+		});
 		button.domNode.classList.add('ash-sessions-activity-item');
 	}
 

@@ -1592,6 +1592,82 @@ test('Browser Sessions application menu uses Sessions actions', async ({ target,
 	await expect(workbench.page).toHaveURL(/\/workbench\/workbench\.html$/u);
 });
 
+test('Sessions Activity Bar tooltips follow side, top and bottom placement without replacing buttons', async ({ application, target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code');
+	let page = workbench.page;
+	if (target.kind === 'browser') {
+		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+	} else {
+		if (!('windows' in application)) throw new Error('Expected Electron windows');
+		const opened = application.waitForEvent('window');
+		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
+		page = await opened;
+	}
+	const navigation = page.locator('.ash-sessions-activity-content');
+	const chat = navigation.getByRole('button', { name: /^Chat(?:\.|$)/u });
+	const accounts = navigation.getByRole('button', { name: 'Accounts', exact: true });
+	const originalChat = await chat.elementHandle();
+	const originalAccounts = await accounts.elementHandle();
+	const checkTooltip = async (trigger: Locator, label: string, direction: 'right' | 'below' | 'above', keyboard = false): Promise<void> => {
+		await page.mouse.move(600, 400);
+		if (keyboard) {
+			await page.getByRole('button', { name: 'Application menu', exact: true }).focus();
+			await trigger.focus();
+		} else {
+			await trigger.hover();
+		}
+		const tooltip = page.getByRole('tooltip');
+		await expect(tooltip).toBeVisible();
+		await expect(tooltip).toHaveText(label);
+		const [anchor, hover] = await Promise.all([trigger.boundingBox(), page.locator('.ash-context-view-hover', { has: tooltip }).boundingBox()]);
+		expect(anchor).not.toBeNull();
+		expect(hover).not.toBeNull();
+		if (direction === 'right') expect(hover!.x).toBeGreaterThanOrEqual(anchor!.x + anchor!.width);
+		if (direction === 'below') expect(hover!.y).toBeGreaterThanOrEqual(anchor!.y + anchor!.height);
+		if (direction === 'above') expect(hover!.y + hover!.height).toBeLessThanOrEqual(anchor!.y);
+		await expect(trigger).toHaveAttribute('aria-describedby', await tooltip.getAttribute('id') ?? '');
+		await expect(page.locator('.ash-context-view-hover')).toHaveCSS('border-radius', '12px');
+		await page.keyboard.press('Escape');
+		await expect(tooltip).toHaveCount(0);
+		await expect(trigger).not.toHaveAttribute('aria-describedby');
+		if (keyboard) await expect(trigger).toBeFocused();
+	};
+	const setPosition = async (position: string): Promise<void> => {
+		await accounts.click({ button: 'right' });
+		await page.getByRole('menu').last().getByRole('menuitem', { name: 'Activity Bar Position' }).press('ArrowRight');
+		await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: position, exact: true }).click();
+	};
+	await checkTooltip(chat, 'Chat', 'right');
+	for (const label of ['Collaboration', 'Library', 'Code', 'Mobile devices (coming soon)', 'Accounts']) {
+		await checkTooltip(navigation.getByRole('button', { name: label, exact: true }), label, 'right');
+	}
+	await checkTooltip(accounts, 'Accounts', 'right', true);
+	await setPosition('Top');
+	await expect(page.locator('.ash-sessions-activity-host.top')).toBeVisible();
+	await checkTooltip(chat, 'Chat', 'below', true);
+	await checkTooltip(accounts, 'Accounts', 'below');
+	await page.emulateMedia({ colorScheme: 'dark' });
+	await setPosition('Bottom');
+	await expect(page.locator('.ash-sessions-activity-host.bottom')).toBeVisible();
+	await checkTooltip(chat, 'Chat', 'above');
+	await checkTooltip(accounts, 'Accounts', 'above', true);
+	await setPosition('Default');
+	await expect(page.locator('[data-part="activitybar"]')).toBeVisible();
+	await accounts.click({ button: 'right' });
+	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Activity Bar Size' }).press('ArrowRight');
+	await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: 'Compact', exact: true }).click();
+	await expect(navigation).toHaveClass(/compact/u);
+	await page.setViewportSize({ width: 900, height: 600 });
+	await checkTooltip(chat, 'Chat', 'right');
+	expect(await chat.evaluate((element, original) => element === original, originalChat)).toBe(true);
+	expect(await accounts.evaluate((element, original) => element === original, originalAccounts)).toBe(true);
+	await originalChat!.dispose();
+	await originalAccounts!.dispose();
+	const closed = target.kind === 'electron' ? page.waitForEvent('close') : undefined;
+	await returnFromSessions(page);
+	await closed;
+});
+
 test('Sessions Activity Bar switches Chat and Code with the keyboard without losing the draft', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	let page = workbench.page;

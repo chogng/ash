@@ -1,6 +1,6 @@
 import type { IDelayedHoverOptions } from "../../../base/browser/ui/hover/hover.js";
 import { HoverPosition } from "../../../base/browser/ui/hover/hoverWidget.js";
-import type { IActivityHoverOptions } from "./compositeBarActions.js";
+import { getActivityHoverPosition, type IActivityHoverOptions } from "./compositeBarActions.js";
 import './media/globalCompositeBar.css';
 import { h } from '../../../base/browser/dom.js';
 import { ActionBar } from '../../../base/browser/ui/actionbar/actionbar.js';
@@ -21,7 +21,7 @@ import { ILogService } from '../../../platform/log/common/log.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { IGitHubConnectionService } from '../../services/accounts/common/gitHubConnectionService.js';
 import { ILocalizationService } from '../../services/localization/common/localizationService.js';
-import { WorkbenchConfiguration, type SideBarLocation } from '../../common/configuration.js';
+import { ActivityBarPosition, WorkbenchConfiguration, type SideBarLocation } from '../../common/configuration.js';
 
 /** Account and management actions shared by the Activity Bar and title bar. */
 export class GlobalCompositeBar extends Disposable {
@@ -58,7 +58,7 @@ export class GlobalCompositeBar extends Disposable {
 			ariaLabel: this.label('workbench.activityBarGlobalActions', 'Activity Bar global actions'),
 			orientation: 'vertical',
 			actionViewItemProvider: (action, options) => this.createActionViewItem(action, options, {
-				position: () => this.configurationService.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation) === 'left' ? HoverPosition.RIGHT : HoverPosition.LEFT,
+				position: () => getActivityHoverPosition(ActivityBarPosition.DEFAULT, this.configurationService.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation)),
 			}),
 		}));
 		this.renderActions();
