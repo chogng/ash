@@ -463,10 +463,15 @@
 }
 
 .ash-scm-changes {
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   flex: 1 1 auto;
-  overflow: auto;
-  scrollbar-gutter: stable;
+  overflow: hidden;
+}
+
+.ash-scm-changes > .ash-list-scrollable {
+  flex: 1 1 auto;
 }
 
 .ash-scm-section-heading {
@@ -475,15 +480,10 @@
   min-height: 22px;
   align-items: center;
   margin: 0;
-  padding: 0 8px 0 16px;
-  font-size: 12px;
+  padding: 0;
+  font-size: var(--ash-font-size-label1);
   font-weight: var(--ash-font-weight-semi-bold);
   line-height: 22px;
-}
-
-.ash-scm-section-heading:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
 }
 
 .ash-scm-section-label {
@@ -511,17 +511,13 @@
   display: none;
 }
 
-.ash-scm-section-heading:hover > .ash-scm-section-actions,
+.ash-scm-changes .ash-tree-row:hover .ash-scm-section-actions,
+.ash-scm-changes .ash-tree-row.focused .ash-scm-section-actions,
+.ash-scm-changes .ash-tree-row.focused .ash-scm-change-actions,
 .ash-scm-section-heading:focus-within > .ash-scm-section-actions,
 .ash-scm-change:hover > .ash-scm-change-actions,
 .ash-scm-change:focus-within > .ash-scm-change-actions {
   display: flex;
-}
-
-.ash-scm-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
 }
 
 .ash-scm-change {
@@ -529,7 +525,7 @@
   min-width: 0;
   min-height: 22px;
   align-items: center;
-  padding: 0 8px 0 16px;
+  padding: 0;
   line-height: 22px;
 }
 

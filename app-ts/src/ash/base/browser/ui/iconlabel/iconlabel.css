@@ -6,6 +6,10 @@
   overflow: hidden;
 }
 
+.ash-icon-label.ash-icon-label-wide-gap {
+  gap: var(--ash-spacing-size60);
+}
+
 .ash-icon-label-icon {
   display: inline-flex;
   flex: 0 0 auto;

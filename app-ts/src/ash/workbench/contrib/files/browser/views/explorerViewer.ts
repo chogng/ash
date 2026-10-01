@@ -142,6 +142,7 @@ export class FilesRenderer extends Disposable {
 		const decoration = provideDecorations(item);
 		label.setFile(item.resource, {
 			hidePath: true,
+			extraClasses: ['ash-icon-label-wide-gap'],
 			fileKind: item.kind,
 			fileDecorations: { colors: true, badges: true },
 			...(decoration ? {

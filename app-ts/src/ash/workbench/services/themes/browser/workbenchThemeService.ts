@@ -145,7 +145,8 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 		if (theme === this.fileIconTheme) { return; }
 		this.fileIconTheme = theme;
 		if (this.iconStyles) {
-			this.iconStyles.textContent = theme ? theme.styleSheetContent + '\n.ash-file-icon{font-style:normal;font-weight:normal;line-height:16px;}' : '';
+			// Font advances can exceed the reserved icon width; keep their origin at the slot's left edge.
+			this.iconStyles.textContent = theme ? theme.styleSheetContent + '\n.ash-file-icon{display:block;font-style:normal;font-weight:normal;line-height:16px;}' : '';
 		}
 		this.fileIconThemeChange.fire(this.getFileIconTheme());
 		this.resourceIconChange.fire();

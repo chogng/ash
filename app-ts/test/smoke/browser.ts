@@ -19,6 +19,11 @@ const serverUrl = `http://127.0.0.1:${port}/`;
 const workspaceDirectory = mode === 'full'
 	? await mkdtemp(join(tmpdir(), 'ash-playwright-browser-workspace-'))
 	: undefined;
+// Git discovery belongs to workspace startup, so connected SCM scenarios prepare it before launch.
+if (workspaceDirectory && process.env.ASH_PLAYWRIGHT_GIT_REPOSITORY === '1') {
+	const initialized = await run('git', ['init', '-b', 'main', workspaceDirectory], process.env);
+	if (initialized !== 0) { process.exit(initialized); }
+}
 const profileDirectory = mode === 'full'
 	// Leave room for the daemon's socket name within Windows AF_UNIX limits.
 	? await mkdtemp(join(tmpdir(), 'ash-web-'))

@@ -5,8 +5,8 @@ import { expect, test } from '../../../automation/test.js';
 test.beforeEach(async ({ target, testWorkspace }) => {
 	if (target.kind !== 'electron' || target.appServerMode !== 'required') return;
 	await mkdir(join(testWorkspace.directory, 'tree-parent', 'tree-child'), { recursive: true });
-	await writeFile(join(testWorkspace.directory, 'root.txt'), 'root');
-	await writeFile(join(testWorkspace.directory, 'tree-parent', 'tree-child', 'leaf.txt'), 'leaf');
+	await writeFile(join(testWorkspace.directory, 'root.ts'), 'root');
+	await writeFile(join(testWorkspace.directory, 'tree-parent', 'tree-child', 'leaf.ts'), 'leaf');
 	await mkdir(join(testWorkspace.directory, 'tree-other'));
 	await writeFile(join(testWorkspace.directory, 'tree-other', 'other.txt'), 'other');
 });
@@ -28,10 +28,10 @@ test('Explorer tree guides align with ancestor arrows and settings update withou
 		await page.evaluate(async () => {
 			const root = await navigator.storage.getDirectory();
 			const workspace = await root.getDirectoryHandle(`tree-guides-${crypto.randomUUID()}`, { create: true });
-			await workspace.getFileHandle('root.txt', { create: true });
+			await workspace.getFileHandle('root.ts', { create: true });
 			const parent = await workspace.getDirectoryHandle('tree-parent', { create: true });
 			const child = await parent.getDirectoryHandle('tree-child', { create: true });
-			await child.getFileHandle('leaf.txt', { create: true });
+			await child.getFileHandle('leaf.ts', { create: true });
 			const other = await workspace.getDirectoryHandle('tree-other', { create: true });
 			await other.getFileHandle('other.txt', { create: true });
 			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => workspace });
@@ -41,12 +41,12 @@ test('Explorer tree guides align with ancestor arrows and settings update withou
 	const explorer = page.locator('.ash-explorer');
 	const parent = explorer.getByRole('treeitem', { name: 'tree-parent', exact: true });
 	const child = explorer.getByRole('treeitem').filter({ has: page.getByText('tree-child', { exact: true }) });
-	const leaf = explorer.getByRole('treeitem').filter({ has: page.getByText('leaf.txt', { exact: true }) });
+	const leaf = explorer.getByRole('treeitem').filter({ has: page.getByText('leaf.ts', { exact: true }) });
 	const other = explorer.getByRole('treeitem', { name: 'tree-other', exact: true });
 	await parent.locator('.ash-tree-twistie').click();
 	await child.locator('.ash-tree-twistie').click();
 	await other.locator('.ash-tree-twistie').click();
-	const rootFile = explorer.getByRole('treeitem').filter({ has: page.getByText('root.txt', { exact: true }) });
+	const rootFile = explorer.getByRole('treeitem').filter({ has: page.getByText('root.ts', { exact: true }) });
 	const guide = leaf.locator('.ash-tree-indent-guide').first();
 	await page.mouse.move(0, 0);
 	await expect(guide).toHaveCSS('border-left-color', 'rgba(0, 0, 0, 0)');
@@ -64,12 +64,28 @@ test('Explorer tree guides align with ancestor arrows and settings update withou
 		const leafText = await leaf.locator('.ash-icon-label-text').boundingBox();
 		return { alignment: line!.x - arrow!.x - arrow!.width / 2, indent: childArrow!.x - arrow!.x, rootContent: rootContent!.x - arrow!.x, leafContent: leafContent!.x - childArrow!.x, rootText: rootText!.x - folderText!.x, leafText: leafText!.x - childText!.x };
 	};
-	const reservedTwistieWidth = hasFileIcons ? 0 : 20;
-	if (hasFileIcons) await expect(rootFile.locator('.ash-file-icon')).toBeVisible();
+	const reservedTwistieWidth = hasFileIcons ? 0 : 22;
+	if (hasFileIcons) {
+		await expect(rootFile.locator('.ash-file-icon')).toBeVisible();
+		const metrics = await leaf.locator('.ash-file-icon').evaluate(async icon => {
+			const style = getComputedStyle(icon);
+			await document.fonts.load(`${style.fontSize} ${style.fontFamily}`);
+			const range = document.createRange();
+			range.selectNodeContents(icon);
+			const context = document.createElement('canvas').getContext('2d')!;
+			context.font = `${style.fontSize} ${style.fontFamily}`;
+			const text = context.measureText(icon.textContent!);
+			const guide = icon.closest('.ash-tree-row')!.querySelector('.ash-tree-indent-guide:last-child')!.getBoundingClientRect();
+			return { content: icon.textContent, family: style.fontFamily, fontSize: style.fontSize, advance: text.width, originOffset: range.getBoundingClientRect().x - icon.getBoundingClientRect().x, inkGap: range.getBoundingClientRect().x - text.actualBoundingBoxLeft - guide.x - 1, expectedInkGap: -text.actualBoundingBoxLeft - 1 };
+		});
+		console.log('Seti guide clearance', metrics);
+		expect(metrics.originOffset).toBeCloseTo(0, 2);
+		expect(metrics.inkGap).toBeCloseTo(metrics.expectedInkGap, 2);
+	}
 	expect(await geometry()).toEqual({ alignment: 0, indent: 8, rootContent: reservedTwistieWidth, leafContent: 8 + reservedTwistieWidth, rootText: 0, leafText: 8 });
 	await expect(explorer.locator('.ash-icon-label-description:visible')).toHaveCount(0);
 	await leaf.locator('.ash-icon-label').hover();
-	await expect(page.locator('.ash-hover').filter({ hasText: /tree-parent\/tree-child\/leaf\.txt/u })).toBeVisible();
+	await expect(page.locator('.ash-hover').filter({ hasText: /tree-parent\/tree-child\/leaf\.ts/u })).toBeVisible();
 	await page.mouse.move(0, 0);
 	const leafRow = await leaf.elementHandle();
 	await leaf.locator('.ash-tree-contents').click();
@@ -127,7 +143,7 @@ test('Explorer tree guides align with ancestor arrows and settings update withou
 				values['workbench.iconTheme'] = id;
 				await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(values) } });
 			}, id);
-			await expect.poll(geometry).toEqual({ alignment: 0, indent: 4, rootContent: id === null ? 20 : 0, leafContent: id === null ? 24 : 4, rootText: 0, leafText: 4 });
+			await expect.poll(geometry).toEqual({ alignment: 0, indent: 4, rootContent: id === null ? 22 : 0, leafContent: id === null ? 26 : 4, rootText: 0, leafText: 4 });
 			expect(await leafRow!.evaluate(row => row.isConnected)).toBe(true);
 		}
 	}

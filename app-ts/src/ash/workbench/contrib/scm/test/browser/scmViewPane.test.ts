@@ -1,3 +1,7 @@
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+import { setNlsResolver, resetNlsResolver } from '../../../../../nls.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { noFileIconTheme } from '../../../../../platform/theme/common/themeService.js';
 import assert from "node:assert/strict";
 import { Emitter, Event } from '../../../../../base/common/event.js';
@@ -13,13 +17,13 @@ import { MenuId, registerAction2 } from "../../../../../platform/actions/common/
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import { ServiceContainer } from "../../../../../platform/instantiation/common/instantiation.js";
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
-import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
+import { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
-import type { IResourceIconRenderer } from "../../../../browser/labels.js";
+import { IResourceIconRenderer } from "../../../../browser/labels.js";
 import { GitWorkspaceError, IGitService, type GitRepository, type GraphQuery, type GitStatus } from "../../../../../workbench/contrib/git/common/gitService.js";
 import { IEditorService, type EditorInput, type EditorOpenOptions } from "../../../../../workbench/services/editor/common/editorService.js";
 import type { IViewsService } from '../../../../../workbench/services/views/browser/viewsService.js';
-import { WorkbenchState, type IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { WorkbenchState, IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import type { IWorkingCopyService } from '../../../../../workbench/services/workingCopy/common/workingCopyService.js';
 import { CommandService } from "../../../../../workbench/services/commands/common/commandService.js";
 import { OpenScmMultiDiffEditorAction } from "../../../../../workbench/contrib/multiDiffEditor/browser/scmMultiDiffAction.js";
@@ -601,6 +605,97 @@ test("ScmAgentReviewViewPane exposes an explicit empty state", async () => {
 	}
 });
 
+test('ScmViewPane folds groups through the shared tree and keeps state when resources refresh', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	const installedGlobals = installDomGlobals(browser);
+	using changes = new Emitter<void>();
+	const opened: Array<{ path: string; pinned: boolean }> = [];
+	let groupActions = 0;
+	let fileActions = 0;
+	const resource = (path: string) => ({
+		sourceUri: URI.file(`/workspace/${path}`), path,
+		decorations: { badge: 'M', tooltip: 'Modified', kind: 'modified' },
+		openLabel: `Open ${path}`,
+		actions: [{ id: 'stage', label: 'Stage', tooltip: 'Stage', enabled: true, run: () => { fileActions++; } }],
+		open: async (options: { readonly pinned: boolean }) => { opened.push({ path, pinned: options.pinned }); },
+	});
+	const groupAction = { id: 'stageAll', label: 'Stage All', tooltip: 'Stage All', enabled: true, run: () => { groupActions++; } };
+	let groups = [{ id: 'changes', label: 'Changes', resources: [resource('first.ts')], actions: [groupAction] }];
+	const provider: ISCMProvider = {
+		...testSCMProvider('repo-1', 'workspace'),
+		get groups() { return groups; },
+		onDidChangeResources: changes.event,
+		refresh: async () => {
+			groups = [{ ...groups[0], resources: [resource('first.ts'), resource('second.ts')] }];
+			changes.fire();
+		},
+	};
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
+	try {
+		const { ScmViewPane } = await import('../../browser/scmViewPane.js');
+		using services = new ServiceContainer();
+		using configuration = new InMemoryConfigurationService();
+		using scm = new SCMService();
+		using views = new SCMViewService(scm);
+		using repository = scm.registerSCMProvider(provider);
+		services.registerInstance(ISCMService, scm);
+		services.registerInstance(ISCMViewService, views);
+		services.registerInstance(IResourceIconRenderer, testFileIconThemeService());
+		services.registerInstance(IContextMenuService, testContextMenuProvider);
+		services.registerInstance(IWorkspaceContextService, testWorkspaceContext());
+		services.registerInstance(IConfigurationService, configuration);
+		using pane = services.createInstance(ScmViewPane, browser.window.document.body, { id: 'scm-folding', title: 'Changes' });
+		const tree = pane.element.querySelector<HTMLElement>('[role="tree"]')!;
+		const group = (): HTMLElement => tree.querySelector<HTMLElement>('[role="treeitem"][aria-level="1"]')!;
+		const key = (value: string): void => { tree.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: value, bubbles: true })); };
+		assert.equal(tree.getAttribute('aria-label'), '源代码管理更改');
+		assert.ok(tree.getAttribute('aria-description')?.includes('左方向键折叠分组'));
+		assert.equal(group().getAttribute('aria-expanded'), 'true');
+		group().querySelector<HTMLElement>('.ash-scm-section-label')!.click();
+		assert.equal(group().getAttribute('aria-expanded'), 'false');
+		assert.equal(tree.querySelectorAll('.ash-scm-change').length, 0);
+		await pane.refresh();
+		assert.equal(group().getAttribute('aria-expanded'), 'false');
+		assert.equal(group().querySelector('.ash-scm-section-count')?.textContent, '2');
+		key('ArrowRight');
+		assert.equal(group().getAttribute('aria-expanded'), 'true');
+		assert.equal(tree.querySelectorAll('.ash-scm-change').length, 2);
+		const groupButton = group().querySelector<HTMLButtonElement>('[aria-label="Stage All"]')!;
+		groupButton.click();
+		await waitFor(() => groupActions === 1);
+		assert.equal(group().getAttribute('aria-expanded'), 'true');
+		assert.deepEqual(opened, []);
+		key('ArrowLeft');
+		assert.equal(group().getAttribute('aria-expanded'), 'false');
+		key('Enter');
+		assert.equal(group().getAttribute('aria-expanded'), 'true');
+		key('ArrowRight');
+		key('Enter');
+		assert.deepEqual(opened, [{ path: 'first.ts', pinned: false }, { path: 'first.ts', pinned: true }]);
+		const fileButton = tree.querySelector<HTMLButtonElement>('.ash-scm-change-actions [aria-label="Stage"]')!;
+		fileButton.click();
+		await waitFor(() => fileActions === 1);
+		assert.equal(opened.length, 2);
+		group().querySelector<HTMLElement>('.ash-tree-twistie')!.click();
+		assert.equal(group().getAttribute('aria-expanded'), 'false');
+		await pane.refresh();
+		groupButton.click();
+		assert.equal(groupActions, 1, 'Replaced rows release their action listeners');
+		group().querySelector<HTMLElement>('.ash-tree-twistie')!.click();
+		tree.querySelector<HTMLButtonElement>('[aria-label="Open second.ts"]')!.click();
+		assert.deepEqual(opened.at(-1), { path: 'second.ts', pinned: false });
+		using otherRepository = scm.registerSCMProvider({ ...provider, id: 'repo-2' });
+		group().querySelector<HTMLElement>('.ash-tree-twistie')!.click();
+		views.selectRepository(otherRepository.id);
+		assert.equal(group().getAttribute('aria-expanded'), 'true', 'Repositories do not share group identities');
+	} finally {
+		resetNlsResolver();
+		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
+		browser.window.close();
+	}
+});
+
 test("ScmViewPane groups App Server Git status", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
@@ -722,10 +817,11 @@ test("ScmViewPane groups App Server Git status", async () => {
 			commandService, editorService, workingCopyService: workingCopies,
 			dialogService: { ...testDialogs, confirm: async () => ({ confirmed: false }) },
 		}));
+		using configuration = new InMemoryConfigurationService();
 		using pane = new ScmViewPane(browser.window.document.body, {
 			id: "ash.git",
 			title: "Changes",
-		}, scmService, viewService, testFileIconThemeService(), testContextMenuProvider, testWorkspaceContext());
+		}, scmService, viewService, testFileIconThemeService(), testContextMenuProvider, testWorkspaceContext(), configuration);
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector(".ash-scm-status")?.textContent === "4 changed files");
 
@@ -927,10 +1023,11 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
 		using viewService = new SCMViewService(scmService);
 		using provider = new GitSCMProvider(gitService, gitService.repositories[0], {} as GitHistoryProvider, testGitProviderServices());
 		using repository = scmService.registerSCMProvider(provider);
+		using configuration = new InMemoryConfigurationService();
 		using pane = new ScmViewPane(browser.window.document.body, {
 			id: "ash.git.restart",
 			title: "Changes",
-		}, scmService, viewService, testFileIconThemeService(), testContextMenuProvider, testWorkspaceContext());
+		}, scmService, viewService, testFileIconThemeService(), testContextMenuProvider, testWorkspaceContext(), configuration);
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector('[aria-label="Open changes for before.ts"]') !== null);
 		assert.equal(pane.element.querySelector(".ash-scm-branch"), null);
@@ -1024,7 +1121,7 @@ function testWorkspaceContext(): IWorkspaceContextService {
 	};
 }
 
-function testSCMProvider(id: string, label: string, historyProvider: GitHistoryProvider): ISCMProvider {
+function testSCMProvider(id: string, label: string, historyProvider?: GitHistoryProvider): ISCMProvider {
 	return {
 		id, providerId: 'git', label, historyProvider,
 		groups: [], onDidChangeResources: Event.None,

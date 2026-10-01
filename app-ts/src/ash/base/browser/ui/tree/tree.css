@@ -132,7 +132,7 @@
 
 .ash-tree-twistie.ash-tree-twistie-with-icon-gap {
   /* Match an icon label's gap while keeping the arrow on the guide axis. */
-  margin-right: var(--ash-spacing-size40);
+  margin-right: var(--ash-spacing-size60);
 }
 
 .ash-tree-twistie.ash-tree-twistie-hidden {

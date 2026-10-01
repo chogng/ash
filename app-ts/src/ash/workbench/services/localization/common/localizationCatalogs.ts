@@ -9,6 +9,8 @@ const english: LanguagePackCatalog = {
 	catalogVersion: ASH_LOCALIZATION_CATALOG_VERSION,
 	bundles: {
 		ash: {
+			'scm.changesTree': 'Source control changes',
+			'scm.changesTreeHelp': 'Use Up and Down to navigate, Left to collapse, and Right to expand a group. Press Enter to open a file.',
 			"list.treeIndentTitle": "Tree indentation",
 			"list.treeIndentInvalid": "Tree indent must be between 4 and 40 pixels",
 			"list.treeGuidesInvalid": "Unknown tree indent guide mode: {0}",
@@ -1154,6 +1156,8 @@ const chinese: LanguagePackCatalog = {
 	catalogVersion: ASH_LOCALIZATION_CATALOG_VERSION,
 	bundles: {
 		ash: {
+			'scm.changesTree': '源代码管理更改',
+			'scm.changesTreeHelp': '使用上下方向键导航，左方向键折叠分组，右方向键展开分组。按 Enter 打开文件。',
 			"list.treeIndentTitle": "树缩进",
 			"list.treeIndentInvalid": "树缩进必须在 4 到 40 像素之间",
 			"list.treeGuidesInvalid": "未知的树引导线显示模式：{0}",

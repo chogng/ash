@@ -5,7 +5,10 @@ import { IconLabel } from '../../../../base/browser/ui/iconlabel/iconlabel.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { localize } from '../../../../nls.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { WorkbenchObjectTree } from '../../../../platform/list/browser/listService.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IWorkspaceContextService, WorkbenchState } from '../../../../platform/workspace/common/workspace.js';
@@ -15,6 +18,10 @@ import { ISCMService, ISCMViewService, type ISCMProvider, type ISCMResource, typ
 
 export const GIT_VIEW_ID = 'ash.gitView';
 
+type TreeElement =
+	| { readonly id: string; readonly group: ISCMResourceGroup }
+	| { readonly id: string; readonly resource: ISCMResource };
+
 /** Displays resources and actions from the selected SCM provider. */
 export class ScmViewPane extends ViewPane {
 	private readonly repositorySelectorContainer: HTMLLabelElement;
@@ -22,10 +29,10 @@ export class ScmViewPane extends ViewPane {
 	private readonly commitInput: HTMLTextAreaElement;
 	private readonly commitButton: Button;
 	private readonly statusElement: HTMLDivElement;
-	private readonly changesElement: HTMLDivElement;
-	private readonly renderedChanges = this._register(new DisposableStore());
+	private readonly tree: WorkbenchObjectTree<TreeElement>;
+	private readonly renderedRows = this._register(new DisposableMap<HTMLElement, DisposableStore>());
 	private readonly providerListener = this._register(new MutableDisposable());
-	private readonly actionViewItems: ScmActionViewItem[] = [];
+	private readonly actionViewItems = new Set<ScmActionViewItem>();
 	private renderedProvider: ISCMProvider | undefined;
 	private renderedGroups: readonly ISCMResourceGroup[] | undefined;
 	private commitTooltip = 'Commit staged changes';
@@ -39,6 +46,7 @@ export class ScmViewPane extends ViewPane {
 		@IResourceIconRenderer private readonly resourceIconRenderer: IResourceIconRenderer,
 		@IContextMenuService private readonly contextMenuProvider: IContextMenuProvider,
 		@IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService,
+		@IConfigurationService configurationService: IConfigurationService,
 	) {
 		super(container, options);
 		this.contentElement.classList.add('ash-scm');
@@ -71,9 +79,32 @@ export class ScmViewPane extends ViewPane {
 		this.statusElement.className = 'ash-scm-status ash-aria-live';
 		this.statusElement.setAttribute('role', 'status');
 		this.statusElement.setAttribute('aria-live', 'polite');
-		this.changesElement = h(document, 'div');
-		this.changesElement.className = 'ash-scm-changes';
-		this.contentElement.append(this.repositorySelectorContainer, commitForm, this.statusElement, this.changesElement);
+		const changesContainer = h(document, 'div');
+		changesContainer.className = 'ash-scm-changes';
+		this.contentElement.append(this.repositorySelectorContainer, commitForm, this.statusElement, changesContainer);
+		this.tree = this._register(new WorkbenchObjectTree<TreeElement>(changesContainer, {
+			configurationService,
+			ariaLabel: localize('scm.changesTree', 'Source control changes'),
+			scrolling: 'managed',
+			modelOptions: { identityProvider: { getId: element => element.id } },
+			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: element => 'group' in element ? element.group.label : element.resource.path },
+			expandOnlyOnTwistieClick: false,
+			expandOnDoubleClick: false,
+			reuseRows: true,
+			onDidRemoveRow: row => {
+				const content = row.querySelector<HTMLElement>('.ash-scm-section-heading, .ash-scm-change');
+				if (content) { this.renderedRows.deleteAndDispose(content); }
+			},
+			renderElement: element => 'group' in element ? this.renderGroup(element.group) : this.renderResource(element.resource),
+		}));
+		this.tree.element.setAttribute('aria-description', localize('scm.changesTreeHelp', 'Use Up and Down to navigate, Left to collapse, and Right to expand a group. Press Enter to open a file.'));
+		this._register(this.tree.onDidOpen(event => {
+			if ('resource' in event.element) {
+				void event.element.resource.open({ pinned: event.editorOptions.pinned === true });
+			} else if (event.browserEvent.type === 'keydown') {
+				this.tree.toggleCollapsed(event.element.id);
+			}
+		}));
 		this._register(addDisposableListener(this.repositorySelector, 'change', () => void this.selectRepository(this.repositorySelector.value)));
 		this._register(addDisposableListener(commitForm, 'submit', event => { event.preventDefault(); void this.commit(); }));
 		this._register(addDisposableListener(this.commitInput, 'input', () => {
@@ -167,47 +198,46 @@ export class ScmViewPane extends ViewPane {
 		if (forceResources || provider !== this.renderedProvider || groups !== this.renderedGroups) {
 			this.renderedProvider = provider;
 			this.renderedGroups = groups;
-			this.actionViewItems.length = 0;
-			this.renderedChanges.clear();
-			this.changesElement.replaceChildren();
-			for (const group of groups ?? []) this.appendGroup(group);
+			// Provider snapshots replace group objects; repository/group identities keep tree state stable.
+			this.tree.setChildren((groups ?? []).map(group => ({
+				element: { id: JSON.stringify([active!.id, group.id]), group },
+				children: group.resources.map(resource => ({
+					element: { id: JSON.stringify([active!.id, group.id, resource.path]), resource },
+				})),
+			})));
 		}
 		for (const item of this.actionViewItems) item.setBusy(this.busy || provider?.isBusy === true);
 	}
 
-	private appendGroup(group: ISCMResourceGroup): void {
+	private renderGroup(group: ISCMResourceGroup): HTMLElement {
 		const document = this.element.ownerDocument;
-		const section = h(document, 'section');
-		section.className = 'ash-scm-section';
-		const heading = h(document, 'h3');
+		const heading = h(document, 'div');
 		heading.className = 'ash-scm-section-heading';
-		heading.tabIndex = 0;
+		const resources = this.renderedRows.set(heading, new DisposableStore());
 		const label = h(document, 'span');
 		label.className = 'ash-scm-section-label';
 		label.textContent = group.label;
+		label.title = group.label;
 		heading.append(label);
-		this.renderActionToolbar(heading, group.actions, `${group.label} actions`).classList.add('ash-scm-section-actions');
+		this.renderActionToolbar(heading, group.actions, `${group.label} actions`, resources).classList.add('ash-scm-section-actions');
 		const count = h(document, 'span');
 		count.className = 'ash-scm-section-count';
 		count.textContent = String(group.resources.length);
 		heading.append(count);
-		const list = h(document, 'ul');
-		list.className = 'ash-scm-list';
-		for (const resource of group.resources) list.append(this.renderResource(resource));
-		section.append(heading, list);
-		this.changesElement.append(section);
+		return heading;
 	}
 
-	private renderResource(resource: ISCMResource): HTMLLIElement {
+	private renderResource(resource: ISCMResource): HTMLElement {
 		const document = this.element.ownerDocument;
-		const item = h(document, 'li');
+		const item = h(document, 'div');
 		item.className = 'ash-scm-change';
+		const resources = this.renderedRows.set(item, new DisposableStore());
 		const open = h(document, 'button');
 		open.type = 'button';
 		open.className = 'ash-scm-change-open';
 		const name = basename(resource.path);
 		const parentPath = dirname(resource.path);
-		const fileLabel = this.renderedChanges.add(new IconLabel(open, {
+		const fileLabel = resources.add(new IconLabel(open, {
 			label: name,
 			description: parentPath || undefined,
 			reserveIconSpace: true,
@@ -218,13 +248,19 @@ export class ScmViewPane extends ViewPane {
 		fileLabel.element.querySelector('.ash-icon-label-description')?.classList.add('ash-scm-change-description');
 		open.setAttribute('aria-label', resource.openLabel);
 		open.append(fileLabel.element);
-		this.renderedChanges.add(addDisposableListener(open, 'click', event => {
+		resources.add(addDisposableListener(open, 'mousedown', event => event.stopPropagation()));
+		resources.add(addDisposableListener(open, 'keydown', event => event.stopPropagation()));
+		resources.add(addDisposableListener(open, 'click', event => {
+			event.stopPropagation();
 			if ((event as MouseEvent).detail > 1) return;
 			void resource.open({ pinned: false });
 		}));
-		this.renderedChanges.add(addDisposableListener(open, 'dblclick', () => void resource.open({ pinned: true })));
+		resources.add(addDisposableListener(open, 'dblclick', event => {
+			event.stopPropagation();
+			void resource.open({ pinned: true });
+		}));
 		item.append(open);
-		this.renderActionToolbar(item, resource.actions, `Actions for ${resource.path}`).classList.add('ash-scm-change-actions');
+		this.renderActionToolbar(item, resource.actions, `Actions for ${resource.path}`, resources).classList.add('ash-scm-change-actions');
 		const badge = h(document, 'span');
 		badge.className = `ash-scm-change-status status-${resource.decorations.kind}`;
 		badge.textContent = resource.decorations.badge;
@@ -233,17 +269,22 @@ export class ScmViewPane extends ViewPane {
 		return item;
 	}
 
-	private renderActionToolbar(container: HTMLElement, actions: readonly IAction[], ariaLabel: string): HTMLDivElement {
-		const toolbar = this.renderedChanges.add(new WorkbenchToolBar(container, this.contextMenuProvider, {
+	private renderActionToolbar(container: HTMLElement, actions: readonly IAction[], ariaLabel: string, resources: DisposableStore): HTMLDivElement {
+		const toolbar = resources.add(new WorkbenchToolBar(container, this.contextMenuProvider, {
 			ariaLabel,
 			actionViewItemProvider: (action, options) => {
 				const item = new ScmActionViewItem(action, () => this.busy || this.provider?.isBusy === true, options);
-				this.actionViewItems.push(item);
+				this.actionViewItems.add(item);
+				resources.add(toDisposable(() => this.actionViewItems.delete(item)));
 				return item;
 			},
 		}));
 		toolbar.setActions(actions);
 		toolbar.element.classList.add('ash-scm-action-toolbar');
+		// Toolbar input belongs to its buttons, rather than the containing tree row.
+		for (const type of ['mousedown', 'click', 'dblclick', 'keydown']) {
+			resources.add(addDisposableListener(toolbar.element, type, event => event.stopPropagation()));
+		}
 		return toolbar.element;
 	}
 }
