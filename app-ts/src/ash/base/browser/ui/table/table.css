@@ -1,0 +1,51 @@
+.ash-table {
+	min-width: 0;
+	overflow-x: auto;
+	color: var(--ash-foreground);
+	font-size: var(--ash-font-size-body1);
+	border: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
+}
+
+.ash-table-header {
+	font-weight: var(--ash-font-weight-semi-bold);
+	border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+}
+
+.ash-table-column-header,
+.ash-table-cell {
+	box-sizing: border-box;
+	min-width: 0;
+	padding: 0 var(--ash-spacing-size80);
+	display: flex;
+	align-items: center;
+	height: 100%;
+}
+
+.ash-table-column-header {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ash-table-row-cells {
+	display: flex;
+	height: 100%;
+}
+
+.ash-table-cell {
+	flex-shrink: 0;
+}
+
+.ash-table-row:hover {
+	background: var(--ash-list-hover-background);
+}
+
+.ash-table-row.selected {
+	background: var(--ash-list-inactive-selection-background);
+}
+
+.ash-table-row:focus-visible,
+.ash-table-cell:focus-visible {
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
+}
