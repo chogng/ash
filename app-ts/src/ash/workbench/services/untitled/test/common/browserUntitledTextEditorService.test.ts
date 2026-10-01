@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { Emitter, Event } from "../../../../../base/common/event.js";
+import { DeferredPromise } from '../../../../../base/common/async.js';
+import { isCancellationError } from '../../../../../base/common/errors.js';
 import { URI } from "../../../../../base/common/uri.js";
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
 import { IQuickInputService, type IQuickInputService as IQuickInputServiceContract, type IQuickPick, type IQuickPickItem } from "../../../../../platform/quickinput/common/quickInput.js";
@@ -140,6 +142,77 @@ test("New Untitled Text Editor opens a compatible text editor input", async () =
 	assert.equal(opened[0]?.label, "Untitled-1");
 	assert.equal(opened[0]?.initialText, "");
 });
+
+test('Repeated New Untitled commands preserve every document while the first editor is loading', async () => {
+	using workingCopies = new BrowserWorkingCopyService();
+	using services = new InstantiationService();
+	services.registerInstance(IWorkingCopyService, workingCopies);
+	using untitled = services.createInstance(BrowserUntitledTextEditorService);
+	const firstLoad = new DeferredPromise<void>();
+	const opened: string[] = [];
+	services.registerInstance(IUntitledTextEditorService, untitled);
+	services.registerInstance(IEditorPart, { openEditor: async (input: { label: string }) => {
+		opened.push(input.label);
+		if (opened.length === 1) await firstLoad.p;
+	} } as unknown as IEditorPartContract);
+	using commands = new CommandService(services);
+	const requests = Array.from({ length: 3 }, () => commands.executeCommand(NEW_UNTITLED_FILE_COMMAND_ID));
+	const beforeFirstLoad = [...opened];
+	await firstLoad.complete();
+	await Promise.all(requests);
+	assert.deepEqual({ beforeFirstLoad, opened }, { beforeFirstLoad: ['Untitled-1'], opened: ['Untitled-1', 'Untitled-2', 'Untitled-3'] });
+});
+
+test('New Untitled continues opening queued documents after an editor fails', async () => {
+	using workingCopies = new BrowserWorkingCopyService();
+	using services = new InstantiationService();
+	services.registerInstance(IWorkingCopyService, workingCopies);
+	using untitled = services.createInstance(BrowserUntitledTextEditorService);
+	const firstLoad = new DeferredPromise<void>();
+	const opened: string[] = [];
+	services.registerInstance(IUntitledTextEditorService, untitled);
+	services.registerInstance(IEditorPart, { openEditor: async (input: { label: string }) => {
+		opened.push(input.label);
+		if (opened.length === 1) await firstLoad.p;
+	} } as unknown as IEditorPartContract);
+	using commands = new CommandService(services);
+	const failed = assert.rejects(commands.executeCommand(NEW_UNTITLED_FILE_COMMAND_ID), /First editor failed/);
+	const second = commands.executeCommand(NEW_UNTITLED_FILE_COMMAND_ID);
+	const beforeFailure = [...opened];
+	await firstLoad.error(new Error('First editor failed'));
+	await Promise.all([failed, second]);
+	assert.deepEqual({ beforeFailure, opened }, { beforeFailure: ['Untitled-1'], opened: ['Untitled-1', 'Untitled-2'] });
+});
+
+for (const boundary of ['workspace reset', 'window disposal'] as const) {
+	test(`New Untitled cancels queued documents after ${boundary}`, async () => {
+		using workingCopies = new BrowserWorkingCopyService();
+		using services = new InstantiationService();
+		services.registerInstance(IWorkingCopyService, workingCopies);
+		using untitled = services.createInstance(BrowserUntitledTextEditorService);
+		const firstLoad = new DeferredPromise<void>();
+		const opened: string[] = [];
+		services.registerInstance(IUntitledTextEditorService, untitled);
+		services.registerInstance(IEditorPart, { openEditor: async (input: { label: string }) => {
+			opened.push(input.label);
+			if (opened.length === 1) await firstLoad.p;
+		} } as unknown as IEditorPartContract);
+		using commands = new CommandService(services);
+		const first = commands.executeCommand(NEW_UNTITLED_FILE_COMMAND_ID);
+		const pending = commands.executeCommand(NEW_UNTITLED_FILE_COMMAND_ID);
+		const cancelled = assert.rejects(pending, isCancellationError);
+		if (boundary === 'workspace reset') {
+			untitled.reset();
+			untitled.create();
+			untitled.create();
+		} else {
+			untitled.dispose();
+		}
+		await firstLoad.complete();
+		await Promise.all([first, cancelled]);
+		assert.deepEqual(opened, ['Untitled-1']);
+	});
+}
 
 test("New File from Template opens the selected extension template as an untitled editor", async () => {
 	using workingCopies = new BrowserWorkingCopyService();

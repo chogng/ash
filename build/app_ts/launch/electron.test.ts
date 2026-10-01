@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { copyFile, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -30,6 +30,7 @@ for (const profile of ['default', 'custom'] as const) {
       let previous;
       setInterval(() => {
         const phase = fs.readFileSync('phase', 'utf8');
+        fs.appendFileSync('observed.log', phase + '\\n');
         if (phase === 'stop') process.exit(0);
         if (phase === previous) return;
         console.log(previous === undefined ? 'Starting compilation in watch mode' : 'File change detected. Starting incremental compilation');
@@ -41,7 +42,12 @@ for (const profile of ['default', 'custom'] as const) {
         fs.appendFileSync('phases.log', phase + '\\n');
       }, 25);
     `);
-    await writeFile(join(desktop, 'phase'), 'initial');
+    async function publishPhase(phase: string): Promise<void> {
+      // The compiler must never observe the truncate/write gap as a successful empty phase.
+      await writeFile(join(desktop, 'phase.next'), phase);
+      await rename(join(desktop, 'phase.next'), join(desktop, 'phase'));
+    }
+    await publishPhase('initial');
     const home = join(root, profile === 'custom' ? 'custom-profile' : '.build/app-ts/dev/profile');
     const userData = join(root, profile === 'custom' ? 'custom-user-data' : '.build/app-ts/dev/user-data');
     const child = spawn(process.execPath, [join(root, 'build/app_ts/launch/electron.ts'), '--watch', '--fixture', ...(profile === 'custom' ? [`--user-data-dir=${userData}`] : [])], {
@@ -52,7 +58,7 @@ for (const profile of ['default', 'custom'] as const) {
     child.stderr.on('data', chunk => { output += chunk; });
     const closed = new Promise(resolvePromise => child.once('close', resolvePromise));
     t.after(async () => {
-      await writeFile(join(desktop, 'phase'), 'stop');
+      await publishPhase('stop');
       await closed;
       await rm(root, { recursive: true, force: true });
     });
@@ -73,7 +79,7 @@ for (const profile of ['default', 'custom'] as const) {
     }
     await until(() => output.includes('unsupported runtime imports: fs'));
     assert.deepEqual(await lines('launches.log'), []);
-    await writeFile(join(desktop, 'phase'), 'valid');
+    await publishPhase('valid');
     await until(async () => (await lines('launches.log')).length === 1);
     const compilers = (await lines('compilers.log')).map(line => JSON.parse(line));
     assert.equal(compilers.length, 1);
@@ -82,15 +88,21 @@ for (const profile of ['default', 'custom'] as const) {
       assert.ok(compiler.args.includes('--watch'));
       assert.deepEqual(compiler.args.slice(0, 3), ['--build', 'tsconfig.main.json', 'tsconfig.preload.json']);
     }
+    // Force a compiler read while the next phase is incomplete, without relying on scheduling luck.
+    await writeFile(join(desktop, 'phase.next'), '');
+    const observations = (await lines('observed.log')).length;
+    await until(async () => (await lines('observed.log')).length > observations);
+    assert.equal((await lines('observed.log')).at(-1), 'valid');
+    assert.equal((await lines('launches.log')).length, 1);
     for (const phase of ['error', 'invalid']) {
       output = '';
-      await writeFile(join(desktop, 'phase'), phase);
+      await publishPhase(phase);
       await until(async () => (await lines('phases.log')).includes(phase));
       if (phase === 'invalid') await until(() => output.includes('unsupported runtime imports: fs'));
       await delay(300);
       assert.equal((await lines('launches.log')).length, 1);
     }
-    await writeFile(join(desktop, 'phase'), 'recovered');
+    await publishPhase('recovered');
     await until(async () => (await lines('launches.log')).length === 2);
     const launches = (await lines('launches.log')).map(line => JSON.parse(line));
     assert.equal((await lines('compilers.log')).length, 1);
@@ -98,7 +110,8 @@ for (const profile of ['default', 'custom'] as const) {
       assert.ok(pid > 0);
       assert.deepEqual(launch, { cwd: desktop, args: ['--fixture', `--user-data-dir=${userData}`], home });
     }
-    await writeFile(join(desktop, 'phase'), 'stop');
+    assert.deepEqual(await lines('phases.log'), ['initial', 'valid', 'error', 'invalid', 'recovered']);
+    await publishPhase('stop');
     await closed;
     assert.equal(child.exitCode, 1, 'An unexpectedly exited compiler fails the launch task');
     for (const { pid } of [...launches, ...compilers]) assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });

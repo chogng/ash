@@ -2,6 +2,7 @@ module(name = "ash")
 
 bazel_dep(name = "platforms", version = "1.1.0")
 bazel_dep(name = "rules_rs", version = "0.0.96")
+bazel_dep(name = "rules_cc", version = "0.2.20")
 bazel_dep(name = "rules_platform", version = "0.1.0")
 bazel_dep(name = "rules_python", version = "1.9.2")
 bazel_dep(name = "apple_support", version = "2.1.0")
@@ -129,6 +130,12 @@ crate.from_cargo(
     ],
 )
 use_repo(crate, "crates")
+
+crate.annotation(
+    crate = "sherpa-onnx-sys",
+    deps = ["//third_party/sherpa-onnx:cpp_runtime"],
+    repositories = ["crates"],
+)
 
 # Export the locked protoc binaries for the build script's execution platform.
 [

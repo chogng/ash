@@ -80,6 +80,18 @@ fn bazel_runfile(path: &str) -> PathBuf {
     PathBuf::from(value)
 }
 
+fn cpp_runtime_environment(library: &Path) -> (&'static str, PathBuf) {
+    assert!(
+        library.is_file(),
+        "missing declared C++ runtime: {}",
+        library.display()
+    );
+    (
+        "LD_LIBRARY_PATH",
+        library.parent().expect("C++ runtime directory").to_owned(),
+    )
+}
+
 struct StagedBinaries {
     _directory: TempDir,
     ash: PathBuf,
@@ -245,6 +257,11 @@ impl Fixture {
             ("CODEX_HOME", self.codex_home()),
             ("ASH_APP_SERVER_PATH", self.app_server.clone()),
         ];
+        if let Some(path) = option_env!("ASH_BAZEL_LIBSTDCXX") {
+            // Staged executables no longer have Bazel's relative library layout.
+            // Keep every child on the declared runtime instead of the host copy.
+            environment.push(cpp_runtime_environment(&bazel_runfile(path)));
+        }
         if let Some(path) = &self.product_services {
             environment.push(("ASH_PRODUCT_SERVICES_PATH", path.clone()));
         }
@@ -969,6 +986,31 @@ fn normalize_assessment_ids(screen: &str) -> String {
     }
     normalized.push_str(remaining);
     normalized
+}
+
+#[test]
+fn cpp_runtime_environment_configures_only_the_child() {
+    let directory = tempfile::tempdir().unwrap();
+    let library = directory.path().join("libstdc++.so.6");
+    fs::write(&library, b"runtime fixture").unwrap();
+    let inherited = std::env::var_os("LD_LIBRARY_PATH");
+    let (name, value) = cpp_runtime_environment(&library);
+    let mut command = std::process::Command::new("unused-test-child");
+    command.env(name, &value);
+    assert_eq!(name, "LD_LIBRARY_PATH");
+    assert_eq!(value, directory.path());
+    assert_eq!(
+        command.get_envs().collect::<Vec<_>>(),
+        vec![(std::ffi::OsStr::new(name), Some(value.as_os_str()))]
+    );
+    assert_eq!(std::env::var_os("LD_LIBRARY_PATH"), inherited);
+}
+
+#[test]
+#[should_panic(expected = "missing declared C++ runtime")]
+fn cpp_runtime_environment_rejects_a_missing_runfile() {
+    let directory = tempfile::tempdir().unwrap();
+    cpp_runtime_environment(&directory.path().join("libstdc++.so.6"));
 }
 
 #[test]

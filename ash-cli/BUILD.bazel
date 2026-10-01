@@ -15,6 +15,12 @@ ash_rust_binary(
     deps = [":cli"],
 )
 
+_TUI_RUSTC_ENV = {
+    "ASH_BAZEL_ASH": "$(rlocationpath :ash)",
+    "ASH_BAZEL_APP_SERVER": "$(rlocationpath //ash-rs/app-server:ash-app-server)",
+    "ASH_BAZEL_DAEMON": "$(rlocationpath //ash-rs/app-server-daemon:ash-app-server-daemon)",
+}
+
 rust_test(
     name = "tui-real-scenarios",
     crate_name = "tui_real_scenarios",
@@ -32,15 +38,23 @@ rust_test(
         ":ash",
         "//ash-rs/app-server:ash-app-server",
         "//ash-rs/app-server-daemon:ash-app-server-daemon",
-    ] + glob(["tests/snapshots/**/*.snap"]),
+    ] + glob(["tests/snapshots/**/*.snap"]) + select({
+        "@llvm//platforms/config:linux_aarch64_gnu": ["@llvm//runtimes/libstdcxx:libstdcxx_shared_soname"],
+        "@llvm//platforms/config:linux_x86_64_gnu": ["@llvm//runtimes/libstdcxx:libstdcxx_shared_soname"],
+        "//conditions:default": [],
+    }),
     deps = all_crate_deps(normal = True, normal_dev = True) + [":cli"],
     edition = "2024",
     env_inherit = ["PATH", "ASH_RG_PATH", "ASH_TGREP_PATH"],
-    rustc_env = {
-        "ASH_BAZEL_ASH": "$(rlocationpath :ash)",
-        "ASH_BAZEL_APP_SERVER": "$(rlocationpath //ash-rs/app-server:ash-app-server)",
-        "ASH_BAZEL_DAEMON": "$(rlocationpath //ash-rs/app-server-daemon:ash-app-server-daemon)",
-    },
+    rustc_env = select({
+        "@llvm//platforms/config:linux_aarch64_gnu": _TUI_RUSTC_ENV | {
+            "ASH_BAZEL_LIBSTDCXX": "$(rlocationpath @llvm//runtimes/libstdcxx:libstdcxx_shared_soname)",
+        },
+        "@llvm//platforms/config:linux_x86_64_gnu": _TUI_RUSTC_ENV | {
+            "ASH_BAZEL_LIBSTDCXX": "$(rlocationpath @llvm//runtimes/libstdcxx:libstdcxx_shared_soname)",
+        },
+        "//conditions:default": _TUI_RUSTC_ENV,
+    }),
     rustc_env_files = ["//:workspace-version-env"],
     timeout = "long",
 )

@@ -1,4 +1,6 @@
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
+import { TaskQueue } from '../../../../base/common/async.js';
+import { canceled } from '../../../../base/common/errors.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { isMacintosh } from '../../../../base/common/platform.js';
@@ -41,6 +43,8 @@ registerAction2(class OpenFileAction extends Action2 {
 });
 
 registerAction2(class NewUntitledTextEditorAction extends Action2 {
+	private readonly openQueues = new WeakMap<IUntitledTextEditorService, TaskQueue>();
+
 	constructor() {
 		super({
 			id: NEW_UNTITLED_FILE_COMMAND_ID,
@@ -56,8 +60,20 @@ registerAction2(class NewUntitledTextEditorAction extends Action2 {
 	}
 
 	override run(accessor: ServicesAccessor): Promise<void> {
-		const untitled = accessor.get(IUntitledTextEditorService).create();
-		return accessor.get(IEditorPart).openEditor(untitled).then(() => undefined);
+		const service = accessor.get(IUntitledTextEditorService);
+		const editorPart = accessor.get(IEditorPart);
+		const untitled = service.create();
+		let queue = this.openQueues.get(service);
+		if (!queue) {
+			queue = new TaskQueue();
+			this.openQueues.set(service, queue);
+		}
+		// Explicit creation keeps every document; navigation opens still supersede older pending loads.
+		return queue.schedule(async () => {
+			// Workspace reset and window disposal release these identities, even if their URI is reused.
+			if (service.get(untitled.resource) !== untitled) throw canceled();
+			await editorPart.openEditor(untitled);
+		});
 	}
 });
 

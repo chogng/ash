@@ -19,7 +19,7 @@ for (const [lineEndingName, lineEnding] of [['LF', '\n'], ['CRLF', '\r\n']] as c
 			['src/ash/workbench/electron-browser/desktop.main.ts', ['ash.desktop.open-start', 'ash.desktop.api-ready', 'ash.desktop.workbench-start', 'ash.desktop.lifecycle-ready']],
 			['src/ash/workbench/browser/workbench.ts', ['ash.workbench.constructor-start', 'ash.workbench.auxiliary-restore-start', 'ash.workbench.constructor-done', 'ash.workbench.extensions-wait', 'ash.workbench.extensions-ready', 'ash.workbench.editors-restored', 'ash.workbench.backups-restored', 'ash.workbench.contributions-restored']],
 			['src/ash/workbench/services/extensions/browser/appServerExtensionService.ts', ['ash.extensions.catalog-ready', 'ash.extensions.manifest-verified', 'ash.extensions.resources-ready', 'ash.extensions.grammars-ready']],
-			['src/ash/workbench/services/workingCopy/browser/indexedDbWorkingCopyBackupService.ts', ['ash.backups.open-requested', 'ash.backups.database-ready', 'ash.backups.list-ready']],
+			['src/ash/workbench/services/workingCopy/browser/indexedDbWorkingCopyBackupService.ts', ['ash.backups.catalog-read', 'ash.backups.catalog-ready', 'ash.backups.open-requested', 'ash.backups.database-ready', 'ash.backups.list-ready']],
 		] as const) {
 			const file = resolve(desktopRoot, path);
 			const source = readFileSync(file, 'utf8').replaceAll('\r\n', '\n').replaceAll('\n', lineEnding);

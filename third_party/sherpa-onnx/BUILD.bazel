@@ -1,0 +1,21 @@
+load("@rules_cc//cc:cc_import.bzl", "cc_import")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+# Sherpa's Linux archives use the GNU C++ ABI. Import the pinned toolchain's
+# source-built runtime with both names: -lstdc++ needs the linker name, while
+# the ELF loader needs the SONAME in the consuming binary's runfiles.
+cc_import(
+    name = "linux_cpp_runtime",
+    interface_library = "@llvm//runtimes/libstdcxx:libstdcxx_shared_linker_name",
+    shared_library = "@llvm//runtimes/libstdcxx:libstdcxx_shared_soname",
+)
+
+cc_library(
+    name = "cpp_runtime",
+    deps = select({
+        "@llvm//platforms/config:linux_aarch64_gnu": [":linux_cpp_runtime"],
+        "@llvm//platforms/config:linux_x86_64_gnu": [":linux_cpp_runtime"],
+        "//conditions:default": [],
+    }),
+    visibility = ["//visibility:public"],
+)

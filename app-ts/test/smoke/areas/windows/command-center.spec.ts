@@ -948,6 +948,7 @@ test('titlebar navigation moves through editor history beside Quick Access', asy
 	await openUntitled();
 	await openUntitled();
 	await openUntitled();
+	await expect(page.locator('.ash-tab.checked')).toContainText('Untitled-3');
 	await expect(back).toBeEnabled();
 	await expect(forward).toBeDisabled();
 	await back.click();

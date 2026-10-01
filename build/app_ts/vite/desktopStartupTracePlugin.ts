@@ -62,6 +62,8 @@ const marksByFile: Readonly<Record<string, readonly StartupMark[]>> = {
 		{ name: 'ash.extensions.grammars-ready', anchor: '\t\t\tconst preparedGrammars = await this.options.textMateService.grammars.prepareGrammars(this.grammarRegistration, grammars);', position: 'after' },
 	],
 	'src/ash/workbench/services/workingCopy/browser/indexedDbWorkingCopyBackupService.ts': [
+		{ name: 'ash.backups.catalog-read', anchor: '\t\t\tconst databases = await factory.databases();', position: 'before' },
+		{ name: 'ash.backups.catalog-ready', anchor: '\t\t\tconst databases = await factory.databases();', position: 'after' },
 		{ name: 'ash.backups.open-requested', anchor: '\t\tconst opening = factory.open(DATABASE_NAME, DATABASE_VERSION);', position: 'after' },
 		{ name: 'ash.backups.database-ready', anchor: '\t\tconst records = await request<StoredBackup[]>(database.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).index("workspaceId").getAll(workspaceId));', position: 'before' },
 		{ name: 'ash.backups.list-ready', anchor: '\t\tconst records = await request<StoredBackup[]>(database.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).index("workspaceId").getAll(workspaceId));', position: 'after' },
