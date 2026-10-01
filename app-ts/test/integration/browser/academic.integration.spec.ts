@@ -91,28 +91,30 @@ test("Academic TextModel editor persists selected font, size, and emphasis forma
 
 test("Academic TextModel editor exposes collaboration as a separate contribution", async ({ page }) => {
 	await page.goto("/academic.html");
-	await page.evaluate(() => {
-		const responses = ["editor-browser-room"];
-		window.prompt = () => responses.shift() ?? null;
-	});
 	const toolbar = page.locator("#document-editor .stanza-document-collaboration-toolbar");
 	const start = toolbar.locator("[data-action-id='startCollaboration'] button");
 	await expect(toolbar).toHaveAttribute("data-state", "inactive");
 	await start.click();
+	const dialog = page.getByRole('dialog', { name: 'Collaborate', exact: true });
+	await dialog.getByRole('textbox').fill('editor-browser-room');
+	await dialog.getByRole('button', { name: 'OK', exact: true }).click();
 	await expect(toolbar).toHaveAttribute("data-state", "connected");
 	await expect(toolbar.locator(".stanza-document-collaboration-status")).toHaveText("Room: editor-browser-room");
 });
 
 test("Academic TextModel editor exposes room-owner invitations", async ({ page }) => {
 	await page.goto("/academic.html");
-	const prompts = ["editor-browser-room", "Writer", "viewer"];
-	await page.evaluate(({ prompts }) => {
-		window.prompt = () => prompts.shift() ?? null;
-	}, { prompts });
 	const toolbar = page.locator("#document-editor .stanza-document-collaboration-toolbar");
 	await toolbar.locator("[data-action-id='startCollaboration'] button").click();
+	const join = page.getByRole('dialog', { name: 'Collaborate', exact: true });
+	await join.getByRole('textbox').fill('editor-browser-room');
+	await join.getByRole('button', { name: 'OK', exact: true }).click();
 	await expect(toolbar.locator("[data-action-id='inviteCollaborator'] button")).toBeVisible();
 	await toolbar.locator("[data-action-id='inviteCollaborator'] button").click();
+	const invitation = page.getByRole('dialog', { name: 'Invite collaborator', exact: true });
+	await invitation.getByRole('textbox', { name: 'Name', exact: true }).fill('Writer');
+	await invitation.getByRole('textbox', { name: 'Role', exact: true }).fill('viewer');
+	await invitation.getByRole('button', { name: 'OK', exact: true }).click();
 	await expect(toolbar.locator(".stanza-document-collaboration-status")).toContainText("Invitation created for Writer");
 	await expect(toolbar.locator(".stanza-document-collaboration-invitation-token")).toHaveText("Room ID: editor-browser-room\nAccess token: editor-browser-member-token");
 	await toolbar.locator("[data-action-id='manageCollaborators'] button").click();

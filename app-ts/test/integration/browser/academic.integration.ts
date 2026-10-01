@@ -1,6 +1,9 @@
 import { URI } from "../../../src/ash/base/common/uri.js";
 import { Emitter, type Event } from "../../../src/ash/base/common/event.js";
-import { Disposable } from "../../../src/ash/base/common/lifecycle.js";
+import { Disposable, DisposableStore } from "../../../src/ash/base/common/lifecycle.js";
+import '../../../src/ash/base/browser/ui/dialog/dialog.css';
+import '../../../src/ash/base/browser/ui/button/button.css';
+import '../../../src/ash/base/browser/ui/inputbox/inputbox.css';
 import { createDefaultDocumentSchema } from "../../../src/ash/editor/editor.api.js";
 import { createTextNode } from "../../../src/ash/editor/editor.api.js";
 import { TextModel } from "../../../src/ash/editor/editor.api.js";
@@ -23,6 +26,11 @@ import type { DocumentCollaborationSubmitOutcome } from "../../../src/ash/editor
 import type { IDocumentCollaborationService } from "../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js";
 import { MemoryTextFiles } from "./memoryTextFiles.js";
 import { EditorExtensionsRegistry } from '../../../src/ash/editor/browser/editorExtensions.js';
+import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
+import { ServiceContainer } from '../../../src/ash/platform/instantiation/common/instantiation.js';
+import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
+import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
+import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
 
 interface AcademicIntegrationHarness {
 	readonly apiDocumentType: string;
@@ -121,8 +129,13 @@ const codeBlockDocument = schema.createDocument([schema.createNode("codeBlock", 
 })], "editor-text-document");
 const codeBlockFiles = new MemoryTextFiles(codeBlockResource, serializeDocument(codeBlockDocument, schema));
 const structuredFiles = new MemoryTextFiles(structuredResource, "Title\nBody");
-const codeBlockPane = new DocumentEditorPane(codeBlockFiles);
-const structuredPane = new DocumentEditorPane(structuredFiles, { createDocumentCollaborationService: () => new BrowserDocumentCollaborationService() });
+const disposables = new DisposableStore();
+const services = disposables.add(new ServiceContainer());
+const dialogs = disposables.add(new DialogService());
+services.registerInstance(IDialogService, dialogs);
+disposables.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
+const codeBlockPane = disposables.add(services.createInstance(DocumentEditorPane, codeBlockFiles, {}));
+const structuredPane = disposables.add(services.createInstance(DocumentEditorPane, structuredFiles, { createDocumentCollaborationService: () => new BrowserDocumentCollaborationService() }));
 
 codeBlockPane.create(requiredElement("#code-block"));
 structuredPane.create(requiredElement("#document-editor"));
@@ -142,8 +155,7 @@ window.ashAcademicIntegration = {
 	getSavedCodeBlock: () => codeBlockFiles.read(codeBlockResource),
 	dispose: () => {
 		apiModel.dispose();
-		codeBlockPane.dispose();
-		structuredPane.dispose();
+		disposables.dispose();
 		codeBlockFiles.dispose();
 		structuredFiles.dispose();
 	},

@@ -7,7 +7,9 @@ import { IConfigurationService } from '../../../src/ash/platform/configuration/c
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { ServiceContainer } from '../../../src/ash/platform/instantiation/common/instantiation.js';
 import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
-import { DialogResult, DialogSeverity, IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
+import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
+import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
+import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
 import { ILanguageServerService } from '../../../src/ash/platform/language/common/languageServerService.js';
 import type { IMarketplaceApi } from '../../../src/ash/platform/marketplace/common/marketplaceApi.js';
 import { IMarketplaceService, OPEN_MARKETPLACE_COMMAND_ID, type MarketplaceInstalledPackage, type MarketplaceOpenOptions } from '../../../src/ash/platform/marketplace/common/marketplaceService.js';
@@ -62,20 +64,9 @@ const api: IMarketplaceApi = {
 };
 services.registerInstance(IMarketplaceService, disposables.add(new AppServerMarketplaceService(api, { subscribe: listener => changed.event(() => listener({ method: 'marketplace/changed', params: { instanceId: 'fixture', generation } })) })));
 services.registerInstance(IConfigurationService, { getValue: () => true } as unknown as IConfigurationService);
-const dialogs = new BrowserDialogHandler(document.body);
-const signal = new AbortController().signal;
-services.registerInstance(IDialogService, {
-	confirm: async options => ({ confirmed: (await dialogs.showDialog({ kind: 'confirmation', ...options }, signal)).button === DialogResult.Primary }),
-	showMessage: async options => { await dialogs.showDialog({ kind: 'message', ...options }, signal); },
-	info: async message => { await dialogs.showDialog({ kind: 'message', severity: DialogSeverity.Info, message }, signal); },
-	warn: async message => { await dialogs.showDialog({ kind: 'message', severity: DialogSeverity.Warning, message }, signal); },
-	error: async message => { await dialogs.showDialog({ kind: 'message', severity: DialogSeverity.Error, message }, signal); },
-	prompt: async options => (await dialogs.showDialog({ kind: 'prompt', ...options }, signal)).button,
-	input: async options => {
-		const result = await dialogs.showDialog({ kind: 'input', ...options }, signal);
-		return { confirmed: result.button === DialogResult.Primary, values: result.values, checkboxChecked: result.checkboxChecked };
-	},
-});
+const dialogs = disposables.add(new DialogService());
+services.registerInstance(IDialogService, dialogs);
+disposables.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
 services.registerInstance(ICommandService, { executeCommand: async (id: string, options: MarketplaceOpenOptions) => { requests.push(['command', id, options]); if (id !== OPEN_MARKETPLACE_COMMAND_ID) { throw new Error(id); } await marketplace.open(options); } } as unknown as ICommandService);
 let revision = 3;
 let enabled = true;

@@ -1,5 +1,6 @@
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { Disposable, DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
+import { extUri } from '../../../src/ash/base/common/resources.js';
 import { darkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { TerminalInstanceWidget } from '../../../src/ash/workbench/contrib/terminal/browser/instance/terminalInstanceWidget.js';
@@ -124,6 +125,7 @@ if (new URLSearchParams(location.search).has('pane')) {
 		onDidChangeWorkspace: workspaceChanged.event,
 		getWorkspace: () => workspace,
 		getWorkbenchState: () => 2,
+		getWorkspaceFolder: resource => workspace.folders.find(folder => extUri.isEqualOrParent(resource, folder.uri)) ?? null,
 	}));
 	document.querySelector<HTMLElement>('#terminal')!.append(pane.partTitleProjection.actions!);
 	window.ashTerminalPaneIntegration = {
