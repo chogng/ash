@@ -98,11 +98,23 @@ fn input_hints(app: &App) -> KeyHints {
     ) {
         hints = hints.with_compact_action(keys, "mode");
     }
-    if let Some(keys) = app.app_keymap.action_hint(
-        crate::keymap::AppKeymapAction::CycleReasoningEffort,
-        app.app_keymap_context(true),
-    ) {
-        hints = hints.with_compact_action(keys, "effort");
+    let context = app.app_keymap_context(true);
+    let lower = app.app_keymap.action_hint(
+        crate::keymap::AppKeymapAction::DecreaseReasoningEffort,
+        context,
+    );
+    let raise = app.app_keymap.action_hint(
+        crate::keymap::AppKeymapAction::IncreaseReasoningEffort,
+        context,
+    );
+    // Keep the pair together so a narrow terminal does not advertise only one direction.
+    match (lower, raise) {
+        (Some(lower), Some(raise)) => {
+            hints = hints.with_compact_action(format!("{lower}/{raise}"), "effort");
+        }
+        (Some(lower), None) => hints = hints.with_compact_action(lower, "lower effort"),
+        (None, Some(raise)) => hints = hints.with_compact_action(raise, "raise effort"),
+        (None, None) => {}
     }
     hints
 }

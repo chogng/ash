@@ -23,6 +23,8 @@ fn actual_tui_recalls_input_history_after_process_restart() {
     second.wait_for_stable_screen("Ash Code v");
     second.up();
     second.wait_for_stable_screen("> Remember this input across restarts");
+    // These snapshots capture the settled screen, after the startup hint has faded.
+    second.wait_for_screen_to_omit("ask permissions on");
     second.assert_snapshot("real/14-input-history/recalled-after-restart");
     assert_eq!(server.request_count(), 1);
     second.down();
@@ -111,6 +113,7 @@ fn actual_tui_displays_git_branch_and_changes() {
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_stable_screen("1 change");
     assert!(process.screen().lines().next().unwrap().contains("main"));
+    process.wait_for_screen_to_omit("ask permissions on");
     process.assert_snapshot("real/08-git/00-branch-and-change");
     process.quit();
 }

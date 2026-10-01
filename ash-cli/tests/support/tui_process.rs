@@ -707,6 +707,36 @@ impl TuiProcess {
         self.capture.lock().unwrap().screen()
     }
 
+    pub fn wait_for_screen_to_omit(&mut self, unexpected: &str) {
+        let deadline = Instant::now() + STATE_TIMEOUT;
+        loop {
+            let (screen, revision) = {
+                let capture = self.capture.lock().unwrap();
+                (capture.screen(), capture.revision())
+            };
+            if !screen.contains(unexpected) {
+                thread::sleep(Duration::from_millis(250));
+                let capture = self.capture.lock().unwrap();
+                if capture.revision() == revision && !capture.screen().contains(unexpected) {
+                    return;
+                }
+            }
+            if let Some(status) = self.child.try_wait().unwrap() {
+                panic!(
+                    "TUI exited before removing {unexpected:?}: {status:?}; raw:\n{}",
+                    self.raw_text()
+                );
+            }
+            if Instant::now() >= deadline {
+                panic!(
+                    "TUI screen still contained {unexpected:?}; screen:\n{}",
+                    self.screen()
+                );
+            }
+            thread::sleep(Duration::from_millis(20));
+        }
+    }
+
     pub fn raw_text(&self) -> String {
         self.capture.lock().unwrap().raw_text()
     }

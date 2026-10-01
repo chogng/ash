@@ -162,7 +162,7 @@ impl ash_app_server_client::JsonRpcTransport for ConfigTransport {
 }
 
 #[test]
-fn collaboration_effort_cycle_uses_only_supported_values_and_preserves_model() {
+fn collaboration_effort_steps_use_supported_values_and_stop_at_boundaries() {
     let mut selected = entry("openai", "test-model", ModelAccess::ApiKey);
     selected.supported_reasoning_efforts = vec![
         ReasoningEffort::Low,
@@ -183,15 +183,63 @@ fn collaboration_effort_cycle_uses_only_supported_values_and_preserves_model() {
         state: std::sync::Arc::new(std::sync::Mutex::new((config, vec![]))),
     };
     let mut client = ash_app_server_client::AppServerClient::new(transport.clone());
-    for expected in [
-        ReasoningEffort::Max,
-        ReasoningEffort::Low,
-        ReasoningEffort::High,
+    for (command, expected, boundary, writes) in [
+        (
+            super::Command::IncreaseEffort,
+            ReasoningEffort::Max,
+            None,
+            1,
+        ),
+        (
+            super::Command::IncreaseEffort,
+            ReasoningEffort::Max,
+            Some("highest"),
+            1,
+        ),
+        (
+            super::Command::DecreaseEffort,
+            ReasoningEffort::High,
+            None,
+            2,
+        ),
+        (
+            super::Command::DecreaseEffort,
+            ReasoningEffort::Low,
+            None,
+            3,
+        ),
+        (
+            super::Command::DecreaseEffort,
+            ReasoningEffort::Low,
+            Some("lowest"),
+            3,
+        ),
+        (
+            super::Command::IncreaseEffort,
+            ReasoningEffort::High,
+            None,
+            4,
+        ),
     ] {
-        let update = super::execute(&mut client, super::Command::CycleEffort, &catalog).unwrap();
+        let update = super::execute(&mut client, command, &catalog).unwrap();
         assert_eq!(update.summary.model(), Some(&model));
         assert_eq!(update.summary.model_reasoning_effort(), Some(expected));
         assert_eq!(update.config.model_reasoning_effort, Some(expected));
+        let super::ModelNotice::ThinkingEffort(notice) = update.notice else {
+            panic!("effort adjustments must use composer notices")
+        };
+        if let Some(boundary) = boundary {
+            assert!(notice.contains(boundary));
+        } else {
+            assert_eq!(
+                &*notice,
+                format!(
+                    "Thinking effort: {}",
+                    super::reasoning_effort_label(expected)
+                )
+            );
+        }
+        assert_eq!(transport.state.lock().unwrap().1.len(), writes);
     }
     assert!(
         super::execute(
@@ -203,10 +251,15 @@ fn collaboration_effort_cycle_uses_only_supported_values_and_preserves_model() {
         )
         .is_err()
     );
-    assert_eq!(transport.state.lock().unwrap().1.len(), 3);
+    assert_eq!(transport.state.lock().unwrap().1.len(), 4);
     transport.state.lock().unwrap().0.model_reasoning_effort = Some(ReasoningEffort::Medium);
-    assert!(super::execute(&mut client, super::Command::CycleEffort, &catalog).is_err());
-    assert_eq!(transport.state.lock().unwrap().1.len(), 3);
+    for command in [
+        super::Command::DecreaseEffort,
+        super::Command::IncreaseEffort,
+    ] {
+        assert!(super::execute(&mut client, command, &catalog).is_err());
+    }
+    assert_eq!(transport.state.lock().unwrap().1.len(), 4);
     let update = super::execute(
         &mut client,
         super::Command::SetEffort {
@@ -226,6 +279,41 @@ fn collaboration_effort_cycle_uses_only_supported_values_and_preserves_model() {
 }
 
 #[test]
+fn collaboration_effort_without_a_default_initializes_the_first_supported_level() {
+    for command in [
+        super::Command::DecreaseEffort,
+        super::Command::IncreaseEffort,
+    ] {
+        let mut selected = entry("openai", "test-model", ModelAccess::ApiKey);
+        selected.supported_reasoning_efforts = vec![ReasoningEffort::Low];
+        let catalog = ModelListResult {
+            models: vec![selected],
+        };
+        let mut config = crate::test_support::empty_config_snapshot();
+        config.model = Some(ModelRefDto {
+            provider: "openai".into(),
+            model: "test-model".into(),
+        });
+        let transport = ConfigTransport {
+            state: std::sync::Arc::new(std::sync::Mutex::new((config, vec![]))),
+        };
+        let mut client = ash_app_server_client::AppServerClient::new(transport.clone());
+        let update = super::execute(&mut client, command.clone(), &catalog).unwrap();
+        assert_eq!(
+            update.config.model_reasoning_effort,
+            Some(ReasoningEffort::Low)
+        );
+        assert_eq!(transport.state.lock().unwrap().1.len(), 1);
+        let update = super::execute(&mut client, command, &catalog).unwrap();
+        assert_eq!(
+            update.config.model_reasoning_effort,
+            Some(ReasoningEffort::Low)
+        );
+        assert_eq!(transport.state.lock().unwrap().1.len(), 1);
+    }
+}
+
+#[test]
 fn collaboration_effort_unsupported_models_do_not_write_config() {
     for has_model in [false, true] {
         let mut config = crate::test_support::empty_config_snapshot();
@@ -240,15 +328,20 @@ fn collaboration_effort_unsupported_models_do_not_write_config() {
             state: std::sync::Arc::new(std::sync::Mutex::new((config, vec![]))),
         };
         let mut client = ash_app_server_client::AppServerClient::new(transport.clone());
-        let error = super::execute(&mut client, super::Command::CycleEffort, &catalog).unwrap_err();
-        assert!(
-            error.contains(if has_model {
-                "does not support"
-            } else {
-                "Select a model"
-            }),
-            "{error}"
-        );
+        for command in [
+            super::Command::DecreaseEffort,
+            super::Command::IncreaseEffort,
+        ] {
+            let error = super::execute(&mut client, command, &catalog).unwrap_err();
+            assert!(
+                error.contains(if has_model {
+                    "does not support"
+                } else {
+                    "Select a model"
+                }),
+                "{error}"
+            );
+        }
         assert!(transport.state.lock().unwrap().1.is_empty());
     }
 }

@@ -4,9 +4,6 @@ expression: screen
 ---
   <FIXTURE…>                                      …                            [— / —] [Dashboard]
 
-> hello
-
-● ISSUE13-REPLY
 
 
 
@@ -29,8 +26,11 @@ expression: screen
 
 
 
+
+
+                                             Thinking effort is already at the highest level (max)
   ────────────────────────────────────────────────────────────────────────────────────────────────
-  >
-  ───────────────────────────────────────────────────────────────────────────── ash-real-scenario
+  > BOUND-DRAFT
+  ────────────────────────────────────────────────────────────────────────────── GPT-6 Luna (max)
 
-  Enter send  ·  shift+tab mode  ·  alt+,/alt+. effort
+  Enter send  ·  / commands

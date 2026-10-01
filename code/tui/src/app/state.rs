@@ -1623,6 +1623,23 @@ impl App {
     }
 
     pub(super) fn handle_composer_key(&mut self, key: KeyEvent) -> ChatComposerOutcome {
+        // Effort shortcuts take precedence over editor movement. Completion popups
+        // and history search retain their own input until they are dismissed.
+        if self.completion().is_none()
+            && !self.input_state().searching_history()
+            && matches!(
+                self.app_keymap.resolve_single(
+                    &key,
+                    self.app_keymap_context(key.kind == crossterm::event::KeyEventKind::Press)
+                ),
+                Some(
+                    AppKeymapAction::DecreaseReasoningEffort
+                        | AppKeymapAction::IncreaseReasoningEffort
+                )
+            )
+        {
+            return ChatComposerOutcome::Unhandled;
+        }
         let new_session = self.starts_new_session();
         let (panel, input) = self.composer_parts_mut();
         let outcome = if new_session {
@@ -3429,7 +3446,9 @@ impl App {
         AppKeymapContext {
             accepts_input: self.accepts_input(),
             chat_input_focused: self.chat_input_focused(),
-            has_selection: self.list_selection().is_some(),
+            has_selection: self.list_selection().is_some()
+                || self.completion().is_some()
+                || self.input_state().searching_history(),
             chat_input_empty: self.input().is_empty(),
             is_press,
         }
@@ -3490,7 +3509,8 @@ impl App {
                 ));
                 None
             }
-            AppKeymapAction::CycleReasoningEffort => Some(ModelCommand::CycleEffort.into()),
+            AppKeymapAction::DecreaseReasoningEffort => Some(ModelCommand::DecreaseEffort.into()),
+            AppKeymapAction::IncreaseReasoningEffort => Some(ModelCommand::IncreaseEffort.into()),
             AppKeymapAction::ScreenEscape => match self.escape_mut().press(now) {
                 ScreenEscapeOutcome::WaitingForSecondPress => None,
                 ScreenEscapeOutcome::OpenRewind => Some(ThreadCommand::OpenRewindPicker.into()),

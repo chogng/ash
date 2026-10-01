@@ -178,7 +178,7 @@ fn conversation_chrome_keeps_home_and_input_visible_without_a_welcome_message() 
     );
     assert_eq!(
         rendered.lines().last().unwrap().trim_end(),
-        "  Enter send  ·  shift+tab mode  ·  alt+r effort"
+        "  Enter send  ·  shift+tab mode  ·  alt+,/alt+. effort"
     );
 }
 

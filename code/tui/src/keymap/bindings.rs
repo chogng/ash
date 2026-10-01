@@ -27,7 +27,8 @@ use std::sync::LazyLock;
 pub(crate) enum AppKeymapAction {
     CycleApprovalMode,
     CycleCollaborationMode,
-    CycleReasoningEffort,
+    DecreaseReasoningEffort,
+    IncreaseReasoningEffort,
     ScreenEscape,
     OpenRewind,
     ReadClipboardImage,
@@ -41,7 +42,8 @@ impl AppKeymapAction {
         match self {
             Self::CycleApprovalMode => Some("ashCode.action.cycleApprovalMode"),
             Self::CycleCollaborationMode => Some("ashCode.action.cycleCollaborationMode"),
-            Self::CycleReasoningEffort => Some("ashCode.action.cycleReasoningEffort"),
+            Self::DecreaseReasoningEffort => Some("ashCode.action.decreaseReasoningEffort"),
+            Self::IncreaseReasoningEffort => Some("ashCode.action.increaseReasoningEffort"),
             Self::ScreenEscape => None,
             Self::OpenRewind => Some("ashCode.action.openRewind"),
             Self::ReadClipboardImage => Some("ashCode.action.attachClipboardImage"),
@@ -57,10 +59,11 @@ impl AppKeymapAction {
             .find(|action| action.command_id() == Some(id))
     }
 
-    const USER_BINDABLE: [Self; 8] = [
+    const USER_BINDABLE: [Self; 9] = [
         Self::CycleApprovalMode,
         Self::CycleCollaborationMode,
-        Self::CycleReasoningEffort,
+        Self::DecreaseReasoningEffort,
+        Self::IncreaseReasoningEffort,
         Self::OpenRewind,
         Self::ReadClipboardImage,
         Self::InterruptOrQuit,
@@ -72,7 +75,8 @@ impl AppKeymapAction {
         match self {
             Self::CycleApprovalMode => "Cycle approval mode",
             Self::CycleCollaborationMode => "Cycle task mode",
-            Self::CycleReasoningEffort => "Cycle thinking effort",
+            Self::DecreaseReasoningEffort => "Decrease thinking effort",
+            Self::IncreaseReasoningEffort => "Increase thinking effort",
             Self::ScreenEscape => "Rewind escape gesture",
             Self::OpenRewind => "Open rewind checkpoints",
             Self::ReadClipboardImage => "Attach clipboard image",
@@ -145,8 +149,23 @@ pub(super) struct AppKeybindingSpec {
 
 const APP_KEYBINDINGS: &[AppKeybindingSpec] = &[
     AppKeybindingSpec {
-        keybinding: "alt+r",
-        action: AppKeymapAction::CycleReasoningEffort,
+        keybinding: "alt+,",
+        action: AppKeymapAction::DecreaseReasoningEffort,
+        condition: AppKeymapCondition::PressWithComposerWithoutSelection,
+    },
+    AppKeybindingSpec {
+        keybinding: "shift+arrowdown",
+        action: AppKeymapAction::DecreaseReasoningEffort,
+        condition: AppKeymapCondition::PressWithComposerWithoutSelection,
+    },
+    AppKeybindingSpec {
+        keybinding: "alt+.",
+        action: AppKeymapAction::IncreaseReasoningEffort,
+        condition: AppKeymapCondition::PressWithComposerWithoutSelection,
+    },
+    AppKeybindingSpec {
+        keybinding: "shift+arrowup",
+        action: AppKeymapAction::IncreaseReasoningEffort,
         condition: AppKeymapCondition::PressWithComposerWithoutSelection,
     },
     AppKeybindingSpec {

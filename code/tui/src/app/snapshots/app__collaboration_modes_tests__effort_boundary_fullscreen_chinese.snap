@@ -1,8 +1,8 @@
 ---
-source: code/tui/src/app/fullscreen/frame_tests.rs
-expression: working
+source: code/tui/src/app/collaboration_modes_tests.rs
+expression: render(&app)
 ---
-  .                                                        [— / —] [Dashboard]  
+  .                                                           [— / —] [仪 表 盘 ]  
                                                                                 
                                                                                 
                                                                                 
@@ -15,10 +15,14 @@ expression: working
                                                                                 
                                                                                 
                                                                                 
-⠋ Working · 0m 00s total · ctrl+c to interrupt                                  
-                                                               Copied 42 chars  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                    推 理 强 度 已 是 最 高 档 （ high）   
   ────────────────────────────────────────────────────────────────────────────  
-  >                                                                             
-  ─────────────────────────────────────────────────────────── Automatic model   
+  > keep this draft                                                             
+  ───────────────────────────────────────────────────────── test-model (high)   
                                                                                 
-  Enter queue  ·  shift+tab mode  ·  alt+,/alt+. effort
+  Enter 发 送   ·  shift+tab 模 式   ·  alt+,/alt+. 推 理 档 位

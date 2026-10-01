@@ -355,11 +355,7 @@ pub(super) fn apply_request_completion(
                 );
             }
             match update.notice {
-                models::ModelNotice::ThinkingEffort(effort) => {
-                    let mut notice = crate::nls::Text::template(
-                        "Thinking effort: {0}",
-                        vec![models::reasoning_effort_label(effort).into()],
-                    );
+                models::ModelNotice::ThinkingEffort(mut notice) => {
                     notice.localize(app.language());
                     app.chat_panel
                         .show_notice(notice.to_string(), Instant::now());
@@ -385,7 +381,9 @@ pub(super) fn apply_request_completion(
             command,
             result: Err(error),
         } => match command {
-            models::Command::CycleEffort | models::Command::SetEffort { .. } => {
+            models::Command::DecreaseEffort
+            | models::Command::IncreaseEffort
+            | models::Command::SetEffort { .. } => {
                 app.report_composer_option_error(error);
             }
             models::Command::SetModel { .. } | models::Command::Pin { .. } => {

@@ -61,7 +61,7 @@ fn collaboration_shortcuts_preserve_drafts_permissions_and_history_search() {
             message_history::MessageHistory::with_waker(store, || {}).unwrap(),
         );
         switch(&mut app, screen);
-        app.insert_text("keep this draft");
+        app.insert_text("keep this draft\nand this line");
         for mode in [
             CollaborationMode::Plan,
             CollaborationMode::Debug,
@@ -71,21 +71,169 @@ fn collaboration_shortcuts_preserve_drafts_permissions_and_history_search() {
         ] {
             assert_eq!(key(&mut app, KeyCode::BackTab, KeyModifiers::SHIFT), None);
             assert_eq!(app.collaboration_mode(), mode);
-            assert_eq!(app.input(), "keep this draft");
+            assert_eq!(app.input(), "keep this draft\nand this line");
             assert_eq!(app.approval_mode(), ApprovalMode::AskPermissions);
         }
-        assert_eq!(
-            key(&mut app, KeyCode::Char('r'), KeyModifiers::ALT),
-            Some(AppCommand::Models(crate::models::Command::CycleEffort))
-        );
-        assert_eq!(app.input(), "keep this draft");
+        for (code, modifiers, command) in [
+            (
+                KeyCode::Char(','),
+                KeyModifiers::ALT,
+                crate::models::Command::DecreaseEffort,
+            ),
+            (
+                KeyCode::Down,
+                KeyModifiers::SHIFT,
+                crate::models::Command::DecreaseEffort,
+            ),
+            (
+                KeyCode::Char('.'),
+                KeyModifiers::ALT,
+                crate::models::Command::IncreaseEffort,
+            ),
+            (
+                KeyCode::Up,
+                KeyModifiers::SHIFT,
+                crate::models::Command::IncreaseEffort,
+            ),
+        ] {
+            assert_eq!(
+                key(&mut app, code, modifiers),
+                Some(AppCommand::Models(command))
+            );
+            assert_eq!(app.input(), "keep this draft\nand this line");
+            assert_eq!(app.approval_mode(), ApprovalMode::AskPermissions);
+        }
         key(&mut app, KeyCode::Char('r'), KeyModifiers::CONTROL);
         assert!(app.input_state().searching_history());
+        for (code, modifiers) in [
+            (KeyCode::Char(','), KeyModifiers::ALT),
+            (KeyCode::Char('.'), KeyModifiers::ALT),
+            (KeyCode::Up, KeyModifiers::SHIFT),
+            (KeyCode::Down, KeyModifiers::SHIFT),
+        ] {
+            assert_eq!(key(&mut app, code, modifiers), None);
+            assert!(app.input_state().searching_history());
+        }
         assert_eq!(app.collaboration_mode(), CollaborationMode::Agent);
         key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
         key(&mut app, KeyCode::BackTab, KeyModifiers::SHIFT);
         assert_eq!(app.collaboration_mode(), CollaborationMode::Plan);
-        assert_eq!(app.input(), "keep this draft");
+        assert_eq!(app.input(), "keep this draft\nand this line");
+    }
+}
+
+#[test]
+fn collaboration_effort_shortcuts_leave_open_selectors_in_control() {
+    for screen in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut app = App::new();
+        switch(&mut app, screen);
+        command(&mut app, "/mode");
+        app.insert_text("keep this draft");
+        for (code, modifiers) in [
+            (KeyCode::Char(','), KeyModifiers::ALT),
+            (KeyCode::Char('.'), KeyModifiers::ALT),
+            (KeyCode::Up, KeyModifiers::SHIFT),
+            (KeyCode::Down, KeyModifiers::SHIFT),
+        ] {
+            assert_eq!(key(&mut app, code, modifiers), None);
+            assert!(app.command_panel().is_some());
+            assert_eq!(app.input(), "keep this draft");
+        }
+        key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+        assert!(app.chat_input_focused());
+        assert!(app.command_panel().is_none());
+        assert!(app.completion().is_none());
+        assert_eq!(
+            key(&mut app, KeyCode::Up, KeyModifiers::SHIFT),
+            Some(AppCommand::Models(crate::models::Command::IncreaseEffort)),
+            "{screen:?}: {:?}",
+            app.app_keymap_context(true)
+        );
+        let mut app = App::new();
+        switch(&mut app, screen);
+        app.insert_text("/mod");
+        assert!(app.completion().is_some());
+        for (code, modifiers) in [
+            (KeyCode::Char(','), KeyModifiers::ALT),
+            (KeyCode::Char('.'), KeyModifiers::ALT),
+            (KeyCode::Up, KeyModifiers::SHIFT),
+            (KeyCode::Down, KeyModifiers::SHIFT),
+        ] {
+            assert_eq!(key(&mut app, code, modifiers), None);
+            assert_eq!(app.input(), "/mod");
+        }
+    }
+}
+
+#[test]
+fn collaboration_effort_boundaries_are_localized_not_added_to_the_transcript() {
+    for screen in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut app = App::new();
+        let mut settings = TerminalSettings::default();
+        settings.set_screen_mode(screen);
+        settings.set_language(crate::nls::Language::Chinese);
+        app.update(ConfigEvent::SettingsReceived(settings));
+        app.insert_text("keep this draft");
+        let rows = app.messages().len();
+        let mut config = crate::test_support::empty_config_snapshot();
+        config.model = Some(ash_app_server_protocol::protocol::config::ModelRefDto {
+            provider: "openai".into(),
+            model: "test-model".into(),
+        });
+        config.model_reasoning_effort = Some(ash_protocol::ReasoningEffort::High);
+        let origin = super::requests::RequestOrigin {
+            mode: screen,
+            panel_generation: app.panels().generation(),
+        };
+        for (command, message, expected) in [
+            (
+                crate::models::Command::DecreaseEffort,
+                "Thinking effort is already at the lowest level ({0})",
+                "推理强度已是最低档（high）",
+            ),
+            (
+                crate::models::Command::IncreaseEffort,
+                "Thinking effort is already at the highest level ({0})",
+                "推理强度已是最高档（high）",
+            ),
+        ] {
+            super::completion::apply_request_completion(
+                super::completion::Completion::ModelUpdated {
+                    command,
+                    result: Ok(crate::models::ModelUpdate {
+                        summary: crate::models::ModelSummary::from_catalog(
+                            config.model.clone(),
+                            config.model_reasoning_effort,
+                            None,
+                        ),
+                        notice: crate::models::ModelNotice::ThinkingEffort(
+                            crate::nls::Text::template(message, vec!["high".into()]),
+                        ),
+                        picker: None,
+                        config: config.clone(),
+                    }),
+                },
+                origin,
+                &mut None,
+                &mut app,
+                &ash_app_server_protocol::protocol::model::ModelListResult { models: vec![] },
+            );
+            assert_eq!(app.messages().len(), rows);
+            assert_eq!(app.input(), "keep this draft");
+            let rendered = render(&app);
+            assert!(
+                rendered.replace(' ', "").contains(expected),
+                "{screen:?}: expected {expected}\n{rendered}"
+            );
+        }
+        match screen {
+            ScreenMode::Fullscreen => {
+                crate::tui_assert_snapshot!("effort_boundary_fullscreen_chinese", render(&app))
+            }
+            ScreenMode::Inline => {
+                crate::tui_assert_snapshot!("effort_boundary_inline_chinese", render(&app))
+            }
+        }
     }
 }
 

@@ -261,7 +261,8 @@ impl AppDriver {
                     | crate::models::Command::Pin { .. } => self
                         .app
                         .update(ThreadEvent::CommandStarted(command_line.clone())),
-                    crate::models::Command::CycleEffort
+                    crate::models::Command::DecreaseEffort
+                    | crate::models::Command::IncreaseEffort
                     | crate::models::Command::SetEffort { .. } => {}
                     crate::models::Command::OpenEffortPicker => {
                         unreachable!("effort picker is opened before scheduling")

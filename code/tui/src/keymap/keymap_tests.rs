@@ -61,6 +61,81 @@ fn crossterm_adapter_normalizes_backtab_and_character_case() {
 }
 
 #[test]
+fn effort_shortcuts_resolve_both_directions_and_allow_independent_remapping() {
+    let mut keymap = AppKeymap::default();
+    for (code, modifiers, action) in [
+        (
+            KeyCode::Char(','),
+            KeyModifiers::ALT,
+            AppKeymapAction::DecreaseReasoningEffort,
+        ),
+        (
+            KeyCode::Down,
+            KeyModifiers::SHIFT,
+            AppKeymapAction::DecreaseReasoningEffort,
+        ),
+        (
+            KeyCode::Char('.'),
+            KeyModifiers::ALT,
+            AppKeymapAction::IncreaseReasoningEffort,
+        ),
+        (
+            KeyCode::Up,
+            KeyModifiers::SHIFT,
+            AppKeymapAction::IncreaseReasoningEffort,
+        ),
+    ] {
+        assert_eq!(
+            keymap.resolve_single(&KeyEvent::new(code, modifiers), context()),
+            Some(action)
+        );
+    }
+    assert_eq!(
+        keymap.resolve_single(
+            &KeyEvent::new(KeyCode::Char('r'), KeyModifiers::ALT),
+            context()
+        ),
+        None
+    );
+    let rules = compile_app_user_bindings(
+        &serde_json::json!([
+            {"key":"alt+j", "command":"ashCode.action.decreaseReasoningEffort"},
+            {"key":"alt+k", "command":"ashCode.action.increaseReasoningEffort"},
+            {"key":"alt+,", "block":true},
+            {"key":"alt+.", "block":true}
+        ]),
+        HostPlatform::current(),
+    )
+    .unwrap();
+    keymap.replace_user_bindings(rules).unwrap();
+    for (key, action) in [
+        ('j', AppKeymapAction::DecreaseReasoningEffort),
+        ('k', AppKeymapAction::IncreaseReasoningEffort),
+    ] {
+        assert_eq!(
+            keymap.resolve_single(
+                &KeyEvent::new(KeyCode::Char(key), KeyModifiers::ALT),
+                context()
+            ),
+            Some(action)
+        );
+        assert_eq!(
+            keymap.action_hint(action, context()),
+            Some(format!("alt+{key}"))
+        );
+    }
+    for key in [',', '.'] {
+        assert_eq!(
+            keymap.resolve_single(
+                &KeyEvent::new(KeyCode::Char(key), KeyModifiers::ALT),
+                context()
+            ),
+            None
+        );
+    }
+}
+
+#[test]
 fn root_conditions_preserve_input_selection_and_press_boundaries() {
     let keymap = AppKeymap::default();
     let backtab = KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT);
@@ -68,13 +143,36 @@ fn root_conditions_preserve_input_selection_and_press_boundaries() {
 
     for key in [
         backtab,
-        KeyEvent::new(KeyCode::Char('r'), KeyModifiers::ALT),
+        KeyEvent::new(KeyCode::Char(','), KeyModifiers::ALT),
+        KeyEvent::new(KeyCode::Char('.'), KeyModifiers::ALT),
+        KeyEvent::new(KeyCode::Up, KeyModifiers::SHIFT),
+        KeyEvent::new(KeyCode::Down, KeyModifiers::SHIFT),
     ] {
         assert_eq!(
             keymap.resolve_single(
                 &key,
                 AppKeymapContext {
                     chat_input_focused: false,
+                    ..context()
+                }
+            ),
+            None
+        );
+        assert_eq!(
+            keymap.resolve_single(
+                &key,
+                AppKeymapContext {
+                    has_selection: true,
+                    ..context()
+                }
+            ),
+            None
+        );
+        assert_eq!(
+            keymap.resolve_single(
+                &key,
+                AppKeymapContext {
+                    is_press: false,
                     ..context()
                 }
             ),

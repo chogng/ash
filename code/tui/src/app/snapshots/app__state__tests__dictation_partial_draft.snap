@@ -25,4 +25,4 @@ expression: render_dictation_frame(&app)
   > Draft hello                                                                 
   ─────────────────────────────────────────────────────────── Automatic model   
                                                                                 
-  Enter send  ·  shift+tab mode  ·  alt+r effort
+  Enter send  ·  shift+tab mode  ·  alt+,/alt+. effort

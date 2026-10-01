@@ -12,7 +12,8 @@ pub(crate) enum Event {
 pub(crate) enum Command {
     SetModel { preference: String },
     OpenEffortPicker,
-    CycleEffort,
+    DecreaseEffort,
+    IncreaseEffort,
     SetEffort { effort: ReasoningEffort },
     Pin { preference: String, pinned: bool },
 }

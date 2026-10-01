@@ -53,7 +53,7 @@ fn collaboration_effort_completion_preserves_the_running_turn_and_draft() {
     };
     super::apply_request_completion(
         super::Completion::ModelUpdated {
-            command: crate::models::Command::CycleEffort,
+            command: crate::models::Command::IncreaseEffort,
             result: Ok(crate::models::ModelUpdate {
                 summary: crate::models::ModelSummary::from_catalog(
                     Some(ash_app_server_protocol::protocol::config::ModelRefDto {
@@ -63,9 +63,10 @@ fn collaboration_effort_completion_preserves_the_running_turn_and_draft() {
                     Some(ash_protocol::ReasoningEffort::High),
                     None,
                 ),
-                notice: crate::models::ModelNotice::ThinkingEffort(
-                    ash_protocol::ReasoningEffort::High,
-                ),
+                notice: crate::models::ModelNotice::ThinkingEffort(crate::nls::Text::template(
+                    "Thinking effort: {0}",
+                    vec!["high".into()],
+                )),
                 picker: None,
                 config,
             }),
@@ -86,7 +87,7 @@ fn collaboration_effort_completion_preserves_the_running_turn_and_draft() {
     assert_eq!(app.status_line().model_label(), "test-model (high)");
     super::apply_request_completion(
         super::Completion::ModelUpdated {
-            command: crate::models::Command::CycleEffort,
+            command: crate::models::Command::DecreaseEffort,
             result: Err("This model does not support thinking effort".into()),
         },
         origin,

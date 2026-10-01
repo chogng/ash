@@ -24,14 +24,18 @@ pub(crate) struct ModelUpdate {
 #[derive(Debug)]
 pub(crate) enum ModelNotice {
     Command(crate::nls::Text),
-    ThinkingEffort(ReasoningEffort),
+    /// Adjusting effort must not add transcript commands or change a running turn's status.
+    ThinkingEffort(crate::nls::Text),
 }
 
 impl Command {
     pub(crate) const fn request_name(&self) -> &'static str {
         match self {
             Self::Pin { .. } => "ash-tui-pin-model",
-            Self::OpenEffortPicker | Self::CycleEffort | Self::SetEffort { .. } => "ash-tui-effort",
+            Self::OpenEffortPicker
+            | Self::DecreaseEffort
+            | Self::IncreaseEffort
+            | Self::SetEffort { .. } => "ash-tui-effort",
             Self::SetModel { .. } => "ash-tui-set-model",
         }
     }
@@ -43,7 +47,9 @@ impl Command {
                 if *pinned { "pin" } else { "unpin" }
             ),
             Self::SetModel { preference } => format!("/model {preference}"),
-            Self::OpenEffortPicker | Self::CycleEffort => "/effort".into(),
+            Self::OpenEffortPicker | Self::DecreaseEffort | Self::IncreaseEffort => {
+                "/effort".into()
+            }
             Self::SetEffort { effort } => format!("/effort {}", effort.as_str()),
         }
     }
@@ -60,7 +66,16 @@ where
     match command {
         Command::SetModel { preference } => set_model(client, &preference, catalog),
         Command::Pin { preference, pinned } => set_pin(client, &preference, pinned, catalog),
-        Command::CycleEffort => change_effort(client, EffortChange::Cycle, catalog),
+        Command::DecreaseEffort => change_effort(
+            client,
+            EffortChange::Step(EffortDirection::Decrease),
+            catalog,
+        ),
+        Command::IncreaseEffort => change_effort(
+            client,
+            EffortChange::Step(EffortDirection::Increase),
+            catalog,
+        ),
         Command::SetEffort { effort } => change_effort(client, EffortChange::Set(effort), catalog),
         Command::OpenEffortPicker => unreachable!("effort picker is opened by AppDriver"),
     }
@@ -245,8 +260,13 @@ pub(super) fn effort_choices(
 }
 
 enum EffortChange {
-    Cycle,
+    Step(EffortDirection),
     Set(ReasoningEffort),
+}
+
+enum EffortDirection {
+    Decrease,
+    Increase,
 }
 
 fn change_effort<T: JsonRpcTransport>(
@@ -263,7 +283,7 @@ fn change_effort<T: JsonRpcTransport>(
                 "Use /effort to choose a supported thinking effort".into(),
             ));
         }
-        EffortChange::Cycle => {
+        EffortChange::Step(direction) => {
             let next = match current {
                 Some(effort) => {
                     let index = supported
@@ -274,7 +294,37 @@ fn change_effort<T: JsonRpcTransport>(
                                 "Use /effort to choose a supported thinking effort".into(),
                             )
                         })?;
-                    (index + 1) % supported.len()
+                    // A directional adjustment stops at the boundary rather than wrapping.
+                    let next = match direction {
+                        EffortDirection::Decrease => index.checked_sub(1),
+                        EffortDirection::Increase => {
+                            (index + 1 < supported.len()).then_some(index + 1)
+                        }
+                    };
+                    let Some(next) = next else {
+                        let message = match direction {
+                            EffortDirection::Decrease => {
+                                "Thinking effort is already at the lowest level ({0})"
+                            }
+                            EffortDirection::Increase => {
+                                "Thinking effort is already at the highest level ({0})"
+                            }
+                        };
+                        return Ok(ModelUpdate {
+                            summary: ModelSummary::from_catalog(
+                                config.model.clone(),
+                                config.model_reasoning_effort,
+                                Some(catalog),
+                            ),
+                            notice: ModelNotice::ThinkingEffort(crate::nls::Text::template(
+                                message,
+                                vec![super::reasoning_effort_label(effort).into()],
+                            )),
+                            picker: None,
+                            config,
+                        });
+                    };
+                    next
                 }
                 None => 0,
             };
@@ -304,7 +354,10 @@ fn change_effort<T: JsonRpcTransport>(
         Some(catalog),
     );
     Ok(ModelUpdate {
-        notice: ModelNotice::ThinkingEffort(effort),
+        notice: ModelNotice::ThinkingEffort(crate::nls::Text::template(
+            "Thinking effort: {0}",
+            vec![super::reasoning_effort_label(effort).into()],
+        )),
         summary,
         config,
         picker: None,

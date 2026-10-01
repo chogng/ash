@@ -10,7 +10,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 #[test]
-fn collaboration_shortcuts_decode_shift_tab_and_alt_r_without_changing_the_draft() {
+fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_changing_the_draft() {
     let fixture = Fixture::new();
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_stable_screen("Automatic model");
@@ -18,10 +18,10 @@ fn collaboration_shortcuts_decode_shift_tab_and_alt_r_without_changing_the_draft
     process.back_tab();
     process.wait_for_stable_screen("Next mode: Plan");
     assert!(process.screen().contains("BOUND-DRAFT"));
-    process.send(b"\x1br");
+    process.send(b"\x1b.");
     process.wait_for_stable_screen("Select a model with /model before changing thinking effort");
     assert!(process.screen().contains("BOUND-DRAFT"));
-    assert!(!process.screen().contains("BOUND-DRAFTr"));
+    assert!(!process.screen().contains("BOUND-DRAFT."));
     process.back_tab();
     process.wait_for_stable_screen("Next mode: Debug");
     process.assert_snapshot("real/02-terminal/collaboration-shortcuts");
@@ -32,7 +32,7 @@ fn collaboration_shortcuts_decode_shift_tab_and_alt_r_without_changing_the_draft
     process.submit("/model openai/gpt-6-luna high");
     process.wait_for_stable_screen("GPT-6 Luna (high)");
     process.type_text("BOUND-DRAFT");
-    process.send(b"\x1br");
+    process.send(b"\x1b.");
     process.wait_for_stable_screen("Thinking effort: extra high");
     assert!(process.screen().contains("BOUND-DRAFT"));
     assert!(process.screen().contains("GPT-6 Luna (extra high)"));
@@ -43,6 +43,35 @@ fn collaboration_shortcuts_decode_shift_tab_and_alt_r_without_changing_the_draft
             .contains("modelReasoningEffort = \"extraHigh\"")
     );
     process.assert_snapshot("real/02-terminal/effort-shortcut");
+    for (sequence, notice, effort) in [
+        (b"\x1b,".as_slice(), "Thinking effort: high", "high"),
+        (
+            b"\x1b[1;2A".as_slice(),
+            "Thinking effort: extra high",
+            "extraHigh",
+        ),
+        (b"\x1b[1;2B".as_slice(), "Thinking effort: high", "high"),
+    ] {
+        process.send(sequence);
+        process.wait_for_stable_screen(notice);
+        assert!(process.screen().contains("BOUND-DRAFT"));
+        assert!(
+            fixture
+                .config_source()
+                .contains(&format!("modelReasoningEffort = \"{effort}\""))
+        );
+    }
+    process.send(b"\x1b.");
+    process.wait_for_stable_screen("Thinking effort: extra high");
+    process.send(b"\x1b[1;2A");
+    process.wait_for_stable_screen("Thinking effort: max");
+    let config_at_max = fixture.config_source();
+    process.send(b"\x1b.");
+    process.wait_for_stable_screen("Thinking effort is already at the highest level (max)");
+    assert_eq!(fixture.config_source(), config_at_max);
+    assert!(process.screen().contains("GPT-6 Luna (max)"));
+    assert!(process.screen().contains("BOUND-DRAFT"));
+    process.assert_snapshot("real/02-terminal/effort-highest-boundary");
     process.quit();
 }
 
@@ -639,6 +668,7 @@ fn actual_tui_process_streams_queues_resizes_and_resumes() {
     let args = ["resume", session_id.as_str(), thread_id.as_str()];
     let mut resumed = TuiProcess::start(&fixture, &args, LARGE_SIZE);
     resumed.wait_for_stable_screen("第二轮排队消息已经执行。");
+    resumed.wait_for_screen_to_omit("ask permissions on");
     resumed.assert_snapshot("real/07-lifecycle/01-resumed");
     resumed.quit();
 }

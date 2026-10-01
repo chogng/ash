@@ -33,7 +33,7 @@ expression: "format!(\"{completion}\\n\\n{hint}\")"
   > /market                                                                                         
   ────────────────────────────────────────────────────────────────────────────────────── 自 动 模 型    
                                                                                                     
-  Enter 发 送   ·  shift+tab 模 式   ·  alt+r 推 理 档 位                                                   
+  Enter 发 送                                                                                         
 
   .                                                                               [— / —] [仪 表 盘 ]  
                                                                                                     
@@ -66,4 +66,4 @@ expression: "format!(\"{completion}\\n\\n{hint}\")"
   > /marketplace <搜 索 词 >                                                                           
   ────────────────────────────────────────────────────────────────────────────────────── 自 动 模 型    
                                                                                                     
-  Enter 发 送   ·  shift+tab 模 式   ·  alt+r 推 理 档 位
+  Enter 发 送   ·  shift+tab 模 式   ·  alt+,/alt+. 推 理 档 位
