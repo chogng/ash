@@ -31,6 +31,7 @@ import { URI } from "../../../base/common/uri.js";
 import { createWorkspaceContextApi } from "../../workspace/electron-browser/workspaceContextApi.js";
 import type { AshElectronRendererApi } from "../common/rendererApi.js";
 import { createNativeHostApi } from "./nativeHostApi.js";
+import type { IMainProcessService } from '../../ipc/common/mainProcessService.js';
 import type { IAppServerApi } from "../../app-server/common/appServerApi.js";
 import type { RendererHostCapabilities } from "../../renderer/common/rendererHost.js";
 import { createRemoteAgentApi } from "../../remote/electron-browser/remoteAgentApi.js";
@@ -43,7 +44,7 @@ import { InstantiationService } from '../../instantiation/common/instantiationSe
 export type ElectronRendererCapabilityContribution = RendererCapabilityContribution;
 
 /** Composes Electron renderer capabilities from domain-owned IPC adapters. */
-export async function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[], hostCapabilities: { readonly browser: boolean }, workspaceTrust: IWorkspaceTrustRequestService): Promise<AshElectronRendererApi & IDisposable> {
+export async function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[], hostCapabilities: { readonly browser: boolean }, workspaceTrust: IWorkspaceTrustRequestService, mainProcessService: IMainProcessService): Promise<AshElectronRendererApi & IDisposable> {
 	const resources = new DisposableStore();
 	let connecting: Promise<void> = Promise.resolve();
 	const transport = resources.add(new AppServerMessagePortTransport(() => {
@@ -158,7 +159,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			keyboardLayout: createNativeKeyboardLayoutApi(),
 			userKeyboardLayout: createUserKeyboardLayoutApi(),
 			nativeContextMenu: createNativeContextMenuApi(),
-			nativeHost: createNativeHostApi(),
+			nativeHost: createNativeHostApi(mainProcessService),
 			nativeMenubar: createNativeMenubarApi(),
 			localFiles: resources.add(new DiskFileSystemProviderClient(request => invoke(LOCAL_FILE_SYSTEM_CHANNEL_NAME, request), listener => subscribe(LOCAL_FILE_SYSTEM_CHANGED_CHANNEL, listener))),
 			userDataHome: URI.parse(await invoke<string>(`${LOCAL_FILE_SYSTEM_CHANNEL_NAME}:userDataHome`)),

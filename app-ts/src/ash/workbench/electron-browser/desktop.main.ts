@@ -8,6 +8,8 @@ import { ElectronRendererClipboardService } from '../../platform/clipboard/elect
 import { validateConfigurationSnapshot } from '../../platform/configuration/common/configurationIpc.js';
 import { invoke, subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
+import { IMainProcessService } from '../../platform/ipc/common/mainProcessService.js';
+import { ElectronIPCMainProcessService } from '../../platform/ipc/electron-browser/mainProcessService.js';
 import { createElectronRendererApi, type ElectronRendererCapabilityContribution } from '../../platform/native/electron-browser/rendererApi.js';
 import { parseWorkspace } from '../../platform/workspace/common/workspace.js';
 import { showStartupError } from '../browser/startupError.js';
@@ -45,11 +47,16 @@ export class DesktopMain extends Disposable {
 			const container = document.querySelector<HTMLElement>('#app') ?? document.body;
 			const permissionDialog = this._register(new DirectoryPermissionDialog(container));
 			const transcriptionServices = this._register(new InstantiationService());
+			const profileServices = this._register(new InstantiationService());
+			const windowId = await invoke<unknown>('ash:ipc:window-id');
+			if (!Number.isSafeInteger(windowId) || (windowId as number) <= 0) { throw new TypeError('Invalid Main IPC window ID'); }
+			const mainProcessService = this._register(profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
+			profileServices.registerInstance(IMainProcessService, mainProcessService);
+			await mainProcessService.connect();
 			const api = this._register(await createElectronRendererApi([
 				...this.rendererCapabilities,
 				client => registerLocalTranscriptionService(transcriptionServices, client),
-			], { browser: true }, permissionDialog));
-			const profileServices = this._register(new InstantiationService());
+			], { browser: true }, permissionDialog, mainProcessService));
 			profileServices.registerInstance(IFileService, api.localFiles);
 			const userThemes = this._register(await loadUserThemes(profileServices, URI.parse(api.userDataHome.toString().replace(/\/$/u, '') + '/themes')));
 			const workspace = parseWorkspace(await api.workspace.getWorkspace());

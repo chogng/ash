@@ -1,8 +1,7 @@
 import { invoke, subscribe } from "../../ipc/electron-browser/rendererIpc.js";
+import type { IMainProcessService } from '../../ipc/common/mainProcessService.js';
 import {
 	NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL,
-	NATIVE_HOST_GET_COLOR_SCHEME_CHANNEL,
-	NATIVE_HOST_COLOR_SCHEME_CHANGED_CHANNEL,
 	validateColorScheme,
 	NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL,
 	NATIVE_HOST_OPEN_WORKSPACE_CHANNEL,
@@ -26,10 +25,11 @@ import {
 } from '../../window/common/window.js';
 import { showNativeDialog } from '../../dialogs/electron-browser/dialog.js';
 
-export function createNativeHostApi(): INativeHostApi {
+export function createNativeHostApi(mainProcessService: IMainProcessService): INativeHostApi {
+	const colors = mainProcessService.getChannel('colorScheme');
 	return {
-		getOSColorScheme: async () => validateColorScheme(await invoke<unknown>(NATIVE_HOST_GET_COLOR_SCHEME_CHANNEL)),
-		onDidChangeColorScheme: listener => subscribe<unknown>(NATIVE_HOST_COLOR_SCHEME_CHANGED_CHANNEL, value => listener(validateColorScheme(value))),
+		getOSColorScheme: async () => validateColorScheme(await colors.call<unknown>('getOSColorScheme')),
+		onDidChangeColorScheme: listener => colors.listen<unknown>('onDidChangeColorScheme')(value => listener(validateColorScheme(value))),
 		showNativeDialog,
 		installShellCommand: () => invoke<string>(NATIVE_HOST_SHELL_COMMAND_CHANNEL, 'install'),
 		uninstallShellCommand: () => invoke<string>(NATIVE_HOST_SHELL_COMMAND_CHANNEL, 'uninstall'),

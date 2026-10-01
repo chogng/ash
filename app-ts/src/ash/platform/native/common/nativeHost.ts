@@ -30,8 +30,6 @@ export const NATIVE_HOST_SHELL_COMMAND_CHANNEL = 'ash:native-host:shell-command'
 export const NATIVE_HOST_DIALOG_CHANNEL = 'ash:native-host:dialog';
 export const NATIVE_HOST_REVEAL_FILE_CHANNEL = 'ash:native-host:reveal-file';
 
-export const NATIVE_HOST_GET_COLOR_SCHEME_CHANNEL = 'ash:native-host:get-color-scheme';
-export const NATIVE_HOST_COLOR_SCHEME_CHANGED_CHANNEL = 'ash:native-host:color-scheme-changed';
 
 export function validateColorScheme(value: unknown): IColorScheme {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Invalid system color scheme');

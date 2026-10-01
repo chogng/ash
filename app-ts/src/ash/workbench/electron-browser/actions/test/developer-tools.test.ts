@@ -58,7 +58,6 @@ test("native host routes validate folder picking and developer tools", async () 
 			savedFileOptions = options;
 			return "C:\\project\\draft.txt";
 		},
-		getOSColorScheme: () => ({ dark: false, highContrast: false }),
 		isAccessibilitySupportEnabled: () => false,
 		setWindowTheme: (theme) => {
 			windowThemes.push(theme);

@@ -15,11 +15,16 @@ export class ElectronWindow extends Disposable {
 	private readonly waiting = new Map<number, IWindowFilesRequest>();
 	private opening: Promise<void> = Promise.resolve();
 
-	constructor(private readonly ipc: Pick<typeof import('../../platform/ipc/electron-browser/rendererIpc.js'), 'invoke' | 'subscribe'>, @IEditorService private readonly editors: IEditorService, @IEditorGroupsService private readonly groups: IEditorGroupsService) {
+	constructor(
+		private readonly ipc: Pick<typeof import('../../platform/ipc/electron-browser/rendererIpc.js'), 'invoke' | 'subscribe'>,
+		@IEditorService private readonly editors: IEditorService,
+		@IEditorGroupsService private readonly groups: IEditorGroupsService,
+	) {
 		super();
 	}
 
 	public async initialize(): Promise<void> {
+		this.assertNotDisposed();
 		const subscription = this.ipc.subscribe<unknown>(WINDOW_OPEN_FILES_CHANNEL, value => {
 			const request = validateWindowFilesRequest(value);
 			const operation = this.opening.then(() => this.openFiles(request));
@@ -31,12 +36,15 @@ export class ElectronWindow extends Disposable {
 	}
 
 	private async openFiles(request: IWindowFilesRequest): Promise<void> {
+		this.assertNotDisposed();
 		try {
 			for (const file of request.files) {
 				const selection = file.line === undefined ? undefined : new Range(file.line, file.column ?? 1, file.line, file.column ?? 1);
 				await this.editors.openEditor({ resource: URI.parse(file.uri) }, { pinned: true, selection, ignoreError: true });
 			}
-			if (request.wait) this.waiting.set(request.id, request);
+			if (request.wait) {
+				this.waiting.set(request.id, request);
+			}
 			await this.ipc.invoke<void>(WINDOW_OPEN_FILES_RESPONSE_CHANNEL, { kind: 'opened', id: request.id });
 			this.completeClosedFiles();
 		} catch (error) {
@@ -54,7 +62,6 @@ export class ElectronWindow extends Disposable {
 		}
 	}
 }
-
 
 /** Keeps one desktop window's zoom level in sync with its profile setting. */
 export class NativeWindow extends Disposable {

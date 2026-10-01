@@ -22,6 +22,8 @@ import { ElectronLifecycleService } from '../../workbench/services/lifecycle/ele
 import { NativeHostColorSchemeService } from '../../workbench/services/themes/electron-browser/nativeHostColorSchemeService.js';
 import { showStartupError } from "../../workbench/browser/startupError.js";
 import { invoke, subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
+import { IMainProcessService } from '../../platform/ipc/common/mainProcessService.js';
+import { ElectronIPCMainProcessService } from '../../platform/ipc/electron-browser/mainProcessService.js';
 import { WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL } from '../../platform/window/common/window.js';
 import { createWorkspaceContextApi } from '../../platform/workspace/electron-browser/workspaceContextApi.js';
 import { parseWorkspace } from '../../platform/workspace/common/workspace.js';
@@ -65,11 +67,18 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 	sessions.add(toDisposable(() => handoffSubscription.dispose()));
 	const permissionDialog = sessions.add(new DirectoryPermissionDialog(container));
 	const transcriptionServices = sessions.add(new InstantiationService());
+	const profileServices = sessions.add(new InstantiationService());
 	let api: Awaited<ReturnType<typeof createElectronRendererApi>>;
-	try { api = await createElectronRendererApi([client => registerLocalTranscriptionService(transcriptionServices, client)], { browser: false }, permissionDialog); }
+	try {
+		const windowId = await invoke<unknown>('ash:ipc:window-id');
+		if (!Number.isSafeInteger(windowId) || (windowId as number) <= 0) { throw new TypeError('Invalid Main IPC window ID'); }
+		const mainProcessService = sessions.add(profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
+		profileServices.registerInstance(IMainProcessService, mainProcessService);
+		await mainProcessService.connect();
+		api = await createElectronRendererApi([client => registerLocalTranscriptionService(transcriptionServices, client)], { browser: false }, permissionDialog, mainProcessService);
+	}
 	catch (error) { sessions.dispose(); return showStartupError(error, text => invoke<void>('ash:host:writeClipboard', text)); }
 	sessions.add(api);
-	const profileServices = sessions.add(new InstantiationService());
 	profileServices.registerInstance(IFileService, api.localFiles);
 	const { loadUserThemes } = await import('../../workbench/services/themes/browser/workbenchThemeService.js');
 	sessions.add(await loadUserThemes(profileServices, URI.parse(api.userDataHome.toString().replace(/\/$/u, '') + '/themes')));

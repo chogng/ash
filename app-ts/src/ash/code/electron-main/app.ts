@@ -1,5 +1,7 @@
 import { ThemeMainService } from '../../platform/theme/electron-main/themeMainServiceImpl.js';
-import { NATIVE_HOST_COLOR_SCHEME_CHANGED_CHANNEL } from '../../platform/native/common/nativeHost.js';
+import { Server as MainProcessIPCServer } from '../../base/parts/ipc/electron-main/ipc.electron.js';
+import { isRecord } from '../../base/common/types.js';
+import { isUuid } from '../../base/common/uuid.js';
 import { OAuthCallbackHost } from "../../platform/connectors/electron-main/oauthCallbackHost.js";
 import { RendererWorkspaceHost } from "../../platform/workspaces/electron-main/rendererWorkspaceHost.js";
 import { BrowserAutomationHost } from "../../platform/browser/electron-main/browserAutomationHostRoutes.js";
@@ -7,7 +9,7 @@ import { rendererSystemHostRoutes } from "../../platform/native/electron-main/re
 import { nativeImage, nativeTheme, shell } from "electron";
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, Tray, type Event as ElectronEvent } from "electron/main";
 import type { DirGrant } from "../../platform/dirPermissions/common/dirPermissionsService.js";
-import { basename, delimiter, dirname, isAbsolute, join } from "node:path";
+import { basename, delimiter, dirname, isAbsolute, join, parse } from "node:path";
 import { homedir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -43,7 +45,7 @@ import { NativeKeyboardLayoutMainService } from "../../platform/keyboardLayout/e
 import { UserKeyboardLayoutMainService } from "../../platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js";
 import { NativeMenubarMainService, nativeMenubarIpcRoutes } from "../../platform/menubar/electron-main/menubarMainService.js";
 import { clearElectronApplicationMenu, createElectronMenubarHost } from "../../platform/menubar/electron-main/menubar.js";
-import { nativeHostIpcRoutes, windowAppearanceIpcRoutes } from "../../platform/native/electron-main/nativeHostIpc.js";
+import { colorSchemeChannel, nativeHostIpcRoutes, windowAppearanceIpcRoutes } from "../../platform/native/electron-main/nativeHostIpc.js";
 import { UpdateMainService, updateIpcRoutes } from '../../platform/update/electron-main/updateMainService.js';
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, type IOpenAgentsWindowOptions } from "../../platform/native/common/nativeHost.js";
 import { DialogMainService } from '../../platform/dialogs/electron-main/dialogMainService.js';
@@ -55,9 +57,10 @@ import { StateService } from "../../platform/state/node/stateService.js";
 import { resolveHome } from "../../platform/home/node/home.js";
 import { diskFileSystemProviderRoutes } from "../../platform/files/electron-main/diskFileSystemProviderServer.js";
 import { URI } from "../../base/common/uri.js";
+import { extUriBiasedIgnorePathCase } from '../../base/common/resources.js';
 import { DiskFileSystemProvider } from "../../platform/files/node/diskFileSystemProvider.js";
 import { LOCAL_FILE_SYSTEM_CHANGED_CHANNEL } from "../../platform/files/common/diskFileSystemProviderClient.js";
-import { WindowControlsOverlay } from "../../platform/windows/electron-main/windows.js";
+import { IWindowsMainService, WindowControlsOverlay } from "../../platform/windows/electron-main/windows.js";
 import { RESTORE_WINDOWS_SETTING, TitleBarSetting, parseTitleBarStyle, type TitleBarStyleConfiguration } from "../../platform/window/common/window.js";
 import { WindowsStateHandler, WindowSessionStateHandler, type IWindowSessionEntry, type IWindowSessionWindow } from "../../platform/windows/electron-main/windowsStateHandler.js";
 import { WindowsMainService, trackWindowResourceChanges, windowOperationIpcRoute, windowResourceIpcRoutes, workspaceContextIpcRoutes } from "../../platform/windows/electron-main/windowsMainService.js";
@@ -87,9 +90,7 @@ import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS } from '../../platfor
 import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus } from "../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
 import { WorkspacesManagementMainService } from '../../platform/workspaces/electron-main/workspacesManagementMainService.js';
 import { WorkspaceOpenTargetKind } from '../../platform/environment/common/argv.js';
-import { parseWorkspaceLaunchArguments } from '../../platform/environment/node/argvHelper.js';
-import { parseLaunchArguments } from '../../platform/environment/node/argvHelper.js';
-import { IWindowsMainService } from '../../platform/windows/electron-main/windows.js';
+import { parseLaunchArguments, parseWorkspaceLaunchArguments } from '../../platform/environment/node/argvHelper.js';
 import { LaunchMainService, type IStartArguments } from '../../platform/launch/electron-main/launchMainService.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
 import type { IWorkbenchWindowRecord } from "./workbenchWindowRegistry.js";
@@ -206,6 +207,7 @@ export class AshApplication extends Disposable {
 	private readonly disposableTracker: DisposableTracker | undefined;
 	private readonly tracking: globalThis.Disposable | undefined;
 	private readonly trustedIpcRouter: TrustedIpcRouter;
+	private readonly mainProcessIpcServer = this._register(new MainProcessIPCServer());
 	private readonly updateMainService: UpdateMainService;
 	private readonly nativeKeyboardLayout: NativeKeyboardLayoutMainService;
 	private readonly globalKeybindings: GlobalKeybindingsMainService;
@@ -221,12 +223,38 @@ export class AshApplication extends Disposable {
 		() => this.workbenchWindows.values().map(record => record.window),
 		async (configuration, reuseWindow): Promise<BrowserWindow | undefined> => {
 			const workspaces = this.workspaces;
-			if (!workspaces) throw new Error('Workspace service is not initialized');
-			const workspace = await this.windowsMainService.resolveWorkspaceOpenTarget(configuration?.workspace, configuration?.cwd ?? process.cwd());
+			if (!workspaces) {
+				throw new Error('Workspace service is not initialized');
+			}
+			const record = reuseWindow ? this.workbenchWindows.values().find(record => record.window === reuseWindow) : undefined;
+			if (record) {
+				await this.windowsMainService.whenReady(record.window);
+			}
+			let workspace: IAnyWorkspaceIdentifier;
+			if (!configuration?.workspace && configuration && configuration.files.length > 0) {
+				const files = configuration.files.map(file => URI.parse(file.uri));
+				const folders = record?.workspaceContext.getResolvedWorkspace().folders;
+				if (folders && files.every(file => folders.some(folder => extUriBiasedIgnorePathCase.isEqualOrParent(file, folder.uri)))) {
+					return reuseWindow;
+				}
+				// Rust file access belongs to a workspace. File-only launches establish that scope before opening editors.
+				const root = parse(files[0]!.fsPath).root;
+				if (files.some(file => !extUriBiasedIgnorePathCase.isEqual(URI.file(parse(file.fsPath).root), URI.file(root)))) {
+					throw new Error('Files on separate drives require an explicit multi-root workspace');
+				}
+				let folder = extUriBiasedIgnorePathCase.dirname(files[0]!);
+				while (!files.every(file => extUriBiasedIgnorePathCase.isEqualOrParent(file, folder))) {
+					folder = extUriBiasedIgnorePathCase.dirname(folder);
+				}
+				workspace = await workspaces.resolveFolder(folder.fsPath);
+			} else {
+				workspace = await this.windowsMainService.resolveWorkspaceOpenTarget(configuration?.workspace, configuration?.cwd ?? process.cwd());
+			}
 			if (reuseWindow) {
-				if (configuration?.workspace) {
-					const record = this.workbenchWindows.values().find(record => record.window === reuseWindow)!;
-					if (!await record.replaceWorkspace!(workspace)) return undefined;
+				if (configuration?.workspace || configuration?.files.length) {
+					if (!await record!.replaceWorkspace!(workspace)) {
+						return undefined;
+					}
 				}
 				return reuseWindow;
 			}
@@ -320,6 +348,7 @@ export class AshApplication extends Disposable {
 
 		await this.createPersistentServices();
 		this.themeMainService = this._register(new ThemeMainService(nativeTheme, this.services.state));
+		this.mainProcessIpcServer.registerChannel('colorScheme', colorSchemeChannel(this.themeMainService));
 		this.lifecycleMainService = this._register(new LifecycleMainService<BrowserWindow>(async (window, message) => {
 			this.windowsMainService.failManagedWindowClose(window, message);
 			await this.dialogs.showMessageBox({ type: 'error', message }, window);
@@ -428,7 +457,7 @@ export class AshApplication extends Disposable {
 		}
 	}
 
-	/** Opens a second-instance Workspace in its own window, or focuses the active window when no target was supplied. */
+	/** Electron argv includes its executable and, in development, the app entry. */
 	handleSecondInstance(arguments_: readonly string[], cwd: string): void {
 		this.handleLaunchArguments(this.workspaceLaunchArguments(arguments_), cwd);
 	}
@@ -530,7 +559,7 @@ export class AshApplication extends Disposable {
 		while (this.pendingWindowLaunches.length > 0 && !this.quitRequested) {
 			const launch = this.pendingWindowLaunches.shift()!;
 			try {
-				void this.launchMainService.start(launch).catch(error => this.reportWindowOpenFailure(error));
+				await this.launchMainService.start(launch);
 			} catch (error) {
 				await this.reportWindowOpenFailure(error);
 			}
@@ -538,7 +567,9 @@ export class AshApplication extends Disposable {
 	}
 
 	private openWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService, forceNewWindow = false): Promise<WorkbenchWindowRecord | undefined> {
-		if (forceNewWindow) return this.performOpenWorkspace(workspace, workspaces, true);
+		if (forceNewWindow) {
+			return this.performOpenWorkspace(workspace, workspaces, true);
+		}
 		return this.workbenchWindows.openWorkspace(workspace, () => this.performOpenWorkspace(workspace, workspaces));
 	}
 
@@ -566,6 +597,25 @@ export class AshApplication extends Disposable {
 			resources.dispose();
 			throw error;
 		}
+	}
+
+	private mainProcessIpcRoutes(window: BrowserWindow): readonly IpcRoute<unknown, unknown>[] {
+		return [
+			{
+				channel: 'ash:ipc:window-id',
+				validate: value => { if (value !== undefined) { throw new TypeError('Window ID read takes no arguments'); } return undefined; },
+				invoke: () => window.id,
+			},
+			{
+				channel: 'ash:ipc:connect',
+				validate: value => {
+					if (!isRecord(value) || Object.keys(value).length !== 1 || !isUuid(value.nonce)) { throw new TypeError('Invalid Main IPC acquisition'); }
+					return { nonce: value.nonce };
+				},
+				// The trusted route owns the window identity; the renderer supplies only a reply nonce.
+				invoke: value => this.mainProcessIpcServer.connect(window.webContents, `window:${window.id}`, (value as { nonce: string }).nonce),
+			},
+		];
 	}
 
 	private createAppServerConnectionRelay(
@@ -878,29 +928,38 @@ export class AshApplication extends Disposable {
 				const resolvedWorkspace = await workspaces.resolveWorkspace(workspace);
 				const root = isSingleFolderWorkspaceIdentifier(workspace) ? workspace.uri.fsPath : undefined;
 				const grant = root ? await this.resolveDirGrant(workspaceHost, root) : { type: 'config' as const };
-				if (!grant || !await this.lifecycleMainService.unload(window)) return;
-				await record.windowsStateHandler.saveWindowState(window);
-				window.webContents.send('ash:terminal:prepareReplacement');
-				if (this.appServerStartupMode !== 'disabled') {
-					const launcher = supervisor.options.enabled ? supervisor.options.processLauncher : undefined;
-					if (!(launcher instanceof AppServerDaemonLauncher) && !(launcher instanceof RemoteAppServerProcessLauncher)) throw new Error('Workspace connection has no directory launcher');
-					await this.reconnectAppServerWorkspace(supervisor, launcher, root, grant, workspace.id, workspaceContext.getWorkspace().id, workspaceHost);
+				if (!grant || !await this.lifecycleMainService.unload(window)) {
+					return;
 				}
-				loadingWorkspace = true;
-				workspaceContext.updateWorkspace(workspace, resolvedWorkspace);
-				accepted = true;
 				const load = async (): Promise<void> => {
 					try {
 						await this.loadRendererEntry(window, this.resolveRendererEntry('workbench', record.modeId));
+						await this.windowsMainService.whenReady(window);
 					} finally {
 						loadingWorkspace = false;
 					}
 				};
-				// An IPC caller must receive its reply before its renderer is replaced.
-				if (replyBeforeLoad) {
-					rendererLoad = new Promise<void>((resolve, reject) => setImmediate(() => { void load().then(resolve, reject); }));
-				} else {
-					await load();
+				try {
+					await record.windowsStateHandler.saveWindowState(window);
+					window.webContents.send('ash:terminal:prepareReplacement');
+					if (this.appServerStartupMode !== 'disabled') {
+						const launcher = supervisor.options.enabled ? supervisor.options.processLauncher : undefined;
+						if (!(launcher instanceof AppServerDaemonLauncher) && !(launcher instanceof RemoteAppServerProcessLauncher)) {
+							throw new Error('Workspace connection has no directory launcher');
+						}
+						await this.reconnectAppServerWorkspace(supervisor, launcher, root, grant, workspace.id, workspaceContext.getWorkspace().id, workspaceHost);
+					}
+					loadingWorkspace = true;
+					workspaceContext.updateWorkspace(workspace, resolvedWorkspace);
+					accepted = true;
+				} finally {
+					// Unload shuts down renderer services even if changing the backend fails; a load completes that lifecycle.
+					// An IPC caller must receive its reply before its renderer is replaced.
+					if (replyBeforeLoad) {
+						rendererLoad = new Promise<void>((resolve, reject) => setImmediate(() => { void load().then(resolve, reject); }));
+					} else {
+						await load();
+					}
 				}
 			});
 			workspaceOpenQueue = operation.then(async () => { await rendererLoad; }, async () => { await rendererLoad; });
@@ -910,11 +969,11 @@ export class AshApplication extends Disposable {
 		record.replaceWorkspace = workspace => replaceWorkspace(workspace, false);
 
 		windowDisposables.add(toDisposable(() => this.dialogs.cancelWindow(window)));
-		windowDisposables.add(this.themeMainService.onDidChangeColorScheme(scheme => window.webContents.send(NATIVE_HOST_COLOR_SCHEME_CHANGED_CHANNEL, scheme)));
 		const windowControlsOverlay = new WindowControlsOverlay(colors => {
 			if (titleBarStyle === 'custom' && (process.platform === 'win32' || process.platform === 'linux')) window.setTitleBarOverlay(colors);
 		});
 		const ipcRoutes = [
+			...this.mainProcessIpcRoutes(window),
 			...workspaceHost.routes(),
 			...supervisor.routes(window.webContents, () => ({ workspaceId: workspaceContext.getWorkspace().id, workspaceRoot: workspaceContext.getResolvedWorkspace().folders[0]?.uri.fsPath ?? this.profileRoot })),
 			...windowDisposables.add(new BrowserAutomationHost(browserAutomationMainService)).routes(),
@@ -975,7 +1034,6 @@ export class AshApplication extends Disposable {
 					return result.canceled || !result.filePath ? undefined : result.filePath;
 				},
 				isAccessibilitySupportEnabled: () => app.isAccessibilitySupportEnabled(),
-				getOSColorScheme: () => this.themeMainService.getColorScheme(),
 				setWindowTheme: theme => {
 					windowControlsOverlay.setTheme(theme);
 					window.setBackgroundColor(theme.backgroundColor);
@@ -1086,7 +1144,6 @@ export class AshApplication extends Disposable {
 						window.webContents.removeListener('did-start-navigation', onNavigation);
 						window.webContents.removeListener('render-process-gone', rejectInterruptedHandoffs);
 					}));
-					windowDisposables.add(this.themeMainService.onDidChangeColorScheme(scheme => window.webContents.send(NATIVE_HOST_COLOR_SCHEME_CHANGED_CHANNEL, scheme)));
 					const windowControlsOverlay = new WindowControlsOverlay(colors => {
 						if (titleBarStyle === 'custom' && (process.platform === 'win32' || process.platform === 'linux')) window.setTitleBarOverlay(colors);
 					});
@@ -1121,12 +1178,12 @@ export class AshApplication extends Disposable {
 						userKeyboardLayout: this.services.userKeyboardLayout,
 					};
 					const ipcRoutes = [
+						...this.mainProcessIpcRoutes(window),
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
 						...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path)),
 						...remoteWindowContext.ipcRoutes,
 						...windowResourceIpcRoutes(windowResources),
 						...windowAppearanceIpcRoutes({
-							getOSColorScheme: () => this.themeMainService.getColorScheme(),
 							setWindowTheme: theme => {
 								windowControlsOverlay.setTheme(theme);
 								window.setBackgroundColor(theme.backgroundColor);

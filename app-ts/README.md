@@ -50,9 +50,18 @@ Electron 启动前并行准备键盘模块、前端生成资源和后端资源�
 pnpm --dir app-ts start -- C:\path\to\project
 pnpm --dir app-ts start -- --folder C:\path\to\project
 pnpm --dir app-ts start -- --workspace C:\path\to\team.ash-workspace
+pnpm --dir app-ts start -- --reuse-window --goto C:\path\to\project\main.ts:12:4
+pnpm --dir app-ts start -- --new-window C:\path\to\project\main.ts
+pnpm --dir app-ts start -- --wait C:\path\to\project\main.ts
 ```
 
-不传路径时打开空窗口。工作区模型由 `platform/workspace` 定义，启动目标解析和工作区管理由 `platform/workspaces` 负责；资源身份约定见 [资源身份](docs/resource-identity.md)。
+`--new-window` 强制新建窗口，`--reuse-window` 复用当前 Workbench 窗口，两者不能同时使用。`--goto` 支持 `文件:行:列`；`--wait` 让第二个启动进程等待所有请求文件关闭，关闭所属窗口也会结束等待。参数中的 `--` 后面按文件路径处理，可以打开名称以连字符开头的文件。
+
+文件读写需要连接 App Server。只指定文件时，如果当前窗口的工作区包含所有文件，就沿用该工作区；否则使用这些文件的共同父目录，并按现有流程确认目录权限。跨磁盘文件需要显式指定包含这些目录的多根工作区。仅 UI 模式可验证窗口选择，但不能读取磁盘业务文件。
+
+Electron 的 `open-file`、`open-url` 和第二实例参数统一进入 `platform/launch/electron-main/launchMainService.ts`。支持 `--file-uri`、`--folder-uri` 和 `ash://file` 文件请求；系统协议关联属于安装包配置，本次未验证。窗口选择与 Renderer 就绪由 `platform/windows` 管理，文件打开和关闭完成通知由 Workbench 的 `ElectronWindow` 管理。
+
+不传路径时按已有窗口恢复策略启动。工作区模型由 `platform/workspace` 定义，工作区管理由 `platform/workspaces` 负责；资源身份约定见 [资源身份](docs/resource-identity.md)。
 
 ## Electron 启动门禁
 
