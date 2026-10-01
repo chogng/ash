@@ -55,6 +55,7 @@ Session、Thread、Turn 和更新流，不建立第二套领域模型。
 - `backend` 明确选择本地模型，或选择 `openAi` / `xai` 云端供应商及其转写模型。云端识别使用该供应商的直接 API 凭据，不读取当前文字模型的订阅凭据。
 - [realtime-voice](../ash-rs/realtime-voice/README.md) 管理设备所在进程的识别会话，一个进程同时只占用一个麦克风。`dictation/transcript` 携带临时或最终文本，`dictation/ended` 携带结束及错误；这些通知只送给发起连接。停止响应也携带最终文本。
 - 停止请求或连接关闭会释放听写资源。App Server 在所在设备上采集音频；远端客户端需要由本机语音会话持有麦克风。
+- TypeScript 的 `platform/localTranscription/common/localTranscription.ts` 定义前端契约，Workbench 的 `services/localTranscription/electron-browser/localTranscriptionService.ts` 通过现有 renderer connection 接入上述听写资源。Workbench 与 Sessions 的本地听写共用该服务；停止等待最终文本，取消停止后端资源并丢弃后续文本，连接关闭结束当前输入。浏览器和 SSH 窗口不提供设备本地采集。采集、模型缓存和识别仍由共享 Rust 后端负责，前端不推送 PCM、不启动转写工作进程；现有协议尚未提供模型准备进度或模型导入接口。
 
 ### 唯一外部门禁
 

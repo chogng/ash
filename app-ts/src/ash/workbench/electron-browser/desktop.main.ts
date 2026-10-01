@@ -22,6 +22,7 @@ import { createElectronTitlebarPartFactory } from './parts/titlebar/titlebarPart
 import { NativeDialogHandler } from './parts/dialogs/dialogHandler.js';
 import { DirectoryPermissionDialog } from './parts/dialogs/directoryPermissionDialog.js';
 import { ElectronWindow } from './window.js';
+import { registerLocalTranscriptionService } from '../services/localTranscription/electron-browser/localTranscriptionService.js';
 
 /** Owns desktop startup and the resources of one renderer window. */
 export class DesktopMain extends Disposable {
@@ -43,7 +44,11 @@ export class DesktopMain extends Disposable {
 		try {
 			const container = document.querySelector<HTMLElement>('#app') ?? document.body;
 			const permissionDialog = this._register(new DirectoryPermissionDialog(container));
-			const api = this._register(await createElectronRendererApi(this.rendererCapabilities, { browser: true }, permissionDialog));
+			const transcriptionServices = this._register(new InstantiationService());
+			const api = this._register(await createElectronRendererApi([
+				...this.rendererCapabilities,
+				client => registerLocalTranscriptionService(transcriptionServices, client),
+			], { browser: true }, permissionDialog));
 			const profileServices = this._register(new InstantiationService());
 			profileServices.registerInstance(IFileService, api.localFiles);
 			const userThemes = this._register(await loadUserThemes(profileServices, URI.parse(api.userDataHome.toString().replace(/\/$/u, '') + '/themes')));

@@ -23,6 +23,8 @@ import { IConfigurationService } from "../../platform/configuration/common/confi
 import { ContextKeyExpr } from '../../platform/contextkey/common/contextkey.js';
 import { refineServiceDecorator, type IInstantiationService } from "../../platform/instantiation/common/instantiation.js";
 import { InstantiationService } from "../../platform/instantiation/common/instantiationService.js";
+import { ILocalTranscriptionService } from '../../platform/localTranscription/common/localTranscription.js';
+import { NullLocalTranscriptionService } from '../../workbench/services/localTranscription/browser/localTranscriptionService.js';
 import { ICodeEditorService } from '../../editor/browser/services/codeEditorService.js';
 import { StandaloneCodeEditorService } from '../../editor/standalone/browser/standaloneCodeEditorService.js';
 import { ILanguageConfigurationService, LanguageConfigurationService } from '../../editor/common/languages/languageConfigurationRegistry.js';
@@ -206,6 +208,7 @@ export class Workbench extends Disposable {
 
 		const configurationService = this.configurationService = this._register(new WorkbenchConfigurationService({ api: options.configurationApi, initialSnapshot: options.initialConfigurationSnapshot }));
 		const services = this._register(new InstantiationService());
+		services.registerInstance(ILocalTranscriptionService, options.api.localTranscription ?? this._register(new NullLocalTranscriptionService()));
 		services.registerInstance(IConfigurationService, configurationService);
 		if (options.nativeHostApi) services.registerInstance(INativeHostService, options.nativeHostApi);
 		const languageService = this._register(new LanguageService());

@@ -8,6 +8,7 @@ import { DisposableStore, toDisposable, type IDisposable } from "../../base/comm
 import { onUnexpectedError } from "../../base/common/errors.js";
 import type { WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import { createElectronRendererApi } from "../../platform/native/electron-browser/rendererApi.js";
+import { registerLocalTranscriptionService } from '../../workbench/services/localTranscription/electron-browser/localTranscriptionService.js';
 import { DirectoryPermissionDialog } from '../../workbench/electron-browser/parts/dialogs/directoryPermissionDialog.js';
 import { createElectronWorkbenchContextMenuService } from "../../workbench/services/contextmenu/electron-browser/contextMenuService.js";
 import type { SessionsProfile } from "../common/sessionsProfile.js";
@@ -63,8 +64,9 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 	const handoffSubscription = subscribe<void>(AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, requestDrain);
 	sessions.add(toDisposable(() => handoffSubscription.dispose()));
 	const permissionDialog = sessions.add(new DirectoryPermissionDialog(container));
+	const transcriptionServices = sessions.add(new InstantiationService());
 	let api: Awaited<ReturnType<typeof createElectronRendererApi>>;
-	try { api = await createElectronRendererApi([], { browser: false }, permissionDialog); }
+	try { api = await createElectronRendererApi([client => registerLocalTranscriptionService(transcriptionServices, client)], { browser: false }, permissionDialog); }
 	catch (error) { sessions.dispose(); return showStartupError(error, text => invoke<void>('ash:host:writeClipboard', text)); }
 	sessions.add(api);
 	const profileServices = sessions.add(new InstantiationService());

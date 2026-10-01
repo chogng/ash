@@ -346,6 +346,11 @@ test('editor action labels use the selected Chinese language catalog', async () 
 		assert.equal(localize('chat.input.dictate', 'Dictate message'), '语音输入');
 		assert.equal(localize('dictation.cloudProvider.title', 'Cloud dictation provider'), '云端听写供应商');
 		assert.equal(localize('dictation.cloudProvider.description', 'Choose the cloud transcription provider. Its API key is required.'), '选择云端语音转写供应商，并配置对应的 API 密钥。');
+		assert.equal(localize('dictation.connectionLost', 'Dictation connection lost'), '语音输入连接已断开');
+		assert.equal(localize('dictation.alreadyActive', 'Dictation is already active'), '语音输入已在进行中');
+		const { NullLocalTranscriptionService } = await import('../../../localTranscription/browser/localTranscriptionService.js');
+		using transcription = new NullLocalTranscriptionService();
+		await assert.rejects(transcription.start(), { message: '语音输入连接不可用' });
 		assert.equal(localize('chat.agentPicker.mode', 'Agent: {0}', 'reviewer'), '智能体：reviewer');
 		assert.equal(localize('chat.agentPicker.default', 'Default Agent'), '默认智能体');
 		assert.equal(localize('chat.input.voice', 'Voice conversation'), '语音对话');

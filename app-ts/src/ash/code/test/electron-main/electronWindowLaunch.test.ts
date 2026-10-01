@@ -17,3 +17,11 @@ test("development second-instance arguments remove Electron and the app entry", 
 		appPath: "/repo/app-ts",
 	}), ["--folder", "/repo/project"]);
 });
+
+test('development process switches before a custom entry do not turn the entry into a requested file', () => {
+	assert.deepEqual(electronWorkspaceLaunchArguments({
+		arguments: ['/electron', '--inspect=0', '--remote-debugging-port=0', '/tests/late-start.mjs', '--user-data-dir=/tmp/ash', '--goto', '/project/main.ts:2:4'],
+		packaging: 'development',
+		appPath: '/repo/app-ts',
+	}), ['--inspect=0', '--remote-debugging-port=0', '--goto', '/project/main.ts:2:4']);
+});

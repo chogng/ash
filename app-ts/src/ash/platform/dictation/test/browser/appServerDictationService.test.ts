@@ -1,9 +1,12 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
+import { DeferredPromise } from '../../../../base/common/async.js';
 import type { AppServerProtocolClient } from '../../../app-server/browser/appServerProtocolClient.js';
 import type { IConfigurationApi } from '../../../configuration/common/configurationIpc.js';
 import { AppServerDictationService } from '../../browser/appServerDictationService.js';
+import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
+import { registerLocalTranscriptionService } from '../../../../workbench/services/localTranscription/electron-browser/localTranscriptionService.js';
 
 type Notification = Parameters<Parameters<AppServerProtocolClient['onNotification']>[0]>[0];
 type ConnectionState = Parameters<Parameters<AppServerProtocolClient['onStateChange']>[0]>[0];
@@ -44,9 +47,26 @@ function configuration(source = '{}\n'): IConfigurationApi {
 	return { read: async () => ({ revision: 1, document: { version: 1, source } }) } as IConfigurationApi;
 }
 
+test('concurrent dictation starts cannot replace the input awaiting configuration', async () => {
+	const client = new Client();
+	using services = new InstantiationService();
+	registerLocalTranscriptionService(services, client as unknown as AppServerProtocolClient);
+	const snapshot = new DeferredPromise<Awaited<ReturnType<IConfigurationApi['read']>>>();
+	const settings = { read: () => snapshot.p } as IConfigurationApi;
+	using service = services.createInstance(AppServerDictationService, client as unknown as AppServerProtocolClient, settings);
+	const first = service.start(() => {}, () => {});
+	await assert.rejects(service.start(() => {}, () => {}), /already active/);
+	await snapshot.complete({ revision: 1, document: { version: 1, source: '{}' } });
+	const session = await first;
+	await session.stop();
+	assert.deepEqual(client.requests.map(request => request.method), ['dictation/start', 'dictation/stop']);
+});
+
 test('dictation delivers only its own phrases and closes on disconnect', async () => {
 	const client = new Client();
-	using service = new AppServerDictationService(client as unknown as AppServerProtocolClient, configuration());
+	using services = new InstantiationService();
+	registerLocalTranscriptionService(services, client as unknown as AppServerProtocolClient);
+	using service = services.createInstance(AppServerDictationService, client as unknown as AppServerProtocolClient, configuration());
 	const phrases: string[] = [];
 	const ended: string[] = [];
 	const session = await service.start(text => phrases.push(text), error => ended.push(error ?? 'ended'));
@@ -64,7 +84,9 @@ test('dictation delivers only its own phrases and closes on disconnect', async (
 
 test('dictation stop releases the session and ignores late phrases', async () => {
 	const client = new Client();
-	using service = new AppServerDictationService(client as unknown as AppServerProtocolClient, configuration());
+	using services = new InstantiationService();
+	registerLocalTranscriptionService(services, client as unknown as AppServerProtocolClient);
+	using service = services.createInstance(AppServerDictationService, client as unknown as AppServerProtocolClient, configuration());
 	const phrases: string[] = [];
 	const session = await service.start(text => phrases.push(text), () => {});
 	const resourceId = client.requests[0]!.resourceId;
@@ -77,7 +99,9 @@ test('dictation stop releases the session and ignores late phrases', async () =>
 test('stop response delivers final text when the notification arrives after the response', async () => {
 	const client = new Client();
 	client.stopText = 'final phrase';
-	using service = new AppServerDictationService(client as unknown as AppServerProtocolClient, configuration());
+	using services = new InstantiationService();
+	registerLocalTranscriptionService(services, client as unknown as AppServerProtocolClient);
+	using service = services.createInstance(AppServerDictationService, client as unknown as AppServerProtocolClient, configuration());
 	const phrases: string[] = [];
 	const session = await service.start((text, isFinal) => { if (isFinal) { phrases.push(text); } }, () => {});
 	const resourceId = client.requests[0]!.resourceId;
@@ -88,7 +112,9 @@ test('stop response delivers final text when the notification arrives after the 
 
 test('dictation uses the selected local model package', async () => {
 	const client = new Client();
-	using service = new AppServerDictationService(client as unknown as AppServerProtocolClient, configuration('{"dictation.localModel":"custom-online"}'));
+	using services = new InstantiationService();
+	registerLocalTranscriptionService(services, client as unknown as AppServerProtocolClient);
+	using service = services.createInstance(AppServerDictationService, client as unknown as AppServerProtocolClient, configuration('{"dictation.localModel":"custom-online"}'));
 	const session = await service.start(() => {}, () => {});
 	assert.deepEqual(client.requests[0]!.backend, { type: 'local', modelId: 'custom-online' });
 	await session.stop();
@@ -96,7 +122,9 @@ test('dictation uses the selected local model package', async () => {
 
 test('cloud dictation selects the dedicated streaming transcription model', async () => {
 	const client = new Client();
-	using service = new AppServerDictationService(client as unknown as AppServerProtocolClient, configuration('{"dictation.backend":"cloud"}'));
+	using services = new InstantiationService();
+	registerLocalTranscriptionService(services, client as unknown as AppServerProtocolClient);
+	using service = services.createInstance(AppServerDictationService, client as unknown as AppServerProtocolClient, configuration('{"dictation.backend":"cloud"}'));
 	const updates: { text: string; isFinal: boolean }[] = [];
 	const session = await service.start((text, isFinal) => updates.push({ text, isFinal }), () => {});
 	assert.deepEqual(client.requests[0]!.backend, { type: 'cloud', provider: 'openAi', modelId: 'gpt-live-transcribe' });
@@ -109,7 +137,9 @@ test('cloud dictation selects the dedicated streaming transcription model', asyn
 
 test('cloud dictation sends the selected xAI provider and its speech model', async () => {
 	const client = new Client();
-	using service = new AppServerDictationService(client as unknown as AppServerProtocolClient, configuration('{"dictation.backend":"cloud","dictation.cloudProvider":"xai"}'));
+	using services = new InstantiationService();
+	registerLocalTranscriptionService(services, client as unknown as AppServerProtocolClient);
+	using service = services.createInstance(AppServerDictationService, client as unknown as AppServerProtocolClient, configuration('{"dictation.backend":"cloud","dictation.cloudProvider":"xai"}'));
 	const session = await service.start(() => {}, () => {});
 	assert.deepEqual(client.requests[0]!.backend, { type: 'cloud', provider: 'xai', modelId: 'grok-voice-transcribe-2.0' });
 	await session.stop();
@@ -117,7 +147,9 @@ test('cloud dictation sends the selected xAI provider and its speech model', asy
 
 test('cloud dictation rejects an unknown provider before starting capture', async () => {
 	const client = new Client();
-	using service = new AppServerDictationService(client as unknown as AppServerProtocolClient, configuration('{"dictation.backend":"cloud","dictation.cloudProvider":"unknown"}'));
+	using services = new InstantiationService();
+	registerLocalTranscriptionService(services, client as unknown as AppServerProtocolClient);
+	using service = services.createInstance(AppServerDictationService, client as unknown as AppServerProtocolClient, configuration('{"dictation.backend":"cloud","dictation.cloudProvider":"unknown"}'));
 	await assert.rejects(service.start(() => {}, () => {}), /dictation.cloudProvider/);
 	assert.deepEqual(client.requests, []);
 });

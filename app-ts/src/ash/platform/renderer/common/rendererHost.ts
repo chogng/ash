@@ -1,5 +1,6 @@
 import type { ICallService } from '../../call/common/callService.js';
 import type { IDictationService } from '../../dictation/common/dictationService.js';
+import type { ILocalTranscriptionService } from '../../localTranscription/common/localTranscription.js';
 import type { IMemoriesService } from '../../memories/common/memoriesService.js';
 import type { IMemoryDiagnosticsService } from '../../memory/common/memoryDiagnosticsService.js';
 import type { IAppServerApi, IResourceApi, IServerEventApi } from "../../app-server/common/appServerApi.js";
@@ -38,6 +39,7 @@ import { createServiceIdentifier } from '../../instantiation/common/instantiatio
 /** Optional product capabilities contributed by a statically selected host bundle. */
 export interface RendererHostCapabilities {
 	readonly debugAdapter?: IDebugAdapterProcessService;
+	readonly localTranscription?: ILocalTranscriptionService;
 }
 
 /** Merges product capabilities while rejecting two contributions that claim the same slot. */

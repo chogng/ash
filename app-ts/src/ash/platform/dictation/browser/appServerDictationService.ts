@@ -5,24 +5,45 @@ import { APP_SERVER_METHODS } from '../../app-server/common/generated/index.js';
 import { validateConfigurationSnapshot, type IConfigurationApi } from '../../configuration/common/configurationIpc.js';
 import { dictationBackend } from '../common/dictationConfiguration.js';
 import type { IDictationService, IDictationSession } from '../common/dictationService.js';
+import { ILocalTranscriptionService } from '../../localTranscription/common/localTranscription.js';
+import { localize } from '../../../nls.js';
 
-interface ActiveDictation {
-	readonly resourceId: string;
+interface DictationCallbacks {
 	readonly onTranscript: (text: string, isFinal: boolean) => void;
 	readonly onEnded: (error?: string) => void;
 	stopping: boolean;
-	finalDelivered: boolean;
 	endedError?: string;
 }
 
+type ActiveDictation = DictationCallbacks & (
+	{ readonly source: 'local' } |
+	{ readonly source: 'cloud'; readonly resourceId: string; finalDelivered: boolean }
+);
+
 export class AppServerDictationService extends Disposable implements IDictationService {
 	private active: ActiveDictation | undefined;
+	private starting = false;
 
-	constructor(private readonly client: AppServerProtocolClient, private readonly configuration: IConfigurationApi) {
+	constructor(private readonly client: AppServerProtocolClient, private readonly configuration: IConfigurationApi, @ILocalTranscriptionService private readonly localTranscription: ILocalTranscriptionService) {
 		super();
+		this._register(localTranscription.onDidTranscribe(result => {
+			const active = this.active;
+			if (!active || active.source !== 'local') { return; }
+			active.onTranscript(result.text, result.isFinal);
+		}));
+		this._register(localTranscription.onDidEnd(result => {
+			const active = this.active;
+			if (!active || active.source !== 'local') { return; }
+			if (active.stopping) {
+				active.endedError = result.error;
+				return;
+			}
+			this.active = undefined;
+			active.onEnded(result.error);
+		}));
 		this._register(client.onNotification(notification => {
 			const active = this.active;
-			if (!active) { return; }
+			if (!active || active.source !== 'cloud') { return; }
 			if (notification.method === 'dictation/transcript' && notification.params.resourceId === active.resourceId) {
 				if (notification.params.isFinal) { active.finalDelivered = true; }
 				active.onTranscript(notification.params.text, notification.params.isFinal);
@@ -37,32 +58,54 @@ export class AppServerDictationService extends Disposable implements IDictationS
 			}
 		}));
 		this._register(client.onStateChange(state => {
-			if (state === 'ready' || !this.active) { return; }
+			if (state === 'ready' || !this.active || this.active.source !== 'cloud') { return; }
 			const active = this.active;
 			this.active = undefined;
-			active.onEnded('Dictation connection lost');
+			active.onEnded(localize('dictation.connectionLost', 'Dictation connection lost'));
 		}));
 	}
 
 	async start(onTranscript: (text: string, isFinal: boolean) => void, onEnded: (error?: string) => void): Promise<IDictationSession> {
-		if (this.client.state !== 'ready') { throw new Error('Dictation connection is unavailable'); }
-		if (this.active) { throw new Error('Dictation is already active'); }
-		const backend = dictationBackend(validateConfigurationSnapshot(await this.configuration.read()).document);
-		const active: ActiveDictation = { resourceId: generateUuid(), onTranscript, onEnded, stopping: false, finalDelivered: false };
-		this.active = active;
+		this.assertNotDisposed();
+		if (this.client.state !== 'ready') { throw new Error(localize('dictation.connectionUnavailable', 'Dictation connection is unavailable')); }
+		if (this.active || this.starting) { throw new Error(localize('dictation.alreadyActive', 'Dictation is already active')); }
+		this.starting = true;
 		try {
-			await this.client.request(APP_SERVER_METHODS['dictation/start'], { resourceId: active.resourceId, backend });
-		} catch (error) {
-			if (this.active === active) { this.active = undefined; }
-			throw error;
+			const backend = dictationBackend(validateConfigurationSnapshot(await this.configuration.read()).document);
+			this.assertNotDisposed();
+			const callbacks: DictationCallbacks = { onTranscript, onEnded, stopping: false };
+			const active: ActiveDictation = backend.type === 'local'
+				? { ...callbacks, source: 'local' }
+				: { ...callbacks, source: 'cloud', resourceId: generateUuid(), finalDelivered: false };
+			this.active = active;
+			try {
+				if (active.source === 'local') {
+					await this.localTranscription.start({ model: backend.modelId });
+				} else {
+					await this.client.request(APP_SERVER_METHODS['dictation/start'], { resourceId: active.resourceId, backend });
+				}
+			} catch (error) {
+				if (this.active === active) { this.active = undefined; }
+				throw error;
+			}
+			return { stop: () => this.stop(active) };
+		} finally {
+			this.starting = false;
 		}
-		return { stop: () => this.stop(active) };
 	}
 
 	private async stop(active: ActiveDictation): Promise<void> {
 		if (this.active !== active) { return; }
 		active.stopping = true;
 		try {
+			if (active.source === 'local') {
+				await this.localTranscription.stop();
+				if (this.active === active) {
+					this.active = undefined;
+					active.onEnded(active.endedError);
+				}
+				return;
+			}
 			const result = await this.client.request(APP_SERVER_METHODS['dictation/stop'], { resourceId: active.resourceId });
 			if (!active.finalDelivered && result.text !== null) {
 				active.finalDelivered = true;
@@ -78,9 +121,14 @@ export class AppServerDictationService extends Disposable implements IDictationS
 		}
 	}
 
-	public override dispose(): void {
+	protected override disposeCore(): void {
 		const active = this.active;
-		if (active) { void this.stop(active).catch(() => undefined); }
-		super.dispose();
+		this.active = undefined;
+		if (active?.source === 'local') {
+			void this.localTranscription.cancel().catch(() => undefined);
+		} else if (active) {
+			void this.client.request(APP_SERVER_METHODS['dictation/stop'], { resourceId: active.resourceId }).catch(() => undefined);
+		}
+		super.disposeCore();
 	}
 }

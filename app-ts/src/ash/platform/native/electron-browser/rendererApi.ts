@@ -37,6 +37,8 @@ import { createRemoteAgentApi } from "../../remote/electron-browser/remoteAgentA
 import { createRemoteConnectionApi } from "../../remote/electron-browser/remoteConnectionApi.js";
 import { createRemoteTunnelApi } from "../../remote/electron-browser/remoteTunnelApi.js";
 import type { IWorkspaceTrustRequestService } from '../../workspace/common/workspaceTrust.js';
+import { ILocalTranscriptionService } from '../../localTranscription/common/localTranscription.js';
+import { InstantiationService } from '../../instantiation/common/instantiationService.js';
 
 export type ElectronRendererCapabilityContribution = RendererCapabilityContribution;
 
@@ -111,7 +113,14 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			if (client.capabilities?.contracts.memoryDiagnostics?.version === 1) { backend = { ...backend, memoryDiagnostics: resources.add(new AppServerMemoryDiagnosticsService(client, 'electron', () => invoke<MemoryObservation[]>('ash:memory:collect'))) }; }
 			if (client.capabilities?.contracts.calls?.version === 1) { backend = { ...backend, calls: resources.add(new AppServerCallService(client)) }; }
 			const remoteConnection = await createRemoteAgentApi().getConnection();
-			if (remoteConnection.kind !== 'ssh') { backend = { ...backend, dictation: resources.add(new AppServerDictationService(client, createConfigurationApi())) }; }
+			if (remoteConnection.kind !== 'ssh') {
+				const services = resources.add(new InstantiationService());
+				if (!backend.localTranscription) { throw new Error('Local transcription service was not contributed by the renderer entry'); }
+				services.registerInstance(ILocalTranscriptionService, backend.localTranscription);
+				backend = { ...backend, dictation: resources.add(services.createInstance(AppServerDictationService, client, createConfigurationApi())) };
+			} else {
+				backend = { ...backend, localTranscription: undefined };
+			}
 			if (client.capabilities?.contracts.automation?.version === 1) { backend = { ...backend, automation: resources.add(new AppServerAutomationService(client)) }; }
 			if (remoteConnection.kind === 'ssh') {
 				const terminals = resources.add(new ReconnectableTerminalProcessService({ supervisor: client }));
