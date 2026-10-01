@@ -24,9 +24,19 @@ export class DocumentCommands {
 
 	public updateShape(shape: DesignShape): void { this.updateShapes([shape]); }
 
+	public insertShape(shape: DesignShape): void { this.model.applyEdit([...this.model.value.shapes, shape]); }
+
 	public updateShapes(shapes: readonly DesignShape[]): void {
 		const updates = new Map(shapes.map(shape => [shape.id, shape]));
-		this.model.applyEdit(this.model.value.shapes.map(current => updates.get(current.id) ?? current));
+		this.model.applyEdit(this.model.value.shapes.map(current => {
+			const shape = updates.get(current.id);
+			if (!shape) { return current; }
+			// Moving the base object carries its animation; editing keyframes supplies a new motion value.
+			if (shape.motion && shape.motion === current.motion) {
+				return { ...shape, motion: { ...shape.motion, keyframes: shape.motion.keyframes.map(frame => ({ ...frame, x: frame.x + shape.x - current.x, y: frame.y + shape.y - current.y, rotation: frame.rotation + shape.rotation - current.rotation })) } };
+			}
+			return shape;
+		}));
 	}
 
 	public updateGeometry(shape: DesignShape, field: keyof DesignFrame, value: number): void {
@@ -50,7 +60,10 @@ export class DocumentCommands {
 			fill: '#808080',
 			contentWidth: bounds.width,
 			contentHeight: bounds.height,
-			children: children.map(shape => ({ ...shape, x: shape.x - bounds.x, y: shape.y - bounds.y })),
+			children: children.map(shape => ({
+				...shape, x: shape.x - bounds.x, y: shape.y - bounds.y,
+				...(shape.motion ? { motion: { ...shape.motion, keyframes: shape.motion.keyframes.map(frame => ({ ...frame, x: frame.x - bounds.x, y: frame.y - bounds.y })) } } : {}),
+			})),
 		};
 		// The group takes the frontmost selected position; unselected objects keep their relative order.
 		const front = children.at(-1)!.id;
@@ -63,7 +76,7 @@ export class DocumentCommands {
 
 	public ungroup(id: string): readonly string[] {
 		const group = this.model.value.shapes.find(shape => shape.id === id);
-		if (group?.kind !== 'group') { return []; }
+		if (group?.kind !== 'group' || group.motion) { return []; }
 		// Uniform group scaling keeps children representable without shear after ungrouping.
 		const scale = group.width / group.contentWidth;
 		const radians = group.rotation * Math.PI / 180;
@@ -78,6 +91,18 @@ export class DocumentCommands {
 				height: child.height * scale,
 				rotation: child.rotation + group.rotation,
 			};
+			if (child.motion) {
+				geometry.motion = { ...child.motion, keyframes: child.motion.keyframes.map(frame => {
+					const dx = (frame.x + child.width / 2) * scale - group.width / 2;
+					const dy = (frame.y + child.height / 2) * scale - group.height / 2;
+					return {
+						...frame,
+						x: group.x + group.width / 2 + dx * Math.cos(radians) - dy * Math.sin(radians) - child.width * scale / 2,
+						y: group.y + group.height / 2 + dx * Math.sin(radians) + dy * Math.cos(radians) - child.height * scale / 2,
+						rotation: frame.rotation + group.rotation,
+					};
+				}) };
+			}
 			if (geometry.kind === 'text') { return { ...geometry, fontSize: geometry.fontSize * scale }; }
 			if (geometry.kind === 'path') { return { ...geometry, strokeWidth: geometry.strokeWidth * scale }; }
 			return geometry;

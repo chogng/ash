@@ -34,6 +34,7 @@ for (const [name, value] of Object.entries({
 const { DesignEditorWidget } = await import('../../contrib/design/browser/widget/designEditorWidget.js');
 const { DesignDocumentController } = await import('../../contrib/design/browser/designDocumentController.js');
 const { DesignEditorPage } = await import('../../contrib/design/browser/designEditorPage.js');
+const { createDesignEditorContributions } = await import('../../contrib/design/design.main.js');
 const services = new InstantiationService();
 const contextKeys = new ContextKeyService();
 const configuration = new WorkbenchConfigurationService();
@@ -101,25 +102,26 @@ function dispatchWheel(view: { readonly domNode: HTMLElement }, init: WheelEvent
 
 test('Design cursor follows configuration and theme changes and releases its subscriptions', async () => {
 	const view = createView();
-	const cursor = () => view.domNode.style.getPropertyValue('--ash-sessions-design-pointer-cursor');
+	const viewport = view.domNode.querySelector<HTMLElement>('.ash-sessions-design-viewport')!;
+	const cursor = () => viewport.style.getPropertyValue('--ash-sessions-design-pointer-cursor');
 	try {
-		assert.equal(view.domNode.classList.contains('pointer-cursor'), true);
+		assert.equal(viewport.classList.contains('pointer-cursor'), true);
 		assert.match(decodeURIComponent(cursor()), /width="24" height="24"/u);
 		const initialCursor = cursor();
 		theme.setColorTheme(darkColorTheme);
 		assert.notEqual(cursor(), initialCursor);
 		await configuration.updateValue(DesignConfiguration.usePointerCursor, false);
-		assert.equal(view.domNode.classList.contains('pointer-cursor'), false);
+		assert.equal(viewport.classList.contains('pointer-cursor'), false);
 		assert.equal(configuration.inspect(DesignConfiguration.usePointerCursor).userValue, false);
 		using nextView = createView();
-		assert.equal(nextView.domNode.classList.contains('pointer-cursor'), false);
+		assert.equal(nextView.domNode.querySelector('.ash-sessions-design-viewport')!.classList.contains('pointer-cursor'), false);
 		await assert.rejects(configuration.updateValue(DesignConfiguration.usePointerCursor, 'false'), /must be boolean/u);
 		await assert.rejects(configuration.updateValue(DesignConfiguration.usePointerCursor, false, ConfigurationTarget.WORKSPACE), /Unable to write/u);
 		view.dispose();
 		const disposedCursor = cursor();
 		await configuration.updateValue(DesignConfiguration.usePointerCursor, true);
 		theme.setColorTheme(lightColorTheme);
-		assert.equal(view.domNode.classList.contains('pointer-cursor'), false);
+		assert.equal(viewport.classList.contains('pointer-cursor'), false);
 		assert.equal(cursor(), disposedCursor);
 	} finally {
 		view.dispose();
@@ -204,11 +206,11 @@ test('Design canvas pans by dragging with the pointer', () => {
 	};
 	try {
 		firePointer('pointerdown', 10, 10);
-		assert.ok(view.domNode.classList.contains('panning'));
+		assert.ok(viewport.classList.contains('panning'));
 		firePointer('pointermove', 40, 25);
 		firePointer('pointerup', 40, 25);
 		assert.deepEqual(projectedTransform(view), { panX: 30, panY: 15, scale: 1 });
-		assert.ok(!view.domNode.classList.contains('panning'));
+		assert.ok(!viewport.classList.contains('panning'));
 	} finally {
 		view.dispose();
 	}
@@ -337,7 +339,7 @@ test('Design edits text and path nodes, groups a selection, and exports safe SVG
 	outgoing.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
 	assert.match(view.domNode.querySelector('path[data-shape-id]')!.getAttribute('d')!, /C 188 10/u);
 	await clickAction(view, 'Add node');
-	assert.equal(view.domNode.querySelector<HTMLSelectElement>('select')!.options.length, 3);
+	assert.equal(view.domNode.querySelector<HTMLSelectElement>('select[aria-label="Path node"]')!.options.length, 3);
 	await clickAction(view, 'Remove node');
 	const closed = view.domNode.querySelector<HTMLInputElement>('input[aria-label="Closed path"]')!;
 	closed.click();
@@ -379,7 +381,7 @@ test('Chinese Design actions and new property labels are localized', async () =>
 	try {
 		using view = createView();
 		pressCanvas(view, 't');
-		assert.equal(view.domNode.querySelector('textarea')!.getAttribute('aria-label'), '文字内容');
+		assert.equal(view.domNode.querySelector('.ash-sessions-design-properties textarea')!.getAttribute('aria-label'), '文字内容');
 		pressCanvas(view, 'p');
 		assert.ok(view.domNode.querySelector('input[aria-label="出控制点 X"]'));
 		assert.ok(Array.from(view.domNode.querySelectorAll('button')).some(button => button.textContent === '导出 SVG'));
@@ -391,8 +393,8 @@ test('Chinese Design actions and new property labels are localized', async () =>
 
 test('Design editors share document edits and history while keeping selection, camera and lifetime separate', () => {
 	using document = services.createInstance(DesignDocumentController);
-	using first = services.createInstance(DesignEditorWidget, browser.window.document, document);
-	using second = services.createInstance(DesignEditorWidget, browser.window.document, document);
+	using first = services.createInstance(DesignEditorWidget, browser.window.document, document, createDesignEditorContributions);
+	using second = services.createInstance(DesignEditorWidget, browser.window.document, document, createDesignEditorContributions);
 	for (const editor of [first, second]) {
 		editor.initialize();
 		editor.layout({ width: 400, height: 300 });
@@ -434,4 +436,114 @@ test('Sessions page owns the unsaved browser-close check and releases it with th
 		assert.equal(after.defaultPrevented, false);
 		assert.equal(DesignEditorWidget.getFocused(page.domNode), undefined);
 	} finally { page.dispose(); }
+});
+
+test('Design tool contribution draws a shape at document coordinates and hand gestures preserve objects', async () => {
+	using view = createView();
+	view.layout({ width: 400, height: 300 });
+	const viewport = view.domNode.querySelector<HTMLElement>('.ash-sessions-design-viewport')!;
+	const pointer = (type: string, x: number, y: number): void => {
+		viewport.dispatchEvent(new browser.window.PointerEvent(type, { pointerId: 1, isPrimary: true, button: 0, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+	};
+	const tools = view.domNode.querySelector('.ash-design-tools-widget')!;
+	tools.querySelector<HTMLButtonElement>('button[aria-label="Rectangle"]')!.click();
+	pointer('pointerdown', 40, 30);
+	pointer('pointermove', 180, 90);
+	assert.equal(view.domNode.querySelectorAll('[data-shape-id]').length, 0);
+	pointer('pointerup', 180, 90);
+	const rectangle = view.domNode.querySelector('[data-shape-id]')!;
+	assert.deepEqual(['x', 'y', 'width', 'height'].map(field => rectangle.getAttribute(field)), ['40', '30', '140', '60']);
+	tools.querySelector<HTMLButtonElement>('button[aria-label="Move canvas (H)"]')!.click();
+	pointer('pointerdown', 100, 60);
+	pointer('pointermove', 120, 70);
+	pointer('pointerup', 120, 70);
+	assert.deepEqual(projectedTransform(view), { panX: 20, panY: 10, scale: 1 });
+	assert.equal(rectangle.getAttribute('x'), '40');
+	DesignEditorWidget.getFocused(view.domNode)!.undo();
+	assert.equal(view.domNode.querySelector('[data-shape-id]'), null);
+	await clickAction(view, 'Draw');
+	pointer('pointerdown', 30, 20);
+	pointer('pointermove', 40, 30);
+	pointer('pointermove', 60, 20);
+	pointer('pointerup', 60, 20);
+	assert.equal(view.domNode.querySelector('path[data-shape-id]') !== null, true);
+	await clickAction(view, 'Design');
+	tools.querySelector<HTMLButtonElement>('button[aria-label="Pen (P)"]')!.click();
+	pointer('pointerdown', 100, 20); pointer('pointerup', 100, 20);
+	pointer('pointerdown', 160, 80); pointer('pointermove', 180, 90); pointer('pointerup', 180, 90);
+	pressCanvas(view, 'Enter');
+	assert.equal(view.domNode.querySelectorAll('path[data-shape-id]').length, 2);
+	DesignEditorWidget.getFocused(view.domNode)!.undo();
+	assert.equal(view.domNode.querySelectorAll('path[data-shape-id]').length, 1);
+});
+
+test('Motion keyframes round trip, scrub without editing, undo and export runnable code with design identities', async () => {
+	using view = createView();
+	view.layout({ width: 400, height: 300 });
+	pressCanvas(view, 'r');
+	const id = view.domNode.querySelector<SVGGraphicsElement>('[data-shape-id]')!.dataset.shapeId;
+	await clickAction(view, 'Motion');
+	await clickAction(view, 'Add keyframe');
+	const x = view.domNode.querySelector<HTMLInputElement>('input[aria-label="Keyframe X"]')!;
+	x.value = '240';
+	x.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
+	const opacity = view.domNode.querySelector<HTMLInputElement>('input[aria-label="Keyframe opacity"]')!;
+	opacity.value = '0.5'; opacity.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
+	const timeline = view.domNode.querySelector<HTMLInputElement>('input[aria-label="Animation time (ms)"]')!;
+	timeline.value = '500'; timeline.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
+	const rectangle = view.domNode.querySelector<SVGGraphicsElement>('[data-shape-id]')!;
+	assert.deepEqual([rectangle.getAttribute('x'), rectangle.getAttribute('opacity')], ['190', '0.75']);
+	assert.equal(view.domNode.querySelector('.ash-sessions-design-selection rect')!.getAttribute('x'), '190');
+	assert.equal(view.domNode.querySelector('.ash-sessions-design-selection')!.classList.contains('visible'), true);
+	await clickAction(view, 'Add keyframe');
+	assert.equal(view.domNode.querySelector<HTMLSelectElement>('select[aria-label="Keyframe"]')!.options.length, 3);
+	await DesignEditorWidget.getFocused(view.domNode)!.saveDocument();
+	const saved = fileContent;
+	assert.equal(JSON.parse(saved).shapes[0].motion.keyframes.length, 3);
+	timeline.value = '750'; timeline.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
+	assert.equal(view.domNode.classList.contains('dirty'), false);
+	await clickAction(view, 'Code');
+	const source = view.domNode.querySelector<HTMLTextAreaElement>('textarea[aria-label="Generated code"]')!.value;
+	assert.match(source, /@keyframes[\s\S]*opacity: 0\.5/u);
+	const html = new browser.window.DOMParser().parseFromString(source, 'text/html');
+	assert.equal(html.querySelector('[data-design-id]')!.getAttribute('data-design-id'), id);
+	assert.deepEqual(JSON.parse(html.querySelector('#ash-design-document')!.textContent!), JSON.parse(saved));
+	assert.equal(html.querySelectorAll('script:not([type="application/json"])').length, 0);
+	await clickAction(view, 'Export code');
+	assert.equal(fileContent, source);
+	assert.equal(view.domNode.classList.contains('dirty'), false);
+	fileContent = saved;
+	await clickAction(view, 'Open design');
+	await clickAction(view, 'Design');
+	assert.equal(rectangle.getAttribute('x'), '140');
+	pressCanvas(view, 'Tab');
+	await clickAction(view, 'Motion');
+	assert.equal(view.domNode.querySelector<HTMLSelectElement>('select[aria-label="Keyframe"]')!.options.length, 3);
+	await clickAction(view, 'Remove animation');
+	DesignEditorWidget.getFocused(view.domNode)!.undo();
+	assert.equal(view.domNode.querySelector<HTMLSelectElement>('select[aria-label="Keyframe"]')!.options.length, 3);
+});
+
+test('Code contribution escapes user text and Chinese tool, mode and timeline names are translated', async () => {
+	const { builtinLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	try {
+		using view = createView();
+		assert.ok(view.domNode.querySelector('button[aria-label="移动画布（H）"]'));
+		pressCanvas(view, 't');
+		const text = view.domNode.querySelector<HTMLTextAreaElement>('textarea[aria-label="文字内容"]')!;
+		text.value = '</script><script>alert(1)</script> 中文';
+		text.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
+		await clickAction(view, '动效');
+		await clickAction(view, '添加关键帧');
+		assert.ok(view.domNode.querySelector('input[aria-label="关键帧透明度"]'));
+		await clickAction(view, '代码');
+		const source = view.domNode.querySelector<HTMLTextAreaElement>('textarea[aria-label="生成的代码"]')!.value;
+		const html = new browser.window.DOMParser().parseFromString(source, 'text/html');
+		assert.equal(html.querySelectorAll('script').length, 1);
+		assert.equal(JSON.parse(html.querySelector('script')!.textContent!).shapes[0].text, text.value);
+		assert.match(DesignEditorWidget.getFocused(view.domNode)!.getAccessibleContent(), /doctype html/u);
+	} finally { resetNlsResolver(); }
 });

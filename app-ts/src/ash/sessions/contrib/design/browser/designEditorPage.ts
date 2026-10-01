@@ -5,6 +5,7 @@ import { ILifecycleService } from '../../../../workbench/services/lifecycle/comm
 import type { ISessionsPageView } from '../../../browser/pages.js';
 import { DesignDocumentController } from './designDocumentController.js';
 import { DesignEditorWidget } from './widget/designEditorWidget.js';
+import { createDesignEditorContributions } from '../design.main.js';
 
 /** Sessions owns the page lifetime; the editor owns its DOM and editing state. */
 export class DesignEditorPage extends Disposable implements ISessionsPageView {
@@ -18,7 +19,7 @@ export class DesignEditorPage extends Disposable implements ISessionsPageView {
 	) {
 		super();
 		const document = this._register(instantiationService.createInstance(DesignDocumentController));
-		this.editor = this._register(instantiationService.createInstance(DesignEditorWidget, ownerDocument, document));
+		this.editor = this._register(instantiationService.createInstance(DesignEditorWidget, ownerDocument, document, createDesignEditorContributions));
 		this.domNode = this.editor.domNode;
 		this.editor.initialize();
 		this._register(lifecycle.onBeforeShutdown(event => event.veto(document.isBusy || (document.isDirty && document.confirmDiscard()), 'designDocument')));

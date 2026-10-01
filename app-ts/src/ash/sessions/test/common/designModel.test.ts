@@ -5,6 +5,7 @@ import { DesignModel } from '../../contrib/design/common/model/designModel.js';
 import { DocumentCommands } from '../../contrib/design/common/commands/documentCommands.js';
 import { DesignViewport } from '../../contrib/design/common/viewport.js';
 import { hitTestDesignShapes } from '../../contrib/design/common/model/hitTest.js';
+import { sampleDesignMotion } from '../../contrib/design/contrib/motion/common/motion.js';
 
 test('Design documents round trip fractional coordinates and discard redo after a new edit', () => {
 	using model = new DesignModel();
@@ -22,6 +23,38 @@ test('Design documents round trip fractional coordinates and discard redo after 
 	assert.deepEqual([model.value.shapes, model.canRedo], [[], false]);
 	model.undo();
 	assert.equal(model.value.shapes[0].width, 120);
+});
+
+test('Design motion validates ordered keyframes and keeps animation positions through edits, groups and history', () => {
+	using model = new DesignModel();
+	const commands = new DocumentCommands(model);
+	const id = commands.addShape('rectangle', { x: 60, y: 40 });
+	const shape = model.value.shapes[0];
+	const motion = { duration: 1000, loop: false, keyframes: [
+		{ offset: 0, x: 0, y: 0, rotation: 0, opacity: 1 },
+		{ offset: 1, x: 100, y: 200, rotation: 90, opacity: 0 },
+	] };
+	commands.updateShape({ ...shape, motion });
+	assert.deepEqual(sampleDesignMotion(model.value.shapes[0], 500), { offset: 0.5, x: 50, y: 100, rotation: 45, opacity: 0.5 });
+	for (const invalid of [
+		{ ...motion, duration: 0 },
+		{ ...motion, loop: 'true' },
+		{ ...motion, keyframes: [...motion.keyframes].reverse() },
+		{ ...motion, keyframes: [{ ...motion.keyframes[0], opacity: 2 }, motion.keyframes[1]] },
+		{ ...motion, keyframes: [motion.keyframes[0], motion.keyframes[0], motion.keyframes[1]] },
+	]) { assert.throws(() => parseDesignDocument(JSON.stringify({ version: 1, shapes: [{ ...shape, motion: invalid }] })), TypeError); }
+	commands.updateGeometry(model.value.shapes[0], 'x', 20);
+	assert.equal(sampleDesignMotion(model.value.shapes[0], 500).x, 70);
+	model.undo();
+	assert.equal(sampleDesignMotion(model.value.shapes[0], 500).x, 50);
+	const second = commands.addShape('ellipse', { x: 200, y: 40 });
+	const group = commands.group(new Set([id, second]))!;
+	commands.updateGeometry(model.value.shapes[0], 'rotation', 90);
+	commands.ungroup(group);
+	const animated = model.value.shapes.find(shape => shape.id === id)!;
+	assert.equal(animated.motion!.keyframes[1].rotation, 180);
+	assert.deepEqual(parseDesignDocument(serializeDesignDocument(model.value)), model.value);
+	assert.ok(Object.isFrozen(animated.motion!.keyframes[0]));
 });
 
 test('Design files reject unsupported versions, duplicate identities and invalid geometry', () => {

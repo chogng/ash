@@ -1,0 +1,46 @@
+.ash-design-code-widget {
+	display: none;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	padding: var(--ash-spacing-size160) var(--ash-spacing-size160) 80px;
+	background: var(--ash-editor-background);
+	color: var(--ash-foreground);
+}
+
+.ash-design-code-widget.visible {
+	display: flex;
+}
+
+.ash-design-code-header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--ash-spacing-size120);
+	padding-bottom: var(--ash-spacing-size120);
+	font-size: var(--ash-fontSize-label1);
+	color: var(--ash-description-foreground);
+}
+
+.ash-design-code-widget textarea {
+	box-sizing: border-box;
+	flex: 1 1 auto;
+	min-height: 0;
+	width: 100%;
+	padding: var(--ash-spacing-size120);
+	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-medium);
+	background: var(--ash-input-background);
+	color: var(--ash-input-foreground);
+	font-family: monospace;
+	font-size: var(--ash-fontSize-label1);
+	line-height: 1.5;
+	resize: none;
+	white-space: pre;
+}
+
+.ash-design-code-widget textarea:focus-visible {
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
+}

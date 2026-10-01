@@ -1,0 +1,28 @@
+.ash-design-tools-widget {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size160);
+	box-sizing: border-box;
+	max-width: calc(100% - 32px);
+	padding: var(--ash-spacing-size60);
+	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-xLarge);
+	background: var(--ash-editor-background);
+	color: var(--ash-foreground);
+	box-shadow: 0 4px 16px var(--ash-widget-shadow);
+	overflow-x: auto;
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-design-tools-group {
+	display: flex;
+	align-items: center;
+	flex: 0 0 auto;
+	gap: var(--ash-spacing-size40);
+}
+
+[data-color-scheme="high-contrast-dark"] .ash-design-tools-widget,
+[data-color-scheme="high-contrast-light"] .ash-design-tools-widget {
+	border-color: var(--ash-contrast-border);
+	box-shadow: none;
+}

@@ -1,0 +1,62 @@
+.ash-design-motion-widget {
+	display: none;
+	box-sizing: border-box;
+	padding: var(--ash-spacing-size120);
+	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-xLarge);
+	background: var(--ash-editor-background);
+	color: var(--ash-foreground);
+	font-size: var(--ash-fontSize-label1);
+	overflow: auto;
+}
+
+.ash-design-motion-widget.visible {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-design-motion-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-design-motion-hint {
+	color: var(--ash-description-foreground);
+}
+
+.ash-design-motion-row label {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-design-motion-row input[type="range"] {
+	flex: 1 1 120px;
+	min-width: 80px;
+}
+
+.ash-design-motion-row input[type="number"],
+.ash-design-motion-row select {
+	box-sizing: border-box;
+	width: 80px;
+	min-height: 28px;
+	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-small);
+	background: var(--ash-input-background);
+	color: var(--ash-input-foreground);
+	font: inherit;
+}
+
+.ash-design-motion-row input:focus-visible,
+.ash-design-motion-row select:focus-visible {
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
+}
+
+[data-color-scheme="high-contrast-dark"] .ash-design-motion-widget,
+[data-color-scheme="high-contrast-light"] .ash-design-motion-widget {
+	border-color: var(--ash-contrast-border);
+}
