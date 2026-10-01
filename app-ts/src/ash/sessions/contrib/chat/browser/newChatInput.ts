@@ -89,7 +89,7 @@ export class NewChatInputWidget extends ChatInputPart {
 			run: () => this.contextAttachments.showPicker(),
 		}]);
 		this.draftNotifications = notifications;
-		this.element.classList.add('ash-sessions-chat-input');
+		this.element.classList.add('ash-sessions-chat-input', 'floating-card');
 		// Chat and Code share input operations and the current draft, but each owns its appearance.
 		// Keep page-specific CSS under these variants; Workbench must remain unaware of Sessions pages.
 		this._register(autorun(reader => {

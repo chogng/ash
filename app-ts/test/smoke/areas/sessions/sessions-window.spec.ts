@@ -13,6 +13,74 @@ async function replaceChatInput(editor: Editor, text: string): Promise<void> {
 	await editor.input.page().keyboard.insertText(text);
 }
 
+async function expectComposerFocusWithoutOutline(card: Locator, input: Locator, blurTarget: Locator): Promise<void> {
+	await blurTarget.hover();
+	await blurTarget.focus();
+	await expect(card).not.toHaveClass(/focused/u);
+	const colors = await card.evaluate(element => {
+		const probe = document.createElement('span');
+		probe.style.color = 'var(--ash-chat-input-border)';
+		element.append(probe);
+		const resting = getComputedStyle(probe).color;
+		probe.style.color = 'var(--ash-widget-border)';
+		const focused = getComputedStyle(probe).color;
+		probe.remove();
+		return { resting, focused };
+	});
+	await expect(card).toHaveCSS('border-top-color', colors.resting);
+	await input.focus();
+	await expect(input).toBeFocused();
+	await expect(card).toHaveClass(/focused/u);
+	await expect(card).toHaveCSS('border-top-color', colors.focused);
+	await expect(card).toHaveCSS('outline-style', 'none');
+}
+
+async function expectFloatingComposerHover(card: Locator, input: Locator, blurTarget: Locator): Promise<void> {
+	await blurTarget.hover();
+	await blurTarget.focus();
+	const colors = await card.evaluate(element => {
+		const probe = document.createElement('span');
+		element.append(probe);
+		probe.style.color = 'var(--ash-border)';
+		const resting = getComputedStyle(probe).color;
+		probe.style.color = 'var(--ash-widget-border)';
+		const hovered = getComputedStyle(probe).color;
+		probe.remove();
+		return { resting, hovered };
+	});
+	await expect(card).toHaveCSS('border-top-color', colors.resting);
+	await expect(card).not.toHaveCSS('box-shadow', 'none');
+	await expect(card).toHaveCSS('transition-property', 'border-color, box-shadow');
+	await expect(card).toHaveCSS('transition-duration', '0.2s, 0.2s');
+	await expect.poll(() => card.evaluate(element => element.getAnimations().length)).toBe(0);
+	const restingShadow = await card.evaluate(element => getComputedStyle(element).boxShadow);
+	const bounds = await card.boundingBox();
+	await card.hover();
+	await expect(card).toHaveCSS('border-top-color', colors.hovered);
+	await expect.poll(() => card.evaluate(element => element.getAnimations().length)).toBe(0);
+	await expect(card).not.toHaveCSS('box-shadow', restingShadow);
+	const raisedShadow = await card.evaluate(element => getComputedStyle(element).boxShadow);
+	expect(colors.hovered).not.toBe(colors.resting);
+	await input.focus();
+	await expect(input).toBeFocused();
+	await expect(card).toHaveCSS('border-top-color', colors.hovered);
+	await expect(card).toHaveCSS('outline-style', 'none');
+	expect(await card.boundingBox()).toEqual(bounds);
+	await card.page().mouse.move(0, 0);
+	await input.press('ArrowLeft');
+	await input.press('ArrowRight');
+	await expect(input).toBeFocused();
+	await expect(card).toHaveCSS('border-top-color', colors.hovered);
+	await expect(card).toHaveCSS('box-shadow', raisedShadow);
+	await blurTarget.focus();
+	await expect(card).not.toHaveClass(/focused/u);
+	await expect(card).toHaveCSS('border-top-color', colors.resting);
+	await expect(card).toHaveCSS('box-shadow', restingShadow);
+	await input.focus();
+	await expect(card).toHaveCSS('border-top-color', colors.hovered);
+	await expect(card).toHaveCSS('box-shadow', raisedShadow);
+}
+
 test('Sessions composer attaches files, chooses permissions, and restores the unsent draft', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	let page = workbench.page;
@@ -82,6 +150,18 @@ test('Sessions composer configuration leaves Workbench input defaults unchanged'
 	const defaultInput = parent.locator('.ash-chat-view-pane .ash-chat-input-part').first();
 	await expect(defaultInput.locator('.ash-chat-input-container')).toHaveCSS('border-radius', '8px');
 	await expect(defaultInput.locator('.ash-chat-input-editor')).toHaveCSS('height', '100px');
+	await defaultInput.getByRole('textbox', { name: 'Chat message' }).focus();
+	const focusBorder = await defaultInput.evaluate(element => {
+		const probe = document.createElement('span');
+		probe.style.color = 'var(--ash-focus-border)';
+		element.append(probe);
+		const color = getComputedStyle(probe).color;
+		probe.remove();
+		return color;
+	});
+	await expect(defaultInput.locator('.ash-chat-input-container')).toHaveCSS('border-top-color', focusBorder);
+	await expect(defaultInput.locator('.ash-chat-input-container')).toHaveCSS('outline-style', 'none');
+	await expect(defaultInput.locator('.ash-chat-input-container')).toHaveCSS('box-shadow', 'none');
 	let page = parent;
 	if (target.kind === 'browser') {
 		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
@@ -148,19 +228,10 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 	for (const colorScheme of ['light', 'dark'] as const) {
 		await page.emulateMedia({ colorScheme });
 		await expect(page.locator('#app')).toHaveAttribute('data-color-theme', `ash-${colorScheme}`);
-		await input.focus();
+		await expectComposerFocusWithoutOutline(card, input, page.getByRole('button', { name: 'Hide sidebar', exact: true }));
+		await expectFloatingComposerHover(card, input, page.getByRole('button', { name: 'Hide sidebar', exact: true }));
 		await editor.waitForEditorContents(contents => contents === 'Keep this draft');
-		const colors = await card.evaluate(element => {
-			const style = getComputedStyle(element);
-			const probe = document.createElement('span');
-			probe.style.color = 'var(--ash-focus-border)';
-			element.append(probe);
-			const focus = getComputedStyle(probe).color;
-			probe.remove();
-			return { border: style.borderTopColor, focus, background: style.backgroundColor };
-		});
-		expect(colors.background).not.toBe('rgba(0, 0, 0, 0)');
-		await expect(card).toHaveCSS('border-top-color', colors.focus);
+		await expect(card).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 	}
 	const navigation = page.locator('.ash-sessions-activity-content');
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
@@ -172,9 +243,12 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 	for (const colorScheme of ['light', 'dark'] as const) {
 		await page.emulateMedia({ colorScheme });
 		await expect(page.locator('#app')).toHaveAttribute('data-color-theme', `ash-${colorScheme}`);
-		await input.focus();
-		await expect(card).toHaveCSS('outline-style', 'solid');
+		await expectComposerFocusWithoutOutline(card, input, page.getByRole('button', { name: 'Hide sidebar', exact: true }));
+		await expectFloatingComposerHover(card, input, page.getByRole('button', { name: 'Hide sidebar', exact: true }));
 	}
+	await page.emulateMedia({ reducedMotion: 'reduce' });
+	await expect(card).toHaveCSS('transition-duration', '0s');
+	await page.emulateMedia({ reducedMotion: 'no-preference' });
 	await editor.waitForEditorContents(contents => contents === 'Keep this draft');
 	await page.setViewportSize({ width: 760, height: 600 });
 	await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
@@ -190,7 +264,7 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 	await editor.waitForEditorContents(contents => contents === 'Keep this draft\n');
 });
 
-test('Sessions input card keeps a visible border and focus in high contrast', async ({ application, target, workbench }) => {
+test('Sessions input card keeps a visible border without shadow or focus outline in high contrast', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	for (const theme of ['Ash High Contrast Dark', 'Ash High Contrast Light']) {
 		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
@@ -213,12 +287,10 @@ test('Sessions input card keeps a visible border and focus in high contrast', as
 			const card = page.locator(`.${presentation.toLowerCase()}-composer .ash-chat-input-container`).first();
 			await expect(card).toHaveCSS('border-width', '1px');
 			await expect(card).toHaveCSS('border-style', 'solid');
-			await page.getByRole('button', { name: 'Hide sidebar', exact: true }).focus();
-			await expect(card).toHaveCSS('outline-style', 'none');
-			await card.getByRole('textbox', { name: 'Chat message' }).focus();
-			await expect(card).toHaveClass(/focused/u);
-			await expect(card).toHaveCSS('outline-style', 'solid');
-			await expect(card).toHaveCSS('outline-width', '1px');
+			await expect(card).toHaveCSS('box-shadow', 'none');
+			await expectComposerFocusWithoutOutline(card, card.getByRole('textbox', { name: 'Chat message' }), page.getByRole('button', { name: 'Hide sidebar', exact: true }));
+			await card.hover();
+			await expect(card).toHaveCSS('box-shadow', 'none');
 		}
 		const closed = target.kind === 'electron' ? page.waitForEvent('close') : undefined;
 		await returnFromSessions(page);
