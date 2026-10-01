@@ -1,6 +1,7 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 import { Editors } from "./editors.js";
 import { QuickAccess } from "./quickaccess.js";
+import { StartupDeadline } from './startupDeadline.js';
 
 /** Product-level automation surface for one Ash Workbench window. */
 export class Workbench {
@@ -14,12 +15,15 @@ export class Workbench {
 		this.quickaccess = new QuickAccess(page);
 	}
 
-	async waitForReady(): Promise<void> {
-		await this.page.waitForFunction(() => document.readyState === "complete");
-		await this.element.waitFor({ state: "visible" });
-		await expect(this.element).toHaveAttribute('aria-busy', 'false');
-		await this.editors.waitForReady();
-		await this.waitForAnimationFrames();
+	async waitForReady(deadline = new StartupDeadline()): Promise<void> {
+		await deadline.run('Workbench readiness', async () => {
+			await this.page.waitForFunction(() => document.readyState === "complete", undefined, { timeout: deadline.remaining('document load') });
+			await this.element.waitFor({ state: "visible", timeout: deadline.remaining('Workbench visibility') });
+			// Recovery owns readiness; its wait uses the launch budget, not an interaction assertion budget.
+			await expect(this.element).toHaveAttribute('aria-busy', 'false', { timeout: deadline.remaining('Workbench restoration') });
+			await this.editors.waitForReady(deadline);
+			await this.waitForAnimationFrames();
+		});
 	}
 
 	/** Allows pending rendering frames to run; this does not await asynchronous command completion. */

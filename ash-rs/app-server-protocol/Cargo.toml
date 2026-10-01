@@ -50,6 +50,7 @@ ash-utils-path-uri = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
+cargo-bin = { workspace = true }
 sha2 = { workspace = true }
 schemars = { workspace = true }
 ts-rs = { workspace = true, features = ["no-serde-warnings"] }

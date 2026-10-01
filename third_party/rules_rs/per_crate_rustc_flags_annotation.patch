@@ -1,0 +1,50 @@
+--- a/rs/private/annotations.bzl
++++ b/rs/private/annotations.bzl
+@@ -22,2 +22,3 @@
+         rustc_flags_select = {},
++        skip_per_crate_rustc_flags = True,
+         patch_args = [],
+@@ -49,2 +50,3 @@
+         rustc_flags_select = rustc_flags_select,
++        skip_per_crate_rustc_flags = skip_per_crate_rustc_flags,
+         patch_args = patch_args,
+--- a/rs/extensions.bzl
++++ b/rs/extensions.bzl
+@@ -336,2 +336,3 @@
+             rustc_flags_select = annotation.rustc_flags_select,
++            skip_per_crate_rustc_flags = annotation.skip_per_crate_rustc_flags,
+             data = annotation.data,
+@@ -991,2 +992,6 @@
+         ),
++        "skip_per_crate_rustc_flags": attr.bool(
++            default = True,
++            doc = "Trim per-crate rustc flags for this dependency; disable only for explicitly configured crates.",
++        ),
+         "rustc_flags_select": attr.string_list_dict(
+--- a/rs/private/repository_utils.bzl
++++ b/rs/private/repository_utils.bzl
+@@ -186,2 +186,3 @@
+ {rustc_env_attr}{indent}    rustc_flags = {rustc_flags}{conditional_rustc_flags},
++{indent}    skip_per_crate_rustc_flags = {skip_per_crate_rustc_flags},
+ {indent}    tags = {tags},
+@@ -258,2 +259,3 @@
+         rustc_flags = repr(rustc_flags),
++        skip_per_crate_rustc_flags = getattr(attr, "skip_per_crate_rustc_flags", True),
+         conditional_rustc_flags = " + " + conditional_rustc_flags if conditional_rustc_flags else "",
+@@ -312,2 +314,3 @@
+     "rustc_flags": attr.string_list(),
++    "skip_per_crate_rustc_flags": attr.bool(default = True),
+     "rustc_flags_select": attr.string_list_dict(),
+--- a/rs/rust_crate.bzl
++++ b/rs/rust_crate.bzl
+@@ -47,3 +47,4 @@
+         rustc_env = {},
+-        skip_deps_verification = False):
++        skip_deps_verification = False,
++        skip_per_crate_rustc_flags = True):
+     package_metadata(
+@@ -202,3 +203,3 @@
+             visibility = ["//visibility:public"],
+-            skip_per_crate_rustc_flags = True,
++            skip_per_crate_rustc_flags = skip_per_crate_rustc_flags,
+         )

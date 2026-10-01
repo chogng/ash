@@ -79,6 +79,9 @@ def build_targets(member, rules=LIBRARY_RULES):
     if not build_file.is_file():
         return {}
     tree = ast.parse(build_file.read_text(encoding="utf-8"), filename=str(build_file))
+    # Parsing alone accepts repeated keywords, which clean textual merges can add.
+    # Compile without executing so invalid BUILD declarations fail with their path.
+    compile(tree, str(build_file), "exec")
     return {
         literal_attribute(node, "name", None, build_file): node
         for statement in tree.body
@@ -306,6 +309,7 @@ class BazelMacroContractTests(unittest.TestCase):
                 self.assertEqual({"//provider": "caller_name"}, calls[0]["aliases"])
                 if "crate_features" in arguments:
                     self.assertEqual(["cloud"], calls[0]["crate_features"])
+                    self.assertEqual(["cloud"], calls[1]["crate_features"])
                     self.assertEqual(
                         {"//provider": "caller_name", "//test-provider": "test_name"},
                         calls[1]["aliases"],
@@ -371,6 +375,35 @@ class BazelTestProfileTests(unittest.TestCase):
             if package["name"] == "sha2" and package["version"].startswith("0.10.")
         ]
         self.assertTrue(versions)
+        flag_annotations = []
+        for node in module.body:
+            if (
+                isinstance(node, ast.Expr)
+                and isinstance(node.value, ast.Call)
+                and isinstance(node.value.func, ast.Attribute)
+                and node.value.func.attr == "annotation"
+            ):
+                arguments = {key.arg: key.value for key in node.value.keywords}
+                if "skip_per_crate_rustc_flags" in arguments:
+                    flag_annotations.append(
+                        {
+                            key: ast.literal_eval(value)
+                            for key, value in arguments.items()
+                        }
+                    )
+        self.assertEqual(
+            [
+                {
+                    "crate": "sha2",
+                    "version": version,
+                    "skip_per_crate_rustc_flags": False,
+                    "repositories": ["crates"],
+                }
+                for version in versions
+            ],
+            flag_annotations,
+            "The generated sha2 target must opt into per-crate flags; a matching prefix alone is insufficient",
+        )
         # The pinned rules_rust setting matches an execution-path prefix, not a crate name.
         for version in versions:
             self.assertTrue(
@@ -396,6 +429,7 @@ class BazelTestProfileTests(unittest.TestCase):
         self.assertEqual(2, len(commands))
         for command in commands:
             self.assertIn("bazel test --config=ci ", command)
+        self.assertIn("//bazel:rust-test-profile-contract", workflow)
         documentation = (REPOSITORY_ROOT / "docs/build.md").read_text(encoding="utf-8")
         self.assertIn("bazelisk test --config=ci //app-rs:app_ci", documentation)
 
@@ -611,6 +645,17 @@ class BazelDependencyContractFixtureTests(unittest.TestCase):
         ) as error:
             dependency_contract_errors(self.root)
         self.assertIn(str(self.root / "provider/BUILD.bazel"), str(error.exception))
+
+    def test_duplicate_attributes_from_a_clean_merge_are_rejected(self):
+        self.write(
+            "provider/BUILD.bazel",
+            'ash_rust_crate(name="provider", crate_features=["cloud"], crate_features=["cloud"])',
+        )
+        with self.assertRaisesRegex(SyntaxError, "keyword argument repeated") as error:
+            dependency_contract_errors(self.root)
+        self.assertEqual(
+            str(self.root / "provider/BUILD.bazel"), error.exception.filename
+        )
 
     def test_unknown_consumer_macro_is_reported_instead_of_skipped(self):
         self.write("consumer/BUILD.bazel", 'custom_rust_binary(name="consumer")')

@@ -918,10 +918,13 @@ fn schema_fixtures_match_the_generators() {
         include_str!("../schema/metadata.json").replace("\r\n", "\n"),
         protocol_metadata()
     );
-    let fixture_directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("schema")
-        .join("typescript");
-    let fixture_names = generated_fixture_paths(&fixture_directory);
+    let fixture_index = cargo_bin::find_resource!(
+        "schema/typescript/index.ts",
+        "_main/ash-rs/app-server-protocol/schema/typescript/index.ts"
+    )
+    .unwrap();
+    let fixture_directory = fixture_index.parent().unwrap();
+    let fixture_names = generated_fixture_paths(fixture_directory);
     let mut expected_names = typescript_files()
         .iter()
         .map(|(path, _)| path.clone())

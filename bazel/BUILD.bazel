@@ -1,1 +1,5 @@
+load("//bazel/rules:rust_profile_test.bzl", "rust_test_profile_contract_suite")
+
 package(default_visibility = ["//visibility:public"])
+
+rust_test_profile_contract_suite(name = "rust-test-profile-contract")

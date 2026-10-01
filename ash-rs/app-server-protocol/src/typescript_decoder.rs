@@ -3,6 +3,8 @@ use serde_json::Value;
 pub(crate) fn generate(schema: &Value) -> String {
     let mut runtime_schema = schema.clone();
     remove_annotations(&mut runtime_schema);
+    // With preserve_order, removing annotations can swap the remaining object keys.
+    runtime_schema.sort_all_objects();
     let schema =
         serde_json::to_string(&runtime_schema).expect("protocol schema must serialize as JSON");
     let schema_literal =

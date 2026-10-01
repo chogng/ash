@@ -5,6 +5,7 @@ import { appServerDaemonExecutablePath } from "../../src/ash/platform/app-server
 import { _electron, type ElectronApplication, type Request } from "@playwright/test";
 import { ElectronPlaywrightDriver } from "./electronDriver.js";
 import { resolveElectronConfiguration, type ElectronLaunchOptions } from "./electron.js";
+import { StartupDeadline } from './startupDeadline.js';
 
 export interface ElectronLaunchResult {
 	readonly application: ElectronApplication;
@@ -17,6 +18,7 @@ export type ElectronLaunchMilestone = 'electron-launch-resolved' | 'first-window
 
 /** Launches Ash Desktop through Playwright's Electron adapter. */
 export async function launchElectron(options: ElectronLaunchOptions, onMilestone?: (milestone: ElectronLaunchMilestone) => void): Promise<ElectronLaunchResult> {
+	const deadline = new StartupDeadline();
 	const configuration = resolveElectronConfiguration(options);
 	const application = await _electron.launch({
 		args: [...configuration.args],
@@ -24,7 +26,7 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 		env: configuration.env,
 		executablePath: configuration.executablePath,
 		recordVideo: options.recordVideo ? { dir: options.recordVideo.directory, size: options.recordVideo.size } : undefined,
-		timeout: 30_000,
+		timeout: deadline.remaining('Electron process launch'),
 	});
 	onMilestone?.('electron-launch-resolved');
 	// Playwright releases the application channel on exit; retain the child process for startup diagnostics and cleanup.
@@ -48,13 +50,13 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 	const onProcessError = (chunk: Buffer): void => { processErrors = (processErrors + chunk.toString()).slice(-16_384); };
 	electronProcess.stderr?.on('data', onProcessError);
 	try {
-		const page = application.windows()[0] ?? await application.waitForEvent("window", { timeout: 30_000 });
+		const page = await deadline.run('first window', async timeout => application.windows()[0] ?? await application.waitForEvent("window", { timeout }));
 		const videoStartedAt = options.recordVideo ? Date.now() : undefined;
 		onMilestone?.('first-window');
 		if (options.recordVideo) {
-			await application.evaluate(({ BrowserWindow }, size) => {
+			await deadline.run('window sizing', () => application.evaluate(({ BrowserWindow }, size) => {
 				BrowserWindow.getAllWindows()[0]?.setBounds({ x: 0, y: 0, width: size.width, height: size.height });
-			}, options.recordVideo.size);
+			}, options.recordVideo!.size));
 		}
 		const driver = new ElectronPlaywrightDriver(application, page);
 		const pageErrors: string[] = [];
@@ -72,12 +74,12 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 		page.on('requestfinished', onRequestFinished);
 		page.on('requestfailed', onRequestFailed);
 		try {
-			const ready = driver.workbench.waitForReady();
+			const ready = driver.workbench.waitForReady(deadline);
 			if (options.appServerMode === 'required' && options.workspaceDirectory && options.workspacePermissions === 'development') {
 				const prompt = page.getByRole('dialog', { name: 'Ash' });
-				await Promise.race([ready, prompt.waitFor({ state: 'visible' })]);
-				if (await prompt.isVisible()) {
-					await prompt.getByRole('button', { name: 'Trust Folder & Enable Features' }).click();
+				await Promise.race([ready, prompt.waitFor({ state: 'visible', timeout: deadline.remaining('workspace trust prompt') })]);
+				if (await deadline.run('workspace trust state', () => prompt.isVisible())) {
+					await prompt.getByRole('button', { name: 'Trust Folder & Enable Features' }).click({ timeout: deadline.remaining('workspace trust acceptance') });
 					onMilestone?.('trust-accepted');
 				}
 			}
@@ -87,6 +89,8 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 			const text = await page.evaluate(() => [document.body.innerText, ...Array.from(document.querySelectorAll('textarea'), field => field.value)].join('\n')).catch(() => 'Document is unavailable');
 			const startup = await page.evaluate(() => ({
 				visibility: document.visibilityState,
+				readyState: document.readyState,
+				busy: document.querySelector('.ash-workbench')?.getAttribute('aria-busy'),
 				marks: performance.getEntriesByType('mark').filter(entry => entry.name.startsWith('ash.')).map(entry => ({ name: entry.name, startTime: entry.startTime })),
 			})).catch(() => undefined);
 			const windows = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => ({

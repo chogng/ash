@@ -7,4 +7,5 @@ exports_files([
     "linux_zlib_snapshot.patch",
     "rust_macos_rtlib.patch",
     "windows_gnullvm_exec_triples.patch",
+    "per_crate_rustc_flags_annotation.patch",
 ])

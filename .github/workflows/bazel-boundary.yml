@@ -129,7 +129,7 @@ jobs:
 
       - name: Test real TUI terminal scenarios
         run: >-
-          bazel test --config=ci //ash-cli:tui-real-scenarios --test_output=errors
+          bazel test --config=ci //ash-cli:tui-real-scenarios //bazel:rust-test-profile-contract --test_output=errors
           --test_env=PATH --test_env=ASH_RG_PATH --test_env=ASH_TGREP_PATH
           --test_arg=--test-threads=4 --test_arg=--skip --test_arg=actual_tui_sandbox_
 
@@ -141,6 +141,8 @@ jobs:
           path: |
             .build/bazel-testlogs/ash-cli/tui-real-scenarios/test.log
             .build/bazel-testlogs/ash-cli/tui-real-scenarios/test.xml
+            .build/bazel-testlogs/bazel/rust-test-profile-contract-*/test.log
+            .build/bazel-testlogs/bazel/rust-test-profile-contract-*/test.xml
           include-hidden-files: true
           if-no-files-found: warn
           retention-days: 14

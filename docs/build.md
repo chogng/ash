@@ -114,7 +114,7 @@ $env:BAZEL_SH = "C:\Program Files\Git\bin\bash.exe"
 bazelisk test --config=ci //app-rs:app_ci --test_output=errors --test_env=PATH
 ```
 
-`--config=ci` 使用根 `.bazelrc` 的测试配置，保持 `fastbuild`，仅将 `sha2 0.10` 依赖设为 `opt-level=1`，与 Cargo 测试依赖配置对齐。启动时仍完整重算可执行文件的 artifact identity，不缓存或跳过校验；发布构建配置不变。
+`--config=ci` 使用根 `.bazelrc` 的测试配置，保持 `fastbuild`，仅将 `sha2 0.10` 依赖设为 `opt-level=1`，与 Cargo 测试依赖配置对齐。该依赖通过 `MODULE.bazel` annotation 保留 per-crate flags，其他生成依赖仍按 `rules_rs` 默认规则裁剪。`//bazel:rust-test-profile-contract` 检查实际 Rustc action，分别验证 CI、普通 fastbuild 和发布 opt 配置。启动时仍完整重算可执行文件的 artifact identity，不缓存或跳过校验；发布构建配置不变。
 
 `--test_env=PATH` 将固定版本 Node 的路径传给测试进程。`//ash-cli:tui-real-scenarios` 运行同一组 CLI/TUI PTY 场景；先将锁定的 `rg`、`tgrep` 路径设为 `ASH_RG_PATH`、`ASH_TGREP_PATH`。Linux CI 无法运行的真实沙箱场景由 macOS 作业覆盖。
 
@@ -223,7 +223,31 @@ just bench-build ash-cli --profile dev-small --jobs 4 --compare .build/build-hea
 
 真实 `just build-code` 的三轮对照中，无改动为 0.78 → 0.78 秒，CLI 错误前缀的实际代码编辑为 2.36 → 2.40 秒，CLI 二进制约 84.5 MiB，编辑构建 RSS 约 0.87 GiB。参数图拆成独立 crate 的实验，在 TUI Debug 文案实际编辑后为 3.63 → 3.57 秒，回切为 3.69 秒；没有明显收益，已撤回。Cargo timings 中 `ash-app-server-protocol` 单个编译单元约 41–48 秒，新增 CLI 工具库约 0.24 秒；该调查未修改协议实现或全局优化配置，冷编译瓶颈仍在。
 
-报告分别为 `.build/build-health/ash-cli-dev-small-{iktqajj3,9wk3uvac,jw5yk5r9}/report.json`；完整入口与拆分实验位于 `.build/build-health/cli-utils-20261001/{baseline-product,kept-product,tui-product}.json`。Cargo/Bazel 工具库测试、CLI 43 项测试、一个真实终端资源场景、正常 Code 构建、包级 warning 检查及依赖检查通过。完整 Bazel CLI 目标的分析被已有 `collaboration-mode-templates` / `ash-mcp` 依赖标签错误阻断；未将它记录为通过，Windows/Linux 运行行为也未在本机验证。
+报告分别为 `.build/build-health/ash-cli-dev-small-{iktqajj3,9wk3uvac,jw5yk5r9}/report.json`；完整入口与拆分实验位于 `.build/build-health/cli-utils-20261001/{baseline-product,kept-product,tui-product}.json`。Cargo/Bazel 工具库测试、CLI 43 项测试、一个真实终端资源场景、正常 Code 构建、包级 warning 检查及依赖检查通过。完整 Bazel CLI 目标的首次分析被已有 `collaboration-mode-templates` / `ash-mcp` 依赖标签错误阻断；后续修复结果见下文。Windows/Linux 运行行为未在本机验证。
+
+2026-10-01 随后对协议编译做了三项实验：`ash-exec` 的 JSON Schema 派生改为显式 `schema` feature，两个协议包在 `dev-small` 下使用 `opt-level=0`，以及优化 `syn`、`quote`、`proc-macro2`、`serde_derive` 的候选配置。最终保留前两项；schema feature 的嵌套类型与标识符约束由测试覆盖。
+
+下表每项为三轮中位数，测量基于 `0090c73f55` 及本次改动，使用同一 macOS arm64 主机、Rust 1.98.0、12 个任务。CLI 冷构建使用独立输出目录；Code 编辑场景复用产品输出，逐轮修改协议 `AppServerListenInfoError` 的实际错误文本，并确认协议及下游重新编译，随后恢复原文。
+
+| 方案 | CLI 冷构建 / 秒 | CLI 无改动 / 秒 | CLI 时间戳重编译 / 秒 | Code 协议编辑 / 秒 | CLI 冷构建 RSS / GiB | Code 的 ash / MiB |
+| --- | --- | --- | --- | --- | --- | --- |
+| 基线 | 90.79 | 1.87 | 2.69 | 14.10 | 1.69 | 84.6 |
+| schema 显式开启 | 91.65 | 1.64 | 2.83 | 13.27 | 1.35 | 85.5 |
+| 再将协议包优化级别降为 0 | 100.05 | 1.64 | 2.90 | 9.07 | 1.24 | 93.7 |
+| 再优化宏依赖的候选 | 87.32 | 1.58 | 2.82 | 8.62 | 1.24 | 92.9 |
+| 撤回宏配置后的复测，最终保留 | 74.26 | 1.47 | 2.74 | 8.74 | 1.24 | 93.7 |
+
+最终方案的实际协议编辑约快 38%，Code 无改动仍约 0.8 秒，编辑构建 RSS 为 1.59 GiB。代价是开发 CLI 二进制约增大 11%。协议编译单元本身的三轮中位数从底层 31.92 秒、上层 45.96 秒降到 9.42 秒、21.76 秒；回切复测为 9.26 秒、18.48 秒。
+
+同一份代码、相同已记录输入与环境的两组冷构建结果从 100.05 秒变为 74.26 秒，波动较大，因此不能给出稳定冷构建提速比例，也不能将宏候选的差值单独归因于宏优化。宏配置回切后编辑时间为 8.74 秒，与候选的 8.62 秒接近，未保留该配置。这些结果不代表完整 Code 冷构建、所有协议类型编辑、发布构建或其他平台。
+
+CLI 报告位于 `.build/build-health/ash-cli-dev-small-{n4o_stkm,og0s6jgl,in95a67w,fha0_w73,voewa4mc}/report.json`；实际产品报告位于 `.build/build-health/protocol-20261001/{baseline,schema-off,opt0,macro3,kept}-product.json`。
+
+协议测试（上层 72 项、底层 45 项）、执行测试（默认配置 10 项、schema 配置 11 项）、CLI 命令测试 9 项、包级检查、两种配置的 warning 检查、依赖检查及当前工作区的 `just build-code` 通过。执行测试的旧 Turn fixture 已补齐 `mode`。Bazel 已同步显式 schema feature 和可选依赖；首次目标分析被已有的 `collaboration-mode-templates` 目标名称错误阻断，随后完成以下修复。其他平台未在本机测量。
+
+同日修正 Bazel 的 `collaboration-mode-templates`、`ash-mcp` 目标名与 App Server 导入名，补齐协议目标的可选 schema 依赖、Web 模板资源及云端语音 feature。共享构建宏现在让单测继承库的 feature，执行 schema 测试与云端语音测试不再被跳过。协议 fixture 测试使用 `cargo-bin` 定位 Cargo/Bazel 资源；metadata 与解码器生成保持固定 JSON 字段顺序，不受 `serde_json/preserve_order` 影响。
+
+`bazel build //ash-rs/exec:exec //ash-cli:ash` 和生成二进制的 `ash --help` 通过。五个 Bazel 单测目标共通过 114 项：模式模板 2 项、MCP 12 项、执行/schema 11 项、语音 17 项、协议 72 项；语音的三项真实模型/麦克风测试按既有条件忽略。Cargo 在显式启用 `export,serde_json/preserve_order` 时的协议 72 项测试也通过；受影响包的检查、warning 检查与依赖检查通过，`just generate-protocol` 没有改变生成文件。日志位于 `.build/build-health/protocol-20261001/bazel-*.log` 与 `protocol-preserve-order3.log`；这次修复没有新增性能测量。
 
 早期 WebRTC 构建记录属于已切换的依赖图，不能用于当前耗时判断。2026-09-24 产品宿主拆除 App Server 实现依赖的单包测量，也没有同条件完整产品冷构建的前后对照。
 

@@ -7,7 +7,6 @@ use ash_protocol::StableTurnError;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadUpdateEnvelope;
 use ash_protocol::TurnId;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -15,7 +14,8 @@ use serde::Serialize;
 pub const EXEC_EVENT_SCHEMA_VERSION: u32 = 1;
 
 /// Product-level entry intent for one headless Turn.
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(
     tag = "type",
     rename_all = "camelCase",
@@ -50,7 +50,8 @@ impl ExecEntry {
 }
 
 /// Approval authority available to a run with no interactive presentation.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum HeadlessApprovalMode {
     /// Stops the Turn as soon as it requires an interactive response.
@@ -63,7 +64,8 @@ pub enum HeadlessApprovalMode {
 }
 
 /// Fully materialized request consumed by [`crate::ExecRunner`].
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct ExecRunRequest {
     pub run_id: ExecRunId,
@@ -92,14 +94,16 @@ impl ExecRunRequest {
 }
 
 /// Origin of a headless invocation. Scheduler identities remain a future protocol concern.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum ExecOrigin {
     Local,
 }
 
 /// Versioned envelope written as one complete JSON object by JSONL sinks.
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct ExecEvent {
     pub schema_version: u32,
@@ -118,7 +122,8 @@ impl ExecEvent {
 }
 
 /// Observable lifecycle emitted by one run without duplicating canonical Thread state.
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(
     tag = "type",
     rename_all = "camelCase",
@@ -144,7 +149,8 @@ pub enum ExecEventKind {
 }
 
 /// Stable process-level result category used by CLI and worker adapters.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[repr(i32)]
 #[serde(rename_all = "camelCase")]
 pub enum ExecExitCode {
@@ -162,7 +168,8 @@ impl ExecExitCode {
 }
 
 /// Final user-visible content of a canonically completed Turn.
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(
     tag = "type",
     rename_all = "camelCase",
@@ -174,7 +181,8 @@ pub enum ExecFinalOutput {
 }
 
 /// Failure information preserved from a canonical failed Turn.
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(
     tag = "type",
     rename_all = "camelCase",
@@ -186,7 +194,8 @@ pub enum ExecFailure {
 }
 
 /// Why a canonical interrupted Turn was interrupted from the runner's perspective.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum ExecInterruptionReason {
     CancellationRequested,
@@ -195,7 +204,8 @@ pub enum ExecInterruptionReason {
 }
 
 /// Interaction category that cannot be presented by this headless runner.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum ExecInteractionKind {
     Approval,
@@ -215,7 +225,8 @@ impl From<AgentInteractionKind> for ExecInteractionKind {
 }
 
 /// Redaction-safe interaction metadata retained when a headless run stops.
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct ExecRequiredInteraction {
     pub kind: ExecInteractionKind,
@@ -224,7 +235,8 @@ pub struct ExecRequiredInteraction {
 }
 
 /// Why the runner could not establish a canonical terminal Turn state.
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(
     tag = "type",
     rename_all = "camelCase",
@@ -238,7 +250,8 @@ pub enum ExecUnknownReason {
 }
 
 /// Terminal result of a run. Every variant carries the canonical aggregate identities.
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(
     tag = "type",
     rename_all = "camelCase",

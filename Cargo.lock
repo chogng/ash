@@ -772,6 +772,7 @@ dependencies = [
  "ash-queue",
  "ash-response-debug-context",
  "ash-thread-transcript",
+ "ash-utils-cargo-bin",
  "ash-utils-path-uri",
  "schemars",
  "serde",

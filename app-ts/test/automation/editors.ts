@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 import { Editor } from './editor.js';
+import type { StartupDeadline } from './startupDeadline.js';
 
 /** Product-level automation surface for one editor group. */
 export class EditorGroup {
@@ -21,10 +22,10 @@ export class EditorGroup {
 		this.editor = new Editor(this.content);
 	}
 
-	async waitForReady(): Promise<void> {
-		await this.element.waitFor({ state: "visible" });
-		await this.title.waitFor({ state: "visible" });
-		await this.content.waitFor({ state: "visible" });
+	async waitForReady(deadline: StartupDeadline): Promise<void> {
+		await this.element.waitFor({ state: "visible", timeout: deadline.remaining('editor group') });
+		await this.title.waitFor({ state: "visible", timeout: deadline.remaining('editor title') });
+		await this.content.waitFor({ state: "visible", timeout: deadline.remaining('editor content') });
 	}
 
 	async getTabIds(): Promise<string[]> {
@@ -62,9 +63,9 @@ export class Editors {
 		return this.element.locator(`[id=${JSON.stringify(openedId)}]`);
 	}
 
-	async waitForReady(): Promise<void> {
-		await this.element.waitFor({ state: "visible" });
-		await this.groupAt(0).waitForReady();
+	async waitForReady(deadline: StartupDeadline): Promise<void> {
+		await this.element.waitFor({ state: "visible", timeout: deadline.remaining('editor area') });
+		await this.groupAt(0).waitForReady(deadline);
 	}
 }
 
