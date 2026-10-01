@@ -1,3 +1,4 @@
+import { observableValue } from '../../../base/common/observable.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -34,6 +35,10 @@ test('Sessions layout commands update menu state from their owners and release w
 	using layout = new SessionsWorkbenchLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
 	let historyIndex = 1;
 	const sessions: ISessionsService = {
+		page: observableValue<"chat" | "code">("page", "chat"),
+		selectPage() {},
+		getPageSelection() { return { visibleSelections: [], activeSelection: undefined }; },
+		async openThread() {},
 		onDidChange: changed.event,
 		visibleSelections: [],
 		activeSelection: undefined,

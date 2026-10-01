@@ -1,4 +1,5 @@
 import type { Event } from "../../../../base/common/event.js";
+import type { IObservable } from "../../../../base/common/observable.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IActiveSessionThread, IUntitledChatSession, ISession, ModelRef, SessionId, ThreadId } from "./session.js";
 import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
@@ -11,6 +12,8 @@ export interface ISessionsManagementService {
 	readonly sessions: readonly ISession[];
 	readonly active: IActiveSessionThread | undefined;
 	readonly untitledSessions: readonly IUntitledChatSession[];
+	/** Keeps draft identity resolvable after first send, independently of foreground selection. */
+	readonly materializedSessions: IObservable<ReadonlyMap<string, { readonly sessionId: SessionId; readonly threadId: ThreadId }>>;
 	readonly activeUntitledSession: IUntitledChatSession | undefined;
 	readonly state: SessionsManagementState;
 	readonly error: string | undefined;

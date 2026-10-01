@@ -1,3 +1,4 @@
+import { observableValue } from '../../../base/common/observable.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -50,6 +51,10 @@ test('Sessions titlebar localizes its actions and closes the application menu be
 		},
 	};
 	const sessions: ISessionsService = {
+		page: observableValue<"chat" | "code">("page", "chat"),
+		selectPage() {},
+		getPageSelection() { return { visibleSelections: [], activeSelection: undefined }; },
+		async openThread() {},
 		onDidChange: changed.event,
 		visibleSelections: [],
 		activeSelection: undefined,

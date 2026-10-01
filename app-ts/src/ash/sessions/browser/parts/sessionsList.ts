@@ -71,7 +71,9 @@ export class SessionsList extends Disposable {
 		const present = new Set<string>();
 		const activeSelection = this.viewService.activeSelection;
 		const query = this.searchInput.value.trim().toLocaleLowerCase();
-		for (const session of this.sessionService.untitledSessions) {
+		for (const selection of this.viewService.visibleSelections) {
+			if (selection.kind !== "untitled") continue;
+			const session = selection.session;
 			if (query && !session.title.toLocaleLowerCase().includes(query)) continue;
 			const selected = activeSelection?.kind === "untitled" && activeSelection.session.untitledSessionId === session.untitledSessionId;
 			const key = `untitled:${session.untitledSessionId}`;

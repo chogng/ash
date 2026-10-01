@@ -131,7 +131,6 @@ export class Workbench extends Disposable {
 	readonly themeService: WorkbenchThemeService;
 	private readonly layoutService: BrowserLayoutService;
 	private readonly lifecycleService: ILifecycleService;
-	private readonly sessionsManagement: SessionsManagementService;
 	private readonly sessionsView: SessionsService;
 	private readonly sessionsPart: SessionsPart;
 	private readonly showChat: () => void;
@@ -172,7 +171,7 @@ export class Workbench extends Disposable {
 			workbenchState: WorkbenchState.EMPTY,
 		}));
 		services.registerInstance(IWorkbenchHostService, workbenchWindow);
-		const sessions = this.sessionsManagement = this._register(new SessionsManagementService(new AppServerSessionsProvider({
+		const sessions = this._register(new SessionsManagementService(new AppServerSessionsProvider({
 			session: options.api.session,
 			workspace: options.workspaceSelection,
 			selectWorkspace: folders => pickWorkspaceFolder(services.get(IQuickInputService), folders),
@@ -317,7 +316,10 @@ export class Workbench extends Disposable {
 		const selectActivityPage = (page: SessionsActivityPage): void => {
 			activitybar.selectPage(page);
 			sidebar.setEmptyPage(page === 'colab' || page === 'library');
-			if (page === 'chat' || page === 'code') sessionsPart?.setPage(page);
+			if (page === 'chat' || page === 'code') {
+				view.selectPage(page);
+				sessionsPart?.setPage(page);
+			}
 			else sessionsPart?.setPage('empty');
 			auxiliarybar?.setEmptyPage(page !== 'chat');
 		};
@@ -342,7 +344,7 @@ export class Workbench extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsActivityBar,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to move between available buttons. Press Enter or Space to activate a button. Use the Context Menu key or Shift+F10 for position and size options. Chat focuses the sessions list. Code opens the Code page without losing the Chat draft. Collaboration and Library open empty pages. Accounts opens the account menu, which includes Return to Workbench. Mobile devices is not available yet.'),
+					() => localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to move between available buttons. Press Enter or Space to activate a button. Use the Context Menu key or Shift+F10 for position and size options. Chat focuses the sessions list. Chat and Code keep separate selected sessions, navigation history, unsent text, and attachments when you switch pages. Collaboration and Library open empty pages. Accounts opens the account menu, which includes Return to Workbench. Mobile devices is not available yet.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsActivityBar,
 				);
@@ -353,7 +355,7 @@ export class Workbench extends Disposable {
 			if (event.affectsConfiguration(AccessibilityVerbositySettingId.SessionsActivityBar)) updateActivityBarHelpHint();
 		}));
 		updateActivityBarHelpHint();
-		let restoreNewChatDraft = true;
+		const restoredDraftPages = new Set<'chat' | 'code'>();
 		sessionsPart = this.sessionsPart = this._register(new SessionsPart(this.domNode, {
 			sessionService: sessions,
 			chatService: chat,
@@ -363,15 +365,21 @@ export class Workbench extends Disposable {
 			accessibleViewService,
 			notifications: notificationService,
 			commandService,
-			createInputPart: (container, delegate, model, presentation) => {
-				const draft = model.untitledSessionId && restoreNewChatDraft ? readNewChatDraftState(storage) : undefined;
-				if (model.untitledSessionId) restoreNewChatDraft = false;
-				return services.createInstance(NewChatInputWidget, container, delegate, model, options.api.dictation, draft, presentation);
+			createInputPart: (container, delegate, model, page) => {
+				const draft = model.untitledSessionId && !restoredDraftPages.has(page) ? readNewChatDraftState(storage, page) : undefined;
+				if (model.untitledSessionId) restoredDraftPages.add(page);
+				return services.createInstance(NewChatInputWidget, container, delegate, model, options.api.dictation, draft, page);
 			},
-			activateSelection: selection => view.activateSelection(selection),
-			closeSelection: selection => view.closeVisibleSelection(selection),
+			activateSelection: (selection, page) => view.activateSelection(selection, page),
+			closeSelection: (selection, page) => view.closeVisibleSelection(selection, page),
+			createNewSession: page => { view.openNewSession(page === 'code' ? 'New code session' : 'New chat', page); },
 		}));
-		const updateSessionsPart = (): void => sessionsPart?.updateVisibleSelections(view.visibleSelections, view.activeSelection);
+		const updateSessionsPart = (): void => {
+			for (const page of ['chat', 'code'] as const) {
+				const selection = view.getPageSelection(page);
+				sessionsPart?.updateVisibleSelections(selection.visibleSelections, selection.activeSelection, page);
+			}
+		};
 		this._register(view.onDidChange(updateSessionsPart));
 		updateSessionsPart();
 		auxiliarybar = this._register(new AuxiliaryBarPart(this.domNode, sessions, view));
@@ -407,7 +415,10 @@ export class Workbench extends Disposable {
 
 	async acceptHandoff(options: IOpenAgentsWindowOptions): Promise<void> {
 		await this.initialized;
-		if (options.conversation) await this.sessionsManagement.openThread(options.conversation.sessionId, options.conversation.threadId);
+		this.showChat();
+		if (options.conversation) {
+			await this.sessionsView.openThread(options.conversation.sessionId, options.conversation.threadId);
+		}
 		else if (options.draft) {
 			const selected = this.sessionsView.activeSelection;
 			if (selected?.kind !== 'untitled' || !sameWorkspace(selected.session.workspace, this.workspaceSelection())) {
@@ -415,7 +426,7 @@ export class Workbench extends Disposable {
 			}
 		}
 		this.showChat();
-		if (options.draft) this.sessionsPart.restoreDraft(options.draft);
+		if (options.draft) this.sessionsPart.restoreDraft(options.draft, 'chat');
 	}
 
 	shutdown(reason: ShutdownReason): Promise<void> {

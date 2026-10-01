@@ -1,3 +1,4 @@
+import { observableValue } from '../../../base/common/observable.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 
@@ -66,6 +67,7 @@ class PendingSessionService implements ISessionsManagementService {
 	private _activeUntitledSessionId: string | undefined;
 
 	readonly onDidChange = this._onDidChange.event;
+	readonly materializedSessions = observableValue<ReadonlyMap<string, { readonly sessionId: SessionId; readonly threadId: ThreadId }>>(this, new Map());
 	readonly sessions: readonly ISession[] = [];
 	readonly active: IActiveSessionThread | undefined = undefined;
 	readonly state: SessionsManagementState = "loading";

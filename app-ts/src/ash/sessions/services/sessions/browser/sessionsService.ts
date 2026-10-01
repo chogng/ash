@@ -1,5 +1,6 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
+import { observableValue, transaction, type IObservable, type ITransaction } from "../../../../base/common/observable.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IActiveSessionThread, IUntitledChatSession, SessionId, ThreadId } from "../common/session.js";
 import type { ISessionsManagementService } from "../common/sessionsManagement.js";
@@ -9,19 +10,30 @@ export type SessionsViewSelection =
 	| { readonly kind: "session"; readonly active: IActiveSessionThread }
 	| { readonly kind: "untitled"; readonly session: IUntitledChatSession };
 
-/** Owns dedicated-window visibility, active selection, and navigation history. */
+export type SessionsPage = 'chat' | 'code';
+
+export interface SessionsPageSelection {
+	readonly visibleSelections: readonly SessionsViewSelection[];
+	readonly activeSelection: SessionsViewSelection | undefined;
+}
+
+/** Owns each page's visibility, active selection, and navigation history. */
 export interface ISessionsService {
 	readonly onDidChange: Event<void>;
+	readonly page: IObservable<SessionsPage>;
+	selectPage(page: SessionsPage): void;
+	getPageSelection(page: SessionsPage): SessionsPageSelection;
 	readonly visibleSelections: readonly SessionsViewSelection[];
 	readonly activeSelection: SessionsViewSelection | undefined;
 	readonly canNavigateBack: boolean;
 	readonly canNavigateForward: boolean;
 	initialize(): Promise<void>;
+	openThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
 	openSession(sessionId: SessionId, threadId: ThreadId): void;
 	openUntitledSession(untitledSessionId: string): void;
-	openNewSession(title?: string): IUntitledChatSession;
-	activateSelection(selection: SessionsViewSelection): void;
-	closeVisibleSelection(selection: SessionsViewSelection): void;
+	openNewSession(title?: string, page?: SessionsPage): IUntitledChatSession;
+	activateSelection(selection: SessionsViewSelection, page?: SessionsPage): void;
+	closeVisibleSelection(selection: SessionsViewSelection, page?: SessionsPage): void;
 	navigateBack(): void;
 	navigateForward(): void;
 }
@@ -36,13 +48,11 @@ type SessionsViewReference =
 export class SessionsService extends Disposable implements ISessionsService {
 	private readonly sessionService: ISessionsManagementService;
 	private readonly _onDidChange = this._register(new Emitter<void>());
-	private _activeSelection: SessionsViewSelection | undefined;
-	private _visibleSelections: readonly SessionsViewSelection[] = [];
-	private visibleReferences: SessionsViewReference[] = [];
-	private readonly history: SessionsViewReference[] = [];
-	private historyIndex = -1;
-	private navigating = false;
-	private closingVisibilityKey: string | undefined;
+	readonly page = observableValue<SessionsPage>(this, 'chat');
+	private readonly pages = { chat: new SessionsPageState(), code: new SessionsPageState() };
+	private initialized = false;
+
+	private get current(): SessionsPageState { return this.pages[this.page.get()]; }
 
 	readonly onDidChange = this._onDidChange.event;
 
@@ -53,123 +63,147 @@ export class SessionsService extends Disposable implements ISessionsService {
 		this.syncFromSessionService();
 	}
 
-	get visibleSelections(): readonly SessionsViewSelection[] { return this._visibleSelections; }
-	get activeSelection(): SessionsViewSelection | undefined { return this._activeSelection; }
-	get canNavigateBack(): boolean { return this.findNavigableIndex(this.historyIndex, -1) !== undefined; }
-	get canNavigateForward(): boolean { return this.findNavigableIndex(this.historyIndex, 1) !== undefined; }
+	get visibleSelections(): readonly SessionsViewSelection[] { return this.current.visibleSelections.get(); }
+	get activeSelection(): SessionsViewSelection | undefined { return this.current.activeSelection.get(); }
+	get canNavigateBack(): boolean { return this.findNavigableIndex(this.current.historyIndex, -1) !== undefined; }
+	get canNavigateForward(): boolean { return this.findNavigableIndex(this.current.historyIndex, 1) !== undefined; }
+
+	selectPage(page: SessionsPage): void {
+		if (page === this.page.get()) return;
+		this.page.set(page);
+		if (!this.activeSelection) this.openNewSession(page === 'code' ? 'New code session' : 'New chat');
+		this._onDidChange.fire();
+	}
+
+	getPageSelection(page: SessionsPage): SessionsPageSelection {
+		return { visibleSelections: this.pages[page].visibleSelections.get(), activeSelection: this.pages[page].activeSelection.get() };
+	}
 
 	async initialize(): Promise<void> {
 		await this.sessionService.initialize();
+		if (!this.initialized) {
+			this.initialized = true;
+			const restored = activeSelection(this.sessionService);
+			const alreadyOpen = restored && Object.values(this.pages).some(state => state.visibleReferences.some(reference => referenceKey(reference) === selectionKey(restored)));
+			if (restored && !alreadyOpen && !this.pages.chat.activeSelection.get()) this.select(restored, this.pages.chat);
+		}
 		this.syncFromSessionService();
 	}
 
-	openSession(sessionId: SessionId, threadId: ThreadId): void { this.sessionService.selectThread(sessionId, threadId); }
-	openUntitledSession(untitledSessionId: string): void { this.sessionService.selectUntitledSession(untitledSessionId); }
-	openNewSession(title = "New session"): IUntitledChatSession { return this.sessionService.createUntitledSession(title); }
-	activateSelection(selection: SessionsViewSelection): void { this.activate(referenceForSelection(selection)); }
-	closeVisibleSelection(selection: SessionsViewSelection): void {
+	openSession(sessionId: SessionId, threadId: ThreadId): void { this.activate({ kind: 'session', sessionId, threadId }); }
+	async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
+		const state = this.current;
+		await this.sessionService.openThread(sessionId, threadId);
+		this.activate({ kind: 'session', sessionId, threadId }, state);
+	}
+	openUntitledSession(untitledSessionId: string): void { this.activate({ kind: 'untitled', untitledSessionId }); }
+	openNewSession(title = this.page.get() === 'code' ? 'New code session' : 'New chat', page = this.page.get()): IUntitledChatSession {
+		const session = this.sessionService.createUntitledSession(title);
+		this.select({ kind: 'untitled', session }, this.pages[page]);
+		return session;
+	}
+	activateSelection(selection: SessionsViewSelection, page = this.page.get()): void { this.activate(referenceForSelection(selection), this.pages[page]); }
+	closeVisibleSelection(selection: SessionsViewSelection, page = this.page.get()): void {
+		const state = this.pages[page];
 		const key = visibilityKey(referenceForSelection(selection));
-		const index = this.visibleReferences.findIndex(reference => visibilityKey(reference) === key);
+		const index = state.visibleReferences.findIndex(reference => visibilityKey(reference) === key);
 		if (index < 0) return;
-		const wasActive = this._activeSelection !== undefined && visibilityKey(referenceForSelection(this._activeSelection)) === key;
-		this.visibleReferences.splice(index, 1);
-		const replacement = this.visibleReferences[Math.min(index, this.visibleReferences.length - 1)];
-		this.closingVisibilityKey = key;
-		try {
-			if (selection.kind === "untitled") this.sessionService.discardUntitledSession(selection.session.untitledSessionId);
-			if (wasActive && replacement) this.activate(replacement);
-			else if (wasActive && this.visibleReferences.length === 0) {
-				this.closingVisibilityKey = undefined;
-				this.openNewSession("New code session");
-			}
-			else if (selection.kind === "session") {
-				this.projectVisibleSelections();
-				this._onDidChange.fire();
-			}
-		} finally {
-			this.closingVisibilityKey = undefined;
+		const active = state.activeSelection.get();
+		const wasActive = active !== undefined && visibilityKey(referenceForSelection(active)) === key;
+		state.visibleReferences.splice(index, 1);
+		const replacement = state.visibleReferences[Math.min(index, state.visibleReferences.length - 1)];
+		if (wasActive) state.activeSelection.set(undefined);
+		if (selection.kind === "untitled") this.sessionService.discardUntitledSession(selection.session.untitledSessionId);
+		if (wasActive && replacement) this.activate(replacement, state);
+		else if (wasActive) {
+			const session = this.sessionService.createUntitledSession(page === 'code' ? 'New code session' : 'New chat');
+			this.select({ kind: 'untitled', session }, state);
 		}
+		this.projectVisibleSelections(state);
+		this._onDidChange.fire();
 	}
 	navigateBack(): void { this.navigate(-1); }
 	navigateForward(): void { this.navigate(1); }
 
 	private syncFromSessionService(): void {
-		const next = activeSelection(this.sessionService);
-		const previousKey = selectionKey(this._activeSelection);
-		const nextKey = selectionKey(next);
-		this.reconcileVisibleReferences(this._activeSelection, next);
-		this._activeSelection = next;
-		this.projectVisibleSelections();
-		if (!this.navigating && next && nextKey !== previousKey) this.record(referenceForSelection(next));
+		// Catalog changes refresh identities; foreground selection belongs to the page that opened them.
+		for (const state of Object.values(this.pages)) {
+			const previous = state.activeSelection.get();
+			state.visibleReferences = state.visibleReferences.map(reference => this.materializedReference(reference));
+			state.history = state.history.map(reference => this.materializedReference(reference));
+			const reference = previous ? this.materializedReference(referenceForSelection(previous)) : undefined;
+			state.activeSelection.set(this.resolve(reference));
+			this.projectVisibleSelections(state);
+			if (!state.activeSelection.get() && state.visibleReferences.length > 0) this.select(this.resolve(state.visibleReferences[0])!, state);
+		}
 		this._onDidChange.fire();
 	}
 
-	private reconcileVisibleReferences(previous: SessionsViewSelection | undefined, next: SessionsViewSelection | undefined): void {
-		const previousReference = previous ? referenceForSelection(previous) : undefined;
-		const nextReference = next ? referenceForSelection(next) : undefined;
-		if (
-			previousReference?.kind === "untitled" &&
-			nextReference?.kind === "session" &&
-			!this.sessionService.untitledSessions.some(session => session.untitledSessionId === previousReference.untitledSessionId)
-		) {
-			const materializedIndex = this.visibleReferences.findIndex(reference => visibilityKey(reference) === visibilityKey(previousReference));
-			if (materializedIndex >= 0) this.visibleReferences[materializedIndex] = nextReference;
-		}
-		this.visibleReferences = this.visibleReferences.filter(reference => this.resolve(reference) !== undefined);
-		if (!nextReference || visibilityKey(nextReference) === this.closingVisibilityKey) return;
-		const existingIndex = this.visibleReferences.findIndex(reference => visibilityKey(reference) === visibilityKey(nextReference));
-		if (existingIndex >= 0) {
-			this.visibleReferences[existingIndex] = nextReference;
-			return;
-		}
-		if (this.closingVisibilityKey !== undefined) return;
-		const previousIndex = previousReference
-			? this.visibleReferences.findIndex(reference => visibilityKey(reference) === visibilityKey(previousReference))
-			: -1;
-		this.visibleReferences.splice(previousIndex >= 0 ? previousIndex + 1 : this.visibleReferences.length, 0, nextReference);
+	private materializedReference(reference: SessionsViewReference): SessionsViewReference {
+		const active = reference.kind === 'untitled' ? this.sessionService.materializedSessions.get().get(reference.untitledSessionId) : undefined;
+		return active ? { kind: 'session', sessionId: active.sessionId, threadId: active.threadId } : reference;
 	}
 
-	private projectVisibleSelections(): void {
-		this.visibleReferences = this.visibleReferences.filter(reference => this.resolve(reference) !== undefined);
-		this._visibleSelections = this.visibleReferences.map(reference => this.resolve(reference)!);
+	private select(selection: SessionsViewSelection, state = this.current): void {
+		const reference = referenceForSelection(selection);
+		const previous = state.activeSelection.get();
+		const existing = state.visibleReferences.findIndex(candidate => visibilityKey(candidate) === visibilityKey(reference));
+		if (existing >= 0) state.visibleReferences[existing] = reference;
+		else {
+			const previousIndex = previous ? state.visibleReferences.findIndex(candidate => visibilityKey(candidate) === visibilityKey(referenceForSelection(previous))) : -1;
+			state.visibleReferences.splice(previousIndex >= 0 ? previousIndex + 1 : state.visibleReferences.length, 0, reference);
+		}
+		transaction(tx => {
+			state.activeSelection.set(selection, tx);
+			this.projectVisibleSelections(state, tx);
+		});
+		if (!state.navigating && selectionKey(previous) !== selectionKey(selection)) this.record(reference, state);
+		this._onDidChange.fire();
 	}
 
-	private record(reference: SessionsViewReference): void {
+	private projectVisibleSelections(state: SessionsPageState, tx?: ITransaction): void {
+		state.visibleReferences = state.visibleReferences.filter(reference => this.resolve(reference) !== undefined);
+		state.visibleSelections.set(state.visibleReferences.map(reference => this.resolve(reference)!), tx);
+	}
+
+	private record(reference: SessionsViewReference, state: SessionsPageState): void {
 		const key = referenceKey(reference);
-		if (referenceKey(this.history[this.historyIndex]) === key) return;
-		this.history.splice(this.historyIndex + 1);
-		this.history.push(reference);
-		this.historyIndex = this.history.length - 1;
+		if (referenceKey(state.history[state.historyIndex]) === key) return;
+		state.history.splice(state.historyIndex + 1);
+		state.history.push(reference);
+		state.historyIndex = state.history.length - 1;
 	}
 
 	private navigate(direction: -1 | 1): void {
-		const targetIndex = this.findNavigableIndex(this.historyIndex, direction);
+		const state = this.current;
+		const targetIndex = this.findNavigableIndex(state.historyIndex, direction);
 		if (targetIndex === undefined) return;
-		const reference = this.history[targetIndex];
-		const previousIndex = this.historyIndex;
-		this.navigating = true;
-		this.historyIndex = targetIndex;
+		const reference = state.history[targetIndex];
+		const previousIndex = state.historyIndex;
+		state.navigating = true;
+		state.historyIndex = targetIndex;
 		try {
 			this.activate(reference);
 		} catch (error) {
-			this.historyIndex = previousIndex;
+			state.historyIndex = previousIndex;
 			this._onDidChange.fire();
 			throw error;
 		} finally {
-			this.navigating = false;
+			state.navigating = false;
 		}
 	}
 
 	private findNavigableIndex(from: number, direction: -1 | 1): number | undefined {
-		for (let index = from + direction; index >= 0 && index < this.history.length; index += direction) {
-			if (this.resolve(this.history[index])) return index;
+		for (let index = from + direction; index >= 0 && index < this.current.history.length; index += direction) {
+			if (this.resolve(this.current.history[index])) return index;
 		}
 		return undefined;
 	}
 
-	private activate(reference: SessionsViewReference): void {
+	private activate(reference: SessionsViewReference, state = this.current): void {
 		if (reference.kind === "session") this.sessionService.selectThread(reference.sessionId, reference.threadId);
 		else this.sessionService.selectUntitledSession(reference.untitledSessionId);
+		this.select(this.resolve(reference)!, state);
 	}
 
 	private resolve(reference: SessionsViewReference | undefined): SessionsViewSelection | undefined {
@@ -182,6 +216,15 @@ export class SessionsService extends Disposable implements ISessionsService {
 		const thread = session?.chats.find(candidate => candidate.threadId === reference.threadId && candidate.status === "active");
 		return session && thread ? { kind: "session", active: { session, threadId: thread.threadId } } : undefined;
 	}
+}
+
+class SessionsPageState {
+	readonly activeSelection = observableValue<SessionsViewSelection | undefined>(this, undefined);
+	readonly visibleSelections = observableValue<readonly SessionsViewSelection[]>(this, []);
+	visibleReferences: SessionsViewReference[] = [];
+	history: SessionsViewReference[] = [];
+	historyIndex = -1;
+	navigating = false;
 }
 
 function activeSelection(sessionService: ISessionsManagementService): SessionsViewSelection | undefined {

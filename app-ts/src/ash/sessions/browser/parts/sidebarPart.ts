@@ -32,7 +32,7 @@ export class SidebarPart extends WorkbenchPart {
 		this.topActivityBarHost.hidden = true;
 		this.contentDomNode.append(this.topActivityBarHost);
 		this.list = this._register(new SessionsList(this.contentDomNode, sessionService, viewService, "Sessions", "New session"));
-		this.teams = this._register(new TeamsPanel(this.contentDomNode, teamsService, sessionService, quickInput, listRoles));
+		this.teams = this._register(new TeamsPanel(this.contentDomNode, teamsService, viewService, quickInput, listRoles));
 		this.bottomActivityBarHost = h(container.ownerDocument, 'div');
 		this.bottomActivityBarHost.className = 'ash-sessions-activity-host bottom';
 		this.bottomActivityBarHost.hidden = true;

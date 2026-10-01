@@ -39,6 +39,7 @@ export class ChatService extends Disposable implements IChatService {
 	private readonly _onDidUpdateTurnChanges = this._register(new Emitter<TurnChangesUpdate>());
 	private readonly _onDidChangeQueue = this._register(new Emitter<void>());
 	private readonly hiddenModels = new Map<string, ModelRef>();
+	private readonly threadSubscriptions = new Map<string, { owners: Set<object>; pending: Set<Promise<ThreadSubscription>> }>();
 	private modelCatalog: readonly ModelCatalogEntry[] = [];
 	private modelCatalogLoad: Promise<readonly ModelCatalogEntry[]> | undefined;
 	private hasLoadedModelCatalog = false;
@@ -202,13 +203,34 @@ export class ChatService extends Disposable implements IChatService {
 		return { thread: toThread(result.thread), transcript: toThreadTranscriptSnapshot(result.transcript) };
 	}
 
-	async subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number): Promise<ThreadSubscription> {
-		const result = await this.options.threadApi.subscribe({ sessionId, threadId, afterSequence });
-		return { thread: toThread(result.thread), transcript: toThreadTranscriptSnapshot(result.transcript), updates: result.updates.map(toThreadUpdate) };
+	async subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number, owner: object): Promise<ThreadSubscription> {
+		const key = JSON.stringify([sessionId, threadId]);
+		let subscription = this.threadSubscriptions.get(key);
+		if (!subscription) {
+			subscription = { owners: new Set(), pending: new Set() };
+			this.threadSubscriptions.set(key, subscription);
+		}
+		subscription.owners.add(owner);
+		const pending = this.options.threadApi.subscribe({ sessionId, threadId, afterSequence }).then(result => ({
+			thread: toThread(result.thread), transcript: toThreadTranscriptSnapshot(result.transcript), updates: result.updates.map(toThreadUpdate),
+		}));
+		subscription.pending.add(pending);
+		try {
+			return await pending;
+		} finally {
+			subscription.pending.delete(pending);
+		}
 	}
 
-	unsubscribeThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
-		return this.options.threadApi.unsubscribe({ sessionId, threadId });
+	async unsubscribeThread(sessionId: SessionId, threadId: ThreadId, owner: object): Promise<void> {
+		const key = JSON.stringify([sessionId, threadId]);
+		const subscription = this.threadSubscriptions.get(key);
+		if (!subscription || !subscription.owners.delete(owner) || subscription.owners.size > 0) return;
+		// A pane may close while subscribe is in flight. Release only after that request, and only if no other pane acquired it.
+		await Promise.allSettled(subscription.pending);
+		if (subscription.owners.size > 0 || this.threadSubscriptions.get(key) !== subscription) return;
+		this.threadSubscriptions.delete(key);
+		await this.options.threadApi.unsubscribe({ sessionId, threadId });
 	}
 
 	async startTurn(options: StartTurnOptions): Promise<void> {

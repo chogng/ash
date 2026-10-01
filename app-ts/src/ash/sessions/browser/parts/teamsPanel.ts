@@ -3,7 +3,7 @@ import { addDisposableListener, h } from '../../../base/browser/dom.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { localize } from '../../../nls.js';
 import type { IQuickInputService, IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
-import type { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
+import type { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 import type { Team, TeamMessage, TeamRole, TeamRun } from '../../services/teams/common/team.js';
 import type { ITeamsManagementService } from '../../services/teams/common/teamsManagement.js';
 
@@ -27,7 +27,7 @@ export class TeamsPanel extends Disposable {
 	constructor(
 		container: HTMLElement,
 		private readonly teams: ITeamsManagementService,
-		private readonly sessions: ISessionsManagementService,
+		private readonly sessions: ISessionsService,
 		private readonly quickInput: IQuickInputService,
 		private readonly listRoles: () => Promise<readonly TeamRoleOption[]>,
 	) {

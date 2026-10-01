@@ -5,7 +5,7 @@ import { appendIcon } from "../../../../../../base/browser/ui/lxicons/lxicon.js"
 import type { IAction } from "../../../../../../base/common/actions.js";
 import { Separator } from "../../../../../../base/common/actions.js";
 import type { Icon } from "../../../../../../base/common/icon.js";
-import { Disposable, DisposableStore, toDisposable } from "../../../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable, type IDisposable } from "../../../../../../base/common/lifecycle.js";
 import { Emitter } from '../../../../../../base/common/event.js';
 import { Lxicon } from "../../../../../../base/common/lxicons.js";
 import { localize, onDidChangeNls } from "../../../../../../nls.js";
@@ -57,8 +57,21 @@ const modeOptions: readonly { readonly id: ChatInputMode; readonly label: string
 	{ id: "ask", label: "Ask", icon: Lxicon.chat4 },
 ];
 
+/** Input operations consumed by a Chat pane, independent of its product's composer layout. */
+export interface IChatInputPart extends IDisposable {
+	readonly element: HTMLElement;
+	focus(): void;
+	addContext(attachment: ChatContextAttachment): void;
+	captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined>;
+	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void;
+	acceptInput(value?: string): Promise<void>;
+	openModelSelector(): void;
+	setVisible(visible: boolean): void;
+	render(state: ChatInputState): void;
+}
+
 /** Owns the complete input region and all user-facing interactions for one Chat pane. */
-export class ChatInputPart extends Disposable {
+export class ChatInputPart extends Disposable implements IChatInputPart {
 	readonly element: HTMLElement;
 	private readonly inputChanges = this._register(new Emitter<void>());
 	protected readonly onDidChangeInput = this.inputChanges.event;
@@ -427,7 +440,9 @@ export class ChatInputPart extends Disposable {
 				new ChatInputAction("ash.chat.input.interrupt", "Stop", "Stop response", Lxicon.close, true, "interrupt", () => void this.delegate.interrupt()),
 			]
 			: [sendAction];
-		const inputActions = this.toolbarState.inputKind === "command" ? [modeAction] : [...this.additionalActions, modeAction, modelAction, ...(effortAction ? [effortAction] : []), micAction];
+		// Localized getters must be evaluated for each presentation; ActionBar retains identical action objects.
+		const additionalActions = this.additionalActions.map(action => ({ ...action, run: (...args: readonly unknown[]) => action.run(...args) }));
+		const inputActions = this.toolbarState.inputKind === "command" ? [modeAction] : [...additionalActions, modeAction, modelAction, ...(effortAction ? [effortAction] : []), micAction];
 		this.inputToolbar.setActions([...inputActions, ...trailingActions]);
 		this.pickerResponsiveLayout.layout();
 	}

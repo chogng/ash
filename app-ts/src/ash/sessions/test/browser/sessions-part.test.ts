@@ -1,3 +1,4 @@
+import { observableValue } from '../../../base/common/observable.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
@@ -56,6 +57,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	let activeUntitledSessionId: string | undefined;
 	const sessionService: ISessionsManagementService = {
 		onDidChange: onDidChange.event,
+		materializedSessions: observableValue("materialized drafts", new Map()),
 		sessions: [],
 		active: undefined,
 		get untitledSessions() { return untitledSessions; },
@@ -194,15 +196,21 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		accessibleViewService: { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService,
 		notifications,
 		commandService,
-		createInputPart: (container, delegate, model, presentation) => {
-			const input = services.createInstance(NewChatInputWidget, container, delegate, model, undefined, undefined, presentation);
+		createInputPart: (container, delegate, model, page) => {
+			const input = services.createInstance(NewChatInputWidget, container, delegate, model, undefined, undefined, page);
 			inputs.push(input);
 			return input;
 		},
-		activateSelection: selection => viewService.activateSelection(selection),
-		closeSelection: selection => viewService.closeVisibleSelection(selection),
+		activateSelection: (selection, page) => viewService.activateSelection(selection, page),
+		closeSelection: (selection, page) => viewService.closeVisibleSelection(selection, page),
+		createNewSession: page => { viewService.openNewSession(undefined, page); },
 	});
-	const updatePart = (): void => part.updateVisibleSelections(viewService.visibleSelections, viewService.activeSelection);
+	const updatePart = (): void => {
+		for (const page of ['chat', 'code'] as const) {
+			const selection = viewService.getPageSelection(page);
+			part.updateVisibleSelections(selection.visibleSelections, selection.activeSelection, page);
+		}
+	};
 	const partListener = viewService.onDidChange(updatePart);
 	updatePart();
 
@@ -240,29 +248,40 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	assert.equal(part.domNode.querySelectorAll(".ash-sessions-chat-slot").length, 1);
 	assert.ok(part.domNode.querySelector('.ash-sessions-chat-view.single-chat'));
 	const retainedInput = part.domNode.querySelector('.ash-chat-input-part');
-	const draft = { mode: 'plan' as const, text: 'Keep this Code draft', contexts: [] };
+	const draft = { mode: 'plan' as const, text: 'Keep this Chat draft', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context' }] };
 	part.restoreDraft(draft);
+	viewService.selectPage('code');
+	if (!viewService.activeSelection) viewService.openNewSession('New code session');
 	part.setPage('code');
-	assert.equal(part.domNode.querySelector('.ash-sessions-code-page .ash-chat-input-part'), retainedInput);
+	const codeInput = part.domNode.querySelector('.code-composer');
+	assert.notEqual(codeInput, retainedInput);
 	assert.equal(part.domNode.querySelector('.ash-sessions-code-page')?.getAttribute('aria-label'), 'Code');
-	assert.equal(part.domNode.querySelector('.ash-sessions-chat-view')?.hasAttribute('hidden'), false);
-	assert.equal(retainedInput?.classList.contains('code-composer'), true);
-	assert.equal(retainedInput?.classList.contains('chat-composer'), false);
-	assert.equal(inputs.length, 2);
-	const codeDraft = await inputs[1]!.captureDraft();
+	assert.equal(part.domNode.querySelector('.ash-sessions-code-page .ash-sessions-chat-view')?.hasAttribute('hidden'), false);
+	assert.equal(retainedInput?.closest('.ash-sessions-chat-view')?.hasAttribute('hidden'), true);
+	assert.equal(inputs.length, 3);
+	assert.equal(await inputs[2]!.captureDraft(), undefined);
+	const separateDraft = { mode: 'plan' as const, text: 'Keep this Code draft', contexts: [{ id: 'code-file', kind: 'file', name: 'code.ts', content: 'Code context' }] };
+	part.restoreDraft(separateDraft);
+	const codeDraft = await inputs[2]!.captureDraft();
 	assert.ok(codeDraft);
-	assert.deepEqual(codeDraft.draft, draft);
+	assert.deepEqual(codeDraft.draft, separateDraft);
+	assert.deepEqual(readNewChatDraftState(storage, 'chat'), draft);
+	assert.deepEqual(readNewChatDraftState(storage, 'code'), separateDraft);
 	viewService.openNewSession('Another Code draft');
 	assert.equal(part.domNode.querySelectorAll('.code-composer').length, 2);
 	part.setPage('empty');
 	assert.equal(part.domNode.querySelector('.ash-sessions-chat-view')?.hasAttribute('hidden'), true);
+	viewService.selectPage('chat');
 	part.setPage('chat');
 	assert.equal(part.domNode.querySelector('.ash-sessions-chat-view .ash-chat-input-part'), retainedInput);
-	assert.equal(part.domNode.querySelectorAll('.chat-composer').length, 2);
-	assert.equal(part.domNode.querySelectorAll('.code-composer').length, 0);
+	assert.equal(part.domNode.querySelectorAll('.chat-composer').length, 1);
+	assert.equal(part.domNode.querySelectorAll('.code-composer:not([hidden])').length, 0);
 	const chatDraft = await inputs[1]!.captureDraft();
 	assert.ok(chatDraft);
 	assert.deepEqual(chatDraft.draft, draft);
+	part.setPage('code');
+	assert.equal(part.domNode.querySelector('.code-composer'), codeInput);
+	assert.deepEqual((await inputs[2]!.captureDraft())?.draft, separateDraft);
 
 	partListener.dispose();
 	part.dispose();
@@ -278,19 +297,25 @@ test('Sessions draft state restores text and images while isolating Threads and 
 	const ownerWindow = browserEnvironment.window as unknown as Window;
 	using storage = new BrowserStorageService({ ownerWindow, applicationId: 'draft-test', workspaceId: 'workspace-a', flushInterval: 0 });
 	const draft = { mode: 'debug' as const, text: 'Review this', contexts: [{ id: 'image', kind: 'image', name: 'image.png', content: 'data:image/png;base64,aGVsbG8=' }] };
-	writeNewChatDraftState(storage, draft);
-	writeNewChatDraftState(storage, { mode: 'plan', text: 'Thread draft', contexts: [] }, 'thread-1');
+	writeNewChatDraftState(storage, 'chat', draft);
+	writeNewChatDraftState(storage, 'chat', { mode: 'plan', text: 'Thread draft', contexts: [] }, 'thread-1');
+	writeNewChatDraftState(storage, 'code', { mode: 'agent', text: 'Code draft', contexts: [] });
+	writeNewChatDraftState(storage, 'code', { mode: 'agent', text: 'Code Thread draft', contexts: [] }, 'thread-1');
 	await storage.flush();
 	using restored = new BrowserStorageService({ ownerWindow, applicationId: 'draft-test', workspaceId: 'workspace-a', flushInterval: 0 });
-	assert.deepEqual(readNewChatDraftState(restored), draft);
-	assert.deepEqual(readNewChatDraftState(restored, 'thread-1'), { mode: 'plan', text: 'Thread draft', contexts: [] });
-	assert.equal(readNewChatDraftState(restored, 'thread-2'), undefined);
+	assert.deepEqual(readNewChatDraftState(restored, 'chat'), draft);
+	assert.deepEqual(readNewChatDraftState(restored, 'chat', 'thread-1'), { mode: 'plan', text: 'Thread draft', contexts: [] });
+	assert.equal(readNewChatDraftState(restored, 'chat', 'thread-2'), undefined);
+	assert.equal(readNewChatDraftState(restored, 'code')?.text, 'Code draft');
+	assert.equal(readNewChatDraftState(restored, 'code', 'thread-1')?.text, 'Code Thread draft');
 	restored.switchWorkspace('workspace-b');
-	assert.equal(readNewChatDraftState(restored), undefined);
+	assert.equal(readNewChatDraftState(restored, 'chat'), undefined);
+	assert.equal(readNewChatDraftState(restored, 'code'), undefined);
 	restored.switchWorkspace('workspace-a');
-	writeNewChatDraftState(restored, undefined);
-	assert.equal(readNewChatDraftState(restored), undefined);
-	assert.equal(readNewChatDraftState(restored, 'thread-1')?.text, 'Thread draft');
+	writeNewChatDraftState(restored, 'chat', undefined);
+	assert.equal(readNewChatDraftState(restored, 'chat'), undefined);
+	assert.equal(readNewChatDraftState(restored, 'chat', 'thread-1')?.text, 'Thread draft');
+	assert.equal(readNewChatDraftState(restored, 'code')?.text, 'Code draft');
 });
 
 test('Sessions file acquisition preserves valid UTF-8 and rejects binary content without adding it', async () => {

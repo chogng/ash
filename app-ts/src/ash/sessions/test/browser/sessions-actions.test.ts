@@ -1,3 +1,4 @@
+import { observableValue } from '../../../base/common/observable.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { Emitter, Event } from "../../../base/common/event.js";
@@ -15,6 +16,10 @@ test("Sessions owns the local New Chat command without requiring regular Workben
 	const onDidChange = new Emitter<void>();
 	let created = 0;
 	const viewService: ISessionsService = {
+		page: observableValue<"chat" | "code">("page", "chat"),
+		selectPage() {},
+		getPageSelection() { return { visibleSelections: [], activeSelection: undefined }; },
+		async openThread() {},
 		onDidChange: onDidChange.event,
 		visibleSelections: [],
 		activeSelection: undefined,

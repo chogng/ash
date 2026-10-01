@@ -6,7 +6,8 @@ import type { SessionMutationParams, SessionOperationInput } from "../../../plat
 import type { IRendererHost } from "../../../platform/renderer/common/rendererHost.js";
 import type { IAction } from "../../../base/common/actions.js";
 import { Emitter, Event } from "../../../base/common/event.js";
-import { constObservable } from '../../../base/common/observable.js';
+import { DeferredPromise } from '../../../base/common/async.js';
+import { SessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { TAB_CLOSE_ACTION_ID } from "../../../base/browser/ui/tablist/tabList.js";
@@ -96,6 +97,7 @@ const testStorages: InstanceType<typeof BrowserStorageService>[] = [];
 let testStorageSequence = 0;
 const { ChatWidget, openChatMarkdownLink } = await import("../../../workbench/contrib/chat/browser/widget/chatWidget.js");
 const { NewChatInputWidget } = await import('../../contrib/chat/browser/newChatInput.js');
+const { readNewChatDraftState } = await import('../../contrib/chat/common/newChatDraftState.js');
 const { createCodeEditorServices } = await import('../../../editor/test/browser/testCodeEditor.js');
 await import(
 	"../../../workbench/contrib/preferences/browser/preferences.contribution.js"
@@ -687,7 +689,7 @@ test("Turn error cards invoke their typed action without interpreting message te
 	dom.window.close();
 });
 
-test('A centered Code composer keeps its input when the first message creates the conversation', async () => {
+test('Code sending preserves the Chat draft when pages switch during first-session creation', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using domLifetime = toDisposable(() => dom.window.close());
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -707,10 +709,14 @@ test('A centered Code composer keeps its input when the first message creates th
 	});
 	using sessions = new SessionsManagementService(fake.api);
 	await sessions.initialize();
-	const draft = sessions.createUntitledSession();
+	using view = new SessionsService(sessions);
+	await view.initialize();
+	view.selectPage('code');
+	const draft = view.activeSelection;
+	if (draft?.kind !== 'untitled') throw new Error('Expected Code draft');
 	using commands = new CommandService(new ServiceContainer());
 	using chat = createChatService(fake.api);
-	const widgetModel = new ChatWidgetModel(chat, { kind: 'untitled', session: draft }, sessions);
+	const widgetModel = new ChatWidgetModel(chat, { kind: 'untitled', session: draft.session }, sessions);
 	using widget = new ChatWidget(
 		dom.window.document.body,
 		'centered-chat',
@@ -725,7 +731,7 @@ test('A centered Code composer keeps its input when the first message creates th
 		undefined,
 		undefined,
 		undefined,
-		(container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, widgetModel, undefined, undefined, constObservable('code')),
+		(container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, widgetModel, undefined, undefined, 'code'),
 	);
 	widget.setVisible(true);
 	const input = widget.element.querySelector<HTMLElement>('.ash-chat-input-part');
@@ -733,11 +739,35 @@ test('A centered Code composer keeps its input when the first message creates th
 	assert.equal(heading?.hidden, false);
 	assert.equal(input?.classList.contains('code-composer'), true);
 	await widgetModel.initialize();
-	await widget.acceptInput('Start this work');
+	const attachment = new DeferredPromise<{ name: string; content: string }>();
+	widget.addContext({ id: 'code-file', kind: 'file', name: 'code.ts', resolve: () => attachment.p });
+	const sending = widget.acceptInput('Start this work');
+	view.selectPage('chat');
+	const chatSelection = view.activeSelection;
+	if (chatSelection?.kind !== 'untitled') throw new Error('Expected Chat draft');
+	const chatModel = new ChatWidgetModel(chat, { kind: 'untitled', session: chatSelection.session }, sessions);
+	using chatWidget = new ChatWidget(dom.window.document.body, 'separate-chat', chatModel, () => view.openNewSession(),
+		{ showContextMenu: () => undefined } as unknown as IContextMenuService, contextViewService, commands,
+		unavailableAccessibleViewService, notifications, undefined, undefined, undefined, undefined,
+		(container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, chatModel, undefined, undefined, 'chat'));
+	chatWidget.setVisible(true);
+	const chatDraft = { mode: 'agent' as const, text: 'Keep my Chat draft', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context' }] };
+	chatWidget.restoreDraft(chatDraft);
+	await attachment.complete({ name: 'code.ts', content: 'Code context' });
+	await sending;
 	assert.equal(heading?.hidden, true);
 	assert.equal(input?.classList.contains('has-conversation'), true);
 	assert.equal(widget.element.querySelector('.ash-chat-input-part'), input);
 	assert.equal(widget.sessionId, 'session-1');
+	assert.deepEqual((await chatWidget.captureDraft())?.draft, chatDraft);
+	assert.deepEqual(readNewChatDraftState(composerStorage, 'chat'), chatDraft);
+	assert.equal(readNewChatDraftState(composerStorage, 'chat', 'thread-1'), undefined);
+	assert.equal(view.activeSelection?.kind, 'untitled');
+	assert.equal(chatWidget.sessionId, undefined);
+	view.selectPage('code');
+	assert.equal(view.activeSelection?.kind, 'session');
+	assert.equal(await widget.captureDraft(), undefined);
+	assert.equal(readNewChatDraftState(composerStorage, 'code', 'thread-1'), undefined);
 });
 
 test("an empty Session list opens an untitled session and persists it on its first send", async () => {
@@ -1730,6 +1760,40 @@ function createChatService(api: IRendererHost, configurationService?: WorkbenchC
 	if (!storageService) testStorages.push(storage);
 	return new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, turnChangesApi: api.turnChanges, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, ...(configurationService ? { configurationService } : {}), storageService: storage });
 }
+
+test('closing one conversation owner retains another owner across repeated subscriptions', async () => {
+	const fake = fakeApi();
+	const released: string[] = [];
+	using chat = createChatService({ ...fake.api, thread: { ...fake.api.thread, unsubscribe: async ({ threadId }) => { released.push(threadId); } } });
+	const chatOwner = {};
+	const codeOwner = {};
+	await chat.subscribeThread('session-1', 'thread-1', 0, chatOwner);
+	await chat.subscribeThread('session-1', 'thread-1', 0, codeOwner);
+	await chat.subscribeThread('session-1', 'thread-1', 0, codeOwner);
+	await chat.unsubscribeThread('session-1', 'thread-1', codeOwner);
+	assert.deepEqual(released, []);
+	await chat.unsubscribeThread('session-1', 'thread-1', chatOwner);
+	assert.deepEqual(released, ['thread-1']);
+});
+
+test('closing during subscription waits for the request before releasing the backend', async () => {
+	const fake = fakeApi();
+	const pending = new DeferredPromise<Awaited<ReturnType<typeof fake.api.thread.subscribe>>>();
+	const released: string[] = [];
+	using chat = createChatService({ ...fake.api, thread: {
+		...fake.api.thread,
+		subscribe: () => pending.p,
+		unsubscribe: async ({ threadId }) => { released.push(threadId); },
+	} });
+	const owner = {};
+	const subscribing = chat.subscribeThread('session-1', 'thread-1', 0, owner);
+	const closing = chat.unsubscribeThread('session-1', 'thread-1', owner);
+	assert.deepEqual(released, []);
+	await pending.complete(await fake.api.thread.subscribe({ sessionId: 'session-1', threadId: 'thread-1', afterSequence: 0 }));
+	await subscribing;
+	await closing;
+	assert.deepEqual(released, ['thread-1']);
+});
 
 test("Chat service retains Agent identity and branch origin when reading a Thread", async () => {
 	const fake = fakeApi();

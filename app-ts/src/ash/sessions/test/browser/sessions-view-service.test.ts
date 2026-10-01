@@ -1,6 +1,8 @@
+import { observableValue } from '../../../base/common/observable.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { Emitter } from "../../../base/common/event.js";
+import { DeferredPromise } from "../../../base/common/async.js";
 import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../services/sessions/common/session.js";
 import type { ISessionsManagementService, SessionsManagementState } from "../../services/sessions/common/sessionsManagement.js";
 import { SessionsService } from "../../../sessions/services/sessions/browser/sessionsService.js";
@@ -86,6 +88,99 @@ test("closing the last draft does not reopen a previously closed durable Session
 	assert.notEqual(selectionId(view.visibleSelections[0]), `untitled:${draft.untitledSessionId}`);
 });
 
+test('switching pages during catalog loading keeps independently created drafts', async () => {
+	const pending = new DeferredPromise<void>();
+	using sessions = new class extends FakeSessionService {
+		override initialize(): Promise<void> { return pending.p; }
+	}([]);
+	using view = new SessionsService(sessions);
+	const initializing = view.initialize();
+	view.selectPage('code');
+	const codeDraft = selectionId(view.activeSelection);
+	view.selectPage('chat');
+	const chatDraft = selectionId(view.activeSelection);
+	await pending.complete();
+	await initializing;
+	assert.notEqual(chatDraft, codeDraft);
+	assert.deepEqual(['chat', 'code'].map(page => view.getPageSelection(page as 'chat' | 'code').visibleSelections.map(selectionId)), [[chatDraft], [codeDraft]]);
+});
+
+test('Chat and Code keep their own active session, visible sessions, and navigation history', async () => {
+	using sessions = new FakeSessionService([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
+	using view = new SessionsService(sessions);
+	await view.initialize();
+	const chatDraft = view.openNewSession('Chat draft');
+	view.selectPage('code');
+	const codeDraft = view.activeSelection!;
+	view.openSession('session-2', 'thread-2');
+	view.navigateBack();
+	assert.deepEqual(view.getPageSelection('chat').visibleSelections.map(selectionId), ['session:session-1:thread-1', `untitled:${chatDraft.untitledSessionId}`]);
+	assert.equal(selectionId(view.activeSelection), selectionId(codeDraft));
+	assert.equal(view.canNavigateForward, true);
+	view.selectPage('chat');
+	assert.equal(selectionId(view.activeSelection), `untitled:${chatDraft.untitledSessionId}`);
+	assert.equal(view.canNavigateForward, false);
+	view.navigateBack();
+	assert.equal(selectionId(view.activeSelection), 'session:session-1:thread-1');
+	view.selectPage('code');
+	view.navigateForward();
+	assert.equal(selectionId(view.activeSelection), 'session:session-2:thread-2');
+});
+
+test('background first send replaces only its originating page and preserves later selection', async () => {
+	using sessions = new FakeSessionService([]);
+	using view = new SessionsService(sessions);
+	await view.initialize();
+	const chatDraft = view.openNewSession('Chat draft');
+	view.selectPage('code');
+	const pending = view.activeSelection!;
+	if (pending.kind !== 'untitled') throw new Error('Expected draft');
+	const later = view.openNewSession('Later Code draft');
+	view.selectPage('chat');
+	const active = await sessions.materializeUntitledSession(pending.session.untitledSessionId);
+	sessions.promoteUntitledSession(pending.session.untitledSessionId, active);
+	assert.equal(selectionId(view.activeSelection), `untitled:${chatDraft.untitledSessionId}`);
+	assert.deepEqual(view.getPageSelection('code').visibleSelections.map(selectionId), ['session:materialized-1:materialized-thread-1', `untitled:${later.untitledSessionId}`]);
+	view.selectPage('code');
+	assert.equal(selectionId(view.activeSelection), `untitled:${later.untitledSessionId}`);
+	view.navigateBack();
+	assert.equal(selectionId(view.activeSelection), 'session:materialized-1:materialized-thread-1');
+});
+
+test('an asynchronous conversation open stays with the page that requested it', async () => {
+	const pending = new DeferredPromise<void>();
+	using sessions = new class extends FakeSessionService {
+		override async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
+			await pending.p;
+			await super.openThread(sessionId, threadId);
+		}
+	}([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
+	using view = new SessionsService(sessions);
+	await view.initialize();
+	view.selectPage('code');
+	const opening = view.openThread('session-2', 'thread-2');
+	view.selectPage('chat');
+	await pending.complete();
+	await opening;
+	assert.equal(selectionId(view.activeSelection), 'session:session-1:thread-1');
+	assert.equal(selectionId(view.getPageSelection('code').activeSelection), 'session:session-2:thread-2');
+});
+
+test('closing Code drafts and catalog selection do not change Chat selection', async () => {
+	using sessions = new FakeSessionService([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
+	using view = new SessionsService(sessions);
+	await view.initialize();
+	view.selectPage('code');
+	view.closeVisibleSelection(view.activeSelection!);
+	assert.equal(view.activeSelection?.kind, 'untitled');
+	sessions.selectThread('session-2', 'thread-2');
+	assert.equal(selectionId(view.getPageSelection('chat').activeSelection), 'session:session-1:thread-1');
+	assert.equal(view.activeSelection?.kind, 'untitled');
+	view.openSession('session-1', 'thread-1');
+	view.closeVisibleSelection(view.activeSelection!);
+	assert.equal(selectionId(view.getPageSelection('chat').activeSelection), 'session:session-1:thread-1');
+});
+
 class FakeSessionService implements ISessionsManagementService {
 	private readonly _onDidChange = new Emitter<void>();
 	private _sessions: readonly ISession[];
@@ -96,6 +191,7 @@ class FakeSessionService implements ISessionsManagementService {
 	private nextMaterializedId = 1;
 
 	readonly onDidChange = this._onDidChange.event;
+	readonly materializedSessions = observableValue<ReadonlyMap<string, { readonly sessionId: SessionId; readonly threadId: ThreadId }>>(this, new Map());
 	readonly state: SessionsManagementState = "ready";
 	readonly error = undefined;
 	startNewSessionCalls = 0;
@@ -154,6 +250,7 @@ class FakeSessionService implements ISessionsManagementService {
 		return { session: durable, threadId: durable.chats[0]!.threadId };
 	}
 	promoteUntitledSession(untitledSessionId: string, active: IActiveSessionThread): void {
+		this.materializedSessions.set(new Map([...this.materializedSessions.get(), [untitledSessionId, { sessionId: active.session.sessionId, threadId: active.threadId }]]));
 		this._untitledSessions = this._untitledSessions.filter(session => session.untitledSessionId !== untitledSessionId);
 		this._sessions = [active.session, ...this._sessions];
 		this._active = active;

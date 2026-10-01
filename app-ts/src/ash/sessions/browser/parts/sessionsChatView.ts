@@ -11,7 +11,7 @@ import type { IContextViewService } from "../../../platform/contextview/browser/
 import { ChatWidget } from "../../../workbench/contrib/chat/browser/widget/chatWidget.js";
 import { ChatWidgetModel } from '../chatWidgetModel.js';
 import type { ChatInputDelegate } from '../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
-import type { ChatInputPart } from '../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
+import type { IChatInputPart } from '../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import type { IChatService } from "../../../workbench/services/chat/common/chatService.js";
 import type { SessionId } from "../../services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
@@ -32,9 +32,10 @@ export interface SessionsChatViewOptions {
 	readonly accessibleViewService: IAccessibleViewService;
 	readonly notifications: INotificationService;
 	readonly commandService: ICommandService;
-	readonly createInputPart: (container: HTMLElement, delegate: ChatInputDelegate, model: ChatWidgetModel) => ChatInputPart;
+	readonly createInputPart: (container: HTMLElement, delegate: ChatInputDelegate, model: ChatWidgetModel) => IChatInputPart;
 	readonly activateSelection: (selection: SessionsViewSelection) => void;
 	readonly closeSelection: (selection: SessionsViewSelection) => void;
+	readonly createNewSession: () => void;
 }
 
 /** Owns the resizable grid of retained Chat panes in the Sessions Part. */
@@ -45,6 +46,7 @@ export class SessionsChatView extends Disposable {
 	private readonly entries = new Map<string, SessionsChatGridEntry>();
 	private activePane: ChatWidget<ChatWidgetModel> | undefined;
 	private dimension: IDimension | undefined;
+	private visible = true;
 
 	private readonly chatService: IChatService;
 	private readonly dictation: IDictationService | undefined;
@@ -57,6 +59,7 @@ export class SessionsChatView extends Disposable {
 	private readonly createInputPart: SessionsChatViewOptions['createInputPart'];
 	private readonly activateSelection: (selection: SessionsViewSelection) => void;
 	private readonly closeSelection: (selection: SessionsViewSelection) => void;
+	private readonly createNewSession: () => void;
 
 	constructor(container: HTMLElement, options: SessionsChatViewOptions) {
 		super();
@@ -72,6 +75,7 @@ export class SessionsChatView extends Disposable {
 		this.createInputPart = options.createInputPart;
 		this.activateSelection = options.activateSelection;
 		this.closeSelection = options.closeSelection;
+		this.createNewSession = options.createNewSession;
 		this.domNode = h(ownerDocument, "section");
 		this.domNode.className = "ash-sessions-chat-view";
 		container.append(this.domNode);
@@ -89,10 +93,15 @@ export class SessionsChatView extends Disposable {
 		this.activePane?.focus();
 	}
 
+	setVisible(visible: boolean): void {
+		this.visible = visible;
+		for (const entry of this.entries.values()) entry.pane.setVisible(visible);
+	}
+
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void {
 		if (!this.activePane) throw new Error(localize('sessions.handoff.noActiveChat', 'Agents Window has no active chat for the draft.'));
 		this.activePane.restoreDraft(draft);
-		this.activePane.focus();
+		if (this.visible) this.activePane.focus();
 	}
 
 	layout(dimension: IDimension): void {
@@ -129,9 +138,11 @@ export class SessionsChatView extends Disposable {
 					createInputPart: this.createInputPart,
 					activateSelection: this.activateSelection,
 					closeSelection: this.closeSelection,
+					createNewSession: this.createNewSession,
 				});
 				setDisposableOwner(entry, this);
 				this.entries.set(key, entry);
+				entry.pane.setVisible(this.visible);
 				this.grid.addView(entry, Sizing.Distribute, reference, Direction.Right);
 			}
 			entry.update(selection, sameSelection(selection, active));
@@ -238,7 +249,7 @@ class SessionsChatGridEntry extends Disposable implements IView {
 			this.element,
 			`ash-sessions-chat-pane-${sessionsChatPaneInstanceId}`,
 			model,
-			() => { options.sessionService.createUntitledSession(); },
+			options.createNewSession,
 			options.contextMenuService,
 			options.contextViewService,
 			options.commandService,

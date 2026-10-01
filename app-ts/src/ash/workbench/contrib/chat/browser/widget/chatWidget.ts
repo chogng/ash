@@ -8,7 +8,7 @@ import type { IContextViewService } from "../../../../../platform/contextview/br
 import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelRef, SessionId, ThreadGoal, ThreadId } from "../../../../services/chat/common/chatService.js";
 import type { ChatInputDelegate } from "./input/chatInput.js";
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
-import { ChatInputPart } from "./input/chatInputPart.js";
+import { ChatInputPart, type IChatInputPart } from "./input/chatInputPart.js";
 import type { ChatTurnErrorAction } from "./chatListItems.js";
 import { ChatListWidget } from "./chatListWidget.js";
 import type { ChatInputState } from "./input/chatInput.js";
@@ -56,7 +56,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	readonly element: HTMLElement;
 	readonly model: TModel;
 	private readonly listWidget: ChatListWidget;
-	private readonly inputPart: ChatInputPart;
+	private readonly inputPart: IChatInputPart;
 	private readonly goalElement: HTMLDivElement;
 	private submittedMessage = false;
 	private displayedThreadId: ThreadId | undefined;
@@ -75,7 +75,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		editorService?: IEditorService,
 		imageResourceLoader?: (resource: URI) => Promise<Blob>,
 		dictation?: IDictationService,
-		createInputPart?: (container: HTMLElement, delegate: ChatInputDelegate) => ChatInputPart,
+		createInputPart?: (container: HTMLElement, delegate: ChatInputDelegate) => IChatInputPart,
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;

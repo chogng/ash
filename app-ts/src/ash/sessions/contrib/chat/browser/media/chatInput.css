@@ -1,3 +1,13 @@
+.ash-chat > .ash-chat-input-part {
+  box-sizing: border-box;
+  min-height: 0;
+  flex: 0 0 auto;
+}
+
+.ash-sessions-chat-input[hidden] {
+  display: none;
+}
+
 /* Chat appearance. Keep visual changes here scoped to chat-composer. */
 .ash-chat > .ash-chat-input-part.ash-sessions-chat-input.chat-composer {
   --ash-chat-input-min-height: 112px;

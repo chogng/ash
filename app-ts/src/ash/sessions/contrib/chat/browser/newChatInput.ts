@@ -26,8 +26,7 @@ import { ILifecycleService } from '../../../../workbench/services/lifecycle/comm
 import { readNewChatDraftState, writeNewChatDraftState } from '../common/newChatDraftState.js';
 import { status as announceStatus } from '../../../../base/browser/ui/aria/aria.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
-import { autorun, type IObservable } from '../../../../base/common/observable.js';
-import type { SessionsComposerPresentation } from '../../../browser/parts/sessionsPart.js';
+import type { SessionsPage } from '../../../services/sessions/browser/sessionsService.js';
 
 /** Sessions owns its composer layout and editor policy while sharing input operations. */
 export class NewChatInputWidget extends ChatInputPart {
@@ -49,7 +48,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		private readonly model: IChatWidgetModel,
 		dictation: IDictationService | undefined,
 		initialDraft: IOpenAgentsWindowOptions['draft'],
-		presentation: IObservable<SessionsComposerPresentation>,
+		private readonly page: SessionsPage,
 		@IContextMenuService contextMenus: IContextMenuService,
 		@IContextViewService contextViews: IContextViewService,
 		@IAccessibleViewService accessibleViews: IAccessibleViewService,
@@ -90,13 +89,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		}]);
 		this.draftNotifications = notifications;
 		this.element.classList.add('ash-sessions-chat-input', 'floating-card');
-		// Chat and Code share input operations and the current draft, but each owns its appearance.
-		// Keep page-specific CSS under these variants; Workbench must remain unaware of Sessions pages.
-		this._register(autorun(reader => {
-			const page = presentation.read(reader);
-			this.element.classList.toggle('chat-composer', page === 'chat');
-			this.element.classList.toggle('code-composer', page === 'code');
-		}));
+		this.element.classList.add(`${page}-composer`);
 		this.contextAttachments = this._register(instantiationService.createInstance(NewChatContextAttachments, this.inputContainer, this.attachmentModel));
 		this._register(new NewChatInputPasteTarget(this.inputContainer, this.contextAttachments));
 		const dragAndDrop = this._register(new ChatDragAndDrop(files => this.contextAttachments.attachFiles(files)));
@@ -151,10 +144,10 @@ export class NewChatInputWidget extends ChatInputPart {
 		this.heading.textContent = localize('sessions.chat.welcome', 'What can we work on?');
 		this.element.prepend(this.heading);
 		this.displayedThreadId = model.threadId;
-		const storedDraft = model.threadId ? readNewChatDraftState(storage, model.threadId) : initialDraft;
+		const storedDraft = model.threadId ? readNewChatDraftState(storage, this.page, model.threadId) : initialDraft;
 		if (storedDraft) this.restoreDraft(storedDraft);
 		this._register(this.onDidChangeInput(() => {
-			if (!this.restoringDraft && this.draftVisible) {
+			if (!this.restoringDraft) {
 				this.saveDraft();
 			}
 		}));
@@ -171,15 +164,16 @@ export class NewChatInputWidget extends ChatInputPart {
 					this.restoringDraft = true;
 					this.input.value = '';
 					this.attachmentModel.clear();
-					const draft = readNewChatDraftState(storage, model.threadId);
+					const draft = readNewChatDraftState(storage, this.page, model.threadId);
 					if (draft) this.restoreDraft(draft);
 					this.restoringDraft = false;
 				} else {
 					// A successful materialization consumes the new-session identity and its persisted draft.
 					this.draftWriteRevisions.set(undefined, (this.draftWriteRevisions.get(undefined) ?? 0) + 1);
-					writeNewChatDraftState(storage, undefined);
+					writeNewChatDraftState(storage, this.page, undefined);
 				}
 				this.displayedThreadId = model.threadId;
+				this.saveDraft();
 			}
 			this.updateConversation();
 		}));
@@ -191,6 +185,7 @@ export class NewChatInputWidget extends ChatInputPart {
 	}
 
 	public override setVisible(visible: boolean): void {
+		this.element.hidden = !visible;
 		super.setVisible(visible);
 		const becameVisible = visible && !this.draftVisible;
 		this.draftVisible = visible;
@@ -214,15 +209,15 @@ export class NewChatInputWidget extends ChatInputPart {
 		const mode = this.model.inputState.mode;
 		const attachments = this.attachmentModel.attachments;
 		if (attachments.length === 0) {
-			writeNewChatDraftState(this.storage, { mode, text, contexts: [] }, threadId);
+			writeNewChatDraftState(this.storage, this.page, { mode, text, contexts: [] }, threadId);
 			return;
 		}
 		const contexts = await Promise.all(attachments.map(async attachment => ({
 			id: attachment.id, kind: attachment.kind, name: attachment.name,
 			content: (await attachment.resolve()).content,
 		})));
-		if (revision !== this.draftWriteRevisions.get(threadId) || (threadId === undefined && !this.draftVisible)) return;
-		writeNewChatDraftState(this.storage, { mode, text, contexts }, threadId);
+		if (revision !== this.draftWriteRevisions.get(threadId)) return;
+		writeNewChatDraftState(this.storage, this.page, { mode, text, contexts }, threadId);
 	}
 
 	private updateConversation(): void {

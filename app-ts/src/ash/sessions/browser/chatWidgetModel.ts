@@ -87,7 +87,7 @@ export class ChatWidgetModel extends Disposable {
 		this._register(toDisposable(() => {
 			this.generation++;
 			const active = this.activeSession;
-			if (active) void this.chatService.unsubscribeThread(active.session.sessionId, active.threadId);
+			if (active) void this.chatService.unsubscribeThread(active.session.sessionId, active.threadId, this);
 			this.transcriptEntries = [];
 			this.transcriptRevision = 0;
 		}));
@@ -265,7 +265,7 @@ export class ChatWidgetModel extends Disposable {
 			return;
 		}
 		if (previousThreadId !== active.threadId) {
-			void this.chatService.unsubscribeThread(current.session.sessionId, previousThreadId);
+			void this.chatService.unsubscribeThread(current.session.sessionId, previousThreadId, this);
 		}
 		await this.subscribe(active);
 	}
@@ -611,10 +611,10 @@ export class ChatWidgetModel extends Disposable {
 		this.changesGeneration++;
 		this.setState("loading");
 		if (oldThreadId && oldThreadId !== active.threadId) {
-			void this.chatService.unsubscribeThread(active.session.sessionId, oldThreadId);
+			void this.chatService.unsubscribeThread(active.session.sessionId, oldThreadId, this);
 		}
 		try {
-			const result = await this.chatService.subscribeThread(active.session.sessionId, active.threadId, 0);
+			const result = await this.chatService.subscribeThread(active.session.sessionId, active.threadId, 0, this);
 			if (this.isDisposed || generation !== this.generation) return;
 			this._thread = result.thread;
 			if (!this.selectedModes.has(active.threadId)) {

@@ -2,6 +2,7 @@ import { Emitter } from "../../../../base/common/event.js";
 import { isCancellationError } from "../../../../base/common/errors.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";
+import { observableValue } from "../../../../base/common/observable.js";
 import type { IActiveSessionThread, IUntitledChatSession, ISession, ModelRef, SessionId, SessionWorkspaceSelection, ThreadId } from "../common/session.js";
 import type { ISessionsManagementService, SessionsManagementState } from "../common/sessionsManagement.js";
 import type { ISessionsProvider } from "../common/sessionsProvider.js";
@@ -23,6 +24,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	private readonly hydrating = new Map<SessionId, Promise<void>>();
 
 	readonly onDidChange = this._onDidChange.event;
+	readonly materializedSessions = observableValue<ReadonlyMap<string, { readonly sessionId: SessionId; readonly threadId: ThreadId }>>(this, new Map());
 
 	constructor(private readonly provider: ISessionsProvider) {
 		super();
@@ -138,6 +140,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this._untitledSessions = this._untitledSessions.filter(session => session.untitledSessionId !== untitledSessionId);
 		if (wasActive) this._activeUntitledSessionId = undefined;
 		this._sessions = [active.session, ...this._sessions.filter(session => session.sessionId !== active.session.sessionId)];
+		this.materializedSessions.set(new Map([...this.materializedSessions.get(), [untitledSessionId, { sessionId: active.session.sessionId, threadId: active.threadId }]]));
 		if (wasActive || !this._active) this._active = active;
 		this.setState("ready");
 	}

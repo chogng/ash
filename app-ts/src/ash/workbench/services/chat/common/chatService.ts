@@ -428,8 +428,9 @@ export interface IChatService {
 	listSlashCommands(): Promise<readonly SlashCommandDefinition[]>;
 	listSkillSelectors(): Promise<readonly SkillSelectorDefinition[]>;
 	readThread(sessionId: SessionId, threadId: ThreadId): Promise<ThreadRead>;
-	subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number): Promise<ThreadSubscription>;
-	unsubscribeThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
+	/** The owner retains the subscription across refreshes/reconnects until explicitly released. */
+	subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number, owner: object): Promise<ThreadSubscription>;
+	unsubscribeThread(sessionId: SessionId, threadId: ThreadId, owner: object): Promise<void>;
 	startTurn(options: StartTurnOptions): Promise<void>;
 	queueTurn(options: StartTurnOptions): Promise<void>;
 	queuedMessageCount(sessionId: SessionId, threadId: ThreadId): Promise<number>;

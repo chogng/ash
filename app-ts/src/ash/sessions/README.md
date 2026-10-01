@@ -21,7 +21,7 @@ is canonical for the renderer implementation and extension points.
 | Layout | `browser/layoutPolicy.ts` | owns Sessions topology, geometry, Activity Bar position, sidebar and auxiliary visibility, and persisted sizes |
 | Appearance | `common/configuration.ts` and `contrib/modernUI/browser/` | own the independent Sessions layout, Activity Bar position, and size preferences |
 | Accounts and settings | `contrib/accounts/browser/` and `contrib/preferences/browser/` | the account icon opens a Sessions-owned menu with Settings and Return to Workbench; Settings opens a Sessions-owned page that reuses the Workbench setting widgets |
-| Window Sessions state | `services/sessions/browser/sessionsService.ts` | owns active/visible selections, focus, and Back/Forward history |
+| Window Sessions state | `services/sessions/browser/sessionsService.ts` | owns active/visible selections and Back/Forward history separately for Chat and Code |
 | Frontend Session model | `services/sessions/common/session.ts` | owns `ISession`, `IChat`, workspace summary, and untitled identity types |
 | Shared Chat contract | `workbench/services/chat/common/chatService.ts` | owns Thread and Turn operations plus shared Session/Thread IDs, model references, and approval modes used by both renderers |
 | Provider and management | `contrib/providers/appServer/browser/workbenchSessionsService.contribution.ts`, `services/sessions/common/sessionsManagement.ts`, and `services/sessions/browser/sessionsManagementService.ts` | the App Server provider adapts transport data; management owns catalog, drafts, and operations; the contribution registers and starts it in the regular Workbench |
@@ -42,16 +42,21 @@ service contracts. Workbench production code does not import Sessions modules;
 the Code and Academic mode entries load the Sessions contribution that registers
 their Session-backed Chat view and actions. The shared `ChatWidget` renders a
 model supplied by Sessions and does not create or select Sessions itself.
-The dedicated window supplies `NewChatInputWidget` through the shared widget's
-input factory. Sessions selects its embedded `CodeEditorWidget` adapter per
-composer; it does not change the Workbench editor registry. Its CSS styles only
-its own root and configures the shared input through component properties.
-Sessions-only input behavior and appearance stay in this contribution.
-`SessionsPart` owns the observable Chat/Code presentation choice. The composer
-projects it into mutually exclusive `chat-composer` and `code-composer` classes;
-each has its own appearance rules in `media/chatInput.css`. Page-specific visual
-changes must stay within their variant. Switching pages retains the same input,
-draft, attachments, conversation model, and Thread subscription.
+The dedicated window supplies one `NewChatInputWidget` per retained pane
+through the shared widget's input factory. Sessions owns its composer layout,
+file acquisition, and storage policy while reusing the embedded editor and
+shared Chat input operations.
+
+`ISessionsService` owns the Chat/Code page choice and each page's active
+selection, visible selections, and Back/Forward history. `SessionsPart`
+retains a separate `SessionsChatView` for each page. Each pane owns its own
+`ChatWidgetModel`, editor, unsent text, attachments, and pending submission.
+Page switching hides the previous view without transferring its state.
+Both pages share the durable Session catalog; explicitly opening the same
+Thread shares its history, while each page keeps an independent composer.
+The `chat-composer` and `code-composer` appearance rules remain independent.
+See [input and conversation state ownership](../../../docs/input-state-ownership.md)
+for the boundary with regular Workbench Chat and SCM.
 
 The shared `ChatAttachmentModel` owns each composer's attachment collection.
 Sessions file acquisition resolves UTF-8 text or supported image data before
@@ -61,8 +66,8 @@ model and is applied to a new Turn through the existing backend contract.
 Changing it does not change the approval mode of a running Turn.
 
 Unsent composer content is window/workspace UI state, separate from the Session
-catalog's untitled identities. The first new composer in a window claims the
-saved new-session draft; later new composers start empty. Once materialized,
+catalog's untitled identities. The first new composer on each page in a window
+claims that page's saved new-session draft; later new composers start empty. Once materialized,
 the new-session storage entry is removed. Thread changes save and restore the
 corresponding draft, and renderer shutdown joins pending attachment resolution
 before flushing storage.
@@ -89,7 +94,7 @@ before flushing storage.
    The Activity Bar selects Chat, Collaboration, Library, and Code; Collaboration and Library currently show empty pages.
    Mobile devices remains unavailable. Its right-click menu moves the
    controls to the sidebar top or bottom, hides them, or selects the side rail size through
-   `sessions.activityBar.compact`. The Sessions titlebar composes the shared BrowserMenubarControl with Sessions menu IDs and visual tokens. Layout actions derive menu context keys from the layout and window Sessions service; the titlebar keeps no separate sidebar or history state. Code hosts the retained conversation with a centered new-session composer; after the first message, the input stays below the conversation. The sidebar owns the new-session control.
+   `sessions.activityBar.compact`. The Sessions titlebar composes the shared BrowserMenubarControl with Sessions menu IDs and visual tokens. Layout actions derive menu context keys from the layout and window Sessions service; the titlebar keeps no separate sidebar or history state. Code hosts its own retained conversations with a centered new-session composer; after the first message, the input stays below the conversation. The sidebar owns the new-session control.
    Its spacing follows `sessions.layoutStyle`, independently of the IDE's
    `workbench.layoutStyle`. Both preferences use the same profile settings
    resource; changing either one updates its own window without changing
@@ -102,7 +107,7 @@ before flushing storage.
    and persistence, while the Sessions page owns their visible setting metadata;
    the regular Workbench Settings page lists only Workbench settings.
 5. The window Sessions service initializes the catalog. If none is
-   active, the Workbench opens a window-local untitled Session; it becomes
+   active, the Workbench opens a Chat-page untitled Session; Code opens its own draft on first use. Each draft becomes
    durable only when the first message is sent.
    After the model catalog loads, an untitled Chat uses `chat.defaultModel`
    when it names an available model, then the user's last manual model choice.
@@ -115,7 +120,7 @@ before flushing storage.
    back to the active selection; closing a leaf does not archive its durable
    Session, and draft materialization preserves the leaf in place.
    The product composition owns the single view-service subscription and
-   pushes `(visible, active)` into the passive `SessionsPart`.
+   pushes each page's `(visible, active)` into the passive `SessionsPart`.
 
 After `session/catalog/subscribe`, App Server sends `session/changed` and
 `session/deleted` to that connection as catalog invalidations. The provider
