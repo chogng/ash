@@ -7,6 +7,7 @@ bazel_dep(name = "rules_python", version = "1.9.2")
 bazel_dep(name = "apple_support", version = "2.1.0")
 bazel_dep(name = "llvm", version = "0.8.11")
 bazel_dep(name = "aws-lc", version = "5.1.0.bcr.1")
+bazel_dep(name = "xz", version = "5.4.5.bcr.8")
 
 archive_override(
     module_name = "rules_rs",
@@ -195,6 +196,15 @@ crate.annotation(
 )
 
 inject_repo(crate, "aws-lc")
+
+# Match rules_rs's lzma-sys integration: link the pinned Bazel library instead
+# of allowing the Cargo build script to discover the host's liblzma.
+crate.annotation(
+    crate = "lzma-sys",
+    gen_build_script = "off",
+    repositories = ["crates"],
+    deps = ["@xz//:lzma"],
+)
 
 # The V8 crate build script consumes checksum-pinned sandbox-enabled archives and bindings.
 # They are build inputs only: the resulting executables link V8 statically.

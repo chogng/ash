@@ -78,3 +78,32 @@ fn oversized_vp8_keyframe_is_rejected_before_decode() {
     header[8..10].copy_from_slice(&8192u16.to_le_bytes());
     assert!(VideoDecoder::new().decode(&header).is_none());
 }
+
+#[test]
+fn screen_stream_recovers_after_a_missed_first_keyframe() {
+    let mut encoder = VideoEncoder::new(15);
+    let mut decoder = VideoDecoder::new();
+    let mut recovered = 0;
+    for index in 0..33 {
+        let frame = screen_capture::CapturedFrame::Rgba {
+            data: vec![index; 320 * 240 * 4].into(),
+            width: 320,
+            height: 240,
+            stride: 320 * 4,
+            timestamp: Duration::from_millis(u64::from(index) * 1000 / 15),
+        };
+        let encoded = encoder.encode(&capture_planes(&frame).unwrap()).unwrap();
+        // A subscriber that missed the initial keyframe must recover when the
+        // encoder's 30-frame keyframe interval completes.
+        if index == 0 {
+            continue;
+        }
+        let decoded = decoder.decode(&encoded);
+        if index >= 30 {
+            let decoded = decoded.expect("periodic keyframe did not restore decoding");
+            assert_eq!((decoded.width, decoded.height), (320, 240));
+            recovered += 1;
+        }
+    }
+    assert_eq!(recovered, 3);
+}

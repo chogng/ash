@@ -9,15 +9,15 @@ expression: screen
             │                                                                         │
 ● Thought   │  Content: shell-command [call-sandbox]                                  │
             │           {                                                             │
-● Command fa│             "program": "/bin/sh",                                       │
-└─ shell-com│             "arguments": [                                              │
-   {        │               "-c",                                                     │
-     "progra│               "touch ../sandbox-must-not-write.txt 2>&- || { echo       │
+● Command fa│             "arguments": [                                              │
+└─ shell-com│               "-c",                                                     │
+   {        │               "touch ../sandbox-must-not-write.txt 2>&- || { echo       │
      "argume│  'sandbox fixture: operation not permitted' >&2; exit 1; }"             │
        "-c",│             ],                                                          │
-       "touc│             "working_directory": "."                                    │not
-permitted' >│           }                                                             │
-     ],     │           sandbox denied the action, but the attempt may have produced  │
+       "touc│             "program": "/bin/sh",                                       │not
+permitted' >│             "working_directory": "."                                    │
+     ],     │           }                                                             │
+     "progra│           sandbox denied the action, but the attempt may have produced  │
      "workin│  side effects, so the exact call was not retried; reason: the process   │
    }        │  reported an access restriction; output: sandbox fixture: operation not │
    sandbox d│  permitted                                                              │act call was

@@ -10,6 +10,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
+use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use webrtc::media_stream::track_remote::TrackRemote;
@@ -35,6 +36,7 @@ struct Events {
     signal: Arc<SignalClient>,
     target: proto::SignalTarget,
     events: mpsc::Sender<RtcEvent>,
+    publisher_state: watch::Sender<RTCPeerConnectionState>,
 }
 
 #[async_trait::async_trait]
@@ -58,6 +60,9 @@ impl PeerConnectionEventHandler for Events {
     }
 
     async fn on_connection_state_change(&self, state: RTCPeerConnectionState) {
+        if self.target == proto::SignalTarget::Publisher {
+            self.publisher_state.send_replace(state);
+        }
         let _ = self.events.send(RtcEvent::State(self.target, state)).await;
     }
 
@@ -70,6 +75,7 @@ pub(crate) struct RtcTransport {
     pub(crate) signal: Arc<SignalClient>,
     pub(crate) publisher: Arc<dyn PeerConnection>,
     pub(crate) subscriber: Arc<dyn PeerConnection>,
+    publisher_state: watch::Sender<RTCPeerConnectionState>,
     worker: JoinHandle<()>,
     mute: mpsc::Sender<proto::MuteTrackRequest>,
     mute_worker: JoinHandle<()>,
@@ -128,12 +134,14 @@ impl RtcTransport {
                 RtpCodecKind::Video,
             )
             .map_err(|_| MediaError::Connection)?;
+        let (publisher_state, _) = watch::channel(RTCPeerConnectionState::New);
         let publisher = match peer(
             signal.clone(),
             proto::SignalTarget::Publisher,
             events_tx.clone(),
             config.clone(),
             media.clone(),
+            publisher_state.clone(),
         )
         .await
         {
@@ -149,6 +157,7 @@ impl RtcTransport {
             events_tx.clone(),
             config,
             media,
+            publisher_state.clone(),
         )
         .await
         {
@@ -162,6 +171,7 @@ impl RtcTransport {
         let publisher_peer = publisher.clone();
         let subscriber_peer = subscriber.clone();
         let worker_signal = signal.clone();
+        let worker_state = publisher_state.clone();
         let worker = tokio::spawn(async move {
             while let Some(event) = signal_events.recv().await {
                 let result = match event {
@@ -185,6 +195,7 @@ impl RtcTransport {
                     break;
                 }
             }
+            worker_state.send_replace(RTCPeerConnectionState::Closed);
         });
         let (mute, mut requests) = mpsc::channel(64);
         let mute_signal = signal.clone();
@@ -200,6 +211,7 @@ impl RtcTransport {
                 signal,
                 publisher,
                 subscriber,
+                publisher_state,
                 worker,
                 mute,
                 mute_worker,
@@ -231,6 +243,10 @@ impl RtcTransport {
         Ok(())
     }
 
+    pub(crate) async fn wait_for_publisher(&self) -> Result<(), MediaError> {
+        wait_for_connection(self.publisher_state.subscribe()).await
+    }
+
     pub(crate) fn send_mute(&self, sid: &str, muted: bool) -> Result<(), MediaError> {
         self.mute
             .try_send(proto::MuteTrackRequest {
@@ -242,6 +258,8 @@ impl RtcTransport {
     }
 
     pub(crate) async fn close(&self) -> Result<(), MediaError> {
+        self.publisher_state
+            .send_replace(RTCPeerConnectionState::Closed);
         self.mute_worker.abort();
         // Signal an intentional departure so other participants are notified immediately.
         let _ = timeout(
@@ -275,6 +293,7 @@ async fn peer(
     events: mpsc::Sender<RtcEvent>,
     config: webrtc::peer_connection::RTCConfiguration,
     media: MediaEngine,
+    publisher_state: watch::Sender<RTCPeerConnectionState>,
 ) -> Result<Arc<dyn PeerConnection>, MediaError> {
     let peer: Arc<dyn PeerConnection> = Arc::new(
         PeerConnectionBuilder::new()
@@ -284,6 +303,7 @@ async fn peer(
                 signal,
                 target,
                 events,
+                publisher_state,
             }))
             .with_udp_addrs(vec!["0.0.0.0:0", "[::]:0"])
             .with_tcp_addrs(vec!["0.0.0.0:0", "[::]:0"])
@@ -407,3 +427,31 @@ fn embedded_candidates(
     }
     Ok(candidates)
 }
+
+// RTP writes only enqueue packets; the transport drops them before DTLS has
+// installed SRTP. Preserve the first video keyframe until that handshake ends.
+async fn wait_for_connection(
+    mut state: watch::Receiver<RTCPeerConnectionState>,
+) -> Result<(), MediaError> {
+    let state = state
+        .wait_for(|state| {
+            matches!(
+                state,
+                RTCPeerConnectionState::Connected
+                    | RTCPeerConnectionState::Failed
+                    | RTCPeerConnectionState::Closed
+                    | RTCPeerConnectionState::Disconnected
+            )
+        })
+        .await
+        .map_err(|_| MediaError::Connection)?;
+    if *state == RTCPeerConnectionState::Connected {
+        Ok(())
+    } else {
+        Err(MediaError::Connection)
+    }
+}
+
+#[cfg(test)]
+#[path = "rtc_tests.rs"]
+mod tests;

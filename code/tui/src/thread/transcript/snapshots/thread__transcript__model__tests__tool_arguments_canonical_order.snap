@@ -1,0 +1,21 @@
+---
+source: code/tui/src/thread/transcript/model_tests.rs
+expression: "&details[0]"
+---
+write_file [ordered]
+{
+  "arguments": [
+    "z",
+    "a",
+    {
+      "a": 1,
+      "z": 2
+    }
+  ],
+  "content": "keep\nthis",
+  "options": {
+    "a": null,
+    "z": false
+  },
+  "path": "example.txt"
+}

@@ -5112,8 +5112,9 @@ test('color picker retains one widget, applies one undoable edit and releases it
 });
 
 test('hover options control requests, delay and keyboard modifiers', async ({ page }) => {
-	await page.clock.install();
+	await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
 	await page.goto('/standalone.html');
+	await page.clock.pauseAt(new Date('2026-01-01T00:01:00Z'));
 	await page.evaluate(() => {
 		window.ashStandaloneIntegration.updateContributionOptions({ hover: { enabled: 'off', delay: 900 } });
 		window.ashStandaloneIntegration.prepareLanguageRequest('hover');

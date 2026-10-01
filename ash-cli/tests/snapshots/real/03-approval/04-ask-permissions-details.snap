@@ -9,8 +9,8 @@ expression: screen
 ● Updated file
 └─ write_file [call-approve]
    {
-     "path": "approved-by-tui.txt",
-     "content": "approved through the real TUI\n"
+     "content": "approved through the real TUI\n",
+     "path": "approved-by-tui.txt"
    }
    wrote approved-by-tui.txt
    view full

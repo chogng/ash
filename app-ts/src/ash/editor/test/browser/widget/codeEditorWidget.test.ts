@@ -488,11 +488,11 @@ test('common editor reveal modes scroll without changing selection or borrowing 
 		assert.equal(editor.getScrollTop(), expectedTop);
 		assert.deepEqual(control.getSelection(), selection);
 	}
-	editor.setScrollTop(330);
+	editor.setScrollTop(330.5);
 	control.revealRangeInCenterIfOutsideViewport(range, ScrollType.Immediate);
-	assert.equal(editor.getScrollTop(), 330);
+	assert.equal(editor.getScrollTop(), 330.5);
 	control.revealRangeNearTopIfOutsideViewport(range, ScrollType.Immediate);
-	assert.equal(editor.getScrollTop(), 330);
+	assert.equal(editor.getScrollTop(), 330.5);
 	control.setModel(null);
 	for (const [reveal] of cases) reveal();
 	assert.deepEqual([control.getModel(), control.getSelection(), model.isDisposed()], [null, null, false]);

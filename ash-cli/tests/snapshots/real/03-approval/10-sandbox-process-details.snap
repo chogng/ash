@@ -12,12 +12,12 @@ expression: screen
 ● Command failed
 └─ shell-command [call-sandbox]
    {
-     "program": "/bin/sh",
      "arguments": [
        "-c",
        "touch ../sandbox-must-not-write.txt 2>&- || { echo 'sandbox fixture: operation not
 permitted' >&2; exit 1; }"
      ],
+     "program": "/bin/sh",
      "working_directory": "."
    }
    sandbox denied the action, but the attempt may have produced side effects, so the exact call was

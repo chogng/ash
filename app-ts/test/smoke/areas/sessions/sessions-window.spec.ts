@@ -1257,7 +1257,8 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 		await expect(spacer).toBeVisible();
 	}
 	await expect(sessionsPage.locator("[data-part='activitybar']")).toBeVisible();
-	const activityButtons = sessionsPage.locator("[data-part='activitybar'] button");
+	const activityBar = sessionsPage.locator("[data-part='activitybar']");
+	const activityButtons = activityBar.getByRole('button');
 	expect(await activityButtons.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['chat-2-filled', 'colab', 'library', 'code', 'device-mobile', 'account']);
 	await expect(sessionsPage.locator('.ash-sessions-activity-bottom button')).toHaveCount(2);
 	const chatButton = activityButtons.first();
@@ -1269,12 +1270,14 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	expect(chatButtonBounds!.height).toBe(36);
 	expect(Math.abs(chatIconBounds!.x + chatIconBounds!.width / 2 - (chatButtonBounds!.x + chatButtonBounds!.width / 2))).toBeLessThanOrEqual(1);
 	expect(Math.abs(chatIconBounds!.y + chatIconBounds!.height / 2 - (chatButtonBounds!.y + chatButtonBounds!.height / 2))).toBeLessThanOrEqual(1);
-	await expect(activityButtons.nth(1)).toBeEnabled();
-	await expect(activityButtons.nth(2)).toBeEnabled();
-	await expect(activityButtons.nth(3)).toBeDisabled();
+	for (const name of ['Collaboration', 'Library', 'Code']) {
+		await expect(activityBar.getByRole('button', { name, exact: true })).toBeEnabled();
+	}
+	await expect(activityBar.getByRole('button', { name: 'Mobile devices (coming soon)', exact: true })).toBeDisabled();
 	if (target.appServerMode === 'required') {
-		await activityButtons.nth(4).click();
-		await expect(activityButtons.nth(4)).toHaveAttribute('aria-expanded', 'true');
+		const accountsButton = activityBar.getByRole('button', { name: 'Accounts', exact: true });
+		await accountsButton.click();
+		await expect(accountsButton).toHaveAttribute('aria-expanded', 'true');
 		if (process.platform !== 'darwin') {
 			await expect(sessionsPage.getByRole('menuitem', { name: 'Settings' })).toBeVisible();
 			await expect(sessionsPage.getByRole('menuitem', { name: 'Return to Workbench' })).toBeVisible();

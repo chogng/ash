@@ -519,7 +519,11 @@ impl MediaRoom {
         let track = publication.track.clone();
         let ssrc = publication.ssrc;
         let payload_type = publication.payload_type;
+        let rtc = self.rtc.clone();
         let worker = tokio::spawn(async move {
+            timeout(DEADLINE, rtc.wait_for_publisher())
+                .await
+                .map_err(|_| MediaError::Timeout)??;
             let mut encoder = codec::VideoEncoder::new(fps);
             while let Some(frame) = rx.recv().await {
                 let encoded = encoder.encode(&frame)?;
