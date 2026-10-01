@@ -210,6 +210,7 @@ test('settingsLayout is the single projection from registered settings to catego
 
 	assert.deepEqual(SettingsCategories.map(category => category.id), [
 		'general',
+		'dictation',
 		'appearance',
 		'layout',
 		'startup',
@@ -229,8 +230,8 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, LocalizationConfiguration.locale), 'general');
 	assert.equal(findSettingCategory(layout, HoverConfiguration.delay), 'general');
 	assert.equal(findSettingCategory(layout, SashConfiguration.size), 'general');
-	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'models');
-	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'models');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'dictation');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'dictation');
 	assert.equal(findSettingCategory(layout, 'chat.defaultModel'), 'models');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.colorTheme), 'appearance');
 	assert.equal(findSettingCategory(layout, 'workbench.tips.enabled'), 'appearance');
@@ -263,9 +264,9 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.renderControlCharacters), 'editor');
 	assert.equal(findSettingCategory(layout, ContentSearchConfiguration.maxResults), 'editor');
 	assert.equal(findSettingCategory(layout, ScmConfiguration.diffDecorationsIgnoreTrimWhitespace), 'general');
-	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'models');
-	assert.equal(findSettingCategory(layout, DictationConfiguration.cloudProvider), 'models');
-	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'models');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'dictation');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.cloudProvider), 'dictation');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'dictation');
 	assert.equal(defaults.all.some(setting => setting.id === GitConfiguration.autofetch), false);
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetch)?.defaultValue, false);
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetchPeriod)?.defaultValue, 180);
@@ -606,7 +607,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector('.ash-modal-editor')?.getAttribute('role'), 'dialog');
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'editor'],
+		['general', 'dictation', 'editor'],
 	);
 	const workbenchGroup = root.querySelector<HTMLElement>('[data-settings-group-id="workbench"]');
 	assert.ok(workbenchGroup);
@@ -614,7 +615,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	workbenchGroup.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'appearance', 'layout', 'startup', 'editor'],
+		['general', 'dictation', 'appearance', 'layout', 'startup', 'editor'],
 	);
 	assert.equal(root.querySelector('[data-settings-category-id="appearance"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
 	assert.equal(root.querySelector('[data-settings-category-id="layout"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
@@ -790,11 +791,14 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(host.hidden, true);
 	assert.match(prompts[0] ?? '', /\/profile\/config.toml.*namespace \(user\)/);
 	await preferences.openSettings();
+	root.querySelector<HTMLElement>('[data-settings-category-id="dictation"]')?.click();
+	assert.equal(root.querySelector('[data-configuration-key="dictation.localModel"]'), null);
+	assert.ok(root.querySelector('[role="grid"][aria-label="Local dictation models"]'));
 	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')?.click();
 	root.querySelector<HTMLElement>('[data-settings-category-id="models"]')?.click();
 	await nextTurn();
 	assert.equal(root.querySelector('[data-settings-container]')?.getAttribute('data-active-settings-category'), 'models');
-	assert.ok(root.querySelector('[data-configuration-key="dictation.localModel"]'));
+	assert.equal(root.querySelector('[data-configuration-key="dictation.localModel"]'), null);
 	const modelSwitch = root.querySelector<HTMLInputElement>('.ash-models-settings-model-row input[role="switch"]');
 	assert.ok(modelSwitch);
 	assert.equal(modelSwitch.getAttribute('aria-label'), 'Show GPT Test in model picker');
@@ -897,7 +901,7 @@ async function nextTurn(): Promise<void> {
 	await new Promise<void>(resolve => setTimeout(resolve, 0));
 }
 
-test('Local model controls translate progress, import the selected package and cancel on close', async () => {
+test('Local model controls share translated snapshots and keep preparation running when hidden', async () => {
 	using resources = new DisposableStore();
 	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
@@ -906,16 +910,21 @@ test('Local model controls translate progress, import the selected package and c
 	await configuration.updateValue(DictationConfiguration.localModel, 'imported-model');
 	const services = resources.add(new InstantiationService());
 	services.registerInstance(ConfigurationServiceId, configuration);
-	let progress!: (status: ILocalTranscriptionModelStatus) => void;
+	const changed = resources.add(new Emitter<void>());
+	let modelStatus: ILocalTranscriptionModelStatus | undefined;
+	const progress = (status: ILocalTranscriptionModelStatus): void => { modelStatus = status; changed.fire(); };
 	let finish!: (state: ModelState.Cancelled) => void;
 	let cancellations = 0;
 	const imported: unknown[] = [];
 	services.registerInstance(ILocalTranscriptionService, {
 		isSupported: true,
-		getModelStatus: async (model: string) => ({ model, available: false }),
+		getModelStatus: async (model: string) => ({ model, available: false, sizeBytes: 0, status: modelStatus }),
+		listModels: async () => [],
+		onDidChangeModels: changed.event,
+		cancelModel: async () => { cancellations++; progress({ state: LocalTranscriptionModelState.Cancelled }); finish(LocalTranscriptionModelState.Cancelled); },
 		importModel: (options: unknown, onProgress: typeof progress) => {
 			imported.push(options);
-			progress = onProgress;
+			progress({ state: LocalTranscriptionModelState.Checking });
 			return {
 				completed: new Promise<ModelState.Cancelled>(resolve => { finish = resolve; }),
 				cancel: async () => { cancellations++; progress({ state: LocalTranscriptionModelState.Cancelled }); finish(LocalTranscriptionModelState.Cancelled); },
@@ -941,11 +950,18 @@ test('Local model controls translate progress, import the selected package and c
 	assert.deepEqual(imported, [{ model: 'imported-model', sourcePath: 'C:\\prepared-model' }]);
 	assert.equal(importButton.disabled, true);
 	progress({ state: LocalTranscriptionModelState.Downloading, file: 'encoder.onnx', downloadedBytes: 2 * 1024 * 1024 });
+	await nextTurn();
 	assert.equal(status.textContent, '正在下载 encoder.onnx：2.0 MiB');
 	assert.equal(status.getAttribute('aria-atomic'), 'true');
 	controls.setVisible(false);
 	await nextTurn();
+	assert.equal(cancellations, 0);
+	controls.setVisible(true);
+	await nextTurn();
+	assert.equal(root.querySelector<HTMLProgressElement>('progress')?.hasAttribute('value'), false);
+	buttons.find(button => button.textContent === '取消')!.click();
+	await nextTurn();
 	assert.equal(cancellations, 1);
 	assert.equal(importButton.disabled, false);
-	assert.equal(buttons.find(button => button.textContent === '取消')?.disabled, true);
+	assert.equal(buttons.find(button => button.textContent === '取消')?.classList.contains('hidden'), true);
 });

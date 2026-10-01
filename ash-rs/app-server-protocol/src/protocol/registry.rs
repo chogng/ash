@@ -455,6 +455,9 @@ use crate::protocol::dictation::DictationBackend;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::dictation::DictationCloudProvider;
 use crate::protocol::dictation::DictationEnded;
+use crate::protocol::dictation::DictationModelChanged;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::dictation::DictationModelList;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::dictation::DictationModelOperation;
 #[cfg(any(test, feature = "export"))]
@@ -1252,8 +1255,9 @@ use crate::protocol::provider::ProviderApiKeyDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::provider::ProviderApiKeyPolicyDto;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::provider::ProviderApiKeySetParams;
+use crate::protocol::provider::ProviderApiKeyRemoveParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::provider::ProviderApiKeySetParams;
 use crate::protocol::provider::ProviderApiKeySetResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::provider::ProviderCatalogEntryDto;
@@ -3011,6 +3015,11 @@ client_methods! {
         response: ProviderApiKeySetResult,
         serialization: GlobalExclusive,
     },
+    ProviderApiKeyRemove => "provider/apiKey/remove" {
+        params: ProviderApiKeyRemoveParams,
+        response: ProviderApiKeySetResult,
+        serialization: GlobalExclusive,
+    },
     AccountRead => "account/read" {
         params: EmptyParams,
         response: AccountReadResult,
@@ -3280,6 +3289,21 @@ client_methods! {
         params: DictationModelParams,
         response: DictationModelStatus,
         serialization: GlobalSharedRead,
+    },
+    DictationModelList => "dictation/model/list" {
+        params: (),
+        response: DictationModelList,
+        serialization: GlobalSharedRead,
+    },
+    DictationModelCancel => "dictation/model/cancel" {
+        params: DictationModelParams,
+        response: (),
+        serialization: GlobalExclusive,
+    },
+    DictationModelDelete => "dictation/model/delete" {
+        params: DictationModelParams,
+        response: (),
+        serialization: GlobalExclusive,
     },
     DictationModelStart => "dictation/model/start" {
         params: DictationModelStartParams,
@@ -4054,6 +4078,9 @@ server_notifications! {
     AccountUpdated => "account/updated" {
         params: AccountUpdated,
     },
+    ProviderApiKeyChanged => "provider/apiKey/changed" {
+        params: ProviderApiKeySetResult,
+    },
     ProviderModelsUpdated => "provider/models/updated" {
         params: ProviderModelsUpdated,
     },
@@ -4070,6 +4097,7 @@ server_notifications! {
     DictationTranscript => "dictation/transcript" { params: DictationTranscript, },
     DictationEnded => "dictation/ended" { params: DictationEnded, },
     DictationModelProgress => "dictation/model/progress" { params: DictationModelProgress, },
+    DictationModelChanged => "dictation/model/changed" { params: DictationModelChanged, },
     DocumentCollaborationUpdate => "document/collaboration/update" {
         params: DocumentCollaborationUpdate,
     },
@@ -4336,6 +4364,8 @@ typescript_bindings! {
     DictationModelStartParams,
     DictationModelStage,
     DictationModelProgress,
+    DictationModelChanged,
+    DictationModelList,
     CallScreenSource,
     CallScreenSources,
     CallScreenFrame,
@@ -4636,6 +4666,7 @@ typescript_bindings! {
     ProviderApiKeyDto,
     ProviderApiKeyPolicyDto,
     ProviderApiKeySetParams,
+    ProviderApiKeyRemoveParams,
     ProviderApiKeySetResult,
     ProviderProbeParams,
     ProviderProbeResult,

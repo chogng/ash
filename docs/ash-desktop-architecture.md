@@ -629,7 +629,30 @@ Renderer 与 Stanza 共用 `build/app_ts/vite/rendererOutput.ts` 的分包规则
 顺序改变。构建对超过 500 kB 的 JavaScript chunk 直接报错；`build-metrics.json` 另外记录
 每个入口的静态 JavaScript 总量。分包不等于减少总下载量，worker 资源不计入此 chunk 限额。
 
-### 6.6 集成终端
+### 6.6 听写设置与模型准备
+
+Workbench 的“常规 → 听写”和 Sessions 的“常规”页使用同一套听写内容，各自的设置
+外壳拥有导航、搜索和布局。`workbench/contrib/chat/browser/speechToText` 拥有听写设置、
+录音状态和目标编辑器的听写会话；`platform/dictation` 只负责麦克风与后端通信。
+最终识别文字通过编辑器编辑操作插入当前选区，临时识别文字不进入编辑器模型。
+`workbench/contrib/localTranscription` 拥有本地模型安装、导入、选择、卸载及进度控件。
+模型表使用 `base/browser/ui/table` 的列布局、行渲染、焦点、选中及键盘交互；基础表格不识别模型业务。
+表格保留未安装模型，安装完成后提供使用与卸载操作。云端听写页只显示服务商、连接状态和
+管理 API 连接入口，凭据表单仍由 Models 设置负责。当前听写接入 API，聊天订阅不授予听写权限。
+云端识别使用 `dictation.cloudProvider` 指定的服务与固定语音模型，凭据与聊天共用后端密钥存储。
+移除密钥时，界面说明对聊天和语音输入的共同影响。
+
+模型准备任务属于共享 Rust 进程。`dictation/model/read` 和 `dictation/model/list` 返回已安装
+状态、包大小和当前阶段；`dictation/model/changed` 通知所有产品窗口重新读取快照。
+关闭设置、隐藏 Chat 或关闭发起窗口只解除前端监听；`dictation/model/cancel` 才停止对应模型
+的任务。Rust 拒绝同一模型的重复准备，并在停止工作线程、清理临时文件后确认取消。
+删除只移除 Ash 管理的包文件，保留导入源目录；准备中或语音使用中拒绝删除。
+
+Chat 输入区复用相同进度呈现，缺少本地模型时提供下载和听写设置入口，准备期间仍可输入
+和发送文字。麦克风按钮先检查模型是否就绪。下载仅有已传输字节时显示文件名、MiB 和不定进度条，
+不推算百分比。浏览器及未连接后端的宿主明确禁用本地模型操作。
+
+### 6.7 集成终端
 
 Terminal contribution 只依赖 Workbench service layer 的 `ITerminalService`。实例管理、输入
 batching、resize coalescing 和 polling 由 `TerminalService` 负责；process contract 位于

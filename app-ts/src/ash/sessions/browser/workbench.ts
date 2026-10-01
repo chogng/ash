@@ -359,7 +359,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(IQuickInputService, quickInputService);
 		services.registerInstance(IQuickAccessController, this._register(services.createInstance(QuickAccessController)));
 		services.registerInstance(IChatContextPickService, new ChatContextPickService());
-		services.registerSingleton(IPreferencesService, () => services.createInstance(PreferencesService));
 		const contextMenus = this._register(options.createContextMenuService({
 			configurationService,
 			menuService: menus,
@@ -487,6 +486,12 @@ export class Workbench extends Disposable {
 		services.registerInstance(IEditorPart, editor);
 		const editors = this._register(new BrowserEditorService(editor));
 		services.registerInstance(IEditorService, editors);
+		const workbenchPreferences = this._register(services.createInstance(PreferencesService));
+		services.registerInstance(IPreferencesService, {
+			openSettings: category => preferences.open(category),
+			openUserSettings: options => workbenchPreferences.openUserSettings(options),
+			openKeybindings: () => workbenchPreferences.openKeybindings(),
+		});
 		services.registerInstance(IEditorGroupsService, editors);
 		this._register(services.createInstance(TextFileEditorTracker, ownerWindow));
 		const viewDescriptors = this._register(new ViewDescriptorService({ contextKeyService: contextKeys, registry: SessionsViewRegistry }));

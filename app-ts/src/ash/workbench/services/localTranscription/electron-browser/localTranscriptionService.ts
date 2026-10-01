@@ -62,7 +62,11 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 		}));
 	}
 
-	public getModelStatus(model: string): Promise<{ readonly model: string; readonly available: boolean }> {
+	public get onDidChangeModels() { return this.backend.onDidChangeModels; }
+	public listModels() { this.assertNotDisposed(); return this.backend.listModels(); }
+	public cancelModel(model: string) { this.assertNotDisposed(); return this.backend.cancelModel(model); }
+	public deleteModel(model: string) { this.assertNotDisposed(); return this.backend.deleteModel(model); }
+	public getModelStatus(model: string) {
 		this.assertNotDisposed();
 		return this.backend.getModelStatus(model);
 	}
@@ -200,7 +204,7 @@ class ModelOperation extends Disposable implements ILocalTranscriptionModelOpera
 	}
 
 	protected override disposeCore(): void {
-		void this.cancel();
+		if (!this.completion.isSettled) { void this.completion.error(new Error(localize('dictation.connectionLost', 'Dictation connection lost'))); }
 		super.disposeCore();
 	}
 }

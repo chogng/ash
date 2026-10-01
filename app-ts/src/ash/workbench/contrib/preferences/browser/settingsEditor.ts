@@ -31,6 +31,7 @@ import { DefaultSettings, SettingsEditorModel } from '../../../services/preferen
 import { SettingsRenderer } from './settingsRenderers.js';
 import { HooksSettingsContent } from '../../hooks/browser/hooksSettingsContent.js';
 import { ModelSettingsContent } from '../../chat/browser/modelSettingsContent.js';
+import { DictationSettingsContent } from '../../chat/browser/speechToText/dictationSettingsContent.js';
 import { AgentCapabilitiesSettings } from './agentCapabilitiesSettings.js';
 import { SettingsSearchQuery } from './settingsSearch.js';
 import { SettingsSearchWidget } from './settingsWidgets.js';
@@ -196,6 +197,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		this.activeCategory = initialCategory;
 		this.contents.push(
 			this._register(this.instantiationService.createInstance(ModelSettingsContent, settingsContent)),
+			this._register(this.instantiationService.createInstance(DictationSettingsContent, settingsContent)),
 			this._register(this.instantiationService.createInstance(HooksSettingsContent, settingsContent)),
 		);
 		this.rebuildContent();
@@ -287,9 +289,13 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 
 	private rebuildContent(): void {
 		const query = new SettingsSearchQuery(this.searchWidget?.value ?? '');
+		const ownedSettings = new Set(this.contents.flatMap(content => content.settingIds ?? []));
 		const nodes: readonly SettingsTreeNode<ISetting | SettingsContentItem>[] = settingsRootNodes(createSettingsLayout(this.settingsModel.settings)).map(root => ({
 			...root,
-			children: [...root.children ?? [], ...this.contents.filter(content => content.categoryId === root.element.id).flatMap(content => content.getNodes(query))],
+			children: [
+				...(root.children ?? []).map(group => ({ ...group, children: group.children?.filter(item => !ownedSettings.has(item.element.id)) })).filter(group => (group.children?.length ?? 0) > 0),
+				...this.contents.filter(content => content.categoryId === root.element.id).flatMap(content => content.getNodes(query)),
+			],
 		}));
 		this.treeModel.setChildren(nodes);
 		this.contentEmpty.textContent = this.localized('chrome.noResults', 'No settings found.');

@@ -19,19 +19,18 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
-import { DictationConfiguration } from '../../../../platform/dictation/common/dictationConfiguration.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ActivityBarPosition } from '../../../../workbench/common/configuration.js';
 import '../../../../workbench/contrib/preferences/common/settingsEditorColorRegistry.js';
 import { SettingsRenderer } from '../../../../workbench/contrib/preferences/browser/settingsRenderers.js';
 import { ModelSettingsContent } from '../../../../workbench/contrib/chat/browser/modelSettingsContent.js';
+import { DictationSettingsContent } from '../../../../workbench/contrib/chat/browser/speechToText/dictationSettingsContent.js';
 import { SettingsTree } from '../../../../workbench/contrib/preferences/browser/settingsTree.js';
 import { SettingsTreeModel, type SettingsContent, type SettingsContentItem, type SettingsTreeNode } from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
 import { SettingsSearchQuery } from '../../../../workbench/contrib/preferences/browser/settingsSearch.js';
 import type { SettingWidgetOptions } from '../../../../workbench/contrib/preferences/browser/settingsWidgets.js';
 import type { ISetting } from '../../../../workbench/services/preferences/common/preferences.js';
-import { DefaultSettings } from '../../../../workbench/services/preferences/common/settingsModels.js';
 import { SessionsConfiguration } from '../../../common/configuration.js';
 import { DesignConfiguration } from '../../design/common/designConfiguration.js';
 
@@ -66,6 +65,7 @@ interface SettingsSection {
 export class SessionsPreferences extends Disposable {
 	private readonly activeDialog = this._register(new MutableDisposable<DisposableStore>());
 	private dialog: Dialog | undefined;
+	private navigate: ((categoryId: string) => void) | undefined;
 
 	constructor(
 		private readonly container: HTMLElement,
@@ -87,7 +87,7 @@ export class SessionsPreferences extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsSettings,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. Models contains chat models, voice input settings, and API connections. Use the Settings search to filter settings, models, and API connections. Voice input lets you prepare or import a local model; Cancel stops preparation, and closing Settings cancels it. Use Tab and Shift+Tab to move between controls, arrow keys to choose menu values, and Space to toggle switches. Press Escape to close Settings.'),
+					() => localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. General contains dictation settings; Models contains chat models and API connections. Design contains canvas cursor and accessibility settings. Use search to filter settings. The local dictation table lists available and installed models. Use arrow keys to move between rows and cells, and Tab to reach Install, Use model, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation uses the API connections in Models. Press Escape to close Settings.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsSettings,
 				);
@@ -95,8 +95,9 @@ export class SessionsPreferences extends Disposable {
 		}));
 	}
 
-	public async open(): Promise<void> {
+	public async open(categoryId?: string): Promise<void> {
 		if (this.dialog?.element.open) {
+			if (categoryId) { this.navigate?.(categoryId); }
 			this.dialog.element.focus();
 			return;
 		}
@@ -180,9 +181,11 @@ export class SessionsPreferences extends Disposable {
 		};
 		const renderer = resources.add(new SettingsRenderer(list, settingOptions));
 		const modelContent = resources.add(this.instantiationService.createInstance(ModelSettingsContent, list));
-		const sections = this.sections(modelContent);
+		const dictationContent = resources.add(this.instantiationService.createInstance(DictationSettingsContent, list));
+		const sections = this.sections(modelContent, dictationContent);
 		const categories = sections.flatMap(section => section.categories);
-		let activeCategory = 0;
+		let activeCategory = categoryId === 'dictation' ? categories.findIndex(category => category.content === dictationContent)
+			: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent) : 0;
 		const treeModel = resources.add(new SettingsTreeModel<ISetting | SettingsContentItem>());
 		const tree = resources.add(new SettingsTree(list, {
 			model: treeModel,
@@ -251,6 +254,11 @@ export class SessionsPreferences extends Disposable {
 		for (const category of categories) {
 			if (category.content) resources.add(category.content.onDidChange(render));
 		}
+		this.navigate = categoryId => {
+			activeCategory = categoryId === 'models' ? categories.findIndex(category => category.content === modelContent) : categories.findIndex(category => category.content === dictationContent);
+			searchInput.value = '';
+			render();
+		};
 		resources.add(searchInput.onDidChange(() => {
 			render();
 			pageScrollable.scrollTo(0, 0);
@@ -266,12 +274,13 @@ export class SessionsPreferences extends Disposable {
 		try {
 			await dialog.show();
 		} finally {
+			this.navigate = undefined;
 			this.dialog = undefined;
 			this.activeDialog.clear();
 		}
 	}
 
-	private sections(modelContent: SettingsContent): readonly SettingsSection[] {
+	private sections(modelContent: SettingsContent, dictationContent: SettingsContent): readonly SettingsSection[] {
 		const appearanceSettings: readonly ISetting[] = [{
 			id: SessionsConfiguration.layoutStyle,
 			valueType: 'select',
@@ -315,12 +324,6 @@ export class SessionsPreferences extends Disposable {
 			title: localize('sessions.settings.verbosityTitle', 'Settings accessibility help'),
 			description: localize('sessions.settings.verbosityDescription', 'Announce how to open accessibility help when this page has focus.'),
 		}];
-		const registeredSettings = new DefaultSettings();
-		const voiceSettings = [
-			registeredSettings.get(DictationConfiguration.backend),
-			registeredSettings.get(DictationConfiguration.cloudProvider),
-			registeredSettings.get(DictationConfiguration.localModel),
-		];
 		const designSettings: readonly ISetting[] = [{
 			id: DesignConfiguration.usePointerCursor,
 			valueType: 'boolean',
@@ -337,10 +340,9 @@ export class SessionsPreferences extends Disposable {
 		return [{
 			title: localize('sessions.settings.section.basics', 'Basics'),
 			categories: [
-				{ title: localize('sessions.settings.general', 'General'), icon: Lxicon.settings, settings: generalSettings },
+				{ title: localize('sessions.settings.general', 'General'), icon: Lxicon.settings, settings: generalSettings, content: dictationContent },
 				{ title: localize('sessions.settings.account', 'Account'), icon: Lxicon.account, settings: [] },
 				{ title: localize('sessions.settings.appearance', 'Appearance'), icon: Lxicon.appearance, settings: appearanceSettings },
-				{ title: localize('sessions.settings.voice', 'Voice'), icon: Lxicon.mic, settings: voiceSettings },
 				{ title: localize('sessions.settings.personalization', 'Personalization'), icon: Lxicon.briefcase, settings: [] },
 			],
 		}, {

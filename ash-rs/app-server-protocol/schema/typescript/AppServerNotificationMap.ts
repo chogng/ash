@@ -6,6 +6,7 @@ import type { CallStatus } from './types/CallStatus.js';
 import type { ConfigChanged } from './types/ConfigChanged.js';
 import type { ConnectorsChanged } from './types/ConnectorsChanged.js';
 import type { DictationEnded } from './types/DictationEnded.js';
+import type { DictationModelChanged } from './types/DictationModelChanged.js';
 import type { DictationModelProgress } from './types/DictationModelProgress.js';
 import type { DictationTranscript } from './types/DictationTranscript.js';
 import type { DocumentCollaborationPresenceSnapshot } from './types/DocumentCollaborationPresenceSnapshot.js';
@@ -21,6 +22,7 @@ import type { MarketplaceChanged } from './types/MarketplaceChanged.js';
 import type { MemoryChanged } from './types/MemoryChanged.js';
 import type { PluginsChanged } from './types/PluginsChanged.js';
 import type { ProjectChanged } from './types/ProjectChanged.js';
+import type { ProviderApiKeySetResult } from './types/ProviderApiKeySetResult.js';
 import type { ProviderModelsUpdated } from './types/ProviderModelsUpdated.js';
 import type { SessionChanged } from './types/SessionChanged.js';
 import type { SessionDeleted } from './types/SessionDeleted.js';
@@ -35,6 +37,7 @@ import type { JsonRpcVersion } from './protocol.js';
 export interface AppServerNotificationMap {
   "account/login/completed": AccountLoginCompleted;
   "account/updated": AccountUpdated;
+  "provider/apiKey/changed": ProviderApiKeySetResult;
   "provider/models/updated": ProviderModelsUpdated;
   "agent/request": AgentRequestEnvelope;
   "session/changed": SessionChanged;
@@ -43,6 +46,7 @@ export interface AppServerNotificationMap {
   "dictation/transcript": DictationTranscript;
   "dictation/ended": DictationEnded;
   "dictation/model/progress": DictationModelProgress;
+  "dictation/model/changed": DictationModelChanged;
   "document/collaboration/update": DocumentCollaborationUpdate;
   "document/collaboration/presence": DocumentCollaborationPresenceSnapshot;
   "session/thread/update": ThreadUpdateEnvelope;
@@ -85,6 +89,7 @@ export const APP_SERVER_NOTIFICATIONS: {
 } = {
   "account/login/completed": { method: "account/login/completed" },
   "account/updated": { method: "account/updated" },
+  "provider/apiKey/changed": { method: "provider/apiKey/changed" },
   "provider/models/updated": { method: "provider/models/updated" },
   "agent/request": { method: "agent/request" },
   "session/changed": { method: "session/changed" },
@@ -93,6 +98,7 @@ export const APP_SERVER_NOTIFICATIONS: {
   "dictation/transcript": { method: "dictation/transcript" },
   "dictation/ended": { method: "dictation/ended" },
   "dictation/model/progress": { method: "dictation/model/progress" },
+  "dictation/model/changed": { method: "dictation/model/changed" },
   "document/collaboration/update": { method: "document/collaboration/update" },
   "document/collaboration/presence": { method: "document/collaboration/presence" },
   "session/thread/update": { method: "session/thread/update" },

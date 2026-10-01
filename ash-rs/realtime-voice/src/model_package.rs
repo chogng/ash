@@ -28,6 +28,47 @@ pub(crate) struct ModelPackage {
 }
 
 impl ModelPackage {
+    pub(crate) fn remove(root: &Path, model_id: &str) -> Result<(), String> {
+        Self::validate_id(model_id)?;
+        let directory = root.join(model_id);
+        let _installation = Installation::new(root, model_id)?;
+        let metadata = std::fs::symlink_metadata(&directory).map_err(|error| error.to_string())?;
+        if metadata.is_symlink()
+            || !metadata.is_dir()
+            || !directory
+                .canonicalize()
+                .map_err(|error| error.to_string())?
+                .starts_with(root.canonicalize().map_err(|error| error.to_string())?)
+        {
+            return Err("Dictation model must be inside the model directory".into());
+        }
+        let names = [
+            "encoder.onnx",
+            "decoder.onnx",
+            "tokens.txt",
+            "dictation-model.json",
+        ];
+        for entry in std::fs::read_dir(&directory).map_err(|error| error.to_string())? {
+            let entry = entry.map_err(|error| error.to_string())?;
+            if !names.iter().any(|name| entry.file_name() == *name)
+                || !entry
+                    .file_type()
+                    .map_err(|error| error.to_string())?
+                    .is_file()
+            {
+                return Err("Dictation model contains files outside the model package".into());
+            }
+        }
+        for name in names {
+            match std::fs::remove_file(directory.join(name)) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.to_string()),
+            }
+        }
+        std::fs::remove_dir(directory).map_err(|error| error.to_string())
+    }
+
     pub(crate) fn validate_id(model_id: &str) -> Result<(), String> {
         if model_id.is_empty()
             || model_id.len() > 128

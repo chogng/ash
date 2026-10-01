@@ -80,6 +80,15 @@ class Fixture extends Disposable {
 }
 
 suite('LocalTranscriptionService', () => {
+	test('window disposal detaches preparation without sending a backend cancel', async () => {
+		using fixture = new Fixture();
+		const operation = fixture.service.prepareModel('selected-model', () => {});
+		await fixture.client.accepted.p;
+		const completion = assert.rejects(operation.completed, /connection lost/);
+		fixture.service.dispose();
+		await completion;
+		assert.deepEqual(fixture.client.requests.map(request => request.method), ['dictation/model/start']);
+	});
 	test('model import maps its source and releases before reporting completion', async () => {
 		using fixture = new Fixture();
 		fixture.client.startBarrier = new DeferredPromise<void>();

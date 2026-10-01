@@ -661,6 +661,33 @@ fn provider_rpc_lists_the_backend_catalog_and_stores_api_keys_without_projecting
                 |provider| provider["provider"] == "openai" && provider["apiKeyConfigured"] == true
             )
     );
+    let removed = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":6, "method":"provider/apiKey/remove", "params":{"connection":"openai"}
+        }),
+    );
+    assert_eq!(
+        removed["result"],
+        serde_json::json!({"connection":"openai", "apiKeyConfigured":false})
+    );
+    let without_key = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":7, "method":"provider/list", "params":{}
+        }),
+    );
+    assert!(
+        without_key["result"]["providers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|provider| provider["connection"] == "openai"
+                && provider["apiKeyConfigured"] == false)
+    );
+    assert!(!without_key.to_string().contains("secret-provider-key"));
 }
 
 #[test]

@@ -1,7 +1,7 @@
 import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
 import { APP_SERVER_METHODS } from '../../app-server/common/generated/index.js';
 import { LocalTranscriptionModelState, type ILocalTranscriptionBackendService, type ILocalTranscriptionModelStatus } from '../common/localTranscription.js';
-import type { DictationModelStage } from '../../app-server/common/generated/index.js';
+import type { DictationModelStage, DictationModelStatus } from '../../app-server/common/generated/index.js';
 
 /** Converts only this domain's messages on the renderer's existing connection. */
 export function createAppServerLocalTranscriptionBackendService(client: AppServerProtocolClient): ILocalTranscriptionBackendService {
@@ -23,10 +23,16 @@ export function createAppServerLocalTranscriptionBackendService(client: AppServe
 				listener({ resourceId: notification.params.resourceId, model: notification.params.modelId, status: modelStatus(notification.params.stage) });
 			}
 		}),
+		onDidChangeModels: listener => client.onNotification(notification => {
+			if (notification.method === 'dictation/model/changed') { listener(); }
+		}),
 		getModelStatus: async model => {
 			const status = await client.request(APP_SERVER_METHODS['dictation/model/read'], { modelId: model });
-			return { model: status.modelId, available: status.available };
+			return modelSnapshot(status);
 		},
+		listModels: async () => (await client.request(APP_SERVER_METHODS['dictation/model/list'], null)).models.map(modelSnapshot),
+		cancelModel: async model => { await client.request(APP_SERVER_METHODS['dictation/model/cancel'], { modelId: model }); },
+		deleteModel: async model => { await client.request(APP_SERVER_METHODS['dictation/model/delete'], { modelId: model }); },
 		startModelOperation: async (resourceId, model, operation) => {
 			await client.request(APP_SERVER_METHODS['dictation/model/start'], { resourceId, modelId: model, operation });
 		},
@@ -36,6 +42,10 @@ export function createAppServerLocalTranscriptionBackendService(client: AppServe
 		},
 		stop: async resourceId => (await client.request(APP_SERVER_METHODS['dictation/stop'], { resourceId })).text,
 	};
+}
+
+function modelSnapshot(status: DictationModelStatus) {
+	return { model: status.modelId, available: status.available, sizeBytes: status.sizeBytes, status: status.stage ? modelStatus(status.stage) : undefined };
 }
 
 function modelStatus(stage: DictationModelStage): ILocalTranscriptionModelStatus {

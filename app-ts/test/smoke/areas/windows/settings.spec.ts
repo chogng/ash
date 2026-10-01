@@ -3,6 +3,45 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+test('Dictation settings separate local models and cloud API connections with keyboard help', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'Requires Code Settings');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+Shift+P');
+	await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
+	await page.keyboard.press('Enter');
+	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+	await settings.locator('[data-settings-category-id="dictation"]').click();
+	const grid = settings.getByRole('grid', { name: 'Local dictation models' });
+	await expect(grid).toBeVisible();
+	await expect(grid).toHaveAttribute('aria-description', 'Press Alt+F1 for accessibility help.');
+	const verbosity = settings.getByRole('switch', { name: 'Dictation model accessibility help' });
+	await verbosity.focus();
+	await page.keyboard.press('Space');
+	await expect(grid).not.toHaveAttribute('aria-description');
+	await page.keyboard.press('Space');
+	await expect(settings.locator('[data-configuration-key="dictation.cloudProvider"]')).toHaveCount(0);
+	await grid.focus();
+	await page.keyboard.press('Alt+F1');
+	const help = page.getByRole('dialog', { name: 'Accessibility Help' });
+	await expect(help.getByRole('textbox')).toHaveValue(/Local dictation models[\s\S]*Preparation continues/);
+	await help.getByRole('button', { name: 'Close', exact: true }).click();
+	await expect(grid).toBeFocused();
+	await page.keyboard.press('Alt+F2');
+	const accessible = page.getByRole('dialog', { name: 'Accessible View', exact: true });
+	await expect(accessible.getByRole('textbox')).toHaveValue(/Local dictation models/);
+	await accessible.getByRole('button', { name: 'Close', exact: true }).click();
+	const backend = settings.getByRole('combobox', { name: 'Dictation service' });
+	await backend.click();
+	await page.getByRole('option', { name: 'Cloud', exact: true }).click();
+	await expect(grid).toHaveCount(0);
+	await expect(settings.getByRole('combobox', { name: 'Cloud dictation provider' })).toBeVisible();
+	if (target.appServerMode === 'required') { await expect(settings.getByText('An API key is required.', { exact: false })).toBeVisible(); }
+	else { await expect(settings.getByText('Could not read the dictation connection.', { exact: true })).toBeVisible(); }
+	await settings.getByRole('button', { name: 'Manage API connections' }).click();
+	await expect(settings.getByRole('heading', { name: 'API connections', exact: true })).toBeVisible();
+	await expect(settings.locator('.ash-local-transcription-model-controls')).toHaveCount(0);
+});
+
 test('Local model management reports backend import errors and unavailable capture', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'Requires Code Settings');
 	const page = workbench.page;
@@ -10,17 +49,17 @@ test('Local model management reports backend import errors and unavailable captu
 	await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
 	await page.keyboard.press('Enter');
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-	await settings.locator('[data-settings-group-id="agents"]').click();
-	await settings.locator('[data-settings-category-id="models"]').click();
+	await settings.locator('[data-settings-category-id="dictation"]').click();
 	const controls = settings.locator('.ash-local-transcription-model-controls');
 	await expect(controls).toBeVisible();
-	const prepare = controls.getByRole('button', { name: 'Prepare model', exact: true });
+	const prepare = controls.getByRole('button', { name: 'Install', exact: true });
+	await controls.locator('summary').click();
 	const importModel = controls.getByRole('button', { name: 'Import model', exact: true });
 	const cancel = controls.getByRole('button', { name: 'Cancel', exact: true });
 	const status = controls.getByRole('status');
-	await expect(cancel).toBeDisabled();
+	await expect(cancel).toBeHidden();
 	if (target.kind === 'browser' || target.appServerMode !== 'required') {
-		await expect(prepare).toBeDisabled();
+		await expect(controls.getByRole('grid', { name: 'Local dictation models' })).toBeVisible();
 		await expect(importModel).toBeDisabled();
 		await expect(status).toHaveText('Dictation connection is unavailable');
 		return;
@@ -36,10 +75,48 @@ test('Local model management reports backend import errors and unavailable captu
 		await expect(status).toContainText('Model preparation failed:');
 		await expect(status).toContainText('Could not read dictation model package');
 		await expect(importModel).toBeEnabled();
-		await expect(cancel).toBeDisabled();
+		await expect(cancel).toBeHidden();
 	} finally {
 		await rm(source, { recursive: true, force: true });
 	}
+});
+
+test('Desktop Voice imports after Settings closes and shares model deletion with Sessions', async ({ application, target, workbench }) => {
+	const source = process.env.ASH_DICTATION_MODEL_TEST_SOURCE;
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || !source, 'Requires the connected desktop and a prepared voice model fixture');
+	if (!source || !('windows' in application)) { return; }
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+Shift+P');
+	await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
+	await page.keyboard.press('Enter');
+	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+	await settings.locator('[data-settings-category-id="dictation"]').click();
+	const controls = settings.locator('.ash-local-transcription-model-controls');
+	await controls.locator('summary').click();
+	await controls.getByRole('textbox', { name: 'Prepared Paraformer model directory' }).fill(source);
+	await controls.getByRole('button', { name: 'Import model', exact: true }).click();
+	await settings.locator('.ash-modal-editor-close').click();
+	const sessionPagePromise = application.waitForEvent('window');
+	await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
+	const sessionsPage = await sessionPagePromise;
+	await sessionsPage.locator('.ash-sessions-activity-bottom button').last().click();
+	await sessionsPage.getByRole('menuitem', { name: 'Settings' }).click();
+	const sessionsSettings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
+	await sessionsSettings.getByRole('navigation').getByRole('button', { name: 'General', exact: true }).click();
+	const installed = sessionsSettings.getByRole('row').filter({ hasText: 'paraformer-large-online-ec6a3c64' });
+	await expect(installed).toContainText('paraformer-large-online-ec6a3c64', { timeout: 30000 });
+	await expect(installed.getByRole('button', { name: 'Current', exact: true })).toBeDisabled();
+	await expect(installed.getByRole('button', { name: 'Install', exact: true })).toBeHidden();
+	await installed.getByRole('button', { name: 'Uninstall' }).click();
+	await installed.getByRole('button', { name: 'Confirm uninstall' }).click();
+	await expect(installed).toContainText('Not installed');
+	await expect(sessionsSettings.locator('.ash-local-transcription-model-status')).toContainText('Model package not installed:');
+	await page.keyboard.press('ControlOrMeta+Shift+P');
+	await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
+	await page.keyboard.press('Enter');
+	await settings.locator('[data-settings-category-id="dictation"]').click();
+	await expect(controls.getByRole('row').filter({ hasText: 'paraformer-large-online-ec6a3c64' })).toContainText('Not installed');
+	await expect(controls.getByRole('button', { name: 'Install', exact: true })).toBeEnabled();
 });
 
 test('Workbench exposes current Tools and Sandbox capabilities', async ({ target, workbench }) => {
@@ -84,8 +161,6 @@ test('Workbench and Sessions Models share model visibility', async ({ applicatio
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
 	await settings.locator('[data-settings-group-id="agents"]').click();
 	await settings.locator('[data-settings-category-id="models"]').click();
-	await expect(settings.getByRole('heading', { name: 'Voice input' })).toBeVisible();
-	await expect(settings.locator('[data-configuration-key="dictation.localModel"]')).toBeVisible();
 	await expect(settings.getByRole('heading', { name: 'API connections' })).toBeVisible();
 	const firstModel = settings.locator('.ash-models-settings-model-row').first();
 	await expect(firstModel).toBeVisible();
@@ -108,8 +183,6 @@ test('Workbench and Sessions Models share model visibility', async ({ applicatio
 	await sessionsPage.getByRole('menuitem', { name: 'Settings' }).click();
 	const sessionsSettings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
 	await sessionsSettings.getByRole('navigation', { name: 'Settings categories' }).getByRole('button', { name: 'Models' }).click();
-	await expect(sessionsSettings.locator('.ash-local-transcription-model-controls').getByRole('button', { name: 'Prepare model', exact: true })).toBeEnabled();
-	await expect(sessionsSettings.locator('.ash-local-transcription-model-status')).toContainText('Model package not installed:');
 	const sessionSwitch = sessionsSettings.getByRole('switch', { name: modelLabel });
 	await expect(sessionSwitch).toHaveAttribute('aria-checked', String(!initiallyVisible));
 	await sessionSwitch.locator('..').locator('.ash-switch-track').click();
@@ -192,16 +265,16 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 	await expect(page.locator('.ash-settings-page h3')).toHaveText('Minimap');
 	await expect(page.locator('[data-configuration-key="editor.minimap.enabled"]')).toBeVisible();
 	if (target.kind === 'electron') {
-		await page.locator('[data-settings-category-id="general"]').click();
+		await page.locator('[data-settings-category-id="dictation"]').click();
 		await expect(rootTitle).toHaveCount(0);
 		await expect(rootDescription).toHaveCount(0);
-		await page.locator('[data-settings-target-id="general.group.dictation"]').click();
-		await expect(page.locator('.ash-settings-page h3')).toHaveText('Voice input');
+		await expect(page.locator('.ash-settings-page h3')).toHaveText('Dictation');
 		await expect(page.locator('.ash-settings-content-tree > .is-settings-root > .ash-settings-tree-group-title')).toHaveCount(0);
 		await expect(page.locator('.ash-settings-content-tree > .is-settings-root > .ash-settings-tree-group-description')).toHaveCount(0);
-		const voiceInput = page.getByRole('main', { name: 'Voice input' });
+		const voiceInput = page.locator('.ash-settings-page');
 		await expect(voiceInput.getByRole('combobox', { name: 'Dictation service' })).toBeVisible();
-		await expect(voiceInput.getByRole('textbox', { name: 'Local dictation model' })).toBeVisible();
+		await expect(voiceInput.getByRole('grid', { name: 'Local dictation models' })).toBeVisible();
+		await expect(voiceInput.getByRole('textbox', { name: 'Local dictation model' })).toHaveCount(0);
 	}
 	if (target.workbenchMode === 'code') {
 		await page.locator('[data-settings-group-id="workbench"]').click();

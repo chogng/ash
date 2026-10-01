@@ -42,3 +42,13 @@ fn model_operations_reject_cache_paths_and_unknown_stages() {
         .is_err()
     );
 }
+
+#[test]
+fn model_list_serializes_shared_preparation_and_installed_size() {
+    let value = json!({"models":[{"modelId":"custom","available":false,"sizeBytes":0,"stage":{"type":"downloading","file":"encoder.onnx","downloadedBytes":1048576}}]});
+    let decoded: super::DictationModelList = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(serde_json::to_value(decoded).unwrap(), value);
+    let changed = json!({"modelId":"custom"});
+    let decoded: super::DictationModelChanged = serde_json::from_value(changed.clone()).unwrap();
+    assert_eq!(serde_json::to_value(decoded).unwrap(), changed);
+}

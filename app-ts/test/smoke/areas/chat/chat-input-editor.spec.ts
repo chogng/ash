@@ -271,7 +271,7 @@ test('Chat input places the microphone beside voice or send at the right edge', 
 	expect(commandRightInset).toBeLessThanOrEqual(2);
 });
 
-test('Desktop Chat sends the selected local dictation package through its microphone button', async ({ target, workbench }) => {
+test('Desktop Chat guides a missing local model to Dictation settings without opening the microphone', async ({ target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the connected desktop');
 	const page = workbench.page;
 	const original = await page.evaluate(async () => {
@@ -294,7 +294,14 @@ test('Desktop Chat sends the selected local dictation package through its microp
 	await expect(button).toBeEnabled();
 	await expect(button).toHaveAttribute('aria-label', 'Dictate message');
 	await button.click();
-		await expect(page.locator('.ash-notification')).toContainText('Could not read dictation model package');
+		const preparation = page.locator('.ash-chat-view-pane .ash-chat:visible .ash-chat-model-preparation');
+		await expect(preparation).toContainText('ash-playwright-missing-model');
+		await expect(preparation.getByRole('button', { name: 'Download model' })).toBeEnabled();
+		await preparation.getByRole('button', { name: 'Dictation settings' }).click();
+		const voice = page.getByRole('dialog', { name: 'Ash Settings' });
+		await expect(voice.getByRole('grid', { name: 'Local dictation models' })).toBeVisible();
+		await expect(voice.getByRole('row').filter({ hasText: 'ash-playwright-missing-model' })).toBeVisible();
+		await voice.locator('.ash-modal-editor-close').click();
 		await expect(page.locator('.ash-chat-view-pane .ash-chat:visible .ash-chat-status')).not.toContainText('Could not read dictation model package');
 	await expect(button).not.toHaveAttribute('aria-pressed', 'true');
 	} finally {

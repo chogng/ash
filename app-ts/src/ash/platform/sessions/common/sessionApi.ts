@@ -75,6 +75,7 @@ export interface IModelApi {
 	listProviders(): Promise<ProviderListResult>;
 	listProviderModels(connection: string): Promise<readonly ProviderModelCatalogEntry[]>;
 	setProviderApiKey(params: ProviderApiKeySetParams): Promise<ProviderApiKeySetResult>;
+	removeProviderApiKey(connection: string): Promise<void>;
 	readModel(): Promise<ModelRef | null>;
 	setModel(params: { readonly commandId: string; readonly model: ModelRef }): Promise<void>;
 }

@@ -31,12 +31,14 @@ test('Sessions Models switches control the model picker visibility preference', 
 	let visible = true;
 	const writes: boolean[] = [];
 	const savedKeys: string[] = [];
+	const removedKeys: string[] = [];
 	const chat = {
 		onDidChangeModels: changed.event,
 		listModelCatalog: async () => [{ model, displayName: 'GPT Test' }, { model: otherModel, displayName: 'Claude Test' }],
 		listModelProviders: async () => [{ connection: 'openai', provider: 'openai', displayName: 'OpenAI API', access: 'apiKey', active: true, configured: true, ready: false, apiKeyPolicy: 'required', apiKeyConfigured: savedKeys.length > 0 }],
 		isModelVisible: () => visible,
 		setModelProviderApiKey: async (_connection: string, key: string) => { savedKeys.push(key); },
+		removeModelProviderApiKey: async (connection: string) => { removedKeys.push(connection); },
 		refreshModels: async () => [{ model, displayName: 'GPT Test' }, { model: otherModel, displayName: 'Claude Test' }],
 		setModelVisible: async (_model: typeof model, next: boolean) => {
 			writes.push(next);
@@ -65,6 +67,8 @@ test('Sessions Models switches control the model picker visibility preference', 
 	services.registerInstance(ContextMenus, {} as import('../../../platform/contextview/browser/contextView.js').IContextMenuService);
 	services.registerInstance(ContextKeys, contextKeys);
 	services.registerInstance(AccessibleView, accessibleView);
+	const { IPreferencesService } = await import('../../../workbench/services/preferences/common/preferences.js');
+	services.registerInstance(IPreferencesService, { openSettings: category => preferences.open(category) } as import('../../../workbench/services/preferences/common/preferences.js').IPreferencesService);
 	using preferences = services.createInstance(SessionsPreferences, window.document.body);
 	const opened = preferences.open();
 	const designButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Design');
@@ -82,15 +86,20 @@ test('Sessions Models switches control the model picker visibility preference', 
 	const modelsButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent?.includes('Models'));
 	assert.ok(modelsButton);
 	modelsButton.click();
-	assert.ok(window.document.querySelector('.ash-local-transcription-model-controls'));
+	assert.equal(window.document.querySelector('.ash-local-transcription-model-controls'), null);
 	await Promise.resolve();
-	const voiceButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Voice');
+	const voiceButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'General');
 	assert.ok(voiceButton);
 	voiceButton.click();
-	assert.ok(window.document.querySelector('[data-configuration-key="dictation.localModel"]'));
+	assert.equal(window.document.querySelector('[data-configuration-key="dictation.localModel"]'), null);
+	assert.ok(window.document.querySelector('[role="grid"][aria-label="Local dictation models"]'));
+	assert.ok(window.document.querySelector('.ash-local-transcription-model-controls'));
+	assert.equal(window.document.querySelector('[data-configuration-key="dictation.cloudProvider"]'), null);
+	await configuration.updateValue('dictation.backend', 'cloud');
+	assert.ok(window.document.querySelector('[data-configuration-key="dictation.cloudProvider"]'));
+	assert.equal(window.document.querySelector('.ash-local-transcription-model-controls'), null);
 	modelsButton.click();
 	await Promise.resolve();
-	assert.match(window.document.querySelector('[data-settings-item-id="models.voice-models"]')?.textContent ?? '', /gpt-live-transcribe.*grok-voice-transcribe-2\.0/);
 	const apiInput = window.document.querySelector<HTMLInputElement>('.ash-models-settings-api-row input[type="password"]');
 	assert.ok(apiInput);
 	const saveKey = window.document.querySelector<HTMLButtonElement>('.ash-models-settings-api-row button');
@@ -104,6 +113,13 @@ test('Sessions Models switches control the model picker visibility preference', 
 	assert.deepEqual(savedKeys, ['test-secret']);
 	assert.equal(apiInput.value, '');
 	assert.equal(window.document.body.textContent?.includes('test-secret'), false);
+	const removeKey = [...window.document.querySelectorAll<HTMLButtonElement>('.ash-models-settings-api-row button')].find(button => button.textContent === 'Remove API key')!;
+	removeKey.click();
+	assert.deepEqual(removedKeys, []);
+	assert.match(window.document.body.textContent ?? '', /shared by chat and dictation/);
+	removeKey.click();
+	await Promise.resolve();
+	assert.deepEqual(removedKeys, ['openai']);
 	const modelSearch = window.document.querySelector<HTMLInputElement>('.ash-sessions-settings-search input[type="search"]');
 	assert.ok(modelSearch);
 	assert.equal(window.document.querySelectorAll('input[type="search"]').length, 1);
@@ -116,9 +132,9 @@ test('Sessions Models switches control the model picker visibility preference', 
 	modelSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
 	assert.equal(window.document.querySelector('.ash-models-settings-model-row'), null);
 	assert.equal(window.document.querySelector<HTMLElement>('.ash-sessions-settings-empty')?.hidden, false);
-	modelSearch.value = 'gpt-live-transcribe';
+	modelSearch.value = 'Cloud connection';
 	modelSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
-	assert.match(window.document.querySelector('[data-settings-item-id="models.voice-models"]')?.textContent ?? '', /gpt-live-transcribe/);
+	assert.ok(window.document.querySelector('[data-settings-item-id="dictation.connection"]'));
 	modelSearch.value = 'OpenAI API';
 	modelSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
 	assert.ok(window.document.querySelector('.ash-models-settings-api-row'));

@@ -87,6 +87,7 @@ import type { DebugAdapterSendParams } from './types/DebugAdapterSendParams.js';
 import type { DebugAdapterStartParams } from './types/DebugAdapterStartParams.js';
 import type { DebugAdapterStartResult } from './types/DebugAdapterStartResult.js';
 import type { DiagnosticSnapshot } from './types/DiagnosticSnapshot.js';
+import type { DictationModelList } from './types/DictationModelList.js';
 import type { DictationModelParams } from './types/DictationModelParams.js';
 import type { DictationModelStartParams } from './types/DictationModelStartParams.js';
 import type { DictationModelStatus } from './types/DictationModelStatus.js';
@@ -337,6 +338,7 @@ import type { ProjectRootAddParams } from './types/ProjectRootAddParams.js';
 import type { ProjectRootRemoveParams } from './types/ProjectRootRemoveParams.js';
 import type { ProjectRootUpdateParams } from './types/ProjectRootUpdateParams.js';
 import type { ProjectSessionMutationParams } from './types/ProjectSessionMutationParams.js';
+import type { ProviderApiKeyRemoveParams } from './types/ProviderApiKeyRemoveParams.js';
 import type { ProviderApiKeySetParams } from './types/ProviderApiKeySetParams.js';
 import type { ProviderApiKeySetResult } from './types/ProviderApiKeySetResult.js';
 import type { ProviderConfigureParams } from './types/ProviderConfigureParams.js';
@@ -588,6 +590,7 @@ export interface AppServerRequestMap {
   "provider/probe": { params: ProviderProbeParams; response: ProviderProbeResult };
   "provider/models/list": { params: ProviderModelsListParams; response: ProviderModelsListResult };
   "provider/apiKey/set": { params: ProviderApiKeySetParams; response: ProviderApiKeySetResult };
+  "provider/apiKey/remove": { params: ProviderApiKeyRemoveParams; response: ProviderApiKeySetResult };
   "account/read": { params: Record<string, never>; response: AccountReadResult };
   "account/rateLimits/read": { params: AccountRateLimitsReadParams; response: AccountRateLimitsReadResult };
   "account/login/start": { params: AccountLoginStartParams; response: AccountLoginStartResult };
@@ -642,6 +645,9 @@ export interface AppServerRequestMap {
   "dictation/start": { params: DictationStartParams; response: null };
   "dictation/stop": { params: DictationResourceParams; response: DictationStopResult };
   "dictation/model/read": { params: DictationModelParams; response: DictationModelStatus };
+  "dictation/model/list": { params: null; response: DictationModelList };
+  "dictation/model/cancel": { params: DictationModelParams; response: null };
+  "dictation/model/delete": { params: DictationModelParams; response: null };
   "dictation/model/start": { params: DictationModelStartParams; response: null };
   "dictation/model/stop": { params: DictationResourceParams; response: null };
   "fs/getMetadata": { params: FsGetMetadataParams; response: FsGetMetadataResult };
@@ -912,6 +918,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "provider/probe": { method: "provider/probe" },
   "provider/models/list": { method: "provider/models/list" },
   "provider/apiKey/set": { method: "provider/apiKey/set" },
+  "provider/apiKey/remove": { method: "provider/apiKey/remove" },
   "account/read": { method: "account/read" },
   "account/rateLimits/read": { method: "account/rateLimits/read" },
   "account/login/start": { method: "account/login/start" },
@@ -966,6 +973,9 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "dictation/start": { method: "dictation/start" },
   "dictation/stop": { method: "dictation/stop" },
   "dictation/model/read": { method: "dictation/model/read" },
+  "dictation/model/list": { method: "dictation/model/list" },
+  "dictation/model/cancel": { method: "dictation/model/cancel" },
+  "dictation/model/delete": { method: "dictation/model/delete" },
   "dictation/model/start": { method: "dictation/model/start" },
   "dictation/model/stop": { method: "dictation/model/stop" },
   "fs/getMetadata": { method: "fs/getMetadata" },

@@ -13,7 +13,7 @@ import { ListDragOverPosition, ListDragTargetSector, type ListAccessibilityProvi
 
 export interface ListViewOptions<T> {
 	readonly ariaLabel?: string;
-	readonly role?: "listbox" | "tree";
+	readonly role?: "listbox" | "tree" | "rowgroup";
 	readonly scrolling?: ListScrolling;
 	readonly domFocusable?: boolean;
 	readonly getId?: (item: T) => string;

@@ -6303,6 +6303,22 @@
         {
           "properties": {
             "method": {
+              "const": "provider/apiKey/remove",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProviderApiKeyRemoveParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "account/read",
               "type": "string"
             },
@@ -7152,6 +7168,54 @@
           "properties": {
             "method": {
               "const": "dictation/model/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/DictationModelParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "dictation/model/list",
+              "type": "string"
+            },
+            "params": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "dictation/model/cancel",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/DictationModelParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "dictation/model/delete",
               "type": "string"
             },
             "params": {
@@ -11299,6 +11363,22 @@
         {
           "properties": {
             "method": {
+              "const": "provider/apiKey/remove",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ProviderApiKeySetResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "account/read",
               "type": "string"
             },
@@ -12152,6 +12232,54 @@
             },
             "result": {
               "$ref": "#/$defs/DictationModelStatus"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "dictation/model/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/DictationModelList"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "dictation/model/cancel",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "dictation/model/delete",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
             }
           },
           "required": [
@@ -16738,6 +16866,31 @@
       ],
       "type": "object"
     },
+    "DictationModelChanged": {
+      "properties": {
+        "modelId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "modelId"
+      ],
+      "type": "object"
+    },
+    "DictationModelList": {
+      "properties": {
+        "models": {
+          "items": {
+            "$ref": "#/$defs/DictationModelStatus"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "models"
+      ],
+      "type": "object"
+    },
     "DictationModelOperation": {
       "oneOf": [
         {
@@ -16933,11 +17086,28 @@
         },
         "modelId": {
           "type": "string"
+        },
+        "sizeBytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DictationModelStage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Last process-owned preparation stage, including its terminal result."
         }
       },
       "required": [
         "modelId",
-        "available"
+        "available",
+        "sizeBytes"
       ],
       "type": "object"
     },
@@ -30782,6 +30952,18 @@
       ],
       "type": "string"
     },
+    "ProviderApiKeyRemoveParams": {
+      "additionalProperties": false,
+      "properties": {
+        "connection": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "connection"
+      ],
+      "type": "object"
+    },
     "ProviderApiKeySetParams": {
       "properties": {
         "apiKey": {
@@ -32253,6 +32435,22 @@
         {
           "properties": {
             "method": {
+              "const": "provider/apiKey/changed",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProviderApiKeySetResult"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "provider/models/updated",
               "type": "string"
             },
@@ -32370,6 +32568,22 @@
             },
             "params": {
               "$ref": "#/$defs/DictationModelProgress"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "dictation/model/changed",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/DictationModelChanged"
             }
           },
           "required": [

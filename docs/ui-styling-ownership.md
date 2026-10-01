@@ -39,6 +39,10 @@ Hook 声明是各领域的内容，不为复用界面而伪造配置键或改变
 归 `workbench/contrib/localTranscription`。各控件的 CSS 跟随所属功能；`preferences` 负责
 设置框架和内容接入，不承接这些功能的业务控件。
 
+听写内容归 `workbench/contrib/chat/browser/speechToText`，根据本地或云端选择组合控件。
+`base/browser/ui/table` 拥有列标题、列宽、行与单元格焦点和选中样式。模型表只渲染自己的
+文本和操作按钮，不覆盖 Table、SplitView 或 Button 的内部交互样式。
+
 ## 分层所有权
 
 | 层级 | 当前代表 | 必须负责 | 禁止负责 |

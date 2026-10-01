@@ -373,7 +373,7 @@
   padding: 0 var(--ash-spacing-size40);
   border-radius: var(--ash-cornerRadius-small);
   color: var(--ash-description-foreground);
-  font-size: var(--ash-fontSize-label1);
+  font-size: var(--ash-font-size-label1);
 }
 
 .ash-chat-input-toolbars .ash-chat-input-effort-label {
@@ -463,3 +463,15 @@
     font-size: 13px;
   }
 }
+
+.ash-chat-model-preparation {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+	border-top: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	font-size: var(--ash-font-size-label2);
+}
+.ash-chat-model-preparation[hidden] { display: none; }
+.ash-chat-model-preparation > .ash-local-transcription-model-status { flex: 1; min-width: 0; }

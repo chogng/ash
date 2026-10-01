@@ -4,8 +4,8 @@
 	min-width: 0;
 	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
 	gap: var(--ash-spacing-size80);
-	font-size: var(--ash-fontSize-label1);
-	font-weight: var(--ash-fontWeight-regular);
+	font-size: var(--ash-font-size-label1);
+	font-weight: var(--ash-font-weight-regular);
 	line-height: 1.5;
 }
 
@@ -24,3 +24,23 @@
 	color: var(--ash-description-foreground);
 	overflow-wrap: anywhere;
 }
+
+.ash-local-transcription-model-status p { margin: 0; }
+.ash-local-transcription-model-status progress {
+	display: block;
+	width: 100%;
+	height: var(--ash-spacing-size40);
+	margin-top: var(--ash-spacing-size80);
+	accent-color: var(--ash-accent-foreground);
+}
+.ash-local-transcription-model-status progress[hidden] { display: none; }
+.ash-local-transcription-model-inventory { min-width: 0; }
+.ash-local-transcription-model-cell-text {
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+.ash-local-transcription-model-controls details { display: block; }
+.ash-local-transcription-model-controls summary { cursor: pointer; margin-bottom: var(--ash-spacing-size80); }
+.ash-local-transcription-model-controls details > .ash-local-transcription-model-actions { margin-top: var(--ash-spacing-size80); }

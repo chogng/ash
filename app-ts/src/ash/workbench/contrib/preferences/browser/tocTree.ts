@@ -44,7 +44,7 @@ export class TOCTreeModel {
 				element: { kind: 'group', id: `group.${entry.id}`, group: entry },
 				children: entry.categories.map(category => this.categoryElement(category)),
 				collapsible: true,
-				collapsed: true,
+				collapsed: entry.id !== 'general',
 			};
 		}
 		return this.categoryElement(entry);

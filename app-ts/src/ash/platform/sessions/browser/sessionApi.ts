@@ -28,6 +28,7 @@ export function createDisconnectedModelApi(unavailable: UnavailableOperation): I
 		listProviders: () => unavailable('model.listProviders'),
 		listProviderModels: () => unavailable('model.listProviderModels'),
 		setProviderApiKey: () => unavailable('model.setProviderApiKey'),
+		removeProviderApiKey: () => unavailable('model.removeProviderApiKey'),
 		readModel: () => unavailable("model.readModel"),
 		readAdvisorDefault: () => unavailable("model.readAdvisorDefault"),
 		readConfiguredProviderIds: () => unavailable("model.readConfiguredProviderIds"),
@@ -89,6 +90,7 @@ export function createAppServerModelApi(connection: AppServerProtocolClient): IM
 			return result.type === 'models' ? result.models : [];
 		},
 		setProviderApiKey: params => appServerRequest(connection, 'provider/apiKey/set', params),
+		removeProviderApiKey: async provider => { await appServerRequest(connection, 'provider/apiKey/remove', { connection: provider }); },
 		readModel: async () => (await appServerRequest(connection, "config/read", {})).model,
 		readAdvisorDefault: async () => (await appServerRequest(connection, "config/read", {})).advisor ?? null,
 		readConfiguredProviderIds: async () => Object.keys((await appServerRequest(connection, "config/read", {})).providers),

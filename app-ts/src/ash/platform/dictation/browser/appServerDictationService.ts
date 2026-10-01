@@ -1,4 +1,5 @@
-import { Disposable } from '../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { Emitter } from '../../../base/common/event.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
 import { APP_SERVER_METHODS } from '../../app-server/common/generated/index.js';
@@ -21,11 +22,17 @@ type ActiveDictation = DictationCallbacks & (
 );
 
 export class AppServerDictationService extends Disposable implements IDictationService {
+	private readonly preparationChanged = this._register(new Emitter<void>());
+	public readonly onDidChangePreparation = this.preparationChanged.event;
 	private active: ActiveDictation | undefined;
 	private starting = false;
 
 	constructor(private readonly client: AppServerProtocolClient, private readonly configuration: IConfigurationApi, @ILocalTranscriptionService private readonly localTranscription: ILocalTranscriptionService) {
 		super();
+		const configurationSubscription = configuration.onDidChange(() => this.preparationChanged.fire());
+		this._register(toDisposable(() => configurationSubscription.dispose()));
+		this._register(localTranscription.onDidChangeModels(() => this.preparationChanged.fire()));
+		this._register(client.onStateChange(() => this.preparationChanged.fire()));
 		this._register(localTranscription.onDidTranscribe(result => {
 			const active = this.active;
 			if (!active || active.source !== 'local') { return; }
@@ -63,6 +70,19 @@ export class AppServerDictationService extends Disposable implements IDictationS
 			this.active = undefined;
 			active.onEnded(localize('dictation.connectionLost', 'Dictation connection lost'));
 		}));
+	}
+
+	public async getPreparation() {
+		const backend = dictationBackend(validateConfigurationSnapshot(await this.configuration.read()).document);
+		return backend.type === 'local' ? this.localTranscription.getModelStatus(backend.modelId) : undefined;
+	}
+	public async prepareModel(): Promise<void> {
+		const backend = dictationBackend(validateConfigurationSnapshot(await this.configuration.read()).document);
+		if (backend.type === 'local') { await this.localTranscription.prepareModel(backend.modelId, () => {}).completed; }
+	}
+	public async cancelPreparation(): Promise<void> {
+		const backend = dictationBackend(validateConfigurationSnapshot(await this.configuration.read()).document);
+		if (backend.type === 'local') { await this.localTranscription.cancelModel(backend.modelId); }
 	}
 
 	async start(onTranscript: (text: string, isFinal: boolean) => void, onEnded: (error?: string) => void): Promise<IDictationSession> {

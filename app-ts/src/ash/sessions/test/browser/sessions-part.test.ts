@@ -136,6 +136,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		async listModelCatalog() { return []; },
 		async listModelProviders() { return []; },
 		async setModelProviderApiKey() {},
+		async removeModelProviderApiKey() {},
 		async listAdvisorModels() { return []; },
 		async refreshModels() { return []; },
 		isModelVisible() { return true; },
