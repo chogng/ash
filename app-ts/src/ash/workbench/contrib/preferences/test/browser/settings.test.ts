@@ -1,3 +1,5 @@
+import { IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
+import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -492,7 +494,8 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	disposables.add(editorPanes.registerEditorPane(descriptor));
 	const editorServices = disposables.add(createTestEditorServices(undefined, services));
 	const editor = disposables.add(editorServices.createInstance(EditorPart, root, { registry: editorPanes }));
-	const preferences = disposables.add(new PreferencesService(() => new BrowserEditorService(editor)));
+	const preferences = disposables.add(new PreferencesService(new BrowserEditorService(editor), editorServices.get(IFileTextModelService)));
+	services.registerInstance(IPreferencesService, preferences);
 
 	await preferences.openSettings();
 	const host = root.querySelector<HTMLElement>('.ash-modal-editor-host');

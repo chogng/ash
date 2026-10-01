@@ -1,3 +1,5 @@
+import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
+import { IFileTextModelService } from '../../../workbench/services/textmodelResolver/common/textModelResourceService.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
@@ -261,11 +263,12 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	let preferencesEditorTarget: string | undefined;
 	using chat = createChatService(api);
 	using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
-	using preferences: PreferencesService = new BrowserPreferencesService(() => ({
+	using editorServices = createTestEditorServices();
+	using preferences: PreferencesService = new BrowserPreferencesService({
 		...emptyEditorServiceState,
 		openEditor: async (_input, _options, target) => { preferencesEditorTarget = target; },
 		focusActiveEditor() {},
-	}));
+	}, editorServices.get(IFileTextModelService));
 	services.registerInstance(IPreferencesService, preferences);
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(IQuickInputService, quickInput);
@@ -2774,11 +2777,12 @@ test("Chat Settings toggles Advisor while keeping its selected model", async () 
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IDialogService, recordingDialogService([]));
-	using preferences = new BrowserPreferencesService(() => ({
+	using editorServices = createTestEditorServices();
+	using preferences = new BrowserPreferencesService({
 		...emptyEditorServiceState,
 		openEditor: async () => undefined,
 		focusActiveEditor() {},
-	}));
+	}, editorServices.get(IFileTextModelService));
 	services.registerInstance(IPreferencesService, preferences);
 	using commands = new CommandService(services);
 	for (const enabled of [false, true]) {
@@ -2811,11 +2815,12 @@ test('Chat Settings saves a masked provider key through the model API and refres
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IDialogService, recordingDialogService(messages));
-	using preferences = new BrowserPreferencesService(() => ({
+	using editorServices = createTestEditorServices();
+	using preferences = new BrowserPreferencesService({
 		...emptyEditorServiceState,
 		openEditor: async () => undefined,
 		focusActiveEditor() {},
-	}));
+	}, editorServices.get(IFileTextModelService));
 	services.registerInstance(IPreferencesService, preferences);
 	using commands = new CommandService(services);
 

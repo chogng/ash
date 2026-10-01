@@ -606,7 +606,10 @@ test("Workbench owns the code editor save shortcut and reports failures", async 
 	using models = new BrowserTextModelService(resourceStore);
 	using services = paneServices(models);
 	const errors: unknown[] = [];
-	const pane = createPane(services, resourceStore, { onSaveError: error => errors.push(error) });
+	const failedResources: (URI | undefined)[] = [];
+	const pane = createPane(services, resourceStore, {
+		onSaveError: (error, resource) => { errors.push(error); failedResources.push(resource); },
+	});
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\save.ts") }, new AbortController().signal);
 
@@ -618,6 +621,7 @@ test("Workbench owns the code editor save shortcut and reports failures", async 
 	textFiles.failSave = true;
 	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, ctrlKey: true, key: "s" }));
 	await waitFor(() => errors.length === 1);
+	assert.equal(failedResources[0]?.toString(), pane.workingCopy?.resource.toString());
 	assert.equal(parent.querySelector(".stanza-editor-accessibility-status")?.textContent, "Save failed: conflict");
 
 	pane.dispose();

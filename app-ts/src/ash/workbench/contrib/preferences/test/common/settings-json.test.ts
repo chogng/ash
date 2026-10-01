@@ -1,3 +1,11 @@
+import '../../../codeEditor/common/editorConfiguration.js';
+import { ConfigurationTarget } from '../../../../../platform/configuration/common/configuration.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { Registry } from '../../../../../platform/registry/common/platform.js';
+import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { IEditorService as EditorServiceId } from '../../../../services/editor/common/editorService.js';
+import { IFileTextModelService, TextModelConflictError } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
+import { Event } from '../../../../../base/common/event.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Position } from '../../../../../editor/common/core/position.js';
@@ -136,9 +144,10 @@ test('PreferencesService opens User Settings JSON as a pinned JSON editor input'
 		},
 		focusActiveEditor() {},
 	};
-	using preferences = new PreferencesService(() => editorService);
+	using models = new BrowserTextModelService({ onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '{}', revision: undefined }), save: async () => ({ revision: undefined }) });
+	using preferences = new PreferencesService(editorService, models);
 
-	await preferences.openUserSettingsJson();
+	await preferences.openUserSettings();
 	assert.equal(opened?.input.resource.toString(), UserSettingsResource.toString());
 	assert.equal(opened?.input.languageId, 'jsonc');
 	assert.equal(opened?.input.label, 'User Settings (JSON)');
@@ -172,6 +181,73 @@ test('the text-model save path updates configuration and accepts later external 
 	assert.match(reference.model.getText(), /Keep me/u);
 	assert.doesNotMatch(reference.model.getText(), /"editor\.enabled"/u);
 	assert.equal(reference.hasExternalChange, false);
+});
+
+test('PreferencesService uses the shared dirty model, inserts an undoable default and reveals the top-level value', async () => {
+	const registry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
+	using configuration = new WorkbenchConfigurationService({ registry });
+	using provider = new SettingsFileSystemProvider(configuration);
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(new TextFileService(provider)));
+	using reference = await models.acquire({ resource: UserSettingsResource }, new AbortController().signal);
+	const before = '{\n\t// editor.fontSize is mentioned here, not configured.\n\t"extension.data": { "editor.fontSize": 99 },\n}\n';
+	reference.model.applyEdits([{ range: reference.model.getFullModelRange(), text: before }]);
+	let selection: Range | undefined;
+	using services = new ServiceContainer();
+	services.registerInstance(EditorServiceId, {
+		...emptyEditorServiceState,
+		openEditor: async (_input, options) => { selection = options?.selection; },
+		focusActiveEditor() {},
+	});
+	assert.throws(() => services.createInstance(PreferencesService), /Unknown service: fileTextModelService/u);
+	services.registerInstance(IFileTextModelService, models);
+	using preferences = services.createInstance(PreferencesService);
+
+	await preferences.openUserSettings({ target: ConfigurationTarget.USER_LOCAL, revealSetting: { key: 'editor.fontSize', edit: true } });
+	assert.equal(reference.isDirty, true);
+	assert.equal((await configuration.read()).source, '{}\n');
+	assert.match(reference.model.getText(), /extension.data.*99/u);
+	assert.match(reference.model.getText(), /mentioned here/u);
+	assert.ok(selection);
+	assert.equal(reference.model.getValueInRange(selection), String(registry.getConfiguration('editor.fontSize')!.defaultValue));
+	await reference.model.undo();
+	assert.equal(reference.model.getText(), before);
+	await reference.model.redo();
+	await reference.save(new AbortController().signal);
+	assert.match((await configuration.read()).source, /"editor.fontSize"/u);
+
+	await preferences.openUserSettings({ revealSetting: { key: 'editor.fontSize' } });
+	assert.equal(reference.model.getValueInRange(selection!), '"editor.fontSize"');
+	await assert.rejects(preferences.openUserSettings({ target: ConfigurationTarget.WORKSPACE }), /configuration target/u);
+});
+
+test('revealing existing settings preserves edits and real external conflicts reject saves', async () => {
+	const registry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
+	using configuration = new WorkbenchConfigurationService({ registry });
+	using provider = new SettingsFileSystemProvider(configuration);
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(new TextFileService(provider)));
+	using reference = await models.acquire({ resource: UserSettingsResource }, new AbortController().signal);
+	const source = '{ "editor.fontSize": 18, "extension.pending": true }';
+	reference.model.applyEdits([{ range: reference.model.getFullModelRange(), text: source }]);
+	let selection: Range | undefined;
+	using preferences = new PreferencesService({
+		...emptyEditorServiceState,
+		openEditor: async (_input, options) => { selection = options?.selection; },
+		focusActiveEditor() {},
+	}, models);
+	await preferences.openUserSettings({ revealSetting: { key: 'editor.fontSize', edit: true } });
+	assert.equal(reference.model.getText(), source);
+	assert.equal(reference.model.getValueInRange(selection!), '18');
+
+	await configuration.updateValue('editor.fontSize', 20);
+	await nextTurn();
+	await assert.rejects(reference.save(new AbortController().signal), TextModelConflictError);
+	assert.equal(reference.model.getText(), source);
+	assert.equal(configuration.getValue('editor.fontSize'), 20);
+
+	reference.model.applyEdits([{ range: reference.model.getFullModelRange(), text: '{ broken' }]);
+	await assert.rejects(preferences.openUserSettings({ revealSetting: { key: 'editor.fontSize', edit: true } }), /JSON errors/u);
+	assert.equal(reference.model.getText(), '{ broken');
+	await assert.rejects(reference.save(new AbortController().signal), TextModelConflictError);
 });
 
 test('SmartSnippetInserter preserves object-array punctuation around the cursor', () => {

@@ -131,7 +131,8 @@ export interface EditorPaneOptions {
 	readonly showUnicodeHighlights?: boolean;
 	readonly insertFinalNewLine?: boolean;
 	readonly onSave?: () => Promise<void | boolean>;
-	readonly onSaveError?: (error: unknown) => void;
+	/** Uses the current working copy because the pane can be reused for another resource. */
+	readonly onSaveError?: (error: unknown, resource: URI | undefined) => void | Promise<void>;
 }
 
 /** Workbench pane that composes the text model, input, view, and language services. */
@@ -408,7 +409,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 	}
 
 	protected handleSaveError(error: unknown): void | Promise<void> {
-		(this.options.onSaveError ?? reportSaveError)(error);
+		return (this.options.onSaveError ?? reportSaveError)(error, this.workingCopy?.resource);
 	}
 
 	async revert(): Promise<void> {

@@ -69,12 +69,12 @@ registerAction2(class OpenSettingsJsonAction extends Action2 {
 	constructor() {
 		super({
 			id: OpenSettingsJsonCommandId,
-			title: 'Preferences: Open User Settings (JSON)',
+			title: localizedString('ash.settings', 'json.openCommand', 'Preferences: Open User Settings (JSON)'),
 			f1: true,
 		});
 	}
 
 	override run(accessor: ServicesAccessor): Promise<void> {
-		return accessor.get(IPreferencesService).openUserSettingsJson();
+		return accessor.get(IPreferencesService).openUserSettings();
 	}
 });

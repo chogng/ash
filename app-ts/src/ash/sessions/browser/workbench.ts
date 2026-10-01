@@ -107,7 +107,6 @@ import { IKeyboardShortcutTroubleshootingService } from "../../workbench/service
 import { WorkbenchKeybindingsResourceService } from "../../workbench/services/keybinding/browser/keybindingsResourceService.js";
 import { IPreferencesService } from "../../workbench/services/preferences/common/preferences.js";
 import { PreferencesService } from "../../workbench/services/preferences/browser/preferencesService.js";
-import { IEditorService } from "../../workbench/services/editor/common/editorService.js";
 import { WorkbenchQuickInputService } from "../../workbench/services/quickinput/browser/quickInputService.js";
 import { ChatContextPickService } from "../../workbench/services/chat/browser/chatContextPickService.js";
 import { IChatContextPickService } from "../../workbench/services/chat/common/chatContextService.js";
@@ -355,7 +354,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IQuickInputService, quickInputService);
 		services.registerInstance(IQuickAccessController, this._register(services.createInstance(QuickAccessController)));
 		services.registerInstance(IChatContextPickService, new ChatContextPickService());
-		services.registerInstance(IPreferencesService, this._register(new PreferencesService(() => services.get(IEditorService))));
+		services.registerSingleton(IPreferencesService, () => services.createInstance(PreferencesService));
 		const contextMenus = this._register(options.createContextMenuService({
 			configurationService,
 			menuService: menus,

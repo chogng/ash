@@ -123,7 +123,6 @@ registerAction2(class OpenChatSettingsAction extends Action2 {
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		const chat = accessor.get(IChatService);
-		const preferences = accessor.get(IPreferencesService);
 		const quickInput = accessor.get(IQuickInputService);
 		const [current, models] = await Promise.all([chat.readAdvisorDefault(), chat.listAdvisorModels()]);
 		type Setting = { label: string; description?: string; model?: NonNullable<typeof current>; openSettings?: true; manageProviderKeys?: true; clearModel?: true };
@@ -156,7 +155,7 @@ registerAction2(class OpenChatSettingsAction extends Action2 {
 		disposables.add(picker.onDidAccept((item) => {
 			if (item.openSettings) {
 				picker.hide();
-				void preferences.openSettings();
+				void accessor.get(IPreferencesService).openSettings();
 				return;
 			}
 			if (item.manageProviderKeys) {

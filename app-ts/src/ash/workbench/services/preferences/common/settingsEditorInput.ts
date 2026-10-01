@@ -1,3 +1,4 @@
+import { localize, onDidChangeNls } from '../../../../nls.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { URI } from '../../../../base/common/uri.js';
 import type { EditorInput } from '../../editor/common/editorService.js';
@@ -12,7 +13,8 @@ export function createSettingsEditorInput(category?: string): EditorInput {
 	return {
 		resource: category ? SettingsEditorResource.with({ query: `category=${category}` }) : SettingsEditorResource,
 		contentType: SettingsEditorContentType,
-		label: 'Ash Settings',
+		get label(): string { return localize({ bundle: 'ash.settings', key: 'chrome.modalTitle' }, 'Ash Settings'); },
+		onDidChangeLabel: onDidChangeNls,
 		getIcon: () => Lxicon.settings,
 		readOnly: true,
 	};
@@ -27,6 +29,7 @@ export function createUserSettingsEditorInput(): EditorInput {
 	return Object.freeze({
 		resource: UserSettingsResource,
 		languageId: 'jsonc',
-		label: 'User Settings (JSON)',
+		get label(): string { return localize({ bundle: 'ash.settings', key: 'json.editorLabel' }, 'User Settings (JSON)'); },
+		onDidChangeLabel: onDidChangeNls,
 	});
 }

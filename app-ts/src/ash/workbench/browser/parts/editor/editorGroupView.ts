@@ -431,7 +431,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		let descriptor: IEditorPaneDescriptor;
 		try {
 			const matchInput = this.languageResolver
-				? { ...input, languageId: this.languageResolver.resolveLanguageId({ resource: input.resource, ...(input.contentType === undefined ? {} : { contentType: input.contentType }) }) }
+				? { ...input, languageId: input.languageId ?? this.languageResolver.resolveLanguageId({ resource: input.resource, ...(input.contentType === undefined ? {} : { contentType: input.contentType }) }) }
 				: input;
 			const association = options.preferredEditorId === undefined && this.configurationService
 				? associatedEditorId(

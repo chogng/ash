@@ -1,3 +1,5 @@
+import { IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
+import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
@@ -109,7 +111,7 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 		keyboardLayoutService: keyboardLayout,
 	}));
 	const editorService = new BrowserEditorService(editor);
-	const preferences = disposables.add(new PreferencesService(() => editorService));
+	const preferences = disposables.add(new PreferencesService(editorService, editorServices.get(IFileTextModelService)));
 	await preferences.openSettings();
 	const modalHost = ownerDocument.querySelector<HTMLElement>('.ash-modal-editor-host');
 	assert.ok(modalHost);

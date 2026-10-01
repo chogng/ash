@@ -17,6 +17,7 @@ import { IStorageService } from "../../../../platform/storage/common/storage.js"
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
 import { CodeEditorConfiguration, type WrappingIndentSetting } from "../common/editorConfiguration.js";
 import { TextFileEditor } from '../../files/browser/editors/textFileEditor.js';
+import { TextFileSaveErrorHandler } from '../../files/browser/editors/textFileSaveErrorHandler.js';
 import { isRemoteResource } from '../../../../platform/remote/common/remote.js';
 
 registerWorkbenchContribution("workbench.contrib.codeLensCachePersistence", WorkbenchPhase.BlockStartup, accessor => bindCodeLensCacheStorage(accessor.get(IStorageService)));
@@ -32,6 +33,7 @@ registerEditorPane({
 		const instantiationService = options.instantiationService;
 		if (!instantiationService) throw new Error('Stanza Code requires the Workbench instantiation service');
 		const isFile = options.input?.resource.scheme === 'file' || (options.input && isRemoteResource(options.input.resource));
+		const saveErrorHandler = isFile ? undefined : instantiationService.createInstance(TextFileSaveErrorHandler);
 		return instantiationService.createInstance(isFile ? TextFileEditor : TextResourceEditor, resourceStore, {
 			createPart: partOptions => createBrowserEditorPart(instantiationService, partOptions),
 			textMateService: options.textMateService,
@@ -86,6 +88,7 @@ registerEditorPane({
 			} : undefined,
 			insertFinalNewLine: configuration?.getValue(CodeEditorConfiguration.insertFinalNewLine),
 			onSave: options.onSave,
+			onSaveError: saveErrorHandler ? (error, resource) => saveErrorHandler.onSaveError(error, resource) : undefined,
 			onOpenLocation: options.onOpenLocation,
 			onApplyWorkspaceEdit: options.onApplyWorkspaceEdit,
 		} satisfies EditorPaneOptions);

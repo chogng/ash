@@ -1,12 +1,12 @@
 import { basename } from '../../../../../base/common/resources.js';
 import { type URI } from '../../../../../base/common/uri.js';
 import { localize } from '../../../../../nls.js';
-import { DialogSeverity, type IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { DialogSeverity, IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { TextModelConflictError } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 
 /** Presents save failures without discarding the editor's unsaved working copy. */
 export class TextFileSaveErrorHandler {
-	constructor(private readonly dialogs: IDialogService) {}
+	constructor(@IDialogService private readonly dialogs: IDialogService) {}
 
 	async onSaveError(error: unknown, resource: URI | undefined): Promise<void> {
 		if (error instanceof TextModelConflictError) {

@@ -1,3 +1,4 @@
+import type { ConfigurationTarget } from '../../../../platform/configuration/common/configuration.js';
 import type { Event } from '../../../../base/common/event.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
@@ -97,10 +98,16 @@ export interface ISettingsEditorModel extends IDisposable {
 	readonly reportStatus: (message: string, isError: boolean) => void;
 }
 
+/** Options for opening the current user's JSONC settings resource. */
+export interface IOpenSettingsOptions {
+	readonly target?: ConfigurationTarget;
+	readonly revealSetting?: { readonly key: string; readonly edit?: boolean };
+}
+
 /** Workbench-level entry point for opening Preferences surfaces. */
 export interface IPreferencesService {
 	openSettings(category?: string): Promise<void>;
-	openUserSettingsJson(): Promise<void>;
+	openUserSettings(options?: IOpenSettingsOptions): Promise<void>;
 	openKeybindings(): Promise<void>;
 }
 

@@ -780,7 +780,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IQuickInputService, quickInputService);
 		services.registerInstance(IQuickAccessController, this._register(services.createInstance(QuickAccessController)));
 		services.registerInstance(IChatContextPickService, new ChatContextPickService());
-		services.registerInstance(IPreferencesService, this._register(new PreferencesService(() => services.get(IEditorService))));
+		services.registerSingleton(IPreferencesService, () => services.createInstance(PreferencesService));
 		const contextMenus = this._register(createContextMenuService({
 			configurationService: configuration,
 			menuService: menus,

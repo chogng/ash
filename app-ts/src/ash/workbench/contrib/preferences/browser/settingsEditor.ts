@@ -22,6 +22,7 @@ import type { EditorInput } from '../../../services/editor/common/editorService.
 import { GitConfiguration, type GitAutofetch } from '../../../contrib/git/common/gitConfiguration.js';
 import { IGitService } from '../../../contrib/git/common/gitService.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
+import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
 import type { ISetting, ISettingsEditorModel } from '../../../services/preferences/common/preferences.js';
 import { isSettingsEditorInput } from '../../../services/preferences/common/settingsEditorInput.js';
 import { DefaultSettings, SettingsEditorModel } from '../../../services/preferences/common/settingsModels.js';
@@ -76,6 +77,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		@IAgentCapabilitiesService private readonly agentCapabilitiesService: IAgentCapabilitiesService,
 		@IRemoteAgentService private readonly remoteAgentService: IRemoteAgentService,
 		@IDirPermissionsService private readonly dirPermissionsService: IDirPermissionsService,
+		@IPreferencesService private readonly preferencesService: IPreferencesService,
 	) {
 		super();
 		this.configurationService = configurationService;
@@ -98,6 +100,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 			contextMenuProvider: this.contextMenuProvider,
 			contextViewProvider: this.contextViewProvider,
 			onStatus: this.settingsModel.reportStatus,
+			onOpenSettings: key => this.preferencesService.openUserSettings({ target: ConfigurationTarget.USER_LOCAL, revealSetting: { key, edit: true } }),
 		}));
 
 		const ownerDocument = container.ownerDocument;

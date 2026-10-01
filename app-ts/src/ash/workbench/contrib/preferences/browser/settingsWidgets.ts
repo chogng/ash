@@ -1,4 +1,5 @@
 import './media/settingsWidgets.css';
+import { localize, onDidChangeNls } from '../../../../nls.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -102,6 +103,7 @@ export interface SettingWidgetOptions {
 	readonly contextMenuProvider: IContextMenuProvider;
 	readonly contextViewProvider: IContextViewProvider;
 	readonly onStatus: (message: string, isError: boolean) => void;
+	readonly onOpenSettings?: (key: string) => Promise<void>;
 }
 
 export interface SettingWidget extends IDisposable {
@@ -115,6 +117,7 @@ interface SettingActionsOptions {
 	readonly contextMenuProvider: IContextMenuProvider;
 	readonly clipboardService: IClipboardService;
 	readonly onError: (error: unknown) => void;
+	readonly openSettings?: () => Promise<void>;
 }
 
 class SettingActions extends Disposable {
@@ -153,7 +156,7 @@ class SettingActions extends Disposable {
 
 	private show(): void {
 		if (this.actionsDomNode.classList.contains('is-open')) return;
-		const actions: readonly IAction[] = [
+		const actions: IAction[] = [
 			{
 				id: 'settings.resetSetting',
 				label: 'Reset Setting',
@@ -169,6 +172,15 @@ class SettingActions extends Disposable {
 				run: () => this.run(() => this.options.clipboardService.writeText(this.options.reference.id)),
 			},
 		];
+		if (this.options.openSettings) {
+			actions.push({
+				id: 'settings.editInSettingsJson',
+				label: localize({ bundle: 'ash.settings', key: 'json.edit' }, 'Edit in settings.json'),
+				tooltip: '',
+				enabled: true,
+				run: () => this.run(this.options.openSettings!),
+			});
+		}
 		this.setOpen(true);
 		try {
 			this.options.contextMenuProvider.showContextMenu({
@@ -235,6 +247,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 			contextMenuProvider: options.contextMenuProvider,
 			clipboardService: options.clipboardService,
 			onError: error => options.onStatus(settingErrorMessage(error, 'Unable to run the setting action.'), true),
+			openSettings: !descriptor.binding && options.onOpenSettings ? () => options.onOpenSettings!(descriptor.configuration.key) : undefined,
 		}));
 	}
 
@@ -444,6 +457,17 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 				keyInput.focus();
 			},
 		}));
+		if (!descriptor.binding && options.onOpenSettings) {
+			const editButton = this._register(new Button(actions, {
+				label: localize({ bundle: 'ash.settings', key: 'json.edit' }, 'Edit in settings.json'),
+				onClick: () => {
+					void options.onOpenSettings!(this.descriptor.configuration.key).catch(error => options.onStatus(settingErrorMessage(error, 'Unable to open settings.json.'), true));
+				},
+			}));
+			this._register(onDidChangeNls(() => {
+				editButton.label = localize({ bundle: 'ash.settings', key: 'json.edit' }, 'Edit in settings.json');
+			}));
+		}
 		this.domNode.append(this.copyDomNode, this.rows, actions);
 		this.bindState(state => {
 			if (!sameStringMap(this.renderedValue, state.value)) {

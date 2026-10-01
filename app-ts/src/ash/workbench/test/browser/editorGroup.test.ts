@@ -7,6 +7,36 @@ import type { EditorInput } from "../../browser/parts/editor/editorInput.js";
 import type { IEditorPane } from "../../browser/parts/editor/editorPane.js";
 import type { IEditorGroupsService } from "../../services/editor/common/editorGroupsService.js";
 
+test('EditorGroupView keeps the caller language when resource detection has no language', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+	Object.defineProperty(globalThis, 'window', { configurable: true, value: dom.window });
+	try {
+		const { EditorGroupView } = await import('../../browser/parts/editor/editorGroupView.js');
+		const { EditorPaneMatch } = await import('../../browser/parts/editor/editorPane.js');
+		const { EditorPaneRegistry } = await import('../../browser/editor.js');
+		const registry = new EditorPaneRegistry();
+		registry.registerEditorPane({
+			id: 'test.editor',
+			name: 'Explicit text language',
+			canOpen: input => input.languageId === 'jsonc' ? EditorPaneMatch.Default : EditorPaneMatch.None,
+			create: () => new TestEditorPane(),
+		});
+		using services = createTestEditorServices();
+		using group = services.createInstance(EditorGroupView, dom.window.document.body, {
+			registry,
+			languageResolver: { resolveLanguageId: () => undefined },
+		});
+		const input = { resource: URI.parse('test-settings:/settings.json'), languageId: 'jsonc' };
+		await group.openEditor(input, { pinned: true, ignoreError: true });
+		assert.deepEqual(group.inputs, [input]);
+	} finally {
+		if (originalWindow) Object.defineProperty(globalThis, 'window', originalWindow);
+		else delete (globalThis as { window?: Window }).window;
+		dom.window.close();
+	}
+});
+
 test("EditorGroupView reorders tabs and moves them between groups", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
