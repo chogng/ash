@@ -23,6 +23,58 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[test]
+fn branch_mutations_refresh_all_connections_and_invalidate_history_cursors() {
+    let repository = TestRepository::init();
+    for value in ["initial", "updated"] {
+        repository.write("tracked.txt", value);
+        repository.git(&["add", "tracked.txt"]);
+        repository.git(&["commit", "-m", value]);
+    }
+    let broker = Arc::new(UpdateBroker::default());
+    let first = NotificationQueue::default();
+    let second = NotificationQueue::default();
+    broker.register(1, false, &first);
+    broker.register(2, false, &second);
+    let runtime = GitRuntime::new(mutation_authorization(repository.root()), broker).unwrap();
+    let initial = runtime.status().unwrap();
+    first.drain();
+    second.drain();
+    let limit = std::num::NonZeroUsize::new(1).unwrap();
+    let cursor = runtime.graph(1, limit, None).unwrap().next_cursor.unwrap();
+
+    for (created, expected_revision) in
+        [(true, initial.revision + 1), (false, initial.revision + 2)]
+    {
+        let branches = if created {
+            runtime.create_branch_for(None, "topic").unwrap()
+        } else {
+            runtime.delete_branch_for(None, "topic").unwrap()
+        };
+        assert_eq!(
+            branches.iter().any(|branch| branch.name == "topic"),
+            created
+        );
+        assert_eq!(repository.git_output(&["branch", "--show-current"]), "main");
+        let notifications = first.drain();
+        assert_eq!(notifications, second.drain());
+        assert_eq!(notifications.len(), 1);
+        assert_eq!(notifications[0]["method"], "git/statusChanged");
+        assert_eq!(
+            notifications[0]["params"]["status"]["revision"],
+            expected_revision
+        );
+        assert!(matches!(
+            runtime.graph(1, limit, Some(&cursor)),
+            Err(super::GitRuntimeError::InvalidGraphCursor)
+        ));
+    }
+
+    assert!(runtime.delete_branch_for(None, "main").is_err());
+    assert!(first.drain().is_empty());
+    assert!(second.drain().is_empty());
+}
+
+#[test]
 fn automatic_fetch_runs_from_shared_config_without_a_frontend() {
     let source = TestRepository::init();
     source.write("tracked.txt", "remote commit\n");
@@ -236,13 +288,149 @@ fn unchanged_watcher_refresh_keeps_graph_cursor_alive() {
         .unwrap();
     let cursor = first_page.next_cursor.expect("graph continuation cursor");
 
-    runtime.repositories[0].refresh_from_watcher();
+    runtime.repository(None).unwrap().refresh_from_watcher();
 
     let final_page = runtime
         .graph(1, std::num::NonZeroUsize::new(1).unwrap(), Some(&cursor))
         .unwrap();
     assert_eq!(final_page.commits.len(), 1);
     assert!(!final_page.has_more);
+}
+
+#[test]
+fn external_ref_and_remote_changes_publish_without_head_or_file_changes() {
+    let repository = TestRepository::init();
+    for message in ["first", "second"] {
+        repository.write("file.txt", message);
+        repository.git(&["add", "."]);
+        repository.git(&["commit", "-m", message]);
+    }
+    let broker = Arc::new(UpdateBroker::default());
+    let first = NotificationQueue::default();
+    let second = NotificationQueue::default();
+    broker.register(1, false, &first);
+    broker.register(2, false, &second);
+    let runtime = GitRuntime::new(mutation_authorization(repository.root()), broker).unwrap();
+    let initial = runtime.status().unwrap();
+    first.drain();
+    second.drain();
+    let limit = std::num::NonZeroUsize::new(1).unwrap();
+    let commands: &[&[&str]] = &[
+        &["branch", "external"],
+        &["tag", "external-tag"],
+        &["remote", "add", "origin", "https://example.invalid/first"],
+        &[
+            "remote",
+            "set-url",
+            "origin",
+            "https://example.invalid/second",
+        ],
+        &["update-ref", "refs/remotes/origin/topic", "HEAD"],
+        &["tag", "-d", "external-tag"],
+        &["branch", "-d", "external"],
+        &["update-ref", "-d", "refs/remotes/origin/topic"],
+    ];
+    for (index, command) in commands.iter().enumerate() {
+        let cursor = runtime.graph(1, limit, None).unwrap().next_cursor.unwrap();
+        repository.git(command);
+        let status = runtime.status().unwrap();
+        assert_eq!(status.head, initial.head);
+        assert_eq!(status.changes, initial.changes);
+        assert_eq!(status.revision, initial.revision + index as u64 + 1);
+        let notifications = first.drain();
+        assert_eq!(notifications, second.drain());
+        assert_eq!(notifications.len(), 1);
+        assert!(matches!(
+            runtime.graph(1, limit, Some(&cursor)),
+            Err(super::GitRuntimeError::InvalidGraphCursor)
+        ));
+    }
+    let cursor = runtime.graph(1, limit, None).unwrap().next_cursor.unwrap();
+    repository.git(&["pack-refs", "--all", "--prune"]);
+    runtime.status().unwrap();
+    assert!(first.drain().is_empty());
+    assert!(second.drain().is_empty());
+    assert!(runtime.graph(1, limit, Some(&cursor)).is_ok());
+}
+
+#[test]
+fn discovery_watches_empty_dirs_and_preserves_existing_repository_owners() {
+    let repository = TestRepository::init();
+    std::fs::remove_dir_all(repository.root().join(".git")).unwrap();
+    let broker = Arc::new(UpdateBroker::default());
+    let first = NotificationQueue::default();
+    let second = NotificationQueue::default();
+    broker.register(1, false, &first);
+    broker.register(2, false, &second);
+    let runtime = GitRuntime::new(inspection_authorization(repository.root()), broker).unwrap();
+    assert!(runtime.repositories().repositories.is_empty());
+    let watcher = runtime.start_watching(None);
+    repository.git(&["init", "-b", "main"]);
+    await_repository_count(&runtime, 1);
+    let owner = runtime.repository(None).unwrap();
+    let status = owner.status().unwrap();
+    assert!(
+        first
+            .drain()
+            .iter()
+            .any(|event| event["method"] == "git/repositoriesChanged")
+    );
+    assert!(
+        second
+            .drain()
+            .iter()
+            .any(|event| event["method"] == "git/repositoriesChanged")
+    );
+    std::fs::create_dir(repository.root().join("nested")).unwrap();
+    repository.git_at("nested", &["init", "-b", "nested"]);
+    await_repository_count(&runtime, 2);
+    assert!(Arc::ptr_eq(&owner, &runtime.repository(None).unwrap()));
+    assert_eq!(
+        owner.status().unwrap().stream_instance_id,
+        status.stream_instance_id
+    );
+    assert!(matches!(
+        runtime.create_branch_for(None, "denied"),
+        Err(super::GitRuntimeError::Service(
+            crate::git_service::GitServiceError::Permission
+        ))
+    ));
+    std::fs::rename(
+        repository.root().join("nested"),
+        repository.root().join("moved"),
+    )
+    .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !runtime
+        .repositories()
+        .repositories
+        .iter()
+        .any(|repo| repo.path == "moved")
+    {
+        assert!(
+            Instant::now() < deadline,
+            "moved repository was not discovered"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    std::fs::remove_dir_all(repository.root().join("moved")).unwrap();
+    await_repository_count(&runtime, 1);
+    std::fs::remove_dir_all(repository.root().join(".git")).unwrap();
+    await_repository_count(&runtime, 0);
+    repository.git(&["init", "-b", "recreated"]);
+    await_repository_count(&runtime, 1);
+    let recreated = runtime.status().unwrap();
+    assert_eq!(recreated.repository_id, status.repository_id);
+    assert_ne!(recreated.stream_instance_id, status.stream_instance_id);
+    drop(watcher);
+}
+
+fn await_repository_count(runtime: &GitRuntime, count: usize) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while runtime.repositories().repositories.len() != count {
+        assert!(Instant::now() < deadline, "expected {count} repositories");
+        std::thread::sleep(Duration::from_millis(20));
+    }
 }
 
 #[test]
@@ -624,4 +812,90 @@ fn partially_failed_fetch_invalidates_the_graph_after_a_remote_ref_was_updated()
             .graph(1, std::num::NonZeroUsize::new(10).unwrap(), None)
             .is_ok()
     );
+}
+
+#[test]
+fn repository_intents_publish_conflicts_and_refs_to_every_connection_and_reject_read_only() {
+    use ash_async_utils::CancellationSource;
+    use ash_git::GitCommand;
+    use ash_git::GitCommandOutcome;
+    let repository = TestRepository::init();
+    repository.write("file.txt", "base\n");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "Base"]);
+    repository.git(&["switch", "-c", "topic"]);
+    repository.write("file.txt", "topic\n");
+    repository.git(&["commit", "-am", "Topic"]);
+    repository.git(&["switch", "main"]);
+    repository.write("file.txt", "main\n");
+    repository.git(&["commit", "-am", "Main"]);
+    let broker = Arc::new(UpdateBroker::default());
+    let first = NotificationQueue::default();
+    let second = NotificationQueue::default();
+    broker.register(1, false, &first);
+    broker.register(2, false, &second);
+    let runtime = GitRuntime::new(mutation_authorization(repository.root()), broker).unwrap();
+    runtime.status().unwrap();
+    first.drain();
+    second.drain();
+    let token = CancellationSource::new();
+    let (status, outcome, operation) = runtime
+        .command_for(
+            None,
+            &GitCommand::Merge {
+                reference: "topic".into(),
+            },
+            &token.token(),
+        )
+        .unwrap();
+    assert_eq!(outcome, GitCommandOutcome::Conflicted);
+    assert_eq!(operation, Some(ash_git::GitIntegration::Merge));
+    assert!(status.changes.iter().any(|change| change.conflicted));
+    assert_eq!(first.drain(), second.drain());
+    runtime
+        .command_for(
+            None,
+            &GitCommand::Abort {
+                operation: ash_git::GitIntegration::Merge,
+            },
+            &token.token(),
+        )
+        .unwrap();
+    first.drain();
+    second.drain();
+    let before = runtime.status().unwrap();
+    let (after, _, _) = runtime
+        .command_for(
+            None,
+            &GitCommand::CreateTag {
+                name: "review".into(),
+                reference: "HEAD".into(),
+            },
+            &token.token(),
+        )
+        .unwrap();
+    assert_eq!(after.revision, before.revision + 1);
+    let updates = first.drain();
+    assert_eq!(updates, second.drain());
+    assert_eq!(updates.len(), 1);
+    assert_eq!(runtime.catalog_for(None).unwrap().tags[0].0, "review");
+    let read_only = GitRuntime::new(
+        inspection_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    assert!(read_only.catalog_for(None).is_ok());
+    assert!(matches!(
+        read_only.command_for(
+            None,
+            &GitCommand::DeleteTag {
+                name: "review".into()
+            },
+            &token.token()
+        ),
+        Err(super::GitRuntimeError::Service(
+            crate::git_service::GitServiceError::Permission
+        ))
+    ));
+    assert_eq!(repository.git_output(&["tag", "--list"]), "review");
 }

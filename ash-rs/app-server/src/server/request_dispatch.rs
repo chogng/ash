@@ -128,7 +128,8 @@ impl RequestLane {
                 | ClientMethod::ConnectorDeviceOAuthCancel,
             ) => Self::Control,
             Some(
-                ClientMethod::GitClone
+                ClientMethod::GitCommand
+                | ClientMethod::GitClone
                 | ClientMethod::GitFetch
                 | ClientMethod::GitPull
                 | ClientMethod::GitPush

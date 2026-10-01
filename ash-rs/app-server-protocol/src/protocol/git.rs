@@ -251,9 +251,10 @@ pub struct GitRemoteDto {
 pub enum GitReferenceKindDto {
     LocalBranch,
     RemoteBranch,
+    Tag,
 }
 
-/// A local or fetched remote-tracking branch ref.
+/// A branch or tag ref in a repository graph.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
@@ -615,4 +616,199 @@ pub struct GitOperationResult {
 pub struct GitCommitResult {
     pub object_id: String,
     pub status: GitStatusResult,
+}
+
+/// Git metadata is the authority for an unfinished integration, including after reconnect.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitIntegrationDto {
+    Merge,
+    Rebase,
+    CherryPick,
+}
+
+/// Closed repository intents; this API never accepts executable names or Git argument arrays.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+#[ts(tag = "kind", rename_all = "camelCase")]
+pub enum GitCommandDto {
+    RenameBranch {
+        name: String,
+        #[ts(rename = "newName")]
+        new_name: String,
+    },
+    DeleteRemoteBranch {
+        remote: String,
+        name: String,
+    },
+    Merge {
+        reference: String,
+    },
+    Rebase {
+        reference: String,
+    },
+    CherryPick {
+        reference: String,
+    },
+    Continue {
+        operation: GitIntegrationDto,
+    },
+    Abort {
+        operation: GitIntegrationDto,
+    },
+    Stash {
+        message: String,
+        mode: GitStashModeDto,
+    },
+    ApplyStash {
+        #[ts(rename = "objectId")]
+        object_id: String,
+    },
+    PopStash {
+        #[ts(rename = "objectId")]
+        object_id: String,
+    },
+    DropStash {
+        #[ts(rename = "objectId")]
+        object_id: String,
+    },
+    CreateTag {
+        name: String,
+        reference: String,
+    },
+    DeleteTag {
+        name: String,
+    },
+    AddRemote {
+        name: String,
+        url: String,
+    },
+    RemoveRemote {
+        name: String,
+    },
+    Amend {
+        message: String,
+    },
+    UndoCommit {
+        #[ts(rename = "expectedHead")]
+        expected_head: String,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitStashModeDto {
+    Tracked,
+    IncludeUntracked,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCommandParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
+    pub command: GitCommandDto,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitCommandOutcomeDto {
+    Completed,
+    Conflicted,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCommandResult {
+    pub status: GitStatusResult,
+    pub outcome: GitCommandOutcomeDto,
+    pub operation: Option<GitIntegrationDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitNamedRefDto {
+    pub name: String,
+    pub object_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitStashDto {
+    pub object_id: String,
+    pub subject: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCatalogResult {
+    pub tags: Vec<GitNamedRefDto>,
+    pub stashes: Vec<GitStashDto>,
+    pub remotes: Vec<String>,
+    pub operation: Option<GitIntegrationDto>,
+}
+
+/// Initialization targets an already authorized workspace directory, not an arbitrary host path.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitInitParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dir_id: Option<String>,
+    #[schemars(length(min = 1, max = 1024))]
+    pub initial_branch: String,
+}
+
+/// Selection is interpreted against the exact reviewed comparison; no client-crafted patch runs.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum GitIndexSelectionDto {
+    Hunk {
+        index: usize,
+    },
+    Lines {
+        #[schemars(range(min = 1))]
+        start: usize,
+        #[schemars(range(min = 1))]
+        end: usize,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitIndexEditParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
+    pub path: String,
+    pub comparison: GitChangeFileComparisonDto,
+    #[schemars(length(max = 2097152))]
+    pub expected_original: Option<String>,
+    #[schemars(length(max = 2097152))]
+    pub expected_modified: Option<String>,
+    pub selection: GitIndexSelectionDto,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitIndexHunkDto {
+    pub index: usize,
+    pub old_start: usize,
+    pub old_count: usize,
+    pub new_start: usize,
+    pub new_count: usize,
+    pub preview: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitIndexDiffResult {
+    pub original: Option<String>,
+    pub modified: Option<String>,
+    pub hunks: Vec<GitIndexHunkDto>,
 }

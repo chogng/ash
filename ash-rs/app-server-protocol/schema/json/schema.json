@@ -2178,6 +2178,7 @@
         "GitNotRepository",
         "GitOperationFailed",
         "GitConflictChanged",
+        "GitIndexChanged",
         "TurnChangesUnavailable",
         "TurnChangesRevisionConflict",
         "TurnChangesOperationFailed",
@@ -8030,6 +8031,86 @@
         {
           "properties": {
             "method": {
+              "const": "git/init",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitInitParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/catalog",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitRepositoryParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/command",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitCommandParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/indexDiff",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitChangeFileParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/indexEdit",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitIndexEditParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "git/repositories",
               "type": "string"
             },
@@ -12935,6 +13016,86 @@
             },
             "result": {
               "$ref": "#/$defs/IssueReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/init",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitRepositoriesResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/catalog",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitCatalogResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/command",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/indexDiff",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitIndexDiffResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/indexEdit",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitOperationResult"
             }
           },
           "required": [
@@ -20153,6 +20314,44 @@
       ],
       "type": "object"
     },
+    "GitCatalogResult": {
+      "properties": {
+        "operation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GitIntegrationDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "remotes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "stashes": {
+          "items": {
+            "$ref": "#/$defs/GitStashDto"
+          },
+          "type": "array"
+        },
+        "tags": {
+          "items": {
+            "$ref": "#/$defs/GitNamedRefDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "tags",
+        "stashes",
+        "remotes"
+      ],
+      "type": "object"
+    },
     "GitChangeFileComparisonDto": {
       "description": "Selects the two repository states represented by a current SCM resource group.",
       "enum": [
@@ -20279,6 +20478,352 @@
       },
       "required": [
         "repositoryPath"
+      ],
+      "type": "object"
+    },
+    "GitCommandDto": {
+      "description": "Closed repository intents; this API never accepts executable names or Git argument arrays.",
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "renameBranch",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "newName": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name",
+            "newName"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "deleteRemoteBranch",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "remote": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "remote",
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "merge",
+              "type": "string"
+            },
+            "reference": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "reference"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "rebase",
+              "type": "string"
+            },
+            "reference": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "reference"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "cherryPick",
+              "type": "string"
+            },
+            "reference": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "reference"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "continue",
+              "type": "string"
+            },
+            "operation": {
+              "$ref": "#/$defs/GitIntegrationDto"
+            }
+          },
+          "required": [
+            "kind",
+            "operation"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "abort",
+              "type": "string"
+            },
+            "operation": {
+              "$ref": "#/$defs/GitIntegrationDto"
+            }
+          },
+          "required": [
+            "kind",
+            "operation"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "stash",
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "mode": {
+              "$ref": "#/$defs/GitStashModeDto"
+            }
+          },
+          "required": [
+            "kind",
+            "message",
+            "mode"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "applyStash",
+              "type": "string"
+            },
+            "objectId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "objectId"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "popStash",
+              "type": "string"
+            },
+            "objectId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "objectId"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "dropStash",
+              "type": "string"
+            },
+            "objectId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "objectId"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "createTag",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "reference": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name",
+            "reference"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "deleteTag",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "addRemote",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name",
+            "url"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "removeRemote",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "amend",
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "message"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "expectedHead": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "undoCommit",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "expectedHead"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "GitCommandOutcomeDto": {
+      "enum": [
+        "completed",
+        "conflicted"
+      ],
+      "type": "string"
+    },
+    "GitCommandParams": {
+      "properties": {
+        "command": {
+          "$ref": "#/$defs/GitCommandDto"
+        },
+        "repositoryId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    "GitCommandResult": {
+      "properties": {
+        "operation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GitIntegrationDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "outcome": {
+          "$ref": "#/$defs/GitCommandOutcomeDto"
+        },
+        "status": {
+          "$ref": "#/$defs/GitStatusResult"
+        }
+      },
+      "required": [
+        "status",
+        "outcome"
       ],
       "type": "object"
     },
@@ -20863,6 +21408,203 @@
       ],
       "type": "object"
     },
+    "GitIndexDiffResult": {
+      "properties": {
+        "hunks": {
+          "items": {
+            "$ref": "#/$defs/GitIndexHunkDto"
+          },
+          "type": "array"
+        },
+        "modified": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "original": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "hunks"
+      ],
+      "type": "object"
+    },
+    "GitIndexEditParams": {
+      "properties": {
+        "comparison": {
+          "$ref": "#/$defs/GitChangeFileComparisonDto"
+        },
+        "expectedModified": {
+          "maxLength": 2097152,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expectedOriginal": {
+          "maxLength": 2097152,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "repositoryId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "selection": {
+          "$ref": "#/$defs/GitIndexSelectionDto"
+        }
+      },
+      "required": [
+        "path",
+        "comparison",
+        "selection"
+      ],
+      "type": "object"
+    },
+    "GitIndexHunkDto": {
+      "properties": {
+        "index": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "newCount": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "newStart": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "oldCount": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "oldStart": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "preview": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "index",
+        "oldStart",
+        "oldCount",
+        "newStart",
+        "newCount",
+        "preview"
+      ],
+      "type": "object"
+    },
+    "GitIndexSelectionDto": {
+      "description": "Selection is interpreted against the exact reviewed comparison; no client-crafted patch runs.",
+      "oneOf": [
+        {
+          "properties": {
+            "index": {
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "hunk",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "index"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "end": {
+              "format": "uint",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "lines",
+              "type": "string"
+            },
+            "start": {
+              "format": "uint",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "start",
+            "end"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "GitInitParams": {
+      "description": "Initialization targets an already authorized workspace directory, not an arbitrary host path.",
+      "properties": {
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "initialBranch": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "initialBranch"
+      ],
+      "type": "object"
+    },
+    "GitIntegrationDto": {
+      "description": "Git metadata is the authority for an unfinished integration, including after reconnect.",
+      "enum": [
+        "merge",
+        "rebase",
+        "cherryPick"
+      ],
+      "type": "string"
+    },
+    "GitNamedRefDto": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "objectId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "objectId"
+      ],
+      "type": "object"
+    },
     "GitOperationResult": {
       "properties": {
         "status": {
@@ -20897,7 +21639,7 @@
       "type": "object"
     },
     "GitReferenceDto": {
-      "description": "A local or fetched remote-tracking branch ref.",
+      "description": "A branch or tag ref in a repository graph.",
       "properties": {
         "current": {
           "type": "boolean"
@@ -20930,7 +21672,8 @@
       "description": "Ref kinds included in a repository graph snapshot.",
       "enum": [
         "localBranch",
-        "remoteBranch"
+        "remoteBranch",
+        "tag"
       ],
       "type": "string"
     },
@@ -21074,6 +21817,28 @@
         }
       },
       "type": "object"
+    },
+    "GitStashDto": {
+      "properties": {
+        "objectId": {
+          "type": "string"
+        },
+        "subject": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "objectId",
+        "subject"
+      ],
+      "type": "object"
+    },
+    "GitStashModeDto": {
+      "enum": [
+        "tracked",
+        "includeUntracked"
+      ],
+      "type": "string"
     },
     "GitStatusChanged": {
       "properties": {
@@ -31813,6 +32578,22 @@
             },
             "params": {
               "$ref": "#/$defs/GitStatusChanged"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/repositoriesChanged",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
             }
           },
           "required": [

@@ -58,6 +58,7 @@ pub enum AppServerErrorName {
     GitNotRepository,
     GitOperationFailed,
     GitConflictChanged,
+    GitIndexChanged,
     TurnChangesUnavailable,
     TurnChangesRevisionConflict,
     TurnChangesOperationFailed,

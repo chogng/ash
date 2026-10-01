@@ -948,3 +948,143 @@ fn agent_glob_uses_public_path_search_and_honors_exclusions_and_cancellation() {
         Err(CoreError::Cancelled(_))
     ));
 }
+
+#[test]
+fn agent_shell_git_changes_refresh_every_connected_git_client() {
+    use crate::server::AppServer;
+    use ash_core::{InMemoryThreadStore, ThreadController};
+    use ash_model_provider::EchoModel;
+    use std::time::{Duration, Instant};
+    let dir = TestDir::new();
+    let service = LocalShellToolService::new(
+        dir.authorization(),
+        RipgrepExecutable::from_path(dir.ripgrep()).unwrap(),
+        PassThroughBackend,
+    )
+    .unwrap();
+    let server = AppServer::new(
+        Arc::new(ThreadController::with_store(Arc::new(
+            InMemoryThreadStore::default(),
+        ))),
+        Arc::new(crate::local::ProviderModelService::new(Arc::new(EchoModel))),
+    )
+    .with_ephemeral_env_state()
+    .with_git_root(dir.grant().authorize(Permission::MutateRepository).unwrap())
+    .unwrap();
+    let mut clients = [server.connection(), server.connection()];
+    for client in &mut clients {
+        let response: serde_json::Value = serde_json::from_str(
+            &server.handle_json(
+                client,
+                &json!({
+                    "jsonrpc":"2.0", "id":1, "method":"initialize",
+                    "params":{"clientInfo":{"name":"test","version":"1"},"capabilities":{}}
+                })
+                .to_string(),
+            ),
+        )
+        .unwrap();
+        assert!(response.get("result").is_some(), "{response}");
+    }
+    let execute_git = |arguments: &[&str]| {
+        let call =
+            tool_call(json!({"program":"git", "arguments":arguments, "working_directory":"."}));
+        let review = service.prepare(&call).unwrap();
+        assert_eq!(
+            LocalShellPolicy::default()
+                .decide(&review, &CancellationSource::new().token())
+                .unwrap(),
+            ExecutionDecision::RunSandboxed(shell_sandbox())
+        );
+        let output = service
+            .execute(
+                &call,
+                &ToolAuthorization::Sandboxed(shell_sandbox()),
+                &CancellationSource::new().token(),
+            )
+            .unwrap();
+        let ToolExecutionOutput::Success(text) = output else {
+            panic!("Git tool failed: {output:?}");
+        };
+        let result: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(result["exit_code"], 0, "{result}");
+    };
+    execute_git(&["init", "-b", "main"]);
+    let mut request_id = 2;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        request_id += 1;
+        let response: serde_json::Value = serde_json::from_str(
+            &server.handle_json(
+                &mut clients[0],
+                &json!({
+                    "jsonrpc":"2.0", "id":request_id, "method":"git/repositories", "params":{}
+                })
+                .to_string(),
+            ),
+        )
+        .unwrap();
+        if response["result"]["repositories"].as_array().unwrap().len() == 1 {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "agent init did not discover a repository"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    execute_git(&[
+        "-c",
+        "user.name=Ash",
+        "-c",
+        "user.email=ash@example.invalid",
+        "commit",
+        "--allow-empty",
+        "-m",
+        "agent commit",
+    ]);
+    // Initialize the observable status before the ref-only command and drain earlier notifications.
+    request_id += 1;
+    server.handle_json(
+        &mut clients[0],
+        &json!({"jsonrpc":"2.0","id":request_id,"method":"git/status","params":{}}).to_string(),
+    );
+    for client in &mut clients {
+        server.drain_notifications(client);
+    }
+    execute_git(&["branch", "agent-topic"]);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut observed = [false, false];
+    while !observed.iter().all(|value| *value) {
+        for (index, client) in clients.iter_mut().enumerate() {
+            observed[index] |= server.drain_notifications(client).iter().any(|raw| {
+                let event: serde_json::Value = serde_json::from_str(raw).unwrap();
+                event["method"] == "git/statusChanged"
+            });
+        }
+        assert!(
+            Instant::now() < deadline,
+            "agent branch did not refresh every connection"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    for client in &mut clients {
+        let response: serde_json::Value = serde_json::from_str(
+            &server.handle_json(
+                client,
+                &json!({
+                    "jsonrpc":"2.0","id":100,"method":"git/graph","params":{"limit":10}
+                })
+                .to_string(),
+            ),
+        )
+        .unwrap();
+        assert!(
+            response["result"]["references"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|reference| reference["name"] == "agent-topic")
+        );
+    }
+}

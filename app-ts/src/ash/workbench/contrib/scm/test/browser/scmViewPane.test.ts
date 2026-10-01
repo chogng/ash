@@ -223,6 +223,7 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 					references: [
 						{ name: "main", objectId: "1234567890abcdef", kind: "localBranch", remoteName: undefined, current: true },
 						{ name: "origin/main", objectId: "abcdef1234567890", kind: "remoteBranch", remoteName: "origin", current: false },
+						{ name: "reviewed", objectId: "abcdef1234567890", kind: "tag", remoteName: undefined, current: false },
 					],
 					remotes: [{ name: "origin", identity: { provider: "github", host: "github.com", owner: "chogng", repository: "ash" } }],
 					hasMore: false,
@@ -269,6 +270,7 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 		assert.ok(pane.element.querySelector(".ash-scm-graph-label.head .ash-icon"));
 		assert.equal(pane.element.querySelector(".ash-scm-graph-label.remote")?.textContent, "origin/main");
 		assert.equal(pane.element.querySelector<HTMLElement>(".ash-scm-graph-label.remote")?.dataset.icon, "cloud");
+		assert.equal(pane.element.querySelector<HTMLElement>('.ash-scm-graph-label[title="reviewed"]')?.dataset.icon, 'tag');
 		assert.match(pane.element.querySelector(".ash-scm-graph-remote")?.textContent ?? "", /^GitHub · chogng\/ash · origin$/);
 		assert.equal(hoverOptions.length, 4);
 		assert.ok(hoverOptions.every((options) => options.target.classList.contains("ash-scm-graph-commit")));

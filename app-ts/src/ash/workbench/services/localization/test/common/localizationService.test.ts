@@ -18,6 +18,36 @@ import { colorThemeSchemaId, registerColorThemeSchemas } from '../../../themes/c
 import '../../../../common/theme.js';
 import { DefaultSettings } from '../../../preferences/common/settingsModels.js';
 import { ListConfiguration } from '../../../../../platform/list/browser/listService.js';
+import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
+import '../../../../contrib/git/browser/gitBranches.js';
+import '../../../../contrib/git/browser/git.contribution.js';
+import '../../../../contrib/git/browser/gitWorktrees.js';
+
+test('Git branch and worktree commands update their labels with the selected Chinese catalog', async () => {
+	using configuration = new InMemoryConfigurationService();
+	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
+	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
+	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
+	try {
+		await localization.whenReady;
+		await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
+		const commands = MenusRegistry.getMenuItems(MenuId.CommandPalette);
+		const labels = ['git.branch', 'git.deleteBranch', 'git.createWorktree', 'git.openWorktree', 'git.deleteWorktree', 'git.stash', 'git.merge', 'git.continue', 'git.stageSelectedRanges', 'git.init'].map(id => {
+			const item = commands.find(candidate => 'command' in candidate && candidate.command.id === id)!;
+			assert.ok('command' in item);
+			return commandActionLabel(item.command.title);
+		});
+		assert.deepEqual(labels, [
+			'Git: 创建分支', 'Git: 删除分支', 'Git: 创建工作树', 'Git: 打开工作树', 'Git: 删除工作树',
+			'Git: 储藏更改', 'Git: 合并分支', 'Git: 继续合并、变基或拣选', 'Git: 暂存选中行', 'Git: 初始化仓库',
+		]);
+		assert.equal(localization.translate('ash', 'git.indexChanged', ''), '比较内容已变化。请从源代码管理重新打开当前比较，再选择更改。');
+		assert.equal(localization.translate('ash', 'git.deleteBranchConfirm', '', { '0': 'topic' }), '删除本地分支 topic？');
+		assert.equal(localization.translate('ash', 'git.worktreeNameInvalid', ''), '请使用 1–64 个英文字母、数字、连字符或下划线。');
+	} finally {
+		resetNlsResolver();
+	}
+});
 
 test('Tree settings use Chinese titles and guide options', async () => {
 	using configuration = new InMemoryConfigurationService();

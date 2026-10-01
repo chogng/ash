@@ -196,6 +196,7 @@ const iconSymbolColor = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"
 const iconSymbolColorFilled = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path fill=\"#000\" d=\"M8 1a7 7 0 0 1 7 7c0 .334-.109.626-.309.862a1.8 1.8 0 0 1-.7.485c-.504.21-1.155.3-1.766.367-.643.07-1.258.116-1.801.218-.56.104-.902.246-1.064.415-.164.171-.252.449-.256.882s.072.908.14 1.418c.06.463.124 1.014.006 1.454a1.18 1.18 0 0 1-.428.658c-.234.174-.52.241-.822.241A7 7 0 1 1 8 1M4.5 9a1 1 0 1 0 0 2 1 1 0 0 0 0-2m7.366-3.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2M4.5 5.134a1 1 0 1 0 0 2 1 1 0 0 0 0-2M8 3a1 1 0 1 0 0 2 1 1 0 0 0 0-2\"/></svg>";
 const iconSync = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" stroke-linecap=\"round\" d=\"M14 8A6 6 0 0 0 3.082 4.563m9.792 6.937A6 6 0 0 1 2 8\"/><path stroke=\"#000\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M5.5 4.5H3V2m7.5 9.5H13v2.448\"/></svg>";
 const iconTable = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" d=\"M2.5 4.5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2z\"/><path stroke=\"#000\" d=\"M4.5 5a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 .5.5v1.5a.5.5 0 0 1-.5.5H5a.5.5 0 0 1-.5-.5zm0 4.5A.5.5 0 0 1 5 9h6a.5.5 0 0 1 .5.5V11a.5.5 0 0 1-.5.5H5a.5.5 0 0 1-.5-.5z\"/></svg>";
+const iconTag = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" stroke-linejoin=\"round\" d=\"M2.5 2.5h5l6 6-5 5-6-6z\"/><circle cx=\"5.5\" cy=\"5.5\" r=\"1\" stroke=\"#000\"/></svg>";
 const iconTarget = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><circle cx=\"8\" cy=\"8\" r=\"6\" stroke=\"#000\"/><circle cx=\"8\" cy=\"8\" r=\"3\" stroke=\"#000\"/></svg>";
 const iconTerminal = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" d=\"M3 3h10a1.5 1.5 0 0 1 1.5 1.5v7A1.5 1.5 0 0 1 13 13H3a1.5 1.5 0 0 1-1.5-1.5v-7A1.5 1.5 0 0 1 3 3Z\"/><path stroke=\"#000\" stroke-linecap=\"round\" d=\"M7.5 11h5\"/><path stroke=\"#000\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M4 10.5 6.5 8 4 5.5\"/></svg>";
 const iconTerminalCmd = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" d=\"M3 3h10a1.5 1.5 0 0 1 1.5 1.5v7A1.5 1.5 0 0 1 13 13H3a1.5 1.5 0 0 1-1.5-1.5v-7A1.5 1.5 0 0 1 3 3Z\"/><path stroke=\"#000\" stroke-linecap=\"round\" d=\"M7.5 11h5M6 7v-.25a1.25 1.25 0 1 0-2.5 0v2.5a1.25 1.25 0 1 0 2.5 0V9\"/></svg>";
@@ -416,6 +417,7 @@ export function createProductIconLibrary<T>(register: (id: string, definition: P
     symbolColorFilled: register("symbol-color-filled", iconSymbolColorFilled),
     sync: register("sync", iconSync),
     table: register("table", iconTable),
+    tag: register("tag", iconTag),
     target: register("target", iconTarget),
     terminal: register("terminal", iconTerminal),
     terminalCmd: register("terminal-cmd", iconTerminalCmd),

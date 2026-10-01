@@ -151,12 +151,15 @@ import type { GitBranchCreateParams } from './types/GitBranchCreateParams.js';
 import type { GitBranchDeleteParams } from './types/GitBranchDeleteParams.js';
 import type { GitBranchListResult } from './types/GitBranchListResult.js';
 import type { GitBranchSwitchParams } from './types/GitBranchSwitchParams.js';
+import type { GitCatalogResult } from './types/GitCatalogResult.js';
 import type { GitChangeFileParams } from './types/GitChangeFileParams.js';
 import type { GitChangeFileResult } from './types/GitChangeFileResult.js';
 import type { GitCheckIgnoreParams } from './types/GitCheckIgnoreParams.js';
 import type { GitCheckIgnoreResult } from './types/GitCheckIgnoreResult.js';
 import type { GitCloneParams } from './types/GitCloneParams.js';
 import type { GitCloneResult } from './types/GitCloneResult.js';
+import type { GitCommandParams } from './types/GitCommandParams.js';
+import type { GitCommandResult } from './types/GitCommandResult.js';
 import type { GitCommitChangesParams } from './types/GitCommitChangesParams.js';
 import type { GitCommitChangesResult } from './types/GitCommitChangesResult.js';
 import type { GitCommitFileParams } from './types/GitCommitFileParams.js';
@@ -170,6 +173,9 @@ import type { GitFetchParams } from './types/GitFetchParams.js';
 import type { GitGraphParams } from './types/GitGraphParams.js';
 import type { GitGraphResult } from './types/GitGraphResult.js';
 import type { GitHistoryResult } from './types/GitHistoryResult.js';
+import type { GitIndexDiffResult } from './types/GitIndexDiffResult.js';
+import type { GitIndexEditParams } from './types/GitIndexEditParams.js';
+import type { GitInitParams } from './types/GitInitParams.js';
 import type { GitOperationResult } from './types/GitOperationResult.js';
 import type { GitPathsParams } from './types/GitPathsParams.js';
 import type { GitRepositoriesResult } from './types/GitRepositoriesResult.js';
@@ -690,6 +696,11 @@ export interface AppServerRequestMap {
   "issue/configure": { params: IssueConfigureParams; response: ConfigCommandResult };
   "issue/list": { params: IssueListParams; response: IssueListResult };
   "issue/read": { params: IssueReadParams; response: IssueReadResult };
+  "git/init": { params: GitInitParams; response: GitRepositoriesResult };
+  "git/catalog": { params: GitRepositoryParams; response: GitCatalogResult };
+  "git/command": { params: GitCommandParams; response: GitCommandResult };
+  "git/indexDiff": { params: GitChangeFileParams; response: GitIndexDiffResult };
+  "git/indexEdit": { params: GitIndexEditParams; response: GitOperationResult };
   "git/repositories": { params: Record<string, never>; response: GitRepositoriesResult };
   "git/clone": { params: GitCloneParams; response: GitCloneResult };
   "git/status": { params: GitRepositoryParams; response: GitStatusResult };
@@ -1009,6 +1020,11 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "issue/configure": { method: "issue/configure" },
   "issue/list": { method: "issue/list" },
   "issue/read": { method: "issue/read" },
+  "git/init": { method: "git/init" },
+  "git/catalog": { method: "git/catalog" },
+  "git/command": { method: "git/command" },
+  "git/indexDiff": { method: "git/indexDiff" },
+  "git/indexEdit": { method: "git/indexEdit" },
   "git/repositories": { method: "git/repositories" },
   "git/clone": { method: "git/clone" },
   "git/status": { method: "git/status" },

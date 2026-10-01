@@ -56,6 +56,7 @@ export interface AppServerNotificationMap {
   "skills/changed": SkillsChanged;
   "extensionHost/changed": ExtensionHostChanged;
   "git/statusChanged": GitStatusChanged;
+  "git/repositoriesChanged": Record<string, never>;
   "turnChanges/changed": TurnChangesChanged;
   "project/changed": ProjectChanged;
   "memory/changed": MemoryChanged;
@@ -105,6 +106,7 @@ export const APP_SERVER_NOTIFICATIONS: {
   "skills/changed": { method: "skills/changed" },
   "extensionHost/changed": { method: "extensionHost/changed" },
   "git/statusChanged": { method: "git/statusChanged" },
+  "git/repositoriesChanged": { method: "git/repositoriesChanged" },
   "turnChanges/changed": { method: "turnChanges/changed" },
   "project/changed": { method: "project/changed" },
   "memory/changed": { method: "memory/changed" },

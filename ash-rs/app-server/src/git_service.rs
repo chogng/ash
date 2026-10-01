@@ -126,6 +126,23 @@ impl GitService {
         &self.projection_root
     }
 
+    pub(crate) fn repository(&self) -> Result<GitRepository, GitServiceError> {
+        self.ensure_readable()?;
+        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
+        runtime.block_on(self.open_repository())
+    }
+
+    pub(crate) fn reference_state(
+        &self,
+        repository: &GitRepository,
+    ) -> Result<ash_git::GitReferenceState, GitServiceError> {
+        self.ensure_readable()?;
+        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
+        runtime
+            .block_on(self.client.reference_state(repository))
+            .map_err(GitServiceError::Git)
+    }
+
     pub(crate) fn check_ignore(&self, paths: &[PathBuf]) -> Result<Vec<PathBuf>, GitServiceError> {
         self.ensure_readable()?;
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
@@ -196,6 +213,92 @@ impl GitService {
                 .filter(|worktree| worktree.checkout_root() != repository.worktree_root())
                 .filter_map(|worktree| worktree.branch().map(str::to_owned))
                 .collect())
+        })
+    }
+
+    pub(crate) fn catalog(&self) -> Result<ash_git::GitCatalog, GitServiceError> {
+        self.ensure_readable()?;
+        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
+        runtime.block_on(async {
+            let repository = self.open_repository().await?;
+            self.client
+                .catalog(&repository)
+                .await
+                .map_err(GitServiceError::Git)
+        })
+    }
+
+    pub(crate) fn command(
+        &self,
+        command: &ash_git::GitCommand,
+        cancellation: &CancellationToken,
+    ) -> Result<ash_git::GitCommandOutcome, GitServiceError> {
+        self.ensure_mutable()?;
+        let runtime = lock_for_request(&self.runtime, cancellation)?;
+        runtime
+            .block_on(
+                async {
+                    let repository = self.open_repository().await?;
+                    // These intents affect checkout-wide state and cannot run through a grant for only
+                    // a nested directory. Path-limited stage/unstage remain available to nested grants.
+                    if !repository
+                        .worktree_root()
+                        .starts_with(self.authorization.dir().canonical_path())
+                    {
+                        return Err(GitServiceError::Boundary);
+                    }
+                    self.client
+                        .execute_command(&repository, command)
+                        .await
+                        .map_err(GitServiceError::Git)
+                }
+                .with_cancellation(cancellation.clone()),
+            )
+            .map_err(|_| GitServiceError::Cancelled)?
+    }
+
+    pub(crate) fn index_diff(
+        &self,
+        path: &Path,
+        comparison: GitChangeFileComparison,
+    ) -> Result<ash_git::GitIndexDiff, GitServiceError> {
+        self.ensure_readable()?;
+        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
+        runtime.block_on(async {
+            let repository = self.open_repository().await?;
+            let path = self.repository_prefix(&repository)?.join(path);
+            self.client
+                .index_diff(&repository, &path, comparison)
+                .await
+                .map_err(GitServiceError::Git)
+        })
+    }
+
+    pub(crate) fn index_edit(
+        &self,
+        request: &ash_git::GitIndexEdit,
+    ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
+        self.ensure_mutable()?;
+        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
+        runtime.block_on(async {
+            let repository = self.open_repository().await?;
+            let scoped = ash_git::GitIndexEdit {
+                path: self.repository_prefix(&repository)?.join(&request.path),
+                comparison: request.comparison,
+                expected_original: request.expected_original.clone(),
+                expected_modified: request.expected_modified.clone(),
+                selection: request.selection.clone(),
+            };
+            self.client
+                .edit_index(&repository, &scoped)
+                .await
+                .map_err(GitServiceError::Git)?;
+            let snapshot = self
+                .client
+                .snapshot(&repository)
+                .await
+                .map_err(GitServiceError::Git)?;
+            Ok((repository, snapshot))
         })
     }
 

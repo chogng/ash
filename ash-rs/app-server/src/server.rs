@@ -2670,6 +2670,11 @@ impl AppServer {
             Some(ClientMethod::FsPasteSystemFiles) => self.fs_paste_system_files(&request.params),
             Some(ClientMethod::FsRename) => self.fs_rename(&request.params),
             Some(ClientMethod::FsDelete) => self.fs_delete(&request.params),
+            Some(ClientMethod::GitInit) => self.git_init(&request.params, cancellation),
+            Some(ClientMethod::GitCatalog) => self.git_catalog(&request.params),
+            Some(ClientMethod::GitCommand) => self.git_command(&request.params, cancellation),
+            Some(ClientMethod::GitIndexDiff) => self.git_index_diff(&request.params),
+            Some(ClientMethod::GitIndexEdit) => self.git_index_edit(&request.params),
             Some(ClientMethod::GitRepositories) => self.git_repositories(),
             Some(ClientMethod::GitClone) => {
                 self.git_clone(connection, &request.params, cancellation)

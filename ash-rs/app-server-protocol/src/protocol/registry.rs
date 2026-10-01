@@ -674,6 +674,8 @@ use crate::protocol::git::GitBranchListResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitBranchSwitchParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCatalogResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitChangeFileComparisonDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitChangeFileParams;
@@ -689,6 +691,14 @@ use crate::protocol::git::GitCheckIgnoreResult;
 use crate::protocol::git::GitCloneParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCloneResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCommandDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCommandOutcomeDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCommandParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCommandResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommitChangeDto;
 #[cfg(any(test, feature = "export"))]
@@ -730,6 +740,20 @@ use crate::protocol::git::GitHeadDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitHistoryResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitIndexDiffResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitIndexEditParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitIndexHunkDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitIndexSelectionDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitInitParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitIntegrationDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitNamedRefDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitOperationResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitPathsParams;
@@ -751,6 +775,10 @@ use crate::protocol::git::GitRepositoryDto;
 use crate::protocol::git::GitRepositoryIdentityDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitRepositoryParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitStashDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitStashModeDto;
 use crate::protocol::git::GitStatusChanged;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitStatusResult;
@@ -3550,6 +3578,11 @@ client_methods! {
         response: IssueReadResult,
         serialization: None,
     },
+    GitInit => "git/init" { params: GitInitParams, response: GitRepositoriesResult, serialization: GlobalExclusive, },
+    GitCatalog => "git/catalog" { params: GitRepositoryParams, response: GitCatalogResult, serialization: RepositoryExclusive, },
+    GitCommand => "git/command" { params: GitCommandParams, response: GitCommandResult, serialization: RepositoryExclusive, },
+    GitIndexDiff => "git/indexDiff" { params: GitChangeFileParams, response: GitIndexDiffResult, serialization: RepositoryExclusive, },
+    GitIndexEdit => "git/indexEdit" { params: GitIndexEditParams, response: GitOperationResult, serialization: RepositoryExclusive, },
     GitRepositories => "git/repositories" {
         params: EmptyParams,
         response: GitRepositoriesResult,
@@ -4076,6 +4109,9 @@ server_notifications! {
     },
     GitStatusChanged => "git/statusChanged" {
         params: GitStatusChanged,
+    },
+    GitRepositoriesChanged => "git/repositoriesChanged" {
+        params: EmptyParams,
     },
     TurnChangesChanged => "turnChanges/changed" {
         params: TurnChangesChanged,
@@ -5035,6 +5071,20 @@ typescript_bindings! {
     FsRenameParams,
     FsDeleteParams,
     FsChanged,
+    GitIntegrationDto,
+    GitStashModeDto,
+    GitCommandDto,
+    GitCommandParams,
+    GitCommandOutcomeDto,
+    GitCommandResult,
+    GitNamedRefDto,
+    GitStashDto,
+    GitCatalogResult,
+    GitInitParams,
+    GitIndexSelectionDto,
+    GitIndexEditParams,
+    GitIndexHunkDto,
+    GitIndexDiffResult,
     GitChangeStatusDto,
     GitUpstreamDto,
     GitHeadDto,

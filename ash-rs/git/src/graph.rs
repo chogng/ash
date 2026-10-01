@@ -14,9 +14,10 @@ use crate::client::GitQueryStream;
 pub enum GitReferenceKind {
     LocalBranch,
     RemoteBranch,
+    Tag,
 }
 
-/// One local or remote-tracking branch ref projected for a repository graph.
+/// One branch or tag ref associated with a repository graph object.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitReference {
     name: String,
@@ -190,16 +191,17 @@ impl GitClient {
         })
     }
 
-    /// Lists local branches and fetched remote-tracking branches without exposing raw ref paths.
+    /// Lists branches and tags. Annotated tags point at their target so graph labels attach to commits.
     pub async fn references(&self, repository: &GitRepository) -> GitResult<Vec<GitReference>> {
         let output = self
             .run_query(
                 repository.worktree_root(),
                 [
                     "for-each-ref",
-                    "--format=%(refname)%00%(objectname)%00%(symref)%00%(HEAD)",
+                    "--format=%(refname)%00%(objectname)%00%(symref)%00%(HEAD)%00%(*objectname)",
                     "refs/heads",
                     "refs/remotes",
+                    "refs/tags",
                 ],
             )
             .await?;
@@ -213,10 +215,10 @@ fn parse_references(bytes: &[u8], command: &str) -> GitResult<Vec<GitReference>>
     let mut references = Vec::new();
     for line in text.lines().filter(|line| !line.is_empty()) {
         let fields = line.split('\0').collect::<Vec<_>>();
-        if fields.len() != 4 {
+        if fields.len() != 5 {
             return Err(GitError::invalid_output(
                 command,
-                format!("ref record had {} fields instead of 4", fields.len()),
+                format!("ref record had {} fields instead of 5", fields.len()),
             ));
         }
         if !fields[2].is_empty() {
@@ -259,6 +261,19 @@ fn parse_references(bytes: &[u8], command: &str) -> GitResult<Vec<GitReference>>
                 object_id: object_id.to_string(),
                 kind: GitReferenceKind::RemoteBranch,
                 remote_name: Some(remote_name.to_string()),
+                current: false,
+            }
+        } else if let Some(name) = full_name.strip_prefix("refs/tags/") {
+            GitReference {
+                name: name.to_string(),
+                object_id: if fields[4].is_empty() {
+                    object_id
+                } else {
+                    fields[4]
+                }
+                .to_string(),
+                kind: GitReferenceKind::Tag,
+                remote_name: None,
                 current: false,
             }
         } else {

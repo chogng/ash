@@ -1,7 +1,14 @@
+import type { GitInitParams, GitCatalogResult, GitCommandParams, GitCommandResult, GitIndexDiffResult, GitIndexEditParams } from '../../app-server/common/generated/index.js';
 import type { ConfigCommandResult, ConfigReadResult, ConfigUpdateParams, GitBranchListResult, GitBranchSwitchParams, GitChangeFileParams, GitChangeFileResult, GitConflictFileParams, GitConflictFileResult, GitCompleteConflictParams, GitCloneParams, GitCloneResult, GitCommitChangesParams, GitCommitChangesResult, GitCommitFileParams, GitCommitFileResult, GitCommitParams, GitCommitResult, GitFetchParams, GitGraphParams, GitGraphResult, GitHistoryResult, GitOperationResult, GitPathsParams, GitRepositoriesResult, GitRepositoryParams, GitStatusResult } from "../../app-server/common/generated/index.js";
 import type { GitCheckIgnoreParams, GitCheckIgnoreResult } from '../../app-server/common/generated/index.js';
+import type { GitBranchCreateParams, GitBranchDeleteParams, GitWorktreeCreateParams, GitWorktreeCreateResult, GitWorktreeDeleteParams, GitWorktreeListResult, GitWorktreeResolveParams, GitWorktreeResolveResult } from '../../app-server/common/generated/index.js';
 
 export interface IGitApi {
+	initialize(params: GitInitParams): Promise<GitRepositoriesResult>;
+	catalog(params: GitRepositoryParams): Promise<GitCatalogResult>;
+	executeCommand(params: GitCommandParams): Promise<GitCommandResult>;
+	indexDiff(params: GitChangeFileParams): Promise<GitIndexDiffResult>;
+	editIndex(params: GitIndexEditParams): Promise<GitOperationResult>;
 	clone(params: GitCloneParams): Promise<GitCloneResult>;
 	readConfig(): Promise<ConfigReadResult>;
 	updateConfig(params: ConfigUpdateParams): Promise<ConfigCommandResult>;
@@ -10,7 +17,13 @@ export interface IGitApi {
 	checkIgnore(params: GitCheckIgnoreParams): Promise<GitCheckIgnoreResult>;
 	history(params: GitRepositoryParams): Promise<GitHistoryResult>;
 	branches(params: GitRepositoryParams): Promise<GitBranchListResult>;
+	createBranch(params: GitBranchCreateParams): Promise<GitBranchListResult>;
+	deleteBranch(params: GitBranchDeleteParams): Promise<GitBranchListResult>;
 	switchBranch(params: GitBranchSwitchParams): Promise<GitOperationResult>;
+	worktrees(params: GitRepositoryParams): Promise<GitWorktreeListResult>;
+	createWorktree(params: GitWorktreeCreateParams): Promise<GitWorktreeCreateResult>;
+	deleteWorktree(params: GitWorktreeDeleteParams): Promise<GitWorktreeListResult>;
+	resolveWorktree(params: GitWorktreeResolveParams): Promise<GitWorktreeResolveResult>;
 	graph(params: GitGraphParams): Promise<GitGraphResult>;
 	commitChanges(params: GitCommitChangesParams): Promise<GitCommitChangesResult>;
 	commitFile(params: GitCommitFileParams): Promise<GitCommitFileResult>;

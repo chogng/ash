@@ -11,6 +11,7 @@ export function gitErrorMessage(error: unknown): string {
 	const message = error instanceof Error ? error.message : String(error);
 	const errorName = error instanceof AppServerRemoteError ? error.errorName : message;
 	if (/GitNotRepository/.test(errorName)) return localize('git.notRepository', 'The open folder is not a Git repository.');
+	if (errorName === 'GitIndexChanged') return localize('git.indexChanged', 'The comparison changed. Reopen the current Source Control comparison and select changes again.');
 	if (/GitConflictChanged/.test(errorName)) return localize({ bundle: 'ash', key: 'git.mergeIndexChanged' }, 'The conflict changed in Git. Reopen this merge editor to review the new versions.');
 	if (/GitUnavailable/.test(errorName)) {
 		return localize('git.unavailable', 'Git is unavailable for this workspace. Check folder access and retry.');

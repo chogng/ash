@@ -2723,6 +2723,55 @@ impl AppServer {
         Ok(authorization.dir().clone())
     }
 
+    pub(super) fn git_init(
+        &self,
+        value: &serde_json::Value,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<serde_json::Value, RpcError> {
+        use ash_async_utils::FutureCancellationExt;
+        let params: ash_app_server_protocol::protocol::git::GitInitParams = super::decode(value)?;
+        let _gate = self
+            .env_runtime_gate
+            .lock()
+            .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
+        let authorization = {
+            let runtime = self
+                .env_runtime
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let grant = match params.dir_id.as_deref() {
+                Some(id) => runtime.dirs.get(id),
+                None => runtime.selected_grant.as_ref(),
+            }
+            .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+            let authorization = grant
+                .authorize(Permission::MutateRepository)
+                .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?;
+            authorization
+        };
+        authorization
+            .ensure_active()
+            .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?;
+        let executor = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
+        executor
+            .block_on(
+                ash_git::GitClient::system()
+                    .initialize_repository(
+                        authorization.dir().canonical_path(),
+                        &params.initial_branch,
+                    )
+                    .with_cancellation(cancellation.clone()),
+            )
+            .map_err(|_| RpcError::new(-32800, AppServerErrorName::RequestCancelled))?
+            .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?;
+        let git = self.git_runtime_service()?;
+        git.reconcile().map_err(super::git_operations::git_error)?;
+        super::result(&git.repositories())
+    }
+
     pub(super) fn git_runtime_service(&self) -> Result<Arc<GitRuntime>, RpcError> {
         self.env_runtime
             .read()
