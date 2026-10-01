@@ -1,15 +1,15 @@
 # Windows 沙箱验收手册
 
-本手册分别验证 MXC PSEC 路径和独立 Windows 账户候选，保留各轮实机证据。WindowsAccount 模型已在 23H2 通过当前完整执行用例；同机仍缺少完整 PSEC 能力。旧 SDK 继承重算的副作用与恢复边界见文末记录。
+本手册分别验证 MXC PSEC 路径和独立 Windows 账户实现，保留各轮实机证据。2026-10-02 的 Windows 11 23H2 x64 管理员验收已通过当前服务安装、更新、完整账户执行和清理；同机仍缺少完整 PSEC 能力。旧 SDK 继承重算的副作用与恢复边界见文末记录。
 实现契约见 [mxc-sandbox](../ash-rs/mxc-sandbox/README.md) 与 [windows-sandbox](../ash-rs/windows-sandbox/README.md)。历史账户原型的结果不能作为当前候选的通过证据。
 
 ## 当前入口
 
 2026-10-02 起源码固定 MXC `46ce71d0da7b97bb531a33e175bf4166ffa730c0`，直接使用平台运行器及发布的 1.0 请求类型。下面 9 月 10–11 日的实机记录使用旧 pin `6cd3d58f05d3447e67109cfb75e042803b843ca4`，不作为新版验收通过证据。
 
-当前 MXC Windows 后端只接受完整 PSEC 能力。此前的账户原型已退出源码和产品包，不能再通过 `mxc-user` 或 `tests/local.ps1` 安装它。独立候选使用 `ash-windows-sandbox`，仍需单独授权和验收，不能沿用旧原型的通过结论。
+当前 MXC Windows 后端只接受完整 PSEC 能力。此前的账户原型已退出源码和产品包，不能再通过 `mxc-user` 或 `tests/local.ps1` 安装它。独立实现使用 `ash-windows-sandbox`，安装与验收需要明确授权；通过依据是下述当前源码的实机记录，不能沿用旧原型的结论。
 
-2026-10-02 新增独立 `ash-windows-sandbox-service` 后，账户验收脚本先安装 SCM 服务，再通过认证管道安装账户、执行用例、替换运行器并复测，最后删除账户和服务。旧 helper 直接配置账户的实机记录不证明新版服务路径通过；本次开发环境尚未执行服务注册与管理员安装验收。当前安装约束和操作入口见 [服务说明](../ash-rs/windows-sandbox-service/README.md)。
+2026-10-02 新增独立 `ash-windows-sandbox-service` 后，账户验收脚本先安装 SCM 服务，再通过认证管道安装账户、执行用例、替换运行器并复测，然后替换服务程序、重启并验证执行，最后删除账户和服务。本机已完成这条管理员实机路径，证据见 [本轮验收记录](#2026-10-02-服务及账户管理员验收)。当前安装约束和操作入口见 [服务说明](../ash-rs/windows-sandbox-service/README.md)。
 
 ```powershell
 just test ash-sandboxing --lib
@@ -40,13 +40,37 @@ PSEC 检查不安装账户、不改变系统权限。`test-psec.ps1 -Capability 
 
 PSEC 报告包含系统版本、架构、工具链、MXC pin、各项退出码和输出。账户结果见独立任务日志及安装计划。能力不支持用例通过只证明拒绝行为，不是 PSEC 成功证明。PSEC ConPTY、完整网络矩阵、App Server 产品链路及 WSL 尚未纳入此任务。
 
+## 2026-10-02 服务及账户管理员验收
+
+Windows 11 专业版 23H2、build `22631.6199`、`x86_64-pc-windows-msvc`，使用提升权限的管理员令牌。最终完整入口运行于北京时间 07:21:11–07:22:26，结果为 `passed`；基线提交为 `30b68cfd25df87512d41e7af9a0170ffb0de7083`，实际运行还包含证据目录中 `source.diff` 保存的未提交修复。
+
+| 验证 | 本机结果 |
+| --- | --- |
+| helper、服务和网络探针构建 | 全部通过 |
+| SCM 安装、认证管道配置账户、状态查询 | 通过；账户仍存在时拒绝服务卸载 |
+| 服务真实管道与安装权限测试 | 9 项通过、0 忽略 |
+| 账户库测试，含真实登录与 ACL 恢复 | 34 项通过、0 忽略 |
+| 文件与元数据、真实退出码、IPv4 代理、IPv6 断网、双账户并发、跨执行文件写入、取消及后代回收 | 10 项执行用例通过、0 忽略 |
+| 运行器程序更新 | SHA-256 改变，账户及 WFP 对象不变；10 项执行用例再次全部通过 |
+| 服务程序更新 | SHA-256 改变，SCM 停止、替换和重启成功，账户及 WFP 对象不变；文件、元数据与退出码执行用例再次通过 |
+| 卸载清理 | WFP 删除逐项查询确认；独立检查服务不存在、安装目录不存在、没有新增账户残留 |
+| 同机 PSEC 能力检查 | `test-psec.ps1 -Capability absent` 通过，结果为 `passed-unsupported-capability`；只证明准备阶段正确拒绝 |
+
+更新验收通过在临时程序副本末尾添加一个 PE overlay 字节改变程序摘要，不改变协议或测试执行逻辑；它验证实际替换和重启流程，不是两个不同发布版本之间的兼容性证明。
+
+实机验收发现并修复了三个产品问题：服务断开会丢弃客户端尚未读完的响应；复用管道实例会沿用上一连接缓存的 EOF；ACL 已恢复后留下的空日志目录被误判为未完成执行，阻止运行器更新。协议现为版本 2，响应增加限时收讫确认，每次连接使用新实例；管道客户端不能创建额外服务端实例。另将网络测试的端点文件改为写完后原子发布，消除读取未完成文件的共享冲突。对应回归与完整入口均通过。
+
+本机证据位于 `.build/acceptance/windows-sandbox-service/run-20261002-072108/`：`result.json` 保存最终状态与清理断言，`verification.json` 保存程序摘要、对象保留核对及再次检查的清理结果，`acceptance.log` 保存完整命令输出，`source.diff` 保存实际修复，`plans/` 保存安装、两次更新与删除清单，`psec/` 保存能力报告和测试日志。这些文件是本机证据，不随源码提交。原始完整入口为 [`scripts/test-windows-sandbox.ps1`](../scripts/test-windows-sandbox.ps1)。
+
+该结果限于本机 WindowsAccount 请求及以上用例。其他 Windows build、ARM64、PSEC 成功执行、完整崩溃恢复、App Server 产品链路和 WSL 未在本轮验收；WindowsAccount 仍不承诺整个宿主只读，`Strict` 请求在启动前拒绝。
+
 ## WSL 验收边界
 
 Windows、WSL 2 中的 Linux 进程和 MXC 的 WSL Container（WSLC）是不同的执行路径，验收结果不能互相替代。
 
 | 场景 | 验收要求 | 当前范围 |
 | --- | --- | --- |
-| Windows 版 Ash 执行 Windows 命令 | 执行本手册的 ProcessContainer 验收 | 必须完成，本次实机未通过 |
+| Windows 版 Ash 执行 Windows 命令 | 按所选后端分别验证账户模型与 PSEC | WindowsAccount 的本机 23H2 服务路径已通过；同机 PSEC 能力不足，未执行成功路径 |
 | Windows 受限命令调用 `wsl.exe` | 检查能否跨入 WSL 后越权访问文件、直连网络或留下存活进程 | 纳入 Windows 绕过检查；需要可正常执行命令的 WSL 环境 |
 | WSL 2 内运行 Linux 版 Ash | 在 WSL 2 内执行 Linux 沙箱验收，并检查跨系统边界 | 若将此用法列入支持范围，发布前必须单独通过 |
 | Windows 通过 MXC WSLC 启动 Linux 容器 | 验证 WSLC 的文件、网络、输入输出及完整容器生命周期 | 当前未启用，不属于已接入功能的验收 |
@@ -77,7 +101,7 @@ SDK 原有 runtime proxy 身份模式仍保留原校验，账户实现不通过�
 ## 证据与发布状态
 
 保存完整命令、退出码、标准流、SDK 诊断、文件和 ACL 差异、存活进程检查。
-Windows 实机及生产隔离资格尚未取得；下列部分结果不能代替完整验收。
+下列历史记录保留当时失败、修复和清理的边界；当前服务路径的本机结果见 [2026-10-02 验收](#2026-10-02-服务及账户管理员验收)，不能扩写为所有平台或完整生产隔离资格。
 Microsoft 对当时固定预览版的限制见 [上游说明](https://github.com/microsoft/mxc/tree/6cd3d58f05d3447e67109cfb75e042803b843ca4)。
 
 ### 2026-09-10 首次实机记录

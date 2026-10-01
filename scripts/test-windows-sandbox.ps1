@@ -73,6 +73,22 @@ try {
     if (($before.changes.accounts | ConvertTo-Json -Depth 10 -Compress) -ne ($after.changes.accounts | ConvertTo-Json -Depth 10 -Compress)) { throw 'Update changed the provisioned accounts.' }
     if (($before.changes.networkObjects | ConvertTo-Json -Depth 30 -Compress) -ne ($after.changes.networkObjects | ConvertTo-Json -Depth 30 -Compress)) { throw 'Update changed the installed network objects.' }
     Invoke-Checked python @('-B', 'scripts/cargo.py', 'test', '-p', 'ash-windows-sandbox', '--test', 'windows', '--locked', '--target', $Target, '--', '--include-ignored', '--test-threads=1')
+    $stream = [IO.File]::Open($service, [IO.FileMode]::Append, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    try { $stream.WriteByte(1) } finally { $stream.Dispose() }
+    $serviceUpdateFile = Join-Path $output 'service-update-plan.json'
+    & $service plan install | Set-Content -LiteralPath $serviceUpdateFile -Encoding utf8
+    if ($LASTEXITCODE -ne 0) { throw 'Could not prepare service executable update plan.' }
+    $serviceUpdate = Get-Content -LiteralPath $serviceUpdateFile -Raw | ConvertFrom-Json
+    if ($serviceUpdate.changes.serviceSha256 -eq $serviceUpdate.changes.installedServiceSha256) { throw 'Service update did not change the executable identity.' }
+    Invoke-Checked $service @('install', '--approve', $serviceUpdate.sha256)
+    Invoke-Checked $binary @('status')
+    $afterServiceFile = Join-Path $output 'after-service-update-plan.json'
+    & $binary plan remove | Set-Content -LiteralPath $afterServiceFile -Encoding utf8
+    if ($LASTEXITCODE -ne 0) { throw 'Could not inspect accounts after service update.' }
+    $afterService = Get-Content -LiteralPath $afterServiceFile -Raw | ConvertFrom-Json
+    if (($after.changes.accounts | ConvertTo-Json -Depth 10 -Compress) -ne ($afterService.changes.accounts | ConvertTo-Json -Depth 10 -Compress)) { throw 'Service update changed the provisioned accounts.' }
+    if (($after.changes.networkObjects | ConvertTo-Json -Depth 30 -Compress) -ne ($afterService.changes.networkObjects | ConvertTo-Json -Depth 30 -Compress)) { throw 'Service update changed the installed network objects.' }
+    Invoke-Checked python @('-B', 'scripts/cargo.py', 'test', '-p', 'ash-windows-sandbox', '--test', 'windows', '--locked', '--target', $Target, 'scoped_execution_preserves_grants_metadata_and_exit_code_authenticity', '--', '--ignored', '--exact', '--test-threads=1')
 } catch {
     $failure = $_
 } finally {

@@ -175,8 +175,15 @@ unsafe extern "system" fn control(
     }
 }
 
-fn listener(name: &str) -> Result<NamedPipeServer, String> {
-    let sd = descriptor("D:P(A;;GA;;;SY)(A;;GRGW;;;BU)")?;
+enum PipeInstance {
+    First,
+    Next,
+}
+
+fn listener(name: &str, instance: PipeInstance) -> Result<NamedPipeServer, String> {
+    // GENERIC_WRITE also grants FILE_CREATE_PIPE_INSTANCE. Clients need only
+    // FILE_WRITE_DATA; the pipe owner alone can create the next server instance.
+    let sd = descriptor("D:P(A;;GA;;;SY)(A;;GA;;;OW)(A;;GR;;;BU)(A;;0x2;;;BU)")?;
     let mut attributes = SECURITY_ATTRIBUTES {
         nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
         lpSecurityDescriptor: sd.0,
@@ -184,15 +191,25 @@ fn listener(name: &str) -> Result<NamedPipeServer, String> {
     };
     let mut options = ServerOptions::new();
     options
-        .first_pipe_instance(true)
+        .first_pipe_instance(matches!(instance, PipeInstance::First))
         .reject_remote_clients(true)
-        .max_instances(1);
+        .max_instances(2);
     unsafe { options.create_with_security_attributes_raw(name, (&raw mut attributes).cast()) }
         .map_err(|error| error.to_string())
 }
 
+fn advance_listener(pipe: &mut NamedPipeServer, name: &str) -> Result<(), String> {
+    // Mio can retain a prefetched EOF from the previous client. Each connection
+    // gets fresh I/O state; keep the old handle until the next instance exists so
+    // another process cannot acquire the service's pipe name between requests.
+    let next = listener(name, PipeInstance::Next)?;
+    pipe.disconnect().map_err(|error| error.to_string())?;
+    *pipe = next;
+    Ok(())
+}
+
 async fn listen(name: &str) -> Result<(), String> {
-    let mut pipe = listener(name)?;
+    let mut pipe = listener(name, PipeInstance::First)?;
     report(SERVICE_RUNNING, 0);
     loop {
         if STOP.load(Ordering::Acquire) {
@@ -225,7 +242,7 @@ async fn listen(name: &str) -> Result<(), String> {
             )
             .await;
         }
-        pipe.disconnect().map_err(|error| error.to_string())?;
+        advance_listener(&mut pipe, name)?;
     }
     Ok(())
 }
@@ -255,7 +272,14 @@ async fn write_response(pipe: &mut NamedPipeServer, response: &Response) -> Resu
         .map_err(|error| error.to_string())?;
     pipe.write_all(&bytes)
         .await
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+    // DisconnectNamedPipe discards unread response bytes, even after WriteFile
+    // completes. Wait for a bounded receipt rather than an unbounded flush that
+    // would let a client hold service shutdown by refusing to read.
+    if pipe.read_u8().await.map_err(|error| error.to_string())? != RESPONSE_RECEIVED {
+        return Err("invalid sandbox service response receipt".into());
+    }
+    Ok(())
 }
 
 fn authenticated_dispatch(pipe: HANDLE, message: Message) -> Response {

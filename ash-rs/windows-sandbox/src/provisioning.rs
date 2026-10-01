@@ -7,8 +7,10 @@ use std::path::PathBuf;
 
 pub const SERVICE_NAME: &str = "AshWindowsSandbox";
 pub const PIPE_NAME: &str = r"\\.\pipe\AshWindowsSandbox";
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
 pub const MAX_MESSAGE_BYTES: usize = 64 * 1024;
+/// The client sends this byte after reading and decoding the complete response.
+pub const RESPONSE_RECEIVED: u8 = 1;
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
