@@ -90,6 +90,7 @@ mod artwork {
     pub(crate) const EDIT_1: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/edit-1.svg"));
     pub(crate) const EDIT_2: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/edit-2.svg"));
     pub(crate) const EDIT_WRITE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/edit-write.svg"));
+    pub(crate) const ELLIPSE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/ellipse.svg"));
     pub(crate) const ELLIPSIS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/ellipsis.svg"));
     pub(crate) const ENTER: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/enter.svg"));
     pub(crate) const ERASER: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/eraser.svg"));
@@ -118,6 +119,7 @@ mod artwork {
     pub(crate) const H3: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/h3.svg"));
     pub(crate) const H4: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/h4.svg"));
     pub(crate) const H5: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/h5.svg"));
+    pub(crate) const HAND: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/hand.svg"));
     pub(crate) const HISTORY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/history.svg"));
     pub(crate) const HOME: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/home.svg"));
     pub(crate) const IMAGE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/image.svg"));
@@ -167,6 +169,7 @@ mod artwork {
     pub(crate) const PDF: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/pdf.svg"));
     pub(crate) const PDF_FILLED: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/pdf-filled.svg"));
     pub(crate) const PDF_RED: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/pdf-red.svg"));
+    pub(crate) const PEN: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/pen.svg"));
     pub(crate) const PINNED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/pinned.svg"));
     pub(crate) const PLAN: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/plan.svg"));
     pub(crate) const PREVIEW: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/preview.svg"));
@@ -317,6 +320,7 @@ pub mod icons {
     pub const EDIT_1: Icon = Icon::new(IconId::new("edit-1"), artwork::EDIT_1);
     pub const EDIT_2: Icon = Icon::new(IconId::new("edit-2"), artwork::EDIT_2);
     pub const EDIT_WRITE: Icon = Icon::new(IconId::new("edit-write"), artwork::EDIT_WRITE);
+    pub const ELLIPSE: Icon = Icon::new(IconId::new("ellipse"), artwork::ELLIPSE);
     pub const ELLIPSIS: Icon = Icon::new(IconId::new("ellipsis"), artwork::ELLIPSIS);
     pub const ENTER: Icon = Icon::new(IconId::new("enter"), artwork::ENTER);
     pub const ERASER: Icon = Icon::new(IconId::new("eraser"), artwork::ERASER);
@@ -345,6 +349,7 @@ pub mod icons {
     pub const H3: Icon = Icon::new(IconId::new("h3"), artwork::H3);
     pub const H4: Icon = Icon::new(IconId::new("h4"), artwork::H4);
     pub const H5: Icon = Icon::new(IconId::new("h5"), artwork::H5);
+    pub const HAND: Icon = Icon::new(IconId::new("hand"), artwork::HAND);
     pub const HISTORY: Icon = Icon::new(IconId::new("history"), artwork::HISTORY);
     pub const HOME: Icon = Icon::new(IconId::new("home"), artwork::HOME);
     pub const IMAGE: Icon = Icon::new(IconId::new("image"), artwork::IMAGE);
@@ -394,6 +399,7 @@ pub mod icons {
     pub const PDF: Icon = Icon::new(IconId::new("pdf"), artwork::PDF);
     pub const PDF_FILLED: Icon = Icon::new(IconId::new("pdf-filled"), artwork::PDF_FILLED);
     pub const PDF_RED: Icon = Icon::new(IconId::new("pdf-red"), artwork::PDF_RED);
+    pub const PEN: Icon = Icon::new(IconId::new("pen"), artwork::PEN);
     pub const PINNED: Icon = Icon::new(IconId::new("pinned"), artwork::PINNED);
     pub const PLAN: Icon = Icon::new(IconId::new("plan"), artwork::PLAN);
     pub const PREVIEW: Icon = Icon::new(IconId::new("preview"), artwork::PREVIEW);
@@ -540,6 +546,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::EDIT_1,
     icons::EDIT_2,
     icons::EDIT_WRITE,
+    icons::ELLIPSE,
     icons::ELLIPSIS,
     icons::ENTER,
     icons::ERASER,
@@ -568,6 +575,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::H3,
     icons::H4,
     icons::H5,
+    icons::HAND,
     icons::HISTORY,
     icons::HOME,
     icons::IMAGE,
@@ -617,6 +625,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::PDF,
     icons::PDF_FILLED,
     icons::PDF_RED,
+    icons::PEN,
     icons::PINNED,
     icons::PLAN,
     icons::PREVIEW,
@@ -764,6 +773,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("edit-1", artwork::EDIT_1),
     ("edit-2", artwork::EDIT_2),
     ("edit-write", artwork::EDIT_WRITE),
+    ("ellipse", artwork::ELLIPSE),
     ("ellipsis", artwork::ELLIPSIS),
     ("enter", artwork::ENTER),
     ("eraser", artwork::ERASER),
@@ -792,6 +802,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("h3", artwork::H3),
     ("h4", artwork::H4),
     ("h5", artwork::H5),
+    ("hand", artwork::HAND),
     ("history", artwork::HISTORY),
     ("home", artwork::HOME),
     ("image", artwork::IMAGE),
@@ -841,6 +852,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("pdf", artwork::PDF),
     ("pdf-filled", artwork::PDF_FILLED),
     ("pdf-red", artwork::PDF_RED),
+    ("pen", artwork::PEN),
     ("pinned", artwork::PINNED),
     ("plan", artwork::PLAN),
     ("preview", artwork::PREVIEW),

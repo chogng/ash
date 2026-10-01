@@ -150,5 +150,18 @@ test("Design editor stays within its Sessions contribution and keeps document co
 			violations.push(`${sourceName(widget)} -> ${sourceName(target)}`);
 		}
 	}
+	const sharedBrowserFiles = [
+		...productionTypeScriptFiles(join(designRoot, "browser/widget")),
+		...productionTypeScriptFiles(join(designRoot, "browser/controller")),
+		join(designRoot, "browser/view.ts"),
+		join(designRoot, "browser/designEditorBrowser.ts"),
+	];
+	for (const file of sharedBrowserFiles) {
+		for (const target of localImports(file)) {
+			if (target.startsWith(join(designRoot, "contrib")) || target === join(designRoot, "design.main.ts")) {
+				violations.push(`${sourceName(file)} -> ${sourceName(target)}`);
+			}
+		}
+	}
 	assert.deepEqual(violations, []);
 });

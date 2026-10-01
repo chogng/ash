@@ -1,7 +1,4 @@
 .ash-sessions-design-view {
-	--ash-sessions-design-grid-size: 12px;
-	--ash-sessions-design-grid-line: color-mix(in srgb, var(--ash-foreground) 8%, transparent);
-
 	display: flex;
 	flex-direction: column;
 	flex: 1 1 auto;
@@ -10,51 +7,33 @@
 	outline: none;
 }
 
-.ash-sessions-design-viewport {
+.ash-sessions-design-stage {
 	position: relative;
+	display: flex;
 	flex: 1 1 auto;
 	min-width: 0;
 	min-height: 0;
-	overflow: hidden;
-	cursor: grab;
-	user-select: none;
-	touch-action: none;
-	background-color: color-mix(in srgb, var(--ash-foreground) 3%, var(--ash-editor-background));
-	background-image: linear-gradient(to right, var(--ash-sessions-design-grid-line) var(--ash-strokeThickness), transparent var(--ash-strokeThickness)), linear-gradient(to bottom, var(--ash-sessions-design-grid-line) var(--ash-strokeThickness), transparent var(--ash-strokeThickness));
-	background-size: calc(var(--ash-sessions-design-grid-size) * var(--ash-sessions-design-scale, 1)) calc(var(--ash-sessions-design-grid-size) * var(--ash-sessions-design-scale, 1));
-	background-position: var(--ash-sessions-design-pan-x, 0px) var(--ash-sessions-design-pan-y, 0px);
 }
 
-.ash-sessions-design-view.pointer-cursor .ash-sessions-design-viewport {
-	cursor: var(--ash-sessions-design-pointer-cursor);
-}
-
-[data-color-scheme="high-contrast-dark"] .ash-sessions-design-view,
-[data-color-scheme="high-contrast-light"] .ash-sessions-design-view {
-	--ash-sessions-design-grid-line: var(--ash-contrastBorder);
-}
-
-[data-color-scheme="high-contrast-dark"] .ash-sessions-design-viewport,
-[data-color-scheme="high-contrast-light"] .ash-sessions-design-viewport {
-	background-color: var(--ash-editor-background);
-}
-
-.ash-sessions-design-view.panning .ash-sessions-design-viewport {
-	cursor: grabbing;
-}
-
-.ash-sessions-design-view:focus-visible .ash-sessions-design-viewport {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: calc(-1 * var(--ash-strokeThickness));
-}
-
-.ash-sessions-design-world {
+.ash-sessions-design-stage > .ash-design-tools-widget {
 	position: absolute;
-	top: 0;
-	left: 0;
-	width: 0;
-	height: 0;
-	transform-origin: 0 0;
+	z-index: 2;
+	bottom: var(--ash-spacing-size160);
+	left: 50%;
+	transform: translateX(-50%);
+}
+
+.ash-sessions-design-stage > .ash-design-code-widget {
+	position: absolute;
+	inset: 0;
+}
+
+.ash-sessions-design-stage > .ash-design-motion-widget {
+	position: absolute;
+	left: var(--ash-spacing-size160);
+	right: var(--ash-spacing-size160);
+	bottom: 76px;
+	max-height: 35%;
 }
 
 .ash-sessions-design-tools {
@@ -74,68 +53,6 @@
 	color: var(--ash-description-foreground);
 }
 
-.ash-sessions-design-shapes {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	overflow: visible;
-	pointer-events: none;
-}
-
-.ash-sessions-design-selection {
-	display: none;
-	fill: none;
-	stroke: var(--ash-focusBorder);
-	stroke-width: 2px;
-	vector-effect: non-scaling-stroke;
-}
-
-.ash-sessions-design-selection.visible {
-	display: block;
-}
-
-.ash-sessions-design-view.moving .ash-sessions-design-viewport {
-	cursor: move;
-}
-
-.ash-sessions-design-properties {
-	display: none;
-	min-height: 0;
-	max-height: 40%;
-	overflow: auto;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--ash-spacing-size120);
-	padding: var(--ash-spacing-size80);
-	font-size: var(--ash-fontSize-label1);
-}
-
-.ash-sessions-design-properties.visible {
-	display: flex;
-}
-
-.ash-sessions-design-properties label {
-	display: flex;
-	align-items: center;
-	gap: var(--ash-spacing-size40);
-}
-
-.ash-sessions-design-properties input {
-	box-sizing: border-box;
-	width: 80px;
-	min-height: 28px;
-	color: var(--ash-input-foreground);
-	background: var(--ash-input-background);
-	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-cornerRadius-small);
-	font: inherit;
-}
-
-.ash-sessions-design-properties input:focus-visible {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: -1px;
-}
-
 .ash-sessions-design-message {
 	font-size: var(--ash-fontSize-label1);
 	padding: 0 var(--ash-spacing-size80);
@@ -143,56 +60,4 @@
 
 .ash-sessions-design-content {
 	display: none;
-}
-
-.ash-sessions-design-special-properties {
-	display: none;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--ash-spacing-size120);
-	width: 100%;
-}
-
-.ash-sessions-design-special-properties.visible {
-	display: flex;
-}
-
-.ash-sessions-design-properties textarea,
-.ash-sessions-design-properties select {
-	box-sizing: border-box;
-	max-width: 100%;
-	min-height: var(--ash-spacing-size280);
-	color: var(--ash-input-foreground);
-	background: var(--ash-input-background);
-	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-cornerRadius-small);
-	font: inherit;
-}
-
-.ash-sessions-design-properties textarea {
-	width: 240px;
-	resize: vertical;
-}
-
-.ash-sessions-design-properties textarea:focus-visible,
-.ash-sessions-design-properties select:focus-visible {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: -1px;
-}
-
-.ash-sessions-design-properties input[type="checkbox"] {
-	width: var(--ash-spacing-size160);
-	min-height: var(--ash-spacing-size160);
-}
-
-.ash-sessions-design-selection rect,
-.ash-sessions-design-selection line,
-.ash-sessions-design-path-handle {
-	vector-effect: non-scaling-stroke;
-}
-
-.ash-sessions-design-path-handle {
-	fill: var(--ash-editor-background);
-	pointer-events: all;
-	cursor: move;
 }

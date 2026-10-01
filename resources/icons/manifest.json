@@ -412,6 +412,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "ellipse",
+      "file": "ellipse.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "ellipsis",
       "file": "ellipsis.svg",
       "rendering": "symbolic"
@@ -549,6 +554,11 @@
     {
       "id": "h5",
       "file": "h5.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "hand",
+      "file": "hand.svg",
       "rendering": "symbolic"
     },
     {
@@ -795,6 +805,11 @@
       "id": "pdf-red",
       "file": "pdf-red.svg",
       "rendering": "multicolor"
+    },
+    {
+      "id": "pen",
+      "file": "pen.svg",
+      "rendering": "symbolic"
     },
     {
       "id": "pinned",

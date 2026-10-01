@@ -6,6 +6,22 @@ import type { DesignFrame, DesignPoint } from '../core/geometry.js';
 export interface DesignShapeGeometry extends DesignFrame {
 	readonly id: string;
 	readonly fill: string;
+	readonly motion?: DesignMotion;
+}
+
+/** Positions are in the object's parent coordinates, matching static geometry. */
+export interface DesignKeyframe {
+	readonly offset: number;
+	readonly x: number;
+	readonly y: number;
+	readonly rotation: number;
+	readonly opacity: number;
+}
+
+export interface DesignMotion {
+	readonly duration: number;
+	readonly loop: boolean;
+	readonly keyframes: readonly DesignKeyframe[];
 }
 
 /** Path points use fractions of the shape bounds, so resizing preserves the curve. */
@@ -28,6 +44,9 @@ export interface DesignDocument {
 }
 
 function freezeShape(shape: DesignShape): DesignShape {
+	if (shape.motion) {
+		shape = { ...shape, motion: Object.freeze({ ...shape.motion, keyframes: Object.freeze(shape.motion.keyframes.map(frame => Object.freeze({ ...frame }))) }) };
+	}
 	if (shape.kind === 'group') {
 		return Object.freeze({ ...shape, children: Object.freeze(shape.children.map(freezeShape)) });
 	}
@@ -79,8 +98,9 @@ function parseShape(value: unknown, ids: Set<string>): DesignShape {
 		throw new TypeError('Invalid design shape');
 	}
 	ids.add(value.id);
-	const geometry: DesignShapeGeometry = { id: value.id, x: value.x, y: value.y, width: value.width, height: value.height, rotation: value.rotation, fill: value.fill };
+	const geometry: DesignShapeGeometry = { id: value.id, x: value.x, y: value.y, width: value.width, height: value.height, rotation: value.rotation, fill: value.fill, ...(value.motion === undefined ? {} : { motion: parseMotion(value.motion) }) };
 	const keys = ['id', 'kind', 'x', 'y', 'width', 'height', 'rotation', 'fill'];
+	if (value.motion !== undefined) { keys.push('motion'); }
 	let shape: DesignShape;
 	switch (value.kind) {
 		case 'rectangle': case 'ellipse': shape = { ...geometry, kind: value.kind }; break;
@@ -109,6 +129,26 @@ function parseShape(value: unknown, ids: Set<string>): DesignShape {
 	}
 	if (Object.keys(value).some(key => !keys.includes(key))) { throw new TypeError('Invalid design shape property'); }
 	return shape;
+}
+
+function parseMotion(value: unknown): DesignMotion {
+	if (!isRecord(value) || !isPositiveNumber(value.duration) || typeof value.loop !== 'boolean' || !Array.isArray(value.keyframes) || value.keyframes.length < 2
+		|| Object.keys(value).some(key => !['duration', 'loop', 'keyframes'].includes(key))) {
+		throw new TypeError('Invalid design motion');
+	}
+	const keyframes = value.keyframes.map((frame: unknown): DesignKeyframe => {
+		if (!isRecord(frame) || !isFiniteNumber(frame.offset) || frame.offset < 0 || frame.offset > 1
+			|| !isFiniteNumber(frame.x) || !isFiniteNumber(frame.y) || !isFiniteNumber(frame.rotation)
+			|| !isFiniteNumber(frame.opacity) || frame.opacity < 0 || frame.opacity > 1
+			|| Object.keys(frame).some(key => !['offset', 'x', 'y', 'rotation', 'opacity'].includes(key))) {
+			throw new TypeError('Invalid design keyframe');
+		}
+		return { offset: frame.offset, x: frame.x, y: frame.y, rotation: frame.rotation, opacity: frame.opacity };
+	});
+	if (keyframes[0].offset !== 0 || keyframes.at(-1)!.offset !== 1 || keyframes.some((frame, index) => index > 0 && frame.offset <= keyframes[index - 1].offset)) {
+		throw new TypeError('Design keyframes must be ordered from zero to one');
+	}
+	return { duration: value.duration, loop: value.loop, keyframes };
 }
 
 export function serializeDesignDocument(document: DesignDocument): string {

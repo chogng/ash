@@ -31,14 +31,14 @@ export class DesignDocumentController extends Disposable {
 	public get isBusy(): boolean { return this.isFileOperationRunning; }
 	public get isDirty(): boolean { return serializeDesignDocument(this.model.value) !== this.savedContent; }
 
-	public async exportDocument(): Promise<void> {
+	public async exportDocument(output = { title: localize('sessions.design.export', 'Export SVG'), filename: 'design.svg', extension: 'svg', content: exportDesignSvg(this.model.value) }): Promise<void> {
 		if (this.isFileOperationRunning) { return; }
 		this.isFileOperationRunning = true;
 		this.changeEmitter.fire({});
 		try {
-			const resource = await this.fileDialogs.showSaveDialog({ title: localize('sessions.design.export', 'Export SVG'), defaultUri: this.workspace.getWorkspace().folders[0]?.uri.joinPathSegment('design.svg'), filters: [{ name: 'SVG', extensions: ['svg'] }] });
+			const resource = await this.fileDialogs.showSaveDialog({ title: output.title, defaultUri: this.workspace.getWorkspace().folders[0]?.uri.joinPathSegment(output.filename), filters: [{ name: output.extension.toUpperCase(), extensions: [output.extension] }] });
 			if (!resource || this.isDisposed) { return; }
-			await this.files.writeFile({ resource, content: exportDesignSvg(this.model.value) });
+			await this.files.writeFile({ resource, content: output.content });
 			if (!this.isDisposed) { this.changeEmitter.fire({ message: localize('sessions.design.exported', 'Exported {0}', basename(resource)) }); }
 		} catch (error) {
 			await this.dialogs.error(localize('sessions.design.exportFailed', 'Could not export the design.'), String(error));
