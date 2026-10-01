@@ -180,7 +180,9 @@ test('TextModel owns the syntax worker lifecycle and reanalyzes language-support
 	assert.equal(model.tokenization.hasAccurateTokensForLine(1), false);
 	await waitFor(() => tokenRequestCount === 2 && model.tokenization.hasAccurateTokensForLine(1));
 	assert.equal(model.tokenization.getLineTokens(1).getStandardTokenType(0), StandardTokenType.Comment);
-	assert.equal(workerCount, 2);
+	assert.equal(workerCount, 1);
+	assert.equal(disposedWorkerCount, 0);
+	model.dispose();
 	assert.equal(disposedWorkerCount, 1);
 });
 

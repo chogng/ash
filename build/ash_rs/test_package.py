@@ -206,8 +206,11 @@ class PackageTests(unittest.TestCase):
     BUILT_IN_EXTENSIONS = [
         "bazel",
         "css",
+        "diff",
+        "git-base",
         "go",
         "html",
+        "ini",
         "javascript",
         "json",
         "markdown-basics",

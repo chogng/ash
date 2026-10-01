@@ -7,3 +7,6 @@ and snippets copied from the sibling VS Code source tree at
 - Upstream: `microsoft/vscode`
 - License: MIT, following the upstream VS Code repository
 - Runtime role: declarative resources consumed through Ash's extension catalog
+
+Ash also accepts `git-commit` and `git-rebase` as fenced code-block labels alongside
+the upstream commit-message and rebase filenames.

@@ -44,6 +44,8 @@
 		{
 			"scope": [
 				"constant.numeric",
+				"constant.other.character-class.ignore",
+				"constant.character.escape.ignore",
 				"variable.other.enummember",
 				"keyword.operator.plus.exponent",
 				"keyword.operator.minus.exponent"
@@ -294,7 +296,11 @@
 			}
 		},
 		{
-			"scope": "keyword",
+			"scope": [
+				"keyword",
+				"keyword.operator.negation.ignore",
+				"keyword.operator.wildcard.ignore"
+			],
 			"settings": {
 				"foreground": "#569cd6"
 			}

@@ -104,7 +104,8 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 			this.scheduleAnalysis();
 		}));
 		if (options.onDidChangeLanguageSupport) this._register(options.onDidChangeLanguageSupport(() => {
-			this.coordinator.restartWorker();
+			// The worker synchronizes its grammar catalog and theme before each request.
+			// Retaining it keeps the loaded grammars and document mirror available.
 			this.tokenStore.clear();
 			this.scheduleAnalysis();
 		}));

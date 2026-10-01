@@ -134,6 +134,63 @@ test('raw tokenizer exposes Markdown scopes and reflects replaced grammars', asy
 	assert.ok((await tokenization.createTokenizer('demo'))!.tokenizeLine('if', null).tokens.some(token => token.scopes.includes('string.quoted.demo')));
 });
 
+test('bundled Git grammars preserve pattern boundaries and colors in every Ash theme', async () => {
+	using registry = new TextMateGrammarRegistry();
+	for (const directory of ['git-base', 'ini', 'diff', 'shellscript']) {
+		const manifest = JSON.parse(await readFile(resolve(`../extensions/${directory}/package.json`), 'utf8')) as { contributes: { grammars: { language: string; scopeName: string; path: string }[] } };
+		for (const grammar of manifest.contributes.grammars) {
+			const content = await readFile(resolve(`../extensions/${directory}`, grammar.path), 'utf8');
+			registry.register({ languageId: grammar.language, scopeName: grammar.scopeName, loadGrammar: () => content });
+		}
+	}
+	using rawTokenization = new TextMateTokenizationService(registry, onigLib);
+	const ignore = (await rawTokenization.createTokenizer('ignore'))!;
+	for (const [line, scopes] of [
+		['# comment', ['comment.line.number-sign.ignore']],
+		[String.raw`\#literal`, ['constant.character.escape.ignore', 'source.ignore']],
+		[String.raw`\!literal`, ['constant.character.escape.ignore', 'source.ignore']],
+		[String.raw`\*literal`, ['constant.character.escape.ignore', 'source.ignore']],
+		['prefix#!literal', ['source.ignore']],
+		['!**/file[0-9]?.txt', ['keyword.operator.negation.ignore', 'keyword.operator.wildcard.ignore', 'punctuation.separator.directory.ignore', 'source.ignore', 'constant.other.character-class.ignore', 'keyword.operator.wildcard.ignore', 'source.ignore']],
+		['[[:digit:]]', ['constant.other.character-class.ignore']],
+		['[!a-z]', ['constant.other.character-class.ignore']],
+		['[]a]', ['constant.other.character-class.ignore']],
+	] as const) {
+		assert.deepEqual(ignore.tokenizeLine(line, null).tokens.map(token => token.scopes.at(-1)), scopes, line);
+	}
+	const rebase = (await rawTokenization.createTokenizer('git-rebase'))!;
+	const shell = rebase.tokenizeLine('exec echo "unfinished', null);
+	assert.ok(shell.tokens.some(token => token.scopes.includes('string.quoted.double.shell')));
+	assert.ok(rebase.tokenizeLine('pick abc1234 Fix', shell.ruleStack).tokens.some(token => token.scopes.includes('support.function.git-rebase')));
+	const samples = [
+		['ignore', '# comment', '# comment'],
+		['ignore', '!keep.log', '!'],
+		['ignore', '*.log', '*'],
+		['ignore', 'file[0-9].log', '[0-9]'],
+		['ignore', String.raw`\#literal`, String.raw`\#`],
+		['git-rebase', 'pick abc1234 Fix', 'pick'],
+		['git-rebase', 'pick abc1234 Fix', 'abc1234'],
+		['git-rebase', 'exec echo "hello"', 'hello'],
+		['git-commit', 'Fix\n\n#\tnew file: file', 'new file: file'],
+		['git-commit', 'Fix\n\n# message\ndiff --git a/file b/file\n@@ -1 +1 @@\n-old\n+new', 'new'],
+		['properties', '[core]\neditor = "ash"', 'editor'],
+		['ini', '[core]\neditor = "ash"', 'editor'],
+		['diff', '@@ -1 +1 @@\n-old\n+new', 'old'],
+		['diff', '@@ -1 +1 @@\n-old\n+new', 'new'],
+	] as const;
+	for (const id of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+		const theme = getWorkbenchColorTheme(id);
+		for (const [languageId, text, lexeme] of samples) {
+			using tokenization = new TextMateTokenizationService(registry, onigLib, { scopeResolver: createTextMateScopeThemeResolver(projectColorThemeTokens(theme, 1)) });
+			using model = new TextModel(text);
+			const result = await tokenization.tokenize(languageId, model.createVersionedSnapshot(), new AbortController().signal);
+			const token = result!.tokens.find(token => model.getTextInRange(token.range).includes(lexeme));
+			assert.ok(token?.presentation?.foreground, `${id}: ${languageId} ${lexeme} has a syntax color`);
+			assert.notEqual(token.presentation.foreground.toLowerCase(), theme.getColorCss('editor.foreground')?.toLowerCase(), `${id}: ${languageId} ${lexeme} differs from plain text`);
+		}
+	}
+});
+
 test("TextMate grammar metadata reaches runtime configuration and token projection", async () => {
 	using registry = new TextMateGrammarRegistry();
 	using registration = registry.register({

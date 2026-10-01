@@ -795,7 +795,7 @@
 			]
 		},
 		"fenced_code_block_git_commit": {
-			"begin": "(^|\\G)(\\s*)(`{3,}|~{3,})\\s*(?i:(COMMIT_EDITMSG|MERGE_MSG)((\\s+|:|,|\\{|\\?)[^`]*)?$)",
+			"begin": "(^|\\G)(\\s*)(`{3,}|~{3,})\\s*(?i:(COMMIT_EDITMSG|MERGE_MSG|git-commit)((\\s+|:|,|\\{|\\?)[^`]*)?$)",
 			"name": "markup.fenced_code.block.markdown",
 			"end": "(^|\\G)(\\2|\\s{0,3})(\\3)\\s*$",
 			"beginCaptures": {
@@ -828,7 +828,7 @@
 			]
 		},
 		"fenced_code_block_git_rebase": {
-			"begin": "(^|\\G)(\\s*)(`{3,}|~{3,})\\s*(?i:(git-rebase-todo)((\\s+|:|,|\\{|\\?)[^`]*)?$)",
+			"begin": "(^|\\G)(\\s*)(`{3,}|~{3,})\\s*(?i:(git-rebase-todo|git-rebase)((\\s+|:|,|\\{|\\?)[^`]*)?$)",
 			"name": "markup.fenced_code.block.markdown",
 			"end": "(^|\\G)(\\2|\\s{0,3})(\\3)\\s*$",
 			"beginCaptures": {

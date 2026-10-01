@@ -746,6 +746,36 @@ test("Code highlights Rust locally and obtains document symbols asynchronously",
 	await expect(page.locator('.ash-quick-pick-row-label')).toContainText('main');
 });
 
+test('Git files load bundled highlighting through the product extension catalog', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires the Code App Server product');
+	const samples = [
+		['.gitignore', '# generated\n!keep.log\n**/*.log', 'ignore', '!'],
+		['COMMIT_EDITMSG', 'Fix\n\n#\tnew file: file', 'git-commit', 'new file: file'],
+		['git-rebase-todo', 'pick abc1234 Fix\nexec echo "hello"', 'git-rebase', 'pick'],
+		['settings.gitconfig', '[core]\neditor = "ash"', 'properties', 'editor'],
+		['changes.patch', '@@ -1 +1 @@\n-old\n+new', 'diff', 'new'],
+	] as const;
+	for (const [filename, source] of samples) {
+		await writeFile(join(testWorkspace.directory, filename), source);
+	}
+	const page = workbench.page;
+	const explorer = page.locator('.ash-explorer');
+	for (const [filename, , language, lexeme] of samples) {
+		const row = explorer.getByRole('treeitem', { name: filename, exact: true });
+		await expect(row).toBeVisible({ timeout: 15_000 });
+		await row.click();
+		await expect(page.getByRole('button', { name: `Language ${language}`, exact: true })).toBeVisible();
+		const editor = workbench.editors.groupAt(0).content.locator('.stanza-editor');
+		const token = editor.locator('.stanza-editor-token').filter({ hasText: lexeme }).first();
+		await expect(token).toBeVisible();
+		const foreground = await editor.evaluate(element => getComputedStyle(element).color);
+		await expect.poll(() => token.evaluate(element => getComputedStyle(element).color), { message: filename }).not.toBe(foreground);
+		const input = editor.getByRole('textbox', { name: filename, exact: true });
+		await input.focus();
+		await expect(input).toBeFocused();
+	}
+});
+
 test('Markdown source styles follow all Ash themes and refresh after editing and undo', async ({ target, testWorkspace, workbench }) => {
 	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'This scenario requires the Code App Server product');
 	const source = '# Heading\n\n**strong** *emphasis* ~~removed~~ `inline` [link](https://example.com)\n\n- item\n> quote\n\n```javascript\nconst value = "hello";\n```';

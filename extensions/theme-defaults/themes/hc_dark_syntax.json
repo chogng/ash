@@ -44,6 +44,8 @@
 		{
 			"scope": [
 				"constant.numeric",
+				"constant.other.character-class.ignore",
+				"constant.character.escape.ignore",
 				"constant.other.color.rgb-value",
 				"constant.other.rgb-value",
 				"support.constant.color"
@@ -263,7 +265,11 @@
 			}
 		},
 		{
-			"scope": "keyword",
+			"scope": [
+				"keyword",
+				"keyword.operator.negation.ignore",
+				"keyword.operator.wildcard.ignore"
+			],
 			"settings": {
 				"foreground": "#569cd6"
 			}

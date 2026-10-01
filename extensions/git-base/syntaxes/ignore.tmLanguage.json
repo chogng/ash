@@ -1,0 +1,31 @@
+{
+  "name": "Ignore",
+  "scopeName": "source.ignore",
+  "comment": "Only a leading unescaped # or ! is special; escapes precede glob operators and character classes.",
+  "patterns": [
+    {
+      "match": "^#.*",
+      "name": "comment.line.number-sign.ignore"
+    },
+    {
+      "match": "\\\\.",
+      "name": "constant.character.escape.ignore"
+    },
+    {
+      "match": "^!",
+      "name": "keyword.operator.negation.ignore"
+    },
+    {
+      "match": "\\*\\*|\\*|\\?",
+      "name": "keyword.operator.wildcard.ignore"
+    },
+    {
+      "match": "\\[(?:[!^])?(?:\\])?(?:\\\\.|\\[:[a-z]+:\\]|[^\\]\\\\\\n])+\\]",
+      "name": "constant.other.character-class.ignore"
+    },
+    {
+      "match": "/",
+      "name": "punctuation.separator.directory.ignore"
+    }
+  ]
+}

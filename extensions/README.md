@@ -42,12 +42,17 @@ User-installed extensions are a separate profile-level root. Marketplace package
 
 The current declarative pack contains the following package directories:
 
-- `bazel` (Starlark/bazelrc), `css` (CSS/Less/SCSS), `go`, `html`, `javascript`, `json`, `markdown-basics`, `python`, `rust`, `shellscript`, `sql`,
+- `bazel` (Starlark/bazelrc), `css` (CSS/Less/SCSS), `diff`, `git-base`, `go`, `html`, `ini`, `javascript`, `json`, `markdown-basics`, `python`, `rust`, `shellscript`, `sql`,
   `toml`, `typescript-basics`, `xml`, and `yaml` provide language IDs, file associations, language
   configuration, TextMate grammars, and—where upstream provides them—snippets.
   Bazel associates `BUILD`, `WORKSPACE`, `MODULE.bazel`, `.bazel`, and `.bzl` files with
   Starlark; `.bazelrc` and `bazel.rc` use a separate configuration grammar. Starlark
   editing includes comment toggling, bracket/quote pairs, block indentation, and folding.
+  Git resources associate ignore/exclude files, commit/merge messages, rebase plans,
+  Git configuration files, and diff/patch files with their grammars. Ignore rules
+  highlight comments, negation, wildcards, character classes, and escapes. Commit
+  messages include diff highlighting, and rebase `exec` commands include Shell
+  highlighting. Markdown fenced blocks reuse these same grammars.
 - `theme-seti` provides the Seti file icon document, font, and third-party notices.
 - `theme-defaults` provides VS Code-derived syntax themes and the four Ash color themes.
   The Workbench loader also resolves package-relative JSON `include` files when a theme uses them.

@@ -58,6 +58,77 @@ test('Bazel files select Starlark or bazelrc and tokenize through the bundled gr
 	expect((await page.evaluate(() => window.tokenizationIntegration.state())).errors).toEqual([]);
 });
 
+test('Git files select their bundled languages and tokenize in the frontend Worker', async ({ page }) => {
+	const samples = [
+		['.gitignore', 'ignore', '# generated\n!keep.log\n**/*.log\nfile[0-9]?.txt', 'operator', '!'],
+		['.gitignore_global', 'ignore', '*.log', 'operator', '*'],
+		['.git/info/exclude', 'ignore', '# local files', 'comment', '# local files'],
+		['.config/git/ignore', 'ignore', '**/cache/', 'operator', '**'],
+		['.git-blame-ignore-revs', 'ignore', '# formatting commit', 'comment', '# formatting commit'],
+		['COMMIT_EDITMSG', 'git-commit', 'Fix the build\n\n# Please enter a commit message', 'comment', '# Please'],
+		['MERGE_MSG', 'git-commit', 'Merge topic\n\n# Conflicts:', 'comment', '# Conflicts:'],
+		['git-rebase-todo', 'git-rebase', 'pick abc1234 Fix the build\nreword def5678 Rename\nexec echo "hello"', 'function', 'pick'],
+		['.git/rebase-merge/done', 'git-rebase', 'squash abc1234 Fix the build', 'constant', 'abc1234'],
+		['.gitconfig', 'properties', '[user]\nname = "Ash"', 'keyword', 'name'],
+		['gitconfig', 'properties', '[core]\neditor = "ash"', 'string', 'ash'],
+		['.git/config', 'properties', '[core]\neditor = "ash"', 'keyword', 'editor'],
+		['.config/git/config', 'properties', '[core]\neditor = "ash"', 'keyword', 'editor'],
+		['.gitmodules', 'properties', '[submodule "lib"]\npath = "lib"', 'keyword', 'path'],
+		['settings.ini', 'ini', '[core]\neditor = "ash"', 'keyword', 'editor'],
+		['changes.diff', 'diff', '@@ -1 +1 @@\n-old\n+new', 'punctuation', '+'],
+		['changes.patch', 'diff', '@@ -1 +1 @@\n-old\n+new', 'punctuation', '-'],
+	] as const;
+	for (const [filename, languageId, text, type, lexeme] of samples) {
+		const actualLanguage = await page.evaluate(({ filename, text }) => window.tokenizationIntegration.openResource(`/project/${filename}`, text), { filename, text });
+		expect(actualLanguage, filename).toBe(languageId);
+		await expect.poll(() => page.evaluate(({ type, lexeme }) => window.tokenizationIntegration.state().tokens.some(token => token.type === type && token.text.includes(lexeme)), { type, lexeme }), { message: filename }).toBe(true);
+	}
+});
+
+test('Gitignore editing distinguishes escaped literals and supports comment toggling', async ({ page }) => {
+	const text = String.raw`\#literal
+\!literal
+\*literal
+prefix#literal
+prefix!literal
+!keep.log
+**/*.log
+file[0-9]?.txt`;
+	await page.evaluate(text => window.tokenizationIntegration.openResource('/project/.gitignore', text), text);
+	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokens.filter(token => token.type === 'operator').map(token => token.text))).toEqual(['!', '**', '*', '?']);
+	expect(await page.evaluate(() => window.tokenizationIntegration.state().tokens.filter(token => token.type === 'comment'))).toEqual([]);
+	const input = page.locator('.stanza-editor-input');
+	await input.focus();
+	await page.keyboard.press('ControlOrMeta+Home');
+	await page.keyboard.press('ControlOrMeta+/');
+	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokens.some(token => token.type === 'comment' && token.text.includes('literal')))).toBe(true);
+	await page.keyboard.press('ControlOrMeta+/');
+	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().text)).toBe(text);
+	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokens.filter(token => token.type === 'comment'))).toEqual([]);
+});
+
+test('Markdown Git fences, commit diffs and rebase Shell commands resolve their included grammars', async ({ page }) => {
+	const samples = [
+		['markdown', '```gitignore\n!keep.log\n```', 'operator', '!'],
+		['markdown', '```git-rebase-todo\npick abc1234 Fix\n```', 'function', 'pick'],
+		['markdown', '```git-rebase\npick abc1234 Fix\n```', 'function', 'pick'],
+		['markdown', '```git-commit\nFix\n\n# message\n```', 'comment', '# message'],
+		['markdown', '```COMMIT_EDITMSG\nFix\n\n# message\n```', 'comment', '# message'],
+		['markdown', '```ini\n[core]\neditor = "ash"\n```', 'keyword', 'editor'],
+		['markdown', '```diff\n-old\n+new\n```', 'punctuation', '+'],
+		['git-commit', 'Fix\n\n# message\ndiff --git a/file b/file\n--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new', 'punctuation', '+'],
+		['git-rebase', 'exec if true; then echo "hello"; fi', 'keyword', 'if'],
+		['git-rebase', 'exec echo "unfinished\npick abc1234 Fix', 'function', 'pick'],
+	] as const;
+	for (const [languageId, text, type, lexeme] of samples) {
+		await page.evaluate(({ languageId, text }) => window.tokenizationIntegration.open(languageId, text), { languageId, text });
+		await expect.poll(() => page.evaluate(({ type, lexeme }) => window.tokenizationIntegration.state().tokens.some(token => token.type === type && token.text.includes(lexeme)), { type, lexeme }), { message: text }).toBe(true);
+	}
+	await page.evaluate(() => window.tokenizationIntegration.unloadExtensions());
+	expect(await page.evaluate(() => window.tokenizationIntegration.openResource('/project/.gitignore', '*.log'))).toBe('plaintext');
+	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokens)).toEqual([]);
+});
+
 test('Starlark editing indents blocks, closes brackets, toggles comments and folds by indentation', async ({ page }) => {
 	await page.evaluate(() => window.tokenizationIntegration.openResource('/project/defs.bzl', 'def impl(ctx):'));
 	const input = page.locator('.stanza-editor-input');

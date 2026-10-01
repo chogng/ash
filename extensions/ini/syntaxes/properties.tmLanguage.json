@@ -1,0 +1,10 @@
+{
+  "name": "Properties",
+  "scopeName": "source.properties",
+  "comment": "Each language has a distinct root scope in the Ash catalog; Properties delegates to the shared INI grammar.",
+  "patterns": [
+    {
+      "include": "source.ini"
+    }
+  ]
+}
