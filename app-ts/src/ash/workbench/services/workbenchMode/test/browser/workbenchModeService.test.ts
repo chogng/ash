@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Event } from '../../../../../base/common/event.js';
-import type { ILifecycleService, ShutdownReason } from '../../../lifecycle/common/lifecycle.js';
+import { LifecyclePhase, StartupKind, type ILifecycleService, type ShutdownReason } from '../../../lifecycle/common/lifecycle.js';
 import { WorkbenchModeId } from '../../../../common/workbenchMode.js';
 import { WorkbenchConfiguration } from '../../../../common/configuration.js';
 import { WorkbenchConfigurationService } from '../../../configuration/browser/configurationService.js';
@@ -73,7 +73,10 @@ test('resetting Workbench mode removes the override before reloading the default
 
 function lifecycleService(onShutdown: (reason: ShutdownReason) => void): ILifecycleService {
 	return {
-		phase: 'running',
+		phase: LifecyclePhase.Ready,
+		startupKind: StartupKind.NewWindow,
+		willShutdown: false,
+		async when(): Promise<void> {},
 		onBeforeShutdown: Event.None,
 		onBeforeShutdownError: Event.None,
 		onShutdownVeto: Event.None,

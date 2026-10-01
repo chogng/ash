@@ -48,7 +48,7 @@ export class DesktopMain extends Disposable {
 			const userThemes = this._register(await loadUserThemes(profileServices, URI.parse(api.userDataHome.toString().replace(/\/$/u, '') + '/themes')));
 			const workspace = parseWorkspace(await api.workspace.getWorkspace());
 			const initialConfigurationSnapshot = validateConfigurationSnapshot(await api.configuration.read());
-			const lifecycleService = new ElectronLifecycleService({ ownerWindow: window, onError: onUnexpectedError });
+			let lifecycleService!: ElectronLifecycleService;
 			const hostColorScheme = await api.nativeHost.getOSColorScheme();
 			const workbench = this._register(startWorkbench({
 				modeId: this.modeId,
@@ -56,7 +56,7 @@ export class DesktopMain extends Disposable {
 				browserViewApi: api.browserView,
 				container,
 				workspace,
-				lifecycleService,
+				createLifecycleService: services => lifecycleService = services.createInstance(ElectronLifecycleService, { ownerWindow: window, onError: onUnexpectedError }),
 				configurationApi: api.configuration,
 				initialConfigurationSnapshot,
 				keybindingsResourceApi: api.keybindings,

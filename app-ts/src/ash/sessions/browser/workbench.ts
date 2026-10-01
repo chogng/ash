@@ -36,7 +36,7 @@ import { LogService } from '../../platform/log/common/logServiceImpl.js';
 import { ConsoleLogSink } from '../../platform/log/common/consoleLogSink.js';
 import type { IKeybindingsResourceApi } from "../../platform/keybinding/common/keybindingsResource.js";
 import { BrowserLayoutService, ILayoutService, type ILayoutOffsetInfo } from "../../platform/layout/browser/layoutService.js";
-import { ILifecycleService, type ShutdownReason } from "../../workbench/services/lifecycle/common/lifecycle.js";
+import { ILifecycleService, LifecyclePhase, type ShutdownReason } from "../../workbench/services/lifecycle/common/lifecycle.js";
 import { NotificationService } from "../../workbench/services/notification/common/notificationService.js";
 import { INotificationsCenter, NotificationsCenter } from "../../workbench/browser/parts/notifications/notificationsCenter.js";
 import { INotificationService } from "../../platform/notification/common/notification.js";
@@ -108,6 +108,7 @@ import { ISessionsManagementService } from "../services/sessions/common/sessions
 import { ISessionsService, SessionsService } from "../services/sessions/browser/sessionsService.js";
 import { registerLayoutActions } from './layoutActions.js';
 import { AuxiliaryBarPart } from "./parts/auxiliaryBarPart.js";
+import { disposableWindowTimeout } from '../../base/browser/scheduler.js';
 import { ActivityBarPart, type SessionsActivityPage } from './parts/activitybar/activityBarPart.js';
 import { SessionsPart, type SessionsPartOptions } from "./parts/sessionsPart.js";
 import { SidebarPart } from "./parts/sidebarPart.js";
@@ -118,7 +119,7 @@ export interface IWorkbenchOptions {
 	readonly profile: SessionsProfile;
 	readonly api: IRendererHost;
 	readonly workspaceSelection: () => SessionWorkspaceSelection;
-	readonly lifecycleService: ILifecycleService & IDisposable;
+	readonly createLifecycleService: (services: IInstantiationService) => ILifecycleService & IDisposable;
 	readonly nativeHostApi?: INativeHostApi;
 	readonly returnToWorkbench: () => void;
 	readonly configurationApi?: IConfigurationApi;
@@ -212,7 +213,7 @@ export class Workbench extends Disposable {
 		const accountService = this._register(new AppServerAccountService(options.api.accounts, options.api.events));
 		services.registerInstance(IAccountService, accountService);
 		services.registerInstance(IChatTipService, this._register(services.createInstance(ChatTipService)));
-		this.lifecycleService = this._register(options.lifecycleService);
+		this.lifecycleService = this._register(options.createLifecycleService(services));
 		services.registerInstance(ILifecycleService, this.lifecycleService);
 		this._register(this.lifecycleService.onWillShutdown(event => {
 			event.join(storage.flush(WillSaveStateReason.SHUTDOWN), "Sessions storage flush");
@@ -415,7 +416,8 @@ export class Workbench extends Disposable {
 		this._register(new SessionsModernUIContribution(this.domNode, layout, configurationService));
 		this._register(registerLayoutActions(layout, view, contextKeys));
 		this.layoutService.layout();
-		this.initialized = this.initialize(view, configurationService);
+		this.lifecycleService.phase = LifecyclePhase.Ready;
+		this.initialized = this.initialize(view, configurationService, ownerWindow);
 		void this.initialized.catch(error => console.error('Failed to initialize Sessions Workbench', error));
 	}
 
@@ -439,10 +441,13 @@ export class Workbench extends Disposable {
 		return this.lifecycleService.shutdown(reason);
 	}
 
-	private async initialize(view: SessionsService, configurationService: WorkbenchConfigurationService): Promise<void> {
+	private async initialize(view: SessionsService, configurationService: WorkbenchConfigurationService, ownerWindow: Window): Promise<void> {
 		await configurationService.reloadConfiguration();
 		await view.initialize();
+		if (this.isDisposed) return;
 		if (!view.activeSelection) view.openNewSession("New code session");
+		this.lifecycleService.phase = LifecyclePhase.Restored;
+		this._register(disposableWindowTimeout(ownerWindow, () => { this.lifecycleService.phase = LifecyclePhase.Eventually; }, 2_000));
 	}
 }
 

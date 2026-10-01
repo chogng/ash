@@ -1,7 +1,23 @@
 import type { Event } from "../../../../base/common/event.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 
-export type LifecyclePhase = "running" | "shuttingDown" | "shutdown";
+/** Startup progress; shutdown does not move this phase backwards. */
+export enum LifecyclePhase {
+	Starting = 1,
+	/** Services are assembled; UI restoration can begin. */
+	Ready = 2,
+	/** Editors, working copies and views have finished their startup restoration. */
+	Restored = 3,
+	/** Deferred work may run after the restored window has had time to settle. */
+	Eventually = 4,
+}
+
+export enum StartupKind {
+	NewWindow = 1,
+	ReloadedWindow = 3,
+	ReopenedWindow = 4,
+}
+
 export type ShutdownReason = "pageHide" | "windowClose" | "reload" | "load" | "quit";
 
 export interface IBeforeShutdownEvent {
@@ -25,14 +41,19 @@ export interface IWillShutdownEvent {
 	join(operation: Promise<unknown>, label: string): void;
 }
 
-/** Coordinates window shutdown participants before their owners are disposed. */
+/** Owns startup milestones and coordinates shutdown before window resources are disposed. */
 export interface ILifecycleService {
-	readonly phase: LifecyclePhase;
+	readonly startupKind: StartupKind;
+	phase: LifecyclePhase;
+	/** True after shutdown checks permit closing; failed shutdown joins reset it. */
+	readonly willShutdown: boolean;
 	readonly onBeforeShutdown: Event<IBeforeShutdownEvent>;
 	readonly onBeforeShutdownError: Event<IBeforeShutdownErrorEvent>;
 	readonly onShutdownVeto: Event<void>;
 	readonly onWillShutdown: Event<IWillShutdownEvent>;
 	readonly onDidShutdown: Event<ShutdownReason>;
+	/** Resolves when this milestone or a later phase is reached. */
+	when(phase: LifecyclePhase): Promise<void>;
 	shutdown(reason: ShutdownReason): Promise<void>;
 }
 

@@ -36,7 +36,7 @@ import { IAccessibilityService } from "../../platform/accessibility/common/acces
 import { ConsoleLogSink } from "../../platform/log/common/consoleLogSink.js";
 import { ILogService } from "../../platform/log/common/log.js";
 import { LogService } from "../../platform/log/common/logServiceImpl.js";
-import { ILifecycleService, type ShutdownReason } from "../services/lifecycle/common/lifecycle.js";
+import { ILifecycleService, LifecyclePhase, type ShutdownReason } from "../services/lifecycle/common/lifecycle.js";
 import { IDebugAdapterProcessService } from "../../platform/debug/common/debugAdapterProcessService.js";
 import { IExtensionHostApi } from "../../platform/extensionHost/common/extensionHostApi.js";
 import { ISyntaxApi } from "../../platform/syntax/common/syntaxApi.js";
@@ -305,7 +305,8 @@ export interface IStartWorkbenchOptions {
 	readonly browserViewApi?: IBrowserViewApi;
 	readonly container: HTMLElement;
 	readonly workspace: IWorkspace;
-	readonly lifecycleService: ILifecycleService & IDisposable;
+	/** The host selects its implementation; the Workbench supplies initialized window services. */
+	readonly createLifecycleService: (services: IInstantiationService) => ILifecycleService & IDisposable;
 	readonly configurationApi?: IConfigurationApi;
 	readonly initialConfigurationSnapshot?: IConfigurationSnapshot;
 	readonly keybindingsResourceApi?: IKeybindingsResourceApi;
@@ -330,7 +331,7 @@ export function startWorkbench({
 	webWorkspaceClient,
 	container,
 	workspace,
-	lifecycleService,
+	createLifecycleService,
 	configurationApi,
 	initialConfigurationSnapshot,
 	keybindingsResourceApi,
@@ -352,7 +353,7 @@ export function startWorkbench({
 		api,
 		container,
 		workspace,
-		lifecycleService,
+		createLifecycleService,
 		configurationApi,
 		initialConfigurationSnapshot,
 		keybindingsResourceApi,
@@ -399,7 +400,7 @@ export class Workbench extends Disposable {
 		api: IRendererHost,
 		workbenchRoot: HTMLElement,
 		workspace: IWorkspace,
-		lifecycleService: ILifecycleService & IDisposable,
+		createLifecycleService: (services: IInstantiationService) => ILifecycleService & IDisposable,
 		configurationApi: IConfigurationApi | undefined,
 		initialConfigurationSnapshot: IConfigurationSnapshot | undefined,
 		keybindingsResourceApi: IKeybindingsResourceApi | undefined,
@@ -630,14 +631,6 @@ export class Workbench extends Disposable {
 		const progressService = this._register(new BrowserProgressService(feedbackHost));
 		services.registerInstance(IProgressService, progressService);
 		services.registerInstance(IClipboardService, clipboardService ?? new BrowserClipboardService(ownerWindow.navigator.clipboard));
-		this.lifecycleService = this._register(lifecycleService);
-		services.registerInstance(ILifecycleService, lifecycleService);
-		services.registerInstance(IWorkbenchModeService, this._register(new WorkbenchModeService({
-			currentModeId: modeId,
-			configurationService: configuration,
-			lifecycleService,
-			switchHostMode: switchWorkbenchMode,
-		})));
 		const workingCopyBackupTracker = this._register(new WorkingCopyBackupTracker(workingCopyService, workingCopyBackups, ownerWindow));
 		this.workingCopyBackupTracker = workingCopyBackupTracker;
 		const storage = this._register(new BrowserStorageService({
@@ -648,6 +641,14 @@ export class Workbench extends Disposable {
 		this.workbenchWindow = workbenchWindow;
 		this.storage = storage;
 		services.registerInstance(IStorageService, storage);
+		const lifecycleService = this.lifecycleService = this._register(createLifecycleService(services));
+		services.registerInstance(ILifecycleService, lifecycleService);
+		services.registerInstance(IWorkbenchModeService, this._register(new WorkbenchModeService({
+			currentModeId: modeId,
+			configurationService: configuration,
+			lifecycleService,
+			switchHostMode: switchWorkbenchMode,
+		})));
 		const layoutService = this._register(services.createInstance(WorkbenchLayout, workbenchRoot, {
 			workbenchState,
 			defaultLayout,
@@ -677,13 +678,17 @@ export class Workbench extends Disposable {
 				storage.store('editorFontInfo', JSON.stringify(entries), StorageScope.APPLICATION, StorageTarget.MACHINE);
 			}
 		};
-		this._register(storage.onWillSaveState(saveFontInfo));
+		this._register(storage.onWillSaveState(() => {
+			if (!lifecycleService.willShutdown) saveFontInfo();
+		}));
 		this._register(toDisposable(() => {
-			if (lifecycleService.phase === 'running') saveFontInfo();
+			if (!lifecycleService.willShutdown) saveFontInfo();
 		}));
 		const recentWorkspaces = this._register(new RecentWorkspacesService(storage, workspaceContext, workspaceOpenService));
 		services.registerInstance(IRecentWorkspacesService, recentWorkspaces);
 		this._register(lifecycleService.onBeforeShutdown(event => {
+			// Page teardown clears font caches before async shutdown joins complete.
+			saveFontInfo();
 			if (event.reason === 'load') event.veto(editorParts.confirmCloseAllEditors().then(confirmed => !confirmed), 'workspace editor changes');
 			event.veto(workingCopyBackupTracker.flush().then(() => false), 'working-copy backup flush');
 		}));
@@ -1192,9 +1197,17 @@ export class Workbench extends Disposable {
 				openPanelComposite(compositeId);
 			},
 		));
+		lifecycleService.phase = LifecyclePhase.Ready;
 		contributions.advance(WorkbenchPhase.BlockRestore);
 		layoutService.layout();
 		this.whenRestored = this.completeStartupRestoration([extensionReady, ...serviceContributionReady], workingCopyBackups, editor, editorParts, contributions);
+		void lifecycleService.when(LifecyclePhase.Restored).then(() => {
+			if (this.isDisposed) return;
+			this._register(disposableWindowTimeout(this.ownerWindow, () => {
+				lifecycleService.phase = LifecyclePhase.Eventually;
+				contributions.advance(WorkbenchPhase.Eventually);
+			}, 2_000));
+		});
 	}
 
 	private registerErrorHandler(logService: ILogService): void {
@@ -1226,8 +1239,8 @@ export class Workbench extends Disposable {
 		if (this.isDisposed) return;
 		await this.restoreWorkingCopyBackups(backups, editor);
 		if (this.isDisposed) return;
+		this.lifecycleService.phase = LifecyclePhase.Restored;
 		contributions.advance(WorkbenchPhase.AfterRestored);
-		this._register(disposableWindowTimeout(this.ownerWindow, () => contributions.advance(WorkbenchPhase.Eventually), 2_000));
 	}
 
 	private async restoreEditorParts(editorParts: IEditorPartsService): Promise<void> {

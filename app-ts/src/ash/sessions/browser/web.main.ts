@@ -51,7 +51,7 @@ async function mountBrowserSessions(modeId: WorkbenchModeId, profile: SessionsPr
 			workspaceSelection: () => host?.workspace ? selectionFromWorkspace(workspaceFromIdentifier(host.workspace)) : { type: 'current' },
 			configurationApi,
 			initialConfigurationSnapshot,
-			lifecycleService: new BrowserLifecycleService({ ownerWindow, onError: onUnexpectedError }),
+			createLifecycleService: services => services.createInstance(BrowserLifecycleService, { ownerWindow, onError: onUnexpectedError }),
 			returnToWorkbench: () => {
 				const location = container.ownerDocument.location;
 				location.assign(new URL(profile.workbenchRelativePath, location.href).href);

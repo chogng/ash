@@ -192,7 +192,8 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	viewService.openNewSession("New code session");
 	viewService.openNewSession("New code session");
 	services.registerInstance(IChatTipService, resources.add(services.createInstance(ChatTipService)));
-	services.registerInstance(ILifecycleService, resources.add(new BrowserLifecycleService({ ownerWindow: dom.window as unknown as Window, onError: error => { throw error; } })));
+	Object.defineProperty(dom.window.performance, 'getEntriesByType', { value: () => [] });
+	services.registerInstance(ILifecycleService, resources.add(services.createInstance(BrowserLifecycleService, { ownerWindow: dom.window as unknown as Window, onError: (error: unknown) => { throw error; } })));
 	const inputs: InstanceType<typeof NewChatInputWidget>[] = [];
 	const part = services.createInstance(SessionsPart, dom.window.document.body, {
 		sessionService,

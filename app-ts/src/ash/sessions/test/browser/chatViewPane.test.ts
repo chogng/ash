@@ -701,7 +701,8 @@ test('Code sending preserves the Chat draft when pages switch during first-sessi
 	const composerStorage = editorResources.add(createTestStorage());
 	editorServices.registerInstance(IStorageService, composerStorage);
 	editorServices.registerInstance(IChatTipService, editorResources.add(editorServices.createInstance(ChatTipService)));
-	editorServices.registerInstance(ILifecycleService, editorResources.add(new BrowserLifecycleService({ ownerWindow: dom.window as unknown as Window, onError: error => { throw error; } })));
+	Object.defineProperty(dom.window.performance, 'getEntriesByType', { value: () => [] });
+	editorServices.registerInstance(ILifecycleService, editorResources.add(editorServices.createInstance(BrowserLifecycleService, { ownerWindow: dom.window as unknown as Window, onError: (error: unknown) => { throw error; } })));
 	const fake = fakeApi({
 		sessions: [],
 		createSession: session('session-1', undefined, 'New Chat'),

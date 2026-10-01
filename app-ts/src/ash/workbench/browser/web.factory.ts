@@ -48,7 +48,7 @@ export function createWebWorkbench(
 		webWorkspaceClient: options.webWorkspaceClient,
 		browserFileSystemProvider: options.browserFileSystemProvider,
 		container: options.container,
-		lifecycleService: new BrowserLifecycleService({ ownerWindow, onError: onUnexpectedError }),
+		createLifecycleService: services => services.createInstance(BrowserLifecycleService, { ownerWindow, onError: onUnexpectedError }),
 		workspace: workspaceFromIdentifier(options.workspace ?? getEmptyWorkspaceIdentifier()),
 		createContextMenuService: createBrowserContextMenuService,
 		createTitlebarPart: createBrowserTitlebarPart,

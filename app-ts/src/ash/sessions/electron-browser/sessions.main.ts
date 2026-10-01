@@ -84,7 +84,7 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 	sessions.add(toDisposable(() => container.style.removeProperty('--ash-sessions-inverse-zoom-factor')));
 	const zoomSubscription = subscribe<number>(WINDOW_ZOOM_CHANGED_CHANNEL, () => { void updateZoomFactor().catch(onUnexpectedError); });
 	sessions.add(toDisposable(() => zoomSubscription.dispose()));
-	const lifecycleService = new ElectronLifecycleService({ ownerWindow: window, onError: onUnexpectedError });
+	let lifecycleService!: ElectronLifecycleService;
 	const initialConfigurationSnapshot = validateConfigurationSnapshot(await api.configuration.read());
 	const workspaceContext = createWorkspaceContextApi();
 	let workspaceSelection = selectionFromWorkspace(parseWorkspace(await workspaceContext.getWorkspace()));
@@ -98,7 +98,7 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 		profile,
 		api,
 		workspaceSelection: () => workspaceSelection,
-		lifecycleService,
+		createLifecycleService: services => lifecycleService = services.createInstance(ElectronLifecycleService, { ownerWindow: window, onError: onUnexpectedError }),
 		nativeHostApi: api.nativeHost,
 		returnToWorkbench: () => { void invoke<void>(RETURN_TO_WORKBENCH_CHANNEL).catch(onUnexpectedError); },
 		configurationApi: api.configuration,
