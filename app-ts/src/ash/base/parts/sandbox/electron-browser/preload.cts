@@ -13,6 +13,7 @@
 
 	const globals: ISandboxGlobals = {
 		ipcRenderer: {
+			send: (channel, ...args) => ipcRenderer.send(validateChannel(channel), ...args),
 			invoke: (channel, params) =>
 				ipcRenderer.invoke(validateChannel(channel), params),
 			on: (channel, listener) => {
@@ -28,6 +29,24 @@
 				};
 			},
 		},
+		ipcMessagePort: {
+			acquire: (responseChannel, nonce) => {
+				const channel = validateChannel(responseChannel);
+				if (typeof nonce !== 'string' || nonce.length === 0) {
+					throw new Error('Invalid MessagePort request nonce');
+				}
+				const handler = (event: Electron.IpcRendererEvent, response: unknown): void => {
+					const responseNonce = typeof response === 'string'
+						? response
+						: typeof response === 'object' && response !== null && 'nonce' in response ? response.nonce : undefined;
+					if (responseNonce !== nonce) { return; }
+					ipcRenderer.removeListener(channel, handler);
+					window.postMessage(response, '*', event.ports);
+				};
+				ipcRenderer.on(channel, handler);
+				return { dispose: () => ipcRenderer.removeListener(channel, handler) };
+			},
+		},
 		process: {
 			platform: process.platform,
 			arch: process.arch,
@@ -38,8 +57,4 @@
 	};
 
 	contextBridge.exposeInMainWorld("ash", globals);
-	ipcRenderer.on('ash:app-server:port', (_event, value: unknown) => {
-		if (typeof value !== 'object' || value === null || !('nonce' in value) || typeof value.nonce !== 'string' || _event.ports.length !== 1) { return; }
-		window.postMessage({ type: 'ash:app-server:port', nonce: value.nonce }, '*', _event.ports);
-	});
 })();

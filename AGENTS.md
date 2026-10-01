@@ -8,7 +8,6 @@ Before modifying this repository:
 2. Read every file under [`.github/instructions`](.github/instructions) whose `applyTo` pattern matches any target file. Scoped instructions add to the repository instructions and cannot override a higher-level ownership or safety rule.
 3. 修改代码前必须阅读并执行 [公共测试规范](.github/instructions/testing.instructions.md)，即使本次没有修改测试文件；同步检查测试覆盖，并完成受影响行为与构建的验证。
 4. 修改 Rust、Cargo 清单/锁文件、`.cargo/` 或 Rust 构建检查时，同时阅读 [Rust 规范](.github/instructions/rust-coding-guidelines.instructions.md)和 [Rust 测试规范](.github/instructions/rust-testing.instructions.md)。
-5. 修改 TypeScript 时同时阅读匹配的前端规范和 [TypeScript 测试规范](.github/instructions/typescript-testing.instructions.md)。
 
 # Communication
 

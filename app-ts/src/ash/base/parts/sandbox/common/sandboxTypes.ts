@@ -10,11 +10,17 @@ export interface ISandboxSubscription {
  * event objects or the underlying `ipcRenderer`.
  */
 export interface ISandboxIpcRenderer {
+	send(channel: string, ...args: unknown[]): void;
 	invoke(channel: string, params?: unknown): Promise<unknown>;
 	on(
 		channel: string,
 		listener: (value: unknown) => void,
 	): ISandboxSubscription;
+}
+
+/** Registers one MessagePort response and releases the registration when cancelled. */
+export interface ISandboxIpcMessagePort {
+	acquire(responseChannel: string, nonce: string): ISandboxSubscription;
 }
 
 /** Read-only process metadata needed before the workbench starts. */

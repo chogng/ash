@@ -1,4 +1,7 @@
-import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+import type { IDisposable } from '../../../base/common/lifecycle.js';
+import { CancellationError } from '../../../base/common/errors.js';
+import { acquirePort } from '../../../base/parts/ipc/electron-browser/ipc.mp.js';
 import { isRecord } from '../../../base/common/types.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { invoke, subscribe } from '../../ipc/electron-browser/rendererIpc.js';
@@ -14,13 +17,11 @@ export class AppServerMessagePortTransport extends Disposable implements AppServ
 	private pendingBytes = 0;
 	private metadata: unknown;
 	private enabled: boolean | undefined;
-	private resolveReady: (() => void) | undefined;
-	private rejectReady: ((error: Error) => void) | undefined;
+	private readonly acquisition = this._register(new MutableDisposable<IDisposable>());
 
 	constructor(private readonly restart: () => void) {
 		super();
-		window.addEventListener('message', this.receivePort);
-		this._register(toDisposable(() => { window.removeEventListener('message', this.receivePort); this.close(); }));
+		this._register(toDisposable(() => this.close()));
 		const subscription = subscribe('ash:app-server:restart', restart);
 		this._register(toDisposable(() => subscription.dispose()));
 	}
@@ -37,18 +38,43 @@ export class AppServerMessagePortTransport extends Disposable implements AppServ
 		this.assertNotDisposed();
 		this.close();
 		const nonce = this.nonce = generateUuid();
-		const ready = new Promise<void>((resolve, reject) => { this.resolveReady = resolve; this.rejectReady = reject; });
-		const timeout = setTimeout(() => this.fail('App Server port acquisition timed out'), 10_000);
-		const acquisition = invoke<unknown>('ash:app-server:acquire', { nonce }).then(result => {
-			if (this.nonce !== nonce) { throw new Error('Connection acquisition superseded'); }
-			if (!isRecord(result) || typeof result.enabled !== 'boolean') { throw new Error('Invalid connection acquisition response'); }
-			this.enabled = result.enabled;
-			this.metadata = result;
-			if (!result.enabled) { this.resolveReady?.(); }
+		const port = acquirePort(undefined, 'ash:app-server:port', nonce);
+		const cancellation = toDisposable(() => port.cancel());
+		this.acquisition.value = cancellation;
+		let enabled: boolean | undefined;
+		const ready = port.then(value => {
+			if (this.nonce !== nonce || this.isDisposed) {
+				value.close();
+				throw new CancellationError();
+			}
+			this.attach(value);
+		}, error => { if (enabled !== false) { throw error; } });
+		let timeout: ReturnType<typeof setTimeout>;
+		const timedOut = new Promise<never>((_resolve, reject) => {
+			timeout = setTimeout(() => {
+				const error = new Error('App Server port acquisition timed out');
+				// Reject with the timeout before closing cancels the pending port acquisition.
+				reject(error);
+				if (this.nonce === nonce) { this.fail(error.message); }
+			}, 10_000);
 		});
-		try { await Promise.all([acquisition, ready]); return this.enabled === true; }
-		catch (error) { this.close(); throw error; }
-		finally { clearTimeout(timeout); this.resolveReady = undefined; this.rejectReady = undefined; }
+		const acquisition = invoke<unknown>('ash:app-server:acquire', { nonce }).then(result => {
+			if (this.nonce !== nonce) { throw new CancellationError(); }
+			if (!isRecord(result) || typeof result.enabled !== 'boolean') { throw new Error('Invalid connection acquisition response'); }
+			this.enabled = enabled = result.enabled;
+			this.metadata = result;
+			if (!result.enabled) { port.cancel(); }
+		});
+		try {
+			await Promise.race([Promise.all([acquisition, ready]), timedOut]);
+			return this.enabled === true;
+		} catch (error) {
+			if (this.nonce === nonce) { this.close(); }
+			throw error;
+		} finally {
+			clearTimeout(timeout!);
+			if (this.acquisition.value === cancellation) { this.acquisition.clear(); }
+		}
 	}
 
 	public async initialized(): Promise<void> { await invoke('ash:app-server:initialized', { nonce: this.nonce }); }
@@ -68,9 +94,7 @@ export class AppServerMessagePortTransport extends Disposable implements AppServ
 		this.port.postMessage({ frame: payload.frame });
 	}
 
-	private readonly receivePort = (event: MessageEvent): void => {
-		if (event.source !== window || !isRecord(event.data) || event.data.type !== 'ash:app-server:port' || event.data.nonce !== this.nonce || event.ports.length !== 1) { return; }
-		const port = event.ports[0];
+	private attach(port: MessagePort): void {
 		this.port = port;
 		port.onmessage = event => {
 			if (this.port !== port) { return; }
@@ -85,17 +109,15 @@ export class AppServerMessagePortTransport extends Disposable implements AppServ
 			if (value.intentional === true) { this.close(); this.emit(WEB_APP_SERVER_CLOSED_EVENT, { intentional: true }); return; }
 			this.fail(typeof value.closed === 'string' ? value.closed : 'App Server connection closed');
 		};
-		port.onmessageerror = () => this.fail('App Server port message could not be decoded');
+		port.onmessageerror = () => { if (this.port === port) { this.fail('App Server port message could not be decoded'); } };
 		port.start();
-		this.resolveReady?.();
-	};
+	}
 
 	private fail(message: string): void {
-		this.rejectReady?.(new Error(message));
 		this.close();
 		this.emit(WEB_APP_SERVER_CLOSED_EVENT, { message });
 	}
 
-	private close(): void { this.port?.close(); this.port = undefined; this.nonce = undefined; this.pending.length = 0; this.pendingBytes = 0; this.rejectReady?.(new Error('App Server connection closed')); }
+	private close(): void { this.acquisition.clear(); this.port?.close(); this.port = undefined; this.nonce = undefined; this.pending.length = 0; this.pendingBytes = 0; }
 	private emit(event: string, payload: unknown): void { for (const listener of this.listeners.get(event) ?? []) { listener(payload); } }
 }

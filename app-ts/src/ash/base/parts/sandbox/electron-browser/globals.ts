@@ -12,6 +12,9 @@ if (!globals) {
 /** IPC capability installed by the sandbox preload. */
 export const ipcRenderer = globals.ipcRenderer;
 
+/** MessagePort response registration installed by the sandbox preload. */
+export const ipcMessagePort = globals.ipcMessagePort;
+
 /** Read-only process metadata installed by the sandbox preload. */
 export const sandboxProcess = globals.process;
 
