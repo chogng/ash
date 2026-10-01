@@ -603,6 +603,55 @@ test("Code highlights Rust locally and obtains document symbols asynchronously",
 	await expect(page.locator('.ash-quick-pick-row-label')).toContainText('main');
 });
 
+test('Markdown source styles follow all Ash themes and refresh after editing and undo', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'This scenario requires the Code App Server product');
+	const source = '# Heading\n\n**strong** *emphasis* ~~removed~~ `inline` [link](https://example.com)\n\n- item\n> quote\n\n```javascript\nconst value = "hello";\n```';
+	await writeFile(join(testWorkspace.directory, 'syntax.md'), source);
+	const page = workbench.page;
+	const explorer = page.locator('.ash-explorer');
+	const fileRow = explorer.locator('.ash-tree-row').filter({ hasText: 'syntax.md' });
+	await expect(fileRow).toHaveCount(1, { timeout: 15_000 });
+	await fileRow.click();
+	const group = workbench.editors.groupAt(0);
+	const editor = group.content.locator('.stanza-editor');
+	await expect(page.getByRole('button', { name: 'Language Markdown', exact: true })).toBeVisible();
+	const token = (text: string) => editor.locator('.stanza-editor-token').filter({ hasText: text }).first();
+	for (const [theme, headingColor, codeColor, listColor, quoteColor] of [
+		['Ash Dark', 'rgb(86, 156, 214)', 'rgb(206, 145, 120)', 'rgb(103, 150, 230)', 'rgb(106, 153, 85)'],
+		['Ash Light', 'rgb(128, 0, 0)', 'rgb(128, 0, 0)', 'rgb(4, 81, 165)', 'rgb(4, 81, 165)'],
+		['Ash High Contrast Dark', 'rgb(103, 150, 230)', 'rgb(206, 145, 120)', 'rgb(103, 150, 230)', 'rgb(124, 166, 104)'],
+		['Ash High Contrast Light', 'rgb(15, 74, 133)', 'rgb(15, 74, 133)', 'rgb(4, 81, 165)', 'rgb(4, 81, 165)'],
+	] as const) {
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+		await workbench.quickaccess.input.fill(theme);
+		await workbench.quickaccess.input.press('Enter');
+		await expect(page.locator('.ash-quick-pick')).toHaveCount(0);
+		await expect(token('Heading')).toHaveCSS('color', headingColor);
+		await expect(token('Heading')).toHaveCSS('font-weight', '700');
+		await expect(token('strong')).toHaveCSS('font-weight', '700');
+		await expect(token('emphasis')).toHaveCSS('font-style', 'italic');
+		await expect(token('removed')).toHaveCSS('text-decoration-line', 'line-through');
+		await expect(token('https://example.com')).toHaveCSS('text-decoration-line', 'underline');
+		await expect(token('inline')).toHaveCSS('color', codeColor);
+		await expect(token('-')).toHaveCSS('color', listColor);
+		await expect(token('>')).toHaveCSS('color', quoteColor);
+		await expect(editor.locator('.token-keyword').filter({ hasText: /^const$/ })).toBeVisible();
+		await expect(editor.locator('.token-string').filter({ hasText: 'hello' })).toBeVisible();
+	}
+	const input = editor.getByRole('textbox', { name: 'syntax.md', exact: true });
+	await input.focus();
+	await input.press('ControlOrMeta+Home');
+	await input.press('Delete');
+	const firstLine = editor.locator('.stanza-editor-line-text').first();
+	await expect(firstLine).toHaveText(' Heading');
+	await expect(firstLine).toHaveCSS('font-weight', '400');
+	await expect(token('Heading')).toHaveCount(0);
+	await input.press('ControlOrMeta+z');
+	await expect(token('Heading')).toHaveCSS('font-weight', '700');
+	await expect(input).toBeFocused();
+	await expect(firstLine).toHaveText('# Heading');
+});
+
 test("Code finds local workspace symbols when the language server has no workspace-symbol provider", async ({ target, workbench }) => {
 	test.skip(
 		target.appServerMode !== "required" || target.workbenchMode !== "code" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,

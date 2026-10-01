@@ -13,6 +13,11 @@ import highContrastDarkThemeDocument from "./themes/ash-high-contrast-dark.json"
 import highContrastLightThemeDocument from "./themes/ash-high-contrast-light.json" with { type: "json" };
 import darkBaseThemeDocument from "./themes/ash-dark-base.json" with { type: "json" };
 import lightBaseThemeDocument from "./themes/ash-light-base.json" with { type: "json" };
+import syntaxThemeManifest from '../../../../../extensions/theme-defaults/package.json' with { type: 'json' };
+import darkSyntaxThemeDocument from '../../../../../extensions/theme-defaults/themes/dark_vs.json' with { type: 'json' };
+import lightSyntaxThemeDocument from '../../../../../extensions/theme-defaults/themes/light_vs.json' with { type: 'json' };
+import highContrastDarkSyntaxThemeDocument from '../../../../../extensions/theme-defaults/themes/hc_black.json' with { type: 'json' };
+import highContrastLightSyntaxThemeDocument from '../../../../../extensions/theme-defaults/themes/hc_light.json' with { type: 'json' };
 
 const colorOwner = "workbench.shell";
 const color = (id: string, dark: string, light: string, highContrastDark: string, highContrastLight: string, description: string): string =>
@@ -170,6 +175,23 @@ const builtInThemeDocuments = new Map<string, unknown>([
 	["ash-dark-base.json", darkBaseThemeDocument],
 ]);
 const builtInThemeExtensionId = `${themeManifest.publisher}.${themeManifest.name}`;
+const syntaxThemeDocuments = new Map<string, unknown>([
+	['themes/dark_vs.json', darkSyntaxThemeDocument],
+	['themes/light_vs.json', lightSyntaxThemeDocument],
+	['themes/hc_black.json', highContrastDarkSyntaxThemeDocument],
+	['themes/hc_light.json', highContrastLightSyntaxThemeDocument],
+]);
+const syntaxThemeExtensionId = `${syntaxThemeManifest.publisher}.${syntaxThemeManifest.name}`;
+const defaultSyntaxThemes = parseExtensionManifest(JSON.stringify(syntaxThemeManifest), {
+	id: syntaxThemeExtensionId,
+	name: syntaxThemeManifest.name,
+	publisher: syntaxThemeManifest.publisher,
+	version: syntaxThemeManifest.version,
+});
+const defaultSyntaxRules = new Map(defaultSyntaxThemes.contributes.themes.map(contribution => [
+	contribution.uiTheme,
+	resolveColorThemeDocument(contribution.path, path => syntaxThemeDocuments.get(path)).tokenColors,
+]));
 const builtInThemeManifest = parseExtensionManifest(JSON.stringify(themeManifest), {
 	id: builtInThemeExtensionId,
 	name: themeManifest.name,
@@ -178,7 +200,10 @@ const builtInThemeManifest = parseExtensionManifest(JSON.stringify(themeManifest
 });
 const builtInWorkbenchThemes = builtInThemeManifest.contributes.themes.map(contribution => {
 	if (!contribution.id || !contribution.uiTheme) throw new Error(`Incomplete built-in theme contribution: ${contribution.path}`);
-	const document = resolveColorThemeDocument(contribution.path, path => builtInThemeDocuments.get(path));
+	// Bundle the extension's authored syntax data so themes are complete before any window or backend starts.
+	const tokenColors = defaultSyntaxRules.get(contribution.uiTheme);
+	if (!tokenColors) throw new Error(`Missing built-in syntax theme: ${contribution.uiTheme}`);
+	const document = { ...resolveColorThemeDocument(contribution.path, path => builtInThemeDocuments.get(path)), tokenColors };
 	const theme = createExtensionWorkbenchColorTheme(parseExtensionTheme(
 		document, contribution.id, builtInThemeExtensionId, contribution.label, contribution.uiTheme, contribution.path,
 	));

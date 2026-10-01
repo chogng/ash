@@ -1,5 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { createColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from "../../../platform/theme/common/colorTheme.js";
 import { ColorScheme } from "../../../platform/theme/common/theme.js";
 import { WorkbenchThemeRegistry, WorkbenchThemesRegistry, getWorkbenchColorTheme, resolveWorkbenchColorTheme } from "../../common/theme.js";
@@ -24,7 +26,6 @@ test('built-in Workbench themes apply every color in their JSON documents', () =
 		for (const [color, value] of Object.entries({ ...inherited?.colors, ...document.colors })) {
 			assert.equal(theme.getColorCss(color), value, `${id}: ${color}`);
 		}
-		if (inherited) assert.equal(theme.tokenColors?.length, inherited.tokenColors.length);
 	}
 	assert.equal(resolveWorkbenchColorTheme('system', true), getWorkbenchColorTheme('ash-dark'));
 	assert.equal(resolveWorkbenchColorTheme('system', false), getWorkbenchColorTheme('ash-light'));
@@ -63,6 +64,20 @@ test('built-in high contrast themes keep common foreground and background pairs 
 			assert.ok(text && surface);
 			assert.ok(contrastRatio(text.rgba, surface.rgba) >= 7, `${theme.id}: ${foreground} on ${background}`);
 		}
+	}
+});
+
+test('built-in syntax rules use the theme-defaults extension resources', async () => {
+	for (const [id, file] of [
+		['ash-dark', 'dark_vs'],
+		['ash-light', 'light_vs'],
+		['ash-high-contrast-dark', 'hc_black'],
+		['ash-high-contrast-light', 'hc_light'],
+	] as const) {
+		const document = JSON.parse(await readFile(resolve(`../extensions/theme-defaults/themes/${file}.json`), 'utf8'));
+		const actual = getWorkbenchColorTheme(id).tokenColors!.map(rule => ({ scopes: rule.scopes, settings: rule.settings }));
+		const expected = document.tokenColors.map((rule: { scope?: string | string[]; settings: object }) => ({ scopes: typeof rule.scope === 'string' ? [rule.scope] : rule.scope ?? [], settings: rule.settings }));
+		assert.deepEqual(actual, expected, id);
 	}
 });
 

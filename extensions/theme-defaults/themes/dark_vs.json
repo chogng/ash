@@ -201,7 +201,7 @@
 			}
 		},
 		{
-			"scope": "markup.inline.raw",
+			"scope": ["markup.inline.raw", "markup.raw", "markup.fenced_code"],
 			"settings": {
 				"foreground": "#ce9178"
 			}
@@ -411,6 +411,6 @@
 		"newOperator": "#d4d4d4",
 		"stringLiteral": "#ce9178",
 		"customLiteral": "#D4D4D4",
-		"numberLiteral": "#b5cea8",
+		"numberLiteral": "#b5cea8"
 	}
 }

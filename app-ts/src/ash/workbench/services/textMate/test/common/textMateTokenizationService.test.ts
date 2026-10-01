@@ -12,6 +12,9 @@ import { createTextMateSyntaxProvider, TEXTMATE_SYNTAX_PROVIDER_ID } from "../..
 import { TextMateGrammarRegistry } from "../../common/textMateGrammarRegistry.js";
 import { TextMateTokenizationService, type TextMateTokenizationCacheUpdate } from "../../common/textMateTokenizationService.js";
 import { SyntaxProviderWorker } from '../../../../../editor/common/services/editorWebWorker.js';
+import { getWorkbenchColorTheme } from '../../../../common/theme.js';
+import { createTextMateScopeThemeResolver } from '../../common/textMateScopeTheme.js';
+import { projectColorThemeTokens } from '../../common/textMateThemeProjection.js';
 
 const onigurumaRuntime = (onigurumaNamespace as unknown as { readonly default?: typeof onigurumaNamespace }).default ?? onigurumaNamespace;
 const { createOnigScanner, createOnigString, loadWASM } = onigurumaRuntime;
@@ -91,6 +94,31 @@ test("vendored VS Code JSON grammar tokenizes through the common service", async
 	assert.equal(tokenTypes.includes("string"), true);
 	assert.equal(tokenTypes.includes("constant"), true);
 	assert.equal(tokenTypes.includes("number"), true);
+});
+
+test('bundled Markdown grammar preserves authored styles in every Ash theme', async () => {
+	const content = await readFile(resolve('../extensions/markdown-basics/syntaxes/markdown.tmLanguage.json'), 'utf8');
+	using registry = new TextMateGrammarRegistry();
+	using registration = registry.register({ languageId: 'markdown', scopeName: 'text.html.markdown', loadGrammar: () => content });
+	using model = new TextModel('# Heading\n\n**strong** *emphasis* ~~removed~~ `inline` [link](https://example.com)\n\n- item\n> quote\n\n```\ncode block\n```');
+	for (const id of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+		const theme = getWorkbenchColorTheme(id);
+		using tokenization = new TextMateTokenizationService(registry, onigLib, { scopeResolver: createTextMateScopeThemeResolver(projectColorThemeTokens(theme, 1)) });
+		const result = await tokenization.tokenize('markdown', model.createVersionedSnapshot(), new AbortController().signal);
+		const presentationFor = (text: string) => result!.tokens.find(token => model.getTextInRange(token.range).includes(text))?.presentation;
+		assert.deepEqual([
+			presentationFor('Heading')?.fontStyle,
+			presentationFor('strong')?.fontStyle,
+			presentationFor('emphasis')?.fontStyle,
+			presentationFor('removed')?.fontStyle,
+			presentationFor('https://example.com')?.fontStyle,
+		], [['bold'], ['bold'], ['italic'], ['strikethrough'], ['underline']], id);
+		for (const text of ['Heading', 'inline', 'code block', '-', '>']) {
+			const color = presentationFor(text)?.foreground;
+			assert.ok(color, `${id}: ${text} has a syntax color`);
+			assert.notEqual(color.toLowerCase(), theme.getColorCss('editor.foreground')?.toLowerCase(), `${id}: ${text} differs from prose`);
+		}
+	}
 });
 
 test("TextMate grammar metadata reaches runtime configuration and token projection", async () => {

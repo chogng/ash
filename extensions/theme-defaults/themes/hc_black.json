@@ -457,6 +457,24 @@
 			"settings": {
 				"foreground": "#CBEDCB"
 			}
+		},
+		{
+			"scope": ["markup.inline.raw", "markup.raw", "markup.fenced_code"],
+			"settings": {
+				"foreground": "#ce9178"
+			}
+		},
+		{
+			"scope": "punctuation.definition.list.begin.markdown",
+			"settings": {
+				"foreground": "#6796e6"
+			}
+		},
+		{
+			"scope": "punctuation.definition.quote.begin.markdown",
+			"settings": {
+				"foreground": "#7ca668"
+			}
 		}
 	],
 	"semanticHighlighting": true,

@@ -160,7 +160,7 @@
 			}
 		},
 		{
-			"scope": "markup.inline.raw",
+			"scope": ["markup.inline.raw", "markup.raw", "markup.fenced_code"],
 			"settings": {
 				"foreground": "#0F4A85"
 			}

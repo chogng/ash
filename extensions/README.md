@@ -47,6 +47,9 @@ The current declarative pack contains the following package directories:
 - `theme-seti` provides the Seti file icon document, font, and third-party notices.
 - `theme-defaults` currently provides four self-contained VS Code-derived color-theme documents.
   The Workbench loader also resolves package-relative JSON `include` files when a theme uses them.
+  Ash's built-in themes bundle the syntax rules from this same package, while their Workbench
+  documents supply Ash's window colors. Markdown grammar and language settings stay in
+  `markdown-basics`; Markdown colors and font styles belong to `theme-defaults`.
 
 The manifest is the only source of contribution metadata. `AppServerExtensionService` receives
 Rust-validated package resources and projects languages/configuration/snippets/grammars/themes/

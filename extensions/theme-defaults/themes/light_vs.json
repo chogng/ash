@@ -199,7 +199,7 @@
 			}
 		},
 		{
-			"scope": "markup.inline.raw",
+			"scope": ["markup.inline.raw", "markup.raw", "markup.fenced_code"],
 			"settings": {
 				"foreground": "#800000"
 			}
@@ -435,6 +435,6 @@
 		"newOperator": "#0000ff",
 		"stringLiteral": "#a31515",
 		"customLiteral": "#000000",
-		"numberLiteral": "#098658",
+		"numberLiteral": "#098658"
 	}
 }
