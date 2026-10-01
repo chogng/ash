@@ -317,28 +317,15 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	assert.equal(part.domNode.querySelector('.code-composer'), codeInput);
 	assert.deepEqual((await inputs[2]!.captureDraft())?.draft, separateDraft);
 
-	part.setPage('design');
-	const designPage = part.domNode.querySelector<HTMLElement>('[data-sessions-page="design"]')!;
-	const designCanvas = part.domNode.querySelector<HTMLElement>('.ash-sessions-design-view')!;
-	assert.equal(designPage.hidden, false);
-	assert.equal(part.domNode.querySelector('.ash-sessions-design-view')?.getAttribute('aria-label'), 'Design canvas');
+	part.setPage('empty');
+	assert.equal(part.domNode.querySelector('[data-sessions-page="design"]'), null);
+	assert.equal(part.domNode.querySelector('.ash-sessions-design-view'), null);
 	assert.equal(part.domNode.querySelector('.ash-sessions-chat-view')?.hasAttribute('hidden'), true);
-	designCanvas.querySelector('.ash-sessions-design-viewport')!
-		.dispatchEvent(new dom.window.WheelEvent('wheel', { deltaY: 120, cancelable: true, bubbles: true }));
-	assert.match(designCanvas.querySelector<HTMLElement>('.ash-sessions-design-world')!.style.transform, /translate\(0px, -120px\) scale\(1\)/u);
-	part.focus();
-	assert.equal(dom.window.document.activeElement, designCanvas);
 	part.setPage('chat');
-	assert.equal(designPage.hidden, true);
-	part.setPage('design');
-	assert.match(designCanvas.querySelector<HTMLElement>('.ash-sessions-design-world')!.style.transform, /translate\(0px, -120px\) scale\(1\)/u);
-	assert.equal(designPage.hidden, false);
+	assert.equal(part.domNode.querySelector('.ash-sessions-chat-view')?.hasAttribute('hidden'), false);
 
 	partListener.dispose();
 	part.dispose();
-	const disposedTransform = designCanvas.querySelector<HTMLElement>('.ash-sessions-design-world')!.style.transform;
-	designCanvas.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: '0', bubbles: true }));
-	assert.equal(designCanvas.querySelector<HTMLElement>('.ash-sessions-design-world')!.style.transform, disposedTransform);
 	viewService.dispose();
 	contextMenuEvents.dispose();
 	commandEvents.dispose();
@@ -485,6 +472,17 @@ test('Sessions page changes restore asymmetric grids only after side-part layout
 		const visibility = [...code.visibility];
 		part.setPage('code', () => part.layout(new Dimension(1_000, 800)));
 		assert.deepEqual({ visibility: code.visibility, focused: document.activeElement, draft: input.value }, { visibility, focused: input, draft: 'Unsent Code draft' });
+		// Design lives in EditorPart; the hidden Sessions part must retain both page geometries.
+		part.setPage('empty', () => {
+			part.layout(new Dimension(600, 800));
+			part.layout(new Dimension(0, 800));
+		});
+		assert.deepEqual({ chat: widths('chat'), code: widths('code') }, { chat: [500, 700], code: [450, 550] });
+		part.setPage('code', () => {
+			part.layout(new Dimension(1_200, 800));
+			part.layout(new Dimension(1_000, 800));
+		});
+		assert.deepEqual({ code: widths('code'), draft: input.value }, { code: [450, 550], draft: 'Unsent Code draft' });
 		part.setPage('chat', () => part.layout(new Dimension(1_200, 800)));
 		assert.deepEqual({ chat: widths('chat'), code: widths('code') }, { chat: [500, 700], code: [450, 550] });
 		await storage.flush();

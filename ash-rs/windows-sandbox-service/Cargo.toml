@@ -1,0 +1,23 @@
+[package]
+name = "ash-windows-sandbox-service"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "ash-windows-sandbox-service"
+path = "src/main.rs"
+
+[target.'cfg(windows)'.dependencies]
+windows-sandbox = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tokio = { workspace = true, features = ["io-util", "macros", "rt-multi-thread", "sync"] }
+windows-sys-061 = { workspace = true, features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_Services", "Win32_System_Threading"] }
+
+[target.'cfg(windows)'.dev-dependencies]
+tempfile = { workspace = true }
+
+[lints.rust]
+unsafe_code = "allow"

@@ -1,6 +1,6 @@
 # Design 编辑器
 
-Design 是 Sessions 专属的二维设计编辑器。本目录拥有设计文档、编辑操作、画布和文件生命周期，Sessions 通过页面契约挂载它。配置、主题、快捷键、文件访问、对话框和窗口生命周期复用已有服务。
+Design 是 Sessions 专属的二维设计编辑器。本目录拥有设计文档、编辑操作、画布和文件生命周期，画布通过共享编辑器注册进入 `EditorPart`，图层和属性通过 Sessions 视图注册分别进入 `SidebarPart` 和 `AuxiliaryBarPart`。配置、主题、快捷键、文件访问、对话框和窗口生命周期复用已有服务。
 
 这份文档说明目录归属、状态与生命周期约定。Sessions 的页面装配见 [Sessions README](../../README.md)，窗口分层见 [LAYERS.md](../../LAYERS.md)。
 
@@ -10,7 +10,7 @@ Design 是 Sessions 专属的二维设计编辑器。本目录拥有设计文档
 
 `browser/widget` 放主编辑器和共享工具栏，`browser/view.ts` 放画布，`browser/controller` 放共享输入。绘制、属性、Motion 和 Code 的具体能力及能力专属 widget 位于 `contrib`；这与 Editor 的 Find、Suggest widget 跟随各自贡献的归属相同。归属取决于组件拥有的职责、状态和生命周期。
 
-核心 Widget、View 和输入控制器只消费 [designEditorBrowser.ts](browser/designEditorBrowser.ts) 的公共能力契约。产品入口 [design.main.ts](design.main.ts) 创建各个能力，由页面传给 Widget；核心组件不导入能力实现或装配入口。贡献更新文档或提供显示数据，画布统一呈现这些数据。文档与历史仍由公共模型统一持有。
+核心 Widget、View 和输入控制器只消费 [designEditorBrowser.ts](browser/designEditorBrowser.ts) 的公共能力契约。产品入口 [design.main.ts](design.main.ts) 创建各个能力，由编辑器 Pane 传给 Widget；核心组件不导入能力实现或装配入口。贡献更新文档或提供显示数据，画布统一呈现这些数据。文档与历史仍由公共模型统一持有。
 
 | 文件 | 拥有的职责 |
 | --- | --- |
@@ -31,9 +31,10 @@ Design 是 Sessions 专属的二维设计编辑器。本目录拥有设计文档
 | [contrib/motion/browser/designMotionWidget.ts](contrib/motion/browser/designMotionWidget.ts) | 关键帧编辑、时间线、播放时钟和动画采样数据；插值位于同贡献的 `common/motion.ts`，画布呈现由共享 View 负责 |
 | [contrib/code/browser/designCodeWidget.ts](contrib/code/browser/designCodeWidget.ts)、[designCodeGenerator.ts](contrib/code/browser/designCodeGenerator.ts) | 从已提交文档生成、显示和导出可运行代码 |
 | [browser/svgRenderer.ts](browser/svgRenderer.ts) | 画布与 SVG 导出共用的对象渲染 |
-| [browser/designDocumentController.ts](browser/designDocumentController.ts) | `DesignDocumentController`，文件身份、读取版本、保存基准和异步文件操作 |
-| [browser/designEditorPage.ts](browser/designEditorPage.ts) | `DesignEditorPage`，Sessions 页面装配、布局、焦点和关闭检查 |
-| [browser/design.contribution.ts](browser/design.contribution.ts) | 页面、快捷键、无障碍帮助与内容视图的注册 |
+| [browser/designDocumentController.ts](browser/designDocumentController.ts) | `DesignDocumentController`，文件身份、读取版本、保存基准、异步文件操作和共享 `IWorkingCopy` 契约 |
+| [browser/designEditorPage.ts](browser/designEditorPage.ts) | `DesignEditorPage`，实现 `IEditorPane`，借用窗口文档，拥有编辑器装配、布局、焦点和浏览器关闭检查 |
+| [browser/designEditorService.ts](browser/designEditorService.ts)、[designViews.ts](browser/designViews.ts) | 窗口 Design 文档、工作副本注册与当前编辑器的可观察引用，以及借用该实例文档、选区和属性组件的 Layers 与 Shape properties 视图 |
+| [browser/design.contribution.ts](browser/design.contribution.ts) | 编辑器 Pane、左右面板视图、快捷键、无障碍帮助与内容视图的注册 |
 
 一个文件可以承接紧密相关的完整职责。几何和文档序列化目前各自保持在小模块中；新增能力时按实际职责拆分。
 
@@ -47,7 +48,7 @@ Design 与 Editor 共用 Base、Platform 提供的生命周期、控件、配置
 
 `common/core` 只定义空间值与计算，文档类型和可变模型依赖它。`common/model` 拥有文档及历史，命令依赖模型。`common` 使用基础 JavaScript 与所属公共服务契约；DOM、文件操作和页面装配留在 `browser`。
 
-编辑器组件使用本目录的公共模型、命令和文件控制器，通过公共契约调用贡献。Sessions 页面创建文档控制器，把能力装配函数传给 Widget，并转交页面布局与焦点。Widget 创建 View、共享工具栏、输入控制器和一组贡献实例；各组件持有自己的 DOM、样式和订阅。宿主只定位直接挂载的组件根节点。
+编辑器组件使用本目录的公共模型、命令和文件控制器，通过公共契约调用贡献。窗口 Design 服务创建并注册唯一文档控制器；`EditorPart` 通过注册的 Pane 借用该文档，把能力装配函数传给 Widget，并转交编辑器布局与焦点。左右面板读取当前 Pane 的同一份文档和选区；属性 View 只挂载 Widget 拥有的属性组件，视图切换不会创建第二份文档、选区或属性状态。Widget 创建 View、共享工具栏、输入控制器和一组贡献实例；各组件持有自己的 DOM、样式和订阅。宿主只定位直接挂载的组件根节点。
 
 | 状态 | 持有者 | 保存进文件 |
 | --- | --- | --- |
@@ -61,9 +62,9 @@ Design 与 Editor 共用 Base、Platform 提供的生命周期、控件、配置
 | 当前工具与模式 | 每个 Widget | 否 |
 | 文件 URI、读取版本、已保存内容和操作状态 | `DesignDocumentController` | 否 |
 
-多个 Widget 可以使用同一个文档控制器，共享已提交内容与历史，同时保留各自的选区和视口。Widget 借用控制器的模型；单独释放 Widget 会取消手势，释放 View、输入控制器、共享工具栏及该实例的全部贡献，并清理订阅和命令查找记录。View 释放画布的主题与配置订阅，Motion 释放播放时钟；文档仍由控制器持有。页面随 Sessions Part 释放；切换页面时 Part 保留实例。
+多个 Widget 可以使用同一个文档控制器，共享已提交内容与历史，同时保留各自的选区和视口。Widget 借用控制器的模型；单独释放 Widget 会取消手势，释放 View、输入控制器、共享工具栏及该实例的全部贡献，并清理订阅和命令查找记录。View 释放画布的主题与配置订阅，Motion 释放播放时钟；文档仍由控制器持有。活动页切换只隐藏对应 Part，`EditorPart` 保留 Pane 实例；隐藏画布会取消手势并停止动画播放。关闭编辑器 Tab 时，`EditorPart` 通过工作副本确认保存、放弃或取消；确认后释放 Pane 和 Widget，并清除面板的当前编辑器引用。文档由窗口服务保留，重新打开 Design Tab 会继续使用它；窗口关闭时释放文档。多个编辑器分组打开同一画布时共享文档及历史，每个 Pane 保留自己的选区和视口。
 
-Design 通过 `sessions.common.main.ts` 加载，当前使用方是 Sessions。Workbench 使用自己的编辑器注册；其基础层和共享服务保持既有依赖方向，不能导入本目录。
+Design 通过 `sessions.common.main.ts` 加载，当前使用方是 Sessions。Design 消费 Workbench 的编辑器注册和工作副本契约；其基础层和共享服务保持既有依赖方向，不能导入本目录。
 
 ## 编辑与几何约定
 

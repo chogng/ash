@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { Separator } from '../../../base/common/actions.js';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { h } from '../../../base/browser/dom.js';
@@ -12,11 +13,18 @@ import { WorkbenchConfigurationService } from '../../../workbench/services/confi
 import { DesignConfiguration } from '../../contrib/design/common/config/editorConfiguration.js';
 import { Event as AshEvent } from '../../../base/common/event.js';
 import { URI } from '../../../base/common/uri.js';
+import type { IContextMenuDelegate } from '../../../base/browser/contextmenu.js';
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import { ConfirmResult, IDialogService, IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { FileKind, FileRevisionConflictError, IFileService, type IFileWriteRequest } from '../../../platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { WorkspaceContextService } from '../../../workbench/services/workspaces/browser/workspaceContextService.js';
+import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { BrowserWorkingCopyService } from '../../../workbench/services/workingCopy/browser/browserWorkingCopyService.js';
+import { IWorkingCopyService } from '../../../workbench/services/workingCopy/common/workingCopyService.js';
+import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
+import { EditorPanes } from '../../../workbench/browser/editor.js';
+import { EditorPaneVisibility } from '../../../workbench/browser/parts/editor/editorPane.js';
 import { ILifecycleService, LifecyclePhase, StartupKind } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 
 
@@ -34,16 +42,22 @@ for (const [name, value] of Object.entries({
 
 const { DesignEditorWidget } = await import('../../contrib/design/browser/widget/designEditorWidget.js');
 const { DesignDocumentController } = await import('../../contrib/design/browser/designDocumentController.js');
+const { EditorPart } = await import('../../../workbench/browser/parts/editor/editorPart.js');
 const { DesignEditorPage } = await import('../../contrib/design/browser/designEditorPage.js');
+const { DesignEditorService, IDesignEditorService } = await import('../../contrib/design/browser/designEditorService.js');
+const { DesignLayersView, DesignPropertiesView } = await import('../../contrib/design/browser/designViews.js');
+const { DESIGN_EDITOR_RESOURCE } = await import('../../contrib/design/browser/designDocumentController.js');
+await import('../../contrib/design/browser/design.contribution.js');
 const { createDesignEditorContributions } = await import('../../contrib/design/design.main.js');
 const services = new InstantiationService();
 const contextKeys = new ContextKeyService();
 const configuration = new WorkbenchConfigurationService();
 const theme = new TestThemeService(lightColorTheme);
-const workspace = new WorkspaceContextService({ id: 'design-test', folders: [] });
 services.registerInstance(IContextKeyService, contextKeys);
+services.registerSingleton(IWorkingCopyService, () => new BrowserWorkingCopyService());
 services.registerInstance(IConfigurationService, configuration);
 services.registerInstance(IThemeService, theme);
+const workspace = new WorkspaceContextService({ id: 'design-test', folders: [] });
 services.registerInstance(IWorkspaceContextService, workspace);
 const resource = URI.file('/design.ash-design.json');
 let fileContent = '';
@@ -52,7 +66,16 @@ let errors: string[] = [];
 let saveDecision = ConfirmResult.DONT_SAVE;
 const writes: IFileWriteRequest[] = [];
 const unexpected = async (): Promise<never> => { throw new Error('Unexpected service call'); };
-services.registerInstance(IContextMenuService, { onDidShowContextMenu: AshEvent.None, onDidHideContextMenu: AshEvent.None, showContextMenu: () => { throw new Error('Unexpected context menu'); }, hideContextMenu: () => {} });
+let contextMenu: IContextMenuDelegate | undefined;
+services.registerInstance(IContextMenuService, {
+	onDidShowContextMenu: AshEvent.None,
+	onDidHideContextMenu: AshEvent.None,
+	showContextMenu: delegate => {
+		contextMenu?.onHide?.(true);
+		contextMenu = delegate as IContextMenuDelegate;
+	},
+	hideContextMenu: () => { contextMenu?.onHide?.(true); contextMenu = undefined; },
+});
 services.registerInstance(IFileDialogService, { pickFileToSave: unexpected, showSaveConfirm: async () => saveDecision, showSaveDialog: async () => resource, showOpenDialog: async () => [resource] });
 services.registerInstance(IDialogService, { onWillShowDialog: AshEvent.None, onDidShowDialog: AshEvent.None, showMessage: unexpected, info: unexpected, warn: unexpected, error: async message => { errors.push(message); }, confirm: unexpected, prompt: unexpected, input: unexpected, about: unexpected });
 services.registerInstance(IFileService, {
@@ -80,15 +103,49 @@ suiteTeardown(() => {
 
 interface ProjectedTransform { panX: number; panY: number; scale: number; }
 
-function createView(): InstanceType<typeof DesignEditorPage> {
-	const view = services.createInstance(DesignEditorPage, browser.window.document.body);
+class DesignEditorFixture extends Disposable {
+	readonly pane: InstanceType<typeof DesignEditorPage>;
+	readonly designEditors: InstanceType<typeof DesignEditorService>;
+	readonly domNode: HTMLElement;
+	readonly propertiesDomNode: HTMLElement;
+	readonly layersDomNode: HTMLElement;
+
+	constructor(container: HTMLElement = browser.window.document.body) {
+		super();
+		const child = services.createChild();
+		this.designEditors = this._register(child.createInstance(DesignEditorService));
+		child.registerInstance(IDesignEditorService, this.designEditors);
+		const ownerDocument = container.ownerDocument;
+		const editorHost = h(ownerDocument, 'section');
+		editorHost.dataset.part = 'editor';
+		this.propertiesDomNode = h(ownerDocument, 'section');
+		this.propertiesDomNode.dataset.part = 'auxiliarybar';
+		this.layersDomNode = h(ownerDocument, 'section');
+		this.layersDomNode.dataset.part = 'sidebar';
+		container.append(editorHost, this.propertiesDomNode, this.layersDomNode);
+		this.pane = this._register(EditorPanes.getEditorPane({ resource: DESIGN_EDITOR_RESOURCE })!.create({ instantiationService: child }) as InstanceType<typeof DesignEditorPage>);
+		this.pane.create(editorHost);
+		this.domNode = this.pane.domNode;
+		const properties = this._register(child.createInstance(DesignPropertiesView, this.propertiesDomNode, { id: 'design.properties', title: 'Shape properties' }));
+		const layers = this._register(child.createInstance(DesignLayersView, this.layersDomNode, { id: 'design.layers', title: 'Layers' }));
+		properties.setVisible(true);
+		layers.setVisible(true);
+		this.pane.setVisible(EditorPaneVisibility.Visible);
+		this._register(child);
+		this._register(toDisposable(() => { editorHost.remove(); this.propertiesDomNode.remove(); this.layersDomNode.remove(); }));
+	}
+	focus(): void { this.pane.focus(); }
+	layout(dimension: { width: number; height: number }): void { this.pane.layout(dimension); }
+}
+
+function createView(): DesignEditorFixture {
+	const view = new DesignEditorFixture();
 	const viewport = view.domNode.querySelector<HTMLElement>('.ash-sessions-design-viewport')!;
 	let captured: number | undefined;
 	viewport.setPointerCapture = id => { captured = id; };
 	viewport.hasPointerCapture = id => captured === id;
 	viewport.releasePointerCapture = () => { captured = undefined; };
 	Object.defineProperty(viewport, 'clientHeight', { configurable: true, value: 100 });
-	browser.window.document.body.append(view.domNode);
 	return view;
 }
 
@@ -102,51 +159,6 @@ function dispatchWheel(view: { readonly domNode: HTMLElement }, init: WheelEvent
 	view.domNode.querySelector<HTMLElement>('.ash-sessions-design-viewport')!
 		.dispatchEvent(new browser.window.WheelEvent('wheel', { cancelable: true, ...init }));
 }
-
-test('Design canvas derives its document and focus from the host in another window', () => {
-	const otherWindow = new JSDOM('<!doctype html><body></body>', { url: 'https://other.ash.test' });
-	try {
-		const container = h(otherWindow.window.document, 'div');
-		otherWindow.window.document.body.append(container);
-		using view = services.createInstance(DesignEditorPage, container);
-		container.append(view.domNode);
-		assert.equal(view.domNode.ownerDocument, container.ownerDocument);
-		assert.notEqual(view.domNode.ownerDocument, document);
-		view.focus();
-		assert.equal(container.ownerDocument.activeElement, view.domNode);
-		const press = (key: string): void => { view.domNode.dispatchEvent(new otherWindow.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })); };
-		const viewport = view.domNode.querySelector<HTMLElement>('.ash-sessions-design-viewport')!;
-		let captured: number | undefined;
-		viewport.setPointerCapture = id => { captured = id; };
-		viewport.hasPointerCapture = id => captured === id;
-		viewport.releasePointerCapture = () => { captured = undefined; };
-		view.domNode.querySelector<HTMLButtonElement>('.ash-design-tools-widget button[aria-label="Rectangle"]')!.click();
-		for (const type of ['pointerdown', 'pointermove']) {
-			viewport.dispatchEvent(new otherWindow.window.PointerEvent(type, { pointerId: 1, isPrimary: true, button: 0, clientX: type === 'pointerdown' ? 10 : 30, clientY: 20, bubbles: true, cancelable: true }));
-		}
-		const draft = view.domNode.querySelector('.ash-design-drawing-preview')!;
-		assert.ok(draft instanceof otherWindow.window.SVGElement);
-		assert.equal(draft.ownerDocument, container.ownerDocument);
-		assert.equal(view.domNode.querySelector('[data-shape-id]'), null);
-		press('Escape');
-		assert.equal(view.domNode.querySelector('.ash-design-drawing-preview'), null);
-		for (const key of ['r', 'e', 't', 'p']) { press(key); }
-		assert.deepEqual(Array.from(view.domNode.querySelectorAll('.ash-sessions-design-shapes > [data-shape-id]'), element => element.tagName), ['rect', 'ellipse', 'svg', 'path']);
-		assert.ok(view.domNode.querySelector('.ash-sessions-design-path-handle'));
-		for (const grouped of [false, true]) {
-			if (grouped) {
-				for (const key of ['n', 'n', 'n', 'g']) { press(key); }
-				assert.equal(view.domNode.querySelectorAll('.ash-sessions-design-shapes > svg > [data-shape-id]').length, 4);
-			}
-			for (const element of view.domNode.querySelectorAll('svg, svg *')) {
-				assert.equal(element.ownerDocument, container.ownerDocument);
-				assert.ok(element instanceof otherWindow.window.SVGElement, element.tagName);
-			}
-		}
-	} finally {
-		otherWindow.window.close();
-	}
-});
 
 test('Design cursor follows configuration and theme changes and releases its subscriptions', async () => {
 	const view = createView();
@@ -289,12 +301,55 @@ async function clickAction(view: { readonly domNode: HTMLElement }, name: string
 	for (let index = 0; index < 20; index++) { await Promise.resolve(); }
 }
 
+async function clickCanvasMenu(view: { readonly domNode: HTMLElement }, name: string): Promise<void> {
+	pressCanvas(view, 'F10', { shiftKey: true });
+	const action = contextMenu!.getActions().find(action => action.label === name)!;
+	assert.equal(action.enabled, true);
+	services.get(IContextMenuService).hideContextMenu();
+	await action.run();
+}
+
+test('Design canvas menu keeps selection, applies edits and disappears with its editor', async () => {
+	const view = createView();
+	try {
+		view.layout({ width: 400, height: 300 });
+		assert.equal(view.domNode.querySelector('.ash-sessions-design-tools'), null);
+		pressCanvas(view, 'ContextMenu');
+		assert.deepEqual(contextMenu!.getActions().filter(action => !(action instanceof Separator)).map(action => [action.label, action.enabled]), [
+			['Undo', false], ['Redo', false], ['Delete', false], ['Select all', false],
+			['Group', false], ['Ungroup', false], ['Export SVG', false], ['Open design', true],
+		]);
+		pressCanvas(view, 'r');
+		pressCanvas(view, 'e');
+		pressCanvas(view, 'ArrowRight', { shiftKey: true });
+		await clickCanvasMenu(view, 'Select all');
+		const viewport = view.domNode.querySelector<HTMLElement>('.ash-sessions-design-viewport')!;
+		viewport.dispatchEvent(new browser.window.MouseEvent('contextmenu', { clientX: 150, clientY: 50, bubbles: true, cancelable: true }));
+		assert.equal(view.domNode.querySelector('.ash-sessions-design-message')!.textContent, '2 objects selected.');
+		assert.equal(contextMenu!.getActions().find(action => action.label === 'Group')!.enabled, true);
+		await clickCanvasMenu(view, 'Group');
+		assert.equal(view.domNode.querySelectorAll('.ash-sessions-design-shapes > svg[data-shape-id]').length, 1);
+		await clickCanvasMenu(view, 'Ungroup');
+		pressCanvas(view, 'Escape');
+		viewport.dispatchEvent(new browser.window.MouseEvent('contextmenu', { clientX: 145, clientY: 50, bubbles: true, cancelable: true }));
+		assert.equal(view.domNode.querySelector('.ash-sessions-design-message')!.textContent, '1 objects selected.');
+		await clickCanvasMenu(view, 'Delete');
+		assert.equal(view.domNode.querySelector('rect[data-shape-id]'), null);
+		assert.equal(view.domNode.querySelectorAll('ellipse[data-shape-id]').length, 1);
+		await clickCanvasMenu(view, 'Undo');
+		assert.equal(view.domNode.querySelectorAll('rect[data-shape-id]').length, 1);
+		pressCanvas(view, 'F10', { shiftKey: true });
+		view.dispose();
+		assert.equal(contextMenu, undefined);
+	} finally { view.dispose(); }
+});
+
 test('Design edits render fractional geometry, keep input editing separate and undo a whole drag', () => {
 	using view = createView();
 	view.layout({ width: 200, height: 100 });
 	pressCanvas(view, 'r');
 	const rect = view.domNode.querySelector<SVGRectElement>('[data-shape-id]')!;
-	const width = view.domNode.querySelector<HTMLInputElement>('input[aria-label="Width"]')!;
+	const width = view.propertiesDomNode.querySelector<HTMLInputElement>('input[aria-label="Width"]')!;
 	width.value = '120.5';
 	width.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
 	width.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
@@ -327,28 +382,28 @@ test('Design saves and reopens the complete document, rejecting stale writes and
 	revision = '0';
 	saveDecision = ConfirmResult.DONT_SAVE;
 	pressCanvas(view, 'r');
-	await clickAction(view, 'Save design');
+	await DesignEditorWidget.getFocused(view.domNode)!.saveDocument();
 	const saved = fileContent;
 	assert.equal(view.domNode.classList.contains('dirty'), false);
 	pressCanvas(view, 'e');
-	await clickAction(view, 'Open design');
+	await clickCanvasMenu(view, 'Open design');
 	assert.equal(view.domNode.querySelectorAll('[data-shape-id]').length, 1);
 	assert.equal(JSON.parse(saved).shapes[0].kind, 'rectangle');
 	pressCanvas(view, 'Tab');
 	pressCanvas(view, 'ArrowRight');
 	revision = '99';
-	await clickAction(view, 'Save design');
+	await DesignEditorWidget.getFocused(view.domNode)!.saveDocument();
 	assert.equal(writes.at(-1)!.expectedRevision, '1');
 	assert.equal(view.domNode.classList.contains('dirty'), true);
 	assert.equal(fileContent, saved);
 	assert.equal(errors.length, 1);
 	fileContent = '{"version":1,"shapes":[{"kind":"rectangle"}]}';
-	await clickAction(view, 'Open design');
+	await clickCanvasMenu(view, 'Open design');
 	assert.equal(view.domNode.querySelectorAll('[data-shape-id]').length, 1);
 	assert.equal(view.domNode.classList.contains('dirty'), true);
 	assert.equal(errors.length, 2);
 	saveDecision = ConfirmResult.CANCEL;
-	await clickAction(view, 'Open design');
+	await clickCanvasMenu(view, 'Open design');
 	assert.equal(errors.length, 2);
 	saveDecision = ConfirmResult.DONT_SAVE;
 });
@@ -364,7 +419,7 @@ test('Design keyboard selection and Chinese properties expose the document conte
 		pressCanvas(view, 'e');
 		pressCanvas(view, 'Escape');
 		pressCanvas(view, 'Tab');
-		assert.equal(view.domNode.querySelector('input[aria-label="宽度"]') !== null, true);
+		assert.equal(view.propertiesDomNode.querySelector('input[aria-label="宽度"]') !== null, true);
 		assert.match(DesignEditorWidget.getFocused(view.domNode)!.getAccessibleContent(), /矩形[\s\S]*椭圆/u);
 		pressCanvas(view, 'Delete');
 		assert.equal(view.domNode.querySelector('[data-shape-id]')!.tagName, 'ellipse');
@@ -375,34 +430,34 @@ test('Design edits text and path nodes, groups a selection, and exports safe SVG
 	using view = createView();
 	view.layout({ width: 400, height: 300 });
 	pressCanvas(view, 't');
-	const text = view.domNode.querySelector<HTMLTextAreaElement>('textarea[aria-label="Text content"]')!;
+	const text = view.propertiesDomNode.querySelector<HTMLTextAreaElement>('textarea[aria-label="Text content"]')!;
 	text.value = '中文 <script>alert(1)</script>\nSecond line';
 	text.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
 	assert.match(DesignEditorWidget.getFocused(view.domNode)!.getAccessibleContent(), /中文 <script>/u);
 	assert.equal(view.domNode.querySelector('script'), null);
 	assert.equal(view.domNode.querySelectorAll('tspan').length, 2);
 	pressCanvas(view, 'p');
-	const outgoing = view.domNode.querySelector<HTMLInputElement>('input[aria-label="Outgoing handle X"]')!;
+	const outgoing = view.propertiesDomNode.querySelector<HTMLInputElement>('input[aria-label="Outgoing handle X"]')!;
 	outgoing.value = '48';
 	outgoing.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
 	assert.match(view.domNode.querySelector('path[data-shape-id]')!.getAttribute('d')!, /C 188 10/u);
-	await clickAction(view, 'Add node');
-	assert.equal(view.domNode.querySelector<HTMLSelectElement>('select[aria-label="Path node"]')!.options.length, 3);
-	await clickAction(view, 'Remove node');
-	const closed = view.domNode.querySelector<HTMLInputElement>('input[aria-label="Closed path"]')!;
+	await clickCanvasMenu(view, 'Add node');
+	assert.equal(view.propertiesDomNode.querySelector<HTMLSelectElement>('select[aria-label="Path node"]')!.options.length, 3);
+	await clickCanvasMenu(view, 'Remove node');
+	const closed = view.propertiesDomNode.querySelector<HTMLInputElement>('input[aria-label="Closed path"]')!;
 	closed.click();
 	assert.match(view.domNode.querySelector('path[data-shape-id]')!.getAttribute('d')!, / Z$/u);
 	pressCanvas(view, 'n');
 	pressCanvas(view, 'g');
 	assert.equal(view.domNode.querySelectorAll('svg[data-shape-id] > [data-shape-id]').length, 2);
-	const width = view.domNode.querySelector<HTMLInputElement>('input[aria-label="Width"]')!;
+	const width = view.propertiesDomNode.querySelector<HTMLInputElement>('input[aria-label="Width"]')!;
 	width.value = '480';
 	width.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
-	assert.equal(view.domNode.querySelector('input[aria-label="Height"]')!.getAttribute('type'), 'number');
+	assert.equal(view.propertiesDomNode.querySelector('input[aria-label="Height"]')!.getAttribute('type'), 'number');
 	await DesignEditorWidget.getFocused(view.domNode)!.saveDocument();
 	const saved = fileContent;
 	pressCanvas(view, 'ArrowRight');
-	await clickAction(view, 'Export SVG');
+	await clickCanvasMenu(view, 'Export SVG');
 	const exported = fileContent;
 	assert.equal(view.domNode.classList.contains('dirty'), true);
 	const svg = new browser.window.DOMParser().parseFromString(exported, 'image/svg+xml');
@@ -413,7 +468,7 @@ test('Design edits text and path nodes, groups a selection, and exports safe SVG
 	assert.equal(svg.querySelector('text')!.textContent, '中文 <script>alert(1)</script>Second line');
 	assert.match(svg.querySelector('path')!.getAttribute('d')!, / Z$/u);
 	fileContent = saved;
-	await clickAction(view, 'Open design');
+	await clickCanvasMenu(view, 'Open design');
 	pressCanvas(view, 'Tab');
 	pressCanvas(view, 'u');
 	assert.equal(view.domNode.querySelectorAll('.ash-sessions-design-shapes > [data-shape-id]').length, 2);
@@ -429,10 +484,12 @@ test('Chinese Design actions and new property labels are localized', async () =>
 	try {
 		using view = createView();
 		pressCanvas(view, 't');
-		assert.equal(view.domNode.querySelector('.ash-sessions-design-properties textarea')!.getAttribute('aria-label'), '文字内容');
+		assert.equal(view.propertiesDomNode.querySelector('.ash-sessions-design-properties textarea')!.getAttribute('aria-label'), '文字内容');
 		pressCanvas(view, 'p');
-		assert.ok(view.domNode.querySelector('input[aria-label="出控制点 X"]'));
-		assert.ok(Array.from(view.domNode.querySelectorAll('button')).some(button => button.textContent === '导出 SVG'));
+		assert.ok(view.propertiesDomNode.querySelector('input[aria-label="出控制点 X"]'));
+		pressCanvas(view, 'F10', { shiftKey: true });
+		assert.ok(contextMenu!.getActions().some(action => action.label === '导出 SVG'));
+		assert.equal(chinese.bundles.ash['sessions.design.contextMenuHelp'].includes('Shift+F10'), true);
 		pressCanvas(view, 'n');
 		pressCanvas(view, 'g');
 		assert.match(DesignEditorWidget.getFocused(view.domNode)!.getAccessibleContent(), /组合[\s\S]*文字[\s\S]*贝塞尔路径/u);
@@ -471,7 +528,7 @@ test('Design editors share document edits and history while keeping selection, c
 	assert.equal(first.domNode.querySelectorAll('[data-shape-id]').length, 1);
 });
 
-test('Sessions page owns the unsaved browser-close check and releases it with the page', () => {
+test('Design editor owns the unsaved browser-close check and releases it with the editor', () => {
 	const page = createView();
 	try {
 		pressCanvas(page, 'r');
@@ -561,7 +618,7 @@ test('Motion keyframes round trip, scrub without editing, undo and export runnab
 	assert.equal(fileContent, source);
 	assert.equal(view.domNode.classList.contains('dirty'), false);
 	fileContent = saved;
-	await clickAction(view, 'Open design');
+	await clickCanvasMenu(view, 'Open design');
 	await clickAction(view, 'Design');
 	assert.equal(rectangle.getAttribute('x'), '140');
 	pressCanvas(view, 'Tab');
@@ -581,7 +638,7 @@ test('Code contribution escapes user text and Chinese tool, mode and timeline na
 		using view = createView();
 		assert.ok(view.domNode.querySelector('button[aria-label="移动画布（H）"]'));
 		pressCanvas(view, 't');
-		const text = view.domNode.querySelector<HTMLTextAreaElement>('textarea[aria-label="文字内容"]')!;
+		const text = view.propertiesDomNode.querySelector<HTMLTextAreaElement>('textarea[aria-label="文字内容"]')!;
 		text.value = '</script><script>alert(1)</script> 中文';
 		text.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
 		await clickAction(view, '动效');
@@ -594,6 +651,148 @@ test('Code contribution escapes user text and Chinese tool, mode and timeline na
 		assert.equal(JSON.parse(html.querySelector('script')!.textContent!).shapes[0].text, text.value);
 		assert.match(DesignEditorWidget.getFocused(view.domNode)!.getAccessibleContent(), /doctype html/u);
 	} finally { resetNlsResolver(); }
+});
+
+
+test('Design panels share the editor selection and detach when the pane hides', () => {
+	using view = createView();
+	pressCanvas(view, 'r');
+	pressCanvas(view, 'e');
+	assert.equal(view.domNode.querySelector('.ash-sessions-design-properties'), null);
+	assert.equal(view.layersDomNode.querySelectorAll('[role="treeitem"]').length, 2);
+	const rectangle = [...view.layersDomNode.querySelectorAll<HTMLElement>('[role="treeitem"]')].find(element => element.textContent?.includes('Rectangle'))!;
+	rectangle.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true }));
+	assert.deepEqual([...view.designEditors.activeEditor.get()!.selection.ids], [view.pane.workingCopy.model.value.shapes[0]!.id]);
+	const ellipse = [...view.layersDomNode.querySelectorAll<HTMLElement>('[role="treeitem"]')].find(element => element.textContent?.includes('Ellipse'))!;
+	ellipse.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true, shiftKey: true }));
+	assert.equal(view.designEditors.activeEditor.get()!.selection.ids.size, 2);
+	assert.equal(view.propertiesDomNode.querySelector('.ash-sessions-design-properties')!.classList.contains('visible'), false);
+	rectangle.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true }));
+	assert.equal(view.propertiesDomNode.querySelector('.ash-sessions-design-properties')!.classList.contains('visible'), true);
+	view.pane.setVisible(EditorPaneVisibility.Hidden);
+	assert.equal(view.designEditors.activeEditor.get(), undefined);
+	assert.equal(view.propertiesDomNode.querySelector('.ash-sessions-design-properties'), null);
+	assert.equal(view.layersDomNode.querySelectorAll('[role="treeitem"]').length, 0);
+	view.pane.setVisible(EditorPaneVisibility.Visible);
+	assert.equal(view.layersDomNode.querySelectorAll('[role="treeitem"]').length, 2);
+	assert.equal(view.propertiesDomNode.querySelector('.ash-sessions-design-properties')!.classList.contains('visible'), true);
+});
+
+test('Design editor tabs use shared save, cancel and discard confirmation', async () => {
+	using child = createTestEditorServices(browser.window.document, configuration, services);
+	using designEditors = child.createInstance(DesignEditorService);
+	child.registerInstance(IDesignEditorService, designEditors);
+	using part = child.createInstance(EditorPart, browser.window.document.body, {
+		fileDialogService: services.get(IFileDialogService),
+		workingCopyService: services.get(IWorkingCopyService),
+	});
+	const input = { resource: DESIGN_EDITOR_RESOURCE, label: 'Design', showBreadcrumbs: false };
+	try {
+		await part.openEditor(input, { pinned: true });
+		let editor = designEditors.activeEditor.get()!;
+		pressCanvas(editor, 'r');
+		saveDecision = ConfirmResult.CANCEL;
+		assert.equal(await part.closeEditor(input), false);
+		assert.equal(part.activePane!.workingCopy!.isDirty, true);
+		saveDecision = ConfirmResult.SAVE;
+		assert.equal(await part.closeEditor(input), true);
+		assert.equal(JSON.parse(fileContent).shapes.length, 1);
+		assert.equal(designEditors.activeEditor.get(), undefined);
+		await part.openEditor(input, { pinned: true });
+		editor = designEditors.activeEditor.get()!;
+		pressCanvas(editor, 'e');
+		saveDecision = ConfirmResult.DONT_SAVE;
+		assert.equal(await part.closeEditor(input), true);
+		assert.equal(part.groups[0]!.inputs.length, 0);
+		assert.equal(designEditors.activeEditor.get(), undefined);
+		assert.equal(services.get(IWorkingCopyService).get(DESIGN_EDITOR_RESOURCE).length, 1);
+		assert.equal(designEditors.document.isDirty, false);
+	} finally { saveDecision = ConfirmResult.DONT_SAVE; }
+});
+
+test('Design panel labels and empty states follow Chinese localization', async () => {
+	const { builtinLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	try {
+		using view = createView();
+		assert.equal(view.layersDomNode.querySelector('[role="tree"]')!.getAttribute('aria-label'), '图层');
+		assert.match(view.layersDomNode.textContent!, /绘制对象后会显示对应图层。/u);
+		assert.match(view.propertiesDomNode.textContent!, /选择一个对象以编辑属性。/u);
+	} finally { resetNlsResolver(); }
+});
+
+
+test('Design split panes share the window document and retain independent editing state', async () => {
+	using child = createTestEditorServices(browser.window.document, configuration, services);
+	using designEditors = child.createInstance(DesignEditorService);
+	child.registerInstance(IDesignEditorService, designEditors);
+	using part = child.createInstance(EditorPart, browser.window.document.body, { workingCopyService: services.get(IWorkingCopyService) });
+	await part.openEditor({ resource: DESIGN_EDITOR_RESOURCE, label: 'Design', showBreadcrumbs: false }, { pinned: true });
+	const first = designEditors.activeEditor.get()!;
+	pressCanvas(first, 'r');
+	pressCanvas(first, '+');
+	await part.splitActiveGroupVertical();
+	const second = designEditors.activeEditor.get()!;
+	assert.notEqual(first, second);
+	assert.equal(first.documentController, second.documentController);
+	assert.equal(part.groups.length, 2);
+	assert.equal(services.get(IWorkingCopyService).get(DESIGN_EDITOR_RESOURCE).length, 1);
+	assert.equal(second.domNode.querySelectorAll('[data-shape-id]').length, 1);
+	assert.equal(second.selection.ids.size, 0);
+	assert.equal(projectedTransform(first).scale, 1.2);
+	assert.equal(projectedTransform(second).scale, 1);
+	pressCanvas(second, 'e');
+	assert.equal(first.documentController.model.value.shapes.length, 2);
+	first.focus();
+	assert.equal(designEditors.activeEditor.get(), first);
+	assert.equal(first.selection.ids.size, 1);
+});
+
+
+test('Design canvas derives its document and focus from the host in another window', () => {
+	const otherWindow = new JSDOM('<!doctype html><body></body>', { url: 'https://other.ash.test' });
+	try {
+		const container = h(otherWindow.window.document, 'div');
+		otherWindow.window.document.body.append(container);
+		using view = new DesignEditorFixture(container);
+		assert.equal(view.domNode.ownerDocument, container.ownerDocument);
+		assert.notEqual(view.domNode.ownerDocument, document);
+		view.focus();
+		assert.equal(container.ownerDocument.activeElement, view.domNode);
+		const press = (key: string): void => { view.domNode.dispatchEvent(new otherWindow.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })); };
+		const viewport = view.domNode.querySelector<HTMLElement>('.ash-sessions-design-viewport')!;
+		let captured: number | undefined;
+		viewport.setPointerCapture = id => { captured = id; };
+		viewport.hasPointerCapture = id => captured === id;
+		viewport.releasePointerCapture = () => { captured = undefined; };
+		view.domNode.querySelector<HTMLButtonElement>('.ash-design-tools-widget button[aria-label="Rectangle"]')!.click();
+		for (const type of ['pointerdown', 'pointermove']) {
+			viewport.dispatchEvent(new otherWindow.window.PointerEvent(type, { pointerId: 1, isPrimary: true, button: 0, clientX: type === 'pointerdown' ? 10 : 30, clientY: 20, bubbles: true, cancelable: true }));
+		}
+		const draft = view.domNode.querySelector('.ash-design-drawing-preview')!;
+		assert.ok(draft instanceof otherWindow.window.SVGElement);
+		assert.equal(draft.ownerDocument, container.ownerDocument);
+		assert.equal(view.domNode.querySelector('[data-shape-id]'), null);
+		press('Escape');
+		assert.equal(view.domNode.querySelector('.ash-design-drawing-preview'), null);
+		for (const key of ['r', 'e', 't', 'p']) { press(key); }
+		assert.deepEqual(Array.from(view.domNode.querySelectorAll('.ash-sessions-design-shapes > [data-shape-id]'), element => element.tagName), ['rect', 'ellipse', 'svg', 'path']);
+		assert.ok(view.domNode.querySelector('.ash-sessions-design-path-handle'));
+		for (const grouped of [false, true]) {
+			if (grouped) {
+				for (const key of ['n', 'n', 'n', 'g']) { press(key); }
+				assert.equal(view.domNode.querySelectorAll('.ash-sessions-design-shapes > svg > [data-shape-id]').length, 4);
+			}
+			for (const element of view.domNode.querySelectorAll('svg, svg *')) {
+				assert.equal(element.ownerDocument, container.ownerDocument);
+				assert.ok(element instanceof otherWindow.window.SVGElement, element.tagName);
+			}
+		}
+	} finally {
+		otherWindow.window.close();
+	}
 });
 
 
@@ -611,8 +810,7 @@ test('Motion playback follows its host clock and cancels queued frames on pause 
 		for (const callback of callbacks) { callback(now); }
 	};
 	try {
-		using view = services.createInstance(DesignEditorPage, otherWindow.window.document.body);
-		otherWindow.window.document.body.append(view.domNode);
+		using view = new DesignEditorFixture(otherWindow.window.document.body);
 		view.layout({ width: 400, height: 300 });
 		const click = (name: string): void => { Array.from(view.domNode.querySelectorAll('button')).find(button => button.textContent === name)!.click(); };
 		view.domNode.dispatchEvent(new otherWindow.window.KeyboardEvent('keydown', { key: 'r', bubbles: true, cancelable: true }));
@@ -643,8 +841,10 @@ test('Motion playback follows its host clock and cancels queued frames on pause 
 		assert.equal(frames.size, 0);
 		click('Play');
 		view.dispose();
+		// Pane disposal hides the editor and restores the document scene before releasing its clock.
+		assert.equal(rectangle.getAttribute('x'), '140');
 		advance(1500);
-		assert.equal(rectangle.getAttribute('x'), '240');
+		assert.equal(rectangle.getAttribute('x'), '140');
 		assert.equal(frames.size, 0);
 	} finally { otherWindow.window.close(); }
 });

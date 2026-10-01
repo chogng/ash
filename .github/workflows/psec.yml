@@ -8,6 +8,7 @@ on:
       - 'scripts/test-psec.ps1'
       - 'scripts/test-windows-sandbox.ps1'
       - 'ash-rs/windows-sandbox/**'
+      - 'ash-rs/windows-sandbox-service/**'
       - 'ash-rs/hooks/**'
       - 'ash-rs/exec-server/**'
       - 'ash-rs/mxc-sandbox/**'

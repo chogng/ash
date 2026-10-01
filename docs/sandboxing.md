@@ -114,7 +114,7 @@ flowchart TD
 
 补丁来源与校验见 [MXC 依赖](../ash-rs/vendor/mxc/README.md)。原型源码与校验清单保存在本机 `.build/acceptance/mxc-local/prototype-source`，历史测试与系统清理结果保留在 [Windows 验收手册](windows-sandbox-acceptance-runbook.md)。
 
-固定 MXC `6cd3d58f05d3447e67109cfb75e042803b843ca4` 的 [上游说明](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/README.md) 明确指出存在生成策略过于宽松的已知情况，当前 MXC profiles 不能被当作安全边界。Ash 的补丁和已有测试不自动消除该限制；产品只可声明经过审查和实机验证的具体保证，不能用 Seatbelt、Bubblewrap 或 PSEC 的名称代替策略验证。
+固定 MXC `46ce71d0da7b97bb531a33e175bf4166ffa730c0` 的 [上游说明](https://github.com/microsoft/mxc/blob/46ce71d0da7b97bb531a33e175bf4166ffa730c0/README.md) 仍明确指出存在生成策略过于宽松的已知情况，当前 MXC profiles 不能被当作安全边界。Ash 的补丁和已有测试不自动消除该限制；产品只可声明经过审查和实机验证的具体保证，不能用 Seatbelt、Bubblewrap 或 PSEC 的名称代替策略验证。
 
 2026-09-12 另核对本地 MXC `567570084f1ebaca539b0a3186aeb68bca77788a` 的 SDK、平台及诊断文档。它用于发现接入限制和升级差异，不代表 Ash 已升级。文档中的 JSON、Rust SDK、命令行和设计提案分别核对，不能把某个入口的能力当作所有入口已实现；依据与失败原因见 [MXC 文档复核](../ash-rs/docs/mxc-sandbox-windows-fallback.md#mxc-文档复核与接入纠正)。
 
@@ -134,7 +134,7 @@ Codex 的专用账户实现是行为参考。Ash 不直接注册其产品 crate�
 | Codex 源码 | 已确认的行为 | Ash 接入要求 |
 | --- | --- | --- |
 | `windows-sandbox-rs/src/setup.rs`、`provisioning_protocol.rs`、`wfp.rs` | 固定账户、管道和 WFP 对象身份 | 安装身份统一生成并记录，不能复用 Codex 的账户、管道或 GUID；卸载只处理本安装记录的对象 |
-| `windows-sandbox-service/src/package_identity.rs`、`ipc/authentication.rs` | 校验客户端包身份、服务包身份及请求者用户 SID | 若采用服务式安装，必须建立 Ash 自己的调用方认证；现有 helper 不因此引入 Codex 服务 |
+| `windows-sandbox-service/src/package_identity.rs`、`ipc/authentication.rs` | 校验客户端包身份、服务包身份及请求者用户 SID | Ash 使用自己的 SCM 服务身份和 Windows 管道令牌；管理变更要求明确清单及调用者的管理员权限，不引入 Codex 包身份 |
 | `windows-sandbox-rs/src/identity.rs` | 请求账户时可能启动提升权限的安装；每次执行前刷新 ACL | 安装、修复与命令执行分开；准备阶段只读检查；账户或规则失效时返回安装错误 |
 | `windows-sandbox-rs/src/elevated/runner_client.rs` | 部分账户、权限错误触发刷新与一次重试 | 启动失败原样返回，由上层决定是否重新授权；适配器不自动重跑 |
 | `windows-sandbox-rs/src/token.rs`、`audit.rs`、`acl.rs` | 限制 SID 包含账户、登录 SID 和 Everyone；执行前扫描可写路径，并可能修改 NUL 权限 | 明确采用账户模型；扫描遗漏不能证明 Strict，设备与 Grant 外的变更需要独立授权 |
@@ -144,6 +144,8 @@ Codex 的专用账户实现是行为参考。Ash 不直接注册其产品 crate�
 这里的宿主安装授权与 `HostAclChanges::Scoped` 不同：后者仍只覆盖 Grant 与隐藏目录，不能批准账户创建、持久网络规则、NUL 或其他宿主路径的修改。接入后也必须保留这一区别。
 
 独立实现位于 [`windows-sandbox`](../ash-rs/windows-sandbox/README.md)，不复用 Codex 的账户、服务、管道或包身份。它从冻结的 InstallContext 获取 Ash helper，使用路径和文件摘要绑定已授权的安装；安装和修复不进入普通执行路径。
+
+2026-10-02 起，管理操作由独立 [`windows-sandbox-service`](../ash-rs/windows-sandbox-service/README.md) 处理。SCM 生命周期和管道认证归服务，账户及执行机制归 Windows 平台库；请求中没有可自报的用户 SID、命令或运行时根目录。程序和账户状态由管理员持有，执行只读取已完成的安装记录。更新独占所有账户租约后替换运行器，保留账户和网络对象；中断记录须通过明确管理操作处理。这项服务改造不扩大 WindowsAccount 的隔离保证，也不改变 MXC 的 PSEC 能力要求。
 
 2026-09-11 实机追踪确认：移除限制 SID 中的 Everyone 后，Windows PowerShell 的 CLR 调用 `NtCreatePrivateNamespace` 返回 `STATUS_ACCESS_DENIED`。该调用的边界描述符包含 Everyone。增加 `BaseNamedObjects` 目录权限不能替代这项检查；相关试验权限已撤销，产品安装清单不保留这些目录授权。
 

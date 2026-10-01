@@ -1,3 +1,4 @@
+diff --git a/rs/private/annotations.bzl b/rs/private/annotations.bzl
 --- a/rs/private/annotations.bzl
 +++ b/rs/private/annotations.bzl
 @@ -22,2 +22,3 @@
@@ -8,6 +9,7 @@
          rustc_flags_select = rustc_flags_select,
 +        skip_per_crate_rustc_flags = skip_per_crate_rustc_flags,
          patch_args = patch_args,
+diff --git a/rs/extensions.bzl b/rs/extensions.bzl
 --- a/rs/extensions.bzl
 +++ b/rs/extensions.bzl
 @@ -336,2 +336,3 @@
@@ -21,6 +23,7 @@
 +            doc = "Trim per-crate rustc flags for this dependency; disable only for explicitly configured crates.",
 +        ),
          "rustc_flags_select": attr.string_list_dict(
+diff --git a/rs/private/repository_utils.bzl b/rs/private/repository_utils.bzl
 --- a/rs/private/repository_utils.bzl
 +++ b/rs/private/repository_utils.bzl
 @@ -186,2 +186,3 @@
@@ -35,6 +38,7 @@
      "rustc_flags": attr.string_list(),
 +    "skip_per_crate_rustc_flags": attr.bool(default = True),
      "rustc_flags_select": attr.string_list_dict(),
+diff --git a/rs/rust_crate.bzl b/rs/rust_crate.bzl
 --- a/rs/rust_crate.bzl
 +++ b/rs/rust_crate.bzl
 @@ -47,3 +47,4 @@

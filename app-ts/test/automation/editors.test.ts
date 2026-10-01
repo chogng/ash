@@ -124,17 +124,41 @@ suite('Editor automation completion', () => {
 		}
 	});
 
-	test('custom menu or command triggers run once and obey the same completion contract', async () => {
+	test('file creation dispatch does not finish until the new editor takes focus', async () => {
 		const fixture = createFixture();
+		let now = performance.now();
+		const clock = mock.method(performance, 'now', () => now);
+		mock.timers.enable({ apis: ['setTimeout'] });
 		let calls = 0;
+		let fileExists = false;
+		let completed = false;
+		const oldInput = fixture.document.activeElement;
 		try {
-			await fixture.editors.newUntitledFile(async () => {
+			const opening = fixture.editors.openNewTextEditor(async () => {
 				calls++;
-				fixture.replaceTab(true);
-				fixture.addInput().focus();
+				fileExists = true;
+			}).then(tab => { completed = true; return tab; });
+			await setImmediate();
+			assert.deepEqual({ fileExists, completed, calls }, { fileExists: true, completed: false, calls: 1 });
+			assert.equal(fixture.document.activeElement, oldInput);
+			const next = fixture.addTextTab('created-file');
+			next.tab.setAttribute('aria-selected', 'true');
+			next.panel.hidden = false;
+			now += 100;
+			mock.timers.tick(100);
+			await setImmediate();
+			assert.equal(completed, false);
+			assert.equal(fixture.document.activeElement, oldInput);
+			next.input.focus();
+			now += 250;
+			mock.timers.tick(250);
+			const tab = await opening;
+			assert.deepEqual({ selector: (tab as unknown as DomLocator).selector, calls, presses: fixture.presses }, {
+				selector: '.ash-workbench-editor [id="created-file"]', calls: 1, presses: [],
 			});
-			assert.deepEqual({ calls, presses: fixture.presses }, { calls: 1, presses: [] });
 		} finally {
+			mock.timers.reset();
+			clock.mock.restore();
 			fixture.dispose();
 		}
 	});
@@ -144,7 +168,7 @@ suite('Editor automation completion', () => {
 		const failure = new Error('New Untitled failed');
 		let calls = 0;
 		try {
-			await assert.rejects(fixture.editors.newUntitledFile(async () => { calls++; throw failure; }), error => error === failure);
+			await assert.rejects(fixture.editors.openNewTextEditor(async () => { calls++; throw failure; }), error => error === failure);
 			assert.equal(calls, 1);
 		} finally {
 			fixture.dispose();

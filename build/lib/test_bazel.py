@@ -74,6 +74,71 @@ def literal_attribute(call, attribute, default, build_file):
         ) from error
 
 
+def macro_required_argument_errors(root, build_file):
+    """Read required parameters from the owned Rust macros, not a copied schema."""
+    tree = ast.parse(build_file.read_text(encoding="utf-8"), filename=str(build_file))
+    macros = {}
+    for statement in tree.body:
+        if not (
+            isinstance(statement, ast.Expr)
+            and isinstance(load := statement.value, ast.Call)
+            and isinstance(load.func, ast.Name)
+            and load.func.id == "load"
+        ):
+            continue
+        label = ast.literal_eval(load.args[0])
+        if label not in {"//:defs.bzl", "//app-rs:defs.bzl"}:
+            continue
+        package, filename = label.removeprefix("//").split(":", 1)
+        source = root / package / filename
+        definitions = {
+            node.name: node
+            for node in ast.parse(source.read_text(encoding="utf-8")).body
+            if isinstance(node, ast.FunctionDef)
+        }
+        imports = {
+            ast.literal_eval(arg): ast.literal_eval(arg) for arg in load.args[1:]
+        }
+        imports.update({key.arg: ast.literal_eval(key.value) for key in load.keywords})
+        for local, original in imports.items():
+            macros[local] = (source, definitions[original])
+    errors = []
+    for call in ast.walk(tree):
+        if not (
+            isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Name)
+            and call.func.id in macros
+        ):
+            continue
+        source, definition = macros[call.func.id]
+        location = f"{build_file.relative_to(root)}:{call.lineno}: {call.func.id}"
+        if any(isinstance(arg, ast.Starred) for arg in call.args) or any(
+            key.arg is None for key in call.keywords
+        ):
+            errors.append(
+                f"{location}: dynamic arguments cannot be checked against {source.relative_to(root)}"
+            )
+            continue
+        parameters = [arg.arg for arg in definition.args.args]
+        required = parameters[: len(parameters) - len(definition.args.defaults)]
+        required += [
+            arg.arg
+            for arg, default in zip(
+                definition.args.kwonlyargs, definition.args.kw_defaults
+            )
+            if default is None
+        ]
+        supplied = set(parameters[: len(call.args)]) | {
+            key.arg for key in call.keywords
+        }
+        missing = [name for name in required if name not in supplied]
+        if missing:
+            errors.append(
+                f"{location}: missing required arguments {missing!r} from {source.relative_to(root)}"
+            )
+    return errors
+
+
 def build_targets(member, rules=LIBRARY_RULES):
     build_file = member / "BUILD.bazel"
     if not build_file.is_file():
@@ -236,6 +301,17 @@ class BazelWorkspaceDependencyTests(unittest.TestCase):
 
 
 class BazelMacroContractTests(unittest.TestCase):
+    def test_workspace_builds_supply_required_macro_arguments(self):
+        _, members = workspace_manifests(REPOSITORY_ROOT)
+        errors = []
+        for member in members:
+            build_file = member / "BUILD.bazel"
+            if build_file.is_file():
+                errors.extend(
+                    macro_required_argument_errors(REPOSITORY_ROOT, build_file)
+                )
+        self.assertEqual([], errors)
+
     def macro_calls(self, path, macro, **arguments):
         calls = []
         metadata_aliases = {
@@ -450,6 +526,61 @@ class BazelTestProfileTests(unittest.TestCase):
                 workflow,
             )
         self.assertIn("include-hidden-files: true", workflow)
+
+
+class BazelMacroSignatureFixtureTests(unittest.TestCase):
+    def setUp(self):
+        self.root = Path(self.enterContext(tempfile.TemporaryDirectory())).resolve()
+        (self.root / "consumer").mkdir()
+        self.build = self.root / "consumer/BUILD.bazel"
+        # A later required parameter must be discovered from the owning macro.
+        (self.root / "defs.bzl").write_text(
+            "def owned_binary(name, crate_root, deps, data = [], *, feature_mode):\n    pass\n",
+            encoding="utf-8",
+        )
+
+    def check_call(self, arguments):
+        self.build.write_text(
+            f'load("//:defs.bzl", binary = "owned_binary")\nbinary({arguments})\n',
+            encoding="utf-8",
+        )
+        return macro_required_argument_errors(self.root, self.build)
+
+    def test_positional_required_and_optional_defaults_pass(self):
+        self.assertEqual(
+            [], self.check_call('"fixture", "src/main.rs", [], feature_mode="test"')
+        )
+
+    def test_each_missing_required_argument_reports_build_and_owner(self):
+        arguments = {
+            "name": "fixture",
+            "crate_root": "src/main.rs",
+            "deps": [],
+            "feature_mode": "test",
+        }
+        for missing in arguments:
+            with self.subTest(missing=missing):
+                call = ", ".join(
+                    f"{name}={value!r}"
+                    for name, value in arguments.items()
+                    if name != missing
+                )
+                self.assertEqual(
+                    [
+                        f"consumer/BUILD.bazel:2: binary: missing required arguments ['{missing}'] from defs.bzl"
+                    ],
+                    self.check_call(call),
+                )
+
+    def test_dynamic_arguments_are_explicitly_unsupported(self):
+        for arguments in ("*inputs", "**inputs"):
+            with self.subTest(arguments=arguments):
+                self.assertEqual(
+                    [
+                        "consumer/BUILD.bazel:2: binary: dynamic arguments cannot be checked against defs.bzl"
+                    ],
+                    self.check_call(arguments),
+                )
 
 
 class BazelDependencyContractFixtureTests(unittest.TestCase):

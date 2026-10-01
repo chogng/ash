@@ -11,11 +11,33 @@ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextke
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import { SessionsPageRegistry } from '../../../browser/pages.js';
+import { EditorPanes } from '../../../../workbench/browser/editor.js';
+import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
+import { ViewContainerLocation, type IView } from '../../../../workbench/common/views.js';
+import { SessionsViewRegistry } from '../../../common/views.js';
 import { DesignEditorPage } from './designEditorPage.js';
 import { DesignEditorWidget } from './widget/designEditorWidget.js';
+import { DESIGN_EDITOR_RESOURCE } from './designDocumentController.js';
+import { DESIGN_LAYERS_CONTAINER_ID, DESIGN_PROPERTIES_CONTAINER_ID } from './designEditorService.js';
+import { DesignLayersView, DesignPropertiesView } from './designViews.js';
 
-SessionsPageRegistry.registerPage('design', new SyncDescriptor(DesignEditorPage));
+EditorPanes.registerStatic({
+	id: DesignEditorPage.ID,
+	name: 'Design',
+	canOpen: input => input.resource.toString() === DESIGN_EDITOR_RESOURCE.toString() ? EditorPaneMatch.Default : EditorPaneMatch.None,
+	create: options => {
+		if (!options.instantiationService) throw new Error('Design editor requires an instantiation service');
+		return options.instantiationService.createInstance(DesignEditorPage);
+	},
+});
+
+for (const [id, title, key, location, view] of [
+	[DESIGN_LAYERS_CONTAINER_ID, 'Layers', 'sessions.design.layers', ViewContainerLocation.Sidebar, DesignLayersView],
+	[DESIGN_PROPERTIES_CONTAINER_ID, 'Shape properties', 'sessions.design.properties', ViewContainerLocation.AuxiliaryBar, DesignPropertiesView],
+] as const) {
+	SessionsViewRegistry.registerStaticViewContainer({ id, title, localizationKey: { bundle: 'ash', key }, location, order: 2 });
+	SessionsViewRegistry.registerStaticViews(id, [{ id: `${id}.view`, title, localizationKey: { bundle: 'ash', key }, ctorDescriptor: new SyncDescriptor<IView>(view), canToggleVisibility: false }]);
+}
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.DesignCanvas,
@@ -38,7 +60,7 @@ AccessibleViewRegistry.register({
 		return new AccessibleContentProvider(
 			AccessibleViewProviderId.DesignCanvas,
 			{ type: AccessibleViewType.Help },
-			() => localize('sessions.design.toolsHelp', 'The floating toolbar at the bottom of the canvas selects tools and modes. Use arrow keys within each toolbar. Select chooses objects; Move canvas pans without moving objects; Zoom canvas zooms in, or out with Alt. Select Rectangle or Ellipse and drag to draw. Select Text and click to place text. In Design mode, Pen places anchors; drag an anchor to create curve handles and press Enter to finish. In Draw mode, Pen draws a freehand stroke. Escape cancels the current drawing. Motion opens an animation timeline: select an object, Add keyframe creates start and end frames, select a keyframe and edit its position, rotation or opacity. Scrub Animation time to add intermediate frames. Duration and Loop apply to the object. Play previews the document with linear interpolation. Animated groups must have their own animation removed before ungrouping. Code shows generated HTML/CSS/SVG, CSS keyframes and editable JSON with object IDs. Export code saves a runnable HTML file; it does not mark the design as saved.') + '\n\n' + localize('sessions.design.help', 'Design canvas\nOne design unit equals one pixel; grid lines are 12 units apart. Press R to add a rectangle or E to add an ellipse at the viewport center. Click a shape to select it, then drag or use arrow keys to move it; hold Shift for 10-pixel keyboard steps. Use Tab and Shift+Tab on the canvas to select shapes in paint order. Edit position, size, rotation and fill in Shape properties. Press Delete to remove the selection and Escape to cancel a drag or clear selection. <keybinding:sessions.design.undo> undoes an edit; <keybinding:sessions.design.redo> redoes it. Drag empty space or use the middle mouse button to pan. Arrow keys pan when no shape is selected. Hold Ctrl and scroll, or press Plus or Minus, to zoom. Press 0 to reset the view. Save design or <keybinding:sessions.design.save> writes an editable Ash design file; Open design loads one. Sessions Settings > Design lets you choose a pointer or hand cursor. Press T to add text and edit its content and font size in Shape properties. Press P to add a Bézier path; drag its anchors and handles, or edit anchors and incoming/outgoing handles in path-local pixels, choose a node, add or remove nodes, and toggle Closed path. Shift-click toggles objects in the selection; N adds the next unselected object, and Select all selects every object. Press G to group the selection and U to ungroup. Groups move and rotate together and resize proportionally. Export SVG saves the artwork without the grid or selection; it keeps unsaved edits in the editable design.'),
+			() => localize('sessions.design.toolsHelp', 'The floating toolbar at the bottom of the canvas selects tools and modes. Use arrow keys within each toolbar. Select chooses objects; Move canvas pans without moving objects; Zoom canvas zooms in, or out with Alt. Select Rectangle or Ellipse and drag to draw. Select Text and click to place text. In Design mode, Pen places anchors; drag an anchor to create curve handles and press Enter to finish. In Draw mode, Pen draws a freehand stroke. Escape cancels the current drawing. Motion opens an animation timeline: select an object, Add keyframe creates start and end frames, select a keyframe and edit its position, rotation or opacity. Scrub Animation time to add intermediate frames. Duration and Loop apply to the object. Play previews the document with linear interpolation. Animated groups must have their own animation removed before ungrouping. Code shows generated HTML/CSS/SVG, CSS keyframes and editable JSON with object IDs. Export code saves a runnable HTML file; it does not mark the design as saved.') + '\n\n' + localize('sessions.design.contextMenuHelp', 'Right-click the canvas, or press Shift+F10 or the Menu key while the canvas is focused, to open editing, path node, export and open actions. Escape closes the menu and returns focus to the canvas.') + '\n\n' + localize('sessions.design.help', 'Design canvas\nOne design unit equals one pixel; grid lines are 12 units apart. Press R to add a rectangle or E to add an ellipse at the viewport center. Click a shape to select it, then drag or use arrow keys to move it; hold Shift for 10-pixel keyboard steps. Use Tab and Shift+Tab on the canvas to select shapes in paint order. Edit position, size, rotation and fill in Shape properties. Press Delete to remove the selection and Escape to cancel a drag or clear selection. <keybinding:sessions.design.undo> undoes an edit; <keybinding:sessions.design.redo> redoes it. Drag empty space or use the middle mouse button to pan. Arrow keys pan when no shape is selected. Hold Ctrl and scroll, or press Plus or Minus, to zoom. Press 0 to reset the view. <keybinding:sessions.design.save> writes an editable Ash design file; Open design loads one. Sessions Settings > Design lets you choose a pointer or hand cursor. Press T to add text and edit its content and font size in Shape properties. Press P to add a Bézier path; drag its anchors and handles, or edit anchors and incoming/outgoing handles in path-local pixels, choose a node, add or remove nodes, and toggle Closed path. Shift-click toggles objects in the selection; N adds the next unselected object, and Select all selects every object. Press G to group the selection and U to ungroup. Groups move and rotate together and resize proportionally. Export SVG saves the artwork without the grid or selection; it keeps unsaved edits in the editable design.'),
 			() => focused.focus(),
 			AccessibilityVerbositySettingId.DesignCanvas,
 		);

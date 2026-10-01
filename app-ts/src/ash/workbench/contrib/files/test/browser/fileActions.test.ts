@@ -15,6 +15,7 @@ import { Schemas } from '../../../../../base/common/network.js';
 import { IClipboardService, type IClipboardResources } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IDialogService, type IConfirmationDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Event } from '../../../../../base/common/event.js';
 import { IFileService, FileKind, FileNotFoundError, type IFileService as FileServiceContract } from '../../../../../platform/files/common/files.js';
 import { ISystemFileTransferService } from '../../../../../platform/files/common/systemFileTransferService.js';
@@ -101,6 +102,8 @@ test('New File command creates and opens a file in the active workspace folder',
 		const root = URI.file('C:/project');
 		const created: URI[] = [];
 		const opened: URI[] = [];
+		const openingStarted = new DeferredPromise<void>();
+		const allowOpen = new DeferredPromise<void>();
 		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
 		using services = new InstantiationService();
 		using explorerService = createExplorerService(workspace);
@@ -124,11 +127,23 @@ test('New File command creates and opens a file in the active workspace folder',
 		} as FileServiceContract);
 		services.registerInstance(IEditorService, {
 			activeEditor: undefined,
-			openEditor: async input => { opened.push(input.resource); },
+			openEditor: async input => {
+				await openingStarted.complete();
+				await allowOpen.p;
+				opened.push(input.resource);
+			},
 		} as EditorServiceContract);
 		using commands = new CommandService(services);
 
-		await commands.executeCommand(NEW_FILE_COMMAND_ID);
+		let completed = false;
+		const command = commands.executeCommand(NEW_FILE_COMMAND_ID).then(() => { completed = true; });
+		try {
+			await openingStarted.p;
+			// The file already exists, but callers must await the editor-opening half of the command.
+			assert.equal(created.length, 1);
+			assert.deepEqual({ completed, opened }, { completed: false, opened: [] });
+		} finally { await allowOpen.complete(); }
+		await command;
 
 		assert.deepEqual(created.map(resource => resource.fsPath), [URI.file('C:/project/new %中.txt').fsPath]);
 		assert.deepEqual(opened.map(resource => resource.toString()), created.map(resource => resource.toString()));

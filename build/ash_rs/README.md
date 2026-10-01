@@ -66,7 +66,7 @@ and its license, and never resolves the packaged runtime from the host `PATH`.
 Development and release resolvers share `build/download/artifacts.py`. Downloads hash bounded streams and publish only verified
 files from unique temporary paths, so failed requests cannot remove a concurrent result. Official Node.js
 releases do not contain musl builds, so musl release jobs must supply an exact
-`--node-bin`; the lock still supplies the verified upstream license. For Linux, `bubblewrap.py` validates [`ash-rs/vendor/bubblewrap`](../../ash-rs/vendor/bubblewrap/README.md), then builds the `ash-bwrap` binary with the target C compiler and `libcap`; `--bwrap-bin` accepts an already built or signed helper. Microsoft MXC is linked into the Rust runtime. Windows packages include `bin/ash-windows-sandbox.exe`, owned and signed with the shared runtime. The SDK license is copied to `ash-resources/licenses/mxc/LICENSE.md`.
+`--node-bin`; the lock still supplies the verified upstream license. For Linux, `bubblewrap.py` validates [`ash-rs/vendor/bubblewrap`](../../ash-rs/vendor/bubblewrap/README.md), then builds the `ash-bwrap` binary with the target C compiler and `libcap`; `--bwrap-bin` accepts an already built or signed helper. Microsoft MXC is linked into the Rust runtime. Windows packages include `bin/ash-windows-sandbox.exe` and `bin/ash-windows-sandbox-service.exe`, both owned, checked and signed with the shared runtime. `--windows-sandbox-service-bin` accepts a prebuilt service. The SDK license is copied to `ash-resources/licenses/mxc/LICENSE.md`.
 Repository-owned built-in Skills come from
 `ash-rs/skills/assets/`; `layout.py` rejects linked or malformed Skill trees,
 stages them under `ash-resources/skills/`, validates the complete package in a
@@ -220,7 +220,7 @@ Each builder owns its tar format, member ordering, permissions, and metadata nor
 | --- | --- |
 | macOS | MXC Seatbelt policy; system launcher |
 | Linux | `ash-resources/bwrap` is required; MXC owns sandbox/network setup |
-| Windows | MXC SDK is linked into the runtime; `ash-windows-sandbox.exe` is included and signed with the runtime |
+| Windows | MXC SDK is linked into the runtime; `ash-windows-sandbox.exe` and `ash-windows-sandbox-service.exe` are included and signed with the runtime |
 
 Tests are offline and cover target-lock completeness, both runtime package layouts, the packaged
 Node executable/license and host-provided omission, all thirteen built-in

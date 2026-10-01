@@ -725,7 +725,7 @@ class PackageTests(unittest.TestCase):
                 metadata["components"]["bubblewrap"]["source"],
             )
 
-    def test_windows_package_excludes_retired_account_runtime(self) -> None:
+    def test_windows_package_contains_service_and_excludes_retired_worker(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             server_binary = root / "ash-app-server.exe"
@@ -763,6 +763,9 @@ class PackageTests(unittest.TestCase):
                 windows_sandbox_binary=executable_file(
                     root / "sandbox-source.exe", b"sandbox"
                 ),
+                windows_sandbox_service_binary=executable_file(
+                    root / "sandbox-service-source.exe", b"sandbox-service"
+                ),
                 voice_host_binary=executable_file(root / "voice", b"voice"),
                 collaboration_server_binary=executable_file(
                     root / "collaboration", b"collaboration"
@@ -773,6 +776,10 @@ class PackageTests(unittest.TestCase):
             )
 
             resources = output / "ash-resources"
+            self.assertEqual(
+                b"sandbox-service",
+                (output / "bin/ash-windows-sandbox-service.exe").read_bytes(),
+            )
             for name in [
                 "ash-command-runner.exe",
                 "ash-windows-sandbox-service.exe",
@@ -783,7 +790,7 @@ class PackageTests(unittest.TestCase):
             self.assertNotIn("mxcUserRuntime", artifacts)
             self.assertFalse((output / "bin/mxc-user.exe").exists())
             self.assertEqual(
-                {"windowsSandbox"},
+                {"windowsSandbox", "windowsSandboxService"},
                 {name for name in artifacts if name.startswith("windows")},
             )
             signed = {}

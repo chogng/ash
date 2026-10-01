@@ -55,6 +55,11 @@ export class Editors {
 
 	/** Opens in the active group and returns only after the new text editor owns focus. */
 	async newUntitledFile(open = () => this.page.keyboard.press('ControlOrMeta+N')): Promise<Locator> {
+		return this.openNewTextEditor(open);
+	}
+
+	/** Runs one opening action and awaits its new editor, including the input's focus transfer. */
+	async openNewTextEditor(open: () => Promise<void>): Promise<Locator> {
 		const tabs = this.element.getByRole('tab');
 		const previousIds = await tabs.evaluateAll(elements => elements.map(element => element.id));
 		await open();

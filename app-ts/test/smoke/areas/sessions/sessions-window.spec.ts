@@ -1,4 +1,5 @@
 import { expect, test } from "../../../automation/test.js";
+import type { PlaywrightApplication } from '../../../automation/playwrightDriver.js';
 import type { Locator, Page } from '@playwright/test';
 import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -6,6 +7,64 @@ import { join, resolve, sep } from 'node:path';
 import { launchElectron } from '../../../automation/playwrightElectron.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
+
+async function prepareCanvasMenuSelection(application: PlaywrightApplication, name: string): Promise<void> {
+	if (!('windows' in application) || process.platform !== 'darwin') { return; }
+	// Only select the OS menu item; renderer dispatch, IPC and action execution stay real.
+	await application.evaluate(({ Menu }, label) => {
+		const popup = Menu.prototype.popup;
+		Menu.prototype.popup = function (options) {
+			Menu.prototype.popup = popup;
+			const item = this.items.find(item => item.label === label);
+			if (!item || !item.enabled) { throw new Error(`Expected enabled Design menu item: ${label}`); }
+			item.click(item, options?.window, { shiftKey: false, ctrlKey: false, altKey: false, metaKey: false, triggeredByAccelerator: false });
+			options?.callback?.();
+		};
+	}, name);
+}
+
+async function clickCanvasMenu(canvas: Locator, name: string, application: PlaywrightApplication): Promise<void> {
+	await prepareCanvasMenuSelection(application, name);
+	await canvas.focus();
+	await canvas.press('Shift+F10');
+	if (!('windows' in application) || process.platform !== 'darwin') {
+		await canvas.page().getByRole('menuitem', { name, exact: true }).click();
+	}
+}
+
+async function inspectCanvasMenu(canvas: Locator, application: PlaywrightApplication, pointer = false): Promise<readonly { label: string; enabled: boolean }[]> {
+	if ('windows' in application && process.platform === 'darwin') {
+		await application.evaluate(({ Menu }) => {
+			const state = globalThis as typeof globalThis & { ashDesignMenuItems?: { label: string; enabled: boolean }[] };
+			state.ashDesignMenuItems = undefined;
+			const popup = Menu.prototype.popup;
+			Menu.prototype.popup = function (options) {
+				Menu.prototype.popup = popup;
+				state.ashDesignMenuItems = this.items.filter(item => item.type !== 'separator').map(item => ({ label: item.label, enabled: item.enabled }));
+				options?.callback?.();
+			};
+		});
+	}
+	await canvas.focus();
+	if (pointer) { await canvas.locator('.ash-sessions-design-viewport').click({ button: 'right', position: { x: 20, y: 20 } }); }
+	else { await canvas.press('Shift+F10'); }
+	if ('windows' in application && process.platform === 'darwin') {
+		await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & { ashDesignMenuItems?: unknown }).ashDesignMenuItems)).toBeDefined();
+		return application.evaluate(() => (globalThis as typeof globalThis & { ashDesignMenuItems: { label: string; enabled: boolean }[] }).ashDesignMenuItems);
+	}
+	const menu = canvas.page().getByRole('menu');
+	await expect(menu).toBeVisible();
+	const items = await menu.getByRole('menuitem').evaluateAll(items => items.map(item => ({ label: item.querySelector('.ash-button-label')!.textContent!, enabled: !(item as HTMLButtonElement).disabled })));
+	await canvas.page().keyboard.press('Escape');
+	return items;
+}
+
+async function rightClickCanvasShape(shape: Locator): Promise<void> {
+	const bounds = await shape.boundingBox();
+	expect(bounds).not.toBeNull();
+	// The viewport owns pointer input; SVG objects deliberately do not receive it.
+	await shape.page().mouse.click(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2, { button: 'right' });
+}
 
 async function replaceChatInput(editor: Editor, text: string): Promise<void> {
 	await editor.focus();
@@ -190,6 +249,11 @@ test('Sessions Design contribution keeps its viewport and applies canvas cursor 
 	await design.click();
 	await expect(canvas).toBeVisible();
 	await expect(canvas).toHaveCSS('display', 'flex');
+	await expect(page.locator('[data-part="editor"]').getByRole('region', { name: 'Design canvas' })).toBeVisible();
+	await expect(page.locator('[data-part="sessions"]')).toBeHidden();
+	await expect(page.locator('[data-part="sidebar"]').getByRole('tree', { name: 'Layers' })).toBeVisible();
+	await expect(page.locator('[data-part="auxiliarybar"]')).toBeVisible();
+	await expect(canvas.locator('.ash-sessions-design-properties')).toHaveCount(0);
 	const viewport = canvas.locator('.ash-sessions-design-viewport');
 	await expect(viewport).toHaveCSS('background-image', /linear-gradient[\s\S]*linear-gradient/u);
 	await expect(viewport).toHaveCSS('background-size', '12px 12px, 12px 12px');
@@ -264,6 +328,26 @@ test('Sessions Design contribution keeps its viewport and applies canvas cursor 
 	await expect(viewport).toHaveClass(/pointer-cursor/u);
 	await page.keyboard.press('Escape');
 	await expect(viewport).toHaveCSS('cursor', /url\("data:image\/svg\+xml,/u);
+	await canvas.focus();
+	await page.keyboard.press('r');
+	await page.keyboard.press('e');
+	const layers = page.locator('[data-part="sidebar"]').getByRole('tree', { name: 'Layers' });
+	await expect(layers.getByRole('treeitem')).toHaveCount(2);
+	await layers.getByRole('treeitem', { name: 'Rectangle', exact: true }).click();
+	await layers.getByRole('treeitem', { name: 'Ellipse', exact: true }).click({ modifiers: ['Shift'] });
+	await expect(layers.getByRole('treeitem', { selected: true })).toHaveCount(2);
+	await layers.getByRole('treeitem', { name: 'Rectangle', exact: true }).click();
+	const x = page.locator('[data-part="auxiliarybar"]').getByRole('spinbutton', { name: 'X', exact: true });
+	await x.fill('42');
+	await x.press('Tab');
+	await expect(canvas.locator('rect[data-shape-id]')).toHaveAttribute('x', '42');
+	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(page.locator('[data-part="sessions"]')).toBeVisible();
+	await expect(canvas).toBeHidden();
+	await design.click();
+	await expect(canvas).toBeVisible();
+	await expect(canvas.locator('rect[data-shape-id]')).toHaveAttribute('x', '42');
+	await expect(layers.getByRole('treeitem', { name: 'Rectangle', exact: true })).toHaveAttribute('aria-selected', 'true');
 });
 
 test('Sessions Design floating tools draw, edit motion and expose reusable code', async ({ application, target, workbench }) => {
@@ -388,6 +472,104 @@ test('Sessions Design floating tools draw, edit motion and expose reusable code'
 	}
 });
 
+test('Sessions Design canvas context menu edits the pointed object and preserves keyboard focus', async ({ application, target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code' || (target.kind === 'electron' && process.platform === 'darwin'), 'DOM menu focus is tested in the browser; macOS system menus have a separate scenario.');
+	let page = workbench.page;
+	if (target.kind === 'browser') {
+		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+	} else {
+		if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
+		const opened = application.waitForEvent('window');
+		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
+		page = await opened;
+	}
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
+	const canvas = page.getByRole('region', { name: 'Design canvas' });
+	const viewport = canvas.locator('.ash-sessions-design-viewport');
+	const item = (name: string): Locator => page.getByRole('menuitem', { name, exact: true });
+	await expect(canvas.locator('.ash-sessions-design-tools')).toHaveCount(0);
+	await expect(canvas.getByRole('button', { name: 'Save design', exact: true })).toHaveCount(0);
+	await viewport.click({ button: 'right', position: { x: 20, y: 20 } });
+	await expect(item('Undo')).toBeDisabled();
+	await expect(item('Delete')).toBeDisabled();
+	await expect(item('Select all')).toBeDisabled();
+	await expect(item('Export SVG')).toBeDisabled();
+	await expect(item('Open design')).toBeEnabled();
+	await expect(item('Save design')).toHaveCount(0);
+	await page.keyboard.press('Escape');
+	await expect(canvas).toBeFocused();
+	await canvas.press('r');
+	await canvas.press('e');
+	for (let index = 0; index < 15; index++) { await canvas.press('Shift+ArrowRight'); }
+	const rectangle = canvas.locator('rect[data-shape-id]');
+	const ellipse = canvas.locator('ellipse[data-shape-id]');
+	await rightClickCanvasShape(rectangle);
+	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('1 objects selected.');
+	await item('Delete').click();
+	await expect(rectangle).toHaveCount(0);
+	await expect(ellipse).toHaveCount(1);
+	await expect(canvas).toBeFocused();
+	await clickCanvasMenu(canvas, 'Undo', application);
+	await expect(rectangle).toHaveCount(1);
+	await clickCanvasMenu(canvas, 'Redo', application);
+	await expect(rectangle).toHaveCount(0);
+	await clickCanvasMenu(canvas, 'Undo', application);
+	await clickCanvasMenu(canvas, 'Select all', application);
+	await rightClickCanvasShape(rectangle);
+	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('2 objects selected.');
+	await expect(item('Group')).toBeEnabled();
+	await item('Group').click();
+	const group = canvas.locator('.ash-sessions-design-shapes > svg[data-shape-id]');
+	await expect(group).toHaveCount(1);
+	await clickCanvasMenu(canvas, 'Ungroup', application);
+	await expect(group).toHaveCount(0);
+	await expect(canvas.locator('.ash-sessions-design-shapes > [data-shape-id]')).toHaveCount(2);
+	await canvas.press('Shift+F10');
+	await expect(item('Export SVG')).toBeEnabled();
+	await page.keyboard.press('Escape');
+	await expect(canvas).toBeFocused();
+	await canvas.press('Alt+F1');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Right-click the canvas[\s\S]*Shift\+F10/u);
+	await page.keyboard.press('Escape');
+	await expect(canvas).toBeFocused();
+});
+
+test('Sessions Design macOS canvas menu dispatches editing through Main', async ({ application, target, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code' || process.platform !== 'darwin');
+	if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
+	const opened = application.waitForEvent('window');
+	await workbench.page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
+	const page = await opened;
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
+	const canvas = page.getByRole('region', { name: 'Design canvas' });
+	expect(await inspectCanvasMenu(canvas, application, true)).toEqual([
+		{ label: 'Undo', enabled: false }, { label: 'Redo', enabled: false },
+		{ label: 'Delete', enabled: false }, { label: 'Select all', enabled: false },
+		{ label: 'Group', enabled: false }, { label: 'Ungroup', enabled: false },
+		{ label: 'Export SVG', enabled: false }, { label: 'Open design', enabled: true },
+	]);
+	await expect(canvas).toBeFocused();
+	await canvas.press('r');
+	await canvas.press('e');
+	for (let index = 0; index < 15; index++) { await canvas.press('Shift+ArrowRight'); }
+	const rectangle = canvas.locator('rect[data-shape-id]');
+	await prepareCanvasMenuSelection(application, 'Delete');
+	await rightClickCanvasShape(rectangle);
+	await expect(rectangle).toHaveCount(0);
+	await expect(canvas.locator('ellipse[data-shape-id]')).toHaveCount(1);
+	await expect(canvas).toBeFocused();
+	await clickCanvasMenu(canvas, 'Undo', application);
+	await expect(rectangle).toHaveCount(1);
+	await clickCanvasMenu(canvas, 'Select all', application);
+	await prepareCanvasMenuSelection(application, 'Group');
+	await rightClickCanvasShape(rectangle);
+	const group = canvas.locator('.ash-sessions-design-shapes > svg[data-shape-id]');
+	await expect(group).toHaveCount(1);
+	await clickCanvasMenu(canvas, 'Ungroup', application);
+	await expect(group).toHaveCount(0);
+	await expect(canvas.locator('.ash-sessions-design-shapes > [data-shape-id]')).toHaveCount(2);
+});
+
 test('Sessions Design edits vector geometry and preserves a complete undo gesture', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	let page = workbench.page;
@@ -406,11 +588,11 @@ test('Sessions Design edits vector geometry and preserves a complete undo gestur
 	await page.keyboard.press('r');
 	const rectangle = canvas.locator('rect[data-shape-id]');
 	await expect(rectangle).toHaveAttribute('width', '120');
-	const width = canvas.getByRole('spinbutton', { name: 'Width', exact: true });
+	const width = page.locator('[data-part="auxiliarybar"]').getByRole('spinbutton', { name: 'Width', exact: true });
 	await width.fill('120.5');
 	await width.press('Tab');
 	await expect(rectangle).toHaveAttribute('width', '120.5');
-	const rotation = canvas.getByRole('spinbutton', { name: 'Rotation', exact: true });
+	const rotation = page.locator('[data-part="auxiliarybar"]').getByRole('spinbutton', { name: 'Rotation', exact: true });
 	await rotation.fill('30');
 	await rotation.press('Tab');
 	await expect(rectangle).toHaveAttribute('transform', /^rotate\(30 /u);
@@ -448,7 +630,7 @@ test('Sessions Design edits vector geometry and preserves a complete undo gestur
 	await page.keyboard.press('Tab');
 	await page.keyboard.press('Delete');
 	await expect(rectangle).toHaveCount(0);
-	await canvas.getByRole('button', { name: 'Undo', exact: true }).click();
+	await clickCanvasMenu(canvas, 'Undo', application);
 	await expect(rectangle).toHaveCount(1);
 	await expect(viewport).toHaveCSS('background-size', /17\.28px/u);
 	await expect(canvas.locator('.ash-sessions-design-zoom')).toContainText('Unsaved changes');
@@ -470,7 +652,7 @@ test('Sessions Design saves and reopens an editable file through App Server', as
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	await canvas.focus();
 	await page.keyboard.press('r');
-	const width = canvas.getByRole('spinbutton', { name: 'Width', exact: true });
+	const width = page.locator('[data-part="auxiliarybar"]').getByRole('spinbutton', { name: 'Width', exact: true });
 	await width.fill('120.5');
 	await width.press('Tab');
 	await canvas.focus();
@@ -482,7 +664,7 @@ test('Sessions Design saves and reopens an editable file through App Server', as
 	await canvas.focus();
 	await page.keyboard.press('e');
 	await page.keyboard.press('ControlOrMeta+z');
-	await canvas.getByRole('button', { name: 'Open design', exact: true }).click();
+	await clickCanvasMenu(canvas, 'Open design', application);
 	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Opened design.ash-design.json');
 	await expect(canvas.locator('rect[data-shape-id]')).toHaveAttribute('width', '120.5');
 	await expect(canvas.locator('ellipse[data-shape-id]')).toHaveCount(0);
@@ -490,13 +672,15 @@ test('Sessions Design saves and reopens an editable file through App Server', as
 	await page.keyboard.press('Tab');
 	await width.fill('240.5');
 	await width.press('Tab');
-	await canvas.getByRole('button', { name: 'Save design', exact: true }).click();
+	await canvas.focus();
+	await page.keyboard.press('ControlOrMeta+s');
 	await expect(canvas.locator('.ash-sessions-design-zoom')).not.toContainText('Unsaved changes');
 	expect(JSON.parse(await readFile(filePath, 'utf8')).shapes[0].width).toBe(240.5);
 	await writeFile(filePath, JSON.stringify(saved));
 	await width.fill('360.5');
 	await width.press('Tab');
-	await canvas.getByRole('button', { name: 'Save design', exact: true }).click();
+	await canvas.focus();
+	await page.keyboard.press('ControlOrMeta+s');
 	const error = page.getByRole('dialog');
 	await expect(error).toContainText('Could not save the design. Your changes are still in the canvas.');
 	await error.getByRole('button', { name: 'OK', exact: true }).click();
@@ -518,7 +702,7 @@ test('Sessions Design saves and reopens an editable file through App Server', as
 	await closed;
 });
 
-test('Sessions Design saves and opens a browser folder without replacing the workspace', async ({ target, workbench }) => {
+test('Sessions Design saves and opens a browser folder without replacing the workspace', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled' || target.workbenchMode !== 'code', 'Requires the standalone browser file picker');
 	const page = workbench.page;
 	await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
@@ -547,7 +731,7 @@ test('Sessions Design saves and opens a browser folder without replacing the wor
 	await page.keyboard.press('r');
 	await page.keyboard.press('ControlOrMeta+z');
 	await expect(canvas.locator('.ash-sessions-design-zoom')).not.toContainText('Unsaved changes');
-	await canvas.getByRole('button', { name: 'Open design', exact: true }).click();
+	await clickCanvasMenu(canvas, 'Open design', application);
 	const file = page.locator('.ash-quick-pick-row-label').filter({ hasText: /^design\.ash-design\.json$/u });
 	await expect(file).toBeVisible();
 	await file.click();
@@ -572,10 +756,10 @@ test('Sessions Design edits text and Bézier handles and transforms groups with 
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	await canvas.focus();
 	await page.keyboard.press('t');
-	const content = canvas.getByRole('textbox', { name: 'Text content', exact: true });
+	const content = page.locator('[data-part="auxiliarybar"]').getByRole('textbox', { name: 'Text content', exact: true });
 	await content.fill('中文 <script>alert(1)</script>\nSecond line');
 	await content.press('Tab');
-	const fontSize = canvas.getByRole('spinbutton', { name: 'Font size', exact: true });
+	const fontSize = page.locator('[data-part="auxiliarybar"]').getByRole('spinbutton', { name: 'Font size', exact: true });
 	await fontSize.fill('32');
 	await fontSize.press('Tab');
 	await expect(canvas.locator('text')).toContainText('中文 <script>alert(1)</script>');
@@ -585,7 +769,7 @@ test('Sessions Design edits text and Bézier handles and transforms groups with 
 	await page.keyboard.press('p');
 	const path = canvas.locator('path[data-shape-id]');
 	const initial = await path.getAttribute('d');
-	const outgoing = canvas.getByRole('spinbutton', { name: 'Outgoing handle X', exact: true });
+	const outgoing = page.locator('[data-part="auxiliarybar"]').getByRole('spinbutton', { name: 'Outgoing handle X', exact: true });
 	await outgoing.fill('48');
 	await outgoing.press('Tab');
 	await expect(path).not.toHaveAttribute('d', initial!);
@@ -600,24 +784,24 @@ test('Sessions Design edits text and Bézier handles and transforms groups with 
 	await expect(path).not.toHaveAttribute('d', edited!);
 	await page.keyboard.press('ControlOrMeta+z');
 	await expect(path).toHaveAttribute('d', edited!);
-	await canvas.getByRole('button', { name: 'Add node', exact: true }).click();
-	await expect(canvas.getByRole('combobox', { name: 'Path node', exact: true }).locator('option')).toHaveCount(3);
-	await canvas.getByRole('button', { name: 'Remove node', exact: true }).click();
-	await canvas.getByRole('checkbox', { name: 'Closed path', exact: true }).check();
+	await clickCanvasMenu(canvas, 'Add node', application);
+	await expect(page.locator('[data-part="auxiliarybar"]').getByRole('combobox', { name: 'Path node', exact: true }).locator('option')).toHaveCount(3);
+	await clickCanvasMenu(canvas, 'Remove node', application);
+	await page.locator('[data-part="auxiliarybar"]').getByRole('checkbox', { name: 'Closed path', exact: true }).check();
 	await expect(path).toHaveAttribute('d', / Z$/u);
 	await canvas.focus();
 	await page.keyboard.press('n');
 	await page.keyboard.press('g');
 	const group = canvas.locator('.ash-sessions-design-shapes > svg[data-shape-id]');
 	await expect(group).toHaveCount(1);
-	const width = canvas.getByRole('spinbutton', { name: 'Width', exact: true });
-	const height = canvas.getByRole('spinbutton', { name: 'Height', exact: true });
+	const width = page.locator('[data-part="auxiliarybar"]').getByRole('spinbutton', { name: 'Width', exact: true });
+	const height = page.locator('[data-part="auxiliarybar"]').getByRole('spinbutton', { name: 'Height', exact: true });
 	const beforeWidth = Number(await width.inputValue());
 	const beforeHeight = Number(await height.inputValue());
 	await width.fill(`${beforeWidth * 1.5}`);
 	await width.press('Tab');
 	await expect.poll(async () => Number(await height.inputValue())).toBeCloseTo(beforeHeight * 1.5, 5);
-	const rotation = canvas.getByRole('spinbutton', { name: 'Rotation', exact: true });
+	const rotation = page.locator('[data-part="auxiliarybar"]').getByRole('spinbutton', { name: 'Rotation', exact: true });
 	await rotation.fill('45');
 	await rotation.press('Tab');
 	await canvas.focus();
@@ -631,14 +815,14 @@ test('Sessions Design edits text and Bézier handles and transforms groups with 
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Group[\s\S]*Text[\s\S]*中文[\s\S]*Bézier path/u);
 	await page.keyboard.press('Escape');
 	await expect(canvas).toBeFocused();
-	await expect(canvas.getByRole('button', { name: 'Export SVG', exact: true })).toBeEnabled();
+	expect((await inspectCanvasMenu(canvas, application)).find(item => item.label === 'Export SVG')!.enabled).toBe(true);
 	if (target.kind === 'browser') { await page.setViewportSize({ width: 600, height: 600 }); }
 	else if ('windows' in application) {
 		await application.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows().find(window => window.getTitle().includes('Sessions'))!.setBounds({ width: 600, height: 600 }); });
 	}
 	await canvas.focus();
 	await page.keyboard.press('p');
-	await expect(canvas.getByRole('spinbutton', { name: 'Outgoing handle Y', exact: true })).toBeVisible();
+	await expect(page.locator('[data-part="auxiliarybar"]').getByRole('spinbutton', { name: 'Outgoing handle Y', exact: true })).toBeVisible();
 	await expect.poll(async () => (await canvas.locator('.ash-sessions-design-viewport').boundingBox())!.height).toBeGreaterThan(100);
 });
 
@@ -670,14 +854,15 @@ test('Sessions Design exports SVG and HTML and reopens grouped text and paths th
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	await canvas.focus();
 	await page.keyboard.press('t');
-	const text = canvas.getByRole('textbox', { name: 'Text content', exact: true });
+	const text = page.locator('[data-part="auxiliarybar"]').getByRole('textbox', { name: 'Text content', exact: true });
 	await text.fill('中文 <script>');
 	await text.press('Tab');
 	await canvas.focus();
 	await page.keyboard.press('p');
-	await canvas.getByRole('button', { name: 'Select all', exact: true }).click();
-	await canvas.getByRole('button', { name: 'Group', exact: true }).click();
-	await canvas.getByRole('button', { name: 'Save design', exact: true }).click();
+	await clickCanvasMenu(canvas, 'Select all', application);
+	await clickCanvasMenu(canvas, 'Group', application);
+	await canvas.focus();
+	await page.keyboard.press('ControlOrMeta+s');
 	if (target.kind === 'browser') {
 		const dialog = page.getByRole('dialog', { name: 'Save design', exact: true });
 		await dialog.getByRole('textbox', { name: 'File name, field 1' }).fill('design.ash-design.json');
@@ -689,7 +874,7 @@ test('Sessions Design exports SVG and HTML and reopens grouped text and paths th
 	if (target.kind === 'electron' && 'windows' in application) {
 		await application.evaluate(({ dialog }, folder) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: `${folder}/design.svg` }); }, directory);
 	}
-	await canvas.getByRole('button', { name: 'Export SVG', exact: true }).click();
+	await clickCanvasMenu(canvas, 'Export SVG', application);
 	if (target.kind === 'browser') {
 		const dialog = page.getByRole('dialog', { name: 'Export SVG', exact: true });
 		await dialog.getByRole('textbox', { name: 'File name, field 1' }).fill('design.svg');
@@ -727,7 +912,7 @@ test('Sessions Design exports SVG and HTML and reopens grouped text and paths th
 	await canvas.locator('.ash-design-tools-widget').getByRole('button', { name: 'Design', exact: true }).click();
 	await canvas.focus();
 	await page.keyboard.press('ControlOrMeta+z');
-	await canvas.getByRole('button', { name: 'Open design', exact: true }).click();
+	await clickCanvasMenu(canvas, 'Open design', application);
 	if (target.kind === 'browser') { await page.locator('.ash-quick-pick-row-label').filter({ hasText: /^design\.ash-design\.json$/u }).click(); }
 	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Opened design.ash-design.json');
 	await expect(canvas.locator('.ash-sessions-design-shapes > svg[data-shape-id]')).toHaveCount(1);

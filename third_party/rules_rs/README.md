@@ -26,6 +26,27 @@ The repository pins `rules_rs 0.0.96` through the archive override in the root
   change reruns the crate extension. Remove the patch when `rules_rs` can select
   the Windows execution ABI and assemble its runtime DLLs from platform constraints.
 
+Validate changes to this patch stack with Bazel's own patch implementation, in
+`MODULE.bazel` order, rather than applying individual patches with the host's
+`patch` executable. Multi-file patches need explicit `diff --git` file boundaries;
+GNU patch accepting the input does not establish Bazel compatibility.
+
+The explicit integration test needs Python 3.12+, a JDK 21+ `java` executable,
+the archive from `archive_override.urls`, and the pinned Bazel installation:
+
+```bash
+python3 -B third_party/rules_rs/test_patches.py \
+  --archive "$RULES_RS_ARCHIVE" \
+  --bazel-install "$(bazel --ignore_all_rc_files info install_base)"
+```
+
+The test verifies the archive integrity and Bazel version before applying the
+complete stack in an isolated temporary directory. Negative cases exercise
+missing file boundaries, changed context, and order-dependent patches. It makes
+no downloads and compiles no Rust targets. Use `--java` for a specific JDK;
+Bazel's bundled runtime lacks the Java source compiler required by this test.
+Ordinary Python unit tests remain independent of this explicit Bazel/JDK check.
+
 The `rules_rust.patch` extension separately applies `rust_macos_rtlib.patch` to
 the pinned `rules_rust` archive. It removes the C/C++ toolchain's redundant
 `-rtlib=compiler-rt` selector from macOS Rust linker arguments. Rust disables

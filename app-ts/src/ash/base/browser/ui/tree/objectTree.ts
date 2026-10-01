@@ -20,6 +20,7 @@ export interface ObjectTreeOptions<TNode> {
 	readonly findMode?: TreeFindMode;
 	readonly findMatchType?: TreeFindMatchType;
 	readonly selectionPresentation?: TreeSelectionPresentation;
+	readonly multipleSelectionSupport?: boolean;
 	readonly enableStickyScroll?: boolean;
 	readonly stickyScrollMaxItemCount?: number;
 	readonly modelOptions: ObjectTreeModelOptions<TNode>;
@@ -124,6 +125,7 @@ export class ObjectTree<TNode> extends Disposable {
 			findMode: options.findMode,
 			findMatchType: options.findMatchType,
 			selectionPresentation: options.selectionPresentation,
+			multipleSelectionSupport: options.multipleSelectionSupport,
 			enableStickyScroll: options.enableStickyScroll,
 			stickyScrollMaxItemCount: options.stickyScrollMaxItemCount,
 			reuseRows: options.reuseRows,

@@ -46,6 +46,7 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
     parser.add_argument(
         "--exec-server-bin", type=Path, help="Prebuilt execution service executable."
     )
+    parser.add_argument("--windows-sandbox-service-bin", type=Path)
     parser.add_argument(
         "--windows-sandbox-bin",
         type=Path,
@@ -178,7 +179,8 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
     }
     if spec.is_windows:
         inputs["ash-windows-sandbox"] = args.windows_sandbox_bin
-    elif args.windows_sandbox_bin is not None:
+        inputs["ash-windows-sandbox-service"] = args.windows_sandbox_service_bin
+    elif args.windows_sandbox_bin is not None or args.windows_sandbox_service_bin is not None:
         raise RuntimeError("Windows sandbox executable requires a Windows target")
     binaries = build_binaries(
         REPOSITORY_ROOT,
@@ -239,6 +241,7 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         protocol_metadata=protocol_metadata,
         update_public_key=args.update_public_key,
         build_profile=args.cargo_profile,
+        windows_sandbox_service_binary=binaries.get("ash-windows-sandbox-service"),
         windows_sandbox_binary=binaries["ash-windows-sandbox"]
         if spec.is_windows
         else None,

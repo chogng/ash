@@ -268,6 +268,7 @@ class PrepareTests(unittest.TestCase):
                 "ash-voice-host",
                 "ash-collaboration-server",
                 "ash-windows-sandbox",
+                "ash-windows-sandbox-service",
             ):
                 path = root / name
                 path.write_text(name)

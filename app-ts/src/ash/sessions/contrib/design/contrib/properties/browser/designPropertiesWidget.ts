@@ -111,6 +111,8 @@ export class DesignPropertiesWidget extends Disposable {
 		];
 	}
 
+	public focus(): void { this.geometryInputs.get('x')!.focus(); }
+
 	public update(shape: DesignShape | undefined, isVisible: boolean): void {
 		this.domNode.classList.toggle('visible', !!shape && isVisible);
 		this.textProperties.classList.toggle('visible', shape?.kind === 'text');

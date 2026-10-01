@@ -158,7 +158,7 @@ test('browser opens an authorized local folder and saves its files', async ({ ta
 	await page.keyboard.press('Enter');
 	const newFileName = page.locator('.ash-quick-pick-input input[aria-label="New File Name"]');
 	await newFileName.fill('created.txt');
-	await newFileName.press('Enter');
+	await workbench.editors.openNewTextEditor(() => newFileName.press('Enter'));
 	await expect(explorer.locator('.ash-tree-row').filter({ hasText: 'created.txt' })).toHaveCount(1);
 	await expect.poll(() => page.evaluate(async name => {
 		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
@@ -172,7 +172,7 @@ test('browser opens an authorized local folder and saves its files', async ({ ta
 	await page.keyboard.press('Enter');
 	const nestedFileName = page.locator('.ash-quick-pick-input input[aria-label="New File Name"]');
 	await nestedFileName.fill('nested.txt');
-	await nestedFileName.press('Enter');
+	await workbench.editors.openNewTextEditor(() => nestedFileName.press('Enter'));
 	await expect(explorer.locator('.ash-tree-row').filter({ hasText: 'nested.txt' })).toHaveCount(1);
 	await expect.poll(() => page.evaluate(async name => {
 		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
@@ -180,7 +180,9 @@ test('browser opens an authorized local folder and saves its files', async ({ ta
 		return (await (await source.getFileHandle('nested.txt')).getFile()).text();
 	}, folderName)).toBe('');
 	const originalEditor = openEditorsTree.getByRole('treeitem', { name: /hello %中\.txt/ });
-	await originalEditor.getByRole('button', { name: 'Close hello %中.txt' }).focus();
+	const closeOriginalEditor = originalEditor.getByRole('button', { name: 'Close hello %中.txt' });
+	await closeOriginalEditor.focus();
+	await expect(closeOriginalEditor).toBeFocused();
 	await page.keyboard.press('Enter');
 	await expect(originalEditor).toHaveCount(0);
 	const nestedEditor = openEditorsTree.getByRole('treeitem', { name: /nested\.txt/ });

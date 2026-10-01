@@ -9,6 +9,8 @@
 
 当前 MXC Windows 后端只接受完整 PSEC 能力。此前的账户原型已退出源码和产品包，不能再通过 `mxc-user` 或 `tests/local.ps1` 安装它。独立候选使用 `ash-windows-sandbox`，仍需单独授权和验收，不能沿用旧原型的通过结论。
 
+2026-10-02 新增独立 `ash-windows-sandbox-service` 后，账户验收脚本先安装 SCM 服务，再通过认证管道安装账户、执行用例、替换运行器并复测，最后删除账户和服务。旧 helper 直接配置账户的实机记录不证明新版服务路径通过；本次开发环境尚未执行服务注册与管理员安装验收。当前安装约束和操作入口见 [服务说明](../ash-rs/windows-sandbox-service/README.md)。
+
 ```powershell
 just test ash-sandboxing --lib
 just test ash-tool-executor --lib

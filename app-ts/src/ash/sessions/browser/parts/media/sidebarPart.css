@@ -10,6 +10,11 @@
 
 .ash-workbench-sidebar > .ash-workbench-part-content > .ash-sessions-list[hidden] { display: none; }
 
+.ash-sessions-window .ash-workbench-sidebar > .ash-workbench-part-content > .ash-pane-composite {
+	flex: 1;
+	min-height: 0;
+}
+
 .ash-workbench-sidebar > .ash-workbench-part-content.empty-page > :not(.ash-sessions-activity-host) { visibility: hidden; }
 
 .ash-sessions-window .ash-workbench-sidebar .ash-sessions-activity-host {
