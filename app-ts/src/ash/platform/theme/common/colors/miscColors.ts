@@ -1,4 +1,4 @@
-import { registerColor } from '../colorUtils.js';
+import { registerColor, transparent } from '../colorUtils.js';
 import { foreground } from './baseColors.js';
 
 const owner = 'platform.theme';
@@ -14,6 +14,15 @@ export const scrollbarShadow = color('scrollbar.shadow', '#000000', '#dddddd', n
 export const scrollbarBackground = registerColor('scrollbar.background', {
 	dark: null, light: null, highContrastDark: null, highContrastLight: null,
 }, { description: 'Scrollbar track background.', owner });
-export const scrollbarSliderBackground = color('scrollbar.sliderBackground', '#79797966', '#64646433', foreground, foreground, 'Scrollbar slider background.');
-export const scrollbarSliderHoverBackground = color('scrollbar.sliderHoverBackground', '#646464b3', '#64646459', foreground, foreground, 'Hovered scrollbar slider background.');
-export const scrollbarSliderActiveBackground = color('scrollbar.sliderActiveBackground', '#bfbfbf66', '#00000033', '#ffff00', '#0000ee', 'Active scrollbar slider background.');
+export const scrollbarSliderBackground = registerColor('scrollbarSlider.background', {
+	dark: transparent('#797979', 0.4), light: transparent('#646464', 0.4),
+	highContrastDark: foreground, highContrastLight: foreground,
+}, { description: 'Scrollbar slider background.', owner });
+export const scrollbarSliderHoverBackground = registerColor('scrollbarSlider.hoverBackground', {
+	dark: transparent('#646464', 0.7), light: transparent('#646464', 0.7),
+	highContrastDark: foreground, highContrastLight: foreground,
+}, { description: 'Hovered scrollbar slider background.', owner });
+export const scrollbarSliderActiveBackground = registerColor('scrollbarSlider.activeBackground', {
+	dark: transparent('#bfbfbf', 0.4), light: transparent('#000000', 0.6),
+	highContrastDark: '#ffff00', highContrastLight: '#0000ee',
+}, { description: 'Active scrollbar slider background.', owner });

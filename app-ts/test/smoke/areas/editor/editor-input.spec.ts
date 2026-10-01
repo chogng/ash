@@ -218,6 +218,67 @@ test('minimap reflects equal-length text edits in the workbench', async ({ targe
 	await expect(editor.element.locator('.minimap')).toHaveAttribute('aria-hidden', 'true');
 });
 
+test('built-in themes apply scrollbar and minimap colors through hover and dragging', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText(Array.from({ length: 120 }, () => 'long text '.repeat(100)).join('\n'));
+	await page.keyboard.press('ControlOrMeta+Home');
+	const vertical = editor.element.locator('.ash-scrollbar-track-vertical');
+	const thumb = vertical.locator('.ash-scrollbar-thumb');
+	const minimap = editor.element.locator('.minimap');
+	const slider = minimap.locator('.stanza-editor-minimap-slider');
+	for (const { name, id, colors, shadow } of [
+		{
+			name: 'Ash Dark', id: 'ash-dark',
+			colors: ['rgba(168, 169, 170, 0.52)', 'rgba(168, 169, 170, 0.56)', 'rgba(168, 169, 170, 0.61)'],
+			shadow: 'rgba(0, 0, 0, 0.08) 0px 0px 6px 0px',
+		},
+		{
+			name: 'Ash Light', id: 'ash-light',
+			colors: ['rgba(100, 100, 100, 0.75)', 'rgba(100, 100, 100, 0.82)', 'rgba(100, 100, 100, 0.88)'],
+			shadow: 'rgba(0, 0, 0, 0.08) 0px 0px 6px 0px',
+		},
+		{
+			name: 'Ash High Contrast Dark', id: 'ash-high-contrast-dark',
+			colors: ['rgb(255, 255, 255)', 'rgb(255, 255, 255)', 'rgb(255, 255, 0)'], shadow: 'none',
+		},
+		{
+			name: 'Ash High Contrast Light', id: 'ash-high-contrast-light',
+			colors: ['rgb(0, 0, 0)', 'rgb(0, 0, 0)', 'rgb(0, 0, 238)'], shadow: 'none',
+		},
+	] as const) {
+		const [background, hover, active] = colors;
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+		const search = page.locator('.ash-quick-pick').getByRole('combobox');
+		await search.fill(name);
+		await search.press('Enter');
+		await expect(workbench.element).toHaveAttribute('data-color-theme', id);
+		await page.mouse.move(0, 0);
+		await expect(thumb).toHaveCSS('background-color', background);
+		await expect(slider).toHaveCSS('background-color', background);
+		await expect(vertical).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect.poll(() => minimap.evaluate(element => getComputedStyle(element, '::after').boxShadow)).toBe(shadow);
+		await minimap.hover();
+		await expect(slider).toHaveCSS('background-color', hover);
+		await vertical.hover();
+		await expect(thumb).toHaveCSS('background-color', hover);
+		const bounds = (await thumb.boundingBox())!;
+		await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+		await page.mouse.down();
+		try {
+			await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2 + 20);
+			await expect(thumb).toHaveCSS('background-color', active);
+			await expect.poll(() => editor.element.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+		} finally {
+			await page.mouse.up();
+		}
+		await editor.input.press('ControlOrMeta+Home');
+	}
+});
+
 test('editor scrollbar track background follows the theme through hover and dragging', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
@@ -277,12 +338,12 @@ test('minimap shadow indicates content beyond the right edge', async ({ target, 
 	await scrollable.evaluate(element => { element.scrollLeft = 0; });
 	await expect.poll(() => scrollable.evaluate(element => element.scrollWidth > element.clientWidth && element.scrollLeft === 0)).toBe(true);
 	await expect.poll(async () => (await readShadow()).shadow).not.toBe('none');
-	expect(await readShadow()).toMatchObject({ content: '""', pointerEvents: 'none', left: '0px' });
-	await minimap.evaluate(element => element.style.setProperty('--ash-widget-shadow', '#123456'));
+	expect(await readShadow()).toMatchObject({ content: '""', pointerEvents: 'none', left: '-6px' });
+	await minimap.evaluate(element => element.style.setProperty('--ash-minimap-shadow', '#123456'));
 	try {
-		await expect.poll(async () => (await readShadow()).shadow).toBe('rgb(18, 52, 86) 6px 0px 6px -6px inset');
+		await expect.poll(async () => (await readShadow()).shadow).toBe('rgb(18, 52, 86) 0px 0px 6px 0px');
 	} finally {
-		await minimap.evaluate(element => element.style.removeProperty('--ash-widget-shadow'));
+		await minimap.evaluate(element => element.style.removeProperty('--ash-minimap-shadow'));
 	}
 	await page.emulateMedia({ forcedColors: 'active' });
 	await expect.poll(async () => (await readShadow()).shadow).toBe('none');
@@ -496,24 +557,34 @@ test('text editor automation follows input, replacement, and folding in its grou
 	await expect(editor.input).toBeFocused();
 });
 
-test('theme color settings update selected text and restore defaults when removed', async ({ target, workbench }) => {
+test('theme color settings update editor colors and restore defaults when removed', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
 	await editor.waitForEditorFocus();
 	await page.keyboard.insertText('prefix selected suffix');
+	const overrides = [
+		['editor.selectionBackground', '#123456', '--ash-editor-selection-background'],
+		['editor.inactiveSelectionBackground', '#654321', '--ash-editor-inactive-selection-background'],
+		['editor.selectionForeground', '#fedcba', '--ash-editor-selection-foreground'],
+		['scrollbar.background', '#112233', '--ash-scrollbar-background'],
+		['scrollbarSlider.background', '#234567', '--ash-scrollbar-slider-background'],
+		['scrollbarSlider.hoverBackground', '#345678', '--ash-scrollbar-slider-hover-background'],
+		['scrollbarSlider.activeBackground', '#456789', '--ash-scrollbar-slider-active-background'],
+		['widget.shadow', '#56789a', '--ash-widget-shadow'],
+		['minimap.shadow', '#6789ab', '--ash-minimap-shadow'],
+	] as const;
+	const variables = overrides.map(([, , variable]) => variable);
+	const readColors = () => editor.element.evaluate((element, tokens) => tokens.map(token => getComputedStyle(element).getPropertyValue(token).trim()), variables);
+	const defaults = await readColors();
 	await workbench.quickaccess.runCommand('workbench.action.openSettings');
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
 	await settings.locator('[data-settings-group-id="workbench"]').click();
 	await settings.locator('[data-settings-category-id="appearance"]').click();
 	const colors = settings.locator('[data-configuration-key="workbench.colorCustomizations"]');
 	await expect(colors).toBeVisible();
-	for (const [id, color, cssVariable] of [
-		['editor.selectionBackground', '#123456', '--ash-editor-selection-background'],
-		['editor.inactiveSelectionBackground', '#654321', '--ash-editor-inactive-selection-background'],
-		['editor.selectionForeground', '#fedcba', '--ash-editor-selection-foreground'],
-	] as const) {
+	for (const [id, color, cssVariable] of overrides) {
 		await colors.getByRole('button', { name: 'Add Color', exact: true }).click();
 		const row = colors.locator('.ash-string-map-row').last();
 		await row.locator('[data-pattern-part="key"]').fill(id);
@@ -536,12 +607,13 @@ test('theme color settings update selected text and restore defaults when remove
 	await workbench.quickaccess.runCommand('workbench.action.openSettings');
 	await settings.locator('[data-settings-group-id="workbench"]').click();
 	await settings.locator('[data-settings-category-id="appearance"]').click();
-	await expect(colors.locator('.ash-string-map-row')).toHaveCount(3);
-	for (let count = 3; count > 0; count--) {
+	await expect(colors.locator('.ash-string-map-row')).toHaveCount(overrides.length);
+	for (let count = overrides.length; count > 0; count--) {
 		await colors.locator('.ash-string-map-row').last().getByRole('button').click();
 		await expect(colors.locator('.ash-string-map-row')).toHaveCount(count - 1);
 	}
 	await settings.locator('.ash-modal-editor-close').click();
+	await expect.poll(readColors).toEqual(defaults);
 	await expect(selected).toHaveCount(0);
 	await expect(editor.lines.first()).toHaveText('prefix selected suffix');
 });

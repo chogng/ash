@@ -281,18 +281,27 @@ test('theme color descriptions in the JSON schema follow locale changes', async 
 		await localization.whenReady;
 		assert.equal(description('input.background'), 'Input background.');
 		assert.equal(description('scrollbar.background'), 'Scrollbar track background.');
+		assert.equal(description('scrollbarSlider.background'), 'Scrollbar slider background.');
 		await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
 		assert.deepEqual([
 			description('input.background'),
 			description('minimapSlider.background'),
+			description('minimap.shadow'),
 			description('scrollbar.background'),
+			description('scrollbarSlider.background'),
+			description('scrollbarSlider.hoverBackground'),
+			description('scrollbarSlider.activeBackground'),
 			description('charts.green'),
 			description('editorGroup.border'),
 			description('editorGroupHeader.tabsBackground'),
 		], [
 			'输入框背景色。',
 			'小地图视口滑块的背景色。',
+			'提示右侧还有内容的小地图阴影颜色。',
 			'滚动条轨道的背景色。',
+			'滚动条滑块的背景色。',
+			'鼠标悬停时滚动条滑块的背景色。',
+			'拖动滚动条滑块时的背景色。',
 			'图表中绿色数据系列的颜色。',
 			'编辑器分组之间的边框颜色。',
 			'编辑器标签栏的背景色。',

@@ -9,12 +9,15 @@
 }
 
 .stanza-editor .minimap.has-right-overflow::after {
-	/* Keep the cue inside the clipping boundary and above the document raster. */
+	/* Clip the shadow source outside the map so only its soft edge covers the raster. */
 	content: '';
 	position: absolute;
-	inset: 0;
+	top: 0;
+	bottom: 0;
+	left: -6px;
+	width: 6px;
 	pointer-events: none;
-	box-shadow: 6px 0 6px -6px var(--ash-widget-shadow) inset;
+	box-shadow: 0 0 6px var(--ash-minimap-shadow);
 }
 
 @media (forced-colors: active) {
