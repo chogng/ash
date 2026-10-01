@@ -31,6 +31,8 @@ export interface SettingsContentItem {
 
 export interface SettingsContent {
 	readonly categoryId: string;
+	/** Registered keys whose controls are composed by this content rather than the generic layout. */
+	readonly settingIds?: readonly string[];
 	readonly onDidChange: Event<void>;
 	getNodes(query: SettingsSearchQuery): readonly SettingsTreeNode<ISetting | SettingsContentItem>[];
 	setVisible(visible: boolean): void;

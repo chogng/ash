@@ -98,6 +98,8 @@ jobs:
         run: pnpm --dir app-ts run test:smoke:browser:no-compile
       - name: Prepare Electron UI smoke tests
         if: matrix.surface == 'electron'
+        env:
+          ASH_DESKTOP_STARTUP_TRACE: '1'
         run: pnpm --dir app-ts run pretest:smoke:ui
       - name: Test Electron UI
         if: matrix.surface == 'electron'

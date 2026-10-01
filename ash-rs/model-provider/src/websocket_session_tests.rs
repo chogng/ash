@@ -189,6 +189,123 @@ async fn stored_api_key_authenticates_all_three_openai_websocket_services() {
 }
 
 #[tokio::test]
+async fn voice_session_preserves_the_registered_catalog_and_selection() {
+    let mut definition = ProviderConfigRegistry::builtin()
+        .get(&provider_id("openai"))
+        .unwrap()
+        .clone();
+    let catalog = definition.voice_models.as_mut().unwrap();
+    catalog.models[0].id = ModelId::new("fixture-speech-v2").unwrap();
+    catalog.default_model = catalog.models[0].id.clone();
+    catalog
+        .models
+        .push(ash_model_provider_config::VoiceModelDefinition {
+            id: ModelId::new("fixture-speech-alternative").unwrap(),
+            default_voice: "fixture-voice".into(),
+            voices: vec!["fixture-voice".into()],
+        });
+    let secrets = Arc::new(MemorySecretStore::default());
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let config = provider_config_with_endpoint(
+        "openai",
+        format!("http://{}/v1", listener.local_addr().unwrap()),
+    );
+    secrets
+        .store(
+            &provider_api_key_secret_key(&config.connection),
+            &SecretValue::new(b"voice-catalog-key".to_vec()),
+        )
+        .unwrap();
+    let runtime = ModelProviderRuntime::with_client_and_secrets(
+        ProviderConfigRegistry::from_definitions([definition]).unwrap(),
+        Arc::new(FailingTransport),
+        secrets,
+    );
+    let server = tokio::spawn(async move {
+        for (model, voice) in [
+            ("fixture-speech-v2", "cedar"),
+            ("fixture-speech-alternative", "fixture-voice"),
+        ] {
+            let (tcp, _) = listener.accept().await.unwrap();
+            let mut socket = tokio_tungstenite::accept_hdr_async(
+                tcp,
+                |request: &tokio_tungstenite::tungstenite::handshake::server::Request, response| {
+                    assert_eq!(request.uri().path(), "/v1/live/sessions");
+                    assert_eq!(
+                        request.headers()["authorization"],
+                        "Bearer voice-catalog-key"
+                    );
+                    Ok(response)
+                },
+            )
+            .await
+            .unwrap();
+            let start: Value =
+                serde_json::from_str(socket.next().await.unwrap().unwrap().to_text().unwrap())
+                    .unwrap();
+            assert_eq!(start["type"], "session.start");
+            assert_eq!(start["session"]["model"], model);
+            assert_eq!(start["session"]["audio"]["output"]["voice"], voice);
+            socket
+                .send(Message::Text(
+                    json!({"type":"session.started","session":{"id":"voice","model":model}})
+                        .to_string()
+                        .into(),
+                ))
+                .await
+                .unwrap();
+        }
+    });
+    let cancellation = CancellationSource::new().token();
+    for (selection, model, voice) in [
+        (
+            ash_model_provider_config::VoiceModelConfig {
+                model: None,
+                voice: Some("cedar".into()),
+            },
+            "fixture-speech-v2",
+            "cedar",
+        ),
+        (
+            ash_model_provider_config::VoiceModelConfig {
+                model: Some(ModelId::new("fixture-speech-alternative").unwrap()),
+                voice: None,
+            },
+            "fixture-speech-alternative",
+            "fixture-voice",
+        ),
+    ] {
+        let session = runtime
+            .connect_voice(
+                &config,
+                &selection,
+                "",
+                &local_connector(),
+                WebSocketSessionConfig::default(),
+                &cancellation,
+            )
+            .await
+            .unwrap();
+        assert_eq!(session.model(), &model_ref("openai", model));
+        assert_eq!(session.voice(), voice);
+    }
+    server.await.unwrap();
+    assert!(matches!(
+        runtime
+            .connect_voice(
+                &provider_config("chatgpt-subscription"),
+                &ash_model_provider_config::VoiceModelConfig::default(),
+                "",
+                &local_connector(),
+                WebSocketSessionConfig::default(),
+                &cancellation,
+            )
+            .await,
+        Err(ModelProviderError::Unavailable(_))
+    ));
+}
+
+#[tokio::test]
 async fn responses_socket_reconnects_after_key_rotation_and_closes_after_deletion() {
     let secrets = Arc::new(MemorySecretStore::default());
     let key = provider_api_key_secret_key(

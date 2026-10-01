@@ -14,7 +14,8 @@ Workbench 的通用展示与 provider 编排层；Git 是当前注册到 SCM 的
 ```text
 Desktop SCM History View → Git history provider → Desktop Git domain service
 Desktop SCM Changes View → Desktop Git domain service
-  ↔ Electron typed IPC + Git notification
+  → TS Git API adapter → renderer protocol client
+  ↔ MessagePort relay（Electron）或 Web transport + Git notification
   ↔ App Server GitRuntime
   → GitService
   → ash-git
@@ -29,8 +30,8 @@ Git 查询和修改使用不同 capability：
 | Git 能力 | `InspectRepository` | `MutateRepository` |
 | --- | --- | --- |
 | 当前分支、HEAD、改动状态、变更路径 | ✅ | ✅ |
-| 本地分支、分页 history/graph、已 fetch 的 remote-tracking refs、受限文本 diff | ✅ | ✅ |
-| 暂存、取消暂存、丢弃、提交、切分支 | ❌ | ✅ |
+| 本地分支、工作树清单与目标解析、分页 history/graph、已 fetch 的 remote-tracking refs、受限文本 diff | ✅ | ✅ |
+| 暂存（含选区和块）、取消暂存、丢弃、提交及修改或撤销提交、分支管理、工作树增删、整合流程、stash、tag、remote 管理、初始化 | ❌ | ✅ |
 | fetch、pull、push | ❌ | ✅ |
 
 只读入口要求 `Authorization<InspectRepository>`，修改入口要求 `Authorization<MutateRepository>`。Git query
@@ -43,6 +44,16 @@ Git 查询和修改使用不同 capability：
 | 暂存或取消暂存 | 使用明确的 `repositoryId` 与仓库相对路径 | 不能越过对应目录 Grant |
 | 丢弃更改 | 只恢复已跟踪文件，并在界面确认 | 不删除未跟踪文件 |
 | 切换本地分支 | 在桌面端点击底栏当前分支，在菜单中选择另一个本地分支；请求通过 App Server | 冲突时 Git 拒绝切换并保留当前工作树 |
+| 创建或删除本地分支 | 命令面板提供 `git.branch` 和 `git.deleteBranch`；新分支基于 HEAD 创建，当前分支保持不变；删除前确认 | Git 拒绝删除未合并或在任何工作树中检出的分支；成功后后端通知所有连接刷新历史引用 |
+| 创建或打开工作树 | 命令面板提供 `git.createWorktree` 和 `git.openWorktree`；创建 detached 工作树后可打开；打开已有目录前通过后端重新解析 | 目录由后端的 worktree 配置决定；保留来源仓库的子目录位置；不打开锁定、失效或会话持有的工作树 |
+| 删除工作树 | `git.deleteWorktree` 选择非当前、可用且未绑定会话的工作树并确认删除 | 后端拒绝主工作树、脏工作树或会话持有的目录；普通 Git 命令不删除会话 |
+| 初始化 | `git.init` 在选中的已授权工作区文件夹创建仓库，并重新发现仓库 | 拒绝在已有仓库内部创建嵌套仓库；要求该文件夹的修改权限 |
+| 分支改名与远端分支删除 | `git.renameBranch` 和 `git.deleteRemoteBranch` 经封闭的 `git/command` intent 执行 | 删除远端分支前确认；远端必须仍在当前仓库配置中 |
+| 合并、变基、拣选 | `git.merge`、`git.rebase`、`git.cherryPick`；`git.continue`、`git.abort` 读取 Git 元数据确定当前流程 | 开始时要求 index 和工作树干净；冲突作为结果返回并发布实际状态；继续不会启动终端编辑器 |
+| 储藏 | `git.stash` 选择已跟踪或包含未跟踪更改；`git.stashApply`、`git.stashPop`、`git.stashDrop` 选择提交 ID | 后端重新定位该 ID，拒绝已不存在的储藏；删除前确认 |
+| 标签与远端配置 | `git.createTag`、`git.deleteTag`、`git.addRemote`、`git.removeRemote` | 清单不返回远端 URL 或凭据；删除标签和移除远端前确认 |
+| 修改或撤销提交 | `git.commitAmend` 提交当前 index；`git.undoCommit` 撤销最后提交并保留 index 和工作树 | 明确提示改写历史；撤销使用确认时的 HEAD 做原子比较，拒绝已变化的 HEAD；不撤销根提交 |
+| 部分暂存 | `git.stageHunk`、`git.unstageHunk` 选择文件与更改块；`git.stageSelectedRanges`、`git.unstageSelectedRanges` 使用编辑器选区 | Rust 重新计算 diff，检查两侧内容并持有 Git index 锁后更新 index；不修改工作文件；冲突、重命名、子模块、二进制和非 UTF-8 文件不支持部分操作 |
 | 查看 history graph | SCM Graph 以 `limit`/`cursor` 分页读取 `git/graph`，自动连续合并全部页面，按 lane 分配颜色并显示 local/remote refs；列表本身按视口虚拟化；history item 可展开 `git/commitChanges` 文件列表，点击文本文件再按需读取 `git/commitFile` 并挂到 Editor | 只包含本地已存在的 refs；自动 fetch 需主动开启；binary 或超限文件不作为文本 editor 打开 |
 | 自动获取远端更新 | App Server 读取共享 `[git]` 配置并逐仓库调度；`autofetch` 默认为 `"off"`，`"default"` 获取默认远端，`"all"` 获取全部远端；`autofetchPeriod` 默认 180 秒 | 三端共用配置，不提供仓库级覆盖；只对有修改授权的仓库执行，各仓库独立定时获取；只更新远端引用，不执行 pull |
 | 拉取远端 | 只允许 fast-forward | 需要交互认证时失败 |
@@ -61,7 +72,7 @@ VS Code 的 extension-host 进程布局。
 | --- | --- | --- | --- |
 | Workbench SCM | repository registry、通用 history contract、历史图展示和 Editor 打开语义 | 历史图已通过 `ISCMViewService` 消费 provider；`ScmViewPane` 和 `ScmStatusContribution` 仍直接消费 `IGitService` | 后续需把 Changes 和状态栏接入 SCM contract |
 | Desktop Git history provider | 把 `IGitService` 的仓库、refs、history、changed-file URI 和历史 Chat 上下文映射为 SCM contract | `GitHistoryProvider` 已在 Git contribution 注册；Changes 和状态栏尚未接入 | 只拥有前端映射，不拥有 Git RPC 或 Git output parsing |
-| Desktop `IGitService` 与 Electron bridge | client-safe Git domain、连接事件和 typed `git/*` transport | 已实现 | 保持 Git 专属；不改名为 SCM service |
+| Desktop `IGitService` 与 Git API adapter | 前端 Git 契约、固定操作目标仓库、连接事件和 typed `git/*` transport | 已接入分支、独立 worktree、整合流程、stash、tag、remote、提交修改和部分暂存 | 保持 Git 专属；普通 UI 不消费生成 DTO；不改名为 SCM service |
 | App Server `GitRuntime` / `GitService` | Git operation serialization、`Authorization<InspectRepository>` / `Authorization<MutateRepository>`、repository projection 与通知 | 已实现 | 保持 Git 专属；不新增仅转发 Git DTO 的 `scm/*` facade |
 | `ash-git` | Git executable、命令、解析和 failure semantics | 已实现 | 与 SCM UI 无依赖 |
 | `git-turn-changes` | 按 Session/Thread/Turn 捕获 Git tree、归属 Tool 写入、维护 ChangeSet 与提交状态 | 已实现 | 只接受 Git repository，不拥有 Thread 目录或 GitHub Issue |
@@ -81,12 +92,29 @@ Changes 和状态栏后续也应只依赖通用 contract。不能让
 | 层级 | 当前职责 | 不拥有 |
 | --- | --- | --- |
 | Desktop SCM（当前实现） | 历史图通过 SCM history contract 显示 lane/ref/remote、展开文件并打开 Editor；Changes 和状态栏仍直接处理分支/upstream、Merge/Staged/Working Tree 分组、提交输入与 Git intent | Git process、porcelain parser、任意 host path authority |
-| Electron bridge | 校验 `repositoryId`、仓库相对路径、commit message 和空参数，再把 typed Git intent 转发给 App Server | Git domain semantics、最终路径授权 |
+| Git API adapter / renderer protocol client | 领域 service 组织输入并转换结果；API adapter 调用协议；protocol client 校验生成协议、配对请求并分发通知；Electron relay 只转发消息 | Git domain semantics、最终路径授权、另一份仓库状态 |
 | App Server `GitRuntime` | 发现目录集合中的仓库，按 repository 串行化 operation、维护 projection/revision、消费 watcher hint、去重并发布状态 | Git command/parsing、Renderer state |
 | App Server `GitService` | 冻结 canonical `Dir` 与 repository projection root、映射目录/仓库路径、持有 Tokio runtime并调用 `ash-git`；按 `InspectRepository`/`MutateRepository` 再校验读写边界 | live projection、notification |
 | `ash-app-server-protocol` | Git query/mutation、`git/statusChanged`、DTO、capability 和 stable error name | process/runtime state |
 | `ash-git` | system Git identity、仓库发现、porcelain-v2 snapshot、分页 graph、local/remote refs、credential-free remote identity、HEAD/worktree 文本 Diff 与增删行统计、typed mutation 与结构化 parsing | App Server lifecycle、目录产品边界、Renderer state |
 | `worktree` | 同仓库 worktree 清单、按 branch/path 解析可用 target、来源目录 nested cwd 映射、Codex Desktop settings 与 `codex-thread.json` 归属 | Git process、Session lifecycle、产品目录切换、选择器 UI |
+
+
+Git 操作的接入位置：
+
+| 职责 | 源码 |
+| --- | --- |
+| 前端契约、仓库选择与结果转换 | [`IGitService`](../app-ts/src/ash/workbench/contrib/git/common/gitService.ts)、[`GitService`](../app-ts/src/ash/workbench/contrib/git/browser/gitService.ts) |
+| 命令、输入和确认框 | [`gitBranches.ts`](../app-ts/src/ash/workbench/contrib/git/browser/gitBranches.ts)、[`gitWorktrees.ts`](../app-ts/src/ash/workbench/contrib/git/browser/gitWorktrees.ts)、[`git.contribution.ts`](../app-ts/src/ash/workbench/contrib/git/browser/git.contribution.ts) |
+| 协议调用与连接 | [`Git API adapter`](../app-ts/src/ash/platform/git/browser/gitApi.ts)、[`protocol client`](../app-ts/src/ash/platform/app-server/browser/appServerProtocolClient.ts) |
+| Electron 连接启动和透明转发 | [`daemon launcher`](../app-ts/src/ash/platform/app-server-daemon/electron-main/appServerDaemonLauncher.ts)、[`relay`](../app-ts/src/ash/platform/app-server/electron-main/appServerConnectionRelay.ts)、[`MessagePort transport`](../app-ts/src/ash/platform/app-server/electron-browser/appServerMessagePortTransport.ts) |
+| 协议定义和生成边界 | [`Git protocol`](../ash-rs/app-server-protocol/src/protocol/git.rs)、[`request map`](../app-ts/src/ash/platform/app-server/common/generated/AppServerRequestMap.ts)、[`decoder`](../app-ts/src/ash/platform/app-server/common/generated/AppServerProtocolDecoder.ts) |
+| Git 执行与部分 index 编辑 | [`operations.rs`](../ash-rs/git/src/operations.rs)、[`index_edit.rs`](../ash-rs/git/src/index_edit.rs) |
+| Rust 调度与通知 | [`git_operations.rs`](../ash-rs/app-server/src/server/git_operations.rs)、[`git_runtime.rs`](../ash-rs/app-server/src/server/git_runtime.rs) |
+
+这些入口复用已有协议与连接：每个 renderer 一条独立连接，共享 profile 的 app-server daemon；没有新增 Host 或需要退出的旧 Host 注册。生成协议与 decoder 已覆盖这些方法，前端命令只依赖 `IGitService`。命令通过 `getRepository` 先取得目标 ID，后续查询、输入、确认和执行始终使用该 ID。
+
+取消选择器或确认框会释放 UI 资源且不发送修改请求；修改请求发出后沿用后端的有限 Git 操作，不把关闭输入框当作取消执行。连接关闭仍由 protocol client 拒绝该连接的未完成请求，并取消正在处理的服务端请求；监听订阅由前端 service 释放，重新连接时重新发现仓库。脏 worktree 的删除由 Rust 拒绝；打开目录继续走工作区切换服务，编辑器未保存内容继续由 working copy 处理。会话持有的 worktree 仍由会话生命周期管理。
 
 Thread 提交不走普通 `git/commit`。`git-turn-changes` 把每个 Turn 封存为不可变 before/after tree，
 `ash-git::commit_tree_delta` 将这一个 delta 三方重放到目标分支最新 HEAD。目标 checkout 原有 index、
@@ -102,15 +130,14 @@ tree 指纹。事务 journal 位于 Git common directory，进程重启后可以
 
 - App Server 从具备 `InspectRepository` 的目录 Grant 发现仓库，并在存在可用仓库时声明 `initialize.capabilities.git = true`；
   只有具备 `MutateRepository` 的仓库才能执行 mutation；
-- `git/repositories` 返回稳定、目录相对的 repository identity；`git/status` 与其他 query/mutation 接受可选 `repositoryId`，省略时选择排序后的首个仓库；mutation 只接受 repository-relative path，Electron 和 Rust 边界都会
-  拒绝绝对路径、空路径和父目录逃逸；
+- `git/repositories` 返回稳定、目录相对的 repository identity；`git/status` 与其他 query/mutation 接受可选 `repositoryId`，省略时选择排序后的首个仓库；文件 mutation 只接受仓库相对路径，Rust 边界拒绝绝对路径、空路径和父目录逃逸。worktree 请求使用后端清单返回的 `checkoutRoot`，后端重新检查归属和可用性；
 - 授权目录位于更大 repository 内时，App Server 会过滤 repository 其他目录并把 path 重新映射为
   directory-relative；mutation 则把合法目录 path 映射回 repository-relative path；
 - 每次请求重新打开仓库并读取 authoritative snapshot，不把旧 snapshot 当作 mutation 前提；
 - response 保留 HEAD branch/detached/unborn、upstream ahead/behind、index/worktree 状态、
   rename original path、conflict 和 submodule flags，并带 `repositoryId`、directory-relative `path`、
   Git runtime `streamInstanceId` 与在该实例内单调递增的 repository status revision；协议不暴露
-  repository 的 host 绝对路径；
+  仓库状态的 host 绝对路径；worktree 接口返回经后端解析的绝对目录，用于选择和打开工作区；
 - `git/stage`、`git/unstage` 和 `git/discardWorktree` 使用明确 path set；discard 只恢复 tracked
   working-tree 内容，不删除 untracked 文件，Desktop 在执行前要求确认；
 - `git/commit` 从 stdin 传入经过校验的 message，并返回新 commit object ID；
@@ -118,16 +145,16 @@ tree 指纹。事务 journal 位于 Git common directory，进程重启后可以
 - `git/branch/list` 返回现有本地分支，`git/branch/switch` 只接受 branch name，并在 host 重新解析为
   当前仓库真实分支后执行切换；
 - `git/graph` 首次接受有界 `limit`，后续使用不透明 `cursor` 继续同一次 `git log --all --topo-order`
-  traversal；游标启动时读取一次 local/remote refs 和 configured remote identity，并通过 `hasMore` 与
+  traversal；游标启动时读取一次 local/remote/tag refs 和 configured remote identity，并通过 `hasMore` 与
   `nextCursor` 表示是否还有下一页。remote identity 只保留 provider、host、owner、repository，原始
   URL、token 和 `gh` 登录配置不会进入协议；状态变化、mutation 或连接关闭会使游标失效；
 - `git/fetch` 接受 `mode: "default" | "all"`；省略时沿用 all-remotes prune，默认远端模式执行 `git fetch --prune`。手动 Fetch 仍获取全部远端。`git/pull` 仅允许 fast-forward，`git/push` 使用 Git 当前
   upstream/default 配置；所有 remote operation 都是 non-interactive；
-- 每个成功 mutation 都返回新的 `GitStatusResult`，Desktop 立即重绘；首次打开 View 也会自动刷新；
+- 文件、提交和切分支操作返回新的 `GitStatusResult`；创建/删除分支返回分支列表，后端同时推进状态 revision、清理旧 graph cursor 并通知所有连接。worktree 操作返回路径或清单，不改变当前检出的分支；首次打开 View 也会自动刷新；
 - App Server 监听已授权目录、Git metadata 和目录上层 repository `.gitignore`，以 100ms
   debounce 合并 burst；事件只触发重新查询，不直接成为 Git 状态；
-- 新 snapshot 按 repository 投影去重；HEAD/change 未改变时 revision 不推进也不发通知，变化时通过
-  `git/statusChanged` 推送完整 snapshot；
+- watcher 比较 HEAD、文件、分支、标签、remote 配置、stash 和整合状态；外部命令仅修改引用也会推进 revision、清理旧历史分页并通过 `git/statusChanged` 通知所有连接。实际状态未改变时保留 revision 和分页；
+- 已授权目录即使尚无仓库也持续监听。外部 init、嵌套仓库创建、移动或删除会更新仓库清单，并发送 `git/repositoriesChanged {}`；客户端重新查询 `git/repositories`。仍存在的仓库保留原有状态流和分页，不因清单扫描重新创建；
 - SCM View 只在相同 `streamInstanceId` 内按 revision 拒绝旧 notification/response；连接重新
   ready 时主动刷新，并接受新 runtime 从较小 revision 开始的 snapshot。已退役实例的迟到通知
   不能覆盖新状态。Watcher 初始化失败不会关闭 Git RPC，用户仍可手动 Refresh。
@@ -148,7 +175,7 @@ Native 的底栏分支按钮复用通用 `ContextMenu`，候选项来自 `git/br
 
 `ash code` 首页“新建工作树”打开同仓库选择器；用户可独立创建 detached 工作树，创建后停留在列表并选中新目录。选择已有或新建的工作树时，TUI 先通过 `git/worktree/resolve` 重新验证，再由本地或 Remote host 连接到以该目录为根的 App Server。这个操作不新建 Session，也不改变原会话的目录；随后提交任务才开始新 Session，新 Thread 以所选目录为来源建立自己的受管工作树。工作树选择器不打开已绑定其他 Thread、锁定或失效的目录；选中其他干净、未绑定的关联工作树后按 `d` 可确认删除。顶部“项目分支”面板提供基于 HEAD 新建本地分支、切换现有分支，以及对非当前分支按 `d` 确认删除；Git 拒绝未合并或在任一工作树中检出的分支。
 
-稳定失败边界为 `GitUnavailable`、`GitNotRepository` 和 `GitOperationFailed`。内部 executable、
+稳定失败边界包括 `GitUnavailable`、`GitNotRepository`、`GitOperationFailed` 和部分暂存内容已变化时的 `GitIndexChanged`。内部 executable、
 stderr 和非 UTF-8 path 不进入 Renderer；工作树的绝对目录路径是供用户选择的显式数据。
 
 ## 当前限制
@@ -156,8 +183,9 @@ stderr 和非 UTF-8 path 不进入 Renderer；工作树的绝对目录路径是�
 - `GitRuntime` 已支持目录集合中的 multi-repository registry。Workbench 通过 `ISCMService`
   注册仓库、由 `ISCMViewService` 选择当前仓库；Git provider 提供 Changes 资源组、输入框、状态栏命令、
   历史记录和冲突操作。SCM 视图从 provider 读取这些数据，不直接读取 Git 状态；
-- operation 由 runtime mutex 串行化，但尚无可观测 queue、progress、caller cancellation 或 retry；
-- App Server 已支持切换、新建和安全删除本地分支，以及独立创建、选择和安全删除工作树；系统仍无 branch 重命名、tag 删除 mutation、强制删除或 credential prompt；
+- operation 由 runtime mutex 串行化；连接取消会中止已接入取消信号的 Git 请求，但尚无用户可见的 queue、progress 或取消按钮；
+- App Server 已支持分支改名、远端分支删除和 tag 管理；不提供强制删除或凭据提示；
+- 部分暂存要求每侧文本不超过 2 MiB，且 diff 满足后端计算上限；冲突、重命名、子模块、二进制和非 UTF-8 内容不能部分暂存；
 - pull 固定为 fast-forward only；discard 不删除 untracked 文件；
 - 当前 registry 来自已授权目录集合，不接受客户端提交任意 repository root；
 - 工作树 change row 尚未接入 editor diff/open workflow；history changed-file row 已支持打开
@@ -180,3 +208,14 @@ stderr 和非 UTF-8 path 不进入 Renderer；工作树的绝对目录路径是�
 
 长期不变量是：Desktop、Native 与 TUI 不直接执行 Git；App Server adapter 不复制 Git
 command/parsing；watch event 只触发重新确认，不能自身成为 repository truth。
+
+### 封闭 intent 与状态发布
+
+`git/command` 的参数是生成的封闭联合类型，不接受命令行或任意 Git 参数。前端先固定
+`repositoryId`，再打开选择或确认界面。Rust 在同仓库操作锁内校验权限、读取真实状态并执行。
+整合、储藏和提交操作涉及整个 checkout，不能通过仅覆盖仓库子目录的授权执行。
+即使 Git 命令失败或连接取消，也会重新读取状态并通知所有连接；引用变化同时使旧历史分页失效。
+
+`git/indexDiff` 返回文本及更改块，`git/indexEdit` 接收这次比较的两侧文本和块或行选区。
+锁定 index 后内容不同就拒绝修改，前端必须重新查看更改；不重试旧选择或应用任意客户端补丁。
+普通文件编辑器中的未保存更改需要先确认保存。取消暂存选区使用源代码管理打开的当前 staged 比较。

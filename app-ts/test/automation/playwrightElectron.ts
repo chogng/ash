@@ -85,7 +85,17 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 			onMilestone?.('workbench-ready');
 		} catch (error) {
 			const text = await page.evaluate(() => [document.body.innerText, ...Array.from(document.querySelectorAll('textarea'), field => field.value)].join('\n')).catch(() => 'Document is unavailable');
+			const startup = await page.evaluate(() => ({
+				visibility: document.visibilityState,
+				marks: performance.getEntriesByType('mark').filter(entry => entry.name.startsWith('ash.')).map(entry => ({ name: entry.name, startTime: entry.startTime })),
+			})).catch(() => undefined);
+			const windows = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => ({
+				visible: window.isVisible(),
+				minimized: window.isMinimized(),
+				loading: window.webContents.isLoading(),
+			}))).catch(() => undefined);
 			const details = [
+				`Startup diagnostics: ${JSON.stringify({ startup, windows })}`,
 				...driver.consoleErrors.slice(-8),
 				...pageErrors,
 				...failedRequests,

@@ -1,5 +1,8 @@
 use super::*;
+use crate::render::RenderTheme;
+use crate::render::ThemePalette;
 use crate::render::test_context;
+use ash_terminal_detection::ColorLevel;
 
 fn plain(_: usize, _: &str, code: &str) -> Vec<Line<'static>> {
     code.lines()
@@ -71,7 +74,7 @@ fn resize_and_theme_changes_rebuild_the_rendered_blocks() {
     streaming.render("message", source, 40, test_context(), &mut highlight);
     let resized = streaming.render("message", source, 8, test_context(), &mut highlight);
     assert!(resized.iter().all(|row| row.line.width() <= 8));
-    let theme = crate::render::RenderTheme::fallback();
+    let theme = RenderTheme::from_palette(ThemePalette::initial(), ColorLevel::TrueColor);
     streaming.render(
         "message",
         source,

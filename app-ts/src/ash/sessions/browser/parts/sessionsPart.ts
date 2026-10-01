@@ -9,6 +9,7 @@ import type { ISessionsManagementService } from "../../services/sessions/common/
 import { WorkbenchPart } from "../../../workbench/browser/part.js";
 import type { SessionsViewSelection, SessionsPage } from "../../services/sessions/browser/sessionsService.js";
 import { SessionsChatView, type SessionsChatViewOptions } from "./sessionsChatView.js";
+import { SessionsPageRegistry, type ISessionsPageView } from '../pages.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import type { IChatInputPart } from '../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import type { ChatInputDelegate } from '../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
@@ -37,10 +38,11 @@ export interface SessionsPartOptions {
 /** Passive primary Part that renders the visible Sessions supplied by its owner. */
 export class SessionsPart extends WorkbenchPart {
 	private readonly views: Record<SessionsPage, SessionsChatView>;
-	private page: SessionsPage | "empty" = "chat";
+	private page: SessionsPage | 'design' | 'empty' = 'chat';
 	private readonly codePage: HTMLDivElement;
 	private dimension: Dimension | undefined;
 	private isChangingPage = false;
+	private readonly contributedPages = new Map<string, { readonly container: HTMLElement; readonly view: ISessionsPageView }>();
 
 	override get minimumWidth(): number { return 420; }
 
@@ -69,16 +71,32 @@ export class SessionsPart extends WorkbenchPart {
 		this.codePage.hidden = true;
 		this.views = { chat: createView("chat", this.contentDomNode), code: createView("code", this.codePage) };
 		this.contentDomNode.append(this.codePage);
+		for (const [id, descriptor] of SessionsPageRegistry.getPages()) {
+			const container = h(ownerDocument, 'div', { className: 'ash-sessions-contributed-page' });
+			container.dataset.sessionsPage = id;
+			container.hidden = true;
+			const view = this._register(services.createInstance(descriptor, ownerDocument));
+			container.append(view.domNode);
+			this.contentDomNode.append(container);
+			this.contributedPages.set(id, { container, view });
+		}
 		this.views.code.domNode.hidden = true;
 		this.views.code.setVisible(false);
 		this.updateVisibleSelections([], undefined);
 	}
 
-	focus(): void { this.views[this.page === "code" ? "code" : "chat"].focus(); }
+	focus(): void {
+		const contributedPage = this.contributedPages.get(this.page);
+		if (contributedPage) {
+			contributedPage.view.focus();
+			return;
+		}
+		this.views[this.page === "code" ? "code" : "chat"].focus();
+	}
 
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>, page: SessionsPage = this.page === 'code' ? 'code' : 'chat'): void { this.views[page].restoreDraft(draft); }
 
-	setPage(page: 'chat' | 'code' | 'empty', updateLayout?: () => void): void {
+	setPage(page: 'chat' | 'code' | 'design' | 'empty', updateLayout?: () => void): void {
 		if (page === this.page) {
 			updateLayout?.();
 			return;
@@ -94,6 +112,9 @@ export class SessionsPart extends WorkbenchPart {
 			this.views.chat.setVisible(page === 'chat');
 			this.views.code.setVisible(page === 'code');
 			this.codePage.hidden = page !== 'code';
+			for (const [id, contributedPage] of this.contributedPages) {
+				contributedPage.container.hidden = page !== id;
+			}
 		} finally {
 			this.isChangingPage = false;
 		}
@@ -108,6 +129,12 @@ export class SessionsPart extends WorkbenchPart {
 		this.dimension = dimension;
 		// Empty pages resize the Part, not the retained Chat or Code geometry beneath it.
 		if (this.page === 'empty' || this.isChangingPage) {
+			return;
+		}
+		const contributedPage = this.contributedPages.get(this.page);
+		if (contributedPage) {
+			const bounds = contributedPage.container.getBoundingClientRect();
+			contributedPage.view.layout(new Dimension(bounds.width, bounds.height));
 			return;
 		}
 		const view = this.views[this.page === "code" ? "code" : "chat"];

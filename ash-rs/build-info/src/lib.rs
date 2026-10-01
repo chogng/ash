@@ -1,4 +1,4 @@
-//! Version and compile-time provenance shared by every product entrypoint.
+//! Stable build identity contract shared by protocols and diagnostics.
 
 use serde::Serialize;
 use sha2::Digest;
@@ -16,14 +16,15 @@ pub struct BuildInfo {
 }
 
 impl BuildInfo {
-    pub fn current() -> Self {
-        let commit = option_env!("ASH_COMPILED_COMMIT");
-        let target = env!("ASH_COMPILED_TARGET");
+    /// Combines product-owned provenance with the version and target of this build.
+    /// Git identity is supplied by the host so protocol consumers do not recompile on commits.
+    pub fn new(commit: Option<&str>, build_id: Option<&str>) -> Self {
+        let target = TARGET;
         Self {
             version: env!("CARGO_PKG_VERSION").into(),
             commit: commit.map(str::to_owned),
             target: target.into(),
-            build_id: option_env!("ASH_BUILD_ID").map(str::to_owned).or_else(|| {
+            build_id: build_id.map(str::to_owned).or_else(|| {
                 commit.map(|commit| {
                     format!(
                         "sha256:{:x}",
@@ -36,6 +37,7 @@ impl BuildInfo {
 }
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const TARGET: &str = env!("ASH_COMPILED_TARGET");
 
 #[cfg(test)]
 #[path = "build_info_tests.rs"]

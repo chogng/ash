@@ -13,10 +13,12 @@ path = "src/lib.rs"
 [dependencies]
 rmcp = { workspace = true, features = [
     "client",
-    "reqwest",
+    "reqwest-tls-no-provider",
     "transport-child-process",
     "transport-streamable-http-client-reqwest",
 ] }
+ash-http-client = { workspace = true }
+reqwest = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "process", "time"] }
 

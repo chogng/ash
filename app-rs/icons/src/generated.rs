@@ -201,6 +201,7 @@ mod artwork {
     pub(crate) const SYMBOL_COLOR_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/symbol-color-filled.svg"));
     pub(crate) const SYNC: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/sync.svg"));
     pub(crate) const TABLE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/table.svg"));
+    pub(crate) const TAG: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/tag.svg"));
     pub(crate) const TARGET: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/target.svg"));
     pub(crate) const TERMINAL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/terminal.svg"));
     pub(crate) const TERMINAL_CMD: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/terminal-cmd.svg"));
@@ -426,6 +427,7 @@ pub mod icons {
     pub const SYMBOL_COLOR_FILLED: Icon = Icon::new(IconId::new("symbol-color-filled"), artwork::SYMBOL_COLOR_FILLED);
     pub const SYNC: Icon = Icon::new(IconId::new("sync"), artwork::SYNC);
     pub const TABLE: Icon = Icon::new(IconId::new("table"), artwork::TABLE);
+    pub const TAG: Icon = Icon::new(IconId::new("tag"), artwork::TAG);
     pub const TARGET: Icon = Icon::new(IconId::new("target"), artwork::TARGET);
     pub const TERMINAL: Icon = Icon::new(IconId::new("terminal"), artwork::TERMINAL);
     pub const TERMINAL_CMD: Icon = Icon::new(IconId::new("terminal-cmd"), artwork::TERMINAL_CMD);
@@ -647,6 +649,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::SYMBOL_COLOR_FILLED,
     icons::SYNC,
     icons::TABLE,
+    icons::TAG,
     icons::TARGET,
     icons::TERMINAL,
     icons::TERMINAL_CMD,
@@ -869,6 +872,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("symbol-color-filled", artwork::SYMBOL_COLOR_FILLED),
     ("sync", artwork::SYNC),
     ("table", artwork::TABLE),
+    ("tag", artwork::TAG),
     ("target", artwork::TARGET),
     ("terminal", artwork::TERMINAL),
     ("terminal-cmd", artwork::TERMINAL_CMD),

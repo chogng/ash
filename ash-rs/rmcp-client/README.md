@@ -38,6 +38,7 @@ RmcpClient::connect_stdio
 
 RmcpClient::connect_streamable_http
 → StreamableHttpClientTransportConfig
+→ ash-http-client::ReqwestHttpClient::sdk_client_builder (OS trust + ring)
 → rmcp::transport::StreamableHttpClientTransport
 → RmcpClient::connect
 
@@ -74,7 +75,7 @@ cleanup。只依赖 `Drop` 不保证调用方观察到 cleanup 完成。
 - `BearerToken` 由 auth/secret owner 在连接时注入，不持久化、不实现 `Clone`，`Debug` 永远脱敏。
 - `StdioServerCommand` convenience connector 继承宿主环境，再叠加显式 env。需要 allowlist、
   sandbox 或 remote execution 的 host 应自行构造 transport，再调用 `RmcpClient::connect`。
-- Streamable HTTP 默认 transport 禁止 reqwest redirect（由 RMCP SDK 实施），但 OAuth、
+- Streamable HTTP 默认 transport 禁止 reqwest redirect（客户端构建时显式设置，同时保留 SDK 的禁用空闲连接池设置），但 OAuth、
   credential refresh 与 credential store 不在本 crate。
 - server info、tool schema、notification 与 tool result 都是不可信远端输入；本 crate只保证
   RMCP decode，不替代产品层的 size、policy、schema normalization 或 content safety。
@@ -82,8 +83,8 @@ cleanup。只依赖 `Drop` 不保证调用方观察到 cleanup 完成。
 ## 测试与修改影响
 
 ```text
-cargo test -p ash-rmcp-client
-cargo clippy -p ash-rmcp-client --all-targets -- -D warnings
+just test ash-rmcp-client
+just rust-warnings ash-rmcp-client
 bazel test //ash-rs/rmcp-client:rmcp-client-unit-tests
 ```
 

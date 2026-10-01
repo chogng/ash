@@ -122,6 +122,12 @@ pub struct ProviderApiKeySetResult {
     pub api_key_configured: bool,
 }
 
+#[derive(Debug, Deserialize, Eq, JsonSchema, PartialEq, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProviderApiKeyRemoveParams {
+    pub connection: String,
+}
+
 /// Tests an unsaved connection without changing configuration or stored credentials.
 #[derive(Debug, Deserialize, Eq, JsonSchema, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]

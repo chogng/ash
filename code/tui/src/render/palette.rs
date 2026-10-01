@@ -44,10 +44,6 @@ impl ThemeRgb {
     const fn components(self) -> [u8; 3] {
         [self.red, self.green, self.blue]
     }
-
-    const fn true_color(self) -> Color {
-        Color::Rgb(self.red, self.green, self.blue)
-    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -97,6 +93,27 @@ pub(crate) struct ThemePalette {
 }
 
 impl ThemePalette {
+    // App initialization precedes application of the configured theme.
+    // Its colors also serve the error screen when the theme resource cannot be loaded.
+    pub(crate) const fn initial() -> Self {
+        Self {
+            accent: ThemeRgb::from_hex("#69aaff"),
+            action_foreground: ThemeRgb::from_hex("#69aaff"),
+            border: ThemeRgb::from_hex("#808080"),
+            chat_input_chrome: ThemeRgb::from_hex("#9b9b9b"),
+            danger: ThemeRgb::from_hex("#f56969"),
+            disabled_foreground: ThemeRgb::from_hex("#808080"),
+            foreground: ThemeRgb::from_hex("#ffffff"),
+            inserted_background: ThemeRgb::from_hex("#13301c"),
+            modal_border: ThemeRgb::from_hex("#9b9b9b"),
+            muted: ThemeRgb::from_hex("#808080"),
+            removed_background: ThemeRgb::from_hex("#37191b"),
+            success: ThemeRgb::from_hex("#5fd28c"),
+            warning: ThemeRgb::from_hex("#f5be50"),
+            ..Self::dark()
+        }
+    }
+
     pub(crate) const fn dark() -> Self {
         Self {
             accent: ThemeRgb::from_hex("#58a6ff"),
@@ -247,10 +264,6 @@ impl ThemePalette {
     }
 }
 
-const fn hex(value: &str) -> Color {
-    ThemeRgb::from_hex(value).true_color()
-}
-
 const fn hex_pair(high: u8, low: u8) -> Option<u8> {
     match (hex_digit(high), hex_digit(low)) {
         (Some(high), Some(low)) => Some((high << 4) | low),
@@ -374,54 +387,6 @@ impl RenderTheme {
     pub(crate) const fn with_terminal_background(mut self, background: [u8; 3]) -> Self {
         self.terminal_background = Some(background);
         self
-    }
-
-    pub(crate) const fn fallback() -> Self {
-        Self {
-            cursor_color: Some(ThemePalette::dark().focus.components()),
-            terminal_background: None,
-            accent: hex("#69aaff"),
-            accent_surface_background: hex("#6658c7"),
-            accent_surface_foreground: hex("#ffffff"),
-            action_foreground: hex("#69aaff"),
-            background: hex("#0d1117"),
-            border: hex("#808080"),
-            chat_input_chrome: hex("#9b9b9b"),
-            mode_plan: hex("#d18616"),
-            mode_debug: hex("#f48771"),
-            mode_multitask: hex("#b180d7"),
-            mode_ask: hex("#89d185"),
-            danger: hex("#f56969"),
-            disabled_foreground: hex("#808080"),
-            focus: hex("#9a91eb"),
-            foreground: hex("#ffffff"),
-            function: hex("#d2a8ff"),
-            hover_background: hex("#25233a"),
-            hover_foreground: hex("#f0edff"),
-            inserted_background: hex("#13301c"),
-            inserted_marker: hex("#3fb950"),
-            keyword: hex("#ff7b72"),
-            modal_border: hex("#9b9b9b"),
-            muted: hex("#808080"),
-            pressed_background: hex("#3b3568"),
-            pressed_foreground: hex("#ffffff"),
-            removed_background: hex("#37191b"),
-            removed_marker: hex("#f85149"),
-            segmented_active: hex("#b8c0c9"),
-            segmented_inactive: hex("#58616e"),
-            overlay_background: hex("#252526"),
-            string: hex("#a5d6ff"),
-            success: hex("#5fd28c"),
-            selection_background: hex("#2f2b52"),
-            selection_foreground: hex("#f0edff"),
-            screen_selection_background: hex("#87ceeb"),
-            screen_selection_foreground: hex("#0d1117"),
-            r#type: hex("#d2a8ff"),
-            transcript_jump_background: hex("#303030"),
-            user_message_background: hex("#161b22"),
-            variable: hex("#ffa657"),
-            warning: hex("#f5be50"),
-        }
     }
 
     pub(crate) const fn accent(self) -> Color {
@@ -761,7 +726,9 @@ impl<'a> RenderContext<'a> {
 
 #[cfg(test)]
 pub(crate) fn test_context() -> RenderContext<'static> {
-    static THEME: RenderTheme = RenderTheme::fallback();
+    static THEME: std::sync::LazyLock<RenderTheme> = std::sync::LazyLock::new(|| {
+        RenderTheme::from_palette(ThemePalette::initial(), ColorLevel::TrueColor)
+    });
     RenderContext::new(&THEME, 0)
 }
 

@@ -49,6 +49,22 @@ const marksByFile: Readonly<Record<string, readonly StartupMark[]>> = {
 		{ name: 'ash.workbench.auxiliary-restore-start', anchor: '\t\t\topenAuxiliaryComposite(requiredViewContainerToRestore(', position: 'before' },
 		{ name: 'ash.workbench.views-restored', anchor: '\t\tthis.restoreActiveViewContainers();', position: 'after' },
 		{ name: 'ash.workbench.constructor-done', anchor: '\t\tif (createWindow) {', position: 'before' },
+		{ name: 'ash.workbench.extensions-wait', anchor: '\t\tawait Promise.allSettled(extensionReady);', position: 'before' },
+		{ name: 'ash.workbench.extensions-ready', anchor: '\t\tawait Promise.allSettled(extensionReady);', position: 'after' },
+		{ name: 'ash.workbench.editors-restored', anchor: '\t\tawait this.restoreEditorParts(editorParts);', position: 'after' },
+		{ name: 'ash.workbench.backups-restored', anchor: '\t\tawait this.restoreWorkingCopyBackups(backups, editor);', position: 'after' },
+		{ name: 'ash.workbench.contributions-restored', anchor: '\t\tawait contributions.workspaceRestored();', position: 'after' },
+	],
+	'src/ash/workbench/services/extensions/browser/appServerExtensionService.ts': [
+		{ name: 'ash.extensions.catalog-ready', anchor: '\t\t\tconst transportCatalog = await this.options.api.list("refresh");', position: 'after' },
+		{ name: 'ash.extensions.manifest-verified', anchor: '\t\t\t\tawait verifyExtensionManifestDigest(extension);', position: 'after' },
+		{ name: 'ash.extensions.resources-ready', anchor: '\t\t\tthis.validateContributions(themes, fileTemplates, debugAdapters);', position: 'before' },
+		{ name: 'ash.extensions.grammars-ready', anchor: '\t\t\tconst preparedGrammars = await this.options.textMateService.grammars.prepareGrammars(this.grammarRegistration, grammars);', position: 'after' },
+	],
+	'src/ash/workbench/services/workingCopy/browser/indexedDbWorkingCopyBackupService.ts': [
+		{ name: 'ash.backups.open-requested', anchor: '\t\tconst opening = factory.open(DATABASE_NAME, DATABASE_VERSION);', position: 'after' },
+		{ name: 'ash.backups.database-ready', anchor: '\t\tconst records = await request<StoredBackup[]>(database.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).index("workspaceId").getAll(workspaceId));', position: 'before' },
+		{ name: 'ash.backups.list-ready', anchor: '\t\tconst records = await request<StoredBackup[]>(database.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).index("workspaceId").getAll(workspaceId));', position: 'after' },
 	],
 };
 

@@ -6,10 +6,11 @@
 > [`docs/sandboxing.md`](../../docs/sandboxing.md) 维护。
 
 `ash-git` 是 Ash 中“如何调用 Git、如何解释 Git 结果”的唯一实现 owner。完整 owner 不等于
-当前已经实现完整 SCM：本阶段提供仓库打开、结构化状态快照、按路径查询忽略规则、本地 branch、remote、分页 commit
+当前已经实现完整 SCM：当前支持仓库打开、结构化状态快照、按路径查询忽略规则、本地 branch、remote、分页 commit
 graph、local/remote-tracking refs、credential-free remote identity、最近 commit、revision file content、HEAD-to-working-tree 文本 Diff/增删行统计、typed
 stage/unstage/discard/commit/fetch/pull/push、local branch switch、worktree inventory、linked worktree mutation、
-不可变 tree/blob 操作和基于 tree 的事务提交；持续监听、状态缓存与 tag mutation 尚未实现。App Server 与 Desktop 已通过 Git SCM 纵向切片消费这些能力，但该 service/protocol/UI
+仓库初始化、分支改名、远端分支删除、merge/rebase/cherry-pick 及继续或中止、stash、tag、remote 管理、amend/undo、部分 index 编辑、
+不可变 tree/blob 操作和基于 tree 的事务提交。持续监听和状态缓存由 App Server 拥有。App Server 与 Desktop 已通过 Git SCM 纵向切片消费这些能力，但该 service/protocol/UI
 不属于本 crate。
 
 ## 为什么不是普通 `git utils`
@@ -44,6 +45,8 @@ Git domain owner 下，而不是建立平级的 `ash-git-utils`：
 | `src/worktree.rs` | 解析 primary/linked/locked/prunable worktree inventory，不决定产品工作区替换 | `GitWorktree`、`GitWorktreeAvailability`、`GitClient::worktrees` |
 | `src/objects.rs` | 捕获、固定、读取、比较与安装不可变 tree/blob；忽略 Git ignored 的未跟踪文件 | `GitTreeId`、`GitPrivateRef`、`GitClient::capture_worktree_tree` |
 | `src/tree_commit.rs` | 把封存的 tree delta 重放到目标分支，保留 checkout 的 staged/unstaged/untracked 语义，并通过 journal + ref CAS 恢复中断事务 | `GitTreeCommitRequest`、`GitTreeCommitRecovery`、`GitClient::commit_tree_delta` |
+| `src/operations.rs` | 封闭 Git 操作、标签/储藏清单、Git 持久化整合状态和提交撤销 CAS | `GitCommand`、`GitCommandOutcome`、`GitCatalog`、`GitIntegration` |
+| `src/index_edit.rs` | 基于真实比较的块/行暂存，持有 Git index 锁后原子替换 index，保留工作文件 | `GitIndexDiff`、`GitIndexEdit`、`GitIndexSelection` |
 | `src/info.rs` | local branches、fetch/push remote URLs、credential-free remote identity、bounded recent history | `GitBranch`、`GitRemote`、`GitRemoteIdentity`、`GitRemoteProvider`、`GitCommitSummary` |
 | `src/graph.rs` | local/remote-tracking refs 与单次 `git log --all` traversal 的分页 graph page | `GitGraph`、`GitGraphCursor`、`GitReference`、`GitReferenceKind`、private `parse_references` |
 | `src/mutation.rs` | path set/commit request validation 与常用 index/worktree/branch/remote mutation | `GitPathspecSet`、`GitCommitRequest`、`GitCommitResult`、`GitClient::switch_branch` |
@@ -261,6 +264,7 @@ private `GitCommandProfile` 固定三类执行：
 - `TimedOut`：child 已启动，crate 发出 kill 并等待退出；
 - `OutputLimitExceeded`：child 已完成或已被完整 drain，但结果不用于 domain parsing；
 - `CommandFailed`：strict query 的 nonzero Git exit；
+- `IndexChanged`：部分暂存时真实内容与用户查看的比较不同，拒绝修改 index；
 - `InvalidOutput`：Git success output 不满足 parser contract。
 
 异步操作 future 拥有 Git 进程及其输出采集；调用方取消并释放 future 时，进程生命周期清理会结束子进程树。App Server 的 clone、fetch、pull、push 将连接取消信号接入这一生命周期。取消不会回滚已发生的仓库修改；仅中止后续执行。
@@ -308,6 +312,8 @@ policy/approval。它们都不能复制本 crate 的 command/parsing 实现。
 - `content_tests.rs`：HEAD/index 内容与 missing path；
 - `text_diff_tests.rs`：modified/deleted/untracked 汇总、replacement 统计及 binary/size skip；
 - `info_tests.rs`：branch、remote fetch/push URL、history limit；
+- `operations_tests.rs`：初始化、分支与远端管理、储藏、标签、整合冲突与继续/中止、amend 与撤销提交；
+- `index_edit_tests.rs`：按行/块编辑 index、过期比较拒绝、新增与删除文件的部分暂存；
 - `worktree_tests.rs`：raw NUL fixture、detached/异常 record、primary/linked inventory、locked reason 与 prunable checkout；
 - `mutation_tests.rs`：validation、stage/unstage/discard/commit、local branch switch 及失败时
   保留当前分支和工作树，以及本地 bare remote 驱动的 fetch/fast-forward pull/push；
@@ -321,9 +327,8 @@ policy/approval。它们都不能复制本 crate 的 command/parsing 实现。
 正常 directory 状态下运行：
 
 ```bash
-cargo test --manifest-path Cargo.toml -p ash-git
-cargo clippy --manifest-path Cargo.toml -p ash-git \
-  --all-targets --no-deps -- -D warnings
+just test ash-git
+just rust-warnings ash-git
 bazel test //ash-rs/git:git-unit-tests
 ```
 
@@ -336,9 +341,9 @@ bazel test //ash-rs/git:git-unit-tests
 
 当前限制：
 
-- local branch switch、基于 HEAD 新建本地分支，以及受管 linked worktree 创建/清理已实现；尚无普通用户 branch 删除/重命名与 tag mutation；
-- App Server 已有单 directory projection、watch、revision/event 和 operation serialization，
-  但尚无 multi-repository registry、可观测 queue、progress 或 caller cancellation；
+- 分支创建、删除、改名，linked worktree 创建/清理，tag、stash、remote 和整合流程已实现；强制删除与交互认证不属于当前接口；
+- App Server 已有 multi-repository registry、watch、revision/event、operation serialization 和连接取消；尚无用户可见的 queue 与 progress；
+- 部分 index 编辑只接受有界 UTF-8 普通文件，拒绝冲突、重命名、子模块和过期比较；
 - 不支持 bare repository，`open_repository` 要求 working tree；
 - repository discovery 依赖支持 `rev-parse --path-format=absolute` 的 Git；
 - patch diagnostics parser 是 best effort，不承诺复现所有 Git 版本的自然语言；
@@ -351,7 +356,7 @@ bazel test //ash-rs/git:git-unit-tests
 
 1. 在本 crate 增加新的明确 typed operation 与 parser；
 2. 为新增 mutation 定义 index/worktree side effect、failure 和 cancellation；
-3. 在当前 App Server `GitRuntime` 上增加 multi-repository registry 与 operation manager；
+3. 在 App Server `GitRuntime` 中接入对应的调度与状态发布；
 4. 最后增加对应 protocol/desktop/agent adapter。
 
 只有出现多个独立底层 Git owner 且有稳定共享 primitive 时，才重新评估 `ash-git-utils`；当前不应

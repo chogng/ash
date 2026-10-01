@@ -1,4 +1,3 @@
-import { CLOUD_DICTATION_MODEL, XAI_DICTATION_MODEL } from '../../../../platform/dictation/common/dictationConfiguration.js';
 import type { ISetting, ISettingsGroup, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
 import { localize } from '../../../../nls.js';
 import type { SettingsTreeNode } from './settingsTreeModels.js';
@@ -44,39 +43,55 @@ export const SettingsNavigation = [
 		id: 'general',
 		label: 'General',
 		description: 'Configure core application behavior and accessibility.',
-		presentation: 'general',
-		groups: [
+		categories: [
 			{
-				id: 'display-language',
-				get label() { return localize({ bundle: 'ash.settings', key: 'displayLanguage.title' }, 'Display Language'); },
-				get description() { return localize({ bundle: 'ash.settings', key: 'displayLanguage.description' }, 'Choose the language used by the Ash interface.'); },
-				settings: ['workbench.locale'],
-			},
-			{
-				id: 'updates',
-				get label() { return localize('update.settingsGroup', 'Updates'); },
-				get description() { return localize('update.settingsGroupDescription', 'Choose how Ash Desktop checks for product updates.'); },
-				settings: ['update.policy'],
-			},
-			{
-				id: 'source-control',
-				get label() { return localize('git.settings.group', 'Source Control'); },
-				get description() { return localize('git.settings.groupDescription', 'Configure Git fetching and Source Control diff decorations.'); },
-				settings: ['git.autofetch', 'git.autofetchPeriod', 'scm.diffDecorationsIgnoreTrimWhitespace'],
-			},
-			{
-				id: 'accessibility',
-				label: 'Accessibility',
-				description: 'Adjust screen-reader behavior, motion, transparency, and link visibility.',
-				settings: ['accessibility.*', 'editor.accessibilitySupport', 'workbench.reduceMotion', 'workbench.reduceTransparency'],
-			},
-			{
-				id: 'interaction',
-				label: 'Interaction',
-				description: 'Tune hover feedback and resize handles.',
-				settings: ['workbench.hover.*', 'workbench.sash.*', 'onboarding.enabled'],
-			},
+				id: 'general',
+				label: 'Application',
+				description: 'Configure core application behavior and accessibility.',
+				presentation: 'general',
+				groups: [
+					{
+						id: 'display-language',
+						get label() { return localize({ bundle: 'ash.settings', key: 'displayLanguage.title' }, 'Display Language'); },
+						get description() { return localize({ bundle: 'ash.settings', key: 'displayLanguage.description' }, 'Choose the language used by the Ash interface.'); },
+						settings: ['workbench.locale'],
+					},
+					{
+						id: 'updates',
+						get label() { return localize('update.settingsGroup', 'Updates'); },
+						get description() { return localize('update.settingsGroupDescription', 'Choose how Ash Desktop checks for product updates.'); },
+						settings: ['update.policy'],
+					},
+					{
+						id: 'source-control',
+						get label() { return localize('git.settings.group', 'Source Control'); },
+						get description() { return localize('git.settings.groupDescription', 'Configure Git fetching and Source Control diff decorations.'); },
+						settings: ['git.autofetch', 'git.autofetchPeriod', 'scm.diffDecorationsIgnoreTrimWhitespace'],
+					},
+					{
+						id: 'accessibility',
+						label: 'Accessibility',
+						description: 'Adjust screen-reader behavior, motion, transparency, and link visibility.',
+						settings: ['accessibility.*', 'editor.accessibilitySupport', 'workbench.reduceMotion', 'workbench.reduceTransparency'],
+					},
+					{
+						id: 'interaction',
+						label: 'Interaction',
+						description: 'Tune hover feedback and resize handles.',
+						settings: ['workbench.hover.*', 'workbench.sash.*', 'onboarding.enabled'],
+					},
 
+				],
+			},
+			{
+				id: 'dictation',
+				get label() { return localize('sessions.settings.dictation', 'Dictation'); },
+				get description() { return localize('dictation.settings.description', 'Choose local or cloud transcription and manage local dictation models.'); },
+				keywords: ['dictation', 'speech', 'microphone', 'download', 'import'],
+				presentation: 'general',
+				groups: [{ id: 'dictation', get label() { return localize('sessions.settings.dictation', 'Dictation'); },
+					get description() { return localize('dictation.settings.description', 'Choose local or cloud transcription and manage local dictation models.'); }, settings: ['dictation.*'] }],
+			},
 		],
 	},
 	{
@@ -265,11 +280,6 @@ export const SettingsNavigation = [
 					get label() { return localize('settings.models.chatDefault.label', 'Chat'); },
 					get description() { return localize('settings.models.chatDefault.description', 'Choose the model used for new chats.'); },
 					settings: ['chat.defaultModel'],
-				}, {
-					id: 'dictation',
-					get label() { return localize('sessions.settings.voiceModels', 'Voice input'); },
-					get description() { return localize('sessions.settings.cloudVoiceModels', 'Cloud models: OpenAI {0} · xAI {1}', CLOUD_DICTATION_MODEL, XAI_DICTATION_MODEL); },
-					settings: ['dictation.*'],
 				}],
 			},
 			{

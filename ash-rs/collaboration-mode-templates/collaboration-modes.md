@@ -78,23 +78,7 @@ Plan 和 Ask 的不修改要求属于模式的行为约束，写在当前模式�
 
 输入区的模式选择按聊天身份保存。首次打开已有聊天时用最近 Turn 的模式初始化；后续刷新、重连或其他入口产生新 Turn，不改写输入区的选择。新聊天首次取得 Thread 身份时保留选择。将草稿移到 Agents Window 时，文字、附件和模式一起传递。
 
-## TUI 模式选择与显示
-
-五种任务模式使用 `/mode` 选择，也支持 `/mode agent|plan|debug|multitask|ask`。参数直接按协议中的稳定 ID 解析，不随界面语言或显示名称变化；命令输入不区分 ASCII 大小写。请求、队列和历史继续使用 `CollaborationMode` 强类型保存。
-
-输入框聚焦时，Shift+Tab 按 Agent、Plan、Debug、Multitask、Ask 的顺序循环。切换只影响下一条消息；运行中选择其他模式后，Ctrl+Enter 也会排队。弹层继续使用所属组件自己的按键处理。
-
-| 呈现 | 当前显示方式 |
-| --- | --- |
-| fullscreen | 模型与推理强度后显示非默认模式的可点击名称；输入框上下边线和输入符号使用模式色 |
-| inline | `/statusline` 可开启 `Mode`，对应 `[tui].statusLine` 的 `mode` 项，默认关闭 |
-| 默认 Agent | 两种呈现均隐藏模式名称与对应分隔符；模式身份仍为 `agent`，fullscreen 使用普通前景色 |
-
-TUI 的模式颜色采用桌面端对应选择的颜色，用户主题可以覆盖。内置暗色为 Plan `#d18616`、Debug `#f48771`、Multitask `#b180d7`、Ask `#89d185`；浅色分别为 `#a65b00`、`#a1260d`、`#652d90`、`#107c10`。实际终端颜色由主题与颜色能力处理。主题文件格式见 [TUI 主题文件](../../code/tui/README.md#tui-主题文件)。
-
-推理强度和权限分别选择：`/effort` 打开推理档位选择，档位增减快捷键及边界行为见 [TUI 命令与补全](../../code/tui/README.md#命令与补全)；Ctrl+R 继续搜索输入历史。`/policy` 选择下一轮权限，也接受 `ask-permissions`、`auto-review`、`bypass-permissions` 参数，权限选择不再占用 Shift+Tab。已有用户自定义的权限快捷键仍可使用。推理档位、模式和权限的选择互不替换。
-
-TUI 实现与验证入口见 [Composer 选项](../../code/tui/src/thread/composer/options.rs)、[模式 App 测试](../../code/tui/src/app/collaboration_modes_tests.rs)、[fullscreen 输入区测试](../../code/tui/src/app/fullscreen/composer_tests.rs)。
+TUI 的 `/mode`、Shift+Tab、两种屏幕模式的标签与配色统一见 [Ash Code LAYOUT](../../code/LAYOUT.md#任务模式选择与显示)。
 
 ## 产品命令与模式
 

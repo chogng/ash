@@ -288,11 +288,18 @@ fn actual_tui_sandbox_approval_modes_change_file_tool_authority() {
     auto.wait_for_screen("自动审查拒绝了工具");
     auto_gate.wait_until_reached();
     assert!(auto_fixture.find_file("auto-reviewed.txt").is_none());
-    auto.submit("/policy bypass-permissions");
+    auto.type_text("/policy bypass-permissions");
+    // The active Turn keeps repainting. Observe its transient policy hint directly
+    // instead of waiting for a quiet frame after Enter, which can outlive the hint.
+    auto.send(b"\r");
     auto.wait_for_screen("current: auto review on");
+    auto.wait_for_screen("next: bypass permissions on");
+    assert!(auto.screen().contains("current: auto review on"));
+    assert!(auto_fixture.find_file("auto-reviewed.txt").is_none());
     // Inspect the review result after the follow-up turn can finish.
     auto_gate.release();
     auto.wait_for_stable_screen("文件没有写入");
+    assert!(auto_fixture.find_file("auto-reviewed.txt").is_none());
     auto.control_up();
     auto.up();
     auto.space();

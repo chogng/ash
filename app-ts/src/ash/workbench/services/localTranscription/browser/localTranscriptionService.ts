@@ -10,7 +10,11 @@ export class NullLocalTranscriptionService extends AbstractDisposable implements
 	public readonly onDidTranscribe = Event.None;
 	public readonly onDidEnd = Event.None;
 	public readonly onDidChangeModelStatus = Event.None;
+	public readonly onDidChangeModels = Event.None;
 	public async getModelStatus(): Promise<never> { throw unavailable(); }
+	public async listModels(): Promise<never> { throw unavailable(); }
+	public async cancelModel(): Promise<never> { throw unavailable(); }
+	public async deleteModel(): Promise<never> { throw unavailable(); }
 	public prepareModel(): never { throw unavailable(); }
 	public importModel(): never { throw unavailable(); }
 	public async start(): Promise<never> {

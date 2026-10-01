@@ -17,6 +17,7 @@ use reqwest::dns::Addrs;
 use reqwest::dns::Name;
 use reqwest::dns::Resolve;
 use reqwest::dns::Resolving;
+use rustls_platform_verifier::BuilderVerifierExt;
 use std::io;
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -52,6 +53,21 @@ enum Message {
 }
 
 impl ReqwestHttpClient {
+    /// Keeps reqwest's OS certificate verification for SDKs that own their HTTP framing.
+    /// The provider is explicit so feature unification cannot pick another crypto backend.
+    pub fn sdk_client_builder() -> Result<reqwest::ClientBuilder, HttpClientError> {
+        let tls = rustls::ClientConfig::builder_with_provider(Arc::new(
+            rustls::crypto::ring::default_provider(),
+        ))
+        .with_safe_default_protocol_versions()
+        .and_then(|builder| builder.with_platform_verifier())
+        .map_err(|_| {
+            HttpClientError::InvalidConfiguration("failed to build HTTP transport".into())
+        })?
+        .with_no_client_auth();
+        Ok(reqwest::Client::builder().tls_backend_preconfigured(tls))
+    }
+
     pub fn with_network(network: OutboundNetworkSnapshot) -> Result<Self, HttpClientError> {
         if !matches!(network.timeouts().write(), Timeout::Disabled) {
             return Err(HttpClientError::InvalidConfiguration(

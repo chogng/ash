@@ -1,0 +1,11 @@
+.ash-dictation-cloud-connection {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+}
+.ash-dictation-cloud-connection > p {
+	margin: 0;
+	color: var(--ash-description-foreground);
+}

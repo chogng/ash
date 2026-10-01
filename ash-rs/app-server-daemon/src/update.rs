@@ -175,7 +175,7 @@ fn install_stable_with_mode(
             .map_err(|error| error.to_string())?;
         return selected_output(&store, "pinned");
     }
-    let target = build_info::BuildInfo::current().target;
+    let target = build_info::TARGET.to_owned();
     let descriptor_url = format!(
         "https://github.com/{REPOSITORY}/releases/download/ash-app-server-stable/ash-app-server-stable-{target}.update.json"
     );

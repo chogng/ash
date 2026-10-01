@@ -39,6 +39,7 @@ use ash_file_access::Authorization;
 use ash_file_watcher::DebouncedWatchReceiver;
 use ash_file_watcher::FileWatcher;
 use ash_file_watcher::FileWatcherBackend;
+use ash_file_watcher::FileWatcherEvent;
 use ash_file_watcher::WatchPath;
 use ash_git::GitChangeFileComparison;
 use ash_git::GitChangeStatus;
@@ -60,6 +61,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::RwLock;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
@@ -71,6 +73,15 @@ const GIT_WATCH_DEBOUNCE: Duration = Duration::from_millis(100);
 const ALIASED_PATH_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 pub(crate) struct GitRuntime {
+    dirs: Vec<(Option<String>, Authorization)>,
+    dir_order: HashMap<String, usize>,
+    updates: Arc<UpdateBroker>,
+    discovery: Mutex<()>,
+    registry: RwLock<GitRepositoryRegistry>,
+}
+
+#[derive(Default)]
+struct GitRepositoryRegistry {
     repositories: Vec<Arc<GitRepositoryRuntime>>,
     repositories_by_id: HashMap<String, Arc<GitRepositoryRuntime>>,
 }
@@ -81,6 +92,7 @@ struct GitRepositoryRuntime {
     stream_instance_id: StreamInstanceId,
     operation: Arc<Mutex<()>>,
     common_dir: PathBuf,
+    identity: GitRepository,
     state: Mutex<GitRuntimeState>,
     graph_sessions: Mutex<HashMap<u64, GraphSession>>,
     next_graph_token: AtomicU64,
@@ -91,7 +103,7 @@ struct GitRepositoryRuntime {
 pub(super) struct GitWatcher {
     shutdown: Option<tokio::sync::oneshot::Sender<()>>,
     auto_fetch_shutdown: Option<mpsc::Sender<()>>,
-    auto_fetch_cancellation: Option<CancellationSource>,
+    cancellation: Option<CancellationSource>,
     thread: Option<JoinHandle<()>>,
     children: Vec<GitWatcher>,
 }
@@ -100,6 +112,7 @@ struct GitRuntimeState {
     revision: u64,
     repository: Option<GitRepository>,
     status: Option<GitStatusResult>,
+    references: Option<ash_git::GitReferenceState>,
 }
 
 struct GraphSession {
@@ -161,66 +174,119 @@ impl GitRuntime {
         dir_order: HashMap<String, usize>,
         updates: Arc<UpdateBroker>,
     ) -> Result<Arc<Self>, GitRuntimeError> {
+        let runtime = Arc::new(Self {
+            dirs,
+            dir_order,
+            updates,
+            discovery: Mutex::new(()),
+            registry: RwLock::new(GitRepositoryRegistry::default()),
+        });
+        runtime.reconcile_with_notification(false)?;
+        Ok(runtime)
+    }
+
+    /// Keep unchanged repository owners alive: their streams and graph cursors belong to clients.
+    pub(super) fn reconcile(&self) -> Result<(), GitRuntimeError> {
+        self.reconcile_with_notification(true)
+    }
+
+    fn reconcile_with_notification(&self, notify: bool) -> Result<(), GitRuntimeError> {
+        let _discovery = self
+            .discovery
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        let previous = self.repository_runtimes();
         let mut repositories = Vec::new();
-        let mut repositories_by_id = HashMap::new();
         let mut worktrees = Vec::<PathBuf>::new();
-        for (dir_id, authorization) in dirs {
-            for projection_root in discover_repository_roots(&authorization) {
-                let descriptor =
-                    repository_descriptor(dir_id.clone(), &authorization, &projection_root)?;
-                let Some(runtime) = GitRepositoryRuntime::new(
-                    authorization.clone(),
-                    projection_root,
-                    descriptor,
-                    Arc::clone(&updates),
-                )?
-                else {
+        for (dir_id, authorization) in &self.dirs {
+            for root in discover_repository_roots(authorization) {
+                if !root.is_dir() {
                     continue;
-                };
-                let runtime = Arc::new(runtime);
-                let Ok((repository, _)) = runtime.service.snapshot() else {
-                    continue;
+                }
+                let descriptor = repository_descriptor(dir_id.clone(), authorization, &root)?;
+                let existing = previous
+                    .iter()
+                    .find(|runtime| runtime.descriptor == descriptor);
+                let runtime = if let Some(existing) = existing
+                    && existing
+                        .service
+                        .repository()
+                        .is_ok_and(|identity| identity == existing.identity)
+                {
+                    Arc::clone(existing)
+                } else {
+                    let Some(runtime) = GitRepositoryRuntime::new(
+                        authorization.clone(),
+                        root,
+                        descriptor,
+                        Arc::clone(&self.updates),
+                    )?
+                    else {
+                        continue;
+                    };
+                    Arc::new(runtime)
                 };
                 if worktrees
                     .iter()
-                    .any(|root| root == repository.worktree_root())
+                    .any(|root| root == runtime.identity.worktree_root())
                 {
                     continue;
                 }
-                worktrees.push(repository.worktree_root().to_path_buf());
-                repositories_by_id.insert(runtime.descriptor.id.clone(), Arc::clone(&runtime));
+                worktrees.push(runtime.identity.worktree_root().to_path_buf());
                 repositories.push(runtime);
             }
         }
         repositories.sort_by(|left, right| {
-            let left_order = left
-                .descriptor
-                .dir_id
-                .as_ref()
-                .and_then(|id| dir_order.get(id))
-                .copied()
-                .unwrap_or(usize::MAX);
-            let right_order = right
-                .descriptor
-                .dir_id
-                .as_ref()
-                .and_then(|id| dir_order.get(id))
-                .copied()
-                .unwrap_or(usize::MAX);
-            left_order
-                .cmp(&right_order)
+            let order = |runtime: &GitRepositoryRuntime| {
+                runtime
+                    .descriptor
+                    .dir_id
+                    .as_ref()
+                    .and_then(|id| self.dir_order.get(id))
+                    .copied()
+                    .unwrap_or(usize::MAX)
+            };
+            order(left)
+                .cmp(&order(right))
                 .then(left.descriptor.path.cmp(&right.descriptor.path))
         });
-        Ok(Arc::new(Self {
-            repositories,
-            repositories_by_id,
-        }))
+        let unchanged = previous.len() == repositories.len()
+            && previous
+                .iter()
+                .zip(&repositories)
+                .all(|(left, right)| Arc::ptr_eq(left, right));
+        if !unchanged {
+            let repositories_by_id = repositories
+                .iter()
+                .map(|runtime| (runtime.descriptor.id.clone(), Arc::clone(runtime)))
+                .collect();
+            *self
+                .registry
+                .write()
+                .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))? =
+                GitRepositoryRegistry {
+                    repositories,
+                    repositories_by_id,
+                };
+            if notify {
+                self.updates.publish_git_repositories_changed();
+            }
+        }
+        Ok(())
+    }
+
+    fn repository_runtimes(&self) -> Vec<Arc<GitRepositoryRuntime>> {
+        self.registry
+            .read()
+            .expect("Git repository registry poisoned")
+            .repositories
+            .clone()
     }
 
     pub(super) fn repositories(&self) -> GitRepositoriesResult {
         GitRepositoriesResult {
             repositories: self
-                .repositories
+                .repository_runtimes()
                 .iter()
                 .map(|runtime| runtime.descriptor.clone())
                 .collect(),
@@ -254,6 +320,78 @@ impl GitRuntime {
         repository_id: Option<&str>,
     ) -> Result<Vec<GitBranchDto>, GitRuntimeError> {
         self.repository(repository_id)?.local_branches()
+    }
+
+    pub(super) fn catalog_for(
+        &self,
+        repository_id: Option<&str>,
+    ) -> Result<ash_git::GitCatalog, GitRuntimeError> {
+        let runtime = self.repository(repository_id)?;
+        let _operation = runtime
+            .operation
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        runtime.service.catalog().map_err(GitRuntimeError::Service)
+    }
+
+    pub(super) fn command_for(
+        &self,
+        repository_id: Option<&str>,
+        command: &ash_git::GitCommand,
+        cancellation: &CancellationToken,
+    ) -> Result<
+        (
+            GitStatusResult,
+            ash_git::GitCommandOutcome,
+            Option<ash_git::GitIntegration>,
+        ),
+        GitRuntimeError,
+    > {
+        let runtime = self.repository(repository_id)?;
+        let _operation =
+            lock_for_request(&runtime.operation, cancellation).map_err(GitRuntimeError::Service)?;
+        let outcome = runtime.service.command(command, cancellation);
+        runtime.invalidate_graphs()?;
+        // A failed or cancelled Git invocation may already have written index or refs. Publish
+        // its actual state before returning the failure so every renderer can inspect it.
+        let (repository, snapshot) = runtime
+            .service
+            .snapshot()
+            .map_err(GitRuntimeError::Service)?;
+        let status = runtime.accept_status(repository, snapshot, StatusNotification::Always)?;
+        let outcome = outcome.map_err(GitRuntimeError::Service)?;
+        let operation = runtime
+            .service
+            .catalog()
+            .map_err(GitRuntimeError::Service)?
+            .operation;
+        Ok((status, outcome, operation))
+    }
+
+    pub(super) fn index_diff_for(
+        &self,
+        repository_id: Option<&str>,
+        path: &Path,
+        comparison: ash_git::GitChangeFileComparison,
+    ) -> Result<ash_git::GitIndexDiff, GitRuntimeError> {
+        let runtime = self.repository(repository_id)?;
+        let _operation = runtime
+            .operation
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        runtime
+            .service
+            .index_diff(path, comparison)
+            .map_err(GitRuntimeError::Service)
+    }
+
+    pub(super) fn index_edit_for(
+        &self,
+        repository_id: Option<&str>,
+        request: &ash_git::GitIndexEdit,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.repository(repository_id)?
+            .mutate_paths(|service| service.index_edit(request))
     }
 
     pub(super) fn create_branch_for(
@@ -528,39 +666,100 @@ impl GitRuntime {
     }
 
     pub(super) fn close_connection(&self, connection_id: u64) {
-        for repository in &self.repositories {
+        for repository in self.repository_runtimes() {
             repository.close_connection(connection_id);
         }
     }
 
     pub(super) fn start_watching(self: &Arc<Self>, config: Option<Arc<ConfigStore>>) -> GitWatcher {
-        let mut children = self
-            .repositories
-            .iter()
-            .map(GitRepositoryRuntime::start_watching)
-            .collect::<Vec<_>>();
-        if let Some(config) = config {
-            children.extend(
-                self.repositories
-                    .iter()
-                    .filter(|repository| repository.service.can_mutate())
-                    .map(|repository| repository.start_autofetch(Arc::clone(&config))),
-            );
-        }
+        let (shutdown, shutdown_rx) = tokio::sync::oneshot::channel();
+        let runtime = Arc::downgrade(self);
+        let cancellation = CancellationSource::new();
+        let token = cancellation.token();
+        let thread = std::thread::Builder::new()
+            .name("ash-git-discovery".into())
+            .spawn(move || watch_repositories(runtime, config, token, shutdown_rx))
+            .ok();
         GitWatcher {
-            shutdown: None,
+            shutdown: Some(shutdown),
+            thread,
             auto_fetch_shutdown: None,
-            auto_fetch_cancellation: None,
-            thread: None,
-            children,
+            cancellation: Some(cancellation),
+            children: Vec::new(),
         }
     }
 
     fn watched_paths(&self) -> Vec<WatchPath> {
-        self.repositories
+        self.repository_runtimes()
             .first()
             .map(|repository| repository.watched_paths())
             .unwrap_or_default()
+    }
+
+    fn discovery_paths(&self) -> Vec<WatchPath> {
+        let mut paths = self
+            .dirs
+            .iter()
+            .flat_map(|(_, authorization)| {
+                [
+                    WatchPath {
+                        path: authorization.dir().requested_path().to_path_buf(),
+                        recursive: true,
+                    },
+                    WatchPath {
+                        path: authorization.dir().canonical_path().to_path_buf(),
+                        recursive: true,
+                    },
+                ]
+            })
+            .collect::<Vec<_>>();
+        // A directory grant can sit inside a checkout whose metadata is outside that grant.
+        for runtime in self.repository_runtimes() {
+            paths.extend(
+                [runtime.identity.git_dir(), runtime.identity.common_dir()]
+                    .into_iter()
+                    .map(|path| WatchPath {
+                        path: path.to_path_buf(),
+                        recursive: true,
+                    }),
+            );
+        }
+        paths.sort_by(|left, right| {
+            left.path
+                .cmp(&right.path)
+                .then(left.recursive.cmp(&right.recursive))
+        });
+        paths.dedup();
+        paths
+    }
+
+    fn discovery_invalidated(&self, event: &FileWatcherEvent) -> bool {
+        let FileWatcherEvent::PathsChanged { paths } = event else {
+            return true;
+        };
+        let repositories = self.repository_runtimes();
+        paths.iter().any(|path| {
+            if path.file_name().is_some_and(|name| name == ".git") {
+                return true;
+            }
+            if repositories.iter().any(|runtime| {
+                path == runtime.identity.git_dir()
+                    || path == runtime.identity.common_dir()
+                    || runtime.service.dir_root().starts_with(path)
+            }) {
+                return true;
+            }
+            if repositories.iter().any(|runtime| {
+                path.starts_with(runtime.identity.git_dir())
+                    || path.starts_with(runtime.identity.common_dir())
+            }) {
+                return false;
+            }
+            path.is_dir()
+                || path
+                    .components()
+                    .any(|component| component.as_os_str() == ".git")
+        })
     }
 
     pub(super) fn common_dir_for(
@@ -573,17 +772,17 @@ impl GitRuntime {
     fn repository(
         &self,
         repository_id: Option<&str>,
-    ) -> Result<&Arc<GitRepositoryRuntime>, GitRuntimeError> {
+    ) -> Result<Arc<GitRepositoryRuntime>, GitRuntimeError> {
+        let registry = self
+            .registry
+            .read()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
         match repository_id {
-            Some(id) => self
-                .repositories_by_id
-                .get(id)
-                .ok_or(GitRuntimeError::RepositoryNotFound),
-            None => self
-                .repositories
-                .first()
-                .ok_or(GitRuntimeError::RepositoryNotFound),
+            Some(id) => registry.repositories_by_id.get(id),
+            None => registry.repositories.first(),
         }
+        .cloned()
+        .ok_or(GitRuntimeError::RepositoryNotFound)
     }
 }
 
@@ -602,6 +801,7 @@ impl GitRepositoryRuntime {
         Ok(Some(Self {
             operation: ash_git::repository_operation_lock(&repository),
             common_dir: dunce::simplified(repository.common_dir()).to_path_buf(),
+            identity: repository,
             service,
             descriptor,
             stream_instance_id: new_stream_instance_id()?,
@@ -609,6 +809,7 @@ impl GitRepositoryRuntime {
                 revision: 0,
                 repository: None,
                 status: None,
+                references: None,
             }),
             graph_sessions: Mutex::new(HashMap::new()),
             next_graph_token: AtomicU64::new(1),
@@ -663,6 +864,9 @@ impl GitRepositoryRuntime {
         self.service
             .create_branch(name)
             .map_err(GitRuntimeError::Service)?;
+        // Ref changes must refresh history in every connection even when HEAD and files are unchanged.
+        let (repository, snapshot) = self.service.snapshot().map_err(GitRuntimeError::Service)?;
+        self.accept_status(repository, snapshot, StatusNotification::Always)?;
         self.local_branches_locked()
     }
 
@@ -674,6 +878,8 @@ impl GitRepositoryRuntime {
         self.service
             .delete_branch(name)
             .map_err(GitRuntimeError::Service)?;
+        let (repository, snapshot) = self.service.snapshot().map_err(GitRuntimeError::Service)?;
+        self.accept_status(repository, snapshot, StatusNotification::Always)?;
         self.local_branches_locked()
     }
 
@@ -1018,16 +1224,20 @@ impl GitRepositoryRuntime {
         GitWatcher {
             shutdown: Some(shutdown),
             auto_fetch_shutdown: None,
-            auto_fetch_cancellation: None,
+            cancellation: None,
             thread,
             children: Vec::new(),
         }
     }
 
-    fn start_autofetch(self: &Arc<Self>, config: Arc<ConfigStore>) -> GitWatcher {
+    fn start_autofetch(
+        self: &Arc<Self>,
+        config: Arc<ConfigStore>,
+        parent: &CancellationToken,
+    ) -> GitWatcher {
         let (shutdown, shutdown_rx) = mpsc::channel();
         let runtime = Arc::downgrade(self);
-        let cancellation = CancellationSource::new();
+        let cancellation = parent.child_source();
         let token = cancellation.token();
         let thread = std::thread::Builder::new()
             .name("ash-git-autofetch".into())
@@ -1036,7 +1246,7 @@ impl GitRepositoryRuntime {
         GitWatcher {
             shutdown: None,
             auto_fetch_shutdown: Some(shutdown),
-            auto_fetch_cancellation: Some(cancellation),
+            cancellation: Some(cancellation),
             thread: Some(thread),
             children: Vec::new(),
         }
@@ -1097,12 +1307,17 @@ impl GitRepositoryRuntime {
             &repository,
             snapshot,
         )?;
+        let references = self
+            .service
+            .reference_state(&repository)
+            .map_err(GitRuntimeError::Service)?;
         let mut state = self
             .state
             .lock()
             .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
         let had_state = state.repository.is_some();
         let unchanged = state.repository.as_ref() == Some(&repository)
+            && state.references.as_ref() == Some(&references)
             && state.status.as_ref().is_some_and(|current| {
                 current.head == projected.head && current.changes == projected.changes
             });
@@ -1116,6 +1331,7 @@ impl GitRepositoryRuntime {
             .expect("Git status revision overflowed");
         projected.revision = state.revision;
         state.repository = Some(repository);
+        state.references = Some(references);
         state.status = Some(projected.clone());
         drop(state);
         if had_state {
@@ -1155,9 +1371,8 @@ impl GitRepositoryRuntime {
                 recursive: true,
             },
         ];
-        if let Ok(state) = self.state.lock()
-            && let Some(repository) = &state.repository
         {
+            let repository = &self.identity;
             paths.push(WatchPath {
                 path: repository.git_dir().to_path_buf(),
                 recursive: true,
@@ -1193,7 +1408,7 @@ impl GitRepositoryRuntime {
 
 impl GitWatcher {
     fn signal_shutdown(&mut self) {
-        if let Some(cancellation) = self.auto_fetch_cancellation.take() {
+        if let Some(cancellation) = self.cancellation.take() {
             cancellation.cancel();
         }
         if let Some(shutdown) = self.shutdown.take() {
@@ -1280,6 +1495,116 @@ fn run_autofetch(
     }
 }
 
+fn watch_repositories(
+    runtime: std::sync::Weak<GitRuntime>,
+    config: Option<Arc<ConfigStore>>,
+    cancellation: CancellationToken,
+    mut shutdown: tokio::sync::oneshot::Receiver<()>,
+) {
+    let Some(runtime) = runtime.upgrade() else {
+        return;
+    };
+    let Ok(executor) = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+    else {
+        return;
+    };
+    let backend = if runtime.dirs.iter().all(|(_, authorization)| {
+        authorization.dir().requested_path() == authorization.dir().canonical_path()
+    }) {
+        FileWatcherBackend::Recommended
+    } else {
+        FileWatcherBackend::Polling {
+            interval: ALIASED_PATH_POLL_INTERVAL,
+        }
+    };
+    let watcher = {
+        let _entered = executor.enter();
+        match FileWatcher::new_with_backend(backend) {
+            Ok(watcher) => Arc::new(watcher),
+            Err(error) => {
+                log::warn!("Git discovery watcher failed: {error}");
+                return;
+            }
+        }
+    };
+    let (subscriber, receiver) = watcher.add_subscriber();
+    let mut paths = runtime.discovery_paths();
+    let Ok(mut registration) = subscriber.register_paths(paths.clone()) else {
+        return;
+    };
+    let mut receiver = DebouncedWatchReceiver::new(receiver, GIT_WATCH_DEBOUNCE);
+    let mut children = HashMap::<String, (Arc<GitRepositoryRuntime>, GitWatcher)>::new();
+    loop {
+        if cancellation.is_cancelled() {
+            break;
+        }
+        if let Err(error) = runtime.reconcile() {
+            log::warn!("Git repository discovery failed: {error:?}");
+        }
+        let repositories = runtime.repository_runtimes();
+        children.retain(|id, (owner, _)| {
+            repositories
+                .iter()
+                .any(|repository| &repository.descriptor.id == id && Arc::ptr_eq(owner, repository))
+        });
+        for repository in repositories {
+            children
+                .entry(repository.descriptor.id.clone())
+                .or_insert_with(|| {
+                    let mut watches = vec![repository.start_watching()];
+                    if repository.service.can_mutate()
+                        && let Some(config) = &config
+                    {
+                        watches.push(repository.start_autofetch(Arc::clone(config), &cancellation));
+                    }
+                    let watcher = GitWatcher {
+                        children: watches,
+                        shutdown: None,
+                        thread: None,
+                        auto_fetch_shutdown: None,
+                        cancellation: None,
+                    };
+                    (repository, watcher)
+                });
+        }
+        let next_paths = runtime.discovery_paths();
+        if next_paths != paths {
+            match subscriber.register_paths(next_paths.clone()) {
+                Ok(next) => {
+                    registration = next;
+                    paths = next_paths;
+                }
+                Err(error) => {
+                    log::warn!("Git discovery watch registration failed: {error}");
+                    break;
+                }
+            }
+        }
+        // Repository owners contain Tokio runtimes. Reconcile and dispose them on this thread,
+        // outside `block_on`, including when a removed repository loses its final reference.
+        let changed = loop {
+            let event = executor.block_on(async {
+                tokio::select! {
+                    _ = &mut shutdown => None,
+                    event = receiver.recv() => event,
+                }
+            });
+            match event {
+                Some(event) if runtime.discovery_invalidated(&event) => break true,
+                Some(_) => {}
+                None => break false,
+            }
+        };
+        if !changed {
+            break;
+        }
+    }
+    drop(registration);
+    drop(children);
+}
+
 fn watch_git(
     runtime: std::sync::Weak<GitRepositoryRuntime>,
     mut shutdown: tokio::sync::oneshot::Receiver<()>,
@@ -1314,13 +1639,14 @@ fn watch_git(
         };
         let file_watcher = Arc::new(file_watcher);
         let (subscriber, receiver) = file_watcher.add_subscriber();
-        let refresh_runtime = Arc::clone(&git_runtime);
-        let _ = tokio::task::spawn_blocking(move || refresh_runtime.refresh_from_watcher()).await;
         let mut watched_paths = git_runtime.watched_paths();
-        drop(git_runtime);
         let Ok(mut registration) = subscriber.register_paths(watched_paths.clone()) else {
             return;
         };
+        // Register before the first read so a mutation during that read schedules another read.
+        let refresh_runtime = Arc::clone(&git_runtime);
+        let _ = tokio::task::spawn_blocking(move || refresh_runtime.refresh_from_watcher()).await;
+        drop(git_runtime);
         let mut receiver = DebouncedWatchReceiver::new(receiver, GIT_WATCH_DEBOUNCE);
         loop {
             tokio::select! {
@@ -1450,6 +1776,7 @@ fn project_graph(graph: GitGraph, next_cursor: Option<String>) -> GitGraphResult
                 kind: match reference.kind() {
                     GitReferenceKind::LocalBranch => GitReferenceKindDto::LocalBranch,
                     GitReferenceKind::RemoteBranch => GitReferenceKindDto::RemoteBranch,
+                    GitReferenceKind::Tag => GitReferenceKindDto::Tag,
                 },
                 remote_name: reference.remote_name().map(Into::into),
                 current: reference.is_current(),

@@ -11,6 +11,7 @@ from build.lib.cargo import cargo_artifact_executable
 from build.lib.cargo import cargo_rendered_diagnostic
 from build.lib.cargo import parse_cargo_message
 from build.lib.cargo import resolve_cargo_target_directory
+from build.lib.sherpa import resolve_sherpa_cargo_env
 from build.lib.targets import TargetSpec
 from build.lib.v8 import resolve_v8_cargo_env
 
@@ -36,6 +37,7 @@ _BINARIES = {
 def cargo_environment(spec: TargetSpec) -> dict[str, str]:
     environment = os.environ.copy()
     environment.update(resolve_v8_cargo_env(spec, environ=environment))
+    environment.update(resolve_sherpa_cargo_env(spec, environ=environment))
     return environment
 
 

@@ -11,6 +11,8 @@ import { SparseMultilineTokens } from '../../../../common/tokens/sparseMultiline
 import { Emitter } from '../../../../../base/common/event.js';
 import { type LanguageTokenResult } from '../../../../common/tokens/languageTokens.js';
 import { type LanguageWorkerRequest } from '../../../../common/model/languageRequestCoordinator.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
+import { isCancellationError } from '../../../../../base/common/errors.js';
 
 test("TextModel owns default line tokens when no syntax provider exists", () => {
 	using model = new TextModel("const value = 1;", { languageId: 'typescript' });
@@ -21,6 +23,85 @@ test("TextModel owns default line tokens when no syntax provider exists", () => 
 	assert.equal(lineTokens.getStandardTokenType(0), StandardTokenType.Other);
 	assert.equal(model.tokenization.hasAccurateTokensForLine(1), true);
 	assert.equal(getStandardTokenTypeAtPosition(model, { lineNumber: 1, column: 2 }), StandardTokenType.Other);
+});
+
+test('lexical readiness follows the current version and shares analysis across cancelled readers', async () => {
+	using registry = new SyntaxProviderRegistry();
+	const firstStarted = new DeferredPromise<void>();
+	const secondStarted = new DeferredPromise<void>();
+	const firstResult = new DeferredPromise<LanguageTokenResult>();
+	const secondResult = new DeferredPromise<LanguageTokenResult>();
+	let requests = 0;
+	using registration = registry.register({
+		id: 'test.readiness', languageIds: ['demo'],
+		provideTokens: () => {
+			requests++;
+			void (requests === 1 ? firstStarted : secondStarted).complete();
+			return (requests === 1 ? firstResult : secondResult).p;
+		},
+	});
+	using model = new TextModel('old', { languageId: 'demo', tokenization: { syntaxProviderRegistry: registry } });
+	const cancelled = new AbortController();
+	const cancelledReader = model.tokenization.whenReady(cancelled.signal);
+	let ready = false;
+	const reader = model.tokenization.whenReady(new AbortController().signal).then(() => { ready = true; });
+	await firstStarted.p;
+	cancelled.abort();
+	await assert.rejects(cancelledReader, isCancellationError);
+	assert.equal(ready, false);
+	model.setValue('new');
+	await secondStarted.p;
+	await firstResult.complete({ tokens: [{ range: new Range(1, 1, 1, 4), tokenType: 'comment', modifiers: [] }] });
+	assert.equal(ready, false);
+	await secondResult.complete({ tokens: [{ range: new Range(1, 1, 1, 4), tokenType: 'string', modifiers: [] }] });
+	await reader;
+	assert.deepEqual([requests, model.tokenization.modelVersion, model.tokenization.getLineTokens(1).getStandardTokenType(0)], [2, model.version, StandardTokenType.String]);
+});
+
+test('lexical readiness rejects worker failures and model disposal', async () => {
+	const started = new DeferredPromise<void>();
+	const result = new DeferredPromise<SyntaxResult>();
+	using model = new TextModel('text', {
+		languageId: 'demo', tokenization: { syntaxService: { workerFactory: () => ({
+			run: () => { void started.complete(); return result.p; },
+			dispose() {}, [Symbol.dispose]() {},
+		}) } },
+	});
+	const failed = model.tokenization.whenReady(new AbortController().signal);
+	await started.p;
+	await result.error(new Error('worker failed'));
+	await assert.rejects(failed, /worker failed/);
+	model.dispose();
+	await assert.rejects(model.tokenization.whenReady(new AbortController().signal), /disposed/i);
+});
+
+test('disposing a model rejects readers already waiting for its lexical result', async () => {
+	const started = new DeferredPromise<void>();
+	using registry = new SyntaxProviderRegistry();
+	using registration = registry.register({
+		id: 'test.disposed-readiness', languageIds: ['demo'],
+		provideTokens: (_request, signal) => {
+			void started.complete();
+			return new Promise<LanguageTokenResult>((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }));
+		},
+	});
+	using model = new TextModel('text', { languageId: 'demo', tokenization: { syntaxProviderRegistry: registry } });
+	const reader = model.tokenization.whenReady(new AbortController().signal);
+	await started.p;
+	model.dispose();
+	await assert.rejects(reader, /disposed/i);
+});
+
+test('plaintext and models above the tokenization limit are immediately ready', async () => {
+	using plain = new TextModel('text');
+	await plain.tokenization.whenReady(new AbortController().signal);
+	let workers = 0;
+	using large = new TextModel('\n'.repeat(300_000), { tokenization: { syntaxService: { workerFactory: () => {
+		workers++;
+		throw new Error('Large files must not start syntax analysis');
+	} } } });
+	await large.tokenization.whenReady(new AbortController().signal);
+	assert.equal(workers, 0);
 });
 
 test('scoped language tokens expose standard comment, string and regex categories', async () => {

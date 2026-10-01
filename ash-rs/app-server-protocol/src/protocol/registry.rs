@@ -455,6 +455,9 @@ use crate::protocol::dictation::DictationBackend;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::dictation::DictationCloudProvider;
 use crate::protocol::dictation::DictationEnded;
+use crate::protocol::dictation::DictationModelChanged;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::dictation::DictationModelList;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::dictation::DictationModelOperation;
 #[cfg(any(test, feature = "export"))]
@@ -674,6 +677,8 @@ use crate::protocol::git::GitBranchListResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitBranchSwitchParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCatalogResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitChangeFileComparisonDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitChangeFileParams;
@@ -689,6 +694,14 @@ use crate::protocol::git::GitCheckIgnoreResult;
 use crate::protocol::git::GitCloneParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCloneResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCommandDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCommandOutcomeDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCommandParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCommandResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommitChangeDto;
 #[cfg(any(test, feature = "export"))]
@@ -730,6 +743,20 @@ use crate::protocol::git::GitHeadDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitHistoryResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitIndexDiffResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitIndexEditParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitIndexHunkDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitIndexSelectionDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitInitParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitIntegrationDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitNamedRefDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitOperationResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitPathsParams;
@@ -751,6 +778,10 @@ use crate::protocol::git::GitRepositoryDto;
 use crate::protocol::git::GitRepositoryIdentityDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitRepositoryParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitStashDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitStashModeDto;
 use crate::protocol::git::GitStatusChanged;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitStatusResult;
@@ -1224,8 +1255,9 @@ use crate::protocol::provider::ProviderApiKeyDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::provider::ProviderApiKeyPolicyDto;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::provider::ProviderApiKeySetParams;
+use crate::protocol::provider::ProviderApiKeyRemoveParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::provider::ProviderApiKeySetParams;
 use crate::protocol::provider::ProviderApiKeySetResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::provider::ProviderCatalogEntryDto;
@@ -2983,6 +3015,11 @@ client_methods! {
         response: ProviderApiKeySetResult,
         serialization: GlobalExclusive,
     },
+    ProviderApiKeyRemove => "provider/apiKey/remove" {
+        params: ProviderApiKeyRemoveParams,
+        response: ProviderApiKeySetResult,
+        serialization: GlobalExclusive,
+    },
     AccountRead => "account/read" {
         params: EmptyParams,
         response: AccountReadResult,
@@ -3252,6 +3289,21 @@ client_methods! {
         params: DictationModelParams,
         response: DictationModelStatus,
         serialization: GlobalSharedRead,
+    },
+    DictationModelList => "dictation/model/list" {
+        params: (),
+        response: DictationModelList,
+        serialization: GlobalSharedRead,
+    },
+    DictationModelCancel => "dictation/model/cancel" {
+        params: DictationModelParams,
+        response: (),
+        serialization: GlobalExclusive,
+    },
+    DictationModelDelete => "dictation/model/delete" {
+        params: DictationModelParams,
+        response: (),
+        serialization: GlobalExclusive,
     },
     DictationModelStart => "dictation/model/start" {
         params: DictationModelStartParams,
@@ -3550,6 +3602,11 @@ client_methods! {
         response: IssueReadResult,
         serialization: None,
     },
+    GitInit => "git/init" { params: GitInitParams, response: GitRepositoriesResult, serialization: GlobalExclusive, },
+    GitCatalog => "git/catalog" { params: GitRepositoryParams, response: GitCatalogResult, serialization: RepositoryExclusive, },
+    GitCommand => "git/command" { params: GitCommandParams, response: GitCommandResult, serialization: RepositoryExclusive, },
+    GitIndexDiff => "git/indexDiff" { params: GitChangeFileParams, response: GitIndexDiffResult, serialization: RepositoryExclusive, },
+    GitIndexEdit => "git/indexEdit" { params: GitIndexEditParams, response: GitOperationResult, serialization: RepositoryExclusive, },
     GitRepositories => "git/repositories" {
         params: EmptyParams,
         response: GitRepositoriesResult,
@@ -4021,6 +4078,9 @@ server_notifications! {
     AccountUpdated => "account/updated" {
         params: AccountUpdated,
     },
+    ProviderApiKeyChanged => "provider/apiKey/changed" {
+        params: ProviderApiKeySetResult,
+    },
     ProviderModelsUpdated => "provider/models/updated" {
         params: ProviderModelsUpdated,
     },
@@ -4037,6 +4097,7 @@ server_notifications! {
     DictationTranscript => "dictation/transcript" { params: DictationTranscript, },
     DictationEnded => "dictation/ended" { params: DictationEnded, },
     DictationModelProgress => "dictation/model/progress" { params: DictationModelProgress, },
+    DictationModelChanged => "dictation/model/changed" { params: DictationModelChanged, },
     DocumentCollaborationUpdate => "document/collaboration/update" {
         params: DocumentCollaborationUpdate,
     },
@@ -4076,6 +4137,9 @@ server_notifications! {
     },
     GitStatusChanged => "git/statusChanged" {
         params: GitStatusChanged,
+    },
+    GitRepositoriesChanged => "git/repositoriesChanged" {
+        params: EmptyParams,
     },
     TurnChangesChanged => "turnChanges/changed" {
         params: TurnChangesChanged,
@@ -4300,6 +4364,8 @@ typescript_bindings! {
     DictationModelStartParams,
     DictationModelStage,
     DictationModelProgress,
+    DictationModelChanged,
+    DictationModelList,
     CallScreenSource,
     CallScreenSources,
     CallScreenFrame,
@@ -4600,6 +4666,7 @@ typescript_bindings! {
     ProviderApiKeyDto,
     ProviderApiKeyPolicyDto,
     ProviderApiKeySetParams,
+    ProviderApiKeyRemoveParams,
     ProviderApiKeySetResult,
     ProviderProbeParams,
     ProviderProbeResult,
@@ -5035,6 +5102,20 @@ typescript_bindings! {
     FsRenameParams,
     FsDeleteParams,
     FsChanged,
+    GitIntegrationDto,
+    GitStashModeDto,
+    GitCommandDto,
+    GitCommandParams,
+    GitCommandOutcomeDto,
+    GitCommandResult,
+    GitNamedRefDto,
+    GitStashDto,
+    GitCatalogResult,
+    GitInitParams,
+    GitIndexSelectionDto,
+    GitIndexEditParams,
+    GitIndexHunkDto,
+    GitIndexDiffResult,
     GitChangeStatusDto,
     GitUpstreamDto,
     GitHeadDto,

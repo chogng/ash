@@ -18,6 +18,7 @@ from build.lib.cargo import (  # noqa: E402
     cargo_rendered_diagnostic,
     parse_cargo_message,
 )
+from build.lib.sherpa import resolve_sherpa_cargo_env  # noqa: E402
 from build.lib.targets import TARGETS, default_target  # noqa: E402
 from build.lib.v8 import (  # noqa: E402
     DEFAULT_CACHE,
@@ -144,6 +145,12 @@ def main(arguments: list[str] | None = None) -> int:
                 lock_path=args.v8_lock.expanduser().resolve(),
                 cache_root=args.v8_cache_root.expanduser().resolve(),
             )
+        )
+    if cargo_command_uses_package(
+        args.cargo, cargo_arguments, REPOSITORY_ROOT, "sherpa-onnx-sys"
+    ):
+        environment.update(
+            resolve_sherpa_cargo_env(TARGETS[target], environ=environment)
         )
     if (
         cargo_arguments[0] in {"test", "run"}

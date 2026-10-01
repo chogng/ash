@@ -20,6 +20,8 @@ export interface IChatInputEditor extends IDisposable {
 	readonly onDidChange: Event<string>;
 	readonly onDidSubmit: Event<void>;
 	value: string;
+	/** Insert recognized text at the current selection using the editor's edit lifecycle. */
+	insertText(text: string): void;
 	focus(): void;
 	layout(): void;
 }
@@ -103,6 +105,13 @@ class TextareaChatInputEditor extends Disposable implements IChatInputEditor {
 
 	focus(): void {
 		this.element.focus();
+	}
+
+	public insertText(text: string): void {
+		const before = this.value.slice(0, this.element.selectionStart);
+		const separator = /[A-Za-z0-9]$/u.test(before) && /^[A-Za-z0-9]/u.test(text) ? ' ' : '';
+		this.element.setRangeText(separator + text, this.element.selectionStart, this.element.selectionEnd, 'end');
+		this._onDidChange.fire(this.value);
 	}
 
 	layout(): void {}

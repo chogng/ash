@@ -5,6 +5,11 @@ import type { IGitApi } from "../common/gitApi.js";
 
 export function createDisconnectedGitApi(unavailable: UnavailableOperation): IGitApi {
 	return {
+		initialize: () => unavailable('git.initialize'),
+		catalog: () => unavailable('git.catalog'),
+		executeCommand: () => unavailable('git.executeCommand'),
+		indexDiff: () => unavailable('git.indexDiff'),
+		editIndex: () => unavailable('git.editIndex'),
 		clone: () => unavailable("git.clone"),
 		readConfig: () => unavailable("git.readConfig"),
 		updateConfig: () => unavailable("git.updateConfig"),
@@ -13,7 +18,13 @@ export function createDisconnectedGitApi(unavailable: UnavailableOperation): IGi
 		checkIgnore: () => unavailable('git.checkIgnore'),
 		history: () => unavailable("git.history"),
 		branches: () => unavailable("git.branches"),
+		createBranch: () => unavailable('git.createBranch'),
+		deleteBranch: () => unavailable('git.deleteBranch'),
 		switchBranch: () => unavailable("git.switchBranch"),
+		worktrees: () => unavailable('git.worktrees'),
+		createWorktree: () => unavailable('git.createWorktree'),
+		deleteWorktree: () => unavailable('git.deleteWorktree'),
+		resolveWorktree: () => unavailable('git.resolveWorktree'),
 		graph: () => unavailable("git.graph"),
 		commitChanges: () => unavailable("git.commitChanges"),
 		commitFile: () => unavailable("git.commitFile"),
@@ -32,6 +43,11 @@ export function createDisconnectedGitApi(unavailable: UnavailableOperation): IGi
 
 export function createAppServerGitApi(connection: AppServerProtocolClient): IGitApi {
 	return {
+		initialize: params => appServerRequest(connection, 'git/init', params),
+		catalog: params => appServerRequest(connection, 'git/catalog', params),
+		executeCommand: params => appServerRequest(connection, 'git/command', params),
+		indexDiff: params => appServerRequest(connection, 'git/indexDiff', params),
+		editIndex: params => appServerRequest(connection, 'git/indexEdit', params),
 		clone: (params) => appServerRequest(connection, "git/clone", params),
 		readConfig: () => appServerRequest(connection, "config/read", {}),
 		updateConfig: (params) => appServerRequest(connection, "config/update", params),
@@ -40,7 +56,13 @@ export function createAppServerGitApi(connection: AppServerProtocolClient): IGit
 		checkIgnore: params => appServerRequest(connection, 'git/checkIgnore', params),
 		history: (params) => appServerRequest(connection, "git/history", params),
 		branches: (params) => appServerRequest(connection, "git/branch/list", params),
+		createBranch: params => appServerRequest(connection, 'git/branch/create', params),
+		deleteBranch: params => appServerRequest(connection, 'git/branch/delete', params),
 		switchBranch: (params) => appServerRequest(connection, "git/branch/switch", params),
+		worktrees: params => appServerRequest(connection, 'git/worktree/list', params),
+		createWorktree: params => appServerRequest(connection, 'git/worktree/create', params),
+		deleteWorktree: params => appServerRequest(connection, 'git/worktree/delete', params),
+		resolveWorktree: params => appServerRequest(connection, 'git/worktree/resolve', params),
 		graph: (params) => appServerRequest(connection, "git/graph", params),
 		commitChanges: (params) => appServerRequest(connection, "git/commitChanges", params),
 		commitFile: (params) => appServerRequest(connection, "git/commitFile", params),

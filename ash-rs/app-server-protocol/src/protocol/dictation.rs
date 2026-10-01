@@ -76,6 +76,22 @@ pub struct DictationModelStatus {
     pub model_id: String,
     /// Installed package availability does not imply an active loaded recognizer.
     pub available: bool,
+    #[ts(type = "number")]
+    pub size_bytes: u64,
+    /// Last process-owned preparation stage, including its terminal result.
+    pub stage: Option<DictationModelStage>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct DictationModelList {
+    pub models: Vec<DictationModelStatus>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct DictationModelChanged {
+    pub model_id: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

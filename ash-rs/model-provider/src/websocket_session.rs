@@ -138,6 +138,13 @@ impl ModelProviderRuntime {
                 "provider has no declared voice session protocol".into(),
             ));
         }
+        // Connection normalization selects transport/auth, but speech models belong to the
+        // registered provider catalog rather than the connection's built-in defaults.
+        let definition = self.configs.get(&normalized.provider).ok_or_else(|| {
+            ash_model_provider_config::ProviderConfigError::UnknownProvider(
+                normalized.provider.clone(),
+            )
+        })?;
         let voice = definition.resolve_voice(selection)?;
         let model = ModelRef::new(definition.id.clone(), voice.model.clone());
         // This factory always resolves direct provider credentials, independently of text subscriptions.

@@ -10,7 +10,6 @@ use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum McpSelectionAction {
-    Marketplace,
     SetEnablement {
         server_id: String,
         enablement: McpServerEnablementDto,
@@ -21,8 +20,6 @@ pub(crate) type McpChoices = ListSelectionSpec<McpSelectionAction>;
 
 pub(crate) fn mcp_choices(servers: &BTreeMap<String, McpServerConfigDto>) -> McpChoices {
     let mut actions = BTreeMap::new();
-    let marketplace_id = ListSelectionItemId::new("marketplace");
-    actions.insert(marketplace_id.clone(), McpSelectionAction::Marketplace);
     let all = servers
         .values()
         .enumerate()
@@ -32,7 +29,6 @@ pub(crate) fn mcp_choices(servers: &BTreeMap<String, McpServerConfigDto>) -> Mcp
         model: crate::extensions::model(crate::extensions::Tab::Mcp, all)
             .with_expandable_descriptions()
             .with_activation(bindings::MCP_TOGGLE)
-            .with_action(ListSelectionItem::new("Get MCP servers").with_id(marketplace_id))
             .with_search(SearchBoxModel::new("Search MCP servers"))
             .with_empty_message("No matching MCP servers"),
         actions,

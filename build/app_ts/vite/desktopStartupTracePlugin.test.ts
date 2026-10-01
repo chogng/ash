@@ -17,7 +17,9 @@ for (const [lineEndingName, lineEnding] of [['LF', '\n'], ['CRLF', '\r\n']] as c
 			['src/ash/platform/app-server/common/generated/AppServerProtocolDecoder.ts', ['ash.decoder.schema-start', 'ash.decoder.schema-ready']],
 			['src/ash/platform/native/electron-browser/rendererApi.ts', ['ash.rendererApi.start', 'ash.rendererApi.acquire-start', 'ash.rendererApi.acquired', 'ash.rendererApi.initialized', 'ash.rendererApi.workspace-initialized']],
 			['src/ash/workbench/electron-browser/desktop.main.ts', ['ash.desktop.open-start', 'ash.desktop.api-ready', 'ash.desktop.workbench-start', 'ash.desktop.lifecycle-ready']],
-			['src/ash/workbench/browser/workbench.ts', ['ash.workbench.constructor-start', 'ash.workbench.auxiliary-restore-start', 'ash.workbench.constructor-done']],
+			['src/ash/workbench/browser/workbench.ts', ['ash.workbench.constructor-start', 'ash.workbench.auxiliary-restore-start', 'ash.workbench.constructor-done', 'ash.workbench.extensions-wait', 'ash.workbench.extensions-ready', 'ash.workbench.editors-restored', 'ash.workbench.backups-restored', 'ash.workbench.contributions-restored']],
+			['src/ash/workbench/services/extensions/browser/appServerExtensionService.ts', ['ash.extensions.catalog-ready', 'ash.extensions.manifest-verified', 'ash.extensions.resources-ready', 'ash.extensions.grammars-ready']],
+			['src/ash/workbench/services/workingCopy/browser/indexedDbWorkingCopyBackupService.ts', ['ash.backups.open-requested', 'ash.backups.database-ready', 'ash.backups.list-ready']],
 		] as const) {
 			const file = resolve(desktopRoot, path);
 			const source = readFileSync(file, 'utf8').replaceAll('\r\n', '\n').replaceAll('\n', lineEnding);
@@ -31,6 +33,14 @@ for (const [lineEndingName, lineEnding] of [['LF', '\n'], ['CRLF', '\r\n']] as c
 				const createWindow = output.indexOf('\t\tif (createWindow) {', callbackEnd);
 				assert.equal(output.slice(callbackEnd, createWindow).trim(), "performance.mark('ash.workbench.constructor-done');");
 				assert.equal(output.split("performance.mark('ash.workbench.constructor-done');").length - 1, 1);
+				for (const [operation, mark] of [
+					['await Promise.allSettled(extensionReady);', 'ash.workbench.extensions-ready'],
+					['await this.restoreEditorParts(editorParts);', 'ash.workbench.editors-restored'],
+					['await this.restoreWorkingCopyBackups(backups, editor);', 'ash.workbench.backups-restored'],
+					['await contributions.workspaceRestored();', 'ash.workbench.contributions-restored'],
+				]) {
+					assert.ok(output.includes(`${operation}\nperformance.mark('${mark}');`), operation);
+				}
 			}
 			if (path.endsWith('/rendererApi.ts')) {
 				const backendStart = output.indexOf('backend = createRendererHost(');

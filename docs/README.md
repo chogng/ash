@@ -1,6 +1,6 @@
 # 工程文档
 
-[系统架构](architecture.md) · [Ash Code](../code/README.md) · [app](../app-rs/docs/README.md) · [用户文档](https://github.com/chogng/ash-docs)
+[系统架构](architecture.md) · [Ash Code](../code/README.md) · [TUI 布局](../code/LAYOUT.md) · [app](../app-rs/docs/README.md) · [用户文档](https://github.com/chogng/ash-docs)
 
 普通开发直接完成实现和测试，按需更新现有文档；显式使用 `/develop` 时才采用[阶段产物与验收规则](development-workflow.md)。编写文档见[写作规范](../.github/instructions/documentation.instructions.md)。各模块的代码和测试入口在相邻 README。
 

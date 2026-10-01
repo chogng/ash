@@ -48,32 +48,86 @@ fn failed_import_is_terminal_and_does_not_publish_or_keep_a_staging_directory() 
 }
 
 #[test]
-fn duplicate_resource_is_rejected_and_connection_close_releases_only_its_operations() {
+fn one_process_owned_task_per_model_can_be_cancelled_from_another_connection() {
     let root = tempfile::tempdir().unwrap();
     let manager = DictationModelManager::default();
+    let (permit, gate) = mpsc::channel();
+    let gate = Mutex::new(gate);
+    let (send, receive) = mpsc::channel();
     let request = || ModelRequest {
         model_root: root.path().into(),
-        model_id: "missing".into(),
+        model_id: "shared".into(),
         operation: ModelOperation::Import {
             source: root.path().join("absent"),
         },
     };
-    manager.start(1, "same".into(), request(), |_| {}).unwrap();
-    manager.start(2, "same".into(), request(), |_| {}).unwrap();
-    assert!(manager.start(1, "same".into(), request(), |_| {}).is_err());
-    manager.close(1);
+    manager
+        .start(1, "owner".into(), request(), move |event| {
+            let checking = event == ModelProgress::Checking;
+            send.send(event).unwrap();
+            if checking {
+                gate.lock().unwrap().recv().unwrap();
+            }
+        })
+        .unwrap();
     assert_eq!(
-        manager
-            .operations
-            .lock()
-            .unwrap()
-            .keys()
-            .cloned()
-            .collect::<Vec<_>>(),
-        [(2, "same".into())]
+        receive.recv_timeout(Duration::from_secs(5)).unwrap(),
+        ModelProgress::Checking
     );
-    manager.close(2);
-    assert!(manager.operations.lock().unwrap().is_empty());
+    assert_eq!(manager.progress("shared"), Some(ModelProgress::Checking));
+    assert!(manager.start(2, "other".into(), request(), |_| {}).is_err());
+    assert!(manager.remove(root.path(), "shared").is_err());
+    // Releasing an unrelated connection resource must leave this task running.
+    manager.stop(2, "owner").unwrap();
+    let token = manager
+        .operations
+        .lock()
+        .unwrap()
+        .get(&(1, "owner".into()))
+        .unwrap()
+        .cancellation
+        .token();
+    thread::scope(|scope| {
+        let cancelled = scope.spawn(|| manager.cancel_model("shared"));
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap()
+            .block_on(token.cancelled());
+        permit.send(()).unwrap();
+        cancelled.join().unwrap().unwrap();
+    });
+    assert_eq!(
+        receive.recv_timeout(Duration::from_secs(5)).unwrap(),
+        ModelProgress::Cancelled
+    );
+    assert_eq!(manager.progress("shared"), Some(ModelProgress::Cancelled));
+    assert!(!root.path().join(".shared.installing").exists());
+}
+
+#[test]
+fn deletion_only_removes_managed_files_and_preserves_import_sources_and_unrelated_content() {
+    let root = tempfile::tempdir().unwrap();
+    let manager = DictationModelManager::default();
+    let installed = root.path().join("installed");
+    std::fs::create_dir(&installed).unwrap();
+    for name in [
+        "encoder.onnx",
+        "decoder.onnx",
+        "tokens.txt",
+        "dictation-model.json",
+    ] {
+        std::fs::write(installed.join(name), "model").unwrap();
+    }
+    std::fs::write(installed.join("notes.txt"), "keep").unwrap();
+    assert!(manager.remove(root.path(), "installed").is_err());
+    assert!(installed.join("encoder.onnx").exists());
+    std::fs::remove_file(installed.join("notes.txt")).unwrap();
+    let source = tempfile::tempdir().unwrap();
+    std::fs::write(source.path().join("encoder.onnx"), "source").unwrap();
+    manager.remove(root.path(), "installed").unwrap();
+    assert!(!installed.exists());
+    assert!(source.path().join("encoder.onnx").exists());
+    assert!(manager.remove(root.path(), "../outside").is_err());
 }
 
 #[test]

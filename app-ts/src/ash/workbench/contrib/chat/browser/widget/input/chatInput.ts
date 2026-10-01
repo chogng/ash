@@ -50,6 +50,6 @@ export interface ChatInputDelegate {
 	listAgents(): Promise<readonly ChatAgent[]>;
 	selectAgent(agent: ChatAgent | undefined): void;
 	selectMode(mode: ChatMode): void;
-	openModelSettings(): Promise<void>;
+	openModelSettings(category?: 'models' | 'dictation'): Promise<void>;
 	resolveInteraction(response: AgentResponse): Promise<void>;
 }

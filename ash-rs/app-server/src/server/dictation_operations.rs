@@ -6,6 +6,7 @@ use super::result;
 use ash_app_server_protocol::protocol::dictation::DictationBackend;
 use ash_app_server_protocol::protocol::dictation::DictationCloudProvider;
 use ash_app_server_protocol::protocol::dictation::DictationEnded;
+use ash_app_server_protocol::protocol::dictation::DictationModelList;
 use ash_app_server_protocol::protocol::dictation::DictationModelOperation;
 use ash_app_server_protocol::protocol::dictation::DictationModelParams;
 use ash_app_server_protocol::protocol::dictation::DictationModelProgress;
@@ -24,6 +25,7 @@ use realtime_voice::DictationEvent;
 use realtime_voice::DictationRequest;
 use realtime_voice::LocalDictationRequest;
 use serde_json::Value;
+use std::sync::Arc;
 
 use super::update_broker::notification;
 
@@ -179,15 +181,74 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         require_product_host(connection)?;
         let params: DictationModelParams = decode(params)?;
-        let available = realtime_voice::DictationModelManager::is_available(
-            &self.dictation_model_root()?,
-            &params.model_id,
-        )
-        .map_err(dictation_error)?;
-        result(&DictationModelStatus {
-            model_id: params.model_id,
+        result(&self.dictation_model_status(params.model_id)?)
+    }
+
+    fn dictation_model_status(&self, model_id: String) -> Result<DictationModelStatus, RpcError> {
+        let root = self.dictation_model_root()?;
+        let available = realtime_voice::DictationModelManager::is_available(&root, &model_id)
+            .map_err(dictation_error)?;
+        let size_bytes = realtime_voice::DictationModelManager::size_bytes(&root, &model_id)
+            .map_err(dictation_error)?;
+        let stage = self.dictation_models.progress(&model_id).map(model_stage);
+        Ok(DictationModelStatus {
+            model_id,
             available,
+            size_bytes,
+            stage,
         })
+    }
+
+    pub(super) fn dictation_model_list(
+        &self,
+        connection: &ConnectionState,
+    ) -> Result<Value, RpcError> {
+        require_product_host(connection)?;
+        let models = self
+            .dictation_models
+            .list(&self.dictation_model_root()?)
+            .map_err(dictation_error)?
+            .into_iter()
+            .map(|id| self.dictation_model_status(id))
+            .collect::<Result<Vec<_>, _>>()?;
+        result(&DictationModelList { models })
+    }
+
+    pub(super) fn dictation_model_cancel(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        require_product_host(connection)?;
+        let params: DictationModelParams = decode(params)?;
+        self.dictation_models
+            .cancel_model(&params.model_id)
+            .map_err(dictation_error)?;
+        result(&())
+    }
+
+    pub(super) fn dictation_model_delete(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        require_product_host(connection)?;
+        let params: DictationModelParams = decode(params)?;
+        let _microphone = self
+            .microphone_gate
+            .lock()
+            .map_err(|_| dictation_error("Microphone state unavailable".into()))?;
+        if self.dictation.is_active() || self.calls.has_active_audio() {
+            return Err(dictation_error(
+                "Stop voice input before deleting the model".into(),
+            ));
+        }
+        self.dictation_models
+            .remove(&self.dictation_model_root()?, &params.model_id)
+            .map_err(dictation_error)?;
+        self.updates
+            .publish_dictation_model_changed(params.model_id);
+        result(&())
     }
 
     pub(super) fn dictation_model_start(
@@ -210,6 +271,7 @@ impl AppServer {
         let model_id = params.model_id.clone();
         let resource_id = params.resource_id.clone();
         let notifications = connection.outbound_notifications.clone();
+        let updates = Arc::clone(&self.updates);
         self.dictation_models
             .start(
                 connection.connection_id,
@@ -227,7 +289,8 @@ impl AppServer {
                             model_id: model_id.clone(),
                             stage: model_stage(progress),
                         },
-                    ))
+                    ));
+                    updates.publish_dictation_model_changed(model_id.clone());
                 },
             )
             .map_err(dictation_error)?;

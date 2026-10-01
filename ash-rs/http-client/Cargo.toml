@@ -17,6 +17,7 @@ httpdate = { workspace = true }
 reqwest = { workspace = true }
 rustls = { workspace = true }
 rustls-native-certs = { workspace = true }
+rustls-platform-verifier = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "sync", "macros", "rt-multi-thread"] }
 tokio-rustls = { workspace = true }
 ureq = { workspace = true }

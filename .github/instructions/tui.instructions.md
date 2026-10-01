@@ -5,7 +5,7 @@ applyTo: "code/**,ash-cli/**"
 
 # Ash Code CLI/TUI Guidelines
 
-Do not add feature overviews, UI behavior specifications, design notes, change records, plans, or verification reports under `code/docs`; keep implementation guidance and targeted test commands with the owning crate, and keep cross-client methods, parameters, results, notifications, errors, and machine-output contracts in their owning API documents. See [`code/README.md`](../../code/README.md) for the product entry point. A specification or existing test file is not evidence that behavior passed acceptance.
+Do not add feature overviews, UI behavior specifications, design notes, change records, plans, or verification reports under `code/docs`; keep implementation guidance and targeted test commands with the owning product, and keep cross-client methods, parameters, results, notifications, errors, and machine-output contracts in their owning API documents. See [`code/README.md`](../../code/README.md) for the product entry point and [`code/LAYOUT.md`](../../code/LAYOUT.md) for fullscreen and inline layout, state ownership, and terminal lifecycle. A specification or existing test file is not evidence that behavior passed acceptance.
 
 `ash-cli/` owns the user-facing `ash` command and dispatches terminal presentation to `code/`. `code/` owns `ash-tui`, raw-mode lifecycle, Ratatui interaction, and terminal-only capabilities. Do not move this product presentation or lifecycle into `ash-rs`; shared backend semantics belong in backend-neutral contracts consumed by all three clients.
 
@@ -15,7 +15,7 @@ Prefer command-line-observable tests for state, events, terminal output, timing,
 
 ## 命令面板与模态交互规范
 
-Ash Code 的命令面板在 fullscreen 中显示为模态框，在 inline 中显示为临时面板；两种呈现共用同一个功能编辑器。统一的是面板机制和同类操作的含义，功能数据、业务动作及子页面仍由对应功能负责。批准、提问和正文详情各有自己的交互容器，不因外观相似而塞进 `CommandPanel`。实现入口见 [ash-tui README](../../code/tui/README.md)。本节是新建和整改面板的要求，不能据此认定现有面板已经全部符合。
+Ash Code 的命令面板在 fullscreen 中显示为模态框，在 inline 中显示为临时面板；两种呈现共用同一个功能编辑器。统一的是面板机制和同类操作的含义，功能数据、业务动作及子页面仍由对应功能负责。批准、提问和正文详情各有自己的交互容器，不因外观相似而塞进 `CommandPanel`。实现入口见 [Ash Code README](../../code/README.md)，两种呈现的区域见 [LAYOUT.md](../../code/LAYOUT.md)。本节是新建和整改面板的要求，不能据此认定现有面板已经全部符合。
 
 | 职责 | 唯一 owner | 约束 |
 | --- | --- | --- |

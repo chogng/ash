@@ -5,6 +5,7 @@ use ash_app_server_protocol::protocol::account::AccountUpdated;
 use ash_app_server_protocol::protocol::collaboration::DocumentCollaborationPresenceSnapshot;
 use ash_app_server_protocol::protocol::collaboration::DocumentCollaborationUpdate;
 use ash_app_server_protocol::protocol::common::AgentInteractionCapability;
+use ash_app_server_protocol::protocol::common::EmptyParams;
 use ash_app_server_protocol::protocol::config::ConfigChanged;
 use ash_app_server_protocol::protocol::connectors::ConnectorsChanged;
 use ash_app_server_protocol::protocol::extension_host::ExtensionHostChanged;
@@ -122,6 +123,23 @@ impl Default for UpdateBroker {
 }
 
 impl UpdateBroker {
+    pub(super) fn publish_dictation_model_changed(&self, model_id: String) {
+        let params =
+            ash_app_server_protocol::protocol::dictation::DictationModelChanged { model_id };
+        let mut state = self.state.lock().expect("update broker state");
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
+                return false;
+            };
+            if subscriber.product_host {
+                queue.push(notification(
+                    ServerNotificationMethod::DictationModelChanged,
+                    &params,
+                ));
+            }
+            true
+        });
+    }
     pub(super) fn bind_hooks(&self, hooks: Arc<dyn HookService>) {
         *self
             .hooks
@@ -163,6 +181,13 @@ impl UpdateBroker {
 
     pub(super) fn publish_provider_models_updated(&self, updated: ProviderModelsUpdated) {
         self.broadcast_notification(ServerNotificationMethod::ProviderModelsUpdated, &updated);
+    }
+
+    pub(super) fn publish_provider_api_key_changed(
+        &self,
+        changed: ash_app_server_protocol::protocol::provider::ProviderApiKeySetResult,
+    ) {
+        self.broadcast_notification(ServerNotificationMethod::ProviderApiKeyChanged, &changed);
     }
 
     pub(super) fn register(
@@ -895,6 +920,24 @@ impl UpdateBroker {
                     status: status.clone(),
                 },
             ));
+            true
+        });
+    }
+
+    pub(super) fn publish_git_repositories_changed(&self) {
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
+                return false;
+            };
+            if subscriber.scope_id == self.scope_id {
+                queue.push(notification(
+                    ServerNotificationMethod::GitRepositoriesChanged,
+                    &EmptyParams {},
+                ));
+            }
             true
         });
     }

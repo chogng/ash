@@ -1,0 +1,15 @@
+load("//:defs.bzl", "ash_rust_crate")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+
+cargo_build_script(
+    name = "build_script",
+    srcs = ["build.rs"],
+    crate_root = "build.rs",
+    edition = "2024",
+)
+
+ash_rust_crate(
+    name = "build-identity",
+    crate_name = "build_identity",
+    extra_deps = [":build_script"],
+)

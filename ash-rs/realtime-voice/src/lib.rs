@@ -1,14 +1,18 @@
 //! Device-local dictation sessions. The product host owns connection identity and delivery;
 //! this crate owns microphone exclusivity, recognition, and session teardown.
 
+#[cfg(feature = "cloud")]
 mod cloud;
 mod local;
 mod model_package;
 mod models;
+#[cfg(feature = "cloud")]
 mod xai;
 
 use http_client::OutboundNetworkSnapshot;
+#[cfg(feature = "cloud")]
 use model_provider::ModelProviderRuntime;
+#[cfg(feature = "cloud")]
 use model_provider_config::ModelProviderConfig;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -17,6 +21,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::thread;
 use tokio::sync::oneshot;
+#[cfg(feature = "cloud")]
 use websocket_client::WebSocketConnector;
 
 pub use model_package::DEFAULT_MODEL_ID;
@@ -33,6 +38,7 @@ pub struct LocalDictationRequest {
     pub network: OutboundNetworkSnapshot,
 }
 
+#[cfg(feature = "cloud")]
 /// Cloud dictation uses a separate transcription session and direct model credentials.
 pub struct CloudDictationRequest {
     pub provider: CloudTranscriptionProvider,
@@ -43,6 +49,7 @@ pub struct CloudDictationRequest {
     pub connector: WebSocketConnector,
 }
 
+#[cfg(feature = "cloud")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CloudTranscriptionProvider {
     OpenAi,
@@ -51,6 +58,7 @@ pub enum CloudTranscriptionProvider {
 
 pub enum DictationRequest {
     Local(LocalDictationRequest),
+    #[cfg(feature = "cloud")]
     Cloud(CloudDictationRequest),
 }
 
@@ -181,6 +189,7 @@ impl Recognizer for SessionRecognizer {
                                 DictationRequest::Local(request) => {
                                     local::run(request, &mut stopped, Arc::clone(&on_event)).await
                                 }
+                                #[cfg(feature = "cloud")]
                                 DictationRequest::Cloud(request) => {
                                     cloud::run(request, &mut stopped, on_event.as_ref()).await
                                 }

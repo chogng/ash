@@ -133,6 +133,8 @@ bazelisk test //app-rs:app_ci --test_output=errors --test_env=PATH
 | `.build/ash-playwright-mcp/` | 临时 UI 场景与验证证据 |
 | `.build/bazel-*` | Bazel 工作区便捷链接；Bazel 输出缓存另行管理 |
 
+Sherpa ONNX 静态库使用按版本共享的校验缓存，位于 `third_party/.cache/sherpa-onnx/`。仓库 Cargo 入口与产品构建会准备并复用该资源，详见 [资源锁定与离线构建](../third_party/sherpa-onnx/README.md)。
+
 `pnpm clean` 删除 `.build/` 及 `build/`、`scripts/` 内的 Python 缓存，不清理 `node_modules`、用户级 pnpm store 或 `.ash/` 配置。源码目录 `build/`、`scripts/` 不属于构建产物。
 
 生成的前端协议副本位于 `app-ts/src/ash/platform/app-server/common/generated/`，可由 `pnpm --dir app-ts protocol:sync` 重建。受版本控制的图标工厂使用 `pnpm icons:generate` 更新。
@@ -198,6 +200,18 @@ just bench-build ash-cli --profile dev-small --jobs 4 --compare .build/build-hea
 | 2026-09-28，macOS arm64、Rust 1.98.0、12 个任务 | TUI 测试包优化级别降为 0，实际编辑重编译中位数 13.31 → 6.72 秒，测试程序 235.2 → 253.9 MiB | 共享增量输出；缺少同条件冷编译对照 |
 | 2026-09-28，同平台、`dev-small` | Code TUI 优化级别降为 0，三轮实际编辑重编译中位数 5.79 → 3.49 秒，回切为 5.84 秒 | `just build-code` 的 TUI 编辑场景；冷编译及运行性能未配对测量，发布配置未变 |
 | 2026-09-30，macOS arm64、Rust 1.98.0、现有 `test` 缓存 | `just --set tui_profile test test-tui-unit session_manager` 在提交稳定后的单次重跑中，Cargo 阶段 0.74 秒，13 项测试执行 0.13 秒 | 先前运行观察到宏动态库的系统签名校验等待，期间 `git pull` 也触发了重编译；此记录未测默认 `ci-test` 的冷构建，不是配置修改前后的速度对照 |
+| 2026-10-01，macOS arm64、Rust 1.98.0、`ash-tui` / `dev-small`、12 个任务 | 三轮空输出目录构建中位数 125.97 秒，无改动 1.73 秒，源码时间戳变化 2.82 秒；冷构建 RSS 1.34 GiB，TUI `.rlib` 54.8 MiB | TUI 自身冷编译中位数 10.37 秒；AWS-LC 构建中位数 84.06 秒，经 HTTP、GitHub、State 依赖延长尾部。构建脚本还下载 Sherpa 库，Cargo 离线模式未阻止该下载；不是优化前后对照 |
+| 2026-10-01，同平台、现有 `dev-small` 缓存 | 源码不变，仅通过 `ASH_BUILD_COMMIT` 改变构建提交号，`just build-code` 单次耗时 2.30 → 16.27 秒，13 个编译单元重编译；恢复后 15.81 秒 | `build-info` 的提交身份经过协议和诊断依赖传播至 TUI、CLI 与 App Server；未改 Git checkout。单次触发实验，不是提速结果 |
+| 2026-10-01，同平台、`ash-tui` / `dev-small`、12 个任务，三轮对照 | TLS 显式使用 ring，云端转写改为宿主选择的 feature，Sherpa 静态库按锁定版本共享后：冷构建 125.97 → 80.54 秒，无改动 1.73 → 1.41 秒，时间戳重编译 2.82 → 2.53 秒；冷构建 RSS 1.34 → 1.33 GiB，TUI `.rlib` 54.8 MiB | 最终代码冷构建约快 36%，三轮为 83.57 / 78.30 / 80.54 秒；前一候选的三轮中位数为 89.57 秒，差值不单独归因于 SDK 适配修正。仅 TLS 调整为 117.39 秒。TUI 默认依赖图移除 AWS-LC、model-provider 与 tokenizers；完整 App Server 仍启用云端转写，并因其他上游依赖保留 AWS-LC。共享 Sherpa 资源已预热，原构建脚本会在 Cargo 离线模式中下载资源，结果包含消除该下载的收益；不代表首次资源准备、其他平台或完整产品冷构建 |
+| 2026-10-01，同平台、现有 `dev-small` 缓存，三轮实际 `just build-code` 对照 | 构建身份与稳定数据契约分开后，仅改变 `ASH_BUILD_COMMIT` 的构建中位数 13.73 → 6.13 秒；重编译包从 13 个缩至身份库、CLI、App Server，协议与 TUI 保持缓存 | 无改动 1.51 → 0.83 秒，TUI 时间戳重编译 4.17 → 3.32 秒；时间戳变化不是实际功能编辑。单项身份调整的提交号重编译为 9.64 秒；这些完整入口数据不用于推断完整产品冷构建 |
+
+优化前的报告为 `.build/build-health/ash-tui-dev-small-gc6em9qr/report.json`，完整入口、提交号实验和测试日志汇总在 `.build/build-health/tui-investigation-20261001/report.json`。该次调查的默认 `ci-test` 13 项会话测试通过，首次 Cargo 编译 33.20 秒，无改动重跑 0.70 秒；当时未复现持续卡死，系统对宏动态库的检查耗时未单独测量。
+
+2026-10-01 优化对照报告：最终 TUI 为 `.build/build-health/ash-tui-dev-small-big7auep/report.json`，前候选为 `ash-tui-dev-small-o1xchm_t/report.json`，TLS 单项为 `ash-tui-dev-small-r4dns3wj/report.json`；完整 Code 的基线、身份单项与最终候选位于 `.build/build-health/tui-fix-20261001/{baseline,identity,final}-product.json`。
+
+同日验证时也复现了系统等待：`rustc` 的采样栈停在加载过程宏动态库的 `dlopen → mapSegments → fcntl`，编译器 CPU 为 0，`syspolicyd` 正在执行安全评估。该轮小范围 `just check` 共耗时 4 分 42 秒，并最终继续完成；栈与系统日志保存在上述 `tui-fix-20261001` 目录。此现象与依赖编译的 CPU 工作不同，已实现的依赖与缓存调整不能保证消除 macOS 首次加载检查；本次未更改系统安全设置。
+
+本次验证：完整 `just build-code`、默认 TUI 的 1,197 项测试、本地与 cloud 语音测试、诊断/反馈及听写 RPC、协议测试、更新与 Remote 宿主测试、受影响包的 `just rust-warnings`、Python 构建测试与 `just dependencies`。真实模型/麦克风测试按已有条件忽略；Windows/Linux 构建未在本机执行。后端与 Remote 的 `ci-test` 程序链接有 `__eh_frame` 超过 16 MiB 的 compact-unwind 提示；测试通过，但不将其记录为无 warning 的构建。正常 Code 的 `dev-small` 构建和包级 warning 检查未出现该提示，未改变全局 profile 或 unwind 设置。
 
 早期 WebRTC 构建记录属于已切换的依赖图，不能用于当前耗时判断。2026-09-24 产品宿主拆除 App Server 实现依赖的单包测量，也没有同条件完整产品冷构建的前后对照。
 

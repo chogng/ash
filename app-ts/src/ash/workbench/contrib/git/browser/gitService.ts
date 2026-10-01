@@ -1,3 +1,4 @@
+import type { GitCommand, GitCommandResult, GitCatalog, GitIndexDiff, GitIndexSelection } from '../common/gitService.js';
 import type { ConfigReadResult, GitConfigDto, GitHeadDto, GitRepositoryChangeDto, GitRepositoryDto, GitStatusResult } from "../../../../platform/app-server/common/generated/index.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -11,6 +12,7 @@ import { getRemoteWorkspacePath, isRemoteResource } from "../../../../platform/r
 import type { IWorkspaceContextService, IWorkspaceFolder } from "../../../../platform/workspace/common/workspace.js";
 import { GitWorkspaceError, type GitBranch, type GitChangeFile, type GitChangeFileComparison, type GitConflictFile, type GitConflictResolution, type GitCommitChanges, type GitCommitFile, type GitCommitResult, type GitCommitSummary, type GitHead, type GitRepository, type GitRepositoryChange, type GitStatus, type GraphPage, type GraphQuery, type IGitService } from "../common/gitService.js";
 import { GitConfiguration, type GitAutofetch } from '../common/gitConfiguration.js';
+import type { GitWorktree } from '../common/gitService.js';
 
 export interface GitServiceOptions {
 	readonly canCloneRepository: boolean;
@@ -67,6 +69,13 @@ export class GitService extends Disposable implements IGitService {
 		this.canCloneRepository = options.canCloneRepository;
 		this.api = options.api;
 		const events = options.eventApi.subscribe(event => {
+			if (event.method === 'git/repositoriesChanged' && this.hasWorkspaceFolder()) {
+				// A catalog hint supersedes any discovery started before the backend membership changed.
+				++this.discoveryGeneration;
+				this.discovery = undefined;
+				void this.refreshRepositories().catch(error => this.logService.error('git', 'Unable to discover repositories', error));
+				return;
+			}
 			if (event.method === 'config/changed') {
 				void this.refreshAutoFetch().catch(error => this.logService.error('git', 'Unable to read automatic Git fetch settings', error));
 				return;
@@ -111,6 +120,18 @@ export class GitService extends Disposable implements IGitService {
 		return this.refreshRepositories();
 	}
 
+	public async getRepository(repositoryId?: string): Promise<GitRepository> {
+		this.requireWorkspaceFolders();
+		if (this.repositoryList.length === 0) await this.refreshRepositories();
+		const id = repositoryId ?? this.activeRepositoryId;
+		const repository = this.repositoryList.find(candidate => candidate.id === id);
+		if (!repository) {
+			if (repositoryId) throw new Error(`GitRepositoryNotFound: ${repositoryId}`);
+			throw new GitWorkspaceError('noRepository');
+		}
+		return repository;
+	}
+
 	async cloneRepository(url: string, parentPath: string): Promise<string> {
 		if (!this.canCloneRepository) throw new Error('Git clone is unavailable in this Workbench host');
 		const result = await this.api.clone({ url, parentPath });
@@ -119,7 +140,7 @@ export class GitService extends Disposable implements IGitService {
 
 	async selectRepository(repositoryId: string): Promise<GitStatus> {
 		const selection = ++this.selectionGeneration;
-		const repository = await this.requireRepository(repositoryId);
+		const repository = await this.getRepository(repositoryId);
 		const status = toGitStatus(await this.api.status({ repositoryId: repository.id }), repository);
 		if (selection !== this.selectionGeneration) return status;
 		if (this.activeRepositoryId !== repository.id) {
@@ -143,7 +164,7 @@ export class GitService extends Disposable implements IGitService {
 	}
 
 	async status(repositoryId?: string): Promise<GitStatus> {
-		const repository = await this.requireRepository(repositoryId);
+		const repository = await this.getRepository(repositoryId);
 		return toGitStatus(await this.api.status({ repositoryId: repository.id }), repository);
 	}
 
@@ -176,24 +197,88 @@ export class GitService extends Disposable implements IGitService {
 	}
 
 	async history(repositoryId?: string): Promise<readonly GitCommitSummary[]> {
-		const repository = await this.requireRepository(repositoryId);
+		const repository = await this.getRepository(repositoryId);
 		const result = await this.api.history({ repositoryId: repository.id });
 		return result.commits.map(commit => ({ ...commit, repositoryId: repository.id }));
 	}
 
 	async branches(repositoryId?: string): Promise<readonly GitBranch[]> {
-		const repository = await this.requireRepository(repositoryId);
+		const repository = await this.getRepository(repositoryId);
 		const result = await this.api.branches({ repositoryId: repository.id });
 		return result.branches.map(branch => ({ ...branch, upstream: branch.upstream ?? undefined }));
 	}
 
 	async switchBranch(name: string, repositoryId?: string): Promise<GitStatus> {
-		const repository = await this.requireRepository(repositoryId);
+		const repository = await this.getRepository(repositoryId);
 		return toGitStatus((await this.api.switchBranch({ repositoryId: repository.id, name })).status, repository);
 	}
 
+	public async initializeRepository(initialBranch: string, dirId: string): Promise<void> {
+		if (!this.requireWorkspaceFolders().some(folder => folder.id === dirId)) {
+			throw new GitWorkspaceError('noFolder');
+		}
+		await this.api.initialize({ initialBranch, dirId });
+		this.discoveryGeneration++;
+		this.discovery = undefined;
+		await this.refreshRepositories();
+	}
+
+	public async catalog(repositoryId?: string): Promise<GitCatalog> {
+		const repository = await this.getRepository(repositoryId);
+		const result = await this.api.catalog({ repositoryId: repository.id });
+		return { ...result, operation: result.operation ?? undefined };
+	}
+
+	public async executeCommand(command: GitCommand, repositoryId?: string): Promise<GitCommandResult> {
+		const repository = await this.getRepository(repositoryId);
+		const result = await this.api.executeCommand({ repositoryId: repository.id, command });
+		return { ...result, status: toGitStatus(result.status, repository), operation: result.operation ?? undefined };
+	}
+
+	public async indexDiff(path: string, comparison: GitChangeFileComparison, repositoryId?: string): Promise<GitIndexDiff> {
+		const repository = await this.getRepository(repositoryId);
+		return this.api.indexDiff({ repositoryId: repository.id, path, comparison });
+	}
+
+	public async editIndex(path: string, comparison: GitChangeFileComparison, reviewed: GitIndexDiff, selection: GitIndexSelection, repositoryId?: string): Promise<GitStatus> {
+		const repository = await this.getRepository(repositoryId);
+		const result = await this.api.editIndex({ repositoryId: repository.id, path, comparison, expectedOriginal: reviewed.original, expectedModified: reviewed.modified, selection });
+		return toGitStatus(result.status, repository);
+	}
+
+	public async createBranch(name: string, repositoryId?: string): Promise<void> {
+		const repository = await this.getRepository(repositoryId);
+		await this.api.createBranch({ repositoryId: repository.id, name });
+	}
+
+	public async deleteBranch(name: string, repositoryId?: string): Promise<void> {
+		const repository = await this.getRepository(repositoryId);
+		await this.api.deleteBranch({ repositoryId: repository.id, name });
+	}
+
+	public async worktrees(repositoryId?: string): Promise<readonly GitWorktree[]> {
+		const repository = await this.getRepository(repositoryId);
+		const result = await this.api.worktrees({ repositoryId: repository.id });
+		return result.worktrees.map(worktree => ({ ...worktree, branch: worktree.branch ?? undefined }));
+	}
+
+	public async createWorktree(name: string, repositoryId?: string): Promise<string> {
+		const repository = await this.getRepository(repositoryId);
+		return (await this.api.createWorktree({ repositoryId: repository.id, name })).path;
+	}
+
+	public async deleteWorktree(checkoutRoot: string, repositoryId?: string): Promise<void> {
+		const repository = await this.getRepository(repositoryId);
+		await this.api.deleteWorktree({ commandId: crypto.randomUUID(), repositoryId: repository.id, checkoutRoot, mode: 'unbound' });
+	}
+
+	public async resolveWorktree(checkoutRoot: string, repositoryId?: string): Promise<string> {
+		const repository = await this.getRepository(repositoryId);
+		return (await this.api.resolveWorktree({ repositoryId: repository.id, checkoutRoot })).path;
+	}
+
 	async graph(query: GraphQuery, repositoryId?: string): Promise<GraphPage> {
-		const repository = await this.requireRepository(repositoryId);
+		const repository = await this.getRepository(repositoryId);
 		const result = await this.api.graph({ repositoryId: repository.id, limit: query.limit, ...(query.cursor ? { cursor: query.cursor } : {}) });
 		return {
 			commits: result.commits.map(commit => ({ ...commit, repositoryId: repository.id, parentObjectIds: [...commit.parentObjectIds] })),
@@ -205,7 +290,7 @@ export class GitService extends Disposable implements IGitService {
 	}
 
 	async commitChanges(objectId: string, repositoryId?: string): Promise<GitCommitChanges> {
-		const repository = await this.requireRepository(repositoryId);
+		const repository = await this.getRepository(repositoryId);
 		const result = await this.api.commitChanges({ repositoryId: repository.id, objectId });
 		return {
 			parentObjectId: result.parentObjectId ?? undefined,
@@ -214,19 +299,19 @@ export class GitService extends Disposable implements IGitService {
 	}
 
 	async commitFile(objectId: string, path: string, repositoryId?: string): Promise<GitCommitFile> {
-		const repository = await this.requireRepository(repositoryId);
+		const repository = await this.getRepository(repositoryId);
 		const result = await this.api.commitFile({ repositoryId: repository.id, objectId, path });
 		return { original: { ...result.original }, modified: { ...result.modified } };
 	}
 
 	async changeFile(path: string, comparison: GitChangeFileComparison, repositoryId?: string): Promise<GitChangeFile> {
-		const repository = await this.requireRepository(repositoryId);
+		const repository = await this.getRepository(repositoryId);
 		const result = await this.api.changeFile({ repositoryId: repository.id, path, comparison });
 		return { original: { ...result.original }, modified: { ...result.modified } };
 	}
 
 	async conflictFile(path: string, repositoryId?: string): Promise<GitConflictFile> {
-		const repository = await this.requireRepository(repositoryId);
+		const repository = await this.getRepository(repositoryId);
 		const result = await this.api.conflictFile({ repositoryId: repository.id, path });
 		return {
 			stageIds: result.stageIds,
@@ -239,7 +324,7 @@ export class GitService extends Disposable implements IGitService {
 	}
 
 	async completeConflict(path: string, expectedStageIds: readonly (string | null)[], expectedResultObjectId: string | null, resolution: GitConflictResolution, repositoryId?: string): Promise<GitStatus> {
-		const repository = await this.requireRepository(repositoryId);
+		const repository = await this.getRepository(repositoryId);
 		if (expectedStageIds.length !== 3) throw new TypeError('A Git conflict must contain three stage identities');
 		const result = await this.api.completeConflict({
 			repositoryId: repository.id,
@@ -252,38 +337,38 @@ export class GitService extends Disposable implements IGitService {
 	}
 
 	async stage(paths: readonly string[], repositoryId?: string): Promise<GitStatus> {
-		const repository = await this.requireRepository(repositoryId);
+		const repository = await this.getRepository(repositoryId);
 		return toGitStatus((await this.api.stage({ repositoryId: repository.id, paths: [...paths] })).status, repository);
 	}
 
 	async unstage(paths: readonly string[], repositoryId?: string): Promise<GitStatus> {
-		const repository = await this.requireRepository(repositoryId);
+		const repository = await this.getRepository(repositoryId);
 		return toGitStatus((await this.api.unstage({ repositoryId: repository.id, paths: [...paths] })).status, repository);
 	}
 
 	async discardWorktree(paths: readonly string[], repositoryId?: string): Promise<GitStatus> {
-		const repository = await this.requireRepository(repositoryId);
+		const repository = await this.getRepository(repositoryId);
 		return toGitStatus((await this.api.discardWorktree({ repositoryId: repository.id, paths: [...paths] })).status, repository);
 	}
 
 	async commit(message: string, repositoryId?: string): Promise<GitCommitResult> {
-		const repository = await this.requireRepository(repositoryId);
+		const repository = await this.getRepository(repositoryId);
 		const result = await this.api.commit({ repositoryId: repository.id, message });
 		return { objectId: result.objectId, status: toGitStatus(result.status, repository) };
 	}
 
 	async fetch(repositoryId?: string): Promise<GitStatus> {
-		const repository = await this.requireRepository(repositoryId);
+		const repository = await this.getRepository(repositoryId);
 		return toGitStatus((await this.api.fetch({ repositoryId: repository.id, mode: 'all' })).status, repository);
 	}
 
 	async pull(repositoryId?: string): Promise<GitStatus> {
-		const repository = await this.requireRepository(repositoryId);
+		const repository = await this.getRepository(repositoryId);
 		return toGitStatus((await this.api.pull({ repositoryId: repository.id })).status, repository);
 	}
 
 	async push(repositoryId?: string): Promise<GitStatus> {
-		const repository = await this.requireRepository(repositoryId);
+		const repository = await this.getRepository(repositoryId);
 		return toGitStatus((await this.api.push({ repositoryId: repository.id })).status, repository);
 	}
 
@@ -355,18 +440,6 @@ export class GitService extends Disposable implements IGitService {
 	private acceptStatus(status: GitStatus): void {
 		this._onDidChangeRepositoryStatus.fire(status);
 		if (status.repositoryId === this.activeRepositoryId) this._onDidChangeStatus.fire(status);
-	}
-
-	private async requireRepository(repositoryId?: string): Promise<GitRepository> {
-		this.requireWorkspaceFolders();
-		if (this.repositoryList.length === 0) await this.refreshRepositories();
-		const id = repositoryId ?? this.activeRepositoryId;
-		const repository = this.repositoryList.find(candidate => candidate.id === id);
-		if (!repository) {
-			if (repositoryId) throw new Error(`GitRepositoryNotFound: ${repositoryId}`);
-			throw new GitWorkspaceError('noRepository');
-		}
-		return repository;
 	}
 
 	private refreshRepositories(): Promise<readonly GitRepository[]> {

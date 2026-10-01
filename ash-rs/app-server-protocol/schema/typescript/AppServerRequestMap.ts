@@ -87,6 +87,7 @@ import type { DebugAdapterSendParams } from './types/DebugAdapterSendParams.js';
 import type { DebugAdapterStartParams } from './types/DebugAdapterStartParams.js';
 import type { DebugAdapterStartResult } from './types/DebugAdapterStartResult.js';
 import type { DiagnosticSnapshot } from './types/DiagnosticSnapshot.js';
+import type { DictationModelList } from './types/DictationModelList.js';
 import type { DictationModelParams } from './types/DictationModelParams.js';
 import type { DictationModelStartParams } from './types/DictationModelStartParams.js';
 import type { DictationModelStatus } from './types/DictationModelStatus.js';
@@ -151,12 +152,15 @@ import type { GitBranchCreateParams } from './types/GitBranchCreateParams.js';
 import type { GitBranchDeleteParams } from './types/GitBranchDeleteParams.js';
 import type { GitBranchListResult } from './types/GitBranchListResult.js';
 import type { GitBranchSwitchParams } from './types/GitBranchSwitchParams.js';
+import type { GitCatalogResult } from './types/GitCatalogResult.js';
 import type { GitChangeFileParams } from './types/GitChangeFileParams.js';
 import type { GitChangeFileResult } from './types/GitChangeFileResult.js';
 import type { GitCheckIgnoreParams } from './types/GitCheckIgnoreParams.js';
 import type { GitCheckIgnoreResult } from './types/GitCheckIgnoreResult.js';
 import type { GitCloneParams } from './types/GitCloneParams.js';
 import type { GitCloneResult } from './types/GitCloneResult.js';
+import type { GitCommandParams } from './types/GitCommandParams.js';
+import type { GitCommandResult } from './types/GitCommandResult.js';
 import type { GitCommitChangesParams } from './types/GitCommitChangesParams.js';
 import type { GitCommitChangesResult } from './types/GitCommitChangesResult.js';
 import type { GitCommitFileParams } from './types/GitCommitFileParams.js';
@@ -170,6 +174,9 @@ import type { GitFetchParams } from './types/GitFetchParams.js';
 import type { GitGraphParams } from './types/GitGraphParams.js';
 import type { GitGraphResult } from './types/GitGraphResult.js';
 import type { GitHistoryResult } from './types/GitHistoryResult.js';
+import type { GitIndexDiffResult } from './types/GitIndexDiffResult.js';
+import type { GitIndexEditParams } from './types/GitIndexEditParams.js';
+import type { GitInitParams } from './types/GitInitParams.js';
 import type { GitOperationResult } from './types/GitOperationResult.js';
 import type { GitPathsParams } from './types/GitPathsParams.js';
 import type { GitRepositoriesResult } from './types/GitRepositoriesResult.js';
@@ -331,6 +338,7 @@ import type { ProjectRootAddParams } from './types/ProjectRootAddParams.js';
 import type { ProjectRootRemoveParams } from './types/ProjectRootRemoveParams.js';
 import type { ProjectRootUpdateParams } from './types/ProjectRootUpdateParams.js';
 import type { ProjectSessionMutationParams } from './types/ProjectSessionMutationParams.js';
+import type { ProviderApiKeyRemoveParams } from './types/ProviderApiKeyRemoveParams.js';
 import type { ProviderApiKeySetParams } from './types/ProviderApiKeySetParams.js';
 import type { ProviderApiKeySetResult } from './types/ProviderApiKeySetResult.js';
 import type { ProviderConfigureParams } from './types/ProviderConfigureParams.js';
@@ -582,6 +590,7 @@ export interface AppServerRequestMap {
   "provider/probe": { params: ProviderProbeParams; response: ProviderProbeResult };
   "provider/models/list": { params: ProviderModelsListParams; response: ProviderModelsListResult };
   "provider/apiKey/set": { params: ProviderApiKeySetParams; response: ProviderApiKeySetResult };
+  "provider/apiKey/remove": { params: ProviderApiKeyRemoveParams; response: ProviderApiKeySetResult };
   "account/read": { params: Record<string, never>; response: AccountReadResult };
   "account/rateLimits/read": { params: AccountRateLimitsReadParams; response: AccountRateLimitsReadResult };
   "account/login/start": { params: AccountLoginStartParams; response: AccountLoginStartResult };
@@ -636,6 +645,9 @@ export interface AppServerRequestMap {
   "dictation/start": { params: DictationStartParams; response: null };
   "dictation/stop": { params: DictationResourceParams; response: DictationStopResult };
   "dictation/model/read": { params: DictationModelParams; response: DictationModelStatus };
+  "dictation/model/list": { params: null; response: DictationModelList };
+  "dictation/model/cancel": { params: DictationModelParams; response: null };
+  "dictation/model/delete": { params: DictationModelParams; response: null };
   "dictation/model/start": { params: DictationModelStartParams; response: null };
   "dictation/model/stop": { params: DictationResourceParams; response: null };
   "fs/getMetadata": { params: FsGetMetadataParams; response: FsGetMetadataResult };
@@ -690,6 +702,11 @@ export interface AppServerRequestMap {
   "issue/configure": { params: IssueConfigureParams; response: ConfigCommandResult };
   "issue/list": { params: IssueListParams; response: IssueListResult };
   "issue/read": { params: IssueReadParams; response: IssueReadResult };
+  "git/init": { params: GitInitParams; response: GitRepositoriesResult };
+  "git/catalog": { params: GitRepositoryParams; response: GitCatalogResult };
+  "git/command": { params: GitCommandParams; response: GitCommandResult };
+  "git/indexDiff": { params: GitChangeFileParams; response: GitIndexDiffResult };
+  "git/indexEdit": { params: GitIndexEditParams; response: GitOperationResult };
   "git/repositories": { params: Record<string, never>; response: GitRepositoriesResult };
   "git/clone": { params: GitCloneParams; response: GitCloneResult };
   "git/status": { params: GitRepositoryParams; response: GitStatusResult };
@@ -901,6 +918,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "provider/probe": { method: "provider/probe" },
   "provider/models/list": { method: "provider/models/list" },
   "provider/apiKey/set": { method: "provider/apiKey/set" },
+  "provider/apiKey/remove": { method: "provider/apiKey/remove" },
   "account/read": { method: "account/read" },
   "account/rateLimits/read": { method: "account/rateLimits/read" },
   "account/login/start": { method: "account/login/start" },
@@ -955,6 +973,9 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "dictation/start": { method: "dictation/start" },
   "dictation/stop": { method: "dictation/stop" },
   "dictation/model/read": { method: "dictation/model/read" },
+  "dictation/model/list": { method: "dictation/model/list" },
+  "dictation/model/cancel": { method: "dictation/model/cancel" },
+  "dictation/model/delete": { method: "dictation/model/delete" },
   "dictation/model/start": { method: "dictation/model/start" },
   "dictation/model/stop": { method: "dictation/model/stop" },
   "fs/getMetadata": { method: "fs/getMetadata" },
@@ -1009,6 +1030,11 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "issue/configure": { method: "issue/configure" },
   "issue/list": { method: "issue/list" },
   "issue/read": { method: "issue/read" },
+  "git/init": { method: "git/init" },
+  "git/catalog": { method: "git/catalog" },
+  "git/command": { method: "git/command" },
+  "git/indexDiff": { method: "git/indexDiff" },
+  "git/indexEdit": { method: "git/indexEdit" },
   "git/repositories": { method: "git/repositories" },
   "git/clone": { method: "git/clone" },
   "git/status": { method: "git/status" },

@@ -507,6 +507,7 @@ fn validate_relative_path(path: &Path) -> GitResult<()> {
 fn missing_object(stderr: &[u8]) -> bool {
     let stderr = String::from_utf8_lossy(stderr);
     stderr.contains("does not exist in")
+        || stderr.contains("does not exist (neither on disk nor in the index)")
         || stderr.contains("exists on disk, but not in")
         || stderr.contains("invalid object name")
         || stderr.contains("unknown revision")

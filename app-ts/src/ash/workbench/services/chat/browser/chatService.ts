@@ -56,6 +56,7 @@ export class ChatService extends Disposable implements IChatService {
 	constructor(private readonly options: ChatServiceOptions) {
 		super();
 		const events = options.eventApi.subscribe((event) => {
+			if (event.method === 'provider/apiKey/changed') this._onDidChangeModels.fire();
 			if (event.method === "queue/changed") this._onDidChangeQueue.fire();
 			if (event.method === "session/thread/update") this._onDidUpdateThread.fire(toThreadUpdate(event.params));
 			if (event.method === "session/thread/transcript/update") this._onDidUpdateThreadTranscript.fire(toThreadTranscriptUpdate(event.params));
@@ -136,6 +137,9 @@ export class ChatService extends Disposable implements IChatService {
 
 	async setModelProviderApiKey(connection: string, apiKey: string): Promise<void> {
 		await this.options.modelApi.setProviderApiKey({ connection, apiKey });
+	}
+	async removeModelProviderApiKey(connection: string): Promise<void> {
+		await this.options.modelApi.removeProviderApiKey(connection);
 	}
 
 	async listAdvisorModels(): Promise<readonly ModelCatalogEntry[]> {

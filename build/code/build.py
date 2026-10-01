@@ -17,6 +17,7 @@ from build.lib.cargo import cargo_artifact_executable  # noqa: E402
 from build.lib.cargo import cargo_rendered_diagnostic  # noqa: E402
 from build.lib.cargo import parse_cargo_message  # noqa: E402
 from build.lib.cargo import resolve_cargo_target_directory  # noqa: E402
+from build.lib.sherpa import resolve_sherpa_cargo_env  # noqa: E402
 from build.lib.targets import TARGETS  # noqa: E402
 from build.lib.targets import default_target  # noqa: E402
 from build.lib.v8 import resolve_v8_cargo_env  # noqa: E402
@@ -47,6 +48,9 @@ def build_binaries(
     target = TARGETS[default_target()]
     cargo_environment = environment.copy()
     cargo_environment.update(resolve_v8_cargo_env(target, environ=cargo_environment))
+    cargo_environment.update(
+        resolve_sherpa_cargo_env(target, environ=cargo_environment)
+    )
     if target.target == "x86_64-pc-windows-msvc":
         cargo_environment.setdefault(
             "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER", "rust-lld"

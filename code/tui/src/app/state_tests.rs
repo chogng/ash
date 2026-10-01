@@ -298,6 +298,9 @@ fn selected_theme_closes_the_theme_picker_immediately() {
 #[test]
 fn selected_render_theme_is_read_through_the_frame_context() {
     let mut app = App::new();
+    assert_eq!(app.render_context().accent(), Color::Rgb(105, 170, 255));
+    assert_eq!(app.render_context().background(), Color::Rgb(13, 17, 23));
+    assert_eq!(app.render_context().foreground(), Color::Rgb(255, 255, 255));
     let theme =
         RenderTheme::from_palette(crate::render::ThemePalette::light(), ColorLevel::TrueColor);
 

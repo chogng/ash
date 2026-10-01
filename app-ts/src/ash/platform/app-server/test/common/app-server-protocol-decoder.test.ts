@@ -219,3 +219,22 @@ test('Memory records and process memory diagnostics use disjoint generated metho
 		},
 	);
 });
+
+test('Git repository invalidation and tag references cross the generated protocol boundary', () => {
+	const notification = { jsonrpc: '2.0', method: 'git/repositoriesChanged', params: {} };
+	assert.deepEqual(decodeAppServerNotification(notification), notification);
+	const result = { commits: [], references: [{ name: 'reviewed', objectId: 'commit', kind: 'tag', remoteName: null, current: false }], remotes: [], hasMore: false };
+	const response = { jsonrpc: '2.0', id: 1, result };
+	assert.deepEqual(decodeAppServerResponse('git/graph', response), response);
+});
+
+test('Git command and partial index requests accept reviewed intents and reject malformed commands', () => {
+	const command = { repositoryId: 'repo', command: { kind: 'continue', operation: 'cherryPick' } };
+	assert.deepEqual(decodeAppServerRequestParams('git/command', command), command);
+	assert.throws(() => decodeAppServerRequestParams('git/command', { command: { kind: 'exec', arguments: ['reset', '--hard'] } }), AppServerProtocolDecodeError);
+	assert.throws(() => decodeAppServerRequestParams('git/command', { command: { kind: 'continue', operation: 'reset' } }), AppServerProtocolDecodeError);
+	const selection = { repositoryId: 'repo', path: 'file.txt', comparison: 'unstaged', expectedOriginal: null, expectedModified: 'new\n', selection: { kind: 'lines', start: 1, end: 2 } };
+	assert.deepEqual(decodeAppServerRequestParams('git/indexEdit', selection), selection);
+	assert.throws(() => decodeAppServerRequestParams('git/indexEdit', { ...selection, selection: { kind: 'lines', start: 0, end: 2 } }), AppServerProtocolDecodeError);
+	assert.throws(() => decodeAppServerRequestParams('git/indexEdit', { ...selection, expectedModified: 'x'.repeat(2097153) }), AppServerProtocolDecodeError);
+});

@@ -9,6 +9,7 @@ pub type GitResult<T> = Result<T, GitError>;
 /// Failure returned while configuring, invoking, or parsing a Git operation.
 #[derive(Clone, Debug)]
 pub enum GitError {
+    IndexChanged,
     InvalidConfiguration {
         field: &'static str,
         requirement: &'static str,
@@ -73,6 +74,7 @@ impl GitError {
 impl fmt::Display for GitError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::IndexChanged => formatter.write_str("Git index comparison changed"),
             Self::InvalidConfiguration { field, requirement } => {
                 write!(formatter, "Git configuration field {field} {requirement}")
             }

@@ -1,7 +1,7 @@
 # 三端快捷键系统
 
 > 文档所有权：本文是 Ash、App 与 Ash Code 共享快捷键语义、端侧输入边界和演进顺序的 canonical 架构文档。
-> 实现细节分别由 [`ash-keybinding`](../ash-rs/keybinding/README.md)、[`ash-keybindings-host`](../app-rs/keybindings/README.md)、[`ash-code` TUI](../code/tui/README.md) 和 [Ash 浏览器基础](../app-ts/docs/browser-foundation.md)维护。
+> 实现细节分别由 [`ash-keybinding`](../ash-rs/keybinding/README.md)、[`ash-keybindings-host`](../app-rs/keybindings/README.md)、[Ash Code](../code/README.md) 和 [Ash 浏览器基础](../app-ts/docs/browser-foundation.md)维护。
 > 状态：共享 Rust 核心与用户配置编译器、Ash Code `AppKeymap`/Keymap 设置界面（入口为 `/shortcuts`）、App、Ash TypeScript 输入链路和跨语言 conformance 向量均为 Current。
 
 ## 快速理解

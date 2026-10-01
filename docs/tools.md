@@ -268,13 +268,19 @@ direct 工具名，不看到基础库或 legacy operation enum：
 | Crate / tool name | 可做的事 | 明确不做的事 |
 | --- | --- | --- |
 | `ash-shell-command` / `shell-command` | 在批准的相对 Directory 工作目录执行显式 program/arguments；复用 `ash-tool-executor` 的 approval、timeout 和输出上限 | 不隐式启动 shell，不绕过 process policy |
+| App Server `LocalToolSuite` / `shell-session` | 启动长任务；读取输出、写入 stdin、等待退出、调整 PTY 和终止已有进程 | 不允许其他 Session 或 Thread 操作该进程 |
 | App Server `LocalToolSuite` / `read_file`、`write_file`、`edit`、`grep`、`glob` | Thread-scoped 读后写入、conditional atomic 单文件写入和受控搜索 | 不暴露 operation enum；断线恢复后必须重读才能恢复内存中的文件 fingerprint |
 | `ash-file-system` / 非 Agent 基础库 | 提供 directory-scoped 条件写入与 host-only filesystem 能力 | 默认 coding profile 不暴露 `file-system` 工具 |
 | `ash-apply-patch` / `apply_patch` | 预检后更新、添加或删除普通文件；replacement 按文件原子写入 | 不接受绝对/`..` 路径，不直接提供任意写入 API；多文件提交不承诺事务性 |
 
-这些 owner 均在构造时固定 `ToolEnvironmentId + DirectoryRoot`，要求它与
-`ToolExecutionContext.environment_id` 一致，且只接受与自身 `ToolDefinition` digest 相符的冻结
-binding。`apply_patch` 在所有 hunk 校验完成前不写入；
+Agent 通过这两个命令工具执行 Git、测试和构建；Workbench 的 Git UI 通过 Git RPC 调用 Rust
+Git 服务。通用命令工具不按 Git 子命令逐个注册，也不需要先打开可见终端。
+
+执行器的 Environment 在构造时固定，要求它与 `ToolExecutionContext.environment_id` 一致；
+工具注册表只接受与自身 `ToolDefinition` digest 相符的冻结 binding。host 根据当前 Session
+和 Thread 的目录授权选定工作目录。短命令和长任务共用同一目录校验，免沙箱权限只改变执行
+权限，不改变工作目录；显式 sandbox scope 必须与 host 选定的目录一致。
+`apply_patch` 在所有 hunk 校验完成前不写入；
 若多文件 commit 中途失败，返回 `OutcomeUncertain`，由 Core 决定后续恢复语义。
 
 `ash-file-system` 还提供 host-only 的 `find_nearest_ancestor_with_markers`，用于从一个本地路径

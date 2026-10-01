@@ -6,38 +6,30 @@ import { Switch } from '../../../../base/browser/ui/toggle/toggle.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import { CLOUD_DICTATION_MODEL, XAI_DICTATION_MODEL } from '../../../../platform/dictation/common/dictationConfiguration.js';
-import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IChatService, type ModelProviderCredentialStatus } from '../../../services/chat/common/chatService.js';
 import type { ModelCatalogEntry } from '../../../services/chat/common/modelCatalog.js';
-import { LocalTranscriptionModelControls } from '../../localTranscription/browser/localTranscriptionModelControls.js';
 import type { SettingsContent, SettingsContentItem, SettingsTreeNode } from '../../preferences/browser/settingsTreeModels.js';
 
 /** Model and credential rows shared by Workbench and Sessions; the host owns navigation and search. */
 export class ModelSettingsContent extends Disposable implements SettingsContent {
-	public readonly categoryId = 'models';
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 	private readonly document: Document;
-	private readonly cloudModelsNote: HTMLElement;
 	private readonly status: HTMLElement;
 	private readonly modelsStatus: HTMLElement;
 	private readonly providersStatus: HTMLElement;
 	private readonly rows = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly apiRows = this._register(new DisposableMap<string, DisposableStore>());
 	private modelElements: readonly { readonly entry: ModelCatalogEntry; readonly row: HTMLElement }[] = [];
-	private apiElements: readonly { readonly provider: ModelProviderCredentialStatus; readonly row: HTMLElement }[] = [];
+	private apiElements: readonly { readonly provider: ModelProviderCredentialStatus; readonly row: HTMLElement; readonly update: (provider: ModelProviderCredentialStatus) => void }[] = [];
 	private visible = false;
 	private modelLoadVersion = 0;
 	private apiLoadVersion = 0;
-	private readonly localModelControls: LocalTranscriptionModelControls;
+	public readonly categoryId = 'models';
 
-	constructor(container: HTMLElement, @IChatService private readonly chatService: IChatService, @IInstantiationService instantiationService: IInstantiationService) {
+	constructor(container: HTMLElement, @IChatService private readonly chatService: IChatService) {
 		super();
 		this.document = container.ownerDocument;
-		this.cloudModelsNote = h(this.document, 'p');
-		this.cloudModelsNote.className = 'ash-models-settings-note';
-		this.cloudModelsNote.textContent = localize('sessions.settings.cloudVoiceModels', 'Cloud models: OpenAI {0} · xAI {1}', CLOUD_DICTATION_MODEL, XAI_DICTATION_MODEL);
 		this.status = h(this.document, 'p');
 		this.status.className = 'ash-models-settings-status';
 		this.status.setAttribute('role', 'status');
@@ -48,9 +40,10 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 		this.providersStatus = h(this.document, 'p');
 		this.providersStatus.className = 'ash-models-settings-empty';
 		this.providersStatus.setAttribute('role', 'status');
-		this.localModelControls = this._register(instantiationService.createInstance(LocalTranscriptionModelControls, h(this.document, 'div')));
 		this._register(this.chatService.onDidChangeModels(() => {
-			if (this.visible) void this.loadModels(++this.modelLoadVersion);
+			if (!this.visible) { return; }
+			void this.loadModels(++this.modelLoadVersion);
+			void this.loadApiConnections(++this.apiLoadVersion);
 		}));
 		this._register(toDisposable(() => { this.modelLoadVersion++; this.apiLoadVersion++; }));
 	}
@@ -65,19 +58,16 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 				children: this.modelElements.length ? this.modelElements.map(({ entry, row }) => item(`models.catalog.${entry.model.provider}/${entry.model.model}`, entry.displayName, `${entry.model.provider}/${entry.model.model}`, row)) : [item('models.catalog.status', localize('sessions.settings.chatModels', 'Chat models'), this.modelsStatus.textContent ?? '', this.modelsStatus)],
 			},
 			{
-				element: { kind: 'group', id: 'models.providers', title: localize('sessions.settings.apiConnections', 'API connections'), description: '' },
-				children: this.apiElements.length ? this.apiElements.map(({ provider, row }) => item(`models.providers.${provider.connection}`, provider.displayName, `${provider.provider} ${provider.connection}`, row, ['API connections'])) : [item('models.providers.status', localize('sessions.settings.apiConnections', 'API connections'), this.providersStatus.textContent ?? '', this.providersStatus)],
+				element: { kind: 'group', id: `${this.categoryId}.providers`, title: localize('sessions.settings.apiConnections', 'API connections'), description: '' },
+				children: this.apiElements.length ? this.apiElements.map(({ provider, row }) => item(`${this.categoryId}.providers.${provider.connection}`, provider.displayName, `${provider.provider} ${provider.connection}`, row, ['API connections'])) : [item(`${this.categoryId}.providers.status`, localize('sessions.settings.apiConnections', 'API connections'), this.providersStatus.textContent ?? '', this.providersStatus)],
 			},
-			item('models.voice-models', localize('sessions.settings.voiceModels', 'Voice input'), this.cloudModelsNote.textContent ?? '', this.cloudModelsNote),
-			item('models.local-transcription', localize('sessions.settings.voiceModels', 'Voice input'), localize('dictation.model.source', 'Prepared Paraformer model directory'), this.localModelControls.domNode),
-			item('models.status', localize('sessions.settings.models', 'Models'), this.status.textContent ?? '', this.status),
+			item(`${this.categoryId}.status`, localize('sessions.settings.models', 'Models'), this.status.textContent ?? '', this.status),
 		];
 	}
 
 	public setVisible(visible: boolean): void {
 		if (this.visible === visible) return;
 		this.visible = visible;
-		this.localModelControls.setVisible(visible);
 		if (!visible) {
 			this.modelLoadVersion++;
 			this.apiLoadVersion++;
@@ -133,13 +123,13 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 			this.apiElements = providers.map(provider => {
 				const existing = previous.get(provider.connection);
 				if (existing) {
-					existing.row.querySelector('h5')!.textContent = provider.displayName;
-					existing.row.querySelector('.ash-models-settings-api-key-status')!.textContent = this.apiKeyStatus(provider);
-					return { provider, row: existing.row };
+					// Credential changes must preserve an unsaved key and its focused input.
+					existing.update(provider);
+					return { ...existing, provider };
 				}
 				const resources = new DisposableStore();
 				this.apiRows.set(provider.connection, resources);
-				return { provider, row: this.apiConnectionRow(provider, resources) };
+				return { provider, ...this.apiConnectionRow(provider, resources) };
 			});
 			this.providersStatus.textContent = localize('sessions.settings.noApiConnections', 'No API connections available.');
 		} catch {
@@ -182,7 +172,7 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 		return row;
 	}
 
-	private apiConnectionRow(provider: ModelProviderCredentialStatus, resources: DisposableStore): HTMLElement {
+	private apiConnectionRow(provider: ModelProviderCredentialStatus, resources: DisposableStore): { readonly row: HTMLElement; readonly update: (provider: ModelProviderCredentialStatus) => void } {
 		const document = this.document;
 		const row = h(document, 'div');
 		row.className = 'ash-models-settings-api-row';
@@ -212,6 +202,31 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 		feedback.setAttribute('role', 'status');
 		feedback.hidden = true;
 		row.append(name, details, keyStatus, controls, feedback);
+		const remove = resources.add(new Button(controls, { label: localize('dictation.model.removeApiKey', 'Remove API key'), presentation: 'secondary', enabled: provider.apiKeyConfigured }));
+		let confirmingRemoval = false;
+		let removing = false;
+		resources.add(remove.onDidClick(() => {
+			if (!confirmingRemoval) {
+				confirmingRemoval = true;
+				remove.label = localize('dictation.model.confirmRemoveApiKey', 'Confirm removal');
+				feedback.textContent = localize('dictation.model.removeApiKeyDetail', 'This API key is shared by chat and dictation. Remove it?');
+				feedback.hidden = false;
+				return;
+			}
+			remove.enabled = false;
+			removing = true;
+			void this.chatService.removeModelProviderApiKey(provider.connection).then(async () => {
+				keyStatus.textContent = localize('chat.providerKeys.missing', 'API key required');
+				feedback.hidden = true;
+				await this.chatService.refreshModels();
+			}).catch(() => {
+				feedback.textContent = localize('dictation.model.removeApiKeyFailed', 'Could not remove the API key');
+				feedback.hidden = false;
+				remove.enabled = true;
+			}).finally(() => {
+				removing = false;
+			});
+		}));
 		const saveKey = async (): Promise<void> => {
 			const key = input.value.trim();
 			if (!key || !save.enabled) return;
@@ -222,6 +237,9 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 				await this.chatService.setModelProviderApiKey(provider.connection, key);
 				input.value = '';
 				keyStatus.textContent = localize('chat.providerKeys.configured', 'API key saved');
+				confirmingRemoval = false;
+				remove.label = localize('dictation.model.removeApiKey', 'Remove API key');
+				remove.enabled = true;
 				try {
 					await this.chatService.refreshModels();
 					feedback.textContent = localize('chat.providerKeys.saved', 'API key saved for {0}', provider.displayName);
@@ -246,7 +264,21 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 			void saveKey();
 		}));
 		resources.add(save.onDidClick(() => void saveKey()));
-		return row;
+		return {
+			row,
+			update: next => {
+				if (provider.apiKeyConfigured !== next.apiKeyConfigured) {
+					confirmingRemoval = false;
+					remove.label = localize('dictation.model.removeApiKey', 'Remove API key');
+					feedback.hidden = true;
+				}
+				provider = next;
+				name.textContent = provider.displayName;
+				keyStatus.textContent = this.apiKeyStatus(provider);
+				input.inputElement.setAttribute('aria-label', localize('chat.providerKeys.inputTitle', 'API key for {0}', provider.displayName));
+				remove.enabled = provider.apiKeyConfigured && !removing;
+			},
+		};
 	}
 
 	private apiKeyStatus(provider: ModelProviderCredentialStatus): string {

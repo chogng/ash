@@ -10,6 +10,23 @@ test('large YAML lockfiles highlight text and minimap without editor interaction
 	await writeFile(join(testWorkspace.directory, 'pnpm-lock.yaml'), text);
 	const file = page.locator('.ash-explorer').getByRole('treeitem', { name: 'pnpm-lock.yaml', exact: true });
 	await expect(file).toBeVisible();
+	await page.evaluate(() => {
+		const frames: { milliseconds: number; highlighted: boolean }[] = [];
+		let frame: number;
+		const sample = (): void => {
+			const editor = document.querySelector<HTMLElement>('.stanza-editor');
+			if (editor && editor.getBoundingClientRect().height > 0 && editor.querySelector('.view-lines')?.textContent?.includes('lockfileVersion')) {
+				const key = [...editor.querySelectorAll<HTMLElement>('.stanza-editor-token')].find(element => element.textContent === 'lockfileVersion');
+				frames.push({ milliseconds: performance.now(), highlighted: key !== undefined && getComputedStyle(key).color !== getComputedStyle(editor).color });
+			}
+			frame = requestAnimationFrame(sample);
+		};
+		(window as Window & { stopSyntaxFrames?: () => typeof frames }).stopSyntaxFrames = () => {
+			cancelAnimationFrame(frame);
+			return frames;
+		};
+		frame = requestAnimationFrame(sample);
+	});
 	const start = Date.now();
 	await file.dblclick();
 	const editor = workbench.editors.groupAt(0).content.locator('.stanza-editor');
@@ -18,6 +35,16 @@ test('large YAML lockfiles highlight text and minimap without editor interaction
 	await expect(key).toBeVisible();
 	const foreground = await editor.evaluate(element => getComputedStyle(element).color);
 	await expect(key).not.toHaveCSS('color', foreground);
+	await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+	const frames = await page.evaluate(() => {
+		const host = window as Window & { stopSyntaxFrames?: () => { milliseconds: number; highlighted: boolean }[] };
+		const result = host.stopSyntaxFrames!();
+		delete host.stopSyntaxFrames;
+		return result;
+	});
+	await testInfo.attach('yaml-visible-frames', { body: JSON.stringify(frames), contentType: 'application/json' });
+	expect(frames.length).toBeGreaterThan(0);
+	expect(frames.filter(frame => !frame.highlighted), 'Every visible file frame must already have lexical colors').toEqual([]);
 	await expect.poll(() => editor.locator('.minimap canvas').evaluate(element => {
 		const canvas = element as HTMLCanvasElement;
 		const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;

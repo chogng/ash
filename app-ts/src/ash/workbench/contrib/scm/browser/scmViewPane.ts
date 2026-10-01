@@ -97,7 +97,7 @@ export class ScmViewPane extends ViewPane {
 			},
 			renderElement: element => 'group' in element ? this.renderGroup(element.group) : this.renderResource(element.resource),
 		}));
-		this.tree.element.setAttribute('aria-description', localize('scm.changesTreeHelp', 'Use Up and Down to navigate, Left to collapse, and Right to expand a group. Press Enter to open a file.'));
+		this.tree.element.setAttribute('aria-description', localize('scm.changesTreeHelp', 'Use Up and Down to navigate, Left to collapse, and Right to expand a group. Press Enter to open a file. Press F1 for Git branch, worktree, stash, tag and remote commands, integration continue or abort, and partial staging.'));
 		this._register(this.tree.onDidOpen(event => {
 			if ('resource' in event.element) {
 				void event.element.resource.open({ pinned: event.editorOptions.pinned === true });

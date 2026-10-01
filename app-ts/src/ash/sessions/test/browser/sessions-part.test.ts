@@ -1,7 +1,6 @@
 import { h as createDomElement, Dimension } from '../../../base/browser/dom.js';
 import type { IPositionedRectangle } from '../../../base/browser/geometry.js';
 import type { IView } from '../../../base/browser/ui/grid/grid.js';
-import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import type { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { SessionGridLayout } from '../../browser/parts/sessionGridLayout.js';
 import { observableValue } from '../../../base/common/observable.js';
@@ -46,6 +45,8 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 const { SessionsPart } = await import("../../../sessions/browser/parts/sessionsPart.js");
+const { SessionsChatView } = await import('../../browser/parts/sessionsChatView.js');
+await import('../../contrib/design/browser/design.contribution.js');
 const { NewChatInputWidget } = await import('../../contrib/chat/browser/newChatInput.js');
 const { createCodeEditorServices } = await import('../../../editor/test/browser/testCodeEditor.js');
 
@@ -141,6 +142,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		async listModelCatalog() { return []; },
 		async listModelProviders() { return []; },
 		async setModelProviderApiKey() {},
+		async removeModelProviderApiKey() {},
 		async listAdvisorModels() { return []; },
 		async refreshModels() { return []; },
 		isModelVisible() { return true; },
@@ -299,8 +301,28 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	assert.equal(part.domNode.querySelector('.code-composer'), codeInput);
 	assert.deepEqual((await inputs[2]!.captureDraft())?.draft, separateDraft);
 
+	part.setPage('design');
+	const designPage = part.domNode.querySelector<HTMLElement>('[data-sessions-page="design"]')!;
+	const designCanvas = part.domNode.querySelector<HTMLElement>('.ash-sessions-design-view')!;
+	assert.equal(designPage.hidden, false);
+	assert.equal(part.domNode.querySelector('.ash-sessions-design-view')?.getAttribute('aria-label'), 'Design canvas');
+	assert.equal(part.domNode.querySelector('.ash-sessions-chat-view')?.hasAttribute('hidden'), true);
+	designCanvas.querySelector('.ash-sessions-design-viewport')!
+		.dispatchEvent(new dom.window.WheelEvent('wheel', { deltaY: 120, cancelable: true, bubbles: true }));
+	assert.match(designCanvas.querySelector<HTMLElement>('.ash-sessions-design-world')!.style.transform, /translate\(0px, -120px\) scale\(1\)/u);
+	part.focus();
+	assert.equal(dom.window.document.activeElement, designCanvas);
+	part.setPage('chat');
+	assert.equal(designPage.hidden, true);
+	part.setPage('design');
+	assert.match(designCanvas.querySelector<HTMLElement>('.ash-sessions-design-world')!.style.transform, /translate\(0px, -120px\) scale\(1\)/u);
+	assert.equal(designPage.hidden, false);
+
 	partListener.dispose();
 	part.dispose();
+	const disposedTransform = designCanvas.querySelector<HTMLElement>('.ash-sessions-design-world')!.style.transform;
+	designCanvas.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: '0', bubbles: true }));
+	assert.equal(designCanvas.querySelector<HTMLElement>('.ash-sessions-design-world')!.style.transform, disposedTransform);
 	viewService.dispose();
 	contextMenuEvents.dispose();
 	commandEvents.dispose();
@@ -383,7 +405,8 @@ test('Sessions page changes restore asymmetric grids only after side-part layout
 	using storage = new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, applicationId: 'page-geometry', workspaceId: 'test', flushInterval: 0 });
 	storage.store('sessions.gridState.chat', JSON.stringify({ version: 1, widths: [{ id: 'first', width: 500 }, { id: 'second', width: 700 }] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	storage.store('sessions.gridState.code', JSON.stringify({ version: 1, widths: [{ id: 'first', width: 450 }, { id: 'second', width: 550 }] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	using services = new InstantiationService();
+	using resources = new DisposableStore();
+	const services = resources.add(createCodeEditorServices(resources).createChild());
 	services.registerInstance(IStorageService, storage);
 	class Pane implements IView {
 		readonly element = createDomElement(document, 'div');
@@ -413,7 +436,9 @@ test('Sessions page changes restore asymmetric grids only after side-part layout
 	const pages = new Map<'chat' | 'code', PageView>();
 	const createPart = (): InstanceType<typeof SessionsPart> => {
 		const part = new SessionsPart(container, {} as SessionsPartOptions, {
-			createInstance: (_constructor: unknown, parent: HTMLElement, options: { page: 'chat' | 'code' }) => {
+			createInstance: (constructor: Parameters<IInstantiationService['createInstance']>[0], ...args: unknown[]) => {
+				if (constructor !== SessionsChatView) return services.createInstance(constructor, ...args);
+				const [parent, options] = args as [HTMLElement, { page: 'chat' | 'code' }];
 				const page = new PageView(parent, options.page);
 				pages.set(options.page, page);
 				return page;

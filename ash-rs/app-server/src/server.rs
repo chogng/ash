@@ -866,7 +866,6 @@ impl AppServer {
         self.feedback.close(connection.connection_id);
         self.calls.close(connection.connection_id);
         self.dictation.close(connection.connection_id);
-        self.dictation_models.close(connection.connection_id);
         self.request_scheduler
             .cancel_connection(connection.connection_id);
         self.request_cancellations
@@ -2454,6 +2453,9 @@ impl AppServer {
             Some(ClientMethod::ProviderApiKeySet) => {
                 self.provider_api_key_set(std::mem::take(&mut request.params))
             }
+            Some(ClientMethod::ProviderApiKeyRemove) => {
+                self.provider_api_key_remove(std::mem::take(&mut request.params))
+            }
             Some(ClientMethod::ConfigUpdate) => self.config_update(&request.params),
             Some(ClientMethod::ExecPolicyRuleUpsert) => {
                 self.exec_policy_rule_upsert(&request.params)
@@ -2550,6 +2552,13 @@ impl AppServer {
             }
             Some(ClientMethod::DictationModelStop) => {
                 self.dictation_model_stop(connection, &request.params)
+            }
+            Some(ClientMethod::DictationModelList) => self.dictation_model_list(connection),
+            Some(ClientMethod::DictationModelCancel) => {
+                self.dictation_model_cancel(connection, &request.params)
+            }
+            Some(ClientMethod::DictationModelDelete) => {
+                self.dictation_model_delete(connection, &request.params)
             }
             Some(ClientMethod::AttachmentUploadWrite) => {
                 self.attachment_upload_write(connection, &request.params)
@@ -2670,6 +2679,11 @@ impl AppServer {
             Some(ClientMethod::FsPasteSystemFiles) => self.fs_paste_system_files(&request.params),
             Some(ClientMethod::FsRename) => self.fs_rename(&request.params),
             Some(ClientMethod::FsDelete) => self.fs_delete(&request.params),
+            Some(ClientMethod::GitInit) => self.git_init(&request.params, cancellation),
+            Some(ClientMethod::GitCatalog) => self.git_catalog(&request.params),
+            Some(ClientMethod::GitCommand) => self.git_command(&request.params, cancellation),
+            Some(ClientMethod::GitIndexDiff) => self.git_index_diff(&request.params),
+            Some(ClientMethod::GitIndexEdit) => self.git_index_edit(&request.params),
             Some(ClientMethod::GitRepositories) => self.git_repositories(),
             Some(ClientMethod::GitClone) => {
                 self.git_clone(connection, &request.params, cancellation)

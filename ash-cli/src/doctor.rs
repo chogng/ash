@@ -60,7 +60,7 @@ pub(super) struct Options {
 
 pub(super) fn run(options: Options) -> Result<(), CliError> {
     let mut report = Report {
-        build: build_info::BuildInfo::current(),
+        build: build_identity::current(),
         checks: Vec::new(),
     };
     let installation = InstallContext::current();

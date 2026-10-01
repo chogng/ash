@@ -126,6 +126,10 @@ fn session_scope_uses_the_declared_session_identity() {
 #[test]
 fn git_operations_declare_repository_access_and_validate_selectors() {
     for method in [
+        "git/command",
+        "git/catalog",
+        "git/indexDiff",
+        "git/indexEdit",
         "git/fetch",
         "git/pull",
         "git/push",
@@ -346,4 +350,30 @@ fn hook_catalog_request_and_sources_round_trip_without_granting_execution() {
     }]}]});
     let result: HookListResult = serde_json::from_value(wire.clone()).unwrap();
     assert_eq!(serde_json::to_value(result).unwrap(), wire);
+}
+
+#[test]
+fn git_intents_round_trip_reviewed_identities_and_reject_open_ended_commands() {
+    use super::super::git::GitCommandParams;
+    for value in [
+        serde_json::json!({"repositoryId":"repo","command":{"kind":"renameBranch","name":"topic","newName":"review"}}),
+        serde_json::json!({"command":{"kind":"stash","message":"review","mode":"includeUntracked"}}),
+        serde_json::json!({"command":{"kind":"popStash","objectId":"a".repeat(40)}}),
+        serde_json::json!({"command":{"kind":"continue","operation":"cherryPick"}}),
+        serde_json::json!({"command":{"kind":"undoCommit","expectedHead":"a".repeat(40)}}),
+    ] {
+        let decoded: GitCommandParams = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(decoded).unwrap(), value);
+    }
+    for command in [
+        serde_json::json!({"kind":"exec","arguments":["reset","--hard"]}),
+        serde_json::json!({"kind":"continue","operation":"reset"}),
+        serde_json::json!({"kind":"stash","message":"review","mode":"all"}),
+        serde_json::json!({"kind":"undoCommit"}),
+    ] {
+        assert!(
+            serde_json::from_value::<GitCommandParams>(serde_json::json!({"command":command}))
+                .is_err()
+        );
+    }
 }

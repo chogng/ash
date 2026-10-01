@@ -24,7 +24,18 @@ export type ILocalTranscriptionModelStatus =
 	| { readonly state: LocalTranscriptionModelState.Downloading; readonly file: string; readonly downloadedBytes: number }
 	| { readonly state: LocalTranscriptionModelState.Error; readonly error: string };
 
-/** Completion waits for backend release. Disposing an unfinished operation cancels its work. */
+export interface ILocalTranscriptionModelSnapshot {
+	readonly model: string;
+	readonly available: boolean;
+	readonly sizeBytes: number;
+	readonly status?: ILocalTranscriptionModelStatus;
+}
+
+export function isModelPreparing(status: ILocalTranscriptionModelStatus | undefined): boolean {
+	return status?.state === LocalTranscriptionModelState.Checking || status?.state === LocalTranscriptionModelState.Downloading || status?.state === LocalTranscriptionModelState.Loading;
+}
+
+/** Disposing detaches delivery. Only cancel explicitly stops the process-owned preparation. */
 export interface ILocalTranscriptionModelOperation extends IDisposable {
 	readonly completed: Promise<LocalTranscriptionModelState.Ready | LocalTranscriptionModelState.Cancelled>;
 	cancel(): Promise<void>;
@@ -39,8 +50,12 @@ export interface ILocalTranscriptionService extends IDisposable {
 	readonly onDidTranscribe: Event<ILocalTranscriptionResult>;
 	readonly onDidEnd: Event<{ readonly error?: string }>;
 	readonly onDidChangeModelStatus: Event<{ readonly model: string; readonly status: ILocalTranscriptionModelStatus }>;
+	readonly onDidChangeModels: Event<void>;
 	/** Checks installed files without loading the model or starting capture. */
-	getModelStatus(model: string): Promise<{ readonly model: string; readonly available: boolean }>;
+	getModelStatus(model: string): Promise<ILocalTranscriptionModelSnapshot>;
+	listModels(): Promise<readonly ILocalTranscriptionModelSnapshot[]>;
+	cancelModel(model: string): Promise<void>;
+	deleteModel(model: string): Promise<void>;
 	prepareModel(model: string, onProgress: (status: ILocalTranscriptionModelStatus) => void): ILocalTranscriptionModelOperation;
 	importModel(options: { readonly model: string; readonly sourcePath: string }, onProgress: (status: ILocalTranscriptionModelStatus) => void): ILocalTranscriptionModelOperation;
 	start(options: { readonly model: string }): Promise<void>;
@@ -57,7 +72,11 @@ export interface ILocalTranscriptionBackendService {
 	readonly onDidTranscribe: Event<ILocalTranscriptionResult & { readonly resourceId: string }>;
 	readonly onDidEnd: Event<{ readonly resourceId: string; readonly error?: string }>;
 	readonly onDidChangeModelStatus: Event<{ readonly resourceId: string; readonly model: string; readonly status: ILocalTranscriptionModelStatus }>;
-	getModelStatus(model: string): Promise<{ readonly model: string; readonly available: boolean }>;
+	readonly onDidChangeModels: Event<void>;
+	getModelStatus(model: string): Promise<ILocalTranscriptionModelSnapshot>;
+	listModels(): Promise<readonly ILocalTranscriptionModelSnapshot[]>;
+	cancelModel(model: string): Promise<void>;
+	deleteModel(model: string): Promise<void>;
 	startModelOperation(resourceId: string, model: string, operation: LocalTranscriptionModelOperation): Promise<void>;
 	stopModelOperation(resourceId: string): Promise<void>;
 	start(resourceId: string, model: string): Promise<void>;

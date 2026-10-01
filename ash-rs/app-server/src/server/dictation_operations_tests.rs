@@ -5,7 +5,60 @@ use ash_model_provider::EchoModel;
 use std::sync::Arc;
 
 #[test]
-fn model_operations_require_authority_and_deliver_progress_only_to_the_owner() {
+fn closing_the_originating_connection_does_not_cancel_model_preparation() {
+    let root = tempfile::tempdir().unwrap();
+    let server = AppServer::new(
+        Arc::new(ThreadController::with_store(Arc::new(
+            InMemoryThreadStore::default(),
+        ))),
+        Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+    );
+    let owner = server.product_host_connection();
+    let owner_id = owner.connection_id;
+    let (permit, gate) = std::sync::mpsc::channel();
+    let gate = std::sync::Mutex::new(gate);
+    let (send, receive) = std::sync::mpsc::channel();
+    server
+        .dictation_models
+        .start(
+            owner_id,
+            "continued".into(),
+            realtime_voice::ModelRequest {
+                model_root: root.path().into(),
+                model_id: "continued".into(),
+                operation: realtime_voice::ModelOperation::Import {
+                    source: root.path().join("absent"),
+                },
+            },
+            move |progress| {
+                let checking = progress == realtime_voice::ModelProgress::Checking;
+                send.send(progress).unwrap();
+                if checking {
+                    gate.lock().unwrap().recv().unwrap();
+                }
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        receive
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap(),
+        realtime_voice::ModelProgress::Checking
+    );
+    server.close_connection(owner);
+    permit.send(()).unwrap();
+    // The missing package fails its validation rather than terminating as cancelled on connection close.
+    assert!(matches!(
+        receive
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap(),
+        realtime_voice::ModelProgress::Failed { .. }
+    ));
+    server.dictation_models.stop(owner_id, "continued").unwrap();
+}
+
+#[test]
+fn model_operations_keep_resource_progress_private_and_broadcast_shared_snapshots() {
     let root = tempfile::tempdir().unwrap();
     let server = AppServer::new(
         Arc::new(ThreadController::with_store(Arc::new(
@@ -40,7 +93,7 @@ fn model_operations_require_authority_and_deliver_progress_only_to_the_owner() {
     let missing: Value = serde_json::from_str(&server.handle_json(&mut owner, &read)).unwrap();
     assert_eq!(
         missing["result"],
-        serde_json::json!({"modelId":"custom","available":false})
+        serde_json::json!({"modelId":"custom","available":false,"sizeBytes":0,"stage":null})
     );
     let started: Value = serde_json::from_str(&server.handle_json(&mut owner,
         &request("dictation/model/start", serde_json::json!({"resourceId":"import","modelId":"custom","operation":{"type":"import","sourceDirectory":root.path().join("absent")}})),
@@ -68,7 +121,15 @@ fn model_operations_require_authority_and_deliver_progress_only_to_the_owner() {
         }
     }
     assert_eq!(stages, ["checking", "failed"]);
-    assert!(server.connection_notifications(&other).drain().is_empty());
+    let shared = server.connection_notifications(&other).drain();
+    assert!(!shared.is_empty());
+    assert!(shared.iter().all(
+        |message| serde_json::from_str::<Value>(message).unwrap()["method"]
+            == "dictation/model/changed"
+    ));
+    assert!(server.connection_notifications(&client).drain().is_empty());
+    let snapshot: Value = serde_json::from_str(&server.handle_json(&mut other, &read)).unwrap();
+    assert_eq!(snapshot["result"]["stage"]["type"], "failed");
     let stopped: Value = serde_json::from_str(&server.handle_json(
         &mut owner,
         &request(

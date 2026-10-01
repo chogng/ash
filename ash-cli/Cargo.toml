@@ -21,6 +21,7 @@ ash-utils-home-dir = { workspace = true }
 ash-app-server-daemon = { workspace = true }
 process-hardening = { workspace = true }
 build-info = { workspace = true }
+build-identity = { workspace = true }
 flate2 = { workspace = true }
 fs2 = { workspace = true }
 semver = { workspace = true }

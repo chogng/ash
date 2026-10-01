@@ -202,3 +202,64 @@ async fn caller_cancellation_sends_protocol_cancellation() {
     client.shutdown().await.expect("shutdown client");
     server.await.expect("server task");
 }
+
+#[tokio::test]
+async fn streamable_http_does_not_follow_redirects_or_replay_bearer_tokens() {
+    use std::net::TcpListener;
+    use tokio::io::AsyncBufReadExt;
+    use tokio::io::AsyncWriteExt;
+    let destination = TcpListener::bind("127.0.0.1:0").unwrap();
+    destination.set_nonblocking(true).unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!("http://{}/mcp", listener.local_addr().unwrap());
+    let location = destination.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let (socket, _) = listener.accept().await.unwrap();
+        let mut reader = tokio::io::BufReader::new(socket);
+        let mut headers = String::new();
+        loop {
+            let mut line = String::new();
+            assert_ne!(reader.read_line(&mut line).await.unwrap(), 0);
+            if line == "\r\n" {
+                break;
+            }
+            headers.push_str(&line);
+        }
+        let response = format!(
+            "HTTP/1.1 302 Found\r\nLocation: http://{location}/stolen\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        );
+        reader
+            .get_mut()
+            .write_all(response.as_bytes())
+            .await
+            .unwrap();
+        headers
+    });
+    let server_config = StreamableHttpServer::new(endpoint)
+        .unwrap()
+        .with_bearer_token(BearerToken::new("private-token").unwrap());
+    let result = RmcpClient::connect_streamable_http(
+        server_config,
+        RmcpClientOptions::new("http-test", "0").with_timeouts(RmcpTimeouts {
+            initialize: Duration::from_secs(2),
+            request: Duration::from_secs(2),
+            shutdown: Duration::from_secs(2),
+        }),
+    )
+    .await;
+    let error = result.err().expect("redirect must reject initialization");
+    assert!(matches!(error, RmcpClientError::Initialize(_)), "{error}");
+    let headers = tokio::time::timeout(Duration::from_secs(5), server)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        headers
+            .to_ascii_lowercase()
+            .contains("authorization: bearer private-token")
+    );
+    assert_eq!(
+        destination.accept().unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+}

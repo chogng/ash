@@ -144,6 +144,11 @@ fn diagnostics_and_feedback_exclude_rpc_content_and_bind_the_owner() {
     assert!(!content.contains("private-user-content"));
     assert!(!content.contains("secret-token"));
     assert!(content.contains("activities"));
+    let bundle: serde_json::Value = serde_json::from_str(content).unwrap();
+    assert_eq!(
+        bundle["build"],
+        serde_json::to_value(build_identity::current()).unwrap()
+    );
     let mut second = server.connection();
     initialize(&server, &mut second);
     let rejected = call(

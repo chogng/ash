@@ -967,6 +967,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "tag",
+      "file": "tag.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "target",
       "file": "target.svg",
       "rendering": "symbolic"

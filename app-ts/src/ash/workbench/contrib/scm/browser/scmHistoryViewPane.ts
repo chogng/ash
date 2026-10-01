@@ -384,9 +384,10 @@ export class SCMHistoryViewPane extends ViewPane {
 			const label = h(this.graphElement.ownerDocument, "span");
 			const isCurrent = reference.id === this.head?.id;
 			const isRemote = reference.category === 'remoteBranch';
+			const icon = reference.category === 'tag' ? Lxicon.tag : isRemote ? Lxicon.cloud : Lxicon.gitBranch;
 			label.className = `ash-scm-graph-label ${isCurrent ? "head" : isRemote ? "remote" : "local"}`;
-			label.dataset.icon = isRemote ? "cloud" : "git-branch";
-			appendIcon(isRemote ? Lxicon.cloud : Lxicon.gitBranch, label);
+			label.dataset.icon = icon.id;
+			appendIcon(icon, label);
 			const text = h(this.graphElement.ownerDocument, "span");
 			text.className = "ash-scm-graph-label-description";
 			text.textContent = reference.name;

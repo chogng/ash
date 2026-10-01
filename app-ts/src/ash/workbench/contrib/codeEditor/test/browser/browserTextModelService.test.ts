@@ -12,6 +12,9 @@ import { type IFileChangeEvent } from "../../../../../platform/files/common/file
 import { TextFileContentSource, TextFileSaveConflictError, type ITextFileService, type TextFileSaveRequest } from "../../../../services/textfile/common/textFileService.js";
 import { BrowserTextResourceStore } from "../../browser/browserTextResourceStore.js";
 import { LanguageService } from "../../../../../editor/common/services/languageService.js";
+import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
+import type { LanguageTokenResult } from '../../../../../editor/common/tokens/languageTokens.js';
 
 test("Stanza text model service shares one model and preserves edits across panes", async () => {
 	const textFiles = new TestTextFileService("from disk");
@@ -33,6 +36,59 @@ test("Stanza text model service shares one model and preserves edits across pane
 	assert.equal(second.model.getText(), "edited");
 	second.dispose();
 	assert.throws(() => second.model.getText(), /disposed/);
+});
+
+test('file model acquisition waits for lexical presentation and cancellation releases only its own reference', async () => {
+	using languages = new LanguageService();
+	using language = languages.registerLanguage({ id: 'demo' });
+	using features = new LanguageFeaturesService();
+	const started = new DeferredPromise<void>();
+	const result = new DeferredPromise<LanguageTokenResult>();
+	let requests = 0;
+	using registration = features.syntaxProvider.register({
+		id: 'test.file-readiness', languageIds: ['demo'],
+		provideTokens: () => { requests++; void started.complete(); return result.p; },
+	});
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(new TestTextFileService('const value = 1;')), { languageService: languages, languageFeaturesService: features });
+	const input = { resource: URI.file('/project/first.demo'), languageId: 'demo' };
+	const controller = new AbortController();
+	const cancelled = models.acquire(input, controller.signal);
+	await started.p;
+	const model = models.getModel(input.resource)!;
+	let acquired = false;
+	const opening = models.acquire(input, new AbortController().signal).then(reference => { acquired = true; return reference; });
+	controller.abort();
+	await assert.rejects(cancelled, isCancellationError);
+	assert.deepEqual([acquired, model.isDisposed(), requests], [false, false, 1]);
+	await result.complete({ tokens: [{ range: new Range(1, 1, 1, 6), tokenType: 'keyword', modifiers: [] }] });
+	const reference = await opening;
+	assert.deepEqual([reference.model, reference.model.tokenization.getLanguageTokens(0)[0]?.tokenType], [model, 'keyword']);
+	reference.dispose();
+	assert.equal(models.getModel(input.resource), null);
+	assert.equal(model.isDisposed(), true);
+});
+
+test('cancelling the final file opener disposes its model during syntax loading', async () => {
+	using languages = new LanguageService();
+	using language = languages.registerLanguage({ id: 'demo' });
+	using features = new LanguageFeaturesService();
+	const started = new DeferredPromise<void>();
+	using registration = features.syntaxProvider.register({
+		id: 'test.cancel-readiness', languageIds: ['demo'],
+		provideTokens: (_request, signal) => {
+			void started.complete();
+			return new Promise<LanguageTokenResult>((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }));
+		},
+	});
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(new TestTextFileService('text')), { languageService: languages, languageFeaturesService: features });
+	const resource = URI.file('/project/cancel.demo');
+	const controller = new AbortController();
+	const opening = models.acquire({ resource, languageId: 'demo' }, controller.signal);
+	await started.p;
+	const model = models.getModel(resource)!;
+	controller.abort();
+	await assert.rejects(opening, isCancellationError);
+	assert.deepEqual([models.getModel(resource), model.isDisposed()], [null, true]);
 });
 
 test("Stanza text model service creates the model with its resource and resolved language", async () => {

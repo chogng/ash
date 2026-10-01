@@ -459,17 +459,24 @@ test.describe('welcome brand', () => {
 			return {
 				cardWidth: Math.round(first.width),
 				secondCardOnFirstRow: first.top === second.top,
-				labelOverflow: Math.max(0, ...cards.map(card => {
+				labelsFitCards: cards.every(card => {
 					const label = card.querySelector<HTMLElement>('.ash-getting-started-card-label')!;
-					return label.scrollWidth - label.clientWidth;
-				})),
+					const labelBounds = label.getBoundingClientRect();
+					const cardBounds = card.getBoundingClientRect();
+					return labelBounds.width > 0 && labelBounds.left >= cardBounds.left && labelBounds.right <= cardBounds.right;
+				}),
+				labelsUseEllipsis: cards.every(card => {
+					const label = card.querySelector<HTMLElement>('.ash-getting-started-card-label')!;
+					const style = getComputedStyle(label);
+					return style.overflowX === 'hidden' && style.textOverflow === 'ellipsis' && style.whiteSpace === 'nowrap';
+				}),
 			};
 		});
 
 		await welcome.evaluate(element => { element.style.width = '364px'; });
-		expect(await cardGeometry()).toEqual({ cardWidth: 160, secondCardOnFirstRow: true, labelOverflow: 0 });
+		expect(await cardGeometry()).toEqual({ cardWidth: 160, secondCardOnFirstRow: true, labelsFitCards: true, labelsUseEllipsis: true });
 		await welcome.evaluate(element => { element.style.width = '350px'; });
-		expect(await cardGeometry()).toEqual({ cardWidth: 180, secondCardOnFirstRow: false, labelOverflow: 0 });
+		expect(await cardGeometry()).toEqual({ cardWidth: 180, secondCardOnFirstRow: false, labelsFitCards: true, labelsUseEllipsis: true });
 	});
 
 	test('welcome uses the theme-colored mark without a filled icon tile', async ({ workbench }) => {

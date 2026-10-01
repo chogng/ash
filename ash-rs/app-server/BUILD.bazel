@@ -4,7 +4,10 @@ ash_rust_crate(
     name = "app-server",
     crate_name = "ash_app_server",
     data = glob(["templates/**"]) + ["//ash-rs/utils/audio:tests/fixtures/tone.wav"],
-    extra_aliases = {"//ash-rs/screen-capture": "screen_capture"},
+    extra_aliases = {
+        "//ash-rs/collaboration-mode-templates": "collaboration_mode_templates",
+        "//ash-rs/screen-capture": "screen_capture",
+    },
 )
 
 ash_rust_binary(

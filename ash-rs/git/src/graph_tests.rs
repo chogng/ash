@@ -94,3 +94,25 @@ async fn graph_pages_commits_and_reports_more() {
     assert_eq!(first_page.commits()[1].subject(), "second");
     assert_eq!(second_page.commits()[0].subject(), "first");
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn graph_tags_point_to_commits_for_lightweight_and_annotated_tags() {
+    let repository = TestRepository::init();
+    repository.write("file.txt", "base\n");
+    repository.commit_all("base");
+    let head = repository.git(&["rev-parse", "HEAD"]);
+    repository.git(&["tag", "lightweight"]);
+    repository.git(&["tag", "-a", "annotated", "-m", "reviewed"]);
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let refs = client.references(&opened).await.unwrap();
+    let tags = refs
+        .iter()
+        .filter(|reference| reference.kind() == GitReferenceKind::Tag)
+        .collect::<Vec<_>>();
+    assert_eq!(tags.len(), 2);
+    assert!(
+        tags.iter()
+            .all(|tag| tag.object_id() == head && !tag.is_current() && tag.remote_name().is_none())
+    );
+}

@@ -4,6 +4,7 @@ use super::decode;
 use super::result;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::provider::ProviderApiKeyPolicyDto;
+use ash_app_server_protocol::protocol::provider::ProviderApiKeyRemoveParams;
 use ash_app_server_protocol::protocol::provider::ProviderApiKeySetParams;
 use ash_app_server_protocol::protocol::provider::ProviderApiKeySetResult;
 use ash_app_server_protocol::protocol::provider::ProviderCatalogEntryDto;
@@ -141,6 +142,24 @@ impl AppServer {
         result(&ProviderListResult { providers })
     }
 
+    pub(super) fn provider_api_key_remove(&self, params: Value) -> Result<Value, RpcError> {
+        let params: ProviderApiKeyRemoveParams = decode(&params)?;
+        let connection = ModelConnectionId::new(params.connection)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        self.configured_credentials()?
+            .remove_api_key(&connection)
+            .map_err(provider_credential_error)?;
+        self.updates
+            .publish_provider_api_key_changed(ProviderApiKeySetResult {
+                connection: connection.to_string(),
+                api_key_configured: false,
+            });
+        result(&ProviderApiKeySetResult {
+            connection: connection.to_string(),
+            api_key_configured: false,
+        })
+    }
+
     pub(super) fn provider_api_key_set(&self, params: Value) -> Result<Value, RpcError> {
         let params: ProviderApiKeySetParams = decode(&params)?;
         let connection = ModelConnectionId::new(params.connection)
@@ -166,6 +185,11 @@ impl AppServer {
         self.configured_credentials()?
             .set_api_key(&connection, params.api_key.into_bytes())
             .map_err(provider_credential_error)?;
+        self.updates
+            .publish_provider_api_key_changed(ProviderApiKeySetResult {
+                connection: connection.to_string(),
+                api_key_configured: true,
+            });
         // Saving a credential does not choose the request route. Each model binding reads the
         // available connections and applies the subscription-first policy.
         store

@@ -44,7 +44,7 @@ class Client {
 }
 
 function configuration(source = '{}\n'): IConfigurationApi {
-	return { read: async () => ({ revision: 1, document: { version: 1, source } }) } as IConfigurationApi;
+	return { read: async () => ({ revision: 1, document: { version: 1, source } }), update: async () => {}, onDidChange: () => toDisposable(() => {}) };
 }
 
 test('concurrent dictation starts cannot replace the input awaiting configuration', async () => {
@@ -52,7 +52,7 @@ test('concurrent dictation starts cannot replace the input awaiting configuratio
 	using services = new InstantiationService();
 	registerLocalTranscriptionService(services, client as unknown as AppServerProtocolClient);
 	const snapshot = new DeferredPromise<Awaited<ReturnType<IConfigurationApi['read']>>>();
-	const settings = { read: () => snapshot.p } as IConfigurationApi;
+	const settings: IConfigurationApi = { read: () => snapshot.p, update: async () => {}, onDidChange: () => toDisposable(() => {}) };
 	using service = services.createInstance(AppServerDictationService, client as unknown as AppServerProtocolClient, settings);
 	const first = service.start(() => {}, () => {});
 	await assert.rejects(service.start(() => {}, () => {}), /already active/);

@@ -3,6 +3,7 @@ import { test } from "mocha";
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
 import type { IAppServerApi, IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
+import type { GitRepositoriesResult, ServerNotification } from '../../../../../platform/app-server/common/generated/index.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
 import type { IGitApi } from "../../../../../platform/git/common/gitApi.js";
 import { WorkbenchConfigurationService } from '../../../../services/configuration/browser/configurationService.js';
@@ -10,6 +11,77 @@ import { WorkspaceContextService } from "../../../../services/workspaces/browser
 import { GitService } from "../../browser/gitService.js";
 import { GitConfiguration } from '../../common/gitConfiguration.js';
 import { GitWorkspaceError } from '../../common/gitService.js';
+
+test('GitService catalog notifications supersede stale discovery and remove the active repository', async () => {
+	const pending: Array<(value: GitRepositoriesResult) => void> = [];
+	let notify: (event: ServerNotification) => void = () => { throw new Error('missing subscription'); };
+	const api = { repositories: () => new Promise<GitRepositoriesResult>(resolve => pending.push(resolve)) } as unknown as IGitApi;
+	const appServerApi = { getConnectionState: async () => 'disconnected', onConnectionState: () => toDisposable(() => undefined) } as unknown as IAppServerApi;
+	const eventApi: IServerEventApi = { subscribe: listener => { notify = listener; return toDisposable(() => undefined); } };
+	using workspaceContext = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using configuration = new WorkbenchConfigurationService();
+	using service = new GitService({ api, appServerApi, eventApi, workspaceContext, canCloneRepository: false }, configuration, new NullLoggerService());
+	const stale = service.listRepositories();
+	notify({ method: 'git/repositoriesChanged', params: {} });
+	assert.equal(pending.length, 2);
+	const fresh = service.listRepositories();
+	pending[1]!({ repositories: [{ id: 'new', label: 'new', path: 'nested' }] });
+	await fresh;
+	assert.equal(service.activeRepository?.id, 'new');
+	pending[0]!({ repositories: [] });
+	await stale;
+	assert.equal(service.activeRepository?.id, 'new');
+	notify({ method: 'git/repositoriesChanged', params: {} });
+	const removed = service.listRepositories();
+	pending[2]!({ repositories: [] });
+	await removed;
+	assert.equal(service.activeRepository, undefined);
+	assert.deepEqual(service.repositories, []);
+});
+
+test('GitService routes branch and worktree operations to an explicit repository and keeps session deletion out of Git', async () => {
+	const requests: Array<{ operation: string; params: Record<string, unknown> }> = [];
+	const record = (operation: string, params: Record<string, unknown>): void => { requests.push({ operation, params }); };
+	const api = {
+		repositories: async () => ({ repositories: [{ id: 'root', label: 'root', path: '' }, { id: 'nested', label: 'nested', path: 'nested' }] }),
+		createBranch: async (params: Record<string, unknown>) => { record('createBranch', params); return { branches: [] }; },
+		deleteBranch: async (params: Record<string, unknown>) => { record('deleteBranch', params); return { branches: [] }; },
+		worktrees: async (params: Record<string, unknown>) => {
+			record('worktrees', params);
+			return { worktrees: [{ checkoutRoot: '/checkouts/one', path: '/checkouts/one/nested', branch: null, head: 'commit', current: false, state: 'ready' }] };
+		},
+		createWorktree: async (params: Record<string, unknown>) => { record('createWorktree', params); return { path: '/checkouts/two/nested' }; },
+		deleteWorktree: async (params: Record<string, unknown>) => { record('deleteWorktree', params); return { worktrees: [] }; },
+		resolveWorktree: async (params: Record<string, unknown>) => { record('resolveWorktree', params); return { path: '/checkouts/one/nested' }; },
+	} as unknown as IGitApi;
+	const appServerApi = { getConnectionState: async () => 'ready', onConnectionState: () => toDisposable(() => undefined) } as unknown as IAppServerApi;
+	const eventApi = { subscribe: () => toDisposable(() => undefined) } as unknown as IServerEventApi;
+	using workspaceContext = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using configuration = new WorkbenchConfigurationService();
+	using service = new GitService({ api, appServerApi, eventApi, workspaceContext, canCloneRepository: false }, configuration, new NullLoggerService());
+	await service.listRepositories();
+
+	assert.equal((await service.getRepository('nested')).id, 'nested');
+	await assert.rejects(service.getRepository('missing'), /GitRepositoryNotFound: missing/);
+	await service.createBranch('topic', 'nested');
+	await service.deleteBranch('topic', 'nested');
+	assert.deepEqual(await service.worktrees('nested'), [{ checkoutRoot: '/checkouts/one', path: '/checkouts/one/nested', branch: undefined, head: 'commit', current: false, state: 'ready' }]);
+	assert.equal(await service.createWorktree('two', 'nested'), '/checkouts/two/nested');
+	await service.deleteWorktree('/checkouts/one', 'nested');
+	assert.equal(await service.resolveWorktree('/checkouts/one', 'nested'), '/checkouts/one/nested');
+	const deletion = requests.find(request => request.operation === 'deleteWorktree')!;
+	assert.match(String(deletion.params.commandId), /^[0-9a-f-]{36}$/);
+	delete deletion.params.commandId;
+	assert.deepEqual(requests, [
+		{ operation: 'createBranch', params: { repositoryId: 'nested', name: 'topic' } },
+		{ operation: 'deleteBranch', params: { repositoryId: 'nested', name: 'topic' } },
+		{ operation: 'worktrees', params: { repositoryId: 'nested' } },
+		{ operation: 'createWorktree', params: { repositoryId: 'nested', name: 'two' } },
+		{ operation: 'deleteWorktree', params: { repositoryId: 'nested', checkoutRoot: '/checkouts/one', mode: 'unbound' } },
+		{ operation: 'resolveWorktree', params: { repositoryId: 'nested', checkoutRoot: '/checkouts/one' } },
+	]);
+	assert.equal(service.activeRepository?.id, 'root');
+});
 
 test('GitService queries ignore rules in the nearest repository and preserves resource identities', async () => {
 	const requests: unknown[] = [];
@@ -235,3 +307,29 @@ async function waitFor(predicate: () => boolean, timeout = 1000): Promise<void> 
 	while (!predicate() && Date.now() < deadline) await delay(10);
 	assert.ok(predicate(), 'expected Auto Fetch request');
 }
+
+test('GitService maps integration state and binds partial staging to exact reviewed contents', async () => {
+	const calls: unknown[] = [];
+	const status = { repositoryId: 'root', streamInstanceId: 'review', revision: 1, path: '', head: { type: 'unborn', name: 'main' }, changes: [] };
+	const api = {
+		repositories: async () => ({ repositories: [{ id: 'root', label: 'root', path: '' }] }),
+		catalog: async (params: unknown) => { calls.push(params); return { tags: [], stashes: [], remotes: [], operation: 'rebase' }; },
+		executeCommand: async (params: unknown) => { calls.push(params); return { status, outcome: 'conflicted', operation: 'rebase' }; },
+		editIndex: async (params: unknown) => { calls.push(params); return { status }; },
+	} as unknown as IGitApi;
+	const appServerApi = { getConnectionState: async () => 'ready', onConnectionState: () => toDisposable(() => undefined) } as unknown as IAppServerApi;
+	const eventApi = { subscribe: () => toDisposable(() => undefined) } as unknown as IServerEventApi;
+	using workspaceContext = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using configuration = new WorkbenchConfigurationService();
+	using service = new GitService({ api, appServerApi, eventApi, workspaceContext, canCloneRepository: false }, configuration, new NullLoggerService());
+	assert.equal((await service.catalog('root')).operation, 'rebase');
+	const result = await service.executeCommand({ kind: 'continue', operation: 'rebase' }, 'root');
+	assert.equal(result.outcome, 'conflicted');
+	assert.equal(result.status.workspacePath, '/workspace');
+	await service.editIndex('file.txt', 'unstaged', { original: null, modified: 'new\n', hunks: [] }, { kind: 'lines', start: 1, end: 1 }, 'root');
+	assert.deepEqual(calls, [
+		{ repositoryId: 'root' },
+		{ repositoryId: 'root', command: { kind: 'continue', operation: 'rebase' } },
+		{ repositoryId: 'root', path: 'file.txt', comparison: 'unstaged', expectedOriginal: null, expectedModified: 'new\n', selection: { kind: 'lines', start: 1, end: 1 } },
+	]);
+});

@@ -11,11 +11,16 @@ use ash_app_server_protocol::protocol::git::GitBranchCreateParams;
 use ash_app_server_protocol::protocol::git::GitBranchDeleteParams;
 use ash_app_server_protocol::protocol::git::GitBranchListResult;
 use ash_app_server_protocol::protocol::git::GitBranchSwitchParams;
+use ash_app_server_protocol::protocol::git::GitCatalogResult;
 use ash_app_server_protocol::protocol::git::GitChangeFileParams;
 use ash_app_server_protocol::protocol::git::GitCheckIgnoreParams;
 use ash_app_server_protocol::protocol::git::GitCheckIgnoreResult;
 use ash_app_server_protocol::protocol::git::GitCloneParams;
 use ash_app_server_protocol::protocol::git::GitCloneResult;
+use ash_app_server_protocol::protocol::git::GitCommandDto;
+use ash_app_server_protocol::protocol::git::GitCommandOutcomeDto;
+use ash_app_server_protocol::protocol::git::GitCommandParams;
+use ash_app_server_protocol::protocol::git::GitCommandResult;
 use ash_app_server_protocol::protocol::git::GitCommitChangesParams;
 use ash_app_server_protocol::protocol::git::GitCommitFileParams;
 use ash_app_server_protocol::protocol::git::GitCommitParams;
@@ -26,9 +31,17 @@ use ash_app_server_protocol::protocol::git::GitFetchModeDto;
 use ash_app_server_protocol::protocol::git::GitFetchParams;
 use ash_app_server_protocol::protocol::git::GitGraphParams;
 use ash_app_server_protocol::protocol::git::GitHistoryResult;
+use ash_app_server_protocol::protocol::git::GitIndexDiffResult;
+use ash_app_server_protocol::protocol::git::GitIndexEditParams;
+use ash_app_server_protocol::protocol::git::GitIndexHunkDto;
+use ash_app_server_protocol::protocol::git::GitIndexSelectionDto;
+use ash_app_server_protocol::protocol::git::GitIntegrationDto;
+use ash_app_server_protocol::protocol::git::GitNamedRefDto;
 use ash_app_server_protocol::protocol::git::GitOperationResult;
 use ash_app_server_protocol::protocol::git::GitPathsParams;
 use ash_app_server_protocol::protocol::git::GitRepositoryParams;
+use ash_app_server_protocol::protocol::git::GitStashDto;
+use ash_app_server_protocol::protocol::git::GitStashModeDto;
 use ash_app_server_protocol::protocol::git::GitWorktreeCreateParams;
 use ash_app_server_protocol::protocol::git::GitWorktreeCreateResult;
 use ash_app_server_protocol::protocol::git::GitWorktreeDeleteMode;
@@ -57,6 +70,110 @@ use worktree::WorktreeSelector;
 const MAX_GIT_GRAPH_PAGE_SIZE: usize = 1000;
 
 impl AppServer {
+    pub(super) fn git_catalog(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitRepositoryParams = decode(value)?;
+        let catalog = self
+            .git_runtime_service()?
+            .catalog_for(params.repository_id.as_deref())
+            .map_err(git_error)?;
+        result(&GitCatalogResult {
+            tags: catalog
+                .tags
+                .into_iter()
+                .map(|(name, object_id)| GitNamedRefDto { name, object_id })
+                .collect(),
+            stashes: catalog
+                .stashes
+                .into_iter()
+                .map(|(object_id, subject)| GitStashDto { object_id, subject })
+                .collect(),
+            remotes: catalog.remotes,
+            operation: catalog.operation.map(integration_dto),
+        })
+    }
+
+    pub(super) fn git_command(
+        &self,
+        value: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
+        let params: GitCommandParams = decode(value)?;
+        let command = command(params.command);
+        let (status, outcome, operation) = self
+            .git_runtime_service()?
+            .command_for(params.repository_id.as_deref(), &command, cancellation)
+            .map_err(git_error)?;
+        result(&GitCommandResult {
+            status,
+            operation: operation.map(integration_dto),
+            outcome: match outcome {
+                ash_git::GitCommandOutcome::Completed => GitCommandOutcomeDto::Completed,
+                ash_git::GitCommandOutcome::Conflicted => GitCommandOutcomeDto::Conflicted,
+            },
+        })
+    }
+
+    pub(super) fn git_index_diff(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitChangeFileParams = decode(value)?;
+        let path = paths(vec![params.path])?.pop().expect("validated path");
+        let diff = self
+            .git_runtime_service()?
+            .index_diff_for(
+                params.repository_id.as_deref(),
+                &path,
+                comparison(params.comparison),
+            )
+            .map_err(git_error)?;
+        let hunks = diff
+            .document
+            .hunks()
+            .iter()
+            .enumerate()
+            .map(|(index, hunk)| GitIndexHunkDto {
+                index,
+                old_start: hunk.old_start(),
+                old_count: hunk.old_count(),
+                new_start: hunk.new_start(),
+                new_count: hunk.new_count(),
+                preview: diff
+                    .document
+                    .rows_for_hunk(*hunk)
+                    .iter()
+                    .filter(|row| row.kind() != ash_diff::DiffRowKind::Context)
+                    .take(6)
+                    .map(|row| row.new_text().or_else(|| row.old_text()).unwrap_or(""))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            })
+            .collect();
+        result(&GitIndexDiffResult {
+            original: diff.original,
+            modified: diff.modified,
+            hunks,
+        })
+    }
+
+    pub(super) fn git_index_edit(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitIndexEditParams = decode(value)?;
+        let request = ash_git::GitIndexEdit {
+            path: paths(vec![params.path])?.pop().expect("validated path"),
+            comparison: comparison(params.comparison),
+            expected_original: params.expected_original,
+            expected_modified: params.expected_modified,
+            selection: match params.selection {
+                GitIndexSelectionDto::Hunk { index } => ash_git::GitIndexSelection::Hunk { index },
+                GitIndexSelectionDto::Lines { start, end } => {
+                    ash_git::GitIndexSelection::Lines { start, end }
+                }
+            },
+        };
+        let status = self
+            .git_runtime_service()?
+            .index_edit_for(params.repository_id.as_deref(), &request)
+            .map_err(git_error)?;
+        result(&GitOperationResult { status })
+    }
+
     pub(super) fn git_clone(
         &self,
         connection: &ConnectionState,
@@ -601,6 +718,9 @@ pub(super) fn git_error(error: GitRuntimeError) -> RpcError {
         GitRuntimeError::Service(GitServiceError::ConflictChanged) => {
             RpcError::new(-32064, AppServerErrorName::GitConflictChanged)
         }
+        GitRuntimeError::Service(GitServiceError::Git(GitError::IndexChanged)) => {
+            RpcError::new(-32065, AppServerErrorName::GitIndexChanged)
+        }
         GitRuntimeError::Service(GitServiceError::Git(GitError::NotAWorkingTree { .. })) => {
             RpcError::new(-32062, AppServerErrorName::GitNotRepository)
         }
@@ -612,6 +732,72 @@ pub(super) fn git_error(error: GitRuntimeError) -> RpcError {
         }
         GitRuntimeError::Service(GitServiceError::Permission) => {
             RpcError::new(-32060, AppServerErrorName::GitUnavailable)
+        }
+    }
+}
+
+fn integration_dto(operation: ash_git::GitIntegration) -> GitIntegrationDto {
+    match operation {
+        ash_git::GitIntegration::Merge => GitIntegrationDto::Merge,
+        ash_git::GitIntegration::Rebase => GitIntegrationDto::Rebase,
+        ash_git::GitIntegration::CherryPick => GitIntegrationDto::CherryPick,
+    }
+}
+fn integration(operation: GitIntegrationDto) -> ash_git::GitIntegration {
+    match operation {
+        GitIntegrationDto::Merge => ash_git::GitIntegration::Merge,
+        GitIntegrationDto::Rebase => ash_git::GitIntegration::Rebase,
+        GitIntegrationDto::CherryPick => ash_git::GitIntegration::CherryPick,
+    }
+}
+fn comparison(
+    value: ash_app_server_protocol::protocol::git::GitChangeFileComparisonDto,
+) -> ash_git::GitChangeFileComparison {
+    match value {
+        ash_app_server_protocol::protocol::git::GitChangeFileComparisonDto::Staged => {
+            ash_git::GitChangeFileComparison::Staged
+        }
+        ash_app_server_protocol::protocol::git::GitChangeFileComparisonDto::Unstaged => {
+            ash_git::GitChangeFileComparison::Unstaged
+        }
+    }
+}
+fn command(command: GitCommandDto) -> ash_git::GitCommand {
+    match command {
+        GitCommandDto::RenameBranch { name, new_name } => {
+            ash_git::GitCommand::RenameBranch { name, new_name }
+        }
+        GitCommandDto::DeleteRemoteBranch { remote, name } => {
+            ash_git::GitCommand::DeleteRemoteBranch { remote, name }
+        }
+        GitCommandDto::Merge { reference } => ash_git::GitCommand::Merge { reference },
+        GitCommandDto::Rebase { reference } => ash_git::GitCommand::Rebase { reference },
+        GitCommandDto::CherryPick { reference } => ash_git::GitCommand::CherryPick { reference },
+        GitCommandDto::Continue { operation } => ash_git::GitCommand::Continue {
+            operation: integration(operation),
+        },
+        GitCommandDto::Abort { operation } => ash_git::GitCommand::Abort {
+            operation: integration(operation),
+        },
+        GitCommandDto::Stash { message, mode } => ash_git::GitCommand::Stash {
+            message,
+            mode: match mode {
+                GitStashModeDto::Tracked => ash_git::GitStashMode::Tracked,
+                GitStashModeDto::IncludeUntracked => ash_git::GitStashMode::IncludeUntracked,
+            },
+        },
+        GitCommandDto::ApplyStash { object_id } => ash_git::GitCommand::ApplyStash { object_id },
+        GitCommandDto::PopStash { object_id } => ash_git::GitCommand::PopStash { object_id },
+        GitCommandDto::DropStash { object_id } => ash_git::GitCommand::DropStash { object_id },
+        GitCommandDto::CreateTag { name, reference } => {
+            ash_git::GitCommand::CreateTag { name, reference }
+        }
+        GitCommandDto::DeleteTag { name } => ash_git::GitCommand::DeleteTag { name },
+        GitCommandDto::AddRemote { name, url } => ash_git::GitCommand::AddRemote { name, url },
+        GitCommandDto::RemoveRemote { name } => ash_git::GitCommand::RemoveRemote { name },
+        GitCommandDto::Amend { message } => ash_git::GitCommand::Amend { message },
+        GitCommandDto::UndoCommit { expected_head } => {
+            ash_git::GitCommand::UndoCommit { expected_head }
         }
     }
 }

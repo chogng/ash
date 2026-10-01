@@ -359,7 +359,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(IQuickInputService, quickInputService);
 		services.registerInstance(IQuickAccessController, this._register(services.createInstance(QuickAccessController)));
 		services.registerInstance(IChatContextPickService, new ChatContextPickService());
-		services.registerSingleton(IPreferencesService, () => services.createInstance(PreferencesService));
 		const contextMenus = this._register(options.createContextMenuService({
 			configurationService,
 			menuService: menus,
@@ -399,7 +398,7 @@ export class Workbench extends Disposable {
 				layout.setPartAvailable('auxiliarybar', page === 'code');
 				layout.setPartAvailable('editor', page === 'code');
 			};
-			if (sessionsPart) sessionsPart.setPage(page === 'chat' || page === 'code' ? page : 'empty', updateLayout);
+			if (sessionsPart) sessionsPart.setPage(page === 'chat' || page === 'code' || page === 'design' ? page : 'empty', updateLayout);
 			else updateLayout();
 		};
 		this.showChat = () => selectActivityPage('chat');
@@ -423,7 +422,7 @@ export class Workbench extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsActivityBar,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to move between available buttons. Press Enter or Space to activate a button. Use the Context Menu key or Shift+F10 for position and size options. Chat focuses the sessions list. Chat and Code keep separate selected sessions, navigation history, unsent text, and attachments when you switch pages. Collaboration and Library open empty pages. Accounts opens the account menu, which includes Return to Workbench. Mobile devices is not available yet.'),
+					() => localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to move between available buttons. Press Enter or Space to activate a button. Use the Context Menu key or Shift+F10 for position and size options. Chat focuses the sessions list. Chat and Code keep separate selected sessions, navigation history, unsent text, and attachments when you switch pages. Collaboration and Library open empty pages. Design opens an infinite canvas. Accounts opens the account menu, which includes Return to Workbench. Mobile devices is not available yet.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsActivityBar,
 				);
@@ -486,6 +485,12 @@ export class Workbench extends Disposable {
 		services.registerInstance(IEditorPart, editor);
 		const editors = this._register(new BrowserEditorService(editor));
 		services.registerInstance(IEditorService, editors);
+		const workbenchPreferences = this._register(services.createInstance(PreferencesService));
+		services.registerInstance(IPreferencesService, {
+			openSettings: category => preferences.open(category),
+			openUserSettings: options => workbenchPreferences.openUserSettings(options),
+			openKeybindings: () => workbenchPreferences.openKeybindings(),
+		});
 		services.registerInstance(IEditorGroupsService, editors);
 		this._register(services.createInstance(TextFileEditorTracker, ownerWindow));
 		const viewDescriptors = this._register(new ViewDescriptorService({ contextKeyService: contextKeys, registry: SessionsViewRegistry }));
@@ -817,6 +822,8 @@ export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAg
 			createSessionsWorkbenchGridDescriptor(this.views, this.initialDimension, state, this.activityBarLocation),
 			{ fromJSON: data => this.view(parseSessionsPartId(data)) },
 		));
+		// Page availability must not relayout the non-proportional grid at its uninitialized zero size.
+		this.grid.layout(this.initialDimension.width, this.initialDimension.height);
 		// Save before the Grid is disposed; hidden views retain their cached user sizes.
 		this._register(toDisposable(() => this.saveState()));
 	}

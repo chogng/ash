@@ -6,9 +6,12 @@ import type { IContextMenuService } from '../../../../../platform/contextview/br
 import type { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import type { IDictationService } from '../../../../../platform/dictation/common/dictationService.js';
+import { Event as AshEvent, Emitter } from '../../../../../base/common/event.js';
+import { LocalTranscriptionModelState, type ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { NotificationSeverity } from '../../../../../platform/notification/common/notification.js';
 import { NotificationService } from '../../../../services/notification/common/notificationService.js';
 import { ChatInputPart } from '../../browser/widget/input/chatInputPart.js';
+import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import type { ChatInputDelegate, ChatInputState } from '../../browser/widget/input/chatInput.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
@@ -24,13 +27,15 @@ for (const [name, value] of Object.entries({
 }
 
 const sharedNotifications = new NotificationService();
+setARIAContainer(document.body);
 suiteTeardown(() => sharedNotifications.dispose());
 
-function inputPart(notifications: NotificationService, dictation?: IDictationService, mode: ChatInputState['mode'] = 'agent', delegate: Partial<ChatInputDelegate> = {}): ChatInputPart {
+function inputPart(notifications: NotificationService, dictation?: Pick<IDictationService, 'start'> & Partial<IDictationService>, mode: ChatInputState['mode'] = 'agent', delegate: Partial<ChatInputDelegate> = {}): ChatInputPart {
 	const container = createDomElement(document, 'div');
 	document.body.append(container);
 	let state: ChatInputState = { mode, queuedMessages: 0, phase: 'loading', canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
-	const part = new ChatInputPart(container, { ...delegate, selectMode: selected => { state = { ...state, mode: selected }; part.render(state); } } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, dictation);
+	const service: IDictationService | undefined = dictation ? { onDidChangePreparation: AshEvent.None, getPreparation: async () => undefined, prepareModel: async () => {}, cancelPreparation: async () => {}, ...dictation } : undefined;
+	const part = new ChatInputPart(container, { ...delegate, selectMode: selected => { state = { ...state, mode: selected }; part.render(state); } } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, service);
 	part.render(state);
 	return part;
 }
@@ -133,6 +138,52 @@ test('Chat dictation startup failure appears in notifications and leaves input s
 	assert.equal(part.element.querySelector('.ash-chat-status')?.textContent, 'Loading chat...');
 });
 
+test('Chat shows shared preparation, keeps text input usable and opens Dictation settings', async () => {
+	using changed = new Emitter<void>();
+	let snapshot: ILocalTranscriptionModelSnapshot | undefined = { model: 'selected', available: false, sizeBytes: 0 };
+	let starts = 0;
+	let prepared = 0;
+	let cancelled = 0;
+	const categories: unknown[] = [];
+	const sent: string[] = [];
+	using part = inputPart(sharedNotifications, {
+		onDidChangePreparation: changed.event,
+		getPreparation: async () => snapshot,
+		prepareModel: async () => { prepared++; snapshot = { model: 'selected', available: false, sizeBytes: 0, status: { state: LocalTranscriptionModelState.Downloading, file: 'encoder.onnx', downloadedBytes: 2097152 } }; changed.fire(); },
+		cancelPreparation: async () => { cancelled++; snapshot = { model: 'selected', available: false, sizeBytes: 0, status: { state: LocalTranscriptionModelState.Cancelled } }; changed.fire(); },
+		start: async () => { starts++; return { stop: async () => {} }; },
+	}, 'agent', { openModelSettings: async category => { categories.push(category); }, send: async text => { sent.push(text); } });
+	part.render({ mode: 'agent', queuedMessages: 0, phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	await new Promise(resolve => setTimeout(resolve, 0));
+	const bar = part.element.querySelector<HTMLElement>('.ash-chat-model-preparation')!;
+	assert.equal(bar.hidden, false);
+	part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')!.click();
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.equal(starts, 0);
+	[...bar.querySelectorAll('button')].find(button => button.textContent === 'Dictation settings')!.click();
+	assert.deepEqual(categories, ['dictation']);
+	[...bar.querySelectorAll('button')].find(button => button.textContent === 'Download model')!.click();
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.equal(prepared, 1);
+	assert.match(bar.textContent ?? '', /Downloading encoder.onnx: 2.0 MiB/);
+	assert.equal(bar.querySelector('progress')!.hasAttribute('value'), false);
+	assert.equal([...bar.querySelectorAll('button')].find(button => button.textContent === 'Download model')!.classList.contains('hidden'), true);
+	assert.equal([...bar.querySelectorAll('button')].find(button => button.textContent === 'Cancel')!.classList.contains('hidden'), false);
+	await part.acceptInput('Text still works');
+	assert.deepEqual(sent, ['Text still works']);
+	part.setVisible(false);
+	assert.equal(cancelled, 0);
+	part.setVisible(true);
+	await new Promise(resolve => setTimeout(resolve, 0));
+	[...bar.querySelectorAll('button')].find(button => button.textContent === 'Cancel')!.click();
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.equal(cancelled, 1);
+	snapshot = undefined;
+	changed.fire();
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.equal(bar.hidden, true);
+});
+
 test('Chat dictation session failure appears in notifications and releases the microphone', async () => {
 	using notifications = new NotificationService();
 	let endSession: ((error?: string) => void) | undefined;
@@ -151,4 +202,43 @@ test('Chat dictation session failure appears in notifications and releases the m
 	]);
 	assert.equal(part.element.querySelector('.ash-chat-status')?.textContent, 'Loading chat...');
 	assert.notEqual(part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')?.getAttribute('aria-pressed'), 'true');
+});
+
+test('Dictation replaces the selection and submission waits for final transcription', async () => {
+	let transcript!: (text: string, final: boolean) => void;
+	let finishStop!: () => void;
+	const sent: string[] = [];
+	using part = inputPart(sharedNotifications, {
+		start: async (onTranscript, onEnded) => {
+			transcript = onTranscript;
+			return { stop: async () => { await new Promise<void>(resolve => { finishStop = resolve; }); transcript('replacement', true); onEnded(); } };
+		},
+	}, 'agent', { send: async text => { sent.push(text); } });
+	part.render({ mode: 'agent', queuedMessages: 0, phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	edit(part, 'before old after');
+	const input = part.element.querySelector('textarea')!;
+	input.setSelectionRange(7, 10);
+	part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')!.click();
+	await new Promise(resolve => setTimeout(resolve, 0));
+	transcript('partial', false);
+	assert.equal(input.value, 'before old after');
+	assert.equal(part.element.querySelector('.ash-chat-dictation-preview')?.textContent, 'partial');
+	const submit = part.acceptInput();
+	await Promise.resolve();
+	assert.deepEqual(sent, []);
+	finishStop();
+	await submit;
+	assert.deepEqual(sent, ['before replacement after']);
+});
+
+test('Closing an input during microphone acquisition closes the resulting session', async () => {
+	let completeStart!: (session: { stop(): Promise<void> }) => void;
+	let stopped = 0;
+	const part = inputPart(sharedNotifications, { start: () => new Promise(resolve => { completeStart = resolve; }) });
+	part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')!.click();
+	await Promise.resolve();
+	part.dispose();
+	completeStart({ stop: async () => { stopped++; } });
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.equal(stopped, 1);
 });

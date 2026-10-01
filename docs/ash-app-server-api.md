@@ -324,6 +324,11 @@ Desktop 当前实现和 Playwright 后续边界见
 | `fs/writeFile` | directory | 原子替换或新建不超过 10 MiB 的 UTF-8 文件 |
 | `syntax/analyze` | stateless syntax | 返回同一 revision 的 bounded token/fold/symbol/diagnostic facts |
 | `syntax/selectionRanges` | stateless syntax | 只沿当前 UTF-16 selections 返回 bounded parser ancestor scopes |
+| `git/init` | authorized dir | 以 `dirId` 选择已授权工作区文件夹并创建仓库；返回重新发现的仓库清单 |
+| `git/catalog` | repository | 返回标签、储藏提交 ID、远端名称和进行中的整合状态；不返回远端 URL |
+| `git/command` | repository | 封闭 intent：分支改名、远端分支删除、merge/rebase/cherry-pick、继续/中止、stash、tag、remote、amend/undo；返回实际状态、完成或冲突结果和当前整合状态 |
+| `git/indexDiff` | repository/path/comparison | 返回当前 index 对比文本和可选的更改块 |
+| `git/indexEdit` | repository/path/comparison | 比较两侧预期文本，按选中的块或行更新 index；过期时返回 `GitIndexChanged`，不重试旧选择 |
 | `git/repositories` | authorized dirs | 列出从已授权 `Dir` 中发现的稳定 repository identity |
 | `git/checkIgnore` | repository | 批量查询 1–5000 个仓库相对路径，返回被忽略的路径；遵循嵌套规则、排除规则与 tracked 状态，不递归列出忽略目录，也不进入待提交列表 |
 | `git/status` | repository | 按可选 `repositoryId` 读取 HEAD、upstream 和 index/worktree change snapshot |
@@ -534,8 +539,8 @@ projection，不建立 App Server-owned editor document，也不返回 Tree-sitt
 
 ### Git SCM
 
-`initialize.capabilities.git` 表示 server 已从获得 `InspectRepository` Authorization 的 `Dir`
-中发现至少一个仓库并安装 Git backend。`git/repositories` 返回稳定的 repository identity。
+`initialize.capabilities.git` 表示 server 已为获得 `InspectRepository` Authorization 的 `Dir`
+安装 Git backend，包括当前尚无仓库的目录。`git/repositories` 返回稳定的 repository identity。
 `git/status` 不接受路径参数，但可携带 `repositoryId`；省略时选择排序后的首个仓库。
 它返回 `GitStatusResult`：标识当前 Git runtime incarnation 的
 `streamInstanceId`、在该实例内单调递增的 repository status revision、
@@ -547,8 +552,9 @@ rename original path、conflict 和 submodule flags。Revision 表示 App Server
 重新映射为 `Dir`-relative；写操作再把已校验路径映射为 repository-relative。
 
 App Server 通过 `ash-file-watcher` 接收 directory、Git metadata 和相关 ancestor `.gitignore`
-invalidation hint，100ms debounce 后重新读取 authoritative Git status。投影内容变化时 revision
-递增并向支持 notification 的连接发送 `git/statusChanged { status }`；内容未变时不发送。
+invalidation hint，100ms debounce 后重新读取 Git 状态及引用。HEAD、文件、分支、标签、remote 配置、stash 或整合状态变化时 revision
+递增并向支持 notification 的连接发送 `git/statusChanged { status }`；实际状态未变时不发送并保留历史分页；明确操作完成后仍发布状态，并使旧历史分页失效。
+仓库发现监听覆盖没有仓库的授权目录；外部 init、仓库移动或删除后发送 `git/repositoriesChanged {}`，客户端重读 `git/repositories`。清单变化不重建未变仓库的状态流和分页。该通知也使前端丢弃变化前已发出的清单查询结果。
 Watcher 初始化失败时显式 `git/status` 与 mutation 仍可用。客户端只在相同
 `streamInstanceId` 内比较 revision 并忽略不大于当前 revision 的通知或响应；实例变化表示
 App Server 已重启，客户端必须接受新 snapshot，并在连接重新 ready 时主动执行 `git/status`
@@ -812,11 +818,9 @@ App Server 的 [`TranscriptAccumulator`](../ash-rs/thread-transcript/src/accumul
 
 | 客户端 | 当前显示职责 |
 | --- | --- |
-| Ash Code TUI | 将条目组织成可绘制的消息和工具单元；`fullscreen` 在应用内整屏布局和滚动，`inline` 将已定稿单元逐块写入终端历史，活动内容留在稳定视口。实现与终端边界见 [TUI README](../code/tui/README.md#终端生命周期)。 |
+| Ash Code TUI | 将条目组织成可绘制的消息和工具单元，布局、滚动与终端输出由客户端拥有；fullscreen 与 inline 的行为见 [LAYOUT.md](../code/LAYOUT.md)。 |
 | Rust 桌面界面 | 保存正文快照及更新，将条目排成会话时间线；见 [正文状态](../app-rs/session/src/pane/transcript.rs)和[时间线](../app-rs/session/src/pane/timeline.rs)。 |
 | TypeScript 桌面界面 | 通过 Chat 服务保留后端条目字段，再映射为聊天列表单元；见 [服务接口](../app-ts/src/ash/workbench/services/chat/common/chatService.ts)和[列表映射](../app-ts/src/ash/workbench/contrib/chat/browser/widget/chatListItems.ts)。 |
-
-最初报告的 inline 空行增长发生在终端排版层，不是后端增加了空消息。[inline 输出](../code/tui/src/app/inline/output.rs)现在只把定稿单元按身份写入主屏历史一次，输入与活动回复在有界视口内重绘；临时面板关闭后回到原历史。重复 `/status`、多轮回复、面板和尺寸变化有 [真实 CLI/PTY 测试](../ash-cli/tests/tui/terminal.rs)覆盖。自动化用例不能代替所有宿主终端的实际显示检查，其他终端组合的验证范围见 [TUI README](../code/tui/README.md#全屏终端兼容性验证)。
 
 工具执行产生的 `ToolCall`、`ToolResult` 是后端条目；`/status` 等本地斜杠命令是客户端操作，TUI 可在自己的正文中显示操作与结果，但不把它们伪装成持久化的 Thread 条目。当前三端都接入了后端语义条目，具体显示能力仍有差异：TypeScript 聊天列表和 Rust 桌面时间线主要以文字显示工具结果；TypeScript 服务虽保留工具结果的富内容字段，列表尚未逐种呈现这些内容。这是客户端显示范围，不改变后端的内容归属。
 
@@ -918,6 +922,7 @@ mutation gate 下重读 exact pending request，过期后持久化 `DeadlineElap
 - `skills/changed`，payload 为新的 catalog `generation`；
 - `marketplace/changed`，payload 为 profile Marketplace 安装状态的 `instanceId` 与新 `generation`；
 - `git/statusChanged`，payload 为新的 directory Git status；
+- `git/repositoriesChanged`，空 payload，表示当前授权目录的仓库清单已变；
 - `fs/changed`，payload 为相对路径变化或 scoped rescan hint；
 - `project/changed`，payload 为已提交的完整 Project 视图，只投递产品 host。
 - `memory/changed`，payload 为发生变化的 Memory 作用域和 catalog revision，只投递产品 host；正文不进入通知。

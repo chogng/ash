@@ -76,7 +76,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		throwIfCancelled(signal, "Text model acquisition was cancelled");
 		const key = input.resource.toString();
 		const current = this.entries.get(key);
-		if (current) return this.reference(key, current);
+		if (current) return this.acquireReference(key, current, signal);
 
 		const content = await this.resourceStore.resolve({
 			resource: input.resource,
@@ -85,7 +85,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		throwIfCancelled(signal, "Text model acquisition was cancelled");
 		this.ensureAlive();
 		const concurrent = this.entries.get(key);
-		if (concurrent) return this.reference(key, concurrent);
+		if (concurrent) return this.acquireReference(key, concurrent, signal);
 		const languageSelection = this.options.languageService
 			? input.languageId !== undefined
 				? this.options.languageService.createById(input.languageId)
@@ -132,7 +132,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		};
 		this.entries.set(key, entry);
 		this.modelAdded.fire(model);
-		return this.reference(key, entry);
+		return this.acquireReference(key, entry, signal);
 	}
 
 	protected override disposeCore(): void {
@@ -142,6 +142,19 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			this.disposeEntry(entry);
 		}
 		super.disposeCore();
+	}
+
+	private async acquireReference(key: string, entry: TextModelEntry, signal: AbortSignal): Promise<TextModelReference> {
+		const reference = this.reference(key, entry);
+		try {
+			// File panes receive a model whose first render already includes its lexical presentation.
+			await entry.model.tokenization.whenReady(signal);
+			throwIfCancelled(signal, "Text model acquisition was cancelled");
+			return reference;
+		} catch (error) {
+			reference.dispose();
+			throw error;
+		}
 	}
 
 	private reference(key: string, entry: TextModelEntry): TextModelReference {

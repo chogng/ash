@@ -53,6 +53,7 @@ use crate::projects::Event as ProjectEvent;
 use crate::render::MermaidPreviews;
 use crate::render::RenderContext;
 use crate::render::RenderTheme;
+use crate::render::ThemePalette;
 use crate::sessions::Command as SessionCommand;
 use crate::sessions::Event as SessionEvent;
 use crate::sessions::SessionChoices;
@@ -116,6 +117,7 @@ use ash_memory_diagnostics::ProcessResourceRequest;
 use ash_protocol::ApprovalMode;
 use ash_protocol::Turn;
 use ash_protocol::TurnId;
+use ash_terminal_detection::ColorLevel;
 use crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
 use std::path::Path;
@@ -229,7 +231,7 @@ impl App {
             inline: super::inline::Inline::new(
                 ash_protocol::ThreadId::new("tui-local").expect("valid initial Thread"),
             ),
-            render_theme: RenderTheme::fallback(),
+            render_theme: RenderTheme::from_palette(ThemePalette::initial(), ColorLevel::TrueColor),
             render_theme_revision: 0,
             mermaid_previews: None,
             skill_diagnostic_warnings: SkillDiagnosticWarnings::default(),
@@ -336,7 +338,7 @@ impl App {
             inline: super::inline::Inline::new(
                 ash_protocol::ThreadId::new("tui-local").expect("valid initial Thread"),
             ),
-            render_theme: RenderTheme::fallback(),
+            render_theme: RenderTheme::from_palette(ThemePalette::initial(), ColorLevel::TrueColor),
             render_theme_revision: 0,
             mermaid_previews,
             skill_diagnostic_warnings: SkillDiagnosticWarnings::default(),
@@ -820,9 +822,6 @@ impl App {
                 Some(StatusCommand::EditLine(edit).into())
             }
             CommandPanelOutcome::Theme(outcome) => self.handle_theme_picker_outcome(outcome),
-            CommandPanelOutcome::Mcp(McpSelectionAction::Marketplace) => {
-                Some(MarketplaceCommand::browse(Some(MarketplaceCapabilityKindDto::Mcp)).into())
-            }
             CommandPanelOutcome::Connectors(ConnectorSelectionAction::Marketplace) => Some(
                 MarketplaceCommand::browse(Some(MarketplaceCapabilityKindDto::Connector)).into(),
             ),
