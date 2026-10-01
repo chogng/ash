@@ -8,6 +8,21 @@
 	opacity: 0.9;
 }
 
+.stanza-editor .minimap.has-right-overflow::after {
+	/* Keep the cue inside the clipping boundary and above the document raster. */
+	content: '';
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	box-shadow: 6px 0 6px -6px var(--ash-widget-shadow) inset;
+}
+
+@media (forced-colors: active) {
+	.stanza-editor .minimap.has-right-overflow::after {
+		box-shadow: none;
+	}
+}
+
 .stanza-editor .stanza-editor-minimap-slider {
 	position: absolute;
 	left: 0;

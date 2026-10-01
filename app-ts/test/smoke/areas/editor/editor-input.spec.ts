@@ -218,6 +218,42 @@ test('minimap reflects equal-length text edits in the workbench', async ({ targe
 	await expect(editor.element.locator('.minimap')).toHaveAttribute('aria-hidden', 'true');
 });
 
+test('minimap shadow indicates content beyond the right edge', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	const minimap = editor.element.locator('.minimap');
+	const scrollable = editor.element.locator(':scope > .ash-smooth-scrollable');
+	const readShadow = () => minimap.evaluate(element => {
+		const style = getComputedStyle(element, '::after');
+		return { content: style.content, shadow: style.boxShadow, pointerEvents: style.pointerEvents, left: style.left };
+	});
+	await page.keyboard.insertText('short line');
+	await expect.poll(async () => (await readShadow()).shadow).toBe('none');
+	await page.keyboard.insertText(' long text'.repeat(100));
+	await scrollable.evaluate(element => { element.scrollLeft = 0; });
+	await expect.poll(() => scrollable.evaluate(element => element.scrollWidth > element.clientWidth && element.scrollLeft === 0)).toBe(true);
+	await expect.poll(async () => (await readShadow()).shadow).not.toBe('none');
+	expect(await readShadow()).toMatchObject({ content: '""', pointerEvents: 'none', left: '0px' });
+	await minimap.evaluate(element => element.style.setProperty('--ash-widget-shadow', '#123456'));
+	try {
+		await expect.poll(async () => (await readShadow()).shadow).toBe('rgb(18, 52, 86) 6px 0px 6px -6px inset');
+	} finally {
+		await minimap.evaluate(element => element.style.removeProperty('--ash-widget-shadow'));
+	}
+	await page.emulateMedia({ forcedColors: 'active' });
+	await expect.poll(async () => (await readShadow()).shadow).toBe('none');
+	await page.emulateMedia({ forcedColors: 'none' });
+	await expect.poll(async () => (await readShadow()).shadow).not.toBe('none');
+	await scrollable.evaluate(element => { element.scrollLeft = element.scrollWidth; });
+	await expect.poll(() => scrollable.evaluate(element => element.scrollLeft + element.clientWidth >= element.scrollWidth)).toBe(true);
+	await expect.poll(async () => (await readShadow()).shadow).toBe('none');
+	await scrollable.evaluate(element => { element.scrollLeft = 0; });
+	await expect.poll(async () => (await readShadow()).shadow).not.toBe('none');
+});
+
 test('minimap slider has modern corners and reaches the scrollbar bottom', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
