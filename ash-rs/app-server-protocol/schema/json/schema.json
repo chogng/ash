@@ -19144,25 +19144,39 @@
       ]
     },
     "FsCopyParams": {
-      "description": "Copies a file or directory between explicitly granted workspace roots.",
+      "description": "Copies between workspace roots, or within one Session-authorized directory.",
       "properties": {
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionDirSelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "source": {
           "type": "string"
         },
         "sourceDirId": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "target": {
           "type": "string"
         },
         "targetDirId": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
-        "sourceDirId",
         "source",
-        "targetDirId",
         "target"
       ],
       "type": "object"
@@ -19360,17 +19374,29 @@
       "description": "Pastes files from the system clipboard into a granted workspace directory.",
       "properties": {
         "dirId": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "moveRequested": {
           "type": "boolean"
         },
         "path": {
           "type": "string"
+        },
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionDirSelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
-        "dirId",
         "path",
         "moveRequested"
       ],

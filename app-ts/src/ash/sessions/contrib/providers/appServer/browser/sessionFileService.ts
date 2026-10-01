@@ -1,0 +1,52 @@
+import { toDisposable } from '../../../../../base/common/lifecycle.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { BrowserFileService } from '../../../../../platform/files/browser/fileService.js';
+import type { IFileApi } from '../../../../../platform/files/common/fileApi.js';
+import type { IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
+
+/** Selects the owning Session at the transport boundary; shared file/editor state stays in Workbench. */
+export class SessionFileService extends BrowserFileService {
+	constructor(
+		host: IRendererHost,
+		@IWorkspaceContextService workspace: IWorkspaceContextService,
+	) {
+		const target = <T extends { readonly dirId?: string }>(params: T): Omit<T, 'dirId'> & { dirId?: string; sessionDirectory?: { sessionId: string; path: string } } => {
+			if (!params.dirId?.startsWith('session:')) { return params; }
+			const [sessionId, path] = params.dirId.slice('session:'.length).split(':').map(decodeURIComponent);
+			const { dirId, ...rest } = params;
+			return { ...rest, sessionDirectory: { sessionId, path } };
+		};
+		const api: IFileApi = {
+			getMetadata: params => host.fs.getMetadata(target(params)),
+			readDirectory: params => host.fs.readDirectory(target(params)),
+			readFile: params => host.fs.readFile(target(params)),
+			readBinaryFile: params => host.fs.readBinaryFile(target(params)),
+			writeFile: params => host.fs.writeFile(target(params)),
+			writeBinaryFile: params => host.fs.writeBinaryFile(target(params)),
+			createFile: params => host.fs.createFile(target(params)),
+			createDirectory: params => host.fs.createDirectory(target(params)),
+			copy: params => {
+				if (params.sourceDirId?.startsWith('session:') || params.targetDirId?.startsWith('session:')) {
+					if (params.sourceDirId !== params.targetDirId) { throw new Error('Copying between Session directories is not supported.'); }
+					const selected = target({ dirId: params.sourceDirId });
+					return host.fs.copy({ source: params.source, target: params.target, sessionDirectory: selected.sessionDirectory });
+				}
+				return host.fs.copy(params);
+			},
+			pasteSystemFiles: params => host.fs.pasteSystemFiles(target(params)),
+			rename: params => host.fs.rename(target(params)),
+			delete: params => host.fs.delete(target(params)),
+		};
+		super({
+			api,
+			resourceApi: host.resource,
+			workspaceContextService: workspace,
+			onDidChange: listener => {
+				const subscription = host.events.subscribe(event => {
+					if (event.method === 'fs/changed') { listener(event.params); }
+				});
+				return toDisposable(() => subscription.dispose());
+			},
+		});
+	}
+}

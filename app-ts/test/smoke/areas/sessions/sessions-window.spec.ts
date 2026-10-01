@@ -1250,7 +1250,7 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	}
 	await expect(sessionsPage.locator("[data-part='sidebar']")).toBeVisible();
 	await expect(sessionsPage.locator("[data-part='sessions']")).toBeVisible();
-	await expect(sessionsPage.locator("[data-part='auxiliarybar']")).toBeVisible();
+	await expect(sessionsPage.locator("[data-part='auxiliarybar']")).toBeHidden();
 	const sidebarToggle = titlebar.getByRole('button', { name: 'Hide sidebar' });
 	await expect(sidebarToggle.locator('svg[data-ash-icon-id="layout-sidebar-left-2"]')).toBeVisible();
 	const divider = await sessionsPage.evaluate(() => {

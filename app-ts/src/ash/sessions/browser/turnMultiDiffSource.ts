@@ -1,4 +1,5 @@
 import { URI } from '../../base/common/uri.js';
+import { localize } from '../../nls.js';
 import type { IChatService, TurnChangeFile, TurnChangeSetSummary } from '../../workbench/services/chat/common/chatService.js';
 import { createMultiDiffEditorInput, type MultiDiffEditorInput, type MultiDiffEditorInputItem } from '../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import type { IActiveSessionThread } from '../services/sessions/common/session.js';
@@ -22,6 +23,7 @@ export async function createTurnMultiDiffEditorInput(chatService: IChatService, 
 		for (const file of details.files) {
 			const contents = await chatService.readTurnChangeFile(active.session.sessionId, active.threadId, changeSet.changeSetId, file.path);
 			if (contents.binary) continue;
+			if (contents.truncated) throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.'));
 			const existing = composed.get(file.path);
 			if (existing) {
 				existing.after = contents.after ?? '';

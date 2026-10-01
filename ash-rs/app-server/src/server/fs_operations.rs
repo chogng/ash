@@ -230,11 +230,43 @@ impl AppServer {
 
     pub(super) fn fs_copy(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FsCopyParams = decode(params)?;
-        let source =
-            self.file_system_for_request(Some(&params.source_dir_id), None, Permission::ReadFiles)?;
+        if params.session_directory.is_none()
+            && (params.source_dir_id.is_none() || params.target_dir_id.is_none())
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        if params.session_directory.is_some()
+            && (params.source_dir_id.is_some() || params.target_dir_id.is_some())
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let source: std::sync::Arc<dyn ash_file_system::FileSystem> =
+            if let Some(selector) = &params.session_directory {
+                std::sync::Arc::new(
+                    ash_file_system::LocalFileSystem::from_authorizations(
+                        self.session_dir_authorization(
+                            &selector.session_id,
+                            &selector.path,
+                            Permission::ReadFiles,
+                        )?,
+                        [self.session_dir_authorization(
+                            &selector.session_id,
+                            &selector.path,
+                            Permission::BrowseFiles,
+                        )?],
+                    )
+                    .map_err(file_system_error)?,
+                )
+            } else {
+                self.file_system_for_request(
+                    params.source_dir_id.as_deref(),
+                    None,
+                    Permission::ReadFiles,
+                )?
+            };
         let target = self.file_system_for_request(
-            Some(&params.target_dir_id),
-            None,
+            params.target_dir_id.as_deref(),
+            params.session_directory.as_ref(),
             Permission::WriteFiles,
         )?;
         source
@@ -245,8 +277,14 @@ impl AppServer {
 
     pub(super) fn fs_paste_system_files(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FsPasteSystemFilesParams = decode(params)?;
-        let files =
-            self.file_system_for_request(Some(&params.dir_id), None, Permission::WriteFiles)?;
+        if params.dir_id.is_none() && params.session_directory.is_none() {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let files = self.file_system_for_request(
+            params.dir_id.as_deref(),
+            params.session_directory.as_ref(),
+            Permission::WriteFiles,
+        )?;
         result(
             &files
                 .paste_system_files(

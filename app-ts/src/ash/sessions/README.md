@@ -17,7 +17,9 @@ is canonical for the renderer implementation and extension points.
 | Browser renderer lifecycle | `workbench/services/lifecycle/browser/lifecycleService.ts` | joins shutdown work when the browser page closes |
 | Electron renderer close | `workbench/services/lifecycle/electron-browser/lifecycleService.ts` | checks shutdown vetoes and joins save work before either Electron window closes |
 | Code profile | `code/common/codeSessionsProfile.ts` | defines the Code window identity and page route used by both browser and Electron entries |
-| Product composition | `browser/workbench.ts` | uses shared window identity and lifecycle services; owns the fixed titlebar/activitybar/sidebar/sessions/auxiliarybar Part set |
+| Product composition | `browser/workbench.ts` | uses shared window identity and lifecycle services; owns the fixed titlebar/activitybar/sidebar/sessions/editor/auxiliarybar Part set |
+| Code Files and Changes | `contrib/files/browser/`, `contrib/changes/browser/`, and `common/views.ts` | register only in the Sessions view catalog; Files reuses Explorer, Changes reads the selected conversation's Turn ledger, and both open the shared Workbench Editor Part |
+| Session file access | `services/workspace/browser/workspaceContextService.ts` and `contrib/providers/appServer/browser/sessionFileService.ts` | Explorer follows the selected Session directory; resource identities retain previously opened directories, while the transport adapter selects the Session directory protocol |
 | Layout | `browser/layoutPolicy.ts` | owns Sessions topology, geometry, Activity Bar position, sidebar and auxiliary visibility, and persisted sizes |
 | Appearance | `common/configuration.ts` and `contrib/modernUI/browser/` | own the independent Sessions layout, Activity Bar position, and size preferences |
 | Accounts and settings | `contrib/accounts/browser/` and `contrib/preferences/browser/` | the account icon opens a Sessions-owned menu with Settings and Return to Workbench; Settings opens a Sessions-owned page that reuses the Workbench setting widgets |
@@ -89,9 +91,10 @@ before flushing storage.
    `WorkbenchWindow` registers the renderer window and its document styles;
    The renderer lifecycle service joins storage flush before disposal.
 4. `SessionsWorkbenchLayout` deserializes the fixed Part grid. Titlebar,
-   activitybar, sidebar, and sessions Parts are registered; the sidebar and auxiliary Parts can be toggled,
+   activitybar, sidebar, sessions, editor, and auxiliary Parts are registered; the sidebar and auxiliary Parts can be toggled,
    and Activity Bar visibility follows `sessions.activityBar.location`.
    The Activity Bar selects Chat, Collaboration, Library, and Code; Collaboration and Library currently show empty pages.
+   Chat hides the auxiliary bar. Code exposes Files and Changes; opening a file or comparison reveals the retained Workbench editor beside the conversation. Switching pages hides and restores that editor without closing its files. Session details has been removed.
    Mobile devices remains unavailable. Its right-click menu moves the
    controls to the sidebar top or bottom, hides them, or selects the side rail size through
    `sessions.activityBar.compact`. The Sessions titlebar composes the shared BrowserMenubarControl with Sessions menu IDs and visual tokens. Layout actions derive menu context keys from the layout and window Sessions service; the titlebar keeps no separate sidebar or history state. Code hosts its own retained conversations with a centered new-session composer; after the first message, the input stays below the conversation. The sidebar owns the new-session control.
@@ -173,6 +176,9 @@ displays the stored root and does not grant access.
 
 - `test/browser/sessions-layout.test.ts` protects fixed topology, required
   Parts, and sidebar and auxiliary visibility.
+- `test/browser/sessionFileService.test.ts` protects Session directory routing across
+  selection changes, directory moves, and archive. `changesView.test.ts` covers stale
+  responses, keyboard Diff opening, combined review, and truncated content errors.
 - `test/browser/sessions-view-service.test.ts` protects selection ownership,
   multi-session visibility, history, stale references, close behavior, and
   draft materialization.
@@ -193,8 +199,10 @@ displays the stored root and does not grant access.
 - `test/browser/workspaceSelection.test.ts` protects the frontend mapping from
   empty, single-folder, and multi-root Workspaces to execution targets.
 - `test/smoke/areas/sessions/sessions-window.spec.ts` verifies the dedicated
-  Electron window, all five Parts, Activity Bar actions, list search, details visibility, multiple Grid leaves, close, return flow,
+  Electron window, all six Parts, Activity Bar actions, list search, multiple Grid leaves, close, return flow,
   and system-wide shortcut registration and release.
+- `test/smoke/areas/sessions/sessions-code.spec.ts` verifies Files/Changes in Web and
+  Electron, file save through the real backend, and retained editor and view state.
 - `platform/windows/test/electron-main/` verifies reuse,
   close and reopen ordering, resource release, initialization failure, and IPC commands.
 - `workbench/contrib/keybindings/test/electron-browser/` verifies shortcut

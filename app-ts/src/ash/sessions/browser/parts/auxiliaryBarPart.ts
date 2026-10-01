@@ -1,76 +1,44 @@
 import "./media/auxiliaryBarPart.css";
-import type { IUntitledChatSession } from "../../services/sessions/common/session.js";
-import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
-import { WorkbenchPart } from "../../../workbench/browser/part.js";
-import type { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
-import { h } from "../../../base/browser/dom.js";
-import { localize } from '../../../nls.js';
+import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
+import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
+import { IStorageService } from '../../../platform/storage/common/storage.js';
+import { AuxiliarybarPart } from '../../../workbench/browser/parts/auxiliarybar/auxiliarybarPart.js';
+import { PaneComposite } from '../../../workbench/browser/parts/views/paneComposite.js';
+import { IViewDescriptorService } from '../../../workbench/services/views/common/viewDescriptorService.js';
+import { ViewContainerLocation } from '../../../workbench/common/views.js';
 
-/** Typed Session and Thread context for the active Sessions Workbench slot. */
-export class AuxiliaryBarPart extends WorkbenchPart {
-	private readonly sessionService: ISessionsManagementService;
-	private readonly viewService: ISessionsService;
+/** Composes Sessions contributions in the shared retained Auxiliary Bar. */
+export class AuxiliaryBarPart extends AuxiliarybarPart {
 
 	override get minimumWidth(): number { return 180; }
 	override get maximumWidth(): number { return 460; }
 
-	constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsService) {
-		super(container, "auxiliarybar");
-		this.sessionService = sessionService;
-		this.viewService = viewService;
-		this._register(viewService.onDidChange(() => this.render()));
-		this.render();
+	constructor(
+		container: HTMLElement,
+		@IViewDescriptorService private readonly descriptors: IViewDescriptorService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@IContextKeyService private readonly contextKeys: IContextKeyService,
+		@IStorageService storage: IStorageService,
+	) {
+		super(container, { viewDescriptorService: descriptors, contextKeyService: contextKeys, storageService: storage });
+		this.domNode.classList.add('ash-sessions-auxiliarybar');
+		this.setCompositeBarVisible(true);
+		this._register(this.onDidSelectComposite(event => this.showComposite(event.compositeId)));
 	}
 
-	setEmptyPage(empty: boolean): void {
-		this.contentDomNode.classList.toggle('empty-page', empty);
-	}
-
-	private render(): void {
-		const content = this.contentDomNode;
-		const heading = h(content.ownerDocument, "h2");
-		heading.textContent = localize('sessions.details.heading', 'Session details');
-		const selection = this.viewService.activeSelection;
-		if (selection?.kind === "session") {
-			const active = selection.active;
-			content.replaceChildren(heading, contextList(content.ownerDocument, [
-				["Status", active.session.status],
-				["Model", active.session.model ? `${active.session.model.provider}/${active.session.model.model}` : "Default"],
-				["Chats", String(active.session.chats.length)],
-				["Active thread", active.threadId],
-				["Session", active.session.sessionId],
-			]));
-			return;
+	public initialize(): void {
+		for (const viewContainer of this.descriptors.getViewContainers(ViewContainerLocation.AuxiliaryBar)) {
+			this.addComposite(new PaneComposite(this.domNode, {
+				viewContainer,
+				model: this.descriptors.getViewContainerModel(viewContainer.id),
+				instantiationService: this.instantiation,
+				contextKeyService: this.contextKeys,
+				paneLayout: 'fill',
+				paneHeaders: 'hidden',
+				onDidFailCreateView: error => { throw error; },
+			}));
 		}
-		if (selection?.kind === "untitled") {
-			content.replaceChildren(heading, contextList(content.ownerDocument, untitledContext(selection.session)));
-			return;
-		}
-		const state = h(content.ownerDocument, "p");
-		state.className = "ash-sessions-context-empty";
-		state.textContent = this.sessionService.state === "loading" ? "Loading sessions…" : this.sessionService.error ?? "No active session.";
-		content.replaceChildren(heading, state);
+		const restored = this.getCompositeIdToRestore();
+		if (restored) { this.showComposite(restored); }
 	}
-}
-
-function untitledContext(session: IUntitledChatSession): ReadonlyArray<readonly [string, string]> {
-	return [
-		["Status", "Draft"],
-		["Model", session.model ? `${session.model.provider}/${session.model.model}` : "Default"],
-		["Session", "Created on first send"],
-	];
-}
-
-function contextList(ownerDocument: Document, rows: ReadonlyArray<readonly [string, string]>): HTMLDListElement {
-	const list = h(ownerDocument, "dl");
-	list.className = "ash-sessions-context-list";
-	for (const [label, value] of rows) {
-		const term = h(ownerDocument, "dt");
-		term.textContent = label;
-		const detail = h(ownerDocument, "dd");
-		detail.textContent = value;
-		detail.title = value;
-		list.append(term, detail);
-	}
-	return list;
 }

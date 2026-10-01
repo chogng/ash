@@ -1511,6 +1511,57 @@ fn session_directory_move_changes_future_context_only_for_that_session() {
     assert!(!context(&first).contains(&format!("<cwd>{}</cwd>", cwd.display())));
 }
 
+#[test]
+fn session_files_copy_within_the_selected_directory_and_reject_ambiguous_targets() {
+    let primary = TestDir::new("session-file-copy", "original.txt");
+    let server = server().with_local_env_host(None, host_policy()).unwrap();
+    server.switch_local_dir_root(primary.path.clone()).unwrap();
+    let thread = server
+        .start_thread(StartThreadRequest {
+            execution_target: None,
+            branch_name: None,
+            agent_id: None,
+            agent: None,
+            command_id: CommandId::new("session-file-copy-thread").unwrap(),
+            title: "Files".into(),
+        })
+        .unwrap();
+    let selector =
+        serde_json::json!({"sessionId":thread.session_id,"path":primary.root().canonical_path()});
+    server
+        .add_session_dir(
+            &thread.session_id,
+            primary.path.clone(),
+            host_dir_permissions(),
+        )
+        .unwrap();
+    let copied = server.fs_copy(&serde_json::json!({
+        "sessionDirectory":selector,"source":"original.txt","target":"copied.txt"
+    }));
+    assert!(copied.is_ok(), "{copied:?}");
+    assert_eq!(
+        std::fs::read(primary.path.join("copied.txt")).unwrap(),
+        std::fs::read(primary.path.join("original.txt")).unwrap()
+    );
+    for params in [
+        serde_json::json!({"source":"original.txt","target":"invalid.txt"}),
+        serde_json::json!({"sessionDirectory":selector,"sourceDirId":"workspace","source":"original.txt","target":"invalid.txt"}),
+        serde_json::json!({"sessionDirectory":selector,"targetDirId":"workspace","source":"original.txt","target":"invalid.txt"}),
+    ] {
+        assert_eq!(server.fs_copy(&params).unwrap_err().code, -32602);
+    }
+    assert!(!primary.path.join("invalid.txt").exists());
+    for params in [
+        serde_json::json!({"path":"","moveRequested":false}),
+        serde_json::json!({"dirId":"workspace","sessionDirectory":selector,"path":"","moveRequested":false}),
+    ] {
+        assert_eq!(
+            server.fs_paste_system_files(&params).unwrap_err().code,
+            -32602
+        );
+    }
+}
+
 fn server() -> AppServer {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),

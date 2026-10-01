@@ -87,9 +87,11 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 	let lifecycleService!: ElectronLifecycleService;
 	const initialConfigurationSnapshot = validateConfigurationSnapshot(await api.configuration.read());
 	const workspaceContext = createWorkspaceContextApi();
-	let workspaceSelection = selectionFromWorkspace(parseWorkspace(await workspaceContext.getWorkspace()));
+	let workspace = parseWorkspace(await workspaceContext.getWorkspace());
+	let workspaceSelection = selectionFromWorkspace(workspace);
 	const workspaceSubscription = workspaceContext.onDidChange(value => {
-		workspaceSelection = selectionFromWorkspace(parseWorkspace(value));
+		workspace = parseWorkspace(value);
+		workspaceSelection = selectionFromWorkspace(workspace);
 	});
 	sessions.add(toDisposable(() => workspaceSubscription.dispose()));
 	const hostColorScheme = await api.nativeHost.getOSColorScheme();
@@ -98,6 +100,7 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 		profile,
 		api,
 		workspaceSelection: () => workspaceSelection,
+		workspace: () => workspace,
 		createLifecycleService: services => lifecycleService = services.createInstance(ElectronLifecycleService, { ownerWindow: window, onError: onUnexpectedError }),
 		nativeHostApi: api.nativeHost,
 		returnToWorkbench: () => { void invoke<void>(RETURN_TO_WORKBENCH_CHANNEL).catch(onUnexpectedError); },

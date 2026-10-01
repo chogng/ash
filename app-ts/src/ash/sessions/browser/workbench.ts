@@ -10,6 +10,7 @@ import { SerializableGrid, type SerializedGridDescriptor } from '../../base/brow
 import { Emitter, type Event } from '../../base/common/event.js';
 import { WorkbenchPartView } from '../../workbench/browser/workbenchPartView.js';
 import { SessionsLayoutPolicy } from './layoutPolicy.js';
+import { SessionsViewRegistry } from '../common/views.js';
 import { sessionsPartIds, SESSION_SIDEBAR_DEFAULT_WIDTH, SESSION_AUXILIARYBAR_DEFAULT_WIDTH, type SessionsPartId } from '../common/layoutConstants.js';
 import { Disposable, toDisposable, type IDisposable } from "../../base/common/lifecycle.js";
 import { ILanguageService } from "../../editor/common/languages/language.js";
@@ -44,7 +45,40 @@ import type { IRendererHost } from "../../platform/renderer/common/rendererHost.
 import type { INativeHostApi, IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { IStorageService, WillSaveStateReason, StorageScope, StorageTarget } from "../../platform/storage/common/storage.js";
 import { IThemeService } from "../../platform/theme/common/themeService.js";
-import { WorkbenchState } from "../../platform/workspace/common/workspace.js";
+import { WorkbenchState, IWorkspaceContextService, type IWorkspace } from "../../platform/workspace/common/workspace.js";
+import { SessionsWorkspaceContextService } from '../services/workspace/browser/workspaceContextService.js';
+import { SessionFileService } from '../contrib/providers/appServer/browser/sessionFileService.js';
+import { IFileService } from '../../platform/files/common/files.js';
+import { ISystemFileTransferService } from '../../platform/files/common/systemFileTransferService.js';
+import { IClipboardService } from '../../platform/clipboard/common/clipboardService.js';
+import { IDialogService } from '../../platform/dialogs/common/dialogs.js';
+import { DialogService } from '../../workbench/services/dialogs/common/dialogService.js';
+import { BrowserDialogHandler } from '../../workbench/browser/parts/dialogs/dialog.js';
+import { DialogHandlerContribution } from '../../workbench/browser/parts/dialogs/dialog.web.contribution.js';
+import { ILabelService, LabelService } from '../../platform/label/common/labelService.js';
+import { IResourceIconRenderer, IResourceLabelService, ResourceLabelService } from '../../workbench/browser/labels.js';
+import { IFileLabelDecorationService } from '../../workbench/services/labels/common/fileLabelDecorationService.js';
+import { FileLabelDecorationService } from '../../workbench/services/labels/browser/fileLabelDecorationService.js';
+import { ITextFileService, TextFileService } from '../../workbench/services/textfile/common/textFileService.js';
+import { IWorkingCopyService } from '../../workbench/services/workingCopy/common/workingCopyService.js';
+import { BrowserWorkingCopyService } from '../../workbench/services/workingCopy/browser/browserWorkingCopyService.js';
+import { IUntitledTextEditorService } from '../../workbench/services/untitled/common/untitledTextEditorService.js';
+import { BrowserUntitledTextEditorService } from '../../workbench/services/untitled/browser/browserUntitledTextEditorService.js';
+import { IExplorerService } from '../../workbench/contrib/files/browser/files.js';
+import { ExplorerService } from '../../workbench/contrib/files/browser/explorerService.js';
+import { TextFileEditorTracker } from '../../workbench/contrib/files/browser/editors/textFileEditorTracker.js';
+import { ITextModelResourceService, IFileTextModelService } from '../../workbench/services/textmodelResolver/common/textModelResourceService.js';
+import { getBrowserTextModelService } from '../../workbench/services/textmodelResolver/browser/browserTextModelService.js';
+import { getBrowserTextResourceStore } from '../../workbench/contrib/codeEditor/browser/browserTextResourceStore.js';
+import { BrowserTextMateService } from '../../workbench/services/textMate/browser/browserTextMateService.js';
+import { ITextMateService } from '../../workbench/services/textMate/common/textMateService.js';
+import { DiffService } from '../../workbench/services/diff/browser/diffService.js';
+import { EditorPart, IEditorPart } from '../../workbench/browser/parts/editor/editorPart.js';
+import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
+import { BrowserEditorService } from '../../workbench/services/editor/browser/browserEditorService.js';
+import { IEditorGroupsService } from '../../workbench/services/editor/common/editorGroupsService.js';
+import { IViewDescriptorService, ViewDescriptorService } from '../../workbench/services/views/common/viewDescriptorService.js';
+import { IViewsService, ViewsService } from '../../workbench/services/views/browser/viewsService.js';
 import type { SessionWorkspaceSelection } from '../services/sessions/common/session.js';
 import { pickWorkspaceFolder } from './workspaceSelection.js';
 import type { WorkbenchPart } from "../../workbench/browser/part.js";
@@ -119,6 +153,7 @@ export interface IWorkbenchOptions {
 	readonly profile: SessionsProfile;
 	readonly api: IRendererHost;
 	readonly workspaceSelection: () => SessionWorkspaceSelection;
+	readonly workspace: () => IWorkspace;
 	readonly createLifecycleService: (services: IInstantiationService) => ILifecycleService & IDisposable;
 	readonly nativeHostApi?: INativeHostApi;
 	readonly returnToWorkbench: () => void;
@@ -209,6 +244,34 @@ export class Workbench extends Disposable {
 			storageService: storage,
 		}));
 		services.registerInstance(ISessionsService, view);
+		const workspace = this._register(services.createInstance(SessionsWorkspaceContextService, options.workspace));
+		services.registerInstance(IWorkspaceContextService, workspace);
+		const files = this._register(services.createInstance(SessionFileService, options.api));
+		services.registerInstance(IFileService, files);
+		services.registerInstance(ISystemFileTransferService, files);
+		services.registerInstance(ILabelService, this._register(new LabelService(workspace)));
+		services.registerInstance(IResourceIconRenderer, themeService);
+		services.registerInstance(IFileLabelDecorationService, this._register(new FileLabelDecorationService()));
+		services.registerSingleton(IResourceLabelService, () => services.createInstance(ResourceLabelService));
+		services.registerSingleton(IExplorerService, () => services.createInstance(ExplorerService));
+		services.registerSingleton(IUntitledTextEditorService, () => services.createInstance(BrowserUntitledTextEditorService));
+		services.registerSingleton(IMultiDiffSourceResolverService, () => services.createInstance(MultiDiffSourceResolverService));
+		services.registerInstance(IClipboardService, new BrowserClipboardService(ownerWindow.navigator.clipboard));
+		const textFiles = new TextFileService(files);
+		services.registerInstance(ITextFileService, textFiles);
+		const workingCopies = this._register(new BrowserWorkingCopyService());
+		services.registerInstance(IWorkingCopyService, workingCopies);
+		const textMate = this._register(new BrowserTextMateService());
+		services.registerInstance(ITextMateService, textMate);
+		const textModels = this._register(getBrowserTextModelService(getBrowserTextResourceStore(textFiles), {
+			languageService,
+			languageConfigurationService: services.get(ILanguageConfigurationService),
+			languageFeaturesService: services.get(ILanguageFeaturesService),
+			syntaxService: { workerFactory: textMate.syntaxWorkerFactory },
+			onDidChangeLanguageSupport: textMate.onDidChange,
+		}));
+		services.registerInstance(ITextModelResourceService, textModels);
+		services.registerInstance(IFileTextModelService, textModels);
 		services.registerInstance(IChatService, chat);
 		const accountService = this._register(new AppServerAccountService(options.api.accounts, options.api.events));
 		services.registerInstance(IAccountService, accountService);
@@ -224,6 +287,9 @@ export class Workbench extends Disposable {
 		this.domNode.className = "ash-sessions-window ash-code-sessions-window";
 		options.container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
+		const dialogs = this._register(new DialogService());
+		services.registerInstance(IDialogService, dialogs);
+		this._register(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(this.domNode)));
 
 		let sessionsPart: SessionsPart | undefined;
 		const layout = this.layoutService = this._register(services.createInstance(SessionsWorkbenchLayout, this.domNode, {
@@ -326,9 +392,9 @@ export class Workbench extends Disposable {
 				sessionsPart?.setPage(page);
 			}
 			else sessionsPart?.setPage('empty');
-			auxiliarybar?.setEmptyPage(page !== 'chat');
 			layout.setPartAvailable('sidebar', page === 'chat' || page === 'code');
-			layout.setPartAvailable('auxiliarybar', page === 'chat' || page === 'code');
+			layout.setPartAvailable('auxiliarybar', page === 'code');
+			layout.setPartAvailable('editor', page === 'code');
 		};
 		this.showChat = () => selectActivityPage('chat');
 		activitybar = this._register(services.createInstance(ActivityBarPart, this.domNode, {
@@ -394,15 +460,60 @@ export class Workbench extends Disposable {
 		};
 		this._register(view.onDidChange(updateSessionsPart));
 		updateSessionsPart();
-		auxiliarybar = this._register(new AuxiliaryBarPart(this.domNode, sessions, view));
+		const editor = this._register(services.createInstance(EditorPart, this.domNode, {
+			configurationService,
+			contextKeyService: contextKeys,
+			keybindingService: keybindings,
+			keybindingsResourceService,
+			keyboardLayoutService,
+			fileService: files,
+			textFileService: textFiles,
+			textMateService: textMate,
+			languageResolver: languageService,
+			languageFeaturesService: services.get(ILanguageFeaturesService),
+			diffService: new DiffService(),
+			workingCopyService: workingCopies,
+			accessibilityService: services.get(IAccessibilityService),
+			dialogService: dialogs,
+			titleActions: { menuService: menus, contextMenuProvider: contextMenus },
+		}));
+		services.registerInstance(IEditorPart, editor);
+		const editors = this._register(new BrowserEditorService(editor));
+		services.registerInstance(IEditorService, editors);
+		services.registerInstance(IEditorGroupsService, editors);
+		this._register(services.createInstance(TextFileEditorTracker, ownerWindow));
+		const viewDescriptors = this._register(new ViewDescriptorService({ contextKeyService: contextKeys, registry: SessionsViewRegistry }));
+		services.registerInstance(IViewDescriptorService, viewDescriptors);
+		auxiliarybar = this._register(services.createInstance(AuxiliaryBarPart, this.domNode));
+		services.registerInstance(IViewsService, new ViewsService({
+			viewDescriptorService: viewDescriptors,
+			getViewContainer: container => auxiliarybar?.getComposite(container.id),
+			openViewContainer: container => {
+				selectActivityPage('code');
+				layout.showPart('auxiliarybar');
+				auxiliarybar!.showComposite(container.id);
+				return auxiliarybar!.getComposite(container.id);
+			},
+		}));
+		auxiliarybar.initialize();
 		const parts = new Map<SessionsPartId, WorkbenchPart>([
 			["titlebar", titlebar],
 			['activitybar', activitybar],
 			["sidebar", sidebar],
 			["sessions", sessionsPart],
+			['editor', editor],
 			["auxiliarybar", auxiliarybar],
 		]);
 		layout.createWorkbenchLayout(parts);
+		layout.setPartAvailable('auxiliarybar', view.page.get() === 'code');
+		layout.setPartAvailable('editor', view.page.get() === 'code');
+		this._register(editors.onDidVisibleEditorsChange(() => {
+			if (editors.visibleEditors.length) { layout.showPart('editor'); }
+			else { layout.hidePart('editor'); }
+		}));
+		this._register(this.lifecycleService.onBeforeShutdown(event => {
+			event.veto(editor.confirmCloseAllEditors().then(confirmed => !confirmed), 'Sessions unsaved files');
+		}));
 		this._register(configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(SessionsConfiguration.activityBarLocation)) {
 				const location = configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation);
@@ -601,6 +712,7 @@ function createSessionsWorkbenchGridDescriptor(
 					leaf('activitybar', activityBarWidth, activityBarLocation === ActivityBarPosition.DEFAULT),
 					leaf('sidebar', state.sidebar.width, state.sidebar.visible),
 					leaf('sessions', sessionsWidth, true, SESSIONS_LAYOUT_PRIORITY),
+					leaf('editor', 480, false),
 					leaf('auxiliarybar', state.auxiliarybar.width, state.auxiliarybar.visible),
 				],
 			},
@@ -617,7 +729,7 @@ function resolveSessionsInitialDimension(container: HTMLElement, dimension: IDim
 }
 
 function parseSessionsPartId(value: unknown): SessionsPartId {
-	if (value === 'titlebar' || value === 'activitybar' || value === 'sidebar' || value === 'sessions' || value === 'auxiliarybar') return value;
+	if (value === 'titlebar' || value === 'activitybar' || value === 'sidebar' || value === 'sessions' || value === 'editor' || value === 'auxiliarybar') return value;
 	throw new TypeError('Sessions Grid contains an unknown Part');
 }
 
@@ -649,7 +761,7 @@ export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAg
 	private readonly views = new Map<SessionsPartId, WorkbenchPartView<SessionsPartId>>();
 	private grid!: SerializableGrid<WorkbenchPartView<SessionsPartId>>;
 	private readonly unavailableParts = new Set<SessionsPartId>();
-	private readonly desiredVisibility: { sidebar: boolean; auxiliarybar: boolean };
+	private readonly desiredVisibility: { sidebar: boolean; auxiliarybar: boolean; editor: boolean };
 	private titlebarHeight = 0;
 	private readonly initialDimension: Dimension;
 	private readonly stateModel: SessionsWorkbenchLayoutStateModel;
@@ -673,7 +785,7 @@ export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAg
 		this._register(toDisposable(() => this.domNode.remove()));
 		this.stateModel = new SessionsWorkbenchLayoutStateModel(storageService, options.initialState ?? createDefaultSessionsWorkbenchLayoutState());
 		const state = this.stateModel.state;
-		this.desiredVisibility = { sidebar: state.sidebar.visible, auxiliarybar: state.auxiliarybar.visible };
+		this.desiredVisibility = { sidebar: state.sidebar.visible, auxiliarybar: state.auxiliarybar.visible, editor: false };
 		this._register(storageService.onWillSaveState(() => this.saveState()));
 	}
 
@@ -759,7 +871,7 @@ export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAg
 		this.layout(new Dimension(this.grid.width, this.grid.height));
 	}
 
-	public setPartAvailable(partId: 'sidebar' | 'auxiliarybar', available: boolean): void {
+	public setPartAvailable(partId: 'sidebar' | 'auxiliarybar' | 'editor', available: boolean): void {
 		if (available === !this.unavailableParts.has(partId)) {
 			return;
 		}
@@ -781,8 +893,10 @@ export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAg
 		this.view('activitybar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: this.activityBarLocation === ActivityBarPosition.DEFAULT ? leftEdge : 0 });
 		this.view('sidebar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: this.activityBarLocation === ActivityBarPosition.DEFAULT ? 0 : leftEdge });
 		const sidebarVisible = this.desiredVisibility.sidebar && !this.unavailableParts.has('sidebar');
-		this.view('sessions').setFrameInsets({ top: 0, right: auxiliarybarVisible ? 0 : rightEdge, bottom: 0, left: this.activityBarLocation !== ActivityBarPosition.DEFAULT && !sidebarVisible ? leftEdge : 0 });
+		const editorVisible = this.desiredVisibility.editor && !this.unavailableParts.has('editor');
+		this.view('sessions').setFrameInsets({ top: 0, right: auxiliarybarVisible || editorVisible ? 0 : rightEdge, bottom: 0, left: this.activityBarLocation !== ActivityBarPosition.DEFAULT && !sidebarVisible ? leftEdge : 0 });
 		this.view('auxiliarybar').setFrameInsets({ top: 0, right: rightEdge, bottom: 0, left: 0 });
+		this.view('editor').setFrameInsets({ top: 0, right: auxiliarybarVisible ? 0 : rightEdge, bottom: 0, left: 0 });
 	}
 
 	private publishPartVisibility(): void {

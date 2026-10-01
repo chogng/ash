@@ -73,6 +73,65 @@ fn system_clipboard_transfer_copies_directories_and_moves_cut_files() {
     assert!(!source.path.join("cut.txt").exists());
 }
 
+#[test]
+fn compound_copy_authorizations_preserve_action_scope_directory_and_revocation() {
+    use ash_file_access::{GrantSource, Permission, Permissions};
+    let source = TestDir::new();
+    let target = TestDir::new();
+    fs::write(source.path.join("source.txt"), "contents").unwrap();
+    let grant = Grant::for_environment(
+        Dir::open_local(&source.path).unwrap(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::ReadFiles, Permission::BrowseFiles]),
+    );
+    let read = grant.authorize(Permission::ReadFiles).unwrap();
+    let browse = grant.authorize(Permission::BrowseFiles).unwrap();
+    let other = Grant::for_environment(
+        Dir::open_local(&target.path).unwrap(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::BrowseFiles]),
+    );
+    assert!(matches!(
+        LocalFileSystem::from_authorizations(
+            read.clone(),
+            [other.authorize(Permission::BrowseFiles).unwrap()]
+        ),
+        Err(FileSystemError::PermissionDenied(_))
+    ));
+    let destination = target.file_system();
+    let read_only = LocalFileSystem::from_authorization(read.clone());
+    assert!(matches!(
+        read_only.copy_to(
+            Path::new("source.txt"),
+            &destination,
+            Path::new("denied.txt")
+        ),
+        Err(FileSystemError::PermissionDenied(_))
+    ));
+    let files = LocalFileSystem::from_authorizations(read, [browse]).unwrap();
+    files
+        .copy_to(
+            Path::new("source.txt"),
+            &destination,
+            Path::new("copied.txt"),
+        )
+        .unwrap();
+    assert_eq!(
+        fs::read_to_string(target.path.join("copied.txt")).unwrap(),
+        "contents"
+    );
+    grant.revoke();
+    assert!(matches!(
+        files.copy_to(
+            Path::new("source.txt"),
+            &destination,
+            Path::new("revoked.txt")
+        ),
+        Err(FileSystemError::PermissionDenied(_))
+    ));
+    assert!(!target.path.join("revoked.txt").exists());
+}
+
 #[cfg(any(windows, target_os = "macos", target_os = "linux"))]
 #[test]
 fn system_clipboard_transfer_rejects_symlinks_and_renames_copy_conflicts() {

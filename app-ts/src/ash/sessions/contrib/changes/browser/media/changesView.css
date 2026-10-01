@@ -1,0 +1,33 @@
+.ash-sessions-changes {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80);
+}
+
+.ash-sessions-changes > p {
+	margin: 0;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-font-size-body1);
+}
+
+.ash-sessions-changes-tree {
+	flex: 1;
+	min-height: 0;
+}
+
+.ash-sessions-change-row {
+	display: flex;
+	min-width: 0;
+	gap: var(--ash-spacing-size80);
+	font-size: var(--ash-font-size-body1);
+}
+
+.ash-sessions-change-path {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}

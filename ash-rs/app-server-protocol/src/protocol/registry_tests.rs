@@ -4,6 +4,25 @@ use super::SerializationAccess;
 use schemars::JsonSchema;
 
 #[test]
+fn file_transfer_selectors_round_trip_for_workspace_and_session_directories() {
+    use super::super::fs::{FsCopyParams, FsPasteSystemFilesParams};
+    for value in [
+        serde_json::json!({"sourceDirId":"source","targetDirId":"target","source":"a","target":"b"}),
+        serde_json::json!({"sessionDirectory":{"sessionId":"session","path":"/work"},"source":"a","target":"b"}),
+    ] {
+        let request: FsCopyParams = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(request).unwrap(), value);
+    }
+    for value in [
+        serde_json::json!({"dirId":"target","path":"destination","moveRequested":true}),
+        serde_json::json!({"sessionDirectory":{"sessionId":"session","path":"/work"},"path":"destination","moveRequested":false}),
+    ] {
+        let request: FsPasteSystemFilesParams = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(request).unwrap(), value);
+    }
+}
+
+#[test]
 fn shared_method_schema_matches_derived_tagged_payloads() {
     #[derive(serde::Serialize, JsonSchema)]
     struct Payload {

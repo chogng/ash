@@ -3,6 +3,37 @@ use std::io::BufReader;
 #[cfg(unix)]
 use std::sync::mpsc;
 
+#[test]
+fn session_directory_file_requests_route_to_the_session_execution_authority() {
+    let profile = tempfile::tempdir().unwrap();
+    let options = ash_app_server_daemon::ConnectionOptions::new(
+        profile.path(),
+        None,
+        ash_app_server_daemon::GrantSource::HostConfiguration,
+        None,
+    );
+    let registry = ProfileAppServerRegistry::open(options.clone()).unwrap();
+    let _server = registry.server_for(options).unwrap();
+    let remote: RemoteSessionIndex = Arc::new(Mutex::new(BTreeMap::from([(
+        "remote-session".into(),
+        ("build-host".into(), "/work/source".into()),
+    )])));
+    for method in [
+        "fs/readDirectory",
+        "fs/readFile",
+        "fs/writeFile",
+        "fs/copy",
+        "fs/pasteSystemFiles",
+    ] {
+        assert_eq!(
+            selected_execution_target(&registry, &remote, &serde_json::json!({
+                "method":method,"params":{"sessionDirectory":{"sessionId":"remote-session","path":"/work/source"}}
+            })).unwrap(),
+            Some(SessionExecutionTarget::Ssh { host: "build-host".into(), root: "/work/source".into() })
+        );
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn imported_ssh_history_is_read_by_the_local_gateway_without_opening_a_remote_agent() {

@@ -21,7 +21,7 @@ test('Sessions shared layout preserves user geometry across pages, resize and re
 	const titlebar = page.locator('[data-part="titlebar"]');
 	const navigation = page.locator('.ash-sessions-activity-content');
 	await expect(sidebar).toBeVisible();
-	await expect(auxiliarybar).toBeVisible();
+	await expect(auxiliarybar).toBeHidden();
 	await page.setViewportSize({ width: 1_280, height: 900 });
 	const sidebarBounds = (await sidebar.boundingBox())!;
 	const sashes = page.locator('.ash-sessions-workbench-layout .ash-sash');
@@ -37,8 +37,9 @@ test('Sessions shared layout preserves user geometry across pages, resize and re
 	await page.mouse.up();
 	await expect.poll(async () => (await sidebar.boundingBox())!.width).toBeGreaterThan(sidebarBounds.width + 20);
 	const sidebarWidth = (await sidebar.boundingBox())!.width;
-	const auxiliaryWidth = (await auxiliarybar.boundingBox())!.width;
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(auxiliarybar).toBeVisible();
+	const auxiliaryWidth = (await auxiliarybar.boundingBox())!.width;
 	const editor = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
 	await editor.waitForEditorFocus();
 	await page.keyboard.insertText('Retained Code draft');
@@ -60,12 +61,13 @@ test('Sessions shared layout preserves user geometry across pages, resize and re
 	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
 	await page.reload({ waitUntil: 'domcontentloaded' });
 	await expect(sidebar).toBeHidden();
-	await expect(auxiliarybar).toBeVisible();
+	await expect(auxiliarybar).toBeHidden();
 	await titlebar.getByRole('button', { name: 'Show sidebar', exact: true }).click();
 	await expect(sidebar).toBeVisible();
 	expect(Math.abs((await sidebar.boundingBox())!.width - sidebarWidth)).toBeLessThanOrEqual(1);
-	expect(Math.abs((await auxiliarybar.boundingBox())!.width - auxiliaryWidth)).toBeLessThanOrEqual(1);
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(auxiliarybar).toBeVisible();
+	expect(Math.abs((await auxiliarybar.boundingBox())!.width - auxiliaryWidth)).toBeLessThanOrEqual(1);
 	await editor.waitForEditorContents(value => value === 'Retained Code draft');
 	await input?.dispose();
 	expect(failures).toEqual([]);

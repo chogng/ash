@@ -1,4 +1,5 @@
 import './parts/menubar.contribution.js';
+import '../sessions.common.main.js';
 import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
 import { addDisposableListener } from "../../base/browser/dom.js";
 import { onUnexpectedError } from "../../base/common/errors.js";
@@ -49,6 +50,7 @@ async function mountBrowserSessions(modeId: WorkbenchModeId, profile: SessionsPr
 			profile,
 			api: host?.api ?? createDisconnectedRendererApi(),
 			workspaceSelection: () => host?.workspace ? selectionFromWorkspace(workspaceFromIdentifier(host.workspace)) : { type: 'current' },
+			workspace: () => host?.workspace ? workspaceFromIdentifier(host.workspace) : { id: 'sessions', folders: [] },
 			configurationApi,
 			initialConfigurationSnapshot,
 			createLifecycleService: services => services.createInstance(BrowserLifecycleService, { ownerWindow, onError: onUnexpectedError }),

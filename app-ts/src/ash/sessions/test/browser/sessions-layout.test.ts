@@ -75,8 +75,8 @@ test("Sessions layout owns a fixed Sessions-first Part topology", () => {
 	assert.equal(Math.abs(layout.getPartSize("auxiliarybar").width - 200) <= 1, true);
 	assert.equal(layout.getPartSize("sessions").height, 800 - WorkbenchWindowBarHeight);
 	assert.equal(layout.getPartSize("sessions").width > 400, true);
-	assert.equal(container.querySelectorAll(".ash-sash").length, 2);
-	assert.equal(container.querySelector("[data-part='editor']"), null);
+	assert.equal(layout.isPartVisible('editor'), false);
+	assert.ok(container.querySelector("[data-part='editor']"));
 	assert.ok(container.querySelector("[data-part='sessions']"));
 
 	layout.dispose();

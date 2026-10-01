@@ -794,7 +794,13 @@ fn selected_execution_target(
         return Ok(selected);
     }
     if let Some(session_id) = params
-        .and_then(|params| params.get("sessionId"))
+        .and_then(|params| {
+            params.get("sessionId").or_else(|| {
+                params
+                    .get("sessionDirectory")
+                    .and_then(|dir| dir.get("sessionId"))
+            })
+        })
         .and_then(Value::as_str)
     {
         let local_id = SessionId::new(session_id.to_owned()).map_err(|error| error.to_string())?;

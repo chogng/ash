@@ -1,4 +1,5 @@
 import '../workbench/electron-browser/desktop.contribution.js';
+import './sessions.common.main.js';
 import './browser/parts/menubar.contribution.js';
 import { localizedString } from '../platform/action/common/action.js';
 import { MenusRegistry } from '../platform/actions/common/actions.js';

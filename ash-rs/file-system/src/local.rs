@@ -31,7 +31,7 @@ pub struct LocalFileSystem {
 
 enum Authority {
     Grant(Grant),
-    Authorization(Authorization),
+    Authorizations(Vec<Authorization>),
 }
 
 impl LocalFileSystem {
@@ -45,8 +45,30 @@ impl LocalFileSystem {
     pub fn from_authorization(authorization: Authorization) -> Self {
         Self {
             files: ScopedFiles::new(authorization.dir().clone()),
-            authority: Authority::Authorization(authorization),
+            authority: Authority::Authorizations(vec![authorization]),
         }
+    }
+
+    /// Binds the exact action proofs needed by a compound operation, preserving each lease.
+    pub fn from_authorizations(
+        first: Authorization,
+        additional: impl IntoIterator<Item = Authorization>,
+    ) -> Result<Self, FileSystemError> {
+        let mut authorizations = vec![first];
+        for authorization in additional {
+            if authorization.dir() != authorizations[0].dir()
+                || authorization.subject() != authorizations[0].subject()
+            {
+                return Err(FileSystemError::PermissionDenied(
+                    "compound filesystem actions require one subject and directory".into(),
+                ));
+            }
+            authorizations.push(authorization);
+        }
+        Ok(Self {
+            files: ScopedFiles::new(authorizations[0].dir().clone()),
+            authority: Authority::Authorizations(authorizations),
+        })
     }
 
     fn execute<T>(
@@ -58,7 +80,13 @@ impl LocalFileSystem {
             Authority::Grant(grant) => grant
                 .authorize(permission)
                 .map_err(|error| FileSystemError::PermissionDenied(error.to_string()))?,
-            Authority::Authorization(authorization) => authorization.clone(),
+            Authority::Authorizations(authorizations) => authorizations
+                .iter()
+                .find(|authorization| authorization.permission() == permission)
+                .cloned()
+                .ok_or_else(|| {
+                    FileSystemError::PermissionDenied(format!("missing {permission} authorization"))
+                })?,
         };
         authorization
             .execute(authorization.subject(), &self.files.dir, permission, || {

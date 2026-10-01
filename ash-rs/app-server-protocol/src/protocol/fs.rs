@@ -221,21 +221,33 @@ pub struct FsRenameParams {
     pub existing: FsExistingTargetBehavior,
 }
 
-/// Copies a file or directory between explicitly granted workspace roots.
+/// Copies between workspace roots, or within one Session-authorized directory.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FsCopyParams {
-    pub source_dir_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub source_dir_id: Option<String>,
     pub source: PathBuf,
-    pub target_dir_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub target_dir_id: Option<String>,
     pub target: PathBuf,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<SessionDirSelector>,
 }
 
 /// Pastes files from the system clipboard into a granted workspace directory.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FsPasteSystemFilesParams {
-    pub dir_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dir_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<SessionDirSelector>,
     pub path: PathBuf,
     pub move_requested: bool,
 }

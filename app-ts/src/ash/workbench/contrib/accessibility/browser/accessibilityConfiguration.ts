@@ -4,6 +4,20 @@ import { Extensions, type IConfigurationRegistry } from '../../../../platform/co
 import { Registry } from '../../../../platform/registry/common/platform.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.SessionsChanges,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') { throw new TypeError('Changes accessibility verbosity must be boolean'); }
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		title: localize('sessions.changes.verbosity.title', 'Changes accessibility help'),
+		description: localize('sessions.changes.verbosity.description', 'Announce how to open accessibility help when the Changes view receives focus.'),
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.Chat,
 	defaultValue: true,
 	parse(value: unknown): boolean {

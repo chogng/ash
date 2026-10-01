@@ -4,6 +4,8 @@ import { validateJsonValue } from '../../../../../base/common/jsonValue.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
+import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
+import { getIconDefinition } from '../../../../../platform/theme/common/iconRegistry.js';
 import { type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { Event } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -105,7 +107,7 @@ test('Multi-diff source resolves uncommitted Git contents', async () => {
 });
 
 test('Stanza multi-diff pane resolves visible comparisons and releases the complete session', async () => {
-	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const dom = createTestDom();
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
@@ -243,7 +245,7 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 });
 
 test('Multi-diff pane acquires text models as files enter the viewport and releases them on clear', async () => {
-	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const dom = createTestDom();
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(new BootstrapTextFiles()));
@@ -316,7 +318,7 @@ test('Multi-diff pane acquires text models as files enter the viewport and relea
 });
 
 test('Multi-diff pane keeps available files open when one comparison fails to load', async () => {
-	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const dom = createTestDom();
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(new BootstrapTextFiles()));
@@ -358,7 +360,7 @@ test('Multi-diff pane keeps available files open when one comparison fails to lo
 
 for (const cancellation of ['signal', 'clear'] as const) {
 	test(`Multi-diff pane releases a model delivered after ${cancellation === 'signal' ? 'input cancellation' : 'clearing pending input'}`, async () => {
-		const dom = new JSDOM('<!doctype html><body><main></main></body>');
+		const dom = createTestDom();
 		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 		const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 		using models = new BrowserTextModelService(new BrowserTextResourceStore(new BootstrapTextFiles()));
@@ -405,7 +407,7 @@ for (const cancellation of ['signal', 'clear'] as const) {
 }
 
 test('Multi-diff pane inherits word wrap and routes the toggle command to its view', async () => {
-	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const dom = createTestDom();
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
@@ -477,6 +479,13 @@ class PaneTestDiffComputationService implements IDocumentDiffProvider {
 	[Symbol.dispose](): void {
 		this.dispose();
 	}
+}
+
+function createTestDom(): JSDOM {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	// Workbench themes supply semantic diff icons; a pane-only fixture must bind the same registry.
+	setIconResolver(dom.window.document, icon => getIconDefinition(icon));
+	return dom;
 }
 
 function requiredElement<T extends Element>(ownerDocument: ParentNode, selector: string): T {
