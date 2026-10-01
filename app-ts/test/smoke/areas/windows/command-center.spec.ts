@@ -4,6 +4,34 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
+test('maximized Panel keeps its state when the sidebar moves and restores its height', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
+	const page = workbench.page;
+	const panel = page.locator('[data-part="panel"]');
+	const editor = page.locator('[data-part="editor"]');
+	const panelToggle = page.locator('.ash-titlebar-actions [data-action-id="workbench.action.togglePanel"] button');
+	await panelToggle.click();
+	await expect(panel).toBeVisible();
+	const restoredHeight = (await panel.boundingBox())!.height;
+	await panel.getByRole('button', { name: 'Maximize Panel', exact: true }).click();
+	await expect(editor).toBeHidden();
+
+	await page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Accounts' }).click({ button: 'right' });
+	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Move Primary Side Bar Right' }).click();
+	await expect(editor).toBeHidden();
+	await expect(panel.getByRole('button', { name: 'Restore Editor Area', exact: true })).toBeVisible();
+	await panel.getByRole('button', { name: 'Restore Editor Area', exact: true }).click();
+	await expect(editor).toBeVisible();
+	await expect.poll(async () => (await panel.boundingBox())!.height).toBeCloseTo(restoredHeight, 0);
+
+	await panel.getByRole('button', { name: 'Maximize Panel', exact: true }).click();
+	await panelToggle.click();
+	await expect(editor).toBeVisible();
+	await expect(panel).toBeHidden();
+	await panelToggle.click();
+	await expect.poll(async () => (await panel.boundingBox())!.height).toBeCloseTo(restoredHeight, 0);
+});
+
 test('Manage Accounts command opens the account picker when the account service is available', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
@@ -732,6 +760,7 @@ test('activity bar context menu changes size and position', async ({ target, wor
 	await expect(titlebarManage).toHaveCount(0);
 	await activitybar.getByRole('button', { name: 'Manage' }).click({ button: 'right' });
 	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Move Primary Side Bar Left' }).click();
+	await expect(sidebar).not.toHaveClass(/sidebar-right/u);
 	const [leftSidebar, leftEditor, leftBar] = await Promise.all([sidebar.boundingBox(), editor.boundingBox(), activitybar.boundingBox()]);
 	expect(leftBar!.x).toBeLessThan(leftSidebar!.x);
 	expect(leftSidebar!.x).toBeLessThan(leftEditor!.x);

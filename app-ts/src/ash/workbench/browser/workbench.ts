@@ -14,7 +14,6 @@ import { IMemoriesService } from '../../platform/memories/common/memoriesService
 import { IMemoryDiagnosticsService } from '../../platform/memory/common/memoryDiagnosticsService.js';
 import "./style.js";
 import { IAutomationService } from '../../platform/automation/common/automationService.js';
-import { bindResizableLayout } from "../../base/browser/ui/resizable/resizable.js";
 import { disposableWindowTimeout } from "../../base/browser/scheduler.js";
 import { getWindow } from '../../base/browser/dom.js';
 import { mainWindow } from "../../base/browser/window.js";
@@ -603,13 +602,8 @@ export class Workbench extends Disposable {
 		}));
 		services.registerInstance(IWorkbenchHostService, workbenchWindow);
 		const ownerDocument = workbenchWindow.ownerDocument;
-		let workbenchLayout: WorkbenchLayout | undefined;
 		const layoutService = this._register(new BrowserLayoutService({
 			root: workbenchRoot,
-			getContainerOffset: () => workbenchLayout?.mainContainerOffset ?? {
-				top: 0,
-				quickInputTop: 0,
-			},
 			focus: () => this.editor.focus(),
 		}));
 		services.registerInstance(ILayoutService, layoutService);
@@ -1049,22 +1043,17 @@ export class Workbench extends Disposable {
 			["editor", editor],
 			["panel", panel],
 		]);
-		const layout = this._register(new WorkbenchLayout(workbenchRoot, parts, {
+		const layout = this._register(services.createInstance(WorkbenchLayout, workbenchRoot, parts, {
 			initialDimension: layoutService.mainContainerDimension,
 			workbenchState,
 			defaultLayout,
-			storageService: storage,
-			layoutStyle: configuration.getValue(WorkbenchConfiguration.layoutStyle),
-			activityBarLocation: configuration.getValue(WorkbenchConfiguration.activityBarLocation),
-			sideBarLocation: configuration.getValue(WorkbenchConfiguration.sideBarLocation),
 		}));
-		workbenchLayout = layout;
 		this.workbenchLayout = layout;
+		layoutService.setContentLayout(layout, () => layout.mainContainerOffset);
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(WorkbenchConfiguration.layoutStyle)) {
 				const style = configuration.getValue<WorkbenchLayoutStyle>(WorkbenchConfiguration.layoutStyle);
 				activitybar.setLayoutStyle(style);
-				layout.setLayoutStyle(style);
 			}
 			if (event.affectsConfiguration(WorkbenchConfiguration.activityBarCompact)) activitybar.setCompact(configuration.getValue<boolean>(WorkbenchConfiguration.activityBarCompact));
 			if (event.affectsConfiguration(WorkbenchConfiguration.activityBarLocation)) {
@@ -1077,13 +1066,11 @@ export class Workbench extends Disposable {
 					activitybar.hostGlobalActions();
 					titlebar.setActivityActions(undefined);
 				}
-				layout.setActivityBarLocation(location);
 			}
 			if (event.affectsConfiguration(WorkbenchConfiguration.sideBarLocation)) {
 				const location = configuration.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation);
 				activitybar.setSideBarLocation(location);
 				sidebar.domNode.classList.toggle('sidebar-right', location === 'right');
-				layout.setSideBarLocation(location);
 			}
 		}));
 		activitybar.setSidebarVisible(layout.isPartVisible('sidebar'));
@@ -1093,7 +1080,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(IWorkbenchLayoutService, layout);
 		services.registerInstance(IWorkbenchLayoutStyleService, layout);
 		this._register(new WorkbenchContextKeysHandler(contextKeys, workspaceContext, editorService, editorService, layout, workingCopyService, nativeHostApi !== undefined || webWorkspaceClient !== undefined, browserFileSystemProvider !== undefined));
-		this._register(bindResizableLayout(layoutService.onDidLayoutMainContainer, layout));
 		const openAuxiliaryComposite = (compositeId: string): PaneComposite => {
 			const viewContainer = viewDescriptors
 				.getViewContainers(ViewContainerLocation.AuxiliaryBar)
@@ -1240,7 +1226,7 @@ export class Workbench extends Disposable {
 
 	private async restoreEditorParts(editorParts: IEditorPartsService): Promise<void> {
 		try {
-			await editorParts.restoreSavedState(this.workbenchLayout.shouldRestoreEditors(this.configurationService));
+			await editorParts.restoreSavedState(this.workbenchLayout.shouldRestoreEditors());
 		} catch (error) {
 			this.logService.error('editor', 'Failed to restore saved editor parts', error);
 		}

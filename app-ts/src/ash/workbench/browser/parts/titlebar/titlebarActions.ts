@@ -126,9 +126,6 @@ registerAction2(class TogglePanelAction extends Action2 {
 	override run(accessor: ServicesAccessor): void {
 		const layout = accessor.get(IWorkbenchLayoutService);
 		if (layout.isPartVisible("panel")) {
-			if (!layout.isPartVisible("editor")) {
-				layout.showPart("editor");
-			}
 			layout.hidePart("panel");
 		} else {
 			layout.showPart("panel");
@@ -159,13 +156,7 @@ registerAction2(class ToggleMaximizedPanelAction extends Action2 {
 	}
 
 	override run(accessor: ServicesAccessor): void {
-		const layout = accessor.get(IWorkbenchLayoutService);
-		if (layout.isPartVisible("editor")) {
-			layout.showPart("panel");
-			layout.hidePart("editor");
-		} else {
-			layout.showPart("editor");
-		}
+		accessor.get(IWorkbenchLayoutService).toggleMaximizedPanel();
 	}
 });
 

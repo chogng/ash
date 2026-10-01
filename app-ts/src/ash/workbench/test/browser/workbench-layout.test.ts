@@ -30,11 +30,10 @@ for (const [name, value] of Object.entries({
 }
 
 const { Dimension } = await import("../../../base/browser/dom.js");
-const { bindResizableLayout } = await import("../../../base/browser/ui/resizable/resizable.js");
 const { Lxicon } = await import("../../../base/common/lxicons.js");
-const { StorageScope, WillSaveStateReason } = await import("../../../platform/storage/common/storage.js");
+const { IStorageService, StorageScope, WillSaveStateReason } = await import("../../../platform/storage/common/storage.js");
 const { WorkbenchState } = await import("../../../platform/workspace/common/workspace.js");
-const { ActivityBarPosition } = await import('../../../workbench/common/configuration.js');
+const { ActivityBarPosition, WorkbenchConfiguration } = await import('../../../workbench/common/configuration.js');
 const { MenuId } = await import(
 	"../../../platform/actions/common/actions.js"
 );
@@ -98,7 +97,12 @@ type WorkbenchPartId =
 type WorkbenchLayoutInstance =
 	import("../../../workbench/browser/layout.js").WorkbenchLayout;
 type WorkbenchLayoutOptions =
-	import("../../../workbench/browser/layout.js").WorkbenchLayoutOptions;
+	import("../../../workbench/browser/layout.js").WorkbenchLayoutOptions & {
+		readonly storageService?: import('../../../platform/storage/common/storage.js').IStorageService;
+		readonly layoutStyle?: import('../../../workbench/common/configuration.js').WorkbenchLayoutStyle;
+		readonly activityBarLocation?: import('../../../workbench/common/configuration.js').ActivityBarPosition;
+		readonly sideBarLocation?: import('../../../workbench/common/configuration.js').SideBarLocation;
+	};
 type WorkbenchPartInstance =
 	import("../../../workbench/browser/part.js").WorkbenchPart;
 type EditorPartInstance =
@@ -152,13 +156,35 @@ function createLayoutHarness(
 	readonly container: HTMLElement;
 	readonly editor: EditorPartInstance;
 	readonly layout: WorkbenchLayoutInstance;
+	readonly configuration: InstanceType<typeof InMemoryConfigurationService>;
 } {
 	const disposables = new DisposableStore();
 	const container = existingContainer ?? h(ownerDocument, "main");
 	ownerDocument.body.append(container);
 	disposables.add(toDisposable(() => container.remove()));
 
-	const services = disposables.add(createTestEditorServices());
+	const { storageService, layoutStyle, activityBarLocation, sideBarLocation, ...layoutOptions } = options;
+	const configuration = disposables.add(new InMemoryConfigurationService());
+	if (layoutStyle !== undefined) {
+		void configuration.updateValue(WorkbenchConfiguration.layoutStyle, layoutStyle);
+	}
+	if (activityBarLocation !== undefined) {
+		void configuration.updateValue(WorkbenchConfiguration.activityBarLocation, activityBarLocation);
+	}
+	if (sideBarLocation !== undefined) {
+		void configuration.updateValue(WorkbenchConfiguration.sideBarLocation, sideBarLocation);
+	}
+	const services = disposables.add(createTestEditorServices(configuration));
+	let storage = storageService;
+	if (!storage) {
+		const storageDom = new JSDOM('', { url: 'https://ash.test' });
+		disposables.add(toDisposable(() => storageDom.window.close()));
+		storage = disposables.add(new BrowserStorageService({
+			ownerWindow: ownerDocument.defaultView!, applicationId: 'test-layout', workspaceId: 'test', flushInterval: 0,
+			backend: storageDom.window.localStorage,
+		}));
+	}
+	services.registerInstance(IStorageService, storage);
 	const parts = new Map<WorkbenchPartId, WorkbenchPartInstance>();
 	let editor: EditorPartInstance | undefined;
 	for (const partId of workbenchPartIds) {
@@ -173,11 +199,11 @@ function createLayoutHarness(
 	}
 	if (!editor) throw new Error("Test layout requires an editor Part");
 
-	const layout = disposables.add(new WorkbenchLayout(container, parts, {
+	const layout = disposables.add(services.createInstance(WorkbenchLayout, container, parts, {
 		workbenchState: WorkbenchState.FOLDER,
-		...options,
+		...layoutOptions,
 	}));
-	return { disposables, container, editor, layout };
+	return { disposables, container, editor, layout, configuration };
 }
 
 test("Workbench layout hides and restores Parts with context keys", () => {
@@ -414,7 +440,12 @@ test("platform layout service drives Workbench Part geometry", () => {
 		initialDimension: layoutService.mainContainerDimension,
 	}, container);
 	harness.disposables.add(layoutService);
-	harness.disposables.add(bindResizableLayout(layoutService.onDidLayoutMainContainer, harness.layout));
+	layoutService.setContentLayout(harness.layout, () => harness.layout.mainContainerOffset);
+	for (const event of [layoutService.onDidLayoutContainer, layoutService.onDidLayoutMainContainer, layoutService.onDidLayoutActiveContainer]) {
+		harness.disposables.add(event(() => {
+			assert.equal(harness.layout.getPartSize('titlebar').width, 1_200);
+		}));
+	}
 
 	layoutService.layout(new Dimension(1_200, 800));
 
@@ -424,6 +455,64 @@ test("platform layout service drives Workbench Part geometry", () => {
 	assert.ok(harness.editor.domNode.isConnected);
 
 	harness.disposables.dispose();
+	dom.window.close();
+});
+
+test('Workbench layout rejects missing service registrations during construction', () => {
+	using services = new ServiceContainer();
+	const dom = new JSDOM('', { url: 'https://ash.test' });
+	const container = h(dom.window.document, 'main');
+	const options = { workbenchState: WorkbenchState.FOLDER };
+	assert.throws(() => services.createInstance(WorkbenchLayout, container, new Map(), options), /storageService/);
+	using storage = new BrowserStorageService({
+		ownerWindow: dom.window as unknown as Window, applicationId: 'layout', workspaceId: 'test',
+		backend: dom.window.localStorage, flushInterval: 0,
+	});
+	services.registerInstance(IStorageService, storage);
+	assert.throws(() => services.createInstance(WorkbenchLayout, container, new Map(), options), /configurationService/);
+	storage.dispose();
+	dom.window.close();
+});
+
+test('maximized Panel survives configuration changes and restores its saved height', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const harness = createLayoutHarness(dom.window.document, { defaultLayout: { parts: { panel: true } } });
+	using disposables = harness.disposables;
+	const contextKeys = disposables.add(new ContextKeyService());
+	disposables.add(createTestWorkbenchContextKeysHandler(contextKeys, { layoutService: harness.layout }));
+	using services = new ServiceContainer();
+	services.registerInstance(IWorkbenchLayoutService, harness.layout);
+	const commands = disposables.add(new CommandService(services));
+	harness.layout.layout(new Dimension(1_200, 800));
+	harness.layout.resizePart('panel', new Dimension(harness.layout.getPartSize('panel').width, 180));
+
+	await commands.executeCommand(ToggleMaximizedPanelCommandId);
+	await harness.configuration.updateValue(WorkbenchConfiguration.sideBarLocation, 'right');
+	await harness.configuration.updateValue(WorkbenchConfiguration.activityBarLocation, ActivityBarPosition.HIDDEN);
+	assert.deepEqual({
+		maximized: harness.layout.isPanelMaximized(),
+		editorVisible: harness.layout.isPartVisible('editor'),
+		contextMaximized: contextKeys.getValue('panelMaximized'),
+		savedPanel: harness.layout.state.panel,
+	}, { maximized: true, editorVisible: false, contextMaximized: true, savedPanel: { height: 180, visible: true } });
+
+	await commands.executeCommand(ToggleMaximizedPanelCommandId);
+	assert.equal(harness.layout.getPartSize('panel').height, 180);
+	assert.equal(contextKeys.getValue('panelMaximized'), false);
+	await commands.executeCommand(ToggleMaximizedPanelCommandId);
+	// ViewsService and other callers close Parts directly, without going through the titlebar command.
+	harness.layout.hidePart('panel');
+	assert.equal(harness.layout.isPartVisible('editor'), true);
+	harness.layout.showPart('panel');
+	assert.equal(harness.layout.getPartSize('panel').height, 180);
+	harness.layout.hidePart('editor');
+	harness.layout.showPart('editor');
+	harness.layout.resizePart('panel', new Dimension(harness.layout.getPartSize('panel').width, 210));
+	assert.equal(harness.layout.state.panel.height, 210);
+	harness.layout.toggleMaximizedPanel();
+	harness.layout.restoreWorkspaceState();
+	assert.equal(harness.layout.isPartVisible('editor'), true);
+	disposables.dispose();
 	dom.window.close();
 });
 

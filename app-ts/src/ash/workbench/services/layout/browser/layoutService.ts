@@ -10,6 +10,8 @@ export interface IWorkbenchLayoutService {
 	readonly onDidChangePartVisibility: Event<WorkbenchPartVisibilityChangeEvent>;
 	isPartVisible(partId: WorkbenchPartId): boolean;
 	isPanelMaximized(): boolean;
+	/** Shows and maximizes the Panel, or restores the Editor and the previous Panel height. */
+	toggleMaximizedPanel(): void;
 	showPart(partId: WorkbenchPartId): void;
 	showParts(partIds: readonly WorkbenchPartId[]): void;
 	hidePart(partId: WorkbenchPartId): void;

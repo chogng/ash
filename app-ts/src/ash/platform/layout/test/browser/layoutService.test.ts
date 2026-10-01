@@ -17,12 +17,16 @@ test("BrowserLayoutService publishes root geometry and container offsets", () =>
 	dom.window.document.body.append(root);
 	const primaryWindow = dom.window as unknown as Window;
 	let focused = 0;
+	const layoutEvents: string[] = [];
 	const service = new BrowserLayoutService({
 		root,
-		getContainerOffset: () => ({ top: 36, quickInputTop: 48 }),
 		focus: () => focused++,
 	});
-	const layoutEvents: string[] = [];
+	assert.deepEqual(service.mainContainerOffset, { top: 0, quickInputTop: 0 });
+	service.setContentLayout({ layout: dimension => {
+		assert.deepEqual(dimension, new Dimension(800, 600));
+		layoutEvents.push('content');
+	} }, () => ({ top: 36, quickInputTop: 48 }));
 	service.onDidLayoutContainer(({ container, dimension }) => {
 		assert.equal(container, root);
 		assert.deepEqual(dimension, new Dimension(800, 600));
@@ -39,7 +43,7 @@ test("BrowserLayoutService publishes root geometry and container offsets", () =>
 
 	service.layout(new Dimension(800, 600));
 
-	assert.deepEqual(layoutEvents, ["container", "main", "active"]);
+	assert.deepEqual(layoutEvents, ['content', "container", "main", "active"]);
 	assert.deepEqual(service.mainContainerDimension, new Dimension(800, 600));
 	assert.deepEqual(service.activeContainerDimension, new Dimension(800, 600));
 	assert.equal(service.mainContainer, root);

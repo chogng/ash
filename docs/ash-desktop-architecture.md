@@ -530,6 +530,14 @@ base 能力不引用 Part、ViewContainer 或其他 Workbench domain。
 Panel profile，Workbench 不反向导入 Mode contribution。窗口变化由高优先级 Editor 区域吸收，
 Part 即使隐藏也保持挂载，尺寸查询返回其可恢复尺寸。
 
+`BrowserLayoutService` 负责容器尺寸和布局完成事件。Workbench 装配完 Parts 后通过
+`setContentLayout` 接入具体布局与浮层偏移；每次尺寸变化先调用具体布局，再发布容器、主容器和
+活动容器事件，让浮层读取已更新的几何。`WorkbenchLayout` 通过构造注入获取配置和存储服务，
+监听 Activity Bar 和 Sidebar 位置设置；布局样式由 Modern UI contribution 统一调用布局样式服务。
+Panel 最大化经 `IWorkbenchLayoutService.toggleMaximizedPanel()` 执行。布局记录最大化前的 Panel
+高度，换 Sidebar 或 Activity Bar 位置时保留最大化状态；恢复编辑区或关闭最大化 Panel 时恢复原高度。
+最大化期间保存布局仍使用恢复后的高度，工作区布局恢复会重新显示编辑区。
+
 当前可变尺寸和显隐快照是具体 `WorkbenchLayout` 的私有实现关注点，不是 Layout Service
 契约，也不存在独立的 `layoutState` service。状态流为：
 
@@ -553,7 +561,7 @@ Workbench 的 `ILifecycleService` 在显式关闭前先等待工作副本备份�
 具体 Layout 内的私有 `WorkbenchLayoutStateModel` 负责把 domain state 映射为存储 key：
 Sidebar、Auxiliary Bar 和 Panel 的尺寸使用 Profile/Machine，显隐使用
 Workspace/Machine。Layout Service 契约和通用 Storage Service 都不包含这组 key 或状态
-schema。Panel 换边、Sidebar 换边、任意 Part 移动和多窗口拓扑尚未实现，出现真实产品需求
+schema。Sidebar 支持左右换边；Panel 换边、任意 Part 移动和多窗口拓扑尚未实现，出现真实产品需求
 时应扩展具体 Layout，而不是让 contribution 直接操作 Grid。
 
 Renderer Part 的视觉所有权仍以

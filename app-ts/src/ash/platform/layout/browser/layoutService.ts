@@ -2,6 +2,7 @@ import { createServiceIdentifier } from "../../instantiation/common/instantiatio
 import { getWindow } from "../../../base/browser/dom.js";
 import { Dimension, getClientArea, type IDimension } from "../../../base/browser/dom.js";
 import { observeElementSize } from "../../../base/browser/observer.js";
+import type { IResizable } from '../../../base/browser/ui/resizable/resizable.js';
 import type { BrowserWindow } from "../../../base/browser/window.js";
 import { type Event, Emitter } from "../../../base/common/event.js";
 import { Disposable } from "../../../base/common/lifecycle.js";
@@ -73,8 +74,9 @@ export class BrowserLayoutService
 	implements ILayoutService {
 	private readonly root: HTMLElement;
 	private readonly targetWindow: BrowserWindow;
-	private readonly getOffset: () => ILayoutOffsetInfo;
+	private getOffset: () => ILayoutOffsetInfo;
 	private readonly focusPrimary: () => void;
+	private contentLayout: IResizable | undefined;
 	private readonly _onDidLayoutMainContainer = this._register(new Emitter<IDimension>());
 	private readonly _onDidLayoutContainer = this._register(new Emitter<ILayoutContainerEvent>());
 	private readonly _onDidLayoutActiveContainer = this._register(new Emitter<IDimension>());
@@ -143,10 +145,17 @@ export class BrowserLayoutService
 		return undefined;
 	}
 
+	/** The host attaches content after assembly; completion events always observe its updated geometry. */
+	setContentLayout(content: IResizable, getContainerOffset: () => ILayoutOffsetInfo): void {
+		this.contentLayout = content;
+		this.getOffset = getContainerOffset;
+	}
+
 	/** Lays out the root and publishes the platform geometry events. */
 	layout(dimension: IDimension = getClientArea(this.root)): void {
 		assertDimension(dimension);
 		this.dimension = new Dimension(dimension.width, dimension.height);
+		this.contentLayout?.layout(this.dimension);
 		this._onDidLayoutContainer.fire({
 			container: this.root,
 			dimension: this.dimension,

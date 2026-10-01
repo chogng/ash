@@ -82,6 +82,7 @@ const emptyLayoutService: IWorkbenchLayoutService = Object.freeze({
 	onDidChangePartVisibility: Event.None,
 	isPartVisible: () => false,
 	isPanelMaximized: () => false,
+	toggleMaximizedPanel: () => {},
 	showPart: () => {},
 	showParts: () => {},
 	hidePart: () => {},

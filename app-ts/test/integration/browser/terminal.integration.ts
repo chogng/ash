@@ -115,6 +115,7 @@ if (new URLSearchParams(location.search).has('pane')) {
 		onDidChangePartVisibility: visibility.event,
 		isPartVisible: () => visible,
 		isPanelMaximized: () => false,
+		toggleMaximizedPanel: () => {},
 		showPart: () => setPanel(true),
 		showParts: () => setPanel(true),
 		hidePart: () => setPanel(false),

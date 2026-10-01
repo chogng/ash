@@ -115,6 +115,7 @@ class VisibleAuxiliarybarLayoutService implements IWorkbenchLayoutService {
 
 	isPartVisible(partId: WorkbenchPartId): boolean { return partId === "auxiliarybar"; }
 	isPanelMaximized(): boolean { return false; }
+	toggleMaximizedPanel(): void {}
 	showPart(_partId: WorkbenchPartId): void {}
 	showParts(_partIds: readonly WorkbenchPartId[]): void {}
 	hidePart(_partId: WorkbenchPartId): void {}
