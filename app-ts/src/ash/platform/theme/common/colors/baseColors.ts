@@ -1,4 +1,4 @@
-import { registerColor } from "../colorUtils.js";
+import { registerColor, transparent } from "../colorUtils.js";
 
 const owner = "platform.theme";
 const color = (id: string, dark: string, light: string, highContrastDark: string | null, highContrastLight: string | null, description: string): string =>
@@ -21,7 +21,12 @@ export const contrastBorder = registerColor("contrastBorder", {
 	highContrastLight: "#000000",
 }, { description: "Extra border separating elements in high contrast themes.", owner });
 export const widgetBorder = color("widget.border", "#454545", "#d4d4d4", contrastBorder, contrastBorder, "Border around floating widgets.");
-export const widgetShadow = color("widget.shadow", "#00000066", "#00000029", null, null, "Shadow around floating widgets.");
+export const widgetShadow = registerColor("widget.shadow", {
+	dark: transparent("#000000", 0.36),
+	light: transparent("#000000", 0.16),
+	highContrastDark: null,
+	highContrastLight: null,
+}, { description: "Shadow around floating widgets.", owner });
 export const selectionForeground = color("selection.foreground", "#ffffff", "#000000", "#000000", "#ffffff", "Selected text foreground.");
 export const selectionBackground = color("selection.background", "#264f78", "#add6ff", "#ffffff", "#000000", "Selected text background.");
 export const textLinkActiveForeground = color("textLink.activeForeground", "#4e94ce", "#006ab1", accentForeground, accentForeground, "Foreground for active links and link-like editor actions.");

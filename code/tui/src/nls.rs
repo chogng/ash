@@ -661,18 +661,6 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Niveau de raisonnement",
     ),
     translation(
-        "Next mode: {0}",
-        "次のモード: {0}",
-        "下一条模式：{0}",
-        "Prochain mode : {0}",
-    ),
-    translation(
-        "Thinking effort: {0}",
-        "推論レベル: {0}",
-        "推理强度：{0}",
-        "Niveau de raisonnement : {0}",
-    ),
-    translation(
         "Cycle task mode",
         "タスクモードを切り替え",
         "循环切换任务模式",
@@ -3371,7 +3359,7 @@ const UI_TRANSLATIONS: &[Translation] = &[
     translation("commands", "コマンド", "命令", "commandes"),
     translation("create", "作成", "创建", "créer"),
     translation("Default", "デフォルト", "默认", "Par défaut"),
-    translation("effort", "推論レベル", "推理档位", "niveau de raisonnement"),
+    translation("effort", "推論レベル", "思考", "niveau de raisonnement"),
     translation("confirm", "確定", "确认", "confirmer"),
     translation(
         "connect/disconnect",

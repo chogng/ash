@@ -156,10 +156,7 @@ pub(super) fn update<T: JsonRpcTransport>(
         Some(catalog),
     );
     Ok(ModelUpdate {
-        notice: ModelNotice::ThinkingEffort(crate::nls::Text::template(
-            "Thinking effort: {0}",
-            vec![effort.as_str().into()],
-        )),
+        notice: ModelNotice::Silent,
         summary,
         config,
         picker: None,

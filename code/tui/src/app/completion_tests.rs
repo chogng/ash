@@ -63,10 +63,7 @@ fn collaboration_effort_completion_preserves_the_running_turn_and_draft() {
                     Some(ash_protocol::ReasoningEffort::High),
                     None,
                 ),
-                notice: crate::models::ModelNotice::ThinkingEffort(crate::nls::Text::template(
-                    "Thinking effort: {0}",
-                    vec!["high".into()],
-                )),
+                notice: crate::models::ModelNotice::Silent,
                 picker: None,
                 config,
             }),
@@ -85,6 +82,7 @@ fn collaboration_effort_completion_preserves_the_running_turn_and_draft() {
     assert_eq!(app.input(), "next task draft");
     assert_eq!(app.messages().len(), rows);
     assert_eq!(app.status_line().model_label(), "test-model (high)");
+    assert_eq!(app.top_tip().text(None), None);
     super::apply_request_completion(
         super::Completion::ModelUpdated {
             command: crate::models::Command::DecreaseEffort,
