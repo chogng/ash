@@ -178,8 +178,33 @@ fn conversation_chrome_keeps_home_and_input_visible_without_a_welcome_message() 
     );
     assert_eq!(
         rendered.lines().last().unwrap().trim_end(),
-        "  Enter send  ·  shift+tab mode  ·  alt+,/alt+. effort"
+        "  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort"
     );
+}
+
+#[test]
+fn effort_hint_shares_arrow_modifiers_only_when_both_bindings_match() {
+    for (lower, raise, expected) in [
+        ("alt+arrowdown", "alt+arrowup", "alt+↓/↑"),
+        ("alt+arrowdown", "ctrl+arrowup", "alt+↓/ctrl+↑"),
+        ("alt+j", "alt+k", "alt+j/alt+k"),
+    ] {
+        let mut app = App::new();
+        let bindings = crate::keymap::compile_app_user_bindings(
+            &serde_json::json!([
+                {"key": lower, "command": "ashCode.action.decreaseReasoningEffort"},
+                {"key": raise, "command": "ashCode.action.increaseReasoningEffort"}
+            ]),
+            ash_keybinding::HostPlatform::current(),
+        )
+        .unwrap();
+        app.app_keymap.replace_user_bindings(bindings).unwrap();
+        let rendered = render(&app, 80, 20);
+        assert_eq!(
+            rendered.lines().last().unwrap().trim_end(),
+            format!("  Enter send  ·  shift+tab mode  ·  {expected} effort")
+        );
+    }
 }
 
 #[test]

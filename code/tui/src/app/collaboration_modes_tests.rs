@@ -76,19 +76,9 @@ fn collaboration_shortcuts_preserve_drafts_permissions_and_history_search() {
         }
         for (code, modifiers, command) in [
             (
-                KeyCode::Char(','),
-                KeyModifiers::ALT,
-                crate::models::Command::DecreaseEffort,
-            ),
-            (
                 KeyCode::Down,
                 KeyModifiers::SHIFT,
                 crate::models::Command::DecreaseEffort,
-            ),
-            (
-                KeyCode::Char('.'),
-                KeyModifiers::ALT,
-                crate::models::Command::IncreaseEffort,
             ),
             (
                 KeyCode::Up,
@@ -106,8 +96,6 @@ fn collaboration_shortcuts_preserve_drafts_permissions_and_history_search() {
         key(&mut app, KeyCode::Char('r'), KeyModifiers::CONTROL);
         assert!(app.input_state().searching_history());
         for (code, modifiers) in [
-            (KeyCode::Char(','), KeyModifiers::ALT),
-            (KeyCode::Char('.'), KeyModifiers::ALT),
             (KeyCode::Up, KeyModifiers::SHIFT),
             (KeyCode::Down, KeyModifiers::SHIFT),
         ] {
@@ -130,8 +118,6 @@ fn collaboration_effort_shortcuts_leave_open_selectors_in_control() {
         command(&mut app, "/mode");
         app.insert_text("keep this draft");
         for (code, modifiers) in [
-            (KeyCode::Char(','), KeyModifiers::ALT),
-            (KeyCode::Char('.'), KeyModifiers::ALT),
             (KeyCode::Up, KeyModifiers::SHIFT),
             (KeyCode::Down, KeyModifiers::SHIFT),
         ] {
@@ -154,8 +140,6 @@ fn collaboration_effort_shortcuts_leave_open_selectors_in_control() {
         app.insert_text("/mod");
         assert!(app.completion().is_some());
         for (code, modifiers) in [
-            (KeyCode::Char(','), KeyModifiers::ALT),
-            (KeyCode::Char('.'), KeyModifiers::ALT),
             (KeyCode::Up, KeyModifiers::SHIFT),
             (KeyCode::Down, KeyModifiers::SHIFT),
         ] {

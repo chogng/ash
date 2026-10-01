@@ -149,18 +149,8 @@ pub(super) struct AppKeybindingSpec {
 
 const APP_KEYBINDINGS: &[AppKeybindingSpec] = &[
     AppKeybindingSpec {
-        keybinding: "alt+,",
-        action: AppKeymapAction::DecreaseReasoningEffort,
-        condition: AppKeymapCondition::PressWithComposerWithoutSelection,
-    },
-    AppKeybindingSpec {
         keybinding: "shift+arrowdown",
         action: AppKeymapAction::DecreaseReasoningEffort,
-        condition: AppKeymapCondition::PressWithComposerWithoutSelection,
-    },
-    AppKeybindingSpec {
-        keybinding: "alt+.",
-        action: AppKeymapAction::IncreaseReasoningEffort,
         condition: AppKeymapCondition::PressWithComposerWithoutSelection,
     },
     AppKeybindingSpec {
@@ -395,9 +385,23 @@ impl AppKeymap {
                 }
             }
             match resolver.resolve(&context, &events, condition_matches) {
-                ResolveResult::Command { command, .. } if command == action => {
-                    Some(serialize_key_sequence(&sequence))
-                }
+                ResolveResult::Command { command, .. } if command == action => Some(
+                    serialize_key_sequence(&sequence)
+                        .split(' ')
+                        .map(|chord| {
+                            chord
+                                .split('+')
+                                .map(|key| match key {
+                                    "arrowup" => "↑",
+                                    "arrowdown" => "↓",
+                                    key => key,
+                                })
+                                .collect::<Vec<_>>()
+                                .join("+")
+                        })
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                ),
                 _ => None,
             }
         })

@@ -25,4 +25,4 @@ expression: render(&app)
   > keep this draft                                                             
   ───────────────────────────────────────────────────────── test-model (high)   
                                                                                 
-  Enter 发 送   ·  shift+tab 模 式   ·  alt+,/alt+. 推 理 档 位
+  Enter 发 送   ·  shift+tab 模 式   ·  shift+↓/↑ 推 理 档 位

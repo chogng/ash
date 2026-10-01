@@ -79,12 +79,24 @@
 | 命令 | 覆盖范围 |
 | --- | --- |
 | `just test <package>` | 指定 Rust 包 |
-| `just test-tui` | 真实 CLI/TUI PTY 场景，先构建服务程序 |
+| `just test-tui-unit <filter>` | TUI 库单测，默认使用 `ci-test` |
+| `just test-tui <filter>` | 真实 CLI/TUI PTY 场景，服务程序与测试统一使用 `ci-test` |
 | `just test-python` / `just test-python build` | 全部仓库 Python 测试，或仅构建工具测试 |
 | `pnpm test` | Rust 协议验证、构建工具检查和前端单测 |
 | `pnpm test:build` | TypeScript 构建工具单测 |
 
 Electron、Browser、编辑器的构建和测试命令，以及测试是否启动 App Server，见 [前端验证命令](../app-ts/README.md#常用命令)。
+
+修改 TUI 后先运行受影响的单测，需要验证真实进程、终端信号或恢复时再运行 PTY 场景：
+
+```sh
+just test-tui-unit session_manager
+just test-tui actual_tui_process_interrupts_an_inflight_http_stream
+```
+
+涉及进程内 App Server 的会话测试需显式启用功能：`just test-tui-unit conversation_flow_tests --features in-process-tests`。两个入口都可用 `just --set tui_profile <profile> ...` 覆盖配置；PTY 入口的服务程序和测试会一起切换。首次构建服务程序仍需时间。日常启动验证用 `just build-code`，使用 `dev-small`。
+
+同一轮验证按单测、必要的 PTY 场景、warning 检查顺序运行；不要同时启动这些 Cargo 任务。`test-tui-unit` 和 `test-tui` 复用 `.build/cargo` 中同配置的产物，并发运行仍会等待 Cargo 构建锁。
 
 #### UI 场景录屏
 
@@ -185,6 +197,7 @@ just bench-build ash-cli --profile dev-small --jobs 4 --compare .build/build-hea
 | 2026-09-26，macOS arm64 | Vite 显式预优化依赖后，首次窗口菜单和编辑区可见耗时 4507 → 2873 毫秒，重载 1 → 0 次 | 两次依赖缓存失效的单次 Playwright 对照，不代表日常启动或 Rust 冷编译 |
 | 2026-09-28，macOS arm64、Rust 1.98.0、12 个任务 | TUI 测试包优化级别降为 0，实际编辑重编译中位数 13.31 → 6.72 秒，测试程序 235.2 → 253.9 MiB | 共享增量输出；缺少同条件冷编译对照 |
 | 2026-09-28，同平台、`dev-small` | Code TUI 优化级别降为 0，三轮实际编辑重编译中位数 5.79 → 3.49 秒，回切为 5.84 秒 | `just build-code` 的 TUI 编辑场景；冷编译及运行性能未配对测量，发布配置未变 |
+| 2026-09-30，macOS arm64、Rust 1.98.0、现有 `test` 缓存 | `just --set tui_profile test test-tui-unit session_manager` 在提交稳定后的单次重跑中，Cargo 阶段 0.74 秒，13 项测试执行 0.13 秒 | 先前运行观察到宏动态库的系统签名校验等待，期间 `git pull` 也触发了重编译；此记录未测默认 `ci-test` 的冷构建，不是配置修改前后的速度对照 |
 
 早期 WebRTC 构建记录属于已切换的依赖图，不能用于当前耗时判断。2026-09-24 产品宿主拆除 App Server 实现依赖的单包测量，也没有同条件完整产品冷构建的前后对照。
 

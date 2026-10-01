@@ -231,13 +231,7 @@ fn collaboration_effort_steps_use_supported_values_and_stop_at_boundaries() {
         if let Some(boundary) = boundary {
             assert!(notice.contains(boundary));
         } else {
-            assert_eq!(
-                &*notice,
-                format!(
-                    "Thinking effort: {}",
-                    super::reasoning_effort_label(expected)
-                )
-            );
+            assert_eq!(&*notice, format!("Thinking effort: {}", expected.as_str()));
         }
         assert_eq!(transport.state.lock().unwrap().1.len(), writes);
     }
@@ -272,7 +266,7 @@ fn collaboration_effort_steps_use_supported_values_and_stop_at_boundaries() {
         update.summary.model_reasoning_effort(),
         Some(ReasoningEffort::Low)
     );
-    let choices = super::request::effort_choices(&update.config, &catalog).unwrap();
+    let choices = super::reasoning_effort::choices(&update.config, &catalog).unwrap();
     let selection = crate::widgets::list_selection::ListSelectionState::new(choices.model);
     assert_eq!(selection.selected_visible_index(), Some(0));
     assert_eq!(selection.visible_items().len(), 3);
@@ -343,5 +337,108 @@ fn collaboration_effort_unsupported_models_do_not_write_config() {
             );
         }
         assert!(transport.state.lock().unwrap().1.is_empty());
+    }
+}
+
+#[test]
+fn reasoning_effort_uses_each_provider_and_models_catalog_levels_and_order() {
+    use crate::thread::composer::options::ComposerOption;
+    use crate::widgets::list_selection::ListSelectionItemId;
+
+    // The same model ID across providers and another model within one provider must not
+    // share effort capabilities. The unusual order also catches a global enum ordering.
+    let cases = [
+        (
+            "provider-a",
+            "shared-model",
+            vec![ReasoningEffort::Low, ReasoningEffort::High],
+            ReasoningEffort::Low,
+            ReasoningEffort::High,
+        ),
+        (
+            "provider-b",
+            "shared-model",
+            vec![
+                ReasoningEffort::None,
+                ReasoningEffort::Medium,
+                ReasoningEffort::Max,
+            ],
+            ReasoningEffort::Medium,
+            ReasoningEffort::Max,
+        ),
+        (
+            "provider-a",
+            "other-model",
+            vec![ReasoningEffort::ExtraHigh, ReasoningEffort::Minimal],
+            ReasoningEffort::ExtraHigh,
+            ReasoningEffort::Minimal,
+        ),
+    ];
+    let catalog = ModelListResult {
+        models: cases
+            .iter()
+            .map(|(provider, model, levels, default, _)| {
+                let mut model = entry(provider, model, ModelAccess::ApiKey);
+                model.supported_reasoning_efforts = levels.clone();
+                model.model_reasoning_effort = Some(*default);
+                model
+            })
+            .collect(),
+    };
+    let transport = ConfigTransport {
+        state: std::sync::Arc::new(std::sync::Mutex::new((
+            crate::test_support::empty_config_snapshot(),
+            vec![],
+        ))),
+    };
+    let mut client = ash_app_server_client::AppServerClient::new(transport.clone());
+    for (provider, model, levels, default, next) in cases {
+        let config = {
+            let mut state = transport.state.lock().unwrap();
+            state.0.model = Some(ModelRefDto {
+                provider: provider.into(),
+                model: model.into(),
+            });
+            state.0.model_reasoning_effort = None;
+            state.0.clone()
+        };
+        let picker = super::ModelPickerData::new(catalog.clone(), config.clone());
+        let choices = picker.effort_choices().unwrap();
+        assert_eq!(choices.actions.len(), levels.len());
+        for (index, level) in levels.iter().enumerate() {
+            assert_eq!(
+                choices.actions[&ListSelectionItemId::new(index.to_string())],
+                ComposerOption::Effort(*level)
+            );
+        }
+        let selection = crate::widgets::list_selection::ListSelectionState::new(choices.model);
+        assert_eq!(
+            selection.selected_visible_index(),
+            levels.iter().position(|level| *level == default)
+        );
+        let update = super::execute(&mut client, super::Command::IncreaseEffort, &catalog).unwrap();
+        assert_eq!(update.config.model, config.model);
+        assert_eq!(update.config.model_reasoning_effort, Some(next));
+        let update = super::execute(&mut client, super::Command::DecreaseEffort, &catalog).unwrap();
+        assert_eq!(update.config.model_reasoning_effort, Some(default));
+        assert_eq!(update.summary.model_reasoning_effort(), Some(default));
+        let unsupported = catalog
+            .models
+            .iter()
+            .flat_map(|model| &model.supported_reasoning_efforts)
+            .find(|level| !levels.contains(level))
+            .unwrap();
+        let writes = transport.state.lock().unwrap().1.len();
+        assert!(
+            super::execute(
+                &mut client,
+                super::Command::SetEffort {
+                    effort: *unsupported
+                },
+                &catalog,
+            )
+            .is_err()
+        );
+        assert_eq!(transport.state.lock().unwrap().1.len(), writes);
     }
 }

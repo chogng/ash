@@ -14,14 +14,13 @@ fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_chang
     let fixture = Fixture::new();
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_stable_screen("Automatic model");
-    process.type_text("BOUND-DRAFT");
+    process.type_text("BOUND-DRAFT≤≥");
     process.back_tab();
     process.wait_for_stable_screen("Next mode: Plan");
-    assert!(process.screen().contains("BOUND-DRAFT"));
-    process.send(b"\x1b.");
+    assert!(process.screen().contains("> BOUND-DRAFT≤≥"));
+    process.send(b"\x1b[1;2A");
     process.wait_for_stable_screen("Select a model with /model before changing thinking effort");
-    assert!(process.screen().contains("BOUND-DRAFT"));
-    assert!(!process.screen().contains("BOUND-DRAFT."));
+    assert!(process.screen().contains("> BOUND-DRAFT≤≥"));
     process.back_tab();
     process.wait_for_stable_screen("Next mode: Debug");
     process.assert_snapshot("real/02-terminal/collaboration-shortcuts");
@@ -32,7 +31,7 @@ fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_chang
     process.submit("/model openai/gpt-6-luna high");
     process.wait_for_stable_screen("GPT-6 Luna (high)");
     process.type_text("BOUND-DRAFT");
-    process.send(b"\x1b.");
+    process.send(b"\x1b[1;2A");
     process.wait_for_stable_screen("Thinking effort: extra high");
     assert!(process.screen().contains("BOUND-DRAFT"));
     assert!(process.screen().contains("GPT-6 Luna (extra high)"));
@@ -44,7 +43,7 @@ fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_chang
     );
     process.assert_snapshot("real/02-terminal/effort-shortcut");
     for (sequence, notice, effort) in [
-        (b"\x1b,".as_slice(), "Thinking effort: high", "high"),
+        (b"\x1b[1;2B".as_slice(), "Thinking effort: high", "high"),
         (
             b"\x1b[1;2A".as_slice(),
             "Thinking effort: extra high",
@@ -61,12 +60,12 @@ fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_chang
                 .contains(&format!("modelReasoningEffort = \"{effort}\""))
         );
     }
-    process.send(b"\x1b.");
+    process.send(b"\x1b[1;2A");
     process.wait_for_stable_screen("Thinking effort: extra high");
     process.send(b"\x1b[1;2A");
     process.wait_for_stable_screen("Thinking effort: max");
     let config_at_max = fixture.config_source();
-    process.send(b"\x1b.");
+    process.send(b"\x1b[1;2A");
     process.wait_for_stable_screen("Thinking effort is already at the highest level (max)");
     assert_eq!(fixture.config_source(), config_at_max);
     assert!(process.screen().contains("GPT-6 Luna (max)"));

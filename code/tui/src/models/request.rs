@@ -1,32 +1,18 @@
 use super::Command;
-use super::ModelChoices;
+use super::ModelCommandError;
+use super::ModelNotice;
 use super::ModelSummary;
+use super::ModelUpdate;
 use super::model_choices;
+use super::reasoning_effort;
 use crate::client::new_command_id;
 use ash_app_server_client::AppServerClient;
-use ash_app_server_client::ClientError;
 use ash_app_server_client::JsonRpcTransport;
 use ash_app_server_protocol::protocol::config::ConfigUpdateParams;
 use ash_app_server_protocol::protocol::config::ModelRefDto;
 use ash_app_server_protocol::protocol::model::ModelListResult;
 use ash_protocol::Patch;
 use ash_protocol::ReasoningEffort;
-use std::fmt;
-
-#[derive(Debug)]
-pub(crate) struct ModelUpdate {
-    pub(crate) summary: ModelSummary,
-    pub(crate) notice: ModelNotice,
-    pub(crate) picker: Option<ModelChoices>,
-    pub(crate) config: ash_app_server_protocol::protocol::config::ConfigReadResult,
-}
-
-#[derive(Debug)]
-pub(crate) enum ModelNotice {
-    Command(crate::nls::Text),
-    /// Adjusting effort must not add transcript commands or change a running turn's status.
-    ThinkingEffort(crate::nls::Text),
-}
 
 impl Command {
     pub(crate) const fn request_name(&self) -> &'static str {
@@ -66,17 +52,19 @@ where
     match command {
         Command::SetModel { preference } => set_model(client, &preference, catalog),
         Command::Pin { preference, pinned } => set_pin(client, &preference, pinned, catalog),
-        Command::DecreaseEffort => change_effort(
+        Command::DecreaseEffort => reasoning_effort::update(
             client,
-            EffortChange::Step(EffortDirection::Decrease),
+            reasoning_effort::Change::Step(reasoning_effort::Direction::Decrease),
             catalog,
         ),
-        Command::IncreaseEffort => change_effort(
+        Command::IncreaseEffort => reasoning_effort::update(
             client,
-            EffortChange::Step(EffortDirection::Increase),
+            reasoning_effort::Change::Step(reasoning_effort::Direction::Increase),
             catalog,
         ),
-        Command::SetEffort { effort } => change_effort(client, EffortChange::Set(effort), catalog),
+        Command::SetEffort { effort } => {
+            reasoning_effort::update(client, reasoning_effort::Change::Set(effort), catalog)
+        }
         Command::OpenEffortPicker => unreachable!("effort picker is opened by AppDriver"),
     }
     .map_err(|error| error.to_string())
@@ -212,158 +200,6 @@ where
     })
 }
 
-fn selected_efforts<'a>(
-    config: &ash_app_server_protocol::protocol::config::ConfigReadResult,
-    catalog: &'a ModelListResult,
-) -> Result<(&'a [ReasoningEffort], Option<ReasoningEffort>), ModelCommandError> {
-    let model = config.model.as_ref().ok_or_else(|| {
-        ModelCommandError("Select a model with /model before changing thinking effort".into())
-    })?;
-    let entry = catalog
-        .models
-        .iter()
-        .find(|entry| {
-            entry.model.provider.as_str() == model.provider
-                && entry.model.model.as_str() == model.model
-        })
-        .ok_or_else(|| ModelCommandError("Model no longer available".into()))?;
-    if entry.supported_reasoning_efforts.is_empty() {
-        return Err(ModelCommandError(
-            "This model does not support thinking effort".into(),
-        ));
-    }
-    Ok((
-        &entry.supported_reasoning_efforts,
-        config
-            .model_reasoning_effort
-            .or(entry.model_reasoning_effort),
-    ))
-}
-
-pub(super) fn effort_choices(
-    config: &ash_app_server_protocol::protocol::config::ConfigReadResult,
-    catalog: &ModelListResult,
-) -> Result<crate::thread::composer::options::ComposerOptions, String> {
-    let (supported, current) =
-        selected_efforts(config, catalog).map_err(|error| error.to_string())?;
-    Ok(crate::thread::composer::options::choices(
-        "Thinking effort",
-        supported.iter().copied().map(|effort| {
-            (
-                super::reasoning_effort_label(effort).into(),
-                String::new(),
-                crate::thread::composer::options::ComposerOption::Effort(effort),
-                current == Some(effort),
-            )
-        }),
-    ))
-}
-
-enum EffortChange {
-    Step(EffortDirection),
-    Set(ReasoningEffort),
-}
-
-enum EffortDirection {
-    Decrease,
-    Increase,
-}
-
-fn change_effort<T: JsonRpcTransport>(
-    client: &mut AppServerClient<T>,
-    change: EffortChange,
-    catalog: &ModelListResult,
-) -> Result<ModelUpdate, ModelCommandError> {
-    let config = client.read_config()?;
-    let (supported, current) = selected_efforts(&config, catalog)?;
-    let effort = match change {
-        EffortChange::Set(effort) if supported.contains(&effort) => effort,
-        EffortChange::Set(_) => {
-            return Err(ModelCommandError(
-                "Use /effort to choose a supported thinking effort".into(),
-            ));
-        }
-        EffortChange::Step(direction) => {
-            let next = match current {
-                Some(effort) => {
-                    let index = supported
-                        .iter()
-                        .position(|value| *value == effort)
-                        .ok_or_else(|| {
-                            ModelCommandError(
-                                "Use /effort to choose a supported thinking effort".into(),
-                            )
-                        })?;
-                    // A directional adjustment stops at the boundary rather than wrapping.
-                    let next = match direction {
-                        EffortDirection::Decrease => index.checked_sub(1),
-                        EffortDirection::Increase => {
-                            (index + 1 < supported.len()).then_some(index + 1)
-                        }
-                    };
-                    let Some(next) = next else {
-                        let message = match direction {
-                            EffortDirection::Decrease => {
-                                "Thinking effort is already at the lowest level ({0})"
-                            }
-                            EffortDirection::Increase => {
-                                "Thinking effort is already at the highest level ({0})"
-                            }
-                        };
-                        return Ok(ModelUpdate {
-                            summary: ModelSummary::from_catalog(
-                                config.model.clone(),
-                                config.model_reasoning_effort,
-                                Some(catalog),
-                            ),
-                            notice: ModelNotice::ThinkingEffort(crate::nls::Text::template(
-                                message,
-                                vec![super::reasoning_effort_label(effort).into()],
-                            )),
-                            picker: None,
-                            config,
-                        });
-                    };
-                    next
-                }
-                None => 0,
-            };
-            supported[next]
-        }
-    };
-    client.update_config(ConfigUpdateParams {
-        advisor: Default::default(),
-        time_context: Default::default(),
-        features: Default::default(),
-        command_id: new_command_id("effort"),
-        expected_revision: config.revision,
-        model: Patch::Missing,
-        model_reasoning_effort: Patch::Value(effort),
-        commit_message_model: Patch::Missing,
-        approval_review_model: Patch::Missing,
-        tool_mode: Patch::Missing,
-        grep_backend: Patch::Missing,
-        git: Patch::Missing,
-        gui: Patch::Missing,
-        tui: Patch::Missing,
-    })?;
-    let config = client.read_config()?;
-    let summary = ModelSummary::from_catalog(
-        config.model.clone(),
-        config.model_reasoning_effort,
-        Some(catalog),
-    );
-    Ok(ModelUpdate {
-        notice: ModelNotice::ThinkingEffort(crate::nls::Text::template(
-            "Thinking effort: {0}",
-            vec![super::reasoning_effort_label(effort).into()],
-        )),
-        summary,
-        config,
-        picker: None,
-    })
-}
-
 fn model_label(model: Option<&ModelRefDto>, effort: Option<ReasoningEffort>) -> String {
     match (model, effort) {
         (Some(model), Some(effort)) => {
@@ -371,21 +207,6 @@ fn model_label(model: Option<&ModelRefDto>, effort: Option<ReasoningEffort>) -> 
         }
         (Some(model), None) => format!("{}/{}", model.provider, model.model),
         (None, _) => "not configured".into(),
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct ModelCommandError(String);
-
-impl fmt::Display for ModelCommandError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
-impl From<ClientError> for ModelCommandError {
-    fn from(error: ClientError) -> Self {
-        Self(error.to_string())
     }
 }
 

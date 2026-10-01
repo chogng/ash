@@ -110,7 +110,13 @@ fn input_hints(app: &App) -> KeyHints {
     // Keep the pair together so a narrow terminal does not advertise only one direction.
     match (lower, raise) {
         (Some(lower), Some(raise)) => {
-            hints = hints.with_compact_action(format!("{lower}/{raise}"), "effort");
+            let keys = match (lower.strip_suffix('↓'), raise.strip_suffix('↑')) {
+                (Some(lower_prefix), Some(raise_prefix)) if lower_prefix == raise_prefix => {
+                    format!("{lower}/↑")
+                }
+                _ => format!("{lower}/{raise}"),
+            };
+            hints = hints.with_compact_action(keys, "effort");
         }
         (Some(lower), None) => hints = hints.with_compact_action(lower, "lower effort"),
         (None, Some(raise)) => hints = hints.with_compact_action(raise, "raise effort"),

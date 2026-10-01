@@ -1356,7 +1356,10 @@ fn set_model_sets_and_clears_model_reasoning_effort() {
     // Specifying valid effort on a model that supports it
     let update =
         crate::models::set_model(&mut *client, "openai/gpt-6-astra high", &catalog).unwrap();
-    crate::tui_assert_snapshot!(&update.notice, @"Model: openai/gpt-6-astra (high)");
+    let crate::models::ModelNotice::Command(notice) = update.notice else {
+        panic!("model selection must produce a command notice");
+    };
+    crate::tui_assert_snapshot!(&*notice, @"Model: openai/gpt-6-astra (high)");
     assert_eq!(
         update.summary.model_reasoning_effort(),
         Some(ReasoningEffort::High)
@@ -1379,14 +1382,20 @@ fn set_model_sets_and_clears_model_reasoning_effort() {
 
     // Setting model without effort clears model reasoning effort.
     let update = crate::models::set_model(&mut *client, "openai/gpt-6-astra", &catalog).unwrap();
-    assert_eq!(update.notice, "Model: openai/gpt-6-astra");
+    let crate::models::ModelNotice::Command(notice) = update.notice else {
+        panic!("model selection must produce a command notice");
+    };
+    assert_eq!(&*notice, "Model: openai/gpt-6-astra");
     assert_eq!(update.summary.model_reasoning_effort(), None);
     let read = client.read_config().unwrap();
     assert_eq!(read.model_reasoning_effort, None);
 
     // Clear unsets model and effort
     let update = crate::models::set_model(&mut *client, "clear", &catalog).unwrap();
-    assert_eq!(update.notice, "Model: not configured");
+    let crate::models::ModelNotice::Command(notice) = update.notice else {
+        panic!("model selection must produce a command notice");
+    };
+    assert_eq!(&*notice, "Model: not configured");
     assert_eq!(update.summary.model(), None);
     assert_eq!(update.summary.model_reasoning_effort(), None);
 

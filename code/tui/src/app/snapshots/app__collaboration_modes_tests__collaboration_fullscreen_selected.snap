@@ -25,4 +25,4 @@ expression: render(&app)
   > draft behind selector                                                       
   ─────────────────────────────────────────────── Automatic model · Multitask   
                                                                                 
-  Enter send  ·  shift+tab mode  ·  alt+,/alt+. effort
+  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort

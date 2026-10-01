@@ -6,8 +6,11 @@ set windows-shell := ["pwsh", "-NoLogo", "-NoProfile", "-CommandWithArgs"]
 python := if os_family() == "windows" { "python" } else { "python3" }
 ruff := if os_family() == "windows" { "./scripts/.venv/Scripts/ruff.exe" } else { "./scripts/.venv/bin/ruff" }
 recipe_args := if os_family() == "windows" { "@($args | Select-Object -Skip 1)" } else { '"$@"' }
-tui_profile := ""
-tui_profile_arg := if tui_profile == "" { "" } else { "--profile " + tui_profile }
+
+# Unit tests and PTY service binaries share one profile to reuse dependency outputs.
+
+tui_profile := "ci-test"
+tui_profile_arg := "--profile " + tui_profile
 
 # Format Just, Rust, and first-party Python sources.
 fmt:
@@ -64,7 +67,11 @@ build-rust *args:
 test *args:
     {{ python }} -B scripts/cargo.py test -p {{ recipe_args }}
 
-# Build the matching daemon and run real CLI/TUI scenarios through a PTY.
+# Run TUI library tests with the shared test profile.
+test-tui-unit *args:
+    {{ python }} -B scripts/cargo.py test -p ash-tui --lib {{ tui_profile_arg }} {{ recipe_args }}
+
+# Build matching service programs and run real CLI/TUI scenarios through a PTY.
 test-tui *args:
     {{ python }} -B scripts/cargo.py build -p ash-app-server --bin ash-app-server -p ash-app-server-daemon --bin ash-app-server-daemon -p ash-remote-server --bin ash-remote-server -p ash-code-mode-host --bin ash-code-mode-host {{ tui_profile_arg }}
     {{ python }} -B scripts/cargo.py test -p ash-cli --test tui_real_scenarios {{ tui_profile_arg }} {{ recipe_args }}

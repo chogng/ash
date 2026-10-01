@@ -87,6 +87,7 @@ fn actual_tui_runs_three_complete_conversation_turns() {
     third.release();
     process.wait_for_stable_screen("连续多轮对话已完成");
     process.refresh_policy_tip();
+    assert!(process.screen().contains("shift+↓/↑ effort"));
     process.assert_snapshot("real/01-conversation/02-third-turn-complete");
 
     let bodies = server.request_bodies();

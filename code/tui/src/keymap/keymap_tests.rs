@@ -61,23 +61,33 @@ fn crossterm_adapter_normalizes_backtab_and_character_case() {
 }
 
 #[test]
+fn action_hints_only_replace_up_and_down_arrow_names() {
+    for platform in [
+        HostPlatform::MacOs,
+        HostPlatform::Linux,
+        HostPlatform::Windows,
+    ] {
+        let mut keymap = AppKeymap::default();
+        keymap.platform = platform;
+        for (action, hint) in [
+            (AppKeymapAction::DecreaseReasoningEffort, "shift+↓"),
+            (AppKeymapAction::IncreaseReasoningEffort, "shift+↑"),
+            (AppKeymapAction::CycleCollaborationMode, "shift+tab"),
+            (AppKeymapAction::InterruptOrQuit, "ctrl+c"),
+        ] {
+            assert_eq!(keymap.action_hint(action, context()).as_deref(), Some(hint));
+        }
+    }
+}
+
+#[test]
 fn effort_shortcuts_resolve_both_directions_and_allow_independent_remapping() {
     let mut keymap = AppKeymap::default();
     for (code, modifiers, action) in [
         (
-            KeyCode::Char(','),
-            KeyModifiers::ALT,
-            AppKeymapAction::DecreaseReasoningEffort,
-        ),
-        (
             KeyCode::Down,
             KeyModifiers::SHIFT,
             AppKeymapAction::DecreaseReasoningEffort,
-        ),
-        (
-            KeyCode::Char('.'),
-            KeyModifiers::ALT,
-            AppKeymapAction::IncreaseReasoningEffort,
         ),
         (
             KeyCode::Up,
@@ -90,19 +100,27 @@ fn effort_shortcuts_resolve_both_directions_and_allow_independent_remapping() {
             Some(action)
         );
     }
-    assert_eq!(
-        keymap.resolve_single(
-            &KeyEvent::new(KeyCode::Char('r'), KeyModifiers::ALT),
-            context()
-        ),
-        None
-    );
+    for (character, modifiers) in [
+        (',', KeyModifiers::ALT),
+        ('.', KeyModifiers::ALT),
+        ('r', KeyModifiers::ALT),
+        ('≤', KeyModifiers::NONE),
+        ('≥', KeyModifiers::NONE),
+    ] {
+        assert_eq!(
+            keymap.resolve_single(
+                &KeyEvent::new(KeyCode::Char(character), modifiers),
+                context()
+            ),
+            None
+        );
+    }
     let rules = compile_app_user_bindings(
         &serde_json::json!([
             {"key":"alt+j", "command":"ashCode.action.decreaseReasoningEffort"},
             {"key":"alt+k", "command":"ashCode.action.increaseReasoningEffort"},
-            {"key":"alt+,", "block":true},
-            {"key":"alt+.", "block":true}
+            {"key":"shift+arrowdown", "block":true},
+            {"key":"shift+arrowup", "block":true}
         ]),
         HostPlatform::current(),
     )
@@ -124,12 +142,9 @@ fn effort_shortcuts_resolve_both_directions_and_allow_independent_remapping() {
             Some(format!("alt+{key}"))
         );
     }
-    for key in [',', '.'] {
+    for code in [KeyCode::Down, KeyCode::Up] {
         assert_eq!(
-            keymap.resolve_single(
-                &KeyEvent::new(KeyCode::Char(key), KeyModifiers::ALT),
-                context()
-            ),
+            keymap.resolve_single(&KeyEvent::new(code, KeyModifiers::SHIFT), context()),
             None
         );
     }
@@ -143,8 +158,6 @@ fn root_conditions_preserve_input_selection_and_press_boundaries() {
 
     for key in [
         backtab,
-        KeyEvent::new(KeyCode::Char(','), KeyModifiers::ALT),
-        KeyEvent::new(KeyCode::Char('.'), KeyModifiers::ALT),
         KeyEvent::new(KeyCode::Up, KeyModifiers::SHIFT),
         KeyEvent::new(KeyCode::Down, KeyModifiers::SHIFT),
     ] {

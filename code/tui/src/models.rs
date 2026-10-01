@@ -1,4 +1,5 @@
 mod picker;
+mod reasoning_effort;
 mod request;
 
 /// A completed model operation delivered to the TUI state owner.
@@ -18,16 +19,16 @@ pub(crate) enum Command {
     Pin { preference: String, pinned: bool },
 }
 
+use ash_app_server_client::ClientError;
 use ash_app_server_protocol::protocol::config::ModelRefDto;
 use ash_app_server_protocol::protocol::model::ModelListResult;
 use ash_protocol::ReasoningEffort;
+use std::fmt;
 
 pub(crate) use picker::ModelChoices;
 pub(crate) use picker::ModelPickerData;
 pub(crate) use picker::ModelSelectionAction;
 pub(crate) use picker::model_choices;
-pub(crate) use request::ModelNotice;
-pub(crate) use request::ModelUpdate;
 pub(crate) use request::execute;
 pub(crate) use request::remove_provider_pins;
 #[cfg(test)]
@@ -98,21 +99,39 @@ impl ModelSummary {
             .or_else(|| self.model.as_ref().map(|model| model.model.as_str()))
             .unwrap_or("Automatic model");
         match self.model_reasoning_effort {
-            Some(effort) => format!("{model} ({})", reasoning_effort_label(effort)),
+            Some(effort) => format!("{model} ({})", effort.as_str()),
             None => model.into(),
         }
     }
 }
 
-pub(crate) const fn reasoning_effort_label(effort: ReasoningEffort) -> &'static str {
-    match effort {
-        ReasoningEffort::None => "none",
-        ReasoningEffort::Minimal => "minimal",
-        ReasoningEffort::Low => "low",
-        ReasoningEffort::Medium => "medium",
-        ReasoningEffort::High => "high",
-        ReasoningEffort::ExtraHigh => "extra high",
-        ReasoningEffort::Max => "max",
+#[derive(Debug)]
+pub(crate) struct ModelUpdate {
+    pub(crate) summary: ModelSummary,
+    pub(crate) notice: ModelNotice,
+    pub(crate) picker: Option<ModelChoices>,
+    pub(crate) config: ash_app_server_protocol::protocol::config::ConfigReadResult,
+}
+
+#[derive(Debug)]
+pub(crate) enum ModelNotice {
+    Command(crate::nls::Text),
+    /// Adjusting effort must not add transcript commands or change a running turn's status.
+    ThinkingEffort(crate::nls::Text),
+}
+
+#[derive(Debug)]
+pub(crate) struct ModelCommandError(String);
+
+impl fmt::Display for ModelCommandError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl From<ClientError> for ModelCommandError {
+    fn from(error: ClientError) -> Self {
+        Self(error.to_string())
     }
 }
 
