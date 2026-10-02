@@ -60,6 +60,7 @@ export function registerLayoutActions(layout: IAgentWorkbenchLayoutService, sess
 				keybinding: { primary: new Keybinding([logicalKey('`', { ctrlKey: true })]), when: codePage.isEqualTo(true) },
 				menu: [
 					{ id: Menus.TitleBarLeftLayout, group: 'navigation', order: 3, when: codePage.isEqualTo(true) },
+					{ id: MenuId.MenubarViewMenu, group: '2_code_layout', order: 3, when: codePage.isEqualTo(true) },
 					{ id: MenuId.PanelTitle, group: 'navigation', order: 100, when: codePage.isEqualTo(true) },
 				],
 				toggled: PanelVisibleContext.isEqualTo(true),

@@ -93,6 +93,76 @@ test('Code panel stays below the main region and retains its state only on Code'
 	expect(errors).toEqual([]);
 });
 
+test('Code connects layout commands to View, Add tab and the panel shortcut', async ({ application, target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code');
+	let page = workbench.page;
+	if (target.kind === 'browser') {
+		await page.goto('/browser/sessions/sessions-code.html');
+	} else {
+		if (!('windows' in application)) {
+			throw new Error('Expected Electron windows');
+		}
+		const opened = application.waitForEvent('window');
+		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
+		page = await opened;
+	}
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	const navigation = page.locator('.ash-sessions-activity-content');
+	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	const editor = page.locator('[data-part="editor"]');
+	const title = editor.locator('.ash-editor-title-control');
+	const content = editor.locator('.ash-editor-group-content');
+	const panel = page.locator('[data-part="panel"]');
+	const openViewMenu = async (): Promise<void> => {
+		await page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Application menu', exact: true }).click();
+		await page.getByRole('menuitem', { name: 'View', exact: true }).hover();
+	};
+	await expect(content).toBeHidden();
+	await openViewMenu();
+	await page.getByRole('menuitem', { name: 'Show editor', exact: true }).click();
+	await expect(content).toBeVisible();
+	await openViewMenu();
+	await expect(page.getByRole('menuitem', { name: 'Hide editor', exact: true })).toBeVisible();
+	await expect(page.getByRole('menuitem', { name: 'Show editor', exact: true })).toHaveCount(0);
+	await page.getByRole('menuitemcheckbox', { name: 'Toggle Code panel', exact: true }).click();
+	await expect(panel).toBeVisible();
+	await page.keyboard.press('Control+`');
+	await expect(panel).toBeHidden();
+	await title.getByRole('button', { name: 'Add tab', exact: true }).click();
+	await page.getByRole('menuitem', { name: 'Open Changes tab', exact: true }).click();
+	const changes = title.getByRole('tab', { name: 'Changes', exact: true });
+	await expect(changes).toHaveAttribute('aria-selected', 'true');
+	await changes.press('Delete');
+	await expect(changes).toHaveCount(0);
+	await title.getByRole('button', { name: 'Add tab', exact: true }).click();
+	await page.getByRole('menuitem', { name: 'Open Changes tab', exact: true }).click();
+	await expect(changes).toHaveAttribute('aria-selected', 'true');
+	await openViewMenu();
+	await page.getByRole('menuitem', { name: 'Hide editor', exact: true }).click();
+	await expect(content).toBeHidden();
+	const commands = new QuickAccess(page);
+	await commands.open('>ash.sessions.hideEditor');
+	await expect(commands.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText('ash.sessions.hideEditor', { exact: true }) })).toHaveCount(0);
+	await commands.close();
+	await commands.runCommand('ash.sessions.showEditor');
+	await expect(content).toBeVisible();
+	await openViewMenu();
+	await page.getByRole('menuitem', { name: 'Hide editor', exact: true }).click();
+	await expect(content).toBeHidden();
+	await openViewMenu();
+	await page.getByRole('menuitem', { name: 'Open Files tab', exact: true }).click();
+	await expect(content).toBeVisible();
+	await expect(title.getByRole('tab', { name: 'Files', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
+	await openViewMenu();
+	for (const name of ['Toggle Code panel', 'Toggle Code side panel', 'Toggle details', 'Hide editor', 'Show editor', 'Open Files tab', 'Open Changes tab']) {
+		await expect(page.getByRole('menu').getByText(name, { exact: true })).toHaveCount(0);
+	}
+	await page.keyboard.press('Escape');
+	expect(errors).toEqual([]);
+});
+
 test('Code shares its tabs across all four editor and Details states', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	let page = workbench.page;

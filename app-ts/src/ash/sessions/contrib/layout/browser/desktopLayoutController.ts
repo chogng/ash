@@ -32,7 +32,6 @@ const codeContext = new RawContextKey<boolean>('sessions.desktopCode', false);
 const supportedDetailsContext = new RawContextKey<boolean>('sessions.supportedDetails', false);
 const profileKey = 'sessions.singlePane.sidePaneVisibility';
 const lastOpenProfileKey = 'sessions.layout.sidePane.lastOpen';
-const addTabMenu = MenuId.for('SessionsAddTab');
 interface SidePaneProfile { readonly editor: boolean; readonly details: boolean; }
 
 function parseProfile(raw: string): SidePaneProfile {
@@ -103,7 +102,9 @@ export class DesktopLayoutController extends BaseLayoutController {
 		this._register(this.layout.onDidLayoutMainContainer(updateContext));
 		this._register(this.layout.onDidChangePartVisibility(() => {
 			updateContext();
-			if (!this.isCodeActive() || this.isEditorAutoVisibilitySuppressed()) return;
+			if (!this.isCodeActive() || this.isEditorAutoVisibilitySuppressed()) {
+				return;
+			}
 			if (this.layout.isPartVisible('editor') && this.collapsedEditors) {
 				void this.enqueueDetails(() => this.restoreCollapsedEditors());
 			}
@@ -113,7 +114,9 @@ export class DesktopLayoutController extends BaseLayoutController {
 			}
 		}));
 		this._register(this.editor.onDidChangeEditors(event => {
-			if (!this.isCodeActive() || this.isEditorAutoVisibilitySuppressed()) return;
+			if (!this.isCodeActive() || this.isEditorAutoVisibilitySuppressed()) {
+				return;
+			}
 			if (event.kind === 'groupChanged' && event.event.kind === 'editorClosed' && event.event.reason === 'close' && this.editor.groups.every(group => group.inputs.length === 0)) {
 				this.layout.hidePart('auxiliarybar');
 				this.layout.hidePart('editor');
@@ -121,7 +124,9 @@ export class DesktopLayoutController extends BaseLayoutController {
 		}));
 		this._register(this.editors.onDidActiveEditorChange(() => {
 			updateContext();
-			if (!this.isCodeActive() || this.isEditorAutoVisibilitySuppressed()) return;
+			if (!this.isCodeActive() || this.isEditorAutoVisibilitySuppressed()) {
+				return;
+			}
 			const input = this.editors.activeEditor;
 			if (input && this.tabs.isManaged(input) && !this.layout.isPartVisible('editor') && this.collapsedEditors) {
 				// A Details tab selection belongs to the restorable composition too, including after reload.
@@ -153,7 +158,11 @@ export class DesktopLayoutController extends BaseLayoutController {
 			['ash.sessions.hideEditor', () => this.hideEditor()],
 			['ash.sessions.showEditor', () => this.showEditor()],
 			['ash.sessions.toggleSidePane', () => this.toggleSidePane()],
-			['ash.sessions.openFilesTab', async () => { await this.showEditor(); await this.tabs.openFiles(); this.detailPanel.update(true); }],
+			['ash.sessions.openFilesTab', async () => {
+				await this.showEditor();
+				await this.tabs.openFiles();
+				this.detailPanel.update(true);
+			}],
 			['ash.sessions.openChangesTab', async () => {
 				await this.showEditor();
 				const selection = this.sessions.getPageSelection('code').activeSelection;
@@ -167,23 +176,40 @@ export class DesktopLayoutController extends BaseLayoutController {
 		}
 		this._register(MenusRegistry.appendMenuItems([
 			{ id: Menus.TitleBarLeftLayout, item: { command: { id: 'ash.sessions.toggleSidePane', title: localizedString('ash', 'sessions.layout.toggleSidePane', 'Toggle Code side panel'), icon: Lxicon.layoutSidebarRight2, toggled: ContextKeyExpr.or(editorVisibleContext.isEqualTo(true), detailsVisibleContext.isEqualTo(true)) }, when: codeContext.isEqualTo(true), group: 'navigation', order: 4 } },
-			{ id: MenuId.EditorTitle, item: { title: localizedString('ash', 'sessions.layout.addTab', 'Add tab'), submenu: addTabMenu, when: codeContext.isEqualTo(true), group: 'navigation', order: 89 } },
-			{ id: addTabMenu, item: { command: { id: 'ash.sessions.openFilesTab', title: localizedString('ash', 'sessions.layout.openFiles', 'Open Files tab'), icon: Lxicon.files }, order: 0 } },
-			{ id: addTabMenu, item: { command: { id: 'ash.sessions.openChangesTab', title: localizedString('ash', 'sessions.layout.openChanges', 'Open Changes tab'), icon: Lxicon.diff }, order: 1 } },
+			{ id: MenuId.EditorTitle, item: { title: localizedString('ash', 'sessions.layout.addTab', 'Add tab'), submenu: Menus.CodeAddTab, when: codeContext.isEqualTo(true), group: 'navigation', order: 89 } },
+			{ id: Menus.CodeAddTab, item: { command: { id: 'ash.sessions.openFilesTab', title: localizedString('ash', 'sessions.layout.openFiles', 'Open Files tab'), icon: Lxicon.files }, order: 0 } },
+			{ id: Menus.CodeAddTab, item: { command: { id: 'ash.sessions.openChangesTab', title: localizedString('ash', 'sessions.layout.openChanges', 'Open Changes tab'), icon: Lxicon.diff }, order: 1 } },
 			{ id: MenuId.EditorTitle, item: { command: { id: 'ash.sessions.toggleDetails', title: localizedString('ash', 'sessions.layout.toggleDetails', 'Toggle details'), icon: Lxicon.files, toggled: detailsVisibleContext.isEqualTo(true), precondition: supportedDetailsContext.isEqualTo(true) }, when: codeContext.isEqualTo(true), group: 'navigation', order: 90 } },
 			{ id: MenuId.EditorTitle, item: { command: { id: 'ash.sessions.hideEditor', title: localizedString('ash', 'sessions.layout.hideEditor', 'Hide editor'), icon: Lxicon.layoutSidebarRightOff2 }, when: ContextKeyExpr.and(codeContext.isEqualTo(true), editorVisibleContext.isEqualTo(true)), group: 'navigation', order: 91 } },
 			{ id: MenuId.EditorTitle, item: { command: { id: 'ash.sessions.showEditor', title: localizedString('ash', 'sessions.layout.showEditor', 'Show editor'), icon: Lxicon.layoutSidebarRight2 }, when: ContextKeyExpr.and(codeContext.isEqualTo(true), editorVisibleContext.isEqualTo(false)), group: 'navigation', order: 91 } },
-			{ id: MenuId.CommandPalette, item: { command: { id: 'ash.sessions.toggleSidePane', title: localizedString('ash', 'sessions.layout.toggleSidePane', 'Toggle Code side panel') }, when: codeContext.isEqualTo(true) } },
 		]));
-		for (const [id, key, label] of [
-			['ash.sessions.toggleDetails', 'sessions.layout.toggleDetails', 'Toggle details'],
-			['ash.sessions.hideEditor', 'sessions.layout.hideEditor', 'Hide editor'],
-			['ash.sessions.showEditor', 'sessions.layout.showEditor', 'Show editor'],
-			['ash.sessions.openFilesTab', 'sessions.layout.openFiles', 'Open Files tab'],
-			['ash.sessions.openChangesTab', 'sessions.layout.openChanges', 'Open Changes tab'],
-		] as const) {
-			this._register(MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id, title: localizedString('ash', key, label) }, when: codeContext.isEqualTo(true) }));
-		}
+		const codeLayoutCommands = [
+			{
+				command: { id: 'ash.sessions.toggleSidePane', title: localizedString('ash', 'sessions.layout.toggleSidePane', 'Toggle Code side panel'), toggled: ContextKeyExpr.or(editorVisibleContext.isEqualTo(true), detailsVisibleContext.isEqualTo(true)) },
+				when: codeContext.isEqualTo(true), order: 0,
+			},
+			{
+				command: { id: 'ash.sessions.toggleDetails', title: localizedString('ash', 'sessions.layout.toggleDetails', 'Toggle details'), toggled: detailsVisibleContext.isEqualTo(true), precondition: supportedDetailsContext.isEqualTo(true) },
+				when: codeContext.isEqualTo(true), order: 1,
+			},
+			{
+				command: { id: 'ash.sessions.hideEditor', title: localizedString('ash', 'sessions.layout.hideEditor', 'Hide editor') },
+				when: ContextKeyExpr.and(codeContext.isEqualTo(true), editorVisibleContext.isEqualTo(true)), order: 2,
+			},
+			{
+				command: { id: 'ash.sessions.showEditor', title: localizedString('ash', 'sessions.layout.showEditor', 'Show editor') },
+				when: ContextKeyExpr.and(codeContext.isEqualTo(true), editorVisibleContext.isEqualTo(false)), order: 2,
+			},
+			{
+				command: { id: 'ash.sessions.openFilesTab', title: localizedString('ash', 'sessions.layout.openFiles', 'Open Files tab') },
+				when: codeContext.isEqualTo(true), order: 4,
+			},
+			{
+				command: { id: 'ash.sessions.openChangesTab', title: localizedString('ash', 'sessions.layout.openChanges', 'Open Changes tab') },
+				when: codeContext.isEqualTo(true), order: 5,
+			},
+		];
+		this._register(MenusRegistry.appendMenuItems(codeLayoutCommands.flatMap(item => [MenuId.CommandPalette, MenuId.MenubarViewMenu].map(id => ({ id, item: { ...item, group: '2_code_layout' } })))));
 		updateContext();
 	}
 
@@ -220,6 +246,11 @@ export class DesktopLayoutController extends BaseLayoutController {
 	}
 
 	protected override async onSessionRestored(selection: SessionsViewSelection, hasSavedEditors: boolean): Promise<void> {
+		// Design retains its live document when covered by Code. Code composition must
+		// wait for a Code editor rather than closing the hidden, possibly dirty canvas.
+		if (!this.layout.isPartAvailable('editor')) {
+			return;
+		}
 		if (this.restoredSession !== this.sessionKey(selection)) {
 			this.collapsedEditors = undefined;
 		}
@@ -253,16 +284,30 @@ export class DesktopLayoutController extends BaseLayoutController {
 		}
 	}
 	private applyProfile(profile: SidePaneProfile): void {
-		if (profile.editor) this.layout.showPart('editor'); else this.layout.hidePart('editor');
-		if (profile.details) this.layout.showPart('auxiliarybar'); else this.layout.hidePart('auxiliarybar');
+		if (profile.editor) {
+			this.layout.showPart('editor');
+		} else {
+			this.layout.hidePart('editor');
+		}
+		if (profile.details) {
+			this.layout.showPart('auxiliarybar');
+		} else {
+			this.layout.hidePart('auxiliarybar');
+		}
 	}
 	private enqueueDetails(operation: () => Promise<void> | void): Promise<void> {
 		return this.enqueueLayoutOperation(async () => {
-			if (this.isDisposed || !this.isCodeActive()) return;
+			if (this.isDisposed || !this.isCodeActive()) {
+				return;
+			}
 			const selected = this.sessions.getPageSelection('code').activeSelection;
 			this.captureEditors();
 			this.updating = true;
-			try { await operation(); } finally { this.updating = false; }
+			try {
+				await operation();
+			} finally {
+				this.updating = false;
+			}
 			if (selected?.kind === 'session' && this.isCurrentSession(selected) && this.detailPanel.supportsActiveEditor) {
 				this.existingProfile = this.profile;
 				this.saveProfile();
@@ -295,7 +340,9 @@ export class DesktopLayoutController extends BaseLayoutController {
 			await this.editor.applyWorkingSet(saved, { preserveFocus: true });
 		}
 		const selection = this.sessions.getPageSelection('code').activeSelection;
-		if (selection) await this.tabs.reconcile(selection, false);
+		if (selection) {
+			await this.tabs.reconcile(selection, false);
+		}
 	}
 	private async showEditor(): Promise<void> {
 		await this.restoreCollapsedEditors();
@@ -305,7 +352,9 @@ export class DesktopLayoutController extends BaseLayoutController {
 	}
 	private async toggleDetails(): Promise<void> {
 		if (this.layout.isPartVisible('auxiliarybar')) {
-			if (!this.layout.isPartVisible('editor')) await this.showEditor();
+			if (!this.layout.isPartVisible('editor')) {
+				await this.showEditor();
+			}
 			this.layout.hidePart('auxiliarybar');
 		} else {
 			this.detailPanel.update(true);
@@ -318,9 +367,13 @@ export class DesktopLayoutController extends BaseLayoutController {
 			this.layout.hidePart('auxiliarybar');
 		} else {
 			this.applyProfile(this.closedProfile);
-			if (this.closedProfile.editor) await this.restoreCollapsedEditors();
+			if (this.closedProfile.editor) {
+				await this.restoreCollapsedEditors();
+			}
 			const selection = this.sessions.getPageSelection('code').activeSelection;
-			if (selection) await this.tabs.reconcile(selection, !this.closedProfile.editor);
+			if (selection) {
+				await this.tabs.reconcile(selection, !this.closedProfile.editor);
+			}
 			this.detailPanel.update(false);
 		}
 		if (this.sessions.getPageSelection('code').activeSelection?.kind === 'session') {
@@ -329,4 +382,3 @@ export class DesktopLayoutController extends BaseLayoutController {
 		this.saveProfile();
 	}
 }
-
