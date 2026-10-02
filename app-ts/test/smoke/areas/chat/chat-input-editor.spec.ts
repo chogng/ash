@@ -133,6 +133,53 @@ test('Chat mode picker exposes all five modes with one checked selection', async
 	}
 });
 
+test('Chat mode choices use the shared action widget and floating elevation across themes', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code', 'Uses the Code Chat shell.');
+	const page = workbench.page;
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	const picker = page.locator('.ash-chat-view-pane .ash-chat:visible [data-action-id="ash.chat.input.mode"] button');
+	for (const theme of ['Ash Light', 'Ash Dark', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+		const search = page.locator('.ash-quick-pick').getByRole('combobox');
+		await search.fill(theme);
+		await search.press('Enter');
+		await expect(page.locator('.ash-quick-pick')).toHaveCount(0);
+		await picker.press('ArrowDown');
+		const widget = page.locator('.ash-action-widget.ash-chat-input-mode-menu');
+		await expect(widget).toBeVisible();
+		const shell = widget.locator('..');
+		await expect(shell).toHaveCSS('box-shadow', 'none');
+		await expect(shell).toHaveCSS('border-width', '0px');
+		await expect(shell).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(widget).toHaveCSS('box-shadow', theme.includes('High Contrast') ? 'none' : 'rgba(0, 0, 0, 0.14) 0px 0px 12px 0px');
+		await expect(widget).toHaveCSS('border-radius', '8px');
+		await expect(widget).toHaveCSS('border-style', 'solid');
+		expect(await widget.evaluate(element => Math.round(parseFloat(getComputedStyle(element).borderTopWidth)))).toBe(1);
+		await expect(widget).toHaveCSS('font-size', '13px');
+		const agent = widget.getByRole('menuitemradio', { name: 'Agent', exact: true });
+		await expect(agent).toBeFocused();
+		await expect(agent).toHaveAttribute('aria-checked', 'true');
+		await expect(agent.locator('.ash-icon-label-icon svg[data-ash-icon-id="unlimited"]')).toBeVisible();
+		await expect(agent.locator('.ash-menu-leading-check > svg[data-ash-icon-id="check"]')).toBeVisible();
+		if (theme === 'Ash Light') {
+			await agent.press('Alt+F1');
+			const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
+			await expect(help).toBeVisible();
+			await expect(help.getByRole('textbox')).toHaveValue(/Use Up and Down Arrow to move between available actions/);
+			await help.press('Escape');
+			await expect(help).toHaveCount(0);
+			await expect(agent).toBeFocused();
+		}
+		await agent.press('ArrowDown');
+		await expect(widget.getByRole('menuitemradio', { name: 'Plan', exact: true })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(widget).toHaveCount(0);
+		await expect(picker).toBeFocused();
+	}
+});
+
 test('Model picker uses free toolbar space before truncating its label', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'Uses the disconnected Chat shell.');
 	const page = workbench.page;

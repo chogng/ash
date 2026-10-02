@@ -4,6 +4,7 @@ import { bindColorTheme } from "../../browser/themeStyles.js";
 import {
 	darkColorTheme,
 	highContrastDarkColorTheme,
+	highContrastLightColorTheme,
 	lightColorTheme,
 } from "../../common/colorTheme.js";
 import { colorCssVariable } from "../../common/colorUtils.js";
@@ -14,6 +15,22 @@ import { menuSelectionBackground, menuSelectionForeground } from "../../common/c
 import { TestThemeService } from "../common/testThemeService.js";
 import { registerColor } from "../../common/colorUtils.js";
 import { asCssVariableName } from "../../common/sizeUtils.js";
+
+test("floating elevation is shared in light and dark themes and removed in high contrast", () => {
+	using service = new TestThemeService(lightColorTheme);
+	const target = new FakeThemeTarget();
+	target.style.setProperty('--ash-shadow-lg', 'host-shadow', 'important');
+	const binding = bindColorTheme(service, target as unknown as HTMLElement);
+	assert.equal(target.style.getPropertyValue('--ash-shadow-lg'), '0 0 12px rgba(0, 0, 0, 0.14)');
+	service.setColorTheme(darkColorTheme);
+	assert.equal(target.style.getPropertyValue('--ash-shadow-lg'), '0 0 12px rgba(0, 0, 0, 0.14)');
+	for (const theme of [highContrastDarkColorTheme, highContrastLightColorTheme]) {
+		service.setColorTheme(theme);
+		assert.equal(target.style.getPropertyValue('--ash-shadow-lg'), 'none');
+	}
+	binding.dispose();
+	assert.deepEqual([target.style.getPropertyValue('--ash-shadow-lg'), target.style.getPropertyPriority('--ash-shadow-lg')], ['host-shadow', 'important']);
+});
 
 test("color theme binding applies changes and restores prior root styles", () => {
 	using service = new TestThemeService(darkColorTheme);

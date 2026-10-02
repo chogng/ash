@@ -16,6 +16,7 @@ import { getIconDefinition } from '../../../theme/common/iconRegistry.js';
 import { IActionWidgetService } from '../../browser/actionWidget.js';
 import { ActionListItemKind } from '../../browser/actionList.js';
 import { ActionWidgetDropdown } from '../../browser/actionWidgetDropdown.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 
 function createServices(document: Document, resources: DisposableStore): InstantiationService {
 	setIconResolver(document, icon => getIconDefinition(icon));
@@ -28,6 +29,40 @@ function createServices(document: Document, resources: DisposableStore): Instant
 	services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
 	return services;
 }
+
+test('action choices preserve icons, radio states and separators when dispatching typed actions', async () => {
+	const dom = new JSDOM('<body><button id="source">Open</button></body>');
+	try {
+		using resources = new DisposableStore();
+		const service = createServices(dom.window.document, resources).get(IActionWidgetService);
+		const source = dom.window.document.querySelector<HTMLButtonElement>('#source')!;
+		const selected: number[] = [];
+		source.focus();
+		service.show('choices', false, [
+			{ kind: ActionListItemKind.Action, item: 1, label: 'Agent', checked: true, group: { title: '', icon: Lxicon.unlimited } },
+			{ kind: ActionListItemKind.Separator, label: '' },
+			{ kind: ActionListItemKind.Action, item: 2, label: 'Plan', checked: false, group: { title: '', icon: Lxicon.plan } },
+		], { onSelect: item => { selected.push(item); }, onHide: () => {} }, source);
+		const rows = Array.from(dom.window.document.querySelectorAll<HTMLButtonElement>('[role=menuitemradio]'));
+		assert.deepEqual(rows.map(row => ({
+			label: row.getAttribute('aria-label'),
+			checked: row.getAttribute('aria-checked'),
+			icon: row.querySelector('.ash-icon-label-icon svg')?.getAttribute('data-ash-icon-id'),
+		})), [
+			{ label: 'Agent', checked: 'true', icon: 'unlimited' },
+			{ label: 'Plan', checked: 'false', icon: 'plan' },
+		]);
+		assert.equal(dom.window.document.querySelectorAll('[role=separator]').length, 1);
+		rows[1]!.focus();
+		rows[1]!.click();
+		await Promise.resolve();
+		assert.deepEqual(selected, [2]);
+		service.hide();
+		assert.equal(dom.window.document.activeElement, source);
+	} finally {
+		dom.window.close();
+	}
+});
 
 test('replacing the action menu cancels its owner once and outside dismissal releases the replacement', () => {
 	const dom = new JSDOM('<body><button id="source">Open</button><input id="outside"></body>');

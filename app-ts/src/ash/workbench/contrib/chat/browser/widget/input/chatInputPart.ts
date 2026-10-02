@@ -521,7 +521,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			});
 		}
 		if (action instanceof SelectorAction) {
-			return new ModePickerActionItem(action, contextViewService, this.mode, () => {
+			return this.instantiationService.createInstance(ModePickerActionItem, action, this.mode, () => {
 				const selected = this.pendingAgentSelection;
 				this.pendingAgentSelection = undefined;
 				if (selected) {

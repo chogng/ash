@@ -341,24 +341,6 @@
   font-size: 13px;
 }
 
-.ash-chat-input-mode-menu {
-  font-size: 12px;
-}
-
-.ash-chat-input-mode-menu.ash-menu .ash-button {
-  position: relative;
-  padding-right: var(--ash-spacing-size280);
-}
-
-.ash-chat-input-mode-menu .ash-menu-leading-check > .ash-icon {
-  position: absolute;
-  right: var(--ash-spacing-size80);
-}
-
-.ash-chat-input-mode-menu.ash-menu .ash-button.checked > .ash-menu-leading-check > .ash-icon-label-icon {
-  display: inline-flex;
-}
-
 .ash-chat-input-toolbars .ash-chat-input-model-selector {
   min-width: 0;
 }

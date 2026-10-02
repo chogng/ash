@@ -1,13 +1,18 @@
 import { registerTestDictationOnboarding } from '../../../../test/common/testDictationServices.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ChatSpeechToTextService, ChatSpeechToTextState, IChatSpeechToTextService } from '../../browser/speechToText/chatSpeechToTextService.js';
-import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ChatInputEditors } from '../../browser/widget/input/chatInputEditorRegistry.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import type { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
+import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
+import { ActionWidgetService, IActionWidgetService } from '../../../../../platform/actionWidget/browser/actionWidget.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { ILanguageModelsService } from '../../common/languageModels.js';
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IDictationService } from '../../../../../platform/dictation/common/dictationService.js';
 import { Event as AshEvent, Emitter } from '../../../../../base/common/event.js';
@@ -17,6 +22,7 @@ import { NotificationService } from '../../../../services/notification/common/no
 import { ChatInputPart } from '../../browser/widget/input/chatInputPart.js';
 import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import type { ChatInputDelegate, ChatInputState } from '../../browser/widget/input/chatInput.js';
+import type { ChatAgent } from '../../../../services/chat/common/chatService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
@@ -48,12 +54,72 @@ function inputPart(notifications: NotificationService, dictation?: Pick<IDictati
 	registerTestDictationOnboarding(services);
 	}
 	const partServices = inputResources.add(services.createChild());
-	partServices.registerInstance(IContextViewService, { container: document.body } as IContextViewService);
+	const contextView = inputResources.add(new BrowserContextViewService(document.body));
+	partServices.registerInstance(IContextViewService, contextView);
+	partServices.registerInstance(IConfigurationService, inputResources.add(new InMemoryConfigurationService()));
+	partServices.registerSingleton(IActionWidgetService, () => partServices.createInstance(ActionWidgetService));
+	partServices.registerInstance(ILanguageModelsService, {
+		onDidChangeModels: AshEvent.None,
+		setModelPreferences: async () => {},
+		listModels: async () => [],
+		getDefaultNewChatModel: () => undefined,
+		rememberSelectedModel: () => {},
+		listModelCatalog: async () => [],
+		listCustomModelProviders: async () => [],
+		saveCustomModelProvider: async () => {},
+		testProviderModel: async () => ({ type: 'passed' }),
+		listModelProviders: async () => [],
+		setModelProviderApiKey: async () => {},
+		removeModelProviderApiKey: async () => {},
+		listAdvisorModels: async () => [],
+		refreshModels: async () => [],
+		isModelVisible: () => true,
+		setModelVisible: async () => {},
+		discoverProviderModels: async () => [],
+	} satisfies ILanguageModelsService);
 	partServices.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 	const part = partServices.createInstance(ChatInputPart,container, { ...delegate, selectMode: selected => { state = { ...state, mode: selected }; part.render(state); } } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, ChatInputEditors, []);
 	part.render(state);
 	return part;
 }
+
+test('Chat mode picker loads Agents before opening the shared action widget and dispatches its selection', async () => {
+	using resources = new DisposableStore();
+	const agent: ChatAgent = { name: 'Reviewer', description: 'Review changes', sourceId: 'workspace' };
+	let finishListing!: (agents: readonly ChatAgent[]) => void;
+	const agents = new Promise<readonly ChatAgent[]>(resolve => { finishListing = resolve; });
+	let finishSelection!: (agent: ChatAgent | undefined) => void;
+	const selection = new Promise<ChatAgent | undefined>(resolve => { finishSelection = resolve; });
+	using part = inputPart(sharedNotifications, undefined, 'agent', {
+		listAgents: () => agents,
+		selectAgent: selected => finishSelection(selected),
+	});
+	part.render({ mode: 'agent', queuedMessages: 0, phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: true });
+	part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mode"] button')!.click();
+	assert.equal(document.querySelector('.ash-action-widget.ash-chat-input-mode-menu'), null);
+	const opened = new Promise<HTMLElement>(resolve => {
+		const observer = new browserEnvironment.window.MutationObserver(() => {
+			const widget = document.querySelector<HTMLElement>('.ash-action-widget.ash-chat-input-mode-menu');
+			if (widget) {
+				observer.disconnect();
+				resolve(widget);
+			}
+		});
+		observer.observe(document.body, { childList: true, subtree: true });
+		resources.add(toDisposable(() => observer.disconnect()));
+	});
+	finishListing([agent]);
+	const widget = await opened;
+	const choices = Array.from(widget.querySelectorAll<HTMLButtonElement>('[role=menuitemradio]'));
+	assert.deepEqual(choices.map(choice => [choice.getAttribute('aria-label'), choice.getAttribute('aria-checked')]), [
+		['Agent', 'true'], ['Plan', 'false'], ['Debug', 'false'], ['Multitask', 'false'], ['Ask', 'false'],
+		['Default Agent', 'true'], ['Reviewer', 'false'],
+	]);
+	choices[6]!.click();
+	assert.deepEqual(await selection, agent);
+	assert.equal(document.querySelector('.ash-chat-input-mode-menu'), null);
+	assert.equal(part.element.querySelector('[data-action-id="ash.chat.input.mode"] button')!.getAttribute('aria-expanded'), 'false');
+});
 
 test('Chat input sends attachments without text and rejects duplicate submissions while pending', async () => {
 	let complete!: () => void;

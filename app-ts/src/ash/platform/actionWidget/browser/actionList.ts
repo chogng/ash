@@ -7,7 +7,8 @@ import '../../../base/browser/ui/dialog/dialog.css';
 import '../../../base/browser/ui/menu/menu.css';
 import { Dialog } from '../../../base/browser/ui/dialog/dialog.js';
 import { Menu } from '../../../base/browser/ui/menu/menu.js';
-import type { IAction } from '../../../base/common/actions.js';
+import { Separator, type IAction } from '../../../base/common/actions.js';
+import type { Icon } from '../../../base/common/icon.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { localize } from '../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../accessibility/browser/accessibleView.js';
@@ -18,6 +19,7 @@ import './actionWidget.css';
 export const enum ActionListItemKind {
 	Action = 'action',
 	Header = 'header',
+	Separator = 'separator',
 }
 
 export interface IActionListItem<T> {
@@ -25,11 +27,13 @@ export interface IActionListItem<T> {
 	readonly item?: T;
 	readonly label: string;
 	readonly disabled?: boolean;
-	readonly group?: { readonly title: string };
+	readonly group?: { readonly title: string; readonly icon?: Icon };
+	readonly checked?: boolean;
 	readonly canPreview?: boolean;
 }
 
 export interface IActionListOptions {
+	readonly className?: string;
 	readonly showFilter?: boolean;
 	readonly filterPlaceholder?: string;
 }
@@ -81,7 +85,7 @@ export class ActionList<T> extends Disposable {
 	) {
 		super();
 		this.domNode = h(container.ownerDocument, 'div');
-		this.domNode.className = 'ash-action-widget';
+		this.domNode.className = options.className ? `ash-action-widget ${options.className}` : 'ash-action-widget';
 		this.domNode.setAttribute('role', 'group');
 		this.domNode.tabIndex = -1;
 		this.domNode.setAttribute('aria-label', localize('actionWidget.label', 'Actions'));
@@ -192,17 +196,24 @@ export class ActionList<T> extends Disposable {
 		}
 		const entries = new Map<string, IActionListItem<T>>();
 		const actions: IAction[] = visible.map((entry, index) => {
+			if (entry.kind === ActionListItemKind.Separator) {
+				return new Separator();
+			}
 			const id = `${this.user}.${index}`;
 			entries.set(id, entry);
 			return {
 				id, label: entry.label, tooltip: entry.label,
 				enabled: entry.kind === ActionListItemKind.Action && !entry.disabled,
+				icon: entry.group?.icon,
+				checked: entry.checked,
 				run: () => this.select(entry),
 			};
 		});
 		this.menuResources.clear();
 		const menu = this.menu = this.menuResources.add(new Menu(this.itemsDomNode, {
 			actions,
+			className: 'ash-action-widget-menu',
+			getCheckedActionsRepresentation: () => 'radio',
 			actionViewItemProvider: action => entries.get(action.id)?.kind === ActionListItemKind.Header ? new ActionListHeader(action) : undefined,
 		}));
 		menu.element.setAttribute('aria-label', localize('actionWidget.label', 'Actions'));

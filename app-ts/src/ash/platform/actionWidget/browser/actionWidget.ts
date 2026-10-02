@@ -59,7 +59,7 @@ export class ActionWidgetService extends Disposable implements IActionWidgetServ
 		const shown = this.contextViewService.show({
 			anchor,
 			content: list.domNode,
-			presentation: 'menu',
+			presentation: 'plain',
 			gap: 4,
 			focusRestore: ContextViewFocusRestore.None,
 			onHide: reason => {

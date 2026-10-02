@@ -1,4 +1,5 @@
 import { IAssetService, type AssetVersion } from '../../platform/assets/common/assetService.js';
+import { ActionWidgetService, IActionWidgetService } from '../../platform/actionWidget/browser/actionWidget.js';
 import { IModelApi as ModelApiId } from '../../platform/sessions/common/sessionApi.js';
 import { IsSessionsWindowContext, WorkspaceFolderCountContext } from '../../workbench/common/contextkeys.js';
 import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } from '../../platform/app-server/common/appServerApi.js';
@@ -423,6 +424,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IMenuService, menus);
 		const contextViews = this._register(new BrowserContextViewService(this.layoutService.activeContainer, this.layoutService));
 		services.registerInstance(IContextViewService, contextViews);
+		services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
 		const quickInputService = this._register(new WorkbenchQuickInputService({
 			container: this.layoutService.activeContainer,
 			contextKeyService: contextKeys,

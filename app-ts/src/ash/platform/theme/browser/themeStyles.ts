@@ -29,6 +29,7 @@ export function bindColorTheme(
 	};
 	rememberProperty("color-scheme");
 	rememberProperty("forced-color-adjust");
+	rememberProperty("--ash-shadow-lg");
 	let colorProperties = new Set<string>();
 
 	const previousThemeId = target.getAttribute("data-color-theme");
@@ -48,6 +49,13 @@ export function bindColorTheme(
 			rememberProperty(asCssVariableName(id));
 			target.style.setProperty(asCssVariableName(id), sizeValueToCss(value));
 		}
+		// Floating surfaces share an elevation independently of the theme's legacy widget shadow color.
+		target.style.setProperty(
+			"--ash-shadow-lg",
+			theme.colorScheme === ColorScheme.HighContrastDark || theme.colorScheme === ColorScheme.HighContrastLight
+				? "none"
+				: "0 0 12px rgba(0, 0, 0, 0.14)",
+		);
 		target.style.setProperty(
 			"color-scheme",
 			isDarkColorScheme(theme.colorScheme) ? "dark" : "light",

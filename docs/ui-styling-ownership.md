@@ -81,6 +81,7 @@ Hook 声明是各领域的内容，不为复用界面而伪造配置键或改变
 | `Button` | button DOM、focus-visible、disabled，以及 `.checked` 与 `aria-pressed` 的并行状态投影 | 不默认提供 hover 背景；hover 与 checked 的具体皮肤由 presentation context 决定 |
 | `Switch` | track/thumb 结构、on/off、hover、focus、pressed、disabled 的内部 presentation | 宿主只提供状态与命名变体，不穿透覆盖内部 track/thumb |
 | `ContextView` | 浮层挂载、锚点定位、视口内翻转和裁剪，以及通用浮层外壳 | 下拉框、提示、选择器和菜单各自的内容结构与交互状态 |
+| `ActionWidget` | 共享动作选择浮层、关闭、焦点恢复、过滤、预览与无障碍帮助；Chat 模式选择也使用此服务 | `actionWidget.css` 拥有浮层根节点的背景、边框、圆角、阴影和字体，`ActionList` 提供图标与右侧单选标记，`Menu` 负责行导航；ContextView 使用 `plain` 外壳，只负责定位。ActionWidget 消费主题绑定的 `shadow-lg` token，普通主题为 `0 0 12px rgba(0, 0, 0, 0.14)`，高对比度为 `none` |
 | `ToolBar` | primary/secondary action 编排、22px icon action 尺寸、More Actions、可选 toggled 高亮 | Button 负责状态投影；所在 presentation context 决定 hover 皮肤 |
 | `DropdownWithPrimaryActionViewItem` | primary 与 dropdown 的组合 DOM、连续几何、内部键盘导航 | Workbench 全局 ActionBar 皮肤为整个 split action 提供 hover；产品只提供 actions 和 menu 数据 |
 | `WorkbenchToolBar` | 把 platform action representation 适配到 base `ToolBar`；actions 仍由调用方提供 | 横向 action hover 归 Workbench 全局皮肤，其余视觉仍归 base `ToolBar`/`Button` |

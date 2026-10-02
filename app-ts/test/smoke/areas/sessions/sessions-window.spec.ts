@@ -1897,12 +1897,14 @@ test('Code chat mode menu shows the available icons and selection', async ({ app
 	const inputContainer = page.locator('.ash-chat-input-container').filter({ has: modeButton });
 	await inputContainer.evaluate(element => element.style.width = '230px');
 	await expect(modeButton.locator('.ash-chat-input-mode-action-label')).toBeHidden();
-	await expect(modeButton).toHaveAttribute('aria-label', 'Agent');
+	await expect(modeButton).toHaveAttribute('aria-label', 'Mode: Agent');
 	await inputContainer.evaluate(element => element.style.width = '');
 	await expect(modeButton.locator('.ash-chat-input-mode-action-label')).toBeVisible();
 	await modeButton.click();
 	const menu = page.locator('.ash-chat-input-mode-menu');
 	await expect(menu).toBeVisible();
+	await expect(menu).toHaveClass(/\bash-action-widget\b/);
+	await expect(menu).toHaveCSS('box-shadow', 'rgba(0, 0, 0, 0.14) 0px 0px 12px 0px');
 	await menu.getByRole('menuitemradio', { name: 'Plan', exact: true }).hover();
 	await page.waitForTimeout(650);
 	await expect(page.locator('.ash-hover[role="tooltip"]')).toHaveCount(0);
@@ -1918,9 +1920,9 @@ test('Code chat mode menu shows the available icons and selection', async ({ app
 		await expect(item.locator('.ash-menu-leading-slot .ash-icon-label-icon svg.ash-icon')).toHaveCount(iconId ? 1 : 0);
 		if (iconId) await expect(item.locator('.ash-menu-leading-slot .ash-icon-label-icon svg.ash-icon')).toHaveAttribute('data-ash-icon-id', iconId);
 	}
-	await expect(menu.getByRole('menuitemradio', { name: 'Agent' })).toHaveAttribute('aria-checked', 'true');
-	await expect(menu.locator("[data-action-id='ash.chat.input.agent.error']")).toHaveCount(0);
-	const selectedAgent = menu.getByRole('menuitemradio', { name: 'Agent' });
+	await expect(menu.getByRole('menuitemradio', { name: 'Agent', exact: true })).toHaveAttribute('aria-checked', 'true');
+	await expect(menu.getByRole('menuitemradio', { name: 'Default Agent', exact: true })).toHaveAttribute('aria-checked', 'true');
+	const selectedAgent = menu.getByRole('menuitemradio', { name: 'Agent', exact: true });
 	const agentIcon = selectedAgent.locator('.ash-icon-label-icon svg.ash-icon');
 	const selectionCheck = selectedAgent.locator('.ash-menu-leading-check > svg.ash-icon');
 	await expect(agentIcon).toBeVisible();

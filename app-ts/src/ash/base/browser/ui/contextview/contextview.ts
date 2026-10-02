@@ -28,8 +28,8 @@ export enum ContextViewHideReason {
 	AnchorRemoved,
 }
 
-/** Named shell treatments owned by ContextView consumers. */
-export type ContextViewPresentation = "default" | "hover" | "menu" | "dialog";
+/** Named shell treatments; plain lets the content own its floating surface. */
+export type ContextViewPresentation = "default" | "hover" | "menu" | "dialog" | "plain";
 
 export interface ContextViewOptions {
 	readonly anchor: ContextViewAnchor;
