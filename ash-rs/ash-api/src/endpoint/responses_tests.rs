@@ -67,7 +67,14 @@ fn xai_replays_complete_encrypted_reasoning_and_requests_it_without_a_summary() 
 fn xai_requests_use_conversation_affinity_and_fresh_request_ids() {
     let mut request = ModelRequest::text("hello");
     request.prompt_cache_key = Some("ash-thread-1".into());
-    let target = ResolvedApiTarget::new("https://cli-chat-proxy.grok.com/v1", Vec::new());
+    let target = ResolvedApiTarget::new(
+        "https://cli-chat-proxy.grok.com/v1",
+        Vec::new(),
+        ash_client::RequestBinding::new(
+            ash_client::RequestPurpose::Model,
+            ash_client::RequestIdentity::Anonymous,
+        ),
+    );
     let first = request_target(
         ApiEndpoint::XaiSubscriptionResponses,
         &target,
@@ -84,7 +91,7 @@ fn xai_requests_use_conversation_affinity_and_fresh_request_ids() {
     .unwrap();
     let header = |target: &ResolvedApiTarget, name: &str| {
         target
-            .headers
+            .headers()
             .iter()
             .find(|header| header.name() == name)
             .unwrap()
@@ -101,7 +108,7 @@ fn xai_requests_use_conversation_affinity_and_fresh_request_ids() {
     assert!(
         request_target(ApiEndpoint::OpenAiResponses, &target, "grok-test", &request)
             .unwrap()
-            .headers
+            .headers()
             .is_empty()
     );
 }

@@ -106,7 +106,7 @@ impl ApiEndpoint {
         request: &ModelRequest,
     ) -> Result<Vec<HttpHeader>, ApiError> {
         let mut headers = Vec::new();
-        for header in &target.headers {
+        for header in target.headers() {
             crate::headers::insert(&mut headers, header.name(), header.value())?;
         }
         match self.protocol() {
@@ -168,6 +168,7 @@ impl ApiEndpoint {
         client: &dyn OperationClient,
         cancellation: &CancellationToken,
     ) -> Result<ModelResponse, ApiError> {
+        target.require_purpose(ash_client::RequestPurpose::Model)?;
         validate_request(model, request)?;
         self.validate_encoding_options(options)?;
         match self {
@@ -222,6 +223,7 @@ impl ApiEndpoint {
         cancellation: &CancellationToken,
         sink: &mut dyn ApiStreamSink,
     ) -> Result<ModelResponse, ApiError> {
+        target.require_purpose(ash_client::RequestPurpose::Model)?;
         validate_request(model, request)?;
         self.validate_encoding_options(options)?;
         match self {
@@ -282,6 +284,7 @@ impl ApiEndpoint {
         client: &dyn OperationClient,
         cancellation: &CancellationToken,
     ) -> Result<InputTokenCount, ApiError> {
+        target.require_purpose(ash_client::RequestPurpose::Model)?;
         validate_request(model, request)?;
         match self {
             Self::ChatGptResponses | Self::XaiSubscriptionResponses => {

@@ -681,9 +681,9 @@ opt-level = 0
 opt-level = 0
 
 [profile.ci-test]
-# Reduce binary size and disk pressure in CI test builds.
+# Inherit test optimization: unoptimized workspace code makes the linked services
+# exceed macOS's 16 MiB DWARF unwind offset limit. Keep the TUI's package override.
 inherits = "test"
-opt-level = 0
 debug = "limited"
 
 [workspace.lints.rust]

@@ -150,15 +150,15 @@ impl SemanticRuntimeResolver {
                 operation.label()
             )));
         }
-        let headers = self
+        let authentication = self
             .credentials
             .as_ref()
-            .map(|credentials| credentials.request_headers(&config.connection))
+            .map(|credentials| credentials.request_authentication(&config.connection))
             .transpose()
             .map_err(|error| ModelProviderError::Credential(error.to_string()))?
             .unwrap_or_default();
         Ok(SemanticHttpRuntime {
-            target: ResolvedApiTarget::new(normalized.base_url, headers),
+            target: authentication.into_target(normalized.base_url),
             endpoint: SemanticApiEndpoint::OpenAiCompatible,
             client: Arc::clone(&self.client),
         })

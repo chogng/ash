@@ -193,7 +193,7 @@ fn both_routes_preserve_authentication_and_exact_usage_windows() {
         let requests = client.requests.lock().unwrap();
         assert_eq!(requests.len(), 1);
         assert_eq!(requests[0].url(), expected);
-        assert_eq!(requests[0].headers(), target.headers);
+        assert_eq!(requests[0].headers(), target.headers());
         assert_eq!(requests[0].method(), HttpMethod::Get);
         assert!(requests[0].body().is_empty());
         assert_eq!(requests[0].retry_policy(), RetryPolicy::never());

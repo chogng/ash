@@ -56,6 +56,7 @@ impl InputTokenCountEndpoint {
         client: &dyn OperationClient,
         cancellation: &CancellationToken,
     ) -> Result<InputTokenCount, ApiError> {
+        target.require_purpose(ash_client::RequestPurpose::InputTokenCount)?;
         validate_request(model, request)?;
         match self {
             Self::OpenAiResponses => endpoint::responses::count_input_tokens(

@@ -1,9 +1,7 @@
 use ::client::ClientError;
-use ::client::ClientRequest;
 use ::client::ClientResponse;
 use ::client::OperationClient;
 use ::client::ResolvedApiTarget;
-use ::client::RetryPolicy;
 use async_utils::CancellationToken;
 use http_client::HttpHeader;
 use http_client::HttpMethod;
@@ -50,7 +48,7 @@ impl From<ClientError> for RequestError {
 }
 
 /// Business HTTP operations using caller-resolved authentication and cancellation.
-/// The injected transport must reject redirects for authenticated requests.
+/// The bound request rejects redirects independently of transport settings.
 pub(crate) struct Client<'a> {
     client: &'a dyn OperationClient,
     target: &'a ResolvedApiTarget,
@@ -62,7 +60,8 @@ impl<'a> Client<'a> {
         client: &'a dyn OperationClient,
         target: &'a ResolvedApiTarget,
     ) -> Result<Self, RequestError> {
-        let base = Url::parse(target.base_url.trim_end_matches('/'))
+        target.require_purpose(::client::RequestPurpose::Account)?;
+        let base = Url::parse(target.base_url().trim_end_matches('/'))
             .map_err(|_| RequestError::InvalidTarget)?;
         if base.scheme() != "https"
             || base.host_str().is_none()
@@ -149,13 +148,9 @@ impl<'a> Client<'a> {
         body: Vec<u8>,
         cancellation: &CancellationToken,
     ) -> Result<ClientResponse, RequestError> {
-        let mut headers = self.target.headers.clone();
-        for header in extra_headers {
-            headers.retain(|existing| !existing.name().eq_ignore_ascii_case(header.name()));
-            headers.push(header.clone());
-        }
-        let request =
-            ClientRequest::new(method, url.as_str(), headers, body, RetryPolicy::never())?;
+        let request = self
+            .target
+            .request(method, url.as_str(), extra_headers.to_vec(), body)?;
         let response = self
             .client
             .execute_with_cancellation(&request, cancellation)?;

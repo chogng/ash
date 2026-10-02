@@ -28,27 +28,27 @@ use std::time::SystemTime;
 
 pub(crate) fn openai_catalog_binding(
     config: &ash_model_provider_config::NormalizedModelProviderConfig,
-    headers: Vec<ash_http_client::HttpHeader>,
+    target: ash_client::ResolvedApiTarget,
     client: Arc<dyn OperationClient>,
     diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
 ) -> Result<ModelCatalogBinding, crate::ModelProviderError> {
-    http_catalog_binding(config, headers, client, diagnostics, "models")
+    http_catalog_binding(config, target, client, diagnostics, "models")
 }
 
 pub(crate) fn anthropic_catalog_binding(
     config: &ash_model_provider_config::NormalizedModelProviderConfig,
-    mut headers: Vec<ash_http_client::HttpHeader>,
+    target: ash_client::ResolvedApiTarget,
     client: Arc<dyn OperationClient>,
     diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
     endpoint: ash_api::ApiEndpoint,
 ) -> Result<ModelCatalogBinding, crate::ModelProviderError> {
-    headers.push(ash_http_client::HttpHeader::new(
+    let target = target.with_headers(vec![ash_http_client::HttpHeader::new(
         "anthropic-version",
         "2023-06-01",
-    ));
+    )])?;
     http_catalog_binding(
         config,
-        headers,
+        target,
         client,
         diagnostics,
         if endpoint == ash_api::ApiEndpoint::AnthropicMessagesAtBase {
@@ -61,7 +61,7 @@ pub(crate) fn anthropic_catalog_binding(
 
 fn http_catalog_binding(
     config: &ash_model_provider_config::NormalizedModelProviderConfig,
-    headers: Vec<ash_http_client::HttpHeader>,
+    target: ash_client::ResolvedApiTarget,
     client: Arc<dyn OperationClient>,
     diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
     path: &str,
@@ -76,7 +76,7 @@ fn http_catalog_binding(
         )
         .as_bytes(),
     );
-    for header in &headers {
+    for header in target.headers() {
         digest.update(header.name().as_bytes());
         digest.update(header.value().as_bytes());
     }
@@ -87,19 +87,20 @@ fn http_catalog_binding(
     ))
     .map_err(|error| crate::ModelProviderError::Unavailable(error.to_string()))?;
     let scope = CatalogScopeKey::new(config.provider.clone(), scope_id);
-    let request = ash_client::ClientRequest::new(
-        ash_http_client::HttpMethod::Get,
-        format!("{}/{path}", config.base_url),
-        headers,
-        Vec::new(),
-        ash_client::RetryPolicy::never(),
-    )
-    .map_err(|_| crate::ModelProviderError::Unavailable("Invalid models endpoint".into()))?;
+    let request = target
+        .request(
+            ash_http_client::HttpMethod::Get,
+            target.endpoint(path)?,
+            Vec::new(),
+            Vec::new(),
+        )
+        .map_err(|_| crate::ModelProviderError::Unavailable("Invalid models endpoint".into()))?;
     Ok(ModelCatalogBinding {
         scope: scope.clone(),
         source: Arc::new(HttpModelCatalogSource {
             scope,
             request,
+            target,
             client,
             diagnostics,
             paginate,
@@ -110,6 +111,7 @@ fn http_catalog_binding(
 struct HttpModelCatalogSource {
     scope: CatalogScopeKey,
     request: ash_client::ClientRequest,
+    target: ash_client::ResolvedApiTarget,
     client: Arc<dyn OperationClient>,
     diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
     paginate: bool,
@@ -248,19 +250,20 @@ impl ModelCatalogSource for HttpModelCatalogSource {
                         )
                     })?;
                     url.query_pairs_mut().append_pair("after_id", &cursor);
-                    next = ash_client::ClientRequest::new(
-                        self.request.method(),
-                        url.to_string(),
-                        self.request.headers().to_vec(),
-                        Vec::new(),
-                        ash_client::RetryPolicy::never(),
-                    )
-                    .map_err(|_| {
-                        CatalogSourceError::new(
-                            CatalogSourceErrorKind::InvalidRequest,
-                            "Invalid model list cursor",
+                    next = self
+                        .target
+                        .request(
+                            self.request.method(),
+                            url.to_string(),
+                            Vec::new(),
+                            Vec::new(),
                         )
-                    })?;
+                        .map_err(|_| {
+                            CatalogSourceError::new(
+                                CatalogSourceErrorKind::InvalidRequest,
+                                "Invalid model list cursor",
+                            )
+                        })?;
                 }
                 cancel_on_drop.disarm();
                 Ok(CatalogDiscoveryOutcome::Modified(

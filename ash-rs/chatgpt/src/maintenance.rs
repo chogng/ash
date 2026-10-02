@@ -226,7 +226,8 @@ fn request_refresh(
         body,
         RetryPolicy::never(),
     )
-    .map_err(|_| RefreshFailure::Transient)?;
+    .map_err(|_| RefreshFailure::Transient)?
+    .without_redirects();
     let response = client
         .execute(&request)
         .map_err(|_| RefreshFailure::Transient)?;

@@ -56,6 +56,11 @@ impl ClientRequest {
         })
     }
 
+    pub fn without_redirects(mut self) -> Self {
+        self.request = self.request.without_redirects();
+        self
+    }
+
     pub fn request(&self) -> &HttpRequest {
         &self.request
     }

@@ -21,7 +21,8 @@ use url::Url;
 /// Implementations own proxy selection, TLS server validation, redirect
 /// handling, transport timeouts, and connection reuse. They must not retry:
 /// the operation client above this trait decides whether a request body is safe
-/// to replay.
+/// to replay. They must honor [`HttpRequest::rejects_redirects`] independently
+/// of the network-wide redirect policy.
 pub trait HttpClient: Send + Sync {
     fn execute(&self, request: &HttpRequest) -> Result<HttpResponse, HttpClientError>;
 
@@ -302,6 +303,9 @@ impl UreqHttpClient {
                     return Err(HttpClientError::Transport("request failed".into()));
                 }
             };
+            if request.rejects_redirects() {
+                return Ok(response);
+            }
             let RedirectPolicy::Follow { max_hops } = self.network.config().redirects() else {
                 return Ok(response);
             };

@@ -41,6 +41,13 @@ impl KimiDesktop {
                 HttpHeader::new("Authorization", format!("Bearer {}", credential.api_key)),
                 HttpHeader::new("User-Agent", format!("Ash/{}", env!("CARGO_PKG_VERSION"))),
             ],
+            ash_client::RequestBinding::new(
+                ash_client::RequestPurpose::Model,
+                ash_client::RequestIdentity::connection(
+                    "kimi-desktop",
+                    credential.api_key.as_bytes(),
+                ),
+            ),
         ))
     }
 

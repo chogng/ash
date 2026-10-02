@@ -119,6 +119,21 @@ fn target() -> ResolvedApiTarget {
     ResolvedApiTarget::new(
         "https://example.test/v1",
         vec![HttpHeader::new("Authorization", "Bearer secret")],
+        ash_client::RequestBinding::new(
+            ash_client::RequestPurpose::Model,
+            ash_client::RequestIdentity::Anonymous,
+        ),
+    )
+}
+
+fn count_target() -> ResolvedApiTarget {
+    ResolvedApiTarget::new(
+        "https://example.test/v1",
+        vec![HttpHeader::new("Authorization", "Bearer secret")],
+        ash_client::RequestBinding::new(
+            ash_client::RequestPurpose::InputTokenCount,
+            ash_client::RequestIdentity::Anonymous,
+        ),
     )
 }
 
@@ -332,6 +347,10 @@ fn provider_conformance_matrix_maps_images_tool_calls_results_and_usage() {
             ResolvedApiTarget::new(
                 "https://api.anthropic.com",
                 vec![HttpHeader::new("x-api-key", "secret")],
+                ash_client::RequestBinding::new(
+                    ash_client::RequestPurpose::Model,
+                    ash_client::RequestIdentity::Anonymous,
+                ),
             ),
             json!({
                 "id": "msg_1",
@@ -404,7 +423,7 @@ fn provider_conformance_matrix_rejects_unmaterialized_durable_images() {
 
     let transport = CapturingTransport::new(json!({}));
     let error = InputTokenCountEndpoint::GoogleGenerateContent
-        .count_with_client(&target(), "gemini-test", &request, &transport)
+        .count_with_client(&count_target(), "gemini-test", &request, &transport)
         .unwrap_err();
     assert!(matches!(error, ApiError::InvalidRequest(_)));
     assert!(transport.request.lock().unwrap().is_none());
@@ -482,6 +501,10 @@ fn provider_conformance_maps_refusals_or_fails_unsupported_output_explicitly() {
             &ResolvedApiTarget::new(
                 "https://api.anthropic.com",
                 vec![HttpHeader::new("x-api-key", "secret")],
+                ash_client::RequestBinding::new(
+                    ash_client::RequestPurpose::Model,
+                    ash_client::RequestIdentity::Anonymous,
+                ),
             ),
             "claude-test",
             &ModelRequest::text("hello"),
@@ -851,6 +874,10 @@ fn anthropic_messages_converts_tools_and_tool_use() {
             &ResolvedApiTarget::new(
                 "https://api.anthropic.com",
                 vec![HttpHeader::new("x-api-key", "secret")],
+                ash_client::RequestBinding::new(
+                    ash_client::RequestPurpose::Model,
+                    ash_client::RequestIdentity::Anonymous,
+                ),
             ),
             "claude-test",
             &request,
@@ -915,6 +942,10 @@ fn anthropic_messages_streams_wire_deltas_and_reassembles_tool_use() {
             &ResolvedApiTarget::new(
                 "https://api.anthropic.com",
                 vec![HttpHeader::new("x-api-key", "secret")],
+                ash_client::RequestBinding::new(
+                    ash_client::RequestPurpose::Model,
+                    ash_client::RequestIdentity::Anonymous,
+                ),
             ),
             "claude-test",
             &request,
@@ -960,6 +991,10 @@ fn anthropic_messages_counts_the_frozen_input_payload() {
     let target = ResolvedApiTarget::new(
         "https://api.anthropic.com",
         vec![HttpHeader::new("x-api-key", "secret")],
+        ash_client::RequestBinding::new(
+            ash_client::RequestPurpose::Model,
+            ash_client::RequestIdentity::Anonymous,
+        ),
     );
 
     let count = ApiEndpoint::AnthropicMessages
@@ -997,10 +1032,18 @@ fn anthropic_prompt_cache_profile_scope_uses_the_resolved_target_and_credentials
     let first_target = ResolvedApiTarget::new(
         "https://profile-a.example/v1",
         vec![HttpHeader::new("x-api-key", "profile-a-secret")],
+        ash_client::RequestBinding::new(
+            ash_client::RequestPurpose::Model,
+            ash_client::RequestIdentity::Anonymous,
+        ),
     );
     let second_target = ResolvedApiTarget::new(
         "https://profile-b.example/v1",
         vec![HttpHeader::new("x-api-key", "profile-b-secret")],
+        ash_client::RequestBinding::new(
+            ash_client::RequestPurpose::Model,
+            ash_client::RequestIdentity::Anonymous,
+        ),
     );
     let request = ModelRequest::text("stable prompt");
 
@@ -1027,6 +1070,10 @@ fn gemini_count_tokens_encodes_the_native_generate_content_request() {
     let target = ResolvedApiTarget::new(
         "https://generativelanguage.googleapis.com/v1beta",
         vec![HttpHeader::new("x-goog-api-client", "ash/0.1")],
+        ash_client::RequestBinding::new(
+            ash_client::RequestPurpose::InputTokenCount,
+            ash_client::RequestIdentity::Anonymous,
+        ),
     );
 
     let count = InputTokenCountEndpoint::GoogleGenerateContent
@@ -1064,7 +1111,7 @@ fn kimi_estimate_tokens_sends_only_the_documented_input_fields() {
     request.temperature = Some(0.5);
 
     let count = InputTokenCountEndpoint::KimiChatCompletions
-        .count_with_client(&target(), "kimi-k2.6", &request, &transport)
+        .count_with_client(&count_target(), "kimi-k2.6", &request, &transport)
         .unwrap();
 
     let (endpoint, _, body) = transport.request.lock().unwrap().clone().unwrap();
@@ -1094,7 +1141,7 @@ fn zai_tokenizer_preserves_tools_but_removes_generation_fields() {
     request.max_output_tokens = Some(512);
 
     let count = InputTokenCountEndpoint::ZaiChatCompletions
-        .count_with_client(&target(), "glm-5.1", &request, &transport)
+        .count_with_client(&count_target(), "glm-5.1", &request, &transport)
         .unwrap();
 
     let (endpoint, _, body) = transport.request.lock().unwrap().clone().unwrap();

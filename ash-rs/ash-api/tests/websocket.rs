@@ -24,6 +24,10 @@ async fn xai_transcription_sends_binary_pcm_and_waits_for_session_completion() {
     let target = ResolvedApiTarget::new(
         format!("http://{}/v1", listener.local_addr().unwrap()),
         vec![HttpHeader::new("Authorization", "Bearer xai-fixture")],
+        ash_client::RequestBinding::new(
+            ash_client::RequestPurpose::Model,
+            ash_client::RequestIdentity::Anonymous,
+        ),
     );
     let server = tokio::spawn(async move {
         let (tcp, _) = listener.accept().await.unwrap();
@@ -109,6 +113,10 @@ async fn transcription_uses_dedicated_session_and_commits_one_audio_turn() {
     let target = ResolvedApiTarget::new(
         format!("http://{}/v1", listener.local_addr().unwrap()),
         vec![HttpHeader::new("Authorization", "Bearer fixture")],
+        ash_client::RequestBinding::new(
+            ash_client::RequestPurpose::Model,
+            ash_client::RequestIdentity::Anonymous,
+        ),
     );
     let server = tokio::spawn(async move {
         let (tcp, _) = listener.accept().await.unwrap();
@@ -186,6 +194,10 @@ async fn live_uses_its_own_start_audio_delegation_and_finalization_contract() {
     let target = ResolvedApiTarget::new(
         format!("http://{}/v1", listener.local_addr().unwrap()),
         vec![HttpHeader::new("Authorization", "Bearer fixture")],
+        ash_client::RequestBinding::new(
+            ash_client::RequestPurpose::Model,
+            ash_client::RequestIdentity::Anonymous,
+        ),
     );
     let server = tokio::spawn(async move {
         let (tcp, _) = listener.accept().await.unwrap();
@@ -356,6 +368,10 @@ async fn responses_reuses_exact_history_but_restarts_after_rollback_or_changed_s
     let target = ResolvedApiTarget::new(
         format!("http://{}/v1", listener.local_addr().unwrap()),
         vec![HttpHeader::new("Authorization", "Bearer fixture")],
+        ash_client::RequestBinding::new(
+            ash_client::RequestPurpose::Model,
+            ash_client::RequestIdentity::Anonymous,
+        ),
     );
     let server = tokio::spawn(async move {
         let (tcp, _) = listener.accept().await.unwrap();
@@ -456,6 +472,10 @@ async fn responses_tool_result_continues_on_the_same_socket() {
     let target = ResolvedApiTarget::new(
         format!("http://{}/v1", listener.local_addr().unwrap()),
         vec![],
+        ash_client::RequestBinding::new(
+            ash_client::RequestPurpose::Model,
+            ash_client::RequestIdentity::Anonymous,
+        ),
     );
     let server = tokio::spawn(async move {
         let (tcp, _) = listener.accept().await.unwrap();
@@ -515,8 +535,14 @@ async fn cancellation_and_invalid_events_retire_responses_without_replay() {
         Some(r#"{"type":"response.output_text.delta","response_id":"other","delta":"x"}"#),
     ] {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let target =
-            ResolvedApiTarget::new(format!("http://{}", listener.local_addr().unwrap()), vec![]);
+        let target = ResolvedApiTarget::new(
+            format!("http://{}", listener.local_addr().unwrap()),
+            vec![],
+            ash_client::RequestBinding::new(
+                ash_client::RequestPurpose::Model,
+                ash_client::RequestIdentity::Anonymous,
+            ),
+        );
         let source = CancellationSource::new();
         let server_cancel = source.clone();
         let server = tokio::spawn(async move {
@@ -581,6 +607,10 @@ async fn realtime_handles_pcm_text_tools_and_cancelled_terminal_usage() {
     let target = ResolvedApiTarget::new(
         format!("http://{}/v1", listener.local_addr().unwrap()),
         vec![HttpHeader::new("Authorization", "Bearer fixture")],
+        ash_client::RequestBinding::new(
+            ash_client::RequestPurpose::Model,
+            ash_client::RequestIdentity::Anonymous,
+        ),
     );
     let server = tokio::spawn(async move {
         let (tcp, _) = listener.accept().await.unwrap();
@@ -730,8 +760,14 @@ async fn realtime_handles_pcm_text_tools_and_cancelled_terminal_usage() {
 #[tokio::test]
 async fn realtime_can_alternate_waiting_for_events_and_sending_microphone_input() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let target =
-        ResolvedApiTarget::new(format!("http://{}", listener.local_addr().unwrap()), vec![]);
+    let target = ResolvedApiTarget::new(
+        format!("http://{}", listener.local_addr().unwrap()),
+        vec![],
+        ash_client::RequestBinding::new(
+            ash_client::RequestPurpose::Model,
+            ash_client::RequestIdentity::Anonymous,
+        ),
+    );
     let server = tokio::spawn(async move {
         let (tcp, _) = listener.accept().await.unwrap();
         let mut socket = tokio_tungstenite::accept_async(tcp).await.unwrap();
@@ -774,8 +810,14 @@ async fn realtime_can_alternate_waiting_for_events_and_sending_microphone_input(
 #[tokio::test]
 async fn explicit_warmup_continues_with_an_empty_delta_without_fabricating_output() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let target =
-        ResolvedApiTarget::new(format!("http://{}", listener.local_addr().unwrap()), vec![]);
+    let target = ResolvedApiTarget::new(
+        format!("http://{}", listener.local_addr().unwrap()),
+        vec![],
+        ash_client::RequestBinding::new(
+            ash_client::RequestPurpose::Model,
+            ash_client::RequestIdentity::Anonymous,
+        ),
+    );
     let server = tokio::spawn(async move {
         let (tcp, _) = listener.accept().await.unwrap();
         let mut socket = tokio_tungstenite::accept_async(tcp).await.unwrap();
@@ -817,8 +859,14 @@ async fn explicit_warmup_continues_with_an_empty_delta_without_fabricating_outpu
 #[tokio::test]
 async fn abandoning_an_inflight_response_closes_its_connection() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let target =
-        ResolvedApiTarget::new(format!("http://{}", listener.local_addr().unwrap()), vec![]);
+    let target = ResolvedApiTarget::new(
+        format!("http://{}", listener.local_addr().unwrap()),
+        vec![],
+        ash_client::RequestBinding::new(
+            ash_client::RequestPurpose::Model,
+            ash_client::RequestIdentity::Anonymous,
+        ),
+    );
     let (started, accepted) = tokio::sync::oneshot::channel();
     let server = tokio::spawn(async move {
         let (tcp, _) = listener.accept().await.unwrap();
@@ -855,8 +903,14 @@ async fn abandoning_an_inflight_response_closes_its_connection() {
 #[tokio::test]
 async fn rejected_realtime_create_does_not_leave_the_session_busy() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let target =
-        ResolvedApiTarget::new(format!("http://{}", listener.local_addr().unwrap()), vec![]);
+    let target = ResolvedApiTarget::new(
+        format!("http://{}", listener.local_addr().unwrap()),
+        vec![],
+        ash_client::RequestBinding::new(
+            ash_client::RequestPurpose::Model,
+            ash_client::RequestIdentity::Anonymous,
+        ),
+    );
     let server = tokio::spawn(async move {
         let (tcp, _) = listener.accept().await.unwrap();
         let mut socket = tokio_tungstenite::accept_async(tcp).await.unwrap();
@@ -914,8 +968,14 @@ async fn rejected_realtime_create_does_not_leave_the_session_busy() {
 #[tokio::test]
 async fn response_timeout_is_not_reported_as_a_completed_turn() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let target =
-        ResolvedApiTarget::new(format!("http://{}", listener.local_addr().unwrap()), vec![]);
+    let target = ResolvedApiTarget::new(
+        format!("http://{}", listener.local_addr().unwrap()),
+        vec![],
+        ash_client::RequestBinding::new(
+            ash_client::RequestPurpose::Model,
+            ash_client::RequestIdentity::Anonymous,
+        ),
+    );
     let server = tokio::spawn(async move {
         let (tcp, _) = listener.accept().await.unwrap();
         let mut socket = tokio_tungstenite::accept_async(tcp).await.unwrap();
@@ -949,8 +1009,14 @@ async fn response_timeout_is_not_reported_as_a_completed_turn() {
 #[tokio::test]
 async fn warmup_accepts_static_instructions_before_user_input_exists() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let target =
-        ResolvedApiTarget::new(format!("http://{}", listener.local_addr().unwrap()), vec![]);
+    let target = ResolvedApiTarget::new(
+        format!("http://{}", listener.local_addr().unwrap()),
+        vec![],
+        ash_client::RequestBinding::new(
+            ash_client::RequestPurpose::Model,
+            ash_client::RequestIdentity::Anonymous,
+        ),
+    );
     let server = tokio::spawn(async move {
         let (tcp, _) = listener.accept().await.unwrap();
         let mut socket = tokio_tungstenite::accept_async(tcp).await.unwrap();
@@ -992,8 +1058,14 @@ async fn warmup_accepts_static_instructions_before_user_input_exists() {
 #[tokio::test]
 async fn wire_heartbeats_keep_a_reasoning_response_alive_without_text_progress() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let target =
-        ResolvedApiTarget::new(format!("http://{}", listener.local_addr().unwrap()), vec![]);
+    let target = ResolvedApiTarget::new(
+        format!("http://{}", listener.local_addr().unwrap()),
+        vec![],
+        ash_client::RequestBinding::new(
+            ash_client::RequestPurpose::Model,
+            ash_client::RequestIdentity::Anonymous,
+        ),
+    );
     let server = tokio::spawn(async move {
         let (tcp, _) = listener.accept().await.unwrap();
         let mut socket = tokio_tungstenite::accept_async(tcp).await.unwrap();

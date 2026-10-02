@@ -13,14 +13,10 @@ pub const MONITOR_URL: &str = "https://open.bigmodel.cn";
 /// Reads quota with the current Coding Plan request key.
 pub fn read_quota(
     transport: &dyn OperationClient,
-    request_key: &str,
+    target: &ResolvedApiTarget,
     cancellation: &CancellationToken,
 ) -> Result<Vec<QuotaLimit>, RequestError> {
-    let target = ResolvedApiTarget::new(
-        MONITOR_URL,
-        vec![http_client::HttpHeader::new("Authorization", request_key)],
-    );
-    crate::coding_plan::read_quota(transport, &target, cancellation)
+    crate::coding_plan::read_quota(transport, target, cancellation)
 }
 
 /// Resolves a model request credential from an authenticated BigModel account.

@@ -168,7 +168,8 @@ fn exchange_code(
         body,
         RetryPolicy::never(),
     )
-    .map_err(|_| ChatGptError::new("ChatGPT token exchange could not be constructed"))?;
+    .map_err(|_| ChatGptError::new("ChatGPT token exchange could not be constructed"))?
+    .without_redirects();
     let response = client
         .execute_with_cancellation(&request, cancellation)
         .map_err(|_| ChatGptError::new("ChatGPT OAuth service is unavailable"))?;
@@ -193,6 +194,7 @@ fn json_request(url: &str, body: Vec<u8>) -> Result<ClientRequest, ChatGptError>
         body,
         RetryPolicy::never(),
     )
+    .map(ClientRequest::without_redirects)
     .map_err(|_| ChatGptError::new("ChatGPT OAuth request could not be constructed"))
 }
 

@@ -54,7 +54,14 @@ fn chat_completions_encodes_audio_between_its_surrounding_text() {
     let (request, url) = audio_request();
     ApiEndpoint::OpenAiChatCompletions
         .complete_with_client(
-            &ResolvedApiTarget::new("https://example.test/v1", Vec::new()),
+            &ResolvedApiTarget::new(
+                "https://example.test/v1",
+                Vec::new(),
+                ash_client::RequestBinding::new(
+                    ash_client::RequestPurpose::Model,
+                    ash_client::RequestIdentity::Anonymous,
+                ),
+            ),
             "audio-model",
             &request,
             &transport,
@@ -77,7 +84,14 @@ fn chatgpt_responses_encodes_the_validated_audio_data_url() {
     let (request, url) = audio_request();
     ApiEndpoint::ChatGptResponses
         .complete_with_client(
-            &ResolvedApiTarget::new("https://example.test", Vec::new()),
+            &ResolvedApiTarget::new(
+                "https://example.test",
+                Vec::new(),
+                ash_client::RequestBinding::new(
+                    ash_client::RequestPurpose::Model,
+                    ash_client::RequestIdentity::Anonymous,
+                ),
+            ),
             "audio-model",
             &request,
             &transport,
@@ -105,7 +119,14 @@ fn unsupported_endpoints_roles_and_invalid_audio_fail_before_transport() {
         };
         message.role = role;
         let result = endpoint.complete_with_client(
-            &ResolvedApiTarget::new("https://example.test", Vec::new()),
+            &ResolvedApiTarget::new(
+                "https://example.test",
+                Vec::new(),
+                ash_client::RequestBinding::new(
+                    ash_client::RequestPurpose::Model,
+                    ash_client::RequestIdentity::Anonymous,
+                ),
+            ),
             "model",
             &request,
             &transport,
@@ -126,7 +147,14 @@ fn unsupported_endpoints_roles_and_invalid_audio_fail_before_transport() {
     };
     assert!(matches!(
         ApiEndpoint::OpenAiChatCompletions.complete_with_client(
-            &ResolvedApiTarget::new("https://example.test", Vec::new()),
+            &ResolvedApiTarget::new(
+                "https://example.test",
+                Vec::new(),
+                ash_client::RequestBinding::new(
+                    ash_client::RequestPurpose::Model,
+                    ash_client::RequestIdentity::Anonymous
+                )
+            ),
             "model",
             &request,
             &transport

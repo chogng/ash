@@ -1,9 +1,7 @@
 use crate::ModelProviderError;
 use crate::catalog::ModelCatalogBinding;
 use ash_async_utils::CancellationSource;
-use ash_client::ClientRequest;
 use ash_client::OperationClient;
-use ash_client::RetryPolicy;
 use ash_http_client::HttpMethod;
 use ash_kimi::KimiExternalCredential;
 use ash_kimi::KimiOAuth;
@@ -83,19 +81,19 @@ impl ModelCatalogSource for KimiExternalCatalogSource {
                         "Kimi Code connection changed",
                     )
                 })?;
-                let request = ClientRequest::new(
-                    HttpMethod::Get,
-                    format!("{}/models", target.base_url),
-                    target.headers,
-                    Vec::new(),
-                    RetryPolicy::never(),
-                )
-                .map_err(|_| {
-                    CatalogSourceError::new(
-                        CatalogSourceErrorKind::InvalidRequest,
-                        "Invalid Kimi Code models request",
+                let request = target
+                    .request(
+                        HttpMethod::Get,
+                        format!("{}/models", target.base_url()),
+                        Vec::new(),
+                        Vec::new(),
                     )
-                })?;
+                    .map_err(|_| {
+                        CatalogSourceError::new(
+                            CatalogSourceErrorKind::InvalidRequest,
+                            "Invalid Kimi Code models request",
+                        )
+                    })?;
                 client
                     .execute_with_cancellation(&request, &token)
                     .map_err(|_| {
@@ -122,10 +120,7 @@ impl ModelCatalogSource for KimiExternalCatalogSource {
                         500..=599 => CatalogSourceErrorKind::ProviderUnavailable,
                         _ => CatalogSourceErrorKind::InvalidRequest,
                     },
-                    format!(
-                        "Kimi Code model list returned HTTP {}",
-                        response.status()
-                    ),
+                    format!("Kimi Code model list returned HTTP {}", response.status()),
                 ));
             }
             #[derive(serde::Deserialize)]

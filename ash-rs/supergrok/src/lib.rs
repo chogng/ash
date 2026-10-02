@@ -238,6 +238,13 @@ impl SuperGrokOAuth {
 
     /// Resolves a fresh bearer target for one xAI subscription invocation.
     pub fn api_target(&self) -> Result<SuperGrokApiTarget, SuperGrokError> {
+        self.resolve_target(ash_client::RequestPurpose::Model)
+    }
+
+    fn resolve_target(
+        &self,
+        purpose: ash_client::RequestPurpose,
+    ) -> Result<SuperGrokApiTarget, SuperGrokError> {
         let _refresh = self.lock_credentials()?;
         let mut credential = self.active_credential()?.ok_or_else(|| {
             SuperGrokError::with_kind(
@@ -264,6 +271,14 @@ impl SuperGrokOAuth {
             target: ResolvedApiTarget::new(
                 SUPERGROK_SUBSCRIPTION_API_BASE_URL,
                 self.api_headers(&credential),
+                ash_client::RequestBinding::new(
+                    purpose,
+                    ash_client::RequestIdentity::account(
+                        "xai-subscription",
+                        &credential.account_id,
+                        credential.credential_revision,
+                    ),
+                ),
             ),
             account_id: credential.account_id.clone(),
             credential_revision: credential.credential_revision,
@@ -303,6 +318,14 @@ impl SuperGrokOAuth {
                 target: ResolvedApiTarget::new(
                     SUPERGROK_SUBSCRIPTION_API_BASE_URL,
                     self.api_headers(&credential),
+                    ash_client::RequestBinding::new(
+                        rejected.target.binding().purpose(),
+                        ash_client::RequestIdentity::account(
+                            "xai-subscription",
+                            &credential.account_id,
+                            credential.credential_revision,
+                        ),
+                    ),
                 ),
                 account_id: credential.account_id.clone(),
                 credential_revision: credential.credential_revision,
@@ -325,6 +348,14 @@ impl SuperGrokOAuth {
             target: ResolvedApiTarget::new(
                 SUPERGROK_SUBSCRIPTION_API_BASE_URL,
                 self.api_headers(&credential),
+                ash_client::RequestBinding::new(
+                    rejected.target.binding().purpose(),
+                    ash_client::RequestIdentity::account(
+                        "xai-subscription",
+                        &credential.account_id,
+                        credential.credential_revision,
+                    ),
+                ),
             ),
             account_id: credential.account_id.clone(),
             credential_revision: credential.credential_revision,
@@ -564,9 +595,9 @@ impl SuperGrokOAuth {
             .collect::<Vec<_>>()
             .join("&")
             .into_bytes();
-        let request =
-            ClientRequest::post(url, self.common_headers(), body, RetryPolicy::never())
-                .map_err(|_| SuperGrokError::new("Xai OAuth request could not be constructed"))?;
+        let request = ClientRequest::post(url, self.common_headers(), body, RetryPolicy::never())
+            .map_err(|_| SuperGrokError::new("Xai OAuth request could not be constructed"))?
+            .without_redirects();
         self.client
             .execute_with_cancellation(&request, cancellation)
             .map_err(|_| SuperGrokError::new("Xai OAuth service is unavailable"))

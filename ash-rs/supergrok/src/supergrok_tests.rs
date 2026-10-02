@@ -108,7 +108,7 @@ fn existing_grok_login_is_reused_without_copying_or_refreshing_its_secret() {
     assert!(account.account.account_id.starts_with("grok-"));
     let target = auth.api_target().unwrap();
     assert_eq!(target.account_id, account.account.account_id);
-    assert!(target.target.headers.iter().any(|header| {
+    assert!(target.target.headers().iter().any(|header| {
         header.name() == "Authorization" && header.value() == "Bearer grok-access"
     }));
     assert!(matches!(
@@ -234,7 +234,7 @@ fn ash_owned_login_stays_selected_while_a_grok_login_exists() {
         .unwrap();
     let target = auth.api_target().unwrap();
     assert_eq!(target.account_id, "account-a");
-    assert!(target.target.headers.iter().any(|header| {
+    assert!(target.target.headers().iter().any(|header| {
         header.name() == "Authorization" && header.value() == "Bearer old-access"
     }));
     let account = auth.read_account().unwrap().unwrap();
@@ -306,11 +306,14 @@ fn device_login_handles_http_pending_and_keeps_oauth_separate_from_proxy_headers
         AccountStatus::Ready
     );
     let target = auth.api_target().unwrap();
-    assert_eq!(target.target.base_url, SUPERGROK_SUBSCRIPTION_API_BASE_URL);
+    assert_eq!(
+        target.target.base_url(),
+        SUPERGROK_SUBSCRIPTION_API_BASE_URL
+    );
     assert!(
         target
             .target
-            .headers
+            .headers()
             .iter()
             .any(|header| header.name() == "Authorization"
                 && header.value() == "Bearer access-secret")
@@ -318,7 +321,7 @@ fn device_login_handles_http_pending_and_keeps_oauth_separate_from_proxy_headers
     assert!(
         target
             .target
-            .headers
+            .headers()
             .iter()
             .any(|header| header.name() == "x-grok-client-identifier" && header.value() == "ash")
     );
@@ -327,7 +330,7 @@ fn device_login_handles_http_pending_and_keeps_oauth_separate_from_proxy_headers
         ("User-Agent", format!("Ash/{}", env!("CARGO_PKG_VERSION"))),
     ] {
         assert!(
-            target.target.headers.iter().any(|header| {
+            target.target.headers().iter().any(|header| {
                 header.name().eq_ignore_ascii_case(name) && header.value() == value
             })
         );

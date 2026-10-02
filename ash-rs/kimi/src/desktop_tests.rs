@@ -20,8 +20,8 @@ fn desktop_connection_reads_current_key_without_copying_or_rewriting_it() {
 
     assert!(desktop.is_ready());
     let first = desktop.api_target().unwrap();
-    assert_eq!(first.base_url, DESKTOP_GATEWAY);
-    assert!(first.headers.iter().any(|header| {
+    assert_eq!(first.base_url(), DESKTOP_GATEWAY);
+    assert!(first.headers().iter().any(|header| {
         header.name() == "Authorization" && header.value() == "Bearer first-key"
     }));
     let first_identity = desktop.catalog_identity().unwrap();
@@ -31,7 +31,7 @@ fn desktop_connection_reads_current_key_without_copying_or_rewriting_it() {
     let rotated = config("second-key", DESKTOP_GATEWAY);
     fs::write(&path, &rotated).unwrap();
     let second = desktop.api_target().unwrap();
-    assert!(second.headers.iter().any(|header| {
+    assert!(second.headers().iter().any(|header| {
         header.name() == "Authorization" && header.value() == "Bearer second-key"
     }));
     assert_ne!(first_identity, desktop.catalog_identity().unwrap());

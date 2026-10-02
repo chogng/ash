@@ -183,7 +183,7 @@ impl SuperGrokOAuth {
         read: impl Fn(&Client<'_>) -> Result<T, RequestError>,
     ) -> Result<T, SuperGrokError> {
         self.check_account(account_id, cancellation)?;
-        let target = self.api_target()?;
+        let target = self.resolve_target(ash_client::RequestPurpose::Account)?;
         self.check_account(account_id, cancellation)?;
         if target.account_id != account_id {
             return Err(account_changed());

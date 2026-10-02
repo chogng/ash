@@ -233,26 +233,48 @@ impl GlmOAuth {
     /// Reads the login-owned credential for one subscription invocation.
     pub fn api_target(&self) -> Result<GlmApiTarget, LoginError> {
         let credential = self.load()?.ok_or_else(unavailable)?;
+        self.target_for(&credential, ash_client::RequestPurpose::Model)
+    }
+
+    pub fn input_token_count_target(&self) -> Result<GlmApiTarget, LoginError> {
+        let credential = self.load()?.ok_or_else(unavailable)?;
+        self.target_for(&credential, ash_client::RequestPurpose::InputTokenCount)
+    }
+
+    fn identity(&self, credential: &Credential) -> ash_client::RequestIdentity {
+        ash_client::RequestIdentity::account(
+            self.connection_id(),
+            &credential.account_id,
+            credential.revision,
+        )
+    }
+
+    fn target_for(
+        &self,
+        credential: &Credential,
+        purpose: ash_client::RequestPurpose,
+    ) -> Result<GlmApiTarget, LoginError> {
         Ok(GlmApiTarget {
             account_id: credential.account_id.clone(),
             target: ResolvedApiTarget::new(
                 self.provider.model_url(),
-                self.request_headers(&credential)?,
+                self.request_headers(credential)?,
+                ash_client::RequestBinding::new(purpose, self.identity(credential)),
             ),
         })
     }
 
-    /// Request policy is refreshed for each invocation; a policy change must take effect
-    /// before sending a model prompt. The credential is re-read after the policy request.
+    /// Balance, policy and generation use one snapshot. Re-reading after preflight
+    /// would allow an unchecked credential to replace the identity we just checked.
     pub fn model_api_target(
         &self,
         model: &str,
         cancellation: &CancellationToken,
     ) -> Result<GlmApiTarget, LoginError> {
+        let credential = self.load()?.ok_or_else(unavailable)?;
         if self.is_start_plan() {
-            let credential = self.load()?.ok_or_else(unavailable)?;
             let usage = self
-                .read_start_plan(&credential.account_id, cancellation)
+                .start_plan_for(&credential, cancellation)
                 .map_err(|_| unavailable())?;
             if !usage.models().contains(&model.to_ascii_lowercase()) {
                 return Err(LoginError::new(
@@ -273,17 +295,21 @@ impl GlmOAuth {
                     "Start Plan requires verification in ZCode",
                 ));
             }
-            self.ensure_current(&credential)
-                .map_err(|_| unavailable())?;
         }
         cancellation.check().map_err(|_| unavailable())?;
-        self.api_target()
+        self.ensure_current(&credential)
+            .map_err(|_| unavailable())?;
+        self.target_for(&credential, ash_client::RequestPurpose::Model)
     }
 
     fn business_target(&self, credential: &Credential) -> Result<ResolvedApiTarget, LoginError> {
         Ok(ResolvedApiTarget::new(
             backend_client::start_plan::SERVICE_URL,
             self.request_headers(credential)?,
+            ash_client::RequestBinding::new(
+                ash_client::RequestPurpose::Account,
+                self.identity(credential),
+            ),
         ))
     }
 
@@ -337,14 +363,22 @@ impl GlmOAuth {
         if credential.account_id != account_id {
             return Err(GlmUsageError::AccountChanged);
         }
+        self.start_plan_for(&credential, cancellation)
+    }
+
+    fn start_plan_for(
+        &self,
+        credential: &Credential,
+        cancellation: &CancellationToken,
+    ) -> Result<StartPlanUsage, GlmUsageError> {
         let target = self
-            .business_target(&credential)
+            .business_target(credential)
             .map_err(|_| GlmUsageError::Unavailable)?;
         let balance =
             backend_client::start_plan::read_balance(self.client.as_ref(), &target, cancellation)
                 .map_err(usage_error)?;
         cancellation.check().map_err(|_| GlmUsageError::Cancelled)?;
-        self.ensure_current(&credential)?;
+        self.ensure_current(credential)?;
         Ok(start_plan_usage(balance))
     }
 
@@ -377,20 +411,31 @@ impl GlmOAuth {
         if credential.account_id != account_id {
             return Err(GlmUsageError::AccountChanged);
         }
-        let limits = match self.provider {
-            GlmProvider::BigModel => backend_client::bigmodel::read_quota(
-                self.client.as_ref(),
-                &credential.model_key,
-                cancellation,
-            ),
+        let quota_url = match self.provider {
+            GlmProvider::BigModel => backend_client::bigmodel::MONITOR_URL,
+            GlmProvider::Zai => backend_client::zai::BUSINESS_URL,
             GlmProvider::BigModelStartPlan | GlmProvider::ZaiStartPlan => {
                 return Err(GlmUsageError::Unavailable);
             }
-            GlmProvider::Zai => backend_client::zai::read_quota(
-                self.client.as_ref(),
-                &credential.model_key,
-                cancellation,
+        };
+        let target = ResolvedApiTarget::new(
+            quota_url,
+            vec![HttpHeader::new("Authorization", &credential.model_key)],
+            ash_client::RequestBinding::new(
+                ash_client::RequestPurpose::Account,
+                self.identity(&credential),
             ),
+        );
+        let limits = match self.provider {
+            GlmProvider::BigModel => {
+                backend_client::bigmodel::read_quota(self.client.as_ref(), &target, cancellation)
+            }
+            GlmProvider::BigModelStartPlan | GlmProvider::ZaiStartPlan => {
+                return Err(GlmUsageError::Unavailable);
+            }
+            GlmProvider::Zai => {
+                backend_client::zai::read_quota(self.client.as_ref(), &target, cancellation)
+            }
         }
         .map_err(usage_error)?;
         cancellation.check().map_err(|_| GlmUsageError::Cancelled)?;
@@ -520,6 +565,13 @@ impl GlmOAuth {
                                 &ResolvedApiTarget::new(
                                     backend_client::bigmodel::BUSINESS_URL,
                                     vec![HttpHeader::new("Authorization", &token)],
+                                    ash_client::RequestBinding::new(
+                                        ash_client::RequestPurpose::Account,
+                                        ash_client::RequestIdentity::connection(
+                                            self.connection_id(),
+                                            token.as_bytes(),
+                                        ),
+                                    ),
                                 ),
                                 cancel,
                             ),
@@ -569,7 +621,8 @@ impl GlmOAuth {
             body,
             RetryPolicy::never(),
         )
-        .map_err(|_| unavailable())?;
+        .map_err(|_| unavailable())?
+        .without_redirects();
         let response = self
             .client
             .execute_with_cancellation(&request, cancel)

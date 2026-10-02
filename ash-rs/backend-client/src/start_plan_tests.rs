@@ -21,6 +21,10 @@ fn start_plan_policy_honors_the_servers_explicit_skip_flag() {
         let target = ResolvedApiTarget::new(
             start_plan::SERVICE_URL,
             vec![HttpHeader::new("Authorization", "Bearer jwt")],
+            ::client::RequestBinding::new(
+                ::client::RequestPurpose::Account,
+                ::client::RequestIdentity::Anonymous,
+            ),
         );
         assert_eq!(
             start_plan::model_request_allowed(
@@ -42,7 +46,14 @@ fn start_plan_rejects_business_errors_without_exposing_response_text() {
         200,
         r#"{"code":3001,"msg":"private detail","data":{"configs":{"captcha":{"enabled":true,"skip_model_request":true}}}}"#,
     );
-    let target = ResolvedApiTarget::new(start_plan::SERVICE_URL, vec![]);
+    let target = ResolvedApiTarget::new(
+        start_plan::SERVICE_URL,
+        vec![],
+        ::client::RequestBinding::new(
+            ::client::RequestPurpose::Account,
+            ::client::RequestIdentity::Anonymous,
+        ),
+    );
     assert_eq!(
         start_plan::model_request_allowed(&transport, &target, &CancellationSource::new().token()),
         Err(RequestError::InvalidResponse)

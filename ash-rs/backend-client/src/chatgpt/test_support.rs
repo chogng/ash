@@ -9,5 +9,9 @@ pub(crate) fn target(base: &str) -> ResolvedApiTarget {
             HttpHeader::new("User-Agent", "Ash/test"),
             HttpHeader::new("X-OpenAI-Fedramp", "true"),
         ],
+        ::client::RequestBinding::new(
+            ::client::RequestPurpose::Account,
+            ::client::RequestIdentity::Anonymous,
+        ),
     )
 }

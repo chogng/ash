@@ -328,7 +328,7 @@ fn every_analytics_report_uses_its_route_query_and_typed_response() {
             let requests = client.requests.lock().unwrap();
             let request = &requests[0];
             assert_eq!(request.method(), HttpMethod::Get);
-            assert_eq!(request.headers(), target.headers);
+            assert_eq!(request.headers(), target.headers());
             let url = url::Url::parse(request.url()).unwrap();
             assert_eq!(url.path(), format!("/backend-api/{prefix}/{path}"));
             let pairs: Vec<_> = url

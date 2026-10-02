@@ -33,6 +33,10 @@ fn subscription_routes_preserve_auth_cancel_status_and_never_retry() {
                     HttpHeader::new("Authorization", "Bearer fixture"),
                     HttpHeader::new("x-grok-client-version", "1.0.38"),
                 ],
+                ::client::RequestBinding::new(
+                    ::client::RequestPurpose::Account,
+                    ::client::RequestIdentity::Anonymous,
+                ),
             );
             let client = Client::new(&transport, &target).unwrap();
             let cancel = CancellationSource::new();
@@ -50,7 +54,7 @@ fn subscription_routes_preserve_auth_cancel_status_and_never_retry() {
             assert_eq!(requests[0].url(), format!("{BASE_URL}/{path}"));
             assert_eq!(requests[0].method(), HttpMethod::Get);
             assert_eq!(requests[0].retry_policy(), RetryPolicy::never());
-            for header in &target.headers {
+            for header in target.headers() {
                 assert!(requests[0].headers().contains(header));
             }
             drop(requests);
@@ -67,7 +71,14 @@ fn credits_keep_fractional_percent_exact_cents_and_missing_fields() {
         200,
         r#"{"config":{"creditUsagePercent":105.125,"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY","end":"2026-09-28T00:00:00Z"},"prepaidBalance":{"val":"9007199254740993"},"onDemandUsed":{},"isUnifiedBillingUser":false,"history":[{"billingCycle":{"year":2026,"month":8},"totalUsed":{"val":123}}]}}"#,
     );
-    let target = ResolvedApiTarget::new(BASE_URL, vec![]);
+    let target = ResolvedApiTarget::new(
+        BASE_URL,
+        vec![],
+        ::client::RequestBinding::new(
+            ::client::RequestPurpose::Account,
+            ::client::RequestIdentity::Anonymous,
+        ),
+    );
     let data = Client::new(&transport, &target)
         .unwrap()
         .read_billing(&CancellationSource::new().token())
@@ -99,7 +110,14 @@ fn credits_keep_fractional_percent_exact_cents_and_missing_fields() {
 
 #[test]
 fn account_settings_follow_the_upstream_shapes() {
-    let target = ResolvedApiTarget::new(BASE_URL, vec![]);
+    let target = ResolvedApiTarget::new(
+        BASE_URL,
+        vec![],
+        ::client::RequestBinding::new(
+            ::client::RequestPurpose::Account,
+            ::client::RequestIdentity::Anonymous,
+        ),
+    );
     let token = CancellationSource::new().token();
     let transport = Transport::response(
         200,

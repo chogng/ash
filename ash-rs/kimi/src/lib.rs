@@ -183,10 +183,14 @@ impl KimiOAuth {
 
     /// Resolves a fresh bearer target for one Kimi Coding API invocation.
     pub fn api_target(&self) -> Result<ResolvedApiTarget, KimiError> {
-        self.api_target_with_identity().map(|(target, _, _)| target)
+        self.api_target_with_identity(ash_client::RequestPurpose::Model)
+            .map(|(target, _, _)| target)
     }
 
-    fn api_target_with_identity(&self) -> Result<(ResolvedApiTarget, String, u64), KimiError> {
+    fn api_target_with_identity(
+        &self,
+        purpose: ash_client::RequestPurpose,
+    ) -> Result<(ResolvedApiTarget, String, u64), KimiError> {
         let _refresh = self
             .refresh
             .lock()
@@ -212,7 +216,18 @@ impl KimiOAuth {
             credential = refreshed;
         }
         Ok((
-            ResolvedApiTarget::new(KIMI_CODE_API_BASE_URL, self.api_headers(&credential)),
+            ResolvedApiTarget::new(
+                KIMI_CODE_API_BASE_URL,
+                self.api_headers(&credential),
+                ash_client::RequestBinding::new(
+                    purpose,
+                    ash_client::RequestIdentity::account(
+                        "kimi",
+                        &credential.device_id,
+                        credential.credential_revision,
+                    ),
+                ),
+            ),
             credential.device_id.clone(),
             credential.credential_revision,
         ))
@@ -224,7 +239,8 @@ impl KimiOAuth {
         cancellation: &CancellationToken,
     ) -> Result<(), KimiError> {
         self.validate_account(account_id)?;
-        let (target, device_id, revision) = self.api_target_with_identity()?;
+        let (target, device_id, revision) =
+            self.api_target_with_identity(ash_client::RequestPurpose::Account)?;
         let account = backend_client::kimi::Client::new(self.client.as_ref(), &target)
             .map_err(kimi_request_error)?
             .read_account(cancellation)
@@ -244,7 +260,8 @@ impl KimiOAuth {
         cancellation: &CancellationToken,
     ) -> Result<(backend_client::kimi::Account, backend_client::kimi::Usage), KimiError> {
         self.validate_account(account_id)?;
-        let (target, device_id, revision) = self.api_target_with_identity()?;
+        let (target, device_id, revision) =
+            self.api_target_with_identity(ash_client::RequestPurpose::Account)?;
         let client = backend_client::kimi::Client::new(self.client.as_ref(), &target)
             .map_err(kimi_request_error)?;
         let account = client
@@ -429,7 +446,8 @@ impl KimiOAuth {
             body,
             RetryPolicy::never(),
         )
-        .map_err(|_| KimiError::new("Kimi OAuth request could not be constructed"))?;
+        .map_err(|_| KimiError::new("Kimi OAuth request could not be constructed"))?
+        .without_redirects();
         self.client
             .execute_with_cancellation(&request, cancellation)
             .map_err(|_| KimiError::new("Kimi OAuth service is unavailable"))

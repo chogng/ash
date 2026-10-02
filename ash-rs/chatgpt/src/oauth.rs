@@ -85,10 +85,26 @@ impl ChatGptApiTarget {
         self.target
     }
 
-    fn new(base_url: &str, credential: &TokenCredential) -> Result<Self, ChatGptError> {
+    fn new(
+        base_url: &str,
+        credential: &TokenCredential,
+        purpose: ash_client::RequestPurpose,
+    ) -> Result<Self, ChatGptError> {
+        let identity = credential.identity()?;
         Ok(Self {
-            target: ResolvedApiTarget::new(base_url, api_headers(credential)),
-            identity: credential.identity()?,
+            target: ResolvedApiTarget::new(
+                base_url,
+                api_headers(credential),
+                ash_client::RequestBinding::new(
+                    purpose,
+                    ash_client::RequestIdentity::account(
+                        "chatgpt",
+                        format!("{}:{}", identity.user_id, identity.account_id),
+                        credential.credential_revision,
+                    ),
+                ),
+            ),
+            identity,
             revision: credential.storage_revision,
         })
     }
@@ -145,7 +161,10 @@ impl ChatGptOAuth {
 
     /// Resolves current credentials, refreshing only when Ash is the credential manager.
     pub fn api_target(&self) -> Result<ChatGptApiTarget, ChatGptError> {
-        self.api_target_for(CHATGPT_RESPONSES_BASE_URL)
+        self.resolve_target(
+            CHATGPT_RESPONSES_BASE_URL,
+            ash_client::RequestPurpose::Model,
+        )
     }
 
     /// Returns the ready account identity used to scope its model catalog.
@@ -182,6 +201,14 @@ impl ChatGptOAuth {
     }
 
     pub(crate) fn api_target_for(&self, base_url: &str) -> Result<ChatGptApiTarget, ChatGptError> {
+        self.resolve_target(base_url, ash_client::RequestPurpose::Account)
+    }
+
+    fn resolve_target(
+        &self,
+        base_url: &str,
+        purpose: ash_client::RequestPurpose,
+    ) -> Result<ChatGptApiTarget, ChatGptError> {
         if self.disconnected()? {
             return Err(ChatGptError::new("ChatGPT is disconnected in Ash"));
         }
@@ -194,7 +221,7 @@ impl ChatGptOAuth {
                 "Codex sign-in has expired; update the login in Codex, then reconnect",
             ));
         }
-        ChatGptApiTarget::new(base_url, &credential)
+        ChatGptApiTarget::new(base_url, &credential, purpose)
     }
 
     fn disconnected_key() -> SecretKey {
@@ -265,7 +292,7 @@ impl ChatGptOAuth {
         }
         let bearer = rejected
             .target
-            .headers
+            .headers()
             .iter()
             .find(|header| header.name().eq_ignore_ascii_case("Authorization"))
             .map(|header| header.value());
@@ -296,7 +323,7 @@ impl ChatGptOAuth {
         if self.disconnected()? {
             return Ok(None);
         }
-        ChatGptApiTarget::new(base_url, &credential).map(Some)
+        ChatGptApiTarget::new(base_url, &credential, rejected.target.binding().purpose()).map(Some)
     }
 
     /// Remembers a rejected credential version without deleting shared authentication.

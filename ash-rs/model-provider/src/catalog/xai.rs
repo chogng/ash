@@ -33,13 +33,13 @@ use std::time::SystemTime;
 
 pub(crate) fn xai_api_catalog_binding(
     config: &ash_model_provider_config::NormalizedModelProviderConfig,
-    headers: Vec<ash_http_client::HttpHeader>,
+    target: ash_client::ResolvedApiTarget,
     client: Arc<dyn OperationClient>,
     diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
 ) -> Result<ModelCatalogBinding, crate::ModelProviderError> {
     let mut digest = Sha256::new();
     digest.update(format!("{config:?}").as_bytes());
-    for header in &headers {
+    for header in target.headers() {
         digest.update(header.name().as_bytes());
         digest.update(header.value().as_bytes());
     }
@@ -49,14 +49,14 @@ pub(crate) fn xai_api_catalog_binding(
             .map_err(|error| crate::ModelProviderError::Unavailable(error.to_string()))?,
     );
     // /models includes image and other non-Agent models; /language-models is the text catalog.
-    let request = ash_client::ClientRequest::new(
-        ash_http_client::HttpMethod::Get,
-        format!("{}/language-models", config.base_url),
-        headers,
-        Vec::new(),
-        ash_client::RetryPolicy::never(),
-    )
-    .map_err(|_| crate::ModelProviderError::Unavailable("Invalid models endpoint".into()))?;
+    let request = target
+        .request(
+            ash_http_client::HttpMethod::Get,
+            target.endpoint("language-models")?,
+            Vec::new(),
+            Vec::new(),
+        )
+        .map_err(|_| crate::ModelProviderError::Unavailable("Invalid models endpoint".into()))?;
     Ok(ModelCatalogBinding {
         scope: scope.clone(),
         source: Arc::new(XaiApiCatalogSource {

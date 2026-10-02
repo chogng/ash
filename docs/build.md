@@ -99,6 +99,8 @@ just test-tui actual_tui_process_interrupts_an_inflight_http_stream
 
 涉及进程内 App Server 的会话测试需显式启用功能：`just test-tui-unit conversation_flow_tests --features in-process-tests`。两个入口都可用 `just --set tui_profile <profile> ...` 覆盖配置；PTY 入口的服务程序和测试会一起切换。首次构建服务程序仍需时间。日常启动验证用 `just build-code`，使用 `dev-small`。
 
+`ci-test` 继承 `test` 的优化配置：共享 workspace 包使用优化级别 1，TUI 保留包级别的 0，App Server 及其客户端保留 `s`。将整个 workspace 降到 0 会使 macOS 服务程序的 `__eh_frame` 超过 compact-unwind 的 16 MiB 偏移限制；因此不在 `ci-test` 中覆盖全局优化级别。调试信息仍为 `limited`，异常展开设置不变。
+
 同一轮验证按单测、必要的 PTY 场景、warning 检查顺序运行；不要同时启动这些 Cargo 任务。`test-tui-unit` 和 `test-tui` 复用 `.build/cargo` 中同配置的产物，并发运行仍会等待 Cargo 构建锁。
 
 #### UI 场景录屏
@@ -207,6 +209,7 @@ just bench-build ash-cli --profile dev-small --jobs 4 --compare .build/build-hea
 | 2026-10-01，同平台、现有 `dev-small` 缓存 | 源码不变，仅通过 `ASH_BUILD_COMMIT` 改变构建提交号，`just build-code` 单次耗时 2.30 → 16.27 秒，13 个编译单元重编译；恢复后 15.81 秒 | `build-info` 的提交身份经过协议和诊断依赖传播至 TUI、CLI 与 App Server；未改 Git checkout。单次触发实验，不是提速结果 |
 | 2026-10-01，同平台、`ash-tui` / `dev-small`、12 个任务，三轮对照 | TLS 显式使用 ring，云端转写改为宿主选择的 feature，Sherpa 静态库按锁定版本共享后：冷构建 125.97 → 80.54 秒，无改动 1.73 → 1.41 秒，时间戳重编译 2.82 → 2.53 秒；冷构建 RSS 1.34 → 1.33 GiB，TUI `.rlib` 54.8 MiB | 最终代码冷构建约快 36%，三轮为 83.57 / 78.30 / 80.54 秒；前一候选的三轮中位数为 89.57 秒，差值不单独归因于 SDK 适配修正。仅 TLS 调整为 117.39 秒。TUI 默认依赖图移除 AWS-LC、model-provider 与 tokenizers；完整 App Server 仍启用云端转写，并因其他上游依赖保留 AWS-LC。共享 Sherpa 资源已预热，原构建脚本会在 Cargo 离线模式中下载资源，结果包含消除该下载的收益；不代表首次资源准备、其他平台或完整产品冷构建 |
 | 2026-10-01，同平台、现有 `dev-small` 缓存，三轮实际 `just build-code` 对照 | 构建身份与稳定数据契约分开后，仅改变 `ASH_BUILD_COMMIT` 的构建中位数 13.73 → 6.13 秒；重编译包从 13 个缩至身份库、CLI、App Server，协议与 TUI 保持缓存 | 无改动 1.51 → 0.83 秒，TUI 时间戳重编译 4.17 → 3.32 秒；时间戳变化不是实际功能编辑。单项身份调整的提交号重编译为 9.64 秒；这些完整入口数据不用于推断完整产品冷构建 |
+| 2026-10-02，macOS arm64、Rust 1.98.0、`ci-test` | 移除全局优化级别 0 后，App Server / Remote 的 `__eh_frame` 分别为 10.8 / 10.5 MiB，低于 16 MiB；两个服务的实际链接均通过 `-D warnings` | 验证使用提交 `240064771` 的独立检出，保留 TUI 的包级别 0 与异常展开设置。三轮构建基线因期间出现新提交而被测量工具拒绝，不作为构建速度对照；日志及段大小位于 `.build/build-health/unwind-20261002/` |
 
 优化前的报告为 `.build/build-health/ash-tui-dev-small-gc6em9qr/report.json`，完整入口、提交号实验和测试日志汇总在 `.build/build-health/tui-investigation-20261001/report.json`。该次调查的默认 `ci-test` 13 项会话测试通过，首次 Cargo 编译 33.20 秒，无改动重跑 0.70 秒；当时未复现持续卡死，系统对宏动态库的检查耗时未单独测量。
 

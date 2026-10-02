@@ -108,13 +108,13 @@ fn device_flow_persists_tokens_and_projects_an_authenticated_api_target() {
     assert_eq!(state.accounts[0].status, AccountStatus::Ready);
 
     let target = runtime.api_target().unwrap();
-    assert_eq!(target.base_url, KIMI_CODE_API_BASE_URL);
-    assert!(target.headers.iter().any(|header| {
+    assert_eq!(target.base_url(), KIMI_CODE_API_BASE_URL);
+    assert!(target.headers().iter().any(|header| {
         header.name() == "Authorization" && header.value() == "Bearer access-secret"
     }));
     assert!(
         target
-            .headers
+            .headers()
             .iter()
             .any(|header| { header.name() == "X-Msh-Platform" && header.value() == "Ash" })
     );
@@ -165,7 +165,7 @@ fn api_target_refreshes_expiring_credentials_and_rotates_the_stored_revision() {
     runtime.install_login_service(&login).unwrap();
 
     let target = runtime.api_target().unwrap();
-    assert!(target.headers.iter().any(|header| {
+    assert!(target.headers().iter().any(|header| {
         header.name() == "Authorization" && header.value() == "Bearer new-access"
     }));
     let account = runtime.read_account().unwrap().unwrap();

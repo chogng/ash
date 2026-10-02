@@ -338,8 +338,8 @@ impl ModelEventSink for AttemptEvents<'_> {
 
 #[derive(Clone)]
 enum RemoteMeasurement {
-    Enabled(Vec<ash_http_client::HttpHeader>),
-    Authenticated,
+    Enabled(ResolvedApiTarget),
+    Authenticated(Arc<GlmOAuth>),
     Disabled,
 }
 
@@ -383,8 +383,25 @@ impl Provider {
                 let mut count_headers = adapter.fixed_headers();
                 count_headers.extend(credentials.measurement);
                 (
-                    ProviderTarget::Fixed(ResolvedApiTarget::new(config.base_url.clone(), headers)),
-                    RemoteMeasurement::Enabled(count_headers),
+                    ProviderTarget::Fixed(ResolvedApiTarget::new(
+                        config.base_url.clone(),
+                        headers,
+                        ash_client::RequestBinding::new(
+                            ash_client::RequestPurpose::Model,
+                            credentials.identity.clone(),
+                        ),
+                    )),
+                    match &config.input_token_count {
+                        Some(count) => RemoteMeasurement::Enabled(ResolvedApiTarget::new(
+                            count.base_url.clone(),
+                            count_headers,
+                            ash_client::RequestBinding::new(
+                                ash_client::RequestPurpose::InputTokenCount,
+                                credentials.identity,
+                            ),
+                        )),
+                        None => RemoteMeasurement::Disabled,
+                    },
                 )
             }
             ProviderConnection::Kimi { auth } => {
@@ -401,7 +418,7 @@ impl Provider {
                 let measurement = if auth.is_start_plan() {
                     RemoteMeasurement::Disabled
                 } else {
-                    RemoteMeasurement::Authenticated
+                    RemoteMeasurement::Authenticated(Arc::clone(&auth))
                 };
                 (ProviderTarget::Glm(auth), measurement)
             }
@@ -625,8 +642,8 @@ impl Provider {
         match target {
             ResolvedProviderTarget::Xai(target) => hash(&target.account_id),
             _ => {
-                hash(&target.api_target().base_url);
-                for header in &target.api_target().headers {
+                hash(target.api_target().base_url());
+                for header in target.api_target().headers() {
                     hash(header.name());
                     hash(header.value());
                 }
@@ -718,12 +735,12 @@ impl Provider {
             std::borrow::Cow::Borrowed(request)
         };
         let target = match &self.remote_measurement {
-            RemoteMeasurement::Enabled(headers) => Some(ResolvedApiTarget::new(
-                self.config.base_url.clone(),
-                headers.clone(),
-            )),
-            RemoteMeasurement::Authenticated => {
-                let target = self.target.resolve()?;
+            RemoteMeasurement::Enabled(target) => Some(target.clone()),
+            RemoteMeasurement::Authenticated(auth) => {
+                let target = ResolvedProviderTarget::Glm(
+                    auth.input_token_count_target()
+                        .map_err(|error| ModelProviderError::Credential(error.to_string()))?,
+                );
                 target.ensure_account(&self.account_identity)?;
                 Some(target.into_api_target())
             }
@@ -1081,15 +1098,15 @@ impl ModelProviderRuntime {
                 }
                 None => runtime.credentials.clone(),
             };
-            let mut headers = adapter.fixed_headers();
-            if let Some(credentials) = credentials {
-                headers.extend(
-                    credentials
-                        .request_headers(&config.connection)
-                        .map_err(|error| ModelProviderError::Credential(error.to_string()))?,
-                );
-            }
-            let target = ResolvedApiTarget::new(normalized.base_url.clone(), headers);
+            let authentication = credentials
+                .as_ref()
+                .map(|credentials| credentials.request_authentication(&config.connection))
+                .transpose()
+                .map_err(|error| ModelProviderError::Credential(error.to_string()))?
+                .unwrap_or_default();
+            let target = authentication
+                .into_target(normalized.base_url.clone())
+                .with_headers(adapter.fixed_headers())?;
             let cancellation = CancellationSource::new();
             if let Some(model) = model {
                 ModelId::new(model)
@@ -1119,16 +1136,16 @@ impl ModelProviderRuntime {
                 };
                 return Ok(None);
             }
-            let request = ClientRequest::new(
-                ash_http_client::HttpMethod::Get,
-                target
-                    .endpoint("models")
-                    .map_err(|error| ModelProviderError::InvalidRequest(error.to_string()))?,
-                target.headers,
-                Vec::new(),
-                ash_client::RetryPolicy::never(),
-            )
-            .map_err(|error| ModelProviderError::InvalidRequest(error.to_string()))?;
+            let request = target
+                .request(
+                    ash_http_client::HttpMethod::Get,
+                    target
+                        .endpoint("models")
+                        .map_err(|error| ModelProviderError::InvalidRequest(error.to_string()))?,
+                    Vec::new(),
+                    Vec::new(),
+                )
+                .map_err(|error| ModelProviderError::InvalidRequest(error.to_string()))?;
             let response = diagnostic
                 .execute_with_cancellation(&request, &cancellation.token())
                 .map_err(|error| ModelProviderError::Unavailable(error.to_string()))?;
@@ -1281,16 +1298,16 @@ impl ModelProviderRuntime {
             .expect("normalization only succeeds for registered providers");
         match definition.adapter {
             ash_model_provider_config::ProviderAdapter::Xai => {
-                let headers = runtime
+                let authentication = runtime
                     .credentials
                     .as_ref()
-                    .map(|credentials| credentials.request_headers(&config.connection))
+                    .map(|credentials| credentials.request_authentication(&config.connection))
                     .transpose()
                     .map_err(|error| ModelProviderError::Credential(error.to_string()))?
                     .unwrap_or_default();
                 crate::catalog::xai_api_catalog_binding(
                     &normalized,
-                    headers,
+                    authentication.into_target(normalized.base_url.clone()),
                     Arc::clone(&self.client),
                     self.diagnostics.clone(),
                 )
@@ -1298,16 +1315,16 @@ impl ModelProviderRuntime {
             }
             ash_model_provider_config::ProviderAdapter::OpenAi
             | ash_model_provider_config::ProviderAdapter::OpenAiCompatible => {
-                let headers = runtime
+                let authentication = runtime
                     .credentials
                     .as_ref()
-                    .map(|credentials| credentials.request_headers(&config.connection))
+                    .map(|credentials| credentials.request_authentication(&config.connection))
                     .transpose()
                     .map_err(|error| ModelProviderError::Credential(error.to_string()))?
                     .unwrap_or_default();
                 crate::catalog::openai_catalog_binding(
                     &normalized,
-                    headers,
+                    authentication.into_target(normalized.base_url.clone()),
                     Arc::clone(&self.client),
                     self.diagnostics.clone(),
                 )
@@ -1315,17 +1332,19 @@ impl ModelProviderRuntime {
             }
             ash_model_provider_config::ProviderAdapter::Anthropic => {
                 let adapter = providers::instantiate(definition.adapter, &normalized);
-                let mut headers = adapter.fixed_headers();
-                if let Some(credentials) = &runtime.credentials {
-                    headers.extend(
-                        credentials
-                            .request_headers(&config.connection)
-                            .map_err(|error| ModelProviderError::Credential(error.to_string()))?,
-                    );
-                }
+                let authentication = runtime
+                    .credentials
+                    .as_ref()
+                    .map(|credentials| credentials.request_authentication(&config.connection))
+                    .transpose()
+                    .map_err(|error| ModelProviderError::Credential(error.to_string()))?
+                    .unwrap_or_default();
+                let target = authentication
+                    .into_target(normalized.base_url.clone())
+                    .with_headers(adapter.fixed_headers())?;
                 crate::catalog::anthropic_catalog_binding(
                     &normalized,
-                    headers,
+                    target,
                     Arc::clone(&self.client),
                     self.diagnostics.clone(),
                     adapter.endpoint(),
@@ -1521,6 +1540,7 @@ impl ModelProviderRuntime {
             .transpose()
             .map_err(|error| ModelProviderError::Credential(error.to_string()))?
             .unwrap_or(crate::auth::ModelHeaders {
+                identity: ash_client::RequestIdentity::Anonymous,
                 invocation: Vec::new(),
                 measurement: Vec::new(),
             });

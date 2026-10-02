@@ -4,9 +4,7 @@ use crate::ModelProviderError;
 use crate::diagnostics::DiagnosticClient;
 use ash_async_utils::CancellationSource;
 use ash_chatgpt::ChatGptOAuth;
-use ash_client::ClientRequest;
 use ash_client::OperationClient;
-use ash_client::RetryPolicy;
 use ash_http_client::HttpMethod;
 use ash_models_manager::CatalogCacheHint;
 use ash_models_manager::CatalogDiscoveryOutcome;
@@ -136,19 +134,14 @@ impl ModelCatalogSource for ChatGptCatalogSource {
                             "Invalid ChatGPT models endpoint",
                         )
                     })?;
-                let request = ClientRequest::new(
-                    HttpMethod::Get,
-                    url,
-                    target.headers.clone(),
-                    Vec::new(),
-                    RetryPolicy::never(),
-                )
-                .map_err(|_| {
-                    CatalogSourceError::new(
-                        CatalogSourceErrorKind::InvalidRequest,
-                        "Invalid ChatGPT model catalog request",
-                    )
-                })?;
+                let request = target
+                    .request(HttpMethod::Get, url, Vec::new(), Vec::new())
+                    .map_err(|_| {
+                        CatalogSourceError::new(
+                            CatalogSourceErrorKind::InvalidRequest,
+                            "Invalid ChatGPT model catalog request",
+                        )
+                    })?;
                 let response = request_client
                     .execute_with_cancellation(&request, &token)
                     .map_err(|error| {

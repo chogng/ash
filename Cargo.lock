@@ -1049,6 +1049,8 @@ dependencies = [
  "ash-http-client",
  "ash-http-test-support",
  "opentelemetry",
+ "sha2 0.10.9",
+ "url",
 ]
 
 [[package]]

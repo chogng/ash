@@ -60,10 +60,11 @@ fn stored_keys_resolve_through_each_declared_header_shape() {
             .unwrap();
         assert_eq!(
             service
-                .request_headers(
+                .request_authentication(
                     &ash_protocol::ModelConnectionId::new(provider_id(provider).as_str()).unwrap()
                 )
-                .unwrap(),
+                .unwrap()
+                .headers,
             vec![ash_http_client::HttpHeader::new(header, value)]
         );
     }

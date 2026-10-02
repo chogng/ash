@@ -50,6 +50,10 @@ fn bigmodel_login_resolves_an_internal_coding_plan_credential() {
     let target = ResolvedApiTarget::new(
         "https://bigmodel.cn",
         vec![HttpHeader::new("Authorization", "account-token")],
+        ::client::RequestBinding::new(
+            ::client::RequestPurpose::Account,
+            ::client::RequestIdentity::Anonymous,
+        ),
     );
     let credential =
         crate::bigmodel::issue_api_key(&client, &target, &CancellationSource::new().token())
@@ -126,7 +130,14 @@ fn coding_plan_rejects_ambiguous_organizations_before_creating_a_key() {
     let client = ScriptedClient::new([
         r#"{"code":200,"data":{"organizations":[{"organizationName":"Team A","organizationId":"a","projects":[]},{"organizationName":"Team B","organizationId":"b","projects":[]}]}}"#,
     ]);
-    let target = ResolvedApiTarget::new("https://bigmodel.cn", Vec::new());
+    let target = ResolvedApiTarget::new(
+        "https://bigmodel.cn",
+        Vec::new(),
+        ::client::RequestBinding::new(
+            ::client::RequestPurpose::Account,
+            ::client::RequestIdentity::Anonymous,
+        ),
+    );
     assert_eq!(
         crate::bigmodel::issue_api_key(&client, &target, &CancellationSource::new().token()),
         Err(RequestError::InvalidResponse)
@@ -146,10 +157,22 @@ fn both_coding_plan_regions_query_their_own_quota_endpoint_with_the_request_key(
         let client = ScriptedClient::new([
             r#"{"code":200,"data":{"limits":[{"type":"CREDIT_LIMIT","percentage":12.5,"unit":3,"number":5,"nextResetTime":1790553600000}]}}"#,
         ]);
+        let target = ResolvedApiTarget::new(
+            if bigmodel {
+                crate::bigmodel::MONITOR_URL
+            } else {
+                crate::zai::BUSINESS_URL
+            },
+            vec![http_client::HttpHeader::new("Authorization", "coding-key")],
+            ::client::RequestBinding::new(
+                ::client::RequestPurpose::Account,
+                ::client::RequestIdentity::connection("coding-plan", b"coding-key"),
+            ),
+        );
         let limits = if bigmodel {
-            crate::bigmodel::read_quota(&client, "coding-key", &CancellationSource::new().token())
+            crate::bigmodel::read_quota(&client, &target, &CancellationSource::new().token())
         } else {
-            crate::zai::read_quota(&client, "coding-key", &CancellationSource::new().token())
+            crate::zai::read_quota(&client, &target, &CancellationSource::new().token())
         }
         .unwrap();
         assert_eq!(limits.len(), 1);
@@ -170,7 +193,14 @@ fn coding_plan_rejects_ambiguous_projects_before_creating_a_key() {
     let client = ScriptedClient::new([
         r#"{"code":200,"data":{"organizations":[{"organizationName":"默认机构","organizationId":"org","projects":[{"projectName":"默认项目备份","projectId":"a"},{"projectName":"Team","projectId":"b"}]}]}}"#,
     ]);
-    let target = ResolvedApiTarget::new("https://bigmodel.cn", Vec::new());
+    let target = ResolvedApiTarget::new(
+        "https://bigmodel.cn",
+        Vec::new(),
+        ::client::RequestBinding::new(
+            ::client::RequestPurpose::Account,
+            ::client::RequestIdentity::Anonymous,
+        ),
+    );
     assert_eq!(
         crate::bigmodel::issue_api_key(&client, &target, &CancellationSource::new().token()),
         Err(RequestError::InvalidResponse)
@@ -185,7 +215,14 @@ fn coding_plan_selects_only_the_exact_default_scope() {
         r#"{"code":200,"data":[{"name":"ash-coding-plan","apiKey":"key-id"}]}"#,
         r#"{"code":200,"data":{"secretKey":"secret"}}"#,
     ]);
-    let target = ResolvedApiTarget::new("https://bigmodel.cn", Vec::new());
+    let target = ResolvedApiTarget::new(
+        "https://bigmodel.cn",
+        Vec::new(),
+        ::client::RequestBinding::new(
+            ::client::RequestPurpose::Account,
+            ::client::RequestIdentity::Anonymous,
+        ),
+    );
     assert_eq!(
         crate::bigmodel::issue_api_key(&client, &target, &CancellationSource::new().token()),
         Ok("key-id.secret".into())
@@ -199,7 +236,14 @@ fn coding_plan_selects_only_the_exact_default_scope() {
 
 #[test]
 fn coding_plan_quota_checks_business_status_and_requires_typed_data() {
-    let target = ResolvedApiTarget::new("https://bigmodel.cn", Vec::new());
+    let target = ResolvedApiTarget::new(
+        "https://bigmodel.cn",
+        Vec::new(),
+        ::client::RequestBinding::new(
+            ::client::RequestPurpose::Account,
+            ::client::RequestIdentity::Anonymous,
+        ),
+    );
     let token = CancellationSource::new().token();
     for body in [
         r#"{"code":0,"data":{"limits":[]}}"#,
@@ -235,7 +279,14 @@ fn coding_plan_quota_checks_business_status_and_requires_typed_data() {
 
 #[test]
 fn malformed_coding_plan_identity_stops_before_credential_requests() {
-    let target = ResolvedApiTarget::new("https://bigmodel.cn", Vec::new());
+    let target = ResolvedApiTarget::new(
+        "https://bigmodel.cn",
+        Vec::new(),
+        ::client::RequestBinding::new(
+            ::client::RequestPurpose::Account,
+            ::client::RequestIdentity::Anonymous,
+        ),
+    );
     let token = CancellationSource::new().token();
     for body in [
         r#"{"code":200,"data":{"organizations":[{"organizationId":17,"projects":[]}]}}"#,

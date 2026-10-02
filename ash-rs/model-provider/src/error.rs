@@ -111,3 +111,9 @@ impl ModelProviderError {
         }
     }
 }
+
+impl From<ash_client::ClientError> for ModelProviderError {
+    fn from(error: ash_client::ClientError) -> Self {
+        Self::from(ApiError::from(error))
+    }
+}

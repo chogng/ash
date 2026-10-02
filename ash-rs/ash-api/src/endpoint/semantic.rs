@@ -41,6 +41,7 @@ impl SemanticApiEndpoint {
         client: &dyn OperationClient,
         cancellation: &CancellationToken,
     ) -> Result<Vec<Vec<f32>>, ApiError> {
+        target.require_purpose(ash_client::RequestPurpose::Model)?;
         validate_model_and_batch(model, inputs, "embedding")?;
         let response = crate::requests::post_json_to_path(
             client,
@@ -80,6 +81,7 @@ impl SemanticApiEndpoint {
         client: &dyn OperationClient,
         cancellation: &CancellationToken,
     ) -> Result<Vec<f32>, ApiError> {
+        target.require_purpose(ash_client::RequestPurpose::Model)?;
         validate_model_and_batch(model, documents, "rerank")?;
         if query.trim().is_empty() {
             return Err(ApiError::InvalidRequest(
@@ -99,7 +101,7 @@ impl SemanticApiEndpoint {
 }
 
 fn semantic_headers(target: &ResolvedApiTarget) -> Vec<ash_http_client::HttpHeader> {
-    let mut headers = target.headers.clone();
+    let mut headers = target.headers().to_vec();
     if !headers
         .iter()
         .any(|header| header.name().eq_ignore_ascii_case("content-type"))

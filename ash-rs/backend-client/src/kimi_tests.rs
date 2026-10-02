@@ -8,6 +8,10 @@ fn target() -> ResolvedApiTarget {
     ResolvedApiTarget::new(
         "https://api.kimi.com/coding/v1",
         vec![HttpHeader::new("Authorization", "Bearer fixture")],
+        ::client::RequestBinding::new(
+            ::client::RequestPurpose::Account,
+            ::client::RequestIdentity::Anonymous,
+        ),
     )
 }
 

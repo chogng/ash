@@ -52,8 +52,15 @@ impl KimiCli {
                 HttpHeader::new("X-Msh-Version", env!("CARGO_PKG_VERSION")),
                 HttpHeader::new("X-Msh-Device-Name", "Ash"),
                 HttpHeader::new("X-Msh-Device-Model", crate::device_model()),
-                HttpHeader::new("X-Msh-Device-Id", device_id),
+                HttpHeader::new("X-Msh-Device-Id", &device_id),
             ],
+            ash_client::RequestBinding::new(
+                ash_client::RequestPurpose::Model,
+                ash_client::RequestIdentity::connection(
+                    "kimi-cli",
+                    credential.access_token.as_bytes(),
+                ),
+            ),
         ))
     }
 

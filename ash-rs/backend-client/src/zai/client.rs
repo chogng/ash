@@ -15,14 +15,10 @@ pub const BUSINESS_URL: &str = "https://api.z.ai";
 /// Reads quota with the current Coding Plan request key.
 pub fn read_quota(
     transport: &dyn OperationClient,
-    request_key: &str,
+    target: &ResolvedApiTarget,
     cancellation: &CancellationToken,
 ) -> Result<Vec<QuotaLimit>, RequestError> {
-    let target = ResolvedApiTarget::new(
-        BUSINESS_URL,
-        vec![http_client::HttpHeader::new("Authorization", request_key)],
-    );
-    crate::coding_plan::read_quota(transport, &target, cancellation)
+    crate::coding_plan::read_quota(transport, target, cancellation)
 }
 
 /// Exchanges the login token for a business token and resolves model request credentials.
@@ -34,7 +30,14 @@ pub fn issue_api_key(
     if oauth_access_token.trim().is_empty() {
         return Err(RequestError::InvalidRequest);
     }
-    let target = ResolvedApiTarget::new(BUSINESS_URL, vec![]);
+    let target = ResolvedApiTarget::new(
+        BUSINESS_URL,
+        vec![],
+        ::client::RequestBinding::new(
+            ::client::RequestPurpose::Account,
+            ::client::RequestIdentity::connection("zai", oauth_access_token.as_bytes()),
+        ),
+    );
     let http = crate::client::Client::new(transport, &target)?;
     let response: BusinessResponse<LoginResponse> = http.post(
         http.endpoint(["api", "auth", "z", "login"])?,
@@ -54,6 +57,10 @@ pub fn issue_api_key(
             "Authorization",
             format!("Bearer {business_token}"),
         )],
+        ::client::RequestBinding::new(
+            ::client::RequestPurpose::Account,
+            ::client::RequestIdentity::connection("zai", business_token.as_bytes()),
+        ),
     );
     crate::coding_plan::issue_api_key(transport, &business_target, true, cancellation)
 }

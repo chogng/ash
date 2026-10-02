@@ -8,7 +8,7 @@ use crate::InputItem;
 use crate::ModelRequest;
 use crate::{ApiEndpoint, ApiError};
 use ash_async_utils::CancellationToken;
-use ash_client::{ClientRequest, OperationClient, ResolvedApiTarget};
+use ash_client::{OperationClient, ResolvedApiTarget};
 use ash_protocol::ModelId;
 use ash_protocol::ModelResponseBilling;
 use serde_json::Value;
@@ -75,12 +75,11 @@ pub(crate) fn post_json_to_path(
 ) -> Result<Value, ApiError> {
     let body = serde_json::to_vec(&body)
         .map_err(|error| ApiError::InvalidRequest(format!("failed to encode API JSON: {error}")))?;
-    let request = ClientRequest::new(
+    let request = target.request(
         ash_http_client::HttpMethod::Post,
         target.endpoint(relative_path)?,
         crate::headers::build(headers, crate::headers::ResponseFormat::Json)?,
         body,
-        target.retry_policy,
     )?;
     let response = client.execute_with_cancellation(&request, cancellation)?;
     if !response.is_success() {

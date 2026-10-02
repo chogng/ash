@@ -97,9 +97,13 @@ impl ProviderInputTokenCounter {
         client: &dyn OperationClient,
         cancellation: &CancellationToken,
     ) -> Result<InputTokenCount, ModelProviderError> {
-        let target = ResolvedApiTarget::new(self.base_url.clone(), target.headers.clone());
+        if target.base_url().trim_end_matches('/') != self.base_url.trim_end_matches('/') {
+            return Err(ModelProviderError::InvalidRequest(
+                "input token count destination differs from its resolved credential target".into(),
+            ));
+        }
         self.endpoint
-            .count_with_client_and_cancellation(&target, model, request, client, cancellation)
+            .count_with_client_and_cancellation(target, model, request, client, cancellation)
             .map_err(Into::into)
     }
 }

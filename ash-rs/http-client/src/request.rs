@@ -33,6 +33,13 @@ pub struct HttpRequest {
     url: String,
     headers: Vec<HttpHeader>,
     body: Vec<u8>,
+    redirects: RequestRedirects,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RequestRedirects {
+    NetworkPolicy,
+    Reject,
 }
 
 impl HttpRequest {
@@ -56,6 +63,7 @@ impl HttpRequest {
             url,
             headers,
             body,
+            redirects: RequestRedirects::NetworkPolicy,
         })
     }
 
@@ -65,6 +73,17 @@ impl HttpRequest {
         body: Vec<u8>,
     ) -> Result<Self, HttpClientError> {
         Self::new(HttpMethod::Post, url, headers, body)
+    }
+
+    /// Credential-bound operations reject redirects regardless of network settings.
+    pub fn without_redirects(mut self) -> Self {
+        self.redirects = RequestRedirects::Reject;
+        self
+    }
+
+    /// Transport implementations must honor this restriction before following a redirect.
+    pub fn rejects_redirects(&self) -> bool {
+        self.redirects == RequestRedirects::Reject
     }
 
     pub fn method(&self) -> HttpMethod {

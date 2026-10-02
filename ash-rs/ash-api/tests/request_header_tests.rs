@@ -76,6 +76,10 @@ fn every_generation_profile_builds_json_and_stream_headers_at_the_api_boundary()
                     HttpHeader::new("Authorization", "Bearer test-credential"),
                     HttpHeader::new("X-Client-Marker", "fixture"),
                 ],
+                ash_client::RequestBinding::new(
+                    ash_client::RequestPurpose::Model,
+                    ash_client::RequestIdentity::Anonymous,
+                ),
             );
             let original = target.clone();
             let capture = HeaderCapture::default();
@@ -164,7 +168,14 @@ fn header_collisions_are_case_insensitive_and_rejected_without_sending_or_disclo
         vec![HttpHeader::new("bad header", "private")],
         vec![HttpHeader::new("session-id", "wrong-private-scope")],
     ] {
-        let target = ResolvedApiTarget::new("https://example.test", headers);
+        let target = ResolvedApiTarget::new(
+            "https://example.test",
+            headers,
+            ash_client::RequestBinding::new(
+                ash_client::RequestPurpose::Model,
+                ash_client::RequestIdentity::Anonymous,
+            ),
+        );
         let capture = HeaderCapture::default();
         let mut request = ModelRequest::text("input");
         request.prompt_cache_key = Some("correct-scope".into());
@@ -182,6 +193,10 @@ fn header_collisions_are_case_insensitive_and_rejected_without_sending_or_disclo
             HttpHeader::new("content-type", "application/json"),
             HttpHeader::new("Content-Type", "application/json"),
         ],
+        ash_client::RequestBinding::new(
+            ash_client::RequestPurpose::Model,
+            ash_client::RequestIdentity::Anonymous,
+        ),
     );
     let _ = ApiEndpoint::OpenAiResponses.complete_with_client(
         &target,
@@ -205,7 +220,14 @@ fn preflight_has_json_headers_and_subscription_preflight_is_rejected() {
         InputTokenCountEndpoint::ZaiChatCompletions,
     ] {
         let capture = HeaderCapture::default();
-        let target = ResolvedApiTarget::new("https://example.test", Vec::new());
+        let target = ResolvedApiTarget::new(
+            "https://example.test",
+            Vec::new(),
+            ash_client::RequestBinding::new(
+                ash_client::RequestPurpose::InputTokenCount,
+                ash_client::RequestIdentity::Anonymous,
+            ),
+        );
         endpoint
             .count_with_client(
                 &target,
@@ -227,7 +249,14 @@ fn preflight_has_json_headers_and_subscription_preflight_is_rejected() {
     let capture = HeaderCapture::default();
     let error = ApiEndpoint::ChatGptResponses
         .count_input_tokens_with_client(
-            &ResolvedApiTarget::new("https://example.test", Vec::new()),
+            &ResolvedApiTarget::new(
+                "https://example.test",
+                Vec::new(),
+                ash_client::RequestBinding::new(
+                    ash_client::RequestPurpose::Model,
+                    ash_client::RequestIdentity::Anonymous,
+                ),
+            ),
             "gpt-5.6-luna",
             &ModelRequest::text("input"),
             &capture,
@@ -267,7 +296,14 @@ fn subscription_preserves_structured_tool_results_while_omitting_cache_breakpoin
         let capture = HeaderCapture::default();
         endpoint
             .complete_with_client(
-                &ResolvedApiTarget::new("https://example.test", vec![]),
+                &ResolvedApiTarget::new(
+                    "https://example.test",
+                    vec![],
+                    ash_client::RequestBinding::new(
+                        ash_client::RequestPurpose::Model,
+                        ash_client::RequestIdentity::Anonymous,
+                    ),
+                ),
                 "gpt-5.6-luna",
                 &request,
                 &capture,
@@ -283,4 +319,50 @@ fn subscription_preserves_structured_tool_results_while_omitting_cache_breakpoin
             endpoint == ApiEndpoint::OpenAiResponses
         );
     }
+}
+
+#[test]
+fn purpose_mismatch_stops_generation_and_preflight_before_transport() {
+    for purpose in [
+        ash_client::RequestPurpose::Account,
+        ash_client::RequestPurpose::InputTokenCount,
+    ] {
+        let target = ResolvedApiTarget::new(
+            "https://example.test",
+            vec![],
+            ash_client::RequestBinding::new(purpose, ash_client::RequestIdentity::Anonymous),
+        );
+        let capture = HeaderCapture::default();
+        assert!(
+            ApiEndpoint::OpenAiResponses
+                .complete_with_client(
+                    &target,
+                    "fixture-model",
+                    &ModelRequest::text("input"),
+                    &capture
+                )
+                .is_err()
+        );
+        assert!(capture.0.lock().unwrap().is_none());
+    }
+    let target = ResolvedApiTarget::new(
+        "https://example.test",
+        vec![],
+        ash_client::RequestBinding::new(
+            ash_client::RequestPurpose::Model,
+            ash_client::RequestIdentity::Anonymous,
+        ),
+    );
+    let capture = HeaderCapture::default();
+    assert!(
+        InputTokenCountEndpoint::OpenAiResponses
+            .count_with_client(
+                &target,
+                "fixture-model",
+                &ModelRequest::text("input"),
+                &capture
+            )
+            .is_err()
+    );
+    assert!(capture.0.lock().unwrap().is_none());
 }

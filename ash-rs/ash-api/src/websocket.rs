@@ -156,36 +156,10 @@ impl JsonSocket {
         }
     }
 }
-
-pub(crate) fn url(base: &str, path: &str) -> Result<url::Url, ApiError> {
-    let mut url = url::Url::parse(base)
-        .map_err(|_| ApiError::InvalidRequest("invalid WebSocket service URL".into()))?;
-    let scheme = match url.scheme() {
-        "http" | "ws" => "ws",
-        "https" | "wss" => "wss",
-        _ => {
-            return Err(ApiError::InvalidRequest(
-                "unsupported WebSocket service scheme".into(),
-            ));
-        }
-    };
-    if url.query().is_some()
-        || url.fragment().is_some()
-        || !url.username().is_empty()
-        || url.password().is_some()
-    {
-        return Err(ApiError::InvalidRequest(
-            "WebSocket service URLs cannot contain credentials, queries, or fragments".into(),
-        ));
-    }
-    url.set_scheme(scheme)
-        .map_err(|_| ApiError::InvalidRequest("invalid WebSocket service scheme".into()))?;
-    url.set_path(&format!("{}/{}", url.path().trim_end_matches('/'), path));
-    Ok(url)
-}
 fn timeout() -> ApiError {
     ApiError::Transport("WebSocket operation timed out".into())
 }
+
 pub(crate) fn cancelled() -> ApiError {
     ApiError::Cancelled("WebSocket operation cancelled".into())
 }
@@ -201,4 +175,24 @@ fn map_error(error: ash_websocket_client::WebSocketClientError) -> ApiError {
         }
         _ => ApiError::Transport(error.to_string()),
     }
+}
+
+/// Resolves an adapter path within the credential owner's WebSocket origin.
+pub(crate) fn bound_url(
+    target: &ash_client::ResolvedApiTarget,
+    path: &str,
+) -> Result<url::Url, crate::ApiError> {
+    target.require_purpose(ash_client::RequestPurpose::Model)?;
+    let http = target.endpoint(path)?;
+    let mut url = url::Url::parse(&http)
+        .map_err(|_| crate::ApiError::InvalidRequest("invalid WebSocket destination".into()))?;
+    let scheme = match url.scheme() {
+        "https" => "wss",
+        "http" => "ws",
+        _ => unreachable!("target endpoint validates HTTP scheme"),
+    };
+    url.set_scheme(scheme)
+        .map_err(|_| crate::ApiError::InvalidRequest("invalid WebSocket scheme".into()))?;
+    target.validate_destination(url.as_str())?;
+    Ok(url)
 }

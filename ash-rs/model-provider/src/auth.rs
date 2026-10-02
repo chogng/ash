@@ -30,8 +30,26 @@ pub struct ProviderCredentialStatus {
     pub api_key_configured: bool,
 }
 
-/// One credential read materialized separately for generation and preflight protocols.
+/// Authentication resolved from one direct-provider credential read.
+#[derive(Default)]
+pub(crate) struct RequestAuthentication {
+    pub(crate) identity: ash_client::RequestIdentity,
+    pub(crate) headers: Vec<HttpHeader>,
+}
+
+impl RequestAuthentication {
+    pub(crate) fn into_target(self, base_url: impl Into<String>) -> ash_client::ResolvedApiTarget {
+        ash_client::ResolvedApiTarget::new(
+            base_url,
+            self.headers,
+            ash_client::RequestBinding::new(ash_client::RequestPurpose::Model, self.identity),
+        )
+    }
+}
+
+/// One snapshot encoded separately for generation and preflight protocols.
 pub(crate) struct ModelHeaders {
+    pub(crate) identity: ash_client::RequestIdentity,
     pub(crate) invocation: Vec<HttpHeader>,
     pub(crate) measurement: Vec<HttpHeader>,
 }
@@ -114,13 +132,16 @@ impl ProviderCredentialService {
         Ok(())
     }
 
-    pub(crate) fn request_headers(
+    pub(crate) fn request_authentication(
         &self,
         provider: &ModelConnectionId,
-    ) -> Result<Vec<HttpHeader>, ProviderCredentialError> {
+    ) -> Result<RequestAuthentication, ProviderCredentialError> {
         let definition = self.definition(provider)?;
         let secret = self.api_key(provider, &definition)?;
-        encode_key(provider, definition.api_key_header, secret.as_ref())
+        Ok(RequestAuthentication {
+            identity: credential_identity(provider, secret.as_ref()),
+            headers: encode_key(provider, definition.api_key_header, secret.as_ref())?,
+        })
     }
 
     pub(crate) fn request_model_headers(
@@ -144,6 +165,7 @@ impl ProviderCredentialService {
             None => definition.api_key_header,
         };
         Ok(ModelHeaders {
+            identity: credential_identity(&config.connection, secret.as_ref()),
             invocation: encode_key(
                 &config.connection,
                 definition.api_key_header,
@@ -246,4 +268,16 @@ fn validate_api_key(api_key: &[u8]) -> Result<(), ProviderCredentialError> {
         return Err(ProviderCredentialError::InvalidApiKey);
     }
     Ok(())
+}
+
+fn credential_identity(
+    connection: &ModelConnectionId,
+    secret: Option<&SecretValue>,
+) -> ash_client::RequestIdentity {
+    match secret {
+        Some(secret) => {
+            ash_client::RequestIdentity::connection(connection.as_str(), secret.expose())
+        }
+        None => ash_client::RequestIdentity::Anonymous,
+    }
 }

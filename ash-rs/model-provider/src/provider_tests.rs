@@ -143,5 +143,5 @@ fn glm_request_rejects_an_account_switch_between_identity_and_target_reads() {
     save("account-b", "key-b");
     let resolved = target.resolve().unwrap();
     assert!(resolved.ensure_account(&bound).is_err());
-    assert_eq!(resolved.api_target().headers[0].value(), "Bearer key-b");
+    assert_eq!(resolved.api_target().headers()[0].value(), "Bearer key-b");
 }

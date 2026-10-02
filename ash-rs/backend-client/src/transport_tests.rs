@@ -76,7 +76,7 @@ fn existing_reset_credits_can_be_queried_and_used_without_replaying_failures() {
                 json!({"redeem_request_id":"stable-request","credit_id":"credit-1"})
             );
             for request in [&query, &use_credit] {
-                for header in &target.headers {
+                for header in target.headers() {
                     assert_eq!(request.header(header.name()), header.value());
                 }
             }
@@ -104,6 +104,10 @@ fn supergrok_business_queries_use_the_credits_contract_over_https() {
             http_client::HttpHeader::new("Authorization", "Bearer xai-fixture"),
             http_client::HttpHeader::new("x-userid", "user-1"),
         ],
+        ::client::RequestBinding::new(
+            ::client::RequestPurpose::Account,
+            ::client::RequestIdentity::Anonymous,
+        ),
     );
     let client = crate::supergrok::Client::new(&transport, &target).unwrap();
     let token = CancellationSource::new().token();
@@ -158,6 +162,10 @@ fn supergrok_catalog_uses_its_own_route_and_authentication_over_https() {
             http_client::HttpHeader::new("Authorization", "Bearer xai-secret"),
             http_client::HttpHeader::new("X-XAI-Token-Auth", "xai-grok-cli"),
         ],
+        ::client::RequestBinding::new(
+            ::client::RequestPurpose::Account,
+            ::client::RequestIdentity::Anonymous,
+        ),
     );
     let models = crate::supergrok::Client::new(&transport, &target)
         .unwrap()
@@ -216,7 +224,7 @@ fn both_routes_send_authentication_queries_and_json_over_https() {
             "new-task"
         );
         for (index, request) in (0..3).map(|i| (i, server.request())) {
-            for header in &target.headers {
+            for header in target.headers() {
                 assert_eq!(request.header(header.name()), header.value());
             }
             match index {

@@ -325,6 +325,10 @@ fn api_key_costs_use_the_explicit_origin_auth_and_provider_scope() {
             HttpHeader::new("OpenAI-Organization", "org"),
             HttpHeader::new("OpenAI-Project", "project"),
         ],
+        ::client::RequestBinding::new(
+            ::client::RequestPurpose::Account,
+            ::client::RequestIdentity::Anonymous,
+        ),
     );
     let token = CancellationSource::new().token();
     let client = Transport::response(
@@ -345,7 +349,7 @@ fn api_key_costs_use_the_explicit_origin_auth_and_provider_scope() {
     );
     assert_eq!(requests[0].method(), HttpMethod::Post);
     assert_eq!(requests[0].retry_policy(), RetryPolicy::never());
-    for header in &target.headers {
+    for header in target.headers() {
         assert!(requests[0].headers().contains(header));
     }
     assert_eq!(

@@ -19,7 +19,6 @@ use crate::ToolDefinition;
 use crate::ToolName;
 use ash_async_utils::CancellationToken;
 use ash_client::ClientError;
-use ash_client::ClientRequest;
 use ash_client::OperationClient;
 use ash_client::OperationStreamSink;
 use ash_client::ResolvedApiTarget;
@@ -65,7 +64,7 @@ pub(crate) fn stream(
     body.insert("stream_options".into(), json!({"include_usage": true}));
     let body = serde_json::to_vec(&Value::Object(body))
         .map_err(|error| ApiError::InvalidRequest(format!("failed to encode API JSON: {error}")))?;
-    let operation = ClientRequest::new(
+    let operation = target.request(
         ash_http_client::HttpMethod::Post,
         target.endpoint(endpoint.relative_path())?,
         crate::headers::build(
@@ -73,7 +72,6 @@ pub(crate) fn stream(
             crate::headers::ResponseFormat::EventStream,
         )?,
         body,
-        target.retry_policy,
     )?;
     let mut body_sink = OpenAiChatCompletionsBodySink {
         framing: SseDecoder::new(MAX_STREAM_EVENT_BYTES)?,

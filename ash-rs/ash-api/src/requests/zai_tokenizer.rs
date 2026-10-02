@@ -18,7 +18,7 @@ pub(crate) fn count_input_tokens(
         client,
         target,
         "tokenizer",
-        target.headers.clone(),
+        target.headers().to_vec(),
         build_request(model, request)?,
         cancellation,
     )?;

@@ -130,14 +130,8 @@ fn config_keeps_optional_data_and_layer_contents() {
     );
 }
 #[test]
-fn settings_and_messages_override_cache_headers() {
-    let mut target = target(BASE_URL);
-    target
-        .headers
-        .push(HttpHeader::new("cache-control", "stale"));
-    target
-        .headers
-        .push(HttpHeader::new("content-type", "text/plain"));
+fn settings_and_messages_add_their_protocol_cache_headers() {
+    let target = target(BASE_URL);
     let token = CancellationSource::new().token();
     let client = Transport::response(200, "{}");
     let backend = Client::new(&client, &target, RouteStyle::ChatGpt).unwrap();
@@ -173,4 +167,20 @@ fn settings_and_messages_override_cache_headers() {
             .headers()
             .contains(&HttpHeader::new("Cache-Control", "no-store"))
     );
+}
+
+#[test]
+fn protocol_headers_cannot_override_resolved_target_headers() {
+    let target = target(BASE_URL)
+        .with_headers(vec![HttpHeader::new("cache-control", "stale")])
+        .unwrap();
+    let transport = Transport::response(200, "{}");
+    let backend = Client::new(&transport, &target, RouteStyle::ChatGpt).unwrap();
+    assert_eq!(
+        backend
+            .read_user_settings(&CancellationSource::new().token())
+            .unwrap_err(),
+        RequestError::InvalidRequest
+    );
+    assert!(transport.requests.lock().unwrap().is_empty());
 }

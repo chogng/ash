@@ -9,7 +9,14 @@ use std::time::Duration;
 
 #[test]
 fn target_rejects_a_non_http_base_url() {
-    let target = ResolvedApiTarget::new("file:///tmp/ash", Vec::new());
+    let target = ResolvedApiTarget::new(
+        "file:///tmp/ash",
+        Vec::new(),
+        crate::RequestBinding::new(
+            crate::RequestPurpose::Model,
+            crate::RequestIdentity::Anonymous,
+        ),
+    );
     assert!(matches!(
         target.endpoint("responses"),
         Err(ClientError::InvalidRequest(_))

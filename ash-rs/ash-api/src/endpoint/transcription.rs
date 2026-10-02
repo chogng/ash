@@ -39,10 +39,13 @@ impl TranscriptionSession {
                 "Unsupported live transcription model".into(),
             ));
         }
-        let mut url = crate::websocket::url(&target.base_url, "realtime")?;
+        let mut url = crate::websocket::bound_url(target, "realtime")?;
         url.query_pairs_mut().append_pair("model", model);
-        let request = WebSocketRequest::new(url.as_str(), target.headers.clone())
-            .map_err(|error| ApiError::InvalidRequest(error.to_string()))?;
+        let request = WebSocketRequest::new(
+            url.as_str(),
+            ash_client::merge_headers(target.headers().to_vec(), Vec::new())?,
+        )
+        .map_err(|error| ApiError::InvalidRequest(error.to_string()))?;
         let (mut socket, _) = JsonSocket::connect(connector, request, limits, cancellation).await?;
         let created = socket.receive(cancellation).await?;
         if created["type"] != "session.created" {

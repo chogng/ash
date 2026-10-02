@@ -238,7 +238,7 @@ fn business_endpoints_use_both_routes_auth_cancellation_and_redacted_failures() 
                 assert_eq!(url.path(), format!("/backend-api/{prefix}/{path}"));
                 assert_eq!(request.method(), *method);
                 assert_eq!(request.retry_policy(), RetryPolicy::never());
-                for header in &target.headers {
+                for header in target.headers() {
                     assert!(request.headers().contains(header), "{path}");
                 }
                 if *method == HttpMethod::Post {

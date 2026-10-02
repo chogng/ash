@@ -120,11 +120,11 @@ fn account_login_acquires_private_coding_plan_credentials_for_each_region() {
         assert_eq!(account.email.as_deref(), Some("person@example.test"));
         let target = auth.api_target().unwrap();
         assert_eq!(target.account_id, "user-1");
-        assert_eq!(target.target.base_url, provider.model_url());
+        assert_eq!(target.target.base_url(), provider.model_url());
         assert!(
             target
                 .target
-                .headers
+                .headers()
                 .iter()
                 .any(|header| header.name() == "Authorization"
                     && header.value() == "Bearer key-id.secret")
@@ -191,7 +191,7 @@ fn zcode_coding_plan_credentials_are_read_live_without_copying_them() {
     assert_eq!(account.account.account_id, "user-1");
     let first = auth.api_target().unwrap();
     assert_eq!(first.account_id, "user-1");
-    assert_eq!(first.target.headers[0].value(), "Bearer key-1.secret");
+    assert_eq!(first.target.headers()[0].value(), "Bearer key-1.secret");
     let service = LoginService::deferred(auth.clone() as Arc<dyn InteractiveLoginDriver>);
     assert!(matches!(
         service.begin(LoginMethod::ZaiBrowser).unwrap(),
@@ -209,7 +209,7 @@ fn zcode_coding_plan_credentials_are_read_live_without_copying_them() {
     write_account("user-2", "key-2.secret");
     let next = auth.api_target().unwrap();
     assert_eq!(next.account_id, "user-2");
-    assert_eq!(next.target.headers[0].value(), "Bearer key-2.secret");
+    assert_eq!(next.target.headers()[0].value(), "Bearer key-2.secret");
     assert_ne!(next.account_id, first.account_id);
     assert!(
         secrets
@@ -327,7 +327,7 @@ fn zcode_reuse_precedes_ash_login_until_zcode_is_unusable() {
     let external = auth.read_account().unwrap().unwrap();
     assert_eq!(external.account.account_id, "zcode-person");
     assert_eq!(
-        auth.api_target().unwrap().target.headers[0].value(),
+        auth.api_target().unwrap().target.headers()[0].value(),
         "Bearer zcode-key.secret"
     );
 
@@ -336,7 +336,7 @@ fn zcode_reuse_precedes_ash_login_until_zcode_is_unusable() {
     assert_eq!(account.account.account_id, "ash-person");
     let target = auth.api_target().unwrap();
     assert_eq!(target.account_id, "ash-person");
-    assert_eq!(target.target.headers[0].value(), "Bearer ash-key.secret");
+    assert_eq!(target.target.headers()[0].value(), "Bearer ash-key.secret");
     auth.logout(&account.account).unwrap();
     assert!(auth.read_account().unwrap().is_none());
     assert!(path.exists());
@@ -364,7 +364,7 @@ fn zcode_bigmodel_account_uses_its_own_request_key() {
     let target = auth.api_target().unwrap();
     assert_eq!(target.account_id, "person/1");
     assert_eq!(
-        target.target.headers[0].value(),
+        target.target.headers()[0].value(),
         "Bearer bigmodel-key.secret"
     );
     assert_eq!(
@@ -396,7 +396,7 @@ fn zcode_zai_profile_identifies_the_matching_account_key() {
     assert_eq!(account.account.account_id, "zai-user");
     assert_eq!(account.display_name.as_deref(), Some("Zai User"));
     assert_eq!(
-        auth.api_target().unwrap().target.headers[0].value(),
+        auth.api_target().unwrap().target.headers()[0].value(),
         "Bearer zai-key.secret"
     );
 }
@@ -451,10 +451,13 @@ fn start_plan_browser_login_keeps_the_zcode_jwt_without_creating_a_coding_plan_k
         ));
         let target = auth.api_target().unwrap();
         assert_eq!(
-            target.target.base_url,
+            target.target.base_url(),
             backend_client::start_plan::MODEL_URL
         );
-        assert_eq!(target.target.headers[0].value(), format!("Bearer {token}"));
+        assert_eq!(
+            target.target.headers()[0].value(),
+            format!("Bearer {token}")
+        );
         assert_eq!(client.requests.lock().unwrap().len(), 2);
         assert!(
             secrets
@@ -501,7 +504,7 @@ fn start_plan_external_jwt_must_match_the_active_region_and_account() {
             .is_none()
     );
     assert_eq!(
-        auth.api_target().unwrap().target.headers[0].value(),
+        auth.api_target().unwrap().target.headers()[0].value(),
         format!("Bearer {token}")
     );
     entries["zcodejwttoken"] = encrypted(&jwt("other-user")).into();
@@ -605,5 +608,68 @@ fn start_plan_balance_does_not_publish_after_a_credential_change_or_cancellation
                 GlmUsageError::AccountChanged
             }
         );
+    }
+}
+
+#[test]
+fn start_plan_generation_keeps_preflight_identity_and_rejects_rotation_during_policy() {
+    struct PolicyClient {
+        secrets: Arc<MemorySecretStore>,
+        rotate: bool,
+        requests: Mutex<Vec<ClientRequest>>,
+    }
+    impl OperationClient for PolicyClient {
+        fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            self.requests.lock().unwrap().push(request.clone());
+            assert!(
+                request
+                    .headers()
+                    .iter()
+                    .any(|header| header.name().eq_ignore_ascii_case("Authorization")
+                        && header.value() == "Bearer checked-token")
+            );
+            let response = if request.url().contains("billing/balance") {
+                serde_json::json!({"code":0,"data":{"server_time":1000,
+                    "plans":[{"user_plan_id":"plan","name":"Start Plan","status":"active","starts_at":900,"ends_at":2000}],
+                    "balances":[{"bucket_id":"bucket","user_plan_id":"plan","show_name":"GLM Flash","capabilities":["model:glm-5.3-flash"],"total_units":1000,"used_units":0,"available_units":1000,"period_start":900,"period_end":2000,"expires_at":2000}]}})
+            } else {
+                assert!(request.url().contains("client/configs"));
+                if self.rotate {
+                    self.secrets.store(&GlmProvider::BigModelStartPlan.credential_key(), &SecretValue::new(serde_json::to_vec(&serde_json::json!({"account_id":"account", "email":null,"display_name":null,"model_key":"unchecked-token","revision":8})).unwrap())).unwrap();
+                }
+                serde_json::json!({"code":0,"data":{"configs":{"captcha":{"enabled":true,"skip_model_request":true}}}})
+            };
+            Ok(ClientResponse::new(
+                200,
+                vec![],
+                serde_json::to_vec(&response).unwrap(),
+            ))
+        }
+    }
+    for rotate in [false, true] {
+        let secrets = Arc::new(MemorySecretStore::default());
+        secrets.store(&GlmProvider::BigModelStartPlan.credential_key(), &SecretValue::new(serde_json::to_vec(&serde_json::json!({"account_id":"account", "email":null,"display_name":null,"model_key":"checked-token","revision":7})).unwrap())).unwrap();
+        let client = Arc::new(PolicyClient {
+            secrets: secrets.clone(),
+            rotate,
+            requests: Mutex::new(vec![]),
+        });
+        let auth = GlmOAuth::with_client(GlmProvider::BigModelStartPlan, secrets, client.clone());
+        let result = auth.model_api_target("glm-5.3-flash", &CancellationSource::new().token());
+        if rotate {
+            assert!(result.is_err());
+        } else {
+            let target = result.unwrap().target;
+            assert_eq!(
+                target.binding().purpose(),
+                ash_client::RequestPurpose::Model
+            );
+            assert_eq!(
+                target.binding().identity(),
+                &ash_client::RequestIdentity::account("bigmodel-start-plan", "account", 7)
+            );
+            assert_eq!(target.headers()[0].value(), "Bearer checked-token");
+        }
+        assert_eq!(client.requests.lock().unwrap().len(), 2);
     }
 }

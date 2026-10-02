@@ -89,7 +89,7 @@ impl ResponsesWebSocketSession {
                 "responses_websockets=2026-02-06",
             )?;
         }
-        let url = crate::websocket::url(&target.base_url, responses::path())?;
+        let url = crate::websocket::bound_url(target, responses::path())?;
         let wire = WebSocketRequest::new(url.as_str(), headers)
             .map_err(|error| ApiError::InvalidRequest(error.to_string()))?;
         let (socket, handshake) =

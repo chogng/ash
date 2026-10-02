@@ -33,20 +33,6 @@ pub(crate) fn insert(
     name: &str,
     value: &str,
 ) -> Result<(), ApiError> {
-    HttpHeader::new(name, value)
-        .validate()
-        .map_err(|_| ApiError::InvalidRequest("invalid API request header".into()))?;
-    if let Some(existing) = headers
-        .iter()
-        .find(|header| header.name().eq_ignore_ascii_case(name))
-    {
-        if existing.value() != value {
-            return Err(ApiError::InvalidRequest(format!(
-                "conflicting API request header: {name}"
-            )));
-        }
-    } else {
-        headers.push(HttpHeader::new(name, value));
-    }
+    *headers = ash_client::merge_headers(std::mem::take(headers), [HttpHeader::new(name, value)])?;
     Ok(())
 }

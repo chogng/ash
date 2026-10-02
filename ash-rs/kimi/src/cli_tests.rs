@@ -33,15 +33,15 @@ fn cli_connection_reads_the_configured_slot_and_observes_rotation_and_expiry() {
     let original = fs::read_to_string(&credential_path).unwrap();
     assert!(cli.is_ready());
     let first = cli.api_target().unwrap();
-    assert_eq!(first.base_url, "https://api.kimi.ai/coding/v1");
+    assert_eq!(first.base_url(), "https://api.kimi.ai/coding/v1");
     assert!(
         first
-            .headers
+            .headers()
             .iter()
             .any(|header| header.name() == "X-Msh-Device-Id" && header.value() == "test-device")
     );
     assert!(
-        first.headers.iter().any(
+        first.headers().iter().any(
             |header| header.name() == "Authorization" && header.value() == "Bearer first-token"
         )
     );
@@ -54,7 +54,7 @@ fn cli_connection_reads_the_configured_slot_and_observes_rotation_and_expiry() {
     assert!(
         cli.api_target()
             .unwrap()
-            .headers
+            .headers()
             .iter()
             .any(|header| header.name() == "Authorization"
                 && header.value() == "Bearer second-token")

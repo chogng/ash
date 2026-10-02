@@ -148,10 +148,10 @@ impl RealtimeSession {
                 "Realtime model must not be empty".into(),
             ));
         }
-        let mut url = crate::websocket::url(&target.base_url, "realtime")?;
+        let mut url = crate::websocket::bound_url(target, "realtime")?;
         url.query_pairs_mut().append_pair("model", model);
         let mut headers = Vec::new();
-        for header in &target.headers {
+        for header in target.headers() {
             if header.name().eq_ignore_ascii_case("openai-beta") {
                 return Err(ApiError::InvalidRequest(
                     "Realtime GA does not accept a beta handshake profile".into(),

@@ -253,3 +253,40 @@ fn truncated_https_body_is_a_transport_error_without_replay_or_body_disclosure()
     assert_eq!(server.request().body, b"payload");
     server.assert_no_more_requests();
 }
+
+#[test]
+fn credential_bound_custom_headers_reject_redirects_even_when_network_follows() {
+    let destination = TcpListener::bind("127.0.0.1:0").unwrap();
+    destination.set_nonblocking(true).unwrap();
+    let server = Server::reply(format!("HTTP/1.1 302 Found\r\nLocation: https://{}/private\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", destination.local_addr().unwrap()).into_bytes());
+    let ca = CertificateBundle::from_der(vec![CA_DER.to_vec()]).unwrap();
+    let transport = UreqHttpClient::with_config(
+        HttpClientConfig::new()
+            .with_proxy_policy(ProxyPolicy::Direct)
+            .with_tls_policy(TlsPolicy::CustomOnly(ca))
+            .with_redirect_policy(RedirectPolicy::Follow {
+                max_hops: NonZeroU8::new(3).unwrap(),
+            }),
+    )
+    .unwrap();
+    let request = HttpRequest::new(
+        HttpMethod::Get,
+        format!("{}/resource", server.url()),
+        vec![
+            HttpHeader::new("X-Device-Proof", "secret-proof"),
+            HttpHeader::new("x-api-key", "secret-key"),
+        ],
+        vec![],
+    )
+    .unwrap()
+    .without_redirects();
+    assert_eq!(transport.execute(&request).unwrap().status(), 302);
+    assert_eq!(
+        destination.accept().unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+    let captured = server.request();
+    assert_eq!(captured.header("X-Device-Proof"), "secret-proof");
+    assert_eq!(captured.header("x-api-key"), "secret-key");
+    server.assert_no_more_requests();
+}

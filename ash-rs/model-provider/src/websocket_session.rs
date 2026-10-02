@@ -357,17 +357,18 @@ impl ResponsesModelSession {
                 .resolve()
                 .map(|target| target.into_api_target());
         };
-        let mut headers = self.provider.adapter.fixed_headers();
-        headers.extend(
-            credentials
-                .request_model_headers(&self.provider.config)
-                .map_err(|error| ModelProviderError::Credential(error.to_string()))?
-                .invocation,
-        );
+        let authentication = credentials
+            .request_model_headers(&self.provider.config)
+            .map_err(|error| ModelProviderError::Credential(error.to_string()))?;
         Ok(ResolvedApiTarget::new(
             self.provider.config.base_url.clone(),
-            headers,
-        ))
+            authentication.invocation,
+            ash_client::RequestBinding::new(
+                ash_client::RequestPurpose::Model,
+                authentication.identity,
+            ),
+        )
+        .with_headers(self.provider.adapter.fixed_headers())?)
     }
 }
 struct Events<'a> {
