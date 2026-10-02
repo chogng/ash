@@ -224,7 +224,7 @@ fn collaboration_effort_changes_update_status_without_a_notice() {
 }
 
 #[test]
-fn collaboration_effort_boundaries_are_silent_inline_and_localized_fullscreen() {
+fn collaboration_effort_boundaries_are_silent_in_both_modes() {
     for screen in [ScreenMode::Fullscreen, ScreenMode::Inline] {
         let mut app = App::new();
         let mut settings = TerminalSettings::default();
@@ -243,17 +243,9 @@ fn collaboration_effort_boundaries_are_silent_inline_and_localized_fullscreen() 
             mode: screen,
             panel_generation: app.panels().generation(),
         };
-        for (command, message, expected) in [
-            (
-                crate::models::Command::DecreaseEffort,
-                "Thinking effort is already at the lowest level ({0})",
-                "推理强度已是最低档（high）",
-            ),
-            (
-                crate::models::Command::IncreaseEffort,
-                "Thinking effort is already at the highest level ({0})",
-                "推理强度已是最高档（high）",
-            ),
+        for command in [
+            crate::models::Command::DecreaseEffort,
+            crate::models::Command::IncreaseEffort,
         ] {
             super::completion::apply_request_completion(
                 super::completion::Completion::ModelUpdated {
@@ -265,9 +257,7 @@ fn collaboration_effort_boundaries_are_silent_inline_and_localized_fullscreen() 
                             config.model_reasoning_effort,
                             None,
                         ),
-                        notice: crate::models::ModelNotice::ThinkingEffort(
-                            crate::nls::Text::template(message, vec!["high".into()]),
-                        ),
+                        notice: crate::models::ModelNotice::Silent,
                         picker: None,
                         config: config.clone(),
                     }),
@@ -278,17 +268,9 @@ fn collaboration_effort_boundaries_are_silent_inline_and_localized_fullscreen() 
             );
             assert_eq!(app.messages().len(), rows);
             assert_eq!(app.input(), "keep this draft");
-            let rendered = render(&app);
-            match screen {
-                ScreenMode::Inline => {
-                    assert_eq!(app.top_tip().text(None), None);
-                    assert!(!rendered.replace(' ', "").contains(expected));
-                }
-                ScreenMode::Fullscreen => assert!(
-                    rendered.replace(' ', "").contains(expected),
-                    "{screen:?}: expected {expected}\n{rendered}"
-                ),
-            }
+            assert_eq!(app.status_line().model_label(), "test-model (high)");
+            assert_eq!(app.top_tip().text(None), None);
+            assert!(app.chat_input_focused());
         }
         match screen {
             ScreenMode::Fullscreen => {

@@ -98,20 +98,13 @@ pub(super) fn update<T: JsonRpcTransport>(
                                 "Use /effort to choose a supported thinking effort".into(),
                             )
                         })?;
-                    // A directional adjustment stops at the boundary rather than wrapping.
+                    // Boundaries stay silent: the status line already shows the current level.
+                    // Do not wrap or persist an unchanged value.
                     let next = match direction {
                         Direction::Decrease => index.checked_sub(1),
                         Direction::Increase => (index + 1 < supported.len()).then_some(index + 1),
                     };
                     let Some(next) = next else {
-                        let message = match direction {
-                            Direction::Decrease => {
-                                "Thinking effort is already at the lowest level ({0})"
-                            }
-                            Direction::Increase => {
-                                "Thinking effort is already at the highest level ({0})"
-                            }
-                        };
                         return Ok(ModelUpdate {
                             catalog: None,
                             summary: ModelSummary::from_catalog(
@@ -119,10 +112,7 @@ pub(super) fn update<T: JsonRpcTransport>(
                                 config.model_reasoning_effort,
                                 Some(catalog),
                             ),
-                            notice: ModelNotice::ThinkingEffort(crate::nls::Text::template(
-                                message,
-                                vec![effort.as_str().into()],
-                            )),
+                            notice: ModelNotice::Silent,
                             picker: None,
                             config,
                         });

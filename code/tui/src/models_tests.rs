@@ -188,56 +188,19 @@ fn collaboration_effort_steps_use_supported_values_and_stop_at_boundaries() {
         state: std::sync::Arc::new(std::sync::Mutex::new((config, vec![]))),
     };
     let mut client = ash_app_server_client::AppServerClient::new(transport.clone());
-    for (command, expected, boundary, writes) in [
-        (
-            super::Command::IncreaseEffort,
-            ReasoningEffort::Max,
-            None,
-            1,
-        ),
-        (
-            super::Command::IncreaseEffort,
-            ReasoningEffort::Max,
-            Some("highest"),
-            1,
-        ),
-        (
-            super::Command::DecreaseEffort,
-            ReasoningEffort::High,
-            None,
-            2,
-        ),
-        (
-            super::Command::DecreaseEffort,
-            ReasoningEffort::Low,
-            None,
-            3,
-        ),
-        (
-            super::Command::DecreaseEffort,
-            ReasoningEffort::Low,
-            Some("lowest"),
-            3,
-        ),
-        (
-            super::Command::IncreaseEffort,
-            ReasoningEffort::High,
-            None,
-            4,
-        ),
+    for (command, expected, writes) in [
+        (super::Command::IncreaseEffort, ReasoningEffort::Max, 1),
+        (super::Command::IncreaseEffort, ReasoningEffort::Max, 1),
+        (super::Command::DecreaseEffort, ReasoningEffort::High, 2),
+        (super::Command::DecreaseEffort, ReasoningEffort::Low, 3),
+        (super::Command::DecreaseEffort, ReasoningEffort::Low, 3),
+        (super::Command::IncreaseEffort, ReasoningEffort::High, 4),
     ] {
         let update = super::execute(&mut client, command, &catalog).unwrap();
         assert_eq!(update.summary.model(), Some(&model));
         assert_eq!(update.summary.model_reasoning_effort(), Some(expected));
         assert_eq!(update.config.model_reasoning_effort, Some(expected));
-        if let Some(boundary) = boundary {
-            let super::ModelNotice::ThinkingEffort(notice) = update.notice else {
-                panic!("effort boundaries must use composer notices")
-            };
-            assert!(notice.contains(boundary));
-        } else {
-            assert!(matches!(update.notice, super::ModelNotice::Silent));
-        }
+        assert!(matches!(update.notice, super::ModelNotice::Silent));
         assert_eq!(transport.state.lock().unwrap().1.len(), writes);
     }
     assert!(
@@ -303,12 +266,14 @@ fn collaboration_effort_without_a_default_initializes_the_first_supported_level(
             update.config.model_reasoning_effort,
             Some(ReasoningEffort::Low)
         );
+        assert!(matches!(update.notice, super::ModelNotice::Silent));
         assert_eq!(transport.state.lock().unwrap().1.len(), 1);
         let update = super::execute(&mut client, command, &catalog).unwrap();
         assert_eq!(
             update.config.model_reasoning_effort,
             Some(ReasoningEffort::Low)
         );
+        assert!(matches!(update.notice, super::ModelNotice::Silent));
         assert_eq!(transport.state.lock().unwrap().1.len(), 1);
     }
 }
@@ -446,5 +411,21 @@ fn reasoning_effort_uses_each_provider_and_models_catalog_levels_and_order() {
             .is_err()
         );
         assert_eq!(transport.state.lock().unwrap().1.len(), writes);
+        for (command, effort) in [
+            (super::Command::DecreaseEffort, levels[0]),
+            (super::Command::IncreaseEffort, *levels.last().unwrap()),
+        ] {
+            let config = {
+                let mut state = transport.state.lock().unwrap();
+                state.0.model_reasoning_effort = Some(effort);
+                state.0.clone()
+            };
+            let update = super::execute(&mut client, command, &catalog).unwrap();
+            assert!(matches!(update.notice, super::ModelNotice::Silent));
+            assert_eq!(update.config.model, config.model);
+            assert_eq!(update.config.model_reasoning_effort, Some(effort));
+            assert_eq!(update.config.revision, config.revision);
+            assert_eq!(transport.state.lock().unwrap().1.len(), writes);
+        }
     }
 }

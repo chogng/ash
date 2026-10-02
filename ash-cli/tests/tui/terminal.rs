@@ -22,6 +22,7 @@ fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_chang
     process.back_tab();
     process.wait_for_stable_screen("Automatic model · Debug");
     assert!(!process.screen().contains("Next mode:"));
+    process.wait_for_screen_to_omit("ask permissions on");
     process.assert_snapshot("real/02-terminal/collaboration-shortcuts");
     process.send(b"\x1b[1;2A");
     process.wait_for_stable_screen("Select a model with /model before changing thinking effort");
@@ -44,6 +45,7 @@ fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_chang
             .config_source()
             .contains("modelReasoningEffort = \"extraHigh\"")
     );
+    process.wait_for_screen_to_omit("ask permissions on");
     process.assert_snapshot("real/02-terminal/effort-shortcut");
     for (sequence, status, effort) in [
         (b"\x1b[1;2B".as_slice(), "GPT-6 Luna (high)", "high"),
@@ -66,7 +68,10 @@ fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_chang
     process.wait_for_stable_screen("GPT-6 Luna (max)");
     let config_at_max = fixture.config_source();
     process.send(b"\x1b[1;2A");
-    process.wait_for_stable_screen("Thinking effort is already at the highest level (max)");
+    // A following edit proves the boundary key was processed before checking silence.
+    process.type_text("-AT-MAX");
+    process.wait_for_stable_screen("BOUND-DRAFT-AT-MAX");
+    assert!(!process.screen().contains("Thinking effort is already"));
     assert_eq!(fixture.config_source(), config_at_max);
     assert!(process.screen().contains("GPT-6 Luna (max)"));
     assert!(process.screen().contains("BOUND-DRAFT"));

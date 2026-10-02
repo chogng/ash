@@ -709,18 +709,6 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "augmenter le raisonnement",
     ),
     translation(
-        "Thinking effort is already at the lowest level ({0})",
-        "推論レベルはすでに最低です（{0}）",
-        "推理强度已是最低档（{0}）",
-        "Le niveau de raisonnement est déjà au minimum ({0})",
-    ),
-    translation(
-        "Thinking effort is already at the highest level ({0})",
-        "推論レベルはすでに最高です（{0}）",
-        "推理强度已是最高档（{0}）",
-        "Le niveau de raisonnement est déjà au maximum ({0})",
-    ),
-    translation(
         "Mode for the next task",
         "次のタスクのモード",
         "下一条任务的模式",

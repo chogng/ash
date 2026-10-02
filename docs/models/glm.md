@@ -27,6 +27,12 @@ Start Plan 的模型请求在 Anthropic `system` 数组前加入两个固定的 
 
 `/api/v1/zcode-plan/billing/balance` 是套餐、模型权益与额度的来源。已过期、尚未开始和不属于当前有效套餐的额度桶不授予模型权限；用尽的有效额度仍可显示。每次模型调用先检查当前权益和 `/api/v1/client/configs` 的验证码策略，再向 `/api/v1/zcode-plan/anthropic/v1/messages` 发送请求。额度、策略请求遵循调用取消，并在发布结果前核对账户及凭据代次。
 
+“0.67 系数 / 150% 配额”活动属于 Coding Plan：[官方客户端配置](https://zcode.z.ai/api/v1/client/configs)将其文案放在 `codingPlanBillingDiscount` 中，Start Plan 的体验额度另由 `startPlanPreview` 描述。不能将 Coding Plan 活动系数用于 Start Plan 的本地用量或余额显示。实际扣量由服务端决定，Ash 展示 billing balance 返回的值。
+
+2026-10-02 对当前 Start Plan 通道的 `ZCode Trust Build` 权益做真实扣量对照：GLM-5.3-Flash 在 Ash 请求头下报告 300 个输入 token 和 70 个输出 token，余额扣减 370；使用 ZCode 协议请求头对照时报告 298 个输入 token 和 12 个输出 token，余额扣减 310。两次均无缓存命中，均按 1:1 扣减，没有观察到 0.67 折算。这是该账户当时权益的实测结果，不代表其他活动或后续政策。
+
+后续安排：等有有效的正式 Coding Plan 订阅后，再考虑 Ash 的 0.67 优惠接入。届时重新核对活动政策、账号资格和 [ZCode 官方权益网关](https://github.com/zai-org/ZCode/blob/main/apps/zcode-cli/packages/adapters/src/model/official-coding-plan-gateway.ts)，通过真实请求比较模型用量与额度扣减；生成成功本身不能证明折扣生效。目前暂缓这项接入工作。
+
 当前实现仅在服务端明确允许免验证码模型请求时继续调用；要求验证码时返回需要在 ZCode 验证的错误，尚未接入 Ash 内的验证码交互。[ZCode 3.14.4 更新说明](https://zcode.z.ai/cn/changelog)宣布关闭模型请求验证码校验；2026-10-02 实测配置也返回 `skip_model_request: true`。本次 HTTP 405 / 3012 错误并非由缺少验证码交互引起。
 
 2026-10-02 使用隔离 Ash 配置目录中的 BigModel 网页登录凭据进行对照：普通请求、双认证和 ZCode 请求头均返回 HTTP 405、业务码 3012；保留 Ash 请求头并加入两个固定系统文本块后，生成成功。仅身份开场白、仅设备元数据和合并后的系统字符串仍失败；日期消息、桌面上下文和额外缓存标记不是本次成功所需条件。文本参考 [Magpie 的 ZCode 兼容实现](https://github.com/yetone/magpie/commit/901fd87ec066f8f067e8bafdfa9247979f1e1189)，并通过逐项实测收窄。

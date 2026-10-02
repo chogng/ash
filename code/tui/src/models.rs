@@ -129,11 +129,9 @@ pub(crate) struct ModelUpdate {
 
 #[derive(Debug)]
 pub(crate) enum ModelNotice {
-    /// The status line reflects successful effort changes without a duplicate notice.
+    /// The status line shows effort changes and boundaries without a duplicate notice.
     Silent,
     Command(crate::nls::Text),
-    /// Effort boundaries must not add transcript commands or change a running turn's status.
-    ThinkingEffort(crate::nls::Text),
 }
 
 #[derive(Debug)]

@@ -353,13 +353,6 @@ pub(super) fn apply_request_completion(
             );
             match update.notice {
                 models::ModelNotice::Silent => {}
-                models::ModelNotice::ThinkingEffort(mut notice) => {
-                    if app.screen_mode() == crate::terminal::ScreenMode::Fullscreen {
-                        notice.localize(app.language());
-                        app.chat_panel
-                            .show_notice(notice.to_string(), Instant::now());
-                    }
-                }
                 models::ModelNotice::Command(mut notice) => {
                     notice.localize(app.language());
                     app.update_for_panel(
