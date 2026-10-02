@@ -623,3 +623,28 @@ pub(super) fn render(app: &App, width: u16, height: u16) -> String {
         .collect::<Vec<_>>()
         .join("\n")
 }
+
+#[test]
+fn usage_displays_start_plan_model_buckets_in_both_screen_modes() {
+    for (mode, snapshot) in [
+        (ScreenMode::Fullscreen, "start_plan_usage_fullscreen"),
+        (ScreenMode::Inline, "start_plan_usage_inline"),
+    ] {
+        let accounts = json!({"revision":"1","accounts":[{"provider":"bigmodel-start-plan","accountId":"start-user","status":"ready","credentialRevision":"1"}]});
+        let usage = json!({"provider":"bigmodel-start-plan","accountId":"start-user","plan":"Start Trial","credits":null,"limits":[{
+            "id":"bucket","name":"GLM-5.3-Flash","model":"glm-5.3-flash","allowed":true,"limitReached":false,
+            "primary":{"usedPercent":25,"windowSeconds":86400,"resetsAt":1790956800},"secondary":null}]});
+        let (mut client, requests) = client(vec![accounts, usage]);
+        let mut app = App::new();
+        set_mode(&mut app, mode);
+        app.update(crate::usage::load(&mut client).unwrap());
+        assert_eq!(
+            requests.lock().unwrap()[1],
+            json!({"method":"account/rateLimits/read","params":{"provider":"bigmodel-start-plan","accountId":"start-user"}})
+        );
+        let screen = render(&app, 80, 28);
+        assert!(screen.contains("Start Trial"));
+        assert!(screen.contains("GLM-5.3-Flash"));
+        crate::tui_assert_snapshot!(snapshot, screen);
+    }
+}

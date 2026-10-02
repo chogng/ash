@@ -38,6 +38,9 @@ use std::thread;
 #[path = "streaming_tests.rs"]
 mod streaming;
 
+#[path = "start_plan_tests.rs"]
+mod start_plan;
+
 #[path = "cache_probe_tests.rs"]
 mod cache_probe;
 
@@ -1907,10 +1910,10 @@ fn both_coding_plan_runtimes_measure_through_their_own_endpoints() {
             transport.clone(),
             secrets.clone(),
         )
-        .with_glm_oauth(
+        .with_glm_accounts([
             GlmOAuth::with_client(GlmProvider::BigModel, secrets.clone(), transport.clone()),
             GlmOAuth::with_client(GlmProvider::Zai, secrets, transport.clone()),
-        );
+        ]);
         let config = provider_config_with_endpoint(provider, base_url);
         let model = runtime
             .build_model(&config, &model_ref("glm", "glm-5.1"))
@@ -2431,6 +2434,12 @@ fn every_builtin_provider_applies_its_authentication_without_subscription_header
         ProviderConfigRegistry::builtin()
             .connections()
             .into_iter()
+            // Start Plan authenticates only after its entitlement and verification checks;
+            // those requests are covered by the complete Start Plan transport tests.
+            .filter(|connection| !matches!(
+                connection.id.as_str(),
+                "bigmodel-start-plan" | "zai-start-plan"
+            ))
             .filter(|connection| !matches!(
                 connection.runtime,
                 ash_model_provider_config::ModelConnectionRuntime::ChatGptSubscription
@@ -2479,10 +2488,10 @@ fn every_builtin_provider_applies_its_authentication_without_subscription_header
             capture.clone(),
             secrets.clone(),
         )
-        .with_glm_oauth(
+        .with_glm_accounts([
             GlmOAuth::with_client(GlmProvider::BigModel, secrets.clone(), capture.clone()),
             GlmOAuth::with_client(GlmProvider::Zai, secrets, capture.clone()),
-        );
+        ]);
         let model = runtime
             .build_model(
                 &provider_config_with_endpoint(provider, "https://example.test/v1"),

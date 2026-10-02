@@ -1,5 +1,6 @@
 use crate::ApiEndpoint;
 use crate::ApiError;
+use crate::ApiRequestOptions;
 use crate::ApiStreamSink;
 use crate::ContentPart;
 use crate::InputItem;
@@ -34,6 +35,7 @@ pub(crate) fn complete(
     target: &ResolvedApiTarget,
     model: &str,
     request: &ModelRequest,
+    options: ApiRequestOptions<'_>,
     client: &dyn OperationClient,
     cancellation: &CancellationToken,
 ) -> Result<ModelResponse, ApiError> {
@@ -42,7 +44,7 @@ pub(crate) fn complete(
         target,
         endpoint,
         request,
-        build_request(model, request)?,
+        build_request_with_prelude(model, request, options.system_prelude)?,
         cancellation,
     )?;
     parse_response(response)
@@ -53,11 +55,14 @@ pub(crate) fn stream(
     target: &ResolvedApiTarget,
     model: &str,
     request: &ModelRequest,
+    options: ApiRequestOptions<'_>,
     client: &dyn OperationClient,
     cancellation: &CancellationToken,
     sink: &mut dyn ApiStreamSink,
 ) -> Result<ModelResponse, ApiError> {
-    let Value::Object(mut body) = build_request(model, request)? else {
+    let Value::Object(mut body) =
+        build_request_with_prelude(model, request, options.system_prelude)?
+    else {
         unreachable!("Anthropic request builders always return an object");
     };
     body.insert("stream".into(), Value::Bool(true));
@@ -166,6 +171,14 @@ fn build_count_request(model: &str, request: &ModelRequest) -> Result<Value, Api
 }
 
 fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError> {
+    build_request_with_prelude(model, request, &[])
+}
+
+fn build_request_with_prelude(
+    model: &str,
+    request: &ModelRequest,
+    prelude: &[&str],
+) -> Result<Value, ApiError> {
     crate::requests::require_materialized_attachments(request)?;
     for item in &request.input {
         let content = match item {
@@ -228,15 +241,19 @@ fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError>
         }
         None => {}
     }
+    let mut system: Vec<Value> = prelude
+        .iter()
+        .map(|text| json!({"type":"text","text":text}))
+        .collect();
     if let Some(instructions) = &request.instructions {
-        body.insert(
-            "system".into(),
-            json!([{
-                "type": "text",
-                "text": instructions,
-                "cache_control": ephemeral_cache_control(),
-            }]),
-        );
+        system.push(json!({
+            "type": "text",
+            "text": instructions,
+            "cache_control": ephemeral_cache_control(),
+        }));
+    }
+    if !system.is_empty() {
+        body.insert("system".into(), Value::Array(system));
     }
     if !request.tools.is_empty() {
         let mut tools = request.tools.iter().map(convert_tool).collect::<Vec<_>>();

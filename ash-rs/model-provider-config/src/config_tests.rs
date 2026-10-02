@@ -543,7 +543,7 @@ fn registry_merge_has_explicit_conflict_semantics() {
 fn builtins_are_valid_and_include_all_supported_adapters() {
     let registry = ProviderConfigRegistry::builtin();
     assert_eq!(registry.providers().count(), 16);
-    assert_eq!(registry.connections().len(), 22);
+    assert_eq!(registry.connections().len(), 24);
     assert_eq!(
         registry.get(&provider_id("openai")).unwrap().adapter,
         ProviderAdapter::OpenAi
@@ -839,12 +839,12 @@ fn connections_own_endpoints_credentials_and_counting() {
         .iter()
         .filter(|connection| connection.provider.as_str() == "glm")
         .collect::<Vec<_>>();
-    assert_eq!(glm.len(), 4);
+    assert_eq!(glm.len(), 6);
     let ids = glm
         .iter()
         .map(|connection| &connection.id)
         .collect::<BTreeSet<_>>();
-    assert_eq!(ids.len(), 4);
+    assert_eq!(ids.len(), 6);
     for connection in glm {
         assert!(
             connection
@@ -863,6 +863,16 @@ fn connections_own_endpoints_credentials_and_counting() {
         let normalized = registry.normalize(&config).unwrap();
         assert_eq!(normalized.connection, connection.id);
         assert_eq!(normalized.provider.as_str(), "glm");
+        if connection.id.as_str().ends_with("start-plan") {
+            assert_eq!(config.access_mode(), ProviderAccessMode::Subscription);
+            assert_eq!(normalized.api_profile, ApiProfile::AnthropicMessages);
+            assert!(normalized.input_token_count.is_none());
+            assert_eq!(
+                connection.transport.api_key_policy,
+                crate::ApiKeyPolicy::Unsupported
+            );
+            continue;
+        }
         assert_eq!(
             normalized
                 .input_token_count

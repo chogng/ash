@@ -6,6 +6,7 @@ pub mod chatgpt;
 mod client;
 mod coding_plan;
 pub mod kimi;
+pub mod start_plan;
 pub mod supergrok;
 #[path = "zai/client.rs"]
 pub mod zai;
@@ -21,3 +22,6 @@ mod transport_tests;
 
 #[cfg(test)]
 mod coding_plan_tests;
+
+#[cfg(test)]
+mod start_plan_tests;

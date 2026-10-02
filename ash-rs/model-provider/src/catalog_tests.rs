@@ -276,10 +276,10 @@ fn api_and_coding_plan_connections_have_separate_credentials() {
         client.clone(),
         secrets.clone(),
     )
-    .with_glm_oauth(
+    .with_glm_accounts([
         GlmOAuth::with_client(GlmProvider::BigModel, secrets.clone(), client.clone()),
         GlmOAuth::with_client(GlmProvider::Zai, secrets.clone(), client),
-    );
+    ]);
     let mut config = ModelProviderConfig::for_connection(
         ash_protocol::ModelConnectionId::new("zai-coding-plan").unwrap(),
     );

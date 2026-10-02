@@ -61,6 +61,10 @@ impl ZCodeCredentials {
                 "oauth:bigmodel:user_info",
             ),
             GlmProvider::Zai => ("account:zai-individual-coding-plan", "oauth:zai:user_info"),
+            GlmProvider::BigModelStartPlan => {
+                ("account:bigmodel-start-plan", "oauth:bigmodel:user_info")
+            }
+            GlmProvider::ZaiStartPlan => ("account:zai-start-plan", "oauth:zai:user_info"),
         };
         let identity_key = format!("account-provider:{provider_id}:identity");
         // ZCode CLI records the selected identity separately; Desktop can keep the same
@@ -76,16 +80,16 @@ impl ZCodeCredentials {
                 serde_json::from_str(&decrypt(profile, self.secret_override.as_deref())?)
                     .map_err(|_| unavailable())?;
             let id_field = match provider {
-                GlmProvider::BigModel => "id",
-                GlmProvider::Zai => "user_id",
+                GlmProvider::BigModel | GlmProvider::BigModelStartPlan => "id",
+                GlmProvider::Zai | GlmProvider::ZaiStartPlan => "user_id",
             };
             let id = profile[id_field]
                 .as_str()
                 .ok_or_else(unavailable)?
                 .to_owned();
             let user = match provider {
-                GlmProvider::BigModel => &profile["rawProfile"],
-                GlmProvider::Zai => &profile,
+                GlmProvider::BigModel | GlmProvider::BigModelStartPlan => &profile["rawProfile"],
+                GlmProvider::Zai | GlmProvider::ZaiStartPlan => &profile,
             };
             (
                 id,
@@ -99,18 +103,35 @@ impl ZCodeCredentials {
         if identity.is_empty() {
             return Err(unavailable());
         }
-        let encoded_identity = encode_component(&identity);
-        let key_name = format!(
-            "account-provider:coding-plan:{provider_id}:account:{encoded_identity}:api-key"
-        );
-        // ZCode may retain OAuth account metadata without a Coding Plan key. That account
-        // is not a usable subscription and must not prevent Ash from starting its own login.
-        let Some(model_key) = entries.get(&key_name) else {
-            return Ok(None);
+        let model_key = if provider.is_start_plan() {
+            // ZCode keeps one JWT for the active region. Pair that JWT with the identity
+            // from this same file read, never with a cached identity from another region.
+            let Some(active) = entries.get("oauth:active_provider") else {
+                return Ok(None);
+            };
+            if decrypt(active, self.secret_override.as_deref())? != provider.oauth_id() {
+                return Ok(None);
+            }
+            let Some(token) = entries.get("zcodejwttoken") else {
+                return Ok(None);
+            };
+            let token = decrypt(token, self.secret_override.as_deref())?;
+            if jwt_subject(&token).as_deref() != Some(identity.as_str()) {
+                return Ok(None);
+            }
+            token
+        } else {
+            let encoded_identity = encode_component(&identity);
+            let key_name = format!(
+                "account-provider:coding-plan:{provider_id}:account:{encoded_identity}:api-key"
+            );
+            let Some(key) = entries.get(&key_name) else {
+                return Ok(None);
+            };
+            decrypt(key, self.secret_override.as_deref())?
+                .trim()
+                .to_owned()
         };
-        let model_key = decrypt(model_key, self.secret_override.as_deref())?
-            .trim()
-            .to_owned();
         if model_key.is_empty() {
             return Err(unavailable());
         }
@@ -186,4 +207,16 @@ fn encode_component(value: &str) -> String {
         }
     }
     encoded
+}
+
+// This is an account-pairing check, not a substitute for server authentication. OAuth
+// tokens arrive over the official HTTPS flow or from the locally decrypted ZCode store.
+pub(super) fn jwt_subject(token: &str) -> Option<String> {
+    let payload = token.split('.').nth(1)?;
+    let claims: serde_json::Value =
+        serde_json::from_slice(&URL_SAFE_NO_PAD.decode(payload).ok()?).ok()?;
+    claims["sub"]
+        .as_str()
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_owned)
 }

@@ -13,6 +13,7 @@ use ash_protocol::ModelInfo;
 use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
 use std::collections::VecDeque;
+use unicode_width::UnicodeWidthStr;
 
 fn account(revision: u64) -> AccountReadResult {
     AccountReadResult {
@@ -405,6 +406,8 @@ fn unusable_accounts_show_only_the_sign_in_action_for_every_subscription() {
         SubscriptionProvider::Kimi,
         SubscriptionProvider::BigModel,
         SubscriptionProvider::Zai,
+        SubscriptionProvider::BigModelStartPlan,
+        SubscriptionProvider::ZaiStartPlan,
     ] {
         for status in [
             AccountStatusDto::ReauthenticationRequired,
@@ -745,6 +748,14 @@ fn glm_subscription_panels_use_account_login_for_both_regions() {
             AccountLoginMethodDto::BigModelBrowser,
         ),
         (SubscriptionProvider::Zai, AccountLoginMethodDto::ZaiBrowser),
+        (
+            SubscriptionProvider::BigModelStartPlan,
+            AccountLoginMethodDto::BigModelStartPlanBrowser,
+        ),
+        (
+            SubscriptionProvider::ZaiStartPlan,
+            AccountLoginMethodDto::ZaiStartPlanBrowser,
+        ),
     ] {
         let mut subscription = Subscription::new(provider);
         assert_eq!(
@@ -787,6 +798,11 @@ fn glm_browser_login_starts_account_authorization() {
     for (provider, expected_method) in [
         (SubscriptionProvider::BigModel, "bigModelBrowser"),
         (SubscriptionProvider::Zai, "zaiBrowser"),
+        (
+            SubscriptionProvider::BigModelStartPlan,
+            "bigModelStartPlanBrowser",
+        ),
+        (SubscriptionProvider::ZaiStartPlan, "zaiStartPlanBrowser"),
     ] {
         let mut client = AppServerClient::new(Transport {
             requests: Vec::new(),
@@ -816,6 +832,11 @@ fn subscription_sign_in_actions_are_localized_in_chinese() {
         (SubscriptionProvider::Kimi, "登录 Kimi"),
         (SubscriptionProvider::BigModel, "登录 BigModel"),
         (SubscriptionProvider::Zai, "登录 Z.AI"),
+        (
+            SubscriptionProvider::BigModelStartPlan,
+            "登录 BigModel Start Plan",
+        ),
+        (SubscriptionProvider::ZaiStartPlan, "登录 Z.AI Start Plan"),
     ] {
         let mut choices = Subscription::new(provider).choices();
         choices.model.localize(crate::nls::Language::Chinese);
@@ -828,5 +849,51 @@ fn subscription_sign_in_actions_are_localized_in_chinese() {
                 .collect::<Vec<_>>(),
             vec![expected]
         );
+    }
+}
+
+#[test]
+fn start_plan_sign_in_panels_show_separate_region_actions_in_chinese() {
+    for (provider, expected) in [
+        (
+            SubscriptionProvider::BigModelStartPlan,
+            "登录 BigModel Start Plan",
+        ),
+        (SubscriptionProvider::ZaiStartPlan, "登录 Z.AI Start Plan"),
+    ] {
+        let subscription = Subscription::new(provider);
+        let mut choices = subscription.choices();
+        choices.model.localize(crate::nls::Language::Chinese);
+        let state = ListSelectionState::new(choices.model);
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(60, 5)).unwrap();
+        terminal
+            .draw(|frame| {
+                crate::widgets::list_selection::draw_body_with_pointer(
+                    frame,
+                    frame.area(),
+                    &state,
+                    None,
+                    None,
+                    crate::render::test_context().with_language(crate::nls::Language::Chinese),
+                )
+            })
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        let text = (0..5)
+            .map(|row| {
+                let mut text = String::new();
+                let mut column = 0;
+                while column < 60 {
+                    let symbol = buffer[(column, row)].symbol();
+                    text.push_str(symbol);
+                    column += u16::try_from(UnicodeWidthStr::width(symbol).max(1)).unwrap();
+                }
+                text.trim_end().to_owned()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(text.contains(expected));
+        insta::assert_snapshot!(format!("{}_sign_in_chinese", provider.id()), text);
     }
 }

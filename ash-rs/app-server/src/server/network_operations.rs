@@ -98,7 +98,10 @@ impl AppServer {
                 "chatgpt-subscription" => Some(ash_chatgpt::sign_in_endpoint()),
                 "kimi-subscription" => Some(ash_kimi::sign_in_endpoint()),
                 "xai-subscription" => Some(supergrok::sign_in_endpoint()),
-                "bigmodel-coding-plan" | "zai-coding-plan" => Some(ash_glm::sign_in_endpoint()),
+                "bigmodel-coding-plan"
+                | "zai-coding-plan"
+                | "bigmodel-start-plan"
+                | "zai-start-plan" => Some(ash_glm::sign_in_endpoint()),
                 _ => None,
             };
             if let Some(endpoint) = sign_in {
@@ -116,6 +119,12 @@ impl AppServer {
                     Some(ash_glm::usage_endpoint(ash_glm::GlmProvider::BigModel))
                 }
                 "zai-coding-plan" => Some(ash_glm::usage_endpoint(ash_glm::GlmProvider::Zai)),
+                "bigmodel-start-plan" => Some(ash_glm::usage_endpoint(
+                    ash_glm::GlmProvider::BigModelStartPlan,
+                )),
+                "zai-start-plan" => {
+                    Some(ash_glm::usage_endpoint(ash_glm::GlmProvider::ZaiStartPlan))
+                }
                 _ => None,
             };
             if let Some(endpoint) = usage {

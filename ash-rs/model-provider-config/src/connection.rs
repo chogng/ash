@@ -30,7 +30,12 @@ pub fn connection_provider(connection: &ModelConnectionId) -> ProviderId {
         "chatgpt-subscription" => "openai",
         "kimi-subscription" => "kimi",
         "xai-subscription" => "xai",
-        "bigmodel" | "bigmodel-coding-plan" | "zai" | "zai-coding-plan" => "glm",
+        "bigmodel"
+        | "bigmodel-coding-plan"
+        | "zai"
+        | "zai-coding-plan"
+        | "bigmodel-start-plan"
+        | "zai-start-plan" => "glm",
         id => id,
     };
     ProviderId::new(provider).expect("connection identity is non-empty")
@@ -41,8 +46,10 @@ pub fn connection_priority(connection: &ModelConnectionId) -> u8 {
     match connection.as_str() {
         "bigmodel-coding-plan" => 0,
         "zai-coding-plan" => 1,
-        "bigmodel" => 2,
-        "zai" => 3,
+        "bigmodel-start-plan" => 2,
+        "zai-start-plan" => 3,
+        "bigmodel" => 4,
+        "zai" => 5,
         "chatgpt-subscription" | "kimi-subscription" | "xai-subscription" => 0,
         _ => 1,
     }
@@ -71,7 +78,10 @@ pub fn builtin_connections() -> Vec<ModelConnectionDefinition> {
     let mut connections = Vec::new();
     for definition in crate::providers::builtin() {
         let id = ModelConnectionId::new(definition.id.as_str()).expect("built-in connection ID");
-        let subscription = matches!(id.as_str(), "bigmodel-coding-plan" | "zai-coding-plan");
+        let subscription = matches!(
+            id.as_str(),
+            "bigmodel-coding-plan" | "zai-coding-plan" | "bigmodel-start-plan" | "zai-start-plan"
+        );
         let transport = if subscription {
             crate::providers::subscription_definition(id.as_str()).expect("coding plan definition")
         } else {

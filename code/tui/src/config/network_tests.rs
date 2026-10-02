@@ -17,6 +17,9 @@ fn network_panel_ignores_a_superseded_result_and_preserves_domain_names() {
     assert_eq!(panel.pending.as_ref(), Some(&second.id));
     let report = Report {
         network: NetworkReadResult {
+            revision: 0,
+            http_mode:
+                ash_app_server_protocol::protocol::diagnostics::HttpCompatibilityModeDto::Http2,
             targets: vec![
                 ash_app_server_protocol::protocol::diagnostics::NetworkTargetDto {
                     id: "one".into(),

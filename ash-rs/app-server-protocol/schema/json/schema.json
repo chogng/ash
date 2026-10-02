@@ -242,6 +242,30 @@
         {
           "properties": {
             "type": {
+              "const": "bigModelStartPlanBrowser",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "zaiStartPlanBrowser",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
               "const": "gitHubBrowser",
               "type": "string"
             }

@@ -12,6 +12,7 @@ use crate::providers;
 use crate::providers::ProviderAdapter;
 use ash_api::ApiEndpoint;
 use ash_api::ApiProtocol;
+use ash_api::ApiRequestOptions;
 use ash_api::ApiStreamSink;
 use ash_api::ContentPart;
 use ash_api::InputItem;
@@ -178,6 +179,26 @@ impl ProviderTarget {
             | Self::KimiDesktop(_)
             | Self::KimiCli(_)
             | Self::Glm(_) => direct,
+        }
+    }
+
+    fn resolve_for_model(
+        &self,
+        model_id: &ModelId,
+        cancellation: &CancellationToken,
+    ) -> Result<ResolvedProviderTarget<'_>, ModelProviderError> {
+        match self {
+            Self::Glm(auth) => auth
+                .model_api_target(model_id.as_str(), cancellation)
+                .map(ResolvedProviderTarget::Glm)
+                .map_err(|error| {
+                    if cancellation.is_cancelled() {
+                        ModelProviderError::Cancelled("model request cancelled".into())
+                    } else {
+                        ModelProviderError::Credential(error.to_string())
+                    }
+                }),
+            _ => self.resolve(),
         }
     }
 
@@ -377,7 +398,12 @@ impl Provider {
                 (ProviderTarget::KimiCli(cli), RemoteMeasurement::Disabled)
             }
             ProviderConnection::Glm { auth } => {
-                (ProviderTarget::Glm(auth), RemoteMeasurement::Authenticated)
+                let measurement = if auth.is_start_plan() {
+                    RemoteMeasurement::Disabled
+                } else {
+                    RemoteMeasurement::Authenticated
+                };
+                (ProviderTarget::Glm(auth), measurement)
             }
             ProviderConnection::Xai { auth } => {
                 (ProviderTarget::Xai(auth), RemoteMeasurement::Disabled)
@@ -435,6 +461,10 @@ impl Provider {
             model.capabilities.image_detail_original == CapabilitySupport::Supported,
         );
         request
+    }
+
+    fn is_start_plan(&self) -> bool {
+        matches!(&self.target, ProviderTarget::Glm(auth) if auth.is_start_plan())
     }
 
     pub fn id(&self) -> &ProviderId {
@@ -513,7 +543,7 @@ impl Provider {
             let model = self.resolve_model(model_id)?;
             let request = self.prepare_request(&model, request);
             check_cancellation(cancellation)?;
-            let target = self.target.resolve()?;
+            let target = self.target.resolve_for_model(model_id, cancellation)?;
             target.ensure_account(&self.account_identity)?;
             let attempt_client = AttemptClient::new(&diagnostic);
             let mut attempt = AttemptEvents {
@@ -625,24 +655,26 @@ impl Provider {
         });
         request.prompt_cache_prefix_end = retained_prefix.checked_sub(1);
         let target = target.api_target();
+        let options = ApiRequestOptions {
+            system_prelude: if self.is_start_plan() {
+                providers::start_plan::SYSTEM_PRELUDE
+            } else {
+                &[]
+            },
+        };
         let mut response = match self.definition.output_transport {
             ModelOutputTransport::NativeStreaming => stream_endpoint(
                 endpoint,
                 target,
                 model,
                 &request,
+                options,
                 client,
                 cancellation,
                 sink,
             ),
             ModelOutputTransport::Unary => endpoint
-                .complete_with_client_and_cancellation(
-                    target,
-                    model,
-                    &request,
-                    client,
-                    cancellation,
-                )
+                .complete_with_options(target, model, &request, options, client, cancellation)
                 .map_err(Into::into),
         }?;
         for item in &mut response.output {
@@ -680,6 +712,11 @@ impl Provider {
         cancellation: &CancellationToken,
     ) -> Result<ContextTokenMeasurementOutcome, ModelProviderError> {
         let model = self.resolve_model(model_id)?;
+        let request = if self.is_start_plan() {
+            std::borrow::Cow::Owned(providers::start_plan::measurement_request(request))
+        } else {
+            std::borrow::Cow::Borrowed(request)
+        };
         let target = match &self.remote_measurement {
             RemoteMeasurement::Enabled(headers) => Some(ResolvedApiTarget::new(
                 self.config.base_url.clone(),
@@ -701,7 +738,7 @@ impl Provider {
             let result = self.adapter.measure_input(
                 &target,
                 model.id.as_str(),
-                request,
+                &request,
                 &diagnostic,
                 cancellation,
             );
@@ -721,7 +758,7 @@ impl Provider {
         }
         match self
             .local_counter
-            .count(model.id.as_str(), request, cancellation)
+            .count(model.id.as_str(), &request, cancellation)
         {
             Ok(outcome) => Ok(outcome),
             Err(ModelProviderError::Cancelled(message)) => {
@@ -769,8 +806,7 @@ pub struct ModelProviderRuntime {
     kimi_desktop: Option<Arc<KimiDesktop>>,
     kimi_cli: Option<Arc<KimiCli>>,
     supergrok_oauth: Option<Arc<supergrok::SuperGrokOAuth>>,
-    bigmodel_oauth: Option<Arc<GlmOAuth>>,
-    zai_oauth: Option<Arc<GlmOAuth>>,
+    glm_accounts: BTreeMap<String, Arc<GlmOAuth>>,
     diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
 }
 
@@ -839,13 +875,12 @@ impl ModelProviderRuntime {
                 },
                 // One broken account is an unavailable connection, not a failure of the
                 // directory runtime. Binding that connection directly still reports its error.
-                "bigmodel-coding-plan" => runtime
-                    .bigmodel_oauth
-                    .as_ref()
-                    .is_some_and(|auth| auth.account_id().is_ok_and(|id| id.is_some())),
-                "zai-coding-plan" => runtime
-                    .zai_oauth
-                    .as_ref()
+                "bigmodel-coding-plan"
+                | "zai-coding-plan"
+                | "bigmodel-start-plan"
+                | "zai-start-plan" => runtime
+                    .glm_accounts
+                    .get(connection.id.as_str())
                     .is_some_and(|auth| auth.account_id().is_ok_and(|id| id.is_some())),
                 _ => {
                     connection.transport.api_key_policy
@@ -911,8 +946,7 @@ impl ModelProviderRuntime {
             kimi_desktop: None,
             kimi_cli: None,
             supergrok_oauth: None,
-            bigmodel_oauth: None,
-            zai_oauth: None,
+            glm_accounts: BTreeMap::new(),
             diagnostics: None,
         }
     }
@@ -943,8 +977,7 @@ impl ModelProviderRuntime {
             kimi_desktop: None,
             kimi_cli: None,
             supergrok_oauth: None,
-            bigmodel_oauth: None,
-            zai_oauth: None,
+            glm_accounts: BTreeMap::new(),
             diagnostics: None,
         }
     }
@@ -972,10 +1005,12 @@ impl ModelProviderRuntime {
         self
     }
 
-    /// Installs the two independent Coding Plan account authorities.
-    pub fn with_glm_oauth(mut self, bigmodel: Arc<GlmOAuth>, zai: Arc<GlmOAuth>) -> Self {
-        self.bigmodel_oauth = Some(bigmodel);
-        self.zai_oauth = Some(zai);
+    /// Installs the independent Coding Plan and Start Plan account authorities.
+    pub fn with_glm_accounts(mut self, accounts: impl IntoIterator<Item = Arc<GlmOAuth>>) -> Self {
+        self.glm_accounts = accounts
+            .into_iter()
+            .map(|auth| (auth.connection_id().into(), auth))
+            .collect();
         self
     }
 
@@ -1069,6 +1104,7 @@ impl ModelProviderRuntime {
                         &target,
                         model,
                         &request,
+                        ApiRequestOptions::default(),
                         &diagnostic,
                         &cancellation.token(),
                         &mut DiscardModelEvents,
@@ -1231,8 +1267,10 @@ impl ModelProviderRuntime {
                 .transpose();
         }
         if let Some(auth) = match normalized.connection.as_str() {
-            "bigmodel-coding-plan" => self.bigmodel_oauth.as_ref(),
-            "zai-coding-plan" => self.zai_oauth.as_ref(),
+            "bigmodel-coding-plan"
+            | "zai-coding-plan"
+            | "bigmodel-start-plan"
+            | "zai-start-plan" => self.glm_accounts.get(normalized.connection.as_str()),
             _ => None,
         } {
             return crate::catalog::glm_catalog_binding(&normalized, Arc::clone(auth));
@@ -1403,14 +1441,14 @@ impl ModelProviderRuntime {
         match connection.runtime {
             ModelConnectionRuntime::XaiSubscription => self.xai_connection(),
             ModelConnectionRuntime::GlmSubscription => {
-                let auth = match normalized.connection.as_str() {
-                    "bigmodel-coding-plan" => self.bigmodel_oauth.as_ref(),
-                    "zai-coding-plan" => self.zai_oauth.as_ref(),
-                    _ => None,
-                }
-                .ok_or_else(|| {
-                    ModelProviderError::Credential("GLM Coding Plan login is unavailable".into())
-                })?;
+                let auth = self
+                    .glm_accounts
+                    .get(normalized.connection.as_str())
+                    .ok_or_else(|| {
+                        ModelProviderError::Credential(
+                            "GLM subscription login is unavailable".into(),
+                        )
+                    })?;
                 auth.api_target()
                     .map_err(|error| ModelProviderError::Credential(error.to_string()))?;
                 Ok(ProviderConnection::Glm {
@@ -1834,6 +1872,7 @@ fn stream_endpoint(
     target: &ash_client::ResolvedApiTarget,
     model: &str,
     request: &ModelRequest,
+    options: ApiRequestOptions<'_>,
     client: &dyn OperationClient,
     cancellation: &CancellationToken,
     sink: &mut dyn ModelEventSink,
@@ -1842,10 +1881,11 @@ fn stream_endpoint(
         inner: sink,
         failure: None,
     };
-    let response = endpoint.stream_with_client_and_cancellation(
+    let response = endpoint.stream_with_options(
         target,
         model,
         request,
+        options,
         client,
         cancellation,
         &mut sink,

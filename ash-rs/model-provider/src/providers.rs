@@ -25,6 +25,7 @@ mod ollama;
 mod openai;
 mod openai_compatible;
 mod qwen;
+pub(crate) mod start_plan;
 mod xai;
 mod zai;
 

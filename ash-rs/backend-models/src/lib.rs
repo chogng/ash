@@ -6,6 +6,7 @@
 pub mod chatgpt;
 pub mod coding_plan;
 pub mod kimi;
+pub mod start_plan;
 pub mod supergrok;
 pub mod zai;
 

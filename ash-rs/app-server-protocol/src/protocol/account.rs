@@ -118,6 +118,8 @@ pub enum AccountLoginMethodDto {
     XaiDeviceCode,
     BigModelBrowser,
     ZaiBrowser,
+    BigModelStartPlanBrowser,
+    ZaiStartPlanBrowser,
     GitHubBrowser,
 }
 

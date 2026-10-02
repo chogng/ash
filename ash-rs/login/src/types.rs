@@ -73,6 +73,8 @@ pub enum LoginMethod {
     XaiDeviceCode,
     BigModelBrowser,
     ZaiBrowser,
+    BigModelStartPlanBrowser,
+    ZaiStartPlanBrowser,
     GitHubBrowser,
 }
 
@@ -84,6 +86,8 @@ impl LoginMethod {
             Self::XaiDeviceCode => "xai-subscription",
             Self::BigModelBrowser => "bigmodel-coding-plan",
             Self::ZaiBrowser => "zai-coding-plan",
+            Self::BigModelStartPlanBrowser => "bigmodel-start-plan",
+            Self::ZaiStartPlanBrowser => "zai-start-plan",
             Self::GitHubBrowser => "github",
         }
     }

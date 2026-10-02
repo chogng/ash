@@ -29,6 +29,7 @@ pub use ash_protocol::ToolName;
 pub use ash_protocol::ToolResult;
 pub use endpoint::ApiEndpoint;
 pub use endpoint::ApiProtocol;
+pub use endpoint::ApiRequestOptions;
 pub use endpoint::ApiStreamSink;
 pub use endpoint::live::LiveCommand;
 pub use endpoint::live::LiveConfig;

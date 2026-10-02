@@ -48,7 +48,7 @@ test('Manage Accounts command offers product login methods when no account is co
 	await environment.commands.executeCommand(ManageAccountsAction.ID);
 	assert.deepEqual(quickInput.pickers[0]!.items.map(item => item.label), ['Add account']);
 	quickInput.pickers[0]!.accept(quickInput.pickers[0]!.items[0]!);
-	assert.deepEqual(quickInput.pickers[1]!.items.map(item => item.label), ['Sign in with ChatGPT', 'Connect GitHub']);
+	assert.deepEqual(quickInput.pickers[1]!.items.map(item => item.label), ['Sign in with ChatGPT', 'Connect GitHub', 'Sign in with BigModel Start Plan', 'Sign in with Z.AI Start Plan']);
 	quickInput.pickers[1]!.accept(quickInput.pickers[1]!.items[0]!);
 	await environment.commands.executeCommand(ManageAccountsAction.ID);
 	quickInput.pickers[2]!.accept(quickInput.pickers[2]!.items[0]!);
@@ -69,7 +69,7 @@ test('Manage Accounts command offers sign in when an account needs reauthenticat
 	const picker = quickInput.pickers[0]!;
 	assert.deepEqual(picker.items.map(item => item.label), ['Ash User', 'Add account']);
 	picker.accept(picker.items[1]!);
-	assert.deepEqual(quickInput.pickers[1]!.items.map(item => item.label), ['Sign in with ChatGPT', 'Connect GitHub']);
+	assert.deepEqual(quickInput.pickers[1]!.items.map(item => item.label), ['Sign in with ChatGPT', 'Connect GitHub', 'Sign in with BigModel Start Plan', 'Sign in with Z.AI Start Plan']);
 	quickInput.pickers[1]!.accept(quickInput.pickers[1]!.items[0]!);
 	assert.deepEqual(operations, ['read', 'login:openAiChatGptBrowser']);
 });
@@ -83,7 +83,7 @@ test('Manage Accounts command offers cancellation for a pending GitHub connectio
 
 	await environment.commands.executeCommand(ManageAccountsAction.ID);
 	quickInput.pickers[0]!.accept(quickInput.pickers[0]!.items[0]!);
-	assert.deepEqual(quickInput.pickers[1]!.items.map(item => item.label), ['Sign in with ChatGPT', 'Cancel GitHub connection']);
+	assert.deepEqual(quickInput.pickers[1]!.items.map(item => item.label), ['Sign in with ChatGPT', 'Cancel GitHub connection', 'Sign in with BigModel Start Plan', 'Sign in with Z.AI Start Plan']);
 	quickInput.pickers[1]!.accept(quickInput.pickers[1]!.items[1]!);
 	assert.deepEqual(operations, ['read', 'github:cancel']);
 });
@@ -135,9 +135,26 @@ test('Manage Accounts command and picker use the selected language', async () =>
 			picker: '选择要管理的账户',
 			addAccount: '添加账户',
 		});
+		quickInput.pickers[0]!.accept(quickInput.pickers[0]!.items[0]!);
+		assert.deepEqual(quickInput.pickers[1]!.items.slice(2).map(item => item.label), ['使用 BigModel Start Plan 登录', '使用 Z.AI Start Plan 登录']);
 	} finally {
 		resetNlsResolver();
 	}
+});
+
+test('Start Plan choices send separate region login methods', async () => {
+	const operations: string[] = [];
+	const quickInput = new TestQuickInputService();
+	using environment = new AccountActionEnvironment(accountFixture({ revision: 1n, accounts: [] }, operations), quickInput, operations);
+	using registration = registerAction2(ManageAccountsAction);
+	for (const index of [2, 3]) {
+		await environment.commands.executeCommand(ManageAccountsAction.ID);
+		const accountPicker = quickInput.pickers.at(-1)!;
+		accountPicker.accept(accountPicker.items[0]!);
+		const loginPicker = quickInput.pickers.at(-1)!;
+		loginPicker.accept(loginPicker.items[index]!);
+	}
+	assert.deepEqual(operations, ['read', 'login:bigModelStartPlanBrowser', 'read', 'login:zaiStartPlanBrowser']);
 });
 
 function accountFixture(state: AccountState, operations: string[]): IAccountService {

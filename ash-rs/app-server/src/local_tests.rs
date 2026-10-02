@@ -3915,10 +3915,10 @@ fn glm_connections_use_distinct_endpoints_keys_and_billing_without_changing_the_
             requests.clone(),
             secrets.clone(),
         )
-        .with_glm_oauth(
+        .with_glm_accounts([
             GlmOAuth::with_client(GlmProvider::BigModel, secrets.clone(), requests.clone()),
             GlmOAuth::with_client(GlmProvider::Zai, secrets.clone(), requests.clone()),
-        ),
+        ]),
     );
     let service = ConfigBackedModelService {
         config: config.clone(),

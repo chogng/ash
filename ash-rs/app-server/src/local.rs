@@ -1420,6 +1420,12 @@ pub fn open_app_server_with_codebase_providers(
     };
     let bigmodel_oauth = glm_auth(GlmProvider::BigModel)?;
     let zai_oauth = glm_auth(GlmProvider::Zai)?;
+    let glm_accounts = [
+        bigmodel_oauth,
+        zai_oauth,
+        glm_auth(GlmProvider::BigModelStartPlan)?,
+        glm_auth(GlmProvider::ZaiStartPlan)?,
+    ];
     let supergrok_oauth = match (&model_operation_client, &options.grok_auth_path) {
         (Some(client), Some(path)) => supergrok::SuperGrokOAuth::with_grok_auth_file(
             Arc::clone(&profile_secrets),
@@ -1454,7 +1460,7 @@ pub fn open_app_server_with_codebase_providers(
     .with_local_tokenizers(local_tokenizers)
     .with_chatgpt_oauth(Arc::clone(&chatgpt_oauth))
     .with_kimi_oauth(Arc::clone(&kimi_oauth))
-    .with_glm_oauth(Arc::clone(&bigmodel_oauth), Arc::clone(&zai_oauth))
+    .with_glm_accounts(glm_accounts.clone())
     .with_supergrok_oauth(Arc::clone(&supergrok_oauth));
     let model_provider = match KimiDesktop::production() {
         Some(desktop) => model_provider.with_kimi_desktop(Arc::new(desktop)),
@@ -1514,10 +1520,14 @@ pub fn open_app_server_with_codebase_providers(
     let mut login_drivers: Vec<Arc<dyn InteractiveLoginDriver>> = vec![
         chatgpt_oauth.clone(),
         kimi_oauth.clone(),
-        bigmodel_oauth.clone(),
-        zai_oauth.clone(),
         supergrok_oauth.clone(),
     ];
+    login_drivers.extend(
+        glm_accounts
+            .iter()
+            .cloned()
+            .map(|auth| auth as Arc<dyn InteractiveLoginDriver>),
+    );
     if let Some(github) = &github_oauth {
         login_drivers.push(github.clone());
     }
@@ -1534,12 +1544,10 @@ pub fn open_app_server_with_codebase_providers(
     kimi_oauth
         .install_login_service(&login_service)
         .map_err(|error| OpenAppServerError(error.to_string()))?;
-    bigmodel_oauth
-        .install_login_service(&login_service)
-        .map_err(|error| OpenAppServerError(error.to_string()))?;
-    zai_oauth
-        .install_login_service(&login_service)
-        .map_err(|error| OpenAppServerError(error.to_string()))?;
+    for auth in &glm_accounts {
+        auth.install_login_service(&login_service)
+            .map_err(|error| OpenAppServerError(error.to_string()))?;
+    }
     supergrok_oauth
         .install_login_service(&login_service)
         .map_err(|error| OpenAppServerError(error.to_string()))?;
@@ -1554,6 +1562,8 @@ pub fn open_app_server_with_codebase_providers(
         supergrok::SUPERGROK_SUBSCRIPTION_PROVIDER_ID,
         ash_glm::BIGMODEL_PROVIDER_ID,
         ash_glm::ZAI_PROVIDER_ID,
+        ash_glm::BIGMODEL_START_PLAN_PROVIDER_ID,
+        ash_glm::ZAI_START_PLAN_PROVIDER_ID,
     ];
     let direct_catalog: Arc<dyn ModelCatalog> = configured_model.clone();
     let agent_model: Arc<dyn ModelService> = options
@@ -1603,7 +1613,7 @@ pub fn open_app_server_with_codebase_providers(
     .with_chatgpt_account(Arc::new(ash_chatgpt::ChatGptAccount::new(chatgpt_oauth)))
     .with_kimi_account(kimi_oauth)
     .with_supergrok_account(supergrok_oauth)
-    .with_glm_accounts(bigmodel_oauth, zai_oauth)
+    .with_glm_accounts(glm_accounts)
     .with_language_server_providers(options.language_server_providers)
     .with_slash_command_catalog(options.slash_commands)
     .with_state_runtime(state_runtime)
@@ -2386,6 +2396,8 @@ impl ModelCatalog for ConfigBackedModelService {
                         | "xai-subscription"
                         | "bigmodel-coding-plan"
                         | "zai-coding-plan"
+                        | "bigmodel-start-plan"
+                        | "zai-start-plan"
                 )
                 .then(|| ash_model_provider_config::ModelProviderConfig::for_connection(id.clone()))
             })

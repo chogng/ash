@@ -279,14 +279,14 @@ fn glm_coding_plan_usage_reads_each_account_and_preserves_reported_windows() {
             .unwrap();
     }
     let client = Arc::new(QuotaClient(Mutex::new(Vec::new())));
-    let server = server().with_glm_accounts(
+    let server = server().with_glm_accounts([
         ash_glm::GlmOAuth::with_client(
             ash_glm::GlmProvider::BigModel,
             secrets.clone(),
             client.clone(),
         ),
         ash_glm::GlmOAuth::with_client(ash_glm::GlmProvider::Zai, secrets, client.clone()),
-    );
+    ]);
     let mut connection = server.connection();
     initialize(&server, &mut connection);
     for (index, (provider, account, url)) in [
@@ -7727,3 +7727,65 @@ fn account_read_never_activates_an_existing_chatgpt_login() {
 
 #[path = "server/network_operations_tests.rs"]
 mod network_tests;
+
+#[test]
+fn start_plan_rate_limits_report_the_current_plan_and_token_bucket_for_both_regions() {
+    use ash_client::ClientError;
+    use ash_client::ClientRequest;
+    use ash_client::ClientResponse;
+    use ash_client::OperationClient;
+    use ash_secrets::SecretStore;
+    struct BalanceClient;
+    impl OperationClient for BalanceClient {
+        fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            assert_eq!(
+                request.url(),
+                "https://zcode.z.ai/api/v1/zcode-plan/billing/balance"
+            );
+            assert!(
+                request
+                    .headers()
+                    .iter()
+                    .any(|header| header.name() == "X-Device-Mid" && header.value().len() == 36)
+            );
+            Ok(ClientResponse::new(200, vec![], serde_json::to_vec(&serde_json::json!({"code":0,"data":{
+                "server_time":1000,
+                "plans":[{"user_plan_id":"plan","name":"Start Trial","status":"active","starts_at":900,"ends_at":2000}],
+                "balances":[{"bucket_id":"bucket","user_plan_id":"plan","show_name":"GLM Flash","capabilities":["model:glm-5.3-flash"],
+                    "total_units":1000,"used_units":250,"available_units":750,"period_start":900,"period_end":2000,"expires_at":2000}]
+            }})).unwrap()))
+        }
+    }
+    for (provider, id) in [
+        (
+            ash_glm::GlmProvider::BigModelStartPlan,
+            "bigmodel-start-plan",
+        ),
+        (ash_glm::GlmProvider::ZaiStartPlan, "zai-start-plan"),
+    ] {
+        let secrets = Arc::new(ash_secrets::MemorySecretStore::default());
+        secrets.store(&ash_secrets::SecretKey::new(format!("provider/{id}/current/oauth")).unwrap(),
+            &ash_secrets::SecretValue::new(br#"{"account_id":"account","email":null,"display_name":null,"model_key":"jwt","revision":1}"#.to_vec())).unwrap();
+        let auth = ash_glm::GlmOAuth::with_client(provider, secrets, Arc::new(BalanceClient));
+        let server = server().with_glm_accounts([auth]);
+        let mut connection = server.connection();
+        initialize(&server, &mut connection);
+        let usage = call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":2,"method":"account/rateLimits/read","params":{"provider":id,"accountId":"account"}}),
+        );
+        assert_eq!(
+            usage["result"],
+            serde_json::json!({"provider":id,"accountId":"account","plan":"Start Trial","credits":null,
+            "limits":[{"id":"bucket","name":"GLM Flash","model":"glm-5.3-flash","allowed":true,"limitReached":false,
+                "primary":{"usedPercent":25,"windowSeconds":1100,"resetsAt":2000},"secondary":null}]})
+        );
+        let changed = call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":3,"method":"account/rateLimits/read","params":{"provider":id,"accountId":"other-account"}}),
+        );
+        assert_eq!(changed["error"]["message"], "AccountChanged");
+    }
+}

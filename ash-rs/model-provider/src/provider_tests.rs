@@ -16,10 +16,10 @@ fn glm_connection_priority_follows_ready_credentials() {
         client.clone(),
         secrets.clone(),
     )
-    .with_glm_oauth(
+    .with_glm_accounts([
         GlmOAuth::with_client(GlmProvider::BigModel, secrets.clone(), client.clone()),
         GlmOAuth::with_client(GlmProvider::Zai, secrets.clone(), client),
-    );
+    ]);
     let credentials =
         ProviderCredentialService::new(ProviderConfigRegistry::builtin(), secrets.clone());
     for id in ["bigmodel", "zai"] {
@@ -78,10 +78,10 @@ fn unreadable_glm_login_does_not_block_other_connections() {
         client.clone(),
         secrets.clone(),
     )
-    .with_glm_oauth(
+    .with_glm_accounts([
         bigmodel.clone(),
         GlmOAuth::with_client(GlmProvider::Zai, secrets.clone(), client),
-    );
+    ]);
     secrets
         .store(
             &SecretKey::new("provider/bigmodel/current/oauth").unwrap(),

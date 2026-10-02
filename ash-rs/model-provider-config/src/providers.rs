@@ -18,7 +18,7 @@ mod qwen;
 mod xai;
 pub(super) mod zai;
 
-pub(crate) fn builtin() -> [ProviderDefinition; 17] {
+pub(crate) fn builtin() -> [ProviderDefinition; 19] {
     [
         openai::definition(),
         openai_compatible::definition(),
@@ -33,6 +33,8 @@ pub(crate) fn builtin() -> [ProviderDefinition; 17] {
         bigmodel::coding_plan_definition(),
         zai::definition(),
         zai::coding_plan_definition(),
+        start_plan_definition("bigmodel-start-plan", "BigModel Start Plan"),
+        start_plan_definition("zai-start-plan", "Z.AI Start Plan"),
         minimax::definition(),
         mimo::definition(),
         anthropic::definition(),
@@ -49,6 +51,8 @@ pub(crate) fn subscription_definition(id: &str) -> Option<ProviderDefinition> {
         "kimi-cli" => Some(kimi::cli_definition()),
         "bigmodel-coding-plan" => Some(bigmodel::coding_plan_definition()),
         "zai-coding-plan" => Some(zai::coding_plan_definition()),
+        "bigmodel-start-plan" => Some(start_plan_definition(id, "BigModel Start Plan")),
+        "zai-start-plan" => Some(start_plan_definition(id, "Z.AI Start Plan")),
         _ => None,
     }
 }
@@ -98,4 +102,20 @@ pub(super) fn configured_provider(
         EndpointPolicy::ConfiguredOnly,
         ModelCatalogPolicy::AllowUnlisted,
     )
+}
+
+fn start_plan_definition(id: &str, name: &str) -> ProviderDefinition {
+    default_provider(
+        id,
+        name,
+        ProviderAdapter::Anthropic,
+        ApiProfile::AnthropicMessages,
+        "https://zcode.z.ai/api/v1/zcode-plan/anthropic",
+    )
+    .with_native_streaming()
+    .with_api_key_policy(crate::ApiKeyPolicy::Unsupported)
+    .with_defaults(crate::ProviderDefaults {
+        max_output_tokens: Some(4096),
+        ..crate::ProviderDefaults::default()
+    })
 }

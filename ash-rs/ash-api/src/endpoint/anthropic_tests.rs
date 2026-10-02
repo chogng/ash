@@ -3,6 +3,45 @@ use crate::ImageDetail;
 use crate::ReasoningConfig;
 
 #[test]
+fn provider_prelude_preserves_canonical_content_and_cache_budget() {
+    let mut request = ModelRequest::text("latest request");
+    request.instructions = Some("Ash instructions".into());
+    request.tools.push(ToolDefinition {
+        name: ToolName::new("read_file").unwrap(),
+        description: "Read a file".into(),
+        parameters: json!({"type": "object", "properties": {"path": {"type": "string"}}}),
+        strict: true,
+    });
+    let canonical = request.clone();
+    let ordinary = build_request("test-model", &request).unwrap();
+    let mut prefixed =
+        build_request_with_prelude("test-model", &request, &["identity", "harness"]).unwrap();
+    assert_eq!(
+        prefixed["system"],
+        json!([
+            {"type": "text", "text": "identity"},
+            {"type": "text", "text": "harness"},
+            {"type": "text", "text": "Ash instructions", "cache_control": {"type": "ephemeral"}}
+        ])
+    );
+    prefixed["system"] = ordinary["system"].clone();
+    assert_eq!(prefixed, ordinary);
+    assert_eq!(request, canonical);
+
+    request.instructions = None;
+    let prefixed =
+        build_request_with_prelude("test-model", &request, &["identity", "harness"]).unwrap();
+    assert_eq!(prefixed["system"].as_array().unwrap().len(), 2);
+    assert!(
+        prefixed["system"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|block| block.get("cache_control").is_none())
+    );
+}
+
+#[test]
 fn fast_mode_uses_speed_and_preserves_existing_beta_headers() {
     let mut request = ModelRequest::text("hello");
     request.service_tier = Some(ash_protocol::ModelServiceTier::Fast);

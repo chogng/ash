@@ -26,6 +26,8 @@ export type AccountLoginMethod =
 	| { readonly type: 'xaiDeviceCode' }
 	| { readonly type: 'bigModelBrowser' }
 	| { readonly type: 'zaiBrowser' }
+	| { readonly type: 'bigModelStartPlanBrowser' }
+	| { readonly type: 'zaiStartPlanBrowser' }
 	| { readonly type: 'gitHubBrowser' };
 
 export type AccountLoginChallenge =

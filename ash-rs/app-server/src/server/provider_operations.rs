@@ -81,6 +81,8 @@ impl AppServer {
                         | "xai-subscription"
                         | "bigmodel-coding-plan"
                         | "zai-coding-plan"
+                        | "bigmodel-start-plan"
+                        | "zai-start-plan"
                 );
                 let external = matches!(entry.connection.as_str(), "kimi-desktop" | "kimi-cli");
                 let ready = if entry.connection.as_str() == "kimi-desktop" {

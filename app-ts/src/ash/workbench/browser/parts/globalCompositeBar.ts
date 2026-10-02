@@ -157,6 +157,8 @@ export class GlobalCompositeBar extends Disposable {
 			case 'xai-subscription': return 'Super Grok';
 			case 'bigmodel-coding-plan': return 'BigModel';
 			case 'zai-coding-plan': return 'Z.AI';
+			case 'bigmodel-start-plan': return 'BigModel Start Plan';
+			case 'zai-start-plan': return 'Z.AI Start Plan';
 			default: return provider;
 		}
 	}

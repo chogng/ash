@@ -69,18 +69,14 @@ impl AppServer {
                 .map_err(kimi_error)?;
             return result(&kimi_usage(params, account, usage));
         }
-        if matches!(
-            params.provider.as_str(),
-            ash_glm::BIGMODEL_PROVIDER_ID | ash_glm::ZAI_PROVIDER_ID
-        ) {
-            let account = if params.provider == ash_glm::BIGMODEL_PROVIDER_ID {
-                &self.bigmodel
-            } else {
-                &self.zai
-            };
+        if let Some(account) = self.glm_accounts.get(&params.provider) {
+            if account.is_start_plan() {
+                let usage = account
+                    .read_start_plan(&params.account_id, cancellation)
+                    .map_err(glm_usage_error)?;
+                return result(&start_plan_usage(params, usage)?);
+            }
             let usage = account
-                .as_ref()
-                .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::AccountUnavailable))?
                 .read_usage(&params.account_id, cancellation)
                 .map_err(glm_usage_error)?;
             return result(&glm_usage(params, usage));
@@ -137,6 +133,10 @@ impl AppServer {
             AccountLoginMethodDto::XaiDeviceCode => LoginMethod::XaiDeviceCode,
             AccountLoginMethodDto::BigModelBrowser => LoginMethod::BigModelBrowser,
             AccountLoginMethodDto::ZaiBrowser => LoginMethod::ZaiBrowser,
+            AccountLoginMethodDto::BigModelStartPlanBrowser => {
+                LoginMethod::BigModelStartPlanBrowser
+            }
+            AccountLoginMethodDto::ZaiStartPlanBrowser => LoginMethod::ZaiStartPlanBrowser,
             AccountLoginMethodDto::GitHubBrowser => LoginMethod::GitHubBrowser,
         };
         let login = self.login_service()?;
@@ -483,4 +483,48 @@ fn xai_usage(
             unified_billing: billing.and_then(|billing| billing.is_unified_billing_user),
         }),
     }
+}
+
+fn start_plan_usage(
+    params: AccountRateLimitsReadParams,
+    usage: ash_glm::StartPlanUsage,
+) -> Result<AccountRateLimitsReadResult, RpcError> {
+    let limits = usage
+        .limits
+        .into_iter()
+        .map(|limit| {
+            let window_seconds = u32::try_from(limit.period_end - limit.period_start)
+                .map_err(|_| RpcError::new(-32030, AppServerErrorName::AccountOperationFailed))?;
+            let primary = if limit.total_units == 0 {
+                None
+            } else {
+                let percent =
+                    (u128::from(limit.used_units) * 100).div_ceil(u128::from(limit.total_units));
+                Some(AccountRateLimitWindowDto {
+                    used_percent: u32::try_from(percent).map_err(|_| {
+                        RpcError::new(-32030, AppServerErrorName::AccountOperationFailed)
+                    })?,
+                    window_seconds,
+                    resets_at: Some(limit.period_end),
+                })
+            };
+            Ok(AccountRateLimitDto {
+                id: limit.id,
+                name: Some(limit.name),
+                model: (limit.models.len() == 1).then(|| limit.models[0].clone()),
+                allowed: Some(limit.available_units > 0),
+                limit_reached: Some(limit.available_units == 0),
+                primary,
+                secondary: None,
+            })
+        })
+        .collect::<Result<_, RpcError>>()?;
+    Ok(AccountRateLimitsReadResult {
+        provider: params.provider,
+        account_id: params.account_id,
+        plan: (!usage.plans.is_empty()).then(|| usage.plans.join(", ")),
+        limits,
+        credits: None,
+        xai: None,
+    })
 }

@@ -27,6 +27,8 @@ pub(crate) fn load<T: JsonRpcTransport>(client: &mut AppServerClient<T>) -> Resu
                     | "xai-subscription"
                     | "bigmodel-coding-plan"
                     | "zai-coding-plan"
+                    | "bigmodel-start-plan"
+                    | "zai-start-plan"
             )
         })
         .collect();
@@ -41,6 +43,8 @@ pub(crate) fn load<T: JsonRpcTransport>(client: &mut AppServerClient<T>) -> Resu
             "kimi-subscription" => "Kimi",
             "bigmodel-coding-plan" => "BigModel",
             "zai-coding-plan" => "Z.AI",
+            "bigmodel-start-plan" => "BigModel Start Plan",
+            "zai-start-plan" => "Z.AI Start Plan",
             _ => "ChatGPT",
         };
         if account.status != AccountStatusDto::Ready {
@@ -106,6 +110,8 @@ fn choices(usage: AccountRateLimitsReadResult) -> ListSelectionGroup {
         "kimi-subscription" => ("Kimi", "Kimi plan"),
         "bigmodel-coding-plan" => ("BigModel", "BigModel plan"),
         "zai-coding-plan" => ("Z.AI", "Z.AI plan"),
+        "bigmodel-start-plan" => ("BigModel Start Plan", "BigModel plan"),
+        "zai-start-plan" => ("Z.AI Start Plan", "Z.AI plan"),
         _ => ("ChatGPT", "ChatGPT plan"),
     };
     let mut items = vec![detail(

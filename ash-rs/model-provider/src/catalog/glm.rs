@@ -36,10 +36,11 @@ pub(crate) fn glm_catalog_binding(
     let digest = Sha256::digest(format!("{config:?}:{identity}").as_bytes());
     let scope = CatalogScopeKey::new(
         ProviderId::new("glm").expect("constant provider ID"),
-        CatalogSourceScopeId::new(format!("glm-coding-plan:{digest:x}"))
+        CatalogSourceScopeId::new(format!("glm-subscription:{digest:x}"))
             .map_err(|error| ModelProviderError::Unavailable(error.to_string()))?,
     );
     let models = match config.connection.as_str() {
+        "bigmodel-start-plan" | "zai-start-plan" => &[][..],
         "bigmodel-coding-plan" => &[("glm-5.1", "GLM-5.1")][..],
         "zai-coding-plan" => &[
             ("glm-5.3", "GLM-5.3"),
@@ -88,18 +89,71 @@ impl ModelCatalogSource for GlmCatalogSource {
                     "GLM login changed during catalog discovery",
                 ));
             }
-            let models: Vec<_> = self
-                .models
-                .iter()
-                .map(|(id, name)| {
-                    DiscoveredModel::new(ModelId::new(*id).expect("constant model ID"))
-                        .with_metadata(ModelMetadataPatch {
-                            access: Some(ModelAccess::Subscription),
-                            display_name: Some((*name).into()),
-                            ..ModelMetadataPatch::default()
-                        })
+            let models: Vec<_> = if self.auth.is_start_plan() {
+                let auth = Arc::clone(&self.auth);
+                let identity = self.identity.clone();
+                let source = ash_async_utils::CancellationSource::new();
+                let cancel_on_drop = source.cancel_on_drop();
+                let usage = tokio::task::spawn_blocking(move || {
+                    auth.read_start_plan(&identity, &source.token())
                 })
-                .collect();
+                .await
+                .map_err(|_| {
+                    CatalogSourceError::new(
+                        CatalogSourceErrorKind::Unreachable,
+                        "Start Plan discovery worker failed",
+                    )
+                })?
+                .map_err(|error| {
+                    let kind = match error {
+                        ash_glm::GlmUsageError::AccountChanged
+                        | ash_glm::GlmUsageError::AuthenticationRequired => {
+                            CatalogSourceErrorKind::Authentication
+                        }
+                        ash_glm::GlmUsageError::Cancelled => CatalogSourceErrorKind::Cancelled,
+                        ash_glm::GlmUsageError::Unavailable => {
+                            CatalogSourceErrorKind::ProviderUnavailable
+                        }
+                        ash_glm::GlmUsageError::RequestFailed => {
+                            CatalogSourceErrorKind::Unreachable
+                        }
+                    };
+                    CatalogSourceError::new(kind, "Start Plan entitlement discovery failed")
+                })?;
+                drop(cancel_on_drop);
+                usage
+                    .models()
+                    .into_iter()
+                    .map(|id| {
+                        ModelId::new(id)
+                            .map(DiscoveredModel::new)
+                            .map(|model| {
+                                model.with_metadata(ModelMetadataPatch {
+                                    access: Some(ModelAccess::Subscription),
+                                    ..ModelMetadataPatch::default()
+                                })
+                            })
+                            .map_err(|_| {
+                                CatalogSourceError::new(
+                                    CatalogSourceErrorKind::InvalidPayload,
+                                    "invalid Start Plan model",
+                                )
+                            })
+                    })
+                    .collect::<Result<_, _>>()?
+            } else {
+                self.models
+                    .iter()
+                    .map(|(id, name)| {
+                        DiscoveredModel::new(ModelId::new(*id).expect("constant model ID"))
+                            .with_metadata(ModelMetadataPatch {
+                                access: Some(ModelAccess::Subscription),
+                                display_name: Some((*name).into()),
+                                ..ModelMetadataPatch::default()
+                            })
+                    })
+                    .collect()
+            };
             Ok(CatalogDiscoveryOutcome::Modified(
                 DiscoveredCatalog::new(
                     self.scope.clone(),

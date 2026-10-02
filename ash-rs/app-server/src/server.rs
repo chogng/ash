@@ -247,8 +247,7 @@ pub struct AppServer {
     chatgpt: Option<Arc<ash_chatgpt::ChatGptAccount>>,
     kimi: Option<Arc<ash_kimi::KimiOAuth>>,
     supergrok: Option<Arc<supergrok::SuperGrokOAuth>>,
-    bigmodel: Option<Arc<ash_glm::GlmOAuth>>,
-    zai: Option<Arc<ash_glm::GlmOAuth>>,
+    glm_accounts: std::collections::BTreeMap<String, Arc<ash_glm::GlmOAuth>>,
     pub(super) env_runtime_gate: Arc<Mutex<()>>,
     env_runtime: Arc<RwLock<EnvRuntime>>,
     turn_backend: Arc<turn_backend_router::TurnBackendHandle>,
@@ -569,8 +568,7 @@ impl AppServer {
             chatgpt: None,
             kimi: None,
             supergrok: None,
-            bigmodel: None,
-            zai: None,
+            glm_accounts: std::collections::BTreeMap::new(),
             env_runtime_gate,
             env_runtime,
             turn_backend,
@@ -1057,11 +1055,12 @@ impl AppServer {
 
     pub fn with_glm_accounts(
         mut self,
-        bigmodel: Arc<ash_glm::GlmOAuth>,
-        zai: Arc<ash_glm::GlmOAuth>,
+        accounts: impl IntoIterator<Item = Arc<ash_glm::GlmOAuth>>,
     ) -> Self {
-        self.bigmodel = Some(bigmodel);
-        self.zai = Some(zai);
+        self.glm_accounts = accounts
+            .into_iter()
+            .map(|auth| (auth.connection_id().into(), auth))
+            .collect();
         self
     }
 

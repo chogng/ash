@@ -2,7 +2,7 @@ import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
 import { localizedString } from '../../../../../platform/action/common/action.js';
 import { Action2 } from '../../../../../platform/actions/common/actions.js';
-import { IAccountService, type Account, type AccountState } from '../../../../../platform/accounts/common/accountService.js';
+import { IAccountService, type Account, type AccountState, type AccountLoginMethod } from '../../../../../platform/accounts/common/accountService.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -12,7 +12,10 @@ type AccountPickItem =
 	| (IQuickPickItem & { readonly kind: 'account'; readonly account: Account })
 	| (IQuickPickItem & { readonly kind: 'add' });
 
-type LoginPickItem = IQuickPickItem & { readonly kind: 'chatgpt' | 'github' };
+type LoginPickItem = IQuickPickItem & (
+	| { readonly kind: 'github' }
+	| { readonly kind: 'subscription'; readonly method: AccountLoginMethod; readonly providerName: string }
+);
 
 export class ManageAccountsAction extends Action2 {
 	public static readonly ID = 'workbench.action.manageAccounts';
@@ -45,7 +48,9 @@ export class ManageAccountsAction extends Action2 {
 		picker.ariaLabel = picker.placeholder;
 		const loginItems: LoginPickItem[] = [
 			...(!state.accounts.some(account => account.provider === 'chatgpt-subscription' && account.status === 'ready') ? [{
-				kind: 'chatgpt' as const,
+				kind: 'subscription' as const,
+				method: { type: 'openAiChatGptBrowser' as const },
+				providerName: 'ChatGPT',
 				label: localize({ bundle: 'ash', key: 'workbench.signInWithChatGPT' }, 'Sign in with ChatGPT'),
 			}] : []),
 			...(!state.accounts.some(account => account.provider === 'github' && account.status === 'ready') ? [{
@@ -53,6 +58,18 @@ export class ManageAccountsAction extends Action2 {
 				label: github.isConnecting
 					? localize({ bundle: 'ash', key: 'workbench.cancelGitHubConnection' }, 'Cancel GitHub connection')
 					: localize({ bundle: 'ash', key: 'workbench.connectGitHub' }, 'Connect GitHub'),
+			}] : []),
+			...(!state.accounts.some(account => account.provider === 'bigmodel-start-plan' && account.status === 'ready') ? [{
+				kind: 'subscription' as const,
+				method: { type: 'bigModelStartPlanBrowser' as const },
+				providerName: 'BigModel Start Plan',
+				label: localize({ bundle: 'ash', key: 'workbench.signInWithBigModelStartPlan' }, 'Sign in with BigModel Start Plan'),
+			}] : []),
+			...(!state.accounts.some(account => account.provider === 'zai-start-plan' && account.status === 'ready') ? [{
+				kind: 'subscription' as const,
+				method: { type: 'zaiStartPlanBrowser' as const },
+				providerName: 'Z.AI Start Plan',
+				label: localize({ bundle: 'ash', key: 'workbench.signInWithZaiStartPlan' }, 'Sign in with Z.AI Start Plan'),
 			}] : []),
 		];
 		picker.items = [
@@ -90,8 +107,8 @@ function showAddAccountActions(quickInput: IQuickInputService, accounts: IAccoun
 			void (github.isConnecting ? github.cancel() : github.connect());
 			return;
 		}
-		void accounts.startLogin({ type: 'openAiChatGptBrowser' }).catch(() => {
-			notifications.error(localize({ bundle: 'ash', key: 'workbench.signInFailed' }, 'Could not start ChatGPT sign in.'));
+		void accounts.startLogin(item.method).catch(() => {
+			notifications.error(localize({ bundle: 'ash', key: 'workbench.startAccountSignInFailed' }, 'Could not start {0} sign in.', item.providerName));
 		});
 	}));
 	resources.add(picker.onDidHide(() => resources.dispose()));

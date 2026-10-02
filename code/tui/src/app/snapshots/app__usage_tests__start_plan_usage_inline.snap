@@ -1,0 +1,32 @@
+---
+source: code/tui/src/app/usage_tests.rs
+expression: screen
+---
+
+    ▄  ▄     Ash Code v0.1.0
+  ▗█▛██▜█▖   Automatic model
+  ▝▜████▛▘   .
+    ▝  ▘
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+─ Usage ────────────────────────────────────────────────────────────────────────
+
+> BigModel plan  ·  Start Trial
+  GLM-5.3-Flash
+  Model  ·  glm-5.3-flash
+  1d window  ·  75% left (25% used)
+  Resets  ·  2026-10-02 16:00 UTC
+
+  Esc to close  ·  Run /usage to refresh

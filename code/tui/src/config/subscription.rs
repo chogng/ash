@@ -30,6 +30,8 @@ pub(crate) enum SubscriptionProvider {
     Kimi,
     BigModel,
     Zai,
+    BigModelStartPlan,
+    ZaiStartPlan,
 }
 
 impl SubscriptionProvider {
@@ -40,6 +42,8 @@ impl SubscriptionProvider {
             Self::Kimi => 2,
             Self::BigModel => 3,
             Self::Zai => 4,
+            Self::BigModelStartPlan => 5,
+            Self::ZaiStartPlan => 6,
         }
     }
     pub(crate) fn id(self) -> &'static str {
@@ -49,6 +53,8 @@ impl SubscriptionProvider {
             Self::Kimi => "kimi-subscription",
             Self::BigModel => "bigmodel-coding-plan",
             Self::Zai => "zai-coding-plan",
+            Self::BigModelStartPlan => "bigmodel-start-plan",
+            Self::ZaiStartPlan => "zai-start-plan",
         }
     }
     fn name(self) -> &'static str {
@@ -58,6 +64,8 @@ impl SubscriptionProvider {
             Self::Kimi => "Kimi",
             Self::BigModel => "BigModel",
             Self::Zai => "Z.AI",
+            Self::BigModelStartPlan => "BigModel Start Plan",
+            Self::ZaiStartPlan => "Z.AI Start Plan",
         }
     }
     fn title(self) -> &'static str {
@@ -67,6 +75,8 @@ impl SubscriptionProvider {
             Self::Kimi => "Kimi",
             Self::BigModel => "BigModel",
             Self::Zai => "Z.AI",
+            Self::BigModelStartPlan => "BigModel Start Plan",
+            Self::ZaiStartPlan => "Z.AI Start Plan",
         }
     }
     fn method(self) -> AccountLoginMethodDto {
@@ -76,6 +86,8 @@ impl SubscriptionProvider {
             Self::Kimi => AccountLoginMethodDto::KimiDeviceCode,
             Self::BigModel => AccountLoginMethodDto::BigModelBrowser,
             Self::Zai => AccountLoginMethodDto::ZaiBrowser,
+            Self::BigModelStartPlan => AccountLoginMethodDto::BigModelStartPlanBrowser,
+            Self::ZaiStartPlan => AccountLoginMethodDto::ZaiStartPlanBrowser,
         }
     }
 }
@@ -549,6 +561,10 @@ fn execute_with_browser<T: JsonRpcTransport>(
         SubscriptionEvent::Failed(match error {
             ClientError::Server { message, .. } if message == "AccountExternalLoginRequired" => {
                 match provider {
+                    SubscriptionProvider::BigModelStartPlan
+                    | SubscriptionProvider::ZaiStartPlan => {
+                        "Sign out of this Start Plan account in ZCode.".into()
+                    }
                     SubscriptionProvider::BigModel | SubscriptionProvider::Zai => {
                         "Sign out of this Coding Plan account in ZCode.".into()
                     }

@@ -68,7 +68,9 @@ impl ModelProviderConfig {
             | "kimi-cli"
             | "xai-subscription"
             | "bigmodel-coding-plan"
-            | "zai-coding-plan" => ProviderAccessMode::Subscription,
+            | "zai-coding-plan"
+            | "bigmodel-start-plan"
+            | "zai-start-plan" => ProviderAccessMode::Subscription,
             _ => ProviderAccessMode::Api,
         }
     }

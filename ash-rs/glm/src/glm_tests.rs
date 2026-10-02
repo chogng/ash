@@ -416,3 +416,194 @@ fn encrypted(value: &str) -> String {
         URL_SAFE_NO_PAD.encode(encrypted)
     )
 }
+
+fn jwt(subject: &str) -> String {
+    format!(
+        "e30.{}.test",
+        URL_SAFE_NO_PAD.encode(serde_json::json!({"sub":subject}).to_string())
+    )
+}
+
+#[test]
+fn start_plan_browser_login_keeps_the_zcode_jwt_without_creating_a_coding_plan_key() {
+    for provider in [GlmProvider::BigModelStartPlan, GlmProvider::ZaiStartPlan] {
+        let token = jwt("user-1");
+        let ready = serde_json::json!({"code":0,"data":{"status":"ready","token":token,"user":{"user_id":"user-1"}}});
+        let client = Arc::new(ScriptedClient::new(vec![
+            init_response(),
+            ready.to_string(),
+        ]));
+        let secrets = Arc::new(MemorySecretStore::default());
+        let auth = GlmOAuth::with_client(provider, secrets.clone(), client.clone());
+        let service = Arc::new(LoginService::new(auth.clone()).unwrap());
+        auth.install_login_service(&service).unwrap();
+        let (sender, receiver) = mpsc::channel();
+        service
+            .install_events(Arc::new(CompletionEvents(sender)))
+            .unwrap();
+        service.begin(provider.login_method()).unwrap();
+        assert!(matches!(
+            receiver
+                .recv_timeout(Duration::from_secs(4))
+                .unwrap()
+                .outcome,
+            LoginCompletionOutcome::Succeeded { .. }
+        ));
+        let target = auth.api_target().unwrap();
+        assert_eq!(
+            target.target.base_url,
+            backend_client::start_plan::MODEL_URL
+        );
+        assert_eq!(target.target.headers[0].value(), format!("Bearer {token}"));
+        assert_eq!(client.requests.lock().unwrap().len(), 2);
+        assert!(
+            secrets
+                .load(&GlmProvider::BigModel.credential_key())
+                .unwrap()
+                .is_none()
+        );
+        service.logout_provider(provider.provider_id()).unwrap();
+        assert!(auth.account_id().unwrap().is_none());
+    }
+}
+
+#[test]
+fn start_plan_external_jwt_must_match_the_active_region_and_account() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("credentials.json");
+    let token = jwt("user-1");
+    let mut entries = serde_json::json!({
+        "oauth:active_provider": encrypted("bigmodel"),
+        "oauth:bigmodel:user_info": encrypted(r#"{"id":"user-1","rawProfile":{"email":"person@example.test"}}"#),
+        "oauth:zai:user_info": encrypted(r#"{"user_id":"user-1"}"#),
+        "zcodejwttoken": encrypted(&token),
+    });
+    std::fs::write(&path, entries.to_string()).unwrap();
+    let secrets = Arc::new(MemorySecretStore::default());
+    let auth = GlmOAuth::with_client_and_zcode(
+        GlmProvider::BigModelStartPlan,
+        secrets.clone(),
+        Arc::new(ScriptedClient::new(vec![])),
+        Some(zcode::ZCodeCredentials::at(path.clone())),
+    );
+    let zai = GlmOAuth::with_client_and_zcode(
+        GlmProvider::ZaiStartPlan,
+        secrets.clone(),
+        Arc::new(ScriptedClient::new(vec![])),
+        Some(zcode::ZCodeCredentials::at(path.clone())),
+    );
+    assert_eq!(auth.account_id().unwrap().as_deref(), Some("user-1"));
+    assert!(zai.account_id().unwrap().is_none());
+    assert!(
+        secrets
+            .load(&GlmProvider::BigModelStartPlan.credential_key())
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        auth.api_target().unwrap().target.headers[0].value(),
+        format!("Bearer {token}")
+    );
+    entries["zcodejwttoken"] = encrypted(&jwt("other-user")).into();
+    std::fs::write(&path, entries.to_string()).unwrap();
+    assert!(auth.account_id().unwrap().is_none());
+}
+
+#[test]
+fn expired_future_and_unrelated_start_plan_buckets_do_not_grant_models() {
+    let mut balance = serde_json::json!({"server_time":1000,
+        "plans":[{"user_plan_id":"active","name":"Start Plan","status":"active","starts_at":900,"ends_at":2000},
+                 {"user_plan_id":"expired","name":"Old plan","status":"active","starts_at":100,"ends_at":999},
+                 {"user_plan_id":"future","name":"Future plan","status":"active","starts_at":1001,"ends_at":2000}],
+        "balances": (["active", "expired", "other", "future"].map(|owner| serde_json::json!({
+            "bucket_id":owner,"user_plan_id":owner,"show_name":"GLM Flash","capabilities":["model:GLM-5.3-Flash"],
+            "total_units":100,"used_units":100,"available_units":0,"period_start":900,"period_end":2000,"expires_at":2000
+        })))
+    });
+    for (id, field, value) in [
+        ("future-period", "period_start", 1001),
+        ("expired-period", "period_end", 999),
+        ("expired-bucket", "expires_at", 999),
+    ] {
+        let mut bucket = balance["balances"][0].clone();
+        bucket["bucket_id"] = id.into();
+        bucket[field] = value.into();
+        balance["balances"].as_array_mut().unwrap().push(bucket);
+    }
+    let usage = start_plan_usage(serde_json::from_value(balance).unwrap());
+    assert_eq!(usage.plans, ["Start Plan"]);
+    assert_eq!(
+        usage.models(),
+        std::collections::BTreeSet::from(["glm-5.3-flash".to_owned()])
+    );
+    assert_eq!(usage.limits.len(), 1);
+    assert_eq!(usage.limits[0].available_units, 0);
+}
+
+#[test]
+fn start_plan_balance_does_not_publish_after_a_credential_change_or_cancellation() {
+    struct ChangingClient {
+        secrets: Arc<MemorySecretStore>,
+        cancellation: Arc<CancellationSource>,
+        cancel: bool,
+    }
+    impl OperationClient for ChangingClient {
+        fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            if self.cancel {
+                self.cancellation.cancel();
+            } else {
+                self.secrets
+                    .store(
+                        &GlmProvider::BigModelStartPlan.credential_key(),
+                        &SecretValue::new(
+                            serde_json::to_vec(&serde_json::json!({
+                                "account_id":"account", "email":null, "display_name":null,
+                                "model_key":"rotated-jwt", "revision":2
+                            }))
+                            .unwrap(),
+                        ),
+                    )
+                    .unwrap();
+            }
+            Ok(ClientResponse::new(
+                200,
+                vec![],
+                br#"{"code":0,"data":{"server_time":1000,"plans":[],"balances":[]}}"#.to_vec(),
+            ))
+        }
+    }
+    for cancel in [false, true] {
+        let secrets = Arc::new(MemorySecretStore::default());
+        secrets
+            .store(
+                &GlmProvider::BigModelStartPlan.credential_key(),
+                &SecretValue::new(
+                    serde_json::to_vec(&serde_json::json!({
+                        "account_id":"account", "email":null, "display_name":null,
+                        "model_key":"original-jwt", "revision":1
+                    }))
+                    .unwrap(),
+                ),
+            )
+            .unwrap();
+        let cancellation = Arc::new(CancellationSource::new());
+        let auth = GlmOAuth::with_client(
+            GlmProvider::BigModelStartPlan,
+            secrets.clone(),
+            Arc::new(ChangingClient {
+                secrets,
+                cancellation: cancellation.clone(),
+                cancel,
+            }),
+        );
+        assert_eq!(
+            auth.read_start_plan("account", &cancellation.token())
+                .unwrap_err(),
+            if cancel {
+                GlmUsageError::Cancelled
+            } else {
+                GlmUsageError::AccountChanged
+            }
+        );
+    }
+}

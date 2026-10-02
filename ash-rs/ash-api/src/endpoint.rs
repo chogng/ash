@@ -33,6 +33,15 @@ pub enum ApiProtocol {
     AnthropicMessages,
 }
 
+/// Provider-owned encoding additions to an otherwise canonical model request.
+///
+/// Anthropic profiles encode each prelude string as a separate, uncached system block before
+/// the caller's instructions. Other profiles reject a non-empty prelude before HTTP execution.
+#[derive(Clone, Copy, Default)]
+pub struct ApiRequestOptions<'a> {
+    pub system_prelude: &'a [&'a str],
+}
+
 /// An exact API endpoint profile supported by Ash.
 ///
 /// A caller supplies a resolved base URL and headers. This type then encodes a
@@ -139,7 +148,28 @@ impl ApiEndpoint {
         client: &dyn OperationClient,
         cancellation: &CancellationToken,
     ) -> Result<ModelResponse, ApiError> {
+        self.complete_with_options(
+            target,
+            model,
+            request,
+            ApiRequestOptions::default(),
+            client,
+            cancellation,
+        )
+    }
+
+    /// Completes a canonical request with explicit provider encoding additions.
+    pub fn complete_with_options(
+        self,
+        target: &ResolvedApiTarget,
+        model: &str,
+        request: &ModelRequest,
+        options: ApiRequestOptions<'_>,
+        client: &dyn OperationClient,
+        cancellation: &CancellationToken,
+    ) -> Result<ModelResponse, ApiError> {
         validate_request(model, request)?;
+        self.validate_encoding_options(options)?;
         match self {
             Self::OpenAiResponses | Self::ChatGptResponses | Self::XaiSubscriptionResponses => {
                 responses::complete(self, target, model, request, client, cancellation)
@@ -150,7 +180,7 @@ impl ApiEndpoint {
                 chat_completions::complete(self, target, model, request, client, cancellation)
             }
             Self::AnthropicMessages | Self::AnthropicMessagesAtBase => {
-                anthropic::complete(self, target, model, request, client, cancellation)
+                anthropic::complete(self, target, model, request, options, client, cancellation)
             }
         }
     }
@@ -169,7 +199,31 @@ impl ApiEndpoint {
         cancellation: &CancellationToken,
         sink: &mut dyn ApiStreamSink,
     ) -> Result<ModelResponse, ApiError> {
+        self.stream_with_options(
+            target,
+            model,
+            request,
+            ApiRequestOptions::default(),
+            client,
+            cancellation,
+            sink,
+        )
+    }
+
+    /// Streams one invocation with explicit provider encoding additions and the same cancellation
+    /// and terminal-response contract as the canonical entry point.
+    pub fn stream_with_options(
+        self,
+        target: &ResolvedApiTarget,
+        model: &str,
+        request: &ModelRequest,
+        options: ApiRequestOptions<'_>,
+        client: &dyn OperationClient,
+        cancellation: &CancellationToken,
+        sink: &mut dyn ApiStreamSink,
+    ) -> Result<ModelResponse, ApiError> {
         validate_request(model, request)?;
+        self.validate_encoding_options(options)?;
         match self {
             Self::OpenAiResponses | Self::ChatGptResponses | Self::XaiSubscriptionResponses => {
                 responses::stream(self, target, model, request, client, cancellation, sink)
@@ -179,10 +233,26 @@ impl ApiEndpoint {
             | Self::XaiChatCompletions => {
                 chat_completions::stream(self, target, model, request, client, cancellation, sink)
             }
-            Self::AnthropicMessages | Self::AnthropicMessagesAtBase => {
-                anthropic::stream(self, target, model, request, client, cancellation, sink)
-            }
+            Self::AnthropicMessages | Self::AnthropicMessagesAtBase => anthropic::stream(
+                self,
+                target,
+                model,
+                request,
+                options,
+                client,
+                cancellation,
+                sink,
+            ),
         }
+    }
+
+    fn validate_encoding_options(self, options: ApiRequestOptions<'_>) -> Result<(), ApiError> {
+        if !options.system_prelude.is_empty() && self.protocol() != ApiProtocol::AnthropicMessages {
+            return Err(ApiError::InvalidRequest(
+                "system prelude requires an Anthropic Messages profile".into(),
+            ));
+        }
+        Ok(())
     }
 
     /// Counts the input tokens for one normalized request through a supported provider preflight

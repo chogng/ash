@@ -171,7 +171,7 @@ pub(crate) struct App {
     welcome: WelcomeModel,
     status: Status,
     terminal_settings: TerminalSettings,
-    subscriptions: [crate::config::Subscription; 5],
+    subscriptions: [crate::config::Subscription; 7],
     selected_subscription: crate::config::SubscriptionProvider,
     pub(super) fullscreen: Fullscreen,
     pub(super) inline: super::inline::Inline,
@@ -223,6 +223,10 @@ impl App {
                 crate::config::Subscription::new(crate::config::SubscriptionProvider::Kimi),
                 crate::config::Subscription::new(crate::config::SubscriptionProvider::BigModel),
                 crate::config::Subscription::new(crate::config::SubscriptionProvider::Zai),
+                crate::config::Subscription::new(
+                    crate::config::SubscriptionProvider::BigModelStartPlan,
+                ),
+                crate::config::Subscription::new(crate::config::SubscriptionProvider::ZaiStartPlan),
             ],
             selected_subscription: crate::config::SubscriptionProvider::ChatGpt,
             fullscreen: Fullscreen::new(
@@ -330,6 +334,10 @@ impl App {
                 crate::config::Subscription::new(crate::config::SubscriptionProvider::Kimi),
                 crate::config::Subscription::new(crate::config::SubscriptionProvider::BigModel),
                 crate::config::Subscription::new(crate::config::SubscriptionProvider::Zai),
+                crate::config::Subscription::new(
+                    crate::config::SubscriptionProvider::BigModelStartPlan,
+                ),
+                crate::config::Subscription::new(crate::config::SubscriptionProvider::ZaiStartPlan),
             ],
             selected_subscription: crate::config::SubscriptionProvider::ChatGpt,
             fullscreen: Fullscreen::new(

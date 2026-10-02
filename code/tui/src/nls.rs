@@ -3157,6 +3157,24 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "登录 Z.AI",
         "Se connecter à Z.AI",
     ),
+    translation(
+        "Sign in to BigModel Start Plan",
+        "BigModel Start Plan にサインイン",
+        "登录 BigModel Start Plan",
+        "Se connecter à BigModel Start Plan",
+    ),
+    translation(
+        "Sign in to Z.AI Start Plan",
+        "Z.AI Start Plan にサインイン",
+        "登录 Z.AI Start Plan",
+        "Se connecter à Z.AI Start Plan",
+    ),
+    translation(
+        "Sign out of this Start Plan account in ZCode.",
+        "ZCode でこの Start Plan アカウントからサインアウトしてください。",
+        "请在 ZCode 中退出此 Start Plan 账户。",
+        "Déconnectez ce compte Start Plan dans ZCode.",
+    ),
     translation("BigModel", "BigModel", "BigModel", "BigModel"),
     translation("Z.AI", "Z.AI", "Z.AI", "Z.AI"),
     translation(

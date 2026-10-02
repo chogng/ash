@@ -135,6 +135,8 @@ impl InteractiveLoginDriver for FakeDriver {
             | LoginMethod::XaiDeviceCode
             | LoginMethod::BigModelBrowser
             | LoginMethod::ZaiBrowser
+            | LoginMethod::BigModelStartPlanBrowser
+            | LoginMethod::ZaiStartPlanBrowser
             | LoginMethod::GitHubBrowser => unreachable!(),
         })
     }

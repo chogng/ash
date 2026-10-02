@@ -44,3 +44,16 @@ test('a failed browser handoff cancels that login without changing the clipboard
 	await assert.rejects(api.startLogin({ method: { type: 'openAiChatGptDeviceCode' } }), /browser unavailable/);
 	assert.deepEqual(calls.slice(1), [['open', started.verificationUrl], ['account/login/cancel', { loginId: 'login-3' }]]);
 });
+
+for (const type of ['bigModelStartPlanBrowser', 'zaiStartPlanBrowser'] as const) {
+	test(`${type} opens the official browser authorization and cancels a failed handoff`, async () => {
+		const started: AccountLoginStartResult = { type: 'browser', loginId: 'start-plan-login', authorizationUrl: 'https://zcode.z.ai/authorize' };
+		const method = { type };
+		const success = fixture(started);
+		assert.deepEqual(await success.api.startLogin({ method }), started);
+		assert.deepEqual(success.calls, [['account/login/start', { method }], ['open', started.authorizationUrl]]);
+		const failure = fixture(started, true);
+		await assert.rejects(failure.api.startLogin({ method }), /browser unavailable/);
+		assert.deepEqual(failure.calls, [['account/login/start', { method }], ['open', started.authorizationUrl], ['account/login/cancel', { loginId: started.loginId }]]);
+	});
+}

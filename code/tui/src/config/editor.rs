@@ -1697,6 +1697,13 @@ fn provider_items(
             "kimi-subscription" => Some(("Kimi", super::SubscriptionProvider::Kimi)),
             "bigmodel-coding-plan" => Some(("BigModel", super::SubscriptionProvider::BigModel)),
             "zai-coding-plan" => Some(("Z.AI", super::SubscriptionProvider::Zai)),
+            "bigmodel-start-plan" => Some((
+                "BigModel Start Plan",
+                super::SubscriptionProvider::BigModelStartPlan,
+            )),
+            "zai-start-plan" => {
+                Some(("Z.AI Start Plan", super::SubscriptionProvider::ZaiStartPlan))
+            }
             _ => None,
         };
         if let Some((label, subscription)) = subscription {

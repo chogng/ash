@@ -5,12 +5,14 @@ import { buildAppServerEnvironment, isAllowedAppServerEnvironmentKey } from "../
 test("App Server environment keeps safe POSIX session variables and excludes credentials", () => {
 	const environment = buildAppServerEnvironment({
 		HOME: "/home/ash",
+		ZCODE_DATA_BASE_DIR: "/external-accounts",
 		LANG: "en_US.UTF-8",
 		LC_ALL: "C.UTF-8",
 		PATH: "/usr/bin",
 		SSH_AUTH_SOCK: '/tmp/ssh-agent.sock',
 		XDG_CONFIG_HOME: "/home/ash/.config",
 		OPENAI_API_KEY: "secret",
+		ZCODE_CREDENTIAL_SECRET: "secret",
 	}, "macos", {
 		ASH_APP_SERVER_PATH: "/opt/Ash/ash-app-server-daemon",
 		ASH_ELECTRON_RUN_AS_NODE_PATH: "/opt/Ash/ash",
@@ -23,6 +25,7 @@ test("App Server environment keeps safe POSIX session variables and excludes cre
 
 	assert.deepEqual(environment, {
 		HOME: "/home/ash",
+		ZCODE_DATA_BASE_DIR: "/external-accounts",
 		LANG: "en_US.UTF-8",
 		PATH: "/usr/bin",
 		SSH_AUTH_SOCK: '/tmp/ssh-agent.sock',
@@ -37,6 +40,8 @@ test("App Server environment keeps safe POSIX session variables and excludes cre
 		ASH_SSH_PATH: "/usr/bin/ssh",
 	});
 	assert.equal(isAllowedAppServerEnvironmentKey("OPENAI_API_KEY"), false);
+	assert.equal(isAllowedAppServerEnvironmentKey("ZCODE_DATA_BASE_DIR"), true);
+	assert.equal(isAllowedAppServerEnvironmentKey("ZCODE_CREDENTIAL_SECRET"), false);
 	assert.equal(isAllowedAppServerEnvironmentKey("ASH_APP_SERVER_PATH"), true);
 	assert.equal(isAllowedAppServerEnvironmentKey("ASH_ELECTRON_RUN_AS_NODE_PATH"), true);
 	assert.equal(isAllowedAppServerEnvironmentKey("ASH_DIR_GRANT_SOURCE"), true);

@@ -1,4 +1,4 @@
-//! Account login and model credentials for the two GLM Coding Plan subscriptions.
+//! Account login and model credentials for GLM Coding Plan and Start Plan subscriptions.
 
 #[path = "zcode.rs"]
 mod zcode;
@@ -48,6 +48,36 @@ pub use backend_client::QuotaLimit;
 
 pub const BIGMODEL_PROVIDER_ID: &str = "bigmodel-coding-plan";
 pub const ZAI_PROVIDER_ID: &str = "zai-coding-plan";
+pub const BIGMODEL_START_PLAN_PROVIDER_ID: &str = "bigmodel-start-plan";
+pub const ZAI_START_PLAN_PROVIDER_ID: &str = "zai-start-plan";
+/// Eligible model buckets from the current account's Start Plan, including exhausted buckets.
+#[derive(Clone, Debug)]
+pub struct StartPlanUsage {
+    pub plans: Vec<String>,
+    pub limits: Vec<StartPlanLimit>,
+}
+
+#[derive(Clone, Debug)]
+pub struct StartPlanLimit {
+    pub id: String,
+    pub name: String,
+    pub models: Vec<String>,
+    pub total_units: u64,
+    pub used_units: u64,
+    pub available_units: u64,
+    pub period_start: u64,
+    pub period_end: u64,
+}
+
+impl StartPlanUsage {
+    pub fn models(&self) -> std::collections::BTreeSet<String> {
+        self.limits
+            .iter()
+            .flat_map(|limit| limit.models.iter().cloned())
+            .collect()
+    }
+}
+
 const OAUTH_BASE_URL: &str = "https://zcode.z.ai/api/v1/oauth/cli";
 
 /// The account and its request key come from one credential read.
@@ -69,13 +99,15 @@ pub enum GlmUsageError {
 pub enum GlmProvider {
     BigModel,
     Zai,
+    BigModelStartPlan,
+    ZaiStartPlan,
 }
 
 impl GlmProvider {
     fn oauth_id(self) -> &'static str {
         match self {
-            Self::BigModel => "bigmodel",
-            Self::Zai => "zai",
+            Self::BigModel | Self::BigModelStartPlan => "bigmodel",
+            Self::Zai | Self::ZaiStartPlan => "zai",
         }
     }
 
@@ -83,6 +115,8 @@ impl GlmProvider {
         match self {
             Self::BigModel => BIGMODEL_PROVIDER_ID,
             Self::Zai => ZAI_PROVIDER_ID,
+            Self::BigModelStartPlan => BIGMODEL_START_PLAN_PROVIDER_ID,
+            Self::ZaiStartPlan => ZAI_START_PLAN_PROVIDER_ID,
         }
     }
 
@@ -90,6 +124,7 @@ impl GlmProvider {
         match self {
             Self::BigModel => "https://open.bigmodel.cn/api/coding/paas/v4",
             Self::Zai => "https://api.z.ai/api/coding/paas/v4",
+            Self::BigModelStartPlan | Self::ZaiStartPlan => backend_client::start_plan::MODEL_URL,
         }
     }
 
@@ -97,16 +132,27 @@ impl GlmProvider {
         match self {
             Self::BigModel => LoginMethod::BigModelBrowser,
             Self::Zai => LoginMethod::ZaiBrowser,
+            Self::BigModelStartPlan => LoginMethod::BigModelStartPlanBrowser,
+            Self::ZaiStartPlan => LoginMethod::ZaiStartPlanBrowser,
         }
     }
 
+    fn is_start_plan(self) -> bool {
+        matches!(self, Self::BigModelStartPlan | Self::ZaiStartPlan)
+    }
+
     fn credential_key(self) -> SecretKey {
-        SecretKey::new(format!("provider/{}/current/oauth", self.oauth_id()))
+        let owner = if self.is_start_plan() {
+            self.provider_id()
+        } else {
+            self.oauth_id()
+        };
+        SecretKey::new(format!("provider/{owner}/current/oauth"))
             .expect("static GLM provider has a valid credential key")
     }
 }
 
-/// Owns one Coding Plan account and its private model request credential.
+/// Owns one subscription connection and its private model request credential.
 pub struct GlmOAuth {
     provider: GlmProvider,
     client: Arc<dyn OperationClient>,
@@ -115,6 +161,7 @@ pub struct GlmOAuth {
     login_service: Mutex<Weak<LoginService>>,
     active: Mutex<BTreeMap<LoginId, CancellationSource>>,
     zcode: Option<zcode::ZCodeCredentials>,
+    device_id: Mutex<Option<String>>,
 }
 
 impl GlmOAuth {
@@ -166,6 +213,7 @@ impl GlmOAuth {
             login_service: Mutex::new(Weak::new()),
             active: Mutex::new(BTreeMap::new()),
             zcode,
+            device_id: Mutex::new(None),
         })
     }
 
@@ -174,19 +222,141 @@ impl GlmOAuth {
         Ok(())
     }
 
-    /// Reads the login-owned credential for one Coding Plan model invocation.
+    pub fn connection_id(&self) -> &'static str {
+        self.provider.provider_id()
+    }
+
+    pub fn is_start_plan(&self) -> bool {
+        self.provider.is_start_plan()
+    }
+
+    /// Reads the login-owned credential for one subscription invocation.
     pub fn api_target(&self) -> Result<GlmApiTarget, LoginError> {
         let credential = self.load()?.ok_or_else(unavailable)?;
         Ok(GlmApiTarget {
             account_id: credential.account_id.clone(),
             target: ResolvedApiTarget::new(
                 self.provider.model_url(),
-                vec![HttpHeader::new(
-                    "Authorization",
-                    format!("Bearer {}", credential.model_key),
-                )],
+                self.request_headers(&credential)?,
             ),
         })
+    }
+
+    /// Request policy is refreshed for each invocation; a policy change must take effect
+    /// before sending a model prompt. The credential is re-read after the policy request.
+    pub fn model_api_target(
+        &self,
+        model: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<GlmApiTarget, LoginError> {
+        if self.is_start_plan() {
+            let credential = self.load()?.ok_or_else(unavailable)?;
+            let usage = self
+                .read_start_plan(&credential.account_id, cancellation)
+                .map_err(|_| unavailable())?;
+            if !usage.models().contains(&model.to_ascii_lowercase()) {
+                return Err(LoginError::new(
+                    LoginErrorKind::Unavailable,
+                    "model is not included in this Start Plan",
+                ));
+            }
+            let target = self.business_target(&credential)?;
+            if !backend_client::start_plan::model_request_allowed(
+                self.client.as_ref(),
+                &target,
+                cancellation,
+            )
+            .map_err(|_| unavailable())?
+            {
+                return Err(LoginError::new(
+                    LoginErrorKind::ExternalLoginRequired,
+                    "Start Plan requires verification in ZCode",
+                ));
+            }
+            self.ensure_current(&credential)
+                .map_err(|_| unavailable())?;
+        }
+        cancellation.check().map_err(|_| unavailable())?;
+        self.api_target()
+    }
+
+    fn business_target(&self, credential: &Credential) -> Result<ResolvedApiTarget, LoginError> {
+        Ok(ResolvedApiTarget::new(
+            backend_client::start_plan::SERVICE_URL,
+            self.request_headers(credential)?,
+        ))
+    }
+
+    fn request_headers(&self, credential: &Credential) -> Result<Vec<HttpHeader>, LoginError> {
+        let mut headers = vec![HttpHeader::new(
+            "Authorization",
+            format!("Bearer {}", credential.model_key),
+        )];
+        if self.is_start_plan() {
+            let mut device_id = self.device_id.lock().map_err(|_| unavailable())?;
+            if device_id.is_none() {
+                let key = SecretKey::new(format!("provider/{}/device-id", self.connection_id()))
+                    .expect("valid device key");
+                *device_id = Some(match self.secrets.load(&key).map_err(|_| unavailable())? {
+                    Some(value) => {
+                        String::from_utf8(value.expose().to_vec()).map_err(|_| unavailable())?
+                    }
+                    None => {
+                        let id = random_device_id()?;
+                        self.secrets
+                            .store(&key, &SecretValue::new(id.as_bytes().to_vec()))
+                            .map_err(|_| unavailable())?;
+                        id
+                    }
+                });
+            }
+            headers.extend([
+                HttpHeader::new("User-Agent", concat!("Ash/", env!("CARGO_PKG_VERSION"))),
+                HttpHeader::new("X-Title", "Ash"),
+                HttpHeader::new(
+                    "X-Device-Mid",
+                    device_id.as_deref().expect("device identity initialized"),
+                ),
+            ]);
+        }
+        Ok(headers)
+    }
+
+    pub fn read_start_plan(
+        &self,
+        account_id: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<StartPlanUsage, GlmUsageError> {
+        if !self.is_start_plan() {
+            return Err(GlmUsageError::Unavailable);
+        }
+        let credential = self
+            .load()
+            .map_err(|_| GlmUsageError::Unavailable)?
+            .ok_or(GlmUsageError::AuthenticationRequired)?;
+        if credential.account_id != account_id {
+            return Err(GlmUsageError::AccountChanged);
+        }
+        let target = self
+            .business_target(&credential)
+            .map_err(|_| GlmUsageError::Unavailable)?;
+        let balance =
+            backend_client::start_plan::read_balance(self.client.as_ref(), &target, cancellation)
+                .map_err(usage_error)?;
+        cancellation.check().map_err(|_| GlmUsageError::Cancelled)?;
+        self.ensure_current(&credential)?;
+        Ok(start_plan_usage(balance))
+    }
+
+    fn ensure_current(&self, credential: &Credential) -> Result<(), GlmUsageError> {
+        let current = self
+            .load()
+            .map_err(|_| GlmUsageError::Unavailable)?
+            .ok_or(GlmUsageError::AccountChanged)?;
+        if current.account_id != credential.account_id || current.revision != credential.revision {
+            return Err(GlmUsageError::AccountChanged);
+        }
+        Ok(())
     }
 
     pub fn account_id(&self) -> Result<Option<String>, LoginError> {
@@ -213,27 +383,18 @@ impl GlmOAuth {
                 &credential.model_key,
                 cancellation,
             ),
+            GlmProvider::BigModelStartPlan | GlmProvider::ZaiStartPlan => {
+                return Err(GlmUsageError::Unavailable);
+            }
             GlmProvider::Zai => backend_client::zai::read_quota(
                 self.client.as_ref(),
                 &credential.model_key,
                 cancellation,
             ),
         }
-        .map_err(|error| match error {
-            backend_client::RequestError::Cancelled => GlmUsageError::Cancelled,
-            backend_client::RequestError::HttpStatus(401 | 403) => {
-                GlmUsageError::AuthenticationRequired
-            }
-            _ => GlmUsageError::RequestFailed,
-        })?;
+        .map_err(usage_error)?;
         cancellation.check().map_err(|_| GlmUsageError::Cancelled)?;
-        let current = self
-            .load()
-            .map_err(|_| GlmUsageError::Unavailable)?
-            .ok_or(GlmUsageError::AccountChanged)?;
-        if current.account_id != credential.account_id || current.revision != credential.revision {
-            return Err(GlmUsageError::AccountChanged);
-        }
+        self.ensure_current(&credential)?;
         Ok(limits)
     }
 
@@ -330,30 +491,49 @@ impl GlmOAuth {
                 "failed" => return Err(unavailable()),
                 "ready" => {
                     let user = status.user.ok_or_else(unavailable)?;
-                    let token = match self.provider {
-                        GlmProvider::BigModel => status.bigmodel,
-                        GlmProvider::Zai => status.zai,
-                    }
-                    .and_then(|token| token.access_token.or(token.alternate_access_token))
-                    .filter(|token| !token.trim().is_empty())
-                    .ok_or_else(unavailable)?;
                     if user.user_id.trim().is_empty() {
                         return Err(unavailable());
                     }
-                    let model_key = match self.provider {
-                        GlmProvider::BigModel => backend_client::bigmodel::issue_api_key(
-                            self.client.as_ref(),
-                            &ResolvedApiTarget::new(
-                                backend_client::bigmodel::BUSINESS_URL,
-                                vec![HttpHeader::new("Authorization", &token)],
-                            ),
-                            cancel,
-                        ),
-                        GlmProvider::Zai => {
-                            backend_client::zai::issue_api_key(self.client.as_ref(), &token, cancel)
+                    let model_key = if self.is_start_plan() {
+                        let jwt = status
+                            .token
+                            .filter(|token| !token.trim().is_empty())
+                            .ok_or_else(unavailable)?;
+                        if zcode::jwt_subject(&jwt).as_deref() != Some(user.user_id.as_str()) {
+                            return Err(unavailable());
                         }
-                    }
-                    .map_err(|_| unavailable())?;
+                        jwt
+                    } else {
+                        let token = match self.provider {
+                            GlmProvider::BigModel => status.bigmodel,
+                            GlmProvider::Zai => status.zai,
+                            GlmProvider::BigModelStartPlan | GlmProvider::ZaiStartPlan => {
+                                unreachable!("handled above")
+                            }
+                        }
+                        .and_then(|token| token.access_token.or(token.alternate_access_token))
+                        .filter(|token| !token.trim().is_empty())
+                        .ok_or_else(unavailable)?;
+                        match self.provider {
+                            GlmProvider::BigModel => backend_client::bigmodel::issue_api_key(
+                                self.client.as_ref(),
+                                &ResolvedApiTarget::new(
+                                    backend_client::bigmodel::BUSINESS_URL,
+                                    vec![HttpHeader::new("Authorization", &token)],
+                                ),
+                                cancel,
+                            ),
+                            GlmProvider::Zai => backend_client::zai::issue_api_key(
+                                self.client.as_ref(),
+                                &token,
+                                cancel,
+                            ),
+                            GlmProvider::BigModelStartPlan | GlmProvider::ZaiStartPlan => {
+                                unreachable!("handled above")
+                            }
+                        }
+                        .map_err(|_| unavailable())?
+                    };
                     cancel.check().map_err(|_| unavailable())?;
                     return Ok(Credential {
                         account_id: user.user_id,
@@ -557,6 +737,7 @@ struct InitData {
 #[derive(Deserialize)]
 struct PollData {
     status: String,
+    token: Option<String>,
     user: Option<User>,
     bigmodel: Option<ProviderToken>,
     zai: Option<ProviderToken>,
@@ -629,14 +810,14 @@ fn wait(duration: Duration, cancel: &CancellationToken) -> Result<(), LoginError
 fn unavailable() -> LoginError {
     LoginError::new(
         LoginErrorKind::Unavailable,
-        "GLM Coding Plan login is unavailable",
+        "GLM subscription login is unavailable",
     )
 }
 
 fn login_failure() -> LoginFailure {
     LoginFailure {
         code: "glm_login_failed".into(),
-        message: "GLM Coding Plan login failed".into(),
+        message: "GLM subscription login failed".into(),
     }
 }
 
@@ -654,5 +835,77 @@ pub fn usage_endpoint(provider: GlmProvider) -> &'static str {
     match provider {
         GlmProvider::BigModel => backend_client::bigmodel::BUSINESS_URL,
         GlmProvider::Zai => backend_client::zai::BUSINESS_URL,
+        GlmProvider::BigModelStartPlan | GlmProvider::ZaiStartPlan => {
+            backend_client::start_plan::SERVICE_URL
+        }
+    }
+}
+
+fn usage_error(error: backend_client::RequestError) -> GlmUsageError {
+    match error {
+        backend_client::RequestError::Cancelled => GlmUsageError::Cancelled,
+        backend_client::RequestError::HttpStatus(401 | 403) => {
+            GlmUsageError::AuthenticationRequired
+        }
+        _ => GlmUsageError::RequestFailed,
+    }
+}
+
+fn random_device_id() -> Result<String, LoginError> {
+    let mut bytes = [0_u8; 16];
+    getrandom::getrandom(&mut bytes).map_err(|_| unavailable())?;
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
+    Ok(format!(
+        "{}-{}-{}-{}-{}",
+        &hex[..8],
+        &hex[8..12],
+        &hex[12..16],
+        &hex[16..20],
+        &hex[20..]
+    ))
+}
+
+fn start_plan_usage(balance: backend_client::start_plan::Balance) -> StartPlanUsage {
+    let active: BTreeMap<_, _> = balance
+        .plans
+        .iter()
+        .filter(|plan| {
+            plan.status == "active"
+                && plan.starts_at <= balance.server_time
+                && plan.ends_at > balance.server_time
+        })
+        .map(|plan| (plan.user_plan_id.as_str(), plan.name.clone()))
+        .collect();
+    let limits = balance
+        .balances
+        .into_iter()
+        .filter(|bucket| {
+            active.contains_key(bucket.user_plan_id.as_str())
+                && bucket.period_start <= balance.server_time
+                && bucket.period_end > balance.server_time
+                && bucket.expires_at > balance.server_time
+        })
+        .map(|bucket| StartPlanLimit {
+            id: bucket.bucket_id,
+            name: bucket.show_name,
+            models: bucket
+                .capabilities
+                .iter()
+                .filter_map(|capability| capability.strip_prefix("model:"))
+                .filter(|model| !model.trim().is_empty())
+                .map(|model| model.trim().to_ascii_lowercase())
+                .collect(),
+            total_units: bucket.total_units,
+            used_units: bucket.used_units,
+            available_units: bucket.available_units,
+            period_start: bucket.period_start,
+            period_end: bucket.period_end,
+        })
+        .collect();
+    StartPlanUsage {
+        plans: active.into_values().collect(),
+        limits,
     }
 }
