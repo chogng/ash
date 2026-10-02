@@ -174,7 +174,9 @@ fn watch_paths(paths: &[PathBuf]) -> Vec<WatchPath> {
         .iter()
         .map(|path| WatchPath {
             path: path.clone(),
-            recursive: path.is_dir(),
+            // Catalog roots remain recursive even when absent at registration, so
+            // their nested Skill files are watched once the directory is created.
+            recursive: true,
         })
         .collect()
 }

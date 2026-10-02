@@ -150,6 +150,11 @@ impl GlmProvider {
         SecretKey::new(format!("provider/{owner}/current/oauth"))
             .expect("static GLM provider has a valid credential key")
     }
+
+    fn disconnected_key(self) -> SecretKey {
+        SecretKey::new(format!("provider/{}/disconnected", self.provider_id()))
+            .expect("static GLM connection has a valid secret key")
+    }
 }
 
 /// Owns one subscription connection and its private model request credential.
@@ -444,6 +449,16 @@ impl GlmOAuth {
     }
 
     fn load(&self) -> Result<Option<Credential>, LoginError> {
+        // Disconnect belongs to this Ash connection, not the external account.
+        // Check it before either credential source so refresh cannot reconnect it.
+        if self
+            .secrets
+            .load(&self.provider.disconnected_key())
+            .map_err(|_| unavailable())?
+            .is_some()
+        {
+            return Ok(None);
+        }
         if let Some(zcode) = &self.zcode
             && let Some(credential) = zcode.reusable_credential(self.provider)
         {
@@ -696,6 +711,9 @@ impl InteractiveLoginDriver for GlmOAuth {
         if let Some(source) = &self.zcode
             && let Some(credential) = source.reusable_credential(self.provider)
         {
+            self.secrets
+                .delete(&self.provider.disconnected_key())
+                .map_err(|_| unavailable())?;
             return Ok(BeginLogin::Connected {
                 login_id: request.login_id,
                 account: self.snapshot(&credential),
@@ -703,6 +721,9 @@ impl InteractiveLoginDriver for GlmOAuth {
         }
         let poll_token = random_token()?;
         let init = self.init(&poll_token)?;
+        self.secrets
+            .delete(&self.provider.disconnected_key())
+            .map_err(|_| unavailable())?;
         let cancellation = CancellationSource::new();
         let mut active = self.active.lock().map_err(|_| unavailable())?;
         if !active.is_empty() {
@@ -756,16 +777,14 @@ impl InteractiveLoginDriver for GlmOAuth {
                 "GLM account changed",
             ));
         }
-        if let Some(source) = &self.zcode
-            && source
-                .reusable_credential(self.provider)
-                .is_some_and(|external| external.account_id == account.account_id)
-        {
-            return Err(LoginError::new(
-                LoginErrorKind::ExternalLoginRequired,
-                "this account is managed by ZCode; sign out there",
-            ));
-        }
+        // ZCode is read-only. Persist a local disconnect before deleting any Ash
+        // credential, including one hidden behind the currently reused account.
+        self.secrets
+            .store(
+                &self.provider.disconnected_key(),
+                &SecretValue::new(b"1".to_vec()),
+            )
+            .map_err(|_| unavailable())?;
         self.secrets
             .delete(&self.provider.credential_key())
             .map(|_| ())

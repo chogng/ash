@@ -35,6 +35,7 @@ ash-secrets = { workspace = true }
 ash-websocket-client = { workspace = true }
 
 [dev-dependencies]
+login = { package = "ash-login", path = "../login" }
 base64 = { workspace = true }
 futures = { workspace = true }
 tempfile = { workspace = true }

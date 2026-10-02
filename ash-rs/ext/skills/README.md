@@ -24,6 +24,10 @@ Directory、Plugin 和 Marketplace 动态 source，应用启用状态与兼容�
 App Server 可以提供配置、事件 adapter 和 list DTO，但不得选择、激活、加载、缓存或渲染 Skill
 instructions。
 
+Skill watcher 仅递归监听 catalog roots，包括尚未创建的 Directory `.ash/skills`。缺失目录的
+祖先监听及逐级移近由共享 `ash-file-watcher` 负责；工作区和 `.ash` 其他内容不属于 Skill
+递归扫描范围。关闭时发送停止信号并回收监听线程，服务退出完成后才能释放 profile 的 endpoint。
+
 真实调用路径：
 
 ```text

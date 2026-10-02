@@ -1,4 +1,5 @@
 use super::*;
+use std::collections::BTreeMap;
 
 struct StartPlanTransport {
     requests: Mutex<Vec<ClientRequest>>,
@@ -9,6 +10,13 @@ struct StartPlanTransport {
 impl OperationClient for StartPlanTransport {
     fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
         self.requests.lock().unwrap().push(request.clone());
+        if request.url().contains("/api/coding/paas/v4/") {
+            return Ok(ClientResponse::new(
+                429,
+                vec![],
+                br#"{"error":{"code":"1113","message":"Coding Plan is unavailable"}}"#.to_vec(),
+            ));
+        }
         let body = if request.url().contains("billing/balance") {
             json!({"code":0,"data":{"server_time":1000,
                 "plans":[{"user_plan_id":"plan","name":"Start Plan","status":"active","starts_at":900,"ends_at":if self.expired {999} else {2000}}],
@@ -62,6 +70,9 @@ impl OperationClient for StartPlanTransport {
         sink: &mut dyn OperationStreamSink,
     ) -> Result<ClientResponse, ClientError> {
         let response = self.execute(request)?;
+        if response.status() != 200 {
+            return Ok(response);
+        }
         let body: Value = serde_json::from_slice(response.body()).unwrap();
         sink.emit(streaming::response_stream(&body).as_bytes())?;
         Ok(ClientResponse::new(200, vec![], vec![]))
@@ -83,6 +94,77 @@ fn runtime(transport: Arc<StartPlanTransport>, provider: GlmProvider) -> ModelPr
         secrets.clone(),
     )
     .with_glm_accounts([GlmOAuth::with_client(provider, secrets, transport)])
+}
+
+#[test]
+fn disconnecting_coding_plan_selects_start_plan_for_the_next_invocation() {
+    let transport = Arc::new(StartPlanTransport {
+        requests: Mutex::new(vec![]),
+        verification_required: false,
+        expired: false,
+    });
+    let secrets = Arc::new(MemorySecretStore::default());
+    for owner in ["bigmodel", "bigmodel-start-plan"] {
+        secrets.store(&SecretKey::new(format!("provider/{owner}/current/oauth")).unwrap(),
+            &SecretValue::new(serde_json::to_vec(&json!({"account_id":"account", "email":null,"display_name":null,"model_key":owner,"revision":1})).unwrap())).unwrap();
+    }
+    let coding = GlmOAuth::with_client(GlmProvider::BigModel, secrets.clone(), transport.clone());
+    let start = GlmOAuth::with_client(
+        GlmProvider::BigModelStartPlan,
+        secrets.clone(),
+        transport.clone(),
+    );
+    let login = login::LoginService::new_with_drivers([
+        coding.clone() as Arc<dyn login::InteractiveLoginDriver>,
+        start.clone() as Arc<dyn login::InteractiveLoginDriver>,
+    ])
+    .unwrap();
+    let runtime = ModelProviderRuntime::with_client_and_secrets(
+        ProviderConfigRegistry::builtin(),
+        transport.clone(),
+        secrets.clone(),
+    )
+    .with_glm_accounts([coding, start]);
+    let model_ref = model_ref("glm", "glm-5.3-flash");
+    let selected = runtime.preferred_connections(&BTreeMap::new()).unwrap();
+    assert_eq!(
+        selected[&model_ref.provider].connection.as_str(),
+        "bigmodel-coding-plan"
+    );
+    let model = runtime
+        .build_model(&selected[&model_ref.provider], &model_ref)
+        .unwrap();
+    assert!(matches!(
+        model.invoke(&ModelRequest::text("hello")),
+        Err(ModelProviderError::Api(ApiError::RateLimited { .. }))
+    ));
+    assert_eq!(transport.requests.lock().unwrap().len(), 1);
+
+    login.logout_provider("bigmodel-coding-plan").unwrap();
+    let selected = runtime.preferred_connections(&BTreeMap::new()).unwrap();
+    assert_eq!(
+        selected[&model_ref.provider].connection.as_str(),
+        "bigmodel-start-plan"
+    );
+    let model = runtime
+        .build_model(&selected[&model_ref.provider], &model_ref)
+        .unwrap();
+    assert_eq!(
+        model.invoke(&ModelRequest::text("hello")).unwrap().text(),
+        "OK"
+    );
+    let requests = transport.requests.lock().unwrap();
+    assert_eq!(requests.len(), 4);
+    assert!(
+        requests[1..]
+            .iter()
+            .all(|request| !request.url().contains("/api/coding/paas/v4/"))
+    );
+    assert!(requests[1..].iter().all(|request| {
+        request.headers().iter().any(|header| {
+            header.name() == "Authorization" && header.value() == "Bearer bigmodel-start-plan"
+        })
+    }));
 }
 
 #[test]

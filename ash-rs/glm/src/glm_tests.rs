@@ -203,10 +203,27 @@ fn zcode_coding_plan_credentials_are_read_live_without_copying_them() {
             .unwrap()
             .is_none()
     );
-    assert!(auth.logout(&account.account).is_err());
-    assert!(path.exists());
+    let external_bytes = std::fs::read(&path).unwrap();
+    service
+        .logout_provider(GlmProvider::Zai.provider_id())
+        .unwrap();
+    assert!(auth.read_account().unwrap().is_none());
+    assert!(auth.api_target().is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), external_bytes);
 
     write_account("user-2", "key-2.secret");
+    assert!(auth.read_account().unwrap().is_none());
+    let restarted = GlmOAuth::with_client_and_zcode(
+        GlmProvider::Zai,
+        secrets.clone(),
+        Arc::new(ScriptedClient::new(Vec::new())),
+        Some(zcode::ZCodeCredentials::at(path.clone())),
+    );
+    assert!(restarted.read_account().unwrap().is_none());
+    assert!(matches!(
+        service.begin(LoginMethod::ZaiBrowser).unwrap(),
+        BeginLogin::Connected { .. }
+    ));
     let next = auth.api_target().unwrap();
     assert_eq!(next.account_id, "user-2");
     assert_eq!(next.target.headers()[0].value(), "Bearer key-2.secret");
@@ -217,6 +234,92 @@ fn zcode_coding_plan_credentials_are_read_live_without_copying_them() {
             .unwrap()
             .is_none()
     );
+}
+
+#[test]
+fn disconnect_is_persisted_per_connection_and_reconnect_preserves_zcode() {
+    for provider in [
+        GlmProvider::BigModel,
+        GlmProvider::Zai,
+        GlmProvider::BigModelStartPlan,
+        GlmProvider::ZaiStartPlan,
+    ] {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("credentials.json");
+        let oauth = provider.oauth_id();
+        let coding = if oauth == "bigmodel" {
+            "account:bigmodel-individual-coding-plan"
+        } else {
+            "account:zai-individual-coding-plan"
+        };
+        let profile = if oauth == "bigmodel" {
+            r#"{"id":"user-1","rawProfile":{}}"#
+        } else {
+            r#"{"user_id":"user-1"}"#
+        };
+        let external = serde_json::json!({
+            "oauth:active_provider": encrypted(oauth),
+            format!("oauth:{oauth}:user_info"): encrypted(profile),
+            format!("account-provider:coding-plan:{coding}:account:user-1:api-key"): encrypted("coding-key"),
+            "zcodejwttoken": encrypted(&jwt("user-1")),
+        }).to_string();
+        std::fs::write(&path, &external).unwrap();
+        let secrets = Arc::new(MemorySecretStore::default());
+        secrets
+            .store(
+                &provider.credential_key(),
+                &SecretValue::new(
+                    serde_json::to_vec(&Credential {
+                        account_id: "ash-user".into(),
+                        email: None,
+                        display_name: None,
+                        model_key: "ash-key".into(),
+                        revision: 1,
+                    })
+                    .unwrap(),
+                ),
+            )
+            .unwrap();
+        let make_auth = |provider| {
+            GlmOAuth::with_client_and_zcode(
+                provider,
+                secrets.clone(),
+                Arc::new(ScriptedClient::new(vec![])),
+                Some(zcode::ZCodeCredentials::at(path.clone())),
+            )
+        };
+        let auth = make_auth(provider);
+        let other_provider = match provider {
+            GlmProvider::BigModel => GlmProvider::BigModelStartPlan,
+            GlmProvider::Zai => GlmProvider::ZaiStartPlan,
+            GlmProvider::BigModelStartPlan => GlmProvider::BigModel,
+            GlmProvider::ZaiStartPlan => GlmProvider::Zai,
+        };
+        let other = make_auth(other_provider);
+        let login = LoginService::new_with_drivers([
+            auth.clone() as Arc<dyn InteractiveLoginDriver>,
+            other.clone() as Arc<dyn InteractiveLoginDriver>,
+        ])
+        .unwrap();
+        login.logout_provider(provider.provider_id()).unwrap();
+        assert!(auth.read_account().unwrap().is_none());
+        assert!(make_auth(provider).read_account().unwrap().is_none());
+        assert!(auth.api_target().is_err());
+        assert!(secrets.load(&provider.credential_key()).unwrap().is_none());
+        assert!(other.read_account().unwrap().is_some());
+        assert!(matches!(
+            login.begin(provider.login_method()).unwrap(),
+            BeginLogin::Connected { .. }
+        ));
+        assert_eq!(auth.account_id().unwrap().as_deref(), Some("user-1"));
+        assert!(
+            secrets
+                .load(&provider.disconnected_key())
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), external);
+    }
 }
 
 #[test]

@@ -557,6 +557,104 @@ fn dir_source_and_watcher_filter_are_runtime_owned() {
     let _ = fs::remove_dir_all(dir);
 }
 
+#[test]
+fn directory_skill_watch_scope_stays_on_the_catalog_when_missing_or_present() {
+    let dir = test_directory("watch-scope");
+    let root = dir.join(".ash/skills");
+    let runtime = runtime(BuiltInSkillSource::Omitted, Arc::new(TestConfig::new()));
+    runtime.bind_dir_root(dir.clone()).unwrap();
+
+    assert_eq!(runtime.watched_paths(), vec![root.clone()]);
+    fs::create_dir(dir.join(".ash")).unwrap();
+    assert_eq!(runtime.watched_paths(), vec![root.clone()]);
+    write_skill(&root, "review", "Review code");
+    runtime.list(SkillCatalogReload::Refresh).unwrap();
+    assert_eq!(runtime.watched_paths(), vec![root.clone()]);
+    fs::remove_dir_all(&root).unwrap();
+    runtime.list(SkillCatalogReload::Refresh).unwrap();
+    assert_eq!(runtime.watched_paths(), vec![root]);
+
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn live_directory_skill_watcher_discovers_creation_edits_and_recreation() {
+    struct Events(std::sync::mpsc::Sender<u64>);
+    impl crate::SkillRuntimeEventSink for Events {
+        fn skills_changed(&self, generation: u64) {
+            self.0.send(generation).unwrap();
+        }
+    }
+
+    let dir = test_directory("live-directory-watch");
+    let built_in = dir.join("bundled-skills");
+    fs::create_dir(&built_in).unwrap();
+    let (events, changes) = std::sync::mpsc::channel();
+    let runtime = SkillRuntime::new(
+        BuiltInSkillSource::Root(built_in),
+        Arc::new(TestConfig::new()),
+        Arc::new(Events(events)),
+    )
+    .unwrap();
+    runtime.bind_dir_root(dir.clone()).unwrap();
+    let watcher = runtime.start_watching();
+    let root = dir.join(".ash/skills");
+    let mut generation = runtime.list(SkillCatalogReload::Cached).unwrap().generation;
+
+    for description in ["Created", "Updated"] {
+        write_skill(&root, "review", description);
+        let next = changes
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
+        assert!(next > generation);
+        generation = next;
+        let snapshot = runtime.list(SkillCatalogReload::Cached).unwrap();
+        assert_eq!(snapshot.generation, generation);
+        assert_eq!(snapshot.entries.len(), 1);
+        assert_eq!(
+            snapshot.entries[0].catalog_entry.metadata().description(),
+            description
+        );
+    }
+    fs::remove_dir_all(&root).unwrap();
+    assert!(
+        changes
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap()
+            > generation
+    );
+    assert!(
+        runtime
+            .list(SkillCatalogReload::Cached)
+            .unwrap()
+            .entries
+            .is_empty()
+    );
+    write_skill(&root, "review", "Recreated");
+    changes
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .unwrap();
+    assert_eq!(
+        runtime
+            .list(SkillCatalogReload::Cached)
+            .unwrap()
+            .entries
+            .len(),
+        1
+    );
+
+    let (released, completion) = std::sync::mpsc::channel();
+    let shutdown = std::thread::spawn(move || {
+        drop(watcher);
+        released.send(()).unwrap();
+    });
+    completion
+        .recv_timeout(std::time::Duration::from_secs(2))
+        .unwrap();
+    shutdown.join().unwrap();
+    fs::remove_dir_all(dir).unwrap();
+}
+
 fn runtime(source: BuiltInSkillSource, config: Arc<TestConfig>) -> Arc<SkillRuntime> {
     SkillRuntime::new(source, config, Arc::new(NoSkillRuntimeEvents)).unwrap()
 }

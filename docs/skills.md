@@ -346,7 +346,9 @@ availability 或 diagnostic 变化才递增 generation。
 由 [`ash-rs/file-watcher/README.md`](../ash-rs/file-watcher/README.md) 维护。
 
 Watcher 仍只发 invalidation hint。当前 App Server adapter 订阅 built-in/user roots、active
-Directory 的 `.ash` metadata root 与 user config authority path；收到普通 change、backend error
+Directory 的 `.ash/skills` 与 user config authority path。目录不存在时，保留目标的递归监听意图，
+由共享 FileWatcher 非递归监听最近的现有祖先，随目录创建逐级移近；不把工作区或 `.ash` 整体
+注册为递归 Skill root，避免扫描无关源码、缓存和 worktrees 阻塞服务退出。收到普通 change、backend error
 或 overflow 后都调用
 `SkillCatalog::refresh` 重新扫描/校验，再按可见 projection 决定是否发布 `skills/changed`。
 Watcher backend 无法启动时不会阻止 App Server 启动，调用方仍可用

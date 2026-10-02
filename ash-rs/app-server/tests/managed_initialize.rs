@@ -171,6 +171,81 @@ fn daemon_keeps_a_directory_connection_open_after_initialize() {
 }
 
 #[test]
+fn daemon_releases_its_endpoint_after_idle_and_can_initialize_again() {
+    let root = tempfile::tempdir().unwrap();
+    let profile = root.path().join("profile");
+    let dir = root.path().join("dir");
+    fs::create_dir(&profile).unwrap();
+    fs::create_dir(&dir).unwrap();
+    let endpoint = daemon_endpoint_path(&profile).unwrap();
+
+    for cycle in 0..2 {
+        if cycle == 1 {
+            // The first launch has no metadata directory; the second has metadata
+            // but no Skill catalog. Neither should become a recursive Skill root.
+            fs::create_dir(dir.join(".ash")).unwrap();
+            fs::write(dir.join(".ash/unrelated.txt"), "unrelated metadata").unwrap();
+        }
+        let daemon = Command::new(env!("CARGO_BIN_EXE_ash-app-server"))
+            .arg(ash_app_server_daemon::MANAGED_PROCESS_ARGUMENT)
+            .env("ASH_HOME", &profile)
+            .env("ZCODE_DATA_BASE_DIR", root.path().join("zcode"))
+            .env("ASH_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS", "250")
+            .spawn()
+            .unwrap();
+        let mut daemon = Daemon(daemon);
+        let mut stream = connect_when_ready(&endpoint);
+        stream.set_read_timeout(Some(CONNECT_TIMEOUT)).unwrap();
+        writeln!(
+            stream,
+            "{}",
+            json!({
+                "version": 1, "dirRoot": dir, "dirGrantSource": "hostConfiguration",
+                "productServices": null,
+            })
+        )
+        .unwrap();
+        writeln!(stream, "{}", json!({
+            "jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": {"clientInfo": {"name": "idle-restart-test", "version": "1"}, "capabilities": {}},
+        })).unwrap();
+        stream.flush().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        assert!(read_response(&mut reader, 1)["result"].is_object());
+        writeln!(
+            stream,
+            "{}",
+            json!({
+                "jsonrpc": "2.0", "id": 2, "method": "skills/list", "params": {"reload": "refresh"},
+            })
+        )
+        .unwrap();
+        stream.flush().unwrap();
+        assert!(read_response(&mut reader, 2)["result"].is_object());
+        drop(reader);
+        drop(stream);
+
+        let deadline = Instant::now() + CONNECT_TIMEOUT;
+        loop {
+            if let Some(status) = daemon.0.try_wait().unwrap() {
+                assert!(
+                    status.success(),
+                    "daemon failed during idle shutdown: {status}"
+                );
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "daemon stayed alive after idle shutdown"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(!endpoint.exists());
+        assert!(!endpoint.with_extension("pid.json").exists());
+    }
+}
+
+#[test]
 fn agents_connection_keeps_sessions_in_two_local_directories() {
     let root = tempfile::tempdir().unwrap();
     let profile = root.path().join("profile");

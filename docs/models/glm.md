@@ -47,4 +47,8 @@ Start Plan 的模型请求在 Anthropic `system` 数组前加入两个固定的 
 
 两个 Coding Plan 支持 `account/rateLimits/read`，并在账户就绪时出现在 `/usage` 中。查询使用当前账户的 Coding Plan 请求密钥，读取对应区域的 `/api/monitor/usage/quota/limit`。界面显示接口实际返回的五小时、每周与 MCP 额度及重置时间；未返回的字段保持“未提供”，不根据入口名称推断套餐等级。上游是否允许模型请求，仍以实际调用结果为准。[Z.AI 官方用量插件](https://github.com/zai-org/zai-coding-plugins/blob/main/plugins/glm-plan-usage/skills/usage-query-skill/scripts/query-usage.mjs)使用相同额度接口。
 
-在订阅页按 `l` 退出 Ash 自己登录的 Coding Plan 或 Start Plan 时，Ash 删除该订阅保存的账户和内部请求凭据。复用 ZCode 账号时，需在 ZCode 退出登录；Ash 不删除外部凭据。其他订阅账户和两个 API 连接的密钥不受影响。配置和选择规则见[登录与账户系统](../login.md#订阅入口与-api-入口)。
+在订阅页按 `l` 断开 Coding Plan 或 Start Plan 时，Ash 为该连接保存本地断开状态，并删除该连接在 Ash 保存的内部请求凭据。复用 ZCode 账号时也可单独在 Ash 断开，无需退出 ZCode；外部文件保持不变。后台刷新、ZCode 换账号和 Ash 重启不会重新接入，只有用户再次登录该连接才清除断开状态。其他订阅账户和两个 API 连接的密钥不受影响。配置和选择规则见[登录与账户系统](../login.md#订阅入口与-api-入口)。
+
+只有 Start Plan 的账户也可能在 ZCode 文件中留有 Coding Plan 请求密钥。密钥存在不代表已购买 Coding Plan；按上述优先级，未断开的 Coding Plan 会先被选中，可能返回 HTTP 429，而 Start Plan 本身仍可用。此时在 Ash 断开未开通的 Coding Plan，下一轮会选择已登录的 Start Plan；失败的请求不会自动换连接重发。未来开通正式 Coding Plan 后，再在 Ash 登录对应连接即可恢复其优先级。
+
+2026-10-02 在实际 Ash 配置中确认该情况：`provider/list` 将 BigModel Coding Plan 标为选中，Start Plan 为已就绪但未选中；Coding Plan 实际返回 HTTP 429、业务码 1113，含义为“余额不足或无可用资源包”，并非短时请求限流。通过 `account/logout` 单独断开 Coding Plan 后，Start Plan 成为选中连接，ZCode 凭据文件未变。使用相同 `glm-5.3-flash` 模型和 `max` 推理强度，真实 App Server 的普通回复、`read_file` 往返和多轮记忆三轮均成功。

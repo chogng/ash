@@ -487,12 +487,10 @@ impl SkillRuntime {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .as_ref()
         {
-            let metadata_root = dir_root.join(".ash");
-            paths.push(if metadata_root.is_dir() {
-                metadata_root
-            } else {
-                dir_root.clone()
-            });
+            // Register the missing catalog itself. FileWatcher follows its existing
+            // ancestors non-recursively until it appears; registering the workspace
+            // instead would make polling read unrelated source, caches and worktrees.
+            paths.push(dir_root.join(".ash/skills"));
         }
         paths.sort();
         paths.dedup();

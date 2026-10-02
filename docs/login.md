@@ -56,6 +56,8 @@ reauthentication-required 状态；它不把不同 Provider 的 credential 协�
 
 GLM 的六个连接共享 `glm` 模型厂商身份，顺序为 BigModel Coding Plan > Z.AI Coding Plan > BigModel Start Plan > Z.AI Start Plan > BigModel API > Z.AI API。四个订阅分别产生独立的 `ash-login` 账户；Start Plan 保存 ZCode JWT，不创建 Coding Plan 请求密钥。
 
+四个 GLM 订阅均支持只在 Ash 断开，包括只读复用的 ZCode 账号。断开状态按连接保存在 Ash 的 SecretStore，屏蔽外部复用和内部凭据，刷新或重启不会自动恢复；再次登录该连接才清除状态。这样只开通 Start Plan 的用户可以断开留有密钥但未开通的 Coding Plan，保留 ZCode 登录和其他接入。
+
 本地默认组合安装 ChatGPT、Kimi、Super Grok 与四个 GLM 订阅登录适配器；发行配置中的公开 GitHub App Client ID 和授权服务地址另启用 GitHub 账户适配器。ChatGPT、Kimi、Super Grok 使用各自的设备授权流程；两个 GLM Coding Plan 只读复用 ZCode 的完整可用订阅凭据，否则使用 Ash 自己保存的凭据，或通过 Ash 浏览器授权登录。GitHub 使用系统浏览器授权、PKCE 和本机回调；Cloudflare Worker 持有 GitHub App Client Secret 并交换或刷新 token，本机将凭据保存到 profile SecretStore。ChatGPT 使用 Codex 兼容的本地登录存储；GLM 的 ZCode 凭据只读使用；其余 Ash 登录凭据保存在 profile SecretStore。适配器只向控制面提供脱敏账户信息。
 
 所有客户端通过 `model/list` 读取同一固定内置目录。模型条目只表达厂商、模型及规格，不携带认证方式或执行适配器；登录、保存密钥、切换和登出都不改变目录条目。远端列表缺少内置模型仍可发起请求，实际错误直接返回，不改用其他模型或接入。

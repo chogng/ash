@@ -2170,6 +2170,7 @@ dependencies = [
  "ash-glm",
  "ash-http-client",
  "ash-kimi",
+ "ash-login",
  "ash-model-provider-config",
  "ash-model-tokenizer",
  "ash-models-manager",
