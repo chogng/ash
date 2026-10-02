@@ -1,3 +1,4 @@
+import { ILanguageModelsService } from '../../workbench/contrib/chat/common/languageModels.js';
 import { Emitter, type Event } from "../../base/common/event.js";
 import { isCancellationError } from "../../base/common/errors.js";
 import { Disposable, toDisposable } from "../../base/common/lifecycle.js";
@@ -64,7 +65,7 @@ export class ChatWidgetModel extends Disposable {
 
 	readonly onDidChange: Event<void> = this._onDidChange.event;
 
-	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService) {
+	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService) {
 		super();
 		this.chatService = chatService;
 		this.sessionService = sessionService;
@@ -77,7 +78,7 @@ export class ChatWidgetModel extends Disposable {
 			this._onDidChange.fire();
 		}));
 		this._register(chatService.onDidBecomeReady(() => void this.reconnect()));
-		this._register(chatService.onDidChangeModels(() => void this.loadModels()));
+		this._register(this.languageModels.onDidChangeModels(() => void this.loadModels()));
 		this._register(chatService.onDidChangeQueue(() => void this.loadQueue()));
 		this._register(chatService.onDidChangeSkills(() => void this.loadSkillSelectors()));
 		this._register(chatService.onDidUpdateTurnChanges((update) => {
@@ -282,12 +283,12 @@ export class ChatWidgetModel extends Disposable {
 		if (this.selection.kind === "untitled") {
 			this.sessionService.setUntitledSessionModel(this.selection.session.untitledSessionId, model);
 			this.refreshUntitledSelection();
-			this.chatService.rememberSelectedModel(model);
+			this.languageModels.rememberSelectedModel(model);
 			return;
 		}
 		this.selectedModels.set(this.selection.active.threadId, model);
 		this.automaticModels.delete(this.selection.active.threadId);
-		this.chatService.rememberSelectedModel(model);
+		this.languageModels.rememberSelectedModel(model);
 		this._onDidChange.fire();
 	}
 
@@ -295,12 +296,12 @@ export class ChatWidgetModel extends Disposable {
 		if (this.selection.kind === 'untitled') {
 			this.sessionService.setUntitledSessionModel(this.selection.session.untitledSessionId, undefined);
 			this.refreshUntitledSelection();
-			this.chatService.rememberSelectedModel(undefined);
+			this.languageModels.rememberSelectedModel(undefined);
 			return;
 		}
 		this.selectedModels.delete(this.selection.active.threadId);
 		this.automaticModels.add(this.selection.active.threadId);
-		this.chatService.rememberSelectedModel(undefined);
+		this.languageModels.rememberSelectedModel(undefined);
 		this._onDidChange.fire();
 	}
 
@@ -405,7 +406,7 @@ export class ChatWidgetModel extends Disposable {
 				} else if (argument === "off") {
 					if (current) await this.chatService.saveAdvisorDefault({ ...current, enabled: false });
 				} else {
-					const models = await this.chatService.listAdvisorModels();
+					const models = await this.languageModels.listAdvisorModels();
 					const chosen = models.find(entry => `${entry.model.provider}/${entry.model.model}` === argument);
 					if (!chosen) throw new Error(localize('chat.advisor.modelUnavailable', 'Advisor model is unavailable: {0}', argument));
 					const config = current?.model.provider === chosen.model.provider && current.model.model === chosen.model.model
@@ -549,12 +550,12 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	private async modelEntries(): Promise<readonly ModelCatalogEntry[]> {
-		return this.chatService.listModels();
+		return this.languageModels.listModels();
 	}
 
 	private applyDefaultNewChatModel(): void {
 		if (this.selection.kind !== 'untitled' || this.selection.session.modelSelectionKind === 'manual') return;
-		const model = this.chatService.getDefaultNewChatModel(this._models);
+		const model = this.languageModels.getDefaultNewChatModel(this._models);
 		this.sessionService.setUntitledSessionDefaultModel(this.selection.session.untitledSessionId, model);
 		this.refreshUntitledSelection();
 	}

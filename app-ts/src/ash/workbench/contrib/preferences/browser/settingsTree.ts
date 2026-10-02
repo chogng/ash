@@ -131,7 +131,13 @@ export class SettingsTree<T> extends Disposable {
 			rendered = this.createGroup(node, group);
 			this.rendered.set(group.id, rendered);
 		}
-		if (rendered.heading) rendered.heading.textContent = group.title;
+		if (rendered.heading) {
+			if (group.titleDomNode) {
+				if (rendered.heading.firstChild !== group.titleDomNode) rendered.heading.replaceChildren(group.titleDomNode);
+			} else {
+				rendered.heading.textContent = group.title;
+			}
+		}
 		if (rendered.description) rendered.description.textContent = group.description;
 		rendered.element.classList.toggle("collapsed", node.collapsed);
 		rendered.element.classList.toggle("is-navigation-target", this.model.navigationTarget === group.id);

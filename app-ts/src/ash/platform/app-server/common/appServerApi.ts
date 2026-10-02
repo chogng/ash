@@ -1,3 +1,4 @@
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { ResourceMetadataParams, ResourceMetadataResult, ResourceReadParams, ResourceReadResult, ResourceReleaseParams, ServerNotification, SlashCommandDefinition } from "./generated/index.js";
 import type { DisposableHandle } from "../../ipc/common/ipc.js";
 
@@ -21,3 +22,6 @@ export interface IResourceApi {
 export interface IServerEventApi {
 	subscribe(listener: (event: ServerNotification) => void): DisposableHandle;
 }
+
+export const IAppServerApi = createServiceIdentifier<IAppServerApi>('AppServerApi');
+export const IServerEventApi = createServiceIdentifier<IServerEventApi>('ServerEventApi');

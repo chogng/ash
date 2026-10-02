@@ -833,7 +833,7 @@ fn custom_provider_rpc_round_trips_protocol_and_stores_a_separate_key() {
         serde_json::json!({
             "jsonrpc":"2.0","id":2,"method":"provider/configure","params":{
                 "commandId":"create-custom","expectedRevision":0,"config":{
-                    "provider":"custom-example","connection":"custom-example","custom":{"name":"Example","protocol":"responses"},"baseUrl":"https://example.test/v1","modelContext":{}
+                    "provider":"custom-example","connection":"custom-example","custom":{"name":"Example","protocol":"responses","modelAliases":{"local-model":"wire-model"}},"baseUrl":"https://example.test/v1","modelContext":{"local-model":{"contextWindow":128000}}
                 }
             }
         }),
@@ -873,6 +873,14 @@ fn custom_provider_rpc_round_trips_protocol_and_stores_a_separate_key() {
     assert_eq!(
         config["result"]["providers"]["custom-example"]["custom"]["protocol"],
         "responses"
+    );
+    assert_eq!(
+        config["result"]["providers"]["custom-example"]["custom"]["modelAliases"],
+        serde_json::json!({"local-model":"wire-model"})
+    );
+    assert_eq!(
+        config["result"]["providers"]["custom-example"]["modelContext"],
+        serde_json::json!({"local-model":{"contextWindow":128000}})
     );
     assert!(!config.to_string().contains("test-key"));
 }

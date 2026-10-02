@@ -252,7 +252,7 @@ class SessionsChatGridEntry extends Disposable implements IView {
 		close.setAttribute("aria-label", "Close visible session");
 		close.textContent = "×";
 		header.append(activate, close);
-		const model = new ChatWidgetModel(options.chatService, options.selection.kind === "session" ? { kind: "session", active: options.selection.active } : { kind: "untitled", session: options.selection.session }, options.sessionService);
+		const model = services.createInstance(ChatWidgetModel, options.chatService, options.selection.kind === "session" ? { kind: "session", active: options.selection.active } : { kind: "untitled", session: options.selection.session }, options.sessionService);
 		this.pane = this._register(services.createInstance<ChatWidget<ChatWidgetModel>>(ChatWidget,
 			this.element,
 			`ash-sessions-chat-pane-${sessionsChatPaneInstanceId}`,

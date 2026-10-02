@@ -79,7 +79,7 @@ test('Dictation settings separate local models and cloud API connections with ke
 	if (target.appServerMode === 'required') { await expect(settings.getByText('An API key is required.', { exact: false })).toBeVisible(); }
 	else { await expect(settings.getByText('Could not read the dictation connection.', { exact: true })).toBeVisible(); }
 	await settings.getByRole('button', { name: 'Manage API connections' }).click();
-	await expect(settings.getByRole('heading', { name: 'API connections', exact: true })).toBeVisible();
+	await expect(settings.getByRole('heading', { name: 'API key' })).toBeVisible();
 	await expect(settings.locator('.ash-local-transcription-model-controls')).toHaveCount(0);
 });
 
@@ -251,7 +251,7 @@ test('Workbench and Sessions Models share model visibility', async ({ applicatio
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
 	await settings.locator('[data-settings-group-id="agents"]').click();
 	await settings.locator('[data-settings-category-id="models"]').click();
-	await expect(settings.getByRole('heading', { name: 'API connections' })).toBeVisible();
+	await expect(settings.getByRole('heading', { name: 'API key' })).toBeVisible();
 	const firstModel = settings.locator('.ash-models-settings-model-row').first();
 	await expect(firstModel).toBeVisible();
 	const modelSwitch = firstModel.getByRole('switch');

@@ -1138,9 +1138,14 @@ fn provider_config_dto(config: ModelProviderConfig) -> ProviderConfigDto {
         connection: config.connection.to_string(),
         provider: config.provider.to_string(),
         custom: config.custom.map(|custom| ash_app_server_protocol::protocol::config::CustomProviderConfigDto {
+            model_aliases: (!custom.model_aliases.is_empty()).then(|| {
+                custom.model_aliases.into_iter()
+                    .map(|(id, upstream)| (id.to_string(), upstream.to_string()))
+                    .collect()
+            }),
             context_window: custom.context_window,
-        order: custom.order,
-        model: custom.model.map(|model| model.to_string()),
+            order: custom.order,
+            model: custom.model.map(|model| model.to_string()),
             name: custom.name,
             protocol: match custom.protocol {
                 ash_model_provider_config::CustomProviderProtocol::Responses => ash_app_server_protocol::protocol::config::CustomProviderProtocolDto::Responses,
@@ -1190,13 +1195,37 @@ pub(super) fn provider_config_from_dto(
         .map(|model| ModelId::new(model.clone()))
         .transpose()
         .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+    let model_aliases = config
+        .custom
+        .as_ref()
+        .map(|custom| {
+            custom
+                .model_aliases
+                .as_ref()
+                .into_iter()
+                .flat_map(|aliases| aliases.iter())
+                .map(|(id, upstream)| {
+                    Ok((
+                        ModelId::new(id.clone()).map_err(|_| {
+                            RpcError::new(-32602, AppServerErrorName::InvalidParams)
+                        })?,
+                        ModelId::new(upstream.clone()).map_err(|_| {
+                            RpcError::new(-32602, AppServerErrorName::InvalidParams)
+                        })?,
+                    ))
+                })
+                .collect::<Result<_, RpcError>>()
+        })
+        .transpose()?
+        .unwrap_or_default();
     Ok(ModelProviderConfig {
         connection: ash_protocol::ModelConnectionId::new(config.connection)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?,
         custom: config.custom.map(|custom| ash_model_provider_config::CustomProviderConfig {
+            model_aliases,
             context_window: custom.context_window,
-        order: custom.order,
-        model: custom_model,
+            order: custom.order,
+            model: custom_model,
             name: custom.name,
             protocol: match custom.protocol {
                 ash_app_server_protocol::protocol::config::CustomProviderProtocolDto::Responses => ash_model_provider_config::CustomProviderProtocol::Responses,

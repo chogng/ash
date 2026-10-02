@@ -163,6 +163,7 @@ fn custom_connection_context_takes_precedence_over_per_model_configuration() {
     let mut config = ModelProviderConfig::new(provider);
     config.base_url = Some("https://example.test/v1".into());
     config.custom = Some(CustomProviderConfig {
+        model_aliases: Default::default(),
         context_window: 272_000,
         order: 0,
         model: Some(model.model.clone()),

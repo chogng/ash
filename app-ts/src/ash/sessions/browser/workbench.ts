@@ -1,3 +1,9 @@
+import { IModelApi as ModelApiId } from '../../platform/sessions/common/sessionApi.js';
+import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } from '../../platform/app-server/common/appServerApi.js';
+import { ILanguageModelsService } from '../../workbench/contrib/chat/common/languageModels.js';
+import { ILanguageModelsConfigurationService } from '../../workbench/contrib/chat/common/languageModelsConfiguration.js';
+import { LanguageModelsConfigurationService } from '../../workbench/contrib/chat/browser/languageModelsConfigurationService.js';
+import { LanguageModelsService } from '../../workbench/contrib/chat/browser/languageModelsService.js';
 import { MarketplaceLanguagePackService } from '../../platform/languagePacks/browser/marketplaceLanguagePackService.js';
 import { ILanguagePackService } from '../../platform/languagePacks/common/languagePacksService.js';
 import { ILocaleService } from '../../workbench/services/localization/common/locale.js';
@@ -286,8 +292,6 @@ export class Workbench extends Disposable {
 			skillApi: options.api.skills,
 			appServerApi: options.api.appServer,
 			eventApi: options.api.events,
-			configurationService,
-			storageService: storage,
 		}));
 		services.registerInstance(ISessionsService, view);
 		const workspace = this._register(services.createInstance(SessionsWorkspaceContextService, options.workspace));
@@ -323,6 +327,11 @@ export class Workbench extends Disposable {
 		services.registerInstance(ITextModelResourceService, textModels);
 		services.registerInstance(IFileTextModelService, textModels);
 		services.registerInstance(IChatService, chat);
+		services.registerInstance(ModelApiId, options.api.model);
+		services.registerInstance(AppServerApiId, options.api.appServer);
+		services.registerInstance(ServerEventApiId, options.api.events);
+		services.registerInstance(ILanguageModelsConfigurationService, this._register(services.createInstance(LanguageModelsConfigurationService)));
+		services.registerInstance(ILanguageModelsService, this._register(services.createInstance(LanguageModelsService)));
 		services.registerInstance(ISkillService, options.api.skills);
 		services.registerInstance(IHooksService, options.api.hooks);
 		const marketplaceService = this._register(new AppServerMarketplaceService(options.api.marketplace, options.api.events));

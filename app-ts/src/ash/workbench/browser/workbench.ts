@@ -1,3 +1,9 @@
+import { IModelApi as ModelApiId } from '../../platform/sessions/common/sessionApi.js';
+import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } from '../../platform/app-server/common/appServerApi.js';
+import { ILanguageModelsService } from '../contrib/chat/common/languageModels.js';
+import { ILanguageModelsConfigurationService } from '../contrib/chat/common/languageModelsConfiguration.js';
+import { LanguageModelsConfigurationService } from '../contrib/chat/browser/languageModelsConfigurationService.js';
+import { LanguageModelsService } from '../contrib/chat/browser/languageModelsService.js';
 import { IDictationService } from '../../platform/dictation/common/dictationService.js';
 import { IHooksService } from '../../platform/hooks/common/hooksService.js';
 import { ExtensionColorThemeService } from '../services/extensions/browser/extensionColorThemeService.js';
@@ -678,8 +684,13 @@ export class Workbench extends Disposable {
 		}));
 		this.workbenchLayout = layoutService;
 		services.registerInstance(IWorkbenchLayoutService, layoutService);
-		const chatService = this._register(new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, turnChangesApi: api.turnChanges, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, configurationService: configuration, storageService: storage }));
+		const chatService = this._register(new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, turnChangesApi: api.turnChanges, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events }));
 		services.registerInstance(IChatService, chatService);
+		services.registerInstance(ModelApiId, api.model);
+		services.registerInstance(AppServerApiId, api.appServer);
+		services.registerInstance(ServerEventApiId, api.events);
+		services.registerInstance(ILanguageModelsConfigurationService, this._register(services.createInstance(LanguageModelsConfigurationService)));
+		services.registerInstance(ILanguageModelsService, this._register(services.createInstance(LanguageModelsService)));
 		const savedFontInfo = storage.get('editorFontInfo', StorageScope.APPLICATION);
 		if (savedFontInfo !== undefined) {
 			try {

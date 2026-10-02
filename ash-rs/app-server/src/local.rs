@@ -2328,7 +2328,7 @@ impl ModelCatalog for ConfigBackedModelService {
             .block_on(manager.refresh(binding.scope().clone(), binding.source()))
             .map_err(ModelCatalogRefreshError::from)?;
         manager
-            .list(&[binding.scope().clone()], &CatalogQuery::all())
+            .list_discovered(&[binding.scope().clone()], &CatalogQuery::all())
             .map_err(ModelCatalogRefreshError::from)?
             .into_iter()
             .filter(|entry| entry.availability() == ash_protocol::ModelAvailability::Available)
@@ -2341,7 +2341,7 @@ impl ModelCatalog for ConfigBackedModelService {
     fn list(
         &self,
     ) -> Result<Vec<ash_app_server_protocol::protocol::model::ModelCatalogEntry>, CoreError> {
-        Ok(ash_model_provider_config::STATIC_MODEL_CATALOG
+        let mut models: Vec<_> = ash_model_provider_config::STATIC_MODEL_CATALOG
             .iter()
             .map(|spec| {
                 ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
@@ -2349,7 +2349,56 @@ impl ModelCatalog for ConfigBackedModelService {
                     &spec.model(),
                 )
             })
-            .collect())
+            .collect();
+        let config = self.resolved_config()?;
+        let mut custom: Vec<_> = config
+            .providers
+            .values()
+            .filter(|provider| provider.custom.is_some())
+            .collect();
+        custom.sort_by_key(|provider| {
+            std::cmp::Reverse(provider.custom.as_ref().expect("custom provider").order)
+        });
+        let registry = self
+            .provider_configs
+            .with_configs(config.providers.values())
+            .map_err(|error| CoreError::Model(error.to_string()))?;
+        let manager = self.models_manager.with_registry(registry.clone());
+        for provider in custom {
+            let mut discovered = std::collections::BTreeSet::new();
+            let binding = match self.catalog_provider.catalog_binding(provider) {
+                Ok(binding) => binding,
+                Err(ash_model_provider::ModelProviderError::Credential(_)) => None,
+                Err(error) => return Err(CoreError::Model(error.to_string())),
+            };
+            if let Some(binding) = binding {
+                // Reading the picker catalog never fetches the endpoint. Only successful remote
+                // observations join the catalog; manual declarations remain authoritative metadata.
+                for entry in manager
+                    .list_discovered(&[binding.scope().clone()], &CatalogQuery::all())
+                    .map_err(|error| CoreError::Model(error.to_string()))?
+                {
+                    discovered.insert(entry.model().model.clone());
+                    if !provider.model_context.contains_key(&entry.model().model) {
+                        models.push(runtime_catalog_entry(&entry, &config, &registry)?);
+                    }
+                }
+            }
+            // Explicit per-model context declarations also enroll custom model IDs in the product
+            // catalog. They do not imply remote availability; the model probe verifies invocation.
+            for (id, context) in &provider.model_context {
+                let mut info = ash_protocol::ModelInfo::new(id.clone(), id.as_str());
+                info.context_window = ash_protocol::ContextWindow::Known(context.context_window);
+                let mut entry =
+                    ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
+                        ash_protocol::ModelRef::new(provider.provider.clone(), id.clone()),
+                        &info,
+                    );
+                entry.discovered = Some(discovered.contains(id));
+                models.push(entry);
+            }
+        }
+        Ok(models)
     }
 
     fn current_access(&self, model: &ash_protocol::ModelRef) -> Result<ModelAccess, CoreError> {
@@ -2511,6 +2560,7 @@ fn runtime_catalog_entry(
         entry.model().clone(),
         &info,
     );
+    result.discovered = Some(true);
     if config.providers.contains_key(&entry.model().provider) {
         match context_budget_for_model(&info, provider_config, registry)?
             .resolve()

@@ -2,17 +2,13 @@ import type { AgentResponse as AgentResponseDto, InputItem, SkillRef as SkillRef
 import { Emitter } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";
-import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
-import { StorageScope, StorageTarget, type IStorageService } from '../../../../platform/storage/common/storage.js';
 import type { IAppServerApi, IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { IModelApi, IThreadApi, ITurnApi } from "../../../../platform/sessions/common/sessionApi.js";
 import type { ISkillApi } from "../../../../platform/skills/common/skillApi.js";
 import type { ITurnChangesApi } from "../../../../platform/turnChanges/common/turnChangesApi.js";
 import type { ModelRef, SessionId, ThreadId } from "../common/chatService.js";
-import type { AdvisorConfig, ConfigureAdvisorOptions, ConsultAdvisorOptions, CompactContextOptions, IChatService, InterruptTurnOptions, ModelCatalogEntry, ResolveInteractionOptions, SkillSelectorDefinition, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope, TurnChangeDetails, TurnChangeSetSummary, TurnChangesUpdate } from "../common/chatService.js";
-import type { ModelProviderCredentialStatus } from '../common/chatService.js';
+import type { AdvisorConfig, ConfigureAdvisorOptions, ConsultAdvisorOptions, CompactContextOptions, IChatService, InterruptTurnOptions, ResolveInteractionOptions, SkillSelectorDefinition, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope, TurnChangeDetails, TurnChangeSetSummary, TurnChangesUpdate } from "../common/chatService.js";
 import type { ResolvedChatContext } from '../common/chatContextService.js';
-import { ModelCatalogConfiguration, modelRefIdentity } from "../common/modelCatalog.js";
 
 export interface ChatServiceOptions {
 	readonly modelApi: IModelApi;
@@ -22,11 +18,8 @@ export interface ChatServiceOptions {
 	readonly skillApi: ISkillApi;
 	readonly appServerApi: IAppServerApi;
 	readonly eventApi: IServerEventApi;
-	readonly configurationService?: IConfigurationService;
-	readonly storageService: IStorageService;
 }
 
-const SelectedChatModelStorageKey = 'chat.currentLanguageModel.chat';
 
 /** App Server-backed implementation of the frontend Chat service. */
 export class ChatService extends Disposable implements IChatService {
@@ -34,21 +27,15 @@ export class ChatService extends Disposable implements IChatService {
 	private readonly _onDidUpdateThreadTranscript = this._register(new Emitter<ThreadTranscriptUpdateEnvelope>());
 	private readonly _onDidUpdateGoal = this._register(new Emitter<ThreadGoalUpdate>());
 	private readonly _onDidBecomeReady = this._register(new Emitter<void>());
-	private readonly _onDidChangeModels = this._register(new Emitter<void>());
 	private readonly _onDidChangeSkills = this._register(new Emitter<void>());
 	private readonly _onDidUpdateTurnChanges = this._register(new Emitter<TurnChangesUpdate>());
 	private readonly _onDidChangeQueue = this._register(new Emitter<void>());
-	private readonly hiddenModels = new Map<string, ModelRef>();
 	private readonly threadSubscriptions = new Map<string, { owners: Set<object>; pending: Set<Promise<ThreadSubscription>> }>();
-	private modelCatalog: readonly ModelCatalogEntry[] = [];
-	private modelCatalogLoad: Promise<readonly ModelCatalogEntry[]> | undefined;
-	private hasLoadedModelCatalog = false;
 
 	readonly onDidUpdateThread = this._onDidUpdateThread.event;
 	readonly onDidUpdateThreadTranscript = this._onDidUpdateThreadTranscript.event;
 	readonly onDidUpdateGoal = this._onDidUpdateGoal.event;
 	readonly onDidBecomeReady = this._onDidBecomeReady.event;
-	readonly onDidChangeModels = this._onDidChangeModels.event;
 	readonly onDidChangeSkills = this._onDidChangeSkills.event;
 	readonly onDidUpdateTurnChanges = this._onDidUpdateTurnChanges.event;
 	readonly onDidChangeQueue = this._onDidChangeQueue.event;
@@ -56,7 +43,6 @@ export class ChatService extends Disposable implements IChatService {
 	constructor(private readonly options: ChatServiceOptions) {
 		super();
 		const events = options.eventApi.subscribe((event) => {
-			if (event.method === 'provider/apiKey/changed') this._onDidChangeModels.fire();
 			if (event.method === "queue/changed") this._onDidChangeQueue.fire();
 			if (event.method === "session/thread/update") this._onDidUpdateThread.fire(toThreadUpdate(event.params));
 			if (event.method === "session/thread/transcript/update") this._onDidUpdateThreadTranscript.fire(toThreadTranscriptUpdate(event.params));
@@ -72,115 +58,10 @@ export class ChatService extends Disposable implements IChatService {
 		this._register(toDisposable(() => events.dispose()));
 		const connection = options.appServerApi.onConnectionState((state) => {
 			if (state !== "ready") return;
-			const refresh = this.refreshModels();
 			this._onDidBecomeReady.fire();
-			void refresh.catch(() => undefined);
 		});
 		this._register(toDisposable(() => connection.dispose()));
-		this.acceptHiddenModels(options.configurationService?.getValue(ModelCatalogConfiguration.hiddenModels) ?? []);
-		this._register(options.storageService.onDidChangeValue(event => {
-			if (event.scope === StorageScope.PROFILE && event.key === SelectedChatModelStorageKey) this._onDidChangeModels.fire();
-		}));
-		if (options.configurationService) {
-			this._register(options.configurationService.onDidChangeConfiguration((event) => {
-				if (event.affectsConfiguration(ModelCatalogConfiguration.hiddenModels)) {
-					this.acceptHiddenModels(options.configurationService!.getValue(ModelCatalogConfiguration.hiddenModels));
-				}
-				if (event.affectsConfiguration(ModelCatalogConfiguration.defaultModel)) this._onDidChangeModels.fire();
-			}));
-		}
-	}
 
-	async listModels(): Promise<readonly ModelCatalogEntry[]> {
-		const catalog = await this.listModelCatalog();
-		return catalog.filter(entry => this.isModelVisible(entry.model));
-	}
-
-	getDefaultNewChatModel(models: readonly ModelCatalogEntry[]): ModelRef | undefined {
-		const configured = this.options.configurationService?.getValue<string>(ModelCatalogConfiguration.defaultModel).trim();
-		const remembered = this.options.storageService.get(SelectedChatModelStorageKey, StorageScope.PROFILE);
-		for (const requested of [configured, remembered]) {
-			if (!requested) continue;
-			if (requested.toLowerCase() === 'auto') return undefined;
-			const match = models.find(entry => `${entry.model.provider}/${entry.model.model}`.toLowerCase() === requested.toLowerCase());
-			if (match) return match.model;
-			const unqualified = models.filter(entry => entry.model.model.toLowerCase() === requested.toLowerCase());
-			if (unqualified.length === 1) return unqualified[0].model;
-		}
-		return undefined;
-	}
-
-	rememberSelectedModel(model: ModelRef | undefined): void {
-		const value = model ? `${model.provider}/${model.model}` : 'auto';
-		this.options.storageService.store(SelectedChatModelStorageKey, value, StorageScope.PROFILE, StorageTarget.USER);
-	}
-
-	async listModelCatalog(): Promise<readonly ModelCatalogEntry[]> {
-		if (this.hasLoadedModelCatalog) return this.modelCatalog;
-		return this.refreshModels();
-	}
-
-	async listModelProviders(): Promise<readonly ModelProviderCredentialStatus[]> {
-		const result = await this.options.modelApi.listProviders();
-		return result.providers.map(provider => ({
-			provider: provider.provider,
-			connection: provider.connection,
-			access: provider.access,
-			active: provider.active,
-			configured: provider.configured,
-			ready: provider.ready,
-			displayName: provider.displayName,
-			apiKeyPolicy: provider.apiKeyPolicy,
-			apiKeyConfigured: provider.apiKeyConfigured,
-		}));
-	}
-
-	async setModelProviderApiKey(connection: string, apiKey: string): Promise<void> {
-		await this.options.modelApi.setProviderApiKey({ connection, apiKey });
-	}
-	async removeModelProviderApiKey(connection: string): Promise<void> {
-		await this.options.modelApi.removeProviderApiKey(connection);
-	}
-
-	async listAdvisorModels(): Promise<readonly ModelCatalogEntry[]> {
-		return this.listModelCatalog();
-	}
-
-	async refreshModels(): Promise<readonly ModelCatalogEntry[]> {
-		if (this.modelCatalogLoad) return this.modelCatalogLoad;
-		const load = this.loadModelCatalog();
-		this.modelCatalogLoad = load;
-		try {
-			return await load;
-		} finally {
-			if (this.modelCatalogLoad === load) this.modelCatalogLoad = undefined;
-		}
-	}
-
-	private async loadModelCatalog(): Promise<readonly ModelCatalogEntry[]> {
-		const [catalog, providers] = await Promise.all([this.options.modelApi.listModels(), this.options.modelApi.listProviders()]);
-		const models: Parameters<typeof this.acceptModelCatalog>[0][number][] = [...catalog.models];
-		for (const connection of ['kimi-desktop', 'kimi-cli']) {
-			if (!providers.providers.some(provider => provider.connection === connection && provider.ready)) continue;
-			models.push(...await this.options.modelApi.listProviderModels(connection));
-		}
-		return this.acceptModelCatalog(models);
-	}
-
-	isModelVisible(model: ModelRef): boolean {
-		return !this.hiddenModels.has(modelRefIdentity(model));
-	}
-
-	async setModelVisible(model: ModelRef, visible: boolean): Promise<void> {
-		const identity = modelRefIdentity(model);
-		if (visible === !this.hiddenModels.has(identity)) return;
-		const models = [...this.hiddenModels.values()].filter(candidate => modelRefIdentity(candidate) !== identity);
-		if (!visible) models.push({ ...model });
-		if (this.options.configurationService) {
-			await this.options.configurationService.updateValue(ModelCatalogConfiguration.hiddenModels, models);
-			return;
-		}
-		this.acceptHiddenModels(models);
 	}
 
 	async listSlashCommands(): Promise<readonly SlashCommandDefinition[]> {
@@ -332,62 +213,13 @@ export class ChatService extends Disposable implements IChatService {
 		return result.changeSets.map(toTurnChangeSummary);
 	}
 
-	private acceptModelCatalog(entries: readonly {
-		readonly model: ModelRef;
-		readonly displayName: string;
-		readonly contextWindow?: number | null;
-		readonly supportedReasoningEfforts?: ModelCatalogEntry['supportedReasoningEfforts'];
-		readonly modelReasoningEffort?: ModelCatalogEntry['modelReasoningEffort'] | null;
-	}[]): readonly ModelCatalogEntry[] {
-		const identities = new Set<string>();
-		const catalog = entries.map(entry => {
-			const identity = modelRefIdentity(entry.model);
-			if (identities.has(identity)) throw new Error(`Model catalog contains duplicate entry '${entry.model.provider}/${entry.model.model}'`);
-			identities.add(identity);
-			return Object.freeze({
-				model: Object.freeze({ ...entry.model }),
-				displayName: entry.displayName,
-				...(entry.contextWindow !== undefined ? { contextWindow: entry.contextWindow } : {}),
-				...(entry.supportedReasoningEfforts !== undefined ? { supportedReasoningEfforts: Object.freeze([...entry.supportedReasoningEfforts]) } : {}),
-				...(entry.modelReasoningEffort != null ? { modelReasoningEffort: entry.modelReasoningEffort } : {}),
-			});
-		});
-		const changed = !sameModelCatalog(this.modelCatalog, catalog);
-		this.modelCatalog = Object.freeze(catalog);
-		this.hasLoadedModelCatalog = true;
-		if (changed) this._onDidChangeModels.fire();
-		return this.modelCatalog;
-	}
 
-	private acceptHiddenModels(models: readonly ModelRef[]): void {
-		const next = new Map(models.map(model => [modelRefIdentity(model), Object.freeze({ ...model })]));
-		if (sameKeys(this.hiddenModels, next)) return;
-		this.hiddenModels.clear();
-		for (const [identity, model] of next) this.hiddenModels.set(identity, model);
-		this._onDidChangeModels.fire();
-	}
 }
 
 function toContextInput(context: ResolvedChatContext): InputItem {
 	return context.kind === 'image'
 		? { type: 'image', url: context.content }
 		: { type: 'context', name: context.name, content: context.content };
-}
-
-function sameModelCatalog(left: readonly ModelCatalogEntry[], right: readonly ModelCatalogEntry[]): boolean {
-	return left.length === right.length && left.every((entry, index) => {
-		const candidate = right[index];
-		return candidate !== undefined
-			&& entry.displayName === candidate.displayName
-			&& modelRefIdentity(entry.model) === modelRefIdentity(candidate.model)
-			&& entry.contextWindow === candidate.contextWindow
-			&& entry.modelReasoningEffort === candidate.modelReasoningEffort
-			&& entry.supportedReasoningEfforts?.join('\0') === candidate.supportedReasoningEfforts?.join('\0');
-	});
-}
-
-function sameKeys(left: ReadonlyMap<string, unknown>, right: ReadonlyMap<string, unknown>): boolean {
-	return left.size === right.size && [...left.keys()].every(key => right.has(key));
 }
 
 function toThread(thread: ThreadDto): Thread {

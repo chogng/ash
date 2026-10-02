@@ -3,20 +3,9 @@ use crate::static_model_spec::static_model;
 use ash_protocol::ModelRef;
 
 /// The sole product-level text model catalog, independent of accounts and connections.
-/// Array order is the stable display order; unknown metadata stays unknown.
+/// Providers stay grouped; models within a provider are ordered by release, newest first.
+/// Sibling variants from the same release retain their family order; unknown metadata stays unknown.
 pub const STATIC_MODEL_CATALOG: &[StaticModelSpec] = &[
-    static_model! {
-        provider: "openai",
-        id: "gpt-6-astra",
-        name: "GPT-6 Astra",
-        context_window: 1_050_000,
-        capabilities: {
-            tools: supported,
-            parallel_tool_calls: supported,
-            image_detail_original: supported,
-        },
-        reasoning: [low, medium, high, extra_high, max],
-    },
     static_model! {
         provider: "openai",
         id: "gpt-6.1-sol",
@@ -41,6 +30,18 @@ pub const STATIC_MODEL_CATALOG: &[StaticModelSpec] = &[
         name: "GPT-6 Luna",
         reasoning: [none, low, medium, high, extra_high, max],
         model_reasoning_effort: medium,
+    },
+    static_model! {
+        provider: "openai",
+        id: "gpt-6-astra",
+        name: "GPT-6 Astra",
+        context_window: 1_050_000,
+        capabilities: {
+            tools: supported,
+            parallel_tool_calls: supported,
+            image_detail_original: supported,
+        },
+        reasoning: [low, medium, high, extra_high, max],
     },
     static_model! {
         provider: "openai",
@@ -82,94 +83,18 @@ pub const STATIC_MODEL_CATALOG: &[StaticModelSpec] = &[
     },
     static_model! {
         provider: "openai",
-        id: "gpt-5.4",
-        name: "GPT-5.4",
-        reasoning: [none, low, medium, high, extra_high],
-        model_reasoning_effort: none,
-    },
-    static_model! {
-        provider: "openai",
-        id: "gpt-5.4-mini",
-        name: "GPT-5.4 Mini",
-        reasoning: [none, low, medium, high, extra_high],
-        model_reasoning_effort: none,
-    },
-    static_model! {
-        provider: "openai",
-        id: "gpt-5.4-nano",
-        name: "GPT-5.4 Nano",
-        reasoning: [none, low, medium, high, extra_high],
-        model_reasoning_effort: none,
-    },
-    static_model! {
-        provider: "openai",
-        id: "gpt-5.3-codex",
-        name: "GPT-5.3 Codex",
-        reasoning: [low, medium, high, extra_high],
-    },
-    static_model! {
-        provider: "openai",
-        id: "gpt-5.2",
-        name: "GPT-5.2",
-        reasoning: [none, low, medium, high, extra_high],
-        model_reasoning_effort: none,
-    },
-    static_model! {
-        provider: "openai",
-        id: "gpt-5.1",
-        name: "GPT-5.1",
-        reasoning: [none, low, medium, high],
-        model_reasoning_effort: none,
-    },
-    static_model! {
-        provider: "openai",
-        id: "gpt-5",
-        name: "GPT-5",
-        reasoning: [minimal, low, medium, high],
-    },
-    static_model! {
-        provider: "openai",
-        id: "gpt-5-mini",
-        name: "GPT-5 Mini",
-        reasoning: [minimal, low, medium, high],
-    },
-    static_model! {
-        provider: "openai",
-        id: "gpt-5-nano",
-        name: "GPT-5 Nano",
-        reasoning: [minimal, low, medium, high],
-    },
-    static_model! {
-        provider: "openai",
-        id: "gpt-4.1",
-        name: "GPT-4.1",
-    },
-    static_model! {
-        provider: "openai",
-        id: "gpt-4.1-mini",
-        name: "GPT-4.1 Mini",
-    },
-    static_model! {
-        provider: "openai",
-        id: "gpt-4o",
-        name: "GPT-4o",
-    },
-    static_model! {
-        provider: "openai",
-        id: "gpt-4o-mini",
-        name: "GPT-4o Mini",
-    },
-    static_model! {
-        provider: "openai",
         id: "o3",
         name: "o3",
         reasoning: [low, medium, high],
     },
     static_model! {
         provider: "anthropic",
-        id: "claude-fable-5-1",
-        name: "Claude Fable 5.1",
+        id: "claude-sonnet-5-5",
+        name: "Claude Sonnet 5.5",
+        context_window: 1_000_000,
+        capabilities: { tools: supported, parallel_tool_calls: supported },
         reasoning: [low, medium, high, extra_high, max],
+        model_reasoning_effort: high,
     },
     static_model! {
         provider: "anthropic",
@@ -179,14 +104,15 @@ pub const STATIC_MODEL_CATALOG: &[StaticModelSpec] = &[
     },
     static_model! {
         provider: "anthropic",
-        id: "claude-sonnet-5",
-        name: "Claude Sonnet 5",
+        id: "claude-fable-5-1",
+        name: "Claude Fable 5.1",
         reasoning: [low, medium, high, extra_high, max],
     },
     static_model! {
         provider: "anthropic",
-        id: "claude-haiku-4-5-20251001",
-        name: "Claude Haiku 4.5",
+        id: "claude-sonnet-5",
+        name: "Claude Sonnet 5",
+        reasoning: [low, medium, high, extra_high, max],
     },
     static_model! {
         provider: "anthropic",
@@ -202,15 +128,20 @@ pub const STATIC_MODEL_CATALOG: &[StaticModelSpec] = &[
     },
     static_model! {
         provider: "anthropic",
+        id: "claude-sonnet-4-6",
+        name: "Claude Sonnet 4.6",
+        reasoning: [low, medium, high, max],
+    },
+    static_model! {
+        provider: "anthropic",
         id: "claude-opus-4-6",
         name: "Claude Opus 4.6",
         reasoning: [low, medium, high, max],
     },
     static_model! {
         provider: "anthropic",
-        id: "claude-sonnet-4-6",
-        name: "Claude Sonnet 4.6",
-        reasoning: [low, medium, high, max],
+        id: "claude-haiku-4-5-20251001",
+        name: "Claude Haiku 4.5",
     },
     static_model! {
         provider: "anthropic",
@@ -237,33 +168,9 @@ pub const STATIC_MODEL_CATALOG: &[StaticModelSpec] = &[
     },
     static_model! {
         provider: "google",
-        id: "gemini-3.5-flash",
-        name: "Gemini 3.5 Flash",
-        reasoning: [minimal, low, medium, high],
-    },
-    static_model! {
-        provider: "google",
-        id: "gemini-3.5-flash-lite",
-        name: "Gemini 3.5 Flash-Lite",
-        reasoning: [minimal, low, medium, high],
-    },
-    static_model! {
-        provider: "google",
-        id: "gemini-3.1-flash-lite",
-        name: "Gemini 3.1 Flash-Lite",
-        reasoning: [minimal, low, medium, high],
-    },
-    static_model! {
-        provider: "google",
         id: "gemini-3.1-pro-preview",
         name: "Gemini 3.1 Pro Preview",
         reasoning: [low, medium, high],
-    },
-    static_model! {
-        provider: "google",
-        id: "gemini-3-flash-preview",
-        name: "Gemini 3 Flash Preview",
-        reasoning: [minimal, low, medium, high],
     },
     static_model! {
         provider: "xai",
@@ -341,14 +248,14 @@ pub const STATIC_MODEL_CATALOG: &[StaticModelSpec] = &[
     },
     static_model! {
         provider: "qwen",
-        id: "qwen3-max",
-        name: "Qwen 3 Max",
+        id: "qwen3-coder-next",
+        name: "Qwen 3 Coder Next",
         context_window: 256_000,
     },
     static_model! {
         provider: "qwen",
-        id: "qwen3-coder-next",
-        name: "Qwen 3 Coder Next",
+        id: "qwen3-max",
+        name: "Qwen 3 Max",
         context_window: 256_000,
     },
     static_model! {

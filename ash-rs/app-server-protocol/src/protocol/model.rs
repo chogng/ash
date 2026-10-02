@@ -14,6 +14,10 @@ use serde::Serialize;
 pub struct ModelCatalogEntry {
     pub model: ModelRef,
     pub display_name: String,
+    /// True only when this ID belongs to the last successful endpoint observation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub discovered: Option<bool>,
     pub context_window: Option<u32>,
     pub auto_compact_token_limit: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -32,6 +36,7 @@ impl ModelCatalogEntry {
         Self {
             model,
             display_name: info.display_name.clone(),
+            discovered: None,
             context_window: match info.context_window {
                 ContextWindow::Known(tokens) => Some(tokens),
                 ContextWindow::Unknown => None,

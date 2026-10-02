@@ -332,6 +332,7 @@ fn custom_provider_uses_selected_protocol_and_isolated_credentials() {
     ] {
         let mut config = ModelProviderConfig::new(provider_id("custom-test"));
         config.custom = Some(CustomProviderConfig {
+            model_aliases: Default::default(),
             context_window: 272_000,
             order: 0,
             model: None,
@@ -2310,6 +2311,7 @@ fn unsaved_provider_probe_uses_exact_ids_and_draft_keys_without_persisting() {
         let mut config = ModelProviderConfig::new(provider_id("custom-probe"));
         config.base_url = Some("https://example.test/gateway/v1".into());
         config.custom = Some(CustomProviderConfig {
+            model_aliases: Default::default(),
             context_window: 272_000,
             order: 0,
             model: None,
@@ -2354,6 +2356,21 @@ fn unsaved_provider_probe_uses_exact_ids_and_draft_keys_without_persisting() {
                     && header.value() == "Bearer draft-key")
             );
         }
+        config.custom.as_mut().unwrap().model_aliases.insert(
+            ModelId::new("private-model-alias").unwrap(),
+            ModelId::new("wire-target").unwrap(),
+        );
+        runtime
+            .probe_connection(
+                &config,
+                Some(b"draft-key".to_vec()),
+                Some("private-model-alias"),
+            )
+            .unwrap();
+        assert_eq!(
+            transport.request.lock().unwrap().as_ref().unwrap().2["model"],
+            "wire-target"
+        );
     }
 }
 

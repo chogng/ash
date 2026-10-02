@@ -12,7 +12,8 @@ use std::collections::BTreeMap;
 /// Model-specific context limits supplied by user or host configuration.
 ///
 /// This metadata is deliberately separate from transport normalization: Core
-/// consumes it to decide whether it can enforce a context budget itself.
+/// consumes it to decide whether it can enforce a context budget itself. For custom
+/// providers, its keys also declare the user-enrolled models in the product catalog.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelContextConfig {
@@ -132,6 +133,9 @@ pub struct CustomProviderConfig {
     pub order: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<ModelId>,
+    /// Local model IDs map directly to wire IDs; values are not resolved recursively.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub model_aliases: BTreeMap<ModelId, ModelId>,
     pub name: String,
     pub protocol: CustomProviderProtocol,
 }
@@ -252,6 +256,8 @@ pub struct NormalizedModelProviderConfig {
     pub provider: ProviderId,
     pub connection: ModelConnectionId,
     pub access_mode: ProviderAccessMode,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub model_aliases: BTreeMap<ModelId, ModelId>,
     pub api_profile: ApiProfile,
     pub base_url: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -261,9 +267,16 @@ pub struct NormalizedModelProviderConfig {
 }
 
 impl NormalizedModelProviderConfig {
-    /// Exact upstream aliases belong to the built-in connection contract. Other IDs are sent
-    /// unchanged, including IDs absent from a remote observation of the model catalog.
-    pub fn upstream_model<'a>(&self, model: &'a str) -> &'a str {
+    /// Custom aliases resolve once to the literal wire ID. Built-in connection aliases retain
+    /// their established mapping; IDs absent from either mapping are sent unchanged.
+    pub fn upstream_model<'a>(&'a self, model: &'a str) -> &'a str {
+        if let Some(upstream) = self
+            .model_aliases
+            .iter()
+            .find_map(|(id, upstream)| (id.as_str() == model).then_some(upstream))
+        {
+            return upstream.as_str();
+        }
         match (self.connection.as_str(), model) {
             ("kimi-subscription", "kimi-k2.7-code") => "kimi-for-coding",
             ("kimi-subscription", "kimi-k2.7-code-highspeed") => "kimi-for-coding-highspeed",

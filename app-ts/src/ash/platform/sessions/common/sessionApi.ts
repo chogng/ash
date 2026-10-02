@@ -1,3 +1,4 @@
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { AdvisorConfig, AdvisorConfigureResult, CollaborationMode, AgentRoleListResult, ModelListResult, ModelRef, SessionCatalogReadResult, SessionCreateParams, SessionListResult, SessionReadParams, SessionRequest, SessionRequestParams, SessionRequestResult, SessionResult, SessionSubscribeParams, SessionSubscribeResult, SessionThreadReadParams, SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeParams, SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams, ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult } from "../../app-server/common/generated/index.js";
 import type { ProviderApiKeySetParams, ProviderApiKeySetResult, ProviderListResult } from '../../app-server/common/generated/index.js';
 import type { ReasoningEffort } from '../../app-server/common/generated/index.js';
@@ -63,14 +64,32 @@ export interface ISessionApi {
 interface ProviderModelCatalogEntry {
 	readonly model: ModelRef;
 	readonly displayName: string;
+	readonly discovered?: boolean;
 	readonly contextWindow?: number | null;
 	readonly supportedReasoningEfforts?: readonly ReasoningEffort[];
 }
+
+export type ModelProviderApiFormat = 'responses' | 'chatCompletions' | 'anthropicMessages';
+
+/** User-owned connection declarations; credentials remain in the secret store. */
+export interface CustomModelProvider {
+	readonly id: string;
+	readonly name: string;
+	readonly baseUrl: string;
+	readonly apiFormat: ModelProviderApiFormat;
+	readonly order: number;
+	readonly models: readonly { readonly id: string; readonly contextWindow: number; readonly upstreamModel?: string }[];
+}
+
+export type ModelProviderTestResult = { readonly type: 'passed' } | { readonly type: 'failed'; readonly message: string };
 
 export interface IModelApi {
 	readAdvisorDefault(): Promise<AdvisorConfig | null>;
 	readConfiguredProviderIds(): Promise<readonly string[]>;
 	setAdvisorDefault(params: { readonly commandId: string; readonly advisor: AdvisorConfig | null }): Promise<void>;
+	listCustomProviders(): Promise<readonly CustomModelProvider[]>;
+	saveCustomProvider(provider: CustomModelProvider): Promise<void>;
+	testProviderModel(provider: CustomModelProvider, model: string): Promise<ModelProviderTestResult>;
 	listModels(): Promise<ModelListResult>;
 	listProviders(): Promise<ProviderListResult>;
 	listProviderModels(connection: string): Promise<readonly ProviderModelCatalogEntry[]>;
@@ -100,3 +119,5 @@ export interface ITurnApi {
 	interrupt(params: SessionOperationInput<"interruptTurn">): Promise<TurnInterruptResult>;
 	resolveInteraction(params: SessionOperationInput<"resolveInteraction">): Promise<TurnInteractionResolveResult>;
 }
+
+export const IModelApi = createServiceIdentifier<IModelApi>('ModelApi');

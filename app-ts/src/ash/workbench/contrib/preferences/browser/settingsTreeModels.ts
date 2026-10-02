@@ -14,6 +14,8 @@ export interface SettingsTreeItem<T> {
 }
 
 export interface SettingsTreeGroup {
+	/** Retained interactive heading content; its creator owns the controls and their disposal. */
+	readonly titleDomNode?: HTMLElement;
 	readonly kind: "group";
 	readonly id: string;
 	readonly title: string;

@@ -1,3 +1,5 @@
+import { errorHandler } from '../../../base/common/errors.js';
+import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
 import { observableValue } from '../../../base/common/observable.js';
 import assert from "node:assert/strict";
@@ -5,13 +7,13 @@ import { test, suiteTeardown } from "mocha";
 
 import { JSDOM } from "jsdom";
 import type { IFileService } from '../../../platform/files/common/files.js';
-import type { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
 import { Emitter, Event } from "../../../base/common/event.js";
 import { toDisposable } from "../../../base/common/lifecycle.js";
 import type { IMenu, IMenuService } from "../../../platform/actions/common/actions.js";
 import type { ICommandService } from "../../../platform/commands/common/commands.js";
-import type { IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
+import { IContextViewService, type IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
 import type { IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, ThreadRead, ThreadSubscription, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from "../../../workbench/services/chat/common/chatService.js";
 import type { IWorkbenchLayoutService, WorkbenchPartId, WorkbenchPartVisibilityChangeEvent } from "../../../workbench/services/layout/browser/layoutService.js";
 import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../services/sessions/common/session.js";
@@ -42,6 +44,8 @@ suiteTeardown(() => browserEnvironment.window.close());
 
 test("opens a local Chat tab before the backend session request settles", () => {
 	const document = browserEnvironment.window.document;
+	const escaped: unknown[] = [];
+	using errors = toDisposable(errorHandler.addListener(error => escaped.push(error)));
 	const sessionService = new PendingSessionService();
 	using layoutService = new VisibleAuxiliarybarLayoutService({ root: document.body });
 	using contextViewService = new BrowserContextViewService(document.body);
@@ -49,10 +53,14 @@ test("opens a local Chat tab before the backend session request settles", () => 
 	services.registerInstance(IDictationService, undefined);
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	registerTestDictationOnboarding(services);
+	const chat = unavailableChatService();
+	services.registerInstance(ILanguageModelsService, chat);
+	services.registerInstance(IContextViewService, contextViewService);
+	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 	using view = new ChatViewPane(
 		document.body,
 		{ id: "workbench.chat", title: "Chat" },
-		unavailableChatService(),
+		chat,
 		sessionService,
 		emptyMenuService(),
 		{} as IContextMenuService,
@@ -65,6 +73,7 @@ test("opens a local Chat tab before the backend session request settles", () => 
 		services,
 	);
 
+	assert.deepEqual(escaped, []);
 	assert.equal(sessionService.untitledSessions.length, 1);
 	assert.equal(view.element.querySelectorAll(".ash-chat[data-untitled-session-id]").length, 1);
 	assert.equal(view.element.querySelector<HTMLElement>(".ash-chat-view-empty")?.hidden, true);
@@ -136,7 +145,7 @@ class VisibleAuxiliarybarLayoutService extends BrowserLayoutService implements I
 	resizePart(_partId: WorkbenchPartId, _dimension: { readonly width: number; readonly height: number }): void {}
 }
 
-function unavailableChatService(): IChatService {
+function unavailableChatService(): IChatService & ILanguageModelsService {
 	const pending = new Promise<never>(() => {});
 	const neverEvent = <T>(): Event<T> => () => toDisposable(() => {});
 	return {
@@ -152,11 +161,15 @@ function unavailableChatService(): IChatService {
 		onDidChangeQueue: neverEvent<void>(),
 		onDidChangeSkills: neverEvent<void>(),
 		onDidUpdateTurnChanges: neverEvent<import("../../../workbench/services/chat/common/chatService.js").TurnChangesUpdate>(),
+		discoverProviderModels: () => pending,
 		listModels: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		getDefaultNewChatModel: () => undefined,
 		rememberSelectedModel: () => {},
 		listModelCatalog: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		listModelProviders: () => pending,
+		listCustomModelProviders: async () => [],
+		saveCustomModelProvider: async () => {},
+		testProviderModel: async () => ({ type: 'passed' }),
 		setModelProviderApiKey: () => pending as Promise<void>,
 		removeModelProviderApiKey: async () => {},
 		listAdvisorModels: () => pending as Promise<readonly ModelCatalogEntry[]>,

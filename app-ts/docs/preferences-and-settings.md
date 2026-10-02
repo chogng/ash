@@ -33,6 +33,32 @@
 
 样式也跟随创建页面的代码：[`settingsEditor.css`](../src/ash/workbench/contrib/preferences/browser/media/settingsEditor.css) 负责页面布局和状态提示，[`settingsTree.css`](../src/ash/workbench/contrib/preferences/browser/media/settingsTree.css) 负责分类树布局，[`settingsWidgets.css`](../src/ash/workbench/contrib/preferences/browser/media/settingsWidgets.css) 负责设置搜索框和设置项控件。
 
+## Models 设置
+
+Workbench 和 Sessions 共用 `ModelSettingsContent`。模型按供应商分组，同一供应商内按发布时间从新到旧排列；默认收起为每家供应商的首个模型，`viewall models` 展开或收起完整列表。列表顶部的模型搜索框按名称和 `provider/model` ID 搜索整个目录，清空搜索后恢复展开状态；API key 区域不参与这个局部搜索。
+
+`ModelCatalogConfiguration` 拥有模型开关的界面默认值：只开启 GPT-6.1 Sol、GPT-6 Astra、GPT-6 Luna、Claude Opus 5.5、Claude Sonnet 5.5 和 Grok 4.7。其他内置、后续新增及自定义模型默认关闭。手动修改由配置服务写入同一份用户设置，模型选择器通过 `ILanguageModelsService` 使用这些开关。
+
+`models.hidden` 保存偏离默认值的选择。已有 `{ provider, model }` 条目继续表示关闭，新增 `{ provider, model, visible: true }` 条目表示开启默认关闭的模型；`visible` 仅接受布尔值。恢复某个模型的默认值时移除对应条目，不保存另一份模型目录。
+
+模型管理文件参考 VS Code 的职责分工：
+
+| 文件 | 职责 |
+| --- | --- |
+| `workbench/contrib/chat/common/languageModels.ts` | 模型目录、供应商操作的界面契约 |
+| `workbench/contrib/chat/browser/languageModelsService.ts` | 目录加载、供应商发现和测试接口，两个窗口各一个实例 |
+| `workbench/contrib/chat/common/languageModelsConfiguration.ts` | JSONC 设置声明、六个默认开启模型、模型开关数据格式 |
+| `workbench/contrib/chat/browser/languageModelsConfigurationService.ts` | 模型开关、默认模型及上一次选择的保存与事件 |
+| `workbench/contrib/chat/browser/chatManagement/chatModelsViewModel.ts` | 当前供应商的发现列表、手动声明、批量测试进度 |
+| `workbench/contrib/chat/browser/chatManagement/chatModelsWidget.ts` | 供应商表单、模型表格、键盘操作与行内编辑 |
+| `workbench/contrib/chat/browser/modelSettingsContent.ts` | 将模型管理接入两个窗口的设置树 |
+
+API key 输入框失焦即保存，清空即移除；成功保存不弹通知，失败显示输入框错误并进入通知服务。密钥由后端 secret store 保存，界面只用掩码表示已配置状态。
+
+`Test models` 测试当前表格全部模型，与启用开关无关；表格为空时先发现模型。`Refresh models` 重新发现，保留手动配置和启用选择。发现成功的空列表、尚未发现、发现失败是不同状态，失败保留之前成功的列表。批量测试逐行更新结果，最后只发一条汇总通知；橙点表示未通过，绿点表示通过，同时提供文字状态。探测通过不证明 1M 上下文可用。
+
+`Add model` 添加 Model ID、上下文 token 数、可选上游 Model ID 与 1M 预设。上游 ID 映射只解析一次，由 Rust 在真正发送请求时使用；配置、开关和上下文绑定界面 ID。行内可编辑上下文和映射，也可删除手动声明；删除发现模型的手动上下文声明后，端点模型仍在表格中并关闭启用开关。Rust 的 models-manager 拥有发现与缓存，model-provider 拥有 HTTP 发现、分页和探测，成功发现的自定义模型进入聊天选择器。ChatService 只保留聊天、线程和 Advisor 配置操作。
+
 ## 为什么没有 PreferencesEditor 容器
 
 Workbench 已有编辑器组负责打开、切换和管理不同编辑器。当前三个偏好入口打开的是不同内容：图形设置、JSON 文件和快捷键。再加一层只承载图形设置页的 `PreferencesEditor`，会重复管理页面创建、搜索、布局和生命周期，却没有实际的多页面切换职责。因此 `SettingsEditor` 直接实现编辑器页面契约；偏好范围仍由 `IPreferencesService` 负责。

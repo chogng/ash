@@ -1,3 +1,4 @@
+import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import { IFileService } from '../../../platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { WorkspaceContextService } from '../../../workbench/services/workspaces/browser/workspaceContextService.js';
@@ -127,7 +128,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	const threadUpdates = new Emitter<ThreadUpdateEnvelope>();
 	const transcriptUpdates = new Emitter<import("../../../workbench/services/chat/common/chatService.js").ThreadTranscriptUpdateEnvelope>();
 	const ready = new Emitter<void>();
-	const chatService: IChatService = {
+	const chatService: IChatService & ILanguageModelsService = {
 		configureAdvisor: async () => {},
 		consultAdvisor: async () => {},
 		readAdvisorDefault: async () => null,
@@ -140,11 +141,15 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		onDidChangeQueue: ready.event,
 		onDidChangeSkills: ready.event,
 		onDidUpdateTurnChanges: () => toDisposable(() => {}),
+		discoverProviderModels: async () => [],
 		async listModels() { return []; },
 		getDefaultNewChatModel() { return undefined; },
 		rememberSelectedModel() {},
 		async listModelCatalog() { return []; },
 		async listModelProviders() { return []; },
+		listCustomModelProviders: async () => [],
+		saveCustomModelProvider: async () => {},
+		testProviderModel: async () => ({ type: 'passed' }),
 		async setModelProviderApiKey() {},
 		async removeModelProviderApiKey() {},
 		async listAdvisorModels() { return []; },
@@ -192,6 +197,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	};
 	using resources = new DisposableStore();
 	const services = resources.add(createCodeEditorServices(resources).createChild());
+	services.registerInstance(ILanguageModelsService, chatService);
 	services.registerInstance(IDictationService, undefined);
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	using notifications = new NotificationService();

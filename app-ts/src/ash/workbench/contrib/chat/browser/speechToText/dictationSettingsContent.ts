@@ -1,3 +1,4 @@
+import { ILanguageModelsService } from '../../common/languageModels.js';
 import './media/dictationSettingsContent.css';
 import { h } from '../../../../../base/browser/dom.js';
 import { Emitter } from '../../../../../base/common/event.js';
@@ -6,7 +7,6 @@ import { localize } from '../../../../../nls.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { DictationConfiguration } from '../../../../../platform/dictation/common/dictationConfiguration.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import { IChatService } from '../../../../services/chat/common/chatService.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { DefaultSettings } from '../../../../services/preferences/common/settingsModels.js';
 import type { ISetting } from '../../../../services/preferences/common/preferences.js';
@@ -58,7 +58,7 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 
 	constructor(container: HTMLElement,
 		@IConfigurationService private readonly configuration: IConfigurationService,
-		@IChatService private readonly chat: IChatService,
+		@ILanguageModelsService private readonly chat: ILanguageModelsService,
 		@IPreferencesService preferences: IPreferencesService,
 		@IInstantiationService instantiation: IInstantiationService,
 		@IContextKeyService contextKeys: IContextKeyService,

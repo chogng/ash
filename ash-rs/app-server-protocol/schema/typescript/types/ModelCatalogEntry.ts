@@ -4,4 +4,8 @@ import type { ModelRef } from './ModelRef.js';
 import type { Personality } from './Personality.js';
 import type { ReasoningEffort } from './ReasoningEffort.js';
 
-export type ModelCatalogEntry = { model: ModelRef, displayName: string, contextWindow: number | null, autoCompactTokenLimit: number | null, availableContextWindow?: number | null, capabilities: ModelCapabilities, supportedReasoningEfforts: Array<ReasoningEffort>, modelReasoningEffort: ReasoningEffort | null, defaultPersonality: Personality | null, };
+export type ModelCatalogEntry = { model: ModelRef, displayName: string,
+/**
+ * True only when this ID belongs to the last successful endpoint observation.
+ */
+discovered?: boolean | null, contextWindow: number | null, autoCompactTokenLimit: number | null, availableContextWindow?: number | null, capabilities: ModelCapabilities, supportedReasoningEfforts: Array<ReasoningEffort>, modelReasoningEffort: ReasoningEffort | null, defaultPersonality: Personality | null, };

@@ -1,3 +1,4 @@
+import { ILanguageModelsService } from '../common/languageModels.js';
 import './media/advisorSettingsContent.css';
 import { h, isHTMLElement } from '../../../../base/browser/dom.js';
 import { Dropdown } from '../../../../base/browser/ui/dropdown/dropdown.js';
@@ -50,6 +51,7 @@ export class AdvisorSettingsContent extends Disposable implements SettingsConten
 
 	constructor(container: HTMLElement,
 		@IChatService private readonly chat: IChatService,
+		@ILanguageModelsService private readonly languageModels: ILanguageModelsService,
 		@IContextViewService contextView: IContextViewService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IAccessibleViewService accessibleView: IAccessibleViewService,
@@ -119,7 +121,7 @@ export class AdvisorSettingsContent extends Disposable implements SettingsConten
 					() => focused.focus(), AccessibilityVerbositySettingId.ChatModelConfiguration);
 			},
 		}));
-		this._register(this.chat.onDidChangeModels(() => {
+		this._register(this.languageModels.onDidChangeModels(() => {
 			this.advisor.hide();
 			if (this.visible && !this.working) { void this.loadSettings(); }
 		}));
@@ -146,7 +148,7 @@ export class AdvisorSettingsContent extends Disposable implements SettingsConten
 		this.updateControls();
 		this.status.textContent = localize('advisor.settings.loading', 'Loading Advisor settings…');
 		try {
-			const [models, advisor] = await Promise.all([this.chat.listAdvisorModels(), this.chat.readAdvisorDefault()]);
+			const [models, advisor] = await Promise.all([this.languageModels.listAdvisorModels(), this.chat.readAdvisorDefault()]);
 			if (this.isDisposed || version !== this.loadVersion) { return; }
 			this.savedAdvisor = advisor;
 			this.models = models;
@@ -218,7 +220,7 @@ export class AdvisorSettingsContent extends Disposable implements SettingsConten
 			checked: !this.savedAdvisor?.enabled,
 			run: () => this.saveAdvisor(this.savedAdvisor ? { ...this.savedAdvisor, enabled: false } : null),
 		};
-		const models = this.models.filter(entry => flagshipModels[entry.model.provider]?.includes(entry.model.model) && this.chat.isModelVisible(entry.model));
+		const models = this.models.filter(entry => flagshipModels[entry.model.provider]?.includes(entry.model.model) && this.languageModels.isModelVisible(entry.model));
 		const actions: IAction[] = models.map(entry => ({
 			id: modelRefIdentity(entry.model), label: entry.displayName, tooltip: '', enabled: true,
 			checked: !!this.savedAdvisor?.enabled && modelRefIdentity(this.savedAdvisor.model) === modelRefIdentity(entry.model),

@@ -100,6 +100,10 @@ ProviderConfigRegistry::normalize(config)
 └─ NormalizedModelProviderConfig
 ```
 
+自定义 provider 的 `model_context` 键同时声明进入产品模型列表的模型 ID，每个条目独立设置上下文窗口；内置 provider 的该字段仍只覆盖元数据。模型测试验证实际调用，不把目录条目当作可用性证据。
+
+`model_aliases` 将界面使用的模型 ID 映射到请求中的上游 ID。映射只应用一次，目标 ID 是原样发送的值；`model_context` 仍按界面中的 ID 绑定上下文预算。两个字段不包含 API key。
+
 `model_context` 不进入 `NormalizedModelProviderConfig`，因为它不改变 transport endpoint。本 crate
 负责配置声明与校验；`ash-models-manager::ModelCatalogEntry::model_info` 按准确模型身份合并配置，
 以目录已知窗口为上限裁剪，并给出压缩阈值建议。Local App Server 将有效信息转换为 Core 预算。

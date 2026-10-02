@@ -1,3 +1,4 @@
+import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -54,6 +55,9 @@ test('Sessions Models switches control the model picker visibility preference', 
 		readAdvisorDefault: async () => advisor,
 		saveAdvisorDefault: async (next: typeof advisor) => { advisor = next; advisorWrites.push(next); },
 		listModelCatalog: async () => [{ model, displayName: 'GPT Test' }, { model: otherModel, displayName: 'Claude Test' }],
+		listCustomModelProviders: async () => [],
+		saveCustomModelProvider: async () => {},
+		testProviderModel: async () => ({ type: 'passed' }),
 		listModelProviders: async () => [{ connection: 'openai', provider: 'openai', displayName: 'OpenAI API', access: 'apiKey', active: true, configured: true, ready: false, apiKeyPolicy: 'required', apiKeyConfigured: savedKeys.length > 0 }],
 		isModelVisible: () => visible,
 		setModelProviderApiKey: async (_connection: string, key: string) => { savedKeys.push(key); },
@@ -76,6 +80,7 @@ test('Sessions Models switches control the model picker visibility preference', 
 	using transcription = new NullLocalTranscriptionService();
 	const { IChatService: ChatService } = await import('../../../workbench/services/chat/common/chatService.js');
 	services.registerInstance(ChatService, chat);
+	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(ILocalTranscriptionService, transcription);
 	const { IDictationService } = await import('../../../platform/dictation/common/dictationService.js');
@@ -141,30 +146,25 @@ test('Sessions Models switches control the model picker visibility preference', 
 	assert.ok(window.document.querySelector('[data-configuration-key="dictation.cloudProvider"]'));
 	assert.equal(window.document.querySelector('.ash-local-transcription-model-controls'), null);
 	modelsButton.click();
-	await Promise.resolve();
+	await new Promise<void>(resolve => setImmediate(resolve));
 	const apiInput = window.document.querySelector<HTMLInputElement>('.ash-models-settings-api-row input[type="password"]');
 	assert.ok(apiInput);
-	const saveKey = window.document.querySelector<HTMLButtonElement>('.ash-models-settings-api-row button');
-	assert.ok(saveKey);
+	assert.equal(window.document.querySelector('.ash-models-settings-api-row button'), null);
 	apiInput.value = 'test-secret';
 	apiInput.dispatchEvent(new window.Event('input', { bubbles: true }));
-	assert.equal(saveKey.disabled, false);
-	saveKey.click();
-	await Promise.resolve();
-	await Promise.resolve();
+	apiInput.dispatchEvent(new window.Event('blur'));
+	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.deepEqual(savedKeys, ['test-secret']);
-	assert.equal(apiInput.value, '');
+	assert.equal(apiInput.value, '••••••••');
 	assert.equal(window.document.body.textContent?.includes('test-secret'), false);
-	const removeKey = [...window.document.querySelectorAll<HTMLButtonElement>('.ash-models-settings-api-row button')].find(button => button.textContent === 'Remove API key')!;
-	removeKey.click();
-	assert.deepEqual(removedKeys, []);
-	assert.match(window.document.body.textContent ?? '', /shared by chat and dictation/);
-	removeKey.click();
-	await Promise.resolve();
+	apiInput.value = '';
+	apiInput.dispatchEvent(new window.Event('input', { bubbles: true }));
+	apiInput.dispatchEvent(new window.Event('blur'));
+	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.deepEqual(removedKeys, ['openai']);
 	const modelSearch = window.document.querySelector<HTMLInputElement>('.ash-sessions-settings-search input[type="search"]');
 	assert.ok(modelSearch);
-	assert.equal(window.document.querySelectorAll('input[type="search"]').length, 1);
+	assert.equal(window.document.querySelectorAll('input[type="search"]').length, 2);
 	const rows = [...window.document.querySelectorAll<HTMLElement>('.ash-models-settings-model-row')];
 	assert.equal(rows.length, 2);
 	modelSearch.value = 'anthropic/claude';

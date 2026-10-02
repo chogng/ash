@@ -1,3 +1,10 @@
+import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
+import { LanguageModelsService } from '../../../workbench/contrib/chat/browser/languageModelsService.js';
+import { LanguageModelsConfigurationService } from '../../../workbench/contrib/chat/browser/languageModelsConfigurationService.js';
+import { ILanguageModelsConfigurationService } from '../../../workbench/contrib/chat/common/languageModelsConfiguration.js';
+import { IModelApi } from '../../../platform/sessions/common/sessionApi.js';
+import { IAppServerApi, IServerEventApi } from '../../../platform/app-server/common/appServerApi.js';
+import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
 import { IDictationService } from '../../../platform/dictation/common/dictationService.js';
 import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
@@ -19,6 +26,7 @@ import { TAB_CLOSE_ACTION_ID } from "../../../base/browser/ui/tablist/tabList.js
 import { Lxicon } from "../../../base/common/lxicons.js";
 import { MenuId } from "../../../platform/actions/common/actions.js";
 import { MenuService } from "../../../platform/actions/common/menuService.js";
+import { IContextViewService } from "../../../platform/contextview/browser/contextView.js";
 import type { IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
@@ -36,7 +44,9 @@ import { emptyEditorServiceState } from '../../../workbench/test/common/testEdit
 import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from "../../../workbench/services/layout/browser/layoutService.js";
 import { ChatService } from "../../../workbench/services/chat/browser/chatService.js";
 import { IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadTranscriptUpdateEnvelope, type ThreadUpdateEnvelope, type TurnError } from "../../../workbench/services/chat/common/chatService.js";
-import { ModelCatalogConfiguration } from "../../../workbench/services/chat/common/modelCatalog.js";
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
+import { Registry } from '../../../platform/registry/common/platform.js';
+import { ModelCatalogConfiguration } from "../../../workbench/contrib/chat/common/languageModelsConfiguration.js";
 import { WorkbenchConfigurationService } from "../../../workbench/services/configuration/browser/configurationService.js";
 import { SessionsManagementService as BaseSessionsManagementService } from "../../services/sessions/browser/sessionsManagementService.js";
 import { AppServerSessionsProvider } from "../../contrib/providers/appServer/browser/appServerSessionsProvider.js";
@@ -60,8 +70,11 @@ import { ILifecycleService } from '../../../workbench/services/lifecycle/common/
 
 const inputResources = new DisposableStore();
 suiteTeardown(() => inputResources.dispose());
-function createInputServices(): InstantiationService {
+function createInputServices(contextView: IContextViewService, chat: IChatService): InstantiationService {
 	const services = inputResources.add(new InstantiationService());
+	services.registerInstance(IContextViewService, contextView);
+	services.registerInstance(ILanguageModelsService, modelsFor(chat));
+	services.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
 	services.registerInstance(IDictationService, undefined);
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	registerTestDictationOnboarding(services);
@@ -193,10 +206,11 @@ test('Chat loads an Ash remote workspace image through the file service', async 
 		using commands = new CommandService(services);
 		const menuService = new MenuService(commands, contextKeys);
 		const contextMenuService = { showContextMenu: () => undefined } as unknown as IContextMenuService;
+		const paneChat = createChatService(fake.api);
 		using pane = new ChatViewPane(
 			dom.window.document.body,
 			{ id: CHAT_VIEW_ID, title: 'Chat' },
-			createChatService(fake.api),
+			paneChat,
 			sessions,
 			menuService,
 			contextMenuService,
@@ -206,7 +220,7 @@ test('Chat loads an Ash remote workspace image through the file service', async 
 			fileService,
 			unavailableAccessibleViewService,
 			notifications,
-			createInputServices(), contextKeys,
+			createInputServices(contextViewService, paneChat), contextKeys,
 		);
 		dom.window.document.body.append(pane.element);
 		await sessions.initialize();
@@ -251,8 +265,8 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	dom.window.HTMLElement.prototype.scrollTo = () => {};
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
 	const subscriptionModel = {
-		model: { provider: "openai", model: "gpt-5.6-sol" },
-		displayName: "GPT-5.6 Sol",
+		model: { provider: "openai", model: "gpt-6.1-sol" },
+		displayName: "GPT-6.1 Sol",
 		contextWindow: 128000,
 		supportedReasoningEfforts: ["low", "medium", "high"] as const,
 		modelReasoningEffort: 'medium' as const,
@@ -283,6 +297,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	}, editorServices.get(IFileTextModelService));
 	services.registerInstance(IPreferencesService, preferences);
 	services.registerInstance(IChatService, chat);
+	services.registerInstance(ILanguageModelsService, modelsFor(chat));
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IContextKeyService, contextKeys);
 	using commands = new CommandService(services);
@@ -317,7 +332,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
-		createInputServices(), contextKeys,
+		createInputServices(contextViewService, chat), contextKeys,
 	);
 	chatView = pane;
 	const title = h(dom.window.document, "div");
@@ -487,7 +502,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 			],
 		);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, "Agent");
-		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.model'] button .ash-button-label")?.textContent, "GPT-5.6 Sol");
+		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.model'] button .ash-button-label")?.textContent, "GPT-6.1 Sol");
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort'] button")?.getAttribute('aria-label'), 'Thinking Effort: Medium');
 		assert.equal(inputToolbar?.querySelector(".ash-chat-input-model-access-badge"), null);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mic'] button")?.disabled, true);
@@ -501,16 +516,16 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	assert.equal(modelPicker?.closest('.ash-context-view')?.parentElement, contextViewService.container);
 	assert.equal(modelButton?.getAttribute('aria-expanded'), 'true');
 	assert.equal(modelPicker?.querySelector<HTMLInputElement>('input')?.placeholder, 'Search models');
-	assert.match(modelPicker?.textContent ?? '', /GPT-5\.6 Sol/);
+	assert.match(modelPicker?.textContent ?? '', /GPT-6\.1 Sol/);
 	assert.match(modelPicker?.textContent ?? '', /128,000 context tokens/);
-	assert.match(modelPicker?.textContent ?? '', /Thinking: low, medium, high/);
+	assert.match(modelPicker?.textContent ?? '', /Thinking: Low, Medium, High/);
 	assert.equal(modelPicker?.querySelector('.ash-quick-pick-row-action'), null);
 	const modelSearch = modelPicker?.querySelector<HTMLInputElement>('input');
 	assert.ok(modelSearch);
 	modelSearch.value = 'no-such-model';
 	modelSearch.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 	assert.equal(modelPicker?.querySelectorAll('.ash-quick-pick-row-content').length, 0);
-	modelSearch.value = 'GPT-5.6 Sol';
+	modelSearch.value = 'GPT-6.1 Sol';
 	modelSearch.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 	modelSearch.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
 	assert.ok(modelSearch.getAttribute('aria-activedescendant'));
@@ -736,7 +751,7 @@ test('Code sending preserves the Chat draft when pages switch during first-sessi
 	if (draft?.kind !== 'untitled') throw new Error('Expected Code draft');
 	using commands = new CommandService(new InstantiationService());
 	using chat = createChatService(fake.api);
-	const widgetModel = new ChatWidgetModel(chat, { kind: 'untitled', session: draft.session }, sessions);
+	const widgetModel = createWidgetModel(chat, { kind: 'untitled', session: draft.session }, sessions);
 	using widget = new ChatWidget(
 		dom.window.document.body,
 		'centered-chat',
@@ -765,7 +780,7 @@ test('Code sending preserves the Chat draft when pages switch during first-sessi
 	view.selectPage('chat');
 	const chatSelection = view.activeSelection;
 	if (chatSelection?.kind !== 'untitled') throw new Error('Expected Chat draft');
-	const chatModel = new ChatWidgetModel(chat, { kind: 'untitled', session: chatSelection.session }, sessions);
+	const chatModel = createWidgetModel(chat, { kind: 'untitled', session: chatSelection.session }, sessions);
 	using chatWidget = new ChatWidget(dom.window.document.body, 'separate-chat', chatModel, () => view.openNewSession(),
 		{ showContextMenu: () => undefined } as unknown as IContextMenuService, contextViewService, commands,
 		unavailableAccessibleViewService, notifications, undefined, undefined, undefined, (container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, chatModel, undefined, 'chat'), editorServices);
@@ -826,13 +841,14 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	const contextMenuService = {
 		showContextMenu: () => undefined,
 	} as unknown as IContextMenuService;
+	const paneChat = createChatService(api);
 	using pane = new ChatViewPane(
 		dom.window.document.body,
 		{
 			id: CHAT_VIEW_ID,
 			title: "Chat",
 		},
-		createChatService(api),
+		paneChat,
 		sessions,
 		menuService,
 		contextMenuService,
@@ -842,7 +858,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
-		createInputServices(),
+		createInputServices(contextViewService, paneChat),
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -993,13 +1009,14 @@ test("the New Chat slash command opens an untitled session", async () => {
 	const contextMenuService = {
 		showContextMenu: () => undefined,
 	} as unknown as IContextMenuService;
+	const paneChat = createChatService(fake.api);
 	using pane = new ChatViewPane(
 		dom.window.document.body,
 		{
 			id: CHAT_VIEW_ID,
 			title: "Chat",
 		},
-		createChatService(fake.api),
+		paneChat,
 		sessions,
 		menuService,
 		contextMenuService,
@@ -1009,7 +1026,7 @@ test("the New Chat slash command opens an untitled session", async () => {
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
-		createInputServices(),
+		createInputServices(contextViewService, paneChat),
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1071,13 +1088,14 @@ test("failed first send keeps the untitled session and its input draft", async (
 	const contextMenuService = {
 		showContextMenu: () => undefined,
 	} as unknown as IContextMenuService;
+	const paneChat = createChatService(fake.api);
 	using pane = new ChatViewPane(
 		dom.window.document.body,
 		{
 			id: CHAT_VIEW_ID,
 			title: "Chat",
 		},
-		createChatService(fake.api),
+		paneChat,
 		sessions,
 		menuService,
 		contextMenuService,
@@ -1087,7 +1105,7 @@ test("failed first send keeps the untitled session and its input draft", async (
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
-		createInputServices(),
+		createInputServices(contextViewService, paneChat),
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1154,13 +1172,14 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 	const contextMenuService = {
 		showContextMenu: () => undefined,
 	} as unknown as IContextMenuService;
+	const paneChat = createChatService(api);
 	using pane = new ChatViewPane(
 		dom.window.document.body,
 		{
 			id: CHAT_VIEW_ID,
 			title: "Chat",
 		},
-		createChatService(api),
+		paneChat,
 		sessions,
 		menuService,
 		contextMenuService,
@@ -1170,7 +1189,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
-		createInputServices(),
+		createInputServices(contextViewService, paneChat),
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1413,7 +1432,7 @@ test("ChatWidgetModel applies backend-assembled transcript entries", async () =>
 		thread: () => currentThread,
 	});
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatWidgetModel(createChatService(fake.api), {
+	using model = createWidgetModel(createChatService(fake.api), {
 		kind: "session",
 		active: {
 			session: activeSession,
@@ -1495,7 +1514,7 @@ test("ChatWidgetModel projects and refreshes the canonical durable Turn plan", a
 	};
 	const fake = fakeApi({ sessions: [activeSession], thread: () => currentThread });
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatWidgetModel(createChatService(fake.api), {
+	using model = createWidgetModel(createChatService(fake.api), {
 		kind: "session",
 		active: { session: activeSession, threadId: "thread-1" },
 	}, sessions);
@@ -1549,7 +1568,7 @@ test("ChatWidgetModel mechanically clears and replaces transient transcript entr
 		thread: () => thread(),
 	});
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatWidgetModel(createChatService(fake.api), {
+	using model = createWidgetModel(createChatService(fake.api), {
 		kind: "session",
 		active: {
 			session: activeSession,
@@ -1632,7 +1651,7 @@ test("ChatWidgetModel projects a durable Turn failure into the conversation", as
 	};
 	const fake = fakeApi({ sessions: [activeSession], thread: () => failedThread });
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatWidgetModel(createChatService(fake.api), {
+	using model = createWidgetModel(createChatService(fake.api), {
 		kind: "session",
 		active: { session: activeSession, threadId: "thread-1" },
 	}, sessions);
@@ -1690,7 +1709,7 @@ test("ChatWidgetModel rebuilds error actions from canonical Thread state after r
 	let currentThread = threadWithFailure("providerAuth", false);
 	const fake = fakeApi({ sessions: [activeSession], thread: () => currentThread });
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatWidgetModel(createChatService(fake.api), {
+	using model = createWidgetModel(createChatService(fake.api), {
 		kind: "session",
 		active: { session: activeSession, threadId: "thread-1" },
 	}, sessions);
@@ -1728,7 +1747,7 @@ test("ChatWidgetModel retries only the latest retryable failed Turn as a new vis
 	const failedThread = threadWithFailure("modelInvocationFailed", true);
 	const fake = fakeApi({ sessions: [activeSession], thread: () => failedThread });
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatWidgetModel(createChatService(fake.api), {
+	using model = createWidgetModel(createChatService(fake.api), {
 		kind: "session",
 		active: { session: activeSession, threadId: "thread-1" },
 	}, sessions);
@@ -1778,10 +1797,28 @@ function createTestStorage(): InstanceType<typeof BrowserStorageService> {
 	return new BrowserStorageService({ ownerWindow: testStorageEnvironment.window as unknown as Window, applicationId: `chat-test-${++testStorageSequence}`, workspaceId: 'test', flushInterval: 0 });
 }
 
+const modelServices = new WeakMap<IChatService, ILanguageModelsService>();
+function modelsFor(chat: IChatService): ILanguageModelsService {
+	return modelServices.get(chat)!;
+}
+function createWidgetModel(chat: IChatService, selection: import('../../browser/chatWidgetModel.js').ChatWidgetSelection, sessions: ISessionsManagementService): ChatWidgetModel {
+	const services = inputResources.add(new InstantiationService());
+	services.registerInstance(ILanguageModelsService, modelsFor(chat));
+	return services.createInstance(ChatWidgetModel, chat, selection, sessions);
+}
 function createChatService(api: IRendererHost, configurationService?: WorkbenchConfigurationService, storageService?: InstanceType<typeof BrowserStorageService>): ChatService {
 	const storage = storageService ?? createTestStorage();
 	if (!storageService) testStorages.push(storage);
-	return new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, turnChangesApi: api.turnChanges, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, ...(configurationService ? { configurationService } : {}), storageService: storage });
+	const services = inputResources.add(new InstantiationService());
+	services.registerInstance(IModelApi, api.model);
+	services.registerInstance(IAppServerApi, api.appServer);
+	services.registerInstance(IServerEventApi, api.events);
+	services.registerInstance(IConfigurationService, configurationService ?? inputResources.add(new WorkbenchConfigurationService()));
+	services.registerInstance(IStorageService, storage);
+	services.registerInstance(ILanguageModelsConfigurationService, inputResources.add(services.createInstance(LanguageModelsConfigurationService)));
+	const chat = new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, turnChangesApi: api.turnChanges, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events });
+	modelServices.set(chat, inputResources.add(services.createInstance(LanguageModelsService)));
+	return chat;
 }
 
 test('closing one conversation owner retains another owner across repeated subscriptions', async () => {
@@ -1930,38 +1967,53 @@ test("Chat service projects unique enabled Skills and submits the exact pinned r
 	]);
 });
 
-test("Chat service caches the static catalog and filters picker entries by user visibility", async () => {
-	const first = {
-		model: { provider: "openai", model: "gpt-5.6-sol" },
-		displayName: "GPT-5.6 Sol",
-	};
-	const second = {
-		model: { provider: "anthropic", model: "claude-opus-5" },
-		displayName: "Claude Opus 5",
-	};
-	const third = {
-		model: { provider: "openai", model: "gpt-5.6" },
-		displayName: "GPT-5.6",
-	};
-	const fake = fakeApi({ models: [first, second, third] });
+test("Language models service applies product visibility defaults and persists manual changes", async () => {
+	const enabled = [
+		{ provider: 'openai', model: 'gpt-6.1-sol' },
+		{ provider: 'openai', model: 'gpt-6-astra' },
+		{ provider: 'openai', model: 'gpt-6-luna' },
+		{ provider: 'anthropic', model: 'claude-opus-5-5' },
+		{ provider: 'anthropic', model: 'claude-sonnet-5-5' },
+		{ provider: 'xai', model: 'grok-4.7' },
+	].map(model => ({ model, displayName: model.model }));
+	const older = { model: { provider: 'openai', model: 'gpt-5.6' }, displayName: 'GPT-5.6' };
+	const custom = { model: { provider: 'custom-gateway', model: 'private-model' }, displayName: 'Private model' };
+	const catalog = [...enabled, older, custom];
+	const fake = fakeApi({ models: catalog });
 	using configuration = new WorkbenchConfigurationService();
 	using chat = createChatService(fake.api, configuration);
 
-	assert.deepEqual(await chat.listModels(), [first, second, third]);
-	assert.deepEqual(await chat.listModelCatalog(), [first, second, third]);
+	assert.deepEqual(await modelsFor(chat).listModels(), enabled);
+	assert.deepEqual(await modelsFor(chat).listModelCatalog(), catalog);
 	assert.equal(fake.modelListRequests.length, 1);
-
-	await chat.setModelVisible(first.model, false);
-
-	assert.deepEqual(await chat.listModels(), [second, third]);
-	assert.deepEqual(configuration.getValue(ModelCatalogConfiguration.hiddenModels), [first.model]);
-	await chat.refreshModels();
-	assert.equal(fake.modelListRequests.length, 2);
+	await modelsFor(chat).setModelVisible(older.model, true);
+	await modelsFor(chat).setModelVisible(enabled[0]!.model, false);
+	assert.deepEqual(await modelsFor(chat).listModels(), [...enabled.slice(1), older]);
+	assert.deepEqual(configuration.getValue(ModelCatalogConfiguration.hiddenModels), [
+		{ ...older.model, visible: true }, enabled[0]!.model,
+	]);
+	using restored = createChatService(fake.api, configuration);
+	assert.deepEqual(await modelsFor(restored).listModels(), [...enabled.slice(1), older]);
+	await modelsFor(restored).setModelVisible(older.model, false);
+	await modelsFor(restored).setModelVisible(enabled[0]!.model, true);
+	assert.deepEqual(configuration.getValue(ModelCatalogConfiguration.hiddenModels), []);
+	assert.deepEqual(await modelsFor(chat).listModels(), enabled);
+	await configuration.updateValue(ModelCatalogConfiguration.hiddenModels, [older.model, enabled[0]!.model]);
+	assert.deepEqual(await modelsFor(chat).listModels(), enabled.slice(1));
+	await configuration.updateValue(ModelCatalogConfiguration.hiddenModels, [{ ...older.model, visible: true }, enabled[0]!.model]);
+	assert.deepEqual(await modelsFor(chat).listModels(), [...enabled.slice(1), older]);
+	await modelsFor(chat).refreshModels();
+	assert.equal(fake.modelListRequests.length, 3);
+	const definition = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(ModelCatalogConfiguration.hiddenModels)!;
+	assert.deepEqual(definition.serialize(definition.parse([{ ...older.model, visible: true }, enabled[0]!.model])), [
+		{ ...older.model, visible: true }, enabled[0]!.model,
+	]);
+	assert.throws(() => definition.parse([{ ...older.model, visible: 'true' }]), /must be a boolean/);
 });
 
 test('New chats use the configured model before the remembered picker choice', async () => {
-	const first = { model: { provider: 'openai', model: 'gpt-first' }, displayName: 'First' };
-	const second = { model: { provider: 'anthropic', model: 'claude-second' }, displayName: 'Second' };
+	const first = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'First' };
+	const second = { model: { provider: 'anthropic', model: 'claude-opus-5-5' }, displayName: 'Second' };
 	const fake = fakeApi({
 		models: [first, second],
 		createSession: session('created', 'created-thread'),
@@ -1971,10 +2023,10 @@ test('New chats use the configured model before the remembered picker choice', a
 	using storage = createTestStorage();
 	using chat = createChatService(fake.api, configuration, storage);
 	using sessions = new SessionsManagementService(fake.api);
-	chat.rememberSelectedModel(first.model);
-	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'anthropic/claude-second');
+	modelsFor(chat).rememberSelectedModel(first.model);
+	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'anthropic/claude-opus-5-5');
 	const configuredDraft = sessions.createUntitledSession();
-	using configured = new ChatWidgetModel(chat, { kind: 'untitled', session: configuredDraft }, sessions);
+	using configured = createWidgetModel(chat, { kind: 'untitled', session: configuredDraft }, sessions);
 	await configured.initialize();
 	assert.deepEqual(configured.selectedModel, second.model);
 	await configured.send('Use the configured model');
@@ -1982,52 +2034,80 @@ test('New chats use the configured model before the remembered picker choice', a
 
 	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, '');
 	const rememberedDraft = sessions.createUntitledSession();
-	using remembered = new ChatWidgetModel(chat, { kind: 'untitled', session: rememberedDraft }, sessions);
+	using remembered = createWidgetModel(chat, { kind: 'untitled', session: rememberedDraft }, sessions);
 	await remembered.initialize();
 	assert.deepEqual(remembered.selectedModel, first.model);
 	await remembered.send('Use the remembered model');
 	assert.deepEqual(fake.turnStartRequests.at(-1)?.model, first.model);
 	using restoredChatService = createChatService(fake.api, configuration, storage);
-	assert.deepEqual(restoredChatService.getDefaultNewChatModel(await restoredChatService.listModels()), first.model);
+	assert.deepEqual(modelsFor(restoredChatService).getDefaultNewChatModel(await modelsFor(restoredChatService).listModels()), first.model);
 	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'missing/model');
-	assert.deepEqual(chat.getDefaultNewChatModel(await chat.listModels()), first.model);
+	assert.deepEqual(modelsFor(chat).getDefaultNewChatModel(await modelsFor(chat).listModels()), first.model);
 	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'auto');
 	const automaticDraft = sessions.createUntitledSession();
-	using automatic = new ChatWidgetModel(chat, { kind: 'untitled', session: automaticDraft }, sessions);
+	using automatic = createWidgetModel(chat, { kind: 'untitled', session: automaticDraft }, sessions);
 	await automatic.initialize();
 	assert.equal(automatic.isAutomaticModel, true);
 });
 
 test('A manual model choice stays with its chat while later new chats use the new default', async () => {
-	const first = { model: { provider: 'openai', model: 'gpt-first' }, displayName: 'First' };
-	const second = { model: { provider: 'anthropic', model: 'claude-second' }, displayName: 'Second' };
+	const first = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'First' };
+	const second = { model: { provider: 'anthropic', model: 'claude-opus-5-5' }, displayName: 'Second' };
 	const fake = fakeApi({ models: [first, second] });
 	using configuration = new WorkbenchConfigurationService();
 	using storage = createTestStorage();
 	using chat = createChatService(fake.api, configuration, storage);
 	using sessions = new SessionsManagementService(fake.api);
 	const firstDraft = sessions.createUntitledSession();
-	using firstChat = new ChatWidgetModel(chat, { kind: 'untitled', session: firstDraft }, sessions);
+	using firstChat = createWidgetModel(chat, { kind: 'untitled', session: firstDraft }, sessions);
 	await firstChat.initialize();
 	await firstChat.selectModel(first.model);
-	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'anthropic/claude-second');
+	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'anthropic/claude-opus-5-5');
 	await waitFor(() => firstChat.models.length === 2);
 	assert.deepEqual(firstChat.selectedModel, first.model);
 	const secondDraft = sessions.createUntitledSession();
-	using secondChat = new ChatWidgetModel(chat, { kind: 'untitled', session: secondDraft }, sessions);
+	using secondChat = createWidgetModel(chat, { kind: 'untitled', session: secondDraft }, sessions);
 	await secondChat.initialize();
 	assert.deepEqual(secondChat.selectedModel, second.model);
 
 	await secondChat.selectAutomaticModel();
-	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'openai/gpt-first');
+	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'openai/gpt-6.1-sol');
 	assert.equal(secondChat.isAutomaticModel, true);
 	const thirdDraft = sessions.createUntitledSession();
-	using thirdChat = new ChatWidgetModel(chat, { kind: 'untitled', session: thirdDraft }, sessions);
+	using thirdChat = createWidgetModel(chat, { kind: 'untitled', session: thirdDraft }, sessions);
 	await thirdChat.initialize();
 	assert.deepEqual(thirdChat.selectedModel, first.model);
 });
 
-test("Chat service includes ready Kimi connections in the desktop model picker", async () => {
+test('Model discovery refreshes the picker after an older catalog request completes', async () => {
+	const discovered = { model: { provider: 'custom-gateway', model: 'private-model' }, displayName: 'Private model', discovered: true };
+	const initial = new DeferredPromise<Awaited<ReturnType<IRendererHost['model']['listModels']>>>();
+	const fake = fakeApi();
+	let loads = 0;
+	using chat = createChatService({ ...fake.api, model: {
+		...fake.api.model,
+		listModels: async () => ++loads === 1 ? initial.p : { models: [{
+			...discovered, contextWindow: null, autoCompactTokenLimit: null,
+			capabilities: { tools: 'supported', reasoning: 'unknown', parallelToolCalls: 'unknown', personality: 'unknown', imageDetailOriginal: 'unknown' },
+			supportedReasoningEfforts: [], modelReasoningEffort: null, defaultPersonality: null,
+		}] },
+		listProviderModels: async () => [discovered],
+	} });
+	const models = modelsFor(chat);
+	const oldCatalog = models.listModelCatalog();
+	const discovery = models.discoverProviderModels('custom-gateway');
+	await initial.complete({ models: [] });
+	assert.deepEqual(await oldCatalog, []);
+	assert.deepEqual(await discovery, [discovered]);
+	const pickerEntry = { ...discovered, contextWindow: null, supportedReasoningEfforts: [] };
+	assert.deepEqual(await models.listModelCatalog(), [pickerEntry]);
+	assert.deepEqual(await models.listModels(), []);
+	await models.setModelVisible(discovered.model, true);
+	assert.deepEqual(await models.listModels(), [pickerEntry]);
+	assert.equal(loads, 2);
+});
+
+test("Language models service includes ready Kimi connections in the model catalog", async () => {
 	const desktop = { model: { provider: 'kimi-desktop', model: 'desktop-k2' }, displayName: 'Desktop K2' };
 	const cli = { model: { provider: 'kimi-cli', model: 'cli-k2' }, displayName: 'CLI K2' };
 	const provider = (connection: string): ModelProviderCredentialStatus => ({
@@ -2040,9 +2120,9 @@ test("Chat service includes ready Kimi connections in the desktop model picker",
 	});
 	using chat = createChatService(fake.api);
 
-	assert.deepEqual(await chat.listModels(), [desktop, cli]);
+	assert.deepEqual(await modelsFor(chat).listModelCatalog(), [desktop, cli]);
 	assert.deepEqual(fake.providerModelRequests, ['kimi-desktop', 'kimi-cli']);
-	assert.deepEqual(await chat.listModels(), [desktop, cli]);
+	assert.deepEqual(await modelsFor(chat).listModelCatalog(), [desktop, cli]);
 	assert.deepEqual(fake.providerModelRequests, ['kimi-desktop', 'kimi-cli']);
 });
 
@@ -2057,11 +2137,11 @@ test("Chat picker excludes a hidden selected model", async () => {
 	await configuration.updateValue(ModelCatalogConfiguration.hiddenModels, [entry.model]);
 	using chat = createChatService(fake.api, configuration);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatWidgetModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
+	using model = createWidgetModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
 
 	await model.initialize();
 
-	assert.deepEqual(await chat.listModels(), []);
+	assert.deepEqual(await modelsFor(chat).listModels(), []);
 	assert.deepEqual(model.models, []);
 	assert.deepEqual(model.selectedModel, entry.model);
 });
@@ -2080,7 +2160,7 @@ test("ChatWidgetModel selects models per chat without changing the global model"
 	const fake = fakeApi({ sessions: [activeSession], thread: () => currentThread });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatWidgetModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
+	using model = createWidgetModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
 	await model.initialize();
 
 	await model.selectModel(firstModel);
@@ -2098,8 +2178,8 @@ test("ChatWidgetModel selects models per chat without changing the global model"
 });
 
 test('ChatWidgetModel sends the selected model thinking effort with its Turn', async () => {
-	const first = { model: { provider: 'openai', model: 'gpt-first' }, displayName: 'First', supportedReasoningEfforts: ['low', 'high'] as const };
-	const second = { model: { provider: 'openai', model: 'gpt-second' }, displayName: 'Second', supportedReasoningEfforts: ['medium'] as const };
+	const first = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'First', supportedReasoningEfforts: ['low', 'high'] as const };
+	const second = { model: { provider: 'openai', model: 'gpt-6-astra' }, displayName: 'Second', supportedReasoningEfforts: ['medium'] as const };
 	const activeSession = session('session-1', 'thread-1');
 	const previous = thread('previous answer');
 	const fake = fakeApi({
@@ -2108,7 +2188,7 @@ test('ChatWidgetModel sends the selected model thinking effort with its Turn', a
 	});
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 
 	assert.equal(model.inputState.selectedReasoningEffort, 'high');
@@ -2129,7 +2209,7 @@ test('ChatWidgetModel sends the selected model thinking effort with its Turn', a
 });
 
 test('New Chat keeps its thinking effort when it creates a Thread', async () => {
-	const entry = { model: { provider: 'openai', model: 'gpt-first' }, displayName: 'First', supportedReasoningEfforts: ['low', 'high'] as const };
+	const entry = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'First', supportedReasoningEfforts: ['low', 'high'] as const };
 	const fake = fakeApi({
 		models: [entry],
 		createSession: session('session-1', undefined, 'New Chat'),
@@ -2138,7 +2218,7 @@ test('New Chat keeps its thinking effort when it creates a Thread', async () => 
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
 	const untitled = sessions.createUntitledSession();
-	using model = new ChatWidgetModel(chat, { kind: 'untitled', session: untitled }, sessions);
+	using model = createWidgetModel(chat, { kind: 'untitled', session: untitled }, sessions);
 	await model.initialize();
 
 	await model.selectModel(entry.model);
@@ -2157,7 +2237,7 @@ test('ChatWidgetModel returns to the session model when Auto is selected', async
 	const fake = fakeApi({ sessions: [activeSession] });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 
 	await model.selectModel(manualModel);
@@ -2177,7 +2257,7 @@ test('ChatWidgetModel sends image-only input using the selected approval mode', 
 	});
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
+	using model = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
 	await model.initialize();
 	model.selectApprovalMode('autoReview');
 	await model.send('', 'agent', undefined, [{ name: 'image.png', content: 'data:image/png;base64,aGVsbG8=', kind: 'image' }]);
@@ -2210,7 +2290,7 @@ test("ChatWidgetModel steers an active Turn instead of starting another Turn", a
 	const fake = fakeApi({ sessions: [activeSession], thread: () => activeThread });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatWidgetModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
+	using model = createWidgetModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
 	await model.initialize();
 
 	await model.send("focus on the failing test");
@@ -2231,7 +2311,7 @@ test("ChatWidgetModel dispatches compact as a standalone server command", async 
 	const fake = fakeApi({ sessions: [activeSession], thread: () => thread("previous answer") });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatWidgetModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
+	using model = createWidgetModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
 	await model.initialize();
 
 	await model.executeServerCommand("compact", "preserve the deployment decision");
@@ -2254,7 +2334,7 @@ test('ChatWidgetModel queues a new mode while keeping the active Turn unchanged'
 	const fake = fakeApi({ sessions: [activeSession], thread: () => value });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	assert.equal(model.inputState.mode, 'plan');
 	model.selectMode('multitask');
@@ -2307,7 +2387,7 @@ test('ChatWidgetModel follows switch_mode while preserving a different next-mess
 		const fake = fakeApi({ sessions: [activeSession], thread: () => value });
 		using chat = createChatService(fake.api);
 		using sessions = new SessionsManagementService(fake.api);
-		using model = new ChatWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+		using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 		await model.initialize();
 		if (selectedMode) {
 			model.selectMode(selectedMode);
@@ -2341,7 +2421,7 @@ test('ChatWidgetModel restores the mode once and keeps it when reconnecting to n
 	const fake = fakeApi({ sessions: [activeSession], thread: () => value });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	assert.equal(model.inputState.mode, 'plan');
 	value = { ...value, sequence: value.sequence + 1, turns: [{ ...value.turns[0]!, mode: 'agent' }] };
@@ -2357,7 +2437,7 @@ test('ChatWidgetModel submits server commands using the selected mode', async ()
 	const fake = fakeApi({ sessions: [activeSession] });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	model.selectMode('ask');
 	await model.executeServerCommand('init', '');
@@ -2373,7 +2453,7 @@ test('ChatWidgetModel retries the recorded mode independently of prompt identity
 	const fake = fakeApi({ sessions: [activeSession], thread: () => value });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	model.selectMode('ask');
 	await model.retryFailedTurn('turn-1');
@@ -2779,7 +2859,7 @@ test("Advisor question consults directly without starting the worker", async () 
 	});
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatWidgetModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
+	using model = createWidgetModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
 	await model.initialize();
 	await model.executeServerCommand("advisor", "Check src/app.rs cancellation");
 	assert.equal(fake.turnStartRequests.length, 0);
@@ -2793,7 +2873,7 @@ test("Advisor without a configured model keeps an untitled chat", async () => {
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
 	const untitled = sessions.createUntitledSession();
-	using model = new ChatWidgetModel(chat, { kind: "untitled", session: untitled }, sessions);
+	using model = createWidgetModel(chat, { kind: "untitled", session: untitled }, sessions);
 	await model.initialize();
 	await assert.rejects(model.executeServerCommand("advisor", "Check cancellation"), /Configure an advisor model in Chat Settings/);
 	assert.equal(fake.createSessionRequests.length, 0);
@@ -2809,7 +2889,7 @@ test('Selecting a custom Agent in a new Chat creates the Session with its exact 
 	});
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
+	using model = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
 	await model.initialize();
 
 	assert.deepEqual(await model.listAgents(), [agent]);
@@ -2829,7 +2909,7 @@ test("Advisor command selects a model and the off switch preserves its settings"
 	});
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = new ChatWidgetModel(chat, { kind: "untitled", session: sessions.createUntitledSession() }, sessions);
+	using model = createWidgetModel(chat, { kind: "untitled", session: sessions.createUntitledSession() }, sessions);
 	await model.initialize();
 	await model.executeServerCommand("advisor", "openai/reviewer");
 	assert.equal(fake.savedAdvisorDefaults[0]?.enabled, true);
@@ -2853,6 +2933,7 @@ test("Chat Settings toggles Advisor while keeping its selected model", async () 
 	using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
 	const services = new InstantiationService();
 	services.registerInstance(IChatService, chat);
+	services.registerInstance(ILanguageModelsService, modelsFor(chat));
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IDialogService, recordingDialogService([]));
 	using editorServices = createTestEditorServices();
@@ -2891,6 +2972,7 @@ test('Chat Settings saves a masked provider key through the model API and refres
 	const messages: IMessageDialogOptions[] = [];
 	const services = new InstantiationService();
 	services.registerInstance(IChatService, chat);
+	services.registerInstance(ILanguageModelsService, modelsFor(chat));
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IDialogService, recordingDialogService(messages));
 	using editorServices = createTestEditorServices();
@@ -2945,7 +3027,7 @@ test("Advisor model choices include the fixed catalog before connection setup", 
 		],
 	});
 	using chat = createChatService(fake.api);
-	assert.deepEqual((await chat.listAdvisorModels()).map(entry => entry.displayName), ["Reviewer", "Flash"]);
+	assert.deepEqual((await modelsFor(chat).listAdvisorModels()).map(entry => entry.displayName), ["Reviewer", "Flash"]);
 });
 
 test("Advisor transcript groups the call and renders advice as a disclosure", () => {

@@ -2595,7 +2595,7 @@ fn built_in_catalog_excludes_configured_custom_models() {
         .map(|entry| entry.model.model.as_str())
         .collect::<Vec<_>>();
     assert!(api_models.contains(&"gpt-5.6"));
-    assert!(api_models.contains(&"gpt-5.4"));
+    assert!(!api_models.contains(&"gpt-5.4"));
     assert!(models.iter().any(|entry| {
         entry.model.provider.as_str() == "openai" && entry.model.model.as_str() == "gpt-6-astra"
     }));
@@ -2665,12 +2665,27 @@ fn custom_provider_discovery_controls_discovered_view_without_mutating_config() 
     let mut connection = ModelProviderConfig::new(provider.clone());
     connection.base_url = Some("https://example.test/v1".into());
     connection.custom = Some(ash_model_provider_config::CustomProviderConfig {
+        model_aliases: Default::default(),
         context_window: 272_000,
         order: 0,
         model: None,
         name: "Example".into(),
         protocol: ash_model_provider_config::CustomProviderProtocol::Responses,
     });
+    connection.model_context.insert(
+        ModelId::new("private-first").unwrap(),
+        ash_model_provider_config::ModelContextConfig {
+            context_window: 272_000,
+            auto_compact_token_limit: None,
+        },
+    );
+    connection.model_context.insert(
+        ModelId::new("private-second").unwrap(),
+        ash_model_provider_config::ModelContextConfig {
+            context_window: 1_000_000,
+            auto_compact_token_limit: None,
+        },
+    );
     config
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("create-custom").unwrap(),
@@ -2703,10 +2718,16 @@ fn custom_provider_discovery_controls_discovered_view_without_mutating_config() 
     };
     let configured = model.config.read_snapshot().unwrap();
     let built_in = model.list().unwrap();
-    assert!(
+    assert_eq!(
         built_in
             .iter()
-            .all(|entry| entry.model.provider != provider)
+            .filter(|entry| entry.model.provider == provider)
+            .map(|entry| (entry.model.model.as_str(), entry.context_window))
+            .collect::<Vec<_>>(),
+        [
+            ("private-first", Some(272_000)),
+            ("private-second", Some(1_000_000))
+        ]
     );
     assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 0);
     let fetched = model
@@ -2722,8 +2743,15 @@ fn custom_provider_discovery_controls_discovered_view_without_mutating_config() 
             ModelId::new("custom-model").unwrap(),
         )]
     );
-    assert_eq!(model.list().unwrap(), built_in);
-    assert_eq!(model.list().unwrap(), built_in);
+    let listed = model.list().unwrap();
+    assert_eq!(
+        listed
+            .iter()
+            .filter(|entry| entry.model.provider == provider)
+            .map(|entry| entry.model.model.as_str())
+            .collect::<Vec<_>>(),
+        ["custom-model", "private-first", "private-second"]
+    );
     assert_eq!(model.config.read_snapshot().unwrap(), configured);
     assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 1);
     assert!(
@@ -2732,26 +2760,14 @@ fn custom_provider_discovery_controls_discovered_view_without_mutating_config() 
             .unwrap()
             .is_empty()
     );
-    assert!(
-        model
-            .list()
-            .unwrap()
-            .into_iter()
-            .all(|entry| entry.model.provider != provider)
-    );
+    assert_eq!(model.list().unwrap(), built_in);
     assert_eq!(model.config.read_snapshot().unwrap(), configured);
     assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 2);
     assert_eq!(
         model.refresh(&ash_protocol::ModelConnectionId::new(provider.as_str()).unwrap()),
         Err(crate::model_catalog::ModelCatalogRefreshError::Authentication)
     );
-    assert!(
-        model
-            .list()
-            .unwrap()
-            .into_iter()
-            .all(|entry| entry.model.provider != provider)
-    );
+    assert_eq!(model.list().unwrap(), built_in);
     assert_eq!(model.config.read_snapshot().unwrap(), configured);
     assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 3);
     assert_eq!(
@@ -2760,7 +2776,13 @@ fn custom_provider_discovery_controls_discovered_view_without_mutating_config() 
             .unwrap(),
         fetched
     );
-    assert_eq!(model.list().unwrap(), built_in);
+    assert!(
+        model
+            .list()
+            .unwrap()
+            .iter()
+            .any(|entry| entry.model == fetched[0].model)
+    );
     assert_eq!(model.config.read_snapshot().unwrap(), configured);
     assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 4);
 

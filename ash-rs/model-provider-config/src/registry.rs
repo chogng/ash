@@ -234,6 +234,11 @@ impl ProviderConfigRegistry {
             })
         });
         Ok(NormalizedModelProviderConfig {
+            model_aliases: config
+                .custom
+                .as_ref()
+                .map(|custom| custom.model_aliases.clone())
+                .unwrap_or_default(),
             provider: config.provider.clone(),
             connection: config.connection.clone(),
             access_mode: config.access_mode(),

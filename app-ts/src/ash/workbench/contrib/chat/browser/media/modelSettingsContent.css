@@ -6,8 +6,11 @@
 .ash-models-settings-api-row h5 {
 	margin: 0;
 	color: var(--ash-foreground);
-	font-size: var(--ash-fontSize-body1);
-	font-weight: var(--ash-fontWeight-semiBold);
+	font-size: var(--ash-font-size-body1);
+	font-weight: var(--ash-font-weight-regular);
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
 }
 
 .ash-models-settings-model-row,
@@ -17,6 +20,18 @@
 }
 
 .ash-models-settings-model-row .ash-switch {
+	width: 100%;
+}
+
+.ash-models-settings-model-title {
+	display: flex;
+	width: 100%;
+	min-width: 0;
+	flex-direction: column;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-models-settings-model-title .ash-input-box {
 	width: 100%;
 }
 
@@ -36,7 +51,7 @@
 .ash-models-settings-note {
 	margin: var(--ash-spacing-size40) 0 0;
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-fontSize-label1);
+	font-size: var(--ash-font-size-label1);
 }
 
 .ash-models-settings-note[role='alert'],
@@ -48,17 +63,11 @@
 	display: flex;
 	min-width: 0;
 	align-items: center;
-	margin-top: var(--ash-spacing-size120);
-	gap: var(--ash-spacing-size80);
 }
 
 .ash-models-settings-api-controls .ash-input-box {
 	flex: 1;
 	min-width: 0;
-}
-
-.ash-models-settings-api-controls .ash-button {
-	flex: 0 0 auto;
 }
 
 .ash-models-settings-empty {
@@ -68,4 +77,30 @@
 
 .ash-models-settings-status {
 	margin: var(--ash-spacing-size120) 0 0;
+}
+
+.ash-models-settings-api-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+	align-items: center;
+	gap: var(--ash-spacing-size160);
+}
+
+.ash-models-settings-provider-title {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--ash-spacing-size120);
+}
+
+.ash-models-settings-provider-title {
+	width: 100%;
+}
+
+.ash-models-settings-expand {
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size160);
+}
+
+.ash-models-settings-expand .ash-button {
+	width: 100%;
 }

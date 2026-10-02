@@ -1239,6 +1239,25 @@ impl ModelProviderRuntime {
                 )
                 .map(Some)
             }
+            ash_model_provider_config::ProviderAdapter::Anthropic => {
+                let adapter = providers::instantiate(definition.adapter, &normalized);
+                let mut headers = adapter.fixed_headers();
+                if let Some(credentials) = &runtime.credentials {
+                    headers.extend(
+                        credentials
+                            .request_headers(&config.connection)
+                            .map_err(|error| ModelProviderError::Credential(error.to_string()))?,
+                    );
+                }
+                crate::catalog::anthropic_catalog_binding(
+                    &normalized,
+                    headers,
+                    Arc::clone(&self.client),
+                    self.diagnostics.clone(),
+                    adapter.endpoint(),
+                )
+                .map(Some)
+            }
             ash_model_provider_config::ProviderAdapter::Ollama => {
                 crate::catalog::ollama_catalog_binding(
                     normalized.provider,

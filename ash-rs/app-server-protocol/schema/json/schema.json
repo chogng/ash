@@ -16468,6 +16468,15 @@
             "null"
           ]
         },
+        "modelAliases": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        },
         "name": {
           "type": "string"
         },
@@ -29476,6 +29485,13 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "discovered": {
+          "description": "True only when this ID belongs to the last successful endpoint observation.",
+          "type": [
+            "boolean",
+            "null"
           ]
         },
         "displayName": {

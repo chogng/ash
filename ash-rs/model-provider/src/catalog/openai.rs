@@ -32,18 +32,64 @@ pub(crate) fn openai_catalog_binding(
     client: Arc<dyn OperationClient>,
     diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
 ) -> Result<ModelCatalogBinding, crate::ModelProviderError> {
+    http_catalog_binding(config, headers, client, diagnostics, "models")
+}
+
+pub(crate) fn anthropic_catalog_binding(
+    config: &ash_model_provider_config::NormalizedModelProviderConfig,
+    mut headers: Vec<ash_http_client::HttpHeader>,
+    client: Arc<dyn OperationClient>,
+    diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
+    endpoint: ash_api::ApiEndpoint,
+) -> Result<ModelCatalogBinding, crate::ModelProviderError> {
+    headers.push(ash_http_client::HttpHeader::new(
+        "anthropic-version",
+        "2023-06-01",
+    ));
+    http_catalog_binding(
+        config,
+        headers,
+        client,
+        diagnostics,
+        if endpoint == ash_api::ApiEndpoint::AnthropicMessagesAtBase {
+            "models"
+        } else {
+            "v1/models"
+        },
+    )
+}
+
+fn http_catalog_binding(
+    config: &ash_model_provider_config::NormalizedModelProviderConfig,
+    headers: Vec<ash_http_client::HttpHeader>,
+    client: Arc<dyn OperationClient>,
+    diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
+    path: &str,
+) -> Result<ModelCatalogBinding, crate::ModelProviderError> {
+    let paginate = config.api_profile == ash_model_provider_config::ApiProfile::AnthropicMessages;
     let mut digest = Sha256::new();
-    digest.update(format!("{config:?}").as_bytes());
+    // Context declarations and local aliases do not change the remote catalog identity.
+    digest.update(
+        format!(
+            "{:?}|{:?}|{:?}|{}|{path}",
+            config.provider, config.connection, config.api_profile, config.base_url
+        )
+        .as_bytes(),
+    );
     for header in &headers {
         digest.update(header.name().as_bytes());
         digest.update(header.value().as_bytes());
     }
-    let scope_id = CatalogSourceScopeId::new(format!("openai:{:x}", digest.finalize()))
-        .map_err(|error| crate::ModelProviderError::Unavailable(error.to_string()))?;
+    let scope_id = CatalogSourceScopeId::new(format!(
+        "{}:{:x}",
+        if paginate { "anthropic" } else { "openai" },
+        digest.finalize()
+    ))
+    .map_err(|error| crate::ModelProviderError::Unavailable(error.to_string()))?;
     let scope = CatalogScopeKey::new(config.provider.clone(), scope_id);
     let request = ash_client::ClientRequest::new(
         ash_http_client::HttpMethod::Get,
-        format!("{}/models", config.base_url),
+        format!("{}/{path}", config.base_url),
         headers,
         Vec::new(),
         ash_client::RetryPolicy::never(),
@@ -51,23 +97,25 @@ pub(crate) fn openai_catalog_binding(
     .map_err(|_| crate::ModelProviderError::Unavailable("Invalid models endpoint".into()))?;
     Ok(ModelCatalogBinding {
         scope: scope.clone(),
-        source: Arc::new(OpenAiCatalogSource {
+        source: Arc::new(HttpModelCatalogSource {
             scope,
             request,
             client,
             diagnostics,
+            paginate,
         }),
     })
 }
 
-struct OpenAiCatalogSource {
+struct HttpModelCatalogSource {
     scope: CatalogScopeKey,
     request: ash_client::ClientRequest,
     client: Arc<dyn OperationClient>,
     diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
+    paginate: bool,
 }
 
-impl ModelCatalogSource for OpenAiCatalogSource {
+impl ModelCatalogSource for HttpModelCatalogSource {
     fn discover<'a>(
         &'a self,
         request: ash_models_manager::CatalogDiscoveryRequest,
@@ -85,84 +133,136 @@ impl ModelCatalogSource for OpenAiCatalogSource {
                         "Model catalog scope changed",
                     ));
                 }
-                let client = Arc::clone(&diagnostic);
-                let request = self.request.clone();
                 let cancellation = CancellationSource::new();
                 let token = cancellation.token();
                 let cancel_on_drop = cancellation.cancel_on_drop();
-                let response = tokio::task::spawn_blocking(move || {
-                    client.execute_with_cancellation(&request, &token)
-                })
-                .await
-                .map_err(|_| {
-                    CatalogSourceError::new(
-                        CatalogSourceErrorKind::Transient,
-                        "Model catalog worker stopped",
-                    )
-                })?
-                .map_err(|error| {
-                    CatalogSourceError::new(
-                        match error {
-                            ash_client::ClientError::Cancelled(_) => {
-                                CatalogSourceErrorKind::Cancelled
-                            }
-                            ash_client::ClientError::InvalidRequest(_) => {
-                                CatalogSourceErrorKind::InvalidRequest
-                            }
-                            ash_client::ClientError::Transport(_) => {
-                                CatalogSourceErrorKind::Unreachable
-                            }
-                            ash_client::ClientError::InvalidResponse(_)
-                            | ash_client::ClientError::Framing(_) => {
-                                CatalogSourceErrorKind::InvalidPayload
-                            }
-                        },
-                        "Could not fetch model list",
-                    )
-                })?;
-                cancel_on_drop.disarm();
-                if !response.is_success() {
-                    let kind = match response.status() {
-                        401 => CatalogSourceErrorKind::Authentication,
-                        403 => CatalogSourceErrorKind::Permission,
-                        404 | 405 | 501 => CatalogSourceErrorKind::Unsupported,
-                        429 => CatalogSourceErrorKind::RateLimited,
-                        400..=499 => CatalogSourceErrorKind::InvalidRequest,
-                        500..=599 => CatalogSourceErrorKind::ProviderUnavailable,
-                        _ => CatalogSourceErrorKind::Transient,
-                    };
-                    return Err(CatalogSourceError::new(
-                        kind,
-                        format!("Model list request failed (HTTP {})", response.status()),
-                    ));
-                }
-                #[derive(serde::Deserialize)]
-                struct Catalog {
-                    data: Vec<Entry>,
-                }
-                #[derive(serde::Deserialize)]
-                struct Entry {
-                    id: String,
-                }
-                let catalog: Catalog = serde_json::from_slice(response.body()).map_err(|_| {
-                    CatalogSourceError::new(
-                        CatalogSourceErrorKind::InvalidPayload,
-                        "Invalid model list response",
-                    )
-                })?;
+                let mut next = self.request.clone();
+                let mut cursors = std::collections::BTreeSet::new();
                 let mut ids = std::collections::BTreeSet::new();
                 let mut models = Vec::new();
-                for entry in catalog.data {
-                    let id = ModelId::new(entry.id).map_err(|_| {
+                loop {
+                    let client = Arc::clone(&diagnostic);
+                    let request = next.clone();
+                    let token = token.clone();
+                    let response = tokio::task::spawn_blocking(move || {
+                        client.execute_with_cancellation(&request, &token)
+                    })
+                    .await
+                    .map_err(|_| {
                         CatalogSourceError::new(
-                            CatalogSourceErrorKind::InvalidPayload,
-                            "Invalid model ID",
+                            CatalogSourceErrorKind::Transient,
+                            "Model catalog worker stopped",
+                        )
+                    })?
+                    .map_err(|error| {
+                        CatalogSourceError::new(
+                            match error {
+                                ash_client::ClientError::Cancelled(_) => {
+                                    CatalogSourceErrorKind::Cancelled
+                                }
+                                ash_client::ClientError::InvalidRequest(_) => {
+                                    CatalogSourceErrorKind::InvalidRequest
+                                }
+                                ash_client::ClientError::Transport(_) => {
+                                    CatalogSourceErrorKind::Unreachable
+                                }
+                                ash_client::ClientError::InvalidResponse(_)
+                                | ash_client::ClientError::Framing(_) => {
+                                    CatalogSourceErrorKind::InvalidPayload
+                                }
+                            },
+                            "Could not fetch model list",
                         )
                     })?;
-                    if ids.insert(id.clone()) {
-                        models.push(DiscoveredModel::new(id));
+                    if !response.is_success() {
+                        let kind = match response.status() {
+                            401 => CatalogSourceErrorKind::Authentication,
+                            403 => CatalogSourceErrorKind::Permission,
+                            404 | 405 | 501 => CatalogSourceErrorKind::Unsupported,
+                            429 => CatalogSourceErrorKind::RateLimited,
+                            400..=499 => CatalogSourceErrorKind::InvalidRequest,
+                            500..=599 => CatalogSourceErrorKind::ProviderUnavailable,
+                            _ => CatalogSourceErrorKind::Transient,
+                        };
+                        return Err(CatalogSourceError::new(
+                            kind,
+                            format!("Model list request failed (HTTP {})", response.status()),
+                        ));
                     }
+                    #[derive(serde::Deserialize)]
+                    struct Catalog {
+                        data: Vec<Entry>,
+                        #[serde(default)]
+                        has_more: bool,
+                        #[serde(default)]
+                        last_id: Option<String>,
+                    }
+                    #[derive(serde::Deserialize)]
+                    struct Entry {
+                        id: String,
+                        #[serde(default)]
+                        display_name: Option<String>,
+                    }
+                    let catalog: Catalog =
+                        serde_json::from_slice(response.body()).map_err(|_| {
+                            CatalogSourceError::new(
+                                CatalogSourceErrorKind::InvalidPayload,
+                                "Invalid model list response",
+                            )
+                        })?;
+                    for entry in catalog.data {
+                        let id = ModelId::new(entry.id).map_err(|_| {
+                            CatalogSourceError::new(
+                                CatalogSourceErrorKind::InvalidPayload,
+                                "Invalid model ID",
+                            )
+                        })?;
+                        if ids.insert(id.clone()) {
+                            models.push(DiscoveredModel::new(id).with_metadata(
+                                ash_models_manager::ModelMetadataPatch {
+                                    display_name: entry.display_name,
+                                    ..Default::default()
+                                },
+                            ));
+                        }
+                    }
+                    if !self.paginate || !catalog.has_more {
+                        break;
+                    }
+                    let cursor = catalog.last_id.filter(|id| !id.is_empty()).ok_or_else(|| {
+                        CatalogSourceError::new(
+                            CatalogSourceErrorKind::InvalidPayload,
+                            "Missing model list cursor",
+                        )
+                    })?;
+                    if !cursors.insert(cursor.clone()) {
+                        return Err(CatalogSourceError::new(
+                            CatalogSourceErrorKind::InvalidPayload,
+                            "Repeated model list cursor",
+                        ));
+                    }
+                    let mut url = url::Url::parse(self.request.url()).map_err(|_| {
+                        CatalogSourceError::new(
+                            CatalogSourceErrorKind::InvalidRequest,
+                            "Invalid models endpoint",
+                        )
+                    })?;
+                    url.query_pairs_mut().append_pair("after_id", &cursor);
+                    next = ash_client::ClientRequest::new(
+                        self.request.method(),
+                        url.to_string(),
+                        self.request.headers().to_vec(),
+                        Vec::new(),
+                        ash_client::RetryPolicy::never(),
+                    )
+                    .map_err(|_| {
+                        CatalogSourceError::new(
+                            CatalogSourceErrorKind::InvalidRequest,
+                            "Invalid model list cursor",
+                        )
+                    })?;
                 }
+                cancel_on_drop.disarm();
                 Ok(CatalogDiscoveryOutcome::Modified(
                     DiscoveredCatalog::new(
                         self.scope.clone(),

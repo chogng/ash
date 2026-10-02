@@ -20,6 +20,7 @@ fn custom_context_presets_set_internal_output_limits() {
             let model = ModelId::new("remote-alias").unwrap();
             let mut config = ModelProviderConfig::new(provider_id("custom-test"));
             config.custom = Some(CustomProviderConfig {
+                model_aliases: Default::default(),
                 context_window: window,
                 order: 0,
                 model: Some(model.clone()),
@@ -50,6 +51,7 @@ fn custom_context_presets_set_internal_output_limits() {
 fn custom_connections_validate_and_restore_protocol_without_shadowing_builtins() {
     let mut first = ModelProviderConfig::new(provider_id("custom-one"));
     first.custom = Some(CustomProviderConfig {
+        model_aliases: Default::default(),
         context_window: 272_000,
         order: 0,
         model: None,
@@ -636,7 +638,7 @@ fn static_catalog_exposes_only_model_specific_reasoning_levels() {
         ),
         (
             "google",
-            "gemini-3.1-flash-lite",
+            "gemini-3.6-flash",
             &[
                 ReasoningEffort::Minimal,
                 ReasoningEffort::Low,
@@ -696,7 +698,6 @@ fn static_catalog_exposes_only_model_specific_reasoning_levels() {
                 ReasoningEffort::Max,
             ],
         ),
-        ("openai", "gpt-4.1", &[]),
         ("anthropic", "claude-haiku-4-5-20251001", &[]),
         ("qwen", "qwen3.7-max", &[]),
         ("minimax", "MiniMax-M3", &[]),
@@ -706,7 +707,7 @@ fn static_catalog_exposes_only_model_specific_reasoning_levels() {
         let entry = STATIC_MODEL_CATALOG
             .iter()
             .find(|entry| entry.provider_id == provider && entry.model_id == model)
-            .unwrap();
+            .unwrap_or_else(|| panic!("missing catalog model {provider}/{model}"));
         assert_eq!(
             entry.supported_reasoning_efforts, expected,
             "{provider}/{model}"
@@ -777,6 +778,7 @@ fn builtin_catalog_includes_current_chat_model_families() {
         ("openai", "gpt-6-sol"),
         ("openai", "gpt-5.6-terra"),
         ("anthropic", "claude-opus-5-5"),
+        ("anthropic", "claude-sonnet-5-5"),
         ("anthropic", "claude-sonnet-5"),
         ("google", "gemini-3.8-flash"),
         ("google", "gemini-3.1-pro-preview"),
@@ -801,6 +803,13 @@ fn builtin_catalog_includes_current_chat_model_families() {
         );
     }
     for (provider, model) in [
+        ("openai", "gpt-5.4"),
+        ("openai", "gpt-5.4-mini"),
+        ("openai", "gpt-5.3-codex"),
+        ("openai", "gpt-4o"),
+        ("google", "gemini-3.5-flash"),
+        ("google", "gemini-3.5-flash-lite"),
+        ("google", "gemini-3-flash-preview"),
         ("anthropic", "claude-sonnet-4-20250514"),
         ("deepseek", "deepseek-v4-flash"),
     ] {
@@ -891,6 +900,7 @@ fn custom_provider_inherits_compatible_models_or_uses_its_exact_override() {
     let mut config = ModelProviderConfig::new(provider_id("custom-gateway"));
     config.base_url = Some("https://example.invalid/v1".into());
     config.custom = Some(CustomProviderConfig {
+        model_aliases: Default::default(),
         context_window: 272_000,
         order: 1,
         name: "Gateway".into(),
@@ -963,5 +973,68 @@ fn transcription_protocol_is_explicit_for_each_direct_api_provider() {
     assert_eq!(
         restored.transcription_api_profile,
         crate::TranscriptionApiProfile::Unavailable
+    );
+}
+
+#[test]
+fn product_catalog_groups_releases_newest_first() {
+    for (provider, latest) in [
+        ("openai", "gpt-6.1-sol"),
+        ("anthropic", "claude-sonnet-5-5"),
+        ("google", "gemini-3.8-flash"),
+    ] {
+        assert_eq!(
+            crate::STATIC_MODEL_CATALOG
+                .iter()
+                .find(|model| model.provider_id == provider)
+                .unwrap()
+                .model_id,
+            latest
+        );
+    }
+}
+
+#[test]
+fn custom_model_aliases_resolve_once_and_keep_the_local_context_declaration() {
+    let mut config = ModelProviderConfig::new(provider_id("custom-alias"));
+    config.base_url = Some("https://example.test/v1".into());
+    config.custom = Some(CustomProviderConfig {
+        context_window: 272_000,
+        order: 0,
+        model: None,
+        name: "Alias gateway".into(),
+        protocol: CustomProviderProtocol::ChatCompletions,
+        model_aliases: BTreeMap::from([
+            (
+                ModelId::new("local-id").unwrap(),
+                ModelId::new("wire-id").unwrap(),
+            ),
+            (
+                ModelId::new("wire-id").unwrap(),
+                ModelId::new("other-id").unwrap(),
+            ),
+        ]),
+    });
+    config.model_context.insert(
+        ModelId::new("local-id").unwrap(),
+        ModelContextConfig {
+            context_window: 128_000,
+            auto_compact_token_limit: None,
+        },
+    );
+    let encoded = serde_json::to_value(&config).unwrap();
+    let decoded: ModelProviderConfig = serde_json::from_value(encoded.clone()).unwrap();
+    assert_eq!(decoded, config);
+    assert_eq!(encoded["custom"]["modelAliases"]["local-id"], "wire-id");
+    let registry = ProviderConfigRegistry::builtin()
+        .with_configs([&decoded])
+        .unwrap();
+    let normalized = registry.normalize(&decoded).unwrap();
+    assert_eq!(normalized.upstream_model("local-id"), "wire-id");
+    assert_eq!(normalized.upstream_model("wire-id"), "other-id");
+    assert_eq!(normalized.upstream_model("unlisted-id"), "unlisted-id");
+    assert_eq!(
+        decoded.model_context[&ModelId::new("local-id").unwrap()].context_window,
+        128_000
     );
 }

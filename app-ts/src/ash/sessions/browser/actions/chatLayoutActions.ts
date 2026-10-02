@@ -1,3 +1,4 @@
+import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import { Lxicon } from "../../../base/common/lxicons.js";
 import { DisposableStore } from "../../../base/common/lifecycle.js";
 import { localize } from "../../../nls.js";
@@ -124,7 +125,7 @@ registerAction2(class OpenChatSettingsAction extends Action2 {
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		const chat = accessor.get(IChatService);
 		const quickInput = accessor.get(IQuickInputService);
-		const [current, models] = await Promise.all([chat.readAdvisorDefault(), chat.listAdvisorModels()]);
+		const [current, models] = await Promise.all([chat.readAdvisorDefault(), accessor.get(ILanguageModelsService).listAdvisorModels()]);
 		type Setting = { label: string; description?: string; model?: NonNullable<typeof current>; openSettings?: true; manageProviderKeys?: true; clearModel?: true };
 		const picker = quickInput.createQuickPick<Setting>();
 		const disposables = new DisposableStore();
@@ -160,7 +161,7 @@ registerAction2(class OpenChatSettingsAction extends Action2 {
 			}
 			if (item.manageProviderKeys) {
 				picker.hide();
-				void showModelProviderKeys(chat, quickInput, accessor.get(IDialogService));
+				void showModelProviderKeys(accessor.get(ILanguageModelsService), quickInput, accessor.get(IDialogService));
 				return;
 			}
 			if (item.clearModel) {
@@ -185,7 +186,7 @@ interface ModelProviderQuickPickItem extends IQuickPickItem {
 	readonly provider: ModelProviderCredentialStatus;
 }
 
-async function showModelProviderKeys(chat: IChatService, quickInput: IQuickInputService, dialogs: IDialogService): Promise<void> {
+async function showModelProviderKeys(chat: ILanguageModelsService, quickInput: IQuickInputService, dialogs: IDialogService): Promise<void> {
 	let providers: readonly ModelProviderCredentialStatus[];
 	try {
 		providers = await chat.listModelProviders();

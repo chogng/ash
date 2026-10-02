@@ -1613,7 +1613,7 @@ test('Browser Models Settings controls which models appear in the picker', async
 	await settings.getByRole('navigation', { name: 'Settings categories' }).getByRole('button', { name: 'Models' }).click();
 	await expect(settings.locator('.ash-local-transcription-model-controls')).toHaveCount(0);
 
-	await expect(settings.getByRole('heading', { name: 'API connections' })).toBeVisible();
+	await expect(settings.getByRole('heading', { name: 'API key' })).toBeVisible();
 	const apiConnection = settings.locator('.ash-models-settings-api-row').first();
 	await expect(apiConnection).toBeVisible();
 	await expect(apiConnection.locator('input[type="password"]')).toBeVisible();
@@ -1622,6 +1622,13 @@ test('Browser Models Settings controls which models appear in the picker', async
 	await expect(modelRows.first()).toBeVisible();
 	const firstModel = modelRows.first();
 	const modelName = (await firstModel.locator('.ash-models-settings-model-copy > span').first().textContent())!.trim();
+	const catalogSearch = settings.getByRole('searchbox', { name: 'Search models', exact: true });
+	await catalogSearch.fill('openai/gpt-6-astra');
+	await expect(modelRows).toHaveCount(1);
+	await expect(modelRows).toContainText(['GPT-6 Astra']);
+	await expect(catalogSearch).toBeFocused();
+	await expect(apiConnection).toBeVisible();
+	await catalogSearch.fill('');
 	const modelSearch = settings.getByRole('searchbox', { name: 'Search settings' });
 	await modelSearch.fill('no-such-model');
 	await expect(settings.getByText('No settings found.', { exact: true })).toBeVisible();
@@ -1776,8 +1783,9 @@ test('Electron Sessions account menu opens the Sessions settings page', async ({
 	await navigation.getByRole('button', { name: 'Models' }).click();
 	await expect(settings.getByRole('heading', { name: 'Models', exact: true })).toBeVisible();
 	await expect(settings.getByRole('searchbox', { name: 'Search settings' })).toBeVisible();
+	await expect(settings.getByRole('searchbox', { name: 'Search models', exact: true })).toBeVisible();
 	await expect(settings.locator('.ash-local-transcription-model-controls')).toHaveCount(0);
-	await expect(settings.getByRole('heading', { name: 'API connections' })).toBeVisible();
+	await expect(settings.getByRole('heading', { name: 'API key' })).toBeVisible();
 	if (target.appServerMode === 'required') {
 		await expect(settings.locator('.ash-models-settings-api-row').first().locator('input[type="password"]')).toBeVisible();
 		const firstModel = settings.locator('.ash-models-settings-model-row').first();

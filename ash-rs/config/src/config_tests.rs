@@ -508,6 +508,7 @@ fn custom_provider_survives_restart_and_rejects_stale_update() {
     let mut config = ModelProviderConfig::new(provider_id("custom-test"));
     config.base_url = Some("https://example.test/v1".into());
     config.custom = Some(ash_model_provider_config::CustomProviderConfig {
+        model_aliases: Default::default(),
         context_window: 272_000,
         order: 0,
         model: None,

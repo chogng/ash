@@ -238,7 +238,7 @@ fn providers_without_dynamic_discovery_return_no_binding() {
     let runtime = crate::ModelProviderRuntime::builtin_with_client(Arc::new(CatalogClient {
         request: Mutex::new(None),
     }));
-    let config = ModelProviderConfig::new(ProviderId::new("anthropic").unwrap());
+    let config = ModelProviderConfig::new(ProviderId::new("google").unwrap());
 
     assert!(runtime.catalog_binding(&config).unwrap().is_none());
 }
@@ -441,6 +441,7 @@ fn custom_catalog_fetches_models_with_its_own_key_and_invalidates_scope() {
     let mut config = ModelProviderConfig::new(ProviderId::new("custom-test").unwrap());
     config.base_url = Some("https://example.test/v1/".into());
     config.custom = Some(CustomProviderConfig {
+        model_aliases: Default::default(),
         context_window: 272_000,
         order: 0,
         // Keep this discovery fixture independent of inherited built-in model rows.
@@ -501,6 +502,14 @@ fn custom_catalog_fetches_models_with_its_own_key_and_invalidates_scope() {
         .unwrap();
     let changed_key = runtime.catalog_binding(&config).unwrap().unwrap();
     assert_ne!(binding.scope(), changed_key.scope());
+    config.custom.as_mut().unwrap().model_aliases.insert(
+        ModelId::new("local-id").unwrap(),
+        ModelId::new("wire-id").unwrap(),
+    );
+    assert_eq!(
+        changed_key.scope(),
+        runtime.catalog_binding(&config).unwrap().unwrap().scope()
+    );
     config.custom.as_mut().unwrap().protocol = CustomProviderProtocol::ChatCompletions;
     let changed_protocol = runtime.catalog_binding(&config).unwrap().unwrap();
     assert_ne!(changed_key.scope(), changed_protocol.scope());
@@ -614,4 +623,83 @@ fn model_discovery_classifies_client_failures_without_exposing_details() {
         };
         assert_eq!(error.kind(), expected);
     }
+}
+
+#[test]
+fn anthropic_catalog_reads_all_pages_and_retains_the_last_complete_observation() {
+    struct Pages {
+        calls: std::sync::atomic::AtomicUsize,
+    }
+    impl OperationClient for Pages {
+        fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            assert!(request.headers().iter().any(
+                |header| header.name() == "anthropic-version" && header.value() == "2023-06-01"
+            ));
+            let call = self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            match call {
+                0 | 2 => {
+                    assert_eq!(request.url(), "https://example.test/v1/models");
+                    Ok(ClientResponse::new(200, vec![], br#"{"data":[{"id":"first","display_name":"First model"}],"has_more":true,"last_id":"first"}"#.to_vec()))
+                }
+                1 => {
+                    assert_eq!(
+                        request.url(),
+                        "https://example.test/v1/models?after_id=first"
+                    );
+                    Ok(ClientResponse::new(
+                        200,
+                        vec![],
+                        br#"{"data":[{"id":"second"}],"has_more":false,"last_id":"second"}"#
+                            .to_vec(),
+                    ))
+                }
+                3 => Ok(ClientResponse::new(403, vec![], b"private body".to_vec())),
+                _ => panic!("unexpected catalog request"),
+            }
+        }
+    }
+    let client = Arc::new(Pages {
+        calls: std::sync::atomic::AtomicUsize::new(0),
+    });
+    let runtime = crate::ModelProviderRuntime::builtin_with_client(client.clone());
+    let mut config = ModelProviderConfig::new(ProviderId::new("anthropic").unwrap());
+    config.base_url = Some("https://example.test".into());
+    let binding = runtime.catalog_binding(&config).unwrap().unwrap();
+    let manager = runtime.models_manager();
+    let executor = tokio::runtime::Runtime::new().unwrap();
+    executor
+        .block_on(manager.refresh(binding.scope().clone(), binding.source()))
+        .unwrap();
+    let catalog = manager
+        .list_discovered(&[binding.scope().clone()], &CatalogQuery::all())
+        .unwrap();
+    assert_eq!(
+        catalog
+            .iter()
+            .map(|entry| entry.model().model.as_str())
+            .collect::<Vec<_>>(),
+        ["first", "second"]
+    );
+    assert_eq!(
+        catalog[0].model_info(&config).unwrap().display_name,
+        "First model"
+    );
+    assert!(
+        executor
+            .block_on(manager.refresh(binding.scope().clone(), binding.source()))
+            .is_err()
+    );
+    assert_eq!(
+        manager
+            .list_discovered(&[binding.scope().clone()], &CatalogQuery::all())
+            .unwrap()
+            .iter()
+            .map(|entry| entry.model_info(&config).unwrap())
+            .collect::<Vec<_>>(),
+        catalog
+            .iter()
+            .map(|entry| entry.model_info(&config).unwrap())
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 4);
 }

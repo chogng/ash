@@ -48,7 +48,7 @@ test('Changes ignores an old conversation response and opens a shared read-only 
 		const requests: unknown[] = [];
 		const host = createDisconnectedRendererApi();
 		let truncated = false;
-		using chat = new ChatService({ modelApi: host.model, threadApi: host.thread, turnApi: host.turn, skillApi: host.skills, appServerApi: host.appServer, eventApi: host.events, storageService: storage,
+		using chat = new ChatService({ modelApi: host.model, threadApi: host.thread, turnApi: host.turn, skillApi: host.skills, appServerApi: host.appServer, eventApi: host.events,
 			turnChangesApi: { ...host.turnChanges,
 				list: async params => params.sessionId === 'old' ? old.p : { changeSets: [details.summary] },
 				read: async params => { requests.push(params); return details; },

@@ -172,9 +172,13 @@ pub struct CustomProviderConfigDto {
     #[serde(default = "default_custom_context_window")]
     pub context_window: u32,
     #[serde(default)]
+    #[ts(type = "number")]
     pub order: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub model_aliases: Option<BTreeMap<String, String>>,
     pub name: String,
     pub protocol: CustomProviderProtocolDto,
 }

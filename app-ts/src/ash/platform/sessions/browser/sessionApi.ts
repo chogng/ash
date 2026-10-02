@@ -1,8 +1,11 @@
+import { localize } from '../../../nls.js';
+import { createUuid } from '../../../base/common/uuid.js';
+import type { ProviderConfigDto, ProviderModelsListFailureCodeDto } from '../../app-server/common/generated/index.js';
 import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
 import { appServerRequest, voidResult } from "../../app-server/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import { sessionRequest, sessionResult, sessionThreadResult, turnInteractionResolveResult, turnInterruptResult, turnStartResult, turnSteerResult } from "../common/sessionApi.js";
-import type { IModelApi, ISessionApi, IThreadApi, ITurnApi } from "../common/sessionApi.js";
+import type { CustomModelProvider, IModelApi, ISessionApi, IThreadApi, ITurnApi } from "../common/sessionApi.js";
 
 export function createDisconnectedSessionApi(unavailable: UnavailableOperation): ISessionApi {
 	return {
@@ -24,6 +27,9 @@ export function createDisconnectedSessionApi(unavailable: UnavailableOperation):
 
 export function createDisconnectedModelApi(unavailable: UnavailableOperation): IModelApi {
 	return {
+		listCustomProviders: () => unavailable('model.listCustomProviders'),
+		saveCustomProvider: () => unavailable('model.saveCustomProvider'),
+		testProviderModel: () => unavailable('model.testProviderModel'),
 		listModels: () => unavailable("model.listModels"),
 		listProviders: () => unavailable('model.listProviders'),
 		listProviderModels: () => unavailable('model.listProviderModels'),
@@ -82,12 +88,51 @@ export function createAppServerSessionApi(connection: AppServerProtocolClient): 
 
 export function createAppServerModelApi(connection: AppServerProtocolClient): IModelApi {
 	return {
+		listCustomProviders: async () => {
+			const snapshot = await appServerRequest(connection, 'config/read', {});
+			return Object.values(snapshot.connections).filter(config => config.custom && config.connection.startsWith('custom-')).map(config => ({
+				id: config.connection,
+				name: config.custom!.name,
+				baseUrl: config.baseUrl ?? '',
+				apiFormat: config.custom!.protocol,
+				order: config.custom!.order,
+				models: Object.entries(config.modelContext ?? {}).map(([id, context]) => ({ id, contextWindow: context.contextWindow, ...(config.custom?.modelAliases?.[id] ? { upstreamModel: config.custom.modelAliases[id] } : {}) })),
+			}));
+		},
+		saveCustomProvider: async provider => {
+			const snapshot = await appServerRequest(connection, 'config/read', {});
+			const config = customProviderConfig(provider);
+			await appServerRequest(connection, 'provider/configure', {
+				commandId: createUuid(),
+				expectedRevision: snapshot.revision,
+				config: {
+					...snapshot.connections[provider.id],
+					...config,
+					modelContext: Object.fromEntries(Object.entries(config.modelContext ?? {}).map(([id, context]) => [id, {
+						...snapshot.connections[provider.id]?.modelContext?.[id],
+						...context,
+					}])),
+					custom: {
+						...config.custom!,
+						...snapshot.connections[provider.id]?.custom,
+						name: provider.name,
+						protocol: provider.apiFormat,
+						order: provider.order,
+						modelAliases: config.custom!.modelAliases,
+					},
+				},
+			});
+		},
+		testProviderModel: async (provider, model) => {
+			const result = await appServerRequest(connection, 'provider/probe', { config: customProviderConfig(provider), apiKey: null, model });
+			return result.type === 'failed' ? result : { type: 'passed' };
+		},
 		listModels: () => appServerRequest(connection, "model/list", {}),
 		listProviders: () => appServerRequest(connection, 'provider/list', {}),
 		listProviderModels: async provider => {
 			const result = await appServerRequest(connection, 'provider/models/list', { connection: provider });
-			if (result.type === 'failed') throw new Error(`${provider} model discovery failed: ${result.failure.code}`);
-			return result.type === 'models' ? result.models : [];
+			if (result.type === 'failed') { throw new Error(modelDiscoveryMessage(result.failure.code)); }
+			return result.type === 'models' ? result.models.map(entry => ({ ...entry, discovered: entry.discovered ?? undefined })) : [];
 		},
 		setProviderApiKey: params => appServerRequest(connection, 'provider/apiKey/set', params),
 		removeProviderApiKey: async provider => { await appServerRequest(connection, 'provider/apiKey/remove', { connection: provider }); },
@@ -136,4 +181,30 @@ export function createAppServerTurnApi(connection: AppServerProtocolClient): ITu
 		interrupt: (params) => appServerRequest(connection, "session/request", sessionRequest(params, { type: "interruptTurn", threadId: params.threadId, expectedSequence: params.expectedSequence, turnId: params.turnId })).then(turnInterruptResult),
 		resolveInteraction: (params) => appServerRequest(connection, "session/request", sessionRequest(params, { type: "resolveInteraction", threadId: params.threadId, expectedSequence: params.expectedSequence, turnId: params.turnId, requestId: params.requestId, response: params.response })).then(turnInteractionResolveResult),
 	};
+}
+
+function customProviderConfig(provider: CustomModelProvider): ProviderConfigDto {
+	return {
+		connection: provider.id,
+		provider: provider.id,
+		baseUrl: provider.baseUrl,
+		custom: { name: provider.name, protocol: provider.apiFormat, order: provider.order, contextWindow: 272_000, model: null, modelAliases: Object.fromEntries(provider.models.filter(model => model.upstreamModel).map(model => [model.id, model.upstreamModel!])) },
+		modelContext: Object.fromEntries(provider.models.map(model => [model.id, { contextWindow: model.contextWindow }])),
+	};
+}
+
+function modelDiscoveryMessage(code: ProviderModelsListFailureCodeDto): string {
+	switch (code) {
+		case 'authentication': return localize('models.discovery.authentication', 'The endpoint rejected the API key.');
+		case 'permission': return localize('models.discovery.permission', 'The API key does not have permission to list models.');
+		case 'unsupported': return localize('models.discovery.unsupported', 'This endpoint does not provide a model list. Add model IDs manually.');
+		case 'rateLimited': return localize('models.discovery.rateLimited', 'The endpoint rate limit was reached. Try again later.');
+		case 'unreachable': return localize('models.discovery.unreachable', 'Could not reach the endpoint. Check the Base URL and connection.');
+		case 'providerUnavailable': return localize('models.discovery.providerUnavailable', 'The endpoint is temporarily unavailable.');
+		case 'invalidRequest': return localize('models.discovery.invalidRequest', 'The endpoint rejected the model list request. Check the API format and Base URL.');
+		case 'invalidResponse': return localize('models.discovery.invalidResponse', 'The endpoint returned an invalid model list.');
+		case 'invalidConfiguration': return localize('models.discovery.invalidConfiguration', 'The provider configuration is invalid. Check its fields.');
+		case 'cancelled': return localize('models.discovery.cancelled', 'Model discovery was cancelled.');
+		case 'unknown': return localize('models.discovery.unknown', 'Could not fetch the model list.');
+	}
 }

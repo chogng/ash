@@ -1,3 +1,5 @@
+import '../../../chat/common/languageModelsConfiguration.js';
+import { ILanguageModelsService } from '../../../../contrib/chat/common/languageModels.js';
 import type { SettingsContentItem } from '../../browser/settingsTreeModels.js';
 import { IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
@@ -13,7 +15,7 @@ import { createTestEditorServices } from '../../../../test/common/testEditorServ
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
+import { formatNlsMessage, localize, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import type { IAction } from '../../../../../base/common/actions.js';
 import type { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import type { IContextMenuService as ContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
@@ -368,12 +370,17 @@ test('Models Settings keeps loading API connections when the model catalog chang
 		onDidChangeModels: changed.event,
 		listModelCatalog: async () => catalog,
 		listModelProviders: () => providers,
+		listCustomModelProviders: async () => [],
 		isModelVisible: () => true,
 	} as unknown as IChatService;
 	const services = disposables.add(new InstantiationService());
 	services.registerInstance(ILocalTranscriptionService, disposables.add(new NullLocalTranscriptionService()));
 	services.registerInstance(ConfigurationServiceId, configuration);
 	services.registerInstance(ChatServiceId, chat);
+	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
+	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
+	services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(root)));
+	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, dispose() {}, [Symbol.dispose]() {} });
 	const panel = disposables.add(services.createInstance(ModelSettingsContent, root));
 	const modelTree = disposables.add(new SettingsTreeModel<SettingsContentItem>());
 	disposables.add(new SettingsTree(root, {
@@ -521,6 +528,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 			advisorWrites.push(next);
 		},
 		listModelCatalog: async () => [{ model, displayName: 'GPT Test' }],
+		listCustomModelProviders: async () => [],
 		listModelProviders: async () => [{ connection: 'openai', provider: 'openai', displayName: 'OpenAI API', apiKeyPolicy: 'required', apiKeyConfigured: savedKeys.length > 0 }],
 		isModelVisible: (entry: typeof model) => entry.model === model.model ? modelVisible : !hiddenAdvisors.has(entry.model),
 		setModelVisible: async (_model: typeof model, visible: boolean) => {
@@ -550,6 +558,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(LocalizationServiceId, workbenchLocalization);
 	services.registerInstance(GitServiceId, gitService);
 	services.registerInstance(ChatServiceId, chatService);
+	services.registerInstance(ILanguageModelsService, chatService as unknown as ILanguageModelsService);
 	services.registerInstance(ILocalTranscriptionService, disposables.add(new NullLocalTranscriptionService()));
 	const descriptor = EditorPanes.getEditorPanes().find(candidate => candidate.id === SettingsEditorId);
 	assert.ok(descriptor);
@@ -906,11 +915,11 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	modelSearch.value = '';
 	modelSearch.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	const apiInput = root.querySelector<HTMLInputElement>('.ash-models-settings-api-controls input[type="password"]');
-	const saveKey = apiInput?.closest('.ash-models-settings-api-controls')?.querySelector<HTMLButtonElement>('button');
-	assert.ok(apiInput && saveKey);
+	assert.ok(apiInput);
+	assert.equal(apiInput.closest('.ash-models-settings-api-controls')?.querySelector('button'), null);
 	apiInput.value = 'test-secret';
 	apiInput.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
-	saveKey.click();
+	apiInput.dispatchEvent(new browserEnvironment.window.Event('blur'));
 	await nextTurn();
 	assert.deepEqual(savedKeys, ['test-secret']);
 	assert.equal(root.textContent?.includes('test-secret'), false);
@@ -1056,4 +1065,148 @@ test('Local model controls share translated snapshots and keep preparation runni
 	assert.equal(cancellations, 1);
 	assert.equal(importButton.disabled, false);
 	assert.equal(buttons.find(button => button.textContent === '取消')?.classList.contains('hidden'), true);
+});
+
+test('Models Settings collapses by provider and saves keys and custom models on blur', async () => {
+	using disposables = new DisposableStore();
+	const document = browserEnvironment.window.document;
+	document.body.replaceChildren();
+	const root = h(document, 'div');
+	document.body.append(root);
+	const saved: import('../../../../../platform/sessions/common/sessionApi.js').CustomModelProvider[] = [];
+	const keys: string[] = [];
+	let removed = 0;
+	let failed = false;
+	let rejectKey = false;
+	const model = { provider: 'openai', model: 'newest' };
+	const chat = {
+		onDidChangeModels: Event.None,
+		listModelCatalog: async () => [
+			{ model, displayName: 'Newest OpenAI' },
+			{ model: { provider: 'openai', model: 'older' }, displayName: 'Older OpenAI' },
+			{ model: { provider: 'anthropic', model: 'opus' }, displayName: 'Opus' },
+		],
+		listModelProviders: async () => ['openai', 'qwen', 'openai-compatible', 'huggingface'].map(connection => ({ connection, provider: connection, displayName: connection, apiKeyPolicy: 'required', apiKeyConfigured: true })),
+		listCustomModelProviders: async () => [],
+		isModelVisible: () => true,
+		saveCustomModelProvider: async (provider: typeof saved[number]) => { saved.push(provider); },
+		setModelProviderApiKey: async (_id: string, key: string) => { if (rejectKey) throw new Error('Key write rejected'); keys.push(key); },
+		removeModelProviderApiKey: async () => { removed++; },
+		refreshModels: async () => [],
+		testProviderModel: async () => failed ? { type: 'failed', message: 'Endpoint rejected this model' } : { type: 'passed' },
+	} as unknown as IChatService;
+	const configuration = disposables.add(new WorkbenchConfigurationService());
+	const services = disposables.add(new InstantiationService());
+	services.registerInstance(ChatServiceId, chat);
+	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
+	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
+	services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(root)));
+	services.registerInstance(ConfigurationServiceId, configuration);
+	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, dispose() {}, [Symbol.dispose]() {} });
+	const content = disposables.add(services.createInstance(ModelSettingsContent, root));
+	const modelTree = disposables.add(new SettingsTreeModel<SettingsContentItem>());
+	disposables.add(new SettingsTree(root, { model: modelTree, rootClassName: 'ash-models-settings', groupClassName: 'ash-settings-content-group', groupDescriptionClassName: 'ash-settings-group-description', itemsClassName: 'ash-settings-list', renderItem: item => item.value.domNode }));
+	disposables.add(content.onDidChange(() => modelTree.setChildren([{ element: { kind: 'group', id: 'models', title: 'Models', description: '' }, children: content.getNodes() }])));
+	content.setVisible(true);
+	await nextTurn();
+	assert.deepEqual([...root.querySelectorAll('.ash-models-settings-model-copy')].map(row => row.textContent), ['Newest OpenAI', 'Opus']);
+	const expand = root.querySelector<HTMLButtonElement>('.ash-models-settings-expand button')!;
+	expand.click();
+	assert.equal(root.querySelectorAll('.ash-models-settings-model-row').length, 3);
+	assert.equal(expand.getAttribute('aria-expanded'), 'true');
+	expand.click();
+	assert.equal(root.querySelectorAll('.ash-models-settings-model-row').length, 2);
+	assert.equal(content.getNodes(new SettingsSearchQuery('Older')).flatMap(node => node.children ?? []).some(node => node.element.kind === 'item' && node.element.title === 'Older OpenAI'), true);
+	const search = root.querySelector<HTMLInputElement>('input[aria-label="Search models"]')!;
+	const searchModels = (value: string): void => {
+		search.value = value;
+		search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+	};
+	search.focus();
+	searchModels('OPENAI/OLDER');
+	assert.deepEqual([...root.querySelectorAll('.ash-models-settings-model-copy')].map(row => row.textContent), ['Older OpenAI']);
+	assert.equal(document.activeElement, search);
+	assert.equal(root.querySelectorAll('.ash-models-settings-api-row').length, 1);
+	searchModels('missing model');
+	assert.equal(root.querySelectorAll('.ash-models-settings-model-row').length, 0);
+	assert.match(root.textContent ?? '', /No models found/);
+	assert.equal(document.activeElement, search);
+	searchModels('');
+	assert.deepEqual([...root.querySelectorAll('.ash-models-settings-model-copy')].map(row => row.textContent), ['Newest OpenAI', 'Opus']);
+	assert.equal(root.querySelectorAll('.ash-models-settings-api-row').length, 1);
+	const input = root.querySelector<HTMLInputElement>('.ash-models-settings-api-row input')!;
+	const edit = (field: HTMLInputElement, value: string): void => {
+		field.value = value;
+		field.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+		field.dispatchEvent(new browserEnvironment.window.Event('blur'));
+	};
+	input.dispatchEvent(new browserEnvironment.window.Event('blur'));
+	await nextTurn();
+	assert.deepEqual(keys, []);
+	assert.equal(removed, 0, 'An untouched masked key must not be removed');
+	edit(input, 'new-test-key');
+	await nextTurn();
+	assert.deepEqual(keys, ['new-test-key']);
+	assert.equal(input.value, '••••••••');
+	edit(input, '');
+	await nextTurn();
+	assert.equal(removed, 1);
+	rejectKey = true;
+	edit(input, 'retry-test-key');
+	await nextTurn();
+	assert.equal(input.getAttribute('aria-invalid'), 'true');
+	assert.equal(input.value, 'retry-test-key');
+	rejectKey = false;
+	input.dispatchEvent(new browserEnvironment.window.Event('blur'));
+	await nextTurn();
+	assert.equal(input.value, '••••••••');
+	assert.equal(input.hasAttribute('aria-invalid'), false);
+	root.querySelector<HTMLButtonElement>('.ash-models-settings-provider-title button')!.click();
+	const card = root.querySelector<HTMLElement>('.ash-chat-models-widget')!;
+	assert.equal(document.activeElement, card.querySelector('input'));
+	edit(card.querySelector<HTMLInputElement>('input[aria-label="Provider name"]')!, 'Gateway');
+	edit(card.querySelector<HTMLInputElement>('input[aria-label="Base URL"]')!, 'https://example.test/v1');
+	await nextTurn();
+	const button = (label: string): HTMLButtonElement => [...card.querySelectorAll<HTMLButtonElement>('button')].find(candidate => candidate.textContent === label)!;
+	button('Add model').click();
+	const first = card.querySelector<HTMLInputElement>('input[aria-label="Model ID"]')!;
+	edit(first, 'first-private-model');
+	card.querySelector<HTMLInputElement>('input[role="switch"][aria-label="1M context"]')!.click();
+	button('Save model').click();
+	await nextTurn();
+	button('Add model').click();
+	edit(first, 'second-private-model');
+	edit(card.querySelector<HTMLInputElement>('input[aria-label="Context window (tokens)"]')!, '128000');
+	button('Save model').click();
+	await nextTurn();
+	assert.deepEqual(saved.at(-1)?.models, [{ id: 'first-private-model', contextWindow: 1_000_000 }, { id: 'second-private-model', contextWindow: 128_000 }]);
+	const testButton = button('Test models');
+	testButton.click();
+	await nextTurn();
+	assert.equal(card.querySelector('.ash-chat-models-test-status')?.classList.contains('passed'), true);
+	edit(card.querySelector<HTMLInputElement>('input[aria-label="Base URL"]')!, 'https://another.test/v1');
+	await nextTurn();
+	assert.equal(card.querySelector('.ash-chat-models-test-status')?.classList.contains('passed'), false);
+	failed = true;
+	testButton.click();
+	await nextTurn();
+	assert.match(card.textContent ?? '', /Endpoint rejected this model/);
+	button('Add model').click();
+	first.focus();
+	const help = AccessibleViewRegistry.getImplementations().find(provider => provider.name.startsWith('models-settings-'))?.getProvider(services);
+	assert.match(help?.provideContent() ?? '', /clear the field to remove a key/);
+	help?.dispose();
+});
+
+test('Custom provider fields and test states use the Chinese catalog', () => {
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	try {
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		assert.equal(localize('models.catalog.search', 'Search models'), '搜索模型');
+		assert.equal(localize('models.provider.name', 'Provider name'), '供应商名称');
+		assert.equal(localize('models.provider.context', '1M context'), '1M 上下文');
+		assert.equal(localize('models.provider.passed', 'Model test passed'), '模型测试通过');
+		assert.equal(localize('models.discovery.unsupported', 'This endpoint does not provide a model list. Add model IDs manually.'), '此端点不提供模型列表，请手动添加模型 ID。');
+		assert.equal(localize('models.provider.contextWindow', 'Context window (tokens)'), '上下文长度（tokens）');
+	} finally { resetNlsResolver(); }
 });
