@@ -326,8 +326,10 @@ fn check_child(command: String) -> (String, String) {
     });
     assert_eq!(unsafe { ResumeThread(thread.0) }, 1);
     const TIMEOUT_MS: u32 = 10_000;
+    let started = Instant::now();
     let wait = unsafe { WaitForSingleObject(process.0, TIMEOUT_MS) };
     if wait != WAIT_OBJECT_0 {
+        capture_child_timeout(process.0);
         // Close every child-side pipe before joining readers so timeout
         // diagnostics include captured output without hanging teardown.
         job.terminate_and_wait(1).unwrap();
@@ -343,5 +345,74 @@ fn check_child(command: String) -> (String, String) {
     );
     assert_eq!(code, 125, "{output}\n{errors}");
     assert!(output.contains("child-ready"), "{output}\n{errors}");
+    eprintln!(
+        "restricted child finished in {:?}: {}",
+        started.elapsed(),
+        request.command
+    );
     (output, errors)
+}
+
+fn capture_child_timeout(process: HANDLE) {
+    let Some(directory) = std::env::var_os("ASH_WINDOWS_SANDBOX_DIAGNOSTICS") else {
+        return;
+    };
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::System::LibraryLoader::GetProcAddress;
+    use windows_sys::Win32::System::LibraryLoader::LoadLibraryW;
+    let directory = std::path::PathBuf::from(directory);
+    std::fs::create_dir_all(&directory).unwrap();
+    let pid = unsafe { GetProcessId(process) };
+    let mut created = FILETIME::default();
+    let mut exited = FILETIME::default();
+    let mut kernel = FILETIME::default();
+    let mut user = FILETIME::default();
+    assert_ne!(
+        unsafe { GetProcessTimes(process, &mut created, &mut exited, &mut kernel, &mut user) },
+        0
+    );
+    let ticks =
+        |time: FILETIME| (u64::from(time.dwHighDateTime) << 32) | u64::from(time.dwLowDateTime);
+    std::fs::write(directory.join(format!("child-{pid}.json")), serde_json::to_vec_pretty(&serde_json::json!({
+        "pid": pid, "created": ticks(created), "kernelMs": ticks(kernel) / 10_000, "userMs": ticks(user) / 10_000,
+    })).unwrap()).unwrap();
+    // Capture the still-running child before job teardown. The ten-second
+    // assertion is unchanged; a dump distinguishes a blocked initializer from
+    // cold-start work. Only explicitly enabled, controlled test children dump.
+    let library_path = wxc_common::system_dir::resolve_system_directory()
+        .unwrap()
+        .join("dbghelp.dll");
+    let library = unsafe { LoadLibraryW(win::wide(library_path).as_ptr()) };
+    assert!(
+        !library.is_null(),
+        "{}",
+        win::error("LoadLibraryW(dbghelp)")
+    );
+    let address = unsafe { GetProcAddress(library, c"MiniDumpWriteDump".as_ptr().cast()) }.unwrap();
+    type WriteDump = unsafe extern "system" fn(
+        HANDLE,
+        u32,
+        HANDLE,
+        u32,
+        *const std::ffi::c_void,
+        *const std::ffi::c_void,
+        *const std::ffi::c_void,
+    ) -> i32;
+    let dump: WriteDump = unsafe { std::mem::transmute(address) };
+    let file = std::fs::File::create(directory.join(format!("child-{pid}.dmp"))).unwrap();
+    // Stack, unloaded-module and thread metadata suffice; do not dump the heap.
+    let success = unsafe {
+        dump(
+            process,
+            pid,
+            file.as_raw_handle(),
+            0x20 | 0x800 | 0x1000,
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+        )
+    };
+    let error = unsafe { GetLastError() };
+    unsafe { FreeLibrary(library) };
+    assert_ne!(success, 0, "MiniDumpWriteDump: {error}");
 }
