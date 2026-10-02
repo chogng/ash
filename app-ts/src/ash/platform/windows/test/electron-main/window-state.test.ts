@@ -584,7 +584,7 @@ test("dedicated window state restores without changing the main window state", a
 		stateService,
 		workspace: UNKNOWN_EMPTY_WINDOW_WORKSPACE,
 		storageKey: 'sessionsWindowState',
-		defaultState: { mode: WindowMode.Normal, width: 1180, height: 780 },
+		defaultState: defaultWindowState(WorkbenchState.WORKSPACE),
 		displayService: {
 			onDidChangeDisplays: Event.None,
 			getAllDisplays: () => [primaryDisplay],
@@ -594,7 +594,7 @@ test("dedicated window state restores without changing the main window state", a
 	};
 	const dedicated = new WindowsStateHandler(dedicatedOptions);
 	assert.deepEqual(dedicated.restoreWindowState(), {
-		...dedicatedOptions.defaultState, x: 370, y: 130, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea,
+		...dedicatedOptions.defaultState, x: 240, y: 70, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea,
 	});
 	const mainWindow = new TestWindow();
 	await main.saveWindowState(mainWindow);

@@ -28,7 +28,23 @@ for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
 			await expect.poll(() => geometryDelta(application!, defaults, 'current')).toBeLessThanOrEqual(2);
 			const opened = application.waitForEvent('window');
 			await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
-			await expect((await opened).locator('.ash-sessions-window')).toBeVisible();
+			const agents = await opened;
+			await expect(agents.locator('.ash-sessions-window')).toBeVisible();
+			const agentsDefaults = await application.evaluate(({ screen }) => {
+				const area = screen.getPrimaryDisplay().workArea;
+				const width = Math.min(1440, area.width);
+				const height = Math.min(900, area.height);
+				return { x: Math.round(area.x + (area.width - width) / 2), y: Math.round(area.y + (area.height - height) / 2), width, height };
+			});
+			const agentsWindow = await application.browserWindow(agents);
+			try {
+				await expect.poll(async () => {
+					const bounds = await agentsWindow.evaluate(window => window.getBounds());
+					return Math.max(...(['x', 'y', 'width', 'height'] as const).map(key => Math.abs(bounds[key] - agentsDefaults[key])));
+				}).toBeLessThanOrEqual(2);
+			} finally {
+				await agentsWindow.dispose();
+			}
 			const requested = await application.evaluate(({ BrowserWindow, screen }) => {
 				const area = screen.getPrimaryDisplay().workArea;
 				const width = Math.max(400, Math.min(1000, Math.floor(area.width * 0.6)));
@@ -128,8 +144,8 @@ test('Desktop places a new Agents window on the primary display of a simulated m
 				};
 				return overlap(primary) > overlap(secondary) ? primary : secondary;
 			};
-			const width = Math.min(1180, primary.workArea.width);
-			const height = Math.min(780, primary.workArea.height);
+			const width = Math.min(1440, primary.workArea.width);
+			const height = Math.min(900, primary.workArea.height);
 			return { x: Math.round(primary.workArea.x + (primary.workArea.width - width) / 2), y: Math.round(primary.workArea.y + (primary.workArea.height - height) / 2), width, height };
 		});
 		const opened = application.waitForEvent('window');

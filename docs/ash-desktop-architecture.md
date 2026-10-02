@@ -303,7 +303,9 @@ Desktop 在创建窗口前由 `WorkspacesMainService.resolveStartupWorkspace()` 
 Folder/Workspace 产生稳定 ID。标识采用 `{ id }`、`{ id, uri }` 或
 `{ id, configPath }` 的结构，不存储重复的 `WorkbenchState` 判别字段。窗口状态策略从标识
 推导状态：`EMPTY` 映射到 `1200 × 800` 默认窗口，`FOLDER` 和 `WORKSPACE` 映射到
-`1440 × 900` 默认窗口。`WindowsStateHandler` 在单个 `windowsState` 记录中持有
+`1440 × 900` 默认窗口。Agents 窗口即使尚未选择项目，也复用工作区的 `1440 × 900`
+默认尺寸；位置和用户调整后的尺寸通过独立的 `sessionsWindowState` 保存。
+`WindowsStateHandler` 在单个 `windowsState` 记录中持有
 `lastActiveWindow` 和 `openedWindows`；每个窗口使用 `workspaceIdentifier`、`folder` 或
 `backupPath` 绑定其 UI state。恢复时先匹配具体 Workspace/Folder/空窗口备份，再回退到
 last-active state，最后才使用默认尺寸。旧的 `windowState` 与 `windowState.empty` 键不会迁移

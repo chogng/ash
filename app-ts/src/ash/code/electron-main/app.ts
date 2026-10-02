@@ -70,8 +70,8 @@ import { RESTORE_WINDOWS_SETTING, TitleBarSetting, parseTitleBarStyle, type Titl
 import { WindowsStateHandler, WindowSessionStateHandler, type IWindowSessionEntry, type IWindowSessionWindow } from "../../platform/windows/electron-main/windowsStateHandler.js";
 import { WindowsMainService, trackWindowResourceChanges, windowOperationIpcRoute, windowResourceIpcRoutes, workspaceContextIpcRoutes } from "../../platform/windows/electron-main/windowsMainService.js";
 import { LifecycleMainService, windowCloseResponseIpcRoute } from '../../platform/lifecycle/electron-main/lifecycleMainService.js';
-import { focusWindow, WindowMode, WorkspaceContextMainService, type IWindowState } from "../../platform/window/electron-main/window.js";
-import { type IAnyWorkspaceIdentifier, type IWorkspace, getWorkspaceRemoteAuthority, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE } from "../../platform/workspace/common/workspace.js";
+import { defaultWindowState, focusWindow, WorkspaceContextMainService, type IWindowState } from "../../platform/window/electron-main/window.js";
+import { type IAnyWorkspaceIdentifier, type IWorkspace, getWorkspaceRemoteAuthority, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE, WorkbenchState } from "../../platform/workspace/common/workspace.js";
 import { createEmptyWorkspaceIdentifier } from "../../platform/workspaces/node/workspaces.js";
 import { packagedRemoteRuntimeCatalogSource } from "../../platform/remote/electron-main/packagedRemoteRuntimeCatalog.js";
 import { RemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from "../../platform/remote/electron-main/remoteRuntimeInstaller.js";
@@ -1370,7 +1370,8 @@ export class AshApplication extends Disposable {
 		const sessionsEntry = this.resolveRendererEntry("sessions", session.modeId);
 		const sessionsWindowState = this.createWindowsStateHandler(UNKNOWN_EMPTY_WINDOW_WORKSPACE, {
 			storageKey: 'sessionsWindowState',
-			defaultState: { mode: WindowMode.Normal, width: 1_180, height: 780 },
+			// Agents uses workspace window dimensions even before a project is selected.
+			defaultState: defaultWindowState(WorkbenchState.WORKSPACE),
 		});
 		const titleBarStyle = this.titleBarStyle;
 		const wasOpen = this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY) !== undefined;
