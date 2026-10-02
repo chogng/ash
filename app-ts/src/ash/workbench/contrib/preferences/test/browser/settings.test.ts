@@ -1,6 +1,14 @@
 import type { SettingsContentItem } from '../../browser/settingsTreeModels.js';
 import { IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
+import { IDictationService } from '../../../../../platform/dictation/common/dictationService.js';
+import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { DialogService } from '../../../../services/dialogs/common/dialogService.js';
+import { ISkillService } from '../../../../../platform/skills/common/skillService.js';
+import { IMarketplaceService } from '../../../../../platform/marketplace/common/marketplaceService.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -210,7 +218,6 @@ test('settingsLayout is the single projection from registered settings to catego
 
 	assert.deepEqual(SettingsCategories.map(category => category.id), [
 		'general',
-		'dictation',
 		'appearance',
 		'layout',
 		'startup',
@@ -230,8 +237,8 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, LocalizationConfiguration.locale), 'general');
 	assert.equal(findSettingCategory(layout, HoverConfiguration.delay), 'general');
 	assert.equal(findSettingCategory(layout, SashConfiguration.size), 'general');
-	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'dictation');
-	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'dictation');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'general');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'general');
 	assert.equal(findSettingCategory(layout, 'chat.defaultModel'), 'models');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.colorTheme), 'appearance');
 	assert.equal(findSettingCategory(layout, 'workbench.tips.enabled'), 'appearance');
@@ -264,9 +271,9 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.renderControlCharacters), 'editor');
 	assert.equal(findSettingCategory(layout, ContentSearchConfiguration.maxResults), 'editor');
 	assert.equal(findSettingCategory(layout, ScmConfiguration.diffDecorationsIgnoreTrimWhitespace), 'general');
-	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'dictation');
-	assert.equal(findSettingCategory(layout, DictationConfiguration.cloudProvider), 'dictation');
-	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'dictation');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'general');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.cloudProvider), 'general');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'general');
 	assert.equal(defaults.all.some(setting => setting.id === GitConfiguration.autofetch), false);
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetch)?.defaultValue, false);
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetchPeriod)?.defaultValue, 180);
@@ -513,6 +520,16 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	} as unknown as IChatService;
 	const contextView = disposables.add(new BrowserContextViewService(root));
 	const services = new InstantiationService();
+	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
+	services.registerInstance(IDictationService, undefined);
+	services.registerInstance(IChatSpeechToTextService, disposables.add(services.createInstance(ChatSpeechToTextService)));
+	services.registerInstance(ISkillService, {
+		list: async () => ({ generation: 0, skills: [] }),
+		read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }),
+		setEnabled: async () => {},
+	});
+	services.registerInstance(IMarketplaceService, { onDidChangeInstalled: Event.None } as IMarketplaceService);
+	services.registerInstance(IDialogService, disposables.add(new DialogService()));
 	services.registerInstance(ClipboardServiceId, clipboardService);
 	services.registerInstance(ConfigurationServiceId, configuration);
 	services.registerInstance(IContextMenuService, contextMenuProvider);
@@ -607,7 +624,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector('.ash-modal-editor')?.getAttribute('role'), 'dialog');
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'dictation', 'editor'],
+		['general', 'editor'],
 	);
 	const workbenchGroup = root.querySelector<HTMLElement>('[data-settings-group-id="workbench"]');
 	assert.ok(workbenchGroup);
@@ -615,8 +632,9 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	workbenchGroup.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'dictation', 'appearance', 'layout', 'startup', 'editor'],
+		['general', 'appearance', 'layout', 'startup', 'editor'],
 	);
+	assert.equal(root.querySelector('[data-settings-category-id="general"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
 	assert.equal(root.querySelector('[data-settings-category-id="appearance"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
 	assert.equal(root.querySelector('[data-settings-category-id="layout"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
 	assert.equal(root.querySelector('[data-settings-category-id="startup"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
@@ -791,7 +809,22 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(host.hidden, true);
 	assert.match(prompts[0] ?? '', /\/profile\/config.toml.*namespace \(user\)/);
 	await preferences.openSettings();
-	root.querySelector<HTMLElement>('[data-settings-category-id="dictation"]')?.click();
+	await preferences.openSettings('dictation');
+	assert.equal(root.querySelector('[data-settings-container]')?.getAttribute('data-active-settings-category'), 'general');
+	assert.equal(root.querySelector('[data-tree-id="general"]')?.getAttribute('aria-selected'), 'true');
+	assert.equal(root.querySelector('[data-settings-category-id="dictation"]'), null);
+	assert.equal(root.querySelector('[data-settings-target-id]'), null);
+	assert.equal(root.querySelector('[data-settings-tree-group-id="dictation"] .ash-settings-tree-group-title')?.textContent, 'Voice input');
+	await configuration.updateValue(LocalizationConfiguration.locale, 'zh-CN');
+	assert.equal(root.querySelector('[data-settings-tree-group-id="dictation"] .ash-settings-tree-group-title')?.textContent, '语音输入');
+	const dictationSearch = root.querySelector<HTMLInputElement>('.ash-settings-search input')!;
+	dictationSearch.value = '听写';
+	dictationSearch.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+	assert.ok(root.querySelector('[role="grid"][aria-label="Local dictation models"]'));
+	assert.ok(root.querySelector('[data-settings-category-id="general"]'));
+	dictationSearch.value = '';
+	dictationSearch.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+	await configuration.updateValue(LocalizationConfiguration.locale, 'en');
 	assert.equal(root.querySelector('[data-configuration-key="dictation.localModel"]'), null);
 	assert.ok(root.querySelector('[role="grid"][aria-label="Local dictation models"]'));
 	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')?.click();

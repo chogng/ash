@@ -1,3 +1,4 @@
+import '../workbench/contrib/skills/browser/skills.contribution.js';
 import './contrib/files/browser/files.contribution.js';
 import './contrib/changes/browser/changes.contribution.js';
 import './contrib/design/browser/design.contribution.js';

@@ -1,3 +1,17 @@
+import { MarketplaceLanguagePackService } from '../../platform/languagePacks/browser/marketplaceLanguagePackService.js';
+import { ILanguagePackService } from '../../platform/languagePacks/common/languagePacksService.js';
+import { ILocaleService } from '../../workbench/services/localization/common/locale.js';
+import { WorkbenchLocaleService } from '../../workbench/services/localization/browser/localeService.js';
+import { ILocalizationService } from '../../workbench/services/localization/common/localizationService.js';
+import { WorkbenchLocalizationService } from '../../workbench/services/localization/browser/workbenchLocalizationService.js';
+import { builtinLanguagePackCatalogs } from '../../workbench/services/localization/common/localizationCatalogs.js';
+import { IHooksService } from '../../platform/hooks/common/hooksService.js';
+import { ISkillService } from '../../platform/skills/common/skillService.js';
+import { IMarketplaceService, OPEN_MARKETPLACE_COMMAND_ID, OPEN_PLUGINS_COMMAND_ID, type MarketplaceOpenOptions } from '../../platform/marketplace/common/marketplaceService.js';
+import { AppServerMarketplaceService } from '../../workbench/services/marketplace/browser/appServerMarketplaceService.js';
+import { IRemoteAgentService } from '../../workbench/services/remote/common/remoteAgentService.js';
+import { AppServerRemoteAgentService } from '../../workbench/services/remote/browser/appServerRemoteAgentService.js';
+import { IChatSessionNavigationService } from '../../workbench/services/chat/common/chatSessionNavigationService.js';
 import '../../workbench/contrib/chat/browser/actions/chatSpeechToTextActions.js';
 import '../../workbench/contrib/quickaccess/browser/quickAccess.contribution.js';
 import { IDictationService } from '../../platform/dictation/common/dictationService.js';
@@ -309,6 +323,17 @@ export class Workbench extends Disposable {
 		services.registerInstance(ITextModelResourceService, textModels);
 		services.registerInstance(IFileTextModelService, textModels);
 		services.registerInstance(IChatService, chat);
+		services.registerInstance(ISkillService, options.api.skills);
+		services.registerInstance(IHooksService, options.api.hooks);
+		const marketplaceService = this._register(new AppServerMarketplaceService(options.api.marketplace, options.api.events));
+		services.registerInstance(IMarketplaceService, marketplaceService);
+		const languagePacks = this._register(new MarketplaceLanguagePackService(marketplaceService, builtinLanguagePackCatalogs));
+		services.registerInstance(ILanguagePackService, languagePacks);
+		const locale = this._register(new WorkbenchLocaleService(configurationService, languagePacks));
+		services.registerInstance(ILocaleService, locale);
+		const localization = this._register(new WorkbenchLocalizationService(locale, languagePacks));
+		services.registerInstance(ILocalizationService, localization);
+		services.registerInstance(IRemoteAgentService, this._register(new AppServerRemoteAgentService({ api: options.api.appServer, remoteApi: options.api.remote })));
 		const accountService = this._register(new AppServerAccountService(options.api.accounts, options.api.events));
 		services.registerInstance(IAccountService, accountService);
 		services.registerInstance(IChatTipService, this._register(services.createInstance(ChatTipService)));
@@ -398,7 +423,12 @@ export class Workbench extends Disposable {
 		void keybindingsResourceService.reload().catch((error: unknown) => console.error("Failed to initialize keybindings resource", error));
 		const accessibleViewService = this._register(services.createInstance(AccessibleViewService));
 		services.registerInstance(IAccessibleViewService, accessibleViewService);
-		const preferences = this._register(services.createInstance(SessionsPreferences, this.domNode));
+		const preferences = this._register(services.createInstance(SessionsPreferences, this.domNode, () => { selectActivityPage('code'); editors.focusActiveEditor(); }));
+		this._register(CommandsRegistry.register(OPEN_PLUGINS_COMMAND_ID, () => preferences.open('plugins', { mode: 'installed' })));
+		this._register(CommandsRegistry.register(OPEN_MARKETPLACE_COMMAND_ID, (_accessor, value: unknown) => {
+			const options = value as MarketplaceOpenOptions | string | undefined;
+			return preferences.open('plugins', typeof options === 'string' ? { query: options.trim() } : { mode: 'browse', ...options });
+		}));
 		const accountMenu = this._register(new SessionsAccountMenu(accountService, contextMenus, preferences, options.returnToWorkbench));
 
 		let auxiliarybar: AuxiliaryBarPart | undefined;
@@ -515,6 +545,21 @@ export class Workbench extends Disposable {
 		};
 		this._register(view.onDidChange(updateSessionsPart));
 		updateSessionsPart();
+		services.registerInstance(IChatSessionNavigationService, {
+			getActiveConversation: () => {
+				const selected = view.activeSelection;
+				return selected?.kind === 'session' ? { sessionId: selected.active.session.sessionId, threadId: selected.active.threadId } : undefined;
+			},
+			getConversations: () => sessions.sessions.filter(session => session.status === 'active').flatMap(session => session.chats.filter(chat => chat.status === 'active').map(chat => ({ sessionId: session.sessionId, threadId: chat.threadId, title: chat.title ?? session.title }))),
+			appendToActiveDraft: text => {
+				selectActivityPage(view.page.get());
+				sessionsPart!.appendToDraft(text, view.page.get());
+				sessionsPart!.focus();
+			},
+			captureActiveDraft: () => sessionsPart!.captureActiveDraft(view.page.get()),
+			openConversation: async (sessionId, threadId) => { selectActivityPage(view.page.get()); await view.openThread(sessionId, threadId); },
+		});
+
 		const editor = this._register(services.createInstance(EditorPart, this.domNode, {
 			configurationService,
 			contextKeyService: contextKeys,

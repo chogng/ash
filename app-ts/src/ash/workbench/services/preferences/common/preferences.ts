@@ -106,7 +106,8 @@ export interface IOpenSettingsOptions {
 
 /** Workbench-level entry point for opening Preferences surfaces. */
 export interface IPreferencesService {
-	openSettings(category?: string): Promise<void>;
+	/** Opens a settings page or reveals a section in its containing page. */
+	openSettings(target?: string): Promise<void>;
 	openUserSettings(options?: IOpenSettingsOptions): Promise<void>;
 	openKeybindings(): Promise<void>;
 }

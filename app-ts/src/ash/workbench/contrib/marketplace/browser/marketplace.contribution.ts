@@ -2,21 +2,13 @@ import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { localizedString } from '../../../../platform/action/common/action.js';
-import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { OPEN_MARKETPLACE_COMMAND_ID, OPEN_PLUGINS_COMMAND_ID, type MarketplaceOpenOptions } from '../../../../platform/marketplace/common/marketplaceService.js';
-import { Registry } from '../../../../platform/registry/common/platform.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { ViewContainerLocation, ViewsRegistry } from '../../../common/views.js';
 import { IViewsService } from '../../../services/views/browser/viewsService.js';
 import { MarketplaceViewPane } from './marketplaceViewPane.js';
-
-Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
-	key: 'accessibility.verbosity.marketplace', defaultValue: true,
-	parse: value => { if (typeof value !== 'boolean') { throw new TypeError('Marketplace accessibility verbosity must be boolean'); } return value; },
-	setting: { valueType: 'boolean', title: 'Marketplace accessibility help', description: 'Announce keyboard help when Marketplace receives focus.' },
-});
 
 registerWorkbenchContribution('workbench.contrib.marketplace', WorkbenchPhase.BlockStartup, () => {
 	const registrations = new DisposableStore();

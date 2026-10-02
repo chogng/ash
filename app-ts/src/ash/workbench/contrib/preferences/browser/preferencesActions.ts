@@ -32,9 +32,9 @@ registerAction2(class OpenSettingsAction extends Action2 {
 		});
 	}
 
-	override run(accessor: ServicesAccessor, category?: unknown): Promise<void> {
-		if (category !== undefined && (typeof category !== 'string' || category.length === 0)) throw new TypeError('Settings category must be a non-empty string');
-		return accessor.get(IPreferencesService).openSettings(category);
+	override run(accessor: ServicesAccessor, target?: unknown): Promise<void> {
+		if (target !== undefined && (typeof target !== 'string' || target.length === 0)) throw new TypeError('Settings target must be a non-empty string');
+		return accessor.get(IPreferencesService).openSettings(target);
 	}
 });
 

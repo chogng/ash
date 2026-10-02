@@ -1,5 +1,20 @@
 import { localize } from '../../../../../../../nls.js';
-import type { ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
+import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
+
+/** Both configuration surfaces write undefined when the configured default is chosen. */
+export function modelPickerEffortOptions(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): readonly { effort: ModelReasoningEffort | undefined; value: ModelReasoningEffort | undefined; label: string; checked: boolean; isDefault: boolean }[] {
+	const defaultEffort = entry.modelReasoningEffort;
+	const efforts: readonly (ModelReasoningEffort | undefined)[] = defaultEffort === undefined
+		? [undefined, ...(entry.supportedReasoningEfforts ?? [])]
+		: entry.supportedReasoningEfforts ?? [];
+	return efforts.map(effort => ({
+		effort,
+		value: effort === defaultEffort ? undefined : effort,
+		label: modelPickerEffortLabel(effort),
+		checked: effort === (selectedEffort ?? defaultEffort),
+		isDefault: defaultEffort !== undefined && effort === defaultEffort,
+	}));
+}
 
 export function modelPickerEffortLabel(effort: ModelReasoningEffort | undefined): string {
 	switch (effort) {

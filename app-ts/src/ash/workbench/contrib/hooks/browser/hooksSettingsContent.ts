@@ -1,3 +1,5 @@
+import { Registry } from '../../../../platform/registry/common/platform.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import './media/hooksSettingsContent.css';
 import { h, isHTMLElement } from '../../../../base/browser/dom.js';
 import { Emitter } from '../../../../base/common/event.js';
@@ -8,7 +10,6 @@ import { SettingsSearchQuery } from '../../preferences/browser/settingsSearch.js
 import type { SettingsContent, SettingsContentItem, SettingsTreeNode } from '../../preferences/browser/settingsTreeModels.js';
 import { Disposable, DisposableStore, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
 import { dirname } from '../../../../base/common/resources.js';
-import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { URI } from '../../../../base/common/uri.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
@@ -18,11 +19,19 @@ import { IFileService } from '../../../../platform/files/common/files.js';
 import { HookEvents, IHooksService, type HookDeclaration, type HookEvent, type HookSource } from '../../../../platform/hooks/common/hooksService.js';
 import { createSshRemoteWorkspaceUri } from '../../../../platform/remote/common/remote.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
-import { CLOSE_EDITOR_COMMAND_ID } from '../../../browser/parts/editor/editorCommands.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { IRemoteAgentService } from '../../../services/remote/common/remoteAgentService.js';
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.HooksSettings,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError('Hooks accessibility verbosity must be boolean');
+		return value;
+	},
+});
 
 /** A project file is editable before session discovery supplies its backend namespace. */
 interface HookConfigurationTarget {
@@ -52,6 +61,9 @@ export class HooksSettingsContent extends Disposable implements SettingsContent 
 	public readonly categoryId = 'hooks';
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
+	private readonly configurationOpened = this._register(new Emitter<URI | undefined>());
+	/** The profile configuration opens on its host; project configurations use this window's editor. */
+	public readonly onDidOpenConfiguration = this.configurationOpened.event;
 	private query = new SettingsSearchQuery('');
 	public readonly domNode: HTMLElement;
 	private readonly status: HTMLElement;
@@ -71,13 +83,13 @@ export class HooksSettingsContent extends Disposable implements SettingsContent 
 
 	constructor(
 		container: HTMLElement,
+		private readonly prepareChat: () => Promise<void>,
 		@IHooksService private readonly hooks: IHooksService,
 		@IRemoteAgentService private readonly remote: IRemoteAgentService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IChatSessionNavigationService private readonly chats: IChatSessionNavigationService,
 		@IEditorService private readonly editors: IEditorService,
 		@IFileService private readonly files: IFileService,
-		@ICommandService private readonly commands: ICommandService,
 		@ILocalizationService private readonly localization: ILocalizationService,
 		@IContextViewService contextView: IContextViewService,
 		@IContextKeyService contextKeys: IContextKeyService,
@@ -331,6 +343,7 @@ export class HooksSettingsContent extends Disposable implements SettingsContent 
 		const id = button.dataset.hookId;
 		const hookSource = id ? this.sources?.find(source => source.hooks.some(hook => hook.id === id)) : undefined;
 		const source = id ? hookSource : this.selectedConfiguration();
+		let editorResource: URI | undefined;
 		try {
 			if (button.dataset.hookAction?.startsWith('ask-')) {
 				if (!source) return;
@@ -340,7 +353,7 @@ export class HooksSettingsContent extends Disposable implements SettingsContent 
 				const prompt = source.namespace
 					? this.label('prompt', 'Help me configure {0} Hooks in {1}. Inspect the existing TOML and preserve other settings. Use the source namespace ({2}) for Hook IDs. Explain the trigger, command and scope, then validate the configuration. My requirement: ', [event, source.configPath, source.namespace])
 					: this.label('projectPrompt', 'Help me configure {0} Hooks in {1}. Inspect the existing TOML and preserve other settings. Resolve the project directory namespace through App Server before choosing Hook IDs. Explain the trigger, command and scope, then validate the configuration. My requirement: ', [event, source.configPath]);
-				await this.commands.executeCommand(CLOSE_EDITOR_COMMAND_ID);
+				await this.prepareChat();
 				this.chats.appendToActiveDraft(prompt);
 				return;
 			}
@@ -353,8 +366,12 @@ export class HooksSettingsContent extends Disposable implements SettingsContent 
 				await this.files.createDirectory(dirname(resource));
 				await this.files.createFile(resource, 'ignore');
 				await this.editors.openEditor({ resource, languageId: 'toml' }, { pinned: true });
+				editorResource = resource;
 			}
-			if (!this.isDisposed) this.setStatus('opened', 'Configuration opened. Save it, then choose Refresh.');
+			if (!this.isDisposed) {
+				this.setStatus('opened', 'Configuration opened. Save it, then choose Refresh.');
+				this.configurationOpened.fire(editorResource);
+			}
 		} catch (error) {
 			if (!this.isDisposed) this.setStatus('actionFailed', 'Could not configure Hooks: {0}', [error instanceof Error ? error.message : String(error)]);
 		}

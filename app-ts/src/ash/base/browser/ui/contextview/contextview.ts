@@ -126,6 +126,7 @@ export class ContextView
 			"pointerdown",
 			(event: PointerEvent) => {
 				const target = event.target;
+				if (isTargetInAnotherModal(target, this.element)) return;
 				if (
 					isNode(target) &&
 					!this.element.contains(target) &&
@@ -144,7 +145,8 @@ export class ContextView
 				if (
 					event.isComposing ||
 					event.key !== "Escape" ||
-					!isTopmostContextView(this)
+					!isTopmostContextView(this) ||
+					isTargetInAnotherModal(event.target, this.element)
 				) {
 					return;
 				}
@@ -289,6 +291,14 @@ function unregisterVisibleContextView(contextView: ContextView): void {
 function isTopmostContextView(contextView: ContextView): boolean {
 	const stack = visibleContextViews.get(contextView.element.ownerDocument);
 	return stack?.[stack.length - 1] === contextView;
+}
+
+/** A modal above the anchored view owns its clicks and Escape until it closes. */
+function isTargetInAnotherModal(target: EventTarget | null, view: HTMLElement): boolean {
+	if (!isNode(target)) return false;
+	const element = target.nodeType === 1 ? target as Element : target.parentElement;
+	const modal = element?.closest('dialog:modal');
+	return !!modal && !modal.contains(view);
 }
 
 function getAnchorDocument(

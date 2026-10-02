@@ -80,17 +80,13 @@ export const SettingsNavigation = [
 						description: 'Tune hover feedback and resize handles.',
 						settings: ['workbench.hover.*', 'workbench.sash.*', 'onboarding.enabled'],
 					},
-
+					{
+						id: 'dictation',
+						get label() { return localize('settings.dictation.group', 'Voice input'); },
+						get description() { return localize('settings.dictation.groupDescription', 'Choose how voice input is transcribed.'); },
+						settings: ['dictation.*'],
+					},
 				],
-			},
-			{
-				id: 'dictation',
-				get label() { return localize('sessions.settings.dictation', 'Dictation'); },
-				get description() { return localize('dictation.settings.description', 'Choose local or cloud transcription and manage local dictation models.'); },
-				keywords: ['dictation', 'speech', 'microphone', 'download', 'import'],
-				presentation: 'general',
-				groups: [{ id: 'dictation', get label() { return localize('sessions.settings.dictation', 'Dictation'); },
-					get description() { return localize('dictation.settings.description', 'Choose local or cloud transcription and manage local dictation models.'); }, settings: ['dictation.*'] }],
 			},
 		],
 	},

@@ -1,18 +1,22 @@
 import { ButtonActionViewItem } from '../../../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { addDisposableListener, stopEvent } from '../../../../../../../base/browser/dom.js';
 import type { IAction } from '../../../../../../../base/common/actions.js';
-import type { IContextViewService } from '../../../../../../../platform/contextview/browser/contextView.js';
+import type { Event } from '../../../../../../../base/common/event.js';
+import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
 import type { ModelRef } from '../../../../../../services/chat/common/chatService.js';
-import type { ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
+import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
 import { ModelPickerWidget } from './modelPickerWidget.js';
 
 export interface IModelPickerDelegate {
+	readonly onDidChangePresentation: Event<void>;
 	getModels(): readonly ModelCatalogEntry[];
 	getSelectedModel(): ModelRef | undefined;
+	getSelectedReasoningEffort(): ModelReasoningEffort | undefined;
 	isAutomaticModel(): boolean;
 	getModelsError(): string | undefined;
 	selectModel(model: ModelRef): Promise<void>;
 	selectAutomaticModel(): Promise<void>;
+	selectReasoningEffort(effort: ModelReasoningEffort | undefined): Promise<void>;
 	openSettings(): Promise<void>;
 }
 
@@ -20,9 +24,9 @@ export interface IModelPickerDelegate {
 export class ModelPickerActionItem extends ButtonActionViewItem {
 	private readonly pickerWidget: ModelPickerWidget;
 
-	constructor(action: IAction, delegate: IModelPickerDelegate, contextViewService: IContextViewService) {
+	constructor(action: IAction, private readonly delegate: IModelPickerDelegate, @IInstantiationService instantiationService: IInstantiationService) {
 		super(action);
-		this.pickerWidget = this._register(new ModelPickerWidget(delegate, contextViewService));
+		this.pickerWidget = this._register(instantiationService.createInstance(ModelPickerWidget, delegate));
 	}
 
 	override render(container: HTMLElement): void {
@@ -32,6 +36,11 @@ export class ModelPickerActionItem extends ButtonActionViewItem {
 		this.button.toggleClassName('ash-chat-input-model-action', true);
 		this.button.domNode.setAttribute('aria-haspopup', 'dialog');
 		this.button.domNode.setAttribute('aria-expanded', 'false');
+		this._register(this.delegate.onDidChangePresentation(() => {
+			this.button.label = this.action.label;
+			this.button.domNode.setAttribute('aria-label', this.action.tooltip);
+			this.setupTooltip();
+		}));
 		this._register(addDisposableListener(this.button.domNode, 'keydown', this.handleKeydown));
 	}
 

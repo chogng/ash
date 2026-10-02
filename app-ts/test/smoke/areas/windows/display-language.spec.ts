@@ -10,7 +10,6 @@ test('Settings changes the display language with the keyboard and keeps it after
 	await page.keyboard.press('ControlOrMeta+,');
 	await expect(settings).toBeVisible();
 	await settings.locator('[data-settings-category-id="general"]').click();
-	await settings.locator('[data-settings-target-id="general.group.display-language"]').click();
 	await expect(settings.getByRole('heading', { name: 'Display Language', exact: true })).toBeVisible();
 	const language = languageRow.getByRole('combobox', { name: 'Interface language', exact: true });
 	await expect(language).toHaveText('English');

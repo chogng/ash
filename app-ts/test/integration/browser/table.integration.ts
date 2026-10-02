@@ -8,6 +8,7 @@ import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser
 import { CodeEditorWidget } from '../../../src/ash/editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 import { IStorageService, StorageScope } from '../../../src/ash/platform/storage/common/storage.js';
+import { IContextViewService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { IDictationService } from '../../../src/ash/platform/dictation/common/dictationService.js';
@@ -156,6 +157,7 @@ services.get(IKeybindingService);
 
 const dictationSession = resources.add(services.createInstance(DictationSession, editor, preview, () => true, async () => {}));
 const contextViews = resources.add(new BrowserContextViewService(document.body));
+services.registerInstance(IContextViewService, contextViews);
 const notifications = resources.add(new NotificationService());
 const secondInput = resources.add(services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, contextViews, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, {
 	create: (options: ChatInputEditorOptions) => services.createInstance(ChatInputEditor, options),

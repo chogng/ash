@@ -53,7 +53,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	setting: {
 		valueType: 'boolean',
 		title: localize('accessibility.chatModelConfigurationVerbosityTitle', 'Chat model configuration accessibility help'),
-		description: localize('accessibility.chatModelConfigurationVerbosityDescription', 'Announce how to open accessibility help when the thinking effort control receives focus.'),
+		description: localize('accessibility.chatModelConfigurationVerbosityDescription', 'Announce how to open accessibility help when the model menu or thinking effort control receives focus.'),
 	},
 });
 

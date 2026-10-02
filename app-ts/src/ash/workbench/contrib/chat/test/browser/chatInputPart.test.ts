@@ -7,8 +7,8 @@ import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import type { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
-import type { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
-import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
+import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IDictationService } from '../../../../../platform/dictation/common/dictationService.js';
 import { Event as AshEvent, Emitter } from '../../../../../base/common/event.js';
 import { LocalTranscriptionModelState, type ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
@@ -47,7 +47,10 @@ function inputPart(notifications: NotificationService, dictation?: Pick<IDictati
 		services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	registerTestDictationOnboarding(services);
 	}
-	const part = services.createInstance(ChatInputPart,container, { ...delegate, selectMode: selected => { state = { ...state, mode: selected }; part.render(state); } } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, ChatInputEditors, []);
+	const partServices = inputResources.add(services.createChild());
+	partServices.registerInstance(IContextViewService, { container: document.body } as IContextViewService);
+	partServices.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+	const part = partServices.createInstance(ChatInputPart,container, { ...delegate, selectMode: selected => { state = { ...state, mode: selected }; part.render(state); } } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, ChatInputEditors, []);
 	part.render(state);
 	return part;
 }

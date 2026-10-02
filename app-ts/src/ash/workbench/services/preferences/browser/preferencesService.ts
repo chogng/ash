@@ -23,8 +23,8 @@ export class PreferencesService extends Disposable implements IPreferencesServic
 		this._register(toDisposable(() => this.lifetime.abort()));
 	}
 
-	public async openSettings(category?: string): Promise<void> {
-		await this.editorService.openEditor(createSettingsEditorInput(category), { pinned: true }, 'modalGroup');
+	public async openSettings(target?: string): Promise<void> {
+		await this.editorService.openEditor(createSettingsEditorInput(target), { pinned: true }, 'modalGroup');
 	}
 
 	public async openUserSettings(options: IOpenSettingsOptions = {}): Promise<void> {

@@ -93,6 +93,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	protected readonly inputContainer: HTMLFormElement;
 	protected readonly input: IChatInputEditor;
 	private readonly inputToolbar: WorkbenchToolBar;
+	// Retaining this action keeps the open picker and its focused switch alive when the selection changes.
+	private readonly modelAction = new ChatInputAction('ash.chat.input.model', '', '', undefined, true, 'model', () => {});
+	private readonly modelPickerPresentationChanged = this._register(new Emitter<void>());
 	private readonly pickerResponsiveLayout: ChatInputPickerResponsiveLayout;
 	private readonly slashCommands = new SlashCommandCatalog(DesktopSlashCommands, []);
 	private readonly skills = new SkillSelectorCatalog();
@@ -121,7 +124,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		private readonly notifications: INotificationService,
 		editorProvider: Pick<IChatInputEditorProvider, 'create'> = ChatInputEditors,
 		private readonly additionalActions: readonly IAction[] = [],
-		@IInstantiationService instantiationService: IInstantiationService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IChatSpeechToTextService private readonly speechToText: IChatSpeechToTextService,
 		@IDictationOnboardingService private readonly onboarding: IDictationOnboardingService,
 	) {
@@ -455,15 +458,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			);
 		const selectedModel = this.toolbarState.models.find(entry => sameModel(entry.model, this.toolbarState.selectedModel));
 		const selectedEffortLabel = modelPickerEffortLabel(this.toolbarState.selectedReasoningEffort ?? selectedModel?.modelReasoningEffort);
-		const modelAction = new ChatInputAction(
-			"ash.chat.input.model",
-			this.toolbarState.isAutomaticModel ? localize('chat.modelPicker.auto', 'Auto') : selectedModel?.displayName ?? "Model",
-			this.toolbarState.isAutomaticModel ? localize('chat.modelPicker.auto', 'Auto') : selectedModel ? `Model: ${selectedModel.displayName}` : "Select model",
-			undefined,
-			true,
-			"model",
-			() => {},
-		);
+		this.modelAction.label = this.toolbarState.isAutomaticModel ? localize('chat.modelPicker.auto', 'Auto') : selectedModel?.displayName ?? "Model";
+		this.modelAction.tooltip = this.toolbarState.isAutomaticModel ? localize('chat.modelPicker.auto', 'Auto') : selectedModel ? `Model: ${selectedModel.displayName}` : "Select model";
 		const effortAction = !this.toolbarState.isAutomaticModel && selectedModel?.supportedReasoningEfforts?.length
 			? new ChatInputAction(
 				'ash.chat.input.effort',
@@ -491,8 +487,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			: [sendAction];
 		// Localized getters must be evaluated for each presentation; ActionBar retains identical action objects.
 		const additionalActions = this.additionalActions.map(action => ({ ...action, run: (...args: readonly unknown[]) => action.run(...args) }));
-		const inputActions = this.toolbarState.inputKind === "command" ? [modeAction] : [...additionalActions, modeAction, modelAction, ...(effortAction ? [effortAction] : []), micAction];
+		const inputActions = this.toolbarState.inputKind === "command" ? [modeAction] : [...additionalActions, modeAction, this.modelAction, ...(effortAction ? [effortAction] : []), micAction];
 		this.inputToolbar.setActions([...inputActions, ...trailingActions]);
+		this.modelPickerPresentationChanged.fire();
 		this.pickerResponsiveLayout.layout();
 	}
 
@@ -558,23 +555,26 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (action.id === this.dictationSession.action.id) { return new DictationActionViewItem(action); }
 		if (!(action instanceof ChatInputAction)) return undefined;
 		if (action.presentation === 'model') {
-			return new ModelPickerActionItem(action, {
+			return this.instantiationService.createInstance(ModelPickerActionItem, action, {
+				onDidChangePresentation: this.modelPickerPresentationChanged.event,
 				getModels: () => this.state.models,
 				getSelectedModel: () => this.state.selectedModel,
+				getSelectedReasoningEffort: () => this.state.selectedReasoningEffort,
 				isAutomaticModel: () => this.state.isAutomaticModel,
 				getModelsError: () => this.state.modelsError,
-				selectModel: model => this.delegate.selectModel(model),
+				selectModel: (model: ModelRef) => this.delegate.selectModel(model),
 				selectAutomaticModel: () => this.delegate.selectAutomaticModel(),
+				selectReasoningEffort: (effort: ModelReasoningEffort | undefined) => this.delegate.selectReasoningEffort(effort),
 				openSettings: () => this.delegate.openModelSettings(),
-			}, contextViewService);
+			});
 		}
 		if (action.presentation === 'effort') {
 			const entry = this.state.models.find(model => sameModel(model.model, this.state.selectedModel))!;
-			return new ModelPickerConfiguration(action, entry, this.state.selectedReasoningEffort, async effort => {
+			return this.instantiationService.createInstance(ModelPickerConfiguration, action, entry, this.state.selectedReasoningEffort, async (effort: ModelReasoningEffort | undefined) => {
 				await this.delegate.selectReasoningEffort(effort);
 				// Updating the effort replaces the toolbar action, so return focus to its new button.
 				this.inputToolbar.element.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort'] button")?.focus();
-			}, contextViewService, this.accessibleViewService);
+			});
 		}
 		if (action instanceof SelectorAction) {
 			return new ModePickerActionItem(action, contextViewService, this.mode, () => {
@@ -697,8 +697,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 class ChatInputAction implements IAction {
 	constructor(
 		readonly id: string,
-		readonly label: string,
-		readonly tooltip: string,
+		public label: string,
+		public tooltip: string,
 		readonly icon: Icon | undefined,
 		readonly enabled: boolean,
 		readonly presentation: ChatInputToolbarPresentation,

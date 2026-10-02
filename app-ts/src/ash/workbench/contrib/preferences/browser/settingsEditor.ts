@@ -1,3 +1,5 @@
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { CLOSE_EDITOR_COMMAND_ID } from '../../../browser/parts/editor/editorCommands.js';
 import './media/settingsEditor.css';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { h } from '../../../../base/browser/dom.js';
@@ -29,6 +31,7 @@ import type { ISelectSetting, ISetting, ISettingsEditorModel } from '../../../se
 import { isSettingsEditorInput } from '../../../services/preferences/common/settingsEditorInput.js';
 import { DefaultSettings, SettingsEditorModel } from '../../../services/preferences/common/settingsModels.js';
 import { SettingsRenderer } from './settingsRenderers.js';
+import { SkillsSettingsContent } from '../../skills/browser/skillsSettingsContent.js';
 import { HooksSettingsContent } from '../../hooks/browser/hooksSettingsContent.js';
 import { ModelSettingsContent } from '../../chat/browser/modelSettingsContent.js';
 import { DictationSettingsContent } from '../../chat/browser/speechToText/dictationSettingsContent.js';
@@ -38,7 +41,7 @@ import { SettingsSearchWidget } from './settingsWidgets.js';
 import { createSettingsLayout, settingsRootNodes, SettingsCategories, type SettingsCategoryDescriptor, type SettingsCategoryGroupDescriptor, type SettingsLayoutCategory } from './settingsLayout.js';
 import { SettingsTree } from './settingsTree.js';
 import { SettingsTreeModel, type SettingsContent, type SettingsContentItem, type SettingsTreeNode } from './settingsTreeModels.js';
-import { TOCTree, TOCTreeModel, type SettingsTOCEntry, type SettingsTOCOpenEntry } from './tocTree.js';
+import { TOCTree, TOCTreeModel, type SettingsTOCOpenEntry } from './tocTree.js';
 
 export const SettingsEditorId = 'workbench.editor.settings';
 
@@ -66,10 +69,10 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 	private tocTree!: TOCTree;
 	private treeModel!: SettingsTreeModel<ISetting | SettingsContentItem>;
 	private activeCategory!: SettingsCategoryDescriptor;
-	private activeNavigationTarget: Extract<SettingsTOCEntry, { readonly kind: 'target' }> | undefined;
 	private rootDomNode: HTMLDivElement | undefined;
 	private searchWidget: SettingsSearchWidget | undefined;
 	private visible = false;
+	private sectionToReveal: string | undefined;
 
 	constructor(
 		@IClipboardService clipboardService: IClipboardService,
@@ -141,7 +144,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 			wheel: { consume: 'when-scrolling' },
 		}));
 		this.navigationScrollable.element.classList.add('ash-settings-sidebar-scrollable');
-		this.tocTree = this._register(new TOCTree(this.navigationScrollable.contentElement, new TOCTreeModel(settingsLayout, this.treeModel), {
+		this.tocTree = this._register(new TOCTree(this.navigationScrollable.contentElement, new TOCTreeModel(this.treeModel), {
 			ariaLabel: this.localized('chrome.categories', 'Settings categories'),
 			categoryLabel: category => this.localizedCategoryLabel(category),
 			categoryDescription: category => this.localizedCategoryDescription(category),
@@ -196,9 +199,10 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		if (!initialCategory) throw new Error('Settings requires at least one category');
 		this.activeCategory = initialCategory;
 		this.contents.push(
+			this._register(this.instantiationService.createInstance(SkillsSettingsContent, settingsContent)),
 			this._register(this.instantiationService.createInstance(ModelSettingsContent, settingsContent)),
 			this._register(this.instantiationService.createInstance(DictationSettingsContent, settingsContent)),
-			this._register(this.instantiationService.createInstance(HooksSettingsContent, settingsContent)),
+			this._register(this.instantiationService.createInstance(HooksSettingsContent, settingsContent, async () => { await this.instantiationService.invokeFunction(accessor => accessor.get(ICommandService).executeCommand(CLOSE_EDITOR_COMMAND_ID)); })),
 		);
 		this.rebuildContent();
 		for (const content of this.contents) {
@@ -239,7 +243,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		this._register(this.tocTree.onDidChangeCollapseState(({ element, collapsed }) => {
 			if (element.kind !== 'group') return;
 			const containsActiveCategory = element.group.categories.some(category => category.id === this.activeCategory.id);
-			const activeId = this.activeNavigationTarget?.id ?? this.activeCategory.id;
+			const activeId = this.activeCategory.id;
 			this.tocTree.setSelection([containsActiveCategory && collapsed ? element.id : activeId]);
 		}));
 		this._register(toDisposable(() => rootDomNode.remove()));
@@ -249,11 +253,19 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		if (!isSettingsEditorInput(input)) throw new TypeError(`Settings editor cannot open ${input.resource}`);
 		if (signal.aborted) throw signal.reason;
 		this.search(this.searchWidget?.value ?? '');
-		const categoryId = new URLSearchParams(input.resource.toEncodedComponents().query).get('category');
-		if (categoryId) {
-			const category = SettingsCategories.find(candidate => candidate.id === categoryId);
-			if (!category) throw new RangeError(`Settings category is not available: ${categoryId}`);
+		const targetId = new URLSearchParams(input.resource.toEncodedComponents().query).get('target');
+		if (targetId) {
+			// The content model owns section identities and their containing page.
+			const target = this.treeModel.getNode(targetId);
+			if (!target || target.element.kind !== 'group') throw new RangeError(`Settings target is not available: ${targetId}`);
+			let root = target;
+			while (root.parent?.element) root = root.parent;
+			const category = SettingsCategories.find(candidate => candidate.id === root.element.id)!;
+			this.searchWidget!.value = '';
+			this.search('');
 			this.renderCategory(category);
+			this.sectionToReveal = targetId !== category.id ? targetId : undefined;
+			this.revealSection();
 		}
 	}
 
@@ -264,11 +276,13 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 	public layout(_dimension: IDimension): void {
 		this.navigationScrollable.layout();
 		this.contentScrollable.layout();
+		this.revealSection();
 	}
 
 	public setVisible(visibility: EditorPaneVisibility): void {
 		this.visible = visibility === EditorPaneVisibility.Visible;
 		this.updateContentVisibility();
+		this.revealSection();
 	}
 
 	public focus(): void {
@@ -276,10 +290,19 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		this.searchWidget?.focus();
 	}
 
+	private revealSection(): void {
+		// New modal editors receive their input before they become visible and get a usable viewport.
+		if (!this.sectionToReveal || !this.visible || this.contentScrollable.state.height === 0) return;
+		const section = this.settingsTree.getGroupElement(this.sectionToReveal)!;
+		const top = section.getBoundingClientRect().top - this.contentScrollable.scrollableElement.getBoundingClientRect().top + this.contentScrollable.state.top;
+		this.contentScrollable.scrollTo(0, top);
+		this.sectionToReveal = undefined;
+	}
+
 	private search(text: string): void {
 		const query = new SettingsSearchQuery(text);
 		this.treeModel.setQuery(query);
-		this.settingsTree.setNavigationTarget(query.isEmpty ? this.activeNavigationTarget?.target.targetId ?? this.activeCategory.id : undefined);
+		this.settingsTree.setNavigationTarget(query.isEmpty ? this.activeCategory.id : undefined);
 		this.rebuildContent();
 		this.updateContentVisibility();
 		this.agentCapabilitiesSettings.setView(query.isEmpty && (this.activeCategory.id === 'tools' || this.activeCategory.id === 'sandbox') ? this.activeCategory.id : undefined);
@@ -316,52 +339,27 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		this.tocTree.domFocus();
 	}
 
-	private renderCategory(category: SettingsCategoryDescriptor, entry?: Extract<SettingsTOCEntry, { readonly kind: 'target' }>): void {
+	private renderCategory(category: SettingsCategoryDescriptor): void {
 		this.activeCategory = category;
-		const navigationId = entry?.id ?? category.id;
-		this.tocTree.expandTo(navigationId);
-		this.tocTree.setSelection([navigationId]);
+		this.tocTree.expandTo(category.id);
+		this.tocTree.setSelection([category.id]);
 		this.content.dataset.activeSettingsCategory = category.id;
-		this.showNavigationTarget(category, entry);
+		this.settingsTree.setNavigationTarget(new SettingsSearchQuery(this.searchWidget?.value ?? '').isEmpty ? category.id : undefined);
+		this.updateContentVisibility();
+		this.agentCapabilitiesSettings.setView(!this.searchWidget?.value && (category.id === 'tools' || category.id === 'sandbox') ? category.id : undefined);
+		this.contentHeading.textContent = this.localizedCategoryLabel(category);
+		this.contentDescription.textContent = this.localizedCategoryDescription(category);
+		this.contentScrollable.scrollTo(0, 0);
+		this.contentScrollable.layout();
 	}
 
 	private openNavigationEntry(entry: SettingsTOCOpenEntry): void {
-		if (entry.kind === 'category') {
-			this.renderCategory(entry.category);
-			return;
-		}
-		this.renderCategory(entry.category, entry);
-	}
-
-	private showNavigationTarget(
-		category: SettingsCategoryDescriptor,
-		entry: Extract<SettingsTOCEntry, { readonly kind: 'target' }> | undefined,
-	): void {
-		const targetId = entry?.target.targetId ?? category.id;
-		const target = this.treeModel.getGroup(targetId);
-		if (!target) throw new RangeError(`Settings layout does not expose navigation target '${targetId}'`);
-		this.settingsTree.setNavigationTarget(targetId);
-		this.updateContentVisibility();
-		this.agentCapabilitiesSettings.setView(!this.searchWidget?.value && (category.id === 'tools' || category.id === 'sandbox') ? category.id : undefined);
-		this.activeNavigationTarget = entry;
-		this.content.classList.toggle('has-navigation-target', entry !== undefined);
-		if (entry) this.content.dataset.activeSettingsTarget = entry.target.targetId;
-		else delete this.content.dataset.activeSettingsTarget;
-		this.contentHeading.textContent = entry ? target.title : this.localizedCategoryLabel(category);
-		this.contentDescription.textContent = entry ? target.description : this.localizedCategoryDescription(category);
-		this.contentScrollable.scrollTo(0, 0);
-		this.contentScrollable.layout();
+		this.renderCategory(entry.category);
 	}
 
 	private updateLocalizedChrome(): void {
 		this.navigationEmpty.textContent = this.localized('chrome.noResults', 'No settings found.');
 		this.tocTree.rerender();
-		if (this.activeNavigationTarget) {
-			const target = this.treeModel.getGroup(this.activeNavigationTarget.target.targetId)!;
-			this.contentHeading.textContent = target.title;
-			this.contentDescription.textContent = target.description;
-			return;
-		}
 		this.contentHeading.textContent = this.localizedCategoryLabel(this.activeCategory);
 		this.contentDescription.textContent = this.localizedCategoryDescription(this.activeCategory);
 	}

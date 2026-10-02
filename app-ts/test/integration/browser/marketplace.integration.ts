@@ -19,7 +19,7 @@ import { IEditorService } from '../../../src/ash/workbench/services/editor/commo
 import { ILanguageServerStatusService } from '../../../src/ash/workbench/services/language/common/languageServerStatusService.js';
 import { AppServerMarketplaceService } from '../../../src/ash/workbench/services/marketplace/browser/appServerMarketplaceService.js';
 import { MarketplaceViewPane } from '../../../src/ash/workbench/contrib/marketplace/browser/marketplaceViewPane.js';
-import { SkillsViewPane } from '../../../src/ash/workbench/contrib/skills/browser/skillsViewPane.js';
+import { SkillsSettingsContent } from '../../../src/ash/workbench/contrib/skills/browser/skillsSettingsContent.js';
 import { LanguageServersViewPane } from '../../../src/ash/workbench/contrib/language/browser/languageServersViewPane.js';
 
 const disposables = new DisposableStore();
@@ -86,8 +86,9 @@ services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => ({ ge
 services.registerInstance(IEditorService, { onDidActiveEditorChange: Event.None } as IEditorService);
 services.registerInstance(IWorkspaceContextService, { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'fixture', folders: [] }) } as unknown as IWorkspaceContextService);
 const marketplace = disposables.add(services.createInstance(MarketplaceViewPane, document.getElementById('marketplace')!, { id: 'marketplace', title: 'Marketplace' }));
-const skills = disposables.add(services.createInstance(SkillsViewPane, document.getElementById('skills')!, { id: 'skills', title: 'Skills' }));
+const skills = disposables.add(services.createInstance(SkillsSettingsContent, document.getElementById('skills')!));
 const lsp = disposables.add(services.createInstance(LanguageServersViewPane, document.getElementById('lsp')!, { id: 'lsp', title: 'Language servers' }));
+document.getElementById('skills')!.append(skills.domNode);
 marketplace.setVisible(true); skills.setVisible(true); lsp.setVisible(true);
 
 window.ashMarketplaceIntegration = {

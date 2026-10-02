@@ -92,6 +92,15 @@ export class SessionsChatView extends Disposable {
 		this.activePane?.focus();
 	}
 
+	appendToDraft(text: string): void {
+		if (!this.activePane) throw new Error(localize('sessions.handoff.noActiveChat', 'Agents Window has no active chat for the draft.'));
+		this.activePane.appendToDraft(text);
+	}
+
+	captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined> {
+		return this.activePane?.captureDraft() ?? Promise.resolve(undefined);
+	}
+
 	setVisible(visible: boolean): void {
 		this.visible = visible;
 		for (const entry of this.entries.values()) entry.pane.setVisible(visible);

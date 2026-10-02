@@ -89,6 +89,10 @@ export class SessionsPart extends WorkbenchPart {
 		this.views[this.page === "code" ? "code" : "chat"].focus();
 	}
 
+	appendToDraft(text: string, page: SessionsPage): void { this.views[page].appendToDraft(text); }
+
+	captureActiveDraft(page: SessionsPage): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined> { return this.views[page].captureActiveDraft(); }
+
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>, page: SessionsPage = this.page === 'code' ? 'code' : 'chat'): void { this.views[page].restoreDraft(draft); }
 
 	setPage(page: 'chat' | 'code' | 'design' | 'empty'): void {

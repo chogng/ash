@@ -6,11 +6,11 @@ import { Menu } from '../../../../../../../base/browser/ui/menu/menu.js';
 import type { IAction } from '../../../../../../../base/common/actions.js';
 import { MutableDisposable } from '../../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../../nls.js';
-import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, type IAccessibleViewService } from '../../../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import type { IContextViewService } from '../../../../../../../platform/contextview/browser/contextView.js';
+import { IContextViewService } from '../../../../../../../platform/contextview/browser/contextView.js';
 import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
-import { modelPickerEffortLabel } from './modelPickerModelConfig.js';
+import { modelPickerEffortLabel, modelPickerEffortOptions } from './modelPickerModelConfig.js';
 import './modelPicker.css';
 
 let nextConfigurationId = 0;
@@ -25,8 +25,8 @@ export class ModelPickerConfiguration extends ButtonActionViewItem {
 		private readonly entry: ModelCatalogEntry,
 		private readonly selectedEffort: ModelReasoningEffort | undefined,
 		private readonly selectReasoningEffort: (effort: ModelReasoningEffort | undefined) => Promise<void>,
-		private readonly contextViewService: IContextViewService,
-		private readonly accessibleViewService: IAccessibleViewService,
+		@IContextViewService private readonly contextViewService: IContextViewService,
+		@IAccessibleViewService private readonly accessibleViewService: IAccessibleViewService,
 	) {
 		super(action);
 		this.contextView = this._register(new ContextView(contextViewService.container));
@@ -83,21 +83,18 @@ export class ModelPickerConfiguration extends ButtonActionViewItem {
 	private show(): void {
 		if (this.contextView.visible) return;
 		const defaultEffort = this.entry.modelReasoningEffort;
-		const efforts: readonly (ModelReasoningEffort | undefined)[] = defaultEffort === undefined
-			? [undefined, ...(this.entry.supportedReasoningEfforts ?? [])]
-			: this.entry.supportedReasoningEfforts ?? [];
-		const actions: IAction[] = efforts.map(effort => {
-			const label = modelPickerEffortLabel(effort);
+		const actions: IAction[] = modelPickerEffortOptions(this.entry, this.selectedEffort).map(option => {
+			const { effort, label } = option;
 			return {
 				id: `ash.chat.input.effort.${effort ?? 'default'}`,
 				label,
 				tooltip: label,
 				enabled: true,
-				checked: effort === (this.selectedEffort ?? defaultEffort),
-				...(defaultEffort !== undefined && effort === defaultEffort ? { badge: modelPickerEffortLabel(undefined) } : {}),
+				checked: option.checked,
+				...(option.isDefault ? { badge: modelPickerEffortLabel(undefined) } : {}),
 				run: async () => {
 					try {
-						await this.selectReasoningEffort(effort === defaultEffort ? undefined : effort);
+						await this.selectReasoningEffort(option.value);
 					} catch {
 						status(localize('chat.modelPicker.effortFailed', 'Could not set thinking effort'));
 					}

@@ -1,4 +1,9 @@
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Emitter } from '../../../../base/common/event.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Registry } from '../../../../platform/registry/common/platform.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { DialogSeverity, IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
@@ -6,7 +11,17 @@ import { IMarketplaceService, type MarketplaceCapabilityKind, type MarketplaceIn
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import './marketplace.css';
 
-export class MarketplaceViewPane extends ViewPane {
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: 'accessibility.verbosity.marketplace', defaultValue: true,
+	parse: value => { if (typeof value !== 'boolean') { throw new TypeError('Marketplace accessibility verbosity must be boolean'); } return value; },
+	setting: { valueType: 'boolean', title: 'Marketplace accessibility help', description: 'Announce keyboard help when Marketplace receives focus.' },
+});
+
+export class MarketplaceContent extends Disposable {
+	public readonly domNode: HTMLElement;
+	private readonly changed = this._register(new Emitter<void>());
+	public readonly onDidChange = this.changed.event;
+	private visible = false;
 	private readonly mode: HTMLSelectElement;
 	private readonly query: HTMLInputElement;
 	private readonly capability: HTMLSelectElement;
@@ -26,16 +41,20 @@ export class MarketplaceViewPane extends ViewPane {
 	private working = false;
 	private loaded = false;
 
-	constructor(container: HTMLElement, options: IViewPaneOptions,
+	constructor(container: HTMLElement, options: MarketplaceOpenOptions,
 		@IMarketplaceService private readonly marketplace: IMarketplaceService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
-		super(container, options);
+		super();
 		const document = container.ownerDocument;
-		this.contentElement.classList.add('ash-marketplace');
+		this.domNode = h(document, 'section');
+		this.domNode.className = 'ash-marketplace';
+		container.append(this.domNode);
+		this._register(toDisposable(() => this.domNode.remove()));
 		this.mode = h(document, 'select');
 		this.mode.append(this.option('Browse', 'browse'), this.option('Installed', 'installed'));
+		this.mode.value = options.mode ?? 'browse';
 		this.field('Package list', this.mode);
 		this.query = h(document, 'input');
 		this.query.type = 'search';
@@ -54,7 +73,7 @@ export class MarketplaceViewPane extends ViewPane {
 		this.status.setAttribute('role', 'status');
 		this.list = h(document, 'select');
 		this.list.size = 8;
-		this.contentElement.append(actions, this.status);
+		this.domNode.append(actions, this.status);
 		this.field('Packages', this.list);
 		this.detail = h(document, 'pre');
 		this.detail.className = 'marketplace-detail';
@@ -67,15 +86,15 @@ export class MarketplaceViewPane extends ViewPane {
 		this.remove = this.button('Uninstall package', () => this.changePackage('uninstall'));
 		this.manage = this.button('Show installed versions', async () => { if (this.selected) { await this.open({ mode: 'installed', query: this.selected.package.id }); } });
 		mutations.append(this.install, this.manage, this.update, this.remove);
-		this.contentElement.append(this.detail, mutations);
+		this.domNode.append(this.detail, mutations);
 		this._register(addDisposableListener(this.mode, 'change', () => { this.language.disabled = this.mode.value === 'installed'; void this.run(() => this.load()); }));
 		this._register(addDisposableListener(this.capability, 'change', () => { void this.run(() => this.load()); }));
 		this._register(addDisposableListener(this.list, 'change', () => { void this.run(() => this.select()); }));
-		this._register(addDisposableListener(this.contentElement, 'keydown', event => {
+		this._register(addDisposableListener(this.domNode, 'keydown', event => {
 			if (event.altKey && event.key === 'F1') { event.preventDefault(); void this.showHelp(); }
 			if (event.key === 'Enter' && (event.target === this.query || event.target === this.language)) { event.preventDefault(); void this.run(() => this.load()); }
 		}));
-		this._register(marketplace.onDidChangeInstalled(() => { this.loaded = false; if (this.isVisible() && !this.working) { void this.run(() => this.load()); } }));
+		this._register(marketplace.onDidChangeInstalled(() => { this.loaded = false; if (this.visible && !this.working) { void this.run(() => this.load()); } }));
 		this.applyEnabled();
 	}
 
@@ -90,12 +109,12 @@ export class MarketplaceViewPane extends ViewPane {
 		await this.run(() => this.load());
 	}
 
-	public override setVisible(visible: boolean): void {
-		super.setVisible(visible);
+	public setVisible(visible: boolean): void {
+		this.visible = visible;
 		if (visible && !this.loaded) { void this.run(() => this.load()); }
 	}
 
-	public override focus(): void {
+	public focus(): void {
 		this.query.focus();
 		if (this.configuration.getValue<boolean>('accessibility.verbosity.marketplace')) {
 			this.status.textContent = 'Marketplace. Use Tab to navigate, arrow keys to select a package, and Alt+F1 for help.';
@@ -141,6 +160,7 @@ export class MarketplaceViewPane extends ViewPane {
 		const summary = this.packages.find(entry => entry.id === this.list.value);
 		this.detail.textContent = installed ? `${installed.package.id} · ${installed.package.version}\n${installed.state === 'pendingRemoval' ? 'Removal pending: active consumers must release this package.' : 'Installed'}\n${installed.capabilities.map(capability => `${capability.kind}: ${capability.id}`).join('\n')}` : '';
 		this.applyEnabled();
+		this.changed.fire();
 		if (!this.list.value) { return; }
 		const details = await this.marketplace.get(installed?.package.id ?? this.list.value, this.mode.value === 'installed' ? installed?.package.version : summary?.version).catch((error: unknown) => {
 			if (!this.isDisposed && generation === this.selectionGeneration) { throw error; }
@@ -150,6 +170,7 @@ export class MarketplaceViewPane extends ViewPane {
 		this.selected = details;
 		this.detail.textContent = `${details.displayName}\n${details.package.id} · ${details.package.version}\n${details.description}\n\nSource: ${details.source === 'official' ? 'Official' : 'Third party'}\nLicense: ${details.license}\n${installed ? `Installed: ${installed.package.version} (${installed.state})\n` : ''}${this.describeCapabilities(details)}`;
 		this.applyEnabled();
+		this.changed.fire();
 	}
 
 	private selectedInstallation(): MarketplaceInstalledPackage | undefined {
@@ -183,7 +204,7 @@ export class MarketplaceViewPane extends ViewPane {
 	}
 
 	private applyEnabled(): void {
-		for (const control of this.contentElement.querySelectorAll<HTMLInputElement | HTMLButtonElement | HTMLSelectElement>('input, button, select')) { control.disabled = this.working; }
+		for (const control of this.domNode.querySelectorAll<HTMLInputElement | HTMLButtonElement | HTMLSelectElement>('input, button, select')) { control.disabled = this.working; }
 		this.language.disabled = this.working || this.mode.value === 'installed';
 		const installed = this.selectedInstallation();
 		const hasInstalled = this.installed.some(entry => entry.package.id === this.selected?.package.id);
@@ -191,7 +212,7 @@ export class MarketplaceViewPane extends ViewPane {
 		this.manage.disabled = this.working || !hasInstalled || this.mode.value === 'installed';
 		this.update.disabled = this.working || !installed || installed.state === 'pendingRemoval';
 		this.remove.disabled = this.working || !installed || installed.state === 'pendingRemoval';
-		this.contentElement.setAttribute('aria-busy', String(this.working));
+		this.domNode.setAttribute('aria-busy', String(this.working));
 	}
 
 	private async run(operation: () => Promise<void>): Promise<void> {
@@ -200,23 +221,46 @@ export class MarketplaceViewPane extends ViewPane {
 	}
 
 	private async showHelp(): Promise<void> {
-		const focus = this.element.ownerDocument.activeElement;
+		const focus = this.domNode.ownerDocument.activeElement;
 		await this.dialogs.showMessage({ title: 'Marketplace help', severity: DialogSeverity.Info, message: 'Open with /marketplace [query] to search, or /plugins to manage installed packages. Search by package, capability, language name, alias, or file extension. Capability filters include capabilities bundled in Plugins. A language server ID filter requires an executable route for that exact language and excludes packages that only supply syntax resources. Installed lists local packages even when the catalog is unavailable. Install, update, and uninstall affect the whole package. Use Tab and Shift+Tab to navigate and arrow keys to select a package. Escape closes this help.' });
 		if (focus instanceof HTMLElement && focus.isConnected) { focus.focus(); }
 	}
 
 	private option(label: string, value: string): HTMLOptionElement {
-		const option = h(this.element.ownerDocument, 'option'); option.textContent = label; option.value = value; return option;
+		const option = h(this.domNode.ownerDocument, 'option'); option.textContent = label; option.value = value; return option;
 	}
 	private field(text: string, control: HTMLElement): void {
-		const label = h(this.element.ownerDocument, 'label');
-		const caption = h(this.element.ownerDocument, 'span');
+		const label = h(this.domNode.ownerDocument, 'label');
+		const caption = h(this.domNode.ownerDocument, 'span');
 		caption.id = generateUuid(); caption.textContent = text;
 		control.setAttribute('aria-labelledby', caption.id);
-		label.append(caption, control); this.contentElement.append(label);
+		label.append(caption, control); this.domNode.append(label);
 	}
 	private button(label: string, action: () => Promise<void>): HTMLButtonElement {
-		const button = h(this.element.ownerDocument, 'button'); button.type = 'button'; button.textContent = label;
+		const button = h(this.domNode.ownerDocument, 'button'); button.type = 'button'; button.textContent = label;
 		this._register(addDisposableListener(button, 'click', () => { void this.run(action); })); return button;
+	}
+}
+
+/** The sidebar owns pane layout; package state and operations belong to its content. */
+export class MarketplaceViewPane extends ViewPane {
+	private readonly content: MarketplaceContent;
+
+	constructor(container: HTMLElement, options: IViewPaneOptions, @IInstantiationService instantiation: IInstantiationService) {
+		super(container, options);
+		this.content = this._register(instantiation.createInstance(MarketplaceContent, this.contentElement, {}));
+	}
+
+	public async open(options?: MarketplaceOpenOptions): Promise<void> {
+		await this.content.open(options);
+	}
+
+	public override setVisible(visible: boolean): void {
+		super.setVisible(visible);
+		this.content.setVisible(visible);
+	}
+
+	public override focus(): void {
+		this.content.focus();
 	}
 }

@@ -43,7 +43,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 
 /** Shared dictation content; each settings host owns navigation, search and setting widgets. */
 export class DictationSettingsContent extends Disposable implements SettingsContent {
-	public readonly categoryId = 'dictation';
+	public readonly categoryId = 'general';
 	public readonly settingIds = [...Object.values(DictationConfiguration), AccessibilityVerbositySettingId.DictationModels];
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
@@ -154,8 +154,8 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 		}
 		children.push(settingNode(AccessibilityVerbositySettingId.DictationModels));
 		return [{
-			element: { kind: 'group', id: 'dictation.settings', title: localize('sessions.settings.dictation', 'Dictation'), description: '' },
-			children,
+			element: { kind: 'group', id: 'dictation', title: localize('settings.dictation.group', 'Voice input'), description: localize('dictation.settings.description', 'Choose local or cloud transcription and manage local dictation models.') },
+			children: children.map(node => ({ ...node, element: { ...node.element, keywords: [...node.element.keywords ?? [], 'dictation', 'speech', localize('sessions.settings.dictation', 'Dictation'), localize('settings.dictation.group', 'Voice input')] } })),
 		}];
 	}
 

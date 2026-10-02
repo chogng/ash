@@ -1,6 +1,3 @@
-import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
-import { Registry } from '../../../../platform/registry/common/platform.js';
-import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { registerEditorPane } from '../../../browser/editor.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
@@ -23,12 +20,3 @@ registerEditorPane({
 });
 
 registerWorkbenchContribution(PreferencesContribution.ID, WorkbenchPhase.BlockStartup, accessor => PreferencesContribution.create(accessor));
-
-Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
-	key: AccessibilityVerbositySettingId.HooksSettings,
-	defaultValue: true,
-	parse(value: unknown): boolean {
-		if (typeof value !== 'boolean') throw new TypeError('Hooks accessibility verbosity must be boolean');
-		return value;
-	},
-});

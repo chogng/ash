@@ -68,14 +68,6 @@
   font-weight: var(--ash-font-weight-semi-bold);
 }
 
-.ash-settings-page.has-navigation-target h3 {
-  position: sticky;
-  z-index: 2;
-  top: 0;
-  background: var(--ash-editor-background);
-  border-bottom: var(--ash-stroke-thickness) solid var(--ash-settings-header-border);
-}
-
 .ash-settings-description {
   max-width: 680px;
   margin: 0 0 28px;

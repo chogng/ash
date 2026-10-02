@@ -67,6 +67,11 @@ export class SettingsTree<T> extends Disposable {
 		return rendered?.kind === "item" ? rendered.element : undefined;
 	}
 
+	getGroupElement(id: string): HTMLElement | undefined {
+		const rendered = this.rendered.get(id);
+		return rendered?.kind === "group" ? rendered.element : undefined;
+	}
+
 	setNavigationTarget(targetId: string | undefined): void {
 		this.model.setNavigationTarget(targetId);
 		this.element.classList.toggle("has-navigation-target", targetId !== undefined);

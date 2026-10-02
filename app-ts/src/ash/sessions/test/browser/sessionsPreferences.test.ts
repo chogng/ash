@@ -1,7 +1,20 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import { Emitter } from '../../../base/common/event.js';
+import { Emitter, Event } from '../../../base/common/event.js';
+import { ISkillService } from '../../../platform/skills/common/skillService.js';
+import { IMarketplaceService } from '../../../platform/marketplace/common/marketplaceService.js';
+import { ICommandService } from '../../../platform/commands/common/commands.js';
+import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
+import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
+import { IHooksService } from '../../../platform/hooks/common/hooksService.js';
+import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
+import { WorkspaceContextService } from '../../../workbench/services/workspaces/browser/workspaceContextService.js';
+import { IRemoteAgentService } from '../../../workbench/services/remote/common/remoteAgentService.js';
+import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
+import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
+import { IFileService } from '../../../platform/files/common/files.js';
+import { ILocalizationService } from '../../../workbench/services/localization/common/localizationService.js';
 import type { IClipboardService } from '../../../platform/clipboard/common/clipboardService.js';
 import type { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import type { IChatService } from '../../../workbench/services/chat/common/chatService.js';
@@ -32,8 +45,13 @@ test('Sessions Models switches control the model picker visibility preference', 
 	const writes: boolean[] = [];
 	const savedKeys: string[] = [];
 	const removedKeys: string[] = [];
+	let advisor: import('../../../workbench/services/chat/common/chatService.js').AdvisorConfig | null = { model, enabled: true, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' };
+	const advisorWrites: (typeof advisor | null)[] = [];
 	const chat = {
 		onDidChangeModels: changed.event,
+		listAdvisorModels: async () => [{ model, displayName: 'GPT Test' }, { model: otherModel, displayName: 'Claude Test' }],
+		readAdvisorDefault: async () => advisor,
+		saveAdvisorDefault: async (next: typeof advisor) => { advisor = next; advisorWrites.push(next); },
 		listModelCatalog: async () => [{ model, displayName: 'GPT Test' }, { model: otherModel, displayName: 'Claude Test' }],
 		listModelProviders: async () => [{ connection: 'openai', provider: 'openai', displayName: 'OpenAI API', access: 'apiKey', active: true, configured: true, ready: false, apiKeyPolicy: 'required', apiKeyConfigured: savedKeys.length > 0 }],
 		isModelVisible: () => visible,
@@ -59,6 +77,15 @@ test('Sessions Models switches control the model picker visibility preference', 
 	services.registerInstance(ChatService, chat);
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(ILocalTranscriptionService, transcription);
+	const { IDictationService } = await import('../../../platform/dictation/common/dictationService.js');
+	const { IChatSpeechToTextService, ChatSpeechToTextService } = await import('../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js');
+	services.registerInstance(IDictationService, undefined);
+	using speech = services.createInstance(ChatSpeechToTextService);
+	services.registerInstance(IChatSpeechToTextService, speech);
+	const { INotificationService } = await import('../../../platform/notification/common/notification.js');
+	const { NotificationService } = await import('../../../workbench/services/notification/common/notificationService.js');
+	using notifications = new NotificationService();
+	services.registerInstance(INotificationService, notifications);
 	const { IClipboardService: ClipboardService } = await import('../../../platform/clipboard/common/clipboardService.js');
 	const { IContextMenuService: ContextMenus } = await import('../../../platform/contextview/browser/contextView.js');
 	const { IContextKeyService: ContextKeys } = await import('../../../platform/contextkey/browser/contextKeyService.js');
@@ -67,10 +94,24 @@ test('Sessions Models switches control the model picker visibility preference', 
 	services.registerInstance(ContextMenus, {} as import('../../../platform/contextview/browser/contextView.js').IContextMenuService);
 	services.registerInstance(ContextKeys, contextKeys);
 	services.registerInstance(AccessibleView, accessibleView);
+	services.registerInstance(ISkillService, { list: async () => ({ generation: 0, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }), setEnabled: async () => {} });
+	services.registerInstance(IMarketplaceService, { onDidChangeInstalled: Event.None, listInstalled: async () => [] } as unknown as IMarketplaceService);
+	using commands = new CommandService(services);
+	services.registerInstance(ICommandService, commands);
+	services.registerInstance(IDialogService, {} as IDialogService);
+	services.registerInstance(IHooksService, { onDidChange: Event.None, userConfigurationEditor: undefined, read: async () => [] });
+	using workspace = new WorkspaceContextService({ id: 'sessions-preferences', folders: [] });
+	services.registerInstance(IWorkspaceContextService, workspace);
+	services.registerInstance(IRemoteAgentService, { connectionState: 'connected', connection: { kind: 'local', generation: 1 }, onDidChangeConnectionState: Event.None, onDidChangeConnection: Event.None, reconnect: async () => ({ kind: 'alreadyConnected' }), rollbackRuntime: async () => ({ kind: 'cancelled' }) });
+	services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => undefined, getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => {}, appendToActiveDraft: () => {} });
+	services.registerInstance(IEditorService, {} as IEditorService);
+	services.registerInstance(IFileService, {} as IFileService);
+	services.registerInstance(ILocalizationService, { onDidChange: Event.None, whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
 	const { IPreferencesService } = await import('../../../workbench/services/preferences/common/preferences.js');
 	services.registerInstance(IPreferencesService, { openSettings: category => preferences.open(category) } as import('../../../workbench/services/preferences/common/preferences.js').IPreferencesService);
-	using preferences = services.createInstance(SessionsPreferences, window.document.body);
+	using preferences = services.createInstance(SessionsPreferences, window.document.body, () => {});
 	const opened = preferences.open();
+	await Promise.race([opened, Promise.resolve()]);
 	const designButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Design');
 	assert.ok(designButton);
 	designButton.click();
@@ -150,6 +191,20 @@ test('Sessions Models switches control the model picker visibility preference', 
 	await Promise.resolve();
 	assert.deepEqual(writes, [false]);
 	assert.equal(switchInput.getAttribute('aria-checked'), 'false');
+	modelSearch.value = '';
+	modelSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
+	const customizeButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Customize');
+	assert.ok(customizeButton);
+	customizeButton.click();
+	await Promise.resolve();
+	await Promise.resolve();
+	const advisorSwitch = window.document.querySelector<HTMLInputElement>('.ash-sessions-customize-settings input[role="switch"]');
+	assert.ok(advisorSwitch);
+	assert.equal(advisorSwitch.checked, true);
+	advisorSwitch.checked = false;
+	advisorSwitch.dispatchEvent(new window.Event('change', { bubbles: true }));
+	await Promise.resolve();
+	assert.deepEqual(advisorWrites, [{ model, enabled: false, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' }]);
 	window.document.querySelector<HTMLDialogElement>('dialog')?.close();
 	await opened;
 	const { builtinLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');

@@ -345,23 +345,23 @@ test('activity bar tooltips follow left, right, top and bottom placement', async
 		await page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: position, exact: true }).click();
 	};
 
-	for (const name of ['Search', 'Skills']) {
+	for (const name of ['Search', 'Marketplace']) {
 		await checkTooltip(activitybar.getByRole('tab', { name, exact: true }), 'right');
 	}
 	for (const name of ['Accounts', 'Manage']) {
 		await checkTooltip(activitybar.getByRole('button', { name, exact: true }), 'right', true);
 	}
-	const skillsElement = await activitybar.getByRole('tab', { name: 'Skills', exact: true }).elementHandle();
+	const marketplaceElement = await activitybar.getByRole('tab', { name: 'Marketplace', exact: true }).elementHandle();
 	const manageElement = await activitybar.getByRole('button', { name: 'Manage', exact: true }).elementHandle();
 	await activitybar.getByRole('button', { name: 'Manage', exact: true }).click({ button: 'right' });
 	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Move Primary Side Bar Right' }).click();
 	await expect(activitybar).toHaveClass(/sidebar-right/);
 	// Direction changes must be read by the retained actions without replacing their DOM.
-	expect(await skillsElement!.evaluate(element => element.isConnected)).toBe(true);
+	expect(await marketplaceElement!.evaluate(element => element.isConnected)).toBe(true);
 	expect(await manageElement!.evaluate(element => element.isConnected)).toBe(true);
-	await skillsElement!.dispose();
+	await marketplaceElement!.dispose();
 	await manageElement!.dispose();
-	await checkTooltip(activitybar.getByRole('tab', { name: 'Skills', exact: true }), 'left', true);
+	await checkTooltip(activitybar.getByRole('tab', { name: 'Marketplace', exact: true }), 'left', true);
 	await checkTooltip(activitybar.getByRole('button', { name: 'Manage', exact: true }), 'left');
 	await checkTooltip(activitybar.getByRole('button', { name: 'Accounts', exact: true }), 'left');
 
@@ -379,7 +379,7 @@ test('activity bar tooltips follow left, right, top and bottom placement', async
 	await checkTooltip(activitybar.getByRole('tab', { name: 'Search', exact: true }), 'left');
 	await activitybar.getByRole('button', { name: 'Manage', exact: true }).click({ button: 'right' });
 	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Move Primary Side Bar Left' }).click();
-	await checkTooltip(activitybar.getByRole('tab', { name: 'Skills', exact: true }), 'right');
+	await checkTooltip(activitybar.getByRole('tab', { name: 'Marketplace', exact: true }), 'right');
 	await checkTooltip(activitybar.getByRole('button', { name: 'Manage', exact: true }), 'right');
 });
 
@@ -604,7 +604,7 @@ test('blank activity bar context menu lists and toggles views', async ({ target,
 	expect(bounds).not.toBeNull();
 	await compositeBar.click({ button: 'right', position: { x: 2, y: bounds!.height - 4 } });
 	let menu = workbench.page.getByRole('menu').last();
-	for (const name of ['Explorer', 'Search', 'Git', 'Run and Debug', 'Testing', 'Marketplace', 'Language servers', 'Skills']) {
+	for (const name of ['Explorer', 'Search', 'Git', 'Run and Debug', 'Testing', 'Marketplace', 'Language servers']) {
 		await expect(menu.getByRole('menuitemcheckbox', { name })).toHaveAttribute('aria-checked', 'true');
 	}
 	await expect(menu.getByRole('menuitemcheckbox', { name: 'Accounts' })).toBeVisible();

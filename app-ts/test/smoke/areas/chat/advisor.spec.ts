@@ -49,6 +49,11 @@ test('Desktop model picker searches fixed models before account setup', async ({
 	await selector.click();
 	const picker = page.getByRole('dialog', { name: 'Choose a chat model' });
 	await expectModelPickerAnchored(picker, selector);
+	const auto = picker.getByRole('switch', { name: 'Auto' });
+	if (await auto.isChecked()) {
+		await auto.press('Space');
+		await expect(auto).not.toHaveAttribute('aria-busy', 'true');
+	}
 	await expect(picker.getByText('GPT-5.6 Sol', { exact: true })).toBeVisible();
 	await expect(picker.getByText('GPT-6 Astra', { exact: true })).toBeVisible();
 	await expect(picker.getByText('GPT-5.4', { exact: true })).toBeVisible();
@@ -73,9 +78,10 @@ test('Desktop model picker searches fixed models before account setup', async ({
 	const detailsMenu = picker.getByRole('region', { name: 'GPT-6 Astra' });
 	await expect(detailsMenu).toBeVisible();
 	await expect(detailsMenu).toContainText('GPT-6 Astra');
+
 	const menuStyles = await detailsMenu.evaluate(element => {
 		const menu = element.closest('.ash-context-view-menu')!;
-		const detailsStyle = getComputedStyle(element);
+		const detailsStyle = getComputedStyle(element.closest('.ash-chat-model-picker-details-menu')!);
 		const menuStyle = getComputedStyle(menu);
 		return {
 			background: detailsStyle.backgroundColor === menuStyle.backgroundColor,
@@ -97,6 +103,10 @@ test('Desktop model picker searches fixed models before account setup', async ({
 	await expect(picker.getByRole('option', { name: /GPT-6 Astra/ })).toBeVisible();
 	await picker.getByRole('option', { name: /GPT-6 Astra/ }).click();
 	await expect(selector).toHaveText('GPT-6 Astra');
+	await selector.click();
+	await picker.getByRole('option', { name: /GPT-5.6 Sol/ }).hover();
+	await expect(picker.getByRole('region', { name: 'GPT-5.6 Sol' }).getByRole('radio')).toHaveCount(0);
+	await picker.getByRole('combobox').press('Escape');
 	await expect(page.locator('.ash-chat-input-model-access-badge')).toHaveCount(0);
 	const effort = page.locator("[data-action-id='ash.chat.input.effort'] button");
 	await expect(effort).toHaveText('Default');
@@ -125,11 +135,37 @@ test('Desktop model picker searches fixed models before account setup', async ({
 	const search = page.getByRole('dialog', { name: 'Choose a chat model' }).getByRole('combobox', { name: 'Choose a chat model' });
 	await expect(page.getByRole('button', { name: 'GPT-6 Astra Details' })).toHaveCount(0);
 	await expect(page.getByRole('combobox', { name: 'Thinking Effort' })).toHaveCount(0);
+	await search.fill('GPT-6 Astra');
+	const filteredModels = await picker.getByRole('option').allTextContents();
+	await search.press('ArrowRight');
+	const currentCard = picker.getByRole('region', { name: 'GPT-6 Astra' });
+	const cardHigh = currentCard.getByRole('radio', { name: 'High', exact: true });
+	await expect(cardHigh).toBeFocused();
+	await cardHigh.press('ArrowUp');
+	const cardMedium = currentCard.getByRole('radio', { name: 'Medium', exact: true });
+	await expect(cardMedium).toBeChecked();
+	await expect(cardMedium).toBeFocused();
+	await expect(effort).toHaveText('Medium');
+	await expect(search).toHaveValue('GPT-6 Astra');
+	expect(await picker.getByRole('option').allTextContents()).toEqual(filteredModels);
+	await cardMedium.press('Alt+F1');
+	const modelHelp = page.getByRole('dialog', { name: 'Accessibility Help' });
+	await expect(modelHelp.getByRole('textbox')).toHaveValue(/Right Arrow opens details/);
+	await modelHelp.getByRole('button', { name: 'Close', exact: true }).click();
+	await expect(cardMedium).toBeFocused();
+	await cardMedium.press('Alt+F2');
+	const modelView = page.getByRole('dialog', { name: 'Accessible View', exact: true });
+	await expect(modelView.getByRole('textbox')).toHaveValue(/GPT-6 Astra[\s\S]*Thinking Level/);
+	await modelView.getByRole('textbox').press('Escape');
+	await expect(cardMedium).toBeFocused();
+	await cardMedium.press('Alt+ArrowLeft');
+	await expect(search).toBeFocused();
 	await search.fill('GPT-5.6 Sol');
 	await search.press('Enter');
 	await expect(selector).toHaveText('GPT-5.6 Sol');
 	await expect(effort).toHaveText('Medium');
 	await effort.click();
+	const solEffortCount = await effortMenu.getByRole('menuitemradio').count();
 	const defaultLevel = effortMenu.getByRole('menuitemradio', { name: 'Medium', exact: true });
 	await expect(defaultLevel).toHaveAttribute('aria-checked', 'true');
 	await expect(defaultLevel).toHaveAttribute('aria-description', 'Default');
@@ -139,6 +175,23 @@ test('Desktop model picker searches fixed models before account setup', async ({
 	await effort.click();
 	await defaultLevel.click();
 	await expect(effort).toHaveText('Medium');
+	await selector.click();
+	await search.fill('GPT-5.6 Sol');
+	await search.press('ArrowRight');
+	const solCard = picker.getByRole('region', { name: 'GPT-5.6 Sol' });
+	await expect(solCard.getByRole('radio')).toHaveCount(solEffortCount);
+	await expect(solCard.getByRole('radio', { name: 'Default', exact: true })).toHaveCount(0);
+	const cardDefault = solCard.getByRole('radio', { name: 'Medium Default', exact: true });
+	await expect(cardDefault).toBeChecked();
+	await cardDefault.press('ArrowDown');
+	await expect(effort).toHaveText('High');
+	await solCard.getByRole('radio', { name: 'High', exact: true }).press('ArrowUp');
+	await expect(cardDefault).toBeChecked();
+	await expect(effort).toHaveText('Medium');
+	await cardDefault.press('Escape');
+	await effort.click();
+	await expect(defaultLevel).toHaveAttribute('aria-checked', 'true');
+	await defaultLevel.press('Escape');
 	await selector.click();
 	await search.fill('GPT-5.4');
 	await search.press('Enter');
@@ -150,12 +203,68 @@ test('Desktop model picker searches fixed models before account setup', async ({
 	const finalPicker = page.getByRole('dialog', { name: 'Choose a chat model' });
 	await expect(finalPicker.getByRole('switch', { name: 'Auto' })).not.toBeChecked();
 	await expect(finalPicker.locator('.ash-chat-model-picker-current')).toHaveCount(1);
-	await finalPicker.getByRole('switch', { name: 'Auto' }).click();
+	const autoSwitch = finalPicker.getByRole('switch', { name: 'Auto' });
+	await autoSwitch.press('Space');
 	await expect(selector).toHaveText('Auto');
 	await expect(effort).toHaveCount(0);
+	await expect(autoSwitch).toHaveAttribute('aria-checked', 'true');
+	await expect(autoSwitch).toBeFocused();
+	await expect(finalPicker.getByRole('combobox')).toHaveCount(0);
+	await expect(finalPicker.getByRole('option')).toHaveCount(0);
+	await expect(finalPicker.getByRole('button', { name: 'Add Models' })).toHaveCount(0);
+	await expect(finalPicker.locator('.ash-switch-track')).toBeVisible();
+	await autoSwitch.press('Escape');
+	await expect(selector).toBeFocused();
 	await selector.click();
+	await expect(autoSwitch).toBeChecked();
+	await expect(autoSwitch).toBeFocused();
+	await expect(finalPicker.getByRole('combobox')).toHaveCount(0);
+	await autoSwitch.press('Space');
+	await expect(autoSwitch).not.toBeChecked();
+	await expect(autoSwitch).toBeFocused();
+	await expect(finalPicker.getByRole('combobox')).toBeVisible();
+	await expect(finalPicker.getByRole('option').first()).toBeVisible();
 	await page.getByRole('dialog', { name: 'Choose a chat model' }).getByRole('button', { name: 'Add Models' }).click();
 	await expect(page.locator('[data-settings-container]')).toHaveAttribute('data-active-settings-category', 'models');
+});
+
+test('Model picker details and keyboard help follow the Chinese display language', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'The model catalog requires the product backend.');
+	const page = workbench.page;
+	await page.keyboard.press('F1');
+	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Configure Display Language');
+	await page.keyboard.press('Enter');
+	const language = page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
+	await language.fill('简体中文');
+	await language.press('Enter');
+	await expect(language).toHaveCount(0);
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: '显示辅助侧栏', exact: true }).click();
+	}
+	const selector = page.locator("[data-action-id='ash.chat.input.model'] button");
+	await selector.click();
+	const picker = page.getByRole('dialog', { name: '选择聊天模型' });
+	const auto = picker.getByRole('switch', { name: '自动' });
+	if (await auto.isChecked()) { await auto.press('Space'); }
+	const search = picker.getByRole('combobox');
+	await search.fill('GPT-6 Astra');
+	await search.press('Enter');
+	await expect(selector).toHaveText('GPT-6 Astra');
+	await selector.click();
+	await search.fill('GPT-6 Astra');
+	await search.press('ArrowRight');
+	const card = picker.getByRole('region', { name: 'GPT-6 Astra' });
+	await expect(card.getByRole('group', { name: '推理强度' })).toBeVisible();
+	const high = card.getByRole('radio', { name: '高', exact: true });
+	await high.click();
+	await expect(page.locator("[data-action-id='ash.chat.input.effort'] button")).toHaveText('高');
+	await high.press('Alt+F1');
+	const help = page.getByRole('dialog', { name: '无障碍帮助' });
+	await expect(help.getByRole('textbox')).toHaveValue(/右方向键进入详情/);
+	await help.getByRole('button', { name: '关闭', exact: true }).click();
+	await expect(high).toBeFocused();
+	await high.press('Escape');
+	await expect(selector).toBeFocused();
 });
 
 test('New Chat starts with the last model chosen in the picker', async ({ target, workbench }) => {
@@ -167,6 +276,11 @@ test('New Chat starts with the last model chosen in the picker', async ({ target
 	const selector = page.locator('.ash-chat-pane-host > .ash-chat:not([hidden]) [data-action-id="ash.chat.input.model"] button');
 	await expect(selector).toBeEnabled();
 	await selector.click();
+	const auto = page.getByRole('dialog', { name: 'Choose a chat model' }).getByRole('switch', { name: 'Auto' });
+	if (await auto.isChecked()) {
+		await auto.press('Space');
+		await expect(auto).not.toHaveAttribute('aria-busy', 'true');
+	}
 	const search = page.getByRole('dialog', { name: 'Choose a chat model' }).getByRole('combobox', { name: 'Choose a chat model' });
 	await search.fill('GPT-5.4');
 	await search.press('Enter');

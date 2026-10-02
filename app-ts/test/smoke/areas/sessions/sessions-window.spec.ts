@@ -1428,9 +1428,9 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await expect(settings.locator('.ash-dialog-actions')).toHaveCount(0);
 	const navigation = settings.getByRole('navigation', { name: 'Settings categories' });
 	for (const [section, categories] of [
-		['Basics', ['General', 'Account', 'Appearance', 'Personalization']],
+		['Basics', ['General', 'Account', 'Appearance', 'Customize']],
 		['Development', ['Agents', 'Design', 'Models', 'Git & PRs', 'Worktree', 'Browser', 'Tab', 'Code Intelligence', 'Environment']],
-		['Management', ['Plugins', 'Keyboard Shortcuts', 'Archived Chats']],
+		['Management', ['Keyboard Shortcuts', 'Archived Chats']],
 	] as const) {
 		const group = navigation.getByRole('group', { name: section });
 		for (const category of categories) {
@@ -1438,7 +1438,7 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 		}
 	}
 	await expect(navigation.getByRole('button', { name: 'Tab', exact: true }).locator('svg')).toHaveAttribute('data-ash-icon-id', 'keyboard-tab');
-	await expect(navigation.getByRole('button', { name: 'Personalization' }).locator('svg')).toHaveAttribute('data-ash-icon-id', 'briefcase');
+	await expect(navigation.getByRole('button', { name: 'Customize' }).locator('svg')).toHaveAttribute('data-ash-icon-id', 'briefcase');
 	await expect(navigation.getByRole('button', { name: 'General' })).toHaveAttribute('aria-current', 'page');
 	await expect(navigation.getByRole('button', { name: 'General' })).toHaveCSS('background-color', 'rgb(240, 240, 240)');
 	await expect(settings.getByRole('heading', { name: 'General' })).toBeVisible();
@@ -1636,6 +1636,12 @@ test('Browser Models Settings controls which models appear in the picker', async
 	await expect(visibility).toHaveAttribute('aria-checked', 'false');
 	await page.keyboard.press('Escape');
 	await modelButton.click();
+	const auto = page.locator('.ash-chat-model-picker').getByRole('switch', { name: 'Auto' });
+	if (await auto.isChecked()) {
+		await auto.press('Space');
+		await expect(auto).not.toHaveAttribute('aria-busy', 'true');
+	}
+	await expect(page.locator('.ash-chat-model-picker').getByRole('combobox')).toBeVisible();
 	await expect(page.locator('.ash-chat-model-picker').getByText(modelName, { exact: true })).toHaveCount(0);
 	await page.keyboard.press('Escape');
 	await accounts.click();

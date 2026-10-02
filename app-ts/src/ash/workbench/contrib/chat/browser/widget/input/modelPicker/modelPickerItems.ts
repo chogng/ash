@@ -3,6 +3,8 @@ import type { IQuickPickItem } from '../../../../../../../platform/quickinput/co
 import type { ModelRef } from '../../../../../../services/chat/common/chatService.js';
 import type { ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
 
+import { modelPickerEffortLabel } from './modelPickerModelConfig.js';
+
 export interface ModelPickerItem extends IQuickPickItem {
 	readonly entry: ModelCatalogEntry;
 }
@@ -13,7 +15,7 @@ export function buildModelPickerItems(models: readonly ModelCatalogEntry[], sele
 		const details = [entry.model.provider, entry.model.model];
 		if (isSelected) details.push(localize('chat.modelPicker.current', 'Current'));
 		if (entry.contextWindow) details.push(localize('chat.modelPicker.context', '{0} context tokens', entry.contextWindow.toLocaleString()));
-		if (entry.supportedReasoningEfforts?.length) details.push(localize('chat.modelPicker.efforts', 'Thinking: {0}', entry.supportedReasoningEfforts.join(', ')));
+		if (entry.supportedReasoningEfforts?.length) details.push(localize('chat.modelPicker.efforts', 'Thinking: {0}', entry.supportedReasoningEfforts.map(modelPickerEffortLabel).join(', ')));
 		return {
 			label: entry.displayName,
 			detail: details.join(' · '),
