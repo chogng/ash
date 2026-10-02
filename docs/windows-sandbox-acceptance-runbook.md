@@ -1,7 +1,7 @@
 # Windows 沙箱验收手册
 
 本手册分别验证 MXC PSEC 路径和独立 Windows 账户实现，保留各轮实机证据。2026-10-02 的 Windows 11 23H2 x64 管理员验收已通过当前服务安装、更新、账户执行和清理；随后完成 WSL2 回归与 DNS/IPv6 网络矩阵。PSEC 在 Windows 11 25H2 ARM64 CI 上取得成功路径证据，本机 23H2 仍缺少能力。WSLC SDK 部分通过，一次性容器清理仍报错；Ash 尚未接入它。具体范围见 [补充验收](#2026-10-02-psecwslc-与网络补充验收)。
-账户 CI 的 ACL 标记差异已修复并完成本机回归，公网 IPv6 的临时出口矩阵在 Windows 与 WSL 两种模式均通过，见 [ACL 与 IPv6 复测](#2026-10-02-acl-恢复与公网-ipv6-复测)。
+账户 CI 的 ACL 标记差异已修复，本机与 ARM64/Server CI 复测通过；公网 IPv6 的临时出口矩阵在 Windows 与 WSL 两种模式均通过，见 [ACL 与 IPv6 复测](#2026-10-02-acl-恢复与公网-ipv6-复测)。
 实现契约见 [mxc-sandbox](../ash-rs/mxc-sandbox/README.md) 与 [windows-sandbox](../ash-rs/windows-sandbox/README.md)。历史账户原型的结果不能作为当前候选的通过证据。
 
 ## 当前入口
@@ -164,7 +164,21 @@ Windows 的两个旧网络用例还暴露出 TCP 临时端口落入 Hyper-V UDP 
 
 复跑时显式提供可达出口，例如 `./scripts/test-windows-sandbox.ps1 -Target x86_64-pc-windows-msvc -NetworkDnsServer '[2606:4700:4700::1111]:53' -NetworkPublicIpv6Http '[2606:4700:4700::1111]:80'`。Linux 使用 `ASH_PUBLIC_IPV6_HTTP_ENDPOINT` 与包含公网 IPv6 的 `ASH_DNS_SERVER`。公开目标必须完成 HTTP 或 DNS 数据往返的正向对照；缺少出口即失败。脚本不自动配置隧道或修改用户的网络设置。
 
-ARM64 与 Server 2022/2025 的新源码 CI 尚未重跑；此前失败的 run 保持原状态，本机通过和 ARM 编译结果不能声明整条 CI 已绿。WSLC 一次性清理失败不属于本轮修复范围。
+新源码已提交到 `codex/psec-acl-recovery-20261002-111128`。提交 `9cbe51cf47049f1f92bc3d5b82bf766aa56279fe` 的 [首轮 CI](https://github.com/chogng/ash/actions/runs/36959078405) 为 5/6 通过；三种系统的 ACL 用例都通过，Server 2025 在运行器更新后的代理用例收到上游 `502`。本机通过分片请求复现：测试接收端在请求头尚未完整到达时回复并关闭连接。已将接收后的 HTTP/DNS 测试连接显式设为阻塞模式，并增加完整请求头回归；代理原用例和共享 DNS/IPv6 矩阵复测通过。Windows 的接收连接继承监听端属性，见 [Microsoft accept 说明](https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-accept)。
+
+提交 `22915fa12cbfd04ea37972e8e6a32ddcdefbaa29` 的 [第二轮 CI](https://github.com/chogng/ash/actions/runs/36961919347) 最终 6/6 通过。其第一次尝试中 ARM64 账户与三项 PSEC 通过，两项 Server 账户任务均在受限 PowerShell 初始化的 10 秒测试期限处失败，标准输出和错误输出为空，退出后的清理通过。同一用例在上一轮通过；本次只重跑这两个失败任务，保留原有期限、退出码与输出断言，两项均通过。这个结果包含一次重跑，不表示首次尝试全部通过。
+
+| 系统 | build | 账户执行与清理 | PSEC |
+| --- | --- | --- | --- |
+| Windows 11 Enterprise 25H2 ARM64 | `26200.9457` | 通过 | 7 项指定成功路径通过 |
+| Windows Server 2022 x64 | `20348.5622` | 通过 | 能力不足时的启动前拒绝通过 |
+| Windows Server 2025 x64 | `26100.33438` | 通过 | 能力不足时的启动前拒绝通过 |
+
+每种系统均有 9 项服务测试、36 项账户库测试，运行器更新前后各通过 10 项完整账户执行用例与 1 项分片 HTTP 接收端回归，全部未忽略。服务程序更新后，文件授权、完整 SDDL 恢复、元数据与退出码用例再次通过；两种程序更新均保留账户及 WFP 对象身份，最后移除账户运行时与服务。托管系统 build 仅限定这些机器的结果，不能扩大为同版本全部环境。
+
+首轮原始日志、安装更新计划和接收端修复的本机证据保存在 `.build/acceptance/sandbox-ci/run-20261002-111128/`；第二轮及重跑证据保存在 `.build/acceptance/sandbox-ci/run-20261002-115023/`，其中 `attempt-1/` 保留首次尝试失败，`verification.json` 核对提交、用例数量、程序摘要、账户/WFP 身份及清理计划。下载的 GitHub 原始任务日志包含测试输出；账户 artifact 的 `account.log` 仅包含 PowerShell 宿主信息，不能单独证明测试通过。原始 artifact ZIP 摘要均与 GitHub 返回的 SHA-256 一致。
+
+本次 CI 未执行公网 DNS/IPv6 矩阵、WSL、PSEC ConPTY 或 App Server 产品链路；公网与 WSL 结果仍引用上述本机证据。WSLC 一次性清理失败不属于本轮修复范围。
 
 ## 已退出账户原型的受管网络记录
 

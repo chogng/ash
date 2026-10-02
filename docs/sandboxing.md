@@ -174,12 +174,12 @@ WindowsAccount 在执行前检查工作目录、Grant、临时目录、用户目
 | Linux MXC 受管网络 | WSL2 Ubuntu x64 的 NAT/mirrored HTTP/CONNECT/SOCKS、域名策略、IPv4/IPv6 与 TCP/UDP A/AAAA DNS 矩阵通过；两种模式另通过临时隧道出口的公网 IPv6 与端口 53 验证；NAT Windows IPv6 链路本地和 mirrored Windows IPv4 回环目标通过 |
 | Windows MXC PSEC | Windows 11 25H2 ARM64 CI 的 7 项指定成功路径通过；23H2 x64 本机能力不足；PSEC 网络流量矩阵与 ConPTY 未验证 |
 | 已退出的账户原型 | 曾完成 2 项完整用例、4 项失败；测试账户、网络对象和运行时目录已清理 |
-| 独立 Windows 账户后端 | 23H2 本机 34 项账户单测、9 项服务测试与 10 项完整执行用例通过，安装、两种程序更新和清理通过 |
+| 独立 Windows 账户后端 | 23H2 本机 36 项账户单测、9 项服务测试与 10 项完整执行用例通过；ARM64、Server 2022/2025 的新源码 CI 也通过安装、两种程序更新、ACL 恢复和清理，含两项 Server 超时后的单次重跑，见 [复测记录](windows-sandbox-acceptance-runbook.md#2026-10-02-acl-恢复与公网-ipv6-复测) |
 | IPv6 断网、双账户并发 | 实机通过 |
-| WindowsAccount DNS/IPv6 网络矩阵 | 23H2 x64 的 Denied/Managed/Allowed、实际 IPv6 端口 53、域名及代理授权、后代与监听用例通过，新增临时隧道出口的公网 IPv6 验证；CI 的 ACL 标记差异已修复并在本机复现条件下通过，ARM/Server 新版本 CI 尚未重跑 |
+| WindowsAccount DNS/IPv6 网络矩阵 | 23H2 x64 的 Denied/Managed/Allowed、实际 IPv6 端口 53、域名及代理授权、后代与监听用例通过，新增临时隧道出口的公网 IPv6 验证；此公网矩阵未纳入默认 ARM64/Server CI |
 | 崩溃恢复 | 已验证准备期间进程被终止后的日志恢复；运行中全部崩溃组合未穷尽 |
 | WSL2 | 本机受限账户不能进入调用者/系统发行版；Linux 文件系统及 `/mnt/c` 的文件、进程、互操作与上述网络矩阵通过；PTY 未验证 |
 | WSLC | SDK 一次性执行的 5 项行为、持久容器 7 步生命周期通过；一次性清理报 `0x80010108`，状态为部分通过；Ash 未接入，Managed 强制代理不具备资格 |
-| WSL1、其他 Windows 系统 | 本轮未验证 |
+| WSL1、未列出的 Windows 构建 | 本轮未验证 |
 
 发布依据必须包含具体平台、系统 build、请求模型、依赖和补丁版本、实际执行及跳过的用例。统一接口、编译和部分测试不能替代系统隔离验收。
