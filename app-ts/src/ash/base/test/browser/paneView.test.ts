@@ -94,6 +94,7 @@ test("PaneView restores expanded sizes, retains content across moves and detache
 	assert.equal(second.element.isConnected, false);
 	view.addPane(second, 270);
 	assert.equal(input.value, "draft");
+	assert.equal(view.getPaneSize(second), 270);
 });
 
 test("PaneView keeps minimum heights scrollable and supports header keyboard navigation", () => {

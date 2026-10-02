@@ -250,7 +250,7 @@ export class SplitView extends Disposable {
 				this.render();
 			});
 		}
-		if (this.didLayout) this.fitToSize();
+		if (this.didLayout) this.fitToSize(typeof sizing === "number" ? new Set([item]) : undefined);
 		this.rebuildSashes();
 		if (this.didLayout) this.render();
 	}

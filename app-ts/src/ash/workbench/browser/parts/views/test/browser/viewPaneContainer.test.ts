@@ -155,6 +155,7 @@ test("ViewPaneContainer retains hidden view instances and restores workspace siz
 		assert.equal(second.element.isConnected, false);
 		assert.equal(container.openView(second.id), second);
 		assert.equal(second.input.value, "unsent expression");
+		assert.equal(container.getViewSize(second), 270);
 	}
 	assert.equal(created, 2);
 	assert.equal(disposed, 0);

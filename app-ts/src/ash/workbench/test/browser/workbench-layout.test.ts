@@ -679,7 +679,7 @@ test("Git sidebar uses its preferred reset width and merges a lone view into the
 		model,
 		instantiationService: disposables.add(new InstantiationService()),
 		contextKeyService: contextKeys,
-	});
+	}, paneStorage);
 	sidebar.addComposite(composite);
 	sidebar.showComposite(descriptor.id);
 	const harness = createLayoutHarness(dom.window.document, {
