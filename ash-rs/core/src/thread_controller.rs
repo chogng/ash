@@ -93,12 +93,16 @@ mod identity;
 pub(crate) mod live_interaction;
 mod loaded_thread;
 mod mailbox;
+mod mode;
 mod restore;
 mod steering;
 mod user_input;
 
 pub use agent::CreateAgentThreadRequest;
 pub use mailbox::ThreadExecutionContext;
+pub use mode::ChangeTurnModeRequest;
+pub use mode::ChangeTurnModeResult;
+pub use mode::ModeChangeAuthority;
 
 pub(crate) enum TurnInterruption {
     Cancelled,

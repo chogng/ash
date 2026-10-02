@@ -255,6 +255,7 @@ fn env_runtime_replaces_directory_services_and_retains_connection_terminals() {
     assert!(tool_names.contains(agent::SPAWN_AGENT_TOOL_NAME));
     assert!(tool_names.contains(agent::SEND_AGENT_MESSAGE_TOOL_NAME));
     assert!(tool_names.contains(agent::WAIT_AGENT_TOOL_NAME));
+    assert!(tool_names.contains(crate::server::switch_mode_tool::SWITCH_MODE_TOOL_NAME));
     assert!(!tool_names.contains("browser_open"));
     host.tools.replace_host_available(true).unwrap();
     assert!(

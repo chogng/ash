@@ -457,7 +457,12 @@ function toThreadUpdate(update: ThreadUpdateEnvelopeDto): ThreadUpdateEnvelope {
 
 function toThreadUpdateValue(update: ThreadUpdateEnvelopeDto["update"]): ThreadUpdate {
 	switch (update.type) {
-		case "committed": return { type: "committed", event: update.event.type === "interactionRequested" ? { type: update.event.type, interaction: { ...update.event.interaction } } : { type: update.event.type } };
+		case "committed": {
+			const event = update.event;
+			if (event.type === 'interactionRequested') return { type: 'committed', event: { type: event.type, interaction: { ...event.interaction } } };
+			if (event.type === 'turnModeChanged') return { type: 'committed', event: { type: event.type, turnId: event.turnId, fromMode: event.fromMode, mode: event.mode } };
+			return { type: 'committed', event: { type: event.type } };
+		}
 		case "itemStarted": return { type: "itemStarted", item: toThreadItem(update.item) };
 		case "itemDelta": return { type: "itemDelta", itemId: update.itemId, delta: { ...update.delta } };
 		case "toolOutputDelta": return { type: "toolOutputDelta", turnId: update.turnId, toolCallId: update.toolCallId, stream: update.stream, text: update.text };

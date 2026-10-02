@@ -16,6 +16,18 @@ pub enum CollaborationMode {
 }
 
 impl CollaborationMode {
+    pub const ALL: [Self; 5] = [
+        Self::Agent,
+        Self::Plan,
+        Self::Debug,
+        Self::Multitask,
+        Self::Ask,
+    ];
+
+    pub const fn is_analysis(self) -> bool {
+        matches!(self, Self::Plan | Self::Ask)
+    }
+
     pub const fn is_agent(&self) -> bool {
         matches!(self, Self::Agent)
     }

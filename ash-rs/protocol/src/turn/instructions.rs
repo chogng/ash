@@ -99,7 +99,7 @@ impl TurnInstructions {
         self
     }
 
-    /// Replaces only the frozen approach when a delegated worker uses a different mode.
+    /// Replaces only the approach for a delegated worker or an explicit mode change.
     /// Keeping it separate prevents copying a parent's coordinating approach into worker rules.
     pub fn with_mode(mut self, mode: &Self) -> Self {
         self.mode_instructions = Some(mode.as_text());

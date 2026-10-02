@@ -710,6 +710,14 @@ export class ChatWidgetModel extends Disposable {
 		if (update.update.type !== "committed") return;
 		const event = update.update.event;
 		switch (event.type) {
+			case 'turnModeChanged':
+				// Follow an Agent's switch unless the user has chosen a different next-turn mode.
+				if (this._thread && update.durableSequence > this._thread.sequence
+					&& this._thread.turns.at(-1)?.turnId === event.turnId && this.mode === event.fromMode) {
+					this.selectedModes.set(update.threadId, event.mode);
+					this._onDidChange.fire();
+				}
+				break;
 			case "interactionRequested":
 				this._interaction = event.interaction;
 				this._onDidChange.fire();

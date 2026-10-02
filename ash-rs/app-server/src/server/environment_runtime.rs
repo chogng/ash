@@ -12,6 +12,7 @@ use super::git_runtime::GitWatcher;
 use super::home_context::HomeContext;
 use super::semantic_index_job::AppServerSemanticIndexMetrics;
 use super::semantic_index_job::SemanticIndexJobController;
+use super::switch_mode_tool::SwitchModeToolService;
 use super::symbol_index_runtime::SymbolIndexRuntime;
 use super::update_plan_tool::UpdatePlanToolService;
 use crate::codebase_retrieval_context::CodebaseRetrievalContextSource;
@@ -3052,6 +3053,13 @@ fn append_multi_agent_tools(
     customizations: Option<&Arc<DirContributions>>,
 ) -> Result<crate::local_tools::LocalToolComposition, EnvRuntimeError> {
     let action_policy_revision = local.action_policy_revision().clone();
+    let local = append_local_tool(
+        local,
+        Arc::new(
+            SwitchModeToolService::new(Arc::clone(threads))
+                .with_action_policy_revision(action_policy_revision.clone()),
+        ),
+    );
     let local = append_local_tool(
         local,
         Arc::new(

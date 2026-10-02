@@ -33,6 +33,7 @@ fn snapshot_preserves_items_and_turn_plans_in_order() {
         reference_cost: ash_protocol::ModelReferenceCostSummary::default(),
         goal: None,
         turns: vec![ash_protocol::Turn {
+            mode: ash_protocol::CollaborationMode::Agent,
             advisor: None,
             turn_id: turn_id(),
             status: ash_protocol::TurnStatus::Completed,

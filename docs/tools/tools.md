@@ -30,6 +30,29 @@
 | 谁决定工具能不能执行？ | 权限系统决定授权；Core 调度；工具执行器落实调用 | [当前本地工具来源](#41-当前本地工具来源运行时) |
 | 当前完成到哪里？ | 统一 registry/executor/search、durable provenance、结构化图片和 Code Mode 主链已落地；Plugin 安装 authority 尚未完成 | [当前仓库审计](#2-当前仓库审计) |
 
+## 当前 Turn 的模式切换
+
+内置工具 `switch_mode` 接收 `{ "mode": "plan", "reason": "先确认实现方案" }`，支持
+`agent`、`plan`、`debug`、`multitask`、`ask`。`reason` 必须是 1–1000 字符的非空说明。
+
+App Server 注册工具并处理用户选择；Core 的 `ThreadController.change_turn_mode` 拥有状态变更，
+写入 `turnModeChanged` 事件及新的模式指令。下一次模型调用读取更新后的 Turn，历史调用保留原有
+指令。事件包含 `fromMode`，用于识别过期切换和同步输入框。桌面与 TUI 跟随切换，但保留用户为下一条
+消息选择的不同模式。
+
+| 切换情况 | 行为 |
+| --- | --- |
+| Agent / Debug / Multitask 之间，或进入 Plan / Ask | 直接切换 |
+| Plan 与 Ask 之间 | 直接切换 |
+| Plan / Ask → Agent / Debug / Multitask | 通过现有用户输入交互等待明确选择；拒绝后保留原模式 |
+| 已在目标模式 | 返回 `changed: false`，不重复写事件 |
+| Turn 已结束、不是 coding Turn，或确认期间原模式改变 | 拒绝变更 |
+
+成功输出为 `{ "changed": true, "from_mode": "agent", "mode": "plan", "sequence": 8 }`；
+拒绝确认输出为 `{ "changed": false, "mode": "plan", "rejected": true }`。
+模式仅决定工作方式和模式提示词。权限、角色、模型选择、共享指令与工具快照保持不变；
+`bypassPermissions` 也不会跳过离开 Plan / Ask 所需的用户选择。
+
 ## 1. 结论
 
 `ash-tools` 是 Ash 工具子系统的共享类型与纯适配层。它定义一个工具如何被描述、暴露、搜索、

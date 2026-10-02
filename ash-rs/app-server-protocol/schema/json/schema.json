@@ -37526,6 +37526,39 @@
           "type": "object"
         },
         {
+          "description": "Changes the approach for subsequent invocations without widening the Turn's tool or\npermission ceiling. Earlier invocation records retain their original instruction input.",
+          "properties": {
+            "fromMode": {
+              "$ref": "#/$defs/CollaborationMode"
+            },
+            "instructions": {
+              "$ref": "#/$defs/TurnInstructions"
+            },
+            "mode": {
+              "$ref": "#/$defs/CollaborationMode"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "const": "turnModeChanged",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "turnId",
+            "fromMode",
+            "mode",
+            "instructions"
+          ],
+          "type": "object"
+        },
+        {
           "properties": {
             "itemIds": {
               "items": {

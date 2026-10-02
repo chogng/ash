@@ -152,6 +152,7 @@ mod semantic_index_job;
 mod session_operations;
 mod skill_operations;
 mod subscription_adapter;
+pub(crate) mod switch_mode_tool;
 mod symbol_index_operations;
 mod symbol_index_runtime;
 mod syntax_operations;

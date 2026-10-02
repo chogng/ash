@@ -250,6 +250,7 @@ impl TranscriptAccumulator {
             | ThreadEvent::ContextOverflowRecoveryCommitted { .. }
             | ThreadEvent::TurnAccepted { .. }
             | ThreadEvent::TurnStarted { .. }
+            | ThreadEvent::TurnModeChanged { .. }
             | ThreadEvent::TurnSteered { .. }
             | ThreadEvent::TurnSteerDelivered { .. }
             | ThreadEvent::TurnExecutionAttempted { .. }

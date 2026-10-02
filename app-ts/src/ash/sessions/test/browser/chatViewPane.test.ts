@@ -2274,6 +2274,66 @@ test('ChatWidgetModel queues a new mode while keeping the active Turn unchanged'
 	assert.equal(model.inputState.mode, 'multitask');
 });
 
+test('Chat mode accessibility help explains switch_mode in Chinese and restores input focus', async () => {
+	const { SessionsChatAccessibilityHelp } = await import('../../contrib/chat/browser/sessionsChatAccessibilityHelp.js');
+	const { builtinLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const container = document.createElement('div');
+	const input = document.createElement('textarea');
+	container.append(input);
+	document.body.append(container);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	try {
+		input.focus();
+		const help = new SessionsChatAccessibilityHelp(container, () => input.focus());
+		const provider = help.getProvider()!;
+		assert.match(provider.provideContent(), /从 Plan 或 Ask 切到执行模式需要你选择/);
+		assert.match(provider.provideContent(), /你为下一条消息选好的不同模式会保留/);
+		input.blur();
+		provider.dispose();
+		assert.equal(document.activeElement, input);
+	} finally {
+		container.remove();
+		resetNlsResolver();
+	}
+});
+
+test('ChatWidgetModel follows switch_mode while preserving a different next-message mode', async () => {
+	for (const selectedMode of [undefined, 'ask'] as const) {
+		const activeSession = session('session-1', 'thread-1');
+		let value = thread('working');
+		value.turns[0]!.status = 'running';
+		const fake = fakeApi({ sessions: [activeSession], thread: () => value });
+		using chat = createChatService(fake.api);
+		using sessions = new SessionsManagementService(fake.api);
+		using model = new ChatWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+		await model.initialize();
+		if (selectedMode) {
+			model.selectMode(selectedMode);
+		}
+		value = { ...value, sequence: value.sequence + 1, turns: [{ ...value.turns[0]!, mode: 'plan' }] };
+		const update: ServerNotification = {
+			method: 'session/thread/update',
+			params: {
+				sessionId: 'session-1', threadId: 'thread-1', durableSequence: value.sequence,
+				update: { type: 'committed', event: {
+					type: 'turnModeChanged', threadId: 'thread-1', turnId: 'turn-1',
+					fromMode: 'agent', mode: 'plan',
+					instructions: { owner: 'test', id: 'approach', revision: '1', body: 'Plan the task.' },
+				} },
+			},
+		};
+		fake.emit(update);
+		await waitFor(() => model.thread?.sequence === value.sequence);
+		assert.equal(model.inputState.activeMode, 'plan');
+		assert.equal(model.inputState.mode, selectedMode ?? 'plan');
+		model.selectMode('agent');
+		fake.emit(update);
+		assert.equal(model.inputState.mode, 'agent', 'replayed events must not overwrite a later choice');
+	}
+});
+
 test('ChatWidgetModel restores the mode once and keeps it when reconnecting to newer Turns', async () => {
 	const activeSession = session('session-1', 'thread-1');
 	let value = thread('planning');

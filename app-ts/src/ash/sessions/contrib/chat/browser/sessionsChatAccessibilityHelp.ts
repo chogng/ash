@@ -16,7 +16,7 @@ export class SessionsChatAccessibilityHelp implements IAccessibleViewImplementat
 		return new AccessibleContentProvider(
 			AccessibleViewProviderId.SessionsChat,
 			{ type: AccessibleViewType.Help },
-			() => localize('sessions.chat.inputHelp', 'Chat input\nPress Enter to send and Shift+Enter for a new line. Use Tab and Shift+Tab to reach attachments, Agent, model, thinking effort, dictation, Send, and Permissions. Press Enter or Space to open a menu, use arrow keys to select an item, and Escape to return. Use the + button to attach UTF-8 text files or images, or paste and drop images into the input. Attachments can be sent without text. The Permissions menu applies to the next Turn.'),
+			() => localize('sessions.chat.inputHelp', 'Chat input\nPress Enter to send and Shift+Enter for a new line. Use Tab and Shift+Tab to reach attachments, Agent, model, thinking effort, dictation, Send, and Permissions. Press Enter or Space to open a menu, use arrow keys to select an item, and Escape to return. Use the + button to attach UTF-8 text files or images, or paste and drop images into the input. Attachments can be sent without text. The Permissions menu applies to the next Turn. The Agent can change the current mode. Leaving Plan or Ask for an execution mode requires your choice. A different mode selected for the next message is kept.'),
 			this.focusInput,
 			AccessibilityVerbositySettingId.Chat,
 		);

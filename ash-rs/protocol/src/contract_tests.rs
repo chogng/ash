@@ -1176,3 +1176,19 @@ fn collaboration_modes_round_trip_and_delegated_workers_keep_their_approach() {
     }
     assert!(serde_json::from_value::<CollaborationMode>(json!("unknown")).is_err());
 }
+
+#[test]
+fn mode_change_events_round_trip_the_previous_mode_and_frozen_instructions() {
+    let event = json!({
+        "type": "turnModeChanged", "threadId": "thread", "turnId": "turn",
+        "fromMode": "agent", "mode": "plan",
+        "instructions": {
+            "owner": "ash", "id": "agent", "revision": "1", "body": "Shared rules",
+            "modeInstructions": { "owner": "ash", "id": "plan", "revision": "1", "body": "Plan the task" }
+        }
+    });
+    let decoded: ThreadEvent = serde_json::from_value(event.clone()).unwrap();
+    assert_eq!(decoded.kind(), "turn.mode_changed");
+    assert_eq!(decoded.thread_id(), &ThreadId::new("thread").unwrap());
+    assert_eq!(serde_json::to_value(decoded).unwrap(), event);
+}

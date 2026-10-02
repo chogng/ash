@@ -13,12 +13,12 @@ pub const ASK: &str = include_str!("../templates/ask.md");
 pub fn instructions(mode: protocol::CollaborationMode) -> protocol::TurnInstructions {
     let (id, revision, body) = match mode {
         protocol::CollaborationMode::Agent => ("collaboration-mode/agent", "agent-v2", AGENT),
-        protocol::CollaborationMode::Plan => ("collaboration-mode/plan", "plan-v2", PLAN),
+        protocol::CollaborationMode::Plan => ("collaboration-mode/plan", "plan-v3", PLAN),
         protocol::CollaborationMode::Debug => ("collaboration-mode/debug", "debug-v2", DEBUG),
         protocol::CollaborationMode::Multitask => {
             ("collaboration-mode/multitask", "multitask-v2", MULTITASK)
         }
-        protocol::CollaborationMode::Ask => ("collaboration-mode/ask", "ask-v2", ASK),
+        protocol::CollaborationMode::Ask => ("collaboration-mode/ask", "ask-v3", ASK),
     };
     protocol::TurnInstructions::new("collaboration-mode-templates", id, revision, body)
         .expect("packaged mode templates have valid identities and nonempty bodies")

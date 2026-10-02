@@ -225,6 +225,15 @@ pub enum ThreadEvent {
         thread_id: ThreadId,
         turn_id: TurnId,
     },
+    /// Changes the approach for subsequent invocations without widening the Turn's tool or
+    /// permission ceiling. Earlier invocation records retain their original instruction input.
+    TurnModeChanged {
+        thread_id: ThreadId,
+        turn_id: TurnId,
+        from_mode: crate::CollaborationMode,
+        mode: crate::CollaborationMode,
+        instructions: TurnInstructions,
+    },
     TurnSteered {
         thread_id: ThreadId,
         turn_id: TurnId,
@@ -397,6 +406,7 @@ impl ThreadEvent {
             Self::ContextOverflowRecoveryCommitted { .. } => "context.overflow_recovery_committed",
             Self::TurnAccepted { .. } => "turn.accepted",
             Self::TurnStarted { .. } => "turn.started",
+            Self::TurnModeChanged { .. } => "turn.mode_changed",
             Self::TurnSteered { .. } => "turn.steered",
             Self::TurnSteerDelivered { .. } => "turn.steer_delivered",
             Self::TurnExecutionAttempted { .. } => "turn.execution_attempted",
@@ -450,6 +460,7 @@ impl ThreadEvent {
             | Self::ContextOverflowRecoveryCommitted { thread_id, .. }
             | Self::TurnAccepted { thread_id, .. }
             | Self::TurnStarted { thread_id, .. }
+            | Self::TurnModeChanged { thread_id, .. }
             | Self::TurnSteered { thread_id, .. }
             | Self::TurnSteerDelivered { thread_id, .. }
             | Self::TurnExecutionAttempted { thread_id, .. }

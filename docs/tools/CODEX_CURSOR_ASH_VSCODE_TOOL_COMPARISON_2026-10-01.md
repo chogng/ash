@@ -371,6 +371,7 @@ Ash 通过 App Server 组合 Environment、Dynamic、Extension、Host、Local、
 | 长进程 | `shell-session`，action 包含 `start/read/wait/write/close_input/interrupt/resize/terminate` | [会话描述与 schema](/Volumes/1t/ash/ash-rs/app-server/src/local_tools/suite.rs:92) |
 | 代码检索 | `search_code`，接入符号、语义与云检索来源 | [工具实现](/Volumes/1t/ash/ash-rs/app-server/src/codebase_retrieval_tool.rs:33)、[实际接入](/Volumes/1t/ash/ash-rs/app-server/src/server/environment_runtime.rs:2245) |
 | 计划与目标 | `update_plan`、`get_goal`、`create_goal`、`update_goal` | [计划工具](/Volumes/1t/ash/ash-rs/app-server/src/server/update_plan_tool.rs:35)、[Goal](/Volumes/1t/ash/ash-rs/ext/goal/src/tool.rs:27) |
+| 模式切换 | `switch_mode(mode, reason)`；更新当前 Turn 的模式及下一次调用的模式提示词。Plan / Ask → 执行模式需用户明确选择；权限、角色和工具快照保持不变 | [工具与约定](tools.md#当前-turn-的模式切换)、[执行代码](/Volumes/1t/ash/ash-rs/app-server/src/server/switch_mode_tool.rs) |
 | 咨询与指令 | `advisor`、`read_instruction` | [Advisor](/Volumes/1t/ash/ash-rs/ext/advisor/src/lib.rs:30)、[指令读取](/Volumes/1t/ash/ash-rs/app-server/src/server/instruction_operations.rs:169) |
 | 多 Agent 与团队 | `spawn_agent`、`send_agent_message`、`wait_agent`、`team_post_message`、`team_read_messages` | [Agent 工具](/Volumes/1t/ash/ash-rs/ext/agent/src/tool.rs:54)、[接入本地工具](/Volumes/1t/ash/ash-rs/app-server/src/server/environment_runtime.rs:3042) |
 | 消息板 | `board_read`、`board_write` | [消息板工具](/Volumes/1t/ash/ash-rs/ext/agent-message-board/src/tools.rs:27) |

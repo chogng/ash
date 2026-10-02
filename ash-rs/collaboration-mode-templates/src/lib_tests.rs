@@ -27,7 +27,13 @@ fn every_mode_freezes_its_authored_asset() {
     ] {
         let frozen = super::instructions(mode);
         assert_eq!(frozen.id(), format!("collaboration-mode/{id}"));
-        assert_eq!(frozen.revision(), format!("{id}-v2"));
+        let revision = match mode {
+            CollaborationMode::Plan | CollaborationMode::Ask => format!("{id}-v3"),
+            CollaborationMode::Agent | CollaborationMode::Debug | CollaborationMode::Multitask => {
+                format!("{id}-v2")
+            }
+        };
+        assert_eq!(frozen.revision(), revision);
         assert_eq!(frozen.body(), body);
         frozen.validate().unwrap();
     }

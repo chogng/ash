@@ -349,3 +349,76 @@ fn queued_work_and_completion_keep_the_origin_recorded_before_a_mode_switch() {
     };
     assert_eq!(completion.origin, expected);
 }
+
+#[test]
+#[cfg(feature = "in-process-tests")]
+fn switch_mode_updates_the_composer_without_overwriting_the_next_message_choice() {
+    use ash_protocol::CollaborationMode;
+    use ash_protocol::ThreadEvent;
+    use ash_protocol::ThreadUpdate;
+    use ash_protocol::ThreadUpdateEnvelope;
+
+    let _guard = crate::test_support::in_process_test_guard();
+    let root = tempfile::tempdir().unwrap();
+    let session = AppServerSession::start_embedded(InProcessClientOptions::new(
+        root.path(),
+        ClientInfo {
+            name: "ash-tui-switch-mode-test".into(),
+            version: "1".into(),
+        },
+    ))
+    .unwrap();
+    let mut client = session.client();
+    let active =
+        crate::sessions::ActiveConversation::start(&mut client, "Mode switch".into()).unwrap();
+    let (subscription, snapshot, _) = crate::thread::ThreadSubscription::start(
+        &mut client,
+        active.session_id(),
+        active.thread_id(),
+    )
+    .unwrap();
+    let mut current = crate::sessions::Conversation {
+        conversation: active,
+        subscription,
+    };
+    let update = ThreadUpdateEnvelope {
+        session_id: snapshot.session_id,
+        thread_id: snapshot.thread_id.clone(),
+        durable_sequence: snapshot.sequence + 1,
+        stream_cursor: None,
+        update: ThreadUpdate::Committed {
+            event: ThreadEvent::TurnModeChanged {
+                thread_id: snapshot.thread_id,
+                turn_id: ash_protocol::TurnId::new("switch-turn").unwrap(),
+                from_mode: CollaborationMode::Agent,
+                mode: CollaborationMode::Plan,
+                instructions: ash_protocol::TurnInstructions::new(
+                    "test",
+                    "mode",
+                    "1",
+                    "Plan the task.",
+                )
+                .unwrap(),
+            },
+        },
+    };
+    for selected in [CollaborationMode::Agent, CollaborationMode::Ask] {
+        let mut app = App::new();
+        app.set_active_turn(ash_protocol::TurnId::new("switch-turn").unwrap());
+        app.set_collaboration_mode(selected);
+        let refresh = super::refresh_server_event(
+            crate::client::ClientEvent::ThreadUpdated(Box::new(update.clone())),
+            Some(&mut current),
+            &mut app,
+        );
+        assert!(refresh.thread);
+        assert_eq!(
+            app.collaboration_mode(),
+            if selected == CollaborationMode::Agent {
+                CollaborationMode::Plan
+            } else {
+                selected
+            }
+        );
+    }
+}

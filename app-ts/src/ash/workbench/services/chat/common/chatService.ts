@@ -230,6 +230,7 @@ export interface TurnInteraction {
 
 export type ThreadCommittedEvent =
 	| { readonly type: "interactionRequested"; readonly interaction: TurnInteraction }
+	| { readonly type: 'turnModeChanged'; readonly turnId: string; readonly fromMode: ChatMode; readonly mode: ChatMode }
 	| { readonly type:
 		"threadCreated"
 		| "advisorConfigured"

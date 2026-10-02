@@ -1417,6 +1417,45 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 .item_sequences
                 .insert(item.item_id().clone(), envelope.sequence);
         }
+        ThreadEvent::TurnModeChanged {
+            turn_id,
+            from_mode,
+            mode,
+            instructions,
+            ..
+        } => {
+            require_no_command(envelope)?;
+            instructions
+                .validate()
+                .map_err(|error| CoreError::Journal(error.to_string()))?;
+            let turn = find_turn_mut(&mut snapshot, turn_id)?;
+            if turn.status != TurnStatus::Running
+                || turn.kind != ash_protocol::TurnKind::Coding
+                || turn.mode != *from_mode
+                || turn.mode == *mode
+            {
+                return Err(CoreError::Journal(
+                    "mode changes require a running Turn and a different mode".into(),
+                ));
+            }
+            let original = turn.instructions.as_ref().ok_or_else(|| {
+                CoreError::Journal("mode changes require frozen Turn instructions".into())
+            })?;
+            if instructions.mode_instructions().is_none()
+                || original.owner() != instructions.owner()
+                || original.id() != instructions.id()
+                || original.revision() != instructions.revision()
+                || original.body() != instructions.body()
+                || original.shared() != instructions.shared()
+                || original.model_guidance() != instructions.model_guidance()
+            {
+                return Err(CoreError::Journal(
+                    "mode changes must preserve shared instructions and model guidance".into(),
+                ));
+            }
+            turn.mode = *mode;
+            turn.instructions = Some(instructions.clone());
+        }
         ThreadEvent::PlanUpdated { turn_id, plan, .. } => {
             require_no_command(envelope)?;
             crate::turn::validate_plan_update(plan).map_err(CoreError::Journal)?;
