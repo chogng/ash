@@ -9,6 +9,138 @@ test.beforeEach(({}, testInfo) => {
 	test.skip(testInfo.project.name !== 'electron-ui', 'Window restoration is a Desktop process lifecycle scenario.');
 });
 
+for (const scaleFactor of [1, 1.25, 1.5, 2]) {
+	test(`Desktop restores proportional Workbench and Agents geometry at ${scaleFactor * 100}% display scaling`, async ({}, testInfo) => {
+		test.setTimeout(90_000);
+		const userDataDirectory = testInfo.outputPath('user-data');
+		await mkdir(userDataDirectory, { recursive: true });
+		let application: ElectronApplication | undefined;
+		try {
+			application = await launch(userDataDirectory, undefined, [`--force-device-scale-factor=${scaleFactor}`]);
+			const page = await application.firstWindow();
+			await new Workbench(page).waitForReady();
+			const opened = application.waitForEvent('window');
+			await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
+			await expect((await opened).locator('.ash-sessions-window')).toBeVisible();
+			const requested = await application.evaluate(({ BrowserWindow, screen }) => {
+				const area = screen.getPrimaryDisplay().workArea;
+				const width = Math.max(400, Math.min(1000, Math.floor(area.width * 0.6)));
+				const height = Math.max(270, Math.min(700, Math.floor(area.height * 0.6)));
+				const bounds = { x: area.x + Math.floor((area.width - width) / 2), y: area.y + Math.floor((area.height - height) / 2), width, height };
+				for (const window of BrowserWindow.getAllWindows()) {
+					window.setBounds(bounds);
+				}
+				return bounds;
+			});
+			// Fractional DPI rounds the operating-system frame to physical pixels.
+			await expect.poll(() => geometryDelta(application!, requested, 'current')).toBeLessThanOrEqual(2);
+			const expected = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.getBounds());
+			// Measure the frame conversion of a new Electron window independently of
+			// Ash's placement policy, which is checked exactly by the owner tests.
+			const expectedFrame = await application.evaluate(({ BrowserWindow }, bounds) => {
+				const probe = new BrowserWindow({
+					...bounds, show: false, minWidth: 400, minHeight: 270,
+					titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
+					titleBarOverlay: process.platform === 'darwin' ? true : { height: 35, color: '#181818', symbolColor: '#d6d6d6' },
+				});
+				try {
+					return probe.getBounds();
+				} finally {
+					probe.destroy();
+				}
+			}, expected);
+			await application.close();
+			application = undefined;
+
+			const statePath = join(userDataDirectory, 'state.json');
+			type Placement = { mode: string; displayId: number; bounds: typeof expected; workArea: typeof expected };
+			type WindowState = { lastActiveWindow: { uiState: Placement }; openedWindows: { uiState: Placement }[] };
+			const saved = JSON.parse(await readFile(statePath, 'utf8')) as { windowsState: WindowState; sessionsWindowState: WindowState };
+			await writeFile(testInfo.outputPath('saved-geometry.json'), JSON.stringify({ expected, workbench: saved.windowsState.openedWindows[0]?.uiState, agents: saved.sessionsWindowState.openedWindows[0]?.uiState }, null, 2));
+			for (const [key, state] of Object.entries(saved)) {
+				if (key !== 'windowsState' && key !== 'sessionsWindowState') {
+					continue;
+				}
+				for (const { uiState } of [state.lastActiveWindow, ...state.openedWindows]) {
+					expect(uiState.workArea).toBeDefined();
+					// Represent a previous screen with twice the logical work area. The next
+					// process must convert persisted placement using its actual Electron display.
+					for (const rectangle of [uiState.bounds, uiState.workArea]) {
+						rectangle.x *= 2;
+						rectangle.y *= 2;
+						rectangle.width *= 2;
+						rectangle.height *= 2;
+					}
+					if (key === 'windowsState') {
+						uiState.mode = 'maximized';
+					}
+				}
+			}
+			await writeFile(statePath, JSON.stringify(saved));
+			application = await launch(userDataDirectory, undefined, [`--force-device-scale-factor=${scaleFactor}`]);
+			await expect.poll(() => application!.windows().length).toBe(2);
+			await expect.poll(() => application!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => window.isMaximized()).sort())).toEqual([false, true]);
+			const geometryPath = testInfo.outputPath('restored-geometry.json');
+			await writeFile(geometryPath, JSON.stringify({ expected, expectedFrame, actual: await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => ({ bounds: window.getNormalBounds(), maximized: window.isMaximized() }))) }, null, 2));
+			await testInfo.attach('restored-window-geometry', { path: geometryPath, contentType: 'application/json' });
+			await expect.poll(() => geometryDelta(application!, expectedFrame, 'normal')).toBeLessThanOrEqual(2);
+			await application.evaluate(({ BrowserWindow }) => {
+				BrowserWindow.getAllWindows().find(window => window.isMaximized())!.unmaximize();
+			});
+			await expect.poll(() => geometryDelta(application!, expectedFrame, 'current')).toBeLessThanOrEqual(2);
+		} finally {
+			await application?.close();
+		}
+	});
+}
+
+test('Desktop adapts open Workbench and Agents windows to display changes without changing zoom or focus', async ({}, testInfo) => {
+	const userDataDirectory = testInfo.outputPath('user-data');
+	await mkdir(userDataDirectory, { recursive: true });
+	const application = await launch(userDataDirectory, undefined, ['--force-device-scale-factor=1']);
+	try {
+		const page = await application.firstWindow();
+		await new Workbench(page).waitForReady();
+		const opened = application.waitForEvent('window');
+		await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
+		await expect((await opened).locator('.ash-sessions-window')).toBeVisible();
+		const before = await application.evaluate(({ BrowserWindow }) => {
+			for (const window of BrowserWindow.getAllWindows()) {
+				window.setBounds({ x: 120, y: 80, width: 1000, height: 700 });
+			}
+			return { focus: BrowserWindow.getFocusedWindow()?.id, zoom: BrowserWindow.getAllWindows().map(window => window.webContents.getZoomLevel()) };
+		});
+		await expect.poll(() => geometryDelta(application, { x: 120, y: 80, width: 1000, height: 700 }, 'current')).toBeLessThanOrEqual(2);
+		await application.evaluate(({ screen }) => {
+			const originalAll = screen.getAllDisplays;
+			const originalMatching = screen.getDisplayMatching;
+			const display = screen.getPrimaryDisplay();
+			const changed = { ...display, workArea: {
+				x: display.workArea.x, y: display.workArea.y,
+				width: display.workArea.width / 2, height: display.workArea.height / 2,
+			} };
+			(globalThis as { restoreTestDisplay?: () => void }).restoreTestDisplay = () => {
+				screen.getAllDisplays = originalAll;
+				screen.getDisplayMatching = originalMatching;
+			};
+			screen.getAllDisplays = () => [changed];
+			screen.getDisplayMatching = () => changed;
+			screen.emit('display-metrics-changed', {}, changed, ['workArea']);
+		});
+		await expect.poll(() => geometryDelta(application, { x: 60, y: 40, width: 500, height: 350 }, 'current')).toBeLessThanOrEqual(2);
+		expect(await application.evaluate(({ BrowserWindow }) => ({
+			focus: BrowserWindow.getFocusedWindow()?.id, zoom: BrowserWindow.getAllWindows().map(window => window.webContents.getZoomLevel()),
+		}))).toEqual(before);
+	} finally {
+		await application.evaluate(() => {
+			const context = globalThis as { restoreTestDisplay?: () => void };
+			context.restoreTestDisplay?.();
+			delete context.restoreTestDisplay;
+		});
+		await application.close();
+	}
+});
+
 test('Desktop restores open Workbench and Agents windows and honors startup intent', async ({}, testInfo) => {
 	test.setTimeout(120_000);
 	const userDataDirectory = testInfo.outputPath('user-data');
@@ -220,8 +352,8 @@ test('updated version restores all windows once despite a none preference', asyn
 	}
 });
 
-async function launch(userDataDirectory: string, folder?: string): Promise<ElectronApplication> {
-	const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory, workspaceDirectory: folder });
+async function launch(userDataDirectory: string, folder?: string, extraArgs?: readonly string[]): Promise<ElectronApplication> {
+	const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory, workspaceDirectory: folder, extraArgs });
 	return _electron.launch({
 		executablePath: configuration.executablePath,
 		args: [...configuration.args],
@@ -229,6 +361,11 @@ async function launch(userDataDirectory: string, folder?: string): Promise<Elect
 		env: configuration.env,
 		timeout: 30_000,
 	});
+}
+
+async function geometryDelta(application: ElectronApplication, expected: { x: number; y: number; width: number; height: number }, kind: 'normal' | 'current'): Promise<number> {
+	const bounds = await application.evaluate(({ BrowserWindow }, kind) => BrowserWindow.getAllWindows().map(window => kind === 'normal' ? window.getNormalBounds() : window.getBounds()), kind);
+	return Math.max(...bounds.flatMap(rectangle => (['x', 'y', 'width', 'height'] as const).map(key => Math.abs(rectangle[key] - expected[key]))));
 }
 
 async function workspaceFolder(page: Page): Promise<string | undefined> {

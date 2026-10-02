@@ -1,5 +1,7 @@
 import "./media/multiEditorTabsControl.css";
 import { DataTransfers } from "../../../../base/browser/dnd.js";
+import { EditorInputCapabilities } from '../../../common/editor.js';
+import { TAB_CLOSE_ACTION_ID } from '../../../../base/browser/ui/tablist/tabList.js';
 import { addDisposableListener, isElement } from "../../../../base/browser/dom.js";
 import { observeResize } from "../../../../base/browser/observer.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
@@ -33,6 +35,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 	private readonly tabContext: IScopedContextKeyService;
 	private readonly renderedLabels = new Map<string, { readonly label: IResourceLabel; readonly context: IScopedContextKeyService; signature: string | undefined }>();
 	private readonly unpinActions = new Map<string, IAction>();
+	private readonly protectedCloseActions = new Map<string, IAction>();
 
 	constructor(
 		container: HTMLElement,
@@ -166,6 +169,21 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 				this.unpinActions.set(editor.instanceId, primaryAction);
 			}
 			const state = editor.hasExternalChange ? "conflict" : editor.isDirty ? "dirty" : undefined;
+			if (!editor.sticky && ((editor.input.capabilities ?? EditorInputCapabilities.None) & EditorInputCapabilities.CannotClose)) {
+				let closeAction = this.protectedCloseActions.get(editor.instanceId);
+				if (!closeAction) {
+					closeAction = {
+						id: TAB_CLOSE_ACTION_ID,
+						label: localize('workbench.closeEditor', 'Close editor'),
+						tooltip: localize('workbench.closeEditor', 'Close editor'),
+						icon: Lxicon.close,
+						enabled: false,
+						run: () => this.delegate.close(editor.input),
+					};
+					this.protectedCloseActions.set(editor.instanceId, closeAction);
+				}
+				primaryAction = closeAction;
+			}
 			const stateLabel = editor.hasExternalChange ? "conflict with changes on disk" : editor.isDirty ? "unsaved changes" : undefined;
 			let ariaDescription = localize("workbench.editorUnpinnedTabHint", "Use Pin Editor to pin this tab.");
 			if (editor.sticky) {
@@ -186,6 +204,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 					this.renderedLabels.set(editor.instanceId, { label: resourceLabel, context, signature: undefined });
 					store.add(toDisposable(() => this.renderedLabels.delete(editor.instanceId)));
 					store.add(toDisposable(() => this.unpinActions.delete(editor.instanceId)));
+					store.add(toDisposable(() => this.protectedCloseActions.delete(editor.instanceId)));
 					return store;
 				},
 				tooltip: stateLabel ? `${editor.input.resource.toString()} — ${stateLabel}` : editor.input.resource.toString(),
@@ -193,7 +212,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 				ariaDescription,
 				...(state ? { state } : {}),
 				preview: editor.preview,
-				primaryAction: editor.sticky ? primaryAction : undefined,
+				primaryAction,
 				tabId: editor.tabId,
 				panelId: editor.panelId,
 			};

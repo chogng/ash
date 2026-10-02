@@ -169,7 +169,7 @@ fn run_restricted_client(capability: &str, target_port: u16) -> (i32, String, St
         "\"{system}\\System32\\curl.exe\" -s -S --connect-timeout 2 --max-time 3 http://127.0.0.1:{target_port}"
     );
     let request = process::Request {
-        version: 4,
+        version: 5,
         owner: owner.clone(),
         account: owner,
         capability: capability.into(),
@@ -181,6 +181,7 @@ fn run_restricted_client(capability: &str, target_port: u16) -> (i32, String, St
         ],
         pipes: Some(pipes.names.clone()),
         pseudoconsole: None,
+        terminal: None,
         reply: directory.join("unused-reply.json"),
         desktop: desktop.name.clone(),
     };

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
+import { Emitter, Event } from "../../../../base/common/event.js";
 import type { IDisposable } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import type { IStateService } from "../../../../platform/state/node/state.js";
@@ -88,11 +89,12 @@ test('window session state owner persists active Workbench and Agents windows an
 });
 
 class TestWindow implements IStatefulWindow {
-	private readonly listeners = new Map<"blur" | "close", Set<() => void>>();
+	private readonly listeners = new Map<Parameters<IStatefulWindow['on']>[0], Set<() => void>>();
 	fullscreen = false;
 	maximized = false;
 	bounds: IWindowBounds = { x: 0, y: 0, width: 1920, height: 1040 };
 	normalBounds: IWindowBounds = { x: 120, y: 80, width: 1100, height: 760 };
+	minimumSize = { width: 400, height: 270 };
 
 	isFullScreen(): boolean {
 		return this.fullscreen;
@@ -110,7 +112,18 @@ class TestWindow implements IStatefulWindow {
 		return this.normalBounds;
 	}
 
-	on(event: "blur" | "close", listener: () => void): void {
+	setMinimumSize(width: number, height: number): void {
+		this.minimumSize = { width, height };
+	}
+
+	setBounds(bounds: IWindowBounds): void {
+		this.bounds = { ...bounds, width: Math.max(bounds.width, this.minimumSize.width), height: Math.max(bounds.height, this.minimumSize.height) };
+		this.normalBounds = { ...this.bounds };
+		this.emit('move');
+		this.emit('resize');
+	}
+
+	on(event: Parameters<IStatefulWindow['on']>[0], listener: () => void): void {
 		let listeners = this.listeners.get(event);
 		if (!listeners) {
 			listeners = new Set();
@@ -119,11 +132,11 @@ class TestWindow implements IStatefulWindow {
 		listeners.add(listener);
 	}
 
-	removeListener(event: "blur" | "close", listener: () => void): void {
+	removeListener(event: Parameters<IStatefulWindow['on']>[0], listener: () => void): void {
 		this.listeners.get(event)?.delete(listener);
 	}
 
-	emit(event: "blur" | "close"): void {
+	emit(event: Parameters<IStatefulWindow['on']>[0]): void {
 		for (const listener of this.listeners.get(event) ?? []) {
 			listener();
 		}
@@ -140,6 +153,7 @@ function createHandler(
 		workspace,
 		backupPath,
 		displayService: {
+			onDidChangeDisplays: Event.None,
 			getAllDisplays: () => [primaryDisplay],
 			getDisplayMatching: () => primaryDisplay,
 		},
@@ -392,6 +406,8 @@ test("maximized windows persist their normal bounds", async () => {
 		folder: folderWorkspace.uri.toString(),
 		uiState: {
 			mode: WindowMode.Maximized,
+			displayId: primaryDisplay.id,
+			workArea: primaryDisplay.workArea,
 			bounds: {
 				x: 120,
 				y: 80,
@@ -422,6 +438,8 @@ test("workspace windows persist their workspace identifier", async () => {
 		},
 		uiState: {
 			mode: WindowMode.Normal,
+			displayId: primaryDisplay.id,
+			workArea: primaryDisplay.workArea,
 			bounds: {
 				x: 0,
 				y: 0,
@@ -452,6 +470,8 @@ test("empty windows persist their backup identity", async () => {
 		backupPath: "C:\\backups\\empty-1",
 		uiState: {
 			mode: WindowMode.Normal,
+			displayId: primaryDisplay.id,
+			workArea: primaryDisplay.workArea,
 			bounds: {
 				x: 0,
 				y: 0,
@@ -496,6 +516,7 @@ test("dedicated window state restores without changing the main window state", a
 		storageKey: 'sessionsWindowState',
 		defaultState: { mode: WindowMode.Normal, width: 1180, height: 780 },
 		displayService: {
+			onDidChangeDisplays: Event.None,
 			getAllDisplays: () => [primaryDisplay],
 			getDisplayMatching: () => primaryDisplay,
 		},
@@ -510,7 +531,7 @@ test("dedicated window state restores without changing the main window state", a
 	await dedicated.saveWindowState(dedicatedWindow);
 	assert.deepEqual(stateService.getItem('windowsState'), mainState);
 	assert.deepEqual(new WindowsStateHandler(dedicatedOptions).restoreWindowState(), {
-		mode: WindowMode.Normal, x: 180, y: 140, width: 1180, height: 780, displayId: undefined,
+		mode: WindowMode.Normal, x: 180, y: 140, width: 1180, height: 780, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea,
 	});
 });
 
@@ -555,4 +576,200 @@ test("tracked windows save on blur and stop after disposal", async () => {
 	window.emit("blur");
 	await Promise.resolve();
 	assert.equal(stateService.flushCount, 1);
+});
+
+test('window placement scales through persistence and preserves exact geometry on the same logical display', async () => {
+	const stateService = new TestStateService();
+	let display = primaryDisplay;
+	const options = {
+		stateService,
+		workspace: folderWorkspace,
+		displayService: {
+			onDidChangeDisplays: Event.None,
+			getAllDisplays: () => [display],
+			getDisplayMatching: () => display,
+		},
+	};
+	const window = new TestWindow();
+	window.bounds = { x: 120, y: 80, width: 1100, height: 760 };
+	await new WindowsStateHandler(options).saveWindowState(window);
+	assert.deepEqual(new WindowsStateHandler(options).restoreWindowState(), {
+		mode: WindowMode.Normal, ...window.bounds, displayId: display.id, workArea: display.workArea,
+	});
+
+	display = { id: 1, bounds: { x: 0, y: 0, width: 3840, height: 2160 }, workArea: { x: 0, y: 0, width: 3840, height: 2080 } };
+	const restored = new WindowsStateHandler(options).restoreWindowState();
+	assert.deepEqual(restored, {
+		mode: WindowMode.Normal, x: 240, y: 160, width: 2200, height: 1520, displayId: 1, workArea: display.workArea,
+	});
+	window.setBounds({ x: restored.x!, y: restored.y!, width: restored.width, height: restored.height });
+	await new WindowsStateHandler(options).saveWindowState(window);
+	display = primaryDisplay;
+	assert.deepEqual(new WindowsStateHandler(options).restoreWindowState(), {
+		mode: WindowMode.Normal, x: 120, y: 80, width: 1100, height: 760, displayId: 1, workArea: display.workArea,
+	});
+});
+
+test('restoring onto a different aspect ratio or a removed display keeps the window shape and fits the work area', () => {
+	const target = { id: 2, bounds: { x: -1200, y: 0, width: 1200, height: 900 }, workArea: { x: -1200, y: 0, width: 1200, height: 900 } };
+	const state = validateWindowState({
+		mode: WindowMode.Normal, x: 480, y: 260, width: 960, height: 520, displayId: 1, workArea: primaryDisplay.workArea,
+	}, [target], WorkbenchState.FOLDER);
+	assert.deepEqual(state, {
+		mode: WindowMode.Normal, x: -900, y: 288, width: 600, height: 325, displayId: 2, workArea: target.workArea,
+	});
+	const tiny = { ...target, workArea: { x: 0, y: 0, width: 480, height: 360 } };
+	assert.deepEqual(validateWindowState({
+		mode: WindowMode.Normal, x: 480, y: 260, width: 960, height: 520, displayId: 1, workArea: primaryDisplay.workArea,
+	}, [tiny], WorkbenchState.FOLDER), {
+		mode: WindowMode.Normal, x: 0, y: 45, width: 480, height: 270, displayId: 2, workArea: tiny.workArea,
+	});
+});
+
+test('resolution changes apply once after OS resize events and defer maximized geometry until restoration', async () => {
+	using changes = new Emitter<void>();
+	const stateService = new TestStateService();
+	let display = primaryDisplay;
+	const options = {
+		stateService,
+		workspace: folderWorkspace,
+		displayService: {
+			onDidChangeDisplays: changes.event,
+			getAllDisplays: () => [display],
+			getDisplayMatching: () => display,
+		},
+	};
+	const handler = new WindowsStateHandler(options);
+	const window = new TestWindow();
+	window.bounds = { x: 120, y: 80, width: 1100, height: 760 };
+	const tracking = handler.trackWindow(window);
+	try {
+		display = { id: 1, bounds: { x: 0, y: 0, width: 960, height: 540 }, workArea: { x: 0, y: 0, width: 960, height: 520 } };
+		window.bounds = { x: 0, y: 0, width: 960, height: 520 };
+		window.emit('resize');
+		window.emit('blur');
+		changes.fire();
+		assert.deepEqual(window.bounds, { x: 60, y: 40, width: 550, height: 380 });
+		changes.fire();
+		assert.deepEqual(window.bounds, { x: 60, y: 40, width: 550, height: 380 });
+
+		window.maximized = true;
+		window.bounds = display.workArea;
+		display = primaryDisplay;
+		changes.fire();
+		assert.deepEqual(window.bounds, { x: 0, y: 0, width: 960, height: 520 });
+		const restored = new WindowsStateHandler(options).restoreWindowState();
+		assert.deepEqual(restored, {
+			mode: WindowMode.Maximized, x: 120, y: 80, width: 1100, height: 760, displayId: 1, workArea: primaryDisplay.workArea,
+		});
+		window.maximized = false;
+		window.emit('unmaximize');
+		assert.deepEqual(window.bounds, { x: 120, y: 80, width: 1100, height: 760 });
+	} finally {
+		tracking.dispose();
+	}
+	const flushed = stateService.flushCount;
+	display = { ...primaryDisplay, workArea: { x: 0, y: 0, width: 960, height: 520 } };
+	changes.fire();
+	window.emit('close');
+	await Promise.resolve();
+	assert.deepEqual({ bounds: window.bounds, flushed: stateService.flushCount }, {
+		bounds: { x: 120, y: 80, width: 1100, height: 760 }, flushed,
+	});
+});
+
+test('display changes preserve fullscreen mode and normal bounds for leaving fullscreen', () => {
+	using changes = new Emitter<void>();
+	let display = primaryDisplay;
+	const handler = new WindowsStateHandler({
+		stateService: new TestStateService(), workspace: folderWorkspace,
+		displayService: { onDidChangeDisplays: changes.event, getAllDisplays: () => [display], getDisplayMatching: () => display },
+	});
+	const window = new TestWindow();
+	window.bounds = { x: 120, y: 80, width: 1100, height: 760 };
+	using tracking = handler.trackWindow(window);
+	window.fullscreen = true;
+	window.bounds = primaryDisplay.bounds;
+	display = { id: 1, bounds: { x: 0, y: 0, width: 960, height: 540 }, workArea: { x: 0, y: 0, width: 960, height: 520 } };
+	changes.fire();
+	assert.equal(window.fullscreen, true);
+	window.fullscreen = false;
+	window.emit('leave-full-screen');
+	assert.deepEqual(window.bounds, { x: 60, y: 40, width: 550, height: 380 });
+});
+
+test('invalid persisted work areas are rejected at the storage boundary', () => {
+	for (const workArea of [null, { x: 0, y: 0, width: 0, height: 1040 }, { x: 0, y: 0, width: '1920', height: 1040 }]) {
+		const stateService = new TestStateService();
+		stateService.setItem('windowsState', { version: 1, openedWindows: [{
+			folder: folderWorkspace.uri.toString(), uiState: { mode: WindowMode.Normal, bounds: { x: 120, y: 80, width: 1100, height: 760 }, workArea },
+		}] });
+		assert.deepEqual(createHandler(stateService, folderWorkspace).restoreWindowState(), defaultWindowState(WorkbenchState.FOLDER));
+	}
+});
+
+test('dragging between displays resizes after the move ends and preserves the dropped center', () => {
+	const secondDisplay = { id: 2, bounds: { x: 1920, y: 0, width: 3840, height: 2160 }, workArea: { x: 1920, y: 0, width: 3840, height: 2080 } };
+	const handler = new WindowsStateHandler({
+		stateService: new TestStateService(), workspace: folderWorkspace,
+		displayService: {
+			onDidChangeDisplays: Event.None,
+			getAllDisplays: () => [primaryDisplay, secondDisplay],
+			getDisplayMatching: bounds => bounds.x < 1920 ? primaryDisplay : secondDisplay,
+		},
+	});
+	const window = new TestWindow();
+	window.bounds = { x: 120, y: 80, width: 1100, height: 760 };
+	using tracking = handler.trackWindow(window);
+	window.bounds = { x: 3000, y: 800, width: 1100, height: 760 };
+	window.emit('move');
+	assert.deepEqual(window.bounds, { x: 3000, y: 800, width: 1100, height: 760 });
+	window.emit('moved');
+	assert.deepEqual(window.bounds, { x: 2450, y: 420, width: 2200, height: 1520 });
+	window.emit('moved');
+	assert.deepEqual(window.bounds, { x: 2450, y: 420, width: 2200, height: 1520 });
+});
+
+test('work areas smaller than the default minimum remain reachable through Electron sizing limits', () => {
+	using changes = new Emitter<void>();
+	let display = primaryDisplay;
+	const handler = new WindowsStateHandler({
+		stateService: new TestStateService(), workspace: folderWorkspace,
+		displayService: { onDidChangeDisplays: changes.event, getAllDisplays: () => [display], getDisplayMatching: () => display },
+	});
+	const window = new TestWindow();
+	window.bounds = { x: 120, y: 80, width: 1100, height: 760 };
+	using tracking = handler.trackWindow(window);
+	display = { id: 1, bounds: { x: 0, y: 0, width: 300, height: 200 }, workArea: { x: 0, y: 0, width: 300, height: 200 } };
+	changes.fire();
+	assert.deepEqual({ bounds: window.bounds, minimum: window.minimumSize }, {
+		bounds: { x: 0, y: 0, width: 300, height: 200 }, minimum: { width: 300, height: 200 },
+	});
+	const options = resolveBrowserWindowOptions({
+		state: { mode: WindowMode.Normal, ...window.bounds, workArea: display.workArea },
+		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: 'preload.js', additionalArguments: [] },
+	});
+	assert.deepEqual({ width: options.minWidth, height: options.minHeight }, window.minimumSize);
+});
+
+test('fullscreen persistence uses the current display and scales the retained normal rectangle when moved', async () => {
+	const stateService = new TestStateService();
+	const secondDisplay = { id: 2, bounds: { x: 1920, y: 0, width: 3840, height: 2160 }, workArea: { x: 1920, y: 0, width: 3840, height: 2080 } };
+	const handler = new WindowsStateHandler({
+		stateService, workspace: folderWorkspace,
+		displayService: {
+			onDidChangeDisplays: Event.None,
+			getAllDisplays: () => [primaryDisplay, secondDisplay],
+			getDisplayMatching: bounds => bounds.x < 1920 ? primaryDisplay : secondDisplay,
+		},
+	});
+	const window = new TestWindow();
+	window.bounds = { x: 120, y: 80, width: 1100, height: 760 };
+	using tracking = handler.trackWindow(window);
+	window.fullscreen = true;
+	window.bounds = secondDisplay.bounds;
+	await handler.saveWindowState(window);
+	assert.deepEqual(handler.restoreWindowState(), {
+		mode: WindowMode.Fullscreen, x: 2160, y: 160, width: 2200, height: 1520, displayId: 2, workArea: secondDisplay.workArea,
+	});
 });

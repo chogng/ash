@@ -1,4 +1,5 @@
 import type { IColorScheme } from '../../window/common/window.js';
+import { validateJsonValue, type JsonValue } from '../../../base/common/jsonValue.js';
 import type { SessionMode } from '../../sessions/common/sessionApi.js';
 import type { DisposableHandle } from "../../ipc/common/ipc.js";
 import type { DialogRequest, FileFilter, IDialogOutcome } from '../../dialogs/common/dialogs.js';
@@ -80,6 +81,8 @@ export function validateShellCommandOperation(value: unknown): ShellCommandOpera
 export interface INativeSystemWideKeybinding {
 	readonly accelerator: string;
 	readonly commandId: string;
+	/** The configured command argument is preserved through registration and dispatch. */
+	readonly args?: JsonValue;
 	readonly userSettingsLabel: string;
 }
 
@@ -92,12 +95,13 @@ export function validateSystemWideKeybindings(value: unknown): readonly INativeS
 	return value.map((item: unknown) => {
 		if (!item || typeof item !== 'object' || Array.isArray(item)) throw new TypeError('Invalid system-wide keybinding');
 		const binding = item as Record<string, unknown>;
-		if (Object.keys(binding).sort().join(',') !== 'accelerator,commandId,userSettingsLabel'
+		if (Object.keys(binding).some(key => !['accelerator', 'commandId', 'args', 'userSettingsLabel'].includes(key))
 			|| typeof binding.accelerator !== 'string' || !binding.accelerator
 			|| typeof binding.commandId !== 'string' || !binding.commandId
 			|| typeof binding.userSettingsLabel !== 'string' || !binding.userSettingsLabel) {
 			throw new TypeError('Invalid system-wide keybinding');
 		}
+		if (binding.args !== undefined) validateJsonValue(binding.args);
 		return binding as unknown as INativeSystemWideKeybinding;
 	});
 }
@@ -170,6 +174,7 @@ export interface INativeHostApi {
 	openWorkspace(root: string): Promise<void>;
 	openWindow(options: IOpenEmptyWindowOptions): Promise<void>;
 	openAgentsWindow(options?: IOpenAgentsWindowOptions): Promise<void>;
+	syncSystemWideKeybindings(keybindings: readonly INativeSystemWideKeybinding[]): Promise<INativeSystemWideKeybindingResult>;
 	revealFile(path: string): Promise<void>;
 	setWindowTheme(theme: INativeWindowTheme): Promise<void>;
 	setWindowDimmed(dimmed: boolean): Promise<void>;

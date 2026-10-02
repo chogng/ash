@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../../../base/common/uri.js";
+import { isWindows } from '../../../../../base/common/platform.js';
 import { Emitter } from "../../../../../base/common/event.js";
 import { DecorationsService } from '../../../../services/decorations/browser/decorationsService.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
@@ -275,7 +276,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 		const readmeRow = [...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => rowLabel(row) === 'README.md');
 		assert.ok(readmeRow);
 		assert.equal(mainRow.querySelector('.ash-icon-label-description'), null);
-		assert.equal(mainRow.querySelector('.ash-icon-label')?.getAttribute('aria-label'), 'src/main.ts');
+		assert.equal(mainRow.querySelector('.ash-icon-label')?.getAttribute('aria-label'), isWindows ? 'src\\main.ts' : 'src/main.ts');
 		assert.equal(sourceFolder.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-with-icon-gap'), true);
 		assert.equal(readmeRow.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-hidden'), true);
 		assert.equal(mainRow.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-hidden'), true);

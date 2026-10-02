@@ -187,6 +187,7 @@ test("desktop commands are available from the command palette", async () => {
 		openWorkspace: async () => {},
 		openWindow: async () => {},
 		openAgentsWindow: async () => {},
+		syncSystemWideKeybindings: async () => ({ failed: [] }),
 		revealFile: async () => {},
 		saveFile: async () => undefined,
 		getOSColorScheme: async () => ({ dark: false, highContrast: false }),

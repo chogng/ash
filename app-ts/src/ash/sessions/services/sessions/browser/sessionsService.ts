@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { observableValue, transaction, type IObservable, type ITransaction } from "../../../../base/common/observable.js";
+import { observableValue, transaction, type IObservable, type IReader, type ITransaction } from "../../../../base/common/observable.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import { isRecord } from '../../../../base/common/types.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
@@ -25,7 +25,7 @@ export interface ISessionsService {
 	readonly onDidChange: Event<void>;
 	readonly page: IObservable<SessionsPage>;
 	selectPage(page: SessionsPage): void;
-	getPageSelection(page: SessionsPage): SessionsPageSelection;
+	getPageSelection(page: SessionsPage, reader?: IReader): SessionsPageSelection;
 	readonly visibleSelections: readonly SessionsViewSelection[];
 	readonly activeSelection: SessionsViewSelection | undefined;
 	readonly canNavigateBack: boolean;
@@ -82,8 +82,8 @@ export class SessionsService extends Disposable implements ISessionsService {
 		this._onDidChange.fire();
 	}
 
-	getPageSelection(page: SessionsPage): SessionsPageSelection {
-		return { visibleSelections: this.pages[page].visibleSelections.get(), activeSelection: this.pages[page].activeSelection.get() };
+	getPageSelection(page: SessionsPage, reader?: IReader): SessionsPageSelection {
+		return { visibleSelections: this.pages[page].visibleSelections.read(reader), activeSelection: this.pages[page].activeSelection.read(reader) };
 	}
 
 	async initialize(): Promise<void> {

@@ -2,7 +2,13 @@
 
 > **Specification change gate:** A bug fix that restores an existing rule belongs in a regression test, not this document. Update this specification only when the intended layout state machine or persistence contract changes.
 
-This document specifies how the session layout controllers manage workbench layout as the user switches between sessions.
+This document specifies the intended controller boundaries and session-switch behavior.
+
+The current Ash implementation uses `BaseLayoutController` for Code-page editor working sets and panel view selection, and `DesktopLayoutController` for Editor/Details composition. It reads the Code page's observable selection through `ISessionsService.getPageSelection`, captures outgoing editors before workspace changes settle, and serializes restoration and user layout transitions once the incoming workspace is ready. Chat navigation and page changes retain the Code editors. Window geometry and part visibility are persisted by `SessionsWorkbenchLayout`. Draft materialization transfers the state to the created Session identity.
+
+Code now has a bottom Panel and Details docked below one shared editor tab strip. Desktop coordinators map Files/Changes tabs to detail content and protect the managed tabs in Details-only mode. Hiding Editor closes ordinary tabs after the shared unsaved-file confirmation and retains a restorable working set; opening a file merges it into that state. Closing the whole side pane retains its tabs, and the preceding open composition is remembered in profile storage at `sessions.layout.sidePane.lastOpen`. Resolved Changes comparison documents are released when their editor content is hidden.
+
+Mobile presentation, separate desktop lifecycle strategy classes, and the controller-selection contribution below remain intended contracts. Current behavior tests live in `contrib/layout/test/browser/desktopLayoutController.test.ts`, `test/browser/sessions-layout.test.ts`, and `test/smoke/areas/sessions/sessions-code.spec.ts`.
 
 | File | Responsibility | Rules |
 |------|----------------|-------|
@@ -56,6 +62,8 @@ Closing the whole side pane keeps ordinary editors available for restoration. En
 ## 4. Panel
 
 The desktop layout stores bottom-panel visibility with workbench part visibility. It remembers only the active panel view per session in `sessions.singlePane.layoutState`.
+
+The Panel is available only on the Code page. Switching to Chat, Design, or another page hides it while retaining the desired visibility and height for the next Code visit.
 
 The active panel view is captured from `IPaneCompositePartService.onDidPaneCompositeOpen`. A session switch restores that view only while the panel is already visible, so restoring content never forces the panel open. Sessions without a remembered view fall back to the Terminal.
 

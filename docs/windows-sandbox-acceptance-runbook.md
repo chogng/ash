@@ -202,6 +202,55 @@ PSEC 的版本查询在 ARM64 `26200.9457` 上返回 `S_OK`、available=true、m
 
 诊断与修复证据分别位于 `.build/acceptance/sandbox-strict/run-20261002-141600/` 和 `run-20261002-144600/`，包含精确 CI 源码摘要、原始日志、artifact 摘要、版本报告、超时转储及 `server2022-symbol-stacks.log`。修复目录的 `verification.json` 核对 CI 提交与当前源码、用例数量、程序更新、账户/WFP 身份及清理计划；下载 ZIP 的摘要均与 GitHub 返回值一致。初期的网络形式探索代码只归档在诊断证据中；当前仓库脚本只查询能力，不保留未经实机执行的策略组合。
 
+## 2026-10-02 AppContainer 与 LPAC 可行性验证
+
+用户要求在 Ash 内验证旧版 Windows 的严格隔离方案，不向 MXC 提交 PR。本轮在 Windows 11 23H2 x64 `22631.6199` 上使用系统 AppContainer API，未修改 MXC 或产品后端。第一阶段要求文件限制和命令兼容性同时成立；本轮未通过，因此没有实施后续 WFP 网络方案。
+
+每个模式使用独立的临时 profile。命令在暂停状态下加入 kill-on-close Job，检查实际 AppContainer SID、低完整性令牌，以及系统 `AccessCheck` 对 All Application Packages 的读取结果后才恢复执行。LPAC 的普通组列表不包含这项隐式授权，不能用 `TokenGroups` 判断是否成功退出该组的访问权限。普通 LPAC 和组合令牌仅增加 `registryRead`、`lpacInstrumentation` 能力，不授予网络能力。
+
+六类测试目录均由本轮创建，显式设置低完整性标签和受保护 DACL；所有目录的调用者写入对照均通过。除授权目录外，分别测试 Everyone、All Application Packages、All Restricted Application Packages、Everyone 与 All Restricted Application Packages 同时授权，以及仅调用者可写的目录。低完整性标签避免把完整性级别阻断误认为文件策略成功。
+
+| 模式 | 真实文件 I/O 与命令结果 | 第一阶段结论 |
+| --- | --- | --- |
+| AppContainer | 授权内写入成功；授权外 All Application Packages、All Restricted Application Packages，以及 Everyone 与 All Restricted Application Packages 同时授权的目录均可写。cmd 的重定向与实际令牌的文件打开结果一致。系统 PowerShell 管道输出 `1/2/3`，退出码 0 | 命令可运行，文件限制不满足 Strict |
+| LPAC | 授权内写入成功；Everyone 和 All Application Packages 目录不可写，但授权外 All Restricted Application Packages 及其与 Everyone 同时授权的目录仍可写。cmd 与实际令牌 I/O 结果一致。PowerShell 在原定 10 秒内未完成管道 | 文件限制与命令兼容性均未通过 |
+| LPAC 加每次执行独有的写入限制 SID | 实际令牌文件打开测试中，授权内可写，五类授权外目录均拒绝；检查确认最终令牌保留了唯一限制 SID。cmd 和 PowerShell 均在初始化阶段退出 `0xC0000142`，未产生脚本输出 | 这组文件测试通过，命令兼容性未通过；不能接入 Strict |
+
+组合令牌的启动失败尚未建立具体对象权限或 CLR 调用的因果证明，不能沿用旧账户实验的原因解释。本轮只否定这些已测试组合的交付资格，不证明其他旧 Windows 实现不可能。目录联接、重命名、完整 IPC 与网络矩阵没有继续执行；有限目录测试也不能独立证明整个宿主不可写。
+
+最终证据位于 `.build/acceptance/appcontainer/run-final/`，包含实际执行的 `probe.py`、源码 SHA-256、原始标准流、完整令牌与目录权限报告，以及 `verification.json`。独立核验确认六次最终执行的 Job 活跃进程数均为零；实验工具开发及最终运行累计创建的 24 个 profile，其目录、包目录和注册表映射均已不存在。递归删除测试目录被工具策略拒绝后，改为保留反例文件作证据；逐项撤销测试授权并恢复中完整性标签，再独立读取全部 236 个文件和目录的安全描述符，确认只剩调用者权限。结果记录在 `.build/acceptance/appcontainer/fixture-cleanup.json`。没有安装账户、服务或 WFP 对象，也没有修改测试目录之外的宿主 ACL。
+
+## 2026-10-02 Codex 账户模型与交互终端验收
+
+本轮按用户确认，以 Codex 的 Windows 账户沙箱作为产品完成标准。WindowsAccount 不扩大为整个宿主只读；PSEC Strict、WSLC 和 AppContainer/LPAC 的未完成能力不计入这条账户路径的交付要求。
+
+核对既有原始证据发现，普通用户 App Server RPC 产品链在 `.build/acceptance/sandbox-product/run-20261002-125636/app-server-test-final.log` 已经通过，不能继续把这项列为未验收。本轮又通过同一真实 RPC 用例：创建 Session 与 Shell Turn、要求受限执行、登记账户身份、真实 cmd → PowerShell、请求目录、`.env` 禁读、授权外文件与 Git 配置拒写、退出码 125、执行一次及 ACL 恢复。
+
+专用账户终端用例复现 `DuplicateHandle(pseudoconsole)` 错误 6。`HPCON` 属于创建进程，改为由账户运行器创建和持有 ConPTY，以私有管道传递输入、输出、尺寸和中断。运行器持续存在时显式保护其进程、令牌及所有初始化线程，并固定后续线程的默认 ACL；账户所有者隐含权限也被抑制。实测同时发现后台启动器的忽略 Ctrl+C 标志会被命令继承，终端运行器在创建命令前恢复正常信号策略；规则见 [微软说明](https://learn.microsoft.com/windows/console/setconsolectrlhandler)。Windows 换行转换复用现有 `utils/pty` 实现。
+
+| 本机 Windows 11 23H2 x64，普通调用者 | 结果 |
+| --- | --- |
+| 管道持续输入及不同调用者拒绝访问会话 | 通过 |
+| 受限 PowerShell 终端、LF 输入、尺寸 40×100、授权外拒写、真实退出码 23 | 通过 |
+| 运行器进程读取/改写、复制句柄、注入线程、终止及修改权限 | 全部拒绝 |
+| 运行器线程上下文、挂起、终止、模拟身份及修改权限 | 全部拒绝 |
+| 正常退出、Ctrl+C、取消、主动终止、释放执行器、超时 | 六种方式均观察到终态及输出关闭，并独立确认命令、运行器与后台后代已退出 |
+| 普通用户真实 App Server RPC 产品链 | 再次通过 |
+
+`tests/terminal.rs` 三项实机用例均通过，六种结束方式由第三项逐项执行。最终统一回归的 36 项账户库用例和 11 项完整执行用例全部通过；普通用户 RPC 用例再次通过。`just check ash-windows-sandbox`、`just rust-warnings ash-windows-sandbox`、`just dependencies` 和包内格式检查均通过。临时服务使用既有已验收版本，运行器按本轮程序摘要更新。
+
+独立验收提交 `7d0f74bffe86c0867c06414753d650af5b7a731f` 的 [CI 36990431604](https://github.com/chogng/ash/actions/runs/36990431604) 首次尝试六项作业全部成功。各账户作业均通过 9 项服务、36 项账户库，以及运行器更新前后各 11 项执行和 3 项终端用例；服务更新后的真实执行也通过，最后完成账户与服务删除。PSEC 作业仍按原有平台能力契约检查，不能把它们的成功扩写为 Strict Managed 已通过。
+
+| 远端平台 | 账户、终端、两种程序更新与清理 |
+| --- | --- |
+| Windows 11 ARM64 | 通过 |
+| Windows Server 2022 x64 | 通过 |
+| Windows Server 2025 x64 | 通过 |
+
+证据位于 `.build/acceptance/codex-account/run-20261002-terminal/`，包含修复前日志、各轮权限与信号日志、最终 `terminal-signal.log`、`app-server.log`、完整账户回归、三台远端原始日志及安装、更新和清理清单。最终 `verification.json` 核对沙箱代码与 CI 提交、验收使用的运行器摘要、全部测试结果、日志摘要及本机清理结果；当前账户沙箱的实现、验收与临时对象清理均已完成。本轮不扩大为所有 Windows 版本、完整崩溃组合或所有产品界面均已验收。
+
+用户再次确认清理后，本机管理员 UAC 成功，按本轮安装归属删除临时服务、三个账户及安装目录。随后逐项查询确认 13 个 WFP 过滤器、一个 provider 和一个 sublayer 均不存在；普通权限下再次核查服务、目录、三个账户、账户配置文件和相关进程均不存在，其余七个本机账户的名称与 SID 未变。结果见 `cleanup-verification.json`、`cleanup-independent.json` 和 `wfp-cleanup.json`；此前两次 UAC 取消的待清理快照作为历史证据保留。
+
 ## 已退出账户原型的受管网络记录
 
 账户原型曾以 WFP 按账户拒绝 IPv4/IPv6 连接、监听及接收，仅给 Managed 槽位开放一个固定 TCP 回环端口。

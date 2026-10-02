@@ -4,6 +4,7 @@ import { Action2, MenuId } from '../../../../../platform/actions/common/actions.
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ashTitlebarMark } from '../../../../browser/parts/titlebar/titlebarMark.js';
 import { INativeHostService } from '../../../../common/services.js';
+import { validateOpenAgentsWindow } from '../../../../../platform/native/common/nativeHost.js';
 import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../common/constants.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 
@@ -21,8 +22,8 @@ export class OpenAgentsWindowAction extends Action2 {
 		});
 	}
 
-	override run(accessor: ServicesAccessor): Promise<void> {
-		return accessor.get(INativeHostService).openAgentsWindow();
+	override run(accessor: ServicesAccessor, options?: unknown): Promise<void> {
+		return accessor.get(INativeHostService).openAgentsWindow(validateOpenAgentsWindow(options));
 	}
 }
 

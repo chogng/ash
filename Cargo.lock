@@ -3290,6 +3290,7 @@ dependencies = [
  "ash-file-access",
  "ash-install-context",
  "ash-network-proxy",
+ "ash-protocol",
  "ash-sandboxing",
  "ash-tool-executor",
  "ash-utils-pty",

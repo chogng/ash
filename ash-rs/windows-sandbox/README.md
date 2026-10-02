@@ -24,6 +24,8 @@
 
 直接进程参数按 Windows 参数规则序列化。`cmd.exe /C` 与 `/K` 后须传一个完整命令字符串；这段字符串按 cmd 语法保留内部引号，不能再用普通参数的反斜线转义，否则带引号的程序路径无法启动。
 
+ConPTY 在创建它的账户运行器内保持整个生命周期，不能把 `HPCON` 当作内核句柄跨进程复制。私有管道传递有长度上限的输入、尺寸和中断，沿用 `utils/pty` 的 Windows 换行规则；输出合并为终端标准输出，标准错误管道保持为空。运行器在创建命令前恢复正常 Ctrl+C 策略，避免继承后台启动器的忽略设置。运行器的进程、令牌、已有线程和后续线程只授予调用者与 System 管理权限，账户的隐含所有者权限被抑制；受限命令不能注入或取得其账户令牌。终端及运行器与命令一起回收，正常退出则先关闭 ConPTY 并排空输出。管道模式仍在恢复用户命令前退出登录进程。私有运行器请求协议为版本 5；安装状态版本不变，更新仍校验程序摘要。
+
 契约、审计限制与实机证据见 [沙箱架构](../../docs/sandboxing.md) 和 [Windows 验收手册](../../docs/windows-sandbox-acceptance-runbook.md)。
 
 ```powershell
@@ -37,6 +39,8 @@ bazel build //ash-rs/windows-sandbox:ash-windows-sandbox
 ```
 
 需要真实账户的测试显式标为忽略，须在获准配置的验收环境执行。`scripts/test-windows-sandbox.ps1` 提供服务与账户安装、全部用例、运行器及服务程序更新后执行，以及 finally 清理入口；调用方须已获得安装与验收授权。
+
+该入口构建 `terminal_probe` 并在运行器更新前后运行 `tests/terminal.rs`，覆盖管道持续输入、终端输入与尺寸、调用者归属、文件写入边界、运行器进程及线程权限，以及正常退出、Ctrl+C、取消、主动终止、释放执行器和超时后的进程回收。23H2 x64 的普通用户实机验收与 ARM64、Server 2022/2025 的更新前后两轮终端验收均通过，远端 CI 首次尝试全部成功，见 [账户模型及终端验收](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-02-codex-账户模型与交互终端验收)。
 
 App Server 的 `windows_shell_turn_enforces_account_isolation_through_rpc` 用例从 RPC 创建 Session 和 Shell Turn，要求沙箱执行，检查已登记账户身份、真实 cmd → PowerShell 命令、目录边界、`.env`、Git 配置、退出码、单次执行及 ACL 恢复。它须在 PSEC 不可用、账户后端已明确安装的 Windows 环境中，以未提升权限的调用者运行；`ASH_WINDOWS_SANDBOX_BIN` 指向与该安装摘要相符的 helper。管理员运行会被测试拒绝，默认 CI 不包含这个 App Server 用例。
 

@@ -1,4 +1,5 @@
 import { EditorInputSerializerRegistry } from '../../../../../services/editor/common/editorInputSerializer.js';
+import { Dimension } from '../../../../../../base/browser/dom.js';
 import { createTestEditorServices } from '../../../../../test/common/testEditorServices.js';
 import type { IEditorPartOptions } from '../../editorPart.js';
 import Severity from '../../../../../../base/common/severity.js';
@@ -31,7 +32,7 @@ import { URI } from "../../../../../../base/common/uri.js";
 import { Position } from "../../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../../editor/common/core/range.js";
 import { EditorOpenSource, TextEditorSelectionSource } from '../../../../../../platform/editor/common/editor.js';
-import { createEditorOpenError, EditorPaneSelectionChangeReason, type IEditorPaneWithSelection } from '../../../../../../workbench/common/editor.js';
+import { createEditorOpenError, EditorInputCapabilities, EditorPaneSelectionChangeReason, type IEditorPaneWithSelection } from '../../../../../../workbench/common/editor.js';
 import type { LanguageLocation } from "../../../../../../editor/common/languages.js";
 import type {
 	CommandId,
@@ -131,6 +132,77 @@ function createEditorPart(container: HTMLElement, options: IEditorPartOptions, p
 	const services = editorTestServices.add(createTestEditorServices(options.configurationService, parent));
 	return services.createInstance(EditorPart, container, options);
 }
+
+test('inactive editor opens keep the selected tab and its content visible', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const panes: TestEditorPane[] = [];
+	const registry = new EditorPaneRegistry();
+	using registration = registry.registerEditorPane(descriptor('ash.test.inactive', '.ts', () => trackPane(panes, 'ash.test.inactive')));
+	using editor = createEditorPart(dom.window.document.body, { registry });
+	const first = input('C:/project/first.ts');
+	const second = input('C:/project/second.ts');
+	await editor.openEditor(first);
+	await editor.openEditor(second, { inactive: true, pinned: true, preserveFocus: true });
+	assert.equal(editor.activeInput, first);
+	assert.equal(panes[1]!.visibilities.at(-1), EditorPaneVisibility.Hidden);
+	await editor.openEditor(second);
+	assert.equal(editor.activeInput, second);
+	assert.equal(panes[1]!.visibilities.at(-1), EditorPaneVisibility.Visible);
+	dom.window.close();
+});
+
+test('protected tabs reject user closure while lifecycle reset can release them', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const registry = new EditorPaneRegistry();
+	using registration = registry.registerEditorPane(descriptor('ash.test.protected', '.ts', () => new TestEditorPane('ash.test.protected')));
+	using editor = createEditorPart(dom.window.document.body, { registry });
+	const protectedInput = { ...input('C:/project/protected.ts'), capabilities: EditorInputCapabilities.CannotClose };
+	await editor.openEditor(protectedInput);
+	assert.equal(await editor.closeEditor(protectedInput), false);
+	assert.equal(await editor.activeGroup.closeEditor(protectedInput, { reason: 'close', skipConfirmation: true }), false);
+	assert.equal(dom.window.document.querySelector<HTMLButtonElement>('[data-action-id="ash.tab.close"] button')?.disabled, true);
+	assert.equal(await editor.activeGroup.closeEditor(protectedInput, { reason: 'reset', skipConfirmation: true }), true);
+	assert.equal(editor.activeInput, undefined);
+	dom.window.close();
+});
+
+test('hidden editor content keeps newly opened panes hidden and reserves the detail width', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const panes: TestEditorPane[] = [];
+	const registry = new EditorPaneRegistry();
+	using registration = registry.registerEditorPane(descriptor('ash.test.docked', '.ts', () => trackPane(panes, 'ash.test.docked')));
+	using editor = createEditorPart(dom.window.document.body, { registry });
+	editor.layout(new Dimension(800, 600));
+	await editor.openEditor(input('C:/project/first.ts'));
+	const width = panes[0]!.dimension!.width;
+	editor.setContentRightInset(200);
+	editor.setEditorContentVisible(false);
+	await editor.openEditor(input('C:/project/second.ts'));
+	assert.equal(panes[1]!.dimension!.width, width - 200);
+	assert.equal(panes[1]!.visibilities.at(-1), EditorPaneVisibility.Hidden);
+	editor.setEditorContentVisible(true);
+	assert.equal(panes[1]!.visibilities.at(-1), EditorPaneVisibility.Visible);
+	assert.equal(dom.window.document.querySelectorAll('.ash-editor-pane-host:not([hidden])').length, 1);
+	dom.window.close();
+});
+
+test('split editors reserve the shared detail column only once', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const panes: TestEditorPane[] = [];
+	const registry = new EditorPaneRegistry();
+	using registration = registry.registerEditorPane(descriptor('ash.test.splitDock', '.ts', () => trackPane(panes, 'ash.test.splitDock')));
+	using editor = createEditorPart(dom.window.document.body, { registry });
+	editor.layout(new Dimension(800, 600));
+	await editor.openEditor(input('C:/project/first.ts'));
+	await editor.splitActiveGroupHorizontal();
+	const originalWidth = panes.reduce((width, pane) => width + pane.dimension!.width, 0);
+	editor.setContentRightInset(200);
+	assert.equal(panes.reduce((width, pane) => width + pane.dimension!.width, 0), originalWidth - 200);
+	assert.ok(panes.every(pane => pane.dimension!.width >= 120));
+	editor.setContentRightInset(0);
+	assert.equal(panes.reduce((width, pane) => width + pane.dimension!.width, 0), originalWidth);
+	dom.window.close();
+});
 
 test('EditorPart uses presentation borders without reading DOM dimensions', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');

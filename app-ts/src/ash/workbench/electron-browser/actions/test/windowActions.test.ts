@@ -85,6 +85,7 @@ test('desktop window commands reach the window host', async () => {
 		openWorkspace: async () => {},
 		openWindow: async () => {},
 		openAgentsWindow: async () => { calls.push('openAgentsWindow'); },
+		syncSystemWideKeybindings: async () => ({ failed: [] }),
 		revealFile: async () => {},
 		setWindowTheme: async () => {},
 		setWindowDimmed: async () => {},

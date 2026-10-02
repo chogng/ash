@@ -9,7 +9,7 @@ import { normalizeLocale } from "../../../../../platform/languagePacks/common/la
 import { LocalizationConfiguration } from "../../common/locale.js";
 import { WorkbenchLocaleService } from "../../browser/localeService.js";
 import { WorkbenchLocalizationService } from "../../browser/workbenchLocalizationService.js";
-import { resetNlsResolver } from '../../../../../nls.js';
+import { localize, resetNlsResolver } from '../../../../../nls.js';
 import { commandActionLabel, localizedString } from '../../../../../platform/action/common/action.js';
 import { JSDOM } from 'jsdom';
 import { QuickInputController } from '../../../../../platform/quickinput/browser/quickInputController.js';
@@ -22,6 +22,31 @@ import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/ac
 import '../../../../contrib/git/browser/gitBranches.js';
 import '../../../../contrib/git/browser/git.contribution.js';
 import '../../../../contrib/git/browser/gitWorktrees.js';
+
+test('Code session layout errors and navigation help use the selected Chinese catalog', async () => {
+	using configuration = new InMemoryConfigurationService();
+	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
+	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
+	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
+	try {
+		await localization.whenReady;
+		await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
+		assert.deepEqual([
+			localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'),
+			localize('sessions.layout.restoreFailed', 'Could not restore the editors for this session: {0}', 'Cancelled'),
+		], ['保存的会话编辑器布局无效。', '无法恢复此会话的编辑器：Cancelled']);
+		assert.deepEqual([
+			localize('sessions.layout.togglePanel', ''),
+			localize('sessions.layout.hideEditor', ''),
+			localize('sessions.layout.showEditor', ''),
+			localize('sessions.layout.openChanges', ''),
+		], ['切换 Code 底部面板', '隐藏编辑器', '显示编辑器', '打开更改标签']);
+		assert.match(localize('sessions.changes.editorHelp', ''), /按 Alt\+F2 阅读更改前后的内容/u);
+		assert.match(localize('sessions.activity.help', ''), /在代码页面切换会话时，会恢复各会话自己的编辑器标签/u);
+	} finally {
+		resetNlsResolver();
+	}
+});
 
 test('Git branch and worktree commands update their labels with the selected Chinese catalog', async () => {
 	using configuration = new InMemoryConfigurationService();

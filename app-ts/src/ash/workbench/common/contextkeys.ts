@@ -1,6 +1,8 @@
 import { RawContextKey } from '../../platform/contextkey/common/contextkey.js';
 import type { WorkbenchStateValue } from '../../platform/workspace/common/workspace.js';
 
+export const IsSessionsWindowContext = new RawContextKey<boolean>('isSessionsWindow', false);
+
 /** Kind of workspace currently hosted by the window. */
 export const WorkbenchStateContext = new RawContextKey<WorkbenchStateValue>('workbenchState', 'empty');
 

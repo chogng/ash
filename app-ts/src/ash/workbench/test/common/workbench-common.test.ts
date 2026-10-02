@@ -155,6 +155,26 @@ test("workbench contributions start once at their declared phases", async () => 
 	]);
 });
 
+test('a product window starts only its selected contributions and rejects missing declarations', () => {
+	using services = new InstantiationService();
+	const registry = new WorkbenchContributionRegistry();
+	const calls: string[] = [];
+	using editorRegistration = registry.register('test.editor', WorkbenchPhase.AfterRestored, () => {
+		throw new Error('Editor contribution reached the Sessions window');
+	});
+	using sessionsRegistration = registry.register('test.sessions', WorkbenchPhase.AfterRestored, () => {
+		calls.push('start');
+		return toDisposable(() => calls.push('dispose'));
+	});
+	{
+		using host = registry.createHost(services, error => { throw error; }, ['test.sessions']);
+		host.advance(WorkbenchPhase.Eventually);
+		assert.deepEqual(calls, ['start']);
+	}
+	assert.deepEqual(calls, ['start', 'dispose']);
+	assert.throws(() => registry.createHost(services, undefined, ['test.missing']), /Unknown workbench contribution/);
+});
+
 test("workbench configuration resolves registered color themes", () => {
 	assert.equal(
 		configurationRegistry.owns(WorkbenchConfiguration.colorTheme),

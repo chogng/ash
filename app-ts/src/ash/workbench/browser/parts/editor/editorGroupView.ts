@@ -23,8 +23,8 @@ import type { EditorCloseOptions } from '../../../services/editor/common/editorG
 import type { IEditorGroupView } from './editor.js';
 import { ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext, MultipleEditorsSelectedInGroupContext, ResourceContext, ResourceSchemeContext } from '../../../common/contextkeys.js';
 import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
-import type { IEditorPane } from "./editorPane.js";
-import { isEditorPaneWithSelection } from '../../../common/editor.js';
+import { EditorPaneVisibility, type IEditorPane } from "./editorPane.js";
+import { EditorInputCapabilities, isEditorPaneWithSelection } from '../../../common/editor.js';
 import { isEditorPaneWithViewState } from "./editorWithViewState.js";
 import { EditorPanes, type EditorPaneInstance } from './editorPanes.js';
 import { extractExternalEditorInputs } from "./editorDropData.js";
@@ -163,6 +163,8 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	private ordinaryContent: Element | undefined;
 	private groupDimension: IDimension = Dimension.Zero;
 	private dimension: IDimension = Dimension.Zero;
+	private contentRightInset = 0;
+	private contentVisible = true;
 	private openSequence = 0;
 
 	constructor(container: HTMLElement, options: EditorGroupOptions, @IInstantiationService instantiationService: IInstantiationService) {
@@ -461,7 +463,11 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 				this.editorChangeEmitter.fire(Object.freeze({ kind: "editorMoved", editor: this.editorState(existing), previousIndex }));
 			}
 			existing.labelListener.value = input.onDidChangeLabel?.(() => this.publishEditorState(existing));
-			this.activateEntry(existing, false);
+			if (options.inactive && this.activeInput) {
+				this.renderChrome();
+			} else {
+				this.activateEntry(existing, false);
+			}
 			applyEditorOpenOptions(existing.paneInstance.pane, options);
 			if (wasPreview !== existing.preview) this.publishEditorState(existing);
 			return existing.paneInstance.pane;
@@ -569,7 +575,13 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		});
 		this.ordinaryContent = undefined;
 		this.editorChangeEmitter.fire(Object.freeze({ kind: "editorOpened", editor: this.editorState(entry) }));
-		this.activateEntry(entry, false);
+		if (options.inactive && this.activeInput) {
+			paneInstance.setVisible(EditorPaneVisibility.Hidden);
+			this.renderContent();
+			this.renderChrome();
+		} else {
+			this.activateEntry(entry, false);
+		}
 		applyEditorOpenOptions(pane, options);
 		return pane;
 	}
@@ -606,6 +618,9 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	}
 
 	async closeEditor(input: EditorInput, options: EditorCloseOptions = {}): Promise<boolean> {
+		if ((options.reason === undefined || options.reason === 'close') && ((input.capabilities ?? EditorInputCapabilities.None) & EditorInputCapabilities.CannotClose)) {
+			return false;
+		}
 		const entry = this.entry(input);
 		if (!entry) return false;
 		if (!options.skipConfirmation && entry.paneInstance.pane.workingCopy?.isDirty && !await this.confirmCloseEditor(input)) return false;
@@ -702,10 +717,29 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	layout(dimension: IDimension): void {
 		this.groupDimension = dimension;
 		this.dimension = new Dimension(
-			dimension.width,
+			Math.max(0, dimension.width - this.contentRightInset),
 			Math.max(0, dimension.height - this.titleControl.height),
 		);
 		this.panes.layout(this.dimension);
+	}
+
+	public get titleHeight(): { readonly offset: number; readonly total: number } {
+		return { offset: this.titleControl.height, total: this.titleControl.height };
+	}
+
+	public setContentRightInset(inset: number): void {
+		this.contentRightInset = inset;
+		this.contentDomNode.style.width = `calc(100% - ${inset}px)`;
+		this.layout(this.groupDimension);
+	}
+
+	public setEditorContentVisible(visible: boolean): void {
+		if (this.contentVisible === visible) {
+			return;
+		}
+		this.contentVisible = visible;
+		this.contentDomNode.hidden = !visible;
+		this.activeEntry?.paneInstance.setVisible(visible ? EditorPaneVisibility.Visible : EditorPaneVisibility.Hidden);
 	}
 
 	focus(): void {
@@ -717,6 +751,9 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.ordinaryContent = undefined;
 		this.renderContent();
 		this.panes.activate(entry.paneInstance, this.dimension);
+		if (!this.contentVisible) {
+			entry.paneInstance.setVisible(EditorPaneVisibility.Hidden);
+		}
 		if (changed) {
 			this.editorChangeEmitter.fire(Object.freeze({ kind: "activeEditorChanged", editor: this.editorState(entry) }));
 		}

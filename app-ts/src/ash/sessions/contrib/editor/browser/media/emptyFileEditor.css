@@ -1,0 +1,5 @@
+.ash-sessions-editor-message {
+	margin: 0;
+	padding: 16px;
+	color: var(--ash-description-foreground);
+}

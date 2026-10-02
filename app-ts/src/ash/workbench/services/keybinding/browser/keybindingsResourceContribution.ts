@@ -19,11 +19,10 @@ import {
 } from "../../../../platform/keybinding/common/keybindingsRegistry.js";
 import type {
 	IKeybindingEntry,
-	IKeybindingsResourceService,
 } from "../../../../platform/keybinding/common/keybindingsResource.js";
+import { IKeybindingsResourceService } from '../../../../platform/keybinding/common/keybindingsResource.js';
 
 export interface KeybindingsResourceContributionOptions {
-	readonly service: IKeybindingsResourceService;
 	readonly registry?: KeybindingRegistry;
 	readonly operatingSystem?: HostOperatingSystem;
 }
@@ -36,14 +35,12 @@ export interface KeybindingsResourceContributionOptions {
  * last complete rule set.
  */
 export class KeybindingsResourceContribution extends Disposable {
-	private readonly service: IKeybindingsResourceService;
 	private readonly registry: KeybindingRegistry;
 	private readonly operatingSystem: HostOperatingSystem;
 	private readonly registration = this._register(new MutableDisposable<IDisposable>());
 
-	constructor(options: KeybindingsResourceContributionOptions) {
+	constructor(options: KeybindingsResourceContributionOptions, @IKeybindingsResourceService private readonly service: IKeybindingsResourceService) {
 		super();
-		this.service = options.service;
 		this.registry = options.registry ?? KeybindingsRegistry;
 		this.operatingSystem = options.operatingSystem ?? environment.os;
 		this.reload(this.service.getKeybindings());

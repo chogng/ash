@@ -48,7 +48,7 @@ import { NativeMenubarMainService, nativeMenubarIpcRoutes } from "../../platform
 import { clearElectronApplicationMenu, createElectronMenubarHost } from "../../platform/menubar/electron-main/menubar.js";
 import { colorSchemeChannel, fileDialogIpcRoutes, nativeHostIpcRoutes, windowAppearanceIpcRoutes, type INativeHostMainService } from "../../platform/native/electron-main/nativeHostIpc.js";
 import { UpdateMainService, updateIpcRoutes } from '../../platform/update/electron-main/updateMainService.js';
-import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, type IOpenAgentsWindowOptions } from "../../platform/native/common/nativeHost.js";
+import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL, NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL, validateOpenAgentsWindow, validateSystemWideKeybindings, type INativeSystemWideKeybinding, type IOpenAgentsWindowOptions } from "../../platform/native/common/nativeHost.js";
 import { DialogMainService } from '../../platform/dialogs/electron-main/dialogMainService.js';
 import type { DialogRequest } from '../../platform/dialogs/common/dialogs.js';
 import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL, RETURN_TO_WORKBENCH_CHANNEL, validateAgentsWindowHandoffComplete, validateAgentsWindowHandoffTake, validateReturnToWorkbench, type IAgentsWindowHandoffResult } from '../../sessions/common/windowNavigation.js';
@@ -142,6 +142,7 @@ class SessionsWindowRecord extends Disposable {
 	readonly modeId: WorkbenchModeId;
 	readonly runtimeResources = this._register(new MutableDisposable<DisposableStore>());
 	supervisor: AppServerConnectionRelay | undefined;
+	windowState: { readonly window: BrowserWindow; readonly handler: WindowsStateHandler; readonly tracking: IDisposable } | undefined;
 	private readonly handoffs = new Map<string, { readonly options: IOpenAgentsWindowOptions; readonly resolve: () => void; readonly reject: (error: Error) => void }>();
 	private readonly handoffQueue: string[] = [];
 
@@ -296,11 +297,16 @@ export class AshApplication extends Disposable {
 		this.nativeKeyboardLayout = this._register(new NativeKeyboardLayoutMainService());
 		this.globalKeybindings = this._register(new GlobalKeybindingsMainService({
 			shortcuts: globalShortcut,
-			activeWindowId: () => this.workbenchWindows.active()?.id,
-			runCommand: (windowId, commandId) => {
+			activeWindowId: () => BrowserWindow.getFocusedWindow()?.id,
+			runCommand: (windowId, commandId, args) => {
 				if (commandId !== OPEN_AGENTS_WINDOW_COMMAND_ID) return;
+				const options = validateOpenAgentsWindow(args);
 				const record = this.workbenchWindows.values().find(candidate => candidate.id === windowId);
-				if (record) return this.openSessionsWindow(record.workspaceContext.getWorkspace(), record.workspaceContext.getResolvedWorkspace(), record.modeId);
+				if (record) return this.openSessionsWindow(record.workspaceContext.getWorkspace(), record.workspaceContext.getResolvedWorkspace(), record.modeId, options);
+				const session = this.sessionsWindow.value;
+				if (session && this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY)?.id === windowId) {
+					return this.openSessionsWindow(session.workspaceContext.getWorkspace(), session.workspaceContext.getResolvedWorkspace(), session.modeId, options);
+				}
 			},
 			onError: error => console.error('Failed to open Agents Window from a system-wide shortcut', error),
 		}));
@@ -1134,7 +1140,9 @@ export class AshApplication extends Disposable {
 				state: sessionsWindowState.restoreWindowState(),
 				webPreferences: this.createSandboxWebPreferences(),
 				initialize: async (window, windowDisposables) => {
-					windowDisposables.add(sessionsWindowState.trackWindow(window));
+					const tracking = windowDisposables.add(sessionsWindowState.trackWindow(window));
+					session.windowState = { window, handler: sessionsWindowState, tracking };
+					windowDisposables.add(toDisposable(() => this.globalKeybindings.removeWindow(window.id)));
 					windowDisposables.add(toDisposable(() => this.dialogs.cancelWindow(window)));
 					const onFocus = (): void => {
 						this.windowSessionStateHandler.windowFocused(window.id);
@@ -1142,7 +1150,10 @@ export class AshApplication extends Disposable {
 					window.on('focus', onFocus);
 					windowDisposables.add(toDisposable(() => window.removeListener('focus', onFocus)));
 					// A renderer reload cannot acknowledge a draft already handed to the previous renderer.
-					const rejectInterruptedHandoffs = (): void => session.rejectHandoffs(new Error('Agents Window reloaded before the handoff completed'));
+					const rejectInterruptedHandoffs = (): void => {
+						this.globalKeybindings.removeWindow(window.id);
+						session.rejectHandoffs(new Error('Agents Window reloaded before the handoff completed'));
+					};
 					const onNavigation = (_event: unknown, _url: string, inPlace: boolean, mainFrame: boolean): void => {
 						if (mainFrame && !inPlace) rejectInterruptedHandoffs();
 					};
@@ -1203,6 +1214,16 @@ export class AshApplication extends Disposable {
 							setWindowDimmed: dimmed => windowControlsOverlay.setDimmed(dimmed),
 						}),
 						windowOperationIpcRoute(this.windowsMainService, window),
+						{
+							channel: NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL,
+							validate: validateOpenAgentsWindow,
+							invoke: (options: unknown) => this.openSessionsWindow(session.workspaceContext.getWorkspace(), session.workspaceContext.getResolvedWorkspace(), session.modeId, options as IOpenAgentsWindowOptions | undefined),
+						},
+						{
+							channel: NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL,
+							validate: validateSystemWideKeybindings,
+							invoke: (bindings: unknown) => this.globalKeybindings.updateKeybindings(window.id, (bindings as readonly INativeSystemWideKeybinding[]).filter(binding => binding.commandId === OPEN_AGENTS_WINDOW_COMMAND_ID)),
+						},
 						...diskFileSystemProviderRoutes(windowDisposables.add(new DiskFileSystemProvider([URI.file(this.profileRoot)])), URI.file(this.profileRoot)),
 						...workspaceContextIpcRoutes(session.workspaceContext),
 						{
@@ -1553,11 +1574,18 @@ export class AshApplication extends Disposable {
 
 		this.quitSaveStarted = true;
 		for (const record of records) record.windowStateTracking.dispose();
+		const sessionsState = this.sessionsWindow.value?.windowState;
+		sessionsState?.tracking.dispose();
 		void (async () => {
 			try {
 				await this.windowSessionStateHandler.saveSession();
 				for (const record of records) {
 					if (!record.window.isDestroyed()) await record.windowsStateHandler.saveWindowState(record.window);
+				}
+				// Save the dedicated window before closing the state service: Electron's
+				// close events arrive only after the second app.quit() below.
+				if (sessionsState && !sessionsState.window.isDestroyed()) {
+					await sessionsState.handler.saveWindowState(sessionsState.window);
 				}
 				await this.closePersistentServices();
 			} catch (error) {
@@ -1652,6 +1680,17 @@ export class AshApplication extends Disposable {
 			workspace,
 			...options,
 			displayService: {
+				onDidChangeDisplays: listener => {
+					const changed = (): void => { listener(); };
+					screen.on('display-metrics-changed', changed);
+					screen.on('display-added', changed);
+					screen.on('display-removed', changed);
+					return toDisposable(() => {
+						screen.removeListener('display-metrics-changed', changed);
+						screen.removeListener('display-added', changed);
+						screen.removeListener('display-removed', changed);
+					});
+				},
 				getAllDisplays: () => screen.getAllDisplays(),
 				getDisplayMatching: (bounds) => screen.getDisplayMatching(bounds),
 			},

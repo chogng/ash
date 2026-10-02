@@ -19,6 +19,7 @@ test('a system event wins over an older startup read and disposed windows ignore
 		getZoomLevel: unexpected, onDidChangeZoomLevel: unexpected, setZoomLevel: unexpected,
 		isAlwaysOnTop: unexpected, setAlwaysOnTop: unexpected, performNativeTabAction: unexpected, openNewWindowTab: unexpected,
 		pickFolder: unexpected, pickFile: unexpected, openWorkspace: unexpected, openWindow: unexpected, openAgentsWindow: unexpected,
+		syncSystemWideKeybindings: unexpected,
 		revealFile: unexpected, setWindowTheme: unexpected, setWindowDimmed: unexpected, toggleDeveloperTools: unexpected,
 		saveFile: unexpected, isAccessibilitySupportEnabled: unexpected, onDidChangeAccessibilitySupport: unexpected,
 	};

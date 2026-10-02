@@ -188,6 +188,13 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 	clearFind(): void { this.tree.clearFind(); }
 	updateElementHeight(element: T, height: number | undefined): void { this.tree.updateElementHeight(element, height); }
 	collapse(element: T): boolean { return this.tree.collapse(element); }
+	public collapseAll(): void {
+		for (const { element } of this.states.values()) {
+			if (this.tree.isCollapsed(element) === false) {
+				this.tree.collapse(element);
+			}
+		}
+	}
 	expand(element: T): boolean { return this.tree.expand(element); }
 	expandTo(element: T): boolean { return this.tree.expandTo(element); }
 	isLoading(element: T): boolean { return this.requests.has(this.getId(element)); }

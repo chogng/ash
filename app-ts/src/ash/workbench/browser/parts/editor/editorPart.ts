@@ -165,6 +165,8 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	private _activeGroup: EditorGroupView;
 	private readonly tabDragAndDrop: EditorTabDragAndDropController;
 	private dimension = Dimension.Zero;
+	private contentRightInset = 0;
+	private editorContentVisible = true;
 	private readonly saveAsResource: ((defaultName: string) => Promise<URI | undefined>) | undefined;
 	private readonly replaceEditorResource: ((source: IEditorGroupView, input: EditorInput, replacement: EditorInput) => Promise<void>) | undefined;
 	private readonly inputSerializers: EditorInputSerializerRegistry;
@@ -173,7 +175,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	private readonly editorsObserver: EditorsObserver;
 	private readonly recentlyClosed: RecentlyClosedEditor[] = [];
 
-	override get minimumWidth(): number { return 120; }
+	override get minimumWidth(): number { return Math.max(120, this.editorGrid.minimumWidth); }
 	override get minimumHeight(): number { return 119; }
 
 	constructor(
@@ -609,13 +611,36 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		this.doLayout(this.layoutContents(dimension.width, height).contentSize);
 	}
 
+	public getTabsHeight(): number {
+		return this._activeGroup.titleHeight.offset;
+	}
+
+	public setContentRightInset(inset: number): void {
+		this.contentRightInset = inset;
+		this.layoutEditorContent();
+	}
+
+	private layoutEditorContent(): void {
+		// A single group keeps its tabs across the shared column. Split groups reserve
+		// Details once at the grid boundary, rather than subtracting it from every pane.
+		for (const host of this._groups) {
+			host.group.setContentRightInset(this._groups.length === 1 ? this.contentRightInset : 0);
+			host.group.setEditorContentVisible(this.editorContentVisible);
+		}
+		this.editorGrid.layout(this.dimension.width - (this._groups.length > 1 ? this.contentRightInset : 0), this.dimension.height);
+	}
+
+	public setEditorContentVisible(visible: boolean): void {
+		this.editorContentVisible = visible;
+		for (const host of this._groups) {
+			host.group.setEditorContentVisible(visible);
+		}
+	}
+
 	private doLayout(dimension: IDimension): void {
 		if (Dimension.equals(this.dimension, dimension)) return;
 		this.dimension = new Dimension(dimension.width, dimension.height);
-		this.editorGrid.layout(
-			this.dimension.width,
-			this.dimension.height,
-		);
+		this.layoutEditorContent();
 	}
 
 	focus(): void {
@@ -706,6 +731,8 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		const targetIndex = sourceIndex + 1;
 		this._groups.splice(targetIndex, 0, created);
 		this.editorGrid.addView(created.view, Sizing.Split, sourceHost.view, direction);
+		this.layoutEditorContent();
+		this.notifyConstraintsChanged();
 		this.editorChangeEmitter.fire(Object.freeze({ kind: "groupAdded", group: created.group.getEditorState() }));
 		return created;
 	}
@@ -716,6 +743,8 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		if (this._groups.length === 1) throw new Error("EditorPart cannot remove its last group");
 		this.editorGrid.removeView(host.view);
 		this._groups.splice(index, 1);
+		this.layoutEditorContent();
+		this.notifyConstraintsChanged();
 		if (this._activeGroup === host.group) {
 			this.setActiveGroup((this._groups[index] ?? this._groups[index - 1])!.group);
 		}
@@ -819,7 +848,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		}
 		const activeGroup = this._groups[target.activeGroupIndex] ?? this._groups[0]!;
 		this.setActiveGroup(activeGroup.group);
-		this.editorGrid.layout(this.dimension.width, this.dimension.height);
+		this.layoutEditorContent();
 		if (!options.preserveFocus && hadEditorFocus) this._activeGroup.focus();
 	}
 
@@ -849,6 +878,8 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			: new SerializableGrid(this.contentDomNode, legacyGridDescriptor(hosts, groups, this.dimension), { styles: EDITOR_GROUP_GRID_STYLES });
 		this.gridSlot.value = grid;
 		this._activeGroup = hosts[activeGroupIndex]?.group ?? hosts[0]!.group;
+		this.layoutEditorContent();
+		this.notifyConstraintsChanged();
 		for (const host of hosts) {
 			this.editorChangeEmitter.fire(Object.freeze({ kind: "groupAdded", group: host.group.getEditorState() }));
 		}

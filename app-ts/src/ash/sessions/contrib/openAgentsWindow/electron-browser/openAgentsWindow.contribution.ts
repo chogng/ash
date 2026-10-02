@@ -1,7 +1,8 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { operatingSystem } from '../../../../base/common/platform.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { localize } from '../../../../nls.js';
-import { IKeybindingsResourceService, type IKeybindingsResourceService as KeybindingsResourceService } from '../../../../platform/keybinding/common/keybindingsResource.js';
+import { IKeybindingsResourceService } from '../../../../platform/keybinding/common/keybindingsResource.js';
 import { ILogService, type ILogService as LogService } from '../../../../platform/log/common/log.js';
 import { INotificationService, type INotificationService as NotificationService } from '../../../../platform/notification/common/notification.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
@@ -11,33 +12,43 @@ import { SystemWideKeybindingsSynchronizer } from '../../../../workbench/contrib
 
 /** Keeps the desktop's global Open Agents Window shortcut in step with user keybindings. */
 export class OpenAgentsWindowSystemWideKeybindingContribution extends Disposable {
+	public static readonly ID = 'workbench.contrib.openAgentsWindowSystemWideKeybinding';
 	private lastFailed = '';
 	private lastIgnoredWhen = '';
 
 	constructor(
-		resource: KeybindingsResourceService,
-		private readonly notifications: NotificationService,
-		private readonly log: LogService,
+		@IKeybindingsResourceService resource: IKeybindingsResourceService,
+		@INotificationService private readonly notifications: NotificationService,
+		@ILogService private readonly log: LogService,
+		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
-		this._register(new SystemWideKeybindingsSynchronizer({
+		this._register(instantiationService.createInstance(SystemWideKeybindingsSynchronizer, {
 			getCandidates: () => {
 				const selection = selectSystemWideKeybindings(
-					resource.getKeybindings().filter(binding => binding.command === OPEN_AGENTS_WINDOW_COMMAND_ID),
+					resource.getKeybindings(),
 					operatingSystem,
 				);
-				for (const key of selection.unsupported) this.log.warn(`[OpenAgentsWindow] ${key} cannot be registered as a system-wide shortcut`);
-				for (const key of selection.duplicates) this.log.warn(`[OpenAgentsWindow] duplicate system-wide shortcut ${key}`);
-				const ignoredWhen = selection.ignoredWhen.join(', ');
+				for (const rejection of selection.unsupported) {
+					if (rejection.commandId === OPEN_AGENTS_WINDOW_COMMAND_ID) {
+						this.log.warn(`[OpenAgentsWindow] ${rejection.userSettingsLabel} cannot be registered as a system-wide shortcut`);
+					}
+				}
+				for (const rejection of selection.duplicates) {
+					if (rejection.commandId === OPEN_AGENTS_WINDOW_COMMAND_ID) {
+						this.log.warn(`[OpenAgentsWindow] duplicate system-wide shortcut ${rejection.userSettingsLabel}`);
+					}
+				}
+				const ignoredWhen = selection.ignoredWhen.filter(binding => binding.commandId === OPEN_AGENTS_WINDOW_COMMAND_ID).map(binding => binding.userSettingsLabel).join(', ');
 				if (ignoredWhen && ignoredWhen !== this.lastIgnoredWhen) {
 					this.notifications.warning(localize('openAgentsWindow.systemWideWhenIgnored', 'The when condition is ignored for system-wide Open Agents Window shortcuts ({0}).', ignoredWhen));
 				}
 				this.lastIgnoredWhen = ignoredWhen;
-				return selection.candidates;
+				return selection.candidates.filter(binding => binding.commandId === OPEN_AGENTS_WINDOW_COMMAND_ID);
 			},
-			onRegistrationFailuresChanged: failed => this.reportFailures(failed),
-			onError: error => this.log.error('[OpenAgentsWindow] Unable to sync system-wide shortcuts', error),
-		}, resource));
+			onRegistrationFailuresChanged: (failed: readonly string[]) => this.reportFailures(failed),
+			onError: (error: unknown) => this.log.error('[OpenAgentsWindow] Unable to sync system-wide shortcuts', error),
+		}));
 	}
 
 	private reportFailures(failedLabels: readonly string[]): void {
@@ -50,11 +61,7 @@ export class OpenAgentsWindowSystemWideKeybindingContribution extends Disposable
 }
 
 registerWorkbenchContribution(
-	'workbench.contrib.openAgentsWindowSystemWideKeybinding',
+	OpenAgentsWindowSystemWideKeybindingContribution.ID,
 	WorkbenchPhase.AfterRestored,
-	accessor => new OpenAgentsWindowSystemWideKeybindingContribution(
-		accessor.get(IKeybindingsResourceService),
-		accessor.get(INotificationService),
-		accessor.get(ILogService),
-	),
+	accessor => accessor.get(IInstantiationService).createInstance(OpenAgentsWindowSystemWideKeybindingContribution),
 );

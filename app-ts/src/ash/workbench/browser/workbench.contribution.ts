@@ -1,6 +1,4 @@
-import {
-	IKeybindingsResourceService,
-} from "../../platform/keybinding/common/keybindingsResource.js";
+import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
 import {
 	registerWorkbenchContribution,
 	WorkbenchPhase,
@@ -108,7 +106,5 @@ registerAction2(ShowAboutDialogAction);
 registerWorkbenchContribution(
 	"workbench.contrib.keybindingsResource",
 	WorkbenchPhase.BlockRestore,
-	(accessor) => new KeybindingsResourceContribution({
-		service: accessor.get(IKeybindingsResourceService),
-	}),
+	(accessor) => accessor.get(IInstantiationService).createInstance(KeybindingsResourceContribution, {}),
 );

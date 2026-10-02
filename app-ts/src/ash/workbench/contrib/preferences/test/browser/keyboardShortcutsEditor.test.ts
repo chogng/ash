@@ -1,5 +1,6 @@
 import { IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
+import { IKeybindingsResourceService } from '../../../../../platform/keybinding/common/keybindingsResource.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
@@ -67,7 +68,9 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 		{ key: 'ctrl+1', command: 'test.shortcuts.alpha' },
 		{ key: 'ctrl+2', command: 'test.shortcuts.beta' },
 	]);
-	disposables.add(new KeybindingsResourceContribution({ service: resources }));
+	const services = disposables.add(new InstantiationService());
+	services.registerInstance(IKeybindingsResourceService, resources);
+	disposables.add(services.createInstance(KeybindingsResourceContribution, {}));
 	const contextKeys = disposables.add(new ContextKeyService());
 	const commands = disposables.add(new CommandService(new InstantiationService()));
 	const keyboardLayout = disposables.add(new BrowserKeyboardLayoutService({
@@ -81,7 +84,6 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 		keyboardLayoutService: keyboardLayout,
 	}, disposables.add(new NotificationService())));
 	const configuration = disposables.add(new InMemoryConfigurationService());
-	const services = disposables.add(new InstantiationService());
 	services.registerInstance(IKeybindingService, keybindings);
 	services.registerInstance(IConfigurationService, configuration);
 	const registry = new EditorPaneRegistry();

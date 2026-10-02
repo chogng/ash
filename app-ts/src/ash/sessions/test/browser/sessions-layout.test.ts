@@ -35,6 +35,12 @@ type SessionsPartId = import("../../common/layoutConstants.js").SessionsPartId;
 type WorkbenchPartInstance = import("../../../workbench/browser/part.js").WorkbenchPart;
 
 class TestSessionsPart extends WorkbenchPart {
+	public setCompositeBarVisible(_visible: boolean): void {}
+	public getTabsHeight(): number { return 35; }
+	public contentInset = 0;
+	public contentVisible = true;
+	public setContentRightInset(inset: number): void { this.contentInset = inset; }
+	public setEditorContentVisible(visible: boolean): void { this.contentVisible = visible; }
 	readonly layouts: import('../../../base/browser/dom.js').Dimension[] = [];
 
 	constructor(readonly id: SessionsPartId, container: HTMLElement) {
@@ -51,6 +57,7 @@ class TestSessionsPart extends WorkbenchPart {
 		if (this.id === "sidebar") return 180;
 		if (this.id === "sessions") return 320;
 		if (this.id === "auxiliarybar") return 180;
+		if (this.id === 'editor') return 120;
 		return 0;
 	}
 
@@ -66,6 +73,36 @@ class TestSessionsPart extends WorkbenchPart {
 function createParts(ownerDocument: Document): Map<SessionsPartId, WorkbenchPartInstance> {
 	return new Map(sessionsPartIds.map(partId => [partId, new TestSessionsPart(partId, ownerDocument.body)]));
 }
+
+test('Code docks Details below one tab strip and preserves the side pane boundary when Details toggles', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const parts = createParts(dom.window.document);
+	using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1200, 800) });
+	const editor = parts.get('editor') as TestSessionsPart;
+	layout.layout(new Dimension(1200, 800));
+	assert.equal(editor.contentVisible, false);
+	assert.equal(editor.domNode.contains(parts.get('auxiliarybar')!.domNode), true);
+	assert.equal(editor.domNode.querySelector<HTMLElement>('.ash-sessions-docked-details')!.style.top, '35px');
+	layout.showPart('editor');
+	layout.resizePart('editor', new Dimension(500, 800));
+	layout.resizePart('auxiliarybar', new Dimension(280, 800));
+	const width = layout.getPartSize('editor').width;
+	assert.equal(editor.contentInset, 280);
+	layout.hidePart('auxiliarybar');
+	assert.equal(editor.contentInset, 0);
+	assert.equal(layout.getPartSize('editor').width, width);
+	layout.showPart('auxiliarybar');
+	layout.layout(new Dimension(1000, 800));
+	assert.equal(layout.getPartSize('editor').width - editor.contentInset >= 120, true);
+	layout.hidePart('editor');
+	assert.equal(editor.contentVisible, false);
+	assert.equal(layout.getPartSize('editor').width, 280);
+	layout.hidePart('auxiliarybar');
+	assert.equal(layout.isPartVisible('editor'), false);
+	assert.equal(layout.isPartVisible('auxiliarybar'), false);
+	for (const part of parts.values()) part.dispose();
+	dom.window.close();
+});
 
 test("Sessions layout owns a fixed Sessions-first Part topology", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
@@ -249,6 +286,8 @@ test("Sessions layout restores its profile-scoped geometry and auxiliary visibil
 	first.resizePart("auxiliarybar", new Dimension(360, first.getPartSize("auxiliarybar").height));
 	first.hidePart('sidebar');
 	first.hidePart("auxiliarybar");
+	first.showPart('editor');
+	first.resizePart('editor', new Dimension(420, first.getPartSize('editor').height));
 	await firstStorage.flush(WillSaveStateReason.SHUTDOWN);
 	first.dispose();
 	for (const part of firstParts.values()) part.dispose();
@@ -264,6 +303,8 @@ test("Sessions layout restores its profile-scoped geometry and auxiliary visibil
 	assert.equal(restored.isPartVisible('sidebar'), false);
 	assert.equal(Math.abs(restored.getPartSize("auxiliarybar").width - 360) <= 1, true);
 	assert.equal(restored.isPartVisible("auxiliarybar"), false);
+	assert.equal(restored.isPartVisible('editor'), true);
+	assert.equal(Math.abs(restored.getPartSize('editor').width - 420) <= 1, true);
 
 	restored.dispose();
 	for (const part of restoredParts.values()) part.dispose();

@@ -16,6 +16,10 @@
   overflow: hidden;
 }
 
+.ash-editor-group-content[hidden] {
+  display: none;
+}
+
 .ash-editor-pane-host {
   position: absolute;
   inset: 0;

@@ -750,6 +750,7 @@ test('Code sending preserves the Chat draft when pages switch during first-sessi
 	if (draft?.kind !== 'untitled') throw new Error('Expected Code draft');
 	using commands = new CommandService(new InstantiationService());
 	using chat = createChatService(fake.api);
+	editorServices.registerInstance(ILanguageModelsService, modelsFor(chat));
 	const widgetModel = createWidgetModel(chat, { kind: 'untitled', session: draft.session }, sessions);
 	using widget = new ChatWidget(
 		dom.window.document.body,
@@ -772,7 +773,12 @@ test('Code sending preserves the Chat draft when pages switch during first-sessi
 	const heading = widget.element.querySelector<HTMLHeadingElement>('.ash-sessions-chat-welcome-heading');
 	assert.equal(heading?.hidden, false);
 	assert.equal(input?.classList.contains('code-composer'), true);
+	const welcomeTip = input?.querySelector('.ash-chat-input-tip');
+	assert.ok(welcomeTip);
+	assert.deepEqual([input?.getAttribute('aria-busy'), input?.querySelector('.ash-chat-status')?.textContent], ['true', '']);
 	await widgetModel.initialize();
+	assert.equal(input?.getAttribute('aria-busy'), 'false');
+	assert.equal(input?.querySelector('.ash-chat-input-tip'), welcomeTip);
 	const attachment = new DeferredPromise<{ name: string; content: string }>();
 	widget.addContext({ id: 'code-file', kind: 'file', name: 'code.ts', resolve: () => attachment.p });
 	const sending = widget.acceptInput('Start this work');

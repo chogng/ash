@@ -2,11 +2,13 @@ import type { ThemeIcon } from '../../../../base/common/themables.js';
 import type { URI } from "../../../../base/common/uri.js";
 import type { Event } from '../../../../base/common/event.js';
 import type { Range } from "../../../../editor/common/core/range.js";
+import type { EditorInputCapabilities } from '../../../common/editor.js';
 import type { IEditorOptions, TextEditorSelectionSource } from "../../../../platform/editor/common/editor.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 
 /** A resource requested through the Workbench editor service. */
 export interface EditorInput {
+	readonly capabilities?: EditorInputCapabilities;
 	readonly resource: URI;
 	readonly contentType?: string;
 	readonly languageId?: string;
@@ -22,6 +24,8 @@ export interface EditorInput {
 
 /** Optional caller preferences for opening and revealing an editor resource. */
 export interface EditorOpenOptions extends IEditorOptions {
+	/** Add or update the tab without selecting it when the group already has an active editor. */
+	readonly inactive?: boolean;
 	readonly preferredEditorId?: string;
 	readonly index?: number;
 	readonly selection?: Range;

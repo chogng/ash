@@ -5,6 +5,12 @@ import type { IAction } from '../../base/common/actions.js';
 import { toError } from '../../base/common/errors.js';
 import type Severity from '../../base/common/severity.js';
 
+/** Input-owned restrictions enforced consistently by editor commands and tabs. */
+export const enum EditorInputCapabilities {
+	None = 0,
+	CannotClose = 1 << 13,
+}
+
 export interface IEditorOpenErrorOptions {
 	/** Uses the supplied message as the page heading instead of a generic open failure. */
 	forceMessage?: boolean;

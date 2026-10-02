@@ -1,0 +1,12 @@
+.ash-sessions-docked-details {
+	position: absolute;
+	right: 0;
+	bottom: 0;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.ash-sessions-docked-details[hidden] {
+	display: none;
+}

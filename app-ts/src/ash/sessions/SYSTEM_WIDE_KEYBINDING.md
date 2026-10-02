@@ -6,9 +6,10 @@ The Agents Window is a narrow renderer owner of direct user system-wide keybindi
 `workbench.action.openAgentsWindow`. This keeps the shortcut active when the Agents Window remains
 after all standard editor windows close.
 
-The shared selection, renderer synchronization, native-host IPC, and Electron main-process
-registration mechanisms are specified in
-[`systemWideKeybindings.specification.md`](../workbench/contrib/keybindings/electron-browser/systemWideKeybindings.specification.md).
+Shared selection and renderer synchronization live in
+[`workbench/contrib/keybindings`](../workbench/contrib/keybindings/electron-browser/systemWideKeybindings.ts).
+[`platform/globalKeybindings`](../platform/globalKeybindings/electron-main/globalKeybindingsMainService.ts)
+owns operating-system registrations; the window host registers and removes each window's ownership.
 
 ## Ownership
 
@@ -19,6 +20,17 @@ commands.
 The command handler is registered during the Sessions desktop entry point. The keybinding owner is
 started after workbench restoration, synchronizes immediately when instantiated, and debounces
 later keybinding changes.
+
+The Electron Sessions entry point selects this contribution from the shared registry. Its host
+advances with the Sessions lifecycle and disposes with the window; unrelated editor contributions
+are not part of that window's composition.
+
+Direct command arguments are JSON values carried by the shortcut registration payload. Main
+validates Open Agents Window options before dispatching them through the same draft/conversation
+handoff used by the local command. Existing unsent drafts retain the handoff's conflict protection.
+
+Successful unchanged shortcut payloads are not resent. Registration or IPC failures leave the
+payload unsynchronized so a later keybinding resource change can attempt registration again.
 
 Rejected Open Agents Window bindings are logged in the Agents Window. OS registration failures are
 reported by each renderer owner so an Agents-only process retains a visible failure surface. When

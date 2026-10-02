@@ -26,6 +26,7 @@ import {
 	parseContextKeyExpression,
 } from "../../../../../platform/contextkey/common/contextKeyExpressionParser.js";
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
+import { IKeybindingsResourceService } from '../../../../../platform/keybinding/common/keybindingsResource.js';
 import { NotificationService } from "../../../../../workbench/services/notification/common/notificationService.js";
 import { NotificationsToasts } from "../../../../browser/parts/notifications/notificationsToasts.js";
 import { INotificationService, NotificationSeverity } from "../../../../../platform/notification/common/notification.js";
@@ -866,8 +867,9 @@ test("keybindings resource applies conditions, arguments, OS keys, and blockers"
 	const keybindingsResource = registrations.add(
 		new WorkbenchKeybindingsResourceService(),
 	);
-	registrations.add(new KeybindingsResourceContribution({
-		service: keybindingsResource,
+	const services = registrations.add(new InstantiationService());
+	services.registerInstance(IKeybindingsResourceService, keybindingsResource);
+	registrations.add(services.createInstance(KeybindingsResourceContribution, {
 		registry,
 		operatingSystem: "windows",
 	}));

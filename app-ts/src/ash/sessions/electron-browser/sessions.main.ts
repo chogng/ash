@@ -1,4 +1,5 @@
 import { FileDialogService } from '../../workbench/services/dialogs/electron-browser/fileDialogService.js';
+import { OpenAgentsWindowSystemWideKeybindingContribution } from '../contrib/openAgentsWindow/electron-browser/openAgentsWindow.contribution.js';
 import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
 import { URI } from "../../base/common/uri.js";
 import { IFileService } from "../../platform/files/common/files.js";
@@ -14,7 +15,6 @@ import { DirectoryPermissionDialog } from '../../workbench/electron-browser/part
 import { createElectronWorkbenchContextMenuService } from "../../workbench/services/contextmenu/electron-browser/contextMenuService.js";
 import type { SessionsProfile } from "../common/sessionsProfile.js";
 import { Workbench } from "../browser/workbench.js";
-import { NativeWindow } from '../../workbench/electron-browser/window.js';
 import { bindWindowControlTheme } from '../../workbench/electron-browser/parts/titlebar/titlebarPart.js';
 import { RETURN_TO_WORKBENCH_CHANNEL } from '../common/windowNavigation.js';
 import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL } from '../common/windowNavigation.js';
@@ -108,6 +108,7 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 	sessions.add(toDisposable(() => workspaceSubscription.dispose()));
 	const hostColorScheme = await api.nativeHost.getOSColorScheme();
 	workbench = sessions.add(await Workbench.create({
+		contributionIds: ['workbench.contrib.nativeWindow', OpenAgentsWindowSystemWideKeybindingContribution.ID],
 		modeId,
 		profile,
 		api,
@@ -129,7 +130,6 @@ export async function main(modeId: WorkbenchModeId, profile: SessionsProfile): P
 		container,
 	}));
 	requestDrain();
-	sessions.add(new NativeWindow(api.nativeHost, workbench.configurationService));
 	sessions.add(bindWindowControlTheme(workbench.themeService, api.nativeHost));
 	sessions.add(addDisposableListener(window, "pagehide", () => {
 		void workbench.shutdown("pageHide").catch(error => console.error("Failed to shut down Sessions Workbench", error)).finally(() => sessions.dispose());

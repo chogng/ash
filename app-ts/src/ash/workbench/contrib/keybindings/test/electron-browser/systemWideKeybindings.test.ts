@@ -18,9 +18,26 @@ test('system-wide selection rejects chords, duplicates, and disabled OS override
 	], OperatingSystem.Windows);
 
 	assert.deepEqual(selected, {
-		candidates: [{ accelerator: 'Control+Shift+B', commandId: 'workbench.action.openAgentsWindow', userSettingsLabel: 'ctrl+shift+b' }],
-		unsupported: ['ctrl+k ctrl+c'],
-		duplicates: ['ctrl+shift+b'],
-		ignoredWhen: ['ctrl+shift+b'],
+		candidates: [{ accelerator: 'Control+Shift+B', commandId: 'workbench.action.openAgentsWindow', args: undefined, userSettingsLabel: 'ctrl+shift+b' }],
+		unsupported: [{ commandId: 'workbench.action.openAgentsWindow', userSettingsLabel: 'ctrl+k ctrl+c' }],
+		duplicates: [{ commandId: 'workbench.action.openAgentsWindow', userSettingsLabel: 'ctrl+shift+b' }],
+		ignoredWhen: [{ commandId: 'workbench.action.openAgentsWindow', userSettingsLabel: 'ctrl+shift+b' }],
+	});
+});
+
+test('system-wide selection resolves conflicts across commands and preserves arguments', () => {
+	const args = { draft: { mode: 'agent', text: 'Review this', contexts: [] } };
+	assert.deepEqual(selectSystemWideKeybindings([
+		binding('ctrl+shift+a', { command: 'other.command' }),
+		binding('ctrl+shift+a'),
+		binding('ctrl+shift+b', { args }),
+	], OperatingSystem.Windows), {
+		candidates: [
+			{ accelerator: 'Control+Shift+A', commandId: 'other.command', args: undefined, userSettingsLabel: 'ctrl+shift+a' },
+			{ accelerator: 'Control+Shift+B', commandId: 'workbench.action.openAgentsWindow', args, userSettingsLabel: 'ctrl+shift+b' },
+		],
+		unsupported: [],
+		duplicates: [{ commandId: 'workbench.action.openAgentsWindow', userSettingsLabel: 'ctrl+shift+a' }],
+		ignoredWhen: [],
 	});
 });

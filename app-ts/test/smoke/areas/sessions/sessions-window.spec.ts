@@ -1298,6 +1298,65 @@ test('Sessions chat fills its content area without a duplicate session title', a
 	}
 });
 
+test('Sessions new session keeps the welcome composer stable across frames', async ({ application, target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code');
+	let page = workbench.page;
+	if (target.kind === 'browser') {
+		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+	} else {
+		if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
+		const opened = application.waitForEvent('window');
+		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
+		page = await opened;
+	}
+	for (let session = 0; session < 3; session++) {
+		await page.setViewportSize([{ width: 1793, height: 1333 }, { width: 1280, height: 800 }, { width: 760, height: 600 }][session]!);
+		const navigation = page.locator('.ash-sessions-activity-content');
+		if (session === 2) {
+			await navigation.getByRole('button', { name: 'Design', exact: true }).click();
+		}
+		await navigation.getByRole('button', { name: session === 1 ? 'Code' : /^Chat(?:\.|$)/u, exact: true }).click();
+		const chat = page.locator('.ash-sessions-chat-slot .ash-chat:visible').first();
+		await expect(chat.getByRole('heading', { name: 'What can we work on?' })).toBeVisible();
+		await expect(chat.locator('.ash-sessions-chat-input')).toHaveAttribute('aria-busy', 'false');
+		if (session === 2) {
+			await chat.getByRole('button', { name: 'Dismiss tip', exact: true }).click();
+		}
+		const sampling = page.evaluate(async () => {
+			const samples: number[][] = [];
+			let finished = false;
+			const finish = (): void => { finished = true; };
+			document.addEventListener('ash-smoke-composer-sampling-complete', finish, { once: true });
+			const sample = (): void => {
+				const composer = document.querySelector('.ash-sessions-chat-slot.active .ash-sessions-chat-input:not([hidden])')!;
+				const card = composer.querySelector('.ash-chat-input-container')!;
+				const rect = composer.getBoundingClientRect();
+				samples.push([rect.x, rect.y, rect.width, rect.height, card.getBoundingClientRect().y, card.getBoundingClientRect().height]);
+			};
+			const observer = new MutationObserver(sample);
+			observer.observe(document.querySelector('[data-part="sessions"]')!, { childList: true, subtree: true });
+			try {
+				while (!finished) {
+					await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+					sample();
+				}
+			} finally {
+				observer.disconnect();
+				document.removeEventListener('ash-smoke-composer-sampling-complete', finish);
+			}
+			return samples;
+		});
+		for (let click = 0; click < 6; click++) {
+			await page.locator('.ash-sessions-list-add').click();
+		}
+		await expect(chat.locator('.ash-sessions-chat-input')).toHaveAttribute('aria-busy', 'false');
+		await page.evaluate(() => document.dispatchEvent(new Event('ash-smoke-composer-sampling-complete')));
+		const samples = await sampling;
+		const changes = samples.slice(1).filter((sample, index) => sample.some((value, axis) => Math.abs(value - samples[index]![axis]!) > 1));
+		expect(changes, JSON.stringify([...new Set(samples.map(sample => JSON.stringify(sample)))])).toEqual([]);
+	}
+});
+
 test('Sessions empty chat centers a growing input card and keeps the draft across themes and navigation', async ({ application, target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code');
 	let page = workbench.page;
@@ -2989,6 +3048,65 @@ test('Code registers and releases a user system-wide Open Agents Window shortcut
 	try {
 		const { application, close } = await launchElectron({ appServerMode: 'disabled', workbenchMode: 'code', userDataDirectory, profileDirectory });
 		try {
+			await expect.poll(() => application.evaluate(({ globalShortcut }) => globalShortcut.isRegistered('Control+Alt+Shift+F24'))).toBe(true);
+			await writeFile(resourcePath, '[]\n');
+			await expect.poll(() => application.evaluate(({ globalShortcut }) => globalShortcut.isRegistered('Control+Alt+Shift+F24'))).toBe(false);
+		} finally {
+			await close();
+		}
+	} finally {
+		if (!resolve(userDataDirectory).startsWith(`${resolve(tmpdir())}${sep}`)) throw new Error('Test profile escaped the temporary directory');
+		await rm(userDataDirectory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+	}
+});
+
+test('Agents retains the system-wide shortcut after the Workbench closes and forwards command arguments', async ({ target }) => {
+	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'This scenario requires Code Electron');
+	const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-agents-shortcut-'));
+	const profileDirectory = join(userDataDirectory, 'profile');
+	const resourcePath = join(profileDirectory, 'keybindings.json');
+	await mkdir(profileDirectory);
+	await writeFile(resourcePath, '[]\n');
+	try {
+		const { application, driver, close } = await launchElectron({ appServerMode: 'disabled', workbenchMode: 'code', userDataDirectory, profileDirectory });
+		try {
+			await application.evaluate(({ globalShortcut }) => {
+				const register = globalShortcut.register;
+				// Substitute only the OS trigger; registration, Main routing and renderer handoff remain real.
+				globalShortcut.register = (accelerator, callback) => {
+					const registered = register.call(globalShortcut, accelerator, callback);
+					if (accelerator === 'Control+Alt+Shift+F24') {
+						(globalThis as typeof globalThis & { ashOpenAgentsShortcut?: () => void }).ashOpenAgentsShortcut = callback;
+						globalShortcut.register = register;
+					}
+					return registered;
+				};
+			});
+			await writeFile(resourcePath, JSON.stringify([
+				{ key: 'ctrl+alt+shift+f24', command: 'workbench.action.openAgentsWindow', systemWide: true, args: { draft: { mode: 'agent', text: 'From the system shortcut', contexts: [] } } },
+				{ key: 'ctrl+shift+y', command: 'workbench.action.openAgentsWindow', args: { draft: { mode: 'agent', text: 'From the Agents command', contexts: [] } } },
+			]));
+			await expect.poll(() => application.evaluate(({ globalShortcut }) => globalShortcut.isRegistered('Control+Alt+Shift+F24'))).toBe(true);
+			const childPromise = application.waitForEvent('window');
+			await driver.workbench.page.keyboard.press('Control+Shift+Y');
+			const child = await childPromise;
+			const editor = new Editor(child.locator('.ash-sessions-chat-slot.active:visible'));
+			await editor.waitForEditorContents(contents => contents === 'From the Agents command');
+			// Draft handoff preserves unsent text; clear the previous draft before accepting another.
+			await replaceChatInput(editor, '');
+			await application.evaluate(() => (globalThis as typeof globalThis & { ashOpenAgentsShortcut: () => void }).ashOpenAgentsShortcut());
+			await editor.waitForEditorContents(contents => contents === 'From the system shortcut');
+			await driver.workbench.page.close();
+			await expect.poll(() => application.windows().length).toBe(1);
+			await expect.poll(() => application.evaluate(({ globalShortcut }) => globalShortcut.isRegistered('Control+Alt+Shift+F24'))).toBe(true);
+			await replaceChatInput(editor, '');
+			await child.keyboard.press('Control+Shift+Y');
+			await editor.waitForEditorContents(contents => contents === 'From the Agents command');
+			await replaceChatInput(editor, '');
+			await application.evaluate(() => (globalThis as typeof globalThis & { ashOpenAgentsShortcut: () => void }).ashOpenAgentsShortcut());
+			await editor.waitForEditorContents(contents => contents === 'From the system shortcut');
+			await child.reload();
+			await editor.waitForEditorContents(contents => contents === 'From the system shortcut');
 			await expect.poll(() => application.evaluate(({ globalShortcut }) => globalShortcut.isRegistered('Control+Alt+Shift+F24'))).toBe(true);
 			await writeFile(resourcePath, '[]\n');
 			await expect.poll(() => application.evaluate(({ globalShortcut }) => globalShortcut.isRegistered('Control+Alt+Shift+F24'))).toBe(false);

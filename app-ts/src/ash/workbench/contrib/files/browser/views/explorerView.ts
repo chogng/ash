@@ -72,8 +72,8 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IAccessibleViewService accessibleViewService: IAccessibleViewService,
-		@IContextMenuService private readonly contextMenuService: IContextMenuService,
-		@ICommandService private readonly commandService: ICommandService,
+		@IContextMenuService protected readonly contextMenuService: IContextMenuService,
+		@ICommandService protected readonly commandService: ICommandService,
 		@IDecorationsService decorationsService: IDecorationsService,
 		@ILabelService labelService?: ILabelService,
 	) {
@@ -287,6 +287,10 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 
 	public getContext(): readonly ExplorerItem[] {
 		return this.tree.selection;
+	}
+
+	public collapseAll(): void {
+		this.tree.collapseAll();
 	}
 
 	public getAccessibleContent(): string {

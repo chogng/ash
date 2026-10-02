@@ -93,10 +93,19 @@ export class WorkbenchContributionRegistry {
 	createHost(
 		accessor: ServicesAccessor,
 		onError: WorkbenchContributionErrorHandler = defaultErrorHandler,
+		contributionIds?: readonly string[],
 	): WorkbenchContributionHost {
+		// Product windows explicitly select their composition from the shared declarations.
+		const registrations = contributionIds === undefined ? [...this.registrations.values()] : contributionIds.map(id => {
+			const registration = this.registrations.get(id);
+			if (!registration) {
+				throw new Error(`Unknown workbench contribution: ${id}`);
+			}
+			return registration;
+		});
 		return new WorkbenchContributionHost(
 			accessor,
-			[...this.registrations.values()].sort(
+			registrations.sort(
 				(left, right) => left.order - right.order,
 			),
 			onError,

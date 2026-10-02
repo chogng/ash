@@ -93,8 +93,8 @@ export function resolveBrowserWindowOptions({
 		y: state.y,
 		width: state.width,
 		height: state.height,
-		minWidth: WINDOW_MINIMUM_SIZE.width,
-		minHeight: WINDOW_MINIMUM_SIZE.height,
+		minWidth: Math.min(WINDOW_MINIMUM_SIZE.width, state.workArea?.width ?? WINDOW_MINIMUM_SIZE.width),
+		minHeight: Math.min(WINDOW_MINIMUM_SIZE.height, state.workArea?.height ?? WINDOW_MINIMUM_SIZE.height),
 		webPreferences,
 	};
 
@@ -189,6 +189,41 @@ export function validateWindowState(
 		);
 	if (usableDisplays.length === 0) {
 		return undefined;
+	}
+
+	if (state.workArea) {
+		const previousArea = state.workArea;
+		const previousCenterX = x + stateWidth / 2;
+		const previousCenterY = y + stateHeight / 2;
+		const distance = (area: IWindowBounds): number => {
+			const dx = Math.max(area.x - previousCenterX, 0, previousCenterX - area.x - area.width);
+			const dy = Math.max(area.y - previousCenterY, 0, previousCenterY - area.y - area.height);
+			return dx * dx + dy * dy;
+		};
+		const target = usableDisplays.find(({ display }) => display.id === state.displayId) ??
+			usableDisplays.reduce((nearest, entry) => distance(entry.area) < distance(nearest.area) ? entry : nearest);
+		const { display, area } = target;
+		// One scale preserves the window shape across displays with different aspect ratios.
+		// The work area already includes system DPI scaling; applying scaleFactor again would double it.
+		const preferredScale = Math.min(area.width / previousArea.width, area.height / previousArea.height);
+		const minimumScale = Math.max(WINDOW_MINIMUM_SIZE.width / stateWidth, WINDOW_MINIMUM_SIZE.height / stateHeight);
+		const maximumScale = Math.min(area.width / stateWidth, area.height / stateHeight);
+		const scale = Math.min(Math.max(preferredScale, minimumScale), maximumScale);
+		// A very narrow work area can make the aspect ratio and both minimums
+		// mutually exclusive. Match Electron's minimums without exceeding the screen.
+		const width = Math.min(area.width, Math.max(WINDOW_MINIMUM_SIZE.width, Math.round(stateWidth * scale)));
+		const height = Math.min(area.height, Math.max(WINDOW_MINIMUM_SIZE.height, Math.round(stateHeight * scale)));
+		const centerX = area.x + (previousCenterX - previousArea.x) / previousArea.width * area.width;
+		const centerY = area.y + (previousCenterY - previousArea.y) / previousArea.height * area.height;
+		return {
+			...state,
+			x: Math.round(Math.max(area.x, Math.min(centerX - width / 2, area.x + area.width - width))),
+			y: Math.round(Math.max(area.y, Math.min(centerY - height / 2, area.y + area.height - height))),
+			width,
+			height,
+			displayId: display.id,
+			workArea: { ...area },
+		};
 	}
 
 	if (state.mode === WindowMode.Fullscreen && state.displayId !== undefined) {

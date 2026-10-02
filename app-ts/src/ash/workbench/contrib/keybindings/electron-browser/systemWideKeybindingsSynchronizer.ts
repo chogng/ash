@@ -1,7 +1,8 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { invoke } from '../../../../platform/ipc/electron-browser/rendererIpc.js';
-import type { IKeybindingsResourceService } from '../../../../platform/keybinding/common/keybindingsResource.js';
-import { NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL, validateSystemWideKeybindingsResult, type INativeSystemWideKeybinding } from '../../../../platform/native/common/nativeHost.js';
+import { RunOnceScheduler } from '../../../../base/common/async.js';
+import { IKeybindingsResourceService } from '../../../../platform/keybinding/common/keybindingsResource.js';
+import type { INativeHostApi, INativeSystemWideKeybinding } from '../../../../platform/native/common/nativeHost.js';
+import { INativeHostService } from '../../../common/services.js';
 
 export interface ISystemWideKeybindingsSynchronizerOptions {
 	readonly getCandidates: () => readonly INativeSystemWideKeybinding[];
@@ -12,24 +13,42 @@ export interface ISystemWideKeybindingsSynchronizerOptions {
 /** Synchronizes a window's user shortcuts after each resource change. */
 export class SystemWideKeybindingsSynchronizer extends Disposable {
 	private pending: Promise<void> = Promise.resolve();
+	private synchronizedPayload: string | undefined;
 
 	constructor(
 		private readonly options: ISystemWideKeybindingsSynchronizerOptions,
-		resource: IKeybindingsResourceService,
+		@IKeybindingsResourceService resource: IKeybindingsResourceService,
+		@INativeHostService private readonly host: INativeHostApi,
 	) {
 		super();
-		this._register(resource.onDidChangeKeybindings(() => this.queueSync()));
+		const scheduler = this._register(new RunOnceScheduler(() => this.queueSync(), 100));
+		this._register(resource.onDidChangeKeybindings(() => scheduler.schedule()));
 		this.queueSync();
 	}
 
 	private queueSync(): void {
 		this.pending = this.pending.then(async () => {
-			if (this.isDisposed) return;
+			if (this.isDisposed) {
+				return;
+			}
 			try {
-				const result = validateSystemWideKeybindingsResult(await invoke<unknown>(NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL, this.options.getCandidates()));
-				if (!this.isDisposed) this.options.onRegistrationFailuresChanged(result.failed);
+				const candidates = this.options.getCandidates();
+				const payload = JSON.stringify(candidates);
+				if (payload === this.synchronizedPayload) {
+					return;
+				}
+				const result = await this.host.syncSystemWideKeybindings(candidates);
+				if (this.isDisposed) {
+					return;
+				}
+				this.synchronizedPayload = result.failed.length === 0 ? payload : undefined;
+				this.options.onRegistrationFailuresChanged(result.failed);
 			} catch (error) {
-				if (!this.isDisposed) this.options.onError(error);
+				// An IPC failure can happen after Main applied the payload, so the next update must resend it.
+				this.synchronizedPayload = undefined;
+				if (!this.isDisposed) {
+					this.options.onError(error);
+				}
 			}
 		});
 	}

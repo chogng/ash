@@ -182,6 +182,40 @@ test("DataTree materializes and refreshes a synchronous data source", () => {
 	dom.window.close();
 });
 
+test('AsyncDataTree collapses loaded descendants even when their parent is already hidden', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const leaf: TestNode = { id: 'leaf', label: 'Leaf', expanded: false };
+	const inner: TestNode = { id: 'inner', label: 'Inner', expanded: false, children: [leaf] };
+	const outer: TestNode = { id: 'outer', label: 'Outer', expanded: false, children: [inner] };
+	const root: TestNode = { id: 'root', label: 'Root', expanded: true, children: [outer] };
+	try {
+		using tree = new AsyncDataTree<TestNode, TestNode>(dom.window.document.body, {
+			hasChildren: element => !!element.children?.length,
+			getChildren: element => element.children ?? [],
+		}, {
+			identityProvider: { getId: element => element.id },
+			collapseByDefault: () => true,
+			renderElement: element => {
+				const label = h(dom.window.document, 'span');
+				label.textContent = element.label;
+				return label;
+			},
+		});
+		await tree.setInput(root);
+		await tree.updateChildren(outer, { recursive: false });
+		tree.expand(outer);
+		await tree.updateChildren(inner, { recursive: false });
+		tree.expand(inner);
+		assert.deepEqual(tree.getVisibleElements().map(element => element.id), ['outer', 'inner', 'leaf']);
+		tree.collapse(outer);
+		tree.collapseAll();
+		tree.expand(outer);
+		assert.deepEqual(tree.getVisibleElements().map(element => element.id), ['outer', 'inner']);
+	} finally {
+		dom.window.close();
+	}
+});
+
 test("AsyncDataTree loads on expansion and coalesces refresh requests", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const root: TestNode = { id: "root", label: "Root", expanded: true };

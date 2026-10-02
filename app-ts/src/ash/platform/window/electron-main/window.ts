@@ -39,6 +39,8 @@ export interface IWindowState {
 	readonly x?: number;
 	readonly y?: number;
 	readonly displayId?: number;
+	/** Display work area in DIP units when the normal window bounds were captured. */
+	readonly workArea?: IWindowBounds;
 }
 
 /** Returns a fresh default state sized for the requested workbench state. */

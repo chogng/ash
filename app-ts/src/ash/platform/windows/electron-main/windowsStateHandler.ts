@@ -1,4 +1,5 @@
-import { toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
+import type { Event } from "../../../base/common/event.js";
+import { DisposableStore, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import { isFiniteNumber } from "../../../base/common/numbers.js";
 import { isNonEmptyString, isRecord } from "../../../base/common/types.js";
 import { URI } from "../../../base/common/uri.js";
@@ -6,6 +7,7 @@ import type { IStateService } from "../../state/node/state.js";
 import { type IAnyWorkspaceIdentifier, type IWorkspaceIdentifier, type WorkbenchState, isEmptyWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, isWorkspaceIdentifier, parseWorkspaceIdentifier, serializeWorkspaceIdentifier, workbenchStateFromWorkspaceIdentifier } from "../../workspace/common/workspace.js";
 import { defaultWindowState, WindowMode, type IWindowBounds, type IWindowState } from "../../window/electron-main/window.js";
 import { validateWindowState, type IWindowDisplay } from "./windows.js";
+import { WINDOW_MINIMUM_SIZE } from "../../window/common/window.js";
 import { getRemoteWorkspacePath, isRemoteResource } from "../../remote/common/remote.js";
 
 const WINDOWS_STATE_STORAGE_KEY = "windowsState";
@@ -15,6 +17,7 @@ const WINDOW_SESSION_STATE_KEY = 'windowSession';
 
 /** Display operations needed to restore and capture window placement. */
 export interface IWindowDisplayService {
+	readonly onDidChangeDisplays: Event<void>;
 	getAllDisplays(): readonly IWindowDisplay[];
 	getDisplayMatching(bounds: IWindowBounds): IWindowDisplay;
 }
@@ -30,8 +33,10 @@ export interface IStatefulWindow {
 	isMaximized(): boolean;
 	getBounds(): IWindowBounds;
 	getNormalBounds(): IWindowBounds;
-	on(event: "blur" | "close", listener: () => void): void;
-	removeListener(event: "blur" | "close", listener: () => void): void;
+	setBounds(bounds: IWindowBounds): void;
+	setMinimumSize(width: number, height: number): void;
+	on(event: "blur" | "close" | "move" | "moved" | "resize" | "unmaximize" | "leave-full-screen", listener: () => void): void;
+	removeListener(event: "blur" | "close" | "move" | "moved" | "resize" | "unmaximize" | "leave-full-screen", listener: () => void): void;
 }
 
 interface IWindowStateRecord {
@@ -75,7 +80,7 @@ export class WindowsStateHandler {
 	private readonly workbenchState: WorkbenchState;
 	private readonly onError: (error: unknown) => void;
 	private windowsState: IWindowsState;
-	private lastNormalBounds: IWindowBounds | undefined;
+	private lastNormalState: IWindowState | undefined;
 
 	constructor({
 		stateService,
@@ -123,7 +128,7 @@ export class WindowsStateHandler {
 				this.workbenchState,
 			);
 			if (restoredState) {
-				this.lastNormalBounds = toBounds(restoredState);
+				this.lastNormalState = restoredState;
 				return restoredState;
 			}
 		}
@@ -133,16 +138,88 @@ export class WindowsStateHandler {
 
 	/** Saves immediately on blur and before the BrowserWindow closes. */
 	trackWindow(window: IStatefulWindow): IDisposable {
+		const resources = new DisposableStore();
+		this.lastNormalState = this.captureWindowState(window);
 		const save = (): void => {
 			void this.saveWindowState(window).catch(this.onError);
 		};
-		window.on("blur", save);
-		window.on("close", save);
-
-		return toDisposable(() => {
-			window.removeListener("blur", save);
-			window.removeListener("close", save);
-		});
+		const updatePlacement = (): void => {
+			if (window.isMaximized() || window.isFullScreen()) {
+				return;
+			}
+			const previous = this.lastNormalState;
+			if (previous?.workArea) {
+				const display = this.displayService.getAllDisplays().find(display => display.id === previous.displayId);
+				// OS resize/move events can precede the display notification. Keep the old
+				// geometry until that notification has converted it exactly once.
+				if (!display || !sameBounds(display.workArea, previous.workArea)) {
+					return;
+				}
+				if (this.displayService.getDisplayMatching(window.getBounds()).id !== previous.displayId) {
+					return;
+				}
+			}
+			this.captureWindowState(window);
+		};
+		const applyPlacement = (): void => {
+			if (window.isMaximized() || window.isFullScreen() || !this.lastNormalState) {
+				return;
+			}
+			const bounds = toBounds(this.lastNormalState);
+			const area = this.lastNormalState.workArea;
+			if (area) {
+				window.setMinimumSize(Math.min(WINDOW_MINIMUM_SIZE.width, area.width), Math.min(WINDOW_MINIMUM_SIZE.height, area.height));
+			}
+			if (bounds && !sameBounds(bounds, window.getBounds())) {
+				window.setBounds(bounds);
+			}
+		};
+		const finishMove = (): void => {
+			if (window.isMaximized() || window.isFullScreen() || !this.lastNormalState) {
+				return;
+			}
+			const bounds = window.getBounds();
+			const display = this.displayService.getDisplayMatching(bounds);
+			if (display.id === this.lastNormalState.displayId) {
+				updatePlacement();
+				return;
+			}
+			const state = validateWindowState(this.lastNormalState, [display], this.workbenchState);
+			if (state) {
+				// Resize after the drag ends, keeping its dropped center rather than
+				// moving the window back to its old relative position on the screen.
+				const area = display.workArea;
+				const x = bounds.x + (bounds.width - state.width) / 2;
+				const y = bounds.y + (bounds.height - state.height) / 2;
+				this.lastNormalState = {
+					...state,
+					x: Math.round(Math.max(area.x, Math.min(x, area.x + area.width - state.width))),
+					y: Math.round(Math.max(area.y, Math.min(y, area.y + area.height - state.height))),
+				};
+				applyPlacement();
+			}
+		};
+		resources.add(this.displayService.onDidChangeDisplays(() => {
+			if (!this.lastNormalState) {
+				return;
+			}
+			const state = validateWindowState(this.lastNormalState, this.displayService.getAllDisplays(), this.workbenchState);
+			if (state) {
+				this.lastNormalState = state;
+				applyPlacement();
+				save();
+			}
+		}));
+		for (const [event, listener] of [
+			["blur", save], ["close", save],
+			["move", updatePlacement], ["resize", updatePlacement],
+			["moved", finishMove],
+			["unmaximize", applyPlacement], ["leave-full-screen", applyPlacement],
+		] as const) {
+			window.on(event, listener);
+			resources.add(toDisposable(() => window.removeListener(event, listener)));
+		}
+		return resources;
 	}
 
 	/** Captures normal bounds and flushes the complete window-session state. */
@@ -177,30 +254,44 @@ export class WindowsStateHandler {
 			: window.isMaximized()
 				? WindowMode.Maximized
 				: WindowMode.Normal;
+		if (this.lastNormalState?.workArea) {
+			const displays = this.displayService.getAllDisplays();
+			const previousDisplay = displays.find(display => display.id === this.lastNormalState?.displayId);
+			if (!previousDisplay || !sameBounds(previousDisplay.workArea, this.lastNormalState.workArea)) {
+				const placement = validateWindowState(this.lastNormalState, displays, this.workbenchState);
+				if (placement) {
+					this.lastNormalState = { ...placement, mode: WindowMode.Normal };
+					return { ...placement, mode };
+				}
+			}
+		}
 		const primaryBounds = readBounds(() =>
 			mode === WindowMode.Normal
 				? window.getBounds()
 				: window.getNormalBounds()
 		);
-		const bounds = primaryBounds ??
+		const bounds = (mode !== WindowMode.Normal && this.lastNormalState ? toBounds(this.lastNormalState) : primaryBounds) ??
 			readBounds(() => window.getBounds()) ??
-			this.lastNormalBounds;
+			(this.lastNormalState ? toBounds(this.lastNormalState) : undefined);
 		if (!bounds) {
 			return undefined;
 		}
 
-		this.lastNormalBounds = bounds;
-		let displayId: number | undefined;
-		if (mode === WindowMode.Fullscreen) {
-			const currentBounds = readBounds(() => window.getBounds()) ?? bounds;
-			displayId = this.displayService.getDisplayMatching(currentBounds).id;
-		}
-
-		return {
-			mode,
+		const display = this.displayService.getDisplayMatching(mode === WindowMode.Normal ? bounds : window.getBounds());
+		let placement: IWindowState = {
+			mode: WindowMode.Normal,
 			...bounds,
-			displayId,
+			displayId: display.id,
+			workArea: { ...display.workArea },
 		};
+		if (mode !== WindowMode.Normal && this.lastNormalState?.workArea && display.id !== this.lastNormalState.displayId) {
+			const adjusted = validateWindowState(this.lastNormalState, [display], this.workbenchState);
+			if (adjusted) {
+				placement = { ...adjusted, mode: WindowMode.Normal };
+			}
+		}
+		this.lastNormalState = placement;
+		return { ...placement, mode };
 	}
 }
 
@@ -391,6 +482,7 @@ function serializeUiState(state: IWindowState): unknown {
 			height: state.height,
 		},
 		...(state.displayId === undefined ? {} : { displayId: state.displayId }),
+		...(state.workArea === undefined ? {} : { workArea: state.workArea }),
 	};
 }
 
@@ -521,12 +613,28 @@ function parseUiState(value: unknown): IWindowState | undefined {
 	) {
 		return undefined;
 	}
+	let workArea: IWindowBounds | undefined;
+	if (value.workArea !== undefined) {
+		if (!isRecord(value.workArea)) {
+			return undefined;
+		}
+		const area = value.workArea;
+		workArea = readBounds(() => ({ x: area.x, y: area.y, width: area.width, height: area.height }));
+		if (!workArea) {
+			return undefined;
+		}
+	}
 
 	return {
 		mode,
 		...bounds,
 		displayId: value.displayId,
+		...(workArea === undefined ? {} : { workArea }),
 	};
+}
+
+function sameBounds(first: IWindowBounds, second: IWindowBounds): boolean {
+	return first.x === second.x && first.y === second.y && first.width === second.width && first.height === second.height;
 }
 
 function toBounds(state: IWindowState): IWindowBounds | undefined {

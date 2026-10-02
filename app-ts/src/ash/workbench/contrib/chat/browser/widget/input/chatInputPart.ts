@@ -619,7 +619,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		return select;
 	}
 
-	private statusText(state: ChatInputState): string {
+	protected statusText(state: ChatInputState): string {
 		if (state.error) return state.error;
 		if (this.dictationSession.isActive && this.speechToText.state === ChatSpeechToTextState.Transcribing) return localize('chat.input.dictationTranscribing', 'Transcribing…');
 		if (this.dictationSession.isActive) return localize('chat.input.dictationListening', 'Listening…');

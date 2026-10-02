@@ -1,4 +1,5 @@
 import { AbstractDisposable } from '../../../base/common/lifecycle.js';
+import type { JsonValue } from '../../../base/common/jsonValue.js';
 import type { INativeSystemWideKeybinding, INativeSystemWideKeybindingResult } from '../../native/common/nativeHost.js';
 
 export interface IGlobalShortcutRegistry {
@@ -9,7 +10,7 @@ export interface IGlobalShortcutRegistry {
 export interface GlobalKeybindingsMainServiceOptions {
 	readonly shortcuts: IGlobalShortcutRegistry;
 	readonly activeWindowId: () => number | undefined;
-	readonly runCommand: (windowId: number, commandId: string) => void | Promise<void>;
+	readonly runCommand: (windowId: number, commandId: string, args?: JsonValue) => void | Promise<void>;
 	readonly onError: (error: unknown) => void;
 }
 
@@ -75,6 +76,6 @@ export class GlobalKeybindingsMainService extends AbstractDisposable {
 			: [...this.byWindow].map(([windowId, bindings]) => ({ windowId, binding: bindings.get(accelerator) })).find(item => item.binding);
 		const binding = selected?.binding;
 		if (!binding) return;
-		void (async () => this.options.runCommand(selected.windowId, binding.commandId))().catch(this.options.onError);
+		void (async () => this.options.runCommand(selected.windowId, binding.commandId, binding.args))().catch(this.options.onError);
 	}
 }

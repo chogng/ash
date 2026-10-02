@@ -17,10 +17,10 @@ is canonical for the renderer implementation and extension points.
 | Browser renderer lifecycle | `workbench/services/lifecycle/browser/lifecycleService.ts` | joins shutdown work when the browser page closes |
 | Electron renderer close | `workbench/services/lifecycle/electron-browser/lifecycleService.ts` | checks shutdown vetoes and joins save work before either Electron window closes |
 | Code profile | `code/common/codeSessionsProfile.ts` | defines the Code window identity and page route used by both browser and Electron entries |
-| Product composition | `browser/workbench.ts` | uses shared window identity and lifecycle services; owns the fixed titlebar/activitybar/sidebar/sessions/editor/auxiliarybar Part set |
+| Product composition | `browser/workbench.ts` | uses shared window identity and lifecycle services; owns the fixed titlebar/activitybar/sidebar/sessions/editor/auxiliarybar/panel Part set |
 | Code Files and Changes | `contrib/files/browser/`, `contrib/changes/browser/`, and `common/views.ts` | register only in the Sessions view catalog; Files reuses Explorer, Changes reads the selected conversation's Turn ledger, and both open the shared Workbench Editor Part |
 | Session file access | `services/workspace/browser/workspaceContextService.ts` and `contrib/providers/appServer/browser/sessionFileService.ts` | Explorer follows the selected Session directory; resource identities retain previously opened directories, while the transport adapter selects the Session directory protocol |
-| Layout | `browser/layoutPolicy.ts` | owns Sessions topology, geometry, Activity Bar position, sidebar and auxiliary visibility, and persisted sizes |
+| Layout | `browser/workbench.ts`, `browser/dockedAuxiliaryBarController.ts`, and `contrib/layout/browser/` | Workbench owns topology, geometry and persisted Part sizes/visibility. Code docks Details below the shared editor tabs and hosts its bottom Panel. The base controller restores session editors and panel views; the desktop controller owns the four Editor/Details states and managed Files/Changes tabs |
 | Appearance | `common/configuration.ts` and `contrib/modernUI/browser/` | own the independent Sessions layout, Activity Bar position, and size preferences |
 | Accounts and settings | `contrib/accounts/browser/` and `contrib/preferences/browser/` | the account icon opens a Sessions-owned menu with Settings and Return to Workbench; Settings opens a Sessions-owned page that reuses the Workbench setting widgets |
 | Window Sessions state | `services/sessions/browser/sessionsService.ts` | owns active/visible selections and Back/Forward history separately for Chat and Code |
@@ -178,7 +178,9 @@ displays the stored root and does not grant access.
 ## Tests and modification impact
 
 - `test/browser/sessions-layout.test.ts` protects fixed topology, required
-  Parts, and sidebar and auxiliary visibility.
+  Parts, docked Details geometry, and independent editor/detail visibility.
+- `contrib/layout/test/browser/desktopLayoutController.test.ts` covers common session editor and panel state, restoration ordering, draft materialization and shutdown.
+- `contrib/changes/test/browser/sessionChangesEditor.test.ts` verifies that hidden Changes editors ignore late results and reload content when shown.
 - `test/browser/sessionFileService.test.ts` protects Session directory routing across
   selection changes, directory moves, and archive. `changesView.test.ts` covers stale
   responses, keyboard Diff opening, combined review, and truncated content errors.
@@ -205,7 +207,7 @@ displays the stored root and does not grant access.
   Electron window, all six Parts, Activity Bar actions, list search, multiple Grid leaves, close, return flow,
   and system-wide shortcut registration and release.
 - `test/smoke/areas/sessions/sessions-code.spec.ts` verifies Files/Changes in Web and
-  Electron, file save through the real backend, and retained editor and view state.
+  Electron, all four Editor/Details states, Code-only Panel availability, protected managed tabs, file save through the real backend, and state restoration across pages and reload.
 - `platform/windows/test/electron-main/` verifies reuse,
   close and reopen ordering, resource release, initialization failure, and IPC commands.
 - `workbench/contrib/keybindings/test/electron-browser/` verifies shortcut

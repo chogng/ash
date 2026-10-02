@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { GlobalKeybindingsMainService, type IGlobalShortcutRegistry } from '../../electron-main/globalKeybindingsMainService.js';
 import type { INativeSystemWideKeybinding } from '../../../native/common/nativeHost.js';
+import { validateSystemWideKeybindings } from '../../../native/common/nativeHost.js';
 
 class TestShortcuts implements IGlobalShortcutRegistry {
 	readonly callbacks = new Map<string, () => void>();
@@ -67,4 +68,30 @@ test('unavailable operating-system shortcut reports its user label', () => {
 	assert.deepEqual(service.updateKeybindings(1, [{ ...binding('Control+Shift+B'), userSettingsLabel: 'ctrl+shift+b' }]), {
 		failed: ['ctrl+shift+b'],
 	});
+});
+
+test('system-wide shortcut retains and dispatches arguments after the editor owner closes', async () => {
+	const shortcuts = new TestShortcuts();
+	const calls: unknown[] = [];
+	const args = { draft: { mode: 'agent', text: 'Review this', contexts: [] } };
+	using service = new GlobalKeybindingsMainService({
+		shortcuts,
+		activeWindowId: () => 2,
+		runCommand: (windowId, commandId, options) => { calls.push({ windowId, commandId, options }); },
+		onError: error => { throw error; },
+	});
+	const payload = validateSystemWideKeybindings(JSON.parse(JSON.stringify([{ ...binding('Control+Shift+A'), args }])));
+	assert.throws(() => validateSystemWideKeybindings([{ ...binding('Control+Shift+A'), args: () => {} }]), /must be an object/);
+	assert.throws(() => validateSystemWideKeybindings([{ ...binding('Control+Shift+A'), unexpected: true }]), /Invalid system-wide/);
+	service.updateKeybindings(1, payload);
+	service.updateKeybindings(2, payload);
+	service.removeWindow(1);
+	shortcuts.callbacks.get('Control+Shift+A')!();
+	await Promise.resolve();
+	assert.deepEqual({ calls, releases: shortcuts.releases }, {
+		calls: [{ windowId: 2, commandId: 'workbench.action.openAgentsWindow', options: args }],
+		releases: [],
+	});
+	service.removeWindow(2);
+	assert.deepEqual(shortcuts.releases, ['Control+Shift+A']);
 });

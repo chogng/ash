@@ -10,7 +10,7 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IChatSpeechToTextService } from '../../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { IDictationOnboardingService } from '../../../../workbench/contrib/chat/browser/speechToText/dictationOnboarding.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
-import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
+import type { ChatInputDelegate, ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
 import { ChatDragAndDrop } from '../../../../workbench/contrib/chat/browser/widget/chatDragAndDrop.js';
@@ -104,7 +104,8 @@ export class NewChatInputWidget extends ChatInputPart {
 		this.tips = this._register(instantiationService.createInstance(ChatInputTipPresenter, {
 			container: tipContainer,
 			isEligible: () => !this.submittedMessage && this.model.items.length === 0
-				&& this.model.inputState.phase === 'ready' && !this.model.inputState.interaction,
+				&& (this.model.inputState.phase === 'ready' || (this.model.untitledSessionId !== undefined && this.model.inputState.phase === 'loading'))
+				&& !this.model.inputState.interaction,
 			focusInput: () => this.focus(),
 		}));
 		const footer = h(container.ownerDocument, 'div');
@@ -204,6 +205,14 @@ export class NewChatInputWidget extends ChatInputPart {
 		if (becameVisible) this.saveDraft();
 	}
 
+	protected override statusText(state: ChatInputState): string {
+		// Catalog loading keeps the local draft's welcome content in place; aria-busy exposes readiness.
+		if (this.model.untitledSessionId !== undefined && state.phase === 'loading' && !state.error) {
+			return '';
+		}
+		return super.statusText(state);
+	}
+
 	private saveDraft(): void {
 		const operation = this.writeDraft();
 		this.draftWrites.add(operation);
@@ -234,6 +243,7 @@ export class NewChatInputWidget extends ChatInputPart {
 
 	private updateConversation(): void {
 		const hasConversation = this.submittedMessage || this.model.items.length > 0;
+		this.element.setAttribute('aria-busy', String(this.model.inputState.phase === 'loading'));
 		this.element.classList.toggle('has-conversation', hasConversation);
 		this.heading.hidden = hasConversation;
 		this.tips.update();

@@ -53,6 +53,7 @@ async function mountBrowserSessions(modeId: WorkbenchModeId, profile: SessionsPr
 		const ownerWindow = container.ownerDocument.defaultView;
 		if (!ownerWindow) throw new Error('Sessions renderer requires an owner window');
 		const workbench = sessions.add(await Workbench.create({
+			contributionIds: [],
 			modeId,
 			profile,
 			api: host?.api ?? createDisconnectedRendererApi(),

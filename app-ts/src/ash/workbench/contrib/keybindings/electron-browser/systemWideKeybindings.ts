@@ -7,17 +7,22 @@ import type { INativeSystemWideKeybinding } from '../../../../platform/native/co
 
 export interface ISystemWideKeybindingSelection {
 	readonly candidates: readonly INativeSystemWideKeybinding[];
-	readonly unsupported: readonly string[];
-	readonly duplicates: readonly string[];
-	readonly ignoredWhen: readonly string[];
+	readonly unsupported: readonly ISystemWideKeybindingRejection[];
+	readonly duplicates: readonly ISystemWideKeybindingRejection[];
+	readonly ignoredWhen: readonly ISystemWideKeybindingRejection[];
+}
+
+export interface ISystemWideKeybindingRejection {
+	readonly commandId: string;
+	readonly userSettingsLabel: string;
 }
 
 /** Selects explicit user shortcuts that Electron can register with the operating system. */
 export function selectSystemWideKeybindings(bindings: readonly IKeybindingEntry[], operatingSystem: OperatingSystem): ISystemWideKeybindingSelection {
 	const candidates: INativeSystemWideKeybinding[] = [];
-	const unsupported: string[] = [];
-	const duplicates: string[] = [];
-	const ignoredWhen: string[] = [];
+	const unsupported: ISystemWideKeybindingRejection[] = [];
+	const duplicates: ISystemWideKeybindingRejection[] = [];
+	const ignoredWhen: ISystemWideKeybindingRejection[] = [];
 	const seen = new Set<string>();
 
 	for (const binding of bindings) {
@@ -25,19 +30,20 @@ export function selectSystemWideKeybindings(bindings: readonly IKeybindingEntry[
 		const key = operatingSystem === OperatingSystem.Macintosh ? binding.mac : operatingSystem === OperatingSystem.Windows ? binding.win : binding.linux;
 		const label = key === undefined ? binding.key : key;
 		if (label === null) continue;
+		const rejection = { commandId: binding.command, userSettingsLabel: label };
 		const parsed = parseKeybinding(label);
 		const accelerator = parsed ? toElectronAccelerator(resolveKeybinding(parsed, operatingSystem)) : undefined;
 		if (!accelerator) {
-			unsupported.push(label);
+			unsupported.push(rejection);
 			continue;
 		}
 		if (seen.has(accelerator)) {
-			duplicates.push(label);
+			duplicates.push(rejection);
 			continue;
 		}
 		seen.add(accelerator);
-		if (binding.when) ignoredWhen.push(label);
-		candidates.push({ accelerator, commandId: binding.command, userSettingsLabel: label });
+		if (binding.when) ignoredWhen.push(rejection);
+		candidates.push({ accelerator, commandId: binding.command, args: binding.args, userSettingsLabel: label });
 	}
 
 	return { candidates, unsupported, duplicates, ignoredWhen };
