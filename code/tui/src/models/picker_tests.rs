@@ -301,12 +301,13 @@ fn effort_labels_align_across_models_with_different_level_counts() {
     let value_columns = rendered
         .lines()
         .filter_map(|line| {
-            ["Medium", "None"]
+            ["Medium"]
                 .iter()
                 .find_map(|value| line.find(value).map(|index| line[..index].width()))
         })
         .collect::<Vec<_>>();
-    assert_eq!(value_columns.len(), 3);
+    assert_eq!(value_columns.len(), 2);
+    assert!(!rendered.contains("None"));
     assert!(
         value_columns
             .iter()
@@ -418,17 +419,20 @@ fn model_controls_share_keyboard_and_pointer_actions_without_consuming_search_in
     let choices = model_choices(&catalog, &config).unwrap();
     let mut picker = ListSelection::new(choices.model, choices.actions);
     let id = crate::widgets::list_selection::ListSelectionItemId::new("openai/gpt-6-astra");
-    for (key, control, option) in [
-        ('f', "fast", super::ModelOption::FastOn),
-        ('c', "context", super::ModelOption::Context272k),
+    for (index, control, option) in [
+        (0, "fast", super::ModelOption::FastOn),
+        (1, "context", super::ModelOption::Context272k),
     ] {
+        if index > 0 {
+            picker.handle_model_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        }
         let expected = ListSelectionOutcome::Activate(ModelSelectionAction::Configure {
             preference: "openai/gpt-6-astra".into(),
             revision: 7,
             option,
         });
         assert_eq!(
-            picker.handle_model_key(KeyEvent::new(KeyCode::Char(key), KeyModifiers::NONE)),
+            picker.handle_model_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)),
             expected
         );
         assert_eq!(
@@ -442,8 +446,9 @@ fn model_controls_share_keyboard_and_pointer_actions_without_consuming_search_in
             expected
         );
     }
-    assert!(picker.model_key_hints().text().contains("f Fast"));
-    assert!(picker.model_key_hints().text().contains("c context"));
+    assert!(picker.model_key_hints().text().contains("Tab setting"));
+    assert!(!picker.model_key_hints().text().contains("f Fast"));
+    assert!(!picker.model_key_hints().text().contains("c context"));
     picker.handle_model_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert!(!picker.model_key_hints().text().contains("f Fast"));
     assert!(!picker.model_key_hints().text().contains("c context"));
@@ -469,7 +474,7 @@ fn model_controls_localize_labels_and_pointer_columns_in_chinese() {
 }
 
 #[test]
-fn model_controls_hide_pointer_columns_on_narrow_terminals() {
+fn model_controls_keep_available_settings_visible_on_narrow_terminals() {
     assert_model_controls(40, crate::nls::Language::English);
 }
 
@@ -509,18 +514,28 @@ fn assert_model_controls(width: u16, language: crate::nls::Language) {
                 assert_eq!(y, 3, "controls only belong to the supported model row");
                 // Wide glyph continuation cells carry no independently rendered style.
                 if buffer[(x, y)].symbol() != " " {
-                    assert_eq!(buffer[(x, y)].fg, crate::render::test_context().focus());
+                    let focused = matches!(&target, ListSelectionPointerTarget::ItemControl { control, .. } if control == "fast");
+                    assert_eq!(
+                        buffer[(x, y)]
+                            .modifier
+                            .contains(ratatui::style::Modifier::UNDERLINED),
+                        focused
+                    );
+                    if focused {
+                        assert_eq!(buffer[(x, y)].fg, crate::render::test_context().focus());
+                    }
                 }
                 hits.push(target);
             }
         }
     }
-    if width == 40 {
-        assert!(hits.is_empty());
-    } else {
-        assert!(hits.iter().any(|target| matches!(target, ListSelectionPointerTarget::ItemControl { control, .. } if control == "fast")));
-        assert!(hits.iter().any(|target| matches!(target, ListSelectionPointerTarget::ItemControl { control, .. } if control == "context")));
-    }
+    assert!(hits.iter().any(|target| matches!(target, ListSelectionPointerTarget::ItemControl { control, .. } if control == "fast")));
+    assert!(hits.iter().any(|target| matches!(target, ListSelectionPointerTarget::ItemControl { control, .. } if control == "context")));
+    assert!(!terminal.backend().to_string().contains('—'));
+    assert!(
+        (40..width).all(|x| buffer[(x, 3)].symbol() == " "),
+        "settings stay next to the model instead of stretching to the edge"
+    );
     crate::tui_assert_snapshot!(
         format!("model_controls_{width}_{language:?}"),
         terminal.backend().to_string()
@@ -618,9 +633,9 @@ fn other_provider_controls_follow_capabilities_and_saved_preferences() {
                 .state_mut()
                 .focus_item(&ListSelectionItemId::new(&preference))
         );
-        for (key, control, option) in [
+        let mut visited = false;
+        for (control, option) in [
             (
-                'f',
                 "fast",
                 fast.then_some(if provider == "google" {
                     super::ModelOption::FastOff
@@ -629,7 +644,6 @@ fn other_provider_controls_follow_capabilities_and_saved_preferences() {
                 }),
             ),
             (
-                'c',
                 "context",
                 window.filter(|maximum| *maximum >= 1_000_000).map(|_| {
                     if provider == "qwen" {
@@ -640,23 +654,25 @@ fn other_provider_controls_follow_capabilities_and_saved_preferences() {
                 }),
             ),
         ] {
-            let expected = option.map_or(ListSelectionOutcome::Consumed, |option| {
-                ListSelectionOutcome::Activate(ModelSelectionAction::Configure {
+            if let Some(option) = option {
+                if visited {
+                    picker.handle_model_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+                }
+                visited = true;
+                let expected = ListSelectionOutcome::Activate(ModelSelectionAction::Configure {
                     preference: preference.clone(),
                     revision: 9,
                     option,
-                })
-            });
-            assert_eq!(
-                picker.handle_model_key(KeyEvent::new(KeyCode::Char(key), KeyModifiers::NONE)),
-                expected
-            );
-            if option.is_some() {
+                });
+                assert_eq!(
+                    picker.handle_model_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)),
+                    expected
+                );
                 assert_eq!(
                     picker.handle_model_click(
                         &ListSelectionPointerTarget::ItemControl {
                             item: ListSelectionItemId::new(&preference),
-                            control: control.into()
+                            control: control.into(),
                         },
                         ListSelectionClick::Single
                     ),
@@ -685,4 +701,273 @@ fn other_provider_controls_follow_capabilities_and_saved_preferences() {
         "other_provider_model_controls_chinese",
         terminal.backend().to_string()
     );
+}
+
+#[test]
+fn model_tab_cycles_only_editable_settings_resets_on_movement_and_removes_none() {
+    use crate::widgets::list_selection::ListSelection;
+    use crate::widgets::list_selection::ListSelectionItemFocus;
+    use crate::widgets::list_selection::ListSelectionItemId;
+    use crate::widgets::list_selection::ListSelectionOutcome;
+    use ash_protocol::ReasoningEffort;
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyEvent;
+    use crossterm::event::KeyModifiers;
+    let mut models = Vec::new();
+    for bits in (0..8).rev() {
+        let mut entry = catalog_entry("openai", &format!("model-{bits}"), &format!("Model {bits}"));
+        entry.supported_reasoning_efforts = if bits & 1 != 0 {
+            vec![
+                ReasoningEffort::None,
+                ReasoningEffort::Low,
+                ReasoningEffort::High,
+            ]
+        } else {
+            vec![ReasoningEffort::None]
+        };
+        entry.model_reasoning_effort = Some(ReasoningEffort::None);
+        if bits & 2 != 0 {
+            entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
+        }
+        if bits & 4 != 0 {
+            entry.maximum_context_window = Some(1_000_000);
+        }
+        models.push(entry);
+    }
+    let catalog = ModelListResult { models };
+    let mut config = crate::test_support::empty_config_snapshot();
+    config.model = Some(ModelRefDto {
+        provider: "openai".into(),
+        model: "model-7".into(),
+    });
+    config.model_reasoning_effort = Some(ReasoningEffort::None);
+    let choices = model_choices(&catalog, &config).unwrap();
+    let mut picker = ListSelection::new(choices.model, choices.actions);
+    for bits in (0..8).rev() {
+        let id = ListSelectionItemId::new(format!("openai/model-{bits}"));
+        assert_eq!(picker.state().selected_item().unwrap().id(), Some(&id));
+        let mut order = Vec::new();
+        if bits & 1 != 0 {
+            order.push(ListSelectionItemFocus::Segmented);
+        }
+        if bits & 2 != 0 {
+            order.push(ListSelectionItemFocus::Control("fast".into()));
+        }
+        if bits & 4 != 0 {
+            order.push(ListSelectionItemFocus::Control("context".into()));
+        }
+        assert_eq!(
+            picker.state().focused_item_setting(),
+            order.first().cloned()
+        );
+        let ModelSelectionAction::Select {
+            supported_efforts,
+            default_effort,
+            ..
+        } = picker.action(&id).unwrap()
+        else {
+            panic!()
+        };
+        assert!(!supported_efforts.contains(&ReasoningEffort::None));
+        assert_eq!(
+            *default_effort,
+            (bits & 1 != 0).then_some(ReasoningEffort::Low)
+        );
+        for index in 1..=order.len().max(1) {
+            assert_eq!(
+                picker.handle_model_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)),
+                ListSelectionOutcome::Consumed
+            );
+            assert_eq!(picker.state().selected_item().unwrap().id(), Some(&id));
+            assert_eq!(
+                picker.state().focused_item_setting(),
+                if order.is_empty() {
+                    None
+                } else {
+                    Some(order[index % order.len()].clone())
+                }
+            );
+        }
+        for index in 1..=order.len().max(1) {
+            picker.handle_model_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
+            assert_eq!(
+                picker.state().focused_item_setting(),
+                if order.is_empty() {
+                    None
+                } else {
+                    Some(order[(order.len() - index % order.len()) % order.len()].clone())
+                }
+            );
+        }
+        if bits & 1 != 0 {
+            for key in [KeyCode::Right, KeyCode::Right, KeyCode::Left] {
+                assert_eq!(
+                    picker.handle_model_key(KeyEvent::new(key, KeyModifiers::NONE)),
+                    ListSelectionOutcome::Consumed
+                );
+                assert!(matches!(
+                    picker.action(&id),
+                    Some(ModelSelectionAction::Select {
+                        effort: Some(ReasoningEffort::Low | ReasoningEffort::High),
+                        ..
+                    })
+                ));
+            }
+        }
+        // Move away from the initial field before selecting the next model.
+        picker.handle_model_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        if bits > 0 {
+            picker.handle_model_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        }
+    }
+    assert!(!picker.model_key_hints().text().contains("Tab"));
+    for key in ['f', 'c'] {
+        assert_eq!(
+            picker.handle_model_key(KeyEvent::new(KeyCode::Char(key), KeyModifiers::NONE)),
+            ListSelectionOutcome::Consumed
+        );
+    }
+    // Up resets the destination row too; the context-only row starts directly at context.
+    picker.handle_model_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    assert_eq!(
+        picker.state().focused_item_setting(),
+        Some(ListSelectionItemFocus::Segmented)
+    );
+    picker
+        .state_mut()
+        .focus_item(&ListSelectionItemId::new("openai/model-4"));
+    assert_eq!(
+        picker.state().focused_item_setting(),
+        Some(ListSelectionItemFocus::Control("context".into()))
+    );
+}
+
+#[test]
+fn model_settings_refresh_keeps_field_focus_and_unconfirmed_effort() {
+    use crate::widgets::list_selection::ListSelection;
+    use crate::widgets::list_selection::ListSelectionItemFocus;
+    use crate::widgets::list_selection::ListSelectionItemId;
+    use crate::widgets::list_selection::ListSelectionOutcome;
+    use ash_protocol::ReasoningEffort;
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyEvent;
+    use crossterm::event::KeyModifiers;
+    let mut entry = catalog_entry("openai", "gpt-6-astra", "GPT-6 Astra");
+    entry.supported_reasoning_efforts = vec![ReasoningEffort::Low, ReasoningEffort::High];
+    entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
+    entry.maximum_context_window = Some(1_050_000);
+    let mut catalog = ModelListResult {
+        models: vec![entry],
+    };
+    let mut config = crate::test_support::empty_config_snapshot();
+    config.revision = 7;
+    let choices = model_choices(&catalog, &config).unwrap();
+    let mut picker = ListSelection::new(choices.model, choices.actions);
+    picker.handle_model_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    picker.handle_model_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    let id = ListSelectionItemId::new("openai/gpt-6-astra");
+    let mut provider = provider_config("openai");
+    provider.fast_models.push("gpt-6-astra".into());
+    config.providers.insert("openai".into(), provider);
+    config.revision = 8;
+    picker.replace_model_choices(model_choices(&catalog, &config).unwrap());
+    assert_eq!(
+        picker.state().focused_item_setting(),
+        Some(ListSelectionItemFocus::Control("fast".into()))
+    );
+    assert!(matches!(
+        picker.action(&id),
+        Some(ModelSelectionAction::Select {
+            effort: Some(ReasoningEffort::High),
+            ..
+        })
+    ));
+    assert_eq!(
+        picker.handle_model_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE)),
+        ListSelectionOutcome::Activate(ModelSelectionAction::Configure {
+            preference: "openai/gpt-6-astra".into(),
+            revision: 8,
+            option: super::ModelOption::FastOff
+        })
+    );
+    catalog.models[0].capabilities.fast_mode = ash_protocol::CapabilitySupport::Unsupported;
+    picker.replace_model_choices(model_choices(&catalog, &config).unwrap());
+    assert_eq!(
+        picker.state().focused_item_setting(),
+        Some(ListSelectionItemFocus::Segmented)
+    );
+}
+
+#[test]
+fn model_tab_focus_is_visible_for_each_setting_in_chinese_and_on_narrow_terminals() {
+    use crate::widgets::list_selection::ListSelection;
+    use crate::widgets::list_selection::ListSelectionPointerTarget;
+    use crate::widgets::list_selection::pointer_target_at;
+    use ash_protocol::ReasoningEffort;
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyEvent;
+    use crossterm::event::KeyModifiers;
+    use ratatui::layout::Position;
+    use ratatui::layout::Rect;
+    use ratatui::style::Modifier;
+    let mut entry = catalog_entry("openai", "gpt-6-astra", "GPT-6 Astra");
+    entry.supported_reasoning_efforts = vec![
+        ReasoningEffort::Low,
+        ReasoningEffort::Medium,
+        ReasoningEffort::High,
+    ];
+    entry.model_reasoning_effort = Some(ReasoningEffort::Medium);
+    entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
+    entry.maximum_context_window = Some(1_050_000);
+    let catalog = ModelListResult {
+        models: vec![entry],
+    };
+    let mut frames = Vec::new();
+    for width in [80, 40] {
+        let choices =
+            model_choices(&catalog, &crate::test_support::empty_config_snapshot()).unwrap();
+        let mut picker = ListSelection::new(choices.model, choices.actions);
+        picker.state_mut().localize(crate::nls::Language::Chinese);
+        for setting in ["effort", "fast", "context"] {
+            let mut terminal = Terminal::new(TestBackend::new(width, 7)).unwrap();
+            terminal
+                .draw(|frame| {
+                    draw_body_with_pointer(
+                        frame,
+                        frame.area(),
+                        picker.state(),
+                        None,
+                        None,
+                        crate::render::test_context(),
+                    )
+                })
+                .unwrap();
+            let output = terminal.backend().to_string();
+            assert_eq!(output.contains('←'), setting == "effort");
+            assert_eq!(output.contains('→'), setting == "effort");
+            let buffer = terminal.backend().buffer();
+            let body = Rect::new(0, 0, width, 7);
+            let mut focused_hits = 0;
+            for x in 0..width {
+                if let Some(ListSelectionPointerTarget::ItemControl { control, .. }) =
+                    pointer_target_at(picker.state(), Rect::default(), body, Position::new(x, 3))
+                {
+                    if buffer[(x, 3)].symbol() != " " {
+                        assert_eq!(
+                            buffer[(x, 3)].modifier.contains(Modifier::UNDERLINED),
+                            control == setting
+                        );
+                        if control == setting {
+                            focused_hits += 1;
+                        }
+                    }
+                }
+            }
+            assert_eq!(focused_hits > 0, setting != "effort");
+            assert_eq!(buffer[(0, 3)].symbol(), ">");
+            frames.push(format!("{width} columns · {setting}\n{output}"));
+            picker.handle_model_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        }
+    }
+    crate::tui_assert_snapshot!("model_tab_focus_chinese", frames.join("\n"));
 }

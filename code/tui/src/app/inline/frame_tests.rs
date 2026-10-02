@@ -589,7 +589,7 @@ fn model_list_opens_inline_and_restores_input_after_close() {
         app.command_panel_key_hints()
             .unwrap()
             .localized_text(crate::nls::Language::Chinese),
-        "↑↓ 选择 · ←→ 调整 · / 搜索 · p 取消固定 · Enter 应用 · Esc 取消"
+        "↑↓ 选择 · Tab 设置项 · ←→ 调整 · / 搜索 · p 取消固定 · Enter 应用 · Esc 取消"
     );
     let pinned = text(&render(&app, 100, 32));
     assert_eq!(
@@ -607,7 +607,7 @@ fn model_list_opens_inline_and_restores_input_after_close() {
         app.command_panel_key_hints()
             .unwrap()
             .localized_text(crate::nls::Language::Chinese),
-        "↑↓ 选择 · ←→ 调整 · / 搜索 · p 固定 · Enter 应用 · Esc 取消"
+        "↑↓ 选择 · Tab 设置项 · ←→ 调整 · / 搜索 · p 固定 · Enter 应用 · Esc 取消"
     );
     let unpinned_chinese = text(&render(&app, 100, 32));
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));

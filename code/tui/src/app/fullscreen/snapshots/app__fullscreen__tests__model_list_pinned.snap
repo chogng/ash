@@ -10,10 +10,10 @@ expression: rendered
             │  │ Search models                                                      │ │             
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
             │  Pinned ─────────────────────────────────────────────────────────────── │             
-            │> gateway-model                                                 —    —   │             
+            │> gateway-model                                                          │             
             │                                                                         │             
             │  Other models ───────────────────────────────────────────────────────── │             
-            │  Unconfigured model                                            —    —   │             
+            │  Unconfigured model                                                     │             
             │                                                                         │             
   ──────────│                                                                         │───────────  
   > Build an│  ↑↓ select · / search · p unpin · Enter apply · Esc cancel              │             

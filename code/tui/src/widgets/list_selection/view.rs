@@ -1,3 +1,4 @@
+use super::ListSelectionItemFocus;
 use super::ListSelectionState;
 use super::state::ListSelectionItem;
 use crate::render::RenderContext;
@@ -74,13 +75,18 @@ pub(crate) fn pointer_target_at(
         1,
     );
     let controls = RowControls::new(row, &items);
-    for (control, area) in item.controls().iter().zip(controls.areas(row)) {
-        if area.contains(position)
-            && let Some(control) = &control.id
-        {
+    let focus = (view.selected_visible_index() == Some(index) && view.items_focused())
+        .then(|| view.focused_item_setting())
+        .flatten();
+    for (control, area) in item
+        .controls()
+        .iter()
+        .zip(controls.row(row, item, focus.as_ref()).controls)
+    {
+        if area.contains(position) {
             return Some(ListSelectionPointerTarget::ItemControl {
                 item: id,
-                control: control.clone(),
+                control: control.id.clone(),
             });
         }
     }
@@ -173,8 +179,6 @@ pub(crate) fn draw_body_with_pointer(
     } else {
         let list_area = with_state_column(areas[1]);
         let controls = RowControls::new(list_area, &visible_items);
-        let column_layout =
-            ItemColumnLayout::new(controls.content_width(list_area), &visible_items);
         let rows = view.item_rows(areas[1].width);
         for (row, &(index, detail)) in rows
             .iter()
@@ -209,58 +213,46 @@ pub(crate) fn draw_body_with_pointer(
                 );
                 continue;
             }
+            let focus = (selected && view.items_focused())
+                .then(|| view.focused_item_setting())
+                .flatten();
+            let layout = controls.row(row_area, item, focus.as_ref());
             draw_item(
                 frame,
-                if item.section_heading() {
-                    row_area
-                } else {
-                    Rect {
-                        width: controls.content_width(row_area),
-                        ..row_area
-                    }
-                },
+                layout.content,
                 item,
                 selected,
                 selected && view.items_focused(),
+                focus.as_ref(),
                 matches!(hovered, Some(ListSelectionPointerTarget::Item(id)) if item.id() == Some(id)),
                 matches!(pressed, Some(ListSelectionPointerTarget::Item(id)) if item.id() == Some(id)),
-                column_layout,
+                layout.columns,
                 view.expandable().then_some(view.expanded(item)),
                 context,
             );
-            for (control, area) in item.controls().iter().zip(controls.areas(row_area)) {
-                let target = item.id().zip(control.id.as_ref()).map(|(id, control)| {
-                    ListSelectionPointerTarget::ItemControl {
-                        item: id.clone(),
-                        control: control.clone(),
-                    }
+            for (control, area) in item.controls().iter().zip(layout.controls) {
+                let target = item.id().map(|id| ListSelectionPointerTarget::ItemControl {
+                    item: id.clone(),
+                    control: control.id.clone(),
                 });
+                let focused =
+                    focus.as_ref() == Some(&ListSelectionItemFocus::Control(control.id.clone()));
                 let mut style = crate::render::interaction_style(
                     context,
                     crate::render::InteractionState {
-                        target: if control.id.is_some() {
-                            crate::render::InteractionTarget::Rest
-                        } else {
-                            crate::render::InteractionTarget::Disabled
-                        },
-                        selected: control.id.is_some() && selected && view.items_focused(),
+                        target: crate::render::InteractionTarget::Rest,
+                        selected: focused,
                         hovered: target.is_some() && target.as_ref() == hovered,
                         pressed: target.is_some() && target.as_ref() == pressed,
                     },
                 );
-                if control.id.is_some()
-                    && selected
-                    && view.items_focused()
-                    && target.as_ref() != pressed
-                {
-                    style = style.fg(context.focus());
+                if focused && target.as_ref() != pressed {
+                    style = style.fg(context.focus()).add_modifier(Modifier::UNDERLINED);
                 }
-                let label = if control.id.is_some() {
-                    format!("[{}]", control.label.to_string())
-                } else {
-                    control.label.to_string()
-                };
-                frame.render_widget(Paragraph::new(label).style(style), area);
+                frame.render_widget(
+                    Paragraph::new(format!("[{}]", control.label.to_string())).style(style),
+                    area,
+                );
             }
         }
         for (area, count, position) in [
@@ -332,55 +324,125 @@ pub(crate) fn draw_body_with_pointer(
     }
 }
 
-// Shared row-column geometry keeps rendered controls and pointer activation aligned.
+// Compact settings share the same per-row geometry for drawing and pointer activation.
+// A narrow terminal shows the focused field instead of leaving its keyboard focus offscreen.
 struct RowControls {
-    widths: Vec<u16>,
+    columns: ItemColumnLayout,
+    value_width: u16,
+    widths: std::collections::BTreeMap<String, u16>,
+    compact: bool,
+}
+
+struct SettingRowLayout {
+    content: Rect,
+    columns: ItemColumnLayout,
+    controls: Vec<Rect>,
 }
 
 impl RowControls {
     fn new(area: Rect, items: &[&ListSelectionItem]) -> Self {
-        let count = items
+        let compact = items.iter().any(|item| {
+            !item.controls().is_empty()
+                || item
+                    .columns()
+                    .is_some_and(|columns| columns.segmented.is_some())
+        });
+        let mut columns = ItemColumnLayout::new(area.width, items);
+        if compact {
+            columns.leading_width = items
+                .iter()
+                .filter(|item| item.id().is_some())
+                .map(|item| item.label().width() as u16)
+                .max()
+                .unwrap_or(0)
+                .min(area.width.saturating_sub(ITEM_STATE_COLUMN_WIDTH));
+        }
+        let value_width = items
             .iter()
-            .map(|item| item.controls().len())
+            .filter_map(|item| item.columns()?.segmented.as_ref())
+            .map(|value| columns.segmented_prefix_width as u16 + value.label.width() as u16)
             .max()
             .unwrap_or(0);
-        let widths = (0..count)
-            .map(|index| {
-                items
-                    .iter()
-                    .filter_map(|item| item.controls().get(index))
-                    .map(|control| control.label.width() as u16 + 2)
-                    .max()
-                    .unwrap_or(0)
-            })
-            .collect::<Vec<_>>();
-        // On small terminals retain the model name and effort; keyboard actions remain available.
-        let required = widths.iter().map(|width| width + 2).sum::<u16>();
+        let mut widths = std::collections::BTreeMap::<String, u16>::new();
+        for control in items.iter().flat_map(|item| item.controls()) {
+            let width = control.label.width() as u16 + 2;
+            widths
+                .entry(control.id.clone())
+                .and_modify(|current| *current = (*current).max(width))
+                .or_insert(width);
+        }
         Self {
-            widths: if area.width >= required + 36 {
-                widths
-            } else {
-                Vec::new()
-            },
+            columns,
+            value_width,
+            widths,
+            compact,
         }
     }
 
-    fn content_width(&self, area: Rect) -> u16 {
-        area.width
-            .saturating_sub(self.widths.iter().map(|width| width + 2).sum::<u16>())
-    }
-
-    fn areas(&self, row: Rect) -> Vec<Rect> {
-        let mut x = row.x + self.content_width(row);
-        self.widths
+    fn row(
+        &self,
+        area: Rect,
+        item: &ListSelectionItem,
+        focus: Option<&ListSelectionItemFocus>,
+    ) -> SettingRowLayout {
+        let mut columns = self.columns;
+        if !self.compact || item.section_heading() {
+            return SettingRowLayout {
+                content: area,
+                columns,
+                controls: Vec::new(),
+            };
+        }
+        let has_value = item
+            .columns()
+            .is_some_and(|columns| columns.segmented.is_some());
+        let required = item
+            .controls()
             .iter()
-            .map(|width| {
-                x += 2;
-                let area = Rect::new(x, row.y, *width, 1);
-                x += width;
-                area
-            })
-            .collect()
+            .map(|control| self.widths[&control.id] + 2)
+            .sum::<u16>();
+        let mut content_width = ITEM_STATE_COLUMN_WIDTH
+            + columns.leading_width
+            + if has_value {
+                ITEM_COLUMN_GAP + self.value_width
+            } else {
+                0
+            };
+        let show_controls = if content_width + required <= area.width {
+            true
+        } else if matches!(focus, Some(ListSelectionItemFocus::Control(_))) {
+            content_width = (ITEM_STATE_COLUMN_WIDTH + columns.leading_width)
+                .min(area.width.saturating_sub(required));
+            columns.leading_width = content_width.saturating_sub(ITEM_STATE_COLUMN_WIDTH);
+            true
+        } else {
+            columns.leading_width = columns.leading_width.min(
+                area.width
+                    .saturating_sub(ITEM_STATE_COLUMN_WIDTH + ITEM_COLUMN_GAP + self.value_width),
+            );
+            content_width = area.width;
+            false
+        };
+        let mut x = area.x + content_width;
+        let controls = if show_controls {
+            item.controls()
+                .iter()
+                .map(|control| {
+                    x += 2;
+                    let width = self.widths[&control.id];
+                    let rect = Rect::new(x, area.y, width, 1);
+                    x += width;
+                    rect.intersection(area)
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        SettingRowLayout {
+            content: Rect::new(area.x, area.y, content_width.min(area.width), 1),
+            columns,
+            controls,
+        }
     }
 }
 
@@ -678,6 +740,7 @@ fn draw_item(
     item: &ListSelectionItem,
     selected: bool,
     show_marker: bool,
+    item_focus: Option<&ListSelectionItemFocus>,
     hovered: bool,
     pressed: bool,
     column_layout: ItemColumnLayout,
@@ -793,15 +856,16 @@ fn draw_item(
         .saturating_sub(column_layout.gap)
         .saturating_sub(middle_x);
     if let Some(value) = &columns.segmented {
-        let active = show_marker && value.adjustable;
+        let value_focused = matches!(item_focus, Some(ListSelectionItemFocus::Segmented));
+        let active = value_focused && value.adjustable;
         let indicator_color = if pressed {
             context.pressed_foreground()
-        } else if selected {
+        } else if value_focused {
             selected_foreground
         } else {
             context.muted()
         };
-        let filled_color = if selected || pressed {
+        let filled_color = if value_focused || pressed {
             indicator_color
         } else {
             context.segmented_active()
@@ -840,7 +904,7 @@ fn draw_item(
         ));
         spans.push(Span::styled(
             value.label.as_str(),
-            Style::default().fg(if selected || active {
+            Style::default().fg(if value_focused {
                 indicator_color
             } else {
                 context.muted()

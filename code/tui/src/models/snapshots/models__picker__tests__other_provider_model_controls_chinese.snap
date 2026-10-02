@@ -5,15 +5,15 @@ expression: terminal.backend().to_string()
 "╭──────────────────────────────────────────────────────────────────────────────────────────────────╮"
 "│ 搜索模型                                                                                         │" Hidden by multi-width symbols: [(3, " "), (5, " "), (7, " "), (9, " ")]
 "╰──────────────────────────────────────────────────────────────────────────────────────────────────╯"
-"> Claude Opus 5.5                                                                  [加速 关]  [1m]  " Hidden by multi-width symbols: [(85, " "), (87, " "), (90, " ")]
-"  Gemini 3.8 Flash                                                                 [加速 开]  [1m]  " Hidden by multi-width symbols: [(85, " "), (87, " "), (90, " ")]
-"  Grok 4.7                                                                         [加速 关]  —     " Hidden by multi-width symbols: [(85, " "), (87, " "), (90, " ")]
-"  MiniMax M2.7                                                                     [加速 关]  —     " Hidden by multi-width symbols: [(85, " "), (87, " "), (90, " ")]
-"  Qwen 3.8 Max                                                                     —          [272k]"
-"  Kimi K3                                                                          —          [1m]  "
-"  DeepSeek V4 Pro                                                                  —          [1m]  "
-"  MiMo V2.6 Pro                                                                    —          [1m]  "
-"  GLM-5.3                                                                          —          [1m]  "
+"> Claude Opus 5.5   [加速 关]  [1m]                                                                 " Hidden by multi-width symbols: [(22, " "), (24, " "), (27, " ")]
+"  Gemini 3.8 Flash  [加速 开]  [1m]                                                                 " Hidden by multi-width symbols: [(22, " "), (24, " "), (27, " ")]
+"  Grok 4.7          [加速 关]                                                                       " Hidden by multi-width symbols: [(22, " "), (24, " "), (27, " ")]
+"  MiniMax M2.7      [加速 关]                                                                       " Hidden by multi-width symbols: [(22, " "), (24, " "), (27, " ")]
+"  Qwen 3.8 Max      [272k]                                                                          "
+"  Kimi K3           [1m]                                                                            "
+"  DeepSeek V4 Pro   [1m]                                                                            "
+"  MiMo V2.6 Pro     [1m]                                                                            "
+"  GLM-5.3           [1m]                                                                            "
 "                                                                                                    "
 "                                                                                                    "
 "                                                                                                    "

@@ -609,9 +609,13 @@ fn model_options_work_in_both_modes_and_keep_the_draft_after_dismissal() {
         app.update(ModelEvent::PickerOpened(
             crate::models::model_choices(&catalog, &config).unwrap(),
         ));
-        for (key, option) in [('f', ModelOption::FastOn), ('c', ModelOption::Context272k)] {
+        for option in [ModelOption::FastOn, ModelOption::Context272k] {
             assert_eq!(
-                app.handle_key(KeyEvent::new(KeyCode::Char(key), KeyModifiers::NONE)),
+                app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)),
+                None
+            );
+            assert_eq!(
+                app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)),
                 Some(AppCommand::Models(ModelCommand::Configure {
                     preference: "openai/gpt-6-astra".into(),
                     revision: 8,

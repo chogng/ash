@@ -9,8 +9,8 @@ expression: "render(&app, 100, 18)"
             │  ╭────────────────────────────────────────────────────────────────────╮ │             
             │  │ Search models                                                      │ │             
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
-            │> gateway-model                                                 —    —   │             
-            │  Unconfigured model                                            —    —   │             
+            │> gateway-model                                                          │             
+            │  Unconfigured model                                                     │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             

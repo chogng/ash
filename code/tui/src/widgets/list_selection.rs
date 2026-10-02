@@ -12,6 +12,7 @@ pub(crate) use state::ListSelectionAdjustment;
 pub(crate) use state::ListSelectionGroup;
 pub(crate) use state::ListSelectionInputOutcome;
 pub(crate) use state::ListSelectionItem;
+pub(crate) use state::ListSelectionItemFocus;
 pub(crate) use state::ListSelectionItemId;
 pub(crate) use state::ListSelectionModel;
 pub(crate) use state::ListSelectionSegmentedValue;

@@ -5,7 +5,7 @@ expression: terminal.backend().to_string()
 "╭──────────────────────────────────────╮"
 "│ Search models                        │"
 "╰──────────────────────────────────────╯"
-"> GPT-6 Astra                           "
+"> GPT-6 Astra  [Fast off]  [1m]         "
 "  GPT-4o                                "
 "                                        "
 "                                        "

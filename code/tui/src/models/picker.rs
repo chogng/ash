@@ -1,8 +1,10 @@
 use crate::keymap::bindings;
 use crate::widgets::list_selection::ListSelection;
+use crate::widgets::list_selection::ListSelectionAdjustment;
 use crate::widgets::list_selection::ListSelectionClick;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
+use crate::widgets::list_selection::ListSelectionItemFocus;
 use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::list_selection::ListSelectionOutcome;
@@ -223,40 +225,54 @@ impl ListSelection<ModelSelectionAction> {
         &mut self,
         key: KeyEvent,
     ) -> ListSelectionOutcome<ModelSelectionAction> {
+        if key.kind == KeyEventKind::Press && self.state().items_focused() {
+            if (key.code == KeyCode::Tab && key.modifiers.is_empty())
+                || (key.code == KeyCode::BackTab
+                    && (key.modifiers.is_empty() || key.modifiers == KeyModifiers::SHIFT))
+                || (key.code == KeyCode::Tab && key.modifiers == KeyModifiers::SHIFT)
+            {
+                let direction = if key.code == KeyCode::Tab && key.modifiers.is_empty() {
+                    ListSelectionAdjustment::Next
+                } else {
+                    ListSelectionAdjustment::Previous
+                };
+                self.state_mut().cycle_item_setting(direction);
+                return ListSelectionOutcome::Consumed;
+            }
+        }
         if key.kind == KeyEventKind::Press
             && key.modifiers.is_empty()
             && self.state().items_focused()
         {
             if matches!(key.code, KeyCode::Left | KeyCode::Right) {
-                if let Some(id) = self
+                let Some(id) = self
                     .state()
                     .selected_item()
                     .and_then(|item| item.id())
                     .cloned()
-                    && let Some(value) = self.action_mut(&id).and_then(|action| {
-                        action.adjust_effort(if key.code == KeyCode::Right { 1 } else { -1 })
-                    })
-                {
-                    self.state_mut().set_item_segmented_value(&id, value);
+                else {
+                    return ListSelectionOutcome::Consumed;
+                };
+                match self.state().focused_item_setting() {
+                    Some(ListSelectionItemFocus::Segmented) => {
+                        if let Some(value) = self.action_mut(&id).and_then(|action| {
+                            action.adjust_effort(if key.code == KeyCode::Right { 1 } else { -1 })
+                        }) {
+                            self.state_mut().set_item_segmented_value(&id, value);
+                        }
+                    }
+                    Some(ListSelectionItemFocus::Control(control)) => {
+                        return self
+                            .action(&id)
+                            .and_then(|action| action.configure(&control))
+                            .map_or(
+                                ListSelectionOutcome::Consumed,
+                                ListSelectionOutcome::Activate,
+                            );
+                    }
+                    None => {}
                 }
                 return ListSelectionOutcome::Consumed;
-            }
-            if matches!(key.code, KeyCode::Char('f') | KeyCode::Char('c')) {
-                let control = if key.code == KeyCode::Char('f') {
-                    "fast"
-                } else {
-                    "context"
-                };
-                return self
-                    .state()
-                    .selected_item()
-                    .and_then(|item| item.id())
-                    .and_then(|id| self.action(id))
-                    .and_then(|action| action.configure(control))
-                    .map_or(
-                        ListSelectionOutcome::Consumed,
-                        ListSelectionOutcome::Activate,
-                    );
             }
             if key.code == KeyCode::Char('p')
                 && let Some(ModelSelectionAction::Select {
@@ -284,13 +300,8 @@ impl ListSelection<ModelSelectionAction> {
         if !self.state_mut().focus_pointer(target) {
             return ListSelectionOutcome::Consumed;
         }
-        if let ListSelectionPointerTarget::ItemControl { control, .. } = target {
-            let code = match control.as_str() {
-                "fast" => KeyCode::Char('f'),
-                "context" => KeyCode::Char('c'),
-                _ => return ListSelectionOutcome::Consumed,
-            };
-            return self.handle_model_key(KeyEvent::new(code, KeyModifiers::NONE));
+        if matches!(target, ListSelectionPointerTarget::ItemControl { .. }) {
+            return self.handle_model_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
         }
         if matches!(target, ListSelectionPointerTarget::Item(_))
             && click == ListSelectionClick::Double
@@ -321,31 +332,27 @@ impl ListSelection<ModelSelectionAction> {
         };
         static HINTS: std::sync::LazyLock<Vec<crate::widgets::key_hint::KeyHints>> =
             std::sync::LazyLock::new(|| {
-                (0..16)
+                (0..4)
                     .map(|bits| {
                         let mut hints = crate::widgets::key_hint::KeyHints::compact()
                             .with_compact_action("↑↓", "select");
                         if bits & 1 != 0 {
-                            hints = hints.with_compact_action("←→", "adjust");
-                        }
-                        if bits & 2 != 0 {
-                            hints = hints.with_compact_action("f", "Fast");
-                        }
-                        if bits & 4 != 0 {
-                            hints = hints.with_compact_action("c", "context");
+                            hints = hints
+                                .with_compact_action("Tab", "setting")
+                                .with_compact_action("←→", "adjust");
                         }
                         hints
                             .with_compact_action("/", "search")
-                            .with_compact_action("p", if bits & 8 != 0 { "unpin" } else { "pin" })
+                            .with_compact_action("p", if bits & 2 != 0 { "unpin" } else { "pin" })
                             .with_compact_action("Enter", "apply")
                             .with_compact_action("Esc", "cancel")
                     })
                     .collect()
             });
-        &HINTS[usize::from(action.supports_effort())
-            | (usize::from(fast.is_some()) << 1)
-            | (usize::from(context.is_some()) << 2)
-            | (usize::from(*pinned) << 3)]
+        let settings = usize::from(action.supports_effort())
+            + usize::from(fast.is_some())
+            + usize::from(context.is_some());
+        &HINTS[usize::from(settings > 0) | (usize::from(*pinned) << 1)]
     }
 
     pub(crate) fn replace_model_choices(&mut self, choices: ModelChoices) {
@@ -402,12 +409,26 @@ pub(crate) fn model_choices(
         let preference = format!("{}/{}", model.provider, model.model);
         let pinned = pins.contains(&model);
         let id = ListSelectionItemId::new(&preference);
-        let supported_efforts = entry.supported_reasoning_efforts.clone();
+        let supported_efforts = entry
+            .supported_reasoning_efforts
+            .iter()
+            .copied()
+            .filter(|effort| *effort != ReasoningEffort::None)
+            .collect::<Vec<_>>();
         let effort = (config.model.as_ref() == Some(&model))
             .then_some(config.model_reasoning_effort)
             .flatten()
-            .filter(|effort| supported_efforts.contains(effort));
-        let default_effort = entry.model_reasoning_effort;
+            .and_then(|effort| {
+                if effort == ReasoningEffort::None {
+                    supported_efforts.first().copied()
+                } else {
+                    supported_efforts.contains(&effort).then_some(effort)
+                }
+            });
+        let default_effort = entry
+            .model_reasoning_effort
+            .filter(|effort| supported_efforts.contains(effort))
+            .or_else(|| supported_efforts.first().copied());
         let provider = config.providers.get(&model.provider);
         let fast = (entry.capabilities.fast_mode == ash_protocol::CapabilitySupport::Supported)
             .then(|| provider.is_some_and(|config| config.fast_models.contains(&model.model)));
@@ -452,7 +473,7 @@ pub(crate) fn model_choices(
             Some(enabled) => {
                 item.with_control("fast", if enabled { "Fast on" } else { "Fast off" })
             }
-            None => item.with_readonly_control("—"),
+            None => item,
         };
         item = match context {
             Some(window) => item.with_control(
@@ -463,7 +484,7 @@ pub(crate) fn model_choices(
                     window => format!("{}k", window / 1000),
                 },
             ),
-            None => item.with_readonly_control("—"),
+            None => item,
         };
         if pinned {
             pinned_items.push(item);

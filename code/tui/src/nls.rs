@@ -3348,6 +3348,7 @@ const UI_TRANSLATIONS: &[Translation] = &[
     translation("ago", "前", "前", "il y a"),
     translation("add", "追加", "添加", "ajouter"),
     translation("adjust", "調整", "调整", "ajuster"),
+    translation("setting", "設定項目", "设置项", "réglage"),
     translation(
         "Fast mode is not supported by this model",
         "このモデルは高速モードに対応していません",

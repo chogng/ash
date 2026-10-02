@@ -19,6 +19,6 @@ expression: output
 "  ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮  "
 "  │ Search models                                                                                                    │  "
 "  ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯  "
-"> GPT-6 Astra    ← ██ ██ ██ → Medium                                                                  [Fast off]  [1m]  "
+"> GPT-6 Astra      ██ ██ ██   Medium  [Fast off]  [1m]                                                                  "
 "                                                                                                                        "
-"  ↑↓ select · ←→ adjust · f Fast · c context · / search · p pin · Enter apply · Esc cancel                              "
+"  ↑↓ select · Tab setting · ←→ adjust · / search · p pin · Enter apply · Esc cancel                                     "

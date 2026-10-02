@@ -61,8 +61,15 @@ pub(crate) struct ListSelectionSegmentedValue {
 /// Opaque row actions interpreted by the feature that owns the list.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct ListSelectionItemControl {
-    pub(super) id: Option<String>,
+    pub(super) id: String,
     pub(super) label: Text,
+}
+
+/// The setting within a selected row that receives horizontal adjustment.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum ListSelectionItemFocus {
+    Segmented,
+    Control(String),
 }
 
 impl ListSelectionItem {
@@ -171,15 +178,7 @@ impl ListSelectionItem {
 
     pub(crate) fn with_control(mut self, id: impl Into<String>, label: impl Into<Text>) -> Self {
         self.controls.push(ListSelectionItemControl {
-            id: Some(id.into()),
-            label: label.into(),
-        });
-        self
-    }
-
-    pub(crate) fn with_readonly_control(mut self, label: impl Into<Text>) -> Self {
-        self.controls.push(ListSelectionItemControl {
-            id: None,
+            id: id.into(),
             label: label.into(),
         });
         self
@@ -187,6 +186,24 @@ impl ListSelectionItem {
 
     pub(super) fn controls(&self) -> &[ListSelectionItemControl] {
         &self.controls
+    }
+
+    fn setting_focus_order(&self) -> Vec<ListSelectionItemFocus> {
+        let mut order = Vec::new();
+        if self
+            .columns
+            .as_ref()
+            .and_then(|columns| columns.segmented.as_ref())
+            .is_some_and(|value| value.adjustable)
+        {
+            order.push(ListSelectionItemFocus::Segmented);
+        }
+        order.extend(
+            self.controls
+                .iter()
+                .map(|control| ListSelectionItemFocus::Control(control.id.clone())),
+        );
+        order
     }
 
     pub(crate) fn with_selection_foreground(mut self, color: Color) -> Self {
@@ -486,6 +503,7 @@ pub(crate) struct ListSelectionState {
     selected_visible: Option<usize>,
     search: Option<SearchBoxState>,
     focus: ListSelectionFocus,
+    item_focus: Option<ListSelectionItemFocus>,
     message: Option<String>,
     expanded: std::collections::BTreeSet<ListSelectionItemId>,
 }
@@ -509,6 +527,7 @@ impl ListSelectionState {
             selected_visible: None,
             search,
             focus: ListSelectionFocus::Items,
+            item_focus: None,
             message: None,
             expanded: Default::default(),
         };
@@ -557,15 +576,26 @@ impl ListSelectionState {
                     .any(|item| item.id() == Some(id) && item.has_expandable_details())
             })
         });
-        if let Some(id) = selected
+        if let Some(id) = selected.as_ref()
             && let Some(index) = self
                 .visible_items()
                 .iter()
-                .position(|item| item.id() == Some(&id))
+                .position(|item| item.id() == Some(id))
         {
             self.selected_visible = Some(index);
         }
         self.reconcile_selection();
+        // Configuration refreshes retain the same field; a removed field resets to the
+        // first setting that remains on the selected row.
+        if self.selected_item().and_then(ListSelectionItem::id) != selected.as_ref()
+            || !self.selected_item().is_some_and(|item| {
+                self.item_focus
+                    .as_ref()
+                    .is_some_and(|focus| item.setting_focus_order().contains(focus))
+            })
+        {
+            self.item_focus = None;
+        }
         if self.focus == ListSelectionFocus::Search && self.search.is_none()
             || self.focus == ListSelectionFocus::Tabs && !self.show_tabs()
             || self.focus == ListSelectionFocus::Action && !self.has_action()
@@ -614,6 +644,9 @@ impl ListSelectionState {
 
     /// Selects a stable item across groups and moves keyboard focus to it.
     pub(crate) fn focus_item(&mut self, id: &ListSelectionItemId) -> bool {
+        if self.selected_item().and_then(ListSelectionItem::id) != Some(id) {
+            self.item_focus = None;
+        }
         self.scroll_offset = None;
         let Some((tab, item)) = self
             .tabs
@@ -673,9 +706,16 @@ impl ListSelectionState {
                 true
             }
             super::ListSelectionPointerTarget::Search => self.focus_search(),
-            super::ListSelectionPointerTarget::Item(id)
-            | super::ListSelectionPointerTarget::ItemControl { item: id, .. } => {
+            super::ListSelectionPointerTarget::Item(id) => {
+                self.item_focus = None;
                 self.focus_item(id)
+            }
+            super::ListSelectionPointerTarget::ItemControl { item, control } => {
+                if !self.focus_item(item) {
+                    return false;
+                }
+                self.item_focus = Some(ListSelectionItemFocus::Control(control.clone()));
+                true
             }
         }
     }
@@ -694,6 +734,34 @@ impl ListSelectionState {
 
     pub(crate) fn items_focused(&self) -> bool {
         self.focus == ListSelectionFocus::Items
+    }
+
+    pub(crate) fn focused_item_setting(&self) -> Option<ListSelectionItemFocus> {
+        self.item_focus.clone().or_else(|| {
+            self.selected_item()?
+                .setting_focus_order()
+                .into_iter()
+                .next()
+        })
+    }
+
+    pub(crate) fn cycle_item_setting(&mut self, direction: ListSelectionAdjustment) {
+        let order = self
+            .selected_item()
+            .map(ListSelectionItem::setting_focus_order)
+            .unwrap_or_default();
+        if order.is_empty() {
+            return;
+        }
+        let current = self
+            .focused_item_setting()
+            .and_then(|focus| order.iter().position(|item| *item == focus))
+            .unwrap_or(0);
+        let next = match direction {
+            ListSelectionAdjustment::Next => (current + 1) % order.len(),
+            ListSelectionAdjustment::Previous => (current + order.len() - 1) % order.len(),
+        };
+        self.item_focus = Some(order[next].clone());
     }
 
     pub(crate) fn action_focused(&self) -> bool {
@@ -766,6 +834,7 @@ impl ListSelectionState {
             return false;
         }
         self.selected_visible = Some(index);
+        self.item_focus = None;
         true
     }
 
@@ -911,6 +980,7 @@ impl ListSelectionState {
                 }
                 _ => {
                     self.set_focus(ListSelectionFocus::Items);
+                    self.item_focus = None;
                     self.selected_visible = self.visible_len().checked_sub(1).map(|last| {
                         navigation.offset(self.selected_visible.unwrap_or(0), last, PAGE_ROWS)
                     });
@@ -1110,6 +1180,7 @@ impl ListSelectionState {
     }
 
     fn move_selection(&mut self, direction: ListSelectionDirection) {
+        let previous = self.selected_visible;
         let visible_len = self.visible_len();
         if visible_len == 0 {
             self.selected_visible = None;
@@ -1121,9 +1192,13 @@ impl ListSelectionState {
             ListSelectionDirection::Next => selected.saturating_add(1).min(visible_len - 1),
         });
         self.skip_section_heading(direction);
+        if self.selected_visible != previous {
+            self.item_focus = None;
+        }
     }
 
     fn select_first_visible(&mut self) {
+        self.item_focus = None;
         self.selected_visible = (self.visible_len() > 0).then_some(0);
         self.skip_section_heading(ListSelectionDirection::Next);
     }
