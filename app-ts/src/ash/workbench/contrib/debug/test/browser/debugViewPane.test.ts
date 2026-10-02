@@ -91,6 +91,7 @@ class FakeDebugService extends Disposable implements IDebugService {
 	constructor(source: IDebugSource = { name: "generated.ts", sourceReference: 33 }) { super(); this.sessions = Object.freeze([this._register(new FakeDebugSession("session-one", "One", source)), this._register(new FakeDebugSession("session-two", "Two", source))]); }
 	async refresh() { return this.configurations; }
 	async start() { return this.sessions[0]!; }
+	async startDebugging() { return this.sessions[0]!; }
 	async startCompound() { return this.sessions; }
 	setActiveSession(session: IDebugSession): void { this.activate(session); }
 	async restart(session = this.session) { return session!; }

@@ -36,6 +36,7 @@ export class TestingViewPane extends ViewPane {
 	private readonly scriptDisposables = this._register(new DisposableStore());
 	private readonly runAllButton: Button;
 	private readonly runSelectedButton: Button;
+	private readonly debugButton: Button;
 	private readonly failedButton: Button;
 	private readonly refreshButton: Button;
 	private readonly cancelButton: Button;
@@ -63,6 +64,7 @@ export class TestingViewPane extends ViewPane {
 		controls.className = 'ash-testing-controls';
 		this.runAllButton = this.makeButton(controls, localize('testing.runAll', 'Run All Tests'), () => testing.runTests(testing.tests.map(test => test.key)));
 		this.runSelectedButton = this.makeButton(controls, localize('testing.runSelected', 'Run Selected'), () => testing.runTests([...new Set(this.selected.flatMap(item => item.keys))]));
+		this.debugButton = this.makeButton(controls, localize('testing.debugSelected', 'Debug Selected Test'), () => testing.debugTest(this.selected[0]!.test!.key));
 		this.failedButton = this.makeButton(controls, localize('testing.rerunFailed', 'Rerun Failed'), () => testing.rerunFailedTests());
 		this.refreshButton = this.makeButton(controls, localize('testing.refresh', 'Refresh Tests'), () => testing.refresh());
 		this.cancelButton = this.makeButton(controls, localize('testing.cancel', 'Cancel Tests'), () => testing.cancelTests());
@@ -93,8 +95,8 @@ export class TestingViewPane extends ViewPane {
 		this._register(this.tree.onDidChangeSelection(event => { this.selected = event.elements; this.render(); }));
 		this._register(this.tree.onDidOpen(event => {
 			const test = event.element.test;
-			if (test) {
-				this.invoke(() => this.editors.openEditor({ resource: test.resource }, { ...event.editorOptions, selection: new Range(test.line, 1, test.line, 1) }, event.sideBySide ? 'sideGroup' : 'activeGroup'));
+			if (test?.resource && test.source) {
+				this.invoke(() => this.editors.openEditor({ resource: test.resource! }, { ...event.editorOptions, selection: new Range(test.source!.line, 1, test.source!.line, 1) }, event.sideBySide ? 'sideGroup' : 'activeGroup'));
 			} else if (event.browserEvent instanceof KeyboardEvent && (event.browserEvent.key === 'Enter' || event.browserEvent.key === ' ')) { this.tree.toggleCollapsed(event.element.id); }
 		}));
 		const result = h(document, 'section');
@@ -142,10 +144,11 @@ export class TestingViewPane extends ViewPane {
 		const busy = this.testing.isDiscovering || this.testing.isRunningTests;
 		this.runAllButton.enabled = !busy && this.testing.tests.length > 0;
 		this.runSelectedButton.enabled = !busy && this.selected.length > 0;
+		this.debugButton.enabled = !busy && this.selected.length === 1 && this.selected[0]?.test?.debuggable === true;
 		this.failedButton.enabled = !busy && results.some(result => result.state === 'failed' || result.state === 'errored');
 		this.refreshButton.enabled = !busy;
 		this.cancelButton.enabled = busy;
-		this.statusDomNode.textContent = this.error ?? (this.testing.isDiscovering ? localize('testing.discovering', 'Discovering tests…') : this.testing.isRunningTests ? localize('testing.running', 'Running tests…') : this.testing.tests.length === 0 ? localize('testing.empty', 'No Rust #[test] cases found. Test scripts are listed below.') : localize('testing.summary', '{0} tests · {1} passed · {2} failed · {3} skipped', this.testing.tests.length, results.filter(result => result.state === 'passed').length, results.filter(result => result.state === 'failed' || result.state === 'errored').length, results.filter(result => result.state === 'skipped').length));
+		this.statusDomNode.textContent = this.error ?? (this.testing.isDiscovering ? localize('testing.discovering', 'Building and discovering tests…') : this.testing.isDebuggingTest ? localize('testing.debugging', 'Debugging test…') : this.testing.isRunningTests ? localize('testing.running', 'Running tests…') : this.testing.tests.length === 0 ? localize('testing.empty', 'No Rust tests found. Test scripts are listed below.') : localize('testing.summary', '{0} tests · {1} passed · {2} failed · {3} skipped', this.testing.tests.length, results.filter(result => result.state === 'passed').length, results.filter(result => result.state === 'failed' || result.state === 'errored').length, results.filter(result => result.state === 'skipped').length));
 		if (this.renderedTests !== this.testing.tests) {
 			this.renderedTests = this.testing.tests;
 			this.tree.setChildren(this.buildTree());
@@ -169,15 +172,17 @@ export class TestingViewPane extends ViewPane {
 			const id = `${test.dirId}:${test.package}:${test.targetKind}:${test.target}`;
 			let files = packages.get(id);
 			if (!files) { files = new Map(); packages.set(id, files); }
-			const tests = files.get(test.path) ?? [];
-			tests.push(test); files.set(test.path, tests);
+			const path = test.source?.path ?? '';
+			const tests = files.get(path) ?? [];
+			tests.push(test); files.set(path, tests);
 		}
 		return [...packages].map(([id, files]) => {
 			const tests = [...files.values()].flat();
 			const first = tests[0]!;
 			const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === first.dirId)!;
-			return { element: { id, label: `${folder.name} / ${first.package} / ${first.target}`, keys: tests.map(test => test.key) }, children: [...files].map(([path, cases]) => ({
-				element: { id: id + ':' + path, label: path, keys: cases.map(test => test.key) },
+			const target = first.targetKind === 'documentation' ? localize('testing.documentationTarget', '{0} · Documentation Tests', first.target) : first.target;
+			return { element: { id, label: `${folder.name} / ${first.package} / ${target}`, keys: tests.map(test => test.key) }, children: [...files].map(([path, cases]) => ({
+				element: { id: id + ':' + path, label: path || localize('testing.noSource', 'Tests without a source location'), keys: cases.map(test => test.key) },
 				children: cases.map(test => ({ element: { id: test.key, label: test.name, keys: [test.key], test } })),
 			})) };
 		});

@@ -1,3 +1,4 @@
+import { IAssetService } from '../../../platform/assets/common/assetService.js';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { generateUuid } from '../../../base/common/uuid.js';
@@ -85,6 +86,7 @@ services.registerInstance(IContextMenuService, {
 });
 services.registerInstance(IFileDialogService, { pickFileToSave: unexpected, showSaveConfirm: async () => saveDecision, showSaveDialog: async () => resource, showOpenDialog: async () => [resource] });
 services.registerInstance(IDialogService, { onWillShowDialog: AshEvent.None, onDidShowDialog: AshEvent.None, showMessage: unexpected, info: unexpected, warn: unexpected, error: async message => { errors.push(message); }, confirm: unexpected, prompt: unexpected, input: unexpected, about: unexpected });
+services.registerInstance(IAssetService, { importImage: unexpected, getVersion: unexpected, readVersion: unexpected });
 services.registerInstance(IFileService, {
 	onDidChangeFiles: AshEvent.None,
 	stat: async target => {

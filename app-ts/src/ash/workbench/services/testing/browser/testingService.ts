@@ -7,14 +7,15 @@ import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js
 import { URI } from '../../../../base/common/uri.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
-import { ITestExecutionService, type TestUpdate } from '../../../../platform/testing/common/testExecutionService.js';
+import { ITestExecutionService, type TestDebugLaunch, type TestUpdate } from '../../../../platform/testing/common/testExecutionService.js';
+import { IDebugService } from '../../debug/common/debugService.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IWorkingCopyService } from '../../workingCopy/common/workingCopyService.js';
 
 interface TestOperation {
 	readonly id: string;
 	readonly dirId: string;
-	readonly kind: 'discovery' | 'run';
+	readonly kind: 'discovery' | 'run' | 'debug';
 	readonly completion: Promise<void>;
 	readonly resolve: () => void;
 	readonly reject: (error: Error) => void;
@@ -22,6 +23,7 @@ interface TestOperation {
 	start?: Promise<void>;
 	accepted: boolean;
 	abandoned: boolean;
+	launch?: TestDebugLaunch;
 }
 
 interface OwnedTestProfileProvider {
@@ -40,6 +42,8 @@ export class TestingService extends Disposable implements ITestingService {
 	private discoveryController: AbortController | undefined;
 	private workspaceGeneration = 0;
 	private runController: AbortController | undefined;
+	private debugConfigurationId: string | undefined;
+	private get debugSession() { return this.debug.sessions.find(session => session.configuration.id === this.debugConfigurationId && session.state !== 'terminated' && session.state !== 'error'); }
 	readonly onDidChangeTests = this.testsEmitter.event;
 	private readonly profilesEmitter = this._register(new Emitter<readonly ITestProfile[]>());
 	private readonly startRunEmitter = this._register(new Emitter<ITestRun>());
@@ -57,14 +61,16 @@ export class TestingService extends Disposable implements ITestingService {
 	readonly onDidStartRun: Event<ITestRun> = this.startRunEmitter.event;
 	readonly onDidChangeRun: Event<ITestRun> = this.changeRunEmitter.event;
 
-	constructor(@ITaskService private readonly taskService: ITaskService, @ITestExecutionService private readonly execution: ITestExecutionService, @IWorkspaceContextService private readonly workspace: IWorkspaceContextService, @IWorkingCopyService private readonly workingCopies: IWorkingCopyService, @ILogService private readonly logService: ILogService) {
+	constructor(@ITaskService private readonly taskService: ITaskService, @ITestExecutionService private readonly execution: ITestExecutionService, @IWorkspaceContextService private readonly workspace: IWorkspaceContextService, @IWorkingCopyService private readonly workingCopies: IWorkingCopyService, @ILogService private readonly logService: ILogService, @IDebugService private readonly debug: IDebugService) {
 		super();
+		this._register(debug.onDidChangeSession(() => this.testsEmitter.fire()));
 		this._register(execution.onDidUpdate(update => this.acceptUpdate(update)));
 		this._register(execution.onDidDisconnect(() => {
 			const error = new Error(localize('testing.disconnected', 'The test connection closed. Refresh tests to reconnect.'));
 			for (const operation of this.operations.values()) { operation.abandoned = true; operation.reject(error); }
 			this.workspaceGeneration++;
 			this.runController?.abort();
+			this.debugConfigurationId = undefined;
 			this.discovery = undefined;
 			this.operations.clear();
 			this.catalogs.clear();
@@ -76,6 +82,7 @@ export class TestingService extends Disposable implements ITestingService {
 		}));
 		this._register(workspace.onDidChangeWorkspace(() => {
 			void this.releaseTestOperations().catch(error => this.reportError(error));
+			this.debugConfigurationId = undefined;
 			this.currentTests = [];
 			this.caseResults.clear();
 			this.testsEmitter.fire();
@@ -102,7 +109,8 @@ export class TestingService extends Disposable implements ITestingService {
 	get tests(): readonly ITestCase[] { return this.currentTests; }
 	get testResults(): readonly ITestCaseResult[] { return [...this.caseResults.values()]; }
 	get isDiscovering(): boolean { return this.discovery !== undefined; }
-	get isRunningTests(): boolean { return this.runController !== undefined; }
+	get isRunningTests(): boolean { return this.runController !== undefined || this.debugSession !== undefined; }
+	get isDebuggingTest(): boolean { return this.debugSession !== undefined; }
 
 	refreshTests(): Promise<void> {
 		if (this.isRunningTests) { return Promise.reject(new Error(localize('testing.alreadyRunning', 'A test run is already active.'))); }
@@ -168,9 +176,52 @@ export class TestingService extends Disposable implements ITestingService {
 		return this.runTests(this.testResults.filter(result => result.state === 'failed' || result.state === 'errored').map(result => result.key));
 	}
 
+	async debugTest(key: string): Promise<void> {
+		this.assertNotDisposed();
+		if (this.isRunningTests) { throw new Error(localize('testing.alreadyRunning', 'A test run is already active.')); }
+		const selected = this.currentTests.find(test => test.key === key && test.debuggable);
+		if (!selected) { throw staleSelection(); }
+		const controller = new AbortController();
+		this.runController = controller;
+		this.testsEmitter.fire();
+		try {
+			const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === selected.dirId)!;
+			for (const copy of this.workingCopies.getAll()) {
+				if (controller.signal.aborted) { return; }
+				if (copy.isDirty && extUriBiasedIgnorePathCase.isEqualOrParent(copy.resource, folder.uri)) { await copy.save(controller.signal); }
+			}
+			if (controller.signal.aborted) { return; }
+			await this.loadTests();
+			if (controller.signal.aborted) { return; }
+			const test = this.currentTests.find(test => test.key === key && test.debuggable);
+			const catalogId = this.catalogs.get(selected.dirId);
+			if (!test || !catalogId) { throw staleSelection(); }
+			const operation = this.createOperation(test.dirId, 'debug');
+			try {
+				await this.startOperation(operation, () => this.execution.prepareDebug(operation.id, test.dirId, catalogId, test.id));
+				if (controller.signal.aborted) { return; }
+				if (!operation.launch) { throw new Error(localize('testing.missingLaunch', 'The backend did not prepare a test debugger launch.')); }
+				const launch = operation.launch;
+				// Keep the configuration identity across DAP restarts, which may replace the session.
+				this.debugConfigurationId = operation.id;
+				const session = await this.debug.startDebugging({
+					id: operation.id, dirId: test.dirId, workspaceFolderName: folder.name,
+					name: localize('testing.debugName', 'Debug {0}', test.name), type: 'lldb-dap', request: 'launch',
+					adapter: { program: launch.adapterProgram, arguments: [] },
+					arguments: { program: launch.program, args: [...launch.arguments], cwd: launch.directory, stopOnEntry: false },
+				});
+				if (controller.signal.aborted) { await this.debug.stop(session); return; }
+			} finally { await this.releaseOperation(operation); }
+		} finally {
+			if (this.runController === controller) { this.runController = undefined; }
+			if (!this.isDisposed) { this.testsEmitter.fire(); }
+		}
+	}
+
 	async cancelTests(): Promise<void> {
 		this.discoveryController?.abort();
 		this.runController?.abort();
+		if (this.debugSession) { await this.debug.stop(this.debugSession); }
 		await settle([...this.operations.values()].map(async operation => {
 			await operation.start?.catch(() => undefined);
 			if (this.operations.get(operation.id) === operation && operation.accepted && !operation.abandoned) { await this.execution.cancel(operation.id); }
@@ -231,7 +282,7 @@ export class TestingService extends Disposable implements ITestingService {
 			if (folder) {
 				this.currentTests = [...this.currentTests.filter(test => test.dirId !== folder.id), ...update.tests.map(test => ({
 					...test, key: folder.id + ':' + test.id, dirId: folder.id,
-					resource: URI.joinPath(folder.uri, test.path),
+					resource: test.source ? URI.joinPath(folder.uri, test.source.path) : undefined,
 				}))];
 			}
 		}
@@ -239,8 +290,9 @@ export class TestingService extends Disposable implements ITestingService {
 			const key = operation.dirId + ':' + update.result.testId;
 			this.caseResults.set(key, { ...update.result, key });
 		}
+		if (update.launch) { operation.launch = update.launch; }
 		if (update.status === 'completed' || update.status === 'cancelled' && operation.kind === 'run') { operation.resolve(); }
-		if (update.status === 'cancelled' && operation.kind === 'discovery') { operation.reject(new Error(localize('testing.cancelled', 'Test operation cancelled.'))); }
+		if (update.status === 'cancelled' && operation.kind !== 'run') { operation.reject(new Error(localize('testing.cancelled', 'Test operation cancelled.'))); }
 		if (update.status === 'failed') { operation.reject(new Error(update.error ?? localize('testing.operationFailed', 'Test operation failed.'))); }
 		this.testsEmitter.fire();
 	}

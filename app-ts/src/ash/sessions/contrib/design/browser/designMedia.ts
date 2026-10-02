@@ -1,6 +1,6 @@
 import { encodeHex, VSBuffer } from '../../../../base/common/buffer.js';
-import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
-import { localize } from '../../../../nls.js';
+import { Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
+import { ImageResource } from '../../../../platform/media/browser/image.js';
 import type { DesignAssetVersion, DesignDocument } from '../common/model/document.js';
 import { flattenDesignShapes } from '../common/model/document.js';
 
@@ -20,21 +20,9 @@ export async function hashDesignMedia(bytes: Uint8Array): Promise<string> {
 	return encodeHex(VSBuffer.wrap(new Uint8Array(await crypto.subtle.digest('SHA-256', new Uint8Array(bytes)))));
 }
 
-/** Decode the original bytes before committing an import; filenames do not establish media type. */
-export async function inspectDesignImage(bytes: Uint8Array): Promise<Pick<DesignAssetVersion, 'mediaType' | 'width' | 'height'>> {
-	let mediaType: DesignAssetVersion['mediaType'];
-	if (bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71) { mediaType = 'image/png'; }
-	else if (bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) { mediaType = 'image/jpeg'; }
-	else if (new TextDecoder().decode(bytes.subarray(0, 4)) === 'RIFF' && new TextDecoder().decode(bytes.subarray(8, 12)) === 'WEBP') { mediaType = 'image/webp'; }
-	else { throw new TypeError(localize('sessions.design.imageTypeUnsupported', 'Choose a PNG, JPEG or WebP image.')); }
-	const image = await createImageBitmap(new Blob([new Uint8Array(bytes)], { type: mediaType }));
-	try { return { mediaType, width: image.width, height: image.height }; }
-	finally { image.close(); }
-}
-
 /** Preview URLs belong to one view; original bytes remain in the document working copy. */
 export class DesignMediaPreview extends Disposable {
-	private readonly urls = this._register(new DisposableMap<string, ReturnType<typeof toDisposable> & { readonly url: string }>());
+	private readonly urls = this._register(new DisposableMap<string, ImageResource>());
 
 	public getSources(document: DesignDocument, read: (version: DesignAssetVersion) => Uint8Array): ReadonlyMap<string, DesignImageSource> {
 		const sources = new Map<string, DesignImageSource>();
@@ -45,8 +33,7 @@ export class DesignMediaPreview extends Disposable {
 			used.add(version.sha256);
 			let resource = this.urls.get(version.sha256);
 			if (!resource) {
-				const url = URL.createObjectURL(new Blob([new Uint8Array(read(version))], { type: version.mediaType }));
-				resource = Object.assign(toDisposable(() => URL.revokeObjectURL(url)), { url });
+				resource = new ImageResource(read(version), version.mediaType);
 				this.urls.set(version.sha256, resource);
 			}
 			sources.set(shape.assetVersionId, { url: resource.url, width: version.width, height: version.height });

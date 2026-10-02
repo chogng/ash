@@ -283,7 +283,7 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 	}
 
 	private async answerReverseRequest(request: Record<string, unknown>): Promise<void> {
-		const sequence = positiveInteger(request.seq, "reverse request seq");
+		const sequence = positiveInteger(request.seq, "reverse request seq", true);
 		const command = string(request.command, "reverse request command");
 		try {
 			if (command !== "runInTerminal" || !this.runInTerminal) throw new Error(`Ash does not support Debug Adapter reverse request '${command}'`);
@@ -319,11 +319,11 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 }
 
 function response(value: Record<string, unknown>): DapResponse {
-	return { seq: positiveInteger(value.seq, "response seq"), type: "response", request_seq: positiveInteger(value.request_seq, "response request_seq"), success: boolean(value.success, "response success"), command: string(value.command, "response command"), ...(typeof value.message === "string" ? { message: value.message } : {}), ...(value.body === undefined ? {} : { body: value.body }) };
+	return { seq: positiveInteger(value.seq, "response seq", true), type: "response", request_seq: positiveInteger(value.request_seq, "response request_seq"), success: boolean(value.success, "response success"), command: string(value.command, "response command"), ...(typeof value.message === "string" ? { message: value.message } : {}), ...(value.body === undefined ? {} : { body: value.body }) };
 }
 
 function event(value: Record<string, unknown>): DapEvent {
-	return { seq: positiveInteger(value.seq, "event seq"), type: "event", event: string(value.event, "event name"), ...(value.body === undefined ? {} : { body: value.body }) };
+	return { seq: positiveInteger(value.seq, "event seq", true), type: "event", event: string(value.event, "event name"), ...(value.body === undefined ? {} : { body: value.body }) };
 }
 
 function stackFrame(value: unknown, index: number, workspace: URI): IDebugStackFrame {

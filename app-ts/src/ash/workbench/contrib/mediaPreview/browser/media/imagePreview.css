@@ -1,0 +1,60 @@
+.ash-image-preview {
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	min-height: 0;
+	color: var(--ash-foreground);
+	background: var(--ash-editor-background);
+}
+
+.ash-image-preview-controls {
+	flex: 0 0 auto;
+	padding: var(--ash-spacing-size80);
+}
+
+.ash-image-preview.hidden {
+	display: none;
+}
+
+.ash-image-preview-viewport {
+	flex: 1 1 auto;
+	min-height: 0;
+	min-width: 0;
+	overflow: auto;
+}
+
+.ash-image-preview-stage {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 100%;
+	min-height: 100%;
+	width: max-content;
+	height: max-content;
+}
+
+.ash-image-preview-image {
+	display: block;
+	flex: 0 0 auto;
+	background-color: var(--ash-editor-background);
+	background-image: conic-gradient(var(--ash-editorWidget-background) 25%, transparent 0 50%, var(--ash-editorWidget-background) 0 75%, transparent 0);
+	background-size: var(--ash-spacing-size160) var(--ash-spacing-size160);
+}
+
+.ash-image-preview-summary {
+	flex: 0 0 auto;
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+	font-size: var(--ash-fontSize-label1);
+	color: var(--ash-descriptionForeground);
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ash-image-preview:focus-visible,
+.ash-image-preview-viewport:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}

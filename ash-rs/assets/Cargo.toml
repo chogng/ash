@@ -1,0 +1,18 @@
+[package]
+name = "ash-assets"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+ash-utils-image = { workspace = true }
+image = { workspace = true, features = ["png", "jpeg", "webp"] }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

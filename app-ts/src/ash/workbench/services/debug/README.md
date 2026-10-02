@@ -9,7 +9,7 @@ The system-level ownership and current user-visible status are documented in [`d
 The call path is:
 
 ```text
-DebugService.start / startCompound
+DebugService.start / startDebugging / startCompound
   -> preLaunchTask through ITaskService
   -> DebugAdapterSession.start
   -> IDebugAdapterProcessService.start
@@ -23,6 +23,8 @@ DebugService.start / startCompound
 `DebugBreakpointDecorationProvider` is the only Debug-to-editor adapter. The editor owns a generic composable gutter contract and must not import Debug semantics. `DebugAdapterSession` also converts adapter source paths into URIs on the current local or Remote Workspace authority; `DebugViewPane` consumes that domain resource and never reinterprets a Remote path as local `file://`. Process lifetime, bounded DAP framing, trust retirement, and connection ownership remain backend responsibilities.
 
 ## Configuration and extension integration
+
+`startDebugging` also accepts a caller-supplied configuration, used by TestingService for an exact compiled test. It does not write `launch.json`; restart retains that configuration. F9 invokes `editor.debug.action.toggleBreakpoint` through the current editor and the same breakpoint owner. LLDB-DAP zero-sequence responses and events retain their adapter identity; request pairing uses `request_seq`, independently of the backend output cursor.
 
 Each `.vscode/launch.json` configuration can declare an explicit `debugAdapter.program` plus `debugAdapter.args`. If it omits `debugAdapter`, `parseLaunchConfigurationDocument` resolves the configuration `type` through the canonical `DebugAdapterFactoriesRegistry`. Declarative extensions register one caller-owned factory set for the program/argument descriptors contributed through `contributes.debuggers`; other runtime producers use independent registrations.
 

@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import { expect, test } from '../../../automation/test.js';
 
@@ -45,6 +46,52 @@ test.describe('built-in Rust testing', () => {
 		await expect(tree).toContainText('Cancelled');
 		await expect(pane.getByRole('button', { name: 'Run All Tests', exact: true })).toBeEnabled();
 	});
+	test('Rust test debugging hits a real breakpoint and macro and documentation tests execute', async ({ workbench, testWorkspace }) => {
+		test.setTimeout(120_000);
+		await writeFile(testWorkspace.rustFile, source + '\nmacro_rules! generated { () => { #[test] fn generated_case() { assert_eq!(3, 3); } } }\n#[cfg(test)] generated!();\n');
+		const manifest = join(testWorkspace.directory, 'Cargo.toml');
+		await writeFile(manifest, await readFile(manifest, 'utf8') + '\n[lib]\npath = "lib.rs"\n');
+		await writeFile(join(testWorkspace.directory, 'lib.rs'), '/// ```\n/// assert_eq!(2 + 2, 4);\n/// ```\npub fn docs() {}\n');
+		const page = workbench.page;
+		await workbench.quickaccess.runCommand('workbench.action.testing.refresh');
+		await page.getByRole('tab', { name: 'Testing', exact: true }).first().click();
+		const pane = page.locator('[data-view-id="ash.testing.view"]');
+		const tree = pane.getByRole('tree', { name: 'Tests' });
+		await expect(tree).toContainText('generated_case');
+		await expect(tree).toContainText('Documentation Tests');
+		await tree.getByRole('treeitem').filter({ has: page.locator('.ash-testing-row > span:first-child', { hasText: 'generated_case' }) }).click();
+		await pane.getByRole('button', { name: 'Run Selected', exact: true }).click();
+		await expect(pane.getByRole('status')).toContainText('1 passed');
+		await tree.getByRole('treeitem').filter({ has: page.locator('.ash-testing-row > span:first-child', { hasText: 'lib.rs - docs' }) }).click();
+		await expect(pane.getByRole('button', { name: 'Debug Selected Test', exact: true })).toBeDisabled();
+		await pane.getByRole('button', { name: 'Run Selected', exact: true }).click();
+		await expect(pane.getByRole('status')).toContainText('2 passed');
+		const passes = tree.getByRole('treeitem').filter({ has: page.locator('.ash-testing-row > span:first-child', { hasText: 'checks::passes' }) });
+		await passes.click();
+		await passes.press('Enter');
+		const editor = workbench.editors.groupAt(0).editor;
+		await expect(editor.element).toBeVisible();
+		await workbench.quickaccess.runCommand('editor.debug.action.toggleBreakpoint');
+		await expect(editor.element.locator('.ash-debug-breakpoint-gutter')).toHaveCount(1);
+		await editor.waitForEditorFocus();
+		await page.keyboard.press('F9');
+		await expect(editor.element.locator('.ash-debug-breakpoint-gutter')).toHaveCount(0);
+		await page.keyboard.press('F9');
+		await expect(editor.element.locator('.ash-debug-breakpoint-gutter')).toHaveCount(1);
+		await passes.click();
+		await pane.getByRole('button', { name: 'Debug Selected Test', exact: true }).click();
+		await expect(pane.getByRole('status')).toHaveText('Debugging test…', { timeout: 30_000 });
+		await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+		const debug = page.locator('[data-view-id="workbench.view.debug"]');
+		await expect(debug.getByRole('status')).toContainText('stopped');
+		await expect(debug.locator('.ash-debug-stack')).toContainText('checks::passes');
+		await expect(editor.element.locator('.ash-debug-breakpoint-gutter.verified')).toHaveCount(1);
+		await debug.getByRole('button', { name: 'Continue', exact: true }).click();
+		await expect(debug.getByRole('status')).toHaveText('0 debug configurations.');
+		await page.getByRole('tab', { name: 'Testing', exact: true }).first().click();
+		await expect(pane.getByRole('button', { name: 'Run All Tests', exact: true })).toBeEnabled();
+	});
+
 });
 
 test.describe('testing without a backend', () => {

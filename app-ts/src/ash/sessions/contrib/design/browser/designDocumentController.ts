@@ -12,7 +12,8 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignAssetVersion, type DesignDocument } from '../common/model/document.js';
 import { DocumentCommands } from '../common/commands/documentCommands.js';
 import type { DesignPoint } from '../common/core/geometry.js';
-import { encodeDesignMedia, hashDesignMedia, inspectDesignImage, type DesignImageSource } from './designMedia.js';
+import { encodeDesignMedia, hashDesignMedia, type DesignImageSource } from './designMedia.js';
+import { IAssetService } from '../../../../platform/assets/common/assetService.js';
 import { DesignModel } from '../common/model/designModel.js';
 import { exportDesignSvg } from './svgRenderer.js';
 import type { IWorkingCopy } from '../../../../workbench/services/workingCopy/common/workingCopyService.js';
@@ -45,6 +46,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 
 	constructor(
 		@IFileService private readonly files: IFileService,
+		@IAssetService private readonly assets: IAssetService,
 		@IFileDialogService private readonly fileDialogs: IFileDialogService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
@@ -105,17 +107,18 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 			const resources = await this.fileDialogs.showOpenDialog({ title: localize('sessions.design.importImage', 'Import image'), canSelectFiles: true, canSelectFolders: false, filters: [{ name: localize('sessions.design.images', 'Images'), extensions: ['png', 'jpg', 'jpeg', 'webp'] }] });
 			if (!resources || this.isDisposed) { return undefined; }
 			const read = await this.files.readFileBytes(resources[0]);
-			const metadata = await inspectDesignImage(read.bytes);
-			const sha256 = await hashDesignMedia(read.bytes);
+			const metadata = await this.assets.importImage({ assetId: generateUuid(), versionId: generateUuid(), name: basename(read.resource), source: read.resource, bytes: read.bytes });
+			const bytes = await this.assets.readVersion(metadata);
+			const sha256 = metadata.sha256;
 			if (this.isDisposed) { return undefined; }
 			if (this.model.version !== versionToken) { throw new Error(localize('sessions.design.importChanged', 'The design changed while the image was importing. Import it again at the current location.')); }
-			const version: DesignAssetVersion = { ...metadata, id: generateUuid(), sha256, path: `assets/${sha256}` };
-			const asset = { id: generateUuid(), name: basename(read.resource), versions: [version] };
+			const version: DesignAssetVersion = { mediaType: metadata.mediaType, width: metadata.width, height: metadata.height, id: metadata.versionId, sha256, path: `assets/${sha256}` };
+			const asset = { id: metadata.assetId, name: metadata.name, versions: [version] };
 			const scale = Math.min(1, 480 / Math.max(metadata.width, metadata.height));
 			const width = metadata.width * scale;
 			const height = metadata.height * scale;
 			const id = generateUuid();
-			this.media.set(sha256, new Uint8Array(read.bytes));
+			this.media.set(sha256, bytes);
 			new DocumentCommands(this.model).insertShape({ id, kind: 'image', assetId: asset.id, assetVersionId: version.id, crop: { x: 0, y: 0, width: 1, height: 1 }, x: center.x - width / 2, y: center.y - height / 2, width, height, rotation: 0, fill: '#ffffff' }, [...this.model.value.assets, asset]);
 			this.changeEmitter.fire({ message: localize('sessions.design.imageImported', 'Imported {0}', asset.name) });
 			return id;

@@ -31,7 +31,7 @@ Design 是 Sessions 专属的二维设计编辑器。本目录拥有设计文档
 | [contrib/motion/browser/designMotionWidget.ts](contrib/motion/browser/designMotionWidget.ts) | 关键帧编辑、时间线、播放时钟和动画采样数据；插值位于同贡献的 `common/motion.ts`，画布呈现由共享 View 负责 |
 | [contrib/code/browser/designCodeWidget.ts](contrib/code/browser/designCodeWidget.ts)、[designCodeGenerator.ts](contrib/code/browser/designCodeGenerator.ts) | 从已提交文档生成、显示和导出可运行代码 |
 | [browser/svgRenderer.ts](browser/svgRenderer.ts) | 画布与 SVG 导出共用的对象渲染 |
-| [browser/designMedia.ts](browser/designMedia.ts) | 导入图片的类型、尺寸及内容校验，各编辑器实例的图片预览 URL 生命周期 |
+| [browser/designMedia.ts](browser/designMedia.ts) | 媒体备份与导出编码、内容摘要；按设计引用管理每个实例的共享图片资源 |
 | [browser/designDocumentController.ts](browser/designDocumentController.ts) | `DesignDocumentController`，文件身份、读取版本、保存基准、异步文件操作和共享 `IWorkingCopy` 契约 |
 | [browser/designEditorPage.ts](browser/designEditorPage.ts) | `DesignEditorPage`，实现 `IEditorPane`，借用窗口文档，拥有编辑器装配、布局、焦点和浏览器关闭检查 |
 | [browser/designEditorService.ts](browser/designEditorService.ts)、[designViews.ts](browser/designViews.ts) | 窗口 Design 文档、工作副本注册与当前编辑器的可观察引用，以及借用该实例文档、选区和属性组件的 Layers 与 Shape properties 视图 |
@@ -69,6 +69,8 @@ Design 与 Editor 共用 Base、Platform 提供的生命周期、控件、配置
 多个 Widget 可以使用同一个文档控制器，共享已提交内容与历史，同时保留各自的选区和视口。Widget 借用控制器的模型；单独释放 Widget 会取消手势，释放 View、输入控制器、共享工具栏及该实例的全部贡献，并清理订阅和命令查找记录。View 释放画布的主题与配置订阅，Motion 释放播放时钟；文档仍由控制器持有。活动页切换只隐藏对应 Part，`EditorPart` 保留 Pane 实例；隐藏画布会取消手势并停止动画播放。关闭编辑器 Tab 时，`EditorPart` 通过工作副本确认保存、放弃或取消；确认后释放 Pane 和 Widget，并清除面板的当前编辑器引用。文档由窗口服务保留，重新打开 Design Tab 会继续使用它；窗口关闭时释放文档。多个编辑器分组打开同一画布时共享文档及历史，每个 Pane 保留自己的选区和视口。
 
 Design 通过 `sessions.common.main.ts` 加载，当前使用方是 Sessions。Design 消费 Workbench 的编辑器注册和工作副本契约；其基础层和共享服务保持既有依赖方向，不能导入本目录。
+
+图片类型识别、真实解码和尺寸读取由 [Platform 图片模块](../../../platform/media/browser/image.ts) 提供；`ImageResource` 创建并释放视图所用的对象 URL。[Workbench 图片预览](../../../workbench/contrib/mediaPreview/browser/imagePreview.ts) 和 Design 共用这套能力。普通文件查看负责适应窗口、原尺寸和缩放，Design 保留素材版本引用、裁切和文档历史。两种视图分别拥有预览资源，关闭一处不影响另一处；URL 不保存进文件，也不作为素材身份。后续 Library 可以消费同一模块，不需要导入 Design。
 
 Library 面向整个产品收集、查找和整理素材，Design 文档保存采用的确切素材版本及使用方式。设计模型不属于聊天记录，Library 的素材目录也不属于某个 Design Widget。当前 Library 只有导航入口，尚未提供素材目录或导入接口；本次图片从文件导入，原始字节随设计包保存。后续 Library 接入通过所属共享领域服务提供素材版本，Design 不持有另一份全局素材目录，也不要求 Library 导入 Design 的编辑模型。规划见 [DESIGN.md](DESIGN.md#library-与编辑器的归属)。
 

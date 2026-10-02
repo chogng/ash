@@ -107,6 +107,7 @@ impl TestingService {
                         tests: Some(snapshot.tests.clone()),
                         result: None,
                         error: snapshot.error.clone(),
+                        launch: None,
                     }
                 });
             },
@@ -163,6 +164,17 @@ impl TestingService {
             Catalog {
                 root: record.root.clone(),
                 tests,
+                documentation_names: snapshot
+                    .tests
+                    .iter()
+                    .filter(|test| test.target_kind == crate::TargetKind::Documentation)
+                    .fold(HashMap::<String, Vec<String>>::new(), |mut names, test| {
+                        names
+                            .entry(test.package.clone())
+                            .or_default()
+                            .push(test.name.clone());
+                        names
+                    }),
             }
         };
         self.start(
@@ -172,6 +184,78 @@ impl TestingService {
             OperationKind::Run,
             publish,
             move |worker| runner::run(&worker, catalog, execute),
+        )
+    }
+
+    pub fn prepare_debug(
+        &self,
+        owner: u64,
+        operation_id: String,
+        catalog_id: &str,
+        test_id: &str,
+        execute: Authorization,
+        publish: Arc<dyn Fn(Update) + Send + Sync>,
+    ) -> Result<(), TestingError> {
+        if execute.permission() != Permission::ExecuteCommands {
+            return Err(TestingError::PermissionRequired);
+        }
+        execute
+            .ensure_active()
+            .map_err(|_| TestingError::PermissionRequired)?;
+        let test = {
+            let records = self.operations.lock().expect("test registry mutex");
+            let record = records
+                .get(&(owner, catalog_id.to_owned()))
+                .ok_or(TestingError::NotFound)?;
+            if record.root != execute.dir().canonical_path() {
+                return Err(TestingError::InvalidInput);
+            }
+            let snapshot = record.operation.snapshot.lock().expect("test state mutex");
+            if snapshot.kind != OperationKind::Discovery
+                || snapshot.status != OperationStatus::Completed
+            {
+                return Err(TestingError::InvalidInput);
+            }
+            snapshot
+                .tests
+                .iter()
+                .find(|test| test.id == test_id && test.debuggable)
+                .cloned()
+                .ok_or(TestingError::InvalidInput)?
+        };
+        self.start(
+            owner,
+            operation_id,
+            execute.dir().canonical_path().to_owned(),
+            OperationKind::Debug,
+            publish,
+            move |worker| {
+                let launch = runner::prepare_debug(&execute, &test, &worker.cancellation.token());
+                worker.update(|snapshot| {
+                    match launch {
+                        Ok(launch) => {
+                            snapshot.launch = Some(launch);
+                            snapshot.status = OperationStatus::Completed;
+                        }
+                        Err(TestingError::Cancelled) => {
+                            snapshot.status = OperationStatus::Cancelled
+                        }
+                        Err(error) => {
+                            snapshot.error = Some(error.to_string());
+                            snapshot.status = OperationStatus::Failed;
+                        }
+                    }
+                    Update {
+                        operation_id: snapshot.operation_id.clone(),
+                        sequence: snapshot.sequence,
+                        status: snapshot.status,
+                        tests: None,
+                        result: None,
+                        error: snapshot.error.clone(),
+                        launch: snapshot.launch.clone(),
+                    }
+                });
+            },
         )
     }
 
@@ -262,6 +346,7 @@ impl TestingService {
                 results: Vec::new(),
                 error: None,
                 sequence: 0,
+                launch: None,
             }),
             cancellation: CancellationSource::new(),
             publish,

@@ -44,6 +44,7 @@ members = [
     "ash-rs/ash-home",
     "ash-rs/attachment-store",
     "ash-rs/attachments",
+    "ash-rs/assets",
     "ash-rs/app-server",
     "ash-rs/app-server-daemon",
     "ash-rs/app-server-client",
@@ -581,6 +582,7 @@ ash-slash-commands = { path = "ash-rs/slash-commands" }
 ash-sprite = { path = "code/sprite", default-features = false }
 ash-slash-launcher = { path = "ash-rs/slash-launcher" }
 ash-skills = { path = "ash-rs/skills" }
+assets = { package = "ash-assets", path = "ash-rs/assets" }
 ash-state = { path = "ash-rs/state" }
 ash-teams = { path = "ash-rs/teams" }
 ash-syntax = { path = "ash-rs/syntax" }

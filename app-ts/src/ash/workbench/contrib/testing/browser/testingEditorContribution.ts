@@ -2,6 +2,7 @@ import './media/testingEditorContribution.css';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { MouseTargetType, type ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
 import { Position } from '../../../../editor/common/core/position.js';
+import { extUri } from '../../../../base/common/resources.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { GlyphMarginLane, TrackedRangeStickiness } from '../../../../editor/common/model.js';
 import { TextDecorationCollection } from '../../../../editor/common/model/decorationCollection.js';
@@ -43,26 +44,24 @@ export class TestingEditorContribution extends Disposable {
 			const tests = this.decorations.decorations.filter(decoration => decoration.range.startLineNumber === target.position!.lineNumber);
 			if (tests.length === 0 || testing.isRunningTests || testing.isDiscovering) { return; }
 			event.event.preventDefault(); event.event.stopPropagation();
-			void testing.runTests(tests.map(test => test.metadata.key)).catch(error => this.report(error));
+			const execution = event.event.altKey && tests[0]!.metadata.debuggable ? testing.debugTest(tests[0]!.metadata.key) : testing.runTests(tests.map(test => test.metadata.key));
+			void execution.catch(error => this.report(error));
 		}));
-		if (model.getLanguageId() === 'rust' && testing.tests.length === 0 && !testing.isDiscovering) {
-			void testing.refreshTests().catch(error => this.report(error));
-		}
 	}
 
 	private update(): void {
 		const model = this.decorations.textModel;
 		const dirty = this.copies.get(model.uri).some(copy => copy.isDirty);
-		const tests = this.invalidated || dirty ? [] : this.testing.tests.filter(test => test.resource.toString() === model.uri.toString() && test.line <= model.lineCount);
+		const tests = this.invalidated || dirty ? [] : this.testing.tests.filter(test => test.resource && test.source && extUri.isEqual(test.resource, model.uri) && test.source.line <= model.lineCount);
 		this.decorations.replaceAll(tests.map(test => ({
-			range: Range.fromPositions(new Position(test.line, 1)),
+			range: Range.fromPositions(new Position(test.source!.line, 1)),
 			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 			metadata: test,
 			options: {
 				description: 'testing-run-test',
 				glyphMarginClassName: 'ash-testing-gutter',
 				glyphMargin: { position: GlyphMarginLane.Right, persistLane: true },
-				glyphMarginHoverMessage: { value: localize('testing.runGutter', 'Run {0} · {1}', test.name, testStateLabel(this.testing.testResults.find(result => result.key === test.key)?.state)) },
+				glyphMarginHoverMessage: { value: localize('testing.runGutter', 'Run {0} · {1}', test.name, testStateLabel(this.testing.testResults.find(result => result.key === test.key)?.state)) + (test.debuggable ? '\n' + localize('testing.debugGutter', 'Alt+Click to debug this test.') : '') },
 				zIndex: 10,
 			},
 		})));

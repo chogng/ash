@@ -286,6 +286,9 @@ impl AppServer {
             "memoryDiagnostics".into(),
             ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
         );
+        if self.assets.is_some() {
+            capabilities.contracts.insert("assets".into(), ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 });
+        }
         if self.home.is_some() {
             capabilities.contracts.insert(
                 "calls".into(),

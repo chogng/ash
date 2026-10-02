@@ -83,6 +83,31 @@ fn testing_rpc_discovers_runs_and_releases_only_the_issuing_connection() {
     );
     let run = await_complete(&server, &mut owner, "run");
     assert_eq!(run["results"][0]["state"], "passed");
+    assert_eq!(catalog["tests"][0]["source"]["path"], "src/lib.rs");
+    assert_eq!(catalog["tests"][0]["debuggable"], true);
+    let denied_debug = call(
+        &server,
+        &mut observer,
+        "testing/prepareDebug",
+        json!({"operationId":"debug","catalogId":"catalog","testId":id}),
+    );
+    assert_eq!(denied_debug["error"]["data"]["kind"], "TestingNotFound");
+    assert!(
+        call(
+            &server,
+            &mut owner,
+            "testing/prepareDebug",
+            json!({"operationId":"debug","catalogId":"catalog","testId":id})
+        )["result"]
+            .is_null()
+    );
+    let prepared = await_complete(&server, &mut owner, "debug");
+    assert_eq!(prepared["status"], "completed", "{prepared}");
+    assert_eq!(prepared["kind"], "debug");
+    assert_eq!(prepared["launch"]["testId"], id);
+    assert_eq!(prepared["launch"]["arguments"][0], "--exact");
+    assert_eq!(prepared["launch"]["arguments"][1], "passes");
+    assert!(std::path::Path::new(prepared["launch"]["program"].as_str().unwrap()).is_file());
     let updates: Vec<Value> = server
         .drain_notifications(&mut owner)
         .iter()
@@ -93,6 +118,11 @@ fn testing_rpc_discovers_runs_and_releases_only_the_issuing_connection() {
         updates
             .iter()
             .any(|update| update["params"]["result"]["state"] == "passed")
+    );
+    assert!(
+        updates
+            .iter()
+            .any(|update| update["params"]["launch"]["testId"] == id)
     );
     assert!(
         !server

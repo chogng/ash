@@ -1,3 +1,6 @@
+import { localize } from '../../../../nls.js';
+import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
+import { EditorContextKeys } from '../../../../editor/common/editorContextKeys.js';
 import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import { Keybinding, logicalKey } from "../../../../base/common/keybindings.js";
 import { type ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
@@ -5,6 +8,19 @@ import { IDebugService } from "../../../services/debug/common/debugService.js";
 import { IDebugConsoleService } from "../../../services/debug/common/debugConsoleService.js";
 import { IViewsService } from "../../../services/views/browser/viewsService.js";
 import { CLEAR_DEBUG_CONSOLE_COMMAND_ID, CONTINUE_DEBUG_COMMAND_ID, DEBUG_CONSOLE_VIEW_ID, DEBUG_VIEW_ID, FOCUS_DEBUG_CONSOLE_COMMAND_ID, PAUSE_DEBUG_COMMAND_ID, RESTART_DEBUG_COMMAND_ID, START_DEBUG_COMMAND_ID, STEP_INTO_DEBUG_COMMAND_ID, STEP_OUT_DEBUG_COMMAND_ID, STEP_OVER_DEBUG_COMMAND_ID, STOP_ALL_DEBUG_COMMAND_ID, STOP_DEBUG_COMMAND_ID } from "../common/debug.js";
+
+registerAction2(class ToggleBreakpointAction extends Action2 {
+	constructor() {
+		super({ id: 'editor.debug.action.toggleBreakpoint', title: localize('debug.toggleBreakpoint', 'Toggle Breakpoint'), f1: true, keybinding: { primary: Keybinding.single(logicalKey('F9')), when: EditorContextKeys.editorTextFocus.isEqualTo(true) } });
+	}
+	override run(accessor: ServicesAccessor): void {
+		const editors = accessor.get(ICodeEditorService);
+		const editor = editors.getFocusedCodeEditor() ?? editors.getActiveCodeEditor();
+		const model = editor?.getModel();
+		const position = editor?.getPosition();
+		if (model && position) { accessor.get(IDebugService).toggleBreakpoint(model.uri, position.lineNumber); }
+	}
+});
 
 registerAction2(class StartDebugAction extends Action2 {
 	constructor() { super({ id: START_DEBUG_COMMAND_ID, title: "Start Debugging", f1: true, keybinding: { primary: Keybinding.single(logicalKey("F5")) }, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 1 } }); }

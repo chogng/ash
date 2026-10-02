@@ -112,6 +112,11 @@ export class DebugService extends Disposable implements IDebugService {
 		if (!this.processes) throw new Error("This host does not provide the Code debug adapter capability");
 		const current = this.currentConfigurations.find(candidate => candidate.id === configuration.id);
 		if (!current) throw new Error("Debug configuration is no longer present in launch.json");
+		return this.startDebugging(current);
+	}
+
+	async startDebugging(current: IDebugConfiguration): Promise<IDebugSession> {
+		if (!this.processes) throw new Error("This host does not provide the Code debug adapter capability");
 		const root = current.dirId
 			? this.workspace.getWorkspace().folders.find(folder => folder.id === current.dirId)?.uri
 			: this.workspace.getWorkspace().folders[0]?.uri;
@@ -166,7 +171,7 @@ export class DebugService extends Disposable implements IDebugService {
 		if (session.capabilities.supportsRestart) { await session.restart(); return session; }
 		const configuration = session.configuration;
 		await this.stop(session);
-		return this.start(configuration);
+		return this.startDebugging(configuration);
 	}
 
 	async stop(session: IDebugSession | undefined = this.session): Promise<void> {

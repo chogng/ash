@@ -42,7 +42,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			if (!(view instanceof TestingViewPane)) { return undefined; }
 			const focused = view.element.ownerDocument.activeElement;
 			return new AccessibleContentProvider(AccessibleViewProviderId.Testing, { type },
-				() => type === AccessibleViewType.Help ? localize('testing.accessibilityHelp', 'Testing\nUse arrow keys to navigate packages, files, and tests. Press Enter to open a test. Use Tab to reach Run Selected, Run All Tests, Rerun Failed, Refresh Tests, or Cancel Tests. Select a test to read its output and open its failure location. Test Scripts run project commands in the terminal. Use the Run Test on Current Line command to run a test from the editor. Tests are saved before execution.') : view.getAccessibleContent(),
+				() => type === AccessibleViewType.Help ? localize('testing.accessibilityHelp', 'Testing\nUse arrow keys to navigate packages, files, and tests. Press Enter to open a test. Use Tab to reach Run Selected, Debug Selected Test, Run All Tests, Rerun Failed, Refresh Tests, or Cancel Tests. Select a test to read its output and open its failure location. Test Scripts run project commands in the terminal. Use Run Test on Current Line or Debug Test on Current Line in the editor. Press F9 in the editor to toggle a breakpoint. Alt+Click a test gutter icon to debug. Tests are saved before execution. Refresh builds test targets to discover macro and asynchronous tests. Documentation tests run through rustdoc; they cannot be debugged here.') : view.getAccessibleContent(),
 				() => { if (focused instanceof HTMLElement) { focused.focus(); } }, AccessibilityVerbositySettingId.Testing);
 		},
 	});

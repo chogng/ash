@@ -13,6 +13,15 @@ import type { AgentReadParams } from './types/AgentReadParams.js';
 import type { AgentReadResult } from './types/AgentReadResult.js';
 import type { AgentRoleListResult } from './types/AgentRoleListResult.js';
 import type { AppServerError } from './types/AppServerError.js';
+import type { AssetImportParams } from './types/AssetImportParams.js';
+import type { AssetImportStartParams } from './types/AssetImportStartParams.js';
+import type { AssetImportStartResult } from './types/AssetImportStartResult.js';
+import type { AssetImportWriteParams } from './types/AssetImportWriteParams.js';
+import type { AssetImportWriteResult } from './types/AssetImportWriteResult.js';
+import type { AssetReadParams } from './types/AssetReadParams.js';
+import type { AssetReadResult } from './types/AssetReadResult.js';
+import type { AssetVersionParams } from './types/AssetVersionParams.js';
+import type { AssetVersionResult } from './types/AssetVersionResult.js';
 import type { AttachmentImportRemoteParams } from './types/AttachmentImportRemoteParams.js';
 import type { AttachmentMaterializeResult } from './types/AttachmentMaterializeResult.js';
 import type { AttachmentUploadCancelParams } from './types/AttachmentUploadCancelParams.js';
@@ -434,6 +443,7 @@ import type { TerminalResizeParams } from './types/TerminalResizeParams.js';
 import type { TerminalWriteParams } from './types/TerminalWriteParams.js';
 import type { TestingDiscoverParams } from './types/TestingDiscoverParams.js';
 import type { TestingOperationParams } from './types/TestingOperationParams.js';
+import type { TestingPrepareDebugParams } from './types/TestingPrepareDebugParams.js';
 import type { TestingRunParams } from './types/TestingRunParams.js';
 import type { TestingSnapshot } from './types/TestingSnapshot.js';
 import type { ThreadGoalClearParams } from './types/ThreadGoalClearParams.js';
@@ -648,6 +658,12 @@ export interface AppServerRequestMap {
   "extensionHost/invoke/read": { params: ExtensionHostInvokeReadParams; response: ExtensionHostInvokeReadResult };
   "extensionHost/invoke/cancel": { params: ExtensionHostInvokeCancelParams; response: ExtensionHostInvokeCancelResult };
   "document/typst/compile": { params: TypstCompileParams; response: TypstCompileResult };
+  "asset/import/start": { params: AssetImportStartParams; response: AssetImportStartResult };
+  "asset/import/write": { params: AssetImportWriteParams; response: AssetImportWriteResult };
+  "asset/import/finish": { params: AssetImportParams; response: AssetVersionResult };
+  "asset/import/cancel": { params: AssetImportParams; response: null };
+  "asset/version": { params: AssetVersionParams; response: AssetVersionResult };
+  "asset/read": { params: AssetReadParams; response: AssetReadResult };
   "resource/metadata": { params: ResourceMetadataParams; response: ResourceMetadataResult };
   "resource/read": { params: ResourceReadParams; response: ResourceReadResult };
   "resource/release": { params: ResourceReleaseParams; response: null };
@@ -778,6 +794,7 @@ export interface AppServerRequestMap {
   "terminal/close": { params: TerminalCloseParams; response: null };
   "testing/discover": { params: TestingDiscoverParams; response: null };
   "testing/run": { params: TestingRunParams; response: null };
+  "testing/prepareDebug": { params: TestingPrepareDebugParams; response: null };
   "testing/read": { params: TestingOperationParams; response: TestingSnapshot };
   "testing/cancel": { params: TestingOperationParams; response: TestingSnapshot };
   "testing/release": { params: TestingOperationParams; response: null };
@@ -986,6 +1003,12 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "extensionHost/invoke/read": { method: "extensionHost/invoke/read" },
   "extensionHost/invoke/cancel": { method: "extensionHost/invoke/cancel" },
   "document/typst/compile": { method: "document/typst/compile" },
+  "asset/import/start": { method: "asset/import/start" },
+  "asset/import/write": { method: "asset/import/write" },
+  "asset/import/finish": { method: "asset/import/finish" },
+  "asset/import/cancel": { method: "asset/import/cancel" },
+  "asset/version": { method: "asset/version" },
+  "asset/read": { method: "asset/read" },
   "resource/metadata": { method: "resource/metadata" },
   "resource/read": { method: "resource/read" },
   "resource/release": { method: "resource/release" },
@@ -1116,6 +1139,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "terminal/close": { method: "terminal/close" },
   "testing/discover": { method: "testing/discover" },
   "testing/run": { method: "testing/run" },
+  "testing/prepareDebug": { method: "testing/prepareDebug" },
   "testing/read": { method: "testing/read" },
   "testing/cancel": { method: "testing/cancel" },
   "testing/release": { method: "testing/release" },

@@ -7,6 +7,13 @@ pub struct TestItem {
     pub target: String,
     pub target_kind: TargetKind,
     pub name: String,
+    pub source: Option<TestSource>,
+    pub debuggable: bool,
+    pub(crate) directory: PathBuf,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TestSource {
     pub path: String,
     pub line: usize,
 }
@@ -16,6 +23,7 @@ pub enum TargetKind {
     Library,
     Binary,
     Integration,
+    Documentation,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -43,6 +51,17 @@ pub struct TestResult {
 pub enum OperationKind {
     Discovery,
     Run,
+    Debug,
+}
+
+/// Prepared launch consumed by the existing DAP owner; it never starts a second debugger host.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DebugLaunch {
+    pub test_id: String,
+    pub program: String,
+    pub arguments: Vec<String>,
+    pub directory: String,
+    pub adapter_program: String,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -62,6 +81,7 @@ pub struct Snapshot {
     pub results: Vec<TestResult>,
     pub error: Option<String>,
     pub sequence: u64,
+    pub launch: Option<DebugLaunch>,
 }
 
 /// Ordered changes are delivered to the connection that started the operation.
@@ -73,9 +93,11 @@ pub struct Update {
     pub tests: Option<Vec<TestItem>>,
     pub result: Option<TestResult>,
     pub error: Option<String>,
+    pub launch: Option<DebugLaunch>,
 }
 
 pub(crate) struct Catalog {
     pub(crate) root: PathBuf,
     pub(crate) tests: Vec<TestItem>,
+    pub(crate) documentation_names: std::collections::HashMap<String, Vec<String>>,
 }

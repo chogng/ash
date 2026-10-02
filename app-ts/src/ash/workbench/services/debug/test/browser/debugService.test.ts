@@ -73,6 +73,26 @@ test("DebugService resolves adapter executables from the canonical factory sourc
 	assert.deepEqual(service.configurations[0]?.adapter, { program: "demo-adapter", arguments: ["--stdio"] });
 });
 
+test('DebugService launches and restarts supplied test configurations without launch.json entries', async () => {
+	const root = URI.file('C:\\project');
+	using tasks = new FakeTaskService();
+	using processes = new FakeDebugAdapterProcessService();
+	using adapters = new DebugAdapterFactoryRegistry();
+	using service = new DebugService(new FakeFileService(root, '{"version":"0.2.0","configurations":[]}'), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
+	await service.refresh();
+	const configuration = { id: 'test-launch', dirId: 'workspace', name: 'Debug test', type: 'lldb-dap', request: 'launch' as const, adapter: { program: 'lldb-dap', arguments: [] }, arguments: { program: 'test-binary', args: ['--exact', 'generated_case'], cwd: root.fsPath } };
+	const session = await service.startDebugging(configuration);
+	assert.deepEqual(service.configurations, []);
+	assert.deepEqual(processes.requests.find(request => request.command === 'launch')?.arguments, configuration.arguments);
+	const restarted = await service.restart(session);
+	assert.notEqual(restarted.id, session.id);
+	assert.equal(restarted.configuration, configuration);
+	assert.equal(processes.requests.filter(request => request.command === 'launch').length, 2);
+	assert.deepEqual(tasks.ran, []);
+	await service.stop(restarted);
+	assert.equal(service.sessions.length, 0);
+});
+
 class FakeFileService implements IFileService {
 	readonly onDidChangeFiles = Event.None;
 	constructor(private readonly root: URI, private readonly document = launchJson) {}
@@ -106,18 +126,20 @@ class FakeTaskService extends Disposable implements ITaskService {
 
 class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 	private readonly connectionEmitter = new Emitter<AppServerConnectionState>();
-	private readonly sessions = new Map<string, { messages: Array<{ readonly sequence: number; readonly message: unknown }>; next: number; protocol: number }>();
+	private readonly sessions = new Map<string, { messages: Array<{ readonly sequence: number; readonly message: unknown }>; next: number }>();
 	private nextSession = 1;
+	readonly requests: Record<string, unknown>[] = [];
 	readonly onConnectionState = this.connectionEmitter.event;
-	async start(): Promise<string> { const id = `debug-${this.nextSession++}`; this.sessions.set(id, { messages: [], next: 0, protocol: 100 }); return id; }
+	async start(): Promise<string> { const id = `debug-${this.nextSession++}`; this.sessions.set(id, { messages: [], next: 0 }); return id; }
 	async send(sessionId: string, message: unknown): Promise<void> {
 		const state = this.sessions.get(sessionId)!;
 		const request = message as Record<string, unknown>;
 		if (request.type !== "request") return;
+		this.requests.push(request);
 		const command = String(request.command);
-		if (command === "launch") this.enqueue(state, { seq: state.protocol++, type: "event", event: "initialized" });
+		if (command === "launch") this.enqueue(state, { seq: 0, type: "event", event: "initialized" });
 		const body = command === "initialize" ? { supportsConfigurationDoneRequest: true } : {};
-		this.enqueue(state, { seq: state.protocol++, type: "response", request_seq: request.seq, success: true, command, body });
+		this.enqueue(state, { seq: 0, type: "response", request_seq: request.seq, success: true, command, body });
 	}
 	async read(sessionId: string, afterSequence: number, maxMessages: number): Promise<IDebugAdapterProcessReadResult> { const state = this.sessions.get(sessionId)!; return { messages: state.messages.filter(message => message.sequence >= afterSequence).slice(0, maxMessages), nextSequence: state.next, outputGap: false, stderr: "", exited: false, exitCode: null, protocolError: null }; }
 	async close(sessionId: string): Promise<void> { this.sessions.delete(sessionId); }

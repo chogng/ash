@@ -1,5 +1,5 @@
 import { URI } from '../../../../../base/common/uri.js';
-import { TestExecutionService } from '../common/testExecutionService.js';
+import { TestExecutionService, TestDebugService } from '../common/testExecutionService.js';
 import { Event } from '../../../../../base/common/event.js';
 import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
 import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
@@ -21,7 +21,8 @@ test("TestingService exposes only test tasks and projects passed and failed runs
 	]);
 	using workspace = new WorkspaceContextService({ id: 'empty', folders: [] });
 	using copies = new BrowserWorkingCopyService();
-	using service = new TestingService(tasks, noExecution, workspace, copies, new NullLoggerService());
+	using debug = new TestDebugService();
+	using service = new TestingService(tasks, noExecution, workspace, copies, new NullLoggerService(), debug.service);
 	assert.deepEqual(service.profiles.map(profile => profile.label), ["Unit", "Integration"]);
 
 	const run = await service.run(service.profiles[0]!);
@@ -43,7 +44,8 @@ test("TestingService owns dynamic Test Profile providers and maps profiles to te
 	using tasks = new FakeTaskService([task("unit", "Unit", "test"), task("build", "Build", "build")]);
 	using workspace = new WorkspaceContextService({ id: 'empty', folders: [] });
 	using copies = new BrowserWorkingCopyService();
-	using service = new TestingService(tasks, noExecution, workspace, copies, new NullLoggerService());
+	using debug = new TestDebugService();
+	using service = new TestingService(tasks, noExecution, workspace, copies, new NullLoggerService(), debug.service);
 	const registration = service.registerTestProfileProviders([{ id: "demo.tests", provideTestProfiles: () => [{ id: "focused", label: "Focused", taskId: "unit", detail: "Extension profile" }] }]);
 
 	await service.refresh();
@@ -64,7 +66,8 @@ test("TestingService rejects profiles that do not reference a current test task"
 	using tasks = new FakeTaskService([task("unit", "Unit", "test")]);
 	using workspace = new WorkspaceContextService({ id: 'empty', folders: [] });
 	using copies = new BrowserWorkingCopyService();
-	using service = new TestingService(tasks, noExecution, workspace, copies, new NullLoggerService());
+	using debug = new TestDebugService();
+	using service = new TestingService(tasks, noExecution, workspace, copies, new NullLoggerService(), debug.service);
 	using registration = service.registerTestProfileProvider({ id: "invalid", provideTestProfiles: () => [{ id: "missing", label: "Missing", taskId: "missing" }] });
 
 	await assert.rejects(service.refresh(), /unavailable test task/);
@@ -108,6 +111,7 @@ const noExecution: ITestExecutionService = {
 	onDidUpdate: Event.None, onDidDisconnect: Event.None,
 	discover: async () => { throw new Error('Unexpected test discovery'); },
 	run: async () => { throw new Error('Unexpected test execution'); },
+	prepareDebug: async () => { throw new Error('Unexpected test debug preparation'); },
 	read: async () => { throw new Error('Unexpected test read'); },
 	cancel: async () => { throw new Error('Unexpected test cancellation'); },
 	release: async () => { throw new Error('Unexpected test release'); },
@@ -118,7 +122,8 @@ test('TestingService consumes completion before start responses and releases exa
 	using backend = new TestExecutionService();
 	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
 	using copies = new BrowserWorkingCopyService();
-	using service = new TestingService(tasks, backend, workspace, copies, new NullLoggerService());
+	using debug = new TestDebugService();
+	using service = new TestingService(tasks, backend, workspace, copies, new NullLoggerService(), debug.service);
 	await service.refreshTests();
 	const passes = service.tests.find(test => test.name.endsWith('passes'))!;
 	await service.runTests([passes.key]);
@@ -134,12 +139,13 @@ test('TestingService ignores old sequences, cancels a run, and keeps scripts ind
 	backend.holdRuns = true;
 	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
 	using copies = new BrowserWorkingCopyService();
-	using service = new TestingService(tasks, backend, workspace, copies, new NullLoggerService());
+	using debug = new TestDebugService();
+	using service = new TestingService(tasks, backend, workspace, copies, new NullLoggerService(), debug.service);
 	await service.refreshTests();
 	const run = service.runTests(service.tests.map(test => test.key));
 	await waitFor(() => backend.runs.length === 1);
 	const id = backend.runs[0]!.id;
-	backend.updates.fire({ operationId: id, sequence: 1, status: 'completed', tests: null, result: null, error: null });
+	backend.updates.fire({ operationId: id, sequence: 1, status: 'completed', tests: null, result: null, error: null, launch: null });
 	assert.equal(service.isRunningTests, true);
 	await service.cancelTests();
 	await run;
@@ -154,7 +160,8 @@ test('TestingService releases an accepted discovery after workspace replacement 
 	backend.pendingDiscovery = new Promise<void>(resolve => { finish = resolve; });
 	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
 	using copies = new BrowserWorkingCopyService();
-	using service = new TestingService(tasks, backend, workspace, copies, new NullLoggerService());
+	using debug = new TestDebugService();
+	using service = new TestingService(tasks, backend, workspace, copies, new NullLoggerService(), debug.service);
 	const discovery = service.refreshTests();
 	const rejected = assert.rejects(discovery, /cancelled/);
 	await waitFor(() => backend.snapshots.size === 1);
@@ -178,8 +185,29 @@ test('TestingService runs scripts independently of backend test discovery', asyn
 	using tasks = new FakeTaskService([task('script', 'Script', 'test')]);
 	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
 	using copies = new BrowserWorkingCopyService();
-	using service = new TestingService(tasks, noExecution, workspace, copies, new NullLoggerService());
+	using debug = new TestDebugService();
+	using service = new TestingService(tasks, noExecution, workspace, copies, new NullLoggerService(), debug.service);
 	const runs = await service.runAllScripts();
 	assert.deepEqual(runs.map(run => run.profile.id), ['script']);
 	assert.deepEqual(service.tests, []);
+});
+
+test('TestingService starts the prepared exact test with the DAP owner and cancels the session', async () => {
+	using tasks = new FakeTaskService([]);
+	using backend = new TestExecutionService();
+	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using copies = new BrowserWorkingCopyService();
+	using debug = new TestDebugService();
+	using service = new TestingService(tasks, backend, workspace, copies, new NullLoggerService(), debug.service);
+	await service.refreshTests();
+	const selected = service.tests[0]!;
+	await service.debugTest(selected.key);
+	assert.deepEqual(debug.launches[0]!.arguments, { program: '/workspace/target/test', args: ['--exact', selected.name], cwd: '/workspace', stopOnEntry: false });
+	assert.equal(debug.launches[0]!.dirId, 'workspace');
+	assert.equal(service.isDebuggingTest, true);
+	assert.equal(backend.runs.length, 0);
+	assert.equal(tasks.runs.length, 0);
+	assert.equal([...backend.snapshots.values()].filter(snapshot => snapshot.kind === 'debug').length, 0);
+	await service.cancelTests();
+	assert.equal(service.isRunningTests, false);
 });

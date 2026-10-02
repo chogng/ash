@@ -3,7 +3,7 @@ use crate::TS;
 use serde::Deserialize;
 use serde::Serialize;
 
-/// Discovers conventional Rust #[test] functions without building the workspace.
+/// Builds and lists Rust harnesses and rustdoc tests, including macro and async tests.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TestingDiscoverParams {
@@ -27,6 +27,17 @@ pub struct TestingRunParams {
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TestingPrepareDebugParams {
+    pub operation_id: String,
+    pub catalog_id: String,
+    pub test_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dir_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TestingOperationParams {
     pub operation_id: String,
 }
@@ -37,6 +48,7 @@ pub enum TestingTargetKind {
     Library,
     Binary,
     Integration,
+    Documentation,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -47,9 +59,26 @@ pub struct TestingItem {
     pub target: String,
     pub target_kind: TestingTargetKind,
     pub name: String,
+    pub source: Option<TestingSource>,
+    pub debuggable: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TestingSource {
     /// Slash-separated path relative to the authorized workspace directory.
     pub path: String,
     pub line: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TestingDebugLaunch {
+    pub test_id: String,
+    pub program: String,
+    pub arguments: Vec<String>,
+    pub directory: String,
+    pub adapter_program: String,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -81,6 +110,7 @@ pub struct TestingResult {
 pub enum TestingOperationKind {
     Discovery,
     Run,
+    Debug,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -104,6 +134,7 @@ pub struct TestingSnapshot {
     pub error: Option<String>,
     #[ts(type = "number")]
     pub sequence: u64,
+    pub launch: Option<TestingDebugLaunch>,
 }
 
 /// Sequence-ordered updates go only to the issuing connection. Cancel waits for the final
@@ -118,4 +149,5 @@ pub struct TestingUpdate {
     pub tests: Option<Vec<TestingItem>>,
     pub result: Option<TestingResult>,
     pub error: Option<String>,
+    pub launch: Option<TestingDebugLaunch>,
 }

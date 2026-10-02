@@ -8,7 +8,7 @@ import type { TestItem, TestResult } from '../../../../platform/testing/common/t
 export interface ITestCase extends TestItem {
 	readonly key: string;
 	readonly dirId: string;
-	readonly resource: URI;
+	readonly resource: URI | undefined;
 }
 
 export interface ITestCaseResult extends TestResult {
@@ -56,9 +56,11 @@ export interface ITestingService extends IDisposable {
 	readonly testResults: readonly ITestCaseResult[];
 	readonly isDiscovering: boolean;
 	readonly isRunningTests: boolean;
+	readonly isDebuggingTest: boolean;
 	readonly onDidChangeTests: Event<void>;
 	refreshTests(): Promise<void>;
 	runTests(keys: readonly string[]): Promise<void>;
+	debugTest(key: string): Promise<void>;
 	rerunFailedTests(): Promise<void>;
 	cancelTests(): Promise<void>;
 	readonly profiles: readonly ITestProfile[];

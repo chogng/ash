@@ -8,11 +8,18 @@ export interface TestItem {
 	readonly id: string;
 	readonly package: string;
 	readonly target: string;
-	readonly targetKind: 'library' | 'binary' | 'integration';
+	readonly targetKind: 'library' | 'binary' | 'integration' | 'documentation';
 	readonly name: string;
-	/** Slash-separated path relative to dirId. */
-	readonly path: string;
-	readonly line: number;
+	readonly source: { readonly path: string; readonly line: number } | null;
+	readonly debuggable: boolean;
+}
+
+export interface TestDebugLaunch {
+	readonly testId: string;
+	readonly program: string;
+	readonly arguments: readonly string[];
+	readonly directory: string;
+	readonly adapterProgram: string;
 }
 
 export interface TestResult {
@@ -32,16 +39,18 @@ export interface TestUpdate {
 	readonly tests: readonly TestItem[] | null;
 	readonly result: TestResult | null;
 	readonly error: string | null;
+	readonly launch: TestDebugLaunch | null;
 }
 
 export interface TestSnapshot {
 	readonly operationId: string;
-	readonly kind: 'discovery' | 'run';
+	readonly kind: 'discovery' | 'run' | 'debug';
 	readonly status: TestOperationStatus;
 	readonly tests: readonly TestItem[];
 	readonly results: readonly TestResult[];
 	readonly error: string | null;
 	readonly sequence: number;
+	readonly launch: TestDebugLaunch | null;
 }
 
 /** Execution and results belong to the backend; subscribe before starting an operation ID. */
@@ -50,6 +59,7 @@ export interface ITestExecutionService {
 	readonly onDidDisconnect: Event<void>;
 	discover(operationId: string, dirId: string): Promise<void>;
 	run(operationId: string, dirId: string, catalogId: string, testIds: readonly string[]): Promise<void>;
+	prepareDebug(operationId: string, dirId: string, catalogId: string, testId: string): Promise<void>;
 	read(operationId: string): Promise<TestSnapshot>;
 	cancel(operationId: string): Promise<TestSnapshot>;
 	release(operationId: string): Promise<void>;

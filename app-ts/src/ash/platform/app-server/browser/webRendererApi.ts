@@ -1,3 +1,4 @@
+import { AppServerAssetService } from '../../assets/browser/appServerAssetService.js';
 import { createAppServerNetworkDiagnosticsApi } from '../../networkDiagnostics/browser/networkDiagnosticsApi.js';
 import { createAppServerHooksApi } from '../../hooks/browser/hooksApi.js';
 import { AppServerTestExecutionService } from '../../testing/browser/appServerTestExecutionService.js';
@@ -113,6 +114,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		git: createAppServerGitApi(connection),
 		contentSearch: createAppServerContentSearchApi(connection),
 		terminal: new AppServerTerminalProcessService(connection, appServer),
+		assets: new AppServerAssetService(connection),
 		testing: new AppServerTestExecutionService(connection),
 		...capabilities,
 		events: createAppServerServerEventApi(connection),

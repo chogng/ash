@@ -1336,10 +1336,12 @@ Thread 保存普通 Coding Turn 的顾问选择策略；接受 Turn 时将解析
 
 桌面调用沿用 `appServerProtocolClient.ts` → `appServerMessagePortTransport.ts` → `appServerConnectionRelay.ts` → 共享 App Server。前两者位于 `app-ts/src/ash/platform/app-server/` 的 `browser/`、`electron-browser/`，Relay 与进程启动入口 `appServerProcessLauncher.ts` 位于 `electron-main/`。每个 Renderer 使用独立连接，进程由现有启动层共享。本次新增测试领域，没有替换旧 Host。测试脚本保留既有 Tasks 与终端执行链，不生成单条测试结果。
 
-当前内置支持 Cargo 工作区中的普通 Rust `#[test]` 函数，包括库、二进制、集成测试与外部模块。测试目录通过 Cargo metadata 和 Rust 语法树发现，不编译项目。宏生成测试、异步测试属性和文档测试尚未支持。源代码中存在但编译配置未启用的测试，执行匹配到零条时显示错误，不算通过。
+内置支持 Cargo 工作区中的普通测试、宏展开后生成的测试、异步测试属性和文档测试。库、二进制及集成测试先通过 Cargo 编译，再读取测试程序的 `--list`；编译配置未启用的测试不进入目录。Rust 语法树只补充源码位置，宏生成的测试没有可靠位置时 `source` 为 `null`，仍可运行和调试。文档测试通过 rustdoc 列举和执行，保留 `ignore`、`no_run`、`compile_fail` 的含义。
 
-客户端先监听 `testing/updated`，再发送带唯一 `operationId` 和 `dirId` 的 `testing/discover`。发现需要目录的 `ReadFiles` 与 `ExecuteCommands` 权限；返回接受响应后，按 `sequence` 接收最终目录。测试身份来自包、目标与限定函数名；`path` 是授权根目录下的相对路径，使用 `/` 分隔。
+客户端先监听 `testing/updated`，再发送带唯一 `operationId` 和 `dirId` 的 `testing/discover`。发现需要目录的 `ReadFiles` 与 `ExecuteCommands` 权限；返回接受响应后，按 `sequence` 接收最终目录。测试身份来自包、目标与测试程序的完整名称；`source.path` 是授权根目录下的相对路径，使用 `/` 分隔，`source.line` 从 1 开始。
 
-`testing/run` 使用已完成目录的 `catalogId` 和确切 `testIds`；目录与运行都归当前连接，且必须使用同一个授权目录。后端按目标编译测试程序，再用 `--exact` 运行所选函数。通过、失败、忽略、执行错误和取消分别记录，脚本退出码不会生成这些单条测试结果。Workbench 的“测试脚本”仍独立委托 Tasks 与终端运行。
+`testing/run` 使用已完成目录的 `catalogId` 和确切 `testIds`；目录与运行都归当前连接，且必须使用同一个授权目录。普通、宏和异步测试用 `--exact` 运行，工作目录为包目录。rustdoc 会拆分含空格的过滤参数，因此文档测试基于完整目录生成唯一过滤条件，不能唯一选择时明确报错。合并与独立文档测试程序的结果一起统计，必须实际得到一个结果，零匹配不能算通过。通过、失败、忽略、执行错误和取消分别记录。
+
+`testing/prepareDebug` 使用相同的 `catalogId` 和一个 `testId`，异步准备包含调试信息的测试程序，通过 `testing/updated.launch` 和 `testing/read.launch` 返回 `program`、`arguments`、`directory`、`adapterProgram`。Renderer 将其交给已有 DebugService 启动 DAP 会话；断点、调用栈、继续、重启及停止归 DebugService。编辑器按 F9 设置断点，测试树选择“调试所选测试”，或按住 Alt 点击测试边栏图标启动。该操作不会写入 `launch.json`，也不会先运行所选测试。macOS 通过 `xcrun --find lldb-dap` 找到适配器，其他平台使用 PATH 中的 `lldb-dap`。文档测试的 `debuggable` 为 `false`，不提供调试按钮。
 
 `testing/read` 读取已有操作的完整快照，不重新执行。`testing/cancel` 等待进程终止与最终更新；`testing/release` 还删除操作状态。连接关闭取消并回收该连接的所有操作。操作最多保留 10,000 个测试，单条结果输出最多 16 KiB，每次运行保留的总输出最多 2 MiB；超出部分明确标记 `outputTruncated`。`TestingNotFound` 表示当前连接没有对应操作，`TestingBusy` 表示操作数量达到上限，`TestingOperationFailed` 表示后端无法完成操作。

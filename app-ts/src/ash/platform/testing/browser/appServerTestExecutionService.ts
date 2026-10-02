@@ -29,6 +29,10 @@ export class AppServerTestExecutionService implements ITestExecutionService {
 		return this.request(voidResult(appServerRequest(this.connection, 'testing/run', { operationId, dirId, catalogId, testIds: [...testIds] })));
 	}
 
+	public prepareDebug(operationId: string, dirId: string, catalogId: string, testId: string): Promise<void> {
+		return this.request(voidResult(appServerRequest(this.connection, 'testing/prepareDebug', { operationId, dirId, catalogId, testId })));
+	}
+
 	public read(operationId: string): Promise<TestSnapshot> {
 		return this.request(appServerRequest(this.connection, 'testing/read', { operationId }));
 	}

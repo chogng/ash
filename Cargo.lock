@@ -570,6 +570,7 @@ dependencies = [
  "ash-app-server-transport",
  "ash-apply-patch",
  "ash-arg0",
+ "ash-assets",
  "ash-async-utils",
  "ash-attachment-store",
  "ash-attachments",
@@ -844,6 +845,16 @@ name = "ash-arg0"
 version = "0.1.0"
 dependencies = [
  "ash-mxc-sandbox",
+]
+
+[[package]]
+name = "ash-assets"
+version = "0.1.0"
+dependencies = [
+ "ash-utils-image",
+ "image",
+ "sha2 0.10.9",
+ "thiserror 2.0.19",
 ]
 
 [[package]]
@@ -2711,6 +2722,7 @@ name = "ash-state"
 version = "0.1.0"
 dependencies = [
  "ash-agent-graph-store",
+ "ash-assets",
  "ash-async-utils",
  "ash-attachment-store",
  "ash-core",

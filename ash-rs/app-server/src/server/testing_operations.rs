@@ -2,14 +2,17 @@ use std::sync::Arc;
 
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::registry::ServerNotificationMethod;
+use ash_app_server_protocol::protocol::testing::TestingDebugLaunch;
 use ash_app_server_protocol::protocol::testing::TestingDiscoverParams;
 use ash_app_server_protocol::protocol::testing::TestingItem;
 use ash_app_server_protocol::protocol::testing::TestingOperationKind;
 use ash_app_server_protocol::protocol::testing::TestingOperationParams;
 use ash_app_server_protocol::protocol::testing::TestingOperationStatus;
+use ash_app_server_protocol::protocol::testing::TestingPrepareDebugParams;
 use ash_app_server_protocol::protocol::testing::TestingResult;
 use ash_app_server_protocol::protocol::testing::TestingRunParams;
 use ash_app_server_protocol::protocol::testing::TestingSnapshot;
+use ash_app_server_protocol::protocol::testing::TestingSource;
 use ash_app_server_protocol::protocol::testing::TestingState;
 use ash_app_server_protocol::protocol::testing::TestingTargetKind;
 use ash_app_server_protocol::protocol::testing::TestingUpdate;
@@ -25,6 +28,24 @@ use super::result;
 use super::update_broker::notification;
 
 impl AppServer {
+    pub(super) fn testing_prepare_debug(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: TestingPrepareDebugParams = decode(params)?;
+        self.testing
+            .prepare_debug(
+                connection.connection_id,
+                params.operation_id,
+                &params.catalog_id,
+                &params.test_id,
+                self.testing_authorization(params.dir_id.as_deref(), Permission::ExecuteCommands)?,
+                update_sink(connection),
+            )
+            .map_err(testing_error)?;
+        result(&())
+    }
     pub(super) fn testing_discover(
         &self,
         connection: &ConnectionState,
@@ -131,6 +152,7 @@ fn update_sink(connection: &ConnectionState) -> Arc<dyn Fn(testing::Update) + Se
                     .map(|tests| tests.into_iter().map(item).collect()),
                 result: update.result.map(test_result),
                 error: update.error,
+                launch: update.launch.map(debug_launch),
             },
         ));
     })
@@ -142,12 +164,14 @@ fn snapshot(value: testing::Snapshot) -> TestingSnapshot {
         kind: match value.kind {
             testing::OperationKind::Discovery => TestingOperationKind::Discovery,
             testing::OperationKind::Run => TestingOperationKind::Run,
+            testing::OperationKind::Debug => TestingOperationKind::Debug,
         },
         status: status(value.status),
         tests: value.tests.into_iter().map(item).collect(),
         results: value.results.into_iter().map(test_result).collect(),
         error: value.error,
         sequence: value.sequence,
+        launch: value.launch.map(debug_launch),
     }
 }
 
@@ -169,10 +193,24 @@ fn item(value: testing::TestItem) -> TestingItem {
             testing::TargetKind::Library => TestingTargetKind::Library,
             testing::TargetKind::Binary => TestingTargetKind::Binary,
             testing::TargetKind::Integration => TestingTargetKind::Integration,
+            testing::TargetKind::Documentation => TestingTargetKind::Documentation,
         },
         name: value.name,
-        path: value.path,
-        line: value.line,
+        source: value.source.map(|source| TestingSource {
+            path: source.path,
+            line: source.line,
+        }),
+        debuggable: value.debuggable,
+    }
+}
+
+fn debug_launch(value: testing::DebugLaunch) -> TestingDebugLaunch {
+    TestingDebugLaunch {
+        test_id: value.test_id,
+        program: value.program,
+        arguments: value.arguments,
+        directory: value.directory,
+        adapter_program: value.adapter_program,
     }
 }
 

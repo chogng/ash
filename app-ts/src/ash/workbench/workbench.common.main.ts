@@ -10,6 +10,7 @@ import './contrib/trace/browser/trace.contribution.js';
  */
 import "./browser/workbench.contribution.js";
 import "./contrib/modernUI/browser/modernUI.contribution.js";
+import './contrib/mediaPreview/browser/mediaPreview.contribution.js';
 
 import './contrib/marketplace/browser/marketplace.contribution.js';
 import './contrib/language/browser/languageServers.contribution.js';

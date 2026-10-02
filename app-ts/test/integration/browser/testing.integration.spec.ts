@@ -54,3 +54,37 @@ test('keyboard navigation, gutter execution, cancellation and disconnect preserv
 	await expect(tree.getByRole('treeitem')).toHaveCount(0);
 	await expect(page.getByRole('button', { name: 'Run All Tests', exact: true })).toBeDisabled();
 });
+
+test('debugging uses the prepared launch, supports gutter Alt+Click, and preserves unlocated macro cases', async ({ page }) => {
+	await page.goto('/testing.html');
+	await expect(page.locator('.ash-testing-gutter')).toHaveCount(2);
+	await page.locator('.ash-testing-gutter').first().click({ modifiers: ['Alt'] });
+	await expect(page.getByRole('status')).toHaveText('Debugging test…');
+	expect((await page.evaluate(() => window.ashTestingIntegration.debugLaunches()))[0]?.arguments.args).toEqual(['--exact', 'checks::passes']);
+	expect(await page.evaluate(() => window.ashTestingIntegration.runs())).toEqual([]);
+	await page.getByRole('button', { name: 'Cancel Tests', exact: true }).click();
+	await page.evaluate(() => window.ashTestingIntegration.addCases());
+	const tree = page.getByRole('tree', { name: 'Tests' });
+	await expect(tree).toContainText('Tests without a source location');
+	await tree.getByRole('treeitem').filter({ has: page.locator('.ash-testing-row', { hasText: 'generated_case' }) }).click();
+	await page.getByRole('button', { name: 'Debug Selected Test', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashTestingIntegration.debugLaunches().length)).toBe(2);
+	await page.getByRole('button', { name: 'Cancel Tests', exact: true }).click();
+	await tree.getByRole('treeitem').filter({ has: page.locator('.ash-testing-row', { hasText: 'src/lib.rs - docs' }) }).click();
+	await expect(page.getByRole('button', { name: 'Debug Selected Test', exact: true })).toBeDisabled();
+	await expect(page.getByRole('button', { name: 'Run Selected', exact: true })).toBeEnabled();
+});
+
+test('Chinese testing controls and documentation labels use the bundled catalog', async ({ page }) => {
+	await page.goto('/testing.html?locale=zh-cn');
+	await expect(page.getByRole('tree', { name: '测试', exact: true })).toContainText('checks::passes');
+	await page.evaluate(() => window.ashTestingIntegration.addCases());
+	const tree = page.getByRole('tree', { name: '测试', exact: true });
+	await expect(tree).toContainText('没有源码位置的测试');
+	await expect(tree).toContainText('文档测试');
+	await tree.getByRole('treeitem').filter({ has: page.locator('.ash-testing-row', { hasText: 'generated_case' }) }).click();
+	await page.getByRole('button', { name: '调试所选测试', exact: true }).click();
+	await expect(page.getByRole('status')).toHaveText('正在调试测试…');
+	await page.getByRole('button', { name: '取消测试', exact: true }).click();
+	await expect(page.getByRole('button', { name: '运行所有测试', exact: true })).toBeEnabled();
+});

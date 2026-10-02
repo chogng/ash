@@ -15,7 +15,7 @@ This crate owns the backend-neutral runtime for trusted Debug Adapter Protocol (
 | `push_message` | Assign ordered sequence numbers and evict the oldest retained messages | Consumer cursors |
 | `refresh_process_state` / `terminate` | Observe exit and reap or kill the child | Restart policy |
 
-The call path is `DebugAdapterService::start` → `tokio::process::Command` → `spawn_stdout_reader` / `spawn_stderr_reader`. Callers send JSON through `send`; `read` returns the next bounded page and advances only past messages in that page. A consumer that falls behind the retained prefix receives `output_gap = true` and must fail the session instead of silently skipping protocol events.
+The call path is `DebugAdapterService::start` → `tokio::process::Command` → `spawn_stdout_reader` / `spawn_stderr_reader`. Callers send JSON through `send`; `read` returns the next bounded page and advances only past messages in that page. Adapter `seq` values may start at zero (LLDB-DAP emits zero); the retained-message cursor is assigned separately by this process owner. Request pairing belongs to the client and uses `request_seq`. A consumer that falls behind the retained prefix receives `output_gap = true` and must fail the session instead of silently skipping protocol events.
 
 ## Failure and integration semantics
 

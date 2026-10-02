@@ -1,3 +1,5 @@
+import { setNlsResolver, formatNlsMessage } from '../../../src/ash/nls.js';
+import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import '../../../src/ash/base/browser/ui/tree/tree.css';
 import '../../../src/ash/base/browser/ui/list/list.css';
 import '../../../src/ash/base/browser/ui/splitview/paneView.css';
@@ -14,7 +16,7 @@ import { create, createModel } from '../../../src/ash/editor/standalone/browser/
 import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
 import { BrowserWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import { TestingService } from '../../../src/ash/workbench/services/testing/browser/testingService.js';
-import { TestExecutionService } from '../../../src/ash/workbench/services/testing/test/common/testExecutionService.js';
+import { TestExecutionService, TestDebugService } from '../../../src/ash/workbench/services/testing/test/common/testExecutionService.js';
 import { type ITaskService } from '../../../src/ash/workbench/services/tasks/common/taskService.js';
 import { type ITerminalService } from '../../../src/ash/workbench/services/terminal/common/terminal.js';
 import { type IViewsService } from '../../../src/ash/workbench/services/views/browser/viewsService.js';
@@ -22,6 +24,11 @@ import { type IEditorService, type EditorOpenOptions } from '../../../src/ash/wo
 import { TestingViewPane } from '../../../src/ash/workbench/contrib/testing/browser/testingViewPane.js';
 import { TestingEditorContribution } from '../../../src/ash/workbench/contrib/testing/browser/testingEditorContribution.js';
 import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+
+if (new URLSearchParams(location.search).get('locale') === 'zh-cn') {
+	const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
+}
 
 const store = new DisposableStore();
 const backend = store.add(new TestExecutionService());
@@ -37,7 +44,8 @@ const tasks: ITaskService = {
 	refresh: async () => tasks.tasks,
 	run: async () => { scriptRuns++; throw new Error('Script invoked'); }, terminate: async () => {},
 };
-const service = store.add(new TestingService(tasks, backend, workspace, copies, new NullLoggerService()));
+const debug = store.add(new TestDebugService());
+const service = store.add(new TestingService(tasks, backend, workspace, copies, new NullLoggerService(), debug.service));
 const opened: { path: string; line: number | undefined }[] = [];
 const editors: IEditorService = {
 	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [],
@@ -56,7 +64,12 @@ const editor = store.add(create(document.querySelector<HTMLElement>('#editor')!,
 store.add(new TestingEditorContribution(editor, model, service, copies, store.add(new NotificationService())));
 window.addEventListener('pagehide', () => store.dispose(), { once: true });
 window.ashTestingIntegration = {
+	debugLaunches: () => debug.launches,
 	opened, runs: () => backend.runs.map(run => run.tests), scriptRuns: () => scriptRuns,
+	addCases: async () => {
+		backend.items = [...backend.items, { id: 'macro', package: 'fixture', target: 'fixture', targetKind: 'library', name: 'generated_case', source: null, debuggable: true }, { id: 'doc', package: 'fixture', target: 'fixture', targetKind: 'documentation', name: 'src/lib.rs - docs (line 1)', source: { path: 'src/lib.rs', line: 1 }, debuggable: false }];
+		await service.refreshTests();
+	},
 	hold: () => { backend.holdRuns = true; },
 	disconnect: () => { backend.disconnected.fire(); },
 	edit: () => model.setValue('\n' + model.getValue()),
@@ -67,9 +80,10 @@ window.ashTestingIntegration = {
 declare global {
 	interface Window {
 		ashTestingIntegration: {
+			debugLaunches(): readonly import('../../../src/ash/workbench/services/debug/common/debugService.js').IDebugConfiguration[];
 			readonly opened: readonly { path: string; line: number | undefined }[];
 			runs(): readonly (readonly string[])[]; scriptRuns(): number;
-			hold(): void; disconnect(): void; edit(): void; refresh(): Promise<void>; accessible(): string; dispose(): void;
+			addCases(): Promise<void>; hold(): void; disconnect(): void; edit(): void; refresh(): Promise<void>; accessible(): string; dispose(): void;
 		};
 	}
 }

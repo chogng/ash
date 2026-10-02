@@ -67,6 +67,9 @@ mod agent_environment_source;
 #[cfg(test)]
 mod agent_runtime_tests;
 mod agent_selection;
+mod asset_operations;
+#[cfg(test)]
+mod asset_operations_tests;
 mod attachment_operations;
 mod automation_execution;
 mod automation_operations;
@@ -204,6 +207,7 @@ pub struct AppServer {
     request_scheduler: RequestScheduler,
     request_cancellations: RequestCancellationRegistry,
     pub(super) resources: Arc<Mutex<ResourceStore>>,
+    pub(super) assets: Option<Arc<assets::Assets>>,
     memory_diagnostics: ash_memory_diagnostics::MemoryDiagnostics,
     memories: Option<Arc<memories::Memories>>,
     pub(super) attachment_uploads: Mutex<AttachmentUploadStore>,
@@ -522,6 +526,7 @@ impl AppServer {
             request_scheduler: RequestScheduler::default(),
             request_cancellations: RequestCancellationRegistry::default(),
             resources,
+            assets: None,
             memory_diagnostics: ash_memory_diagnostics::MemoryDiagnostics::default(),
             memories: None,
             attachment_uploads: Mutex::new(AttachmentUploadStore::default()),
@@ -730,6 +735,12 @@ impl AppServer {
         Ok(self)
     }
 
+    pub(crate) fn with_local_assets(mut self, database_path: &std::path::Path) -> Result<Self, String> {
+        let store = Arc::new(ash_state::SqliteAssetStore::open(database_path).map_err(|error| error.to_string())?);
+        self.assets = Some(Arc::new(assets::Assets::new(store)));
+        Ok(self)
+    }
+
     pub(crate) fn with_local_memories(
         mut self,
         database_path: &std::path::Path,
@@ -921,6 +932,7 @@ impl AppServer {
         for terminals in self.configured_terminal_services() {
             terminals.close_owner(connection.connection_id);
         }
+        if let Some(assets) = &self.assets { assets.close_owner(connection.connection_id); }
         self.testing.close_owner(connection.connection_id);
         for debug_adapters in self.configured_debug_adapter_services() {
             debug_adapters.close_owner(connection.connection_id);
@@ -2551,6 +2563,12 @@ impl AppServer {
             Some(ClientMethod::ExtensionHostInvokeCancel) => {
                 self.extension_host_invoke_cancel(connection, &request.params)
             }
+            Some(ClientMethod::AssetImportStart) => self.asset_import_start(connection, &request.params),
+            Some(ClientMethod::AssetImportWrite) => self.asset_import_write(connection, &request.params),
+            Some(ClientMethod::AssetImportFinish) => self.asset_import_finish(connection, &request.params),
+            Some(ClientMethod::AssetImportCancel) => self.asset_import_cancel(connection, &request.params),
+            Some(ClientMethod::AssetVersion) => self.asset_version(&request.params),
+            Some(ClientMethod::AssetRead) => self.asset_read(&request.params),
             Some(ClientMethod::ResourceMetadata) => {
                 self.resource_metadata(connection, &request.params)
             }
@@ -2789,6 +2807,7 @@ impl AppServer {
                 self.testing_discover(connection, &request.params)
             }
             Some(ClientMethod::TestingRun) => self.testing_run(connection, &request.params),
+            Some(ClientMethod::TestingPrepareDebug) => self.testing_prepare_debug(connection, &request.params),
             Some(ClientMethod::TestingRead) => self.testing_read(connection, &request.params),
             Some(ClientMethod::TestingCancel) => self.testing_cancel(connection, &request.params),
             Some(ClientMethod::TestingRelease) => self.testing_release(connection, &request.params),

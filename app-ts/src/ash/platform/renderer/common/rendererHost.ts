@@ -1,3 +1,4 @@
+import type { IAssetService } from '../../assets/common/assetService.js';
 import type { INetworkDiagnosticsService } from '../../networkDiagnostics/common/networkDiagnosticsService.js';
 import type { ICallService } from '../../call/common/callService.js';
 import type { IDictationService } from '../../dictation/common/dictationService.js';
@@ -60,6 +61,7 @@ export function mergeRendererHostCapabilities(capabilities: readonly RendererHos
 
 /** Transport-neutral capability set supplied by a renderer host at startup. */
 export interface IRendererHost extends RendererHostCapabilities {
+	readonly assets: IAssetService;
 	readonly testing: ITestExecutionService;
 	readonly calls?: ICallService;
 	readonly dictation?: IDictationService;

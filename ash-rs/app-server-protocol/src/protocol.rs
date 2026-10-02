@@ -2,6 +2,7 @@
 
 pub mod account;
 pub mod agent;
+pub mod assets;
 pub mod attachments;
 pub mod automation;
 pub mod browser;

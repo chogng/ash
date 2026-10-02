@@ -2,6 +2,7 @@ import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/c
 import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
+import { extUri } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
 import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
 import { ITestingService } from '../../../services/testing/common/testingService.js';
@@ -34,22 +35,33 @@ registerAction2(class RefreshTestsAction extends Action2 {
 
 registerAction2(class RunTestAtCursorAction extends Action2 {
 	constructor() { super({ id: 'workbench.action.testing.runAtCursor', title: localize('testing.runAtCursor', 'Run Test on Current Line'), f1: true }); }
-	override async run(accessor: ServicesAccessor): Promise<void> {
-		const editors = accessor.get(ICodeEditorService);
-		const editor = editors.getFocusedCodeEditor() ?? editors.getActiveCodeEditor();
-		const model = editor?.getModel();
-		const position = editor?.getPosition();
-		const testing = accessor.get(ITestingService);
-		const notifications = accessor.get(INotificationService);
-		if (!model || !position) { return; }
-		if (accessor.get(IWorkingCopyService).get(model.uri).some(copy => copy.isDirty)) {
-			notifications.info(localize('testing.saveCursor', 'Save the file and refresh tests before running a test on the current line.'));
-			return;
-		}
-		try {
-			const tests = testing.tests.filter(test => test.resource.toString() === model.uri.toString() && test.line === position.lineNumber);
-			if (tests.length === 0) { notifications.info(localize('testing.noTestAtCursor', 'Place the cursor on a discovered test declaration to run it.')); return; }
-			await testing.runTests(tests.map(test => test.key));
-		} catch (error) { notifications.error(String(error)); }
-	}
+	override run(accessor: ServicesAccessor): Promise<void> { return executeTestOnCurrentLine(accessor, 'run'); }
 });
+
+registerAction2(class DebugTestAtCursorAction extends Action2 {
+	constructor() { super({ id: 'workbench.action.testing.debugAtCursor', title: localize('testing.debugAtCursor', 'Debug Test on Current Line'), f1: true }); }
+	override run(accessor: ServicesAccessor): Promise<void> { return executeTestOnCurrentLine(accessor, 'debug'); }
+});
+
+async function executeTestOnCurrentLine(accessor: ServicesAccessor, mode: 'run' | 'debug'): Promise<void> {
+	const editors = accessor.get(ICodeEditorService);
+	const editor = editors.getFocusedCodeEditor() ?? editors.getActiveCodeEditor();
+	const model = editor?.getModel();
+	const position = editor?.getPosition();
+	const testing = accessor.get(ITestingService);
+	const notifications = accessor.get(INotificationService);
+	if (!model || !position) { return; }
+	if (accessor.get(IWorkingCopyService).get(model.uri).some(copy => copy.isDirty)) {
+		notifications.info(localize('testing.saveCursor', 'Save the file and refresh tests before running a test on the current line.'));
+		return;
+	}
+	try {
+		const tests = testing.tests.filter(test => test.resource && extUri.isEqual(test.resource, model.uri) && test.source?.line === position.lineNumber);
+		if (tests.length === 0) { notifications.info(localize('testing.noTestAtCursor', 'Place the cursor on a discovered test declaration to run it.')); return; }
+		if (mode === 'debug') {
+			const test = tests.find(test => test.debuggable);
+			if (!test) { notifications.info(localize('testing.notDebuggable', 'This test is executed by rustdoc and cannot be launched in a debugger.')); return; }
+			await testing.debugTest(test.key);
+		} else { await testing.runTests(tests.map(test => test.key)); }
+	} catch (error) { notifications.error(String(error)); }
+}

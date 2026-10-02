@@ -8,7 +8,7 @@ import { createSshRemoteWorkspaceUri } from "../../../../../platform/remote/comm
 import { DebugAdapterSession } from "../../browser/debugAdapterSession.js";
 import { type IDebugBreakpoint, type IDebugConfiguration } from "../../common/debugService.js";
 
-test("DebugAdapterSession performs DAP configuration, clears breakpoints, and resolves an omitted stopped thread", async () => {
+test("DebugAdapterSession handles zero-sequence DAP messages, clears breakpoints, and resolves an omitted stopped thread", async () => {
 	using processes = new FakeDebugAdapterProcessService();
 	let breakpoints: readonly IDebugBreakpoint[] = [breakpoint(4)];
 	const updates: Array<{ readonly id: string; readonly verified: boolean; readonly message?: string }> = [];
@@ -38,7 +38,7 @@ test("DebugAdapterSession performs DAP configuration, clears breakpoints, and re
 	await waitFor(() => session.state === "stopped");
 	const frames = await session.stackTrace();
 	assert.equal(processes.requests("threads").length, 1);
-	assert.deepEqual(frames.map(frame => ({ ...frame, source: frame.source ? { ...frame.source, resource: frame.source.resource?.toString() } : undefined })), [{ id: 11, name: "main", source: { name: "main.ts", path: "C:\\workspace\\main.ts", resource: "file:///C:/workspace/main.ts" }, lineNumber: 4, columnNumber: 1 }]);
+	assert.deepEqual(frames.map(frame => ({ ...frame, source: frame.source ? { ...frame.source, resource: frame.source.resource?.toString() } : undefined })), [{ id: 11, name: "main", source: { name: "main.ts", path: "C:\\workspace\\main.ts", resource: URI.file("C:\\workspace\\main.ts").toString() }, lineNumber: 4, columnNumber: 1 }]);
 
 	assert.deepEqual(await session.threads(), [{ id: 7, name: "main" }, { id: 8, name: "worker" }]);
 	session.selectThread(8);
@@ -80,8 +80,7 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 	private readonly connectionEmitter = new Emitter<AppServerConnectionState>();
 	private readonly messages: Array<{ readonly sequence: number; readonly message: unknown }> = [];
 	private nextMessageSequence = 0;
-	private nextProtocolSequence = 100;
-	readonly sent: Array<Record<string, unknown>> = [];
+		readonly sent: Array<Record<string, unknown>> = [];
 	started: unknown;
 	closed = false;
 	readonly onConnectionState = this.connectionEmitter.event;
@@ -105,7 +104,7 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 			: command === "source" ? { content: "const generated = true;", mimeType: "text/typescript" }
 			: command === "setBreakpoints" && Array.isArray((request.arguments as Record<string, unknown>)?.breakpoints) && ((request.arguments as Record<string, unknown>).breakpoints as unknown[]).length > 0 ? { breakpoints: [{ verified: true }] }
 			: {};
-		this.enqueue({ seq: this.nextProtocolSequence++, type: "response", request_seq: request.seq, success: true, command, body });
+		this.enqueue({ seq: 0, type: "response", request_seq: request.seq, success: true, command, body });
 	}
 
 	async read(_sessionId: string, afterSequence: number, maxMessages: number): Promise<IDebugAdapterProcessReadResult> {
@@ -118,8 +117,8 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 	dispose(): void { this.connectionEmitter.dispose(); }
 	[Symbol.dispose](): void { this.dispose(); }
 
-	event(event: string, body?: unknown): void { this.enqueue({ seq: this.nextProtocolSequence++, type: "event", event, ...(body === undefined ? {} : { body }) }); }
-	reverseRequest(command: string, argumentsValue: unknown): void { this.enqueue({ seq: this.nextProtocolSequence++, type: "request", command, arguments: argumentsValue }); }
+	event(event: string, body?: unknown): void { this.enqueue({ seq: 0, type: "event", event, ...(body === undefined ? {} : { body }) }); }
+	reverseRequest(command: string, argumentsValue: unknown): void { this.enqueue({ seq: 0, type: "request", command, arguments: argumentsValue }); }
 	request(command: string): Record<string, unknown> { const request = this.requests(command)[0]; assert.ok(request); return request; }
 	requests(command: string): Record<string, unknown>[] { return this.sent.filter(message => message.type === "request" && message.command === command); }
 	responses(command: string): Record<string, unknown>[] { return this.sent.filter(message => message.type === "response" && message.command === command); }

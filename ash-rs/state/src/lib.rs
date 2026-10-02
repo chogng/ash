@@ -1,5 +1,7 @@
 //! Profile-local database runtime, durable state adapters, and rebuildable index leases.
 
+mod assets;
+pub use assets::SqliteAssetStore;
 mod dir_index;
 mod issue_cache;
 mod message_history;

@@ -105,6 +105,9 @@ fn discovers_qualified_tests_and_runs_exact_pass_fail_and_ignored_cases() {
             .iter()
             .find(|test| test.name == "separate::from_file")
             .unwrap()
+            .source
+            .as_ref()
+            .unwrap()
             .path
             .ends_with("separate checks.rs")
     );
@@ -242,7 +245,7 @@ fn rejects_unknown_tests_and_revoked_execution_authority() {
 }
 
 #[test]
-fn exact_execution_rejects_cfg_filtered_cases_and_bounds_output() {
+fn compiled_listing_omits_cfg_filtered_cases_and_bounds_output() {
     let (temp, grant) = fixture();
     std::fs::write(
         temp.path().join("src/lib.rs"),
@@ -270,14 +273,13 @@ fn exact_execution_rejects_cfg_filtered_cases_and_bounds_output() {
             .iter()
             .map(|test| test.name.as_str())
             .collect::<Vec<_>>(),
-        ["disabled", "r#match", "integration_passes"]
+        ["r#match", "integration_passes"]
     );
-    assert!(
-        catalog.tests[..2]
-            .iter()
-            .all(|test| test.path == "src/lib.rs")
+    assert_eq!(catalog.tests[0].source.as_ref().unwrap().path, "src/lib.rs");
+    assert_eq!(
+        catalog.tests[1].source.as_ref().unwrap().path,
+        "tests/flow.rs"
     );
-    assert_eq!(catalog.tests[2].path, "tests/flow.rs");
     service
         .run(
             1,
@@ -298,15 +300,15 @@ fn exact_execution_rejects_cfg_filtered_cases_and_bounds_output() {
             .iter()
             .map(|result| result.state)
             .collect::<Vec<_>>(),
-        [TestState::Errored, TestState::Passed, TestState::Passed],
+        [TestState::Passed, TestState::Passed],
         "{:?}",
         run.results
             .iter()
             .map(|result| (&result.state, &result.output))
             .collect::<Vec<_>>()
     );
-    assert!(run.results[1].output_truncated);
-    assert_eq!(run.results[1].output.len(), 16 * 1024);
+    assert!(run.results[0].output_truncated);
+    assert_eq!(run.results[0].output.len(), 16 * 1024);
 }
 
 #[test]
@@ -330,4 +332,253 @@ fn source_module_cycles_fail_discovery_without_recursive_launches() {
     let catalog = await_terminal(&service, 1, "catalog");
     assert_eq!(catalog.status, OperationStatus::Failed);
     assert!(catalog.error.unwrap().contains("cycle"));
+}
+
+#[test]
+fn compiled_macros_async_doctests_and_debug_preparation_use_real_toolchains() {
+    let (temp, grant) = fixture();
+    std::fs::write(temp.path().join("Cargo.toml"), "[package]\nname = \"testing-fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n[dev-dependencies]\ntokio = { version = \"1\", features = [\"macros\", \"rt\"] }\n").unwrap();
+    std::fs::write(
+        temp.path().join("src/lib.rs"),
+        r#"
+/// ```
+/// assert_eq!(2 + 2, 4);
+/// ```
+/// ```compile_fail
+/// let _: u8 = "invalid";
+/// ```
+/// ```no_run
+/// panic!("must not execute");
+/// ```
+/// ```ignore
+/// panic!("ignored");
+/// ```
+/// ```
+/// std::fs::write("unexpected-doc-run", "failed").unwrap();
+/// panic!("documentation failure");
+/// ```
+pub fn documented() {}
+#[cfg(test)] macro_rules! generated { () => { #[test] fn generated_case() { assert_eq!(3, 3); } } }
+#[cfg(test)] generated!();
+#[cfg(test)] #[tokio::test] async fn asynchronous() { assert_eq!(async { 4 }.await, 4); }
+"#,
+    )
+    .unwrap();
+    let service = TestingService::default();
+    service
+        .discover(
+            1,
+            "catalog".into(),
+            grant.authorize(Permission::ReadFiles).unwrap(),
+            grant.authorize(Permission::ExecuteCommands).unwrap(),
+            Arc::new(|_| {}),
+        )
+        .unwrap();
+    let catalog = await_terminal(&service, 1, "catalog");
+    assert_eq!(
+        catalog.status,
+        OperationStatus::Completed,
+        "{:?}",
+        catalog.error
+    );
+    let generated = catalog
+        .tests
+        .iter()
+        .find(|test| test.name == "generated_case")
+        .unwrap();
+    assert!(generated.source.is_none());
+    let asynchronous = catalog
+        .tests
+        .iter()
+        .find(|test| test.name == "asynchronous")
+        .unwrap();
+    assert!(asynchronous.source.is_some());
+    let docs = catalog
+        .tests
+        .iter()
+        .filter(|test| test.target_kind == crate::TargetKind::Documentation)
+        .collect::<Vec<_>>();
+    assert_eq!(docs.len(), 5);
+    assert!(
+        docs.iter()
+            .all(|test| !test.debuggable && test.source.is_some())
+    );
+    let failing = docs
+        .iter()
+        .find(|test| test.source.as_ref().unwrap().line == 14)
+        .unwrap();
+    let selected = catalog
+        .tests
+        .iter()
+        .filter(|test| test.id != failing.id)
+        .map(|test| test.id.clone())
+        .collect::<Vec<_>>();
+    service
+        .run(
+            1,
+            "run".into(),
+            "catalog",
+            &selected,
+            grant.authorize(Permission::ExecuteCommands).unwrap(),
+            Arc::new(|_| {}),
+        )
+        .unwrap();
+    let run = await_terminal(&service, 1, "run");
+    assert_eq!(
+        run.results
+            .iter()
+            .filter(|result| result.state == TestState::Passed)
+            .count(),
+        6,
+        "{:?}",
+        run.results
+    );
+    assert_eq!(
+        run.results
+            .iter()
+            .filter(|result| result.state == TestState::Skipped)
+            .count(),
+        1
+    );
+    assert!(
+        !temp.path().join("unexpected-doc-run").exists(),
+        "Selecting other doctests must not execute the failing block"
+    );
+    service
+        .run(
+            1,
+            "failed-doc".into(),
+            "catalog",
+            &[failing.id.clone()],
+            grant.authorize(Permission::ExecuteCommands).unwrap(),
+            Arc::new(|_| {}),
+        )
+        .unwrap();
+    let failed = await_terminal(&service, 1, "failed-doc");
+    assert_eq!(
+        failed.results[0].state,
+        TestState::Failed,
+        "{:?}",
+        failed.results
+    );
+    assert!(failed.results[0].output.contains("documentation failure"));
+    assert!(temp.path().join("unexpected-doc-run").exists());
+    assert!(matches!(
+        service.prepare_debug(
+            2,
+            "foreign".into(),
+            "catalog",
+            &generated.id,
+            grant.authorize(Permission::ExecuteCommands).unwrap(),
+            Arc::new(|_| {})
+        ),
+        Err(TestingError::NotFound)
+    ));
+    for (id, test) in [("macro-debug", generated), ("async-debug", asynchronous)] {
+        service
+            .prepare_debug(
+                1,
+                id.into(),
+                "catalog",
+                &test.id,
+                grant.authorize(Permission::ExecuteCommands).unwrap(),
+                Arc::new(|_| {}),
+            )
+            .unwrap();
+        let prepared = await_terminal(&service, 1, id);
+        assert_eq!(
+            prepared.status,
+            OperationStatus::Completed,
+            "{:?}",
+            prepared.error
+        );
+        let launch = prepared.launch.unwrap();
+        assert!(std::path::Path::new(&launch.program).is_file());
+        assert_eq!(&launch.arguments[..2], ["--exact", test.name.as_str()]);
+        assert_eq!(
+            std::path::Path::new(&launch.directory),
+            temp.path().canonicalize().unwrap()
+        );
+        service.release(1, id).unwrap();
+    }
+    assert!(matches!(
+        service.prepare_debug(
+            1,
+            "doc-debug".into(),
+            "catalog",
+            &failing.id,
+            grant.authorize(Permission::ExecuteCommands).unwrap(),
+            Arc::new(|_| {})
+        ),
+        Err(TestingError::InvalidInput)
+    ));
+}
+
+#[test]
+fn workspace_member_tests_use_package_directory_and_workspace_source_paths() {
+    let (temp, grant) = fixture();
+    let member = temp.path().join("member");
+    std::fs::create_dir(&member).unwrap();
+    for file in ["Cargo.toml", "src", "tests"] {
+        std::fs::rename(temp.path().join(file), member.join(file)).unwrap();
+    }
+    std::fs::write(
+        temp.path().join("Cargo.toml"),
+        "[workspace]\nmembers=[\"member\"]\nresolver=\"2\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        member.join("Cargo.toml"),
+        "[package]\nname=\"member-fixture\"\nversion=\"0.1.0\"\nedition=\"2024\"\n",
+    )
+    .unwrap();
+    std::fs::write(member.join("src/lib.rs"), "/// ```\n/// assert_eq!(std::env::current_dir().unwrap().file_name().unwrap(), \"member\");\n/// ```\npub fn docs() {}\n#[test] fn package_directory() { assert_eq!(std::env::current_dir().unwrap().file_name().unwrap(), \"member\"); }\n").unwrap();
+    let service = TestingService::default();
+    service
+        .discover(
+            1,
+            "catalog".into(),
+            grant.authorize(Permission::ReadFiles).unwrap(),
+            grant.authorize(Permission::ExecuteCommands).unwrap(),
+            Arc::new(|_| {}),
+        )
+        .unwrap();
+    let catalog = await_terminal(&service, 1, "catalog");
+    assert_eq!(
+        catalog.status,
+        OperationStatus::Completed,
+        "{:?}",
+        catalog.error
+    );
+    assert_eq!(catalog.tests.len(), 3);
+    assert!(
+        catalog
+            .tests
+            .iter()
+            .all(|test| test.source.as_ref().unwrap().path.starts_with("member/"))
+    );
+    service
+        .run(
+            1,
+            "run".into(),
+            "catalog",
+            &catalog
+                .tests
+                .iter()
+                .map(|test| test.id.clone())
+                .collect::<Vec<_>>(),
+            grant.authorize(Permission::ExecuteCommands).unwrap(),
+            Arc::new(|_| {}),
+        )
+        .unwrap();
+    let run = await_terminal(&service, 1, "run");
+    assert_eq!(
+        run.results
+            .iter()
+            .map(|result| result.state)
+            .collect::<Vec<_>>(),
+        [TestState::Passed, TestState::Passed, TestState::Passed],
+        "{:?}",
+        run.results
+    );
 }

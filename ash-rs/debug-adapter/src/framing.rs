@@ -75,12 +75,11 @@ fn validate_message(value: &Value) -> Result<(), DebugAdapterError> {
     let Some(object) = value.as_object() else {
         return Err(DebugAdapterError::InvalidMessage);
     };
-    let Some(sequence) = object.get("seq").and_then(Value::as_u64) else {
+    // LLDB-DAP emits seq=0; request pairing uses request_seq and our retained-message cursor
+    // is assigned by the process owner, independently of this adapter-supplied field.
+    let Some(_) = object.get("seq").and_then(Value::as_u64) else {
         return Err(DebugAdapterError::InvalidMessage);
     };
-    if sequence == 0 {
-        return Err(DebugAdapterError::InvalidMessage);
-    }
     let Some(kind) = object.get("type").and_then(Value::as_str) else {
         return Err(DebugAdapterError::InvalidMessage);
     };

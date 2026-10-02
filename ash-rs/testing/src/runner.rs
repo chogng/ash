@@ -22,6 +22,7 @@ use crate::TestResult;
 use crate::TestState;
 use crate::TestingError;
 use crate::Update;
+use crate::doctest;
 use crate::model::Catalog;
 use crate::service::Operation;
 
@@ -29,6 +30,22 @@ pub(crate) fn execute(
     authorization: &Authorization,
     program: &str,
     arguments: &[&str],
+    cancellation: &CancellationToken,
+) -> Result<CommandOutput, TestingError> {
+    execute_in_directory(
+        authorization,
+        program,
+        arguments,
+        std::path::Path::new("."),
+        cancellation,
+    )
+}
+
+pub(crate) fn execute_in_directory(
+    authorization: &Authorization,
+    program: &str,
+    arguments: &[&str],
+    directory: &std::path::Path,
     cancellation: &CancellationToken,
 ) -> Result<CommandOutput, TestingError> {
     let executor = ProcessExecutor::new(
@@ -54,7 +71,7 @@ pub(crate) fn execute(
                             .iter()
                             .map(|argument| (*argument).to_owned())
                             .collect(),
-                        working_directory: std::path::PathBuf::from("."),
+                        working_directory: directory.to_owned(),
                         input: CommandInput::Closed,
                     },
                     CommandExecutionAuthority::Unrestricted,
@@ -95,45 +112,45 @@ pub(crate) fn run(operation: &Operation, catalog: Catalog, authorization: Author
             result(&test, TestState::Running, 0, String::new(), false),
         );
         let key = format!("{}:{:?}:{}", test.package, test.target_kind, test.target);
-        let binary = binaries
-            .entry(key)
-            .or_insert_with(|| build(&authorization, &test, &cancellation));
-        let completed = match binary {
-            Ok(binary) => execute(
+        let completed = if test.target_kind == TargetKind::Documentation {
+            run_documentation(
                 &authorization,
-                binary,
-                &["--exact", &test.name, "--nocapture", "--color", "never"],
+                &test,
+                &catalog.documentation_names[&test.package],
                 &cancellation,
             )
-            .map(|output| {
-                let summary = output
-                    .stdout
-                    .lines()
-                    .rev()
-                    .find(|line| line.starts_with("test result: "))
-                    .unwrap_or("");
-                let state = if summary.contains("1 ignored;") {
-                    TestState::Skipped
-                } else if summary.contains("1 passed;") && output.exit_code == Some(0) {
-                    TestState::Passed
-                } else if summary.contains("1 failed;") {
-                    TestState::Failed
-                } else {
-                    // Source discovery is not proof that cfg or the harness exposes a test.
-                    // In particular, a successful invocation matching zero tests must not pass.
-                    TestState::Errored
-                };
-                let text = format!("{}{}", output.stdout, output.stderr);
-                result(
-                    &test,
-                    state,
-                    elapsed_ms(started),
-                    text,
-                    output.stdout_truncated || output.stderr_truncated,
+        } else {
+            let binary = binaries.entry(key).or_insert_with(|| {
+                build(
+                    &authorization,
+                    &test.package,
+                    test.target_kind,
+                    &test.target,
+                    &cancellation,
                 )
-            }),
-            Err(error) => Err(error.clone()),
+            });
+            match binary {
+                Ok(binary) => execute_in_directory(
+                    &authorization,
+                    binary,
+                    &["--exact", &test.name, "--nocapture", "--color", "never"],
+                    test.directory
+                        .strip_prefix(&catalog.root)
+                        .expect("catalog directory is authorized"),
+                    &cancellation,
+                ),
+                Err(error) => Err(error.clone()),
+            }
         };
+        let completed = completed.map(|output| {
+            result(
+                &test,
+                output_state(&output),
+                elapsed_ms(started),
+                format!("{}{}", output.stdout, output.stderr),
+                output.stdout_truncated || output.stderr_truncated,
+            )
+        });
         let completed = match completed {
             Ok(completed) => completed,
             Err(TestingError::Cancelled) => result(
@@ -177,22 +194,138 @@ pub(crate) fn run(operation: &Operation, catalog: Catalog, authorization: Author
             tests: None,
             result: None,
             error: None,
+            launch: None,
         }
     });
 }
 
-fn build(
+fn run_documentation(
+    authorization: &Authorization,
+    test: &TestItem,
+    names: &[String],
+    cancellation: &CancellationToken,
+) -> Result<CommandOutput, TestingError> {
+    let mut arguments = vec![
+        "test".to_owned(),
+        "-p".to_owned(),
+        test.package.clone(),
+        "--doc".to_owned(),
+        "--".to_owned(),
+    ];
+    arguments.extend(doctest::selection_arguments(&test.name, names)?);
+    arguments.extend([
+        "--nocapture".to_owned(),
+        "--color".to_owned(),
+        "never".to_owned(),
+    ]);
+    execute(
+        authorization,
+        "cargo",
+        &arguments.iter().map(String::as_str).collect::<Vec<_>>(),
+        cancellation,
+    )
+}
+
+fn output_state(output: &CommandOutput) -> TestState {
+    let mut counts = [0_usize; 3];
+    for summary in output
+        .stdout
+        .lines()
+        .filter_map(|line| line.strip_prefix("test result: "))
+    {
+        for section in summary.split(';') {
+            let words = section.split_whitespace().collect::<Vec<_>>();
+            for (index, label) in ["passed", "failed", "ignored"].into_iter().enumerate() {
+                if words.last() == Some(&label)
+                    && let Some(count) = words
+                        .get(words.len().saturating_sub(2))
+                        .and_then(|count| count.parse::<usize>().ok())
+                {
+                    counts[index] += count;
+                }
+            }
+        }
+    }
+    // rustdoc may report separate merged and standalone harnesses. Exactly one
+    // selected result is required across all of them; zero matches never passes.
+    match counts {
+        [1, 0, 0] if output.exit_code == Some(0) => TestState::Passed,
+        [0, 0, 1] if output.exit_code == Some(0) => TestState::Skipped,
+        [0, 1, 0] => TestState::Failed,
+        _ => TestState::Errored,
+    }
+}
+
+pub(crate) fn prepare_debug(
     authorization: &Authorization,
     test: &TestItem,
     cancellation: &CancellationToken,
-) -> Result<String, TestingError> {
-    let mut args = vec!["test", "-p", &test.package];
-    match test.target_kind {
-        TargetKind::Library => args.push("--lib"),
-        TargetKind::Binary => args.extend(["--bin", &test.target]),
-        TargetKind::Integration => args.extend(["--test", &test.target]),
+) -> Result<crate::DebugLaunch, TestingError> {
+    if !test.debuggable {
+        return Err(TestingError::InvalidInput);
     }
-    args.extend(["--no-run", "--message-format=json"]);
+    let program = build(
+        authorization,
+        &test.package,
+        test.target_kind,
+        &test.target,
+        cancellation,
+    )?;
+    #[cfg(target_os = "macos")]
+    let adapter_program = {
+        let output = execute(
+            authorization,
+            "xcrun",
+            &["--find", "lldb-dap"],
+            cancellation,
+        )?;
+        if output.exit_code != Some(0) || output.stdout.trim().is_empty() {
+            return Err(TestingError::Failed(
+                "LLVM lldb-dap is required to debug Rust tests".into(),
+            ));
+        }
+        output.stdout.trim().to_owned()
+    };
+    #[cfg(not(target_os = "macos"))]
+    let adapter_program = "lldb-dap".to_owned();
+    Ok(crate::DebugLaunch {
+        test_id: test.id.clone(),
+        program,
+        arguments: vec![
+            "--exact".into(),
+            test.name.clone(),
+            "--nocapture".into(),
+            "--color".into(),
+            "never".into(),
+            "--test-threads=1".into(),
+        ],
+        directory: test.directory.to_string_lossy().into_owned(),
+        adapter_program,
+    })
+}
+
+pub(crate) fn build(
+    authorization: &Authorization,
+    package: &str,
+    kind: TargetKind,
+    target: &str,
+    cancellation: &CancellationToken,
+) -> Result<String, TestingError> {
+    let mut args = vec!["test", "-p", package];
+    match kind {
+        TargetKind::Library => args.push("--lib"),
+        TargetKind::Binary => args.extend(["--bin", target]),
+        TargetKind::Integration => args.extend(["--test", target]),
+        TargetKind::Documentation => return Err(TestingError::InvalidInput),
+    }
+    args.extend([
+        "--no-run",
+        "--message-format=json",
+        "--config",
+        "profile.test.debug=2",
+        "--config",
+        "profile.test.strip=\"none\"",
+    ]);
     let output = execute(authorization, "cargo", &args, cancellation)?;
     if output.exit_code != Some(0) {
         return Err(TestingError::Failed(format!(
@@ -209,7 +342,7 @@ fn build(
         let message: serde_json::Value =
             serde_json::from_str(line).map_err(|error| TestingError::Failed(error.to_string()))?;
         if message["reason"] == "compiler-artifact"
-            && message["target"]["name"] == test.target
+            && message["target"]["name"] == target
             && message["profile"]["test"] == true
             && let Some(executable) = message["executable"].as_str()
         {
@@ -276,6 +409,7 @@ fn publish_result(operation: &Operation, result: TestResult) {
             tests: None,
             result: Some(result),
             error: None,
+            launch: None,
         }
     });
 }

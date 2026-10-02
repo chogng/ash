@@ -65,6 +65,26 @@ use crate::protocol::attachments::AttachmentImportRemoteParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::attachments::AttachmentMaterializeResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::assets::AssetImportStartParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::assets::AssetImportStartResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::assets::AssetImportWriteParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::assets::AssetImportWriteResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::assets::AssetImportParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::assets::AssetVersionParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::assets::AssetVersionResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::assets::AssetImageType;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::assets::AssetReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::assets::AssetReadResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::attachments::AttachmentUploadCancelParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::attachments::AttachmentUploadFinishParams;
@@ -1511,6 +1531,12 @@ use crate::protocol::terminal::TerminalReconnectLease;
 use crate::protocol::terminal::TerminalResizeParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalWriteParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingDebugLaunch;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingPrepareDebugParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingSource;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::testing::TestingDiscoverParams;
 #[cfg(any(test, feature = "export"))]
@@ -3299,6 +3325,24 @@ client_methods! {
         response: TypstCompileResult,
         serialization: GlobalExclusive,
     },
+    AssetImportStart => "asset/import/start" {
+        params: AssetImportStartParams, response: AssetImportStartResult, serialization: ResourceExclusive("versionId"),
+    },
+    AssetImportWrite => "asset/import/write" {
+        params: AssetImportWriteParams, response: AssetImportWriteResult, serialization: ResourceExclusive("versionId"),
+    },
+    AssetImportFinish => "asset/import/finish" {
+        params: AssetImportParams, response: AssetVersionResult, serialization: ResourceExclusive("versionId"),
+    },
+    AssetImportCancel => "asset/import/cancel" {
+        params: AssetImportParams, response: (), serialization: ResourceExclusive("versionId"),
+    },
+    AssetVersion => "asset/version" {
+        params: AssetVersionParams, response: AssetVersionResult, serialization: ResourceExclusive("versionId"),
+    },
+    AssetRead => "asset/read" {
+        params: AssetReadParams, response: AssetReadResult, serialization: ResourceExclusive("versionId"),
+    },
     ResourceMetadata => "resource/metadata" {
         params: ResourceMetadataParams,
         response: ResourceMetadataResult,
@@ -3955,6 +3999,11 @@ client_methods! {
     },
     TestingRun => "testing/run" {
         params: TestingRunParams,
+        response: (),
+        serialization: None,
+    },
+    TestingPrepareDebug => "testing/prepareDebug" {
+        params: TestingPrepareDebugParams,
         response: (),
         serialization: None,
     },
@@ -5053,6 +5102,16 @@ typescript_bindings! {
     TypstDiagnosticDto,
     TypstDiagnosticSeverityDto,
     TypstSourceRangeDto,
+    AssetImportStartParams,
+    AssetImportStartResult,
+    AssetImportWriteParams,
+    AssetImportWriteResult,
+    AssetImportParams,
+    AssetVersionParams,
+    AssetVersionResult,
+    AssetImageType,
+    AssetReadParams,
+    AssetReadResult,
     ResourceMetadataParams,
     ResourceMetadataResult,
     ResourceReadParams,
@@ -5347,6 +5406,9 @@ typescript_bindings! {
     TerminalReadResult,
     TerminalCloseParams,
     TestingDiscoverParams,
+    TestingPrepareDebugParams,
+    TestingDebugLaunch,
+    TestingSource,
     TestingRunParams,
     TestingOperationParams,
     TestingTargetKind,

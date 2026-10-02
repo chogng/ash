@@ -139,6 +139,8 @@ export interface IDebugService extends IDisposable {
 	readonly onDidChangeSession: Event<IDebugSession | undefined>;
 	refresh(): Promise<readonly IDebugConfiguration[]>;
 	start(configuration: IDebugConfiguration): Promise<IDebugSession>;
+	/** Starts a supplied configuration without adding it to launch.json. */
+	startDebugging(configuration: IDebugConfiguration): Promise<IDebugSession>;
 	startCompound(compound: IDebugCompound): Promise<readonly IDebugSession[]>;
 	setActiveSession(session: IDebugSession): void;
 	restart(session?: IDebugSession): Promise<IDebugSession>;

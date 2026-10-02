@@ -11,7 +11,10 @@ use tree_sitter::Parser;
 
 use crate::TargetKind;
 use crate::TestItem;
+use crate::TestSource;
 use crate::TestingError;
+use crate::doctest;
+use crate::runner::build;
 use crate::runner::execute;
 use crate::service::MAX_TESTS;
 
@@ -26,6 +29,7 @@ struct Package {
     id: String,
     name: String,
     targets: Vec<Target>,
+    manifest_path: PathBuf,
 }
 
 #[derive(Deserialize)]
@@ -34,6 +38,7 @@ struct Target {
     kind: Vec<String>,
     src_path: PathBuf,
     test: bool,
+    doctest: bool,
 }
 
 pub(crate) fn discover(
@@ -72,12 +77,22 @@ pub(crate) fn discover(
         .into_iter()
         .filter(|package| members.contains(&package.id))
     {
-        for target in package.targets.into_iter().filter(|target| target.test) {
-            let kind = if target
-                .kind
-                .iter()
-                .any(|kind| kind == "lib" || kind == "rlib" || kind == "proc-macro")
-            {
+        let directory = package
+            .manifest_path
+            .parent()
+            .ok_or(TestingError::InvalidInput)?
+            .canonicalize()
+            .map_err(|error| TestingError::Failed(error.to_string()))?;
+        if !directory.starts_with(root) {
+            return Err(TestingError::PermissionRequired);
+        }
+        for target in package.targets {
+            let kind = if target.kind.iter().any(|kind| {
+                matches!(
+                    kind.as_str(),
+                    "lib" | "rlib" | "dylib" | "cdylib" | "staticlib" | "proc-macro"
+                )
+            }) {
                 TargetKind::Library
             } else if target.kind.iter().any(|kind| kind == "bin") {
                 TargetKind::Binary
@@ -86,6 +101,7 @@ pub(crate) fn discover(
             } else {
                 continue;
             };
+            let mut sources = Vec::new();
             let mut scanner = Scanner {
                 parser: &mut parser,
                 read,
@@ -95,13 +111,64 @@ pub(crate) fn discover(
                 kind,
                 visited: HashSet::new(),
                 active_files: HashSet::new(),
-                tests: &mut tests,
+                tests: &mut sources,
+                directory: &directory,
             };
             scanner.file(
                 &target.src_path,
                 &[],
                 target.src_path.parent().ok_or(TestingError::InvalidInput)?,
             )?;
+            if target.test {
+                let executable = build(command, &package.name, kind, &target.name, cancellation)?;
+                let listed = execute(
+                    command,
+                    &executable,
+                    &["--list", "--format", "terse"],
+                    cancellation,
+                )?;
+                if listed.exit_code != Some(0) || listed.stdout_truncated {
+                    return Err(TestingError::Failed(format!(
+                        "Test listing failed: {}",
+                        listed.stderr
+                    )));
+                }
+                for name in listed
+                    .stdout
+                    .lines()
+                    .filter_map(|line| line.strip_suffix(": test"))
+                {
+                    let source = sources
+                        .iter()
+                        .find(|source| source.name == name)
+                        .and_then(|source| source.source.clone());
+                    tests.push(TestItem {
+                        id: test_id(&package.name, kind, &target.name, name),
+                        package: package.name.clone(),
+                        target: target.name.clone(),
+                        target_kind: kind,
+                        name: name.to_owned(),
+                        source,
+                        debuggable: true,
+                        directory: directory.clone(),
+                    });
+                }
+            }
+            if kind == TargetKind::Library && target.doctest {
+                tests.extend(doctest::discover(
+                    read,
+                    command,
+                    &package.name,
+                    &target.name,
+                    &directory,
+                    cancellation,
+                )?);
+            }
+            if tests.len() > MAX_TESTS {
+                return Err(TestingError::Failed(
+                    "Rust test discovery exceeded 10000 tests".into(),
+                ));
+            }
         }
     }
     tests.sort_by(|a, b| a.id.cmp(&b.id));
@@ -119,6 +186,7 @@ struct Scanner<'a> {
     visited: HashSet<(PathBuf, Vec<String>)>,
     tests: &'a mut Vec<TestItem>,
     active_files: HashSet<PathBuf>,
+    directory: &'a Path,
 }
 
 impl Scanner<'_> {
@@ -192,38 +260,33 @@ impl Scanner<'_> {
             if item.kind() == "line_comment" || item.kind() == "block_comment" {
                 continue;
             }
-            if item.kind() == "function_item"
-                && attributes
-                    .iter()
-                    .any(|attribute| attribute.replace(char::is_whitespace, "") == "#[test]")
-            {
+            if item.kind() == "function_item" {
                 let name = item
                     .child_by_field_name("name")
                     .ok_or(TestingError::InvalidInput)?;
                 let mut segments = modules.to_vec();
                 segments.push(source[name.byte_range()].to_owned());
                 let qualified = segments.join("::");
-                let target_kind = match self.kind {
-                    TargetKind::Library => "lib",
-                    TargetKind::Binary => "bin",
-                    TargetKind::Integration => "test",
-                };
                 self.tests.push(TestItem {
-                    id: format!("{}:{target_kind}:{}:{qualified}", self.package, self.target),
+                    id: test_id(self.package, self.kind, self.target, &qualified),
                     package: self.package.to_owned(),
                     target: self.target.to_owned(),
                     target_kind: self.kind,
                     name: qualified,
-                    path: path
-                        .strip_prefix(self.read.dir().canonical_path())
-                        .map_err(|_| TestingError::PermissionRequired)?
-                        .to_string_lossy()
-                        .replace('\\', "/"),
-                    line: name.start_position().row + 1,
+                    source: Some(TestSource {
+                        path: path
+                            .strip_prefix(self.read.dir().canonical_path())
+                            .map_err(|_| TestingError::PermissionRequired)?
+                            .to_string_lossy()
+                            .replace('\\', "/"),
+                        line: name.start_position().row + 1,
+                    }),
+                    debuggable: true,
+                    directory: self.directory.to_owned(),
                 });
-                if self.tests.len() > MAX_TESTS {
+                if self.tests.len() > 100_000 {
                     return Err(TestingError::Failed(
-                        "Rust test discovery exceeded 10000 tests".into(),
+                        "Rust source indexing exceeded 100000 functions".into(),
                     ));
                 }
             }
@@ -288,4 +351,14 @@ impl Scanner<'_> {
         }
         Ok(())
     }
+}
+
+pub(crate) fn test_id(package: &str, kind: TargetKind, target: &str, name: &str) -> String {
+    let kind = match kind {
+        TargetKind::Library => "lib",
+        TargetKind::Binary => "bin",
+        TargetKind::Integration => "test",
+        TargetKind::Documentation => "doc",
+    };
+    format!("{package}:{kind}:{target}:{name}")
 }

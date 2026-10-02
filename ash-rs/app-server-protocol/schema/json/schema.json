@@ -2131,6 +2131,13 @@
         "InvalidParams",
         "AdvisorDisabled",
         "InternalError",
+        "AssetsUnavailable",
+        "AssetInvalid",
+        "AssetInvalidImage",
+        "AssetNotFound",
+        "AssetConflict",
+        "AssetCapacity",
+        "AssetOperationFailed",
         "TestingNotFound",
         "TestingBusy",
         "TestingOperationFailed",
@@ -2348,6 +2355,226 @@
           "type": "object"
         }
       ]
+    },
+    "AssetImageType": {
+      "enum": [
+        "image/png",
+        "image/jpeg",
+        "image/webp"
+      ],
+      "type": "string"
+    },
+    "AssetImportParams": {
+      "additionalProperties": false,
+      "properties": {
+        "versionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "versionId"
+      ],
+      "type": "object"
+    },
+    "AssetImportStartParams": {
+      "additionalProperties": false,
+      "properties": {
+        "assetId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "size": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source": {
+          "type": "string"
+        },
+        "versionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "assetId",
+        "versionId",
+        "name",
+        "source",
+        "size"
+      ],
+      "type": "object"
+    },
+    "AssetImportStartResult": {
+      "properties": {
+        "maxChunkBytes": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "maxChunkBytes"
+      ],
+      "type": "object"
+    },
+    "AssetImportWriteParams": {
+      "additionalProperties": false,
+      "properties": {
+        "dataBase64": {
+          "maxLength": 262144,
+          "type": "string"
+        },
+        "offset": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "versionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "versionId",
+        "offset",
+        "dataBase64"
+      ],
+      "type": "object"
+    },
+    "AssetImportWriteResult": {
+      "properties": {
+        "nextOffset": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "nextOffset"
+      ],
+      "type": "object"
+    },
+    "AssetReadParams": {
+      "additionalProperties": false,
+      "properties": {
+        "assetId": {
+          "type": "string"
+        },
+        "maxBytes": {
+          "format": "uint",
+          "maximum": 196608,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "offset": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "versionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "assetId",
+        "versionId",
+        "offset",
+        "maxBytes"
+      ],
+      "type": "object"
+    },
+    "AssetReadResult": {
+      "properties": {
+        "dataBase64": {
+          "type": "string"
+        },
+        "decodedLength": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "eof": {
+          "type": "boolean"
+        },
+        "offset": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "dataBase64",
+        "offset",
+        "decodedLength",
+        "eof"
+      ],
+      "type": "object"
+    },
+    "AssetVersionParams": {
+      "additionalProperties": false,
+      "properties": {
+        "assetId": {
+          "type": "string"
+        },
+        "versionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "assetId",
+        "versionId"
+      ],
+      "type": "object"
+    },
+    "AssetVersionResult": {
+      "properties": {
+        "assetId": {
+          "type": "string"
+        },
+        "height": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mediaType": {
+          "$ref": "#/$defs/AssetImageType"
+        },
+        "name": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "size": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source": {
+          "type": "string"
+        },
+        "versionId": {
+          "type": "string"
+        },
+        "width": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "assetId",
+        "versionId",
+        "name",
+        "source",
+        "sha256",
+        "mediaType",
+        "size",
+        "width",
+        "height"
+      ],
+      "type": "object"
     },
     "AttachmentImportRemoteParams": {
       "properties": {
@@ -7074,6 +7301,102 @@
         {
           "properties": {
             "method": {
+              "const": "asset/import/start",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/AssetImportStartParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "asset/import/write",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/AssetImportWriteParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "asset/import/finish",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/AssetImportParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "asset/import/cancel",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/AssetImportParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "asset/version",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/AssetVersionParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "asset/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/AssetReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "resource/metadata",
               "type": "string"
             },
@@ -9143,6 +9466,22 @@
             },
             "params": {
               "$ref": "#/$defs/TestingRunParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "testing/prepareDebug",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TestingPrepareDebugParams"
             }
           },
           "required": [
@@ -12294,6 +12633,102 @@
         {
           "properties": {
             "method": {
+              "const": "asset/import/start",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/AssetImportStartResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "asset/import/write",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/AssetImportWriteResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "asset/import/finish",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/AssetVersionResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "asset/import/cancel",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "asset/version",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/AssetVersionResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "asset/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/AssetReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "resource/metadata",
               "type": "string"
             },
@@ -14359,6 +14794,22 @@
           "properties": {
             "method": {
               "const": "testing/run",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "testing/prepareDebug",
               "type": "string"
             },
             "result": {
@@ -37460,9 +37911,39 @@
       ],
       "type": "object"
     },
+    "TestingDebugLaunch": {
+      "properties": {
+        "adapterProgram": {
+          "type": "string"
+        },
+        "arguments": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "directory": {
+          "type": "string"
+        },
+        "program": {
+          "type": "string"
+        },
+        "testId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "testId",
+        "program",
+        "arguments",
+        "directory",
+        "adapterProgram"
+      ],
+      "type": "object"
+    },
     "TestingDiscoverParams": {
       "additionalProperties": false,
-      "description": "Discovers conventional Rust #[test] functions without building the workspace.",
+      "description": "Builds and lists Rust harnesses and rustdoc tests, including macro and async tests.",
       "properties": {
         "dirId": {
           "type": [
@@ -37481,13 +37962,11 @@
     },
     "TestingItem": {
       "properties": {
+        "debuggable": {
+          "type": "boolean"
+        },
         "id": {
           "type": "string"
-        },
-        "line": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
         },
         "name": {
           "type": "string"
@@ -37495,9 +37974,15 @@
         "package": {
           "type": "string"
         },
-        "path": {
-          "description": "Slash-separated path relative to the authorized workspace directory.",
-          "type": "string"
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TestingSource"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "target": {
           "type": "string"
@@ -37512,15 +37997,15 @@
         "target",
         "targetKind",
         "name",
-        "path",
-        "line"
+        "debuggable"
       ],
       "type": "object"
     },
     "TestingOperationKind": {
       "enum": [
         "discovery",
-        "run"
+        "run",
+        "debug"
       ],
       "type": "string"
     },
@@ -37544,6 +38029,32 @@
         "failed"
       ],
       "type": "string"
+    },
+    "TestingPrepareDebugParams": {
+      "additionalProperties": false,
+      "properties": {
+        "catalogId": {
+          "type": "string"
+        },
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "testId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "operationId",
+        "catalogId",
+        "testId"
+      ],
+      "type": "object"
     },
     "TestingResult": {
       "properties": {
@@ -37630,6 +38141,16 @@
         "kind": {
           "$ref": "#/$defs/TestingOperationKind"
         },
+        "launch": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TestingDebugLaunch"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "operationId": {
           "type": "string"
         },
@@ -37664,6 +38185,24 @@
       ],
       "type": "object"
     },
+    "TestingSource": {
+      "properties": {
+        "line": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "description": "Slash-separated path relative to the authorized workspace directory.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "line"
+      ],
+      "type": "object"
+    },
     "TestingState": {
       "enum": [
         "running",
@@ -37679,7 +38218,8 @@
       "enum": [
         "library",
         "binary",
-        "integration"
+        "integration",
+        "documentation"
       ],
       "type": "string"
     },
@@ -37690,6 +38230,16 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "launch": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TestingDebugLaunch"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "operationId": {
