@@ -1,6 +1,5 @@
 .ash-view-pane-container { display: flex; min-width: 0; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow: hidden; }
-.ash-pane-composite-pane-layout-fill > .ash-pane-view { min-height: 0; flex: 1 1 auto; }
-.ash-pane-composite-pane-headers-hidden > .ash-pane-view > .ash-pane-view-header { display: none; }
+.ash-view-pane-container[hidden] { display: none; }
 .ash-view-pane-placeholder {
   margin: 0;
   padding: 8px;

@@ -127,6 +127,10 @@ export class SplitView extends Disposable {
 		container.append(element);
 		this._startSnappingEnabled = options.startSnappingEnabled ?? true;
 		this._endSnappingEnabled = options.endSnappingEnabled ?? true;
+		this._register(toDisposable(() => {
+			for (const item of this.items) item.changeListener?.dispose();
+			this.items.length = 0;
+		}));
 	}
 
 	get sashPresentation(): SashPresentation {
@@ -233,8 +237,9 @@ export class SplitView extends Disposable {
 		container.hidden = !item.visible;
 		view.setVisible?.(item.visible);
 		if (view.onDidChange) {
-			item.changeListener = this._register(view.onDidChange((preferredSize) => {
+			item.changeListener = view.onDidChange((preferredSize) => {
 				validateViewConstraints(view);
+				this.rebuildSashes();
 				if (!this.didLayout && preferredSize === undefined) return;
 				if (preferredSize === undefined) {
 					this.fitToSize();
@@ -243,7 +248,7 @@ export class SplitView extends Disposable {
 					return;
 				}
 				this.render();
-			}));
+			});
 		}
 		if (this.didLayout) this.fitToSize();
 		this.rebuildSashes();
@@ -260,6 +265,21 @@ export class SplitView extends Disposable {
 		if (this.didLayout) this.render();
 		this._onDidChangeViewSizes.fire();
 		return item.view;
+	}
+
+	moveView(from: number, to: number): void {
+		const item = this.item(from);
+		this.item(to);
+		if (from === to) return;
+		const focused = this.element.ownerDocument.activeElement;
+		this.items.splice(from, 1);
+		this.items.splice(to, 0, item);
+		const next = this.items[to + 1]?.container;
+		this.element.insertBefore(item.container, next ?? null);
+		if (focused && item.container.contains(focused)) (focused as HTMLElement).focus();
+		this.rebuildSashes();
+		if (this.didLayout) this.render();
+		this._onDidChangeViewSizes.fire();
 	}
 
 	layout(size: number, orthogonalSize: number): void {
@@ -335,7 +355,7 @@ export class SplitView extends Disposable {
 	}
 
 	/**
-	 * Resets the nearest visible views around one sash to an even split.
+	 * Resets the nearest resizable views around one sash to an even split.
 	 * Unrelated views retain their current sizes.
 	 */
 	resetSash(boundaryIndex: number, leadingSize?: number): void {
@@ -343,8 +363,8 @@ export class SplitView extends Disposable {
 			throw new RangeError(`SplitView sash boundary is out of range: ${boundaryIndex}`);
 		}
 		if (!this.didLayout) return;
-		const before = this.findVisibleItem(boundaryIndex, -1);
-		const after = this.findVisibleItem(boundaryIndex + 1, 1);
+		const before = this.findResizableItem(boundaryIndex, -1);
+		const after = this.findResizableItem(boundaryIndex + 1, 1);
 		if (!before || !after) return;
 		const total = before.size + after.size;
 		const beforeSize = resetLeadingViewSize(total, before, after, leadingSize);
@@ -599,10 +619,10 @@ export class SplitView extends Disposable {
 		return this.items.filter((item) => item.visible);
 	}
 
-	private findVisibleItem(startIndex: number, direction: -1 | 1): ViewItem | undefined {
+	private findResizableItem(startIndex: number, direction: -1 | 1): ViewItem | undefined {
 		for (let index = startIndex; index >= 0 && index < this.items.length; index += direction) {
 			const item = this.items[index];
-			if (item?.visible) return item;
+			if (item?.visible && isResizable(item)) return item;
 		}
 		return undefined;
 	}

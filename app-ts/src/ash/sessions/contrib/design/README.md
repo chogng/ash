@@ -70,9 +70,9 @@ Design 与 Editor 共用 Base、Platform 提供的生命周期、控件、配置
 
 Design 通过 `sessions.common.main.ts` 加载，当前使用方是 Sessions。Design 消费 Workbench 的编辑器注册和工作副本契约；其基础层和共享服务保持既有依赖方向，不能导入本目录。
 
-普通图片查看的类型识别、显示解码和尺寸读取由 [Platform 图片模块](../../../platform/media/browser/image.ts) 提供；`ImageResource` 创建并释放视图所用的对象 URL。[Workbench 图片预览](../../../workbench/contrib/mediaPreview/browser/imagePreview.ts) 和 Design 共用这套能力。普通文件查看负责适应窗口、原尺寸和缩放。Design 导入通过 [素材服务](../../../platform/assets/common/assetService.ts) 使用 Rust 入库结果，前端不生成正式素材元数据；Design 保留素材版本引用、裁切和文档历史。两种视图分别拥有预览资源，关闭一处不影响另一处；URL 不保存进文件，也不作为素材身份。后续 Library 可以消费同一模块，不需要导入 Design。
+普通图片查看的类型识别、显示解码和尺寸读取由 [Platform 图片模块](../../../platform/media/browser/image.ts) 提供；`ImageResource` 创建并释放视图所用的对象 URL。[Workbench 图片预览](../../../workbench/contrib/mediaPreview/browser/imagePreview.ts) 和 Design 共用这套能力。普通文件查看负责适应窗口、原尺寸和缩放。Design 导入通过 [素材服务](../../../platform/assets/common/assetService.ts) 使用 Rust 入库结果，前端不生成正式素材元数据；Design 保留素材版本引用、裁切和文档历史。两种视图分别拥有预览资源，关闭一处不影响另一处；URL 不保存进文件，也不作为素材身份。Library 消费同一模块，预览资源随其页面可见性释放，不需要导入 Design。
 
-Library 面向整个产品收集、查找和整理素材，Design 文档保存采用的确切素材版本及使用方式。设计模型不属于聊天记录，Library 的素材目录也不属于某个 Design Widget。当前 Library 只有导航入口，尚未提供素材目录界面；[Rust 素材领域](../../../../../../ash-rs/assets/src/lib.rs) 已提供原件入库、不可变版本与分块读取，Design 从文件导入时使用该领域，原始字节随设计包保存。后续 Library 接入使用同一共享素材服务提供素材版本，Design 不持有另一份全局素材目录，也不要求 Library 导入 Design 的编辑模型。规划见 [DESIGN.md](DESIGN.md#library-与编辑器的归属)。
+Library 面向整个产品收集、查找和整理素材，Design 文档保存采用的确切素材版本及使用方式。设计模型不属于聊天记录，Library 的素材目录也不属于某个 Design Widget。Library 已提供图片目录、导入、搜索、收藏与集合；[Rust 素材领域](../../../../../../ash-rs/assets/src/lib.rs) 已提供原件入库、不可变版本与分块读取，Design 从文件导入时使用该领域，原始字节随设计包保存。Library 的“用于 Design”由窗口装配打开设计页并调用编辑器的素材采用入口；Design 通过共享素材服务读取确切版本，将原件纳入工作副本。同一素材版本可产生多个独立图片对象，文档只保存一份素材版本条目。Design 不持有另一份全局目录，Library 不导入 Design 的编辑模型。规划见 [DESIGN.md](DESIGN.md#library-与编辑器的归属)。
 
 ## 编辑与几何约定
 
@@ -116,7 +116,7 @@ Code 模式从同一已提交快照生成 HTML/CSS/SVG：矩形、椭圆和画�
 
 ## 当前能力与验证入口
 
-已具备矩形、椭圆、文字、贝塞尔路径、画板、PNG/JPEG/WebP 图片导入、独立裁切、多选、分组、几何与属性编辑、撤销重做、素材包打开保存、关键帧动画编辑与播放、SVG 和 HTML 代码导出。组尺寸按比例变化，画板尺寸变化保留子对象几何；文字内容目前通过属性面板编辑。品牌样式、Agent 候选采用、Library 素材目录、视频和媒体工作流尚未实现。
+已具备矩形、椭圆、文字、贝塞尔路径、画板、PNG/JPEG/WebP 图片导入、独立裁切、多选、分组、几何与属性编辑、撤销重做、素材包打开保存、关键帧动画编辑与播放、SVG 和 HTML 代码导出。组尺寸按比例变化，画板尺寸变化保留子对象几何；文字内容目前通过属性面板编辑。品牌样式、Agent 候选采用、视频和媒体工作流尚未实现。
 
 无障碍入口由 contribution 注册：帮助说明可用工具和快捷键，内容视图以文本描述文档，关闭后恢复原焦点。Widget 提供键盘操作、属性输入标签和选区状态播报；文案沿现有 NLS 加载。
 

@@ -3,6 +3,12 @@ use super::ConnectionState;
 use super::RpcError;
 use super::decode;
 use super::result;
+use ash_app_server_protocol::protocol::assets::AssetCatalogEntry;
+use ash_app_server_protocol::protocol::assets::AssetCatalogParams;
+use ash_app_server_protocol::protocol::assets::AssetCatalogResult;
+use ash_app_server_protocol::protocol::assets::AssetCatalogUpdateParams;
+use ash_app_server_protocol::protocol::assets::AssetCollection;
+use ash_app_server_protocol::protocol::assets::AssetCollectionDeleteParams;
 use ash_app_server_protocol::protocol::assets::AssetImageType;
 use ash_app_server_protocol::protocol::assets::AssetImportParams;
 use ash_app_server_protocol::protocol::assets::AssetImportStartParams;
@@ -26,6 +32,58 @@ impl AppServer {
         self.assets
             .as_deref()
             .ok_or_else(|| RpcError::new(-32130, AppServerErrorName::AssetsUnavailable))
+    }
+
+    pub(super) fn asset_catalog(&self, params: &Value) -> Result<Value, RpcError> {
+        let _: AssetCatalogParams = decode(params)?;
+        let catalog = self.asset_service()?.catalog().map_err(error)?;
+        result(&AssetCatalogResult {
+            entries: catalog
+                .entries
+                .into_iter()
+                .map(|entry| AssetCatalogEntry {
+                    version: version_result(entry.version),
+                    added_at: entry.added_at,
+                    favorite: entry.favorite,
+                    collection_ids: entry.collection_ids,
+                })
+                .collect(),
+            collections: catalog
+                .collections
+                .into_iter()
+                .map(|collection| AssetCollection {
+                    id: collection.id,
+                    name: collection.name,
+                })
+                .collect(),
+        })
+    }
+
+    pub(super) fn asset_catalog_update(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: AssetCatalogUpdateParams = decode(params)?;
+        self.asset_service()?
+            .update_entry(&params.asset_id, params.favorite, &params.collection_ids)
+            .map_err(error)?;
+        result(&())
+    }
+
+    pub(super) fn asset_collection_create(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: AssetCollection = decode(params)?;
+        self.asset_service()?
+            .create_collection(&assets::Collection {
+                id: params.id,
+                name: params.name,
+            })
+            .map_err(error)?;
+        result(&())
+    }
+
+    pub(super) fn asset_collection_delete(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: AssetCollectionDeleteParams = decode(params)?;
+        self.asset_service()?
+            .delete_collection(&params.id)
+            .map_err(error)?;
+        result(&())
     }
 
     pub(super) fn asset_import_start(

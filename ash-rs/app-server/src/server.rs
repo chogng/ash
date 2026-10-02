@@ -2563,6 +2563,10 @@ impl AppServer {
             Some(ClientMethod::ExtensionHostInvokeCancel) => {
                 self.extension_host_invoke_cancel(connection, &request.params)
             }
+            Some(ClientMethod::AssetCatalog) => self.asset_catalog(&request.params),
+            Some(ClientMethod::AssetCatalogUpdate) => self.asset_catalog_update(&request.params),
+            Some(ClientMethod::AssetCollectionCreate) => self.asset_collection_create(&request.params),
+            Some(ClientMethod::AssetCollectionDelete) => self.asset_collection_delete(&request.params),
             Some(ClientMethod::AssetImportStart) => self.asset_import_start(connection, &request.params),
             Some(ClientMethod::AssetImportWrite) => self.asset_import_write(connection, &request.params),
             Some(ClientMethod::AssetImportFinish) => self.asset_import_finish(connection, &request.params),

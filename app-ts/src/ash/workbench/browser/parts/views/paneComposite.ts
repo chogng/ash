@@ -3,6 +3,7 @@ import { Emitter } from "../../../../base/common/event.js";
 import { localize } from "../../../services/localization/common/localizationService.js";
 import { ViewPaneContainer, type ViewPaneContainerOptions } from "./viewPaneContainer.js";
 import type { PartTitleProjection, ViewPane } from "./viewPane.js";
+import { IStorageService } from "../../../../platform/storage/common/storage.js";
 
 export interface PaneCompositeOptions extends ViewPaneContainerOptions {
 	readonly paneHeaders?: PaneHeaderVisibility;
@@ -26,8 +27,8 @@ export class PaneComposite extends ViewPaneContainer {
 	private mergedPane: ViewPane | undefined;
 	private mergedPaneWasCollapsed = false;
 
-	constructor(container: HTMLElement, options: PaneCompositeOptions) {
-		super(container, options);
+	constructor(container: HTMLElement, options: PaneCompositeOptions, @IStorageService storageService: IStorageService) {
+		super(container, options, storageService);
 		this.title = localize(options.localizationService, options.viewContainer.localizationKey, options.viewContainer.title);
 		this.element.classList.add("ash-pane-composite");
 		this.element.classList.toggle("ash-pane-composite-pane-headers-hidden", options.paneHeaders === "hidden");
@@ -70,8 +71,8 @@ export class PaneComposite extends ViewPaneContainer {
 		this.mergedPane = pane;
 		this.mergedPaneWasCollapsed = pane?.isExpanded() === false;
 		if (pane) {
-			pane.setExpanded(true);
 			pane.setHeaderVisible(false);
+			pane.setExpanded(true);
 		}
 		this.titleChange.fire();
 	}

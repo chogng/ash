@@ -116,3 +116,89 @@ fn asset_rpc_uploads_are_isolated_but_committed_versions_survive_connection_clos
     );
     assert_eq!(bytes["result"]["eof"], true);
 }
+
+#[test]
+fn asset_catalog_rpc_persists_organization_and_rejects_unknown_membership_atomically() {
+    let temp = tempfile::tempdir().unwrap();
+    let server = AppServer::new(
+        Arc::new(ash_core::ThreadController::with_store(Arc::new(
+            ash_core::InMemoryThreadStore::default(),
+        ))),
+        Arc::new(crate::local::ProviderModelService::new(Arc::new(
+            ash_model_provider::EchoModel,
+        ))),
+    )
+    .with_local_assets(&temp.path().join("state.sqlite"))
+    .unwrap();
+    let mut connection = initialize(&server);
+    rpc(
+        &server,
+        &mut connection,
+        "asset/import/start",
+        json!({"assetId":ASSET,"versionId":VERSION,"name":"product.png","source":"file:///product.png","size":PNG.len()}),
+    );
+    rpc(
+        &server,
+        &mut connection,
+        "asset/import/write",
+        json!({"versionId":VERSION,"offset":0,"dataBase64":STANDARD.encode(PNG)}),
+    );
+    rpc(
+        &server,
+        &mut connection,
+        "asset/import/finish",
+        json!({"versionId":VERSION}),
+    );
+    let collection = "44444444-4444-4444-8444-444444444444";
+    assert!(
+        rpc(
+            &server,
+            &mut connection,
+            "asset/collection/create",
+            json!({"id":collection,"name":"Brand"})
+        )
+        .get("result")
+        .is_some()
+    );
+    assert!(
+        rpc(
+            &server,
+            &mut connection,
+            "asset/catalog/update",
+            json!({"assetId":ASSET,"favorite":true,"collectionIds":[collection]})
+        )
+        .get("result")
+        .is_some()
+    );
+    let catalog = rpc(&server, &mut connection, "asset/catalog", json!({}))["result"].clone();
+    assert_eq!(catalog["entries"][0]["version"]["versionId"], VERSION);
+    assert_eq!(catalog["entries"][0]["favorite"], true);
+    assert_eq!(catalog["entries"][0]["collectionIds"], json!([collection]));
+    assert_eq!(
+        rpc(
+            &server,
+            &mut connection,
+            "asset/catalog/update",
+            json!({"assetId":ASSET,"favorite":false,"collectionIds":["55555555-5555-4555-8555-555555555555"]})
+        )["error"]["data"]["kind"],
+        "AssetNotFound"
+    );
+    assert_eq!(
+        rpc(&server, &mut connection, "asset/catalog", json!({}))["result"],
+        catalog
+    );
+    assert!(
+        rpc(
+            &server,
+            &mut connection,
+            "asset/collection/delete",
+            json!({"id":collection})
+        )
+        .get("result")
+        .is_some()
+    );
+    assert_eq!(
+        rpc(&server, &mut connection, "asset/catalog", json!({}))["result"]["entries"][0]["collectionIds"],
+        json!([])
+    );
+}

@@ -1,3 +1,4 @@
+import type { AssetVersion } from '../../../../../platform/assets/common/assetService.js';
 import './designEditorWidget.css';
 import { addDisposableListener, h, type IDimension } from '../../../../../base/browser/dom.js';
 import { Separator, type IAction } from '../../../../../base/common/actions.js';
@@ -230,6 +231,15 @@ export class DesignEditorWidget extends Disposable {
 		const selected = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => this.selection.ids.has(entry.shape.id));
 		const center = selected?.world.kind === 'frame' ? { x: selected.world.x + selected.world.width / 2, y: selected.world.y + selected.world.height / 2 } : this.viewportCenter();
 		const id = await this.documentController.importImage(center);
+		if (this.isDisposed) { return; }
+		if (id) { this.select([id]); this.render(); }
+		this.focus();
+	}
+
+	public async adoptAssetVersion(version: AssetVersion): Promise<void> {
+		this.setMode(DesignMode.Design);
+		this.cancelGesture();
+		const id = await this.documentController.adoptAssetVersion(version, this.viewportCenter());
 		if (this.isDisposed) { return; }
 		if (id) { this.select([id]); this.render(); }
 		this.focus();

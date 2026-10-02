@@ -2356,6 +2356,118 @@
         }
       ]
     },
+    "AssetCatalogEntry": {
+      "properties": {
+        "addedAt": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "collectionIds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "favorite": {
+          "type": "boolean"
+        },
+        "version": {
+          "$ref": "#/$defs/AssetVersionResult"
+        }
+      },
+      "required": [
+        "version",
+        "addedAt",
+        "favorite",
+        "collectionIds"
+      ],
+      "type": "object"
+    },
+    "AssetCatalogParams": {
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "AssetCatalogResult": {
+      "properties": {
+        "collections": {
+          "items": {
+            "$ref": "#/$defs/AssetCollection"
+          },
+          "type": "array"
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/AssetCatalogEntry"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "entries",
+        "collections"
+      ],
+      "type": "object"
+    },
+    "AssetCatalogUpdateParams": {
+      "additionalProperties": false,
+      "properties": {
+        "assetId": {
+          "maxLength": 36,
+          "minLength": 36,
+          "type": "string"
+        },
+        "collectionIds": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "type": "array"
+        },
+        "favorite": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "assetId",
+        "favorite",
+        "collectionIds"
+      ],
+      "type": "object"
+    },
+    "AssetCollection": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 36,
+          "minLength": 36,
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 512,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "type": "object"
+    },
+    "AssetCollectionDeleteParams": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 36,
+          "minLength": 36,
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
     "AssetImageType": {
       "enum": [
         "image/png",
@@ -7327,6 +7439,70 @@
             },
             "params": {
               "$ref": "#/$defs/TypstCompileParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "asset/catalog",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/AssetCatalogParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "asset/catalog/update",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/AssetCatalogUpdateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "asset/collection/create",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/AssetCollection"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "asset/collection/delete",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/AssetCollectionDeleteParams"
             }
           },
           "required": [
@@ -12659,6 +12835,70 @@
             },
             "result": {
               "$ref": "#/$defs/TypstCompileResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "asset/catalog",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/AssetCatalogResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "asset/catalog/update",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "asset/collection/create",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "asset/collection/delete",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
             }
           },
           "required": [

@@ -13,6 +13,9 @@ class Transport implements AppServerTransport {
 	public failWrite = false;
 	public invalidImage = false;
 	public supportsAssets = true;
+	public favorite = false;
+	public collectionIds: string[] = [];
+	public collections: { id: string; name: string }[] = [];
 	private readonly listeners = new Map<string, Set<(value: unknown) => void>>();
 	private bytes = Buffer.alloc(0);
 	private version: Record<string, unknown> = {};
@@ -36,6 +39,10 @@ class Transport implements AppServerTransport {
 				result = { serverInfo: { name: 'ash-app-server', version: '1' }, protocolVersion: { major: APP_SERVER_PROTOCOL_MAJOR, revision: APP_SERVER_PROTOCOL_REVISION }, schemaHash: APP_SERVER_SCHEMA_HASH, slashCommands: [], capabilities: { ...Object.fromEntries(['agentInteractions', 'documentCollaboration', 'sessions', 'threads', 'turns', 'projects', 'memories', 'resources', 'attachments', 'fileSystem', 'git', 'contentSearch', 'codebase', 'cloudCodebase', 'terminal', 'debugAdapter', 'typst', 'updateReplay', 'extensions', 'extensionHost', 'connectors', 'plugins', 'marketplace', 'mcp', 'mcpOAuth'].map(name => [name, true])), contracts } };
 				break;
 			}
+			case 'asset/catalog': result = { entries: this.version.assetId ? [{ version: this.version, addedAt: 1700000000000, favorite: this.favorite, collectionIds: this.collectionIds }] : [], collections: this.collections }; break;
+			case 'asset/catalog/update': this.favorite = params.favorite as boolean; this.collectionIds = params.collectionIds as string[]; result = null; break;
+			case 'asset/collection/create': this.collections.push(params as { id: string; name: string }); result = null; break;
+			case 'asset/collection/delete': this.collections = this.collections.filter(collection => collection.id !== params.id); result = null; break;
 			case 'asset/import/start':
 				this.bytes = Buffer.alloc(0);
 				this.version = { ...params, sha256: 'a'.repeat(64), mediaType: 'image/png', width: 20, height: 10 };
@@ -106,5 +113,22 @@ test('Asset operations reject an unsupported backend contract before creating an
 		await client.connect();
 		await assert.rejects(new AppServerAssetService(client).importImage(request), /supports version 1/);
 		assert.equal(transport.requests.length, 1);
+	} finally { client.dispose(); }
+});
+
+
+test('Asset catalog adapts generated metadata and sends durable organization operations', async () => {
+	const transport = new Transport();
+	const client = new AppServerProtocolClient(transport);
+	try {
+	await client.connect();
+	const service = new AppServerAssetService(client);
+	const version = await service.importImage(request);
+	const collection = { id: '33333333-3333-4333-8333-333333333333', name: 'Brand' };
+	await service.createCollection(collection);
+	await service.updateEntry(version.assetId, true, [collection.id]);
+	assert.deepEqual(await service.getCatalog(), { entries: [{ version, addedAt: 1700000000000, favorite: true, collectionIds: [collection.id] }], collections: [collection] });
+	await service.deleteCollection(collection.id);
+	assert.equal((await service.getCatalog()).collections.length, 0);
 	} finally { client.dispose(); }
 });

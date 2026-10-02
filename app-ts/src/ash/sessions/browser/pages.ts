@@ -5,6 +5,7 @@ import type { SyncDescriptor } from '../../platform/instantiation/common/descrip
 /** The host retains each page until disposal, preserving its state across navigation. */
 export interface ISessionsPageView extends IDisposable {
 	readonly domNode: HTMLElement;
+	setVisible(visible: boolean): void;
 	focus(): void;
 	layout(dimension: IDimension): void;
 }

@@ -53,7 +53,7 @@ test("ViewPane title chevron tracks collapsed state", async () => {
 		assert.equal(pane.setExpanded(true), true);
 		assert.equal(pane.isBodyVisible(), false);
 		pane.setVisible(true);
-		assert.deepEqual(visibility, [true, false, false, true, true]);
+		assert.deepEqual(visibility, [true, false, true]);
 
 		pane.setTitle("Renamed Pane");
 		assert.equal(title?.textContent, "Renamed Pane");

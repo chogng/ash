@@ -7,6 +7,10 @@ import { FocusedViewContext } from "../../../common/contextkeys.js";
 import type { IViewContainerDescriptor, IViewContainerModel, IViewDescriptor } from "../../../common/views.js";
 import { ViewPane } from "./viewPane.js";
 import { h } from "../../../../base/browser/dom.js";
+import { PaneView } from "../../../../base/browser/ui/splitview/paneview.js";
+import { observeElementSize } from "../../../../base/browser/observer.js";
+import type { IDimension } from "../../../../base/browser/dom.js";
+import { IStorageService, StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
 
 /** Construction inputs for one browser view container. */
 export interface ViewPaneContainerOptions {
@@ -15,6 +19,7 @@ export interface ViewPaneContainerOptions {
 	readonly model: IViewContainerModel;
 	readonly instantiationService: IInstantiationService;
 	readonly contextKeyService: IContextKeyService;
+	readonly paneHeaders?: "visible" | "hidden";
 	readonly onDidFailCreateView?: (
 		error: unknown,
 		viewId: string,
@@ -22,7 +27,8 @@ export interface ViewPaneContainerOptions {
 }
 
 /**
- * Browser host for the visible panes projected by one container model.
+ * Owns registered pane instances and workspace layout state. The model owns
+ * visibility; hiding a pane detaches it without discarding contribution state.
  */
 export class ViewPaneContainer extends Disposable {
 	readonly element: HTMLElement;
@@ -37,9 +43,14 @@ export class ViewPaneContainer extends Disposable {
 		viewId: string,
 	) => void;
 	private readonly _panes = new Map<string, ViewPaneItem>();
+	private readonly paneView: PaneView;
+	private readonly headersVisible: boolean;
+	private mountedPanes: ViewPane[] = [];
+	private syncing = false;
+	private didLayout = false;
 	private visible = true;
 
-	constructor(container: HTMLElement, options: ViewPaneContainerOptions) {
+	constructor(container: HTMLElement, options: ViewPaneContainerOptions, @IStorageService private readonly storageService: IStorageService) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, "div");
@@ -50,6 +61,8 @@ export class ViewPaneContainer extends Disposable {
 		container.append(element);
 		this.id = options.viewContainer.id;
 		this.viewContainer = options.viewContainer;
+		this.headersVisible = options.paneHeaders !== "hidden";
+		this.paneView = this._register(new PaneView(element));
 		this.model = options.model;
 		this.instantiationService = options.instantiationService;
 		this.localizationService = options.localizationService;
@@ -68,13 +81,35 @@ export class ViewPaneContainer extends Disposable {
 			) {
 				this.focusedView.reset();
 			}
+			for (const item of this._panes.values()) item.dispose();
 			this._panes.clear();
+			this.mountedPanes.length = 0;
 		}));
+		this._register(this.paneView.onDidSashChange(() => this.saveState()));
+		this._register(this.model.onDidChangeAllViewDescriptors(() => this.syncPanes()));
 		this._register(this.model.onDidChangeVisibleViewDescriptors(() => {
 			this.syncPanes();
 		}));
 		if (this.localizationService) this._register(this.localizationService.onDidChange(() => this.updateLocalizedTitles()));
 		this.syncPanes();
+		// The flex host resolves title slots and activity bars before publishing its content size.
+		this._register(observeElementSize(element, size => {
+			if (size.height > 0 && size.width > 0) this.layout(size);
+		}));
+	}
+
+	layout(dimension: IDimension): void {
+		this.paneView.layout(dimension.height, dimension.width);
+		this.didLayout = true;
+		this.saveState();
+	}
+
+	getViewSize(view: ViewPane): number {
+		return this.paneView.getPaneSize(view);
+	}
+
+	resizeView(view: ViewPane, size: number): void {
+		this.paneView.resizePane(view, size);
 	}
 
 	get panes(): readonly ViewPane[] {
@@ -84,7 +119,7 @@ export class ViewPaneContainer extends Disposable {
 	}
 
 	getView(id: string): ViewPane | undefined {
-		return this._panes.get(id)?.pane;
+		return this.model.isVisible(id) ? this._panes.get(id)?.pane : undefined;
 	}
 
 	isVisible(): boolean {
@@ -96,7 +131,7 @@ export class ViewPaneContainer extends Disposable {
 		this.visible = visible;
 		this.element.hidden = !visible;
 		for (const item of this._panes.values()) {
-			item.pane.setVisible(visible);
+			item.pane.setVisible(visible && this.model.isVisible(item.pane.id));
 		}
 	}
 
@@ -119,42 +154,85 @@ export class ViewPaneContainer extends Disposable {
 	}
 
 	private syncPanes(): void {
-		const desired = this.model.visibleViewDescriptors;
-		const desiredIds = new Set(desired.map((view) => view.id));
-		for (const [viewId, item] of this._panes) {
-			if (desiredIds.has(viewId)) continue;
-			this._panes.delete(viewId);
-			item.dispose();
-		}
-		for (const descriptor of desired) {
-			if (this._panes.has(descriptor.id)) continue;
-			let pane: ViewPane;
-			try {
-				pane = this.createView(descriptor);
-			} catch (error) {
-				this.onDidFailCreateView(error, descriptor.id);
-				continue;
+		this.syncing = true;
+		try {
+			const desired = this.model.visibleViewDescriptors;
+			const desiredIds = new Set(desired.map(view => view.id));
+			const registeredIds = new Set(this.model.allViewDescriptors.map(view => view.id));
+			let focusRemoved = false;
+			for (const pane of this.mountedPanes) {
+				if (desiredIds.has(pane.id)) continue;
+				focusRemoved ||= pane.element.contains(this.element.ownerDocument.activeElement);
+				this.paneView.removePane(pane);
+				pane.setVisible(false);
 			}
-			pane.setVisible(this.visible);
-			this._panes.set(
-				descriptor.id,
-				this._register(new ViewPaneItem(pane, this.focusedView)),
-			);
-		}
-		// Keep unchanged panes mounted so a visibility change does not discard keyboard focus.
-		let index = 0;
-		for (const descriptor of desired) {
-			const pane = this._panes.get(descriptor.id)?.pane;
-			if (!pane) continue;
-			if (this.element.children[index] !== pane.element) {
-				this.element.insertBefore(pane.element, this.element.children[index] ?? null);
+			this.mountedPanes = this.mountedPanes.filter(pane => desiredIds.has(pane.id));
+			for (const [viewId, item] of this._panes) {
+				if (registeredIds.has(viewId)) continue;
+				this._panes.delete(viewId);
+				item.dispose();
 			}
-			index += 1;
+			for (const descriptor of desired) {
+				if (this._panes.has(descriptor.id)) continue;
+				let pane: ViewPane;
+				try {
+					pane = this.createView(descriptor);
+				} catch (error) {
+					this.onDidFailCreateView(error, descriptor.id);
+					continue;
+				}
+				pane.setVisible(this.visible);
+				const item = new ViewPaneItem(pane, this.readSize(descriptor.id) ?? 200, this.focusedView);
+				this._panes.set(descriptor.id, item);
+				item.listenToLayout(() => this.saveState());
+			}
+			let index = 0;
+			for (const descriptor of desired) {
+				const pane = this._panes.get(descriptor.id)?.pane;
+				if (!pane) continue;
+				const currentIndex = this.mountedPanes.indexOf(pane);
+				if (currentIndex < 0) {
+					this.paneView.addPane(pane, this._panes.get(pane.id)!.size, index);
+					this.mountedPanes.splice(index, 0, pane);
+				} else if (currentIndex !== index) {
+					this.paneView.movePane(pane, this.mountedPanes[index]!);
+					this.mountedPanes.splice(currentIndex, 1);
+					this.mountedPanes.splice(index, 0, pane);
+				}
+				pane.setVisible(this.visible);
+				index += 1;
+			}
+			if (focusRemoved && this.visible) this.focus();
+		} finally {
+			this.syncing = false;
+		}
+		this.saveState();
+	}
+
+	private stateKey(viewId: string, field: "size" | "collapsed"): string {
+		return `workbench.viewContainer.${this.id}.${viewId}.${field}`;
+	}
+
+	private readSize(viewId: string): number | undefined {
+		const size = this.storageService.getNumber(this.stateKey(viewId, "size"), StorageScope.WORKSPACE);
+		return size !== undefined && size >= 0 ? size : undefined;
+	}
+
+	private saveState(): void {
+		if (this.syncing || !this.didLayout) return;
+		for (const pane of this.mountedPanes) {
+			// A merged header is presentation only and must not overwrite the user's collapse choice.
+			if (pane.isHeaderVisible()) this.storageService.store(this.stateKey(pane.id, "collapsed"), pane.isCollapsed(), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			if (!pane.isCollapsed()) {
+				const size = this.getViewSize(pane);
+				this._panes.get(pane.id)!.size = size;
+				this.storageService.store(this.stateKey(pane.id, "size"), size, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			}
 		}
 	}
 
 	private updateLocalizedTitles(): void {
-		for (const descriptor of this.model.visibleViewDescriptors) {
+		for (const descriptor of this.model.allViewDescriptors) {
 			const pane = this._panes.get(descriptor.id)?.pane;
 			if (pane) pane.setTitle(localize(this.localizationService, descriptor.localizationKey, descriptor.title));
 		}
@@ -167,7 +245,7 @@ export class ViewPaneContainer extends Disposable {
 			{
 				id: descriptor.id,
 				title: localize(this.localizationService, descriptor.localizationKey, descriptor.title),
-				collapsed: descriptor.collapsed,
+				collapsed: this.storageService.getBoolean(this.stateKey(descriptor.id, "collapsed"), StorageScope.WORKSPACE) ?? descriptor.collapsed,
 			},
 		);
 		if (!(view instanceof ViewPane)) {
@@ -181,13 +259,21 @@ export class ViewPaneContainer extends Disposable {
 				`View constructor returned '${view.id}' for '${descriptor.id}'`,
 			);
 		}
+		if (!this.headersVisible) {
+			view.setHeaderVisible(false);
+			view.setExpanded(true);
+		}
 		return view;
 	}
 }
 
 class ViewPaneItem extends Disposable {
+	listenToLayout(listener: () => void): void {
+		this._register(this.pane.onDidChangeExpansionState(listener));
+	}
 	constructor(
 		readonly pane: ViewPane,
+		public size: number,
 		focusedView: IContextKey<string>,
 	) {
 		super();

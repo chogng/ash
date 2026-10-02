@@ -2,7 +2,7 @@ import { setNlsResolver, formatNlsMessage } from '../../../src/ash/nls.js';
 import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import '../../../src/ash/base/browser/ui/tree/tree.css';
 import '../../../src/ash/base/browser/ui/list/list.css';
-import '../../../src/ash/base/browser/ui/splitview/paneView.css';
+import '../../../src/ash/base/browser/ui/splitview/paneview.css';
 import '../../../src/ash/base/browser/ui/button/button.css';
 import '../../../src/ash/workbench/contrib/testing/browser/media/testing.css';
 import { Event } from '../../../src/ash/base/common/event.js';

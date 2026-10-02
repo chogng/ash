@@ -59,7 +59,7 @@ export class SidebarPart extends WorkbenchSidebarPart {
 
 	public initialize(): void {
 		for (const viewContainer of this.descriptors.getViewContainers(ViewContainerLocation.Sidebar)) {
-			this.addComposite(new PaneComposite(this.domNode, {
+			this.addComposite(this.instantiation.createInstance(PaneComposite, this.domNode, {
 				viewContainer, model: this.descriptors.getViewContainerModel(viewContainer.id),
 				instantiationService: this.instantiation, contextKeyService: this.contextKeys,
 				paneLayout: 'fill', mergeViewWithContainerWhenSingleView: true,

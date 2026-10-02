@@ -13,6 +13,11 @@ import type { AgentReadParams } from './types/AgentReadParams.js';
 import type { AgentReadResult } from './types/AgentReadResult.js';
 import type { AgentRoleListResult } from './types/AgentRoleListResult.js';
 import type { AppServerError } from './types/AppServerError.js';
+import type { AssetCatalogParams } from './types/AssetCatalogParams.js';
+import type { AssetCatalogResult } from './types/AssetCatalogResult.js';
+import type { AssetCatalogUpdateParams } from './types/AssetCatalogUpdateParams.js';
+import type { AssetCollection } from './types/AssetCollection.js';
+import type { AssetCollectionDeleteParams } from './types/AssetCollectionDeleteParams.js';
 import type { AssetImportParams } from './types/AssetImportParams.js';
 import type { AssetImportStartParams } from './types/AssetImportStartParams.js';
 import type { AssetImportStartResult } from './types/AssetImportStartResult.js';
@@ -658,6 +663,10 @@ export interface AppServerRequestMap {
   "extensionHost/invoke/read": { params: ExtensionHostInvokeReadParams; response: ExtensionHostInvokeReadResult };
   "extensionHost/invoke/cancel": { params: ExtensionHostInvokeCancelParams; response: ExtensionHostInvokeCancelResult };
   "document/typst/compile": { params: TypstCompileParams; response: TypstCompileResult };
+  "asset/catalog": { params: AssetCatalogParams; response: AssetCatalogResult };
+  "asset/catalog/update": { params: AssetCatalogUpdateParams; response: null };
+  "asset/collection/create": { params: AssetCollection; response: null };
+  "asset/collection/delete": { params: AssetCollectionDeleteParams; response: null };
   "asset/import/start": { params: AssetImportStartParams; response: AssetImportStartResult };
   "asset/import/write": { params: AssetImportWriteParams; response: AssetImportWriteResult };
   "asset/import/finish": { params: AssetImportParams; response: AssetVersionResult };
@@ -1003,6 +1012,10 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "extensionHost/invoke/read": { method: "extensionHost/invoke/read" },
   "extensionHost/invoke/cancel": { method: "extensionHost/invoke/cancel" },
   "document/typst/compile": { method: "document/typst/compile" },
+  "asset/catalog": { method: "asset/catalog" },
+  "asset/catalog/update": { method: "asset/catalog/update" },
+  "asset/collection/create": { method: "asset/collection/create" },
+  "asset/collection/delete": { method: "asset/collection/delete" },
   "asset/import/start": { method: "asset/import/start" },
   "asset/import/write": { method: "asset/import/write" },
   "asset/import/finish": { method: "asset/import/finish" },

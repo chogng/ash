@@ -86,7 +86,7 @@ services.registerInstance(IContextMenuService, {
 });
 services.registerInstance(IFileDialogService, { pickFileToSave: unexpected, showSaveConfirm: async () => saveDecision, showSaveDialog: async () => resource, showOpenDialog: async () => [resource] });
 services.registerInstance(IDialogService, { onWillShowDialog: AshEvent.None, onDidShowDialog: AshEvent.None, showMessage: unexpected, info: unexpected, warn: unexpected, error: async message => { errors.push(message); }, confirm: unexpected, prompt: unexpected, input: unexpected, about: unexpected });
-services.registerInstance(IAssetService, { importImage: unexpected, getVersion: unexpected, readVersion: unexpected });
+services.registerInstance(IAssetService, { getCatalog: unexpected, updateEntry: unexpected, createCollection: unexpected, deleteCollection: unexpected, importImage: unexpected, getVersion: unexpected, readVersion: unexpected });
 services.registerInstance(IFileService, {
 	onDidChangeFiles: AshEvent.None,
 	stat: async target => {
@@ -931,6 +931,7 @@ test('Design import adopts backend version identities and metadata and packages 
 	child.registerInstance(IFileService, { ...services.get(IFileService), readFileBytes: async () => ({ resource: source, bytes: original, revision: '1' }) });
 	let imports = 0;
 	child.registerInstance(IAssetService, {
+		getCatalog: unexpected, updateEntry: unexpected, createCollection: unexpected, deleteCollection: unexpected,
 		importImage: async request => { imports++; assert.deepEqual(request.bytes, original); assert.equal(request.source.toString(), source.toString()); return backend; },
 		getVersion: unexpected,
 		readVersion: async version => { assert.equal(version, backend); return committed; },
@@ -945,4 +946,21 @@ test('Design import adopts backend version identities and metadata and packages 
 	assert.deepEqual(asset.versions[0], { id: backend.versionId, mediaType: backend.mediaType, width: 320, height: 200, sha256: backend.sha256, path: `assets/${backend.sha256}` });
 	assert.deepEqual(controller.readMedia(asset.versions[0]), committed);
 	assert.equal(controller.model.value.shapes.find(shape => shape.id === id)!.width, 320);
+});
+
+
+test('Design reuses the exact Library version without importing again or duplicating its asset entry', async () => {
+	using child = services.createChild();
+	const bytes = new Uint8Array([1, 2, 3]);
+	const version = { assetId: generateUuid(), versionId: generateUuid(), name: 'Library image', source: URI.file('/image.png'), sha256: createHash('sha256').update(bytes).digest('hex'), mediaType: 'image/png' as const, size: bytes.length, width: 100, height: 60 };
+	child.registerInstance(IAssetService, { getCatalog: unexpected, updateEntry: unexpected, createCollection: unexpected, deleteCollection: unexpected, importImage: unexpected, getVersion: unexpected, readVersion: async selected => { assert.equal(selected, version); return bytes; } });
+	using controller = child.createInstance(DesignDocumentController);
+	await controller.adoptAssetVersion(version, { x: 200, y: 200 });
+	await controller.adoptAssetVersion(version, { x: 400, y: 400 });
+	assert.equal(controller.model.value.assets.length, 1);
+	assert.equal(controller.model.value.assets[0].versions.length, 1);
+	assert.deepEqual(controller.model.value.shapes.map(shape => shape.kind === 'image' ? [shape.assetId, shape.assetVersionId] : undefined), [[version.assetId, version.versionId], [version.assetId, version.versionId]]);
+	assert.deepEqual(controller.readMedia(controller.model.value.assets[0].versions[0]), bytes);
+	controller.model.undo();
+	assert.equal(controller.model.value.shapes.length, 1);
 });

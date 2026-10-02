@@ -370,6 +370,7 @@ export class SessionsPreferences extends Disposable {
 			title: localize('sessions.design.verbosityTitle', 'Design canvas accessibility help'),
 			description: localize('sessions.design.verbosityDescription', 'Announce how to open accessibility help when the Design canvas receives focus.'),
 		}];
+		const librarySettings: readonly ISetting[] = [{ id: AccessibilityVerbositySettingId.Library, valueType: 'boolean', configuration: configuration<boolean>(AccessibilityVerbositySettingId.Library), title: localize('library.verbosityTitle', 'Library accessibility help'), description: localize('library.verbosityDescription', 'Announce how to open accessibility help when Library receives focus.') }];
 		return [{
 			title: localize('sessions.settings.section.basics', 'Basics'),
 			categories: [
@@ -382,6 +383,7 @@ export class SessionsPreferences extends Disposable {
 			title: localize('sessions.settings.section.development', 'Development'),
 			categories: [
 				{ title: localize('sessions.settings.agents', 'Agents'), icon: Lxicon.agent, settings: [], content: advisorContent },
+				{ title: localize('library.title', 'Library'), icon: Lxicon.library, settings: librarySettings },
 				{ title: localize('sessions.settings.design', 'Design'), icon: Lxicon.symbolColor, settings: designSettings },
 				{ title: localize('sessions.settings.models', 'Models'), icon: Lxicon.model, settings: [], content: modelContent },
 				{ title: localize('sessions.settings.gitPrs', 'Git & PRs'), icon: Lxicon.git, settings: [] },

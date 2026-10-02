@@ -1,4 +1,4 @@
-import { IAssetService } from '../../platform/assets/common/assetService.js';
+import { IAssetService, type AssetVersion } from '../../platform/assets/common/assetService.js';
 import { IModelApi as ModelApiId } from '../../platform/sessions/common/sessionApi.js';
 import { IsSessionsWindowContext, WorkspaceFolderCountContext } from '../../workbench/common/contextkeys.js';
 import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } from '../../platform/app-server/common/appServerApi.js';
@@ -483,7 +483,7 @@ export class Workbench extends Disposable {
 					view.selectPage(page);
 					sessionsPart?.setPage(page);
 					if (sidebar.currentView === 'views') sidebar.selectView('chats');
-				} else sessionsPart?.setPage('empty');
+				} else sessionsPart?.setPage(page === 'library' ? 'library' : 'empty');
 				layout.setPartAvailable('sidebar', page === 'chat' || page === 'code' || page === 'design');
 				layout.setPartAvailable('auxiliarybar', page === 'code' || page === 'design');
 				layout.setPartAvailable('panel', page === 'code');
@@ -510,6 +510,23 @@ export class Workbench extends Disposable {
 				}
 			});
 		};
+		this._register(CommandsRegistry.register('sessions.library.useInDesign', async (_accessor, value) => {
+			const version = value as AssetVersion;
+			const design = services.get(IDesignEditorService);
+			await editors.openEditor(design.input, { pinned: true, preserveFocus: true });
+			selectActivityPage('design');
+			await design.activeEditor.get()!.adoptAssetVersion(version);
+		}));
+		this._register(CommandsRegistry.register('sessions.library.addToChat', async (_accessor, value) => {
+			const version = value as AssetVersion;
+			const bytes = await options.api.assets.readVersion(version);
+			let binary = '';
+			for (let offset = 0; offset < bytes.length; offset += 8192) { binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192)); }
+			const content = `data:${version.mediaType};base64,${btoa(binary)}`;
+			selectActivityPage('chat');
+			sessionsPart!.addContext({ id: version.versionId, name: version.name, kind: 'image', resolve: async () => ({ name: version.name, content, kind: 'image' }) }, 'chat');
+			sessionsPart!.focus();
+		}));
 		this.showChat = () => selectActivityPage('chat');
 		activitybar = this._register(services.createInstance(ActivityBarPart, this.domNode, {
 			focusList: () => sidebar.focusChats(),
@@ -531,7 +548,7 @@ export class Workbench extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsActivityBar,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to move between available buttons. Press Enter or Space to activate a button. Use the Context Menu key or Shift+F10 for position and size options. Chat focuses the sessions list. Chat and Code keep separate selected sessions, navigation history, unsent text, and attachments when you switch pages. Code sessions restore their own editor tabs when you navigate between them. Toggle Code panel shows or hides the bottom tools. Toggle details, Hide editor and Show editor change the Code side panel. Toggle Code side panel closes and reopens the whole composition. Changes and Files tabs remain available in Details-only mode. Use arrow keys on separators to resize. Collaboration and Library open empty pages. Design opens an infinite canvas. Accounts opens the account menu, which includes Return to Workbench. Mobile devices is not available yet.'),
+					() => localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to move between available buttons. Press Enter or Space to activate a button. Use the Context Menu key or Shift+F10 for position and size options. Chat focuses the sessions list. Chat and Code keep separate selected sessions, navigation history, unsent text, and attachments when you switch pages. Code sessions restore their own editor tabs when you navigate between them. Toggle Code panel shows or hides the bottom tools. Toggle details, Hide editor and Show editor change the Code side panel. Toggle Code side panel closes and reopens the whole composition. Changes and Files tabs remain available in Details-only mode. Use arrow keys on separators to resize. Collaboration opens an empty page. Library browses imported images, favorites and collections. Design opens an infinite canvas. Accounts opens the account menu, which includes Return to Workbench. Mobile devices is not available yet.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsActivityBar,
 				);

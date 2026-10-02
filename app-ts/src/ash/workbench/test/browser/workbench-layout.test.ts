@@ -1,7 +1,7 @@
 import { HoverPosition } from "../../../base/browser/ui/hover/hoverWidget.js";
 import { createTestEditorServices } from '../common/testEditorServices.js';
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
 import type { IAction } from "../../../base/common/actions.js";
@@ -47,6 +47,12 @@ const { createTestWorkbenchContextKeysHandler } = await import('../../../workben
 const { ILayoutService } = await import("../../../platform/layout/browser/layoutService.js");
 const { IWorkbenchLayoutService, workbenchPartIds } = await import("../../../workbench/services/layout/browser/layoutService.js");
 const { BrowserStorageService } = await import("../../../workbench/services/storage/browser/storageService.js");
+const paneStorageEnvironment = new JSDOM("<!doctype html><body></body>", { url: "https://ash-pane.test" });
+const paneStorage = new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, applicationId: "pane-composite-tests", workspaceId: "window", backend: paneStorageEnvironment.window.localStorage, flushInterval: 0 });
+suiteTeardown(() => {
+	paneStorage.dispose();
+	paneStorageEnvironment.window.close();
+});
 const { InMemoryConfigurationService } = await import('../../../platform/configuration/common/inMemoryConfigurationService.js');
 const { IConfigurationService } = await import('../../../platform/configuration/common/configuration.js');
 const { WorkbenchQuickInputService } = await import('../../../workbench/services/quickinput/browser/quickInputService.js');
@@ -1196,13 +1202,13 @@ test("Activity Bar hosts the primary sidebar selector independently of sidebar v
 		model: viewDescriptors.getViewContainerModel(explorerContainer.id),
 		instantiationService,
 		contextKeyService: contextKeys,
-	});
+	}, paneStorage);
 	const searchComposite = new PaneComposite(dom.window.document.body, {
 		viewContainer: searchContainer,
 		model: viewDescriptors.getViewContainerModel(searchContainer.id),
 		instantiationService,
 		contextKeyService: contextKeys,
-	});
+	}, paneStorage);
 	sidebar.addComposite(explorerComposite);
 	sidebar.addComposite(searchComposite);
 	sidebar.showComposite(explorerComposite.id);
@@ -1267,7 +1273,7 @@ test("Pane Composite Parts restore workspace selections with Registry fallback",
 			model: viewDescriptors.getViewContainerModel(descriptor.id),
 			instantiationService: new InstantiationService(),
 			contextKeyService: contextKeys,
-		});
+		}, paneStorage);
 	};
 
 	const firstStorage = createStorage("workspace-a");
@@ -1351,7 +1357,7 @@ test("Sidebar can host Agent Sidebar composites", () => {
 		model: viewDescriptors.getViewContainerModel(descriptor.id),
 		instantiationService: new InstantiationService(),
 		contextKeyService: contextKeys,
-	});
+	}, paneStorage);
 	agentSidebar.addComposite(composite);
 	agentSidebar.showComposite(composite.id);
 	assert.equal(contextKeys.getValue('activeAgentSidebar'), composite.id);
@@ -1429,7 +1435,7 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 		contextKeyService: contextKeys,
 		paneHeaders: "hidden",
 		paneLayout: "fill",
-	});
+	}, paneStorage);
 	panel.addComposite(terminal);
 	panel.showComposite(terminal.id);
 	assert.equal(contextKeys.getValue('activePanel'), terminal.id);
@@ -1455,7 +1461,7 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 			contextKeyService: contextKeys,
 			paneHeaders: "hidden",
 			paneLayout: "fill",
-		});
+		}, paneStorage);
 		panel.addComposite(composite);
 		panel.showComposite(composite.id);
 		assert.equal(panel.domNode.querySelector(".ash-pane-composite-title-view-actions [aria-label='Test panel actions']"), null);
@@ -1678,7 +1684,7 @@ test("Auxiliary Bar retains its fixed View as a standard Pane Composite", () => 
 		contextKeyService: contextKeys,
 		paneHeaders: "hidden",
 		paneLayout: "fill",
-	});
+	}, paneStorage);
 	const auxiliarybar = disposables.add(
 		new AuxiliarybarPart(dom.window.document.body, {
 			viewDescriptorService: viewDescriptors,
@@ -1780,7 +1786,7 @@ test("PaneComposite rejects ambiguous title projections from multiple Views", ()
 		model: viewDescriptors.getViewContainerModel(descriptor.id),
 		instantiationService: new InstantiationService(),
 		contextKeyService: contextKeys,
-	});
+	}, paneStorage);
 
 	assert.throws(
 		() => composite.partTitleProjection,

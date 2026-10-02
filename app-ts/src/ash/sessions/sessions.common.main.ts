@@ -3,6 +3,7 @@ import './contrib/files/browser/files.contribution.js';
 import './contrib/changes/browser/changes.contribution.js';
 import './contrib/editor/browser/emptyFileEditor.contribution.js';
 import './contrib/design/browser/design.contribution.js';
+import './contrib/library/browser/library.contribution.js';
 import '../workbench/contrib/codeEditor/browser/codeEditor.contribution.js';
 import '../workbench/contrib/mediaPreview/browser/mediaPreview.contribution.js';
 import '../workbench/contrib/multiDiffEditor/browser/multiDiffEditor.contribution.js';

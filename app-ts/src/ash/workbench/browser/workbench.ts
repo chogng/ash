@@ -981,7 +981,7 @@ export class Workbench extends Disposable {
 		const createPaneComposite = (parent: HTMLElement, options: PaneCompositeOptions): PaneComposite => {
 			const descriptor = options.viewContainer.ctorDescriptor;
 			if (!descriptor) {
-				return new PaneComposite(parent, options);
+				return instantiationService.createInstance(PaneComposite, parent, options);
 			}
 			const composite = instantiationService.createInstance(descriptor, parent, options);
 			if (!(composite instanceof PaneComposite)) {

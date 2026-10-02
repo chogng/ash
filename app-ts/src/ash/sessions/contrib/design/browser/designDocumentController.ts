@@ -13,7 +13,7 @@ import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serialize
 import { DocumentCommands } from '../common/commands/documentCommands.js';
 import type { DesignPoint } from '../common/core/geometry.js';
 import { encodeDesignMedia, hashDesignMedia, type DesignImageSource } from './designMedia.js';
-import { IAssetService } from '../../../../platform/assets/common/assetService.js';
+import { IAssetService, type AssetVersion } from '../../../../platform/assets/common/assetService.js';
 import { DesignModel } from '../common/model/designModel.js';
 import { exportDesignSvg } from './svgRenderer.js';
 import type { IWorkingCopy } from '../../../../workbench/services/workingCopy/common/workingCopyService.js';
@@ -108,20 +108,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 			if (!resources || this.isDisposed) { return undefined; }
 			const read = await this.files.readFileBytes(resources[0]);
 			const metadata = await this.assets.importImage({ assetId: generateUuid(), versionId: generateUuid(), name: basename(read.resource), source: read.resource, bytes: read.bytes });
-			const bytes = await this.assets.readVersion(metadata);
-			const sha256 = metadata.sha256;
-			if (this.isDisposed) { return undefined; }
-			if (this.model.version !== versionToken) { throw new Error(localize('sessions.design.importChanged', 'The design changed while the image was importing. Import it again at the current location.')); }
-			const version: DesignAssetVersion = { mediaType: metadata.mediaType, width: metadata.width, height: metadata.height, id: metadata.versionId, sha256, path: `assets/${sha256}` };
-			const asset = { id: metadata.assetId, name: metadata.name, versions: [version] };
-			const scale = Math.min(1, 480 / Math.max(metadata.width, metadata.height));
-			const width = metadata.width * scale;
-			const height = metadata.height * scale;
-			const id = generateUuid();
-			this.media.set(sha256, bytes);
-			new DocumentCommands(this.model).insertShape({ id, kind: 'image', assetId: asset.id, assetVersionId: version.id, crop: { x: 0, y: 0, width: 1, height: 1 }, x: center.x - width / 2, y: center.y - height / 2, width, height, rotation: 0, fill: '#ffffff' }, [...this.model.value.assets, asset]);
-			this.changeEmitter.fire({ message: localize('sessions.design.imageImported', 'Imported {0}', asset.name) });
-			return id;
+			return await this.placeImage(metadata, center, versionToken);
 		} catch (error) {
 			await this.dialogs.error(localize('sessions.design.importFailed', 'Could not import the image.'), String(error));
 			return undefined;
@@ -130,6 +117,35 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 			if (!this.isDisposed) { this.changeEmitter.fire({}); }
 		}
 	}
+	public async adoptAssetVersion(metadata: AssetVersion, center: DesignPoint): Promise<string | undefined> {
+		if (this.isBusy) { return undefined; }
+		this.isFileOperationRunning = true;
+		this.changeEmitter.fire({});
+		try { return await this.placeImage(metadata, center, this.model.version); }
+		catch (error) { await this.dialogs.error(localize('sessions.design.importFailed', 'Could not import the image.'), String(error)); return undefined; }
+		finally { this.isFileOperationRunning = false; if (!this.isDisposed) { this.changeEmitter.fire({}); } }
+	}
+
+	private async placeImage(metadata: AssetVersion, center: DesignPoint, versionToken: string): Promise<string | undefined> {
+		const bytes = await this.assets.readVersion(metadata);
+		const sha256 = metadata.sha256;
+		if (this.isDisposed) { return undefined; }
+		if (this.model.version !== versionToken) { throw new Error(localize('sessions.design.importChanged', 'The design changed while the image was importing. Import it again at the current location.')); }
+		const version: DesignAssetVersion = { mediaType: metadata.mediaType, width: metadata.width, height: metadata.height, id: metadata.versionId, sha256, path: `assets/${sha256}` };
+		const existing = this.model.value.assets.find(asset => asset.id === metadata.assetId);
+		const versions = existing ? [...existing.versions] : [];
+		if (!versions.some(saved => saved.id === version.id)) { versions.push(version); }
+		const asset = { id: metadata.assetId, name: metadata.name, versions };
+		const scale = Math.min(1, 480 / Math.max(metadata.width, metadata.height));
+		const width = metadata.width * scale;
+		const height = metadata.height * scale;
+		const id = generateUuid();
+		this.media.set(sha256, bytes);
+		new DocumentCommands(this.model).insertShape({ id, kind: 'image', assetId: asset.id, assetVersionId: version.id, crop: { x: 0, y: 0, width: 1, height: 1 }, x: center.x - width / 2, y: center.y - height / 2, width, height, rotation: 0, fill: '#ffffff' }, [...this.model.value.assets.filter(saved => saved.id !== asset.id), asset]);
+		this.changeEmitter.fire({ message: localize('sessions.design.imageImported', 'Imported {0}', asset.name) });
+		return id;
+	}
+
 	public async save(signal: AbortSignal): Promise<void> { signal.throwIfAborted(); await this.saveDocument(); }
 	public async saveAs(resource: URI, signal: AbortSignal): Promise<void> { signal.throwIfAborted(); await this.saveDocument(resource); }
 	public async revert(signal: AbortSignal): Promise<void> { signal.throwIfAborted(); this.model.replace(parseDesignDocument(this.savedContent)); }

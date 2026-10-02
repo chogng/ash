@@ -28,7 +28,7 @@ export class AuxiliaryBarPart extends AuxiliarybarPart {
 
 	public initialize(): void {
 		for (const viewContainer of this.descriptors.getViewContainers(ViewContainerLocation.AuxiliaryBar)) {
-			this.addComposite(new PaneComposite(this.domNode, {
+			this.addComposite(this.instantiation.createInstance(PaneComposite, this.domNode, {
 				viewContainer,
 				model: this.descriptors.getViewContainerModel(viewContainer.id),
 				instantiationService: this.instantiation,

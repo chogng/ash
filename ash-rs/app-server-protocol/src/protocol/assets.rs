@@ -111,3 +111,49 @@ pub struct AssetReadResult {
     pub decoded_length: usize,
     pub eof: bool,
 }
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AssetCatalogParams {}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AssetCatalogEntry {
+    pub version: AssetVersionResult,
+    pub added_at: i64,
+    pub favorite: bool,
+    pub collection_ids: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AssetCollection {
+    #[schemars(length(min = 36, max = 36))]
+    pub id: String,
+    #[schemars(length(min = 1, max = 512))]
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AssetCatalogResult {
+    pub entries: Vec<AssetCatalogEntry>,
+    pub collections: Vec<AssetCollection>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AssetCatalogUpdateParams {
+    #[schemars(length(min = 36, max = 36))]
+    pub asset_id: String,
+    pub favorite: bool,
+    #[schemars(length(max = 64))]
+    pub collection_ids: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AssetCollectionDeleteParams {
+    #[schemars(length(min = 36, max = 36))]
+    pub id: String,
+}

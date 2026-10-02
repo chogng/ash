@@ -1,3 +1,4 @@
+import type { ChatContextAttachment } from '../../../workbench/services/chat/common/chatContextService.js';
 import "./media/sessionsChatView.css";
 import { addDisposableListener, h } from "../../../base/browser/dom.js";
 import type { IDimension } from "../../../base/browser/dom.js";
@@ -90,6 +91,11 @@ export class SessionsChatView extends Disposable {
 
 	focus(): void {
 		this.activePane?.focus();
+	}
+
+	addContext(attachment: ChatContextAttachment): void {
+		if (!this.activePane) { throw new Error(localize('sessions.handoff.noActiveChat', 'Agents Window has no active chat for the draft.')); }
+		this.activePane.addContext(attachment);
 	}
 
 	appendToDraft(text: string): void {

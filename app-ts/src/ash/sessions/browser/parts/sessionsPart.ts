@@ -1,3 +1,4 @@
+import type { ChatContextAttachment } from '../../../workbench/services/chat/common/chatContextService.js';
 import "./media/sessionsPart.css";
 import { Dimension } from "../../../base/browser/dom.js";
 import type { ICommandService } from "../../../platform/commands/common/commands.js";
@@ -36,7 +37,7 @@ export interface SessionsPartOptions {
 /** Passive primary Part that renders the visible Sessions supplied by its owner. */
 export class SessionsPart extends WorkbenchPart {
 	private readonly views: Record<SessionsPage, SessionsChatView>;
-	private page: SessionsPage | 'design' | 'empty' = 'chat';
+	private page: SessionsPage | 'design' | 'library' | 'empty' = 'chat';
 	private readonly codePage: HTMLDivElement;
 	private readonly contributedPages = new Map<string, { readonly container: HTMLElement; readonly view: ISessionsPageView }>();
 
@@ -89,13 +90,15 @@ export class SessionsPart extends WorkbenchPart {
 		this.views[this.page === "code" ? "code" : "chat"].focus();
 	}
 
+	addContext(attachment: ChatContextAttachment, page: SessionsPage): void { this.views[page].addContext(attachment); }
+
 	appendToDraft(text: string, page: SessionsPage): void { this.views[page].appendToDraft(text); }
 
 	captureActiveDraft(page: SessionsPage): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined> { return this.views[page].captureActiveDraft(); }
 
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>, page: SessionsPage = this.page === 'code' ? 'code' : 'chat'): void { this.views[page].restoreDraft(draft); }
 
-	setPage(page: 'chat' | 'code' | 'design' | 'empty'): void {
+	setPage(page: 'chat' | 'code' | 'design' | 'library' | 'empty'): void {
 		this.page = page;
 		this.contentDomNode.classList.toggle('empty-page', page === 'empty');
 		this.views.chat.domNode.hidden = page !== 'chat';
@@ -105,6 +108,7 @@ export class SessionsPart extends WorkbenchPart {
 		this.codePage.hidden = page !== 'code';
 		for (const [id, contributedPage] of this.contributedPages) {
 			contributedPage.container.hidden = page !== id;
+			contributedPage.view.setVisible(page === id);
 		}
 	}
 

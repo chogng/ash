@@ -64,6 +64,26 @@ pub struct AssetVersion {
     pub height: u32,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CatalogEntry {
+    pub version: AssetVersion,
+    pub added_at: i64,
+    pub favorite: bool,
+    pub collection_ids: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Collection {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Catalog {
+    pub entries: Vec<CatalogEntry>,
+    pub collections: Vec<Collection>,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum AssetError {
     #[error("Invalid asset input")]
@@ -83,6 +103,16 @@ pub enum AssetError {
 /// Atomically publishes immutable versions and exact original bytes. Implementations deduplicate
 /// content without merging asset identities and reject changes to an existing version identity.
 pub trait AssetStore: Send + Sync {
+    /// Reads the latest published version of each asset with its mutable catalog membership.
+    fn catalog(&self) -> Result<Catalog, AssetError>;
+    fn update_entry(
+        &self,
+        asset_id: &str,
+        favorite: bool,
+        collection_ids: &[String],
+    ) -> Result<(), AssetError>;
+    fn create_collection(&self, collection: &Collection) -> Result<(), AssetError>;
+    fn delete_collection(&self, id: &str) -> Result<(), AssetError>;
     fn publish(&self, version: &AssetVersion, bytes: &[u8]) -> Result<(), AssetError>;
     fn get(&self, asset_id: &str, version_id: &str) -> Result<AssetVersion, AssetError>;
     fn read(
@@ -251,6 +281,39 @@ impl Assets {
     pub fn get(&self, asset_id: &str, version_id: &str) -> Result<AssetVersion, AssetError> {
         validate_identity(asset_id, version_id)?;
         self.store.get(asset_id, version_id)
+    }
+
+    pub fn catalog(&self) -> Result<Catalog, AssetError> {
+        self.store.catalog()
+    }
+
+    pub fn update_entry(
+        &self,
+        asset_id: &str,
+        favorite: bool,
+        collection_ids: &[String],
+    ) -> Result<(), AssetError> {
+        validate_identity(asset_id, asset_id)?;
+        if collection_ids.len() > 64 {
+            return Err(AssetError::Invalid);
+        }
+        for id in collection_ids {
+            validate_identity(id, id)?;
+        }
+        self.store.update_entry(asset_id, favorite, collection_ids)
+    }
+
+    pub fn create_collection(&self, collection: &Collection) -> Result<(), AssetError> {
+        validate_identity(&collection.id, &collection.id)?;
+        if collection.name.trim().is_empty() || collection.name.len() > 512 {
+            return Err(AssetError::Invalid);
+        }
+        self.store.create_collection(collection)
+    }
+
+    pub fn delete_collection(&self, id: &str) -> Result<(), AssetError> {
+        validate_identity(id, id)?;
+        self.store.delete_collection(id)
     }
 
     pub fn read(

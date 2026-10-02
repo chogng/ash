@@ -5,11 +5,37 @@ import type { AppServerProtocolClient } from '../../app-server/browser/appServer
 import { appServerRequest } from '../../app-server/browser/appServerRequest.js';
 import { AppServerRemoteError } from '../../app-server/common/appServerError.js';
 import type { AssetVersionResult } from '../../app-server/common/generated/index.js';
-import type { AssetImport, AssetVersion, IAssetService } from '../common/assetService.js';
+import type { AssetCatalog, AssetCollection, AssetImport, AssetVersion, IAssetService } from '../common/assetService.js';
 
 /** Only this adapter handles generated DTOs; the backend owns all committed content and metadata. */
 export class AppServerAssetService implements IAssetService {
 	constructor(private readonly connection: AppServerProtocolClient) {}
+
+	public async getCatalog(): Promise<AssetCatalog> {
+		this.requireAssets();
+		try {
+			const catalog = await appServerRequest(this.connection, 'asset/catalog', {});
+			return { collections: catalog.collections, entries: catalog.entries.map(entry => ({ ...entry, addedAt: Number(entry.addedAt), version: versionFromResult(entry.version) })) };
+		} catch (error) { throw assetError(error); }
+	}
+
+	public async updateEntry(assetId: string, favorite: boolean, collectionIds: readonly string[]): Promise<void> {
+		this.requireAssets();
+		try { await appServerRequest(this.connection, 'asset/catalog/update', { assetId, favorite, collectionIds: [...collectionIds] }); }
+		catch (error) { throw assetError(error); }
+	}
+
+	public async createCollection(collection: AssetCollection): Promise<void> {
+		this.requireAssets();
+		try { await appServerRequest(this.connection, 'asset/collection/create', collection); }
+		catch (error) { throw assetError(error); }
+	}
+
+	public async deleteCollection(id: string): Promise<void> {
+		this.requireAssets();
+		try { await appServerRequest(this.connection, 'asset/collection/delete', { id }); }
+		catch (error) { throw assetError(error); }
+	}
 
 	public async importImage(request: AssetImport): Promise<AssetVersion> {
 		this.requireAssets();

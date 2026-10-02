@@ -1,9 +1,13 @@
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { ASH_REMOTE_SCHEME } from '../../../../../platform/remote/common/remote.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
@@ -31,7 +35,11 @@ test('Sessions Files selects one view from the current folder state and creates 
 	assert.deepEqual(visibleIds(), [SESSIONS_FILES_VIEW_ID]);
 	folders.set(0);
 	using services = new InstantiationService();
-	using host = new ViewPaneContainer(browserEnvironment.window.document.body, {
+	const storageEnvironment = new JSDOM('<!doctype html><body></body>', { url: 'https://ash-files.test' });
+	using storageOwner = toDisposable(() => storageEnvironment.window.close());
+	using storage = new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, applicationId: 'sessions-files-test', workspaceId: 'empty', backend: storageEnvironment.window.localStorage, flushInterval: 0 });
+	services.registerInstance(IStorageService, storage);
+	using host = services.createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
 		viewContainer: model.viewContainer,
 		model,
 		instantiationService: services,

@@ -192,3 +192,76 @@ fn jpeg_webp_and_oriented_jpeg_keep_original_bytes_and_report_display_dimensions
         assert_eq!(assets.read(ASSET, &id, 0, bytes.len()).unwrap(), bytes);
     }
 }
+
+#[test]
+fn catalog_keeps_one_latest_version_and_durable_favorites_and_collection_membership() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("state.sqlite");
+    let assets = Assets::new(Arc::new(SqliteAssetStore::open(&path).unwrap()));
+    let first = publish(&assets, 1, FIRST);
+    let collection = assets::Collection {
+        id: "44444444-4444-4444-8444-444444444444".into(),
+        name: "Brand images".into(),
+    };
+    assets.create_collection(&collection).unwrap();
+    assets.create_collection(&collection).unwrap();
+    assets
+        .update_entry(ASSET, true, std::slice::from_ref(&collection.id))
+        .unwrap();
+    let second = publish(&assets, 1, SECOND);
+    let catalog = assets.catalog().unwrap();
+    assert_eq!(catalog.collections, vec![collection.clone()]);
+    assert_eq!(catalog.entries.len(), 1);
+    assert_eq!(catalog.entries[0].version, second);
+    assert!(catalog.entries[0].added_at > 0);
+    assert!(catalog.entries[0].favorite);
+    assert_eq!(
+        catalog.entries[0].collection_ids,
+        vec![collection.id.clone()]
+    );
+    assert!(matches!(
+        assets.update_entry(
+            ASSET,
+            false,
+            &["55555555-5555-4555-8555-555555555555".into()]
+        ),
+        Err(AssetError::NotFound)
+    ));
+    assert_eq!(assets.catalog().unwrap(), catalog);
+    drop(assets);
+    let assets = Assets::new(Arc::new(SqliteAssetStore::open(&path).unwrap()));
+    assert_eq!(assets.catalog().unwrap(), catalog);
+    assets.delete_collection(&collection.id).unwrap();
+    let catalog = assets.catalog().unwrap();
+    assert!(catalog.collections.is_empty());
+    assert!(catalog.entries[0].collection_ids.is_empty());
+    assert!(catalog.entries[0].favorite);
+    assert_eq!(assets.get(ASSET, FIRST).unwrap(), first);
+    assert_eq!(assets.read(ASSET, FIRST, 0, PNG.len()).unwrap(), PNG);
+}
+
+#[test]
+fn catalog_migrates_published_version_one_databases_without_changing_content() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("state.sqlite");
+    let connection = Connection::open(&path).unwrap();
+    connection.execute_batch("CREATE TABLE ash_schema_migrations (component TEXT PRIMARY KEY, version INTEGER NOT NULL);
+        INSERT INTO ash_schema_migrations VALUES ('assets', 1);
+        CREATE TABLE asset_contents (sha256 TEXT PRIMARY KEY, bytes BLOB NOT NULL);
+        CREATE TABLE assets (asset_id TEXT PRIMARY KEY);
+        CREATE TABLE asset_versions (version_id TEXT PRIMARY KEY, asset_id TEXT NOT NULL REFERENCES assets(asset_id), name TEXT NOT NULL, source TEXT NOT NULL, sha256 TEXT NOT NULL REFERENCES asset_contents(sha256), media_type TEXT NOT NULL, size INTEGER NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL);").unwrap();
+    connection
+        .execute("INSERT INTO assets VALUES (?1)", [ASSET])
+        .unwrap();
+    connection
+        .execute(
+            "INSERT INTO asset_contents VALUES (?1, ?2)",
+            params!["a".repeat(64), PNG],
+        )
+        .unwrap();
+    connection.execute("INSERT INTO asset_versions VALUES (?1, ?2, 'old.png', 'file:///old.png', ?3, 'image/png', ?4, 2, 1)", params![FIRST, ASSET, "a".repeat(64), PNG.len() as u32]).unwrap();
+    drop(connection);
+    let assets = Assets::new(Arc::new(SqliteAssetStore::open(&path).unwrap()));
+    assert_eq!(assets.catalog().unwrap().entries[0].version.name, "old.png");
+    assert_eq!(assets.read(ASSET, FIRST, 0, PNG.len()).unwrap(), PNG);
+}

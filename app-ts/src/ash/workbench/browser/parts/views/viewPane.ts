@@ -1,10 +1,10 @@
 import "./views.css";
 import { Emitter } from "../../../../base/common/event.js";
-import { PaneView, type PaneViewOptions } from "../../../../base/browser/ui/splitview/paneView.js";
+import { Pane, type IPaneOptions } from "../../../../base/browser/ui/splitview/paneview.js";
 import type { IView } from "../../../common/views.js";
 
 /** Runtime inputs supplied by a browser view container to every pane. */
-export type IViewPaneOptions = PaneViewOptions;
+export type IViewPaneOptions = IPaneOptions;
 
 /** Optional title content and actions projected together into a hosting Part. */
 export interface PartTitleProjection {
@@ -13,7 +13,7 @@ export interface PartTitleProjection {
 }
 
 /** A titled, independently managed view hosted inside a workbench view container. */
-export abstract class ViewPane extends PaneView implements IView {
+export abstract class ViewPane extends Pane implements IView {
 	private visible = false;
 	private readonly bodyVisibility = this._register(new Emitter<boolean>());
 	readonly onDidChangeBodyVisibility = this.bodyVisibility.event;
@@ -50,8 +50,9 @@ export abstract class ViewPane extends PaneView implements IView {
 
 	override setCollapsed(collapsed: boolean): void {
 		if (collapsed === this.isCollapsed()) return;
+		const bodyWasVisible = this.isBodyVisible();
 		super.setCollapsed(collapsed);
-		this.bodyVisibility.fire(!collapsed);
+		if (bodyWasVisible !== this.isBodyVisible()) this.bodyVisibility.fire(this.isBodyVisible());
 	}
 
 	setVisible(visible: boolean): void {

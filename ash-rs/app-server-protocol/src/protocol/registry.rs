@@ -61,9 +61,21 @@ use crate::protocol::agent::ToolExposureDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::ToolSourceDto;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::attachments::AttachmentImportRemoteParams;
+use crate::protocol::assets::AssetCatalogEntry;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::attachments::AttachmentMaterializeResult;
+use crate::protocol::assets::AssetCatalogParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::assets::AssetCatalogResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::assets::AssetCatalogUpdateParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::assets::AssetCollection;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::assets::AssetCollectionDeleteParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::assets::AssetImageType;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::assets::AssetImportParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::assets::AssetImportStartParams;
 #[cfg(any(test, feature = "export"))]
@@ -73,13 +85,14 @@ use crate::protocol::assets::AssetImportWriteParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::assets::AssetImportWriteResult;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::assets::AssetImportParams;
-#[cfg(any(test, feature = "export"))]
 use crate::protocol::assets::AssetVersionParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::assets::AssetVersionResult;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::assets::AssetImageType;
+use crate::protocol::attachments::AttachmentImportRemoteParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::attachments::AttachmentMaterializeResult;
+
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::assets::AssetReadParams;
 #[cfg(any(test, feature = "export"))]
@@ -1534,10 +1547,6 @@ use crate::protocol::terminal::TerminalWriteParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::testing::TestingDebugLaunch;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::testing::TestingPrepareDebugParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::testing::TestingSource;
-#[cfg(any(test, feature = "export"))]
 use crate::protocol::testing::TestingDiscoverParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::testing::TestingItem;
@@ -1548,11 +1557,15 @@ use crate::protocol::testing::TestingOperationParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::testing::TestingOperationStatus;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingPrepareDebugParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::testing::TestingResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::testing::TestingRunParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::testing::TestingSnapshot;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::testing::TestingSource;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::testing::TestingState;
 #[cfg(any(test, feature = "export"))]
@@ -3324,6 +3337,18 @@ client_methods! {
         params: TypstCompileParams,
         response: TypstCompileResult,
         serialization: GlobalExclusive,
+    },
+    AssetCatalog => "asset/catalog" {
+        params: AssetCatalogParams, response: AssetCatalogResult, serialization: GlobalExclusive,
+    },
+    AssetCatalogUpdate => "asset/catalog/update" {
+        params: AssetCatalogUpdateParams, response: (), serialization: GlobalExclusive,
+    },
+    AssetCollectionCreate => "asset/collection/create" {
+        params: AssetCollection, response: (), serialization: GlobalExclusive,
+    },
+    AssetCollectionDelete => "asset/collection/delete" {
+        params: AssetCollectionDeleteParams, response: (), serialization: GlobalExclusive,
     },
     AssetImportStart => "asset/import/start" {
         params: AssetImportStartParams, response: AssetImportStartResult, serialization: ResourceExclusive("versionId"),
@@ -5102,6 +5127,12 @@ typescript_bindings! {
     TypstDiagnosticDto,
     TypstDiagnosticSeverityDto,
     TypstSourceRangeDto,
+    AssetCatalogParams,
+    AssetCatalogEntry,
+    AssetCollection,
+    AssetCatalogResult,
+    AssetCatalogUpdateParams,
+    AssetCollectionDeleteParams,
     AssetImportStartParams,
     AssetImportStartResult,
     AssetImportWriteParams,

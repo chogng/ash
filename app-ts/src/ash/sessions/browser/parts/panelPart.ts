@@ -35,7 +35,7 @@ export class PanelPart extends WorkbenchPanelPart {
 			if (!container || container.location !== ViewContainerLocation.Panel) {
 				throw new Error(`Code panel view is not registered: ${compositeId}`);
 			}
-			this.addComposite(new PaneComposite(this.domNode, {
+			this.addComposite(this.instantiation.createInstance(PaneComposite, this.domNode, {
 				viewContainer: container,
 				model: this.descriptors.getViewContainerModel(container.id),
 				instantiationService: this.instantiation,
