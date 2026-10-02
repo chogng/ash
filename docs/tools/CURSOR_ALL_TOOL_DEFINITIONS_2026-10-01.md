@@ -1,7 +1,7 @@
 # Cursor 3.23.12 全部静态工具定义与输出
 
 
-Cursor Plan、Debug、Multitask 的提示词原文与相关工具见 [模式专项文档](/Volumes/1t/ash/docs/tools/CURSOR_MODE_PROMPTS_AND_TOOLS_2026-10-01.md)（29 组配置示例，含工具和日志服务的区别）。
+Cursor Agent、Ask、Plan、Debug、Multitask 的提示词原文与相关工具见 [模式专项文档](/Volumes/1t/ash/docs/tools/CURSOR_MODE_PROMPTS_AND_TOOLS_2026-10-01.md)（37 组生成结果，含 Ask 与 AskQuestion、工具与日志服务的区别）。
 
 核查日期：2026-10-01。本机安装包中能定位到的 Agent 工具工厂、浏览器 Provider、computer-use Provider 与两代调用协议已统一提取。每项保留名称、描述、参数构造、执行入口和输出处理代码，详见 [完整 JSON](/Volumes/1t/ash/docs/tools/CURSOR_ALL_TOOL_DEFINITIONS_2026-10-01.json)。
 

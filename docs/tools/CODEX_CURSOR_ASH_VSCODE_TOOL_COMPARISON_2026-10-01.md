@@ -1,7 +1,7 @@
 # Codex、Cursor、Ash、VS Code 工具对比
 
 
-Cursor Plan、Debug、Multitask 的提示词原文与相关工具见 [模式专项文档](/Volumes/1t/ash/docs/tools/CURSOR_MODE_PROMPTS_AND_TOOLS_2026-10-01.md)（29 组配置示例，含工具和日志服务的区别）。
+Cursor Agent、Ask、Plan、Debug、Multitask 的提示词原文与相关工具见 [模式专项文档](/Volumes/1t/ash/docs/tools/CURSOR_MODE_PROMPTS_AND_TOOLS_2026-10-01.md)（37 组生成结果，含 Ask 与 AskQuestion、工具与日志服务的区别）。
 
 核查日期：2026-10-01。比较对象是提供给 Agent 的工具，以及工具从注册、选择到执行的链路。Cursor 已更新为本机安装的 **3.23.12**，直接核查安装包中的协议、工具构造、执行路由和 MCP Provider 注册。
 

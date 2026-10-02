@@ -1,14 +1,18 @@
-# Cursor Plan、Debug、Multitask：提示词原文与相关工具
+# Cursor Agent、Ask、Plan、Debug、Multitask：提示词原文与相关工具
 
 核查日期：2026-10-01。材料为本机 Cursor **3.23.12** 安装包。
 
-**三个功能都有真实模式状态，也都有追加给模型的提示词；执行能力来自具体工具和宿主服务。** 已保存 29 组提示词配置、30 个提示词相关源码符号，以及 22 类相关工具的构造和输出处理代码。[完整 JSON](/Volumes/1t/ash/docs/tools/CURSOR_MODE_PROMPTS_AND_TOOLS_2026-10-01.json) · [全部静态工具定义与输出](/Volumes/1t/ash/docs/tools/CURSOR_ALL_TOOL_DEFINITIONS_2026-10-01.md)
+**Cursor 的 Ask 是用户提问、模型回答代码问题的模式；AskQuestion 才是模型向用户提问的工具。** 五种模式均有状态标识；已检查的模式提醒入口中，Agent 不追加专属正文，Ask、Plan、Debug、Multitask 有各自提醒。已保存 37 组生成结果（含两个空提醒分支）、33 个提示词相关源码记录，以及 22 类相关工具的构造和输出处理代码。[完整 JSON](/Volumes/1t/ash/docs/tools/CURSOR_MODE_PROMPTS_AND_TOOLS_2026-10-01.json) · [全部静态工具定义与输出](/Volumes/1t/ash/docs/tools/CURSOR_ALL_TOOL_DEFINITIONS_2026-10-01.md)
 
 | 模式 | 提示词要求 | 主要相关工具 / 服务 |
 | --- | --- | --- |
+| Agent | 默认执行模式；已检查的模式提醒入口不追加 Agent 专属正文 | 使用配置提供的工具；完整基础 system prompt 未在本次提取中确认 |
+| Ask | 回答用户的代码问题；只读调查、解释、举例；必要时可向用户澄清 | 读取、搜索、诊断；只读 shell 按开关与 sandbox 条件提供 |
 | Plan | 调查需求、提出澄清问题、生成可实施的计划，等用户要求后执行 | `CreatePlan`、`AskQuestion`；读取 / 检索、`Task` 的 explore 子 Agent、`TodoWrite` |
 | Debug | 提出假设、插入日志、复现、分析运行证据、修复后再次验证 | 读取 / 删除 / 编辑 / shell；本地 NDJSON 日志服务。云端分支强调 `Task` 的 `computerUse` 子 Agent |
 | Multitask | 将实质工作委托给异步子 Agent；前台协调、轻量调查、处理用户消息 | `Task` 的 `run_in_background`；另有按配置提供的 `create-agent`、`send-message-to-agent` 等异步工具路径 |
+
+基础 system prompt 的本地完整生成正文已另存 [基础提示词文档](/Volumes/1t/ash/docs/tools/CURSOR_BASE_SYSTEM_PROMPTS_2026-10-01.md)（11 组明确示例配置）。当前文档仍保存模式追加提醒，两类正文的拼装位置不同。
 
 ## 1. 找到的是什么
 
@@ -19,15 +23,32 @@
 | 入口 | 作用 | 变化来源 |
 | --- | --- | --- |
 | `X5` | 根据模式追加提醒；区分首次进入、继续、退出 Multitask | 当前 / 上轮模式与配置 |
+| `yP`（Agent Host） | Ask 初次 / 后续提醒 | 只读 shell；配置分支可能省略这段追加提醒 |
 | `Sce` / `wce` | Plan 初次 / 后续提醒 | GPT-5、Composer 2、工具命名、新版计划提示词、内联问题、计划承诺等开关 |
 | `gce` / `fce` | Debug 初次 / 后续提醒 | 本地 / 云端、日志路径、端点、会话 ID |
 | `g2` / `y2` / `w2` | Multitask 初次 / 后续 / 退出提醒 | 模型类型、完成通知、持久执行提示配置 |
 | `mz` | Start Multitasking / Build in Parallel 的按钮提醒 | 用户动作类型与当前模式 |
 | `J0` | “You are now in … mode” 提醒 | 模式 ID |
 
-来源：[Agent bundle](/Applications/Cursor.app/Contents/Resources/app/extensions/cursor-agent-exec/dist/main.js)。符号在这个版本的压缩 bundle 中使用这些名字，更新后可能变化；JSON 保存 UTF-16 起止偏移和文件 hash，便于重定位。
+来源：[Agent Exec bundle](/Applications/Cursor.app/Contents/Resources/app/extensions/cursor-agent-exec/dist/main.js)、[Agent Host bundle](/Applications/Cursor.app/Contents/Resources/app/extensions/cursor-agent-host/dist/main.js)。符号在这个版本的压缩 bundle 中使用这些名字，更新后可能变化；JSON 保存 UTF-16 起止偏移和文件 hash，便于重定位。
 
 ## 2. 相关工具到底是什么
+
+### 2.0 Ask 的含义与 Agent 的提取范围
+
+Cursor Ask 首次提醒直接写明：
+
+> The user wants you to answer questions about their codebase or coding in general.
+
+因此 Ask 是“用户问、模型答”的模式。它要求只读调查，不修改文件、配置或提交；可以展示代码示例与实现建议，但不能实际实施。第 4、5 条还允许模型向用户澄清问题：这种提问是完成问答的手段，不是 Ask 模式名称的含义。
+
+`AskQuestion` 则是结构化提问工具，将问题与选项交给用户并收集回答。Plan 提示词也引用它，所以调用 AskQuestion 不要求先切换到 Ask 模式。
+
+Cursor 内部枚举是 `ASK`，但 `Y5` 把它映射成切换目标 `chat`，`J0` 再显示为 “Ask”。因此在允许此目标的配置中，SwitchMode 的值是 `target_mode_id: "chat"`，不能直接套用 Ash 的 `ask` 协议 ID。
+
+Ask 的只读 shell 提醒在已检查的 Host 配置里要求 `enableReadonlyShell` 和 `requestContext.env.sandboxEnabled` 同时为 true。另外一个本地循环配置在 `enableFilterEditToolsInAskMode=true` 时返回空的 Ask 追加提醒。这只是省略该段正文，不表示关闭 Ask，也不表示整个 system prompt 为空；具体调用是否走此分支取决于模型与配置。
+
+Agent 的 `X5` 分支直接跳过专属模式提醒；从其他模式切回 Agent 时仍会生成状态切换提醒。下面保留这两种实际输出，但没有用自写正文或 SwitchMode 的工具描述冒充 Agent 的完整基础提示词。
 
 ### 2.1 切换模式与 Plan
 
@@ -80,13 +101,138 @@ CreatePlan 的描述明确区分“新建计划”和“更新已有计划”：
 
 ## 3. 提示词原文
 
-共保存 29 组**有明确配置参数的生成示例**。这是选定分支覆盖，不是所有模型与开关的排列组合。每节列出的参数可在 JSON 的 `prompts[].arguments` 查到；`sourceSymbols[]` 保留原函数，`relatedTools[]` 保留工具工厂，`toolSymbols` 保留相关构造与输出依赖。
+共保存 37 组**有明确配置参数的生成结果**，其中两组是空提醒分支。这是选定分支覆盖，不是所有模型与开关的排列组合。每节列出的参数可在 JSON 的 `prompts[].arguments` 查到；`sourceSymbols[]` 保留原函数，`relatedTools[]` 保留工具工厂，`toolSymbols` 保留相关构造与输出依赖。
 
 Debug 使用示例值 `/example/cursor/debug.log`、`http://example.invalid/ingest/example`、`EXAMPLE-SESSION`；原函数会按会话 ID 生成对应日志路径。这些不是用户的真实端点或会话数据。无 session ID 的 Debug 分支仅证明生成器包含此分支，当前接收服务要求会话 header，前端会提供 ID，不能把该示例当成可运行会话配置。
 
-### 3.1 Plan
+### 3.1 Agent
 
-<details>
+#### Agent 默认：不追加专属模式提醒
+
+生成入口：`X5`；结果 ID：`agent_default_no_mode_reminder`；0 个 UTF-16 字符。
+
+实际输出为长度 0 的空字符串。这个结果只描述模式追加提醒，不代表完整 system prompt 为空。
+
+#### 从 Plan 切回 Agent：状态切换提醒
+
+生成入口：`X5`；结果 ID：`agent_enter_from_plan`；139 个 UTF-16 字符。
+
+````text
+<system_reminder>
+You are now in Agent mode. You have EXITED your previous mode. Continue with the task in the new mode.
+</system_reminder>
+````
+
+### 3.2 Ask
+
+#### 首次进入 Ask：默认提醒
+
+生成入口：`yP`；结果 ID：`ask_enter_default`；1733 个 UTF-16 字符。
+
+````text
+
+<system_reminder>
+Ask mode is active. The user wants you to answer questions about their codebase or coding in general. You MUST NOT make any edits, run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supersedes any other instructions you have received (for example, to make edits).
+
+Your role in Ask mode:
+
+1. Answer the user's questions comprehensively and accurately. Focus on providing clear, detailed explanations.
+
+2. Use readonly tools to explore the codebase and gather information needed to answer the user's questions. You can:
+   - Read files to understand code structure and implementation
+   - Search the codebase to find relevant code
+   - Use grep to find patterns and usages
+   - List directory contents to understand project structure
+   - Read lints/diagnostics to understand code quality issues
+
+3. Provide code examples and references when helpful, citing specific file paths and line numbers.
+
+4. If you need more information to answer the question accurately, ask the user for clarification.
+
+5. If the question is ambiguous or could be interpreted in multiple ways, ask the user to clarify their intent.
+
+6. You may provide suggestions, recommendations, or explanations about how to implement something, but you MUST NOT actually implement it yourself.
+
+7. Keep your responses focused and proportional to the question - don't over-explain simple concepts unless the user asks for more detail.
+
+8. If the user asks you to make changes or implement something, politely remind them that you're in Ask mode and can only provide information and guidance. Suggest they switch to Agent mode if they want you to make changes.
+</system_reminder>
+````
+
+#### 继续 Ask：默认提醒
+
+生成入口：`yP`；结果 ID：`ask_continue_default`；298 个 UTF-16 字符。
+
+````text
+<system_reminder>
+Ask mode is still active. You MUST NOT make any edits, run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supersedes any other instructions you have received (for example, to make edits).
+</system_reminder>
+````
+
+#### 首次进入 Ask：启用只读 shell
+
+生成入口：`yP`；结果 ID：`ask_enter_readonly_shell`；1894 个 UTF-16 字符。
+
+````text
+
+<system_reminder>
+Ask mode is active. The user wants you to answer questions about their codebase or coding in general. You MUST NOT make any edits, run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supersedes any other instructions you have received (for example, to make edits).
+
+Your role in Ask mode:
+
+1. Answer the user's questions comprehensively and accurately. Focus on providing clear, detailed explanations.
+
+2. Use readonly tools to explore the codebase and gather information needed to answer the user's questions. You can:
+   - Read files to understand code structure and implementation
+   - Search the codebase to find relevant code
+   - Use grep to find patterns and usages
+   - List directory contents to understand project structure
+   - Read lints/diagnostics to understand code quality issues
+   - Run shell commands for readonly operations (the shell operates under a readonly sandbox; use required_permissions: ['network'] if network access is needed)
+
+3. Provide code examples and references when helpful, citing specific file paths and line numbers.
+
+4. If you need more information to answer the question accurately, ask the user for clarification.
+
+5. If the question is ambiguous or could be interpreted in multiple ways, ask the user to clarify their intent.
+
+6. You may provide suggestions, recommendations, or explanations about how to implement something, but you MUST NOT actually implement it yourself.
+
+7. Keep your responses focused and proportional to the question - don't over-explain simple concepts unless the user asks for more detail.
+
+8. If the user asks you to make changes or implement something, politely remind them that you're in Ask mode and can only provide information and guidance. Suggest they switch to Agent mode if they want you to make changes.
+</system_reminder>
+````
+
+#### 继续 Ask：启用只读 shell
+
+生成入口：`yP`；结果 ID：`ask_continue_readonly_shell`；542 个 UTF-16 字符。
+
+````text
+<system_reminder>
+Ask mode is still active. You MUST NOT make any edits, run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supersedes any other instructions you have received (for example, to make edits).
+
+You CAN use the shell tool for readonly operations - it will operate under a readonly sandbox that prevents any file modifications or system changes. If a command needs network access, you can request it via required_permissions: ['network'].
+</system_reminder>
+````
+
+#### 编辑工具过滤配置：省略 Ask 追加提醒
+
+生成入口：`askReminderConfig_localLoop`；结果 ID：`ask_reminder_suppressed_by_edit_filter`；0 个 UTF-16 字符。
+
+实际输出为长度 0 的空字符串。这个结果只描述模式追加提醒，不代表完整 system prompt 为空。
+
+#### 切换到 Ask：状态提醒
+
+生成入口：`J0`；结果 ID：`mode_changed_ask`；100 个 UTF-16 字符。
+
+````text
+You are now in Ask mode. You have EXITED your previous mode. Continue with the task in the new mode.
+````
+
+### 3.3 Plan
+
+<details open>
 <summary>首次进入：旧版提示词：plan_enter_legacy</summary>
 
 生成入口：`Sce`；3773 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
@@ -644,9 +790,9 @@ You are now in Plan mode. You have EXITED your previous mode. Continue with the 
 
 </details>
 
-### 3.2 Debug
+### 3.4 Debug
 
-<details>
+<details open>
 <summary>首次进入：本地 Debug：debug_enter_local</summary>
 
 生成入口：`gce`；10917 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
@@ -971,9 +1117,9 @@ You are now in Debug mode. You have EXITED your previous mode. Continue with the
 
 </details>
 
-### 3.3 Multitask
+### 3.5 Multitask
 
-<details>
+<details open>
 <summary>首次进入：默认 Multitask：multitask_enter_default</summary>
 
 生成入口：`g2`；8857 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
@@ -1584,7 +1730,7 @@ You are now in Multitask mode. You have EXITED your previous mode. Continue with
 
 ## 5. 验证与边界
 
-已核对原源码切片与四个安装包文件 hash、29 份文本 hash、22 类工具引用、文档链接与代码围栏。源码定位采用 UTF-16 偏移。生成过程没有执行工具、创建子 Agent、发送网络请求或启动日志服务。
+已核对原源码切片与五个安装包文件 hash、37 份结果 hash、22 类工具引用、文档链接与代码围栏。源码定位采用 UTF-16 偏移。生成过程没有执行工具、创建子 Agent、发送网络请求或启动日志服务。
 
 提示词和工具构造存在模型 / 开关分支；外部 MCP、服务端动态内容和实际账号配置没有包含在这份导出中。完整基础提示词与实际请求中的最终工具目录仍需另行验证。
 
