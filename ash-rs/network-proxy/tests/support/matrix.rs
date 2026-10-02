@@ -49,6 +49,9 @@ impl Matrix {
                 while !stopped.load(Ordering::Acquire) {
                     match origin.accept() {
                         Ok((mut stream, _)) => {
+                            // Accepted Winsock sockets inherit nonblocking mode;
+                            // framed HTTP/DNS reads must wait for all bytes.
+                            stream.set_nonblocking(false).unwrap();
                             stream.set_read_timeout(Some(Duration::from_millis(600))).unwrap();
                             let mut headers = Vec::new();
                             let mut byte = [0];
@@ -85,6 +88,7 @@ impl Matrix {
                         let _ = udp.send_to(&query[..length], peer);
                     }
                     if let Ok((mut stream, _)) = tcp.accept() {
+                        stream.set_nonblocking(false).unwrap();
                         stream
                             .set_read_timeout(Some(Duration::from_millis(600)))
                             .unwrap();

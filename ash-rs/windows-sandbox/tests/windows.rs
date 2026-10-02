@@ -417,6 +417,9 @@ impl Origin {
             while !stopped.load(Ordering::Acquire) {
                 match listener.accept() {
                     Ok((mut stream, _)) => {
+                        // Winsock accepts inherit the listener's nonblocking
+                        // mode; the request reader below needs blocking I/O.
+                        stream.set_nonblocking(false).unwrap();
                         stream
                             .set_read_timeout(Some(Duration::from_secs(5)))
                             .unwrap();
@@ -447,6 +450,36 @@ impl Drop for Origin {
         self.stop.store(true, Ordering::Release);
         self.thread.take().unwrap().join().unwrap();
     }
+}
+
+#[test]
+fn origin_waits_for_complete_request_headers() {
+    let origin = Origin::start();
+    let mut stream =
+        std::net::TcpStream::connect((std::net::Ipv4Addr::LOCALHOST, origin.port)).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_millis(250)))
+        .unwrap();
+    stream.write_all(b"GET / HTTP/1.1\r\n").unwrap();
+    // Split the request across writes: an origin must wait for the remaining
+    // headers instead of replying and closing over unread request bytes.
+    let error = stream
+        .read(&mut [0])
+        .expect_err("origin replied before complete HTTP headers");
+    assert!(matches!(
+        error.kind(),
+        std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+    ));
+    stream
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .unwrap();
+    stream
+        .write_all(b"Host: localhost\r\nConnection: close\r\n\r\n")
+        .unwrap();
+    let mut response = String::new();
+    stream.read_to_string(&mut response).unwrap();
+    assert!(response.starts_with("HTTP/1.1 200 OK\r\n"), "{response}");
+    assert!(response.ends_with("approved"), "{response}");
 }
 
 #[test]
