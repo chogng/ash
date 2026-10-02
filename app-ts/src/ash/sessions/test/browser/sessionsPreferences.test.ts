@@ -45,11 +45,12 @@ test('Sessions Models switches control the model picker visibility preference', 
 	const writes: boolean[] = [];
 	const savedKeys: string[] = [];
 	const removedKeys: string[] = [];
-	let advisor: import('../../../workbench/services/chat/common/chatService.js').AdvisorConfig | null = { model, enabled: true, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' };
+	const advisorModel = { provider: 'openai', model: 'gpt-6.1-sol' };
+	let advisor: import('../../../workbench/services/chat/common/chatService.js').AdvisorConfig | null = { model: advisorModel, enabled: true, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' };
 	const advisorWrites: (typeof advisor | null)[] = [];
 	const chat = {
 		onDidChangeModels: changed.event,
-		listAdvisorModels: async () => [{ model, displayName: 'GPT Test' }, { model: otherModel, displayName: 'Claude Test' }],
+		listAdvisorModels: async () => [{ model: advisorModel, displayName: 'GPT-6.1 Sol' }, { model: otherModel, displayName: 'Claude Test' }],
 		readAdvisorDefault: async () => advisor,
 		saveAdvisorDefault: async (next: typeof advisor) => { advisor = next; advisorWrites.push(next); },
 		listModelCatalog: async () => [{ model, displayName: 'GPT Test' }, { model: otherModel, displayName: 'Claude Test' }],
@@ -193,18 +194,18 @@ test('Sessions Models switches control the model picker visibility preference', 
 	assert.equal(switchInput.getAttribute('aria-checked'), 'false');
 	modelSearch.value = '';
 	modelSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
-	const customizeButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Customize');
-	assert.ok(customizeButton);
-	customizeButton.click();
+	const agentsButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Agents');
+	assert.ok(agentsButton);
+	agentsButton.click();
 	await Promise.resolve();
 	await Promise.resolve();
-	const advisorSwitch = window.document.querySelector<HTMLInputElement>('.ash-sessions-customize-settings input[role="switch"]');
+	const advisorSwitch = window.document.querySelector<HTMLInputElement>('.ash-advisor-settings input[role="switch"]');
 	assert.ok(advisorSwitch);
 	assert.equal(advisorSwitch.checked, true);
 	advisorSwitch.checked = false;
 	advisorSwitch.dispatchEvent(new window.Event('change', { bubbles: true }));
 	await Promise.resolve();
-	assert.deepEqual(advisorWrites, [{ model, enabled: false, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' }]);
+	assert.deepEqual(advisorWrites, [{ model: advisorModel, enabled: false, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' }]);
 	window.document.querySelector<HTMLDialogElement>('dialog')?.close();
 	await opened;
 	const { builtinLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');

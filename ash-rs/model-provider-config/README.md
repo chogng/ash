@@ -76,7 +76,7 @@ src/
 | `validate_model_selection` | public compatibility/preflight method | 显式配置校验 | 内置模型请求不依赖远端目录成员资格 |
 | `normalize_base_url` | crate-private function | apply explicit normalization rule | 不追加 API route |
 | `is_http_url` | crate-private function | 最小 HTTP(S) shape check | 不是 full URL/network validator |
-| `providers::builtin` | crate-private function | 13 个 built-in definitions | 每个 provider 在 sibling module 独立定义 |
+| `providers::builtin` | crate-private function | built-in definitions | 每个 provider 在 sibling module 独立定义 |
 | `default_provider` / `configured_provider` | private helpers | shared definition constructors | 不隐藏 provider-specific profile/default differences |
 
 ## 规范化调用图
@@ -127,6 +127,8 @@ OpenAI definition 另外声明 `WebSocketApiProfile::OpenAiResponses`。其他 b
 `Unavailable`，包括 HTTP-compatible provider；xAI 的上游 Responses WebSocket 也不会覆盖当前
 Chat Completions definition。真实调用仍需 runtime target 和 `ash-api` codec/session client 共同允许。
 
+Meta 使用 `meta` API Key 连接和 `https://api.meta.ai/v1`，按[官方 API 文档](https://dev.meta.ai/docs/overview)使用 Responses 协议与 Bearer 认证。Muse Spark 1.3 的标准层模型 ID、上下文窗口和推理档位来自[模型目录](https://dev.meta.ai/docs/models)与[推理文档](https://dev.meta.ai/docs/reasoning)。
+
 ## 统一静态模型清单
 
 产品内置文本模型只在 `src/model_catalog.rs` 的 `STATIC_MODEL_CATALOG` 中声明。模型自身不带认证方式、执行适配器或端点；订阅和 API 共享同一个厂商＋模型身份。
@@ -155,10 +157,10 @@ service surface 的 provider。`ProviderDefault` 只在 invocation 也使用 pro
 
 新增 provider 时同步：
 
-1. 增加 `ProviderAdapter` variant；
+1. 选择对应的 `ProviderAdapter`；有独立请求行为时才增加 variant；
 2. 新建 private `providers/<name>.rs::definition`；
 3. 加入 `providers::builtin()`；
-4. 在 runtime crate 增加对应 adapter mapping；
+4. 复用该协议的 runtime adapter；有独立行为时增加对应 mapping；
 5. 增加 definition/normalization/runtime tests；
 6. 更新系统 provider matrix 与 schema fixture。
 

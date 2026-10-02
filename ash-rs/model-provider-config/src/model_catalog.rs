@@ -19,6 +19,17 @@ pub const STATIC_MODEL_CATALOG: &[StaticModelSpec] = &[
     },
     static_model! {
         provider: "openai",
+        id: "gpt-6.1-sol",
+        name: "GPT-6.1 Sol",
+        context_window: 1_050_000,
+        capabilities: {
+            tools: supported,
+        },
+        reasoning: [low, medium, high, extra_high, max],
+        model_reasoning_effort: medium,
+    },
+    static_model! {
+        provider: "openai",
         id: "gpt-6-sol",
         name: "GPT-6 Sol",
         reasoning: [none, low, medium, high, extra_high, max],
@@ -492,6 +503,15 @@ pub const STATIC_MODEL_CATALOG: &[StaticModelSpec] = &[
         provider: "mimo",
         id: "mimo-v2.5-pro",
         name: "MiMo V2.5 Pro",
+    },
+    // Standard tier: https://dev.meta.ai/docs/models and /docs/reasoning.
+    static_model! {
+        provider: "meta",
+        id: "muse-spark-1.3",
+        name: "Muse Spark 1.3",
+        context_window: 1_048_576,
+        capabilities: { tools: supported, parallel_tool_calls: supported },
+        reasoning: [minimal, low, medium, high, extra_high, max],
     },
 ];
 

@@ -153,50 +153,48 @@ test('Chat dictation startup failure appears in notifications and leaves input s
 	assert.equal(part.element.querySelector('.ash-chat-status')?.textContent, 'Loading chat...');
 });
 
-test('Chat shows shared preparation, keeps text input usable and opens Dictation settings', async () => {
+test('Chat keeps model preparation in settings and reads it only when dictation is requested', async () => {
 	using changed = new Emitter<void>();
-	let snapshot: ILocalTranscriptionModelSnapshot | undefined = { model: 'selected', available: false, sizeBytes: 0 };
+	let snapshot: ILocalTranscriptionModelSnapshot = { model: 'selected', available: false, sizeBytes: 0 };
+	let reads = 0;
 	let starts = 0;
 	let prepared = 0;
 	let cancelled = 0;
 	const categories: unknown[] = [];
 	const sent: string[] = [];
+	let settingsOpened!: () => void;
+	let opened = new Promise<void>(resolve => { settingsOpened = resolve; });
 	using part = inputPart(sharedNotifications, {
 		onDidChangePreparation: changed.event,
-		getPreparation: async () => snapshot,
-		prepareModel: async () => { prepared++; snapshot = { model: 'selected', available: false, sizeBytes: 0, status: { state: LocalTranscriptionModelState.Downloading, file: 'encoder.onnx', downloadedBytes: 2097152 } }; changed.fire(); },
-		cancelPreparation: async () => { cancelled++; snapshot = { model: 'selected', available: false, sizeBytes: 0, status: { state: LocalTranscriptionModelState.Cancelled } }; changed.fire(); },
+		getPreparation: async () => { reads++; return snapshot; },
+		prepareModel: async () => { prepared++; },
+		cancelPreparation: async () => { cancelled++; },
 		start: async () => { starts++; return { stop: async () => {} }; },
-	}, 'agent', { openModelSettings: async category => { categories.push(category); }, send: async text => { sent.push(text); } });
+	}, 'agent', { openModelSettings: async category => { categories.push(category); settingsOpened(); }, send: async text => { sent.push(text); } });
 	part.render({ mode: 'agent', queuedMessages: 0, phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
-	await new Promise(resolve => setTimeout(resolve, 0));
-	const bar = part.element.querySelector<HTMLElement>('.ash-chat-model-preparation')!;
-	assert.equal(bar.hidden, false);
+	assert.equal(part.element.querySelector('.ash-chat-model-preparation'), null);
+	assert.equal(reads, 0);
+	edit(part, 'Text still works');
 	part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')!.click();
-	await new Promise(resolve => setTimeout(resolve, 0));
-	assert.equal(starts, 0);
-	[...bar.querySelectorAll('button')].find(button => button.textContent === 'Dictation settings')!.click();
+	await opened;
+	await Promise.resolve();
 	assert.deepEqual(categories, ['dictation']);
-	[...bar.querySelectorAll('button')].find(button => button.textContent === 'Download model')!.click();
-	await new Promise(resolve => setTimeout(resolve, 0));
-	assert.equal(prepared, 1);
-	assert.match(bar.textContent ?? '', /Downloading encoder.onnx: 2.0 MiB/);
-	assert.equal(bar.querySelector('progress')!.hasAttribute('value'), false);
-	assert.equal([...bar.querySelectorAll('button')].find(button => button.textContent === 'Download model')!.classList.contains('hidden'), true);
-	assert.equal([...bar.querySelectorAll('button')].find(button => button.textContent === 'Cancel')!.classList.contains('hidden'), false);
-	await part.acceptInput('Text still works');
-	assert.deepEqual(sent, ['Text still works']);
-	part.setVisible(false);
-	assert.equal(cancelled, 0);
-	part.setVisible(true);
-	await new Promise(resolve => setTimeout(resolve, 0));
-	[...bar.querySelectorAll('button')].find(button => button.textContent === 'Cancel')!.click();
-	await new Promise(resolve => setTimeout(resolve, 0));
-	assert.equal(cancelled, 1);
-	snapshot = undefined;
+	assert.equal(part.element.querySelector('textarea')!.value, 'Text still works');
+	assert.deepEqual({ reads, starts, prepared, cancelled }, { reads: 1, starts: 0, prepared: 0, cancelled: 0 });
+
+	snapshot = { model: 'selected', available: false, sizeBytes: 0, status: { state: LocalTranscriptionModelState.Downloading, file: 'encoder.onnx', downloadedBytes: 2097152 } };
 	changed.fire();
-	await new Promise(resolve => setTimeout(resolve, 0));
-	assert.equal(bar.hidden, true);
+	part.setVisible(false);
+	part.setVisible(true);
+	assert.equal(reads, 1);
+	assert.equal(part.element.querySelector('.ash-chat-model-preparation'), null);
+	opened = new Promise<void>(resolve => { settingsOpened = resolve; });
+	part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')!.click();
+	await opened;
+	assert.deepEqual(categories, ['dictation', 'dictation']);
+	assert.deepEqual({ reads, starts, prepared, cancelled }, { reads: 2, starts: 0, prepared: 0, cancelled: 0 });
+	await part.acceptInput();
+	assert.deepEqual(sent, ['Text still works']);
 });
 
 test('Chat dictation session failure appears in notifications and releases the microphone', async () => {

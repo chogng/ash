@@ -238,14 +238,14 @@ export const SettingsNavigation = [
 	},
 	{
 		id: 'agents',
-		label: 'Agents',
-		description: 'Create agents and teams, then configure their shared capabilities.',
+		label: 'Chat',
+		description: 'Configure chats, agents, models, and shared capabilities.',
 		categories: [
 			{
 				id: 'agents',
-				label: 'My Agents',
-				description: 'Manage reusable agents and their bounded subagent delegation.',
-				keywords: ['agent profiles', 'custom agents', 'subagents', 'delegation'],
+				label: 'Agents',
+				description: 'Configure agents and the Advisor used for second opinions.',
+				keywords: ['agent profiles', 'custom agents', 'subagents', 'delegation', 'advisor', 'second opinion'],
 				presentation: 'general',
 				groups: [],
 			},

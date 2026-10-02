@@ -169,15 +169,3 @@
 .ash-sessions-customize > .ash-tab-list {
 	margin-bottom: var(--ash-spacing-size160);
 }
-
-.ash-sessions-customize-settings {
-	display: flex;
-	flex-direction: column;
-	align-items: flex-start;
-	gap: var(--ash-spacing-size120);
-}
-
-.ash-sessions-customize-settings > p {
-	margin: 0;
-	line-height: 1.5;
-}

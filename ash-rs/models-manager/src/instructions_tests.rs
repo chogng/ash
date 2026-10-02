@@ -138,25 +138,27 @@ fn built_in_guidance_does_not_guess_aliases_or_apply_to_another_provider() {
 #[test]
 fn shared_guidance_keeps_each_selected_model_identity_independent() {
     let catalog = ModelInstructionCatalog::built_in();
-    let first = model("openai", "gpt-5.6-sol");
-    let second = model("openai", "gpt-6-astra");
-    let ModelInstructionSelection::Specialized {
-        model: first_model,
-        instructions: first_text,
-        digest: first_digest,
-    } = catalog.resolve(Some(&first))
-    else {
-        panic!("GPT guidance missing");
-    };
-    let ModelInstructionSelection::Specialized {
-        model: second_model,
-        instructions: second_text,
-        digest: second_digest,
-    } = catalog.resolve(Some(&second))
-    else {
-        panic!("GPT guidance missing");
-    };
-    assert_eq!((first_model, second_model), (first, second));
-    assert_eq!(first_text, second_text);
-    assert_eq!(first_digest, second_digest);
+    for name in ["gpt-5.6-sol", "gpt-6.1-sol"] {
+        let first = model("openai", name);
+        let second = model("openai", "gpt-6-astra");
+        let ModelInstructionSelection::Specialized {
+            model: first_model,
+            instructions: first_text,
+            digest: first_digest,
+        } = catalog.resolve(Some(&first))
+        else {
+            panic!("GPT guidance missing");
+        };
+        let ModelInstructionSelection::Specialized {
+            model: second_model,
+            instructions: second_text,
+            digest: second_digest,
+        } = catalog.resolve(Some(&second))
+        else {
+            panic!("GPT guidance missing");
+        };
+        assert_eq!((first_model, second_model), (first, second));
+        assert_eq!(first_text, second_text);
+        assert_eq!(first_digest, second_digest);
+    }
 }

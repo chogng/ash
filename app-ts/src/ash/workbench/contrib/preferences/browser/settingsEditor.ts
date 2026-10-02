@@ -33,6 +33,7 @@ import { DefaultSettings, SettingsEditorModel } from '../../../services/preferen
 import { SettingsRenderer } from './settingsRenderers.js';
 import { SkillsSettingsContent } from '../../skills/browser/skillsSettingsContent.js';
 import { HooksSettingsContent } from '../../hooks/browser/hooksSettingsContent.js';
+import { AdvisorSettingsContent } from '../../chat/browser/advisorSettingsContent.js';
 import { ModelSettingsContent } from '../../chat/browser/modelSettingsContent.js';
 import { DictationSettingsContent } from '../../chat/browser/speechToText/dictationSettingsContent.js';
 import { AgentCapabilitiesSettings } from './agentCapabilitiesSettings.js';
@@ -199,6 +200,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		if (!initialCategory) throw new Error('Settings requires at least one category');
 		this.activeCategory = initialCategory;
 		this.contents.push(
+			this._register(this.instantiationService.createInstance(AdvisorSettingsContent, settingsContent)),
 			this._register(this.instantiationService.createInstance(SkillsSettingsContent, settingsContent)),
 			this._register(this.instantiationService.createInstance(ModelSettingsContent, settingsContent)),
 			this._register(this.instantiationService.createInstance(DictationSettingsContent, settingsContent)),

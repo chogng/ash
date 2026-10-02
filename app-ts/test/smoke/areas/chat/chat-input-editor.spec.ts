@@ -8,6 +8,7 @@ test('Empty chat keeps its input near the pane edges', async ({ target, workbenc
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	await expect(chat).toHaveClass(/empty/u);
+	await expect(chat.locator('.ash-chat-model-preparation')).toHaveCount(0);
 	const layout = await chat.evaluate(element => {
 		const list = element.querySelector<HTMLElement>('.ash-chat-list-widget');
 		const input = element.querySelector<HTMLElement>('.ash-chat-input-part');
@@ -287,19 +288,26 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 		await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });
 	});
 	try {
-	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
-	}
-	const button = page.locator('.ash-chat-view-pane .ash-chat:visible [data-action-id="ash.chat.input.mic"] button');
-	await expect(button).toBeEnabled();
-	await expect(button).toHaveAttribute('aria-label', 'Dictate message');
-	await button.click();
-		const preparation = page.locator('.ash-chat-view-pane .ash-chat:visible .ash-chat-model-preparation');
-		await expect(preparation).toContainText('ash-playwright-missing-model');
-		await expect(preparation.getByRole('button', { name: 'Download model' })).toBeEnabled();
-		await preparation.getByRole('button', { name: 'Dictation settings' }).click();
+		if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+			await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		}
+		const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
+		const composer = chat.locator('.ash-chat-input-container');
+		await expect(chat.locator('.ash-chat-model-preparation')).toHaveCount(0);
+		await expect(composer).toHaveCSS('height', '140px');
+		const input = chat.locator('.ash-chat-input-editor .stanza-editor-input');
+		await input.focus();
+		await page.keyboard.insertText('Keep this draft');
+		const button = chat.locator('[data-action-id="ash.chat.input.mic"] button');
+		await expect(button).toBeEnabled();
+		await expect(button).toHaveAttribute('aria-label', 'Dictate message');
+		await button.focus();
+		await page.keyboard.press('Enter');
 		const voice = page.getByRole('dialog', { name: 'Ash Settings' });
 		await expect(voice.getByRole('grid', { name: 'Local dictation models' })).toBeVisible();
+		await expect(chat.locator('.ash-chat-model-preparation')).toHaveCount(0);
+		await expect(chat.locator('.stanza-editor-line-text')).toHaveText('Keep this draft');
+		await expect(button).not.toHaveAttribute('aria-pressed', 'true');
 		await expect(voice.getByRole('row').filter({ hasText: 'ash-playwright-missing-model' })).toBeVisible();
 		const microphone = voice.getByRole('combobox', { name: 'Microphone', exact: true });
 		const language = voice.getByRole('combobox', { name: 'Transcription language', exact: true });
@@ -315,7 +323,10 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 		await page.keyboard.press('Enter');
 		await voice.locator('.ash-modal-editor-close').click();
 		await expect(page.locator('.ash-chat-view-pane .ash-chat:visible .ash-chat-status')).not.toContainText('Could not read dictation model package');
-	await expect(button).not.toHaveAttribute('aria-pressed', 'true');
+		await expect(button).not.toHaveAttribute('aria-pressed', 'true');
+		await expect(chat.locator('.ash-chat-model-preparation')).toHaveCount(0);
+		await expect(composer).toHaveCSS('height', '140px');
+		await expect(chat.locator('.stanza-editor-line-text')).toHaveText('Keep this draft');
 		await button.focus();
 		await workbench.quickaccess.runCommand('workbench.action.chat.dictation.showIntroduction');
 		const introduction = page.getByRole('region', { name: 'Dictation introduction', exact: true });

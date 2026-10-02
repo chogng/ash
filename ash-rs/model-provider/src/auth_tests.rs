@@ -27,7 +27,7 @@ fn catalog_reports_every_builtin_without_exposing_values() {
 
     let catalog = service.catalog().unwrap();
 
-    assert_eq!(catalog.len(), 19);
+    assert_eq!(catalog.len(), 22);
     assert!(catalog.iter().any(|entry| {
         entry.provider == openai
             && entry.api_key_policy == ApiKeyPolicy::Required
@@ -48,6 +48,7 @@ fn stored_keys_resolve_through_each_declared_header_shape() {
 
     for (provider, header, value) in [
         ("openai", "Authorization", "Bearer openai-key"),
+        ("meta", "Authorization", "Bearer meta-key"),
         ("anthropic", "x-api-key", "anthropic-key"),
         ("google", "Authorization", "Bearer google-key"),
     ] {

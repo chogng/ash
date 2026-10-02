@@ -1,0 +1,48 @@
+.ash-advisor-settings-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size200);
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+}
+
+.ash-advisor-settings-copy {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size40);
+	flex: 1;
+	min-width: min(100%, 220px);
+}
+
+.ash-advisor-settings-copy > h4,
+.ash-advisor-settings-copy > p {
+	margin: 0;
+}
+
+.ash-advisor-settings-copy > h4 {
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-advisor-settings-copy > p {
+	color: var(--ash-description-foreground);
+	line-height: 1.5;
+}
+
+.ash-advisor-settings-status {
+	margin: 0;
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size160);
+}
+
+.ash-advisor-settings-status:empty {
+	display: none;
+}
+
+.ash-advisor-settings-row > .ash-dropdown {
+	width: 190px;
+	max-width: 100%;
+}
+
+.ash-advisor-settings-row > .ash-toggle {
+	margin-left: auto;
+}

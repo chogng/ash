@@ -10,6 +10,7 @@ mod huggingface;
 mod kimi;
 mod mimo;
 mod minimax;
+mod meta;
 mod ollama;
 mod openai;
 mod openai_compatible;
@@ -17,7 +18,7 @@ mod qwen;
 mod xai;
 pub(super) mod zai;
 
-pub(crate) fn builtin() -> [ProviderDefinition; 16] {
+pub(crate) fn builtin() -> [ProviderDefinition; 17] {
     [
         openai::definition(),
         openai_compatible::definition(),
@@ -35,6 +36,7 @@ pub(crate) fn builtin() -> [ProviderDefinition; 16] {
         minimax::definition(),
         mimo::definition(),
         anthropic::definition(),
+        meta::definition(),
     ]
 }
 

@@ -505,11 +505,24 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	let modelVisible = true;
 	const modelWrites: boolean[] = [];
 	const savedKeys: string[] = [];
+	const advisorModel = { provider: 'openai', model: 'gpt-6.1-sol' };
+	const otherAdvisorModel = { provider: 'meta', model: 'muse-spark-1.3' };
+	const hiddenAdvisors = new Set<string>();
+	let advisor: import('../../../../services/chat/common/chatService.js').AdvisorConfig | null = { model: advisorModel, enabled: true, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' };
+	const advisorWrites: (typeof advisor | null)[] = [];
+	let rejectAdvisorSave = false;
 	const chatService = {
 		onDidChangeModels: modelsChanged.event,
+		listAdvisorModels: async () => [{ model: advisorModel, displayName: 'GPT-6.1 Sol' }, { model: otherAdvisorModel, displayName: 'Muse Spark 1.3', supportedReasoningEfforts: ['high'] }, { model, displayName: 'GPT Test' }],
+		readAdvisorDefault: async () => advisor,
+		saveAdvisorDefault: async (next: typeof advisor) => {
+			if (rejectAdvisorSave) { throw new Error('Preference write failed'); }
+			advisor = next;
+			advisorWrites.push(next);
+		},
 		listModelCatalog: async () => [{ model, displayName: 'GPT Test' }],
 		listModelProviders: async () => [{ connection: 'openai', provider: 'openai', displayName: 'OpenAI API', apiKeyPolicy: 'required', apiKeyConfigured: savedKeys.length > 0 }],
-		isModelVisible: () => modelVisible,
+		isModelVisible: (entry: typeof model) => entry.model === model.model ? modelVisible : !hiddenAdvisors.has(entry.model),
 		setModelVisible: async (_model: typeof model, visible: boolean) => {
 			modelWrites.push(visible);
 			modelVisible = visible;
@@ -644,7 +657,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector('[data-settings-target-id="startup.group.startup-editor"]'), null);
 	const agentsGroup = root.querySelector<HTMLElement>('[data-settings-group-id="agents"]');
 	assert.ok(agentsGroup);
-	assert.equal(agentsGroup.textContent, 'Agents');
+	assert.equal(agentsGroup.textContent, 'Chat');
 	assert.equal(agentsGroup.closest('.ash-tree-row')?.getAttribute('aria-expanded'), 'false');
 	assert.equal(root.querySelector('[data-settings-category-id="models"]'), null);
 	assert.ok(root.querySelector(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks}"]`));
@@ -722,9 +735,55 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.deepEqual(
 		['agents', 'teams', 'agent-defaults', 'models', 'rules', 'skills', 'tools', 'sandbox', 'hooks']
 			.map(categoryId => root.querySelector<HTMLElement>(`[data-settings-category-id="${categoryId}"]`)?.textContent),
-		['My Agents', 'Teams', 'Defaults', 'Models', 'Rules', 'Skills', 'Tools', 'Sandbox', 'Hooks'],
+		['Agents', 'Teams', 'Defaults', 'Models', 'Rules', 'Skills', 'Tools', 'Sandbox', 'Hooks'],
 	);
 	assert.equal(root.querySelector('[data-tree-id="general"]')?.getAttribute('aria-selected'), 'true');
+	root.querySelector<HTMLElement>('[data-settings-category-id="agents"]')?.click();
+	await nextTurn();
+	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Agents');
+	const advisorSwitch = root.querySelector<HTMLInputElement>('.ash-advisor-settings input[role="switch"]');
+	assert.ok(advisorSwitch);
+	assert.equal(advisorSwitch.checked, true);
+	advisorSwitch.checked = false;
+	advisorSwitch.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
+	await nextTurn();
+	assert.deepEqual(advisorWrites, [{ model: advisorModel, enabled: false, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' }]);
+	root.querySelector<HTMLElement>('.ash-advisor-settings [aria-haspopup="menu"]')?.click();
+	const otherAdvisorOption = [...root.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(option => option.textContent === 'Muse Spark 1.3');
+	assert.ok(otherAdvisorOption);
+	otherAdvisorOption.click();
+	await nextTurn();
+	assert.deepEqual(advisorWrites[1], { model: otherAdvisorModel, enabled: true, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' });
+	rejectAdvisorSave = true;
+	advisorSwitch.checked = false;
+	advisorSwitch.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
+	await nextTurn();
+	assert.equal(advisorSwitch.checked, true);
+	assert.match(root.querySelector('.ash-advisor-settings [role="status"]')?.textContent ?? '', /Preference write failed/u);
+	rejectAdvisorSave = false;
+	advisorSwitch.checked = true;
+	advisorSwitch.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
+	await nextTurn();
+	root.querySelector<HTMLElement>('.ash-advisor-settings [aria-haspopup="menu"]')?.click();
+	const clearAdvisorOption = [...root.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(option => option.textContent === 'Disable');
+	assert.ok(clearAdvisorOption);
+	clearAdvisorOption.click();
+	await nextTurn();
+	assert.deepEqual(advisorWrites[3], { model: otherAdvisorModel, enabled: false, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' });
+	assert.equal(advisorSwitch.checked, false);
+	assert.equal(advisorSwitch.disabled, false);
+	advisorSwitch.checked = true;
+	advisorSwitch.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
+	await nextTurn();
+	hiddenAdvisors.add(otherAdvisorModel.model);
+	modelsChanged.fire();
+	await nextTurn();
+	assert.equal(root.querySelector('.ash-advisor-settings [aria-haspopup="menu"]')?.textContent, 'Muse Spark 1.3');
+	root.querySelector<HTMLElement>('.ash-advisor-settings [aria-haspopup="menu"]')?.click();
+	assert.deepEqual([...root.querySelectorAll('[role="menuitemradio"]')].map(option => option.textContent), ['Disable', 'GPT-6.1 Sol']);
+	assert.equal(advisorWrites.length, 5, 'Hiding a model must not change the saved preference');
+	assert.ok(root.querySelector('.ash-advisor-settings.ash-settings-card'));
+	assert.equal(root.querySelector('.ash-advisor-settings')?.textContent?.includes('Refresh'), false);
 	root.querySelector<HTMLElement>('[data-settings-category-id="tools"]')?.click();
 	await nextTurn();
 	assert.match(root.querySelector('.ash-agent-capabilities-settings')?.textContent ?? '', /read_file/);
@@ -868,7 +927,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.ok(search);
 	search.value = 'subagent';
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
-	assert.equal(root.querySelector('[data-settings-category-id="agents"]')?.textContent, 'My Agents');
+	assert.equal(root.querySelector('[data-settings-category-id="agents"]')?.textContent, 'Agents');
 	assert.equal(root.querySelector('[data-settings-category-id="teams"]'), null);
 	search.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }));
 	assert.equal(search.value, '');

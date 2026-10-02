@@ -166,6 +166,7 @@ Provider 名称不能等同于 API 协议。同一 Provider 可以选择多个�
 | Provider | 可选 API profile 示例 |
 | --- | --- |
 | OpenAI Platform | Responses |
+| Meta Model API | Muse Spark 1.3，Responses + Bearer API Key；[官方协议](https://dev.meta.ai/docs/overview) |
 | ChatGPT 订阅 | OpenAI Responses codec + `ash-chatgpt` native OAuth target |
 | Kimi Platform | OpenAI-compatible Chat Completions + API key |
 | Kimi Code 订阅 | Kimi Coding OpenAI-compatible Chat Completions + Ash OAuth 凭据 |

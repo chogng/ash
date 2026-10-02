@@ -533,8 +533,8 @@ fn registry_merge_has_explicit_conflict_semantics() {
 #[test]
 fn builtins_are_valid_and_include_all_supported_adapters() {
     let registry = ProviderConfigRegistry::builtin();
-    assert_eq!(registry.providers().count(), 15);
-    assert_eq!(registry.connections().len(), 21);
+    assert_eq!(registry.providers().count(), 16);
+    assert_eq!(registry.connections().len(), 22);
     assert_eq!(
         registry.get(&provider_id("openai")).unwrap().adapter,
         ProviderAdapter::OpenAi
@@ -553,6 +553,40 @@ fn builtins_are_valid_and_include_all_supported_adapters() {
 }
 
 #[test]
+fn meta_connection_declares_muse_responses_auth_and_reasoning() {
+    let registry = ProviderConfigRegistry::builtin();
+    let config = ModelProviderConfig::new(provider_id("meta"));
+    let normalized = registry.normalize(&config).unwrap();
+    assert_eq!(normalized.base_url, "https://api.meta.ai/v1");
+    assert_eq!(normalized.api_profile, ApiProfile::OpenAiResponses);
+    let connection = builtin_connections()
+        .into_iter()
+        .find(|entry| entry.id.as_str() == "meta")
+        .unwrap();
+    assert_eq!(connection.transport.api_key_policy, ApiKeyPolicy::Required);
+    assert_eq!(connection.runtime, ModelConnectionRuntime::ProviderApi);
+    let model = find_static_model(&ash_protocol::ModelRef::new(
+        provider_id("meta"),
+        ModelId::new("muse-spark-1.3").unwrap(),
+    ))
+    .unwrap();
+    assert_eq!(
+        model.context_window,
+        ash_protocol::ContextWindow::Known(1_048_576)
+    );
+    assert!(
+        model
+            .supported_reasoning_efforts
+            .contains(&ReasoningEffort::Minimal)
+    );
+    assert!(
+        !model
+            .supported_reasoning_efforts
+            .contains(&ReasoningEffort::None)
+    );
+}
+
+#[test]
 fn static_model_catalog_has_unique_valid_rows() {
     let mut identities = BTreeSet::new();
     for spec in STATIC_MODEL_CATALOG {
@@ -567,6 +601,17 @@ fn static_model_catalog_has_unique_valid_rows() {
 #[test]
 fn static_catalog_exposes_only_model_specific_reasoning_levels() {
     let cases: &[(&str, &str, &[ReasoningEffort])] = &[
+        (
+            "openai",
+            "gpt-6.1-sol",
+            &[
+                ReasoningEffort::Low,
+                ReasoningEffort::Medium,
+                ReasoningEffort::High,
+                ReasoningEffort::ExtraHigh,
+                ReasoningEffort::Max,
+            ],
+        ),
         (
             "openai",
             "gpt-6-sol",
@@ -728,6 +773,7 @@ fn kimi_desktop_connection_rejects_endpoint_override() {
 fn builtin_catalog_includes_current_chat_model_families() {
     let registry = ProviderConfigRegistry::builtin();
     for (provider, model) in [
+        ("openai", "gpt-6.1-sol"),
         ("openai", "gpt-6-sol"),
         ("openai", "gpt-5.6-terra"),
         ("anthropic", "claude-opus-5-5"),

@@ -25,6 +25,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { ActivityBarPosition } from '../../../../workbench/common/configuration.js';
 import '../../../../workbench/contrib/preferences/common/settingsEditorColorRegistry.js';
 import { SettingsRenderer } from '../../../../workbench/contrib/preferences/browser/settingsRenderers.js';
+import { AdvisorSettingsContent } from '../../../../workbench/contrib/chat/browser/advisorSettingsContent.js';
 import { ModelSettingsContent } from '../../../../workbench/contrib/chat/browser/modelSettingsContent.js';
 import { DictationSettingsContent } from '../../../../workbench/contrib/chat/browser/speechToText/dictationSettingsContent.js';
 import { SettingsTree } from '../../../../workbench/contrib/preferences/browser/settingsTree.js';
@@ -91,7 +92,7 @@ export class SessionsPreferences extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsSettings,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. General contains dictation settings; Models contains chat models and API connections. Design contains canvas cursor and accessibility settings. Customize has Settings, Plugins, Skills, and Hooks tabs. Use Left and Right to move between tabs, then Enter or Space to open one. Use search to filter settings. The local dictation table lists available and installed models. Use arrow keys to move between rows and cells, and Tab to reach Install, Use model, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation uses the API connections in Models. Press Escape to close Settings.'),
+					() => localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. General contains dictation settings; Models contains chat models and API connections. Agents contains the Advisor model and enable switch. Changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings, Plugins, Skills, and Hooks tabs. Use Left and Right to move between tabs, then Enter or Space to open one. Use search to filter settings. The local dictation table lists available and installed models. Use arrow keys to move between rows and cells, and Tab to reach Install, Use model, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation uses the API connections in Models. Press Escape to close Settings.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsSettings,
 				);
@@ -194,11 +195,13 @@ export class SessionsPreferences extends Disposable {
 			layout: () => contextView.layout(),
 		}])));
 		const customizeContent = resources.add(contentServices.createInstance(SessionsCustomizeContent, list, async () => { dialog.close(); }, this.showEditor));
-		const sections = this.sections(modelContent, dictationContent, customizeContent);
+		const advisorContent = resources.add(contentServices.createInstance(AdvisorSettingsContent, list));
+		const sections = this.sections(modelContent, dictationContent, customizeContent, advisorContent);
 		const categories = sections.flatMap(section => section.categories);
 		if (categoryId === 'skills' || categoryId === 'plugins' || categoryId === 'hooks') customizeContent.selectTab(categoryId);
 		let activeCategory = categoryId === 'customize' || categoryId === 'skills' || categoryId === 'plugins' || categoryId === 'hooks' ? categories.findIndex(category => category.content === customizeContent)
 			: categoryId === 'dictation' ? categories.findIndex(category => category.content === dictationContent)
+			: categoryId === 'agents' ? categories.findIndex(category => category.content === advisorContent)
 			: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent) : 0;
 		const treeModel = resources.add(new SettingsTreeModel<ISetting | SettingsContentItem>());
 		const tree = resources.add(new SettingsTree(list, {
@@ -271,6 +274,7 @@ export class SessionsPreferences extends Disposable {
 		this.navigate = (categoryId, marketplaceOptions) => {
 			if (categoryId === 'skills' || categoryId === 'plugins' || categoryId === 'hooks') customizeContent.selectTab(categoryId);
 			activeCategory = categoryId === 'customize' || categoryId === 'skills' || categoryId === 'plugins' || categoryId === 'hooks' ? categories.findIndex(category => category.content === customizeContent)
+				: categoryId === 'agents' ? categories.findIndex(category => category.content === advisorContent)
 				: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent) : categories.findIndex(category => category.content === dictationContent);
 			searchInput.value = '';
 			render();
@@ -309,7 +313,7 @@ export class SessionsPreferences extends Disposable {
 		}
 	}
 
-	private sections(modelContent: SettingsContent, dictationContent: SettingsContent, customizeContent: SettingsContent): readonly SettingsSection[] {
+	private sections(modelContent: SettingsContent, dictationContent: SettingsContent, customizeContent: SettingsContent, advisorContent: SettingsContent): readonly SettingsSection[] {
 		const appearanceSettings: readonly ISetting[] = [{
 			id: SessionsConfiguration.layoutStyle,
 			valueType: 'select',
@@ -377,7 +381,7 @@ export class SessionsPreferences extends Disposable {
 		}, {
 			title: localize('sessions.settings.section.development', 'Development'),
 			categories: [
-				{ title: localize('sessions.settings.agents', 'Agents'), icon: Lxicon.agent, settings: [] },
+				{ title: localize('sessions.settings.agents', 'Agents'), icon: Lxicon.agent, settings: [], content: advisorContent },
 				{ title: localize('sessions.settings.design', 'Design'), icon: Lxicon.symbolColor, settings: designSettings },
 				{ title: localize('sessions.settings.models', 'Models'), icon: Lxicon.model, settings: [], content: modelContent },
 				{ title: localize('sessions.settings.gitPrs', 'Git & PRs'), icon: Lxicon.git, settings: [] },

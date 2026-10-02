@@ -127,7 +127,7 @@ Core 接收：共同规则 + 选择结果 + 当前 Role + 实际工具/环境 + 
 
 | 资产 | 准确模型登记 | 设计假设与来源 |
 | --- | --- | --- |
-| `model/gpt` / `gpt-guidance-v1` | `openai/` 下的 `gpt-6-astra`、`gpt-5.6`、`gpt-5.6-sol`、`gpt-5.6-terra`、`gpt-5.6-luna`、`gpt-5.5` | 目标驱动、减少无意义停顿与重复验证，保留简短回答中的必要证据；参考 [GPT-5.6 指导](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6) 与 [GPT-6 Astra 指导](https://developers.openai.com/api/docs/guides/latest-model) |
+| `model/gpt` / `gpt-guidance-v1` | `openai/` 下的 `gpt-6-astra`、`gpt-6.1-sol`、`gpt-5.6`、`gpt-5.6-sol`、`gpt-5.6-terra`、`gpt-5.6-luna`、`gpt-5.5` | 目标驱动、减少无意义停顿与重复验证，保留简短回答中的必要证据；参考 [GPT-5.6 指导](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6) 与 [GPT-6 指导](https://developers.openai.com/api/docs/guides/latest-model) |
 | `model/claude` / `claude-guidance-v1` | `anthropic/claude-sonnet-4-20250514` | 明确所需产物并限制额外工程化；参考 [Claude 提示词指导](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices) 的通用原则，不将较新型号的行为描述冒充 Sonnet 4 的实测结论 |
 | `model/gemini` / `gemini-guidance-v1` | `google/gemini-3.6-flash` | 简洁指令、明确当前任务、证据与目标格式；参考 [Gemini 3 指导](https://ai.google.dev/gemini-api/docs/gemini-3)，这属于对当前登记型号的初版应用 |
 | `model/function-calling` / `function-calling-guidance-v1` | `xai/grok-4.5`、`qwen/qwen-plus`、`kimi/kimi-k2.6`、`kimi/kimi-k2.7-code`、`deepseek/deepseek-v4-pro`、`zai/glm-5.1`、`minimax/MiniMax-M3`、`mimo/mimo-v2.5-pro` | 共同的工具调用接口适配：执行参数与回答分离，等待实际结果后继续；参考 Ash 已接的工具通道，以及 [Qwen Function Calling](https://www.alibabacloud.com/help/en/model-studio/qwen-function-calling)、[Z.AI Function Calling](https://docs.z.ai/guides/capabilities/function-calling) |

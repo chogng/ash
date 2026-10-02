@@ -1,6 +1,6 @@
 # 开发者 API 模型价格
 
-这张表列出 Ash 内置模型目录中 OpenAI、Anthropic、Google、Qwen、DeepSeek 当前仍提供的**开发者 API 按量连接**模型，并保留已核价的其他供应商型号；核对时间为 2026-09-26。模型列使用 Ash 的模型 ID。订阅连接是否按相同规则计费，见[订阅套餐一览](plans-and-pricing.md)。
+这张表列出 Ash 内置模型目录中 OpenAI、Anthropic、Google、Qwen、DeepSeek 当前仍提供的**开发者 API 按量连接**模型，并保留已核价的其他供应商型号；核对时间为 2026-09-26，GPT-6.1 Sol 于 2026-10-01 补充核对。模型列使用 Ash 的模型 ID。订阅连接是否按相同规则计费，见[订阅套餐一览](plans-and-pricing.md)。
 
 表内输入、输出、缓存读、缓存写金额均按每 100 万 token 计，Google 的缓存存储费另按每 100 万 token·小时计。输入表示未命中缓存的输入；缓存读表示命中缓存的输入。“上下文”列标出最大上下文窗口；按上下文档位变价的型号直接列出对应档位，顺序与价格栏一致。
 
@@ -49,6 +49,7 @@ Anthropic Claude 4.6 及更新型号默认支持 1M 上下文，长上下文不�
 | 供应商 | 模型 | 推理档位 | Fast（请求级） | 上下文 | 输入单价 | 输出单价 | 缓存读单价 | 缓存写单价 | 官方来源 |
 | --- | --- | --- | :---: | --- | ---: | ---: | ---: | ---: | --- |
 | OpenAI | `gpt-6-astra` | `low`, `medium`, `high`, `xhigh`, `max` | ✓ | 272K / 1M | &#36;10/&#36;20 | &#36;50/&#36;75 | &#36;1/&#36;2 | &#36;12.5/&#36;25 | [模型详情](https://developers.openai.com/api/docs/models/gpt-6-astra) |
+|  | `gpt-6.1-sol` | `low`, `medium`, `high`, `xhigh`, `max` | ✓ | 272K / 1M | &#36;2/&#36;4 | &#36;10/&#36;15 | &#36;0.1/&#36;0.2 | &#36;2.5/&#36;5 | [模型详情](https://developers.openai.com/api/docs/models/gpt-6.1-sol) |
 |  | `gpt-6-sol` | `none`, `low`, `medium`, `high`, `xhigh`, `max` | ✓ | 272K / 1M | &#36;2/&#36;4 | &#36;10/&#36;15 | &#36;0.2/&#36;0.4 | &#36;2.5/&#36;5 | [模型详情](https://developers.openai.com/api/docs/models/gpt-6-sol) |
 |  | `gpt-6-luna` | `none`, `low`, `medium`, `high`, `xhigh`, `max` | ✓ | 272K / 1M | &#36;0.1/&#36;0.2 | &#36;0.5/&#36;0.75 | &#36;0.01/&#36;0.02 | &#36;0.125/&#36;0.25 | [模型详情](https://developers.openai.com/api/docs/models/gpt-6-luna) |
 |  | `gpt-5.6-sol` | `none`, `low`, `medium`, `high`, `xhigh`, `max` | ✓ | 272K / 1M | &#36;4/&#36;8 | &#36;20/&#36;30 | &#36;0.4/&#36;0.8 | &#36;5/&#36;10 | [模型详情](https://developers.openai.com/api/docs/models/gpt-5.6-sol) |

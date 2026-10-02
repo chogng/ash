@@ -2166,6 +2166,50 @@ fn ollama_runtime_uses_its_local_default_endpoint() {
 }
 
 #[test]
+fn meta_muse_uses_stored_credentials_and_streams_responses() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let request = read_http_request(&mut stream);
+        let body = streaming::response_stream(&responses_response("Muse reply"));
+        write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+        request
+    });
+    let secrets = Arc::new(MemorySecretStore::default());
+    secrets
+        .store(
+            &provider_api_key_secret_key(&ash_protocol::ModelConnectionId::new("meta").unwrap()),
+            &SecretValue::new(b"meta-test-key".to_vec()),
+        )
+        .unwrap();
+    let runtime = ModelProviderRuntime::with_secrets(ProviderConfigRegistry::builtin(), secrets);
+    let model = runtime
+        .build_model(
+            &provider_config_with_endpoint("meta", format!("http://{address}/v1")),
+            &model_ref("meta", "muse-spark-1.3"),
+        )
+        .unwrap();
+    let mut input = ModelRequest::text("hello");
+    input.reasoning = Some(ash_protocol::ReasoningConfig {
+        effort: ash_protocol::ReasoningEffort::High,
+        summary: false,
+    });
+    assert_eq!(model.invoke(&input).unwrap().text(), "Muse reply");
+    let request = server.join().unwrap();
+    assert!(request.starts_with("POST /v1/responses HTTP/1.1"));
+    assert!(
+        request
+            .to_ascii_lowercase()
+            .contains("authorization: bearer meta-test-key")
+    );
+    let body: Value = serde_json::from_str(request.split_once("\r\n\r\n").unwrap().1).unwrap();
+    assert_eq!(body["model"], "muse-spark-1.3");
+    assert_eq!(body["reasoning"]["effort"], "high");
+    assert_eq!(body["stream"], true);
+}
+
+#[test]
 fn default_transport_posts_to_the_normalized_endpoint() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
@@ -2346,13 +2390,21 @@ fn every_builtin_provider_applies_its_authentication_without_subscription_header
         "minimax",
         "mimo",
         "anthropic",
+        "meta",
     ];
     assert_eq!(
         providers.len(),
         ProviderConfigRegistry::builtin()
             .connections()
             .into_iter()
-            .filter(|connection| !connection.id.as_str().ends_with("-subscription"))
+            .filter(|connection| !matches!(
+                connection.runtime,
+                ash_model_provider_config::ModelConnectionRuntime::ChatGptSubscription
+                    | ash_model_provider_config::ModelConnectionRuntime::KimiCode
+                    | ash_model_provider_config::ModelConnectionRuntime::KimiDesktop
+                    | ash_model_provider_config::ModelConnectionRuntime::KimiCli
+                    | ash_model_provider_config::ModelConnectionRuntime::XaiSubscription
+            ))
             .count()
     );
     for provider in providers {

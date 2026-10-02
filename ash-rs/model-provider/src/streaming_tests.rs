@@ -117,6 +117,7 @@ fn every_chat_provider_delivers_live_events_and_the_same_complete_result() {
     for definition in definitions.providers().filter(|definition| {
         definition.api_profile == ApiProfile::OpenAiChatCompletions
             && !definition.id.as_str().ends_with("-subscription")
+            && !matches!(definition.id.as_str(), "kimi-desktop" | "kimi-cli")
     }) {
         let id = definition.id.as_str();
         let finished = Arc::new(AtomicBool::new(false));

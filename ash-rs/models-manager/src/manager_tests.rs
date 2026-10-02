@@ -36,6 +36,7 @@ use ash_protocol::ModelInfo;
 use ash_protocol::ModelMetadataQuality;
 use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
+use ash_protocol::ReasoningEffort;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -118,6 +119,34 @@ impl Clock for FakeClock {
     fn now(&self) -> SystemTime {
         *self.now.lock().unwrap()
     }
+}
+
+#[test]
+fn gpt_6_1_sol_is_selectable_and_resolves_its_declared_metadata() {
+    let manager = ModelsManager::new(ProviderConfigRegistry::builtin());
+    let model = model_ref("openai", "gpt-6.1-sol");
+    let entries = manager
+        .list_static(&[provider_id("openai")], &CatalogQuery::selectable())
+        .unwrap();
+    assert!(entries.iter().any(|entry| entry.model() == &model));
+    let resolved = manager
+        .resolve_static(&model, &ModelRequirements::agent())
+        .unwrap();
+    let info = resolved.entry().info();
+    assert_eq!(info.display_name, "GPT-6.1 Sol");
+    assert_eq!(info.context_window, ContextWindow::Known(1_050_000));
+    assert_eq!(info.capabilities.tools, CapabilitySupport::Supported);
+    assert_eq!(info.model_reasoning_effort, Some(ReasoningEffort::Medium));
+    assert!(
+        !info
+            .supported_reasoning_efforts
+            .contains(&ReasoningEffort::None)
+    );
+    assert!(
+        !info
+            .supported_reasoning_efforts
+            .contains(&ReasoningEffort::Minimal)
+    );
 }
 
 #[test]
