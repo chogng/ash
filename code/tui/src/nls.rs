@@ -644,6 +644,24 @@ pub(crate) fn spinner_verb(index: usize) -> &'static str {
 /// identifiers, and code are intentionally absent so they remain byte-for-byte source text.
 const UI_TRANSLATIONS: &[Translation] = &[
     translation(
+        "Model or provider configuration is missing or invalid",
+        "モデルまたはプロバイダーの設定が不足しているか無効です",
+        "模型或供应商配置缺失或无效",
+        "La configuration du modèle ou du fournisseur est manquante ou invalide",
+    ),
+    translation(
+        "Configure the model context window in /config before sending a message.",
+        "送信する前に /config でモデルのコンテキストウィンドウを設定してください。",
+        "请先在 /config 中设置模型上下文窗口，再发送消息。",
+        "Configurez la fenêtre de contexte du modèle dans /config avant d’envoyer un message.",
+    ),
+    translation(
+        "Adjust the context window, output limit, or compaction threshold in /config to leave room for input.",
+        "/config でコンテキストウィンドウを広げるか、出力と圧縮の上限を調整してください。",
+        "请在 /config 中调整上下文窗口、输出上限或压缩阈值，为输入留出空间。",
+        "Augmentez la fenêtre de contexte ou ajustez les limites de sortie et de compression dans /config.",
+    ),
+    translation(
         "Model no longer available",
         "モデルは利用できなくなりました",
         "该模型已不可用",
@@ -3253,16 +3271,22 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Reconnectez-vous à ChatGPT dans /config > Fournisseurs.",
     ),
     translation(
-        "ChatGPT account changed. Run /usage again.",
-        "ChatGPT アカウントが変更されました。/usage を再実行してください。",
-        "ChatGPT 账号已切换，请重新运行 /usage。",
-        "Le compte ChatGPT a changé. Relancez /usage.",
+        "Account changed. Run /usage again.",
+        "アカウントが変更されました。/usage を再実行してください。",
+        "账号已切换，请重新运行 /usage。",
+        "Le compte a changé. Relancez /usage.",
     ),
     translation(
-        "Could not load ChatGPT usage. Run /usage to retry.",
-        "ChatGPT の使用量を取得できませんでした。/usage で再試行してください。",
-        "无法读取 ChatGPT 额度，请运行 /usage 重试。",
-        "Impossible de lire les quotas ChatGPT. Relancez /usage.",
+        "Could not load account usage. Run /usage to retry.",
+        "アカウントの使用量を取得できませんでした。/usage で再試行してください。",
+        "无法读取账号额度，请运行 /usage 重试。",
+        "Impossible de lire les quotas du compte. Relancez /usage.",
+    ),
+    translation(
+        "Reconnect the account in /config > Providers.",
+        "/config > プロバイダーでアカウントに再接続してください。",
+        "请在 /config > 提供商重新连接账号。",
+        "Reconnectez le compte dans /config > Fournisseurs.",
     ),
     translation("Status line", "ステータスライン", "状态栏", "Barre d’état"),
     translation("Submitting…", "送信中…", "正在提交…", "Envoi…"),

@@ -49,6 +49,19 @@ use super::PreparedToolExecution;
 use super::ToolExecutorReviewer;
 use super::ToolExecutorRuntime;
 
+#[cfg(unix)]
+pub(crate) fn prepared_shell_parts(
+    prepared: PreparedToolExecution,
+) -> (
+    ash_shell_command::ShellCommandRequest,
+    Vec<ash_file_access::Authorization>,
+) {
+    (
+        ash_shell_command::ShellCommandRequest::from_arguments(&prepared.payload).unwrap(),
+        prepared.dir_authorizations,
+    )
+}
+
 struct RecordingExecutor {
     definition: ToolDefinition,
     saw_frozen_binding: Arc<AtomicBool>,

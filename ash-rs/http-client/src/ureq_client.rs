@@ -8,9 +8,7 @@ use crate::OutboundNetworkSnapshot;
 use crate::OutboundProxyRoute;
 use crate::RedirectPolicy;
 use crate::Timeout;
-use crate::outbound_network::SystemRootLoader;
 use crate::outbound_network::resolve_public_internet_target;
-use crate::outbound_network::system_root_store;
 use crate::request::ResponseReceivedAt;
 use std::io::Read;
 use std::sync::Arc;
@@ -98,25 +96,14 @@ impl UreqHttpClient {
     /// Builds the production client with the default transport policy.
     ///
     /// Static proxy, custom-certificate, and client-identity configuration is validated here.
-    /// Platform certificate roots are loaded lazily on the first HTTPS request so an HTTP-only
+    /// The system certificate verifier is built lazily on the first HTTPS request so an HTTP-only
     /// client remains usable in offline or restricted hosts.
     pub fn new() -> Result<Self, HttpClientError> {
         Self::with_config(HttpClientConfig::default())
     }
 
     pub fn with_config(config: HttpClientConfig) -> Result<Self, HttpClientError> {
-        Self::with_config_and_root_loader(config, Arc::new(system_root_store))
-    }
-
-    fn with_config_and_root_loader(
-        config: HttpClientConfig,
-        system_root_loader: SystemRootLoader,
-    ) -> Result<Self, HttpClientError> {
-        Self::with_network(OutboundNetworkSnapshot::with_root_loader(
-            config,
-            crate::OutboundNetworkPolicy::default(),
-            system_root_loader,
-        )?)
+        Self::with_network(OutboundNetworkSnapshot::new(config)?)
     }
 
     /// Shares the same immutable certificate, proxy and target policy as other transports.
@@ -140,14 +127,6 @@ impl UreqHttpClient {
             https_direct_agent: OnceLock::new(),
             https_proxy_agent: OnceLock::new(),
         })
-    }
-
-    #[cfg(test)]
-    pub(crate) fn with_test_system_root_loader(
-        config: HttpClientConfig,
-        loader: impl Fn() -> Result<rustls::RootCertStore, HttpClientError> + Send + Sync + 'static,
-    ) -> Result<Self, HttpClientError> {
-        Self::with_config_and_root_loader(config, Arc::new(loader))
     }
 
     fn agent_for(&self, url: &str) -> Result<&ureq::Agent, HttpClientError> {

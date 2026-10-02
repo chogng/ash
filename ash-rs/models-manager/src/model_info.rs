@@ -68,14 +68,12 @@ impl ModelCatalogEntry {
         if info.capabilities.fast_mode == ash_protocol::CapabilitySupport::Supported {
             info.capabilities.fast_mode = config.fast_mode_support(&info.id);
         }
-        let context = config
-            .custom
-            .as_ref()
-            .map(|custom| ModelContextConfig {
+        let context = config.model_context.get(&info.id).copied().or_else(|| {
+            config.custom.as_ref().map(|custom| ModelContextConfig {
                 context_window: custom.context_window,
                 auto_compact_token_limit: None,
             })
-            .or_else(|| config.model_context.get(&info.id).copied());
+        });
         if let Some(context) = context {
             info.context_window = ContextWindow::Known(match info.context_window {
                 ContextWindow::Known(limit) => context.context_window.min(limit),

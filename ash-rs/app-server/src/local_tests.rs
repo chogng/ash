@@ -12,6 +12,8 @@ use ash_config::DirConfigStore;
 use ash_config::PreferencesUpdate;
 use ash_config::ResolvedConfig;
 use ash_config::UserConfigCommand;
+use ash_core::ContextCompactionLimit;
+use ash_core::ContextTokenCount;
 use ash_core_plugins::PluginAuthorityCommand;
 use ash_core_plugins::PluginAuthorityCommandId;
 use ash_core_plugins::PluginAuthorityCommandRequest;
@@ -715,7 +717,29 @@ fn chatgpt_model_catalog_is_shared_by_login_picker_and_disk_cache() {
         .unwrap();
     assert_eq!(api["active"], true);
     assert_eq!(api["apiKeyConfigured"], true);
-    assert_eq!(call("model/list", serde_json::json!({})), initial);
+    let api_catalog = call("model/list", serde_json::json!({}));
+    let identities = |catalog: &serde_json::Value| {
+        catalog["models"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|entry| entry["model"].clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(identities(&api_catalog), identities(&initial));
+    let window = |catalog: &serde_json::Value| {
+        catalog["models"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|entry| {
+                entry["model"]["provider"] == "openai" && entry["model"]["model"] == "gpt-5.6"
+            })
+            .unwrap()["contextWindow"]
+            .as_u64()
+    };
+    assert_eq!(window(&initial), Some(100_000));
+    assert_eq!(window(&api_catalog), Some(272_000));
     let cache = std::fs::read_to_string(profile.path().join("cache/models/openai.json")).unwrap();
     assert!(cache.contains("gpt-5.6"));
     assert!(!cache.contains("catalog-token"));
@@ -2363,7 +2387,7 @@ fn configured_model_context_enables_core_managed_compaction() {
         ContextBudget::core_managed(
             ContextTokenCount::new(20_000),
             ContextTokenCount::new(2_048),
-            ContextTokenCount::new(MODEL_CONTEXT_SAFETY_MARGIN_TOKENS),
+            ContextTokenCount::new(1_024),
             ContextCompactionLimit::Tokens(ContextTokenCount::new(15_000)),
         )
     );
@@ -2376,14 +2400,235 @@ fn configured_model_context_enables_core_managed_compaction() {
     assert_eq!(entry.maximum_context_window, Some(1_050_000));
     assert_eq!(entry.discovered, None);
     assert_eq!(entry.auto_compact_token_limit, Some(15_000));
-    assert_eq!(
-        entry.available_context_window,
-        Some(15_000 - 2_048 - MODEL_CONTEXT_SAFETY_MARGIN_TOKENS)
-    );
+    assert_eq!(entry.available_context_window, Some(15_000 - 2_048 - 1_024));
     let serialized = serde_json::to_value(entry).unwrap();
     assert_eq!(serialized["contextWindow"], 20_000);
     assert_eq!(serialized["autoCompactTokenLimit"], 15_000);
     assert!(serialized.get("availableContextWindow").is_some());
+    let frozen = service
+        .snapshot(ModelSelection::ConfiguredDefault)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        frozen
+            .context_budget(ModelSelection::ConfiguredDefault)
+            .unwrap(),
+        service
+            .context_budget(ModelSelection::ConfiguredDefault)
+            .unwrap()
+    );
+    let snapshot = service.config.read_snapshot().unwrap();
+    let connection_id = ash_protocol::ModelConnectionId::new("openai").unwrap();
+    let mut invalid = snapshot.values.connections[&connection_id].clone();
+    invalid
+        .model_context
+        .get_mut(&model)
+        .unwrap()
+        .context_window = 1_000;
+    service
+        .config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("exhaust-input-capacity").unwrap(),
+            expected_revision: snapshot.revision,
+            command: UserConfigCommand::ConfigureConnection {
+                connection: connection_id,
+                config: invalid,
+            },
+        })
+        .unwrap();
+    assert!(
+        matches!(service.context_budget(ModelSelection::ConfiguredDefault),
+        Err(CoreError::ModelFailure(failure)) if !failure.retryable && failure.message.contains("leave room for input"))
+    );
+    let models = service.list().unwrap();
+    let invalid = models
+        .iter()
+        .find(|entry| entry.model.model == model && entry.model.provider == provider)
+        .unwrap();
+    assert_eq!(invalid.context_window, Some(1_000));
+    assert_eq!(invalid.available_context_window, None);
+    assert!(
+        frozen
+            .context_budget(ModelSelection::ConfiguredDefault)
+            .is_ok()
+    );
+}
+
+#[test]
+fn missing_context_blocks_execution_until_the_exact_model_is_configured() {
+    let profile = tempfile::tempdir().unwrap();
+    let config = Arc::new(ConfigStore::open(profile.path().join("config.json")).unwrap());
+    let revision = configure_test_provider(&config, ConfigRevision::INITIAL);
+    let revision = select_model(&config, "select-unknown", revision, "unknown-model");
+    let registry = test_provider_registry();
+    let runtime = Arc::new(ModelProviderRuntime::new(registry.clone()));
+    let gate = Arc::new(ResponseGate::default());
+    let service = ConfigBackedModelService {
+        config: config.clone(),
+        dir_config: None,
+        provider_configs: registry,
+        models_manager: runtime.models_manager(),
+        catalog_provider: runtime,
+        catalog_runtime: Arc::new(tokio::runtime::Runtime::new().unwrap()),
+        resolver: Arc::new(RecordingSnapshotResolver { gate: gate.clone() }),
+    };
+    assert!(service.list().is_ok());
+    let frozen = service
+        .snapshot(ModelSelection::ConfiguredDefault)
+        .unwrap()
+        .unwrap();
+    let error = service
+        .context_budget(ModelSelection::ConfiguredDefault)
+        .unwrap_err();
+    let CoreError::ModelFailure(failure) = &error else {
+        panic!("missing capacity must be a configuration error")
+    };
+    assert_eq!(
+        failure.code,
+        ash_protocol::StableTurnErrorCode::ModelConfiguration
+    );
+    assert!(!failure.retryable);
+    assert!(failure.message.contains("context window"));
+    assert_eq!(
+        frozen.context_budget(ModelSelection::ConfiguredDefault),
+        Err(error.clone())
+    );
+    assert_eq!(
+        frozen.invoke(
+            ModelSelection::ConfiguredDefault,
+            &ModelRequest::text("review"),
+            &CancellationSource::new().token()
+        ),
+        Err(error.clone()),
+    );
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let thread_id = ash_protocol::ThreadId::new("context-test").unwrap();
+    threads
+        .create_thread(ash_core::CreateThreadRequest {
+            execution_target: None,
+            agent_id: ash_protocol::AgentId::new("context-agent").unwrap(),
+            origin: Default::default(),
+            agent: None,
+            session_id: ash_protocol::SessionId::new("context-session").unwrap(),
+            thread_id: thread_id.clone(),
+            title: "Context test".into(),
+        })
+        .unwrap();
+    let start = |id: &str| {
+        threads
+            .start_turn(
+                &thread_id,
+                ash_core::StartTurnRequest {
+                    mode: Default::default(),
+                    advisor: None,
+                    kind: ash_protocol::TurnKind::Coding,
+                    instructions: ash_protocol::TurnInstructions::new(
+                        "test",
+                        "context",
+                        "1",
+                        "Answer briefly.",
+                    )
+                    .unwrap(),
+                    command_id: CommandId::new(id).unwrap(),
+                    expected_sequence: core_api::SequenceExpectation::Any,
+                    model: None,
+                    reasoning_effort: None,
+                    policy_revision: "test".into(),
+                    approval_mode: Default::default(),
+                    tool_mode: ash_protocol::ToolMode::Direct,
+                    tool_profile: None,
+                    activated_skills: Vec::new(),
+                    input: vec![ash_protocol::UserInput::Text {
+                        text: "hello".into(),
+                    }],
+                },
+            )
+            .unwrap()
+            .turn_id
+    };
+    let wait_for_status = |turn: &ash_protocol::TurnId, expected: ash_protocol::TurnStatus| {
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let snapshot = threads.read_thread(&thread_id).unwrap();
+            if snapshot
+                .turns
+                .iter()
+                .any(|entry| &entry.turn_id == turn && entry.status == expected)
+            {
+                return;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "Turn did not reach {expected:?}: {snapshot:?}"
+            );
+            thread::sleep(Duration::from_millis(1));
+        }
+    };
+    let turn = start("missing-budget");
+    let executor = ash_core::TurnExecutor::without_tools(threads.clone(), frozen.clone());
+    executor.start(&thread_id, &turn).unwrap();
+    wait_for_status(&turn, ash_protocol::TurnStatus::Failed);
+    assert_eq!(
+        threads
+            .read_thread(&thread_id)
+            .unwrap()
+            .turns
+            .last()
+            .unwrap()
+            .failure
+            .as_ref(),
+        Some(failure)
+    );
+    assert!(!gate.state.lock().unwrap().entered);
+
+    let mut connection = ModelProviderConfig::new(ProviderId::new("test").unwrap());
+    connection.base_url = Some("https://example.test/v1".into());
+    connection.max_output_tokens = Some(2_048);
+    connection.model_context.insert(
+        ModelId::new("unknown-model").unwrap(),
+        ModelContextConfig {
+            context_window: 32_000,
+            auto_compact_token_limit: None,
+        },
+    );
+    config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("declare-context").unwrap(),
+            expected_revision: revision,
+            command: UserConfigCommand::ConfigureConnection {
+                connection: connection.connection.clone(),
+                config: connection,
+            },
+        })
+        .unwrap();
+    assert_eq!(
+        service
+            .context_budget(ModelSelection::ConfiguredDefault)
+            .unwrap(),
+        ContextBudget::core_managed(
+            ContextTokenCount::new(32_000),
+            ContextTokenCount::new(2_048),
+            ContextTokenCount::new(1_024),
+            ContextCompactionLimit::Tokens(ContextTokenCount::new(28_800)),
+        )
+    );
+    assert_eq!(
+        frozen.context_budget(ModelSelection::ConfiguredDefault),
+        Err(error)
+    );
+    let ready = service
+        .snapshot(ModelSelection::ConfiguredDefault)
+        .unwrap()
+        .unwrap();
+    let turn = start("configured-budget");
+    gate.release();
+    let executor = ash_core::TurnExecutor::without_tools(threads.clone(), ready);
+    executor.start(&thread_id, &turn).unwrap();
+    wait_for_status(&turn, ash_protocol::TurnStatus::Completed);
+    assert!(gate.state.lock().unwrap().entered);
+    assert_eq!(gate.state.lock().unwrap().max_output_tokens, Some(2_048));
 }
 
 #[test]
@@ -2450,7 +2695,11 @@ fn configure_test_provider(config: &ConfigStore, revision: ConfigRevision) -> Co
                     ProviderId::new("test").unwrap().as_str(),
                 )
                 .unwrap(),
-                config: ModelProviderConfig::new(ProviderId::new("test").unwrap()),
+                config: {
+                    let mut provider = ModelProviderConfig::new(ProviderId::new("test").unwrap());
+                    provider.base_url = Some("https://example.test/v1".into());
+                    provider
+                },
             },
         })
         .unwrap()
@@ -2488,6 +2737,7 @@ fn select_model(
 
 #[derive(Default)]
 struct GateState {
+    max_output_tokens: Option<u32>,
     entered: bool,
     released: bool,
 }
@@ -2664,10 +2914,11 @@ impl ModelInvoker for SnapshotModel {
 
     fn stream_with_cancellation(
         &self,
-        _: &ModelRequest,
+        request: &ModelRequest,
         _: &ash_async_utils::CancellationToken,
         _: &mut dyn ash_model_provider::ModelEventSink,
     ) -> Result<ModelResponse, ModelProviderError> {
+        self.gate.state.lock().unwrap().max_output_tokens = request.max_output_tokens;
         self.gate.wait_until_released();
         Ok(ModelResponse {
             output: vec![ResponseItem::Text(self.model.clone())],
@@ -2700,6 +2951,9 @@ fn model_invocations_and_image_limits_keep_an_in_flight_snapshot() {
         .snapshot(ModelSelection::ConfiguredDefault)
         .unwrap()
         .unwrap();
+    let before_budget = frozen
+        .context_budget(ModelSelection::ConfiguredDefault)
+        .unwrap();
     let in_flight_model = model.clone();
     let in_flight = thread::spawn(move || invoke_text(in_flight_model.as_ref(), "first"));
     gate.wait_until_entered();
@@ -2719,6 +2973,18 @@ fn model_invocations_and_image_limits_keep_an_in_flight_snapshot() {
         "before-update"
     );
     assert_eq!(invoke_text(model.as_ref(), "second"), "after-update");
+    assert_eq!(
+        frozen
+            .context_budget(ModelSelection::ConfiguredDefault)
+            .unwrap(),
+        before_budget
+    );
+    assert_ne!(
+        model
+            .context_budget(ModelSelection::ConfiguredDefault)
+            .unwrap(),
+        before_budget
+    );
     assert_eq!(
         frozen
             .image_input_policy(ModelSelection::ConfiguredDefault)
@@ -2955,13 +3221,8 @@ fn custom_provider_discovery_controls_discovered_view_without_mutating_config() 
             ))
             .collect::<Vec<_>>(),
         [
-            ("private-first", Some(272_000), Some(1_000_000), Some(false)),
-            (
-                "private-second",
-                Some(1_000_000),
-                Some(1_000_000),
-                Some(false)
-            )
+            ("private-first", Some(272_000), None, Some(false)),
+            ("private-second", Some(1_000_000), None, Some(false))
         ]
     );
     assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 0);
@@ -2979,7 +3240,7 @@ fn custom_provider_discovery_controls_discovered_view_without_mutating_config() 
         )]
     );
     assert_eq!(fetched[0].discovered, Some(true));
-    assert_eq!(fetched[0].maximum_context_window, Some(1_000_000));
+    assert_eq!(fetched[0].maximum_context_window, None);
     let listed = model.list().unwrap();
     assert_eq!(
         listed
@@ -3116,14 +3377,30 @@ fn invoke_text(model: &dyn ModelService, prompt: &str) -> String {
 fn test_provider_registry() -> ProviderConfigRegistry {
     let mut registry = ProviderConfigRegistry::builtin();
     registry
-        .register(ProviderDefinition::new(
-            ProviderId::new("test").unwrap(),
-            "Test",
-            ProviderAdapter::OpenAiCompatible,
-            ApiProfile::OpenAiChatCompletions,
-            EndpointPolicy::ConfiguredOnly,
-            ModelCatalogPolicy::AllowUnlisted,
-        ))
+        .register(
+            ProviderDefinition::new(
+                ProviderId::new("test").unwrap(),
+                "Test",
+                ProviderAdapter::OpenAiCompatible,
+                ApiProfile::OpenAiChatCompletions,
+                EndpointPolicy::ConfiguredOnly,
+                ModelCatalogPolicy::AllowUnlisted,
+            )
+            .with_api_key_policy(ash_model_provider_config::ApiKeyPolicy::Unsupported)
+            .with_models(
+                [
+                    ("before-update", 128_000),
+                    ("after-update", 256_000),
+                    ("user-model", 128_000),
+                    ("dir-model", 128_000),
+                ]
+                .map(|(id, window)| {
+                    let mut info = ash_protocol::ModelInfo::new(ModelId::new(id).unwrap(), id);
+                    info.context_window = ash_protocol::ContextWindow::Known(window);
+                    info
+                }),
+            ),
+        )
         .unwrap();
     registry
 }
@@ -3416,14 +3693,25 @@ fn deleting_a_managed_worktree_deletes_its_session_and_discards_checkout_content
 #[test]
 fn xai_subscription_catalog_drives_model_selection_context_and_invocation() {
     use ash_secrets::SecretStore;
-    struct Proxy;
+    struct Proxy {
+        window: std::sync::atomic::AtomicU32,
+    }
     impl OperationClient for Proxy {
         fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
             assert_eq!(
                 request.url(),
                 "https://cli-chat-proxy.grok.com/v1/models-v2"
             );
-            Ok(ClientResponse::new(200, vec![], br#"{"data":[{"model":"grok-test","apiBackend":"responses","contextWindow":500000,"reasoningEfforts":["high"],"reasoningEffort":"high"},{"model":"grok-older","apiBackend":"responses"}]}"#.to_vec()))
+            Ok(ClientResponse::new(
+                200,
+                vec![],
+                serde_json::to_vec(&serde_json::json!({"data":[{
+                "model":"grok-test", "apiBackend":"responses",
+                "contextWindow":self.window.load(std::sync::atomic::Ordering::SeqCst),
+                "reasoningEfforts":["high"], "reasoningEffort":"high"
+            }, {"model":"grok-older", "apiBackend":"responses"}]}))
+                .unwrap(),
+            ))
         }
         fn execute_streaming(
             &self,
@@ -3444,7 +3732,9 @@ fn xai_subscription_catalog_drives_model_selection_context_and_invocation() {
     let config = Arc::new(ConfigStore::open(profile.path().join("config.json")).unwrap());
     let secrets = Arc::new(MemorySecretStore::default());
     secrets.store(&ash_secrets::SecretKey::new("provider/xai/current/oauth").unwrap(), &ash_secrets::SecretValue::new(br#"{"access_token":"fixture","refresh_token":"fixture-refresh","token_type":"Bearer","scope":"","expires_at":4102444800,"account_id":"a","credential_revision":1}"#.to_vec())).unwrap();
-    let client = Arc::new(Proxy);
+    let client = Arc::new(Proxy {
+        window: std::sync::atomic::AtomicU32::new(500_000),
+    });
     let auth = supergrok::SuperGrokOAuth::with_client(
         secrets,
         client.clone(),
@@ -3452,7 +3742,7 @@ fn xai_subscription_catalog_drives_model_selection_context_and_invocation() {
     );
     let registry = ProviderConfigRegistry::builtin();
     let runtime = Arc::new(
-        ModelProviderRuntime::with_client(registry.clone(), client)
+        ModelProviderRuntime::with_client(registry.clone(), client.clone())
             .with_supergrok_oauth(auth)
             .with_catalog_cache(profile.path().join("models")),
     );
@@ -3535,6 +3825,45 @@ fn xai_subscription_catalog_drives_model_selection_context_and_invocation() {
             .unwrap(),
         ModelBillingScope::SubscriptionPlan
     );
+    let discovered = ModelRef::new(
+        ProviderId::new("xai").unwrap(),
+        ModelId::new("grok-test").unwrap(),
+    );
+    let frozen_discovered = service
+        .snapshot(ModelSelection::Session(&discovered))
+        .unwrap()
+        .unwrap();
+    let old_budget = frozen_discovered
+        .context_budget(ModelSelection::ConfiguredDefault)
+        .unwrap();
+    client
+        .window
+        .store(240_000, std::sync::atomic::Ordering::SeqCst);
+    let refreshed = service
+        .refresh(&ash_protocol::ModelConnectionId::new("xai-subscription").unwrap())
+        .unwrap();
+    let row = refreshed
+        .iter()
+        .find(|entry| entry.model == discovered)
+        .unwrap();
+    assert_eq!(row.context_window, Some(240_000));
+    let new_budget = service
+        .context_budget(ModelSelection::Session(&discovered))
+        .unwrap();
+    assert_ne!(new_budget, old_budget);
+    assert_eq!(
+        frozen_discovered
+            .context_budget(ModelSelection::ConfiguredDefault)
+            .unwrap(),
+        old_budget
+    );
+    let ash_core::ResolvedContextBudget::CoreManaged(limits) = new_budget.resolve().unwrap() else {
+        panic!("discovered models require a managed budget")
+    };
+    assert_eq!(
+        row.available_context_window,
+        Some(limits.maximum_input().get())
+    );
     assert_eq!(invoke_text(&service, "hi"), "hello");
 }
 
@@ -3604,13 +3933,10 @@ fn glm_connections_use_distinct_endpoints_keys_and_billing_without_changing_the_
     };
     let mut catalog = service.list().unwrap();
     for entry in &mut catalog {
-        if entry.model.provider.as_str() == "glm" && entry.context_window == Some(1_000_000) {
+        if entry.model.provider.as_str() == "glm" && entry.model.model.as_str() == "glm-5.1" {
+            entry.context_window = Some(1_000_000);
             entry.auto_compact_token_limit = Some(900_000);
-            entry.available_context_window = Some(
-                900_000
-                    - DEFAULT_MODEL_OUTPUT_RESERVATION_TOKENS
-                    - MODEL_CONTEXT_SAFETY_MARGIN_TOKENS,
-            );
+            entry.available_context_window = Some(900_000 - 4_096 - 1_024);
         }
     }
     let model = ModelRef::new(
@@ -3665,7 +3991,18 @@ fn glm_connections_use_distinct_endpoints_keys_and_billing_without_changing_the_
                 command_id: CommandId::new(format!("choose-{id}")).unwrap(),
                 expected_revision: config.read_snapshot().unwrap().revision,
                 command: UserConfigCommand::ConfigureConnection {
-                    config: ModelProviderConfig::for_connection(connection.clone()),
+                    config: {
+                        let mut config = ModelProviderConfig::for_connection(connection.clone());
+                        // Routing evidence does not declare this model's capacity.
+                        config.model_context.insert(
+                            model.model.clone(),
+                            ModelContextConfig {
+                                context_window: 1_000_000,
+                                auto_compact_token_limit: None,
+                            },
+                        );
+                        config
+                    },
                     connection,
                 },
             })

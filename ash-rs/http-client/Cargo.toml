@@ -16,13 +16,15 @@ futures = { workspace = true }
 httpdate = { workspace = true }
 reqwest = { workspace = true }
 rustls = { workspace = true }
-rustls-native-certs = { workspace = true }
 rustls-platform-verifier = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "sync", "macros", "rt-multi-thread"] }
 tokio-rustls = { workspace = true }
 ureq = { workspace = true }
 url = { workspace = true }
 zeroize = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+rustls-native-certs = { workspace = true }
 
 [dev-dependencies]
 http-test-support = { package = "ash-http-test-support", path = "../http-test-support" }

@@ -1,0 +1,22 @@
+---
+source: code/tui/src/app/usage_tests.rs
+expression: "render(&app, 100, 20)"
+---
+  .                                                                            [— / —] [Dashboard]
+
+            ┌── Usage ────────────────────────────────────────────────────────────[✗]─┐
+            │                                                                         │
+            │> Status  ·  Account changed. Run /usage again.                          │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+  ──────────│                                                                         │───────────
+  > Build an│  Esc to close  ·  Run /usage to refresh                                 │
+  ──────────└─────────────────────────────────────────────────────────────────────────┘atic model

@@ -47,13 +47,16 @@ pub(crate) fn load<T: JsonRpcTransport>(client: &mut AppServerClient<T>) -> Resu
             reconnect.get_or_insert(name);
             continue;
         }
-        let usage = client
-            .read_account_rate_limits(AccountRateLimitsReadParams {
-                provider: account.provider,
-                account_id: account.account_id,
-            })
-            .map_err(query_error)?;
-        groups.push(choices(usage));
+        // Each subscription owns its result; one provider's failure must not hide
+        // successful queries or prevent the remaining accounts from being read.
+        let group = match client.read_account_rate_limits(AccountRateLimitsReadParams {
+            provider: account.provider,
+            account_id: account.account_id,
+        }) {
+            Ok(usage) => choices(usage),
+            Err(error) => ListSelectionGroup::new(name, vec![detail("Status", query_error(error))]),
+        };
+        groups.push(group);
     }
     if groups.is_empty() {
         return Ok(message(&format!(

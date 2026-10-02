@@ -6,7 +6,7 @@
 > 通用预算、精准/估算计量结果和边界判定已拆入 `ash-context-engine`；OpenAI exact，以及
 > Anthropic、Google、Kimi、Z.AI estimated remote preflight 已接入，DeepSeek/Hugging Face local
 > tokenizer adapter 已接入；provider usage 会按冻结模型和估算 revision 校准未来 Core-managed
-> capacity，未知窗口仍为 provider-managed。Hugging Face 公共模型支持按需发现、下载和缓存，其他 provider 的固定
+> capacity；产品接入的未知窗口必须配置后才能执行。Hugging Face 公共模型支持按需发现、下载和缓存，其他 provider 的固定
 > 资产目录、reference baseline、跨 Thread seed 与自动 Skill 选择仍是扩展点。
 >
 > Core 总体边界：[`core.md`](core.md)
@@ -385,8 +385,9 @@ Core-managed plan 会把同一份 `reserved_output` 写入该次不可变 `Model
 不能静默删除当前输入、权限约束或未完成 Tool/Agent continuation。
 
 已知窗口可以来自内置 `ModelInfo`，也可以由 `ModelProviderConfig.model_context` 按模型 ID 配置；
-窗口未知时使用 `ContextBudget::ProviderManaged`，Core 不假装拥有可靠上限。预算解析、精准/估算
-计量结果和统一边界判定已由 `ash-context-engine` 提供；生产 planner 首轮仍使用带 revision 的
+App Server 统一读取静态规格和当前连接的缓存目录，冻结每轮预算；窗口未知时返回具体的
+`ModelConfiguration`，不调用模型。通用引擎的 `ProviderManaged` 仍供显式委托预算的嵌入方使用，
+产品配置路径不产生该状态。预算解析、精准/估算计量结果和统一边界判定由 `ash-context-engine` 提供；生产 planner 首轮仍使用带 revision 的
 确定性 byte estimate。最终 canonical request 会按“官方 preflight → 匹配模型的本地整请求计数 →
 Core 保守估算”降级：OpenAI Responses 为 exact；Anthropic、Google native `countTokens`、Kimi
 estimate 与 Z.AI tokenizer 为 estimated remote；本地 `hf-chat-template + tokenizers` 结果为
@@ -600,7 +601,7 @@ TurnExecutor
 | 通用 Skill 指令端口与预算行为 | ✅ 已实现 | 外部返回 `Required / BestEffort`；Core 不拥有 Skill 发现或选择 |
 | durable checkpoint、摘要生成、commit 后重规划 | ✅ 已实现 | 原始 event log 永不删除；压缩请求本身也受预算限制 |
 | 供应商上下文溢出恢复 | ✅ 已实现 | 只压缩 terminal 旧历史；checkpoint 与 Turn 恢复标记原子提交；最多重试一次 |
-| 已知模型窗口的生产启用 | ✅ 已实现 | 可通过 `model_context` 配置；未知模型退回 provider-managed |
+| 已知模型窗口的生产启用 | ✅ 已实现 | 内置规格、缓存发现或 `model_context` 提供容量；未知窗口阻止调用并提示配置 |
 | 通用预算与精准/估算计量契约 | ✅ 已实现 | `ash-context-engine` 统一压力线、硬窗口和保守记账判定 |
 | provider input-token preflight | 部分具备 | OpenAI exact；Anthropic、Google、Kimi、Z.AI estimated；官方接口失败时降级到本地或 Core 估算 |
 | 请求级本地 token 计数 | 部分具备 | HF 公共模型按需发现/下载/缓存；其他 provider 需固定资产清单；多模态 processor 尚未接入 |

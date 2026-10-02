@@ -160,6 +160,42 @@ fn model_errors_keep_their_actions_visible_in_the_conversation() {
 }
 
 #[test]
+fn context_configuration_errors_show_the_cause_in_both_modes_in_chinese() {
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut app = App::new();
+        let mut settings = TerminalSettings::default();
+        settings.set_language(crate::nls::Language::Chinese);
+        settings.set_screen_mode(mode);
+        app.update(ConfigEvent::SettingsReceived(settings));
+        let mut error = ash_protocol::StableTurnError::model_configuration();
+        error.message =
+            "Configure the model context window in /config before sending a message.".into();
+        app.update(ThreadEvent::FailureReported(
+            crate::thread::present_turn_error(&error),
+        ));
+        let frame = if mode == ScreenMode::Inline {
+            // Finished errors are committed to terminal history, outside the live viewport.
+            assert_eq!(app.history_prefix().len(), 1);
+            let view = app.history_prefix()[0].history_view();
+            let mut buffer =
+                ratatui::buffer::Buffer::empty(ratatui::layout::Rect::new(0, 0, 80, 1));
+            view.render_rows(
+                &mut buffer,
+                0,
+                app.render_context(),
+                app.transcript_render_cache(),
+            );
+            buffer_text(&buffer)
+        } else {
+            render(&app, 80, 20)
+        };
+        assert!(frame.contains("请先在 /config 中设置模型上下文窗口，再发送消息。"));
+        assert!(!frame.contains("Request failed"));
+        crate::tui_assert_snapshot!(format!("context_configuration_{mode:?}_chinese"), frame);
+    }
+}
+
+#[test]
 fn misspelled_slash_command_shows_a_local_suggestion() {
     let mut app = App::new();
     app.insert_text("/confg");
@@ -190,6 +226,12 @@ fn render(app: &App, width: u16, height: u16) -> String {
         .draw(|frame| super::frame::draw(frame, app))
         .unwrap();
     let buffer = terminal.backend().buffer();
+    buffer_text(buffer)
+}
+
+fn buffer_text(buffer: &ratatui::buffer::Buffer) -> String {
+    let width = buffer.area.width;
+    let height = buffer.area.height;
     (0..height)
         .map(|row| {
             let mut text = String::new();

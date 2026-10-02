@@ -24,8 +24,13 @@ use tokio::io::AsyncWrite;
 use tokio::io::ReadBuf;
 use tokio_rustls::TlsConnector;
 
-pub(crate) type SystemRootLoader =
-    Arc<dyn Fn() -> Result<rustls::RootCertStore, HttpClientError> + Send + Sync>;
+pub(crate) type SystemVerifierFactory = Arc<
+    dyn Fn(
+            Vec<rustls::pki_types::CertificateDer<'static>>,
+        ) -> Result<Arc<dyn rustls::client::danger::ServerCertVerifier>, HttpClientError>
+        + Send
+        + Sync,
+>;
 
 /// A construction-time snapshot of outbound proxy, TLS, timeout, and target policy,
 /// with a live application host policy.
@@ -43,17 +48,17 @@ struct OutboundNetworkSnapshotInner {
     policy: OutboundNetworkPolicy,
     proxy_url: Option<String>,
     proxy_bypass: ProxyBypass,
-    system_root_loader: SystemRootLoader,
+    system_verifier_factory: SystemVerifierFactory,
     secure_tls_config: OnceLock<Result<Arc<rustls::ClientConfig>, HttpClientError>>,
 }
 
 impl OutboundNetworkSnapshot {
     /// Resolves environment-backed policy once and validates cross-policy invariants.
     pub fn new(config: HttpClientConfig) -> Result<Self, HttpClientError> {
-        Self::with_root_loader(
+        Self::with_verifier_factory(
             config,
             OutboundNetworkPolicy::default(),
-            Arc::new(system_root_store),
+            Arc::new(system_certificate_verifier),
         )
     }
 
@@ -62,13 +67,13 @@ impl OutboundNetworkSnapshot {
         config: HttpClientConfig,
         policy: OutboundNetworkPolicy,
     ) -> Result<Self, HttpClientError> {
-        Self::with_root_loader(config, policy, Arc::new(system_root_store))
+        Self::with_verifier_factory(config, policy, Arc::new(system_certificate_verifier))
     }
 
-    pub(crate) fn with_root_loader(
+    pub(crate) fn with_verifier_factory(
         config: HttpClientConfig,
         policy: OutboundNetworkPolicy,
-        system_root_loader: SystemRootLoader,
+        system_verifier_factory: SystemVerifierFactory,
     ) -> Result<Self, HttpClientError> {
         if config.network_targets() == NetworkTargetPolicy::PublicInternetOnly
             && (!matches!(config.proxy(), ProxyPolicy::Direct)
@@ -86,7 +91,7 @@ impl OutboundNetworkSnapshot {
                 policy,
                 proxy_url,
                 proxy_bypass,
-                system_root_loader,
+                system_verifier_factory,
                 secure_tls_config: OnceLock::new(),
             }),
         })
@@ -129,8 +134,8 @@ impl OutboundNetworkSnapshot {
             .get_or_init(|| {
                 build_tls_config(
                     &self.inner.config,
-                    SystemRoots::Load,
-                    &self.inner.system_root_loader,
+                    SystemTrust::Use,
+                    &self.inner.system_verifier_factory,
                 )
             })
             .as_ref()
@@ -204,8 +209,8 @@ impl OutboundNetworkSnapshot {
     ) -> Result<Arc<rustls::ClientConfig>, HttpClientError> {
         build_tls_config(
             &self.inner.config,
-            SystemRoots::Skip,
-            &self.inner.system_root_loader,
+            SystemTrust::Skip,
+            &self.inner.system_verifier_factory,
         )
     }
 }
@@ -400,31 +405,33 @@ fn is_public_ipv6(address: Ipv6Addr) -> bool {
 
 fn build_tls_config(
     config: &HttpClientConfig,
-    system_roots: SystemRoots,
-    system_root_loader: &SystemRootLoader,
+    system_trust: SystemTrust,
+    system_verifier_factory: &SystemVerifierFactory,
 ) -> Result<Arc<rustls::ClientConfig>, HttpClientError> {
-    let mut roots = match config.tls() {
-        TlsPolicy::SystemRoots | TlsPolicy::SystemPlus(_) => match system_roots {
-            SystemRoots::Load => system_root_loader()?,
-            SystemRoots::Skip => rustls::RootCertStore::empty(),
-        },
-        TlsPolicy::CustomOnly(_) => rustls::RootCertStore::empty(),
-    };
-    match config.tls() {
-        TlsPolicy::SystemRoots => {}
-        TlsPolicy::SystemPlus(bundle) | TlsPolicy::CustomOnly(bundle) => {
-            add_certificate_bundle(&mut roots, bundle.certificates())?;
-        }
-    }
-
     let builder = rustls::ClientConfig::builder_with_provider(
         rustls::crypto::ring::default_provider().into(),
     )
     .with_protocol_versions(&[&rustls::version::TLS12, &rustls::version::TLS13])
     .map_err(|_| {
         HttpClientError::InvalidConfiguration("TLS provider has no usable protocol versions".into())
-    })?
-    .with_root_certificates(roots);
+    })?;
+    let builder = match (config.tls(), system_trust) {
+        (TlsPolicy::SystemRoots, SystemTrust::Use) => builder
+            .dangerous()
+            .with_custom_certificate_verifier(system_verifier_factory(Vec::new())?),
+        (TlsPolicy::SystemPlus(bundle), SystemTrust::Use) => builder
+            .dangerous()
+            .with_custom_certificate_verifier(system_verifier_factory(
+                bundle.certificates().collect(),
+            )?),
+        (policy, SystemTrust::Skip) | (policy @ TlsPolicy::CustomOnly(_), SystemTrust::Use) => {
+            let mut roots = rustls::RootCertStore::empty();
+            if let TlsPolicy::SystemPlus(bundle) | TlsPolicy::CustomOnly(bundle) = policy {
+                add_certificate_bundle(&mut roots, bundle.certificates())?;
+            }
+            builder.with_root_certificates(roots)
+        }
+    };
     let tls_config = match config.client_identity() {
         ClientIdentityPolicy::None => builder.with_no_client_auth(),
         ClientIdentityPolicy::Identity(identity) => builder
@@ -441,18 +448,48 @@ fn build_tls_config(
     Ok(Arc::new(tls_config))
 }
 
-pub(crate) fn system_root_store() -> Result<rustls::RootCertStore, HttpClientError> {
-    let native_certificates = rustls_native_certs::load_native_certs().map_err(|_| {
+// Desktop system trust must be evaluated by the OS, including local trust decisions.
+// Exporting every trust-settings entry can fail on macOS before a request is sent.
+#[cfg(not(target_os = "android"))]
+fn system_certificate_verifier(
+    extra_roots: Vec<rustls::pki_types::CertificateDer<'static>>,
+) -> Result<Arc<dyn rustls::client::danger::ServerCertVerifier>, HttpClientError> {
+    rustls_platform_verifier::Verifier::new_with_extra_roots(
+        extra_roots,
+        Arc::new(rustls::crypto::ring::default_provider()),
+    )
+    .map(|verifier| Arc::new(verifier) as Arc<dyn rustls::client::danger::ServerCertVerifier>)
+    .map_err(|_| {
+        HttpClientError::InvalidConfiguration("failed to create system certificate verifier".into())
+    })
+}
+
+// Android's platform verifier has no extra-root API. Keep its existing root-store
+// policy for both system trust and configured additions.
+#[cfg(target_os = "android")]
+fn system_certificate_verifier(
+    extra_roots: Vec<rustls::pki_types::CertificateDer<'static>>,
+) -> Result<Arc<dyn rustls::client::danger::ServerCertVerifier>, HttpClientError> {
+    let certificates = rustls_native_certs::load_native_certs().map_err(|_| {
         HttpClientError::InvalidConfiguration("failed to load system certificate roots".into())
     })?;
     let mut roots = rustls::RootCertStore::empty();
-    let (valid_count, _) = roots.add_parsable_certificates(native_certificates);
+    let (valid_count, _) = roots.add_parsable_certificates(certificates);
     if valid_count == 0 {
         return Err(HttpClientError::InvalidConfiguration(
             "system certificate roots are empty".into(),
         ));
     }
-    Ok(roots)
+    add_certificate_bundle(&mut roots, extra_roots)?;
+    rustls::client::WebPkiServerVerifier::builder_with_provider(
+        Arc::new(roots),
+        Arc::new(rustls::crypto::ring::default_provider()),
+    )
+    .build()
+    .map(|verifier| verifier as Arc<dyn rustls::client::danger::ServerCertVerifier>)
+    .map_err(|_| {
+        HttpClientError::InvalidConfiguration("failed to create system certificate verifier".into())
+    })
 }
 
 fn add_certificate_bundle(
@@ -470,7 +507,7 @@ fn add_certificate_bundle(
 }
 
 #[derive(Clone, Copy)]
-enum SystemRoots {
-    Load,
+enum SystemTrust {
+    Use,
     Skip,
 }

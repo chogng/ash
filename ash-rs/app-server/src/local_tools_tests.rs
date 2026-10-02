@@ -291,9 +291,10 @@ fn shell_executor_runs_in_a_session_dir() {
         "arguments": ["-lc", "pwd"],
         "working_directory": session_dir.path(),
     }));
-    let (_, request, authorizations) = reviewer
+    let prepared = reviewer
         .prepare_shell(&call, Some(&session_id), None)
         .unwrap();
+    let (request, authorizations) = crate::tool_executor_adapter::prepared_shell_parts(prepared);
     let authorization = authorizations[0].clone();
     assert_eq!(
         authorizations[0].dir().canonical_path(),

@@ -9,7 +9,7 @@ body 和 safe telemetry。上层通过 `HttpClient` 执行一个已经完整构�
 
 它还公开构造时冻结的 `OutboundNetworkSnapshot`，供独立
 [`ash-websocket-client`](../websocket-client/README.md) 复用 proxy、TLS/mTLS、connect timeout 与 target filtering。
-`ReqwestHttpClient::sdk_client_builder` 为必须使用 reqwest 的 SDK 显式选择 ring，并保留 reqwest 原有的系统证书验证器；RMCP 使用此入口，SDK 继续拥有 HTTP framing 与其客户端设置。纯 HTTP 不提前读取系统证书。普通 Ash 调用仍通过 `HttpClient`，不接触后端 TLS 类型。
+`ReqwestHttpClient::sdk_client_builder` 为必须使用 reqwest 的 SDK 显式选择 ring，并保留 reqwest 原有的系统证书验证器；RMCP 使用此入口，SDK 继续拥有 HTTP framing 与其客户端设置。纯 HTTP 不提前创建系统证书验证器。普通 Ash 调用仍通过 `HttpClient`，不接触后端 TLS 类型。
 
 它不解释 provider JSON，不拥有 model operation retry，也不实现 SSE/NDJSON/WebSocket framing。
 
@@ -80,10 +80,10 @@ overall timeout、system roots、无 client identity、100/1 idle pool，以及�
 `with_streaming_response_body_limit` 独立限制成功流，避免大下载同时放大错误页缓冲上限。
 
 环境 proxy 与 bypass 在 `UreqHttpClient::new` / `with_config` 时快照，不在每个 request 重新读取。
-两者都返回 `Result`；proxy、自定义证书与 mTLS 静态材料在构造时校验。System roots 在第一次实际
-HTTPS request（或 HTTPS proxy route）时惰性加载并缓存结果，因此拒绝 redirect 的纯 HTTP/loopback
+两者都返回 `Result`；proxy、自定义证书与 mTLS 静态材料在构造时校验。系统证书验证器在第一次实际
+HTTPS request（或 HTTPS proxy route）时惰性创建并缓存结果，因此拒绝 redirect 的纯 HTTP/loopback
 不依赖 host certificate store；允许 redirect 的 HTTP route 会预备 TLS，因为目标可能升级到 HTTPS。
-加载失败由该次需要 TLS 的 invocation path 处理。
+验证器构造失败由该次需要 TLS 的 invocation path 处理。桌面端使用操作系统的信任判断，不枚举或导出全部系统证书。
 
 ### 遥测
 
@@ -111,7 +111,7 @@ URL、header、certificate、request/response body 和 provider identity 不在 
 | `proxy_url_from_environment` | private | 固定优先级读取 proxy env | 只在 client 构造时调用 |
 | `build_agent` | private | 应用 proxy、redirect、timeouts、pool、TLS | 每个 request 不重新 build agent |
 | `build_tls_config` | private | trust roots + optional client auth | 保持 hostname/chain validation |
-| `system_root_store` | private | 加载 host system roots | failure 是 configuration error |
+| `system_certificate_verifier` | private | 系统信任验证器与额外 CA | 桌面端委托 OS 校验，构造失败是 configuration error |
 | `add_certificate_bundle` | private | 将 DER roots 加入 rustls store | 不记录 certificate bytes |
 | `rule_matches` / `split_authority` | private | `NO_PROXY`-style match | port rule 必须 exact |
 | `is_http_url` | private | request construction 的 scheme/authority guard | 非 HTTP(S) 在 backend 前拒绝 |
@@ -126,16 +126,16 @@ UreqHttpClient::new() / with_config(config) → Result
 │  │  ├─ proxy_url_from_environment [FromEnvironment]
 │  │  └─ ProxyBypass::from_environment
 │  └─ validate target-policy/proxy/redirect combination
-├─ build_tls_config(SystemRoots::Skip)
+├─ build_tls_config(SystemTrust::Skip)
 ├─ build HTTP agent(config, tls, None)
 └─ build HTTP proxy agent(config, tls, proxy_url) [when proxy exists]
 
 first HTTPS request / HTTPS proxy route
 ├─ OutboundNetworkSnapshot::rustls_client_config
-│  ├─ build_tls_config(SystemRoots::Load)
+│  ├─ build_tls_config(SystemTrust::Use)
 │  ├─ add_certificate_bundle     [SystemPlus/CustomOnly]
 │  └─ ClientIdentity::private_key [mTLS]
-│  └─ system_root_store          [SystemRoots/SystemPlus]
+│  └─ system_certificate_verifier [SystemRoots/SystemPlus]
 └─ build and cache HTTPS direct/proxy agent
 
 WebSocket secure route
@@ -185,8 +185,8 @@ ALL_PROXY → all_proxy → HTTPS_PROXY → https_proxy → HTTP_PROXY → http_
 
 TLS 使用 rustls：
 
-- `SystemRoots` 在首次 HTTPS route 加载 host roots；
-- `SystemPlus` 在 system roots 上增加 DER CA；
+- `SystemRoots` 在首次 HTTPS route 创建系统证书验证器；
+- `SystemPlus` 在系统信任规则上增加 DER CA；
 - `CustomOnly` 只使用 supplied DER CA；
 - optional mTLS key 接受 PKCS#1、PKCS#8 或 SEC1 DER；
 - private key 存在 `Zeroizing<Vec<u8>>` 中；
@@ -243,7 +243,7 @@ bazel test //ash-rs/http-client:http-client-unit-tests
 - one-attempt、non-2xx preservation 与 redirect rejection；
 - HTTPS 跨来源重定向不发送认证头、响应未完成时触发整体超时、截断响应报脱敏传输错误；
 - bypass domain/IP/port matching 和 direct route；
-- 纯 HTTP 不加载 system roots，HTTPS 惰性加载并缓存失败；
+- 纯 HTTP 不创建系统证书验证器，HTTPS 惰性创建并缓存失败；
 - custom trust/mTLS invalid material；
 - response body hard limit 与 `limit + 1` headroom；
 - telemetry 只发出 safe facts。

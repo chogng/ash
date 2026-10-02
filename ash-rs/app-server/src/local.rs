@@ -23,12 +23,9 @@ use ash_config::ResolvedConfig;
 use ash_config::ResolvedConfigSnapshot;
 use ash_config::resolve_scoped_config;
 use ash_core::ContextBudget;
-use ash_core::ContextCompactionLimit;
-use ash_core::ContextTokenCount;
 use ash_core::ContextTokenMeasurementCapability;
 use ash_core::ContextTokenMeasurementOutcome;
 use ash_core::InMemoryThreadStore;
-use ash_core::ResolvedContextBudget;
 use ash_core::ThreadController;
 use ash_core_plugins::PluginActivationAuthority;
 use ash_core_plugins::PluginActivationSnapshot;
@@ -74,7 +71,6 @@ use ash_model_provider_config::find_static_model;
 use ash_models_manager::CatalogQuery;
 use ash_models_manager::ModelRequirements;
 use ash_models_manager::ModelsManager;
-use ash_protocol::ContextWindow;
 use ash_protocol::ModelAccess;
 use ash_protocol::ModelBillingScope;
 use ash_protocol::ModelImageInputPolicy;
@@ -98,8 +94,10 @@ use std::sync::Mutex;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-const DEFAULT_MODEL_OUTPUT_RESERVATION_TOKENS: u32 = 4_096;
-const MODEL_CONTEXT_SAFETY_MARGIN_TOKENS: u32 = 1_024;
+mod model_context;
+
+use model_context::ModelContext;
+use model_context::ModelContextCatalog;
 
 /// Inputs for opening an App Server with its profile and execution environments.
 #[derive(Clone)]
@@ -2167,10 +2165,10 @@ impl ModelService for ConfigBackedModelService {
         selection: ModelSelection<'_>,
     ) -> Result<Option<Arc<dyn ModelService>>, CoreError> {
         let config = self.config_for_selection(selection)?;
+        let contexts = self.context_catalog(&config)?;
         let source = Arc::new(FrozenModelSource {
             config,
-            registry: self.provider_configs.clone(),
-            manager: self.models_manager.clone(),
+            contexts,
             resolver: self.resolver.clone(),
         });
         Ok(Some(source.resolve(selection)?))
@@ -2183,7 +2181,7 @@ impl ModelService for ConfigBackedModelService {
 
     fn context_budget(&self, selection: ModelSelection<'_>) -> Result<ContextBudget, CoreError> {
         let config = self.config_for_selection(selection)?;
-        self.context_budget_for_resolved(&config)
+        self.context_catalog(&config)?.budget(&config)
     }
 
     fn image_input_policy(
@@ -2251,9 +2249,11 @@ impl ModelService for ConfigBackedModelService {
         cancellation: &CancellationToken,
     ) -> Result<ash_protocol::ModelResponse, CoreError> {
         let config = self.config_for_selection(selection)?;
+        let budget = self.context_catalog(&config)?.budget(&config)?;
+        let request = model_context::request_with_output_limit(request, budget);
         ProviderModelService::new(self.resolver.resolve(&config)).invoke(
             ModelSelection::ConfiguredDefault,
-            request,
+            &request,
             cancellation,
         )
     }
@@ -2266,9 +2266,11 @@ impl ModelService for ConfigBackedModelService {
         sink: &mut dyn CoreModelStreamSink,
     ) -> Result<ash_protocol::ModelResponse, CoreError> {
         let config = self.config_for_selection(selection)?;
+        let budget = self.context_catalog(&config)?.budget(&config)?;
+        let request = model_context::request_with_output_limit(request, budget);
         ProviderModelService::new(self.resolver.resolve(&config)).stream(
             ModelSelection::ConfiguredDefault,
-            request,
+            &request,
             cancellation,
             sink,
         )
@@ -2348,25 +2350,26 @@ impl ModelCatalog for ConfigBackedModelService {
             .provider_configs
             .with_configs(config.providers.values())
             .map_err(|error| CoreError::Model(error.to_string()))?;
-        let manager = self.models_manager.with_registry(registry.clone());
         let product_manager = self
             .models_manager
             .with_registry(ProviderConfigRegistry::builtin());
+        let contexts = self.context_catalog(&config)?;
         // Product identities and order stay fixed. Unconfigured rows still use the product's
         // effective defaults; connection definitions only affect their configured provider.
         let mut models: Vec<_> = ash_model_provider_config::STATIC_MODEL_CATALOG
             .iter()
             .map(|spec| {
                 let model = spec.model_ref();
-                let manager = if config.providers.contains_key(&model.provider) {
-                    &manager
+                let entry = if config.providers.contains_key(&model.provider) {
+                    contexts.entry(&model)?
                 } else {
-                    &product_manager
+                    product_manager
+                        .resolve_static(&model, &ModelRequirements::agent())
+                        .map_err(|error| CoreError::Model(error.to_string()))?
+                        .entry()
+                        .clone()
                 };
-                let resolved = manager
-                    .resolve_static(&model, &ModelRequirements::agent())
-                    .map_err(|error| CoreError::Model(error.to_string()))?;
-                runtime_catalog_entry(resolved.entry(), &config, &registry)
+                runtime_catalog_entry(&entry, &config, &registry)
             })
             .collect::<Result<_, CoreError>>()?;
         let mut custom: Vec<_> = config
@@ -2379,37 +2382,21 @@ impl ModelCatalog for ConfigBackedModelService {
         });
         for provider in custom {
             let mut discovered = std::collections::BTreeSet::new();
-            let binding = match self.catalog_provider.catalog_binding(provider) {
-                Ok(binding) => binding,
-                Err(ash_model_provider::ModelProviderError::Credential(_)) => None,
-                Err(error) => return Err(CoreError::Model(error.to_string())),
-            };
-            if let Some(binding) = binding {
-                // Reading the picker catalog never fetches the endpoint. Only successful remote
-                // observations join the catalog; manual declarations remain authoritative metadata.
-                for entry in manager
-                    .list_discovered(&[binding.scope().clone()], &CatalogQuery::all())
-                    .map_err(|error| CoreError::Model(error.to_string()))?
-                {
-                    discovered.insert(entry.model().model.clone());
-                    if !provider.model_context.contains_key(&entry.model().model) {
-                        let mut result = runtime_catalog_entry(&entry, &config, &registry)?;
-                        result.discovered = Some(true);
-                        models.push(result);
-                    }
+            // Listing and execution consume the same captured account metadata.
+            for entry in contexts.discovered(&provider.provider) {
+                discovered.insert(entry.model().model.clone());
+                if !provider.model_context.contains_key(&entry.model().model) {
+                    let mut result = runtime_catalog_entry(entry, &config, &registry)?;
+                    result.discovered = Some(true);
+                    models.push(result);
                 }
             }
             // Explicit per-model context declarations also enroll custom model IDs in the product
             // catalog. They do not imply remote availability; the model probe verifies invocation.
-            for (id, context) in &provider.model_context {
-                let mut info = ash_protocol::ModelInfo::new(id.clone(), id.as_str());
-                info.context_window = ash_protocol::ContextWindow::Known(context.context_window);
+            for id in provider.model_context.keys() {
+                let model = ash_protocol::ModelRef::new(provider.provider.clone(), id.clone());
                 let mut entry =
-                    ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
-                        ash_protocol::ModelRef::new(provider.provider.clone(), id.clone()),
-                        &info,
-                    );
-                entry.maximum_context_window = Some(1_000_000);
+                    runtime_catalog_entry(&contexts.entry(&model)?, &config, &registry)?;
                 entry.discovered = Some(discovered.contains(id));
                 models.push(entry);
             }
@@ -2434,28 +2421,13 @@ impl ModelCatalog for ConfigBackedModelService {
 }
 
 impl ConfigBackedModelService {
-    fn context_budget_for_resolved(
-        &self,
-        config: &ResolvedConfig,
-    ) -> Result<ContextBudget, CoreError> {
-        if let Some(model) = &config.model
-            && config
-                .providers
-                .get(&model.provider)
-                .is_some_and(|provider| provider.access_mode() == ProviderAccessMode::Subscription)
-        {
-            let provider = &config.providers[&model.provider];
-            let info = self
-                .catalog_provider
-                .model_info(provider, model)
-                .map_err(|error| CoreError::Model(error.to_string()))?;
-            let registry = self
-                .provider_configs
-                .with_configs(config.providers.values())
-                .map_err(|error| CoreError::Model(error.to_string()))?;
-            return context_budget_for_model(&info, provider, &registry);
-        }
-        context_budget_for_config(config, &self.provider_configs, &self.models_manager)
+    fn context_catalog(&self, config: &ResolvedConfig) -> Result<ModelContextCatalog, CoreError> {
+        ModelContextCatalog::capture(
+            config,
+            &self.provider_configs,
+            &self.models_manager,
+            &self.catalog_provider,
+        )
     }
 
     fn config_for_selection(
@@ -2507,58 +2479,6 @@ fn resolve_local_config(
     .map(|resolved| resolved.values)
 }
 
-fn context_budget_for_config(
-    config: &ResolvedConfig,
-    providers: &ProviderConfigRegistry,
-    manager: &ModelsManager,
-) -> Result<ContextBudget, CoreError> {
-    let Some(model_ref) = config.model.as_ref() else {
-        return Ok(ContextBudget::provider_managed());
-    };
-    let Some(provider_config) = config.providers.get(&model_ref.provider) else {
-        return Ok(ContextBudget::provider_managed());
-    };
-    let registry = providers
-        .with_configs(config.providers.values())
-        .map_err(|error| CoreError::Model(error.to_string()))?;
-    let resolved = manager
-        .with_registry(registry.clone())
-        .resolve_static(model_ref, &ModelRequirements::agent())
-        .map_err(|error| CoreError::Model(error.to_string()))?;
-    let info = resolved
-        .entry()
-        .model_info(provider_config)
-        .map_err(|error| CoreError::Model(error.to_string()))?;
-    context_budget_for_model(&info, provider_config, &registry)
-}
-
-fn context_budget_for_model(
-    info: &ash_protocol::ModelInfo,
-    config: &ModelProviderConfig,
-    registry: &ProviderConfigRegistry,
-) -> Result<ContextBudget, CoreError> {
-    let ContextWindow::Known(context_window) = info.context_window else {
-        return Ok(ContextBudget::provider_managed());
-    };
-    let normalized = registry
-        .normalize(config)
-        .map_err(|error| CoreError::Model(error.to_string()))?;
-    let reserved_output = normalized
-        .max_output_tokens
-        .unwrap_or(DEFAULT_MODEL_OUTPUT_RESERVATION_TOKENS);
-    let compaction_limit = info
-        .auto_compact_token_limit
-        .map_or(ContextCompactionLimit::ContextWindow, |tokens| {
-            ContextCompactionLimit::Tokens(ContextTokenCount::new(tokens))
-        });
-    Ok(ContextBudget::core_managed(
-        ContextTokenCount::new(context_window),
-        ContextTokenCount::new(reserved_output),
-        ContextTokenCount::new(MODEL_CONTEXT_SAFETY_MARGIN_TOKENS),
-        compaction_limit,
-    ))
-}
-
 fn runtime_catalog_entry(
     entry: &ash_models_manager::ModelCatalogEntry,
     config: &ResolvedConfig,
@@ -2569,32 +2489,13 @@ fn runtime_catalog_entry(
         .providers
         .get(&entry.model().provider)
         .unwrap_or(&default_config);
-    let info = entry
-        .model_info(provider_config)
-        .map_err(|error| CoreError::Model(error.to_string()))?;
+    let context = ModelContext::resolve(entry, provider_config, registry)?;
     let mut result = ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
         entry.model().clone(),
-        &info,
+        &context.info,
     );
-    result.maximum_context_window = if provider_config.custom.is_some() {
-        Some(1_000_000)
-    } else {
-        match entry.info().context_window {
-            ContextWindow::Known(tokens) => Some(tokens),
-            ContextWindow::Unknown => None,
-        }
-    };
-    if config.providers.contains_key(&entry.model().provider) {
-        match context_budget_for_model(&info, provider_config, registry)?
-            .resolve()
-            .map_err(|error| CoreError::Context(error.to_string()))?
-        {
-            ResolvedContextBudget::ProviderManaged => {}
-            ResolvedContextBudget::CoreManaged(limits) => {
-                result.available_context_window = Some(limits.maximum_input().get());
-            }
-        }
-    }
+    result.maximum_context_window = context.maximum_window;
+    result.available_context_window = context.available_input();
     Ok(result)
 }
 
@@ -2889,8 +2790,7 @@ impl ModelInvoker for ReviewModelInvoker {
 /// All model consultations in a Turn resolve against this one profile configuration.
 struct FrozenModelSource {
     config: ResolvedConfig,
-    registry: ProviderConfigRegistry,
-    manager: ModelsManager,
+    contexts: ModelContextCatalog,
     resolver: Arc<dyn ModelSnapshotResolver>,
 }
 impl FrozenModelSource {
@@ -2902,7 +2802,9 @@ impl FrozenModelSource {
         if let ModelSelection::Session(model) = selection {
             config.model = Some(model.clone());
         }
-        let budget = context_budget_for_config(&config, &self.registry, &self.manager)?;
+        // Freeze configuration failures too: execution persists their actionable cause on the
+        // Turn instead of rejecting snapshot creation with a generic dispatch error.
+        let budget = self.contexts.budget(&config);
         let reasoning = config
             .model
             .as_ref()
@@ -2929,7 +2831,7 @@ impl FrozenModelSource {
 struct FrozenModelService {
     source: Arc<FrozenModelSource>,
     provider: ProviderModelService,
-    budget: ContextBudget,
+    budget: Result<ContextBudget, CoreError>,
     billing_scope: ModelBillingScope,
     reasoning: Option<ash_protocol::ReasoningConfig>,
 }
@@ -2943,7 +2845,7 @@ impl ModelService for FrozenModelService {
         let Ok(model) = self
             .source
             .config
-            .resolve_approval_review_model(&self.source.registry)
+            .resolve_approval_review_model(self.source.contexts.registry())
         else {
             return Ok(None);
         };
@@ -2962,7 +2864,7 @@ impl ModelService for FrozenModelService {
         Ok(self.billing_scope)
     }
     fn context_budget(&self, _: ModelSelection<'_>) -> Result<ContextBudget, CoreError> {
-        Ok(self.budget)
+        self.budget.clone()
     }
     fn image_input_policy(
         &self,
@@ -3000,9 +2902,10 @@ impl ModelService for FrozenModelService {
         cancellation: &CancellationToken,
         sink: &mut dyn CoreModelStreamSink,
     ) -> Result<ash_protocol::ModelResponse, CoreError> {
+        let request = model_context::request_with_output_limit(request, self.budget.clone()?);
         self.provider.stream(
             ModelSelection::ConfiguredDefault,
-            request,
+            &request,
             cancellation,
             sink,
         )
@@ -3013,7 +2916,8 @@ impl ModelService for FrozenModelService {
         request: &ash_protocol::ModelRequest,
         cancellation: &CancellationToken,
     ) -> Result<ash_protocol::ModelResponse, CoreError> {
+        let request = model_context::request_with_output_limit(request, self.budget.clone()?);
         self.provider
-            .invoke(ModelSelection::ConfiguredDefault, request, cancellation)
+            .invoke(ModelSelection::ConfiguredDefault, &request, cancellation)
     }
 }

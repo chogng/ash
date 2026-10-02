@@ -1,0 +1,5 @@
+---
+source: code/tui/src/app/interaction_flow_tests.rs
+expression: frame
+---
+● 请先在 /config 中设置模型上下文窗口，再发送消息。

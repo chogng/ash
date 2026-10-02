@@ -1003,7 +1003,10 @@ hybrid 模型不可用时，`embeddingStatus` 为 `unavailable`，自然语言�
 Provider DTO 的 `modelContext` 以模型 ID 映射 `contextWindow` 和可选
 `autoCompactTokenLimit`，用于 Core context budget。配置写入时拒绝零值；`models-manager` 按准确
 provider/model 合并配置，配置窗口不能超过目录已知窗口。模型列表返回生效后的窗口和压缩阈值，
-App Server 再扣除输出预留和安全余量。未知窗口保持未知，目录事实不会被用户配置改写。
+App Server 再扣除输出预留和安全余量。单模型配置优先于自定义连接默认窗口；GPT 没有显式
+配置时使用 272k。列表和执行读取同一批静态规格及当前连接的缓存发现信息，每轮开始时冻结。
+未知窗口保持未知，目录事实不会被用户配置改写；窗口缺失或预留导致没有输入空间时，
+执行以不可重试的 `ModelConfiguration` 失败，并保留具体配置原因，provider 不会收到请求。
 
 `skills/list` 返回 source-qualified `SkillId`、description、source kind、content digest、
 compatibility、effective enablement 和 isolated diagnostics。`reload: "cached"` 可复用当前

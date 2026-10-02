@@ -49,19 +49,21 @@ fn a_transport_attempt_does_not_retry_a_retryable_status() {
 }
 
 #[test]
-fn plain_http_does_not_load_system_certificate_roots() {
-    let root_loads = Arc::new(AtomicUsize::new(0));
-    let observed_root_loads = root_loads.clone();
-    let client = UreqHttpClient::with_test_system_root_loader(
+fn plain_http_does_not_build_system_certificate_verifier() {
+    let verifier_builds = Arc::new(AtomicUsize::new(0));
+    let observed_verifier_builds = verifier_builds.clone();
+    let network = OutboundNetworkSnapshot::with_verifier_factory(
         HttpClientConfig::new().with_proxy_policy(ProxyPolicy::Direct),
-        move || {
-            observed_root_loads.fetch_add(1, Ordering::Relaxed);
+        OutboundNetworkPolicy::default(),
+        Arc::new(move |_| {
+            observed_verifier_builds.fetch_add(1, Ordering::Relaxed);
             Err(HttpClientError::InvalidConfiguration(
-                "fixture system roots unavailable".into(),
+                "fixture system verifier unavailable".into(),
             ))
-        },
+        }),
     )
     .unwrap();
+    let client = UreqHttpClient::with_network(network).unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
     let server = std::thread::spawn(move || {
@@ -82,24 +84,26 @@ fn plain_http_does_not_load_system_certificate_roots() {
     .unwrap();
 
     assert_eq!(client.execute(&request).unwrap().body(), b"ok");
-    assert_eq!(root_loads.load(Ordering::Relaxed), 0);
+    assert_eq!(verifier_builds.load(Ordering::Relaxed), 0);
     server.join().unwrap();
 }
 
 #[test]
-fn https_loads_system_certificate_roots_lazily_and_caches_the_failure() {
-    let root_loads = Arc::new(AtomicUsize::new(0));
-    let observed_root_loads = root_loads.clone();
-    let client = UreqHttpClient::with_test_system_root_loader(
+fn https_builds_system_certificate_verifier_lazily_and_caches_the_failure() {
+    let verifier_builds = Arc::new(AtomicUsize::new(0));
+    let observed_verifier_builds = verifier_builds.clone();
+    let network = OutboundNetworkSnapshot::with_verifier_factory(
         HttpClientConfig::new().with_proxy_policy(ProxyPolicy::Direct),
-        move || {
-            observed_root_loads.fetch_add(1, Ordering::Relaxed);
+        OutboundNetworkPolicy::default(),
+        Arc::new(move |_| {
+            observed_verifier_builds.fetch_add(1, Ordering::Relaxed);
             Err(HttpClientError::InvalidConfiguration(
-                "fixture system roots unavailable".into(),
+                "fixture system verifier unavailable".into(),
             ))
-        },
+        }),
     )
     .unwrap();
+    let client = UreqHttpClient::with_network(network).unwrap();
     let request = HttpRequest::new(
         HttpMethod::Get,
         "https://127.0.0.1:1/offline",
@@ -112,10 +116,10 @@ fn https_loads_system_certificate_roots_lazily_and_caches_the_failure() {
         assert!(matches!(
             client.execute(&request),
             Err(HttpClientError::InvalidConfiguration(message))
-                if message == "fixture system roots unavailable"
+                if message == "fixture system verifier unavailable"
         ));
     }
-    assert_eq!(root_loads.load(Ordering::Relaxed), 1);
+    assert_eq!(verifier_builds.load(Ordering::Relaxed), 1);
 }
 
 #[test]

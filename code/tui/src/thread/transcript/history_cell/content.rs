@@ -130,8 +130,16 @@ impl HistoryCell for ContentCell {
                 rows.into_iter().map(|row| row.links).collect(),
             )
         } else {
+            let summary = self.summary(view.mode);
+            // Stable backend errors use product-owned NLS keys. User and model text keep
+            // their source bytes; localization belongs to rendering so language changes apply.
+            let summary = if self.role == MessageRole::Error {
+                crate::nls::localize(context.language(), &summary)
+            } else {
+                Cow::Borrowed(summary.as_ref())
+            };
             (
-                prefixed_body(&self.summary(view.mode), marker, color, view, context),
+                prefixed_body(&summary, marker, color, view, context),
                 Vec::new(),
             )
         };

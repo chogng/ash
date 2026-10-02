@@ -92,9 +92,7 @@ pub(crate) fn recover_active_turn(turns: &[Turn]) -> Option<TurnId> {
 pub(crate) fn present_turn_error(error: &StableTurnError) -> String {
     match error.code {
         StableTurnErrorCode::PolicyCircuitBreaker => error.message.clone(),
-        StableTurnErrorCode::ModelConfiguration => {
-            "Check your provider and model configuration in /config.".into()
-        }
+        StableTurnErrorCode::ModelConfiguration => error.message.clone(),
         StableTurnErrorCode::ProviderCredentials => {
             "Credentials unavailable. Check your provider credentials in /config.".into()
         }

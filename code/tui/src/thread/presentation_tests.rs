@@ -77,7 +77,7 @@ fn configuration_errors_offer_config_and_request_errors_show_the_cause() {
     for (error, expected) in [
         (
             StableTurnError::model_configuration(),
-            "Check your provider and model configuration in /config.",
+            "Model or provider configuration is missing or invalid",
         ),
         (
             StableTurnError::provider_credentials(),

@@ -345,6 +345,9 @@ impl ToolExecutorRuntime {
 #[path = "tool_executor_adapter_tests.rs"]
 mod tests;
 
+#[cfg(all(test, unix))]
+pub(crate) use tests::prepared_shell_parts;
+
 fn protocol_execution_output(
     outcome: ToolExecutionOutcome,
     sink: &mut dyn ToolOutputSink,

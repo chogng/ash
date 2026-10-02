@@ -144,6 +144,116 @@ fn usage_keeps_ready_subscription_visible_when_kimi_needs_reauthentication() {
 }
 
 #[test]
+fn usage_keeps_successful_accounts_when_another_provider_query_fails() {
+    let accounts = json!({"revision":"1","accounts":[
+        {"provider":"bigmodel-coding-plan","accountId":"bigmodel-1","status":"ready","credentialRevision":"1"},
+        {"provider":"chatgpt-subscription","accountId":"account-1","status":"ready","credentialRevision":"1"},
+        {"provider":"xai-subscription","accountId":"xai-1","status":"ready","credentialRevision":"1"}
+    ]});
+    let requests = Arc::default();
+    let replies = VecDeque::from([
+        json!({"result":accounts}),
+        json!({"error":{"code":-32030,"message":"AccountOperationFailed"}}),
+        json!({"result":quota()}),
+        json!({"error":{"code":-32030,"message":"AccountAuthenticationRequired"}}),
+    ]);
+    let transport = ScriptedTransport {
+        replies: replies.clone(),
+        requests: Arc::clone(&requests),
+    };
+    let mut client = AppServerClient::new(transport);
+    let mut app = App::new();
+    let invocation = submit(&mut app);
+    let output = execute_product_command(None, &mut client, Path::new("."), invocation).unwrap();
+    for event in output.events {
+        app.update(event);
+    }
+    assert_eq!(requests.lock().unwrap().len(), 4);
+    assert_eq!(
+        app.list_selection()
+            .unwrap()
+            .selected_item()
+            .unwrap()
+            .description(),
+        Some("Could not load account usage. Run /usage to retry.")
+    );
+    crate::tui_assert_snapshot!("usage_partial_failure", render(&app, 100, 24));
+    app.handle_key(key(KeyCode::Tab));
+    assert_eq!(
+        app.list_selection()
+            .unwrap()
+            .selected_item()
+            .unwrap()
+            .label(),
+        "ChatGPT plan"
+    );
+    assert!(render(&app, 100, 24).contains("65% left (35% used)"));
+    app.handle_key(key(KeyCode::Tab));
+    assert_eq!(
+        app.list_selection()
+            .unwrap()
+            .selected_item()
+            .unwrap()
+            .description(),
+        Some("Reconnect the account in /config > Providers.")
+    );
+    app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
+    app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
+    assert_eq!(
+        app.list_selection()
+            .unwrap()
+            .selected_item()
+            .unwrap()
+            .description(),
+        Some("Could not load account usage. Run /usage to retry.")
+    );
+    app.handle_key(key(KeyCode::Esc));
+    let mut settings = TerminalSettings::default();
+    settings.set_language(crate::nls::Language::Chinese);
+    settings.set_screen_mode(ScreenMode::Inline);
+    app.update(ConfigEvent::SettingsReceived(settings));
+    let mut client = AppServerClient::new(ScriptedTransport {
+        replies,
+        requests: Arc::default(),
+    });
+    let invocation = submit(&mut app);
+    let output = execute_product_command(None, &mut client, Path::new("."), invocation).unwrap();
+    for event in output.events {
+        app.update(event);
+    }
+    let screen = render(&app, 100, 24);
+    assert!(
+        screen.contains("无法读取账号额度，请运行 /usage 重试。"),
+        "{screen}"
+    );
+    crate::tui_assert_snapshot!("usage_partial_failure_chinese_inline", screen);
+    app.handle_key(key(KeyCode::Esc));
+    assert!(app.command_panel().is_none());
+}
+
+#[test]
+fn usage_displays_a_single_failed_account_in_its_own_panel() {
+    let mut client = AppServerClient::new(ScriptedTransport {
+        replies: VecDeque::from([
+            json!({"result":account("ready")}),
+            json!({"error":{"code":-32030,"message":"AccountChanged"}}),
+        ]),
+        requests: Arc::default(),
+    });
+    let mut app = App::new();
+    app.update(crate::usage::load(&mut client).unwrap());
+    assert_eq!(
+        app.list_selection()
+            .unwrap()
+            .selected_item()
+            .unwrap()
+            .description(),
+        Some("Account changed. Run /usage again.")
+    );
+    crate::tui_assert_snapshot!("usage_account_changed", render(&app, 100, 20));
+}
+
+#[test]
 fn usage_command_reads_the_selected_account_and_renders_both_screen_modes() {
     let mut app = App::new();
     let invocation = submit(&mut app);
@@ -292,12 +402,9 @@ fn usage_loading_failure_and_late_results_preserve_the_current_panel() {
     let generation = app.panels().generation();
     crate::tui_assert_snapshot!("usage_loading", render(&app, 80, 20));
     let transport = ScriptedTransport {
-        replies: VecDeque::from([
-            json!({"result":account("ready")}),
-            json!({"error":{
-                "code":-32030, "message":"AccountOperationFailed", "data":{"message":"ChatGPT usage query failed"}
-            }}),
-        ]),
+        replies: VecDeque::from([json!({"error":{
+            "code":-32030, "message":"AccountOperationFailed", "data":{"message":"ChatGPT usage query failed"}
+        }})]),
         requests: Arc::default(),
     };
     let mut client = AppServerClient::new(transport);
@@ -356,9 +463,24 @@ fn live_usage_command_through_local_app_server() {
                 version: "1".into(),
             },
         )
+        .with_codex_home(codex_home.clone())
         .without_built_in_skills(),
     )
     .unwrap();
+    let accounts = client.read_accounts().unwrap();
+    assert!(
+        accounts.accounts.iter().any(|account| {
+            account.provider == "chatgpt-subscription"
+                && account.status
+                    == ash_app_server_protocol::protocol::account::AccountStatusDto::Ready
+        }),
+        "live ChatGPT login must be ready: {:?}",
+        accounts
+            .accounts
+            .iter()
+            .map(|account| (&account.provider, account.status))
+            .collect::<Vec<_>>()
+    );
     let mut app = App::new();
     let invocation = submit(&mut app);
     let result = execute_product_command(None, &mut client, profile.path(), invocation);
@@ -369,12 +491,29 @@ fn live_usage_command_through_local_app_server() {
     for event in output.events {
         app.update(event);
     }
+    let tabs = app.list_selection().unwrap().tabs().len();
+    let mut screens = Vec::new();
+    for _ in 0..tabs {
+        screens.push(render(&app, 100, 30));
+        if app
+            .list_selection()
+            .unwrap()
+            .visible_items()
+            .iter()
+            .any(|item| item.label() == "ChatGPT plan")
+        {
+            break;
+        }
+        app.handle_key(key(KeyCode::Tab));
+    }
     let selection = app.command_panel().unwrap().list_selection().unwrap();
     assert!(
         selection
             .visible_items()
             .iter()
-            .any(|item| item.label() == "ChatGPT plan")
+            .any(|item| item.label() == "ChatGPT plan"),
+        "{}",
+        screens.join("\n")
     );
     assert!(selection.visible_items().iter().any(|item| {
         item.description()

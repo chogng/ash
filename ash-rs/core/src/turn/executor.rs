@@ -962,7 +962,7 @@ impl TurnExecutor {
             let configured_budget = self
                 .model
                 .context_budget(model)
-                .map_err(ExecutionFailure::model)?;
+                .map_err(ExecutionFailure::service)?;
             let calibration = frozen_model
                 .as_ref()
                 .and_then(|model| snapshot.context_calibration(model, CONTEXT_ESTIMATOR_REVISION));
@@ -1388,7 +1388,7 @@ impl TurnExecutor {
             let configured_budget = self
                 .model
                 .context_budget(selection)
-                .map_err(ExecutionFailure::model)?;
+                .map_err(ExecutionFailure::service)?;
             let calibration = frozen_model
                 .as_ref()
                 .and_then(|model| snapshot.context_calibration(model, CONTEXT_ESTIMATOR_REVISION));

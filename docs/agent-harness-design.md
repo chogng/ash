@@ -36,7 +36,7 @@
 | 模型失败弹性 | 429/5xx 退避重试、溢出压缩重试、空响应处理 | ✅ 类型化错误、退避、单次溢出恢复、空响应重试、Refusal 完成语义和对话内错误动作已接通 |
 | Steering | 运行中排队注入用户消息 | ✅ typed command、receipt、delivery fact、App Server、Desktop 与本地重规划均已接通 |
 | 工具结果限幅 | 模型侧截断 + 保留头尾 | 已实现：ContextPlan 为 shell、read、search、MCP 生成带 continuation 的 bounded clone，durable 原值不改写 |
-| 上下文预算 | 窗口估算、溢出显式处理 | ✅ 已知/配置窗口走确定性预算；未知窗口明确退回 provider-managed |
+| 上下文预算 | 窗口估算、溢出显式处理 | ✅ 静态、发现和配置容量共用预算；未知窗口以配置错误阻止调用 |
 | 压缩 | 阈值触发、durable checkpoint | ✅ `ash-prompts` 共享 compaction 提示词、source digest、原子 commit、恢复校验与 commit 后重规划已接通 |
 | Prompt cache | 前缀稳定 + 断点标注 | 已实现：Anthropic tools/system/滚动 user 三断点、cached usage 与 scope 回归已接通 |
 | 多 Tool Call/响应 | 模型一次响应多个调用 | 已实现：`parallel_tool_calls: true`，调用先完整持久化再按顺序执行，避免并行写副作用 |
@@ -319,7 +319,7 @@ session/request::SteerTurn { command_id, expected_sequence, thread_id, turn_id, 
   estimate、estimator revision 与 calibration revision。reducer 只在 provider 报告 input usage 时，
   按 Thread 内的模型与 estimator revision 重建低估比例：更高误差立即收紧，较低误差按非对称 EMA
   渐进衰减，且永不把容量放大到配置值以上；
-- 校准投影只减少后续 Core-managed input capacity；`ContextWindow::Unknown` 仍为 provider-managed，
+- 校准投影只减少后续 Core-managed input capacity；产品接入的未知窗口要求补齐配置后执行，
   历史 `ModelUsage` 和已提交 checkpoint provenance 均不改写。legacy configured-default Turn 因没有
   可验证模型身份而不生成校准样本。
 

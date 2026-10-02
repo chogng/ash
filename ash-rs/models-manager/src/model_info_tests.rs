@@ -157,7 +157,7 @@ fn model_info_rejects_configuration_for_another_provider_and_invalid_limits() {
 }
 
 #[test]
-fn custom_connection_context_takes_precedence_over_per_model_configuration() {
+fn per_model_context_overrides_the_custom_connection_default() {
     let provider = ProviderId::new("custom-test").unwrap();
     let model = ModelRef::new(provider.clone(), ModelId::new("custom-model").unwrap());
     let mut config = ModelProviderConfig::new(provider);
@@ -184,8 +184,8 @@ fn custom_connection_context_takes_precedence_over_per_model_configuration() {
         .resolve_static(&model, &ModelRequirements::agent())
         .unwrap();
     let info = resolved.entry().model_info(&config).unwrap();
-    assert_eq!(info.context_window, ContextWindow::Known(272_000));
-    assert_eq!(info.auto_compact_token_limit, Some(244_800));
+    assert_eq!(info.context_window, ContextWindow::Known(20_000));
+    assert_eq!(info.auto_compact_token_limit, Some(15_000));
 }
 
 #[test]
