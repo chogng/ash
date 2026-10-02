@@ -191,15 +191,18 @@ test('Workbench Models switches control the model picker', async ({ target, work
 	}
 	const modelButton = page.locator('.ash-chat-view-pane [data-action-id="ash.chat.input.model"] button');
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+	let modelName: string | undefined;
 	for (const visible of [false, true]) {
 		await page.keyboard.press('ControlOrMeta+Shift+P');
 		await page.getByPlaceholder('Type the name of a command to run').fill('Ash Settings');
 		await page.keyboard.press('Enter');
 		await settings.locator('[data-settings-group-id="agents"]').click();
 		await settings.locator('[data-settings-category-id="models"]').click();
-		const row = settings.locator('.ash-models-settings-model-row').first();
-		await expect(row).toBeVisible();
-		const name = (await row.locator('.ash-models-settings-model-copy').textContent())!.trim();
+		const rows = settings.locator('.ash-models-settings-model-row');
+		await expect(rows.first()).toBeVisible();
+		modelName ??= (await rows.first().locator('.ash-models-settings-model-copy').textContent())!.trim();
+		const name = modelName;
+		const row = rows.filter({ has: page.getByText(name, { exact: true }) });
 		await expect(row.locator('.ash-models-settings-model-copy > span')).toHaveCount(1);
 		await expect(row.locator('.ash-models-settings-note')).toHaveCount(0);
 		const itemId = await row.getAttribute('data-settings-tree-item-id');
@@ -254,9 +257,9 @@ test('Workbench and Sessions Models share model visibility', async ({ applicatio
 	await expect(settings.getByRole('heading', { name: 'API key' })).toBeVisible();
 	const firstModel = settings.locator('.ash-models-settings-model-row').first();
 	await expect(firstModel).toBeVisible();
-	const modelSwitch = firstModel.getByRole('switch');
-	const modelLabel = await modelSwitch.getAttribute('aria-label');
+	const modelLabel = await firstModel.getByRole('switch').getAttribute('aria-label');
 	if (!modelLabel) throw new Error('Model visibility switch has no label');
+	const modelSwitch = settings.getByRole('switch', { name: modelLabel, exact: true });
 	const initiallyVisible = await modelSwitch.isChecked();
 	await modelSwitch.locator('..').locator('.ash-switch-track').click();
 	await expect(modelSwitch).toHaveAttribute('aria-checked', String(!initiallyVisible));
@@ -289,10 +292,11 @@ test('Browser Workbench and Sessions persist model visibility across page naviga
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
 	await settings.locator('[data-settings-group-id="agents"]').click();
 	await settings.locator('[data-settings-category-id="models"]').click();
-	const modelSwitch = settings.locator('.ash-models-settings-model-row').first().getByRole('switch');
-	await expect(modelSwitch).toBeVisible();
-	const modelLabel = await modelSwitch.getAttribute('aria-label');
+	const firstModelSwitch = settings.locator('.ash-models-settings-model-row').first().getByRole('switch');
+	await expect(firstModelSwitch).toBeVisible();
+	const modelLabel = await firstModelSwitch.getAttribute('aria-label');
 	if (!modelLabel) throw new Error('Model visibility switch has no label');
+	const modelSwitch = settings.getByRole('switch', { name: modelLabel, exact: true });
 	const initiallyVisible = await modelSwitch.isChecked();
 	await modelSwitch.locator('..').locator('.ash-switch-track').click();
 	await expect(modelSwitch).toHaveAttribute('aria-checked', String(!initiallyVisible));

@@ -1,5 +1,4 @@
-import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
-import { LanguageModelsService } from '../../../workbench/contrib/chat/browser/languageModelsService.js';
+import { ILanguageModelsService, LanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import { LanguageModelsConfigurationService } from '../../../workbench/contrib/chat/browser/languageModelsConfigurationService.js';
 import { ILanguageModelsConfigurationService } from '../../../workbench/contrib/chat/common/languageModelsConfiguration.js';
 import { IModelApi } from '../../../platform/sessions/common/sessionApi.js';
@@ -2087,8 +2086,8 @@ test('Model discovery refreshes the picker after an older catalog request comple
 	using chat = createChatService({ ...fake.api, model: {
 		...fake.api.model,
 		listModels: async () => ++loads === 1 ? initial.p : { models: [{
-			...discovered, contextWindow: null, autoCompactTokenLimit: null,
-			capabilities: { tools: 'supported', reasoning: 'unknown', parallelToolCalls: 'unknown', personality: 'unknown', imageDetailOriginal: 'unknown' },
+			...discovered, contextWindow: null, maximumContextWindow: null, autoCompactTokenLimit: null,
+			capabilities: { tools: 'supported', reasoning: 'unknown', parallelToolCalls: 'unknown', personality: 'unknown', imageDetailOriginal: 'unknown', fastMode: 'unknown' },
 			supportedReasoningEfforts: [], modelReasoningEffort: null, defaultPersonality: null,
 		}] },
 		listProviderModels: async () => [discovered],

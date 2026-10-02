@@ -1,9 +1,8 @@
 import { IModelApi as ModelApiId } from '../../platform/sessions/common/sessionApi.js';
 import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } from '../../platform/app-server/common/appServerApi.js';
-import { ILanguageModelsService } from '../../workbench/contrib/chat/common/languageModels.js';
+import { ILanguageModelsService, LanguageModelsService } from '../../workbench/contrib/chat/common/languageModels.js';
 import { ILanguageModelsConfigurationService } from '../../workbench/contrib/chat/common/languageModelsConfiguration.js';
 import { LanguageModelsConfigurationService } from '../../workbench/contrib/chat/browser/languageModelsConfigurationService.js';
-import { LanguageModelsService } from '../../workbench/contrib/chat/browser/languageModelsService.js';
 import { MarketplaceLanguagePackService } from '../../platform/languagePacks/browser/marketplaceLanguagePackService.js';
 import { ILanguagePackService } from '../../platform/languagePacks/common/languagePacksService.js';
 import { ILocaleService } from '../../workbench/services/localization/common/locale.js';

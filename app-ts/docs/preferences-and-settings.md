@@ -35,7 +35,7 @@
 
 ## Models 设置
 
-Workbench 和 Sessions 共用 `ModelSettingsContent`。模型按供应商分组，同一供应商内按发布时间从新到旧排列；默认收起为每家供应商的首个模型，`viewall models` 展开或收起完整列表。列表顶部的模型搜索框按名称和 `provider/model` ID 搜索整个目录，清空搜索后恢复展开状态；API key 区域不参与这个局部搜索。
+Workbench 和 Sessions 共用 `ModelSettingsContent`。模型目录按供应商排列，同一供应商内按发布时间从新到旧排列；默认收起为每家供应商的首个模型，`viewall models` 展开或收起完整列表。当前显示的列表将已开启模型排在前面，两组内部保持目录原序；关闭后回到未开启组中的原有位置，与开启先后无关。列表顶部的模型搜索框按名称和 `provider/model` ID 搜索整个目录，搜索结果使用同一排序规则，清空搜索后恢复展开状态；API key 区域不参与这个局部搜索。键盘切换开关后，保存完成时焦点留在同一个模型上。
 
 `ModelCatalogConfiguration` 拥有模型开关的界面默认值：只开启 GPT-6.1 Sol、GPT-6 Astra、GPT-6 Luna、Claude Opus 5.5、Claude Sonnet 5.5 和 Grok 4.7。其他内置、后续新增及自定义模型默认关闭。手动修改由配置服务写入同一份用户设置，模型选择器通过 `ILanguageModelsService` 使用这些开关。
 
@@ -45,8 +45,7 @@ Workbench 和 Sessions 共用 `ModelSettingsContent`。模型按供应商分组�
 
 | 文件 | 职责 |
 | --- | --- |
-| `workbench/contrib/chat/common/languageModels.ts` | 模型目录、供应商操作的界面契约 |
-| `workbench/contrib/chat/browser/languageModelsService.ts` | 目录加载、供应商发现和测试接口，两个窗口各一个实例 |
+| `workbench/contrib/chat/common/languageModels.ts` | 模型服务契约与实现；目录加载、供应商发现和测试操作，两个窗口各一个实例 |
 | `workbench/contrib/chat/common/languageModelsConfiguration.ts` | JSONC 设置声明、六个默认开启模型、模型开关数据格式 |
 | `workbench/contrib/chat/browser/languageModelsConfigurationService.ts` | 模型开关、默认模型及上一次选择的保存与事件 |
 | `workbench/contrib/chat/browser/chatManagement/chatModelsViewModel.ts` | 当前供应商的发现列表、手动声明、批量测试进度 |

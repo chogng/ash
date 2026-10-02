@@ -1,9 +1,8 @@
 import { IModelApi as ModelApiId } from '../../platform/sessions/common/sessionApi.js';
 import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } from '../../platform/app-server/common/appServerApi.js';
-import { ILanguageModelsService } from '../contrib/chat/common/languageModels.js';
+import { ILanguageModelsService, LanguageModelsService } from '../contrib/chat/common/languageModels.js';
 import { ILanguageModelsConfigurationService } from '../contrib/chat/common/languageModelsConfiguration.js';
 import { LanguageModelsConfigurationService } from '../contrib/chat/browser/languageModelsConfigurationService.js';
-import { LanguageModelsService } from '../contrib/chat/browser/languageModelsService.js';
 import { IDictationService } from '../../platform/dictation/common/dictationService.js';
 import { IHooksService } from '../../platform/hooks/common/hooksService.js';
 import { ExtensionColorThemeService } from '../services/extensions/browser/extensionColorThemeService.js';

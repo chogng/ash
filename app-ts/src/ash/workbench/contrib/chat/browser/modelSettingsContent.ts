@@ -121,8 +121,11 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 					if (!this.visible || !isHTMLElement(focused)) return undefined;
 					const nodes = [this.modelTitle, this.providerTitle, this.expandRow, ...this.modelElements.map(model => model.row), ...this.apiElements.map(provider => provider.row), ...[...this.customProviders].map(([, card]) => card.domNode)];
 					if (!nodes.some(node => node.contains(focused))) return undefined;
+					const modelNames = (): string => this.getNodes()[0].children!
+						.filter(node => node.element.id !== 'models.catalog.expand')
+						.map(node => node.element.title).join('\n');
 					return new AccessibleContentProvider(AccessibleViewProviderId.ChatModelConfiguration, { type },
-						() => type === AccessibleViewType.View ? [...this.customProviders].map(([, card]) => card.getAccessibleContent()).join('\n\n') || this.modelElements.map(model => model.entry.displayName).join('\n') : localize('models.settings.help', 'Models shows the newest model from each provider. Search models filters the full list by model name or ID. Clear the search to restore the list. Use viewall models to expand or collapse the full list. API keys save when the field loses focus; clear the field to remove a key. New provider adds a card with provider name, Base URL, API key and API format. Test models tests the current table, fetching the endpoint list first when empty. Refresh models fetches the list again. Use Add model for a missing ID or to declare its context window. Edit context and delete manual declarations from the row actions. Each Enabled switch controls picker availability independently of test results. Test status: orange means it has not passed and green means it passed. Use Tab and Shift+Tab to move between fields and buttons.'),
+						() => type === AccessibleViewType.View ? [...this.customProviders].map(([, card]) => card.getAccessibleContent()).join('\n\n') || modelNames() : localize('models.settings.help', 'Models shows the newest model from each provider. Enabled models appear first; each group keeps the catalog order. Turning a model off restores its place among disabled models. Search models filters the full list by model name or ID. Clear the search to restore the list. Use viewall models to expand or collapse the full list. API keys save when the field loses focus; clear the field to remove a key. New provider adds a card with provider name, Base URL, API key and API format. Test models tests the current table, fetching the endpoint list first when empty. Refresh models fetches the list again. Use Add model for a missing ID or to declare its context window. Edit context and delete manual declarations from the row actions. Each Enabled switch controls picker availability independently of test results. Test status: orange means it has not passed and green means it passed. Use Tab and Shift+Tab to move between fields and buttons.'),
 						() => focused.focus(), AccessibilityVerbositySettingId.ChatModelConfiguration);
 				},
 			}));
@@ -142,6 +145,8 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 			return modelQuery.matches({ title: entry.displayName, description: '', keywords: [`${entry.model.provider}/${entry.model.model}`] })
 				&& (this.expanded || !modelQuery.isEmpty || (query && !query.isEmpty) || first);
 		});
+		// Keep the catalog order as the baseline so disabling restores the model's place.
+		models.sort((left, right) => Number(this.languageModels.isModelVisible(right.entry.model)) - Number(this.languageModels.isModelVisible(left.entry.model)));
 		const modelNodes = models.map(({ entry, row }) => item(`models.catalog.${entry.model.provider}/${entry.model.model}`, entry.displayName, '', row, [`${entry.model.provider}/${entry.model.model}`]));
 		if (models.length && this.modelElements.length > seenProviders.size && modelQuery.isEmpty && (!query || query.isEmpty)) modelNodes.push(item('models.catalog.expand', localize('models.catalog.viewAll', 'viewall models'), '', this.expandRow));
 		if (this.modelElements.length && !models.length) modelNodes.push(item('models.catalog.noMatches', this.modelSearchEmpty.textContent!, '', this.modelSearchEmpty));
@@ -266,6 +271,7 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 		}));
 		resources.add(this.languageModels.onDidChangeModels(() => { toggle.checked = this.languageModels.isModelVisible(entry.model); }));
 		resources.add(toggle.onDidChange(visible => {
+			const hadFocus = row.contains(this.document.activeElement);
 			toggle.busy = true;
 			this.status.hidden = true;
 			void this.languageModels.setModelVisible(entry.model, visible).catch(() => {
@@ -273,6 +279,11 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 			}).finally(() => {
 				toggle.checked = this.languageModels.isModelVisible(entry.model);
 				toggle.busy = false;
+				// Saving disables the input and sorting can move its row. Restore keyboard
+				// focus only if the user has not focused another control while saving.
+				if (hadFocus && this.visible && row.isConnected && this.document.activeElement === this.document.body) {
+					toggle.focus();
+				}
 			});
 		}));
 		return row;
