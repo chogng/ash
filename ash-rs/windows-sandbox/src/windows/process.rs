@@ -1,5 +1,5 @@
 // Licensed under the MIT License.
-//! The trusted logon worker exits before the untrusted command is resumed.
+//! Account launch and validation; terminal launches retain a protected I/O worker.
 
 use super::account::Account;
 use super::win;
@@ -30,17 +30,36 @@ pub(super) struct Request {
     pub(super) cwd: String,
     pub(super) environment: Vec<String>,
     pub(super) pipes: Option<[String; 3]>,
+    // HPCON belongs to the process that created it; it is never an IPC handle.
+    #[serde(skip)]
     pub(super) pseudoconsole: Option<usize>,
+    pub(super) terminal: Option<[u16; 2]>,
     pub(super) reply: std::path::PathBuf,
     pub(super) desktop: String,
 }
 
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-struct Reply {
+pub(super) struct Reply {
     pid: u32,
     thread: u32,
     error: Option<String>,
+}
+
+pub(super) fn publish_reply(
+    request: &Request,
+    pid: u32,
+    thread: u32,
+    error: Option<String>,
+) -> Result<()> {
+    let reply = Reply { pid, thread, error };
+    let pending = request.reply.with_extension("pending");
+    std::fs::write(
+        &pending,
+        serde_json::to_vec(&reply).map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())?;
+    std::fs::rename(pending, &request.reply).map_err(|error| error.to_string())
 }
 
 pub(super) struct Child {
@@ -49,6 +68,7 @@ pub(super) struct Child {
     pub(super) stdin: Box<dyn std::io::Write + Send>,
     pub(super) stdout: Box<dyn std::io::Read + Send>,
     pub(super) stderr: Option<Box<dyn std::io::Read + Send>>,
+    pub(super) terminal: Option<super::terminal::Controller>,
 }
 
 pub(super) struct Pipes {
@@ -136,8 +156,7 @@ pub(super) fn spawn(
     runner: &Path,
     directory: &Path,
     request: &Request,
-    pipes: Option<Pipes>,
-    terminal: Option<&mut ash_utils_pty::PreparedConPty>,
+    pipes: Pipes,
     job: &super::job::Job,
 ) -> Result<Child> {
     let input = directory.join("request.json");
@@ -200,36 +219,15 @@ pub(super) fn spawn(
         }
         return Err(error.to_string());
     }
-    let mut worker_request = request.clone();
-    if let Some(terminal) = terminal.as_ref() {
-        let mut remote = std::ptr::null_mut();
-        if unsafe {
-            DuplicateHandle(
-                GetCurrentProcess(),
-                terminal.pseudoconsole_handle().cast(),
-                worker.0,
-                &mut remote,
-                0,
-                0,
-                DUPLICATE_SAME_ACCESS,
-            )
-        } == 0
-        {
-            return Err(win::error("DuplicateHandle(pseudoconsole)"));
-        }
-        worker_request.pseudoconsole = Some(remote as usize);
-    }
     std::fs::write(
         &input,
-        serde_json::to_vec(&worker_request).map_err(|error| error.to_string())?,
+        serde_json::to_vec(request).map_err(|error| error.to_string())?,
     )
     .map_err(|error| error.to_string())?;
     if unsafe { ResumeThread(worker_thread.0) } == u32::MAX {
         return Err(win::error("ResumeThread(logon worker)"));
     }
-    if let Some(pipes) = pipes.as_ref()
-        && let Err(error) = pipes.connect(worker.0)
-    {
+    if let Err(error) = pipes.connect(worker.0) {
         if unsafe { WaitForSingleObject(worker.0, 0) } == WAIT_OBJECT_0 {
             let mut code = 0;
             unsafe {
@@ -246,21 +244,33 @@ pub(super) fn spawn(
         }
         return Err(error);
     }
-    if unsafe { WaitForSingleObject(worker.0, 15000) } != WAIT_OBJECT_0 {
-        return Err("Ash logon worker did not finish preparing the child".into());
-    }
-    let mut code = 0;
-    if unsafe { GetExitCodeProcess(worker.0, &mut code) } == 0 {
-        return Err(win::error("GetExitCodeProcess(logon worker)"));
+    if request.terminal.is_some() {
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while !request.reply.exists() {
+            if unsafe { WaitForSingleObject(worker.0, 0) } == WAIT_OBJECT_0
+                || Instant::now() >= deadline
+            {
+                return Err("Ash terminal worker did not prepare the child".into());
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    } else {
+        if unsafe { WaitForSingleObject(worker.0, 15000) } != WAIT_OBJECT_0 {
+            return Err("Ash logon worker did not finish preparing the child".into());
+        }
+        let mut code = 0;
+        if unsafe { GetExitCodeProcess(worker.0, &mut code) } == 0 {
+            return Err(win::error("GetExitCodeProcess(logon worker)"));
+        }
+        if code != 0 {
+            return Err("Ash logon worker failed".into());
+        }
     }
     let reply: Reply =
         serde_json::from_slice(&std::fs::read(&request.reply).map_err(|error| error.to_string())?)
             .map_err(|_| "invalid reply from Ash logon worker")?;
     if let Some(error) = reply.error {
         return Err(error);
-    }
-    if code != 0 {
-        return Err("Ash logon worker failed".into());
     }
     let child = Handle::new(
         unsafe {
@@ -300,47 +310,29 @@ pub(super) fn spawn(
         return Err("prepared child does not have the expected restricted account identity".into());
     }
     verify_capability(token.0, &request.capability)?;
-    // The bootstrap must initialize Windows libraries before preparing the
-    // restricted child. Apply UI limits only after it exits, while the user
-    // command is still suspended and cannot execute a single instruction.
+    // Windows libraries and ConPTY initialize before UI limits are applied.
+    // The terminal worker has already protected its process, token and threads
+    // against the account child; the command is still suspended at this point.
     job.set_ui_limits().map_err(|error| error.to_string())?;
     std::fs::remove_file(&input).map_err(|error| error.to_string())?;
     std::fs::remove_file(&request.reply).map_err(|error| error.to_string())?;
-    // The worker's unrestricted logon token is gone before user code starts.
     if unsafe { ResumeThread(thread.0) } != 1 {
         return Err("prepared child did not have exactly one suspension".into());
     }
-    let (stdin, stdout, stderr) = match (pipes, terminal) {
-        (Some(pipes), None) => {
-            let [stdin, stdout, stderr] = pipes.files();
-            (
-                Box::new(stdin) as Box<dyn std::io::Write + Send>,
-                Box::new(stdout) as Box<dyn std::io::Read + Send>,
-                Some(Box::new(stderr) as Box<dyn std::io::Read + Send>),
-            )
-        }
-        (None, Some(terminal)) => {
-            terminal
-                .client_attached()
-                .map_err(|error| error.to_string())?;
-            (
-                terminal
-                    .take_writer()
-                    .ok_or("ConPTY input has already been taken")?,
-                terminal
-                    .take_reader()
-                    .ok_or("ConPTY output has already been taken")?,
-                None,
-            )
-        }
-        _ => return Err("process stdio must use either pipes or ConPTY".into()),
+    let [stdin, stdout, stderr] = pipes.files();
+    let (stdin, terminal): (Box<dyn std::io::Write + Send>, _) = if request.terminal.is_some() {
+        let (controller, input) = super::terminal::Controller::new(worker, stdin);
+        (Box::new(input), Some(controller))
+    } else {
+        (Box::new(stdin), None)
     };
     Ok(Child {
         process: child,
         pid: reply.pid,
         stdin,
-        stdout,
-        stderr,
+        stdout: Box::new(stdout),
+        stderr: Some(Box::new(stderr)),
+        terminal,
     })
 }
 
@@ -398,7 +390,7 @@ pub(super) fn run(path: &Path) -> Result<()> {
         return Err("worker request exceeds 1 MiB".into());
     }
     let request: Request = serde_json::from_slice(&data).map_err(|_| "invalid worker request")?;
-    if request.version != 4 || win::current_user()? != request.account {
+    if request.version != 5 || win::current_user()? != request.account {
         return Err("worker request identity or protocol mismatch".into());
     }
     if request.account == request.owner {
@@ -414,6 +406,13 @@ pub(super) fn run(path: &Path) -> Result<()> {
             .all(|value| value.is_ascii_hexdigit())
     {
         return Err("invalid execution desktop".into());
+    }
+    if let Some(size) = request.terminal {
+        let result = super::terminal::run(&request, size);
+        if let Err(error) = &result {
+            publish_reply(&request, 0, 0, Some(error.clone()))?;
+        }
+        return result;
     }
     let result = prepare_child(&request);
     let reply = match result {

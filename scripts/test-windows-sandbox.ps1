@@ -19,6 +19,7 @@ function Invoke-Checked([string]$Program, [string[]]$Arguments) {
 # The caller must run this explicit acceptance entry point as an administrator.
 # Normal product execution never invokes setup or requests elevation.
 Invoke-Checked python @('-B', 'scripts/cargo.py', 'build', '-p', 'ash-windows-sandbox', '--bin', 'ash-windows-sandbox', '--locked', '--target', $Target)
+Invoke-Checked python @('-B', 'scripts/cargo.py', 'build', '-p', 'ash-windows-sandbox', '--example', 'terminal_probe', '--locked', '--target', $Target)
 Invoke-Checked python @('-B', 'scripts/cargo.py', 'build', '-p', 'ash-windows-sandbox-service', '--bin', 'ash-windows-sandbox-service', '--locked', '--target', $Target)
 Invoke-Checked python @('-B', 'scripts/cargo.py', 'build', '-p', 'ash-network-proxy', '--example', 'probe', '--locked', '--target', $Target)
 if ($NetworkDnsServer) {
@@ -34,6 +35,7 @@ $service = Join-Path $bin 'ash-windows-sandbox-service.exe'
 Copy-Item -LiteralPath (Join-Path $workspace ".build/cargo/$Target/debug/ash-windows-sandbox-service.exe") -Destination $service
 $env:ASH_WINDOWS_SANDBOX_BIN = $binary
 $env:ASH_NETWORK_PROBE = Join-Path $workspace ".build/cargo/$Target/debug/examples/probe.exe"
+$env:ASH_TERMINAL_PROBE = Join-Path $workspace ".build/cargo/$Target/debug/examples/terminal_probe.exe"
 $servicePlanFile = Join-Path $output 'service-install-plan.json'
 & $service plan install | Set-Content -LiteralPath $servicePlanFile -Encoding utf8
 if ($LASTEXITCODE -ne 0) { throw 'Could not prepare service installation plan.' }
@@ -63,7 +65,7 @@ try {
     if ($LASTEXITCODE -eq 0) { throw 'Service removal accepted a remaining user runtime.' }
     Invoke-Checked $binary @('status')
     Invoke-Checked python @('-B', 'scripts/cargo.py', 'test', '-p', 'ash-windows-sandbox-service', '--locked', '--target', $Target)
-    Invoke-Checked python @('-B', 'scripts/cargo.py', 'test', '-p', 'ash-windows-sandbox', '--lib', '--test', 'windows', '--locked', '--target', $Target, '--', '--include-ignored', '--nocapture', '--test-threads=1')
+    Invoke-Checked python @('-B', 'scripts/cargo.py', 'test', '-p', 'ash-windows-sandbox', '--lib', '--test', 'windows', '--test', 'terminal', '--locked', '--target', $Target, '--', '--include-ignored', '--nocapture', '--test-threads=1')
     if ($NetworkDnsServer) {
         Invoke-Checked python @('-B', 'scripts/cargo.py', '--process-tests', 'test', '-p', 'ash-windows-sandbox', '--test', 'network_matrix', '--locked', '--target', $Target, '--', '--ignored', '--nocapture', '--test-threads=1')
     }
@@ -91,7 +93,7 @@ try {
     $after = Get-Content -LiteralPath $afterFile -Raw | ConvertFrom-Json
     if (($before.changes.accounts | ConvertTo-Json -Depth 10 -Compress) -ne ($after.changes.accounts | ConvertTo-Json -Depth 10 -Compress)) { throw 'Update changed the provisioned accounts.' }
     if (($before.changes.networkObjects | ConvertTo-Json -Depth 30 -Compress) -ne ($after.changes.networkObjects | ConvertTo-Json -Depth 30 -Compress)) { throw 'Update changed the installed network objects.' }
-    Invoke-Checked python @('-B', 'scripts/cargo.py', 'test', '-p', 'ash-windows-sandbox', '--test', 'windows', '--locked', '--target', $Target, '--', '--include-ignored', '--test-threads=1')
+    Invoke-Checked python @('-B', 'scripts/cargo.py', 'test', '-p', 'ash-windows-sandbox', '--test', 'windows', '--test', 'terminal', '--locked', '--target', $Target, '--', '--include-ignored', '--test-threads=1')
     $stream = [IO.File]::Open($service, [IO.FileMode]::Append, [IO.FileAccess]::Write, [IO.FileShare]::None)
     try { $stream.WriteByte(1) } finally { $stream.Dispose() }
     $serviceUpdateFile = Join-Path $output 'service-update-plan.json'

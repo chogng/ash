@@ -9,6 +9,7 @@ mod process;
 mod proxy;
 mod runtime;
 pub(crate) mod service;
+mod terminal;
 pub(crate) mod win;
 
 use account::NetworkMode;
@@ -301,7 +302,7 @@ struct Resources {
     _directory_pin: win::Handle,
     _directory: Directory,
     _lease: runtime::Lease,
-    terminal: Option<ash_utils_pty::PreparedConPty>,
+    terminal: Option<terminal::Controller>,
 }
 
 struct Process {
@@ -353,16 +354,7 @@ fn spawn(request: &Execution) -> Result<Process, String> {
         })
         .transpose()?;
     let job = job::Job::new(&lease.account.name)?;
-    let mut terminal = match request.io {
-        ash_sandboxing::ProcessIo::Pipes => None,
-        ash_sandboxing::ProcessIo::Pty(size) => {
-            Some(ash_utils_pty::PreparedConPty::new(size).map_err(|error| error.to_string())?)
-        }
-    };
-    let pipes = terminal
-        .is_none()
-        .then(|| process::Pipes::new(&owner, &lease.account.sid))
-        .transpose()?;
+    let pipes = process::Pipes::new(&owner, &lease.account.sid)?;
     let mut environment = BTreeMap::new();
     for entry in &request.env {
         let (name, value) = entry.split_once('=').ok_or("invalid environment entry")?;
@@ -393,7 +385,7 @@ fn spawn(request: &Execution) -> Result<Process, String> {
         environment.insert("NO_PROXY".into(), String::new());
     }
     let worker = process::Request {
-        version: 4,
+        version: 5,
         owner,
         account: lease.account.sid.clone(),
         capability,
@@ -403,8 +395,12 @@ fn spawn(request: &Execution) -> Result<Process, String> {
             .into_iter()
             .map(|(key, value)| format!("{key}={value}"))
             .collect(),
-        pipes: pipes.as_ref().map(|pipes| pipes.names.clone()),
+        pipes: Some(pipes.names.clone()),
         pseudoconsole: None,
+        terminal: match request.io {
+            ash_sandboxing::ProcessIo::Pipes => None,
+            ash_sandboxing::ProcessIo::Pty(size) => Some([size.rows, size.cols]),
+        },
         reply: directory.0.join("reply.json"),
         desktop: desktop.name.clone(),
     };
@@ -433,7 +429,6 @@ fn spawn(request: &Execution) -> Result<Process, String> {
         &resources._directory.0,
         &worker,
         pipes,
-        terminal.as_mut(),
         &resources.job,
     )?;
     result.pid = child.pid;
@@ -441,7 +436,7 @@ fn spawn(request: &Execution) -> Result<Process, String> {
     result.stdin = Some(child.stdin);
     result.stdout = Some(child.stdout);
     result.stderr = child.stderr;
-    result.resources.as_mut().unwrap().terminal = terminal;
+    result.resources.as_mut().unwrap().terminal = child.terminal;
     Ok(result)
 }
 
@@ -484,8 +479,15 @@ impl SandboxProcess for Process {
                 if unsafe { GetExitCodeProcess(process.0, &mut code) } == 0 {
                     return Err(io::Error::last_os_error());
                 }
-                self.exit = Some(code as i32);
+                if let Some(terminal) = self
+                    .resources
+                    .as_ref()
+                    .and_then(|resources| resources.terminal.as_ref())
+                {
+                    terminal.wait_for_close().map_err(io::Error::other)?;
+                }
                 self.finish()?;
+                self.exit = Some(code as i32);
                 Ok(Some(SandboxProcessExitStatus::Code(code as i32)))
             }
             _ => Err(io::Error::last_os_error()),
@@ -493,6 +495,18 @@ impl SandboxProcess for Process {
     }
     fn close(&mut self) -> io::Result<()> {
         self.finish()
+    }
+    fn interrupt(&mut self) -> io::Result<()> {
+        self.resources
+            .as_ref()
+            .and_then(|resources| resources.terminal.as_ref())
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "process is not attached to ConPTY",
+                )
+            })?
+            .interrupt()
     }
     fn resize(&mut self, size: ash_utils_pty::TerminalSize) -> io::Result<()> {
         self.resources

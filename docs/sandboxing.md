@@ -19,7 +19,7 @@ flowchart TD
     proxy --> core
 ```
 
-产品在 Windows 上按 `mxc`、`windows` 顺序注册两个候选；Linux/macOS 只注册 MXC。Windows 本地工具目前选择 `WindowsAccount` 作为最低隔离要求，能力足够时仍优先使用 PSEC。账户后端已接入安装身份、授权、运行器和打包，并取得本机 23H2 的部分验收证据；它不能满足 `Strict`，完整平台及组合验收尚未完成。
+产品在 Windows 上按 `mxc`、`windows` 顺序注册两个候选；Linux/macOS 只注册 MXC。Windows 本地工具选择 `WindowsAccount` 作为最低隔离要求，能力足够时仍优先使用 PSEC。账户后端已接入安装身份、授权、运行器和打包，23H2 x64 已通过普通用户 App Server RPC 和受限交互终端实机验收。ARM64、Server 2022/2025 的账户安装、更新及执行已有 CI 证据；新增终端用例的跨平台结果另行记录。当前产品完成标准是 Codex 的 Windows 账户模型，`Strict` 的保证仍由支持它的独立后端承担。
 
 | Owner | 职责 |
 | --- | --- |
@@ -95,7 +95,7 @@ flowchart TD
 
 ## 持续执行与终端目标
 
-`tool-executor` 检查审批后调用 `exec-server`；`sandboxing::SandboxProcess` 提供管道、PTY、等待和关闭。受限 PTY 通过宿主明确配置的内部启动器接入 MXC；macOS 已有真实进程覆盖，Windows/Linux 仍需实机验收。
+`tool-executor` 检查审批后调用 `exec-server`；`sandboxing::SandboxProcess` 提供管道、PTY、等待和关闭。MXC 的受限 PTY 通过宿主明确配置的内部启动器接入，macOS 已有真实进程覆盖，Linux 仍需实机验收。WindowsAccount 的 ConPTY 由账户运行器创建并持有，通过私有管道传递输入、输出、尺寸及中断；23H2 x64 的真实命令会话验收已通过。
 
 - `exec-server` 拥有持续执行的进程记录、输出游标、等待预算、硬超时、输入和终止；工具层和远程接口不复制这些状态。
 - 后端在准备阶段检查管道或 PTY 能力，创建时一并施加隔离。`utils/pty` 适配已被沙箱创建的进程；不能另开一个普通 shell 来实现交互。
@@ -150,13 +150,15 @@ Codex 的专用账户实现是行为参考。Ash 不直接注册其产品 crate�
 
 2026-09-11 实机追踪确认：移除限制 SID 中的 Everyone 后，Windows PowerShell 的 CLR 调用 `NtCreatePrivateNamespace` 返回 `STATUS_ACCESS_DENIED`。该调用的边界描述符包含 Everyone。增加 `BaseNamedObjects` 目录权限不能替代这项检查；相关试验权限已撤销，产品安装清单不保留这些目录授权。
 
-产品已明确采用 Codex 的 Windows 账户安全模型。令牌保留文件 SID、登录 SID 和 Everyone；可信登录进程使用默认登录桌面，退出后才恢复私有桌面上的受限命令。普通执行不再配置设备或命名对象目录权限。
+产品已明确采用 Codex 的 Windows 账户安全模型。令牌保留文件 SID、登录 SID 和 Everyone；可信登录进程使用默认登录桌面，受限命令使用本次执行的私有桌面。管道模式的登录进程在恢复命令前退出；终端模式的运行器继续持有 ConPTY，其进程、令牌、已有线程和后续线程权限只授予调用者与 System，并抑制账户作为对象所有者的隐含权限。运行器与命令由同一个 Job 回收。普通执行不配置设备或命名对象目录权限。
 
 WindowsAccount 在执行前检查工作目录、Grant、临时目录、用户目录、PATH 和系统目录的候选路径及直接子项。每目录最多 1000 项，总计最多 50000 项、2 秒；重解析路径不纳入这项审计，读取失败和截断会报告。审计发现授权 ACL 范围外的 Everyone 可写路径时，拒绝启动并列出需要另行处理的路径；范围内的只读和隐藏项使用明确拒绝 ACE。该扫描不证明整个宿主只读。
 
 每次执行独占账户租约，ACL 日志位于安装根下按账户隔离的私有目录，不放进子进程可写的运行目录。结束后先回收进程树，再恢复 ACL；未完成的执行阻止账户复用，显式删除安装时恢复遗留日志。FullAccess 与受限网络的组合仍不由此账户后端提供。
 
 这些能力已有本机账户模型证据，但不能扩大为所有 Windows 版本均受支持或整个宿主不可写。PSEC 的 ARM64 CI 成功证据独立记录，不能替代本机 x64 的能力检查。缺少合格且支持完整请求的实现时，受限执行必须拒绝。
+
+2026-10-02 的 [AppContainer 与 LPAC 实机验证](windows-sandbox-acceptance-runbook.md#2026-10-02-appcontainer-与-lpac-可行性验证) 未形成可接入的 Strict 实现：两种普通令牌均存在授权外目录写入反例；给 LPAC 叠加独有写入限制 SID 后，这组目录 I/O 限制成立，但 cmd 与 PowerShell 初始化失败。因此没有继续实现该候选的受管网络，WindowsAccount 和 Strict 的保证仍分别维护。本轮结果不等于旧版 Windows 无法实现其他沙箱方案。
 
 ## 当前验证范围
 
@@ -169,12 +171,14 @@ WindowsAccount 在执行前检查工作目录、Grant、临时目录、用户目
 | PSEC 受管代理与 Windows UI 策略 | UI 策略下 cmd/PowerShell 在 25H2 ARM64 CI 上执行通过；该机器仅支持 PSEC 1.0，缺独立入口策略。严格 Managed 仍在准备阶段拒绝，正式代理身份及网络成功路径未完成；见 [契约复核](windows-sandbox-acceptance-runbook.md#2026-10-02-server-与-psec-契约复核) |
 | MXC 与 Windows 账户后端的组合选择 | 已接线；两个隔离模型的真实组合验证待补 |
 | 路径级规则、最小读取基线、受控 IPC | 对齐目标；现有目录作用域及全禁 Unix socket 策略不足以覆盖 |
-| 沙箱内 PTY、持续输入与会话管理 | 已接线并有 macOS 真实进程测试；Windows/Linux 交叉编译不代表实机验收 |
+| 沙箱内 PTY、持续输入与会话管理 | macOS 已有真实进程测试；WindowsAccount 23H2 x64 的输入、尺寸、退出码、会话归属、权限与六种结束方式通过，见 [终端验收](windows-sandbox-acceptance-runbook.md#2026-10-02-codex-账户模型与交互终端验收)；Linux 未实机验收 |
 | macOS MXC 执行、目录与代理隔离 | 保留真实进程回归入口 |
 | Linux MXC 受管网络 | WSL2 Ubuntu x64 的 NAT/mirrored HTTP/CONNECT/SOCKS、域名策略、IPv4/IPv6 与 TCP/UDP A/AAAA DNS 矩阵通过；两种模式另通过临时隧道出口的公网 IPv6 与端口 53 验证；NAT Windows IPv6 链路本地和 mirrored Windows IPv4 回环目标通过 |
 | Windows MXC PSEC | Windows 11 25H2 ARM64 CI 的 7 项指定成功路径通过；23H2 x64 本机能力不足；PSEC 网络流量矩阵与 ConPTY 未验证 |
+| Windows AppContainer／LPAC 严格隔离候选 | 23H2 x64 实机第一阶段未通过：普通模式出现授权外写入；叠加写入限制后的命令初始化失败。未接入产品、未实施网络阶段；见 [实机证据](windows-sandbox-acceptance-runbook.md#2026-10-02-appcontainer-与-lpac-可行性验证) |
 | 已退出的账户原型 | 曾完成 2 项完整用例、4 项失败；测试账户、网络对象和运行时目录已清理 |
 | 独立 Windows 账户后端 | 23H2 本机 36 项账户单测、9 项服务测试与 10 项完整执行用例通过；最新 ARM64、Server 2022/2025 CI 各通过 9 项服务、36 项账户和更新前后各 11 项执行用例，包含安装、两种程序更新、ACL 恢复与清理，首次尝试全部通过；见 [冷启动复核](windows-sandbox-acceptance-runbook.md#2026-10-02-server-与-psec-契约复核) |
+| Windows App Server 产品调用链 | 23H2 x64 普通用户的真实 RPC → Core → 工具执行器 → 账户沙箱 → cmd → PowerShell 验收通过，覆盖身份、目录、禁读规则、Git 配置、退出码、执行一次和 ACL 恢复；本轮再次通过 |
 | IPv6 断网、双账户并发 | 实机通过 |
 | WindowsAccount DNS/IPv6 网络矩阵 | 23H2 x64 的 Denied/Managed/Allowed、实际 IPv6 端口 53、域名及代理授权、后代与监听用例通过，新增临时隧道出口的公网 IPv6 验证；此公网矩阵未纳入默认 ARM64/Server CI |
 | 崩溃恢复 | 已验证准备期间进程被终止后的日志恢复；运行中全部崩溃组合未穷尽 |

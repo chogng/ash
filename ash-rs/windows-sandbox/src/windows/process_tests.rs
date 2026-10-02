@@ -221,7 +221,7 @@ fn restricted_child_attaches_to_execution_owned_conpty() {
         })
         .unwrap();
     let request = Request {
-        version: 4,
+        version: 5,
         owner: owner.clone(),
         account: owner,
         capability: capability.into(),
@@ -237,6 +237,7 @@ fn restricted_child_attaches_to_execution_owned_conpty() {
         ],
         pipes: None,
         pseudoconsole: Some(terminal.pseudoconsole_handle() as usize),
+        terminal: None,
         reply: directory.join("unused-reply.json"),
         desktop: desktop.name.clone(),
     };
@@ -283,7 +284,7 @@ fn check_child(command: String) -> (String, String) {
     let pipes = Pipes::new(&owner, &owner).unwrap();
     let system = std::env::var("SystemRoot").unwrap();
     let request = Request {
-        version: 4,
+        version: 5,
         owner: owner.clone(),
         account: owner,
         capability: capability.into(),
@@ -298,6 +299,7 @@ fn check_child(command: String) -> (String, String) {
         ],
         pipes: Some(pipes.names.clone()),
         pseudoconsole: None,
+        terminal: None,
         reply: directory.join("unused-reply.json"),
         desktop: desktop.name.clone(),
     };
