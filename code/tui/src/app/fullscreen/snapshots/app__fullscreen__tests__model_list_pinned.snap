@@ -16,5 +16,5 @@ expression: rendered
             │  Unconfigured model                                                     │             
             │                                                                         │             
   ──────────│                                                                         │───────────  
-  > Build an│  ↑↓ select · / search · P pin/unpin · Enter apply · Esc cancel          │             
+  > Build an│  ↑↓ select · / search · p unpin · Enter apply · Esc cancel              │             
   ──────────└─────────────────────────────────────────────────────────────────────────┘atic model

@@ -221,22 +221,35 @@ impl ListSelection<ModelSelectionAction> {
     }
 
     pub(crate) fn model_key_hints(&self) -> &crate::widgets::key_hint::KeyHints {
-        if !self.state().items_focused()
-            || self
-                .state()
-                .selected_item()
-                .and_then(|item| item.id())
-                .is_none()
-        {
+        if !self.state().items_focused() {
             return self.key_hints();
         }
-        key_hints(
-            self.state()
-                .selected_item()
-                .and_then(|item| item.id())
-                .and_then(|id| self.action(id))
-                .is_some_and(ModelSelectionAction::supports_effort),
-        )
+        let Some(action @ ModelSelectionAction::Select { pinned, .. }) = self
+            .state()
+            .selected_item()
+            .and_then(|item| item.id())
+            .and_then(|id| self.action(id))
+        else {
+            return self.key_hints();
+        };
+        static HINTS: std::sync::LazyLock<[[crate::widgets::key_hint::KeyHints; 2]; 2]> =
+            std::sync::LazyLock::new(|| {
+                ["pin", "unpin"].map(|pin_action| {
+                    [false, true].map(|supports_effort| {
+                        let mut hints = crate::widgets::key_hint::KeyHints::compact()
+                            .with_compact_action("↑↓", "select");
+                        if supports_effort {
+                            hints = hints.with_compact_action("←→", "adjust");
+                        }
+                        hints
+                            .with_compact_action("/", "search")
+                            .with_compact_action("p", pin_action)
+                            .with_compact_action("Enter", "apply")
+                            .with_compact_action("Esc", "cancel")
+                    })
+                })
+            });
+        &HINTS[usize::from(*pinned)][usize::from(action.supports_effort())]
     }
 
     pub(crate) fn replace_model_choices(&mut self, choices: ModelChoices) {
@@ -255,30 +268,6 @@ impl ListSelection<ModelSelectionAction> {
                 self.state_mut().set_item_segmented_value(&id, value);
             }
         }
-    }
-}
-
-pub(crate) fn key_hints(supports_effort: bool) -> &'static crate::widgets::key_hint::KeyHints {
-    fn hints(supports_effort: bool) -> crate::widgets::key_hint::KeyHints {
-        let mut hints =
-            crate::widgets::key_hint::KeyHints::compact().with_compact_action("↑↓", "select");
-        if supports_effort {
-            hints = hints.with_compact_action("←→", "effort");
-        }
-        hints
-            .with_compact_action("/", "search")
-            .with_compact_action("P", "pin/unpin")
-            .with_compact_action("Enter", "apply")
-            .with_compact_action("Esc", "cancel")
-    }
-    static WITH_EFFORT: std::sync::LazyLock<crate::widgets::key_hint::KeyHints> =
-        std::sync::LazyLock::new(|| hints(true));
-    static WITHOUT_EFFORT: std::sync::LazyLock<crate::widgets::key_hint::KeyHints> =
-        std::sync::LazyLock::new(|| hints(false));
-    if supports_effort {
-        &WITH_EFFORT
-    } else {
-        &WITHOUT_EFFORT
     }
 }
 

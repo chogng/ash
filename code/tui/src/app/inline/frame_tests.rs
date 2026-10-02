@@ -551,13 +551,73 @@ fn model_list_opens_inline_and_restores_input_after_close() {
         ]
     );
     assert!(!text(&buffer).contains("openai"));
-    crate::tui_assert_snapshot!("model_list", text(&buffer));
+    let unpinned = text(&buffer);
+    assert!(
+        app.command_panel_key_hints()
+            .unwrap()
+            .text()
+            .contains("p pin")
+    );
+    assert!(
+        !app.command_panel_key_hints()
+            .unwrap()
+            .text()
+            .contains("unpin")
+    );
     app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
     assert!(text(&render(&app, 100, 32)).contains("██ ██ ██"));
+    let mut settings = TerminalSettings::default();
+    settings.set_screen_mode(ScreenMode::Inline);
+    settings.set_language(crate::nls::Language::Chinese);
+    app.update(ConfigEvent::SettingsReceived(settings));
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE)),
+        Some(AppCommand::Models(crate::models::Command::Pin {
+            preference: "openai/gpt-test".into(),
+            pinned: true,
+        }))
+    );
+    config.tui.0.insert(
+        "pinnedModels".into(),
+        serde_json::json!([{"provider":"openai", "model":"gpt-test"}]),
+    );
+    app.update(ModelEvent::PickerUpdated(
+        crate::models::model_choices(&catalog, &config).unwrap(),
+    ));
+    assert_eq!(
+        app.command_panel_key_hints()
+            .unwrap()
+            .localized_text(crate::nls::Language::Chinese),
+        "↑↓ 选择 · ←→ 调整 · / 搜索 · p 取消固定 · Enter 应用 · Esc 取消"
+    );
+    let pinned = text(&render(&app, 100, 32));
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE)),
+        Some(AppCommand::Models(crate::models::Command::Pin {
+            preference: "openai/gpt-test".into(),
+            pinned: false,
+        }))
+    );
+    config.tui.0.remove("pinnedModels");
+    app.update(ModelEvent::PickerUpdated(
+        crate::models::model_choices(&catalog, &config).unwrap(),
+    ));
+    assert_eq!(
+        app.command_panel_key_hints()
+            .unwrap()
+            .localized_text(crate::nls::Language::Chinese),
+        "↑↓ 选择 · ←→ 调整 · / 搜索 · p 固定 · Enter 应用 · Esc 取消"
+    );
+    let unpinned_chinese = text(&render(&app, 100, 32));
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_none());
     assert!(app.chat_input_focused());
     assert_eq!(app.input(), "keep this draft");
+    crate::tui_assert_snapshot!("model_list", unpinned);
+    crate::tui_assert_snapshot!(
+        "model_pin_actions_chinese",
+        format!("Pinned\n{pinned}\n\nUnpinned\n{unpinned_chinese}")
+    );
 }
 
 #[test]

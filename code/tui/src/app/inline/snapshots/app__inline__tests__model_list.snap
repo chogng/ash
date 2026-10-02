@@ -1,6 +1,6 @@
 ---
 source: code/tui/src/app/inline/frame_tests.rs
-expression: text(&buffer)
+expression: unpinned
 ---
                                                                                                     
     ▄  ▄     Ash Code v0.1.0                                                                        
@@ -33,4 +33,4 @@ expression: text(&buffer)
   ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  
 > GPT Test    ← ██ ██ ██ → Medium                                                                   
                                                                                                     
-  ↑↓ select · ←→ effort · / search · P pin/unpin · Enter apply · Esc cancel
+  ↑↓ select · ←→ adjust · / search · p pin · Enter apply · Esc cancel

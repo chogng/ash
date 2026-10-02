@@ -333,6 +333,61 @@ fn configured_model_is_selected_when_picker_opens() {
 }
 
 #[test]
+fn model_hints_follow_selected_pin_state_capabilities_and_search_focus() {
+    use crate::widgets::list_selection::ListSelection;
+    use crate::widgets::list_selection::ListSelectionOutcome;
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyEvent;
+    use crossterm::event::KeyModifiers;
+
+    let mut adjustable = catalog_entry("openai", "adjustable", "Adjustable");
+    adjustable.supported_reasoning_efforts = vec![
+        ash_protocol::ReasoningEffort::Low,
+        ash_protocol::ReasoningEffort::High,
+    ];
+    let catalog = ModelListResult {
+        models: vec![adjustable, catalog_entry("openai", "simple", "Simple")],
+    };
+    for pinned in [false, true] {
+        let mut config = crate::test_support::empty_config_snapshot();
+        if pinned {
+            config.tui.0.insert(
+                "pinnedModels".into(),
+                serde_json::json!([
+                    {"provider":"openai", "model":"adjustable"},
+                    {"provider":"openai", "model":"simple"}
+                ]),
+            );
+        }
+        let choices = model_choices(&catalog, &config).unwrap();
+        let mut picker = ListSelection::new(choices.model, choices.actions);
+        for (model, supports_effort) in [("adjustable", true), ("simple", false)] {
+            let hints = picker.model_key_hints().text();
+            assert!(hints.contains(if pinned { "p unpin" } else { "p pin" }));
+            assert!(!hints.contains(if pinned { "p pin" } else { "p unpin" }));
+            assert_eq!(hints.contains("←→ adjust"), supports_effort);
+            assert_eq!(
+                picker.handle_model_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE)),
+                ListSelectionOutcome::Activate(ModelSelectionAction::Pin {
+                    preference: format!("openai/{model}"),
+                    pinned: !pinned,
+                })
+            );
+            picker.handle_model_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        }
+        picker.handle_model_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+        assert!(!picker.model_key_hints().text().contains("p pin"));
+        assert!(!picker.model_key_hints().text().contains("p unpin"));
+        assert!(!picker.model_key_hints().text().contains("←→ adjust"));
+        assert_eq!(
+            picker.handle_model_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE)),
+            ListSelectionOutcome::Consumed
+        );
+        assert_eq!(picker.state().query(), "p");
+    }
+}
+
+#[test]
 fn malformed_or_duplicate_pins_are_rejected() {
     let mut tui = ash_app_server_protocol::protocol::config::FrontendConfigDto::default();
     for value in [

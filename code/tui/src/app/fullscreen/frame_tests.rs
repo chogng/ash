@@ -3111,7 +3111,7 @@ fn model_picker_cycles_supported_effort_in_place_and_commits_on_enter() {
     settings.set_language(crate::nls::Language::Chinese);
     chinese.update(crate::config::Event::SettingsReceived(settings));
     chinese.update(ModelEvent::PickerOpened(choices()));
-    assert!(render(&chinese, 100, 18).contains("←→ 思 考"));
+    assert!(render(&chinese, 100, 18).contains("←→ 调 整"));
 
     app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
     assert!(render(&app, 100, 18).contains("██ ██ ██"));
