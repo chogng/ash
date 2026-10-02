@@ -1,3 +1,5 @@
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
+
 /**
  * JSON-backed application state available to the Electron main process.
  *
@@ -11,3 +13,4 @@ export interface IStateService {
 	flush(): Promise<void>;
 	close(): Promise<void>;
 }
+export const IStateService = createServiceIdentifier<IStateService>('stateService');

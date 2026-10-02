@@ -1,26 +1,29 @@
-import { _electron, chromium, expect, test } from '@playwright/test';
+import { _electron, chromium, expect, test, type TestInfo } from '@playwright/test';
+import type { Menu, Tray } from 'electron';
 import { spawn } from 'node:child_process';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { resolveElectronConfiguration, type ElectronConfiguration } from '../../../automation/electron.js';
 import { Workbench } from '../../../automation/workbench.js';
+import { URI } from '../../../../src/ash/base/common/uri.js';
 
 const desktop = resolve(import.meta.dirname, '../../../..');
 const mainOutput = resolve(desktop, '../.build/app-ts/main/src');
 
-test.beforeEach(({}, testInfo) => {
-	test.skip(testInfo.project.name !== 'electron-ui', 'Bootstrap scenarios exercise the Electron host without a backend.');
-});
+interface ShellProbe {
+	__ashTray: Tray;
+	__ashTrayMenu: Menu;
+	__ashTrayTooltip: string;
+	__ashQuitVetoCount: number;
+}
 
-test('Desktop starts when its application entry loads after Electron is ready', async ({}, testInfo) => {
-	const userDataDirectory = testInfo.outputPath('user-data');
-	await mkdir(userDataDirectory, { recursive: true });
-	const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory });
+async function writeShellEntry(testInfo: TestInfo): Promise<string> {
 	const entry = testInfo.outputPath('late-start.mjs');
 	await writeFile(entry, `
 import { app, Tray } from 'electron/main';
+import { writeFileSync } from 'node:fs';
 import { bootstrapElectronMain } from ${JSON.stringify(pathToFileURL(join(mainOutput, 'bootstrap.js')).href)};
 bootstrapElectronMain();
 app.setAppPath(${JSON.stringify(desktop)});
@@ -30,11 +33,29 @@ Tray.prototype.setToolTip = function(text) {
 	globalThis.__ashTrayTooltip = text;
 	setToolTip.call(this, text);
 };
+const setContextMenu = Tray.prototype.setContextMenu;
+Tray.prototype.setContextMenu = function(menu) {
+	globalThis.__ashTrayMenu = menu;
+	setContextMenu.call(this, menu);
+};
+app.on('quit', () => writeFileSync(${JSON.stringify(testInfo.outputPath('tray-cleanup.json'))}, JSON.stringify({ destroyed: globalThis.__ashTray.isDestroyed() })));
 void app.whenReady().then(async () => {
 	const { startElectronApplication } = await import(${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/code/electron-main/startElectronApplication.js')).href)});
 	startElectronApplication({ initialModeId: 'code' });
 });
 `);
+	return entry;
+}
+
+test.beforeEach(({}, testInfo) => {
+	test.skip(testInfo.project.name !== 'electron-ui', 'Bootstrap scenarios exercise the Electron host without a backend.');
+});
+
+test('Desktop starts when its application entry loads after Electron is ready', async ({}, testInfo) => {
+	const userDataDirectory = testInfo.outputPath('user-data');
+	await mkdir(userDataDirectory, { recursive: true });
+	const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory });
+	const entry = await writeShellEntry(testInfo);
 	const application = await _electron.launch({
 		executablePath: configuration.executablePath,
 		args: configuration.args.map(argument => argument === desktop ? entry : argument),
@@ -49,6 +70,12 @@ void app.whenReady().then(async () => {
 			windows: BrowserWindow.getAllWindows().length,
 		}))).toEqual({ ready: true, windows: 1 });
 		if (process.platform === 'win32' || process.platform === 'darwin') {
+			await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu?.items.map(item => item.label || item.type))).toEqual(['Show Ash', 'New Window', 'Open Agents Window', 'separator', 'Recent Folders & Workspaces', 'separator', 'Quit Ash']);
+			expect(await application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.submenu)!.submenu!.items.map(item => ({ label: item.label, enabled: item.enabled, type: item.type })))).toEqual([
+				{ label: 'No Recent Projects', enabled: false, type: 'normal' },
+				{ label: '', enabled: true, type: 'separator' },
+				{ label: 'Clear Recently Opened', enabled: false, type: 'normal' },
+			]);
 			expect(await application.evaluate(() => (globalThis as typeof globalThis & { __ashTrayTooltip?: string }).__ashTrayTooltip)).toBe('Ash');
 			if (process.platform === 'darwin') {
 				expect(await application.evaluate(({ app }) => app.dock!.isVisible())).toBe(true);
@@ -81,8 +108,32 @@ void app.whenReady().then(async () => {
 			await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMinimized())).toBe(true);
 			await application.evaluate(() => (globalThis as typeof globalThis & { __ashTray: { emit(event: string): void } }).__ashTray.emit('click'));
 			await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMinimized())).toBe(false);
+			await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].minimize());
+			await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMinimized())).toBe(true);
+			await application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.label === 'Show Ash')!.click({ altKey: false }));
+			await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMinimized())).toBe(false);
+			await application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.label === 'New Window')!.click({ altKey: false }));
+			await expect.poll(() => application.windows().length).toBe(2);
+			await new Workbench(application.windows()[1]!).waitForReady();
+			const projectPath = testInfo.outputPath('tray project with spaces');
+			await mkdir(projectPath, { recursive: true });
+			await page.evaluate(async folderUri => {
+				await (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<unknown> } } }).ash.ipcRenderer.invoke('ash:workspaces:recent:add', { workspaces: [{ folderUri, label: 'Tray project' }] });
+			}, URI.file(projectPath).toString());
+			await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.submenu)!.submenu!.items[0]!.label)).toBe('Tray project');
+			for (const window of application.windows()) await expect(window.locator('.ash-getting-started-recent-name')).toHaveText(['Tray project']);
+			await application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.submenu)!.submenu!.items[0]!.click({ altKey: false }));
+			await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some(window => window.getTitle().includes('tray project with spaces')))).toBe(true);
+			await application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.submenu)!.submenu!.items.find(item => item.label === 'Clear Recently Opened')!.click({ altKey: false }));
+			await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.submenu)!.submenu!.items[0]!.label)).toBe('No Recent Projects');
+			await expect(page.locator('.ash-getting-started-recent-name')).toHaveCount(0);
+			const agentsOpened = application.waitForEvent('window');
+			await application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.label === 'Open Agents Window')!.click({ altKey: false }));
+			await expect((await agentsOpened).locator('.ash-sessions-window')).toBeVisible();
+			await application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.label === 'Open Agents Window')!.click({ altKey: false }));
+			expect(application.windows().filter(window => window.url().includes('sessions'))).toHaveLength(1);
 			if (process.platform === 'darwin') {
-				await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close());
+				await application.evaluate(({ BrowserWindow }) => { for (const window of BrowserWindow.getAllWindows()) window.close(); });
 				await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(0);
 				await application.evaluate(() => (globalThis as typeof globalThis & { __ashTray: { emit(event: string): void } }).__ashTray.emit('click'));
 				await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1);
@@ -90,6 +141,68 @@ void app.whenReady().then(async () => {
 		}
 	} finally {
 		await application.close();
+	}
+});
+
+test('tray Quit honors a window veto, keeps services usable, and restores drafts after shutdown', async ({}, testInfo) => {
+	test.skip(process.platform !== 'win32' && process.platform !== 'darwin', 'The tray is available on Windows and macOS.');
+	test.setTimeout(60_000);
+	const userDataDirectory = testInfo.outputPath('user-data');
+	await mkdir(userDataDirectory, { recursive: true });
+	const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory });
+	const entry = await writeShellEntry(testInfo);
+	const options = { executablePath: configuration.executablePath, args: configuration.args.map(argument => argument === desktop ? entry : argument), cwd: configuration.cwd, env: configuration.env };
+	let application = await _electron.launch(options);
+	try {
+		const page = await application.firstWindow();
+		const workbench = new Workbench(page);
+		await workbench.waitForReady();
+		await page.keyboard.press('F1');
+		await page.locator('.ash-quick-pick').getByRole('combobox').fill('New Untitled Text Editor');
+		await page.keyboard.press('Enter');
+		const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
+		await input.focus();
+		await input.type('unsaved tray draft');
+		await application.evaluate(({ BrowserWindow }) => {
+			const contents = BrowserWindow.getAllWindows()[0]!.webContents;
+			const original = contents.send.bind(contents);
+			const state = globalThis as typeof globalThis & ShellProbe;
+			state.__ashQuitVetoCount = 0;
+			contents.send = (channel, ...args) => {
+				if (channel !== 'ash:window:prepare-close') { original(channel, ...args); return; }
+				contents.send = original;
+				// Simulate a renderer veto at the real close-protocol boundary, before shutdown.
+				void contents.executeJavaScript(`globalThis.ash.ipcRenderer.invoke('ash:window:close-response', { kind: 'vetoed', token: ${Number(args[0])} })`).then(() => state.__ashQuitVetoCount++);
+			};
+		});
+		await application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.label === 'Quit Ash')!.click({ altKey: false }));
+		await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashQuitVetoCount)).toBe(1);
+		await expect(workbench.editors.groupAt(0).content.locator('.stanza-editor-line-text').first()).toContainText('unsaved tray draft');
+		await page.evaluate(async () => {
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { source: string } };
+			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify({ ...JSON.parse(snapshot.document.source), 'workbench.locale': 'zh-cn' }) } });
+		});
+		await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.map(item => item.label || item.type))).toEqual(['显示 Ash', '新建窗口', '打开 Agents 窗口', 'separator', '最近的文件夹和工作区', 'separator', '退出 Ash']);
+		await application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.label === '新建窗口')!.click({ altKey: false }));
+		await expect.poll(() => application.windows().length).toBe(2);
+		await new Workbench(application.windows()[1]!).waitForReady();
+		await page.evaluate(async () => {
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { source: string } };
+			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify({ ...JSON.parse(snapshot.document.source), 'workbench.locale': 'en' }) } });
+		});
+		await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.at(-1)!.label)).toBe('Quit Ash');
+		const closed = application.waitForEvent('close');
+		await application.evaluate(() => { (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.label === 'Quit Ash')!.click({ altKey: false }); });
+		await closed;
+		expect(JSON.parse(await readFile(testInfo.outputPath('tray-cleanup.json'), 'utf8'))).toEqual({ destroyed: true });
+		application = await _electron.launch(options);
+		await expect.poll(() => application.windows().length).toBe(2);
+		for (const restoredPage of application.windows()) await new Workbench(restoredPage).waitForReady();
+		await expect(application.windows()[0]!.locator('.stanza-editor-line-text').first()).toContainText('unsaved tray draft');
+	} finally {
+		if (application.process().exitCode === null) await application.close();
 	}
 });
 

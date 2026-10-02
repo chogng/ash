@@ -389,6 +389,11 @@ export class WindowSessionStateHandler<TEntry extends IWindowSessionEntry> {
 		this.shuttingDown = true;
 	}
 
+	resumeAutomaticSaves(): void {
+		this.shuttingDown = false;
+		this.scheduleSave();
+	}
+
 	async saveSession(): Promise<void> {
 		const windows = this.getOpenWindows();
 		const entries = windows.length > 0 ? windows.map(window => window.entry) : this.lastClosedWindow ? [this.lastClosedWindow] : [];

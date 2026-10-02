@@ -5,7 +5,8 @@ import { AshApplicationId, AshApplicationName, AshRendererDirectory } from '../c
 import { developmentArtifactsPath } from '../../platform/environment/node/developmentArtifacts.js';
 import type { WorkbenchModeId } from '../../workbench/common/workbenchMode.js';
 import { resolveApplicationDataPaths, resolvePackagedRendererRoot } from './applicationPaths.js';
-import { electronWorkspaceLaunchArguments } from './electronWindowLaunch.js';
+import { electronWorkspaceLaunchArguments, parseElectronWindowLaunch } from './electronWindowLaunch.js';
+import { builtinLanguagePackCatalogs } from '../../workbench/services/localization/common/localizationCatalogs.js';
 import { parseLaunchArguments } from '../../platform/environment/node/argvHelper.js';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -31,7 +32,9 @@ export async function startElectronApplication(options: StartElectronApplication
 
 	app.setName(AshApplicationName);
 	configureApplicationDataPaths();
-	const args = parseLaunchArguments(electronWorkspaceLaunchArguments({ arguments: process.argv, packaging: app.isPackaged ? 'packaged' : 'development', appPath: app.getAppPath() }));
+	const messages = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'en')!.bundles.ash!;
+	const initialLaunchArguments = electronWorkspaceLaunchArguments({ arguments: process.argv, packaging: app.isPackaged ? 'packaged' : 'development', appPath: app.getAppPath() });
+	const { args } = parseElectronWindowLaunch(initialLaunchArguments, process.cwd(), messages['taskbar.invalidAgentsArguments']!);
 	if (args.wait && !args.waitMarkerFilePath) {
 		const marker = join(tmpdir(), `ash-wait-${randomUUID()}`);
 		await writeFile(marker, '', { flag: 'wx' });

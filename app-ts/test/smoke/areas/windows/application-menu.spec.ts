@@ -76,9 +76,7 @@ test.describe('File menu closes the workspace', () => {
 			await page.locator('.ash-quick-pick').getByRole('combobox').fill('Open Folder');
 			await page.keyboard.press('Enter');
 		}
-		await page.keyboard.press('F1');
-		await page.locator('.ash-quick-pick').getByRole('combobox').fill('New Untitled Text Editor');
-		await page.keyboard.press('Enter');
+		await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
 		await expect(workbench.editors.element.getByRole('tab', { name: /Untitled-1/ })).toBeVisible();
 		const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
 		await input.focus();
@@ -158,9 +156,7 @@ test.describe('File menu closes the workspace', () => {
 			dialog.showSaveDialog = (async () => ({ canceled: false, filePath: destination })) as typeof dialog.showSaveDialog;
 		}, destination);
 		try {
-			await page.keyboard.press('F1');
-			await page.locator('.ash-quick-pick').getByRole('combobox').fill('New Untitled Text Editor');
-			await page.keyboard.press('Enter');
+			await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
 			const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
 			await input.focus();
 			await input.type('saved through workspace shutdown');

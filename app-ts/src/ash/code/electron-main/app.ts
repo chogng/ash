@@ -8,7 +8,7 @@ import { RendererWorkspaceHost } from "../../platform/workspaces/electron-main/r
 import { BrowserAutomationHost } from "../../platform/browser/electron-main/browserAutomationHostRoutes.js";
 import { rendererSystemHostRoutes } from "../../platform/native/electron-main/rendererSystemHostRoutes.js";
 import { nativeImage, nativeTheme, shell } from "electron";
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, Tray, type Event as ElectronEvent } from "electron/main";
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, Menu, Tray, type Event as ElectronEvent, type JumpListCategory, type MenuItemConstructorOptions } from "electron/main";
 import type { DirGrant } from "../../platform/dirPermissions/common/dirPermissionsService.js";
 import { basename, delimiter, dirname, isAbsolute, join, parse } from "node:path";
 import { homedir } from 'node:os';
@@ -21,7 +21,7 @@ import { isCancellationError } from "../../base/common/errors.js";
 import { createUuid } from '../../base/common/uuid.js';
 import { Disposable, DisposableMap, DisposableStore, DisposableTracker, MutableDisposable, installDisposableTracker, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { assertDefined } from "../../base/common/types.js";
-import { AshApplicationName } from '../common/application.js';
+import { AshApplicationId, AshApplicationName } from '../common/application.js';
 import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry, WorkbenchRendererEntry, withWorkbenchModeId, type WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import { ElectronContextMenu } from "../../base/parts/contextmenu/electron-main/contextmenu.js";
 import { AppServerConnectionRelay } from "../../platform/app-server/electron-main/appServerConnectionRelay.js";
@@ -55,6 +55,10 @@ import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE
 import { GlobalKeybindingsMainService } from '../../platform/globalKeybindings/electron-main/globalKeybindingsMainService.js';
 import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../workbench/contrib/chat/common/constants.js';
 import { StateService } from "../../platform/state/node/stateService.js";
+import { IStateService } from '../../platform/state/node/state.js';
+import { WorkspacesHistoryMainService } from '../../platform/workspaces/electron-main/workspacesHistoryMainService.js';
+import { recentWorkspaceUri, restoreRecentlyOpened, toStoreData, RECENTLY_OPENED_CHANGED_CHANNEL, type IRecent } from '../../platform/workspaces/common/workspaces.js';
+import { Schemas } from '../../base/common/network.js';
 import { resolveHome } from "../../platform/home/node/home.js";
 import { diskFileSystemProviderRoutes } from "../../platform/files/electron-main/diskFileSystemProviderServer.js";
 import { URI } from "../../base/common/uri.js";
@@ -92,13 +96,14 @@ import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOp
 import { WorkspacesManagementMainService } from '../../platform/workspaces/electron-main/workspacesManagementMainService.js';
 import { WorkspaceOpenTargetKind } from '../../platform/environment/common/argv.js';
 import { parseLaunchArguments, parseWorkspaceLaunchArguments } from '../../platform/environment/node/argvHelper.js';
-import { LaunchMainService, type IStartArguments } from '../../platform/launch/electron-main/launchMainService.js';
+import { LaunchMainService } from '../../platform/launch/electron-main/launchMainService.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
 import type { IWorkbenchWindowRecord } from "./workbenchWindowRegistry.js";
 import { WorkbenchWindowRegistry } from "./workbenchWindowRegistry.js";
 import { LocalizationConfiguration } from '../../workbench/services/localization/common/locale.js';
 import { builtinLanguagePackCatalogs } from '../../workbench/services/localization/common/localizationCatalogs.js';
-import { electronWorkspaceLaunchArguments } from "./electronWindowLaunch.js";
+import { normalizeLocale } from '../../platform/languagePacks/common/languagePackCatalog.js';
+import { electronWorkspaceLaunchArguments, parseElectronWindowLaunch, windowsCommandLine, type ElectronWindowLaunch } from "./electronWindowLaunch.js";
 import { workbenchModeIpcRoutes } from "../../workbench/services/workbenchMode/electron-main/workbenchModeIpc.js";
 export type AppServerStartupMode = "required" | "disabled";
 
@@ -272,12 +277,15 @@ export class AshApplication extends Disposable {
 	private themeMainService!: ThemeMainService;
 	private lifecycleMainService!: LifecycleMainService<BrowserWindow>;
 	private windowSessionStateHandler!: WindowSessionStateHandler<WindowSessionEntry>;
-	private readonly pendingWindowLaunches: IStartArguments[] = [];
+	private readonly pendingWindowLaunches: ElectronWindowLaunch[] = [];
 	private launchMainService!: LaunchMainService;
+	private workspacesHistory!: WorkspacesHistoryMainService;
+	private jumpListUpdates: Promise<void> = Promise.resolve();
 	private workspaces: WorkspacesManagementMainService | undefined;
 	private persistentServices: PersistentServices | undefined;
 	private closePersistentServicesPromise: Promise<void> | undefined;
 	private quitRequested = false;
+	private quitAfterServicesClosed = false;
 	private quitAfterStateSaved = false;
 	private quitSaveStarted = false;
 
@@ -354,17 +362,31 @@ export class AshApplication extends Disposable {
 		}
 
 		await this.createPersistentServices();
+		const launchServices = this._register(new InstantiationService());
+		launchServices.registerInstance(IStateService, this.services.state);
+		this.workspacesHistory = this._register(launchServices.createInstance(WorkspacesHistoryMainService));
+		this._register(this.workspacesHistory.onDidChangeRecentlyOpened(() => {
+			for (const window of BrowserWindow.getAllWindows()) {
+				window.webContents.send(RECENTLY_OPENED_CHANGED_CHANNEL);
+			}
+		}));
+		if (process.platform === 'win32') {
+			this.configureWindowsTaskbar();
+		}
 		this.themeMainService = this._register(new ThemeMainService(nativeTheme, this.services.state));
 		this.mainProcessIpcServer.registerChannel('colorScheme', colorSchemeChannel(this.themeMainService));
 		this.lifecycleMainService = this._register(new LifecycleMainService<BrowserWindow>(async (window, message) => {
+			this.cancelQuit();
 			this.windowsMainService.failManagedWindowClose(window, message);
 			await this.dialogs.showMessageBox({ type: 'error', message }, window);
-		}, window => this.windowsMainService.failManagedWindowClose(window, 'Window close was vetoed'), this.services.state, app.getVersion()));
+		}, window => {
+			this.cancelQuit();
+			this.windowsMainService.failManagedWindowClose(window, 'Window close was vetoed');
+		}, this.services.state, app.getVersion()));
 		this.windowSessionStateHandler = new WindowSessionStateHandler(this.services.state, () => this.getOpenWindowSessions(), isWindowSessionEntry);
 		const wasUpdated = this.lifecycleMainService.wasRestarted;
 		const workspaces = new WorkspacesManagementMainService();
 		this.workspaces = workspaces;
-		const launchServices = this._register(new InstantiationService());
 		launchServices.registerInstance(IWindowsMainService, this.windowsMainService);
 		this.launchMainService = this._register(launchServices.createInstance(LaunchMainService));
 		{
@@ -378,10 +400,23 @@ export class AshApplication extends Disposable {
 		await this.windowSessionStateHandler.saveSession();
 		this.createTray();
 		await this.drainPendingWindowLaunches();
+		if (process.platform === 'win32') {
+			const update = (): void => {
+				this.jumpListUpdates = this.jumpListUpdates.then(() => this.updateWindowsJumpList()).catch(error => console.error('Failed to update Windows Jump List', error));
+			};
+			this._register(this.workspacesHistory.onDidChangeRecentlyOpened(update));
+			this._register(this.services.configuration.onDidChange(update));
+			update();
+		}
 	}
 
 	private async openStartupWindows(workspaces: WorkspacesManagementMainService, wasUpdated: boolean): Promise<void> {
-		const args = parseLaunchArguments(this.workspaceLaunchArguments(process.argv));
+		const launchRequest = parseElectronWindowLaunch(this.workspaceLaunchArguments(process.argv), process.cwd(), this.mainLocalizationMessages()['taskbar.invalidAgentsArguments']!);
+		if (launchRequest.agentsWindow) {
+			await this.startWindowLaunch(launchRequest);
+			return;
+		}
+		const args = launchRequest.args;
 		if (args.paths.length > 0 || args.newWindow || args.reuseWindow || args.wait || args.workspace) {
 			if (app.isPackaged || process.env.ASH_DEV_AGENTS_WINDOW !== '1') {
 				await this.restoreWindowSession(workspaces, true, wasUpdated);
@@ -443,9 +478,54 @@ export class AshApplication extends Disposable {
 		if (process.platform === 'darwin') blackIcon.setTemplateImage(true);
 		const whiteIcon = process.platform === 'win32' ? loadIcon('white') : undefined;
 		const tray = new Tray(whiteIcon && nativeTheme.shouldUseDarkColorsForSystemIntegratedUI ? whiteIcon : blackIcon);
-		tray.setToolTip(AshApplicationName);
-		tray.on('click', () => this.handleActivate());
 		this._register(toDisposable(() => tray.destroy()));
+		tray.setToolTip(AshApplicationName);
+		const activate = (): void => this.handleActivate();
+		tray.on('click', activate);
+		tray.on('double-click', activate);
+		this._register(toDisposable(() => {
+			tray.removeListener('click', activate);
+			tray.removeListener('double-click', activate);
+		}));
+		let menuUpdates: Promise<void> = Promise.resolve();
+		const updateMenu = (): void => {
+			menuUpdates = menuUpdates.then(async () => {
+				const recents = await this.workspacesHistory.getRecentlyOpened();
+				if (this.isDisposed) {
+					return;
+				}
+				const messages = this.mainLocalizationMessages();
+				const recentItems: MenuItemConstructorOptions[] = recents.workspaces.map(recent => ({
+					label: this.recentProjectLabel(recent),
+					click: () => this.handleLaunchArguments(this.recentProjectLaunchArguments(recent), process.cwd()),
+				}));
+				if (recentItems.length === 0) {
+					recentItems.push({ label: messages['shell.noRecentProjects']!, enabled: false });
+				}
+				recentItems.push({ type: 'separator' }, {
+					label: messages['shell.clearRecentProjects']!,
+					enabled: recents.workspaces.length > 0,
+					click: () => { void this.workspacesHistory.clearRecentlyOpened().catch(error => console.error('Failed to clear recent projects', error)); },
+				});
+				const items: MenuItemConstructorOptions[] = [
+					{ label: messages['tray.showWindow']!, click: () => this.handleActivate() },
+					{ label: messages['taskbar.newWindow']!, click: () => this.handleLaunchArguments(['--new-window'], process.cwd()) },
+				];
+				if (WorkbenchModeRegistry.get(this.shellWorkbenchModeId()).dedicatedSessions) {
+					items.push({ label: messages['taskbar.agentsWindow']!, click: () => this.handleLaunchArguments(['--agents-window'], process.cwd()) });
+				}
+				items.push(
+					{ type: 'separator' },
+					{ label: messages['shell.recentProjects']!, submenu: recentItems },
+					{ type: 'separator' },
+					{ label: messages['tray.quit']!, click: () => app.quit() },
+				);
+				tray.setContextMenu(Menu.buildFromTemplate(items));
+			}).catch(error => console.error('Failed to update tray menu', error));
+		};
+		this._register(this.workspacesHistory.onDidChangeRecentlyOpened(updateMenu));
+		this._register(this.services.configuration.onDidChange(updateMenu));
+		updateMenu();
 		if (whiteIcon) {
 			const updateIcon = (): void => tray.setImage(nativeTheme.shouldUseDarkColorsForSystemIntegratedUI ? whiteIcon : blackIcon);
 			nativeTheme.on('updated', updateIcon);
@@ -470,9 +550,9 @@ export class AshApplication extends Disposable {
 	}
 
 	handleLaunchArguments(arguments_: readonly string[], cwd: string): void {
-		let launch: IStartArguments;
+		let launch: ElectronWindowLaunch;
 		try {
-			launch = { args: parseLaunchArguments(arguments_), cwd };
+			launch = parseElectronWindowLaunch(arguments_, cwd, this.mainLocalizationMessages()['taskbar.invalidAgentsArguments']!);
 		} catch (error) {
 			void this.reportWindowOpenFailure(error);
 			return;
@@ -481,7 +561,134 @@ export class AshApplication extends Disposable {
 			this.pendingWindowLaunches.push(launch);
 			return;
 		}
-		void this.launchMainService.start(launch).catch(error => this.reportWindowOpenFailure(error));
+		void this.startWindowLaunch(launch).catch(error => this.reportWindowOpenFailure(error));
+	}
+
+	private async startWindowLaunch(launch: ElectronWindowLaunch): Promise<void> {
+		if (!launch.agentsWindow) {
+			await this.launchMainService.start(launch);
+			return;
+		}
+		const workspaces = this.workspaces;
+		assertDefined(workspaces, 'Workspace service is not initialized');
+		const active = this.workbenchWindows.active();
+		const workspace = launch.args.workspace
+			? await this.windowsMainService.resolveWorkspaceOpenTarget(launch.args.workspace, launch.cwd)
+			: active?.workspaceContext.getWorkspace() ?? createEmptyWorkspaceIdentifier();
+		await this.openSessionsWindow(workspace, await workspaces.resolveWorkspace(workspace), active?.modeId ?? this.defaultModeId);
+	}
+
+	private configureWindowsTaskbar(): void {
+		const iconPath = this.windowIconPath ?? process.execPath;
+		// Shell shortcuts run outside the dev launcher: retain the entry and Electron data directory.
+		const launchArguments = this.shellLaunchArguments();
+		const configureWindow = (_event: ElectronEvent, window: BrowserWindow): void => {
+			window.setAppDetails({
+				appId: AshApplicationId,
+				appIconPath: iconPath,
+				appIconIndex: 0,
+				relaunchDisplayName: AshApplicationName,
+				relaunchCommand: windowsCommandLine([process.execPath, ...launchArguments, '--new-window']),
+			});
+		};
+		app.on('browser-window-created', configureWindow);
+		this._register(toDisposable(() => app.removeListener('browser-window-created', configureWindow)));
+	}
+
+	private shellLaunchArguments(): string[] {
+		const arguments_ = app.isPackaged ? [] : [app.getAppPath()];
+		arguments_.push(`--user-data-dir=${app.getPath('userData')}`);
+		return arguments_;
+	}
+
+	private shellWorkbenchModeId(): WorkbenchModeId {
+		const modeId = configurationValues(this.services.configuration.read().document)[WorkbenchModeConfigurationKey];
+		return WorkbenchModeRegistry.isModeId(modeId) ? modeId : this.defaultModeId;
+	}
+
+	private recentProjectLabel(recent: IRecent): string {
+		return recent.label ?? basename(recentWorkspaceUri(recent).fsPath);
+	}
+
+	private recentProjectLaunchArguments(recent: IRecent): string[] {
+		return 'workspace' in recent ? ['--workspace', recent.workspace.configPath.fsPath] : ['--folder-uri', recent.folderUri.toString()];
+	}
+
+	private async updateWindowsJumpList(): Promise<void> {
+		if (this.isDisposed) {
+			return;
+		}
+		const messages = this.mainLocalizationMessages();
+		const iconPath = this.windowIconPath ?? process.execPath;
+		const launchArguments = this.shellLaunchArguments();
+		const actions = [
+			{ title: messages['taskbar.newWindow']!, description: messages['taskbar.newWindowDescription']!, argument: '--new-window' },
+		];
+		if (WorkbenchModeRegistry.get(this.shellWorkbenchModeId()).dedicatedSessions) {
+			actions.push({ title: messages['taskbar.agentsWindow']!, description: messages['taskbar.agentsWindowDescription']!, argument: '--agents-window' });
+		}
+		const categories: JumpListCategory[] = [{
+			type: 'tasks',
+			items: actions.map(action => ({
+				type: 'task',
+				program: process.execPath,
+				args: windowsCommandLine([...launchArguments, action.argument]),
+				iconPath,
+				iconIndex: 0,
+				title: action.title,
+				description: action.description,
+			})),
+		}];
+		let recents = await this.workspacesHistory.getRecentlyOpened();
+		const settings = app.getJumpListSettings();
+		const removed = recents.workspaces.filter(recent => settings.removedItems.some(item => item.args === windowsCommandLine([...launchArguments, ...this.recentProjectLaunchArguments(recent)])));
+		// Explorer rejects a whole custom category if it contains an item the user removed.
+		if (removed.length > 0) {
+			await this.workspacesHistory.removeRecentlyOpened(removed.map(recentWorkspaceUri));
+			recents = await this.workspacesHistory.getRecentlyOpened();
+		}
+		const items = recents.workspaces.slice(0, settings.minItems).map(recent => ({
+			type: 'task' as const,
+			program: process.execPath,
+			args: windowsCommandLine([...launchArguments, ...this.recentProjectLaunchArguments(recent)]),
+			iconPath,
+			iconIndex: 0,
+			title: this.recentProjectLabel(recent).slice(0, 255),
+			description: recentWorkspaceUri(recent).fsPath.slice(0, 255),
+		}));
+		if (items.length > 0) {
+			categories.push({ type: 'custom', name: messages['shell.recentProjects']!, items });
+		}
+		categories.push({ type: 'recent' });
+		if (this.isDisposed) {
+			return;
+		}
+		const result = app.setJumpList(categories);
+		if (result !== 'ok') {
+			console.error(`Failed to update Windows Jump List: ${result}`);
+		}
+	}
+
+	private recordRecentWorkspace(workspace: IWorkspace): void {
+		let recent: IRecent;
+		if (workspace.configuration?.scheme === Schemas.file) {
+			recent = { workspace: { id: workspace.id, configPath: workspace.configuration }, label: workspace.name ?? basename(workspace.configuration.fsPath) };
+		} else {
+			const folder = workspace.folders.length === 1 ? workspace.folders[0] : undefined;
+			if (folder?.uri.scheme !== Schemas.file) {
+				return;
+			}
+			recent = { folderUri: folder.uri, label: folder.name };
+		}
+		void this.workspacesHistory.addRecentlyOpened([recent]).catch(error => console.error('Failed to record recent project', error));
+	}
+
+	private mainLocalizationMessages(): Readonly<Record<string, string>> {
+		const configuredLocale = this.persistentServices && configurationValues(this.services.configuration.read().document)[LocalizationConfiguration.locale];
+		const locale = typeof configuredLocale === 'string' ? normalizeLocale(configuredLocale) : 'en';
+		const catalog = builtinLanguagePackCatalogs.find(candidate => candidate.locale === locale)
+			?? builtinLanguagePackCatalogs.find(candidate => candidate.locale === 'en')!;
+		return catalog.bundles.ash!;
 	}
 
 	/** Focuses a live window, or recreates an empty Workbench when none remains. */
@@ -566,7 +773,7 @@ export class AshApplication extends Disposable {
 		while (this.pendingWindowLaunches.length > 0 && !this.quitRequested) {
 			const launch = this.pendingWindowLaunches.shift()!;
 			try {
-				await this.launchMainService.start(launch);
+				await this.startWindowLaunch(launch);
 			} catch (error) {
 				await this.reportWindowOpenFailure(error);
 			}
@@ -608,6 +815,41 @@ export class AshApplication extends Disposable {
 
 	private mainProcessIpcRoutes(window: BrowserWindow): readonly IpcRoute<unknown, unknown>[] {
 		return [
+			{
+				channel: 'ash:workspaces:recent:read',
+				validate: value => {
+					if (value !== undefined) {
+						throw new TypeError('Recent projects read takes no arguments');
+					}
+					return undefined;
+				},
+				invoke: async () => toStoreData(await this.workspacesHistory.getRecentlyOpened()),
+			},
+			{
+				channel: 'ash:workspaces:recent:add',
+				validate: value => restoreRecentlyOpened(value).workspaces,
+				invoke: value => this.workspacesHistory.addRecentlyOpened(value as readonly IRecent[]),
+			},
+			{
+				channel: 'ash:workspaces:recent:remove',
+				validate: value => {
+					if (!Array.isArray(value)) {
+						throw new TypeError('Recent project removal requires URI paths');
+					}
+					return restoreRecentlyOpened({ workspaces: value.map(folderUri => ({ folderUri })) }).workspaces.map(recentWorkspaceUri);
+				},
+				invoke: value => this.workspacesHistory.removeRecentlyOpened(value as readonly URI[]),
+			},
+			{
+				channel: 'ash:workspaces:recent:clear',
+				validate: value => {
+					if (value !== undefined) {
+						throw new TypeError('Recent projects clear takes no arguments');
+					}
+					return undefined;
+				},
+				invoke: () => this.workspacesHistory.clearRecentlyOpened(),
+			},
 			{
 				channel: 'ash:ipc:window-id',
 				validate: value => { if (value !== undefined) { throw new TypeError('Window ID read takes no arguments'); } return undefined; },
@@ -792,6 +1034,7 @@ export class AshApplication extends Disposable {
 			focus: () => focusWindow(window),
 		};
 		this.workbenchWindows.add(record);
+		this.recordRecentWorkspace(workspaceContext.getResolvedWorkspace());
 		resources.add(toDisposable(() => this.globalKeybindings.removeWindow(record.id)));
 		const onFocus = (): void => {
 			if (!window.isDestroyed()) {
@@ -856,13 +1099,14 @@ export class AshApplication extends Disposable {
 			}),
 		);
 		windowDisposables.add(browserAutomationMainService.bind(browserViewMainService, browserTargetRegistry));
-		windowDisposables.add(workspaceContext.onDidChangeWorkspace(({ workspace: nextWorkspace }) => {
+		windowDisposables.add(workspaceContext.onDidChangeWorkspace(({ workspace: nextWorkspace, resolvedWorkspace }) => {
 			if (window.isDestroyed()) return;
 			record.windowStateTracking.dispose();
 			const nextWindowsStateHandler = this.createWindowsStateHandler(nextWorkspace);
 			record.windowsStateHandler = nextWindowsStateHandler;
 			record.windowStateTracking = windowDisposables.add(nextWindowsStateHandler.trackWindow(window));
 			this.workbenchWindows.updateWorkspace(record.id, nextWorkspace);
+			this.recordRecentWorkspace(resolvedWorkspace);
 			this.windowSessionStateHandler.windowChanged();
 		}));
 		let loadingWorkspace = false;
@@ -1563,7 +1807,6 @@ export class AshApplication extends Disposable {
 		this.quitRequested = true;
 		if (this.persistentServices) this.windowSessionStateHandler.stopAutomaticSaves();
 		const records = this.workbenchWindows.values();
-		for (const record of records) record.supervisor.dispose();
 		if (this.quitAfterStateSaved || !this.persistentServices) {
 			return;
 		}
@@ -1573,21 +1816,17 @@ export class AshApplication extends Disposable {
 		}
 
 		this.quitSaveStarted = true;
-		for (const record of records) record.windowStateTracking.dispose();
 		const sessionsState = this.sessionsWindow.value?.windowState;
-		sessionsState?.tracking.dispose();
 		void (async () => {
 			try {
 				await this.windowSessionStateHandler.saveSession();
 				for (const record of records) {
 					if (!record.window.isDestroyed()) await record.windowsStateHandler.saveWindowState(record.window);
 				}
-				// Save the dedicated window before closing the state service: Electron's
-				// close events arrive only after the second app.quit() below.
+				// Capture the session before Electron starts closing its windows.
 				if (sessionsState && !sessionsState.window.isDestroyed()) {
 					await sessionsState.handler.saveWindowState(sessionsState.window);
 				}
-				await this.closePersistentServices();
 			} catch (error) {
 				console.error("Failed to flush application state before quit", error);
 			} finally {
@@ -1609,9 +1848,30 @@ export class AshApplication extends Disposable {
 		}
 	};
 
-	private readonly onWillQuit = (): void => {
-		this.dispose();
-		this.releaseDisposableTracker();
+	private cancelQuit(): void {
+		if (!this.quitRequested) {
+			return;
+		}
+		this.quitRequested = false;
+		this.quitSaveStarted = false;
+		this.quitAfterStateSaved = false;
+		this.windowSessionStateHandler.resumeAutomaticSaves();
+	}
+
+	private readonly onWillQuit = (event: ElectronEvent): void => {
+		if (this.quitAfterServicesClosed) {
+			this.dispose();
+			this.releaseDisposableTracker();
+			return;
+		}
+		// A window can still veto before this event. Keep its services alive until then.
+		event.preventDefault();
+		void this.closePersistentServices().catch(error => {
+			console.error('Failed to close persistent services before quit', error);
+		}).finally(() => {
+			this.quitAfterServicesClosed = true;
+			app.quit();
+		});
 	};
 
 	private closePersistentServices(): Promise<void> {
@@ -1652,11 +1912,8 @@ export class AshApplication extends Disposable {
 	}
 
 	private directoryPermissionPrompt(path: string): DialogRequest {
-		const configuredLocale = configurationValues(this.services.configuration.read().document)[LocalizationConfiguration.locale];
-		const locale = typeof configuredLocale === 'string' ? configuredLocale : 'en';
-		const catalog = builtinLanguagePackCatalogs.find(candidate => candidate.locale === locale)
-			?? builtinLanguagePackCatalogs.find(candidate => candidate.locale === 'en')!;
-		const translate = (key: string, english: string): string => catalog.bundles.ash?.[key] ?? english;
+		const messages = this.mainLocalizationMessages();
+		const translate = (key: string, english: string): string => messages[key] ?? english;
 		return {
 			kind: 'prompt',
 			title: AshApplicationName,

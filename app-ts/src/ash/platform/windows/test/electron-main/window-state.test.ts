@@ -86,6 +86,12 @@ test('window session state owner persists active Workbench and Agents windows an
 	handler.windowOpened();
 	await handler.saveSession();
 	assert.deepEqual(handler.readSession(), { windows: [workbench], active: 0 });
+	handler.stopAutomaticSaves();
+	windows = [{ id: 4, entry: agents, focused: true }];
+	handler.windowOpened();
+	assert.deepEqual(handler.readSession(), { windows: [workbench], active: 0 });
+	handler.resumeAutomaticSaves();
+	assert.deepEqual(handler.readSession(), { windows: [agents], active: 0 });
 });
 
 class TestWindow implements IStatefulWindow {

@@ -1,4 +1,23 @@
+import { parseLaunchArguments } from '../../platform/environment/node/argvHelper.js';
+import type { IStartArguments } from '../../platform/launch/electron-main/launchMainService.js';
+
 export type ElectronApplicationPackaging = "packaged" | "development";
+
+export interface ElectronWindowLaunch extends IStartArguments {
+	readonly agentsWindow: boolean;
+}
+
+/** Validates product window selection before startup can create a wait marker or acquire the instance lock. */
+export function parseElectronWindowLaunch(arguments_: readonly string[], cwd: string, invalidAgentsArgumentsMessage: string): ElectronWindowLaunch {
+	const separator = arguments_.indexOf('--');
+	const switches = separator < 0 ? arguments_ : arguments_.slice(0, separator);
+	const args = parseLaunchArguments(arguments_);
+	const agentsWindow = switches.includes('--agents-window');
+	if (agentsWindow && (args.paths.length > 0 || args.newWindow || args.reuseWindow || args.goto || args.wait)) {
+		throw new Error(invalidAgentsArgumentsMessage);
+	}
+	return { args, cwd, agentsWindow };
+}
 
 export interface ElectronWorkspaceLaunchArgumentsOptions {
 	readonly arguments: readonly string[];
@@ -27,4 +46,9 @@ export function electronWorkspaceLaunchArguments(options: ElectronWorkspaceLaunc
 		workspaceArguments.push(argument);
 	}
 	return workspaceArguments;
+}
+
+/** Quotes Windows process arguments, including quotes and trailing backslashes in paths. */
+export function windowsCommandLine(arguments_: readonly string[]): string {
+	return arguments_.map(argument => `"${argument.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, '$1$1')}"`).join(' ');
 }

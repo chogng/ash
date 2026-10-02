@@ -8,7 +8,17 @@ const english: LanguagePackCatalog = {
 	localizedLanguageName: "English",
 	catalogVersion: ASH_LOCALIZATION_CATALOG_VERSION,
 	bundles: {
-		ash: {
+	 ash: {
+			"taskbar.newWindow": "New Window",
+			"shell.recentProjects": "Recent Folders & Workspaces",
+			"shell.noRecentProjects": "No Recent Projects",
+			"shell.clearRecentProjects": "Clear Recently Opened",
+			"tray.showWindow": "Show Ash",
+			"tray.quit": "Quit Ash",
+			"taskbar.newWindowDescription": "Open a new Ash window",
+			"taskbar.agentsWindow": "Open Agents Window",
+			"taskbar.agentsWindowDescription": "Open the Ash Agents window",
+			"taskbar.invalidAgentsArguments": "Open the Agents window with --agents-window and an optional --folder or --workspace target. File, window, and wait options cannot be combined with it.",
 			'library.addToChat': 'Add to conversation',
 			'library.useInDesign': 'Use in Design',
 
@@ -1923,6 +1933,16 @@ const chinese: LanguagePackCatalog = {
 	catalogVersion: ASH_LOCALIZATION_CATALOG_VERSION,
 	bundles: {
 		ash: {
+			"taskbar.newWindow": "新建窗口",
+			"shell.recentProjects": "最近的文件夹和工作区",
+			"shell.noRecentProjects": "没有最近打开的项目",
+			"shell.clearRecentProjects": "清空最近打开的项目",
+			"tray.showWindow": "显示 Ash",
+			"tray.quit": "退出 Ash",
+			"taskbar.newWindowDescription": "打开新的 Ash 窗口",
+			"taskbar.agentsWindow": "打开 Agents 窗口",
+			"taskbar.agentsWindowDescription": "打开 Ash Agents 窗口",
+			"taskbar.invalidAgentsArguments": "使用 --agents-window 打开 Agents 窗口，可通过 --folder 或 --workspace 指定项目。不能同时使用文件、窗口或等待选项。",
 			'library.addToChat': '添加到对话',
 			'library.useInDesign': '用于设计',
 

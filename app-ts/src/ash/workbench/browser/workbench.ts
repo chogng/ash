@@ -721,7 +721,7 @@ export class Workbench extends Disposable {
 		this._register(toDisposable(() => {
 			if (!lifecycleService.willShutdown) saveFontInfo();
 		}));
-		const recentWorkspaces = this._register(new RecentWorkspacesService(storage, workspaceContext, workspaceOpenService));
+		const recentWorkspaces = this._register(services.createInstance(RecentWorkspacesService));
 		services.registerInstance(IRecentWorkspacesService, recentWorkspaces);
 		this._register(lifecycleService.onBeforeShutdown(event => {
 			// Page teardown clears font caches before async shutdown joins complete.
@@ -1235,7 +1235,7 @@ export class Workbench extends Disposable {
 		lifecycleService.phase = LifecyclePhase.Ready;
 		contributions.advance(WorkbenchPhase.BlockRestore);
 		layoutService.layout();
-		this.whenRestored = this.completeStartupRestoration([extensionReady, ...serviceContributionReady], workingCopyBackups, editor, editorParts, contributions);
+		this.whenRestored = this.completeStartupRestoration([extensionReady, recentWorkspaces.initialize(), ...serviceContributionReady], workingCopyBackups, editor, editorParts, contributions);
 		if (createWindow) {
 			this._register(createWindow(services));
 		}
