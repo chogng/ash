@@ -10,7 +10,7 @@ import { ScrollDecorationViewPart } from '../../../browser/viewParts/scrollDecor
 test('ScrollDecorationViewPart follows layout and scrollbar configuration', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const state = configurationState();
-	const scrollDecoration = new ScrollDecorationViewPart(testViewContext(state), dom.window.document.querySelector('main')!);
+	using scrollDecoration = new ScrollDecorationViewPart(testViewContext(state), dom.window.document.querySelector('main')!);
 	const domNode = scrollDecoration.getDomNode().domNode;
 	dom.window.document.querySelector('main')!.append(domNode);
 
@@ -19,7 +19,7 @@ test('ScrollDecorationViewPart follows layout and scrollbar configuration', () =
 	scrollDecoration.render(renderingContext({ scrollLeft: 15, scrollTop: 0, scrollHeight: 300, viewportHeight: 100 }));
 	assert.equal(domNode.style.width, '500px');
 	assert.equal(domNode.style.height, '100px');
-	assert.equal(domNode.style.transform, 'translate3d(15px, 0px, 0)');
+	assert.equal(domNode.style.transform, '');
 	assert.equal(shadow(scrollDecoration, 'top').classList.contains('visible'), false);
 	assert.equal(shadow(scrollDecoration, 'bottom').classList.contains('visible'), true);
 
@@ -40,6 +40,7 @@ test('ScrollDecorationViewPart follows layout and scrollbar configuration', () =
 	scrollDecoration.render(renderingContext({ scrollTop: 50, scrollHeight: 300, viewportHeight: 100 }));
 	assert.equal(shadow(scrollDecoration, 'top').classList.contains('visible'), true);
 	assert.equal(shadow(scrollDecoration, 'bottom').classList.contains('visible'), true);
+	assert.equal(domNode.style.transform, '');
 	assert.equal(scrollDecoration.onConfigurationChanged(configurationChange(EditorOption.scrollbar)), false);
 	assert.equal(scrollDecoration.onConfigurationChanged(configurationChange(EditorOption.lineHeight)), false);
 	assert.equal(scrollDecoration.onScrollChanged(scrollChange({ scrollLeftChanged: true })), true);

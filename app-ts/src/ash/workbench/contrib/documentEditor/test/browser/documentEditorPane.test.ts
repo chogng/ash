@@ -68,7 +68,7 @@ test("Stanza editor migrates plain text and edits a structured paragraph", async
 	});
 
 	await pane.setInput({
-		resource: URI.file("C:\\project\\paper.ash-academic"),
+		resource: URI.file("C:/project/paper.ash-academic"),
 		contentType: "application/vnd.ash.academic-document+json",
 		label: "paper",
 	}, new AbortController().signal);
@@ -114,7 +114,7 @@ test("Stanza refuses a stale conditional save even before a file-change notifica
 	const parent = h(environment.window.document, "main");
 	using pane = new EditorPane(files);
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
 	assert.ok(textarea);
 	textarea.value = "Local";
@@ -157,7 +157,7 @@ test("Stanza routes block keyboard commands through Stanza", async () => {
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(files);
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	const textareas = (): HTMLTextAreaElement[] => Array.from(parent.querySelectorAll<HTMLTextAreaElement>("textarea.stanza-document-text-input"));
 	const blockTexts = (): string[] => pane.getDocument().content.map(block => block.content.find(child => child.text !== undefined)?.text ?? "");
@@ -220,7 +220,7 @@ test("Stanza projects plugin decorations onto rich text runs", async () => {
 	}, { decorations: state => state });
 	using pane = new EditorPane(files, { plugins: [plugin] });
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	const editor = parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input");
 	const hit = editor?.querySelector<HTMLElement>(".search-hit");
@@ -242,7 +242,7 @@ test("Stanza commits textarea composition as one Stanza transaction", async () =
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(files);
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
 	assert.ok(textarea);
@@ -293,7 +293,7 @@ test("Stanza accepts a schema and custom node view without changing Stanza commo
 		},
 	});
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
 
 	const callout = parent.querySelector<HTMLElement>("aside.custom-callout-view");
 	assert.ok(callout);
@@ -332,7 +332,7 @@ test("Stanza projects and edits the generic group, typed-block, and line hierarc
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(new MemoryTextFiles(""), { schema });
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\hierarchy.ash-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/hierarchy.ash-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
 
 	assert.equal(parent.querySelectorAll(".stanza-document-group[data-node-kind='group']").length, 1);
 	assert.equal(parent.querySelectorAll(".stanza-document-block[data-node-kind='block']").length, 1);
@@ -358,7 +358,7 @@ test("Stanza projects Academic wrappers while editing Stanza child blocks", asyn
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(new MemoryTextFiles(""), { schema, nodeViews: profileNodeViews, outlineNavigator: true });
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
 
 	const title = parent.querySelector<HTMLElement>("header.ash-academic-title");
 	const abstract = parent.querySelector<HTMLElement>("section.ash-academic-abstract");
@@ -404,7 +404,7 @@ test("Stanza renders and deletes Academic citation inline nodes", async () => {
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(new MemoryTextFiles(""), { schema, nodeViews: profileNodeViews, inlineNodeViews: citationInlineNodeViews });
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\citations.ash-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/citations.ash-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
 
 	const citationElement = parent.querySelector<HTMLElement>(".ash-citation");
 	const editor = parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input[data-block-id='citation-paragraph']");
@@ -433,7 +433,7 @@ test("Stanza exposes Academic citation insertion as a toolbar action", async () 
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(new MemoryTextFiles(""), { schema, nodeViews: profileNodeViews, inlineNodeViews: citationInlineNodeViews, toolbarActions: citationToolbarActions });
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\toolbar.ash-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/toolbar.ash-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
 
 	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea[data-block-id='toolbar-paragraph']");
 	assert.ok(textarea);
@@ -466,7 +466,7 @@ test("Stanza renders resolved citations and bibliography references", async () =
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(new MemoryTextFiles(""), { schema, nodeViews: { ...profileNodeViews, ...citationNodeViews }, inlineNodeViews: citationInlineNodeViews, plugins: [createReferenceIndexPlugin()] });
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\resolved.ash-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/resolved.ash-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
 
 	const citationElement = parent.querySelector<HTMLElement>(".ash-citation");
 	const referenceElement = parent.querySelector<HTMLElement>(".ash-citation-reference");
@@ -489,7 +489,7 @@ test("Stanza exposes reference insertion as a citation toolbar action", async ()
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(new MemoryTextFiles(""), { schema, nodeViews: { ...profileNodeViews, ...citationNodeViews }, inlineNodeViews: citationInlineNodeViews, toolbarActions: citationToolbarActions });
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\reference-toolbar.ash-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/reference-toolbar.ash-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
 
 	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea[data-block-id='reference-toolbar-paragraph']");
 	assert.ok(textarea);
@@ -516,7 +516,7 @@ test("Stanza uses the Academic empty document through revert", async () => {
 		nodeViews: profileNodeViews,
 	});
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\empty.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/empty.ash-academic") }, new AbortController().signal);
 
 	assert.deepEqual(pane.getDocument().content.map(node => node.type), ["title", "abstract"]);
 	assert.ok(parent.querySelector("header.ash-academic-title"));
@@ -541,7 +541,7 @@ test("Stanza projects read-only inputs without accepting model mutations", async
 	const parent = h(environment.window.document, "main");
 	const pane = new EditorPane(new MemoryTextFiles("Hello"));
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic"), readOnly: true }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic"), readOnly: true }, new AbortController().signal);
 
 	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
 	assert.ok(textarea);
@@ -566,7 +566,7 @@ test("Stanza routes text undo and redo through Stanza history", async () => {
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(files);
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	const textareas = (): HTMLTextAreaElement[] => Array.from(parent.querySelectorAll<HTMLTextAreaElement>("textarea.stanza-document-text-input"));
 	const dispatchKey = (textarea: HTMLTextAreaElement, key: string, modifiers: KeyboardEventInit = {}): KeyboardEvent => {
@@ -602,7 +602,7 @@ test("Stanza creates a hard break with Shift+Enter", async () => {
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(files);
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
 	assert.ok(textarea);
@@ -644,7 +644,7 @@ test("Stanza deletes a selection spanning a hard break", async () => {
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(files);
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	const editor = parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input");
 	assert.ok(editor);
@@ -698,7 +698,7 @@ test("Stanza renders semantic lists and splits list items", async () => {
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(files);
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	assert.equal(parent.querySelectorAll("ul").length, 1);
 	assert.equal(parent.querySelectorAll("ul > li").length, 1);
@@ -741,7 +741,7 @@ test("Stanza indents and outdents list items with Tab", async () => {
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(files);
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	let textareas = Array.from(parent.querySelectorAll<HTMLTextAreaElement>("textarea.stanza-document-text-input"));
 	textareas[1]!.focus();
@@ -777,7 +777,7 @@ test("Stanza exits an empty list item on the second Enter", async () => {
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(files);
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
 	assert.ok(textarea);
@@ -797,7 +797,7 @@ test("Stanza exposes a block toolbar for block and list formats", async () => {
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(files);
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	const toolbar = parent.querySelector<HTMLDivElement>(".stanza-structured-format-toolbar");
 	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
@@ -833,7 +833,7 @@ test("Stanza formats selected text with persistent typography marks", async () =
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(new MemoryTextFiles("Hello"));
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\formatted.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/formatted.ash-academic") }, new AbortController().signal);
 
 	const toolbar = parent.querySelector<HTMLDivElement>(".stanza-structured-format-toolbar");
 	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
@@ -883,7 +883,7 @@ test("Stanza toggles blockquotes and inserts horizontal rules", async () => {
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(files);
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	const toolbar = parent.querySelector<HTMLDivElement>(".stanza-structured-format-toolbar");
 	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
@@ -911,7 +911,7 @@ test("Stanza navigates table cells with Tab and exposes row and column operation
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(files);
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	const toolbar = parent.querySelector<HTMLDivElement>(".stanza-structured-format-toolbar");
 	const source = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
@@ -987,7 +987,7 @@ test("Stanza renders inline image nodes in the rich surface", async () => {
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(files);
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	const image = parent.querySelector<HTMLImageElement>(".stanza-document-rich-text-input img");
 	assert.ok(image);
@@ -1017,7 +1017,7 @@ test("Stanza turns an image clipboard paste into an image node", async () => {
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(files);
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
 	assert.ok(textarea);
@@ -1061,7 +1061,7 @@ test("Stanza inserts a pasted image at a rich-text selection", async () => {
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(files);
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	const editor = parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input");
 	assert.ok(editor);
@@ -1133,7 +1133,7 @@ test("Stanza renders and edits marked inline runs", async () => {
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(files);
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	const rich = parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input");
 	assert.ok(rich);
@@ -1184,7 +1184,7 @@ test("Stanza carries collapsed mark toggles into later input", async () => {
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(new MemoryTextFiles("Hello"));
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
 	assert.ok(textarea);
@@ -1250,7 +1250,7 @@ test("Stanza applies, updates, and removes link marks", async () => {
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(files);
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	const rich = parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input");
 	assert.ok(rich);
@@ -1316,7 +1316,7 @@ test("Stanza routes rich-text copy and cut through Stanza", async () => {
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(files);
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	const rich = parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input");
 	assert.ok(rich);
@@ -1402,7 +1402,7 @@ test("Stanza pastes external HTML through a schema-valid structured fragment", a
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(files);
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	const rich = parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input");
 	const firstRun = rich?.querySelector<HTMLElement>("[data-text-node-id='text-1']");
@@ -1469,7 +1469,7 @@ test("Stanza handles whole-document select all, copy, and cut", async () => {
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(files);
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	const rich = parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input");
 	assert.ok(rich);
@@ -1533,7 +1533,7 @@ test("Stanza replaces a rich-text selection spanning sibling blocks", async () =
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(files);
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	const editors = Array.from(parent.querySelectorAll<HTMLDivElement>(".stanza-document-rich-text-input"));
 	assert.equal(editors.length, 2);
@@ -1595,7 +1595,7 @@ test("Stanza pastes multiline text as structured blocks", async () => {
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(files);
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	const editor = parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input");
 	assert.ok(editor);
@@ -1639,7 +1639,7 @@ test("Stanza restores serialized blocks and releases its model", async () => {
 	const parent = h(environment.window.document, "main");
 	using pane = new EditorPane(files);
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	assert.equal(parent.querySelector("[data-editor-kind='code-block']")?.textContent, "");
 	assert.equal(parent.querySelector<HTMLTextAreaElement>("textarea")?.value, "const value = 1;");
@@ -1673,7 +1673,7 @@ test("Stanza edits Academic code-block lines through the owning TextModel", asyn
 	const parent = h(environment.window.document, "main");
 	using pane = new EditorPane(files);
 	pane.create(parent);
-	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
+	await pane.setInput({ resource: URI.file("C:/project/paper.ash-academic") }, new AbortController().signal);
 
 	const editor = parent.querySelector<HTMLTextAreaElement>("[data-editor-kind='code-block'] textarea.stanza-document-text-input");
 	assert.ok(editor);

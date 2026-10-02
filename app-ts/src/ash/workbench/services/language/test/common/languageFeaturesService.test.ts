@@ -26,7 +26,7 @@ test('Workbench installs JSON providers without registering language definitions
 	using syntax = new SyntaxProviderWorker(languageFeatures.syntaxProvider);
 	using completions = new LanguageCompletionService(model, languageFeatures.completionProvider);
 
-	assert.equal(languageService.resolveLanguageId({ resource: URI.file('C:\\project\\source.ts') }), undefined);
+	assert.equal(languageService.resolveLanguageId({ resource: URI.file('C:/project/source.ts') }), undefined);
 	assert.equal(languageConfigurations.getLanguageConfiguration('typescript').comments?.lineCommentToken, undefined);
 	using jsonModel = new TextModel('{}', { languageId: 'json' });
 	assert.equal(languageFeatures.hoverProvider.ordered(jsonModel).length, 1);

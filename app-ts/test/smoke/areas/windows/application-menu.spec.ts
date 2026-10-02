@@ -47,8 +47,11 @@ test('File menu keeps close commands visible and closes single and all editors',
 	await expect(tabs).toHaveCount(0);
 	await expect.poll(readCloseItems).toEqual(closeLabels.map(label => ({ label, enabled: false })));
 	await runMenuCommand('New Untitled Text Editor');
+	await expect(tabs).toHaveText(['Untitled-1']);
+	await expect(workbench.editors.groupAt(0).content.getByRole('textbox', { name: 'Untitled-1', exact: true })).toBeVisible();
 	await runMenuCommand('New Untitled Text Editor');
-	await expect(tabs).toHaveCount(2);
+	await expect(tabs).toHaveText(['Untitled-1', 'Untitled-2']);
+	await expect(workbench.editors.groupAt(0).content.getByRole('textbox', { name: 'Untitled-2', exact: true })).toBeVisible();
 	await expect.poll(readCloseItems).toEqual(closeLabels.map(label => ({ label, enabled: true })));
 	await runMenuCommand('Close Editor');
 	await expect(tabs).toHaveCount(1);

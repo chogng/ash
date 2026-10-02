@@ -21,8 +21,8 @@
 	height: 32px;
 	padding: var(--ash-spacing-size40);
 	border: 0;
-	border-radius: var(--ash-corner-radius-small);
-	color: var(--ash-composite-bar-inactive-foreground);
+	border-radius: var(--ash-cornerRadius-small);
+	color: var(--ash-compositeBar-inactiveForeground);
 	background: transparent;
 }
 
@@ -37,12 +37,12 @@
 
 .ash-global-composite-bar .ash-action-view-item > button:hover,
 .ash-global-composite-bar .ash-action-view-item > button.active {
-	color: var(--ash-composite-bar-foreground);
-	background: var(--ash-tab-list-active-background);
+	color: var(--ash-compositeBar-foreground);
+	background: var(--ash-tabList-activeBackground);
 }
 
 .ash-global-composite-bar .ash-action-view-item > button:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: 0;
 }
 

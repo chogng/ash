@@ -150,7 +150,7 @@ Menu 的 pointer hover 与键盘导航必须汇入同一个 `focusedEntry`，并
 
 ## Selector 规则
 
-Workbench 的固定横向几何使用物理方向 CSS。仅需左右 inset 时，写作 `padding: 0 <value>`；不要使用 `padding-inline`、`margin-inline` 或其他 `*-inline` logical property。token 仍表达数值，例如 `padding: 0 var(--ash-tab-list-item-content-inset)`。
+Workbench 的固定横向几何使用物理方向 CSS。仅需左右 inset 时，写作 `padding: 0 <value>`；不要使用 `padding-inline`、`margin-inline` 或其他 `*-inline` logical property。token 仍表达数值，例如 `padding: 0 var(--ash-tabList-itemContentInset)`。
 
 允许组件修改自己的内部结构：
 
@@ -235,7 +235,7 @@ Design token 回答“值是什么”，组件 CSS 回答“何时使用这个�
 
 ```text
 Theme registry
-  → --ash-tab-list-active-background
+  → --ash-tabList-activeBackground
   → tablist.css 的 .ash-tab.checked
 ```
 

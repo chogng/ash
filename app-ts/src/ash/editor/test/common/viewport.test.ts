@@ -62,6 +62,17 @@ function testConfiguration(lineHeight: number, padding: EditorViewportVerticalPa
 	};
 }
 
+test('ViewLayout preserves fractional scroll positions in current and future viewports', () => {
+	using model = new TextModel(lines(100));
+	using viewport = new ViewLayout(model, { lineHeight: 20 });
+	viewport.setViewportSize({ width: 300, height: 100 });
+	viewport.setMaxLineWidth(500);
+	viewport.setScrollPosition({ scrollLeft: 10.25, scrollTop: 45.5 }, ScrollType.Immediate);
+	const expected = { _viewportBrand: undefined, top: 45.5, left: 10.25, width: 300, height: 100 };
+	assert.deepEqual({ ...viewport.getCurrentViewport() }, expected);
+	assert.deepEqual({ ...viewport.getFutureViewport() }, expected);
+});
+
 test("ViewLayout calculates visible line ranges", () => {
 	using model = new TextModel(lines(100));
 	using viewport = new ViewLayout(model, {

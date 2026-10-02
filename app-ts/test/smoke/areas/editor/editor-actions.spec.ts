@@ -3,9 +3,8 @@ import { expect, test } from '../../../automation/test.js';
 test('opening find focuses its input and leaves editor text unchanged', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const editor = workbench.editors.groupAt(0).editor;
-	await editor.waitForEditorFocus();
 	await editor.waitForTypeInEditor('alpha beta');
 	await page.keyboard.press('ControlOrMeta+F');
 	const dialog = workbench.editors.groupAt(0).content.getByRole('dialog', { name: 'Find and replace', exact: true });
@@ -23,9 +22,8 @@ test('opening find focuses its input and leaves editor text unchanged', async ({
 test('closed find options show a checked button when toggled from the editor', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const editor = workbench.editors.groupAt(0).editor;
-	await editor.waitForEditorFocus();
 	await editor.waitForTypeInEditor('alpha beta');
 	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Alt+c' : 'Alt+c');
 	const options = workbench.editors.groupAt(0).content.getByRole('group', { name: 'Find options' });
@@ -46,7 +44,7 @@ test('closed find options show a checked button when toggled from the editor', a
 test('editor breadcrumbs use the base widget for keyboard focus and activation', async ({ target, workbench }) => {
 	test.skip(target.workbenchMode !== 'code', 'This scenario requires the Code product');
 	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const breadcrumbs = workbench.editors.groupAt(0).title.getByRole('navigation', { name: 'Editor breadcrumbs' });
 	const current = breadcrumbs.getByRole('button').last();
 	await expect(breadcrumbs.locator('.ash-breadcrumbs-widget')).toBeVisible();
@@ -92,9 +90,9 @@ test('Code exposes editor view actions in the command palette', async ({ target,
 	const picker = workbench.page.locator('.ash-quick-pick');
 	const colors = await picker.evaluate(element => {
 		const initial = getComputedStyle(element).backgroundColor;
-		(element as HTMLElement).style.setProperty('--ash-quick-input-background', '#123456');
+		(element as HTMLElement).style.setProperty('--ash-quickInput-background', '#123456');
 		const overridden = getComputedStyle(element).backgroundColor;
-		(element as HTMLElement).style.removeProperty('--ash-quick-input-background');
+		(element as HTMLElement).style.removeProperty('--ash-quickInput-background');
 		return { initial, overridden, restored: getComputedStyle(element).backgroundColor };
 	});
 	expect(colors.initial).not.toBe('rgba(0, 0, 0, 0)');

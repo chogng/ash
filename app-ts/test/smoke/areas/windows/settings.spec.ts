@@ -1,3 +1,4 @@
+import { waitForNewElectronWindow } from '../../../automation/playwrightElectron.js';
 import { expect, test } from '../../../automation/test.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -96,7 +97,7 @@ test('Desktop Voice imports after Settings closes and shares model deletion with
 	await controls.getByRole('textbox', { name: 'Prepared Paraformer model directory' }).fill(source);
 	await controls.getByRole('button', { name: 'Import model', exact: true }).click();
 	await settings.locator('.ash-modal-editor-close').click();
-	const sessionPagePromise = application.waitForEvent('window');
+	const sessionPagePromise = waitForNewElectronWindow(application, 'sessions');
 	await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 	const sessionsPage = await sessionPagePromise;
 	await sessionsPage.locator('.ash-sessions-activity-bottom button').last().click();
@@ -218,7 +219,7 @@ test('Workbench and Sessions Models share model visibility', async ({ applicatio
 	await expect(settings.locator('.ash-models-settings-status')).toBeHidden();
 	await settings.locator('.ash-modal-editor-close').click();
 	await expect(settings).toBeHidden();
-	const sessionPagePromise = application.waitForEvent('window');
+	const sessionPagePromise = waitForNewElectronWindow(application, 'sessions');
 	await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 	const sessionsPage = await sessionPagePromise;
 	const accounts = sessionsPage.locator('.ash-sessions-activity-bottom button').last();
@@ -375,7 +376,7 @@ test('File opening settings save through their controls and survive reloading th
 	if (target.appServerMode === 'required') {
 		await expect(workbench.element).toHaveAttribute('data-workbench-state', 'folder');
 		await expect(page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true })).toBeAttached();
-		await workbench.waitForUiIdle();
+		await workbench.waitForAnimationFrames();
 	}
 	await openSettings();
 	await expect(dialog).not.toBeChecked();
@@ -586,15 +587,18 @@ test.describe('without an open workspace', () => {
 		expect(await appearanceRow.getAttribute('aria-expanded')).toBeNull();
 		await expect(page.locator('[data-settings-target-id="appearance.group.theme"]')).toHaveCount(0);
 		await page.locator('[data-settings-category-id="appearance"]').click();
-		const appearanceGroup = page.locator('.ash-settings-content-group:not(.is-settings-root)');
-		await expect(appearanceGroup.locator('.ash-settings-tree-group-title')).toBeHidden();
-		await expect(appearanceGroup.locator('.ash-settings-tree-group-description')).toBeHidden();
+		const appearanceGroup = page.locator('[data-settings-tree-group-id="appearance.group.theme"]');
+		await expect(appearanceGroup.getByRole('heading', { name: 'Color theme', exact: true })).toBeVisible();
+		await expect(appearanceGroup.locator('.ash-settings-tree-group-description')).toBeVisible();
+		const tipsGroup = page.locator('[data-settings-tree-group-id="appearance.group.editor-tips"]');
+		await expect(tipsGroup.getByRole('heading', { name: 'Editor tips', exact: true })).toBeVisible();
+		await expect(tipsGroup.locator('[data-configuration-key="workbench.tips.enabled"]')).toBeVisible();
 		await expect(appearanceGroup.locator('.ash-settings-card')).toHaveCSS('border-radius', '8px');
 		await expect(page.locator('[data-configuration-key="workbench.colorTheme"]')).toBeVisible();
 		await expect(page.locator('[data-configuration-key="workbench.colorTheme"]').getByRole('combobox')).toBeVisible();
-		const appearanceSettings = appearanceGroup.locator('.ash-configuration-setting');
-		await expect(appearanceSettings).toHaveCount(3);
-		for (const setting of await appearanceSettings.all()) {
+		for (const key of ['workbench.colorTheme', 'workbench.iconTheme', 'workbench.productIconTheme']) {
+			const setting = appearanceGroup.locator(`[data-settings-item-id="${key}"]`);
+			await expect(setting).toBeVisible();
 			await expect(setting.locator('.ash-settings-indicators')).toHaveCSS('display', 'none');
 			await expect(setting).toHaveCSS('height', '68px');
 		}
@@ -654,8 +658,9 @@ test.describe('without an open workspace', () => {
 		const page = workbench.page;
 		await page.getByRole('button', { name: 'Manage' }).click();
 		await page.getByRole('menu').last().getByRole('menuitem', { name: 'Check for Updates...' }).click();
-		await expect(page.getByText(/Could not check for updates\.|Ash .* is up to date\.|Ash .* is available\./)).toBeVisible({ timeout: 45_000 });
-		await expect(page.getByText('Checking for updates...')).toHaveCount(0);
+		const notifications = page.getByRole('region', { name: 'Notifications', exact: true });
+		await expect(notifications.getByText(/Could not check for updates\.|Ash .* is up to date\.|Ash .* is available\./)).toBeVisible({ timeout: 45_000 });
+		await expect(notifications.getByText('Checking for updates...')).toHaveCount(0);
 	});
 
 	test('editor More Actions tooltip clears the window controls', async ({ workbench }) => {

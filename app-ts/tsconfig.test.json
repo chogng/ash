@@ -73,6 +73,7 @@
     "src/ash/platform/app-server/browser/**/*.ts",
     "src/ash/platform/browser/common/**/*.ts",
     "src/ash/platform/browser/electron-main/browserViewIpc.ts",
-    "test/architecture/**/*.ts"
+    "test/architecture/**/*.ts",
+    "test/automation/**/*.test.ts"
   ]
 }

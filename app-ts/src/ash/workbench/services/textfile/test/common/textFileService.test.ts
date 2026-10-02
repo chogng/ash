@@ -14,7 +14,7 @@ import {
 test("TextFileService uses bootstrap content without reading the workspace", async () => {
 	const files = new TestFileService("workspace");
 	const service = new TextFileService(files);
-	const resource = URI.file("C:\\project\\main.ts");
+	const resource = URI.file("C:/project/main.ts");
 
 	const content = await service.resolve({ resource, bootstrapText: "bootstrap" }, new AbortController().signal);
 
@@ -28,7 +28,7 @@ test("TextFileService uses bootstrap content without reading the workspace", asy
 test("TextFileService reads missing bootstrap content and observes cancellation", async () => {
 	const files = new TestFileService("workspace");
 	const service = new TextFileService(files);
-	const resource = URI.file("C:\\project\\main.ts");
+	const resource = URI.file("C:/project/main.ts");
 	const content = await service.resolve({ resource }, new AbortController().signal);
 	assert.equal(content.text, "workspace");
 	assert.equal(content.source, TextFileContentSource.FileSystem);
@@ -46,7 +46,7 @@ test("TextFileService cancels before starting a byte read when metadata resoluti
 	const files = new TestFileService(pending.promise);
 	const service = new TextFileService(files);
 	const controller = new AbortController();
-	const resolving = service.resolve({ resource: URI.file("C:\\project\\slow.ts") }, controller.signal);
+	const resolving = service.resolve({ resource: URI.file("C:/project/slow.ts") }, controller.signal);
 
 	controller.abort("closed");
 	await assert.rejects(resolving, isCancellationError);
@@ -59,13 +59,13 @@ test("TextFileService preserves file-system failures", async () => {
 	const service = new TextFileService(new TestFileService(Promise.reject(failure)));
 
 	await assert.rejects(
-		service.resolve({ resource: URI.file("C:\\project\\main.ts") }, new AbortController().signal),
+		service.resolve({ resource: URI.file("C:/project/main.ts") }, new AbortController().signal),
 		error => error === failure,
 	);
 });
 
 test("TextFileService decodes a UTF-8 BOM and rejects binary or invalid UTF-8 content", async () => {
-	const resource = URI.file("C:\\project\\content.txt");
+	const resource = URI.file("C:/project/content.txt");
 	const withBom = new TestFileService(new Uint8Array([0xef, 0xbb, 0xbf, 0x68, 0x69]));
 	assert.equal((await new TextFileService(withBom).resolve({ resource }, new AbortController().signal)).text, "hi");
 
@@ -84,7 +84,7 @@ test("TextFileService rejects oversized resources before reading their bytes", a
 	files.reportedSizeBytes = 32 * 1024 * 1024 + 1;
 
 	await assert.rejects(
-		new TextFileService(files).resolve({ resource: URI.file("C:\\project\\large.txt") }, new AbortController().signal),
+		new TextFileService(files).resolve({ resource: URI.file("C:/project/large.txt") }, new AbortController().signal),
 		TextFileTooLargeError,
 	);
 	assert.equal(files.readCount, 0);
@@ -93,7 +93,7 @@ test("TextFileService rejects oversized resources before reading their bytes", a
 test("TextFileService writes text and observes cancellation", async () => {
 	const files = new TestFileService("workspace");
 	const service = new TextFileService(files);
-	const resource = URI.file("C:\\project\\main.ts");
+	const resource = URI.file("C:/project/main.ts");
 
 	const saved = await service.save({ resource, text: "saved", expectedRevision: "revision-1" }, new AbortController().signal);
 	assert.deepEqual(files.writes, [{ resource, content: "saved", expectedRevision: "revision-1" }]);
@@ -109,7 +109,7 @@ test("TextFileService maps conditional file-write conflicts to its editor-facing
 	const files = new TestFileService("workspace");
 	files.rejectWritesWithRevisionConflict = true;
 	const service = new TextFileService(files);
-	const resource = URI.file("C:\\project\\main.ts");
+	const resource = URI.file("C:/project/main.ts");
 
 	await assert.rejects(service.save({ resource, text: "saved", expectedRevision: "stale" }, new AbortController().signal), TextFileSaveConflictError);
 });

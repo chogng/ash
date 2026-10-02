@@ -5,10 +5,10 @@
   gap: 6px;
   align-items: center;
   padding: 4px;
-  background: var(--ash-editor-widget-background, var(--ash-editor-background));
-  border: var(--ash-stroke-thickness) solid var(--ash-editor-widget-border, var(--ash-editor-border));
-  border-radius: var(--ash-corner-radius-small);
-  box-shadow: 0 4px 14px var(--ash-editor-widget-shadow);
+  background: var(--ash-editor-widgetBackground, var(--ash-editor-background));
+  border: var(--ash-strokeThickness) solid var(--ash-editor-widgetBorder, var(--ash-editor-border));
+  border-radius: var(--ash-cornerRadius-small);
+  box-shadow: 0 4px 14px var(--ash-editor-widgetShadow);
 }
 
 .stanza-editor-rename[hidden] {
@@ -18,11 +18,11 @@
 .stanza-editor-rename-input {
   min-width: 220px;
   color: var(--ash-editor-foreground);
-  background: var(--ash-editor-input-background, var(--ash-editor-background));
-  border: var(--ash-stroke-thickness) solid var(--ash-editor-border);
+  background: var(--ash-editor-inputBackground, var(--ash-editor-background));
+  border: var(--ash-strokeThickness) solid var(--ash-editor-border);
 }
 
 .stanza-editor-rename-status {
-  color: var(--ash-editor-description-foreground, var(--ash-editor-foreground));
+  color: var(--ash-editor-descriptionForeground, var(--ash-editor-foreground));
   font-size: 12px;
 }

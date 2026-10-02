@@ -1,7 +1,7 @@
 .stanza-editor-inline-completion {
   position: absolute;
   z-index: 4;
-  color: var(--ash-editor-inline-completion-foreground, var(--ash-editor-description-foreground));
+  color: var(--ash-editor-inlineCompletionForeground, var(--ash-editor-descriptionForeground));
   pointer-events: none;
   white-space: pre;
   opacity: 0.75;

@@ -19,6 +19,50 @@ const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 const ORIGIN: &str = "https://desktop.ash.example";
 
 #[test]
+fn accepted_nonblocking_connection_waits_for_the_complete_request() {
+    let directory = TempDir::new().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let options =
+        CollaborationServerOptions::new(address, directory.path().join("rooms.sqlite3"), TOKEN);
+    let runtime = HttpRuntime::new(
+        SqliteDocumentCollaborationRooms::open_at(options.database_path()).unwrap(),
+        options,
+    );
+    let mut client = TcpStream::connect(address).unwrap();
+    client
+        .set_read_timeout(Some(std::time::Duration::from_secs(2)))
+        .unwrap();
+    let (stream, _) = listener.accept().unwrap();
+    // Reproduce Windows' inherited mode on every test platform.
+    stream.set_nonblocking(true).unwrap();
+    client
+        .write_all(b"POST /unknown HTTP/1.1\r\nContent-Length: 4\r\n\r\nab")
+        .unwrap();
+    let (started, entered) = std::sync::mpsc::channel();
+    let (finished, completion) = std::sync::mpsc::channel();
+    let worker = thread::spawn(move || {
+        started.send(()).unwrap();
+        let result = super::handle_connection(stream, &runtime);
+        finished.send(()).unwrap();
+        result
+    });
+    entered.recv().unwrap();
+    let early_completion = completion.recv_timeout(std::time::Duration::from_millis(100));
+    let sent = client.write_all(b"cd");
+    let handled = worker.join().unwrap();
+    assert_eq!(
+        early_completion,
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+    );
+    sent.unwrap();
+    handled.unwrap();
+    let mut response = String::new();
+    client.read_to_string(&mut response).unwrap();
+    assert!(response.starts_with("HTTP/1.1 404 Not Found\r\n"));
+}
+
+#[test]
 #[ignore = "requires ASH_TEST_LIVEKIT_SERVER pointing to the pinned server"]
 fn media_calls_enforce_membership_and_rotate_self_hosted_rooms() {
     struct MediaProcess(std::process::Child);

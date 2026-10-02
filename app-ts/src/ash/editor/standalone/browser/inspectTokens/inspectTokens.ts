@@ -1,3 +1,4 @@
+import { h as createDomElement } from '../../../../base/browser/dom.js';
 import { KeyCode } from '../../../../base/common/keyCodes.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../nls.js';
@@ -56,17 +57,17 @@ class InspectTokensWidget extends Disposable implements IContentWidget {
 		super();
 		this.model = editor.getModel()!;
 		const doc = editor.getContainerDomNode().ownerDocument;
-		this.node = doc.createElement('div');
+		this.node = createDomElement(doc, 'div');
 		this.node.className = 'stanza-editor-inspect-tokens';
 		this.node.setAttribute('role', 'status');
 		this.node.setAttribute('aria-live', 'polite');
 		this.node.setAttribute('aria-label', localize('inspectTokens.title', 'Token details'));
-		const heading = doc.createElement('strong');
+		const heading = createDomElement(doc, 'strong');
 		heading.className = 'stanza-editor-inspect-tokens-heading';
 		heading.textContent = localize('inspectTokens.title', 'Token details');
-		this.sample = doc.createElement('code');
+		this.sample = createDomElement(doc, 'code');
 		this.sample.className = 'stanza-editor-inspect-tokens-sample';
-		const details = doc.createElement('dl');
+		const details = createDomElement(doc, 'dl');
 		this.language = this.addDetail(details, localize('inspectTokens.language', 'Language'));
 		this.scope = this.addDetail(details, localize('inspectTokens.scope', 'Token type'));
 		this.modifiers = this.addDetail(details, localize('inspectTokens.modifiers', 'Modifiers'));
@@ -95,9 +96,9 @@ class InspectTokensWidget extends Disposable implements IContentWidget {
 	}
 
 	private addDetail(parent: HTMLDListElement, label: string): HTMLElement {
-		const term = parent.ownerDocument.createElement('dt');
+		const term = createDomElement(parent.ownerDocument, 'dt');
 		term.textContent = label;
-		const value = parent.ownerDocument.createElement('dd');
+		const value = createDomElement(parent.ownerDocument, 'dd');
 		parent.append(term, value);
 		return value;
 	}

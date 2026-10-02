@@ -19,10 +19,10 @@ test("App Server diagnostics service synchronizes, filters revisions, and closes
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
 	const documents = new FakeCodeIntelligenceDocuments();
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
+	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
 	using service = new AppServerLanguageDiagnosticsService(api, events, workspace, documents);
 	using model = new TextModel("fn main() {}\n");
-	const resource = URI.file("C:\\project\\main.rs");
+	const resource = URI.file("C:/project/main.rs");
 	using first = service.acquire(resource, "rust", model);
 	using second = service.acquire(resource, "rust", model);
 	await tick();
@@ -65,14 +65,14 @@ test("App Server diagnostics keep equal relative paths isolated by Workspace fol
 	using workspace = new WorkspaceContextService({
 		id: "multi-root",
 		folders: [
-			{ id: "one", uri: URI.file("C:\\one"), name: "one", index: 0 },
-			{ id: "two", uri: URI.file("C:\\two"), name: "two", index: 1 },
+			{ id: "one", uri: URI.file("C:/one"), name: "one", index: 0 },
+			{ id: "two", uri: URI.file("C:/two"), name: "two", index: 1 },
 		],
-		configuration: URI.file("C:\\project.code-workspace"),
+		configuration: URI.file("C:/project.code-workspace"),
 	});
 	using service = new AppServerLanguageDiagnosticsService(api, events, workspace);
 	using model = new TextModel("fn second() {}\n");
-	const resource = URI.file("C:\\two\\main.rs");
+	const resource = URI.file("C:/two/main.rs");
 	using acquisition = service.acquire(resource, "rust", model);
 	await tick();
 
@@ -159,11 +159,11 @@ test("App Server diagnostics service includes unopened workspace reports", async
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
 	api.workspaceReport = { supported: true, snapshots: [{ path: "src/unopened.rs", diagnostics: [{ range: { start: { lineIndex: 2, columnIndex: 1 }, end: { lineIndex: 2, columnIndex: 4 } }, severity: "warning", message: "workspace warning", code: null, source: "fixture" }] }] };
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
+	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
 	using service = new AppServerLanguageDiagnosticsService(api, events, workspace);
 	await tick();
 	await tick();
-	const resource = URI.file("C:\\project\\src\\unopened.rs");
+	const resource = URI.file("C:/project/src/unopened.rs");
 	assert.equal(service.getDiagnostics(resource)?.revision, 0);
 	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, "workspace warning");
 	assert.equal(service.getAllDiagnostics().length, 1);
@@ -183,10 +183,10 @@ test("App Server diagnostics service treats typed unavailable pulls as unsupport
 	const originalConsoleError = console.error;
 	console.error = (...arguments_: unknown[]) => reported.push(arguments_);
 	try {
-		using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
+		using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
 		using service = new AppServerLanguageDiagnosticsService(api, events, workspace);
 		using model = new TextModel("fn main() {}\n");
-		using acquisition = service.acquire(URI.file("C:\\project\\main.rs"), "rust", model);
+		using acquisition = service.acquire(URI.file("C:/project/main.rs"), "rust", model);
 		await tick();
 		await tick();
 
@@ -207,7 +207,7 @@ test("App Server diagnostics service waits for a workspace folder before pulling
 	await tick();
 	assert.equal(api.workspaceDiagnosticPulls, 0);
 
-	workspace.updateWorkspace({ id: "workspace", uri: URI.file("C:\\project") });
+	workspace.updateWorkspace({ id: "workspace", uri: URI.file("C:/project") });
 	await tick();
 	await tick();
 	assert.ok(api.workspaceDiagnosticPulls > 0);
@@ -217,10 +217,10 @@ test("App Server diagnostics service gates Editor synchronization on directory p
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
 	const permissions = new FakeDirPermissionsService("workspace", []);
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
+	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
 	using service = new AppServerLanguageDiagnosticsService(api, events, workspace, undefined, permissions);
 	using model = new TextModel("fn main() {}\n");
-	using acquisition = service.acquire(URI.file("C:\\project\\main.rs"), "rust", model);
+	using acquisition = service.acquire(URI.file("C:/project/main.rs"), "rust", model);
 
 	await tick();
 	await tick();

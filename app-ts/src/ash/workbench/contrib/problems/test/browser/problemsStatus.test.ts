@@ -8,7 +8,7 @@ import type { IViewsService } from "../../../../../workbench/services/views/brow
 
 test("Problems status projects and updates workspace error and warning counts", () => {
 	using markerService = new MarkerService();
-	const resource = URI.file("C:\\project\\src\\main.rs");
+	const resource = URI.file("C:/project/src/main.rs");
 	markerService.set("fixture", [
 		marker(resource, MarkerSeverity.Error, "first"),
 		marker(resource, MarkerSeverity.Error, "second"),

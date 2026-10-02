@@ -8,8 +8,8 @@ import { RetainedModelUndoRedoHistory } from "../../common/retainedModelUndoRedo
 
 test("RetainedModelUndoRedoHistory retains only the configured number of model histories", () => {
 	using participant = new RetainedModelUndoRedoHistory({ maxEntries: 1 });
-	const firstResource = URI.file("C:\\project\\first.ts");
-	const secondResource = URI.file("C:\\project\\second.ts");
+	const firstResource = URI.file("C:/project/first.ts");
+	const secondResource = URI.file("C:/project/second.ts");
 	using first = editedModel("first");
 	using second = editedModel("second");
 	participant.remember(firstResource, first);
@@ -24,7 +24,7 @@ test("RetainedModelUndoRedoHistory retains only the configured number of model h
 
 test("RetainedModelUndoRedoHistory does not capture an unfinished history revision", () => {
 	using participant = new RetainedModelUndoRedoHistory();
-	const resource = URI.file("C:\\project\\revision.ts");
+	const resource = URI.file("C:/project/revision.ts");
 	using model = new TextModel("revision");
 	const group = new UndoRedoGroup();
 	model.beginHistoryRevision(group);

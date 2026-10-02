@@ -28,12 +28,12 @@ body {
   place-items: center;
   width: 54px;
   height: 54px;
-  border-radius: var(--ash-corner-radius-x-large);
-  background: var(--ash-button-primary-background);
-  color: var(--ash-button-primary-foreground);
+  border-radius: var(--ash-cornerRadius-xLarge);
+  background: var(--ash-button-primaryBackground);
+  color: var(--ash-button-primaryForeground);
   font-family: var(--ash-font-family-monospace, "SFMono-Regular", Consolas, monospace);
-  font-size: var(--ash-font-size-heading2);
-  font-weight: var(--ash-font-weight-semi-bold);
+  font-size: var(--ash-fontSize-heading2);
+  font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .remote-install__content {
@@ -43,8 +43,8 @@ body {
 h1 {
   margin: 2px 0 6px;
   color: var(--ash-editor-foreground);
-  font-size: var(--ash-font-size-heading2);
-  font-weight: var(--ash-font-weight-semi-bold);
+  font-size: var(--ash-fontSize-heading2);
+  font-weight: var(--ash-fontWeight-semiBold);
 }
 
 p {
@@ -55,7 +55,7 @@ p {
   overflow: hidden;
   color: var(--ash-accent-foreground);
   font-family: var(--ash-font-family-monospace, "SFMono-Regular", Consolas, monospace);
-  font-size: var(--ash-font-size-label1);
+  font-size: var(--ash-fontSize-label1);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -63,21 +63,21 @@ p {
 .remote-install__stage {
   margin-top: 20px;
   color: var(--ash-editor-foreground);
-  font-size: var(--ash-font-size-body1);
-  font-weight: var(--ash-font-weight-semi-bold);
+  font-size: var(--ash-fontSize-body1);
+  font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .remote-install__progress {
   width: 100%;
   height: 5px;
   margin: 10px 0 10px;
-  accent-color: var(--ash-button-primary-background);
+  accent-color: var(--ash-button-primaryBackground);
 }
 
 .remote-install__detail {
   min-height: 32px;
   color: var(--ash-description-foreground);
-  font-size: var(--ash-font-size-label1);
+  font-size: var(--ash-fontSize-label1);
   line-height: 16px;
 }
 
@@ -85,21 +85,21 @@ button {
   margin-top: 16px;
   min-height: 28px;
   padding: 4px 12px;
-  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-  border-radius: var(--ash-corner-radius-x-small);
-  background: var(--ash-button-secondary-background);
+  border: var(--ash-strokeThickness) solid var(--ash-input-border);
+  border-radius: var(--ash-cornerRadius-xSmall);
+  background: var(--ash-button-secondaryBackground);
   color: var(--ash-button-foreground);
   font: inherit;
-  font-size: var(--ash-font-size-label1);
+  font-size: var(--ash-fontSize-label1);
   cursor: pointer;
 }
 
 button:hover:not(:disabled) {
-  background: var(--ash-button-hover-background);
+  background: var(--ash-button-hoverBackground);
 }
 
 button:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
   outline-offset: 2px;
 }
 

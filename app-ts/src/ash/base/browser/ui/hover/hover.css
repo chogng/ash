@@ -20,8 +20,8 @@
 .ash-hover code,
 .ash-hover kbd {
   padding: 2px 4px;
-  background: var(--ash-text-code-block-background);
-  border-radius: var(--ash-corner-radius-small);
+  background: var(--ash-text-codeBlockBackground);
+  border-radius: var(--ash-cornerRadius-small);
   font-family: var(--ash-font-family-monospace);
   font-size: 0.92em;
 }

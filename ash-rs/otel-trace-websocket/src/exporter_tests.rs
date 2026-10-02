@@ -8,6 +8,7 @@ use opentelemetry::trace::TraceContextExt;
 use opentelemetry::trace::Tracer;
 use opentelemetry::trace::TracerProvider;
 use opentelemetry_sdk::Resource;
+use opentelemetry_sdk::trace::Sampler;
 use opentelemetry_sdk::trace::SdkTracerProvider;
 use opentelemetry_sdk::trace::SpanExporter;
 use serde_json::Value;
@@ -56,6 +57,7 @@ async fn sdk_streams_parent_ids_timing_and_typed_attributes_to_all_viewers() {
     let mut first = connect(exporter.local_addr()).await;
     let mut second = connect(exporter.local_addr()).await;
     let provider = SdkTracerProvider::builder()
+        .with_sampler(Sampler::AlwaysOn)
         .with_resource(
             Resource::builder_empty()
                 .with_attribute(KeyValue::new("service.name", "test"))
@@ -109,6 +111,7 @@ async fn connections_start_at_live_tail_without_replay() {
     let exporter = exporter();
     let address = exporter.local_addr();
     let provider = SdkTracerProvider::builder()
+        .with_sampler(Sampler::AlwaysOn)
         .with_simple_exporter(exporter)
         .build();
     let tracer = provider.tracer("test");

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { registerTestDictationServices } from '../../../workbench/test/common/testDictationServices.js';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Emitter } from '../../../base/common/event.js';
@@ -59,6 +60,7 @@ test('Sessions Models switches control the model picker visibility preference', 
 	services.registerInstance(ChatService, chat);
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(ILocalTranscriptionService, transcription);
+	registerTestDictationServices(services, undefined);
 	const { IClipboardService: ClipboardService } = await import('../../../platform/clipboard/common/clipboardService.js');
 	const { IContextMenuService: ContextMenus } = await import('../../../platform/contextview/browser/contextView.js');
 	const { IContextKeyService: ContextKeys } = await import('../../../platform/contextkey/browser/contextKeyService.js');

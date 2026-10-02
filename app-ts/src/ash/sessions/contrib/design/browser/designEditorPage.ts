@@ -28,7 +28,7 @@ export class DesignEditorPage extends Disposable implements IEditorPane {
 	}
 
 	public create(parent: HTMLElement): void {
-		this.editor = this._register(this.instantiationService.createInstance(DesignEditorWidget, parent.ownerDocument, this.workingCopy, createDesignEditorContributions));
+		this.editor = this._register(this.instantiationService.createInstance(DesignEditorWidget, parent, this.workingCopy, createDesignEditorContributions));
 		this.domNode = this.editor.domNode;
 		parent.append(this.domNode);
 		this.editor.initialize();

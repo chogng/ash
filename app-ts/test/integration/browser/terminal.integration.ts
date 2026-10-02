@@ -3,9 +3,7 @@ import { IViewsService } from '../../../src/ash/workbench/services/views/browser
 import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { ITerminalService } from '../../../src/ash/workbench/services/terminal/common/terminal.js';
-import { IDictationService } from '../../../src/ash/platform/dictation/common/dictationService.js';
-import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
-import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
+import { registerTestDictationServices } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
@@ -123,14 +121,12 @@ if (new URLSearchParams(location.search).has('pane')) {
 	services.registerInstance(ITerminalService, terminals);
 	let transcript!: (text: string, isFinal: boolean) => void;
 	let stops = 0;
-	services.registerInstance(IDictationService, { onDidChangePreparation: Event.None, getPreparation: async () => undefined, getOptions: async () => ({ inputDevices: [], languages: [] }), prepareModel: async () => {}, cancelPreparation: async () => {}, start: async (callback) => { transcript = callback; return { stop: async () => { stops++; } }; } });
+	services.registerInstance(INotificationService, store.add(new NotificationService()));
+	registerTestDictationServices(services, { onDidChangePreparation: Event.None, getPreparation: async () => undefined, getOptions: async () => ({ inputDevices: [], languages: [] }), prepareModel: async () => {}, cancelPreparation: async () => {}, start: async (callback) => { transcript = callback; return { stop: async () => { stops++; } }; } });
 	services.registerInstance(IContextKeyService, context);
 	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 	services.registerInstance(IViewsService, { openView: () => pane, getViewWithId: () => pane, focusView: () => { pane.focus(); return true; } });
-	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
-	registerTestDictationOnboarding(services);
 	services.registerInstance(IPreferencesService, { openSettings: async () => {} } as unknown as IPreferencesService);
-	services.registerInstance(INotificationService, store.add(new NotificationService()));
 	const pane = store.add(new TerminalViewPane(document.querySelector<HTMLElement>('#terminal')!, { id: 'terminal', title: 'Terminal' }, terminals, theme, menu, {
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,

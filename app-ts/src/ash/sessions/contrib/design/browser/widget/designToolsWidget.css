@@ -1,17 +1,26 @@
 .ash-design-tools-widget {
-	display: flex;
-	align-items: center;
-	gap: var(--ash-spacing-size160);
 	box-sizing: border-box;
+	width: calc(var(--ash-design-tools-content-width, 100%) + 2 * var(--ash-strokeThickness));
 	max-width: calc(100% - 32px);
-	padding: var(--ash-spacing-size60);
-	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
 	border-radius: var(--ash-cornerRadius-xLarge);
 	background: var(--ash-editor-background);
 	color: var(--ash-foreground);
 	box-shadow: 0 4px 16px var(--ash-widget-shadow);
-	overflow-x: auto;
 	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-design-tools-widget > .ash-design-tools-scroll {
+	height: calc(28px + 2 * var(--ash-spacing-size60));
+	border-radius: inherit;
+}
+
+.ash-design-tools-row {
+	display: flex;
+	align-items: center;
+	width: max-content;
+	gap: var(--ash-spacing-size160);
+	padding: var(--ash-spacing-size60);
 }
 
 .ash-design-tools-group {
@@ -23,6 +32,6 @@
 
 [data-color-scheme="high-contrast-dark"] .ash-design-tools-widget,
 [data-color-scheme="high-contrast-light"] .ash-design-tools-widget {
-	border-color: var(--ash-contrast-border);
+	border-color: var(--ash-contrastBorder);
 	box-shadow: none;
 }

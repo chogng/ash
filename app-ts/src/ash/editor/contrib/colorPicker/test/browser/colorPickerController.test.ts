@@ -36,7 +36,13 @@ test('color picker decorates, edits, and undoes a CSS color as one operation', a
 	await waitFor(() => container.querySelector('.colorpicker-color-decoration') !== null);
 	const swatch = container.querySelector<HTMLElement>('.colorpicker-color-decoration')!;
 	assert.match(swatch.className, /dyn-rule-/u);
-	swatch.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
+	// jsdom has no browser caret hit testing; point at the rendered injected swatch.
+	const caret = dom.window.document.createRange();
+	caret.setStart(swatch.firstChild!, 0);
+	caret.collapse(true);
+	dom.window.document.caretRangeFromPoint = () => caret;
+	swatch.dispatchEvent(new dom.window.PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'mouse', pointerId: 1 }));
+	swatch.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true, cancelable: true, detail: 1 }));
 
 	const dialog = container.querySelector<HTMLElement>('.stanza-editor-color-picker')!;
 	await waitFor(() => !dialog.hidden && dialog.querySelectorAll('option').length === 3);

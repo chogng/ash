@@ -43,4 +43,3 @@ export function designBounds(shapes: readonly DesignFrame[]): { x: number; y: nu
 	const y = Math.min(...points.map(point => point.y));
 	return { x, y, width: Math.max(...points.map(point => point.x)) - x, height: Math.max(...points.map(point => point.y)) - y };
 }
-

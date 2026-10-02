@@ -1,7 +1,7 @@
 .ash-menubar {
   /* Hosts select the radius on this root; action styling stays inside the control. */
-  --ash-menubar-action-radius: var(--ash-corner-radius-small);
-  --ash-menubar-hover-background: var(--ash-title-bar-hover-background);
+  --ash-menubar-action-radius: var(--ash-cornerRadius-small);
+  --ash-menubar-hover-background: var(--ash-titleBar-hoverBackground);
 }
 
 .ash-menubar .ash-button {
@@ -9,7 +9,7 @@
 }
 
 .ash-menubar .ash-menubar-item {
-  color: var(--ash-title-bar-foreground);
+  color: var(--ash-titleBar-foreground);
 }
 
 .ash-menubar .ash-menubar-item:hover,
@@ -18,6 +18,6 @@
 }
 
 .ash-workbench[data-color-scheme^="high-contrast-"] .ash-menubar .ash-button:is(.active, :hover):not(:disabled):not(:focus-visible) {
-  outline: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
+  outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
   outline-offset: -1px;
 }

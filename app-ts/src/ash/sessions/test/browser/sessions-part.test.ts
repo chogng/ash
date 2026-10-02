@@ -1,3 +1,8 @@
+import { h as createDomElement, Dimension } from '../../../base/browser/dom.js';
+import type { IPositionedRectangle } from '../../../base/browser/geometry.js';
+import type { IView } from '../../../base/browser/ui/grid/grid.js';
+import type { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
+import { SessionGridLayout } from '../../browser/parts/sessionGridLayout.js';
 import { IFileService } from '../../../platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { WorkspaceContextService } from '../../../workbench/services/workspaces/browser/workspaceContextService.js';
@@ -5,15 +10,13 @@ import { IDialogService, IFileDialogService } from '../../../platform/dialogs/co
 import { DialogService } from '../../../workbench/services/dialogs/common/dialogService.js';
 import { FileDialogService } from '../../../workbench/services/dialogs/browser/fileDialogService.js';
 import type { IWebWorkspaceClient } from '../../../workbench/services/workspaces/browser/workspaceOpenService.js';
-import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
-import { IDictationService } from '../../../platform/dictation/common/dictationService.js';
-import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
+import { registerTestDictationServices } from '../../../workbench/test/common/testDictationServices.js';
 import { observableValue } from '../../../base/common/observable.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { Emitter, Event } from "../../../base/common/event.js";
-import { DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import type { ICommandEvent, ICommandService } from "../../../platform/commands/common/commands.js";
 import { IContextMenuService, IContextViewService } from "../../../platform/contextview/browser/contextView.js";
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
@@ -50,6 +53,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 const { SessionsPart } = await import("../../../sessions/browser/parts/sessionsPart.js");
+const { SessionsChatView } = await import('../../browser/parts/sessionsChatView.js');
 await import('../../contrib/design/browser/design.contribution.js');
 const { NewChatInputWidget } = await import('../../contrib/chat/browser/newChatInput.js');
 const { createCodeEditorServices } = await import('../../../editor/test/browser/testCodeEditor.js');
@@ -192,8 +196,6 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	};
 	using resources = new DisposableStore();
 	const services = resources.add(createCodeEditorServices(resources).createChild());
-	services.registerInstance(IDictationService, undefined);
-	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	using notifications = new NotificationService();
 	services.registerInstance(IContextMenuService, contextMenuService);
 	services.registerInstance(IContextViewService, contextViewService);
@@ -208,7 +210,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	services.registerInstance(INotificationService, notifications);
 	const storage = resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, applicationId: 'test', workspaceId: 'test', flushInterval: 0 }));
 	services.registerInstance(IStorageService, storage);
-	registerTestDictationOnboarding(services);
+	registerTestDictationServices(services, undefined);
 	services.registerInstance(ISessionsManagementService, sessionService);
 	const viewService = services.createInstance(SessionsService);
 	viewService.openNewSession("New code session");
@@ -396,4 +398,101 @@ test('Closing Sessions file acquisition cancels its readers and does not mutate 
 	await pending;
 	assert.equal(model.size, 0);
 	assert.deepEqual(notifications.getNotifications(), []);
+});
+
+test('Sessions page changes restore asymmetric grids only after side-part layout settles', async () => {
+	const document = browserEnvironment.window.document;
+	const container = createDomElement(document, 'div');
+	document.body.append(container);
+	using cleanup = toDisposable(() => container.remove());
+	using storage = new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, applicationId: 'page-geometry', workspaceId: 'test', flushInterval: 0 });
+	storage.store('sessions.gridState.chat', JSON.stringify({ version: 1, widths: [{ id: 'first', width: 500 }, { id: 'second', width: 700 }] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	storage.store('sessions.gridState.code', JSON.stringify({ version: 1, widths: [{ id: 'first', width: 450 }, { id: 'second', width: 550 }] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	using resources = new DisposableStore();
+	const services = resources.add(createCodeEditorServices(resources).createChild());
+	services.registerInstance(IStorageService, storage);
+	const dialogs = resources.add(new DialogService());
+	services.registerInstance(IDialogService, dialogs);
+	const unexpectedFileOperation = async (): Promise<never> => { throw new Error('Unexpected file operation'); };
+	services.registerInstance(IFileService, { onDidChangeFiles: Event.None, stat: unexpectedFileOperation, readDirectory: unexpectedFileOperation, readFile: unexpectedFileOperation, readFileBytes: unexpectedFileOperation, writeFile: unexpectedFileOperation, writeFileBytes: unexpectedFileOperation, createFile: unexpectedFileOperation, createDirectory: unexpectedFileOperation, copy: unexpectedFileOperation, rename: unexpectedFileOperation, delete: unexpectedFileOperation });
+	services.registerInstance(IFileDialogService, new FileDialogService({ kind: 'server', client: {} as IWebWorkspaceClient, quickInput: () => { throw new Error('Unexpected picker'); }, fileService: () => { throw new Error('Unexpected files'); }, workspaceRoot: () => undefined }, () => dialogs));
+	services.registerInstance(ILifecycleService, resources.add(services.createInstance(BrowserLifecycleService, { ownerWindow: browserEnvironment.window as unknown as Window, onError: (error: unknown) => { throw error; } })));
+	class Pane implements IView {
+		readonly element = createDomElement(document, 'div');
+		readonly minimumWidth = 100;
+		readonly maximumWidth = Number.POSITIVE_INFINITY;
+		readonly minimumHeight = 0;
+		readonly maximumHeight = Number.POSITIVE_INFINITY;
+		width = 0;
+		constructor() { this.element.append(createDomElement(document, 'input')); }
+		layout(bounds: IPositionedRectangle): void { this.width = bounds.width; }
+	}
+	class PageView extends Disposable {
+		readonly domNode = createDomElement(document, 'section');
+		readonly panes = [new Pane(), new Pane()];
+		readonly visibility: boolean[] = [];
+		private readonly grid: SessionGridLayout;
+		constructor(parent: HTMLElement, page: 'chat' | 'code') {
+			super();
+			parent.append(this.domNode);
+			this.grid = this._register(services.createInstance(SessionGridLayout, this.domNode, this.panes[0]!, page));
+			this.grid.reconcile(this.panes.map((view, index) => ({ id: index === 0 ? 'first' : 'second', view })), 'first');
+		}
+		setVisible(visible: boolean): void { this.visibility.push(visible); }
+		updateVisibleSelections(): void {}
+		layout(dimension: Dimension): void { this.grid.layout(dimension.width, dimension.height); }
+	}
+	const pages = new Map<'chat' | 'code', PageView>();
+	const createPart = (): InstanceType<typeof SessionsPart> => {
+		const part = new SessionsPart(container, {} as SessionsPartOptions, {
+			createInstance: (constructor: Parameters<IInstantiationService['createInstance']>[0], ...args: unknown[]) => {
+				if (constructor !== SessionsChatView) return services.createInstance(constructor, ...args);
+				const [parent, options] = args as [HTMLElement, { page: 'chat' | 'code' }];
+				const page = new PageView(parent, options.page);
+				pages.set(options.page, page);
+				return page;
+			},
+		} as unknown as IInstantiationService);
+		Object.defineProperties(part.domNode.querySelector('.ash-workbench-part-content')!, { clientWidth: { get: () => 1_200 }, clientHeight: { get: () => 800 } });
+		return part;
+	};
+	const widths = (page: 'chat' | 'code'): readonly number[] => pages.get(page)!.panes.map(pane => pane.width);
+	const exercise = async (part: InstanceType<typeof SessionsPart>): Promise<void> => {
+		part.layout(new Dimension(1_200, 800));
+		assert.deepEqual(widths('chat'), [500, 700]);
+		part.setPage('code', () => {
+			part.layout(new Dimension(1_100, 800));
+			part.layout(new Dimension(1_000, 800));
+		});
+		assert.deepEqual({ chat: widths('chat'), code: widths('code') }, { chat: [500, 700], code: [450, 550] });
+		const code = pages.get('code')!;
+		const input = code.panes[0]!.element.querySelector('input')!;
+		input.value = 'Unsent Code draft';
+		input.focus();
+		const visibility = [...code.visibility];
+		part.setPage('code', () => part.layout(new Dimension(1_000, 800)));
+		assert.deepEqual({ visibility: code.visibility, focused: document.activeElement, draft: input.value }, { visibility, focused: input, draft: 'Unsent Code draft' });
+		// Design lives in EditorPart; the hidden Sessions part must retain both page geometries.
+		part.setPage('empty', () => {
+			part.layout(new Dimension(600, 800));
+			part.layout(new Dimension(0, 800));
+		});
+		assert.deepEqual({ chat: widths('chat'), code: widths('code') }, { chat: [500, 700], code: [450, 550] });
+		part.setPage('code', () => {
+			part.layout(new Dimension(1_200, 800));
+			part.layout(new Dimension(1_000, 800));
+		});
+		assert.deepEqual({ code: widths('code'), draft: input.value }, { code: [450, 550], draft: 'Unsent Code draft' });
+		part.setPage('chat', () => part.layout(new Dimension(1_200, 800)));
+		assert.deepEqual({ chat: widths('chat'), code: widths('code') }, { chat: [500, 700], code: [450, 550] });
+		await storage.flush();
+	};
+	{
+		using part = createPart();
+		await exercise(part);
+	}
+	{
+		using reloaded = createPart();
+		await exercise(reloaded);
+	}
 });

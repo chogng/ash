@@ -50,13 +50,13 @@ test('high contrast theme colors are opaque when present', () => {
 test("color identifiers map to stable CSS custom properties", () => {
 	assert.equal(
 		colorCssVariable(primaryButtonHoverBackground),
-		"--ash-button-primary-hover-background",
+		"--ash-button-primaryHoverBackground",
 	);
 	assert.equal(
 		colorCssVariable(editorForeground),
 		"--ash-editor-foreground",
 	);
-	assert.equal(colorCssVariable(foldBackground), '--ash-editor-fold-background');
-	assert.equal(colorCssVariable(foldPlaceholderForeground), '--ash-editor-fold-placeholder-foreground');
-	assert.equal(colorCssVariable(foldingControlForeground), '--ash-editor-gutter-folding-control-foreground');
+	assert.equal(colorCssVariable(foldBackground), '--ash-editor-foldBackground');
+	assert.equal(colorCssVariable(foldPlaceholderForeground), '--ash-editor-foldPlaceholderForeground');
+	assert.equal(colorCssVariable(foldingControlForeground), '--ash-editorGutter-foldingControlForeground');
 });

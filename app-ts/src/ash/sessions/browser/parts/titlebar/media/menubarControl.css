@@ -3,10 +3,10 @@
 }
 
 .ash-sessions-titlebar-actions.ash-menubar {
-	--ash-action-bar-gap: var(--ash-spacing-size80);
-	--ash-toolbar-action-size: var(--ash-spacing-size280);
-	--ash-toolbar-hover-background: var(--ash-sessions-selection-background);
-	--ash-menubar-hover-background: var(--ash-sessions-selection-background);
-	--ash-menubar-action-radius: var(--ash-corner-radius-large);
-	color: var(--ash-title-bar-foreground);
+	--ash-actionBar-gap: var(--ash-spacing-size80);
+	--ash-toolbar-actionSize: var(--ash-spacing-size280);
+	--ash-toolbar-hoverBackground: var(--ash-sessions-selectionBackground);
+	--ash-menubar-hover-background: var(--ash-sessions-selectionBackground);
+	--ash-menubar-action-radius: var(--ash-cornerRadius-large);
+	color: var(--ash-titleBar-foreground);
 }

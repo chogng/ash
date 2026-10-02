@@ -13,7 +13,7 @@
 }
 .ash-sash::after {
   background-color: transparent;
-  border-radius: var(--ash-corner-radius-circle);
+  border-radius: var(--ash-cornerRadius-circle);
   pointer-events: none;
 }
 @media (prefers-reduced-motion: no-preference) {
@@ -42,32 +42,32 @@
   top: 0;
   bottom: 0;
   left: 50%;
-  width: var(--ash-sash-drag-area-size, 4px);
+  width: var(--ash-sash-dragAreaSize, 4px);
   transform: translateX(-50%);
 }
 .ash-sash-horizontal::before {
   top: 50%;
   right: 0;
   left: 0;
-  height: var(--ash-sash-drag-area-size, 4px);
+  height: var(--ash-sash-dragAreaSize, 4px);
   transform: translateY(-50%);
 }
 .ash-sash-vertical::after {
   top: 0;
   bottom: 0;
   left: 50%;
-  width: var(--ash-sash-hover-feedback-size, 1px);
+  width: var(--ash-sash-hoverFeedbackSize, 1px);
   transform: translateX(-50%);
 }
 .ash-sash-horizontal::after {
   top: 50%;
   right: 0;
   left: 0;
-  height: var(--ash-sash-hover-feedback-size, 1px);
+  height: var(--ash-sash-hoverFeedbackSize, 1px);
   transform: translateY(-50%);
 }
 .ash-sash-hover::after, .ash-sash-active::after, .ash-sash:focus-visible::after {
-  background: var(--ash-sash-hover-background);
+  background: var(--ash-sash-hoverBackground);
 }
 .ash-sash-vertical { cursor: col-resize; }
 .ash-sash-horizontal { cursor: row-resize; }
@@ -79,8 +79,8 @@
 .ash-sash-orthogonal-handle {
   position: absolute;
   z-index: 1;
-  width: calc(var(--ash-sash-drag-area-size, 4px) * 2);
-  height: calc(var(--ash-sash-drag-area-size, 4px) * 2);
+  width: calc(var(--ash-sash-dragAreaSize, 4px) * 2);
+  height: calc(var(--ash-sash-dragAreaSize, 4px) * 2);
   cursor: all-scroll;
 }
 .ash-sash-vertical > .ash-sash-orthogonal-handle {

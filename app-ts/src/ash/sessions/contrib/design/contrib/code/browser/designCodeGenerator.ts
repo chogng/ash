@@ -1,3 +1,4 @@
+import { h, svg } from '../../../../../../base/browser/dom.js';
 import { mainWindow } from '../../../../../../base/browser/window.js';
 import { localize } from '../../../../../../nls.js';
 import { designBounds } from '../../../common/core/geometry.js';
@@ -7,7 +8,7 @@ import { renderDesignShape } from '../../../browser/svgRenderer.js';
 /** Generates runnable source from committed data, retaining IDs and JSON for agent edits. */
 export function generateDesignCode(document: DesignDocument): string {
 	const ownerDocument = mainWindow.document;
-	const scene = ownerDocument.createElement('div');
+	const scene = h(ownerDocument, 'div');
 	scene.className = 'ash-design-scene';
 	const rules = ['body { margin: 0; }', '.ash-design-scene { position: relative; overflow: visible; }', '.ash-design-object { position: absolute; transform-origin: center; }'];
 	const frames = document.shapes.flatMap(shape => [shape, ...(shape.motion?.keyframes.map(frame => ({ ...shape, ...frame })) ?? [])]);
@@ -15,7 +16,7 @@ export function generateDesignCode(document: DesignDocument): string {
 	const padding = strokePadding(document.shapes);
 	rules.push(`.ash-design-scene { width: ${bounds.width + padding * 2}px; height: ${bounds.height + padding * 2}px; }`);
 	function render(shape: DesignShape, originX: number, originY: number): HTMLElement {
-		const node = ownerDocument.createElement('div');
+		const node = h(ownerDocument, 'div');
 		const className = `ash-design-object-${shape.id}`;
 		node.className = `ash-design-object ${className}`;
 		node.dataset.designId = shape.id;
@@ -25,21 +26,21 @@ export function generateDesignCode(document: DesignDocument): string {
 		if (shape.kind === 'rectangle' || shape.kind === 'ellipse') {
 			appearance = ` background: ${shape.fill};${shape.kind === 'ellipse' ? ' border-radius: 50%;' : ''}`;
 		} else if (shape.kind === 'group') {
-			const content = ownerDocument.createElement('div');
+			const content = h(ownerDocument, 'div');
 			content.className = `${className}-content`;
 			rules.push(`.${className}-content { width: ${shape.contentWidth}px; height: ${shape.contentHeight}px; transform-origin: top left; transform: scale(${shape.width / shape.contentWidth}); }`);
 			content.append(...shape.children.map(child => render(child, 0, 0)));
 			node.append(content);
 		} else {
-			const svg = ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
-			svg.setAttribute('width', `${shape.width}`);
-			svg.setAttribute('height', `${shape.height}`);
-			svg.setAttribute('viewBox', `0 0 ${shape.width} ${shape.height}`);
-			svg.setAttribute('overflow', 'visible');
-			svg.append(renderDesignShape({ ...shape, x: 0, y: 0, rotation: 0 }));
-			svg.querySelector('[data-shape-id]')!.removeAttribute('data-shape-id');
-			if (shape.kind === 'text') { svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', shape.text); }
-			node.append(svg);
+			const shapeDomNode = svg(ownerDocument, 'svg');
+			shapeDomNode.setAttribute('width', `${shape.width}`);
+			shapeDomNode.setAttribute('height', `${shape.height}`);
+			shapeDomNode.setAttribute('viewBox', `0 0 ${shape.width} ${shape.height}`);
+			shapeDomNode.setAttribute('overflow', 'visible');
+			shapeDomNode.append(renderDesignShape(shapeDomNode, { ...shape, x: 0, y: 0, rotation: 0 }));
+			shapeDomNode.querySelector('[data-shape-id]')!.removeAttribute('data-shape-id');
+			if (shape.kind === 'text') { shapeDomNode.setAttribute('role', 'img'); shapeDomNode.setAttribute('aria-label', shape.text); }
+			node.append(shapeDomNode);
 		}
 		if (shape.motion) {
 			const motion = shape.motion;
@@ -51,7 +52,7 @@ export function generateDesignCode(document: DesignDocument): string {
 		return node;
 	}
 	scene.append(...document.shapes.map(shape => render(shape, bounds.x - padding, bounds.y - padding)));
-	const title = ownerDocument.createElement('title');
+	const title = h(ownerDocument, 'title');
 	title.textContent = localize('sessions.design.codeTitle', 'Ash design');
 	// A raw-text script cannot contain a literal closing tag, even for inert JSON.
 	const data = serializeDesignDocument(document).replaceAll('<', '\\u003c').replaceAll('>', '\\u003e').replaceAll('&', '\\u0026');

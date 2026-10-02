@@ -14,7 +14,7 @@ test("minimal text editor assembly creates only the engine surface", () => {
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("const value = (1);");
-	const resource = URI.file("C:\\project\\minimal.ts");
+	const resource = URI.file("C:/project/minimal.ts");
 	using editor = createTestCodeEditor({
 		container,
 		ariaLabel: "minimal.ts",

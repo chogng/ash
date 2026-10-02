@@ -76,6 +76,44 @@ fn tool_call_output_and_result_form_one_exec_cell() {
 }
 
 #[test]
+fn tool_argument_details_sort_objects_without_changing_values_or_array_order() {
+    let inputs = [
+        r#"{"path":"example.txt","content":"keep\nthis","options":{"z":false,"a":null},"arguments":["z","a",{"z":2,"a":1}]}"#,
+        r#"{"arguments":["z","a",{"a":1,"z":2}],"options":{"a":null,"z":false},"content":"keep\nthis","path":"example.txt"}"#,
+    ];
+    let mut details = Vec::new();
+    for input in inputs {
+        let turn = turn_id("ordered");
+        let mut model = TranscriptModel::default();
+        model.replace(snapshot(vec![ThreadTranscriptEntry::Item {
+            entry_id: "ordered-entry".into(),
+            turn_id: turn.clone(),
+            item: ThreadItem::ToolCall {
+                item_id: item_id("ordered-item"),
+                turn_id: turn,
+                tool_call_id: call_id("ordered"),
+                name: ToolName::new("write_file").unwrap(),
+                arguments_json: input.into(),
+                binding: None,
+            },
+            transient: false,
+        }]));
+        let detail = model.cells()[0].details().unwrap();
+        let displayed: serde_json::Value =
+            serde_json::from_str(detail.split_once('\n').unwrap().1).unwrap();
+        assert_eq!(
+            displayed,
+            serde_json::from_str::<serde_json::Value>(input).unwrap()
+        );
+        assert_eq!(displayed["arguments"][0], "z");
+        assert_eq!(displayed["arguments"][1], "a");
+        details.push(detail);
+    }
+    assert_eq!(details[0], details[1]);
+    crate::tui_assert_snapshot!("tool_arguments_canonical_order", &details[0]);
+}
+
+#[test]
 fn policy_stop_transcript_keeps_the_reason_without_a_retry_suggestion() {
     let mut model = TranscriptModel::default();
     model.replace(snapshot(vec![ThreadTranscriptEntry::TurnError {

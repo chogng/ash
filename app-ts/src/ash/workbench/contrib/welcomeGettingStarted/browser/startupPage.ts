@@ -14,7 +14,6 @@ export class StartupPageRunnerContribution extends Disposable {
 		@IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService,
 	) {
 		super();
-		void this.openStartupEditor().catch(error => console.error('Could not open Welcome', error));
 	}
 
 	onWorkspaceRestored(): Promise<void> {

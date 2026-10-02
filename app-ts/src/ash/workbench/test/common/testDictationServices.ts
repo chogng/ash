@@ -2,9 +2,18 @@ import { InstantiationService } from '../../../platform/instantiation/common/ins
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../services/storage/browser/storageService.js';
 import { DictationOnboardingService, IDictationOnboardingService } from '../../contrib/chat/browser/speechToText/dictationOnboarding.js';
+import { IDictationService } from '../../../platform/dictation/common/dictationService.js';
+import { INotificationService } from '../../../platform/notification/common/notification.js';
+import { NotificationService } from '../../services/notification/common/notificationService.js';
+import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 
 /** Test profile storage is isolated from the browser's persistent user profile. */
-export function registerTestDictationOnboarding(services: InstantiationService, seen = true): void {
+export function registerTestDictationServices(services: InstantiationService, backend: IDictationService | undefined, seen = true): void {
+	services.registerInstance(IDictationService, backend);
+	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	if (!services.has(INotificationService)) {
+		services.registerSingleton(INotificationService, () => new NotificationService());
+	}
 	if (!services.has(IStorageService)) {
 		const entries = new Map<string, string>();
 		services.registerSingleton(IStorageService, () => new BrowserStorageService({

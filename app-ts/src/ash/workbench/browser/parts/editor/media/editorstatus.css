@@ -5,7 +5,7 @@
 	z-index: 100;
 	max-width: 26rem;
 	padding: var(--ash-spacing-size160);
-	border: var(--ash-strokeThickness) solid var(--ash-focus-border);
+	border: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	border-radius: var(--ash-cornerRadius-small);
 	background: var(--ash-editor-background);
 	color: var(--ash-foreground);
@@ -22,7 +22,7 @@
 }
 
 .ash-screen-reader-explanation button {
-	border: var(--ash-strokeThickness) solid var(--ash-focus-border);
+	border: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	border-radius: var(--ash-cornerRadius-small);
 	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
 	background: var(--ash-button-background);
@@ -31,6 +31,6 @@
 }
 
 .ash-screen-reader-explanation button:focus-visible {
-	outline: var(--ash-strokeThickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: var(--ash-spacing-size40);
 }

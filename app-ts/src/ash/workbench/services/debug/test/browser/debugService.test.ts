@@ -24,23 +24,23 @@ const launchJson = `{
 
 test("DebugService persists workspace breakpoints and watch expressions", async () => {
 	const storage = new TestStorageService();
-	const root = URI.file("C:\\project");
+	const root = URI.file("C:/project");
 	const workspace = workspaceService(root);
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
 	using adapters = new DebugAdapterFactoryRegistry();
 	using first = new DebugService(new FakeFileService(root), workspace, processes, {} as ITerminalService, storage, tasks, adapters);
-	first.toggleBreakpoint(URI.file("C:\\project\\main.ts"), 7);
+	first.toggleBreakpoint(URI.file("C:/project/main.ts"), 7);
 	first.addWatchExpression("value + 1");
 	await storage.flush();
 
 	using second = new DebugService(new FakeFileService(root), workspace, processes, {} as ITerminalService, storage, tasks, adapters);
-	assert.deepEqual(second.breakpoints.map(breakpoint => [breakpoint.resource.fsPath, breakpoint.lineNumber]), [["C:\\project\\main.ts", 7]]);
+	assert.deepEqual(second.breakpoints.map(breakpoint => [breakpoint.resource.fsPath, breakpoint.lineNumber]), [[URI.file("C:/project/main.ts").fsPath, 7]]);
 	assert.deepEqual(second.watchExpressions, ["value + 1"]);
 });
 
 test("DebugService starts compounds, runs launch lifecycle tasks, and owns multiple sessions", async () => {
-	const root = URI.file("C:\\project");
+	const root = URI.file("C:/project");
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
 	using adapters = new DebugAdapterFactoryRegistry();
@@ -60,7 +60,7 @@ test("DebugService starts compounds, runs launch lifecycle tasks, and owns multi
 });
 
 test("DebugService resolves adapter executables from the canonical factory source", async () => {
-	const root = URI.file("C:\\project");
+	const root = URI.file("C:/project");
 	const document = `{"version":"0.2.0","configurations":[{"name":"Contributed","type":"contributed","request":"launch"}]}`;
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();

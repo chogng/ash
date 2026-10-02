@@ -21,7 +21,7 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 	private readonly rows = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly apiRows = this._register(new DisposableMap<string, DisposableStore>());
 	private modelElements: readonly { readonly entry: ModelCatalogEntry; readonly row: HTMLElement }[] = [];
-	private apiElements: readonly { readonly provider: ModelProviderCredentialStatus; readonly row: HTMLElement }[] = [];
+	private apiElements: readonly { readonly provider: ModelProviderCredentialStatus; readonly row: HTMLElement; readonly update: (provider: ModelProviderCredentialStatus) => void }[] = [];
 	private visible = false;
 	private modelLoadVersion = 0;
 	private apiLoadVersion = 0;
@@ -122,13 +122,14 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 			}
 			this.apiElements = providers.map(provider => {
 				const existing = previous.get(provider.connection);
-				if (existing && existing.provider.apiKeyConfigured === provider.apiKeyConfigured) {
-					existing.row.querySelector('h5')!.textContent = provider.displayName;
-					return { provider, row: existing.row };
+				if (existing) {
+					// Credential changes must preserve an unsaved key and its focused input.
+					existing.update(provider);
+					return { ...existing, provider };
 				}
 				const resources = new DisposableStore();
 				this.apiRows.set(provider.connection, resources);
-				return { provider, row: this.apiConnectionRow(provider, resources) };
+				return { provider, ...this.apiConnectionRow(provider, resources) };
 			});
 			this.providersStatus.textContent = localize('sessions.settings.noApiConnections', 'No API connections available.');
 		} catch {
@@ -168,7 +169,7 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 		return row;
 	}
 
-	private apiConnectionRow(provider: ModelProviderCredentialStatus, resources: DisposableStore): HTMLElement {
+	private apiConnectionRow(provider: ModelProviderCredentialStatus, resources: DisposableStore): { readonly row: HTMLElement; readonly update: (provider: ModelProviderCredentialStatus) => void } {
 		const document = this.document;
 		const row = h(document, 'div');
 		row.className = 'ash-models-settings-api-row';
@@ -178,12 +179,8 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 		details.className = 'ash-models-settings-note';
 		details.textContent = provider.connection;
 		const keyStatus = h(document, 'p');
-		keyStatus.className = 'ash-models-settings-note';
-		keyStatus.textContent = provider.apiKeyConfigured
-			? localize('chat.providerKeys.configured', 'API key saved')
-			: provider.apiKeyPolicy === 'required'
-				? localize('chat.providerKeys.missing', 'API key required')
-				: localize('chat.providerKeys.optional', 'No API key saved');
+		keyStatus.className = 'ash-models-settings-note ash-models-settings-api-key-status';
+		keyStatus.textContent = this.apiKeyStatus(provider);
 		const controls = h(document, 'div');
 		controls.className = 'ash-models-settings-api-controls';
 		const input = resources.add(new InputBox(controls, {
@@ -204,6 +201,7 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 		row.append(name, details, keyStatus, controls, feedback);
 		const remove = resources.add(new Button(controls, { label: localize('dictation.model.removeApiKey', 'Remove API key'), presentation: 'secondary', enabled: provider.apiKeyConfigured }));
 		let confirmingRemoval = false;
+		let removing = false;
 		resources.add(remove.onDidClick(() => {
 			if (!confirmingRemoval) {
 				confirmingRemoval = true;
@@ -213,6 +211,7 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 				return;
 			}
 			remove.enabled = false;
+			removing = true;
 			void this.chatService.removeModelProviderApiKey(provider.connection).then(async () => {
 				keyStatus.textContent = localize('chat.providerKeys.missing', 'API key required');
 				feedback.hidden = true;
@@ -221,6 +220,8 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 				feedback.textContent = localize('dictation.model.removeApiKeyFailed', 'Could not remove the API key');
 				feedback.hidden = false;
 				remove.enabled = true;
+			}).finally(() => {
+				removing = false;
 			});
 		}));
 		const saveKey = async (): Promise<void> => {
@@ -260,7 +261,29 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 			void saveKey();
 		}));
 		resources.add(save.onDidClick(() => void saveKey()));
-		return row;
+		return {
+			row,
+			update: next => {
+				if (provider.apiKeyConfigured !== next.apiKeyConfigured) {
+					confirmingRemoval = false;
+					remove.label = localize('dictation.model.removeApiKey', 'Remove API key');
+					feedback.hidden = true;
+				}
+				provider = next;
+				name.textContent = provider.displayName;
+				keyStatus.textContent = this.apiKeyStatus(provider);
+				input.inputElement.setAttribute('aria-label', localize('chat.providerKeys.inputTitle', 'API key for {0}', provider.displayName));
+				remove.enabled = provider.apiKeyConfigured && !removing;
+			},
+		};
+	}
+
+	private apiKeyStatus(provider: ModelProviderCredentialStatus): string {
+		return provider.apiKeyConfigured
+			? localize('chat.providerKeys.configured', 'API key saved')
+			: provider.apiKeyPolicy === 'required'
+				? localize('chat.providerKeys.missing', 'API key required')
+				: localize('chat.providerKeys.optional', 'No API key saved');
 	}
 
 	private reportStatus(message: string, isError: boolean): void {

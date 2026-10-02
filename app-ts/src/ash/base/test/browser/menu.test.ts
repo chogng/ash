@@ -1,3 +1,4 @@
+import { h as createDomElement } from '../../browser/dom.js';
 import assert from "node:assert/strict";
 import { mock } from "node:test";
 import { test } from "mocha";
@@ -396,7 +397,7 @@ test("Menu preserves submenu focus and closes after focus leaves or the parent s
 		trigger.dispatchEvent(movement);
 		mock.timers.tick(250);
 		assert.equal(trigger.getAttribute("aria-expanded"), "true");
-		const unrelatedScroller = dom.window.document.createElement("div");
+		const unrelatedScroller = createDomElement(dom.window.document, "div");
 		dom.window.document.body.append(unrelatedScroller);
 		unrelatedScroller.dispatchEvent(new dom.window.Event("scroll"));
 		assert.equal(trigger.getAttribute("aria-expanded"), "true");

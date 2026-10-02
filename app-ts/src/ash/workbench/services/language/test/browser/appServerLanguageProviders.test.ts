@@ -27,12 +27,12 @@ function definition(languages: LanguageFeaturesService, model: TextModel, resour
 
 test("App Server language providers map cross-resource locations without double-encoding paths", async () => {
 	using languages = new LanguageFeaturesService();
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
+	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	await tick();
 	using model = new TextModel("value", { languageId: "typescript" });
-	const source = URI.file("C:\\project\\main file.ts");
+	const source = URI.file("C:/project/main file.ts");
 
 	const locations = await definition(languages, model, source, new Position((0) + 1, (2) + 1));
 
@@ -61,16 +61,16 @@ test("App Server language providers route resources through their owning Workspa
 	using workspace = new WorkspaceContextService({
 		id: "multi-root",
 		folders: [
-			{ id: "frontend", uri: URI.file("C:\\frontend"), name: "frontend", index: 0 },
-			{ id: "backend", uri: URI.file("C:\\backend"), name: "backend", index: 1 },
+			{ id: "frontend", uri: URI.file("C:/frontend"), name: "frontend", index: 0 },
+			{ id: "backend", uri: URI.file("C:/backend"), name: "backend", index: 1 },
 		],
-		configuration: URI.file("C:\\project.code-workspace"),
+		configuration: URI.file("C:/project.code-workspace"),
 	});
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	await tick();
 	using model = new TextModel("value", { languageId: "typescript" });
-	const source = URI.file("C:\\backend\\main.ts");
+	const source = URI.file("C:/backend/main.ts");
 
 	const locations = await definition(languages, model, source, new Position((0) + 1, (2) + 1));
 
@@ -81,7 +81,7 @@ test("App Server language providers route resources through their owning Workspa
 
 test("App Server workspace symbols query every supported Code language and deduplicate results", async () => {
 	using languages = new LanguageFeaturesService();
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
+	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	await tick();
@@ -95,11 +95,11 @@ test("App Server workspace symbols query every supported Code language and dedup
 
 test("App Server hover and completion providers keep revision, resource, and insertion semantics", async () => {
 	using languages = new LanguageFeaturesService();
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
+	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	await tick();
-	const resource = URI.file("C:\\project\\main.rs");
+	const resource = URI.file("C:/project/main.rs");
 	using model = new TextModel("pri", { languageId: "rust", resource });
 	using completions = new LanguageCompletionService(model, languages.completionProvider, { resource });
 
@@ -147,12 +147,12 @@ test("App Server hover and completion providers keep revision, resource, and ins
 
 test("App Server rename and code actions preserve ordered workspace file operations", async () => {
 	using languages = new LanguageFeaturesService();
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
+	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	await tick();
 	using model = new TextModel("value", { languageId: "typescript" });
-	const resource = URI.file("C:\\project\\main.ts");
+	const resource = URI.file("C:/project/main.ts");
 	const signal = new AbortController().signal;
 	const request = {
 		...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
@@ -178,11 +178,11 @@ test("App Server rename and code actions preserve ordered workspace file operati
 
 test("App Server formatting providers preserve snapshot, options, range, and edits", async () => {
 	using languages = new LanguageFeaturesService();
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
+	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	await tick();
-	using model = new TextModel("value", { languageId: "typescript", resource: URI.file("C:\\project\\main.ts") });
+	using model = new TextModel("value", { languageId: "typescript", resource: URI.file("C:/project/main.ts") });
 	const options = { tabSize: 4, insertSpaces: false, trimTrailingWhitespace: true };
 	assert.deepEqual(languages.onTypeFormattingEditProvider.ordered(model), []);
 
@@ -218,12 +218,12 @@ test('App Server range formatting discards a response after the model changes', 
 
 test("App Server language providers do not send documents above their transport limit", async () => {
 	using languages = new LanguageFeaturesService();
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
+	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	await tick();
 	using model = new TextModel("界".repeat(Math.ceil((10 * 1024 * 1024 + 1) / 3)), { languageId: "typescript" });
-	const source = URI.file("C:\\project\\large.ts");
+	const source = URI.file("C:/project/large.ts");
 
 	assert.deepEqual(await definition(languages, model, source, new Position((0) + 1, (0) + 1)), []);
 	assert.equal(api.locationRequests.length, 0);
@@ -231,14 +231,14 @@ test("App Server language providers do not send documents above their transport 
 
 test("App Server language providers register only while directory permissions allow execution", async () => {
 	using languages = new LanguageFeaturesService();
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
+	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
 	const api = new FakeLanguageApi();
 	const events = new FakeServerEvents();
 	const permissions = new FakeDirPermissionsService("workspace", []);
 	using providers = new AppServerLanguageProviders(languages, api, workspace, { dirPermissions: permissions, events });
 	await tick();
 	using model = new TextModel("value", { languageId: "typescript" });
-	const source = URI.file("C:\\project\\main.ts");
+	const source = URI.file("C:/project/main.ts");
 
 	await tick();
 	assert.deepEqual(languages.definitionProvider.ordered(model), []);

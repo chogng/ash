@@ -1,3 +1,4 @@
+import { h as createDomElement, } from '../../../src/ash/base/browser/dom.js';
 import { ExtensionColorThemeService } from '../../../src/ash/workbench/services/extensions/browser/extensionColorThemeService.js';
 import { createDisconnectedExtensionApi } from '../../../src/ash/platform/extensions/browser/extensionApi.js';
 import '../../../src/ash/workbench/browser/parts/notifications/media/notifications.css';
@@ -140,8 +141,8 @@ const themes = resources.add(services.createInstance(WorkbenchThemeService, docu
 themes.initialize();
 appendIcon(Lxicon.add, document.querySelector<HTMLElement>('#product-icon')!);
 appendIcon(registerIcon('browser-test-semantic-product', Lxicon.chevronRight, 'Browser test semantic product icon'), document.querySelector<HTMLElement>('#semantic-product-icon')!);
-const iconSelectBox = resources.add(new IconSelectBox({ icons: [Lxicon.add, Lxicon.chevronRight, Lxicon.check], showIconInfo: true }));
 const iconSelectHost = document.querySelector<HTMLElement>('#icon-select-host')!;
+const iconSelectBox = resources.add(new IconSelectBox(iconSelectHost, { icons: [Lxicon.add, Lxicon.chevronRight, Lxicon.check], showIconInfo: true }));
 iconSelectHost.append(iconSelectBox.domNode);
 iconSelectBox.layout({ width: 240, height: 180 });
 resources.add(iconSelectBox.onDidSelect(icon => { iconSelectHost.dataset.selectedIcon = icon.id; }));
@@ -154,9 +155,9 @@ window.selectColorTheme = id => configuration.updateValue(WorkbenchConfiguration
 window.setThemeSetting = (key, value) => configuration.updateValue(key, value);
 let nestedHighContrastWidget: { host: HTMLElement; service: TestThemeService; binding: { dispose(): void } } | undefined;
 window.mountNestedHighContrastWidget = () => {
-	const host = document.createElement('div');
+	const host = createDomElement(document, 'div');
 	host.id = 'nested-high-contrast-root';
-	const widget = document.createElement('div');
+	const widget = createDomElement(document, 'div');
 	widget.className = 'ash-context-view-default';
 	host.append(widget);
 	document.querySelector<HTMLElement>('#root')!.append(host);
@@ -213,7 +214,7 @@ const decorationUpdates = resources.add(new Emitter<readonly URI[]>());
 let decorationData: IDecorationData | undefined;
 const decorationProvider = resources.add(decorations.registerDecorationsProvider({ label: 'Browser test', onDidChange: decorationUpdates.event, provideDecorations: async () => decorationData }));
 const decoratedLabels = resources.add(new ResourceLabels(DEFAULT_LABELS_CONTAINER, { workspaceContextService: workspace, resourceIconRenderer: themes, decorationsService: decorations }));
-const decoratedHost = document.createElement('button');
+const decoratedHost = createDomElement(document, 'button');
 decoratedHost.id = 'decorated-label';
 document.querySelector('#root')!.append(decoratedHost);
 const decoratedUri = URI.file('/workspace/ignored.log');
@@ -223,7 +224,7 @@ window.removeLabelDecorationProvider = () => decorationProvider.dispose();
 const modelReferences: TextModelReference[] = [];
 for (const [id, resource] of [['model-icon', URI.file('/workspace/no-extension')], ['untitled-icon', URI.parse('untitled:/Untitled-1')]] as const) {
 	modelReferences.push(resources.add(await models.acquire({ resource, languageId: 'typescript' }, new AbortController().signal)));
-	const host = document.createElement('button');
+	const host = createDomElement(document, 'button');
 	host.id = id;
 	document.querySelector('#root')!.append(host);
 	labels.create(host).setResource({ resource, name: id });

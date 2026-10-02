@@ -11,7 +11,7 @@
 	user-select: none;
 	touch-action: none;
 	background-color: color-mix(in srgb, var(--ash-foreground) 3%, var(--ash-editor-background));
-	background-image: linear-gradient(to right, var(--ash-sessions-design-grid-line) var(--ash-stroke-thickness), transparent var(--ash-stroke-thickness)), linear-gradient(to bottom, var(--ash-sessions-design-grid-line) var(--ash-stroke-thickness), transparent var(--ash-stroke-thickness));
+	background-image: linear-gradient(to right, var(--ash-sessions-design-grid-line) var(--ash-strokeThickness), transparent var(--ash-strokeThickness)), linear-gradient(to bottom, var(--ash-sessions-design-grid-line) var(--ash-strokeThickness), transparent var(--ash-strokeThickness));
 	background-size: calc(var(--ash-sessions-design-grid-size) * var(--ash-sessions-design-scale, 1)) calc(var(--ash-sessions-design-grid-size) * var(--ash-sessions-design-scale, 1));
 	background-position: var(--ash-sessions-design-pan-x, 0px) var(--ash-sessions-design-pan-y, 0px);
 }
@@ -34,7 +34,7 @@
 
 [data-color-scheme="high-contrast-dark"] .ash-sessions-design-viewport,
 [data-color-scheme="high-contrast-light"] .ash-sessions-design-viewport {
-	--ash-sessions-design-grid-line: var(--ash-contrast-border);
+	--ash-sessions-design-grid-line: var(--ash-contrastBorder);
 }
 
 [data-color-scheme="high-contrast-dark"] .ash-sessions-design-viewport,
@@ -47,8 +47,8 @@
 }
 
 .ash-sessions-design-viewport.focused {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-	outline-offset: calc(-1 * var(--ash-stroke-thickness));
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
 }
 
 .ash-sessions-design-world {
@@ -71,7 +71,7 @@
 .ash-sessions-design-selection {
 	display: none;
 	fill: none;
-	stroke: var(--ash-focus-border);
+	stroke: var(--ash-focusBorder);
 	stroke-width: 2px;
 	vector-effect: non-scaling-stroke;
 }

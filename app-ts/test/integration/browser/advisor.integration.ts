@@ -1,3 +1,4 @@
+import { h as createDomElement } from '../../../src/ash/base/browser/dom.js';
 import { ChatListWidget } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListWidget.js';
 import { chatTranscriptListItems, type IChatListItem } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListItems.js';
 import type { ThreadTranscriptEntry } from '../../../src/ash/workbench/services/chat/common/chatService.js';
@@ -10,7 +11,7 @@ if (locale) {
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
 }
 
-const container = document.createElement('main');
+const container = createDomElement(document, 'main');
 document.body.append(container);
 const widget = new ChatListWidget(container);
 widget.element.style.height = '160px';
@@ -20,7 +21,7 @@ const entries: ThreadTranscriptEntry[] = [
 	{ type: 'item', entryId: 'result', turnId: 'turn', transient: false, item: { type: 'toolResult', itemId: 'result', turnId: 'turn', toolCallId: 'consult', text: JSON.stringify({ status: 'reviewed', model: { provider: 'test', model: 'reviewer' }, advice: 'Check **cancellation** before writing.', question: 'Check cancellation', sourceSequence: 12, usage: { inputTokens: 120, outputTokens: 8 } }), isError: false } },
 ];
 widget.render(chatTranscriptListItems(entries));
-const refresh = document.createElement('button');
+const refresh = createDomElement(document, 'button');
 refresh.textContent = 'Refresh transcript';
 refresh.addEventListener('click', () => widget.render(chatTranscriptListItems(entries)));
 document.body.append(refresh);
@@ -30,16 +31,16 @@ const history: IChatListItem[] = Array.from({ length: 40 }, (_, index) => ({
 	text: `Message ${index}`,
 	transient: false,
 }));
-const fill = document.createElement('button');
+const fill = createDomElement(document, 'button');
 fill.textContent = 'Fill transcript';
 fill.addEventListener('click', () => widget.render(history));
 document.body.append(fill);
-const prepend = document.createElement('button');
+const prepend = createDomElement(document, 'button');
 prepend.textContent = 'Prepend history';
 prepend.addEventListener('click', () => widget.render([{ id: 'earlier', type: 'userMessage', text: 'Earlier message', transient: false }, ...history]));
 document.body.append(prepend);
 
-const policyStop = document.createElement('button');
+const policyStop = createDomElement(document, 'button');
 policyStop.textContent = 'Show policy stop';
 policyStop.addEventListener('click', () => widget.render(chatTranscriptListItems([{
 	type: 'turnError',

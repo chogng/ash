@@ -1,3 +1,4 @@
+import { waitForNewElectronWindow } from '../../../automation/playwrightElectron.js';
 import { expect, test } from '../../../automation/test.js';
 
 test('Agents Collaboration page stays empty and selects its Activity Bar entry', async ({ application, target, workbench }) => {
@@ -7,7 +8,7 @@ test('Agents Collaboration page stays empty and selects its Activity Bar entry',
 		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	} else {
 		if (!('windows' in application)) throw new Error('Expected Electron windows');
-		const opened = application.waitForEvent('window');
+		const opened = waitForNewElectronWindow(application, 'sessions');
 		await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 		page = await opened;
 	}

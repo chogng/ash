@@ -22,7 +22,10 @@ fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_chang
     process.back_tab();
     process.wait_for_stable_screen("Automatic model · Debug");
     assert!(!process.screen().contains("Next mode:"));
-    process.assert_snapshot("real/02-terminal/collaboration-shortcuts");
+    process.assert_snapshot(
+        "real/02-terminal/collaboration-shortcuts",
+        "Automatic model · Debug",
+    );
     process.send(b"\x1b[1;2A");
     process.wait_for_stable_screen("Select a model with /model before changing thinking effort");
     assert!(process.screen().contains("> BOUND-DRAFT≤≥"));
@@ -44,7 +47,7 @@ fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_chang
             .config_source()
             .contains("modelReasoningEffort = \"extraHigh\"")
     );
-    process.assert_snapshot("real/02-terminal/effort-shortcut");
+    process.assert_snapshot("real/02-terminal/effort-shortcut", "GPT-6 Luna (xhigh)");
     for (sequence, status, effort) in [
         (b"\x1b[1;2B".as_slice(), "GPT-6 Luna (high)", "high"),
         (b"\x1b[1;2A".as_slice(), "GPT-6 Luna (xhigh)", "extraHigh"),
@@ -70,7 +73,10 @@ fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_chang
     assert_eq!(fixture.config_source(), config_at_max);
     assert!(process.screen().contains("GPT-6 Luna (max)"));
     assert!(process.screen().contains("BOUND-DRAFT"));
-    process.assert_snapshot("real/02-terminal/effort-highest-boundary");
+    process.assert_snapshot(
+        "real/02-terminal/effort-highest-boundary",
+        "Thinking effort is already at the highest level (max)",
+    );
     process.quit();
 }
 
@@ -241,7 +247,7 @@ fn inline_repeated_status_keeps_history_compact() {
         command_rows[1] - command_rows[0] <= 4,
         "repeating the status command left empty rows between submissions:\n{screen}"
     );
-    process.assert_snapshot("inline/status_after_compact_slash_completion");
+    process.assert_snapshot("inline/status_after_compact_slash_completion", "> /status");
     process.quit();
 }
 
@@ -264,7 +270,7 @@ fn actual_tui_inline_statusline_stays_at_terminal_bottom() {
         "{}",
         process.screen()
     );
-    process.assert_snapshot("inline/statusline_bottom_anchor");
+    process.assert_snapshot("inline/statusline_bottom_anchor", "Git changes");
 
     process.resize(SMALL_SIZE);
     process.wait_for_stable_screen("Git changes");
@@ -414,8 +420,11 @@ fn actual_tui_input_keeps_its_row_without_blank_line_growth() {
         };
         let initial_hint = hint_row(&process);
         let initial_input = input_top_row(&process);
+        let mut draft = String::new();
         for ch in "hello".chars() {
+            draft.push(ch);
             process.type_text(&ch.to_string());
+            process.wait_for_screen(&format!("> {draft}"));
             assert_eq!(
                 hint_row(&process),
                 initial_hint,
@@ -443,7 +452,7 @@ fn actual_tui_input_keeps_its_row_without_blank_line_growth() {
                 std::thread::sleep(std::time::Duration::from_millis(20));
             }
             process.wait_for_stable_screen("Enter send");
-            process.assert_snapshot("issue13/fullscreen_conversation");
+            process.assert_snapshot("issue13/fullscreen_conversation", "ISSUE13-REPLY");
         }
         process.submit("/status");
         process.wait_for_screen("Full context window");
@@ -452,6 +461,7 @@ fn actual_tui_input_keeps_its_row_without_blank_line_growth() {
         assert_input_surface_visible(&process);
         assert_eq!(input_top_row(&process), initial_input);
         process.type_text("next");
+        process.wait_for_screen("> next");
         assert_eq!(input_top_row(&process), initial_input);
         process.quit();
     }
@@ -601,27 +611,38 @@ fn actual_tui_sandbox_process_details_show_enforcement() {
     process.wait_for_stable_screen("目标文件没有生成");
     process.refresh_policy_tip();
     process.wait_for_stable_screen("bypass permissions on");
-    process.assert_snapshot("real/03-approval/09-sandbox-blocked");
+    process.assert_snapshot("real/03-approval/09-sandbox-blocked", "目标文件没有生成");
     assert!(!outside_path.exists());
     assert_eq!(server.request_count(), 3);
     assert!(server.request_bodies()[2].contains("sandbox"));
 
+    // Detail snapshots must not depend on time spent navigating before the hint expires.
+    process.wait_for_screen_to_omit("/policy to change permissions");
     process.control_up();
     process.up();
     process.space();
     process.wait_for_screen("shell-command [call-sandbox]");
-    process.assert_snapshot("real/03-approval/10-sandbox-process-details");
+    process.assert_snapshot(
+        "real/03-approval/10-sandbox-process-details",
+        "shell-command [call-sandbox]",
+    );
 
     process.enter();
     process.wait_for_screen("Transcript cell");
-    process.assert_snapshot("real/03-approval/11-sandbox-process-full-details");
+    process.assert_snapshot(
+        "real/03-approval/11-sandbox-process-full-details",
+        "Transcript cell",
+    );
     process.escape();
 
     process.space();
     process.up();
     process.space();
     process.wait_for_screen("再根据进程结果确认目录边界是否生效");
-    process.assert_snapshot("real/03-approval/12-reasoning-details");
+    process.assert_snapshot(
+        "real/03-approval/12-reasoning-details",
+        "再根据进程结果确认目录边界是否生效",
+    );
     process.quit();
 }
 
@@ -660,7 +681,7 @@ fn actual_tui_process_streams_queues_resizes_and_resumes() {
 
     process.resize(SMALL_SIZE);
     process.wait_for_stable_screen("第二轮排队消息已经执行。");
-    process.assert_snapshot("real/07-lifecycle/00-resized");
+    process.assert_snapshot("real/07-lifecycle/00-resized", "第二轮排队消息已经执行。");
     process.quit();
 
     let (session_id, thread_id) = fixture.only_thread();
@@ -668,7 +689,7 @@ fn actual_tui_process_streams_queues_resizes_and_resumes() {
     let mut resumed = TuiProcess::start(&fixture, &args, LARGE_SIZE);
     resumed.wait_for_stable_screen("第二轮排队消息已经执行。");
     resumed.wait_for_screen_to_omit("ask permissions on");
-    resumed.assert_snapshot("real/07-lifecycle/01-resumed");
+    resumed.assert_snapshot("real/07-lifecycle/01-resumed", "第二轮排队消息已经执行。");
     resumed.quit();
 }
 
@@ -692,7 +713,7 @@ fn actual_tui_process_interrupts_an_inflight_http_stream() {
     process.wait_for_screen("这段回复正在等待取消");
     process.send(&[0x03]);
     process.wait_for_stable_screen("turn interrupted");
-    process.assert_snapshot("real/07-lifecycle/02-interrupted");
+    process.assert_snapshot("real/07-lifecycle/02-interrupted", "turn interrupted");
     gate.release();
     process.submit("new turn after interrupt");
     process.wait_for_stable_screen("AFTER-INTERRUPT-READY");
@@ -717,12 +738,18 @@ fn actual_tui_process_renders_an_http_failure_and_remains_usable() {
     process.wait_for_screen("ask permissions on");
     process.submit("触发真实 HTTP 500");
     process.wait_for_stable_screen("Provider request failed (500). Try again later.");
-    process.assert_snapshot("real/07-lifecycle/03-http-500");
+    process.assert_snapshot(
+        "real/07-lifecycle/03-http-500",
+        "Provider request failed (500). Try again later.",
+    );
     assert_eq!(server.request_count(), 4);
 
     process.submit("错误以后继续发送");
     process.wait_for_stable_screen("错误后仍能继续对话。");
-    process.assert_snapshot("real/07-lifecycle/04-error-recovered");
+    process.assert_snapshot(
+        "real/07-lifecycle/04-error-recovered",
+        "错误后仍能继续对话。",
+    );
     process.quit();
 }
 

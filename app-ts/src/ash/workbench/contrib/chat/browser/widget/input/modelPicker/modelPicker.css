@@ -45,14 +45,14 @@
   width: 100%;
   height: var(--ash-spacing-size320);
   padding: 0 var(--ash-spacing-size100);
-  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+  border: var(--ash-strokeThickness) solid var(--ash-input-border);
   border-radius: var(--ash-cornerRadius-small);
   color: var(--ash-input-foreground);
   background: var(--ash-input-background);
 }
 
 .ash-chat-model-picker-search input:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
   outline-offset: -1px;
 }
 
@@ -75,7 +75,7 @@
 }
 
 .ash-chat-model-picker-auto input {
-  accent-color: var(--ash-focus-border);
+  accent-color: var(--ash-focusBorder);
   cursor: pointer;
 }
 
@@ -116,7 +116,7 @@
 
 .ash-chat-model-picker-footer {
   padding: var(--ash-spacing-size40);
-  border-top: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+  border-top: var(--ash-strokeThickness) solid var(--ash-widget-border);
 }
 
 .ash-chat-model-picker-footer button {
@@ -133,13 +133,13 @@
 
 .ash-chat-model-picker-footer button:hover,
 .ash-chat-model-picker-footer button:focus-visible {
-  background: var(--ash-menu-selection-background);
-  color: var(--ash-menu-selection-foreground);
+  background: var(--ash-menu-selectionBackground);
+  color: var(--ash-menu-selectionForeground);
 }
 
 .ash-chat-model-picker-footer button:focus-visible,
 .ash-chat-model-picker-auto input:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
   outline-offset: -1px;
 }
 
@@ -152,8 +152,8 @@
   width: 220px;
   max-width: calc(100vw - var(--ash-spacing-size160));
   padding: var(--ash-spacing-size100);
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-large);
+  border: var(--ash-strokeThickness) solid var(--ash-border);
+  border-radius: var(--ash-cornerRadius-large);
   color: var(--ash-foreground);
   background: var(--ash-editor-background);
   box-shadow: 0 2px 8px var(--ash-widget-shadow);
@@ -165,8 +165,8 @@
 }
 
 .ash-chat-model-picker-details-menu strong {
-  font-size: var(--ash-font-size-label1);
-  font-weight: var(--ash-font-weight-semi-bold);
+  font-size: var(--ash-fontSize-label1);
+  font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-chat-model-picker-details-menu p {
@@ -179,7 +179,7 @@
 }
 
 .ash-high-contrast .ash-chat-model-picker-details-menu {
-  border-color: var(--ash-contrast-border);
+  border-color: var(--ash-contrastBorder);
   box-shadow: none;
 }
 

@@ -20,6 +20,8 @@ test('size contributions remain sealed after startup', () => {
 	assert.throws(() => sizes.registerSize('late.size', size(1), metadata), /registry is sealed/);
 });
 
-test('size identifiers use Ash CSS variables', () => {
-	assert.equal(asCssVariableName('strokeThickness'), '--ash-stroke-thickness');
+test('size identifiers preserve case and replace only dots in CSS variables', () => {
+	assert.equal(asCssVariableName('strokeThickness'), '--ash-strokeThickness');
+	assert.equal(asCssVariableName('fontSize.body1'), '--ash-fontSize-body1');
+	assert.equal(asCssVariableName('cornerRadius.xSmall'), '--ash-cornerRadius-xSmall');
 });

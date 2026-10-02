@@ -1,8 +1,10 @@
 import './designToolsWidget.css';
-import { h } from '../../../../../base/browser/dom.js';
+import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
+import { observeElementSize } from '../../../../../base/browser/observer.js';
 import { ActionBar } from '../../../../../base/browser/ui/actionbar/actionbar.js';
 import { ActionViewItem } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import type { Button } from '../../../../../base/browser/ui/button/button.js';
+import { ScrollableElement } from '../../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import type { IAction } from '../../../../../base/common/actions.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
@@ -18,12 +20,26 @@ export class DesignToolsWidget extends Disposable {
 	private readonly toolActions = new Map<DesignTool, IAction>();
 	private readonly modeActions = new Map<DesignMode, IAction>();
 
-	constructor(ownerDocument: Document, selectTool: (tool: DesignTool) => void, selectMode: (mode: DesignMode) => void) {
+	constructor(container: HTMLElement, selectTool: (tool: DesignTool) => void, selectMode: (mode: DesignMode) => void) {
 		super();
+		const ownerDocument = container.ownerDocument;
 		this.domNode = h(ownerDocument, 'div', { className: 'ash-design-tools-widget' });
+		const scrollable = this._register(new ScrollableElement(this.domNode, { direction: 'horizontal', scrollbarSize: 4, tabIndex: -1 }));
+		scrollable.element.classList.add('ash-design-tools-scroll');
+		const row = h(ownerDocument, 'div', { className: 'ash-design-tools-row' });
 		const tools = h(ownerDocument, 'div', { className: 'ash-design-tools-group' });
 		const modes = h(ownerDocument, 'div', { className: 'ash-design-tools-group ash-design-modes' });
-		this.domNode.append(tools, modes);
+		row.append(tools, modes);
+		scrollable.append(row);
+		// Preserve the row's natural width while the canvas constrains its scroll viewport.
+		this._register(observeElementSize(row, size => {
+			this.domNode.style.setProperty('--ash-design-tools-content-width', `${size.width}px`);
+			scrollable.layout();
+		}));
+		this._register(addDisposableListener(row, 'focusin', () => {
+			const focused = ownerDocument.activeElement;
+			if (focused && row.contains(focused)) { scrollable.reveal(focused); }
+		}));
 		this.tools = this._register(new ActionBar(tools, { ariaLabel: localize('sessions.design.tools', 'Design tools'), highlightToggledItems: true, actionViewItemProvider: action => new DesignToolViewItem(action) }));
 		this.modes = this._register(new ActionBar(modes, { ariaLabel: localize('sessions.design.modes', 'Editor modes'), highlightToggledItems: true }));
 		for (const [tool, label, icon] of [

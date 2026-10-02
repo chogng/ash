@@ -112,7 +112,7 @@ export class FilesRenderer extends Disposable {
 	private readonly renderedRows = this._register(new DisposableMap<HTMLElement, DisposableStore>());
 
 	constructor(
-		private readonly document: Document,
+		private readonly container: HTMLElement,
 		workspaceContextService: IWorkspaceContextService,
 		resourceIconRenderer: IResourceIconRenderer,
 		private readonly hoverService: IHoverService,
@@ -135,7 +135,7 @@ export class FilesRenderer extends Disposable {
 	}
 
 	public renderElement(item: ExplorerItem): HTMLElement {
-		const content = h(this.document, 'span');
+		const content = h(this.container.ownerDocument, 'span');
 		content.className = `ash-explorer-row-content ash-explorer-${item.kind}`;
 		const resources = this.renderedRows.set(content, new DisposableStore());
 		const label = resources.add(this.labels.create(content));

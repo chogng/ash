@@ -5,8 +5,8 @@ import { MarkerService, MarkerSeverity } from "../../../../platform/markers/comm
 
 test("marker service replaces an owner atomically and reports affected resources", () => {
 	using service = new MarkerService();
-	const first = URI.file("C:\\project\\src\\main.rs");
-	const second = URI.file("C:\\project\\src\\lib.rs");
+	const first = URI.file("C:/project/src/main.rs");
+	const second = URI.file("C:/project/src/lib.rs");
 	const changes: string[][] = [];
 	service.onDidChange(change => changes.push(change.resources.map(resource => resource.toString())));
 
@@ -22,7 +22,7 @@ test("marker service replaces an owner atomically and reports affected resources
 
 test("marker service keeps owners isolated and supports resource removal", () => {
 	using service = new MarkerService();
-	const resource = URI.file("C:\\project\\src\\main.rs");
+	const resource = URI.file("C:/project/src/main.rs");
 	service.set("language", [createMarker(resource, MarkerSeverity.Error, "language")]);
 	service.set("tasks", [createMarker(resource, MarkerSeverity.Warning, "task")]);
 
@@ -59,7 +59,7 @@ test('marker service replaces one owner resource without changing its other reso
 
 test("marker service rejects invalid marker input", () => {
 	using service = new MarkerService();
-	const resource = URI.file("C:\\project\\src\\main.rs");
+	const resource = URI.file("C:/project/src/main.rs");
 
 	assert.throws(
 		() => service.set("language", [createMarker(resource, "invalid" as MarkerSeverity, "message")]),

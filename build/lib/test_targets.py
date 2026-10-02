@@ -1,6 +1,7 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -10,10 +11,25 @@ from build.lib.targets import OperatingSystem  # noqa: E402
 from build.lib.targets import TARGETS  # noqa: E402
 from build.lib.targets import TargetSpec  # noqa: E402
 from build.lib.targets import WindowsAbi  # noqa: E402
+from build.lib.targets import default_target  # noqa: E402
 from build.lib.targets import target_spec  # noqa: E402
 
 
 class TargetSpecTests(unittest.TestCase):
+    def test_default_target_uses_host_operating_system_and_architecture(self) -> None:
+        for system, machine, expected in [
+            ("Windows", "AMD64", "x86_64-pc-windows-msvc"),
+            ("Windows", "ARM64", "aarch64-pc-windows-msvc"),
+            ("Linux", "x86_64", "x86_64-unknown-linux-gnu"),
+            ("Darwin", "arm64", "aarch64-apple-darwin"),
+        ]:
+            with (
+                self.subTest(system=system, machine=machine),
+                patch("build.lib.targets.platform.system", return_value=system),
+                patch("build.lib.targets.platform.machine", return_value=machine),
+            ):
+                self.assertEqual(default_target(), expected)
+
     def test_catalog_covers_supported_operating_system_architecture_pairs(self) -> None:
         self.assertEqual(
             {

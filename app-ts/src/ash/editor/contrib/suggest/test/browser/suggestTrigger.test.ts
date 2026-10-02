@@ -65,6 +65,52 @@ test("A registered trigger character requests after the text transaction", async
 	assert.equal(requests[0]!.snapshot.getText(), "obj.");
 });
 
+test("Keyboard commands request trigger completions exactly once", async () => {
+	const requests: LanguageCompletionProviderRequest[] = [];
+	using fixture = createFixture({
+		id: "member-command",
+		languageIds: ["typescript"],
+		triggerCharacters: ["."],
+		provideCompletions: request => {
+			requests.push(request);
+			return completionResult(request, "method");
+		},
+	}, "obj");
+
+	fixture.editor.trigger('keyboard', 'type', { text: '.' });
+	await waitFor(() => fixture.session.state !== undefined);
+
+	assert.equal(fixture.model.getText(), 'obj.');
+	assert.equal(requests.length, 1);
+	assert.equal(requests[0]!.context.kind, LanguageCompletionTriggerKind.TriggerCharacter);
+	assert.equal(requests[0]!.position.column, 5);
+});
+
+test("Browser replacement updates request trigger completions exactly once", async () => {
+	const requests: LanguageCompletionProviderRequest[] = [];
+	using fixture = createFixture({
+		id: "member-replacement",
+		languageIds: ["typescript"],
+		triggerCharacters: ["."],
+		provideCompletions: request => {
+			requests.push(request);
+			return completionResult(request, "method");
+		},
+	}, "obj ");
+
+	fixture.input.applyTextUpdate({
+		previousSelectionStart: 4, previousSelectionEnd: 4,
+		updateRangeStart: 3, updateRangeEnd: 4, text: '.',
+		selectionStart: 4, selectionEnd: 4, inputType: 'insertReplacementText',
+	});
+	await waitFor(() => fixture.session.state !== undefined);
+
+	assert.equal(fixture.model.getText(), 'obj.');
+	assert.equal(requests.length, 1);
+	assert.equal(requests[0]!.context.kind, LanguageCompletionTriggerKind.TriggerCharacter);
+	assert.equal(requests[0]!.position.column, 5);
+});
+
 test("An auto-closed trigger character requests from the caret inside its pair", async () => {
 	const requests: LanguageCompletionProviderRequest[] = [];
 	using fixture = createFixture({
@@ -163,6 +209,7 @@ test("Completion request wiring rejects a same-model session from another servic
 
 interface TriggerFixture extends Disposable {
 	readonly dom: JSDOM;
+	readonly editor: ReturnType<typeof createTestCodeEditor>;
 	readonly model: TextModel;
 	readonly service: LanguageCompletionService;
 	readonly session: SuggestModel;
@@ -193,6 +240,7 @@ function createFixture(provider: LanguageCompletionProvider, text = "con"): Trig
 	viewport.focus();
 	return {
 		dom,
+		editor,
 		model,
 		service,
 		session,

@@ -1,6 +1,4 @@
-import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
-import { IDictationService } from '../../../platform/dictation/common/dictationService.js';
-import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
+import { registerTestDictationServices } from '../../../workbench/test/common/testDictationServices.js';
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
 import { IFileTextModelService } from '../../../workbench/services/textmodelResolver/common/textModelResourceService.js';
 import assert from "node:assert/strict";
@@ -62,9 +60,7 @@ const inputResources = new DisposableStore();
 suiteTeardown(() => inputResources.dispose());
 function createInputServices(): InstantiationService {
 	const services = inputResources.add(new InstantiationService());
-	services.registerInstance(IDictationService, undefined);
-	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
-	registerTestDictationOnboarding(services);
+	registerTestDictationServices(services, undefined);
 	return services;
 }
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -275,7 +271,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	let preferencesEditorTarget: string | undefined;
 	using chat = createChatService(api);
 	using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
-	using editorServices = createTestEditorServices();
+	using editorServices = createTestEditorServices(dom.window.document);
 	using preferences: PreferencesService = new BrowserPreferencesService({
 		...emptyEditorServiceState,
 		openEditor: async (_input, _options, target) => { preferencesEditorTarget = target; },
@@ -710,14 +706,12 @@ test('Code sending preserves the Chat draft when pages switch during first-sessi
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editorResources = new DisposableStore();
 	const editorServices = editorResources.add(createCodeEditorServices(editorResources).createChild());
-	editorServices.registerInstance(IDictationService, undefined);
-	editorServices.registerSingleton(IChatSpeechToTextService, () => editorServices.createInstance(ChatSpeechToTextService));
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
 	editorServices.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
 	editorServices.registerInstance(INotificationService, notifications);
 	const composerStorage = editorResources.add(createTestStorage());
 	editorServices.registerInstance(IStorageService, composerStorage);
-	registerTestDictationOnboarding(editorServices);
+	registerTestDictationServices(editorServices, undefined);
 	editorServices.registerInstance(IChatTipService, editorResources.add(editorServices.createInstance(ChatTipService)));
 	Object.defineProperty(dom.window.performance, 'getEntriesByType', { value: () => [] });
 	editorServices.registerInstance(ILifecycleService, editorResources.add(editorServices.createInstance(BrowserLifecycleService, { ownerWindow: dom.window as unknown as Window, onError: (error: unknown) => { throw error; } })));
@@ -2795,7 +2789,7 @@ test("Chat Settings toggles Advisor while keeping its selected model", async () 
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IDialogService, recordingDialogService([]));
-	using editorServices = createTestEditorServices();
+	using editorServices = createTestEditorServices(dom.window.document);
 	using preferences = new BrowserPreferencesService({
 		...emptyEditorServiceState,
 		openEditor: async () => undefined,
@@ -2833,7 +2827,7 @@ test('Chat Settings saves a masked provider key through the model API and refres
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IDialogService, recordingDialogService(messages));
-	using editorServices = createTestEditorServices();
+	using editorServices = createTestEditorServices(dom.window.document);
 	using preferences = new BrowserPreferencesService({
 		...emptyEditorServiceState,
 		openEditor: async () => undefined,
@@ -2896,7 +2890,7 @@ test("Advisor transcript groups the call and renders advice as a disclosure", ()
 	const items = chatTranscriptListItems(entries);
 	assert.equal(items.length, 1);
 	assert.equal(items[0]?.type, "advisor");
-	const container = document.createElement("div");
+	const container = h(document, "div");
 	using widget = new ChatListWidget(container);
 	widget.render(items);
 	assert.equal(container.querySelector("summary")?.textContent, "Advisor · test/reviewer");

@@ -44,6 +44,7 @@ test('URI validates percent encoding and rejects credentials', () => {
 });
 
 test("URI.file supports Windows drive paths and UNC paths", () => {
+	assert.equal(URI.file('C:/Users/Ash/An item.txt').toString(), 'file:///C:/Users/Ash/An%20item.txt');
 	if (!isWindows) {
 		assert.throws(() => URI.file('C:\\Users\\Ash\\An item.txt'), TypeError);
 		return;
@@ -77,6 +78,7 @@ test('URI.file retains a POSIX backslash as part of a file name', () => {
 	const resource = URI.file('/tmp/a\\b');
 	assert.equal(resource.toString(), 'file:///tmp/a%5Cb');
 	assert.equal(resource.fsPath, '/tmp/a\\b');
+	assert.equal(URI.file('/tmp/C:\\Users\\Ash').fsPath, '/tmp/C:\\Users\\Ash');
 });
 
 test('URI serialization retains components and can be revived', () => {

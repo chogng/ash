@@ -56,10 +56,10 @@ test('workbench colors follow theme changes and keep editor group borders visibl
 	const { configuration, root } = window;
 	const colors = () => ({
 		workbench: root.style.getPropertyValue('--ash-workbench-background'),
-		tab: root.style.getPropertyValue('--ash-editor-tab-background'),
-		titleBar: root.style.getPropertyValue('--ash-title-bar-background'),
-		sideBar: root.style.getPropertyValue('--ash-side-bar-background'),
-		groupBorder: root.style.getPropertyValue('--ash-editor-group-border'),
+		tab: root.style.getPropertyValue('--ash-editor-tabBackground'),
+		titleBar: root.style.getPropertyValue('--ash-titleBar-background'),
+		sideBar: root.style.getPropertyValue('--ash-sideBar-background'),
+		groupBorder: root.style.getPropertyValue('--ash-editorGroup-border'),
 	});
 	assert.deepEqual(colors(), {
 		workbench: '#ffffff', tab: '#eeeeee', titleBar: '#ffffff',

@@ -1,3 +1,4 @@
+import { waitForNewElectronWindow } from '../../../automation/playwrightElectron.js';
 import { expect, test } from '../../../automation/test.js';
 
 test('Electron Workbench window operations use the registered window host', async ({ target, workbench }) => {
@@ -46,7 +47,7 @@ test('Electron Workbench window operations use the registered window host', asyn
 test('window picker data includes the Agents window and can focus it', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'This scenario requires the Code Electron Workbench');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
-	const opened = application.waitForEvent('window');
+	const opened = waitForNewElectronWindow(application, 'sessions');
 	await workbench.page.keyboard.press('F1');
 	await workbench.page.locator('.ash-quick-pick').getByRole('combobox').fill('Open Agents Window');
 	await workbench.page.keyboard.press('Enter');

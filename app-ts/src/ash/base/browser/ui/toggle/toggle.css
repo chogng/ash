@@ -41,8 +41,8 @@
 }
 
 .ash-toggle > input:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: var(--ash-stroke-thickness);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+  outline-offset: var(--ash-strokeThickness);
 }
 
 .ash-checkbox > input {
@@ -74,12 +74,12 @@
   height: 18px;
   flex: 0 0 34px;
   box-sizing: border-box;
-  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-  border-radius: var(--ash-corner-radius-circle);
+  border: var(--ash-strokeThickness) solid var(--ash-input-border);
+  border-radius: var(--ash-cornerRadius-circle);
   background: var(--ash-input-background);
   transition:
-    background var(--ash-animation-duration-normal, 200ms) cubic-bezier(0.4, 0, 0.2, 1),
-    border-color var(--ash-animation-duration-normal, 200ms) cubic-bezier(0.4, 0, 0.2, 1);
+    background var(--ash-animation-durationNormal, 200ms) cubic-bezier(0.4, 0, 0.2, 1),
+    border-color var(--ash-animation-durationNormal, 200ms) cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .ash-switch-track::after {
@@ -92,8 +92,8 @@
   background: var(--ash-description-foreground);
   content: "";
   transition:
-    transform var(--ash-animation-duration-normal, 200ms) cubic-bezier(0.4, 0, 0.2, 1),
-    background var(--ash-animation-duration-normal, 200ms) cubic-bezier(0.4, 0, 0.2, 1);
+    transform var(--ash-animation-durationNormal, 200ms) cubic-bezier(0.4, 0, 0.2, 1),
+    background var(--ash-animation-durationNormal, 200ms) cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .ash-switch.checked > .ash-switch-track {
@@ -103,10 +103,10 @@
 
 .ash-switch.checked > .ash-switch-track::after {
   transform: translateX(16px);
-  background: var(--ash-list-active-selection-foreground);
+  background: var(--ash-list-activeSelectionForeground);
 }
 
 .ash-switch > input:focus-visible ~ .ash-switch-track {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
   outline-offset: 2px;
 }

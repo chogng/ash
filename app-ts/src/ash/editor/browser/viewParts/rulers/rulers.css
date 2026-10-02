@@ -6,6 +6,6 @@
 }
 
 .stanza-editor .stanza-editor-ruler {
-	width: var(--ash-stroke-thickness);
-	background-color: var(--stanza-editor-ruler-color, var(--ash-editor-ruler-foreground));
+	width: var(--ash-strokeThickness);
+	background-color: var(--stanza-editor-ruler-color, var(--ash-editorRuler-foreground));
 }

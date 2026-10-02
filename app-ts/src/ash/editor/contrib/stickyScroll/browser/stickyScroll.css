@@ -9,7 +9,7 @@
   overflow: hidden;
   pointer-events: none;
   background: var(--ash-editor-background);
-  border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+  border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
 }
 
 .stanza-editor-sticky-scroll.empty {
@@ -54,13 +54,13 @@
   position: absolute;
   top: 0;
   overflow: hidden;
-  color: var(--ash-editor-line-number-foreground);
+  color: var(--ash-editorLineNumber-foreground);
   line-height: var(--stanza-sticky-line-height);
   text-align: right;
 }
 
 .stanza-editor-sticky-scroll-number.active {
-  color: var(--ash-editor-line-number-active-foreground);
+  color: var(--ash-editorLineNumber-activeForeground);
 }
 
 .stanza-editor-sticky-scroll-folding {
@@ -71,7 +71,7 @@
   justify-content: center;
   height: 100%;
   padding: 0;
-  color: var(--ash-editor-gutter-folding-control-foreground);
+  color: var(--ash-editorGutter-foldingControlForeground);
   cursor: pointer;
   pointer-events: auto;
   background: var(--ash-editor-background);
@@ -93,6 +93,6 @@
 
 .stanza-editor-sticky-scroll-item:focus-visible,
 .stanza-editor-sticky-scroll-folding:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
   outline-offset: -1px;
 }

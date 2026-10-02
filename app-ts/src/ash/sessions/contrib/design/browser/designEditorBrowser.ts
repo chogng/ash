@@ -58,7 +58,7 @@ export interface IDesignEditorContributions extends IDisposable {
 }
 
 export interface DesignEditorContributionContext {
-	readonly ownerDocument: Document;
+	readonly container: HTMLElement;
 	readonly documentController: DesignDocumentController;
 	readonly commands: DocumentCommands;
 	readonly selection: DesignSelection;

@@ -15,8 +15,8 @@ import { ResourceTextEdit } from '../../../../../editor/browser/services/bulkEdi
 import { FileKind, FileNotFoundError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileService } from "../../../../../platform/files/common/files.js";
 
 test("workspace edits preflight every document before mutating and persist closed resources", async () => {
-	const first = URI.file("C:\\project\\first.ts");
-	const second = URI.file("C:\\project\\second.ts");
+	const first = URI.file("C:/project/first.ts");
+	const second = URI.file("C:/project/second.ts");
 	using store = new MemoryResourceStore([[first, "alpha"], [second, "bravo"]]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
@@ -34,8 +34,8 @@ test("workspace edits preflight every document before mutating and persist close
 });
 
 test("workspace edit undo restores multiple closed documents", async () => {
-	const first = URI.file('C:\\project\\first.ts');
-	const second = URI.file('C:\\project\\second.ts');
+	const first = URI.file('C:/project/first.ts');
+	const second = URI.file('C:/project/second.ts');
 	using store = new MemoryResourceStore([[first, 'alpha'], [second, 'bravo']]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
@@ -50,7 +50,7 @@ test("workspace edit undo restores multiple closed documents", async () => {
 });
 
 test('bulk text edits against one resource use the original coordinate space', async () => {
-	const resource = URI.file('C:\\project\\one.ts');
+	const resource = URI.file('C:/project/one.ts');
 	using store = new MemoryResourceStore([[resource, 'abc def']]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
@@ -68,7 +68,7 @@ test('bulk text edits against one resource use the original coordinate space', a
 });
 
 test('bulk language workspace edits preserve explicitly ordered document operations', async () => {
-	const resource = URI.file('C:\\project\\one.ts');
+	const resource = URI.file('C:/project/one.ts');
 	using store = new MemoryResourceStore([[resource, 'abc def']]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
@@ -86,7 +86,7 @@ test('bulk language workspace edits preserve explicitly ordered document operati
 });
 
 test("workspace edit undo reverses a created file and its inserted text", async () => {
-	const resource = URI.file('C:\\project\\new.ts');
+	const resource = URI.file('C:/project/new.ts');
 	using store = new MemoryResourceStore([]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
@@ -102,10 +102,10 @@ test("workspace edit undo reverses a created file and its inserted text", async 
 });
 
 test('workspace edit undo restores file creation, rename, and deletion together', async () => {
-	const created = URI.file('C:\\project\\created.ts');
-	const source = URI.file('C:\\project\\source.ts');
-	const renamed = URI.file('C:\\project\\renamed.ts');
-	const deleted = URI.file('C:\\project\\deleted.ts');
+	const created = URI.file('C:/project/created.ts');
+	const source = URI.file('C:/project/source.ts');
+	const renamed = URI.file('C:/project/renamed.ts');
+	const deleted = URI.file('C:/project/deleted.ts');
 	using store = new MemoryResourceStore([]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
@@ -127,8 +127,8 @@ test('workspace edit undo restores file creation, rename, and deletion together'
 });
 
 test('workspace edit undo leaves all resources intact when another target changed', async () => {
-	const first = URI.file('C:\\project\\first.ts');
-	const second = URI.file('C:\\project\\second.ts');
+	const first = URI.file('C:/project/first.ts');
+	const second = URI.file('C:/project/second.ts');
 	using store = new MemoryResourceStore([[first, 'alpha'], [second, 'bravo']]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
@@ -146,7 +146,7 @@ test('workspace edit undo leaves all resources intact when another target change
 });
 
 test("workspace edits keep open working copies dirty instead of saving behind the editor", async () => {
-	const resource = URI.file("C:\\project\\open.ts");
+	const resource = URI.file("C:/project/open.ts");
 	using store = new MemoryResourceStore([[resource, "alpha"]]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
@@ -164,8 +164,8 @@ test("workspace edits keep open working copies dirty instead of saving behind th
 });
 
 test("workspace edit preflight rejects stale or invalid edits without changing any document", async () => {
-	const first = URI.file("C:\\project\\first.ts");
-	const second = URI.file("C:\\project\\second.ts");
+	const first = URI.file("C:/project/first.ts");
+	const second = URI.file("C:/project/second.ts");
 	using store = new MemoryResourceStore([[first, "alpha"], [second, "bravo"]]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
@@ -184,8 +184,8 @@ test("workspace edit preflight rejects stale or invalid edits without changing a
 });
 
 test("workspace edit preflight rejects a changed target content baseline atomically", async () => {
-	const first = URI.file("C:\\workspace\\first.ts");
-	const second = URI.file("C:\\workspace\\second.ts");
+	const first = URI.file("C:/workspace/first.ts");
+	const second = URI.file("C:/workspace/second.ts");
 	using store = new MemoryResourceStore([[first, "first"], [second, "changed"]]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
@@ -200,7 +200,7 @@ test("workspace edit preflight rejects a changed target content baseline atomica
 });
 
 test("workspace edit applies create then text edit in protocol order", async () => {
-	const created = URI.file("C:\\workspace\\created.ts");
+	const created = URI.file("C:/workspace/created.ts");
 	using store = new MemoryResourceStore([]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
@@ -217,8 +217,8 @@ test("workspace edit applies create then text edit in protocol order", async () 
 });
 
 test("workspace edit rolls back created resources when a later operation fails", async () => {
-	const created = URI.file("C:\\workspace\\created.ts");
-	const target = URI.file("C:\\workspace\\target.ts");
+	const created = URI.file("C:/workspace/created.ts");
+	const target = URI.file("C:/workspace/target.ts");
 	using store = new MemoryResourceStore([]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();
@@ -228,7 +228,7 @@ test("workspace edit rolls back created resources when a later operation fails",
 
 	await assert.rejects(service.apply({ entries: [
 		{ kind: "create", resource: created, existing: "error" },
-		{ kind: "rename", source: created, target: URI.file("C:\\workspace\\moved.ts"), existing: "error" },
+		{ kind: "rename", source: created, target: URI.file("C:/workspace/moved.ts"), existing: "error" },
 	] }), /injected rename failure/);
 
 	assert.equal(files.has(created), false);
@@ -236,7 +236,7 @@ test("workspace edit rolls back created resources when a later operation fails",
 });
 
 test("workspace edits classify caller cancellation before mutating resources", async () => {
-	const created = URI.file("C:\\workspace\\cancelled.ts");
+	const created = URI.file("C:/workspace/cancelled.ts");
 	using store = new MemoryResourceStore([]);
 	using models = new BrowserTextModelService(store);
 	using workingCopies = new BrowserWorkingCopyService();

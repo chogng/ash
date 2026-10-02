@@ -29,19 +29,19 @@
 }
 
 .stanza-editor .edit-context-composition-secondary {
-	border-bottom: var(--ash-stroke-thickness) solid var(--ash-editor-composition-border);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-editor-compositionBorder);
 }
 
 .stanza-editor .edit-context-composition-primary {
-	border-bottom: 2px solid var(--ash-editor-composition-border);
+	border-bottom: 2px solid var(--ash-editor-compositionBorder);
 }
 
 [data-color-scheme="high-contrast-dark"] .stanza-editor .edit-context-composition-secondary,
 [data-color-scheme="high-contrast-light"] .stanza-editor .edit-context-composition-secondary {
-	border: var(--ash-stroke-thickness) solid var(--ash-editor-composition-border);
+	border: var(--ash-strokeThickness) solid var(--ash-editor-compositionBorder);
 }
 
 [data-color-scheme="high-contrast-dark"] .stanza-editor .edit-context-composition-primary,
 [data-color-scheme="high-contrast-light"] .stanza-editor .edit-context-composition-primary {
-	border: 2px solid var(--ash-editor-composition-border);
+	border: 2px solid var(--ash-editor-compositionBorder);
 }

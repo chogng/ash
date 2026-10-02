@@ -1,3 +1,4 @@
+import { h as createDomElement, } from '../../../../../base/browser/dom.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -142,7 +143,7 @@ test("Markdown supports all five GitHub alert severities", () => {
 	})), [
 		{ severity: 'ash-markdown-alert-note', label: 'Note', icon: 'info' },
 		{ severity: 'ash-markdown-alert-tip', label: 'Tip', icon: 'lightning' },
-		{ severity: 'ash-markdown-alert-important', label: 'Important', icon: 'chat' },
+		{ severity: 'ash-markdown-alert-important', label: 'Important', icon: 'chat-4' },
 		{ severity: 'ash-markdown-alert-warning', label: 'Warning', icon: 'warning' },
 		{ severity: 'ash-markdown-alert-caution', label: 'Caution', icon: 'error' },
 	]);
@@ -219,7 +220,7 @@ test('Markdown image dimensions survive sanitization only as numeric image attri
 		ownerDocument: dom.window.document,
 		markdown: { value: '', baseUri: URI.parse('https://example.com/docs/') },
 	}, html);
-	const host = dom.window.document.createElement('div');
+	const host = createDomElement(dom.window.document, 'div');
 	host.innerHTML = sanitized;
 	const image = host.querySelector('img');
 	assert.deepEqual({
@@ -257,7 +258,7 @@ test('Markdown preserves supported resource schemes and filters remote media by 
 	assert.equal(resolveMarkdownLinkTarget('vscode-file://user:secret@vscode-app/image.png'), undefined);
 	const html = sanitizeMarkdownHtmlToString({ ownerDocument: dom.window.document },
 		'<img src="vscode-file://vscode-app/images/pixel.gif"><img src="https://example.com/pixel.gif"><img src="data:image/svg+xml,<svg></svg>">');
-	const host = dom.window.document.createElement('div');
+	const host = createDomElement(dom.window.document, 'div');
 	host.innerHTML = html;
 	assert.deepEqual([...host.querySelectorAll('img')].map(image => image.getAttribute('src')), [
 		'vscode-file://vscode-app/images/pixel.gif',
@@ -376,7 +377,7 @@ test('MarkdownElement replaces sanitized code blocks with a synchronous renderer
 		markdown: '```ts\nconst value = 1;\n```',
 		codeBlockRendererSync: (languageId, value, raw) => {
 			seen.push([languageId, value, raw]);
-			const rendered = dom.window.document.createElement('span');
+			const rendered = createDomElement(dom.window.document, 'span');
 			rendered.className = 'highlighted-code';
 			rendered.textContent = value;
 			return rendered;
@@ -400,7 +401,7 @@ test('MarkdownElement ignores an asynchronous code block after Markdown changes'
 	});
 	dom.window.document.body.append(markdown.element);
 	markdown.setMarkdown('new text');
-	const staleElement = dom.window.document.createElement('span');
+	const staleElement = createDomElement(dom.window.document, 'span');
 	staleElement.textContent = 'old';
 	resolveCodeBlock(staleElement);
 	await Promise.resolve();
@@ -423,7 +424,7 @@ test('MarkdownElement mounts an asynchronous code block and signals completion',
 		asyncRenderCallback: () => { callbackCount += 1; resolveCompletion(); },
 	});
 	dom.window.document.body.append(markdown.element);
-	const rendered = dom.window.document.createElement('span');
+	const rendered = createDomElement(dom.window.document, 'span');
 	rendered.className = 'highlighted-code';
 	rendered.textContent = 'rendered';
 	resolveCodeBlock(rendered);

@@ -25,5 +25,5 @@ export function opaque(value: ColorValue, background: ColorValue): ColorTransfor
 }
 
 export function colorCssVariable(id: ColorIdentifier): string {
-	return `--ash-${id.replaceAll(".", "-").replace(/[A-Z]/g, (character) => `-${character.toLowerCase()}`)}`;
+	return `--ash-${id.replaceAll(".", "-")}`;
 }

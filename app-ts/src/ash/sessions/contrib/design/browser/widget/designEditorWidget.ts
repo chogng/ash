@@ -48,7 +48,7 @@ export class DesignEditorWidget extends Disposable {
 	private dimension: IDimension = { width: 0, height: 0 };
 
 	constructor(
-		ownerDocument: Document,
+		container: HTMLElement,
 		public readonly documentController: DesignDocumentController,
 		createContributions: DesignEditorContributionFactory,
 		@IContextKeyService contextKeys: IContextKeyService,
@@ -56,6 +56,7 @@ export class DesignEditorWidget extends Disposable {
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
+		const ownerDocument = container.ownerDocument;
 		this.commands = new DocumentCommands(documentController.model);
 		this.domNode = h(ownerDocument, 'section', { className: 'ash-sessions-design-view', attributes: { role: 'region', 'aria-label': localize('sessions.design.canvas', 'Design canvas'), tabindex: '0' } });
 		focusedViews.set(this.domNode, this);
@@ -65,12 +66,12 @@ export class DesignEditorWidget extends Disposable {
 			if (this.contextMenuVisible) { this.contextMenus.hideContextMenu(); }
 		}));
 		this.zoomDomNode = h(ownerDocument, 'span', { className: 'ash-sessions-design-zoom' });
-		this.canvas = this._register(instantiationService.createInstance(DesignView, ownerDocument));
+		this.canvas = this._register(instantiationService.createInstance(DesignView, this.domNode));
 		this.canvas.setTool(this.tool);
 		const stage = h(ownerDocument, 'div', { className: 'ash-sessions-design-stage' });
-		this.toolsWidget = this._register(new DesignToolsWidget(ownerDocument, tool => this.setTool(tool), mode => this.setMode(mode)));
+		this.toolsWidget = this._register(new DesignToolsWidget(this.domNode, tool => this.setTool(tool), mode => this.setMode(mode)));
 		const contributions = this._register(createContributions({
-			ownerDocument,
+			container: this.domNode,
 			documentController,
 			commands: this.commands,
 			selection: this.selection,

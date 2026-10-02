@@ -67,9 +67,8 @@ def build_package_directory(
     remote_runtime_bundle: Optional[Path] = None,
     remote_runtime_release: Optional[Dict[str, str]] = None,
 ) -> None:
-    if (
-        spec.is_windows != (windows_sandbox_binary is not None)
-        or spec.is_windows != (windows_sandbox_service_binary is not None)
+    if spec.is_windows != (windows_sandbox_binary is not None) or spec.is_windows != (
+        windows_sandbox_service_binary is not None
     ):
         raise RuntimeError(
             "Windows packages require both sandbox executables; other targets must omit them"
@@ -632,7 +631,9 @@ def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]
     }
     if spec.is_windows:
         artifacts["windowsSandbox"] = package / "bin/ash-windows-sandbox.exe"
-        artifacts["windowsSandboxService"] = package / "bin/ash-windows-sandbox-service.exe"
+        artifacts["windowsSandboxService"] = (
+            package / "bin/ash-windows-sandbox-service.exe"
+        )
     if "cli" in components:
         artifacts["cli"] = package / "bin" / spec.cli_name
     if metadata.get("javascriptRuntime") == {"kind": "packagedNode"}:

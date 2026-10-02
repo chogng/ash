@@ -11,13 +11,11 @@ from scripts.cargo import main, prepare_test_executable, run_process_tests
 
 class CodeModeHostTests(unittest.TestCase):
     def setUp(self) -> None:
-        # These tests replace subprocess.run, including platform.py's Windows
-        # version probe. Keep host detection outside the mocked process boundary.
-        target = patch(
-            "scripts.cargo.default_target", return_value="x86_64-pc-windows-msvc"
+        # Windows platform discovery invokes subprocess.run too; keep the Cargo
+        # process mock isolated from host detection, which is tested separately.
+        self.enterContext(
+            patch("scripts.cargo.default_target", return_value="x86_64-pc-windows-msvc")
         )
-        target.start()
-        self.addCleanup(target.stop)
 
     @patch.dict("scripts.cargo.os.environ", {}, clear=True)
     @patch("scripts.cargo.subprocess.run")

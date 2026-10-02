@@ -5,7 +5,7 @@ import { TextModel } from '../../../common/model/textModel.js';
 import { TestLanguageConfigurationService } from '../../common/modes/testLanguageConfigurationService.js';
 import { registerTestTokens } from '../../common/testTokenization.js';
 
-test('Bracket colorization follows model nesting and excludes brackets in strings', async () => {
+test('Bracket colorization follows model nesting and excludes brackets in strings', () => {
 	using configurations = new TestLanguageConfigurationService();
 	using model = new TextModel("{\n  (\"}\")\n}", { languageId: "typescript", languageConfigurationService: configurations });
 	using registration = configurations.register("typescript", {
@@ -14,7 +14,7 @@ test('Bracket colorization follows model nesting and excludes brackets in string
 	using tokens = registerTestTokens(new Map([
 		['  ("}")', [{ offset: 0, type: '' }, { offset: 3, type: 'string' }, { offset: 6, type: '' }]],
 	]));
-	await new Promise(resolve => setImmediate(resolve));
+	model.tokenization.forceTokenization(model.getLineCount());
 	const colors = {
 		getLineBrackets: (lineIndex: number) => model.getLineDecorations(lineIndex + 1).map(decoration => ({
 			startColumn: decoration.range.startColumn - 1,

@@ -10,10 +10,10 @@ test('selected Chat tab uses the tab surface instead of list selection blue', as
 	await expect(selected.getByRole('tab')).toHaveAttribute('aria-selected', 'true');
 	const colors = await selected.evaluate(element => {
 		const reference = document.createElement('span');
-		reference.style.background = 'var(--ash-tab-list-active-background)';
+		reference.style.background = 'var(--ash-tabList-activeBackground)';
 		element.append(reference);
 		const active = getComputedStyle(reference).backgroundColor;
-		reference.style.background = 'var(--ash-list-active-selection-background)';
+		reference.style.background = 'var(--ash-list-activeSelectionBackground)';
 		const listSelection = getComputedStyle(reference).backgroundColor;
 		reference.remove();
 		return { tab: getComputedStyle(element).backgroundColor, active, listSelection };

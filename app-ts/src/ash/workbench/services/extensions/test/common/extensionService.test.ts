@@ -478,8 +478,8 @@ test("resolves extension language first-line patterns after file content is avai
 	using languages = new LanguageService();
 	using registration = languages.registerLanguage({ id: "demo", firstLine: "^#!.*\\bdemo" }, { priority: 100 });
 
-	assert.equal(languages.resolveLanguageId({ resource: URI.file("C:\\workspace\\script"), firstLine: "#!/usr/bin/env demo" }), "demo");
-	assert.equal(languages.resolveLanguageId({ resource: URI.file("C:\\workspace\\script"), firstLine: "#!/usr/bin/env python" }), undefined);
+	assert.equal(languages.resolveLanguageId({ resource: URI.file("C:/workspace/script"), firstLine: "#!/usr/bin/env demo" }), "demo");
+	assert.equal(languages.resolveLanguageId({ resource: URI.file("C:/workspace/script"), firstLine: "#!/usr/bin/env python" }), undefined);
 });
 
 test("treats an in-flight load cancelled by disposal as normal shutdown", async () => {

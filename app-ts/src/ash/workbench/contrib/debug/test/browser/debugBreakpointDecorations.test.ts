@@ -18,7 +18,7 @@ test('Breakpoint editor contribution projects semantic glyph-margin decorations'
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const editorNode = dom.window.document.querySelector<HTMLElement>('main');
 	assert.ok(editorNode);
-	const resource = URI.file('C:\\project\\main.ts');
+	const resource = URI.file('C:/project/main.ts');
 	using model = new TextModel('first\nsecond\nthird', { resource });
 	using debug = new BreakpointDebugService(resource);
 	using mouseDown = new Emitter<IEditorMouseEvent>();

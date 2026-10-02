@@ -28,6 +28,9 @@ const allowedDocumentConstructors = new Map<string, ReadonlySet<string>>([
 	[resolve(sourceRoot, "base/browser/domStylesheets.ts"), new Set(["ManagedStyleSheet"])],
 	[resolve(sourceRoot, "base/browser/reactiveDom.ts"), new Set(["ReactiveElement"])],
 	[resolve(sourceRoot, "base/browser/ui/aria/aria.ts"), new Set(["AriaLiveRegion"])],
+	// These services own document-wide stylesheets, independent of any mounted component.
+	[resolve(sourceRoot, "platform/theme/browser/iconsStyleSheet.ts"), new Set(["IconsStyleSheet"])],
+	[resolve(sourceRoot, "workbench/services/decorations/browser/decorationsService.ts"), new Set(["DecorationsService"])],
 ]);
 
 test("frontend TypeScript creates DOM only through the canonical foundations", () => {
@@ -51,22 +54,26 @@ test("frontend TypeScript creates DOM only through the canonical foundations", (
 });
 
 test("browser evaluation callbacks use browser APIs without importing the test runner's modules", () => {
-	const sourceFile = ts.createSourceFile("test/integration/browser/example.integration.spec.ts", `
-		const host = document.createElement('main');
-		page.evaluate(() => {
-			document.createElement('span');
-			requestAnimationFrame(() => document.createTextNode('ready'));
+	for (const file of ["test/integration/browser/example.integration.spec.ts", "test/smoke/areas/windows/example.spec.ts", "src/ash/base/browser/example.ts"]) {
+		const sourceFile = ts.createSourceFile(file, `
+			const host = document.createElement('main');
+			page.evaluate(() => {
+				document.createElement('span');
+				requestAnimationFrame(() => document.createTextNode('ready'));
+			});
+			const probe = () => document.createElement('div');
+			page.evaluate(probe);
+		`, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+		const checked: string[] = [];
+		visit(sourceFile, node => {
+			if (ts.isCallExpression(node) && calledName(node.expression) === "createElement" && !isBrowserEvaluation(node)) {
+				checked.push(node.getText(sourceFile));
+			}
 		});
-		const probe = () => document.createElement('div');
-		page.evaluate(probe);
-	`, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-	const checked: string[] = [];
-	visit(sourceFile, node => {
-		if (ts.isCallExpression(node) && calledName(node.expression) === "createElement" && !isBrowserEvaluation(node)) {
-			checked.push(node.getText(sourceFile));
-		}
-	});
-	assert.deepEqual(checked, ["document.createElement('main')", "document.createElement('div')"]);
+		assert.deepEqual(checked, file.startsWith('test/')
+			? ["document.createElement('main')", "document.createElement('div')"]
+			: ["document.createElement('main')", "document.createElement('span')", "document.createElement('div')"]);
+	}
 });
 
 test("DOM context queries have one canonical owner", () => {
@@ -170,7 +177,7 @@ function calledName(expression: ts.LeftHandSideExpression): string | undefined {
 }
 
 function isBrowserEvaluation(node: ts.Node): boolean {
-	if (!/[\\/]test[\\/]integration[\\/]browser[\\/].*\.spec\.ts$/u.test(`/${node.getSourceFile().fileName}`)) return false;
+	if (!/[\\/]test[\\/](?:integration[\\/]browser|smoke)[\\/].*\.spec\.ts$/u.test(`/${node.getSourceFile().fileName}`)) return false;
 	for (let current = node.parent; current; current = current.parent) {
 		if (!ts.isArrowFunction(current) && !ts.isFunctionExpression(current)) continue;
 		const call = current.parent;

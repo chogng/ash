@@ -13,8 +13,9 @@ export class DesignCodeWidget extends Disposable {
 	private readonly exportButton: Button;
 	private document: DesignDocument | undefined;
 
-	constructor(ownerDocument: Document, exportCode: () => Promise<void>) {
+	constructor(container: HTMLElement, exportCode: () => Promise<void>) {
 		super();
+		const ownerDocument = container.ownerDocument;
 		this.domNode = h(ownerDocument, 'section', { className: 'ash-design-code-widget', attributes: { 'aria-label': localize('sessions.design.generatedCode', 'Generated code') } });
 		const header = h(ownerDocument, 'div', { className: 'ash-design-code-header' });
 		header.append(h(ownerDocument, 'span', {}, localize('sessions.design.codeHint', 'Runnable HTML/CSS/SVG with object IDs, keyframes and editable design JSON for agents.')));

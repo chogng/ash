@@ -1,3 +1,4 @@
+import { h as createDomElement } from '../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { getIconRegistry } from '../common/iconRegistry.js';
 import type { IThemeService } from '../common/themeService.js';
@@ -6,7 +7,7 @@ import type { IThemeService } from '../common/themeService.js';
 export class IconsStyleSheet extends Disposable {
 	constructor(document: Document, themeService: IThemeService) {
 		super();
-		const style = document.createElement('style');
+		const style = createDomElement(document, 'style');
 		style.setAttribute('data-ash-icon-fonts', '');
 		document.head.append(style);
 		this._register(toDisposable(() => style.remove()));

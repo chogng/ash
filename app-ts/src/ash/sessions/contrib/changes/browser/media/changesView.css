@@ -9,7 +9,7 @@
 .ash-sessions-changes > p {
 	margin: 0;
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-font-size-body1);
+	font-size: var(--ash-fontSize-body1);
 }
 
 .ash-sessions-changes-tree {
@@ -21,7 +21,7 @@
 	display: flex;
 	min-width: 0;
 	gap: var(--ash-spacing-size80);
-	font-size: var(--ash-font-size-body1);
+	font-size: var(--ash-fontSize-body1);
 }
 
 .ash-sessions-change-path {

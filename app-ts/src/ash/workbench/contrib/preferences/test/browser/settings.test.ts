@@ -1,4 +1,5 @@
 import type { SettingsContentItem } from '../../browser/settingsTreeModels.js';
+import { registerTestDictationServices } from '../../../../test/common/testDictationServices.js';
 import { IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
@@ -388,6 +389,77 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	assert.equal(root.querySelector('.ash-models-settings-model-copy > span')?.textContent, 'GPT Test Updated');
 });
 
+test('Models Settings refreshes API key status without replacing the key draft or focus', async () => {
+	using disposables = new DisposableStore();
+	const ownerDocument = browserEnvironment.window.document;
+	const root = h(ownerDocument, 'div');
+	ownerDocument.body.append(root);
+	disposables.add(toDisposable(() => root.remove()));
+	let displayName = 'OpenAI API';
+	let apiKeyConfigured = false;
+	let apiKeyPolicy: 'required' | 'optional' = 'required';
+	const chat = {
+		onDidChangeModels: Event.None,
+		listModelCatalog: async () => [],
+		listModelProviders: async () => [{ connection: 'openai', provider: 'openai', displayName, apiKeyPolicy, apiKeyConfigured }],
+	} as unknown as IChatService;
+	const services = disposables.add(new InstantiationService());
+	services.registerInstance(ILocalTranscriptionService, disposables.add(new NullLocalTranscriptionService()));
+	services.registerInstance(ConfigurationServiceId, disposables.add(new WorkbenchConfigurationService()));
+	services.registerInstance(ChatServiceId, chat);
+	const panel = disposables.add(services.createInstance(ModelSettingsContent, root));
+	const modelTree = disposables.add(new SettingsTreeModel<SettingsContentItem>());
+	disposables.add(new SettingsTree(root, {
+		model: modelTree, rootClassName: 'ash-models-settings', groupClassName: 'ash-settings-content-group', groupDescriptionClassName: 'ash-settings-group-description', itemsClassName: 'ash-settings-list', renderItem: item => item.value.domNode,
+	}));
+	disposables.add(panel.onDidChange(() => modelTree.setChildren(panel.getNodes())));
+	const reload = async (): Promise<void> => {
+		panel.setVisible(false);
+		const loaded = new Promise<void>(resolve => {
+			const listener = disposables.add(panel.onDidChange(() => {
+				if (root.querySelector('.ash-models-settings-api-row h5')?.textContent !== displayName) return;
+				listener.dispose();
+				resolve();
+			}));
+		});
+		panel.setVisible(true);
+		await loaded;
+	};
+	await reload();
+	const row = root.querySelector('.ash-models-settings-api-row')!;
+	const status = [...row.querySelectorAll('p')].find(element => element.textContent === 'API key required')!;
+	const input = row.querySelector('input')!;
+	const remove = [...row.querySelectorAll('button')].find(button => button.textContent === 'Remove API key')!;
+	assert.ok(remove);
+	assert.equal(remove.disabled, true);
+	input.value = 'unsaved-key-draft';
+	input.focus();
+	assert.equal(status.textContent, 'API key required');
+
+	for (const state of [
+		{ configured: true, policy: 'required', expected: 'API key saved' },
+		{ configured: false, policy: 'required', expected: 'API key required' },
+		{ configured: false, policy: 'optional', expected: 'No API key saved' },
+	] as const) {
+		apiKeyConfigured = state.configured;
+		apiKeyPolicy = state.policy;
+		displayName = `OpenAI API ${state.expected}`;
+		await reload();
+		assert.equal(status.textContent, state.expected);
+		assert.equal(root.querySelector('.ash-models-settings-api-row'), row);
+		assert.equal(row.querySelector('input'), input);
+		assert.equal(input.value, 'unsaved-key-draft');
+		assert.equal(ownerDocument.activeElement, input);
+		assert.equal(input.getAttribute('aria-label'), `API key for ${displayName}`);
+		assert.equal(remove.disabled, !state.configured);
+		assert.equal(remove.textContent, 'Remove API key');
+		if (state.configured) {
+			remove.click();
+			assert.equal(remove.textContent, 'Confirm removal');
+		}
+	}
+});
+
 test('Settings tree preserves item identity while filtering and updating', () => {
 	using disposables = new DisposableStore();
 	const ownerDocument = browserEnvironment.window.document;
@@ -512,7 +584,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		refreshModels: async () => [{ model, displayName: 'GPT Test' }],
 	} as unknown as IChatService;
 	const contextView = disposables.add(new BrowserContextViewService(root));
-	const services = new InstantiationService();
+	const services = disposables.add(new InstantiationService());
 	services.registerInstance(ClipboardServiceId, clipboardService);
 	services.registerInstance(ConfigurationServiceId, configuration);
 	services.registerInstance(IContextMenuService, contextMenuProvider);
@@ -521,6 +593,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(GitServiceId, gitService);
 	services.registerInstance(ChatServiceId, chatService);
 	services.registerInstance(ILocalTranscriptionService, disposables.add(new NullLocalTranscriptionService()));
+	registerTestDictationServices(services, undefined);
 	const descriptor = EditorPanes.getEditorPanes().find(candidate => candidate.id === SettingsEditorId);
 	assert.ok(descriptor);
 	assert.throws(() => descriptor.create({ instantiationService: services }), /Unknown service: localeService/);
@@ -588,7 +661,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(IFileService, disposables.add(new DiskFileSystemProvider([URI.file(hooksFolder)])));
 	const editorPanes = new EditorPaneRegistry();
 	disposables.add(editorPanes.registerEditorPane(descriptor));
-	const editorServices = disposables.add(createTestEditorServices(undefined, services));
+	const editorServices = disposables.add(createTestEditorServices(ownerDocument, undefined, services));
 	const editor = disposables.add(editorServices.createInstance(EditorPart, root, { registry: editorPanes }));
 	editorServices.registerInstance(IEditorPart, editor);
 	editorServices.registerInstance(ICommandService, disposables.add(new CommandService(editorServices)));

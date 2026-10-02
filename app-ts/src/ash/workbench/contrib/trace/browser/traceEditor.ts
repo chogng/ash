@@ -1,9 +1,12 @@
+import { LocalAccessibilityHelpContext } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import './traceEditor.css';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
+import { scheduleAtNextAnimationFrame } from '../../../../base/browser/scheduler.js';
 import { triggerDownload } from '../../../../base/browser/fileAccess.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { DialogSeverity, IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
@@ -32,17 +35,18 @@ export class TraceEditor extends Disposable implements IEditorPane {
 	private selected: string | undefined;
 	private visible: readonly TraceSpan[] = [];
 	private readonly rows = new Map<string, { domNode: HTMLDivElement; label: HTMLSpanElement; bar: HTMLSpanElement }>();
-	private frame: number | undefined;
+	private readonly frame = this._register(new MutableDisposable());
 	private shown = true;
 	private readonly listId = 'ash-trace-list-' + nextListId++;
 
-	constructor(@IDialogService private readonly dialogs: IDialogService, @IConfigurationService private readonly configuration: IConfigurationService) { super(); }
+	constructor(@IDialogService private readonly dialogs: IDialogService, @IConfigurationService private readonly configuration: IConfigurationService, @IContextKeyService private readonly contextKeys: IContextKeyService) { super(); }
 
 	create(parent: HTMLElement): void {
 		const document = parent.ownerDocument;
 		this.domNode = h(document, 'div');
 		this.domNode.className = 'ash-trace';
 		parent.append(this.domNode);
+		LocalAccessibilityHelpContext.bindTo(this._register(this.contextKeys.createScoped(this.domNode))).set(true);
 		this._register(toDisposable(() => this.domNode.remove()));
 		const toolbar = h(document, 'div');
 		toolbar.className = 'ash-trace-toolbar';
@@ -101,7 +105,6 @@ export class TraceEditor extends Disposable implements IEditorPane {
 		}));
 		this._register(this.connection.onDidChange(() => this.scheduleRender()));
 		this._register(toDisposable(() => {
-			if (this.frame !== undefined) { document.defaultView!.cancelAnimationFrame(this.frame); }
 			this.token.value = '';
 		}));
 		this.render();
@@ -134,8 +137,8 @@ export class TraceEditor extends Disposable implements IEditorPane {
 	}
 
 	private scheduleRender(): void {
-		if (this.frame !== undefined || !this.shown || this.isDisposed) { return; }
-		this.frame = this.domNode.ownerDocument.defaultView!.requestAnimationFrame(() => { this.frame = undefined; this.render(); });
+		if (this.frame.value || !this.shown || this.isDisposed) { return; }
+		this.frame.value = scheduleAtNextAnimationFrame(this.domNode.ownerDocument.defaultView!, () => { this.frame.clear(); this.render(); });
 	}
 
 	private render(): void {

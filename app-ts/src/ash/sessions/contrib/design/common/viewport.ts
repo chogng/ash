@@ -29,4 +29,3 @@ export class DesignViewport {
 		this.panY = 0;
 	}
 }
-

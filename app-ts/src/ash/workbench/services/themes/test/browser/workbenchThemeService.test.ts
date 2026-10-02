@@ -98,7 +98,7 @@ test('persisted color customizations override themes, update live, and restore t
 		], ['#456789', '#112233', 0.65, theme.tokenColors]);
 		assert.equal(active.getColorTheme().getColor('editor.inactiveSelectionBackground')?.rgba.r, 69);
 		await configuration.updateValue(WorkbenchConfiguration.colorCustomizations, { 'editor.inactiveSelectionBackground': '#765432' });
-		assert.equal(browser.window.document.body.style.getPropertyValue('--ash-editor-inactive-selection-background'), '#765432');
+		assert.equal(browser.window.document.body.style.getPropertyValue('--ash-editor-inactiveSelectionBackground'), '#765432');
 		assert.equal(active.getColorTheme().getColorCss('editor.selectionForeground'), '#abcdef');
 		await configuration.updateValue(WorkbenchConfiguration.colorCustomizations, undefined);
 		assert.equal(active.getColorTheme(), theme);
@@ -235,7 +235,7 @@ test('active user themes apply overrides for colors registered after theme loadi
 		assert.deepEqual({
 			before: before.find(entry => entry.id === 'test.workbenchLate'),
 			resolved: theme.colors['test.workbenchLate'],
-			css: browser.window.document.body.style.getPropertyValue('--ash-test-workbench-late'),
+			css: browser.window.document.body.style.getPropertyValue('--ash-test-workbenchLate'),
 			changes,
 			tokenRules: theme.tokenColors,
 		}, {

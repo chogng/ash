@@ -170,6 +170,7 @@ fn actual_tui_provider_autosaves_and_tests_without_fetching_models() {
         }
         process.down();
     }
+    wait_for_config(&fixture, "PTY service");
     assert!(fixture.config_source().contains("PTY service"));
     process.wait_for_screen("> Model ID");
     process.enter();
@@ -208,7 +209,9 @@ fn actual_tui_provider_autosaves_and_tests_without_fetching_models() {
     process.wait_for_screen("> Provider name");
     process.enter();
     process.type_text("-cancelled");
+    process.wait_for_screen("-cancelled");
     process.escape();
+    process.wait_for_screen_to_omit("-cancelled");
     assert!(!process.screen().contains("-cancelled"));
     process.down();
     process.down();

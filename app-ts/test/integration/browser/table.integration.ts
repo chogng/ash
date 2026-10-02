@@ -9,13 +9,13 @@ import { CodeEditorWidget } from '../../../src/ash/editor/browser/widget/codeEdi
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 import { IStorageService, StorageScope } from '../../../src/ash/platform/storage/common/storage.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
-import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
-import { IDictationService } from '../../../src/ash/platform/dictation/common/dictationService.js';
+import { registerTestDictationServices } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { IChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import '../../../src/ash/base/browser/ui/button/button.css';
 import '../../../src/ash/base/browser/ui/inputbox/inputbox.css';
 import '../../../src/ash/base/browser/ui/splitview/splitview.css';
 import '../../../src/ash/base/browser/ui/sash/sash.css';
+import { h } from '../../../src/ash/base/browser/dom.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
@@ -33,7 +33,6 @@ import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser
 import { ChatInputEditor } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
 import { SlashCommandCatalog } from '../../../src/ash/workbench/contrib/chat/common/slashCommands.js';
 import { SkillSelectorCatalog } from '../../../src/ash/workbench/contrib/chat/common/skillSelectors.js';
-import { ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { DictationSession } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/dictationSession.js';
 import { setARIAContainer } from '../../../src/ash/base/browser/ui/aria/aria.js';
 import '../../../src/ash/workbench/contrib/chat/browser/widget/media/chat.css';
@@ -124,11 +123,11 @@ let controls = resources.add(services.createInstance(LocalTranscriptionModelCont
 controls.setVisible(true);
 registerCodeEditorServices(services);
 setARIAContainer(document.body);
-const inputContainer = document.createElement('div');
+const inputContainer = h(document, 'div');
 inputContainer.style.width = '600px';
 document.body.append(inputContainer);
 const editor = resources.add(services.createInstance(ChatInputEditor, { container: inputContainer, ariaLabel: 'Dictation draft', placeholder: '', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() }));
-const preview = document.createElement('div');
+const preview = h(document, 'div');
 preview.id = 'dictation-preview';
 document.body.append(preview);
 let starts = 0;
@@ -136,16 +135,14 @@ let stops = 0;
 let captureReady = Promise.resolve();
 let releaseCapture!: () => void;
 let transcript!: (text: string, final: boolean) => void;
-services.registerInstance(IDictationService, {
+registerTestDictationServices(services, {
 	onDidChangePreparation: Event.None, getOptions: async () => ({ inputDevices: [{ id: 'microphone-1', label: 'Test microphone', isDefault: true }], languages: ['en', 'zh'] }), getPreparation: async () => undefined, prepareModel: async () => {}, cancelPreparation: async () => {},
 	start: async (onTranscript: (text: string, isFinal: boolean) => void) => { starts++; transcript = onTranscript; await captureReady; return { stop: async () => { stops++; } }; },
 });
-services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
-registerTestDictationOnboarding(services);
 services.registerInstance(IPreferencesService, { openSettings: async () => {} } as unknown as IPreferencesService);
 services.registerInstance(IEditorService, { onDidVisibleEditorsChange: Event.None } as unknown as IEditorService);
 services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
-const codeContainer = document.createElement('div');
+const codeContainer = h(document, 'div');
 codeContainer.style.cssText = 'width:600px;height:220px';
 document.body.append(codeContainer);
 const codeModel = resources.add(new TextModel('before old after'));

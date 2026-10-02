@@ -12,11 +12,11 @@
 .ash-editor-quick-pick-item .ash-quick-pick-row-action:hover,
 .ash-editor-quick-pick-item .ash-quick-pick-row-action:focus-visible {
 	color: var(--ash-foreground);
-	background: var(--ash-list-hover-background);
+	background: var(--ash-list-hoverBackground);
 }
 
 .ash-editor-quick-pick-item .ash-quick-pick-row-action:focus-visible {
-	outline: var(--ash-strokeThickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 

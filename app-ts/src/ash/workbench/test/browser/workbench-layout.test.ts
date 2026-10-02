@@ -179,7 +179,7 @@ function createLayoutHarness(
 	if (sideBarLocation !== undefined) {
 		void configuration.updateValue(WorkbenchConfiguration.sideBarLocation, sideBarLocation);
 	}
-	const services = disposables.add(createTestEditorServices(configuration));
+	const services = disposables.add(createTestEditorServices(ownerDocument, configuration));
 	let storage = storageService;
 	if (!storage) {
 		const storageDom = new JSDOM('', { url: 'https://ash.test' });
@@ -1054,7 +1054,7 @@ test("Activity Bar hosts the primary sidebar selector independently of sidebar v
 	}));
 	dom.window.document.body.append(sidebar.domNode);
 	const compositeBar = sidebar.compositeBar;
-	const globalActions = dom.window.document.createElement('div');
+	const globalActions = h(dom.window.document, 'div');
 	const configuration = disposables.add(new InMemoryConfigurationService());
 	const globalBar = { domNode: globalActions, setOrientation() {}, getContextMenuActions: () => [] };
 	const localization = { translate: (_bundle: string, _key: string, fallback: string) => fallback } as ILocalizationService;
@@ -1577,7 +1577,7 @@ test('Activity Bar context menu persists hidden views and keeps one pinned view'
 		storageService: storage,
 	}));
 	const configuration = firstBar.add(new InMemoryConfigurationService());
-	const globalBar = { domNode: dom.window.document.createElement('div'), setOrientation() {}, getContextMenuActions: () => [] };
+	const globalBar = { domNode: h(dom.window.document, 'div'), setOrientation() {}, getContextMenuActions: () => [] };
 	const localization = { translate: (_bundle: string, _key: string, fallback: string) => fallback } as ILocalizationService;
 	const activitybar = firstBar.add(new ActivitybarPart(dom.window.document.body, compositeBar, globalBar, configuration, localization));
 	activitybar.domNode.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true }));

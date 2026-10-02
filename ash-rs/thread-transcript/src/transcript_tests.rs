@@ -37,6 +37,7 @@ fn snapshot_preserves_items_and_turn_plans_in_order() {
             turn_id: turn_id(),
             status: ash_protocol::TurnStatus::Completed,
             kind: ash_protocol::TurnKind::Coding,
+            mode: ash_protocol::CollaborationMode::Agent,
             instructions: None,
             model: None,
             reasoning_effort: None,

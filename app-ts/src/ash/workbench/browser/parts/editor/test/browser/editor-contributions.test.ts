@@ -29,7 +29,7 @@ test("EditorAutoSave saves dirty copies after the configured delay and skips con
 	await configuration.updateValue(EditorAutoSaveConfiguration, "afterDelay");
 	await configuration.updateValue(EditorAutoSaveDelayConfiguration, 100);
 	using workingCopies = new BrowserWorkingCopyService();
-	using workingCopy = new TestWorkingCopy(URI.file("C:\\project\\auto-save.ts"));
+	using workingCopy = new TestWorkingCopy(URI.file("C:/project/auto-save.ts"));
 	using registration = workingCopies.register(workingCopy);
 	using contribution = new EditorAutoSave(editorPart, workingCopies, configuration);
 
@@ -59,7 +59,7 @@ test("EditorAutoSave observes auxiliary editor window blur", async () => {
 	const configuration = new InMemoryConfigurationService();
 	await configuration.updateValue(EditorAutoSaveConfiguration, "onWindowChange");
 	using workingCopies = new BrowserWorkingCopyService();
-	using workingCopy = new TestWorkingCopy(URI.file("C:\\project\\auxiliary-auto-save.ts"));
+	using workingCopy = new TestWorkingCopy(URI.file("C:/project/auxiliary-auto-save.ts"));
 	using registration = workingCopies.register(workingCopy);
 	using contribution = new EditorAutoSave(editorPart, workingCopies, configuration);
 
@@ -86,7 +86,7 @@ test("EditorAutoSave saves dirty working copies when focus mode loses window foc
 	const configuration = new InMemoryConfigurationService();
 	await configuration.updateValue(EditorAutoSaveConfiguration, "onFocusChange");
 	using workingCopies = new BrowserWorkingCopyService();
-	using workingCopy = new TestWorkingCopy(URI.file("C:\\project\\focus-auto-save.ts"));
+	using workingCopy = new TestWorkingCopy(URI.file("C:/project/focus-auto-save.ts"));
 	using registration = workingCopies.register(workingCopy);
 	using contribution = new EditorAutoSave(editorPart, workingCopies, configuration);
 
@@ -109,7 +109,7 @@ test("EditorAutoSave saves existing dirty working copies when auto save is enabl
 	} as unknown as IEditorPart;
 	const configuration = new InMemoryConfigurationService();
 	using workingCopies = new BrowserWorkingCopyService();
-	using workingCopy = new TestWorkingCopy(URI.file("C:\\project\\enabled-auto-save.ts"));
+	using workingCopy = new TestWorkingCopy(URI.file("C:/project/enabled-auto-save.ts"));
 	using registration = workingCopies.register(workingCopy);
 	using untitled = new TestWorkingCopy(URI.parse("untitled:/draft"));
 	using untitledRegistration = workingCopies.register(untitled);
@@ -141,7 +141,7 @@ test("EditorAutoSave clears a delay timer through the window that created it", a
 	await configuration.updateValue(EditorAutoSaveConfiguration, "afterDelay");
 	await configuration.updateValue(EditorAutoSaveDelayConfiguration, 100);
 	using workingCopies = new BrowserWorkingCopyService();
-	using workingCopy = new TestWorkingCopy(URI.file("C:\\project\\window-timer.ts"));
+	using workingCopy = new TestWorkingCopy(URI.file("C:/project/window-timer.ts"));
 	using registration = workingCopies.register(workingCopy);
 	using contribution = new EditorAutoSave(editorPart, workingCopies, configuration);
 
@@ -161,7 +161,7 @@ test("EditorAutoSave clears a delay timer through the window that created it", a
 test("EditorStatusContribution projects and clears active pane status", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const editorChanges = new Emitter<void>();
-	const workingCopy = new TestWorkingCopy(URI.file("C:\\project\\status.ts"));
+	const workingCopy = new TestWorkingCopy(URI.file("C:/project/status.ts"));
 	const pane = new TestStatusPane(workingCopy);
 	const input: EditorInput = { resource: workingCopy.resource, languageId: "typescript" };
 	const state: { activeInput: EditorInput | undefined; activePane: IEditorPane | undefined } = { activeInput: input, activePane: pane };

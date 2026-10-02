@@ -14,10 +14,10 @@
   pointer-events: none;
 }
 .ash-split-view-horizontal.ash-split-view-separator-border > .ash-split-view-pane:not(:first-child)::before {
-  width: var(--ash-stroke-thickness);
+  width: var(--ash-strokeThickness);
   height: 100%;
 }
 .ash-split-view-vertical.ash-split-view-separator-border > .ash-split-view-pane:not(:first-child)::before {
   width: 100%;
-  height: var(--ash-stroke-thickness);
+  height: var(--ash-strokeThickness);
 }

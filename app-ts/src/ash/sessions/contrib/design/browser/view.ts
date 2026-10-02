@@ -1,5 +1,5 @@
 import './view.css';
-import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { addDisposableListener, h, svg } from '../../../../base/browser/dom.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { getLxiconDefinition } from '../../../../base/common/lxiconsUtil.js';
@@ -10,8 +10,6 @@ import { DesignConfiguration, DesignTool } from '../common/config/editorConfigur
 import type { DesignShape } from '../common/model/document.js';
 import type { DesignViewport } from '../common/viewport.js';
 import { renderDesignShape } from './svgRenderer.js';
-
-const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
 interface DesignRenderState {
 	readonly shapes: readonly DesignShape[];
@@ -32,17 +30,18 @@ export class DesignView extends Disposable {
 	private drawingDomNode: SVGGraphicsElement | undefined;
 
 	constructor(
-		ownerDocument: Document,
+		container: HTMLElement,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IThemeService private readonly themeService: IThemeService,
 	) {
 		super();
+		const ownerDocument = container.ownerDocument;
 		this.domNode = h(ownerDocument, 'div', { className: 'ash-sessions-design-viewport' });
 		this.world = h(ownerDocument, 'div', { className: 'ash-sessions-design-world' });
-		this.shapesDomNode = ownerDocument.createElementNS(SVG_NAMESPACE, 'svg');
+		this.shapesDomNode = svg(ownerDocument, 'svg');
 		this.shapesDomNode.classList.add('ash-sessions-design-shapes');
 		this.shapesDomNode.setAttribute('aria-hidden', 'true');
-		this.selectionDomNode = ownerDocument.createElementNS(SVG_NAMESPACE, 'g');
+		this.selectionDomNode = svg(ownerDocument, 'g');
 		this.selectionDomNode.classList.add('ash-sessions-design-selection');
 		this.shapesDomNode.append(this.selectionDomNode);
 		this.world.append(this.shapesDomNode);
@@ -78,7 +77,7 @@ export class DesignView extends Disposable {
 		}
 		for (const shape of state.shapes) {
 			const previous = this.renderedShapes.get(shape.id);
-			const element = renderDesignShape(shape, previous);
+			const element = renderDesignShape(this.shapesDomNode, shape, previous);
 			for (const node of [element, ...element.querySelectorAll<SVGGraphicsElement>('[data-shape-id]')]) {
 				if (state.opacity) { node.setAttribute('opacity', `${state.opacity.get(node.dataset.shapeId!)!}`); }
 				else { node.removeAttribute('opacity'); }
@@ -88,7 +87,7 @@ export class DesignView extends Disposable {
 		}
 		const draft = state.draft;
 		if (draft) {
-			const preview = renderDesignShape(draft, this.drawingDomNode);
+			const preview = renderDesignShape(this.shapesDomNode, draft, this.drawingDomNode);
 			if (preview !== this.drawingDomNode) { this.drawingDomNode?.remove(); this.drawingDomNode = preview; }
 			preview.removeAttribute('data-shape-id');
 			preview.classList.add('ash-design-drawing-preview');
@@ -99,25 +98,25 @@ export class DesignView extends Disposable {
 		}
 		const selected = state.selectedShapes;
 		this.selectionDomNode.replaceChildren(...selected.map(shape => {
-			const rect = this.domNode.ownerDocument.createElementNS(SVG_NAMESPACE, 'rect');
+			const rect = svg(this.selectionDomNode.ownerDocument, 'rect');
 			for (const key of ['x', 'y', 'width', 'height'] as const) { rect.setAttribute(key, `${shape[key]}`); }
 			rect.setAttribute('transform', this.shapeTransform(shape));
 			return rect;
 		}));
 		if (state.showPathHandles && selected.length === 1 && selected[0].kind === 'path') {
 			const path = selected[0];
-			const handles = this.domNode.ownerDocument.createElementNS(SVG_NAMESPACE, 'g');
+			const handles = svg(this.selectionDomNode.ownerDocument, 'g');
 			handles.setAttribute('transform', this.shapeTransform(path));
 			for (const [index, node] of path.nodes.entries()) {
 				for (const point of ['incoming', 'outgoing', 'anchor'] as const) {
 					const position = point === 'anchor' ? node : node[point];
 					if (point !== 'anchor' && position.x === node.x && position.y === node.y) { continue; }
 					if (point !== 'anchor') {
-						const line = this.domNode.ownerDocument.createElementNS(SVG_NAMESPACE, 'line');
+						const line = svg(this.selectionDomNode.ownerDocument, 'line');
 						for (const [key, value] of Object.entries({ x1: path.x + node.x * path.width, y1: path.y + node.y * path.height, x2: path.x + position.x * path.width, y2: path.y + position.y * path.height })) { line.setAttribute(key, `${value}`); }
 						handles.append(line);
 					}
-					const circle = this.domNode.ownerDocument.createElementNS(SVG_NAMESPACE, 'circle');
+					const circle = svg(this.selectionDomNode.ownerDocument, 'circle');
 					circle.classList.add('ash-sessions-design-path-handle');
 					circle.dataset.pathNode = `${index}`;
 					circle.dataset.pathPoint = point;

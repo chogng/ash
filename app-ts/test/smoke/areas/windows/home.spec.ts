@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
-import { launchElectron } from '../../../automation/playwrightElectron.js';
+import { launchElectron, waitForNewElectronWindow } from '../../../automation/playwrightElectron.js';
 import { appServerDaemonExecutablePath, appServerExecutablePath } from '../../../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js';
 
 const execFileAsync = promisify(execFile);
@@ -18,7 +18,7 @@ test('Desktop development startup opens Agents with prepared runtime resources',
 		process.env.ASH_DEV_APP_SERVER_RELOAD = '1';
 		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory: directory, workspaceDirectory: testWorkspace.directory, workspacePermissions: 'development' });
 		const page = desktop.driver.workbench.page;
-		const opened = desktop.application.waitForEvent('window');
+		const opened = waitForNewElectronWindow(desktop.application, 'sessions');
 		await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 		const agents = await opened;
 		await expect(agents.locator('.ash-sessions-window')).toBeVisible();

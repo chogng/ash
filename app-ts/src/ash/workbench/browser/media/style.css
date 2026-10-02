@@ -185,8 +185,8 @@ button, input, select, textarea { font: inherit; }
   overflow: hidden;
   flex-direction: column;
   font-family: var(--ash-font-family);
-  font-size: var(--ash-font-size-body1);
-  font-weight: var(--ash-font-weight-regular);
+  font-size: var(--ash-fontSize-body1);
+  font-weight: var(--ash-fontWeight-regular);
   line-height: 1.4;
   color: var(--ash-foreground);
   background: var(--ash-workbench-background);
@@ -216,7 +216,7 @@ button, input, select, textarea { font: inherit; }
 .ash-workbench :where(.ash-action-bar:not(.vertical) > .ash-action-view-item > .ash-action-label:not(:disabled):hover),
 .ash-workbench :where(.ash-action-bar:not(.vertical) > .ash-dropdown-with-primary-action-view-item:not(.disabled):hover),
 .ash-workbench :where(.ash-action-bar:not(.vertical) > .ash-dropdown-with-primary-action-view-item.active) {
-  background: var(--ash-toolbar-hover-background);
+  background: var(--ash-toolbar-hoverBackground);
 }
 
 .ash-workbench.ash-reduce-motion *,
@@ -258,8 +258,8 @@ button, input, select, textarea { font: inherit; }
 }
 
 .ash-progress-cancel {
-  border: var(--ash-stroke-thickness) solid var(--ash-button-border, var(--ash-foreground));
-  border-radius: var(--ash-corner-radius-small);
+  border: var(--ash-strokeThickness) solid var(--ash-button-border, var(--ash-foreground));
+  border-radius: var(--ash-cornerRadius-small);
   color: inherit;
   background: var(--ash-button-background, transparent);
   cursor: pointer;
@@ -274,8 +274,8 @@ button, input, select, textarea { font: inherit; }
   gap: 8px;
   align-items: center;
   padding: 6px 8px;
-  border: var(--ash-stroke-thickness) solid var(--ash-widget-border, var(--ash-foreground));
-  border-radius: var(--ash-corner-radius-small);
+  border: var(--ash-strokeThickness) solid var(--ash-widget-border, var(--ash-foreground));
+  border-radius: var(--ash-cornerRadius-small);
   color: var(--ash-foreground);
   background: var(--ash-editor-background, var(--ash-workbench-background));
   pointer-events: auto;

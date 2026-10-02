@@ -102,7 +102,7 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 			keyboardLayoutService: keyboardLayout,
 		}),
 	});
-	const editorServices = disposables.add(createTestEditorServices(undefined, services));
+	const editorServices = disposables.add(createTestEditorServices(ownerDocument, undefined, services));
 	const editor = disposables.add(editorServices.createInstance(EditorPart, ownerDocument.body, {
 		registry,
 		contextKeyService: contextKeys,

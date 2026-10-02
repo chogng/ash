@@ -2,11 +2,13 @@ module(name = "ash")
 
 bazel_dep(name = "platforms", version = "1.1.0")
 bazel_dep(name = "rules_rs", version = "0.0.96")
+bazel_dep(name = "rules_cc", version = "0.2.20")
 bazel_dep(name = "rules_platform", version = "0.1.0")
 bazel_dep(name = "rules_python", version = "1.9.2")
 bazel_dep(name = "apple_support", version = "2.1.0")
 bazel_dep(name = "llvm", version = "0.8.11")
 bazel_dep(name = "aws-lc", version = "5.1.0.bcr.1")
+bazel_dep(name = "xz", version = "5.4.5.bcr.8")
 
 archive_override(
     module_name = "rules_rs",
@@ -14,7 +16,9 @@ archive_override(
     patch_strip = 1,
     patches = [
         "//third_party/rules_rs:module_dot_bazel_version.patch",
+        "//third_party/rules_rs:linux_zlib_snapshot.patch",
         "//third_party/rules_rs:windows_gnullvm_exec_triples.patch",
+        "//third_party/rules_rs:per_crate_rustc_flags_annotation.patch",
     ],
     strip_prefix = "rules_rs-0.0.96",
     urls = [
@@ -128,6 +132,21 @@ crate.from_cargo(
 )
 use_repo(crate, "crates")
 
+# Generated dependencies normally trim per-crate flags. Opt only the artifact
+# identity hash dependency into the test:ci optimization selected in .bazelrc.
+crate.annotation(
+    crate = "sha2",
+    version = "0.10.9",
+    skip_per_crate_rustc_flags = False,
+    repositories = ["crates"],
+)
+
+crate.annotation(
+    crate = "sherpa-onnx-sys",
+    deps = ["//third_party/sherpa-onnx:cpp_runtime"],
+    repositories = ["crates"],
+)
+
 # rules_rust's runfiles crate has its own manifest below the repository root.
 crate.annotation(
     crate = "runfiles",
@@ -200,6 +219,15 @@ crate.annotation(
 )
 
 inject_repo(crate, "aws-lc")
+
+# Match rules_rs's lzma-sys integration: link the pinned Bazel library instead
+# of allowing the Cargo build script to discover the host's liblzma.
+crate.annotation(
+    crate = "lzma-sys",
+    gen_build_script = "off",
+    repositories = ["crates"],
+    deps = ["@xz//:lzma"],
+)
 
 # The V8 crate build script consumes checksum-pinned sandbox-enabled archives and bindings.
 # They are build inputs only: the resulting executables link V8 statically.

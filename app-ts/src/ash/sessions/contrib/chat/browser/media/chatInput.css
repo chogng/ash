@@ -14,9 +14,9 @@
   --ash-chat-input-padding: var(--ash-spacing-size160);
   --ash-chat-input-border: var(--ash-border);
   --ash-chat-input-focus-border: var(--ash-border);
-  --ash-chat-input-radius: var(--ash-corner-radius-x-large);
+  --ash-chat-input-radius: var(--ash-cornerRadius-xLarge);
   --ash-chat-input-toolbar-gap: var(--ash-spacing-size80);
-  --ash-toolbar-action-size: 28px;
+  --ash-toolbar-actionSize: 28px;
   width: 100%;
   max-width: 728px;
   align-self: center;
@@ -32,20 +32,20 @@
   flex: 0 0 auto;
   margin: 0 0 var(--ash-spacing-size240);
   color: var(--ash-foreground);
-  font-size: var(--ash-font-size-heading1);
-  font-weight: var(--ash-font-weight-semi-bold);
+  font-size: var(--ash-fontSize-heading1);
+  font-weight: var(--ash-fontWeight-semiBold);
   line-height: 1.4;
   text-align: center;
 }
 
 .chat-composer .ash-sessions-chat-input-footer > button {
   border: 0;
-  border-radius: var(--ash-corner-radius-small);
+  border-radius: var(--ash-cornerRadius-small);
   padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
   background: transparent;
   color: var(--ash-description-foreground);
   font: inherit;
-  font-size: var(--ash-font-size-label1);
+  font-size: var(--ash-fontSize-label1);
   cursor: pointer;
 }
 
@@ -55,9 +55,9 @@
   --ash-chat-input-padding: var(--ash-spacing-size160);
   --ash-chat-input-border: var(--ash-border);
   --ash-chat-input-focus-border: var(--ash-border);
-  --ash-chat-input-radius: var(--ash-corner-radius-x-large);
+  --ash-chat-input-radius: var(--ash-cornerRadius-xLarge);
   --ash-chat-input-toolbar-gap: var(--ash-spacing-size80);
-  --ash-toolbar-action-size: 28px;
+  --ash-toolbar-actionSize: 28px;
   width: 100%;
   max-width: 728px;
   align-self: center;
@@ -73,20 +73,20 @@
   flex: 0 0 auto;
   margin: 0 0 var(--ash-spacing-size240);
   color: var(--ash-foreground);
-  font-size: var(--ash-font-size-heading1);
-  font-weight: var(--ash-font-weight-semi-bold);
+  font-size: var(--ash-fontSize-heading1);
+  font-weight: var(--ash-fontWeight-semiBold);
   line-height: 1.4;
   text-align: center;
 }
 
 .code-composer .ash-sessions-chat-input-footer > button {
   border: 0;
-  border-radius: var(--ash-corner-radius-small);
+  border-radius: var(--ash-cornerRadius-small);
   padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
   background: transparent;
   color: var(--ash-description-foreground);
   font: inherit;
-  font-size: var(--ash-font-size-label1);
+  font-size: var(--ash-fontSize-label1);
   cursor: pointer;
 }
 
@@ -106,7 +106,7 @@
   display: grid;
   place-items: center;
   pointer-events: none;
-  border: 2px dashed var(--ash-focus-border);
+  border: 2px dashed var(--ash-focusBorder);
   border-radius: inherit;
   background: var(--ash-editor-background);
   color: var(--ash-foreground);
@@ -122,10 +122,10 @@
 }
 
 .ash-sessions-chat-input-footer > button:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
   outline-offset: 2px;
 }
 
 .ash-sessions-chat-input-footer > button:hover {
-  background: var(--ash-toolbar-hover-background);
+  background: var(--ash-toolbar-hoverBackground);
 }

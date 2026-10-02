@@ -111,8 +111,10 @@ Windows 先配置 Git Bash，然后运行 App 边界和打包契约测试；其�
 
 ```powershell
 $env:BAZEL_SH = "C:\Program Files\Git\bin\bash.exe"
-bazelisk test //app-rs:app_ci --test_output=errors --test_env=PATH
+bazelisk test --config=ci //app-rs:app_ci --test_output=errors --test_env=PATH
 ```
+
+`--config=ci` 使用根 `.bazelrc` 的测试配置，保持 `fastbuild`，仅将 `sha2 0.10` 依赖设为 `opt-level=1`，与 Cargo 测试依赖配置对齐。该依赖通过 `MODULE.bazel` annotation 保留 per-crate flags，其他生成依赖仍按 `rules_rs` 默认规则裁剪。`//bazel:rust-test-profile-contract` 检查实际 Rustc action，分别验证 CI、普通 fastbuild 和发布 opt 配置。启动时仍完整重算可执行文件的 artifact identity，不缓存或跳过校验；发布构建配置不变。
 
 `--test_env=PATH` 将固定版本 Node 的路径传给测试进程。`//ash-cli:tui-real-scenarios` 运行同一组 CLI/TUI PTY 场景；先将锁定的 `rg`、`tgrep` 路径设为 `ASH_RG_PATH`、`ASH_TGREP_PATH`。Linux CI 无法运行的真实沙箱场景由 macOS 作业覆盖。
 

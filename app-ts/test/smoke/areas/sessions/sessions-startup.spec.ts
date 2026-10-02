@@ -1,3 +1,4 @@
+import { waitForNewElectronWindow } from '../../../automation/playwrightElectron.js';
 import type { App } from 'electron';
 import { resolve } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
@@ -33,19 +34,19 @@ test('Agents starts its connection before loading the page and reconnects on rel
 		};
 	}, mainRoot);
 	try {
-		const opened = application.waitForEvent('window');
+		const opened = waitForNewElectronWindow(application, 'sessions');
 		await workbench.page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 		const agents = await opened;
 		const input = agents.getByRole('textbox', { name: 'Chat message', exact: true });
 		await expect(input).toBeEditable();
 		const editor = new Editor(agents.locator('.ash-sessions-chat-input').first());
-		await editor.waitForEditorFocus();
+		await editor.focus();
 		await agents.keyboard.insertText('Keep this draft after reload');
 		await editor.waitForEditorContents(value => value === 'Keep this draft after reload');
 		expect(await application.evaluate(({ app }) => (app as StartupProbeApp).sessionsStartupProbe.events)).toEqual(['connection-started', 'page-loading']);
 		await agents.reload();
 		await expect(input).toBeEditable();
-		await editor.waitForEditorFocus();
+		await editor.focus();
 		await agents.keyboard.press('ControlOrMeta+A');
 		await agents.keyboard.press('Backspace');
 		await agents.keyboard.insertText('Connection reinitialized');

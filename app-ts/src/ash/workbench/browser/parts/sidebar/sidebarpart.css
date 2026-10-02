@@ -2,18 +2,18 @@
 .ash-workbench-agentSidebar {
   border: 0;
   border-radius: 0;
-  background: var(--ash-side-bar-background);
+  background: var(--ash-sideBar-background);
 }
 
 .ash-workbench-sidebar {
-  border-right: var(--ash-stroke-thickness) solid var(--ash-border);
+  border-right: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
 .ash-workbench-agentSidebar {
-  border-left: var(--ash-stroke-thickness) solid var(--ash-border);
+  border-left: var(--ash-strokeThickness) solid var(--ash-border);
 }
 .ash-sidebar-part {
-  background: var(--ash-side-bar-background);
+  background: var(--ash-sideBar-background);
 }
 .ash-sidebar-part > .ash-composite-content { overflow: auto; }
 
@@ -36,8 +36,8 @@
 	padding: 0 var(--ash-spacing-size120);
 	overflow: hidden;
 	color: var(--ash-foreground);
-	font-size: var(--ash-font-size-body1);
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-semiBold);
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }

@@ -1,5 +1,9 @@
+import { RawContextKey } from '../../contextkey/common/contextkey.js';
 import { AbstractDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
+
+/** A focused view supplies its own Alt+F1 help instead of the shared accessible view. */
+export const LocalAccessibilityHelpContext = new RawContextKey<boolean>('localAccessibilityHelp', false);
 
 export const enum AccessibleViewProviderId {
 	InspectEditorTokens = 'inspectEditorTokens',

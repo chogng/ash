@@ -4,8 +4,8 @@
   height: 32px;
   padding: 4px 6px;
   overflow: hidden;
-  color: var(--ash-status-bar-foreground);
-  background: var(--ash-status-bar-background);
+  color: var(--ash-statusBar-foreground);
+  background: var(--ash-statusBar-background);
   font-size: 12px;
   flex-direction: row;
   align-items: stretch;

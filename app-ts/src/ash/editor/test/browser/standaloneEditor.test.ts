@@ -1,3 +1,4 @@
+import { h as createDomElement, } from '../../../base/browser/dom.js';
 import { createLanguageFeatureRequest, TokenizationRegistry } from '../../common/languages.js';
 import { Emitter } from '../../../base/common/event.js';
 import { editorWorkerWireCodec, EditorWorker } from '../../common/services/editorWebWorker.js';
@@ -242,7 +243,7 @@ test('standalone colorization escapes markup, expands tabs and creates no model 
 	const models = stanza.editor.getModels().length;
 	const workers = createdWorkerCount;
 	const html = await stanza.editor.colorize('\uFEFFword\t<img>\r\n&', 'colorize-test', { tabSize: 3 });
-	const element = document.createElement('pre');
+	const element = createDomElement(document, 'pre');
 	element.innerHTML = html;
 	assert.equal(element.textContent, 'word\u00a0\u00a0<img>&');
 	assert.equal(element.querySelectorAll('br').length, 1);
@@ -288,7 +289,7 @@ test("standalone public API keeps compiled theme snapshots internal", () => {
 });
 
 test('standalone editors can start without allocating a model or worker and attach a shared model later', () => {
-	const container = browserEnvironment.window.document.createElement('div');
+	const container = createDomElement(browserEnvironment.window.document, 'div');
 	browserEnvironment.window.document.body.append(container);
 	const models = stanza.editor.getModels();
 	const workers = createdWorkerCount;
@@ -317,7 +318,7 @@ test('standalone editors can start without allocating a model or worker and atta
 });
 
 test('standalone updateOptions changes the window theme and forced-color preference', () => {
-	const container = browserEnvironment.window.document.createElement('div');
+	const container = createDomElement(browserEnvironment.window.document, 'div');
 	browserEnvironment.window.document.body.append(container);
 	using editor = stanza.editor.create(container, { value: 'theme' });
 	try {

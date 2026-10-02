@@ -1,3 +1,4 @@
+import { h as createDomElement } from '../../../base/browser/dom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -18,8 +19,8 @@ class TestView implements IView {
 	public bounds: IPositionedRectangle | undefined;
 
 	constructor(document: Document) {
-		this.element = document.createElement('div');
-		this.element.append(document.createElement('input'));
+		this.element = createDomElement(document, 'div');
+		this.element.append(createDomElement(document, 'input'));
 	}
 
 	public layout(bounds: IPositionedRectangle): void {

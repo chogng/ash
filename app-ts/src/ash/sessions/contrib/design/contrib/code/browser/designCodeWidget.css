@@ -29,7 +29,7 @@
 	min-height: 0;
 	width: 100%;
 	padding: var(--ash-spacing-size120);
-	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
 	border-radius: var(--ash-cornerRadius-medium);
 	background: var(--ash-input-background);
 	color: var(--ash-input-foreground);
@@ -41,6 +41,6 @@
 }
 
 .ash-design-code-widget textarea:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }

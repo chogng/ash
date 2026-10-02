@@ -25,7 +25,10 @@ fn actual_tui_recalls_input_history_after_process_restart() {
     second.wait_for_stable_screen("> Remember this input across restarts");
     // These snapshots capture the settled screen, after the startup hint has faded.
     second.wait_for_screen_to_omit("ask permissions on");
-    second.assert_snapshot("real/14-input-history/recalled-after-restart");
+    second.assert_snapshot(
+        "real/14-input-history/recalled-after-restart",
+        "> Remember this input across restarts",
+    );
     assert_eq!(server.request_count(), 1);
     second.down();
     second.send(&[0x12]);
@@ -64,7 +67,10 @@ fn actual_tui_runs_three_complete_conversation_turns() {
 
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_screen("Start a task below, or continue a previous session.");
-    process.assert_snapshot("real/01-conversation/00-started");
+    process.assert_snapshot(
+        "real/01-conversation/00-started",
+        "Start a task below, or continue a previous session.",
+    );
 
     process.type_text("第一轮：请确认输入、流式输出和 Unicode 🚀");
     process.enter();
@@ -88,7 +94,10 @@ fn actual_tui_runs_three_complete_conversation_turns() {
     process.wait_for_stable_screen("连续多轮对话已完成");
     process.refresh_policy_tip();
     assert!(process.screen().contains("shift+↓/↑ effort"));
-    process.assert_snapshot("real/01-conversation/02-third-turn-complete");
+    process.assert_snapshot(
+        "real/01-conversation/02-third-turn-complete",
+        "连续多轮对话已完成",
+    );
 
     let bodies = server.request_bodies();
     assert_eq!(bodies.len(), 3);
@@ -115,7 +124,7 @@ fn actual_tui_displays_git_branch_and_changes() {
     process.wait_for_stable_screen("1 change");
     assert!(process.screen().lines().next().unwrap().contains("main"));
     process.wait_for_screen_to_omit("ask permissions on");
-    process.assert_snapshot("real/08-git/00-branch-and-change");
+    process.assert_snapshot("real/08-git/00-branch-and-change", "1 change");
     process.quit();
 }
 
@@ -139,11 +148,10 @@ fn actual_tui_queues_restores_and_completes_messages() {
 
     process.type_text("第二条：应该保留并自动发送");
     process.enter();
-    process.wait_for_screen("第二条：应该保留并自动发送");
+    process.wait_for_queued_message(1, "第二条：应该保留并自动发送");
     process.type_text("第三条：稍后恢复到输入框");
     process.enter();
-    process.wait_for_screen("第三条：稍后恢复到输入框");
-    process.wait_for_screen("shift+tab mode");
+    process.wait_for_queued_message(2, "第三条：稍后恢复到输入框");
 
     process.alt_up();
     process.wait_for_screen("> Queue 2: 第三条：稍后恢复到输入框");
@@ -183,7 +191,10 @@ fn actual_tui_sandbox_approves_and_declines_real_file_tool_calls() {
     approve.type_text("请创建 approved-by-tui.txt");
     approve.enter();
     approve.wait_for_screen("Approval required");
-    approve.assert_snapshot("real/03-approval/00-approve-request");
+    // Approval can arrive before or after the transient startup policy hint expires.
+    approve.wait_for_screen_to_omit("/policy to change permissions");
+    approve.wait_for_stable_screen("> Approve once");
+    approve.assert_snapshot("real/03-approval/00-approve-request", "> Approve once");
     approve.down();
     approve.up();
     approve.enter();
@@ -193,12 +204,15 @@ fn actual_tui_sandbox_approves_and_declines_real_file_tool_calls() {
     approve.wait_for_stable_screen("文件写入完成");
     approve.refresh_policy_tip();
     approve.wait_for_stable_screen("ask permissions on");
-    approve.assert_snapshot("real/03-approval/01-approved-final");
+    approve.assert_snapshot("real/03-approval/01-approved-final", "文件写入完成");
     approve.control_up();
     approve.up();
     approve.space();
     approve.wait_for_screen("approved through the real TUI");
-    approve.assert_snapshot("real/03-approval/04-ask-permissions-details");
+    approve.assert_snapshot(
+        "real/03-approval/04-ask-permissions-details",
+        "approved through the real TUI",
+    );
     let approve_bodies = approve_server.request_bodies();
     assert!(
         approve_bodies[1].contains("wrote"),
@@ -234,7 +248,9 @@ fn actual_tui_sandbox_approves_and_declines_real_file_tool_calls() {
     decline.submit("请尝试创建 declined-by-tui.txt");
     decline.wait_for_screen("Approval required");
     decline.down();
-    decline.assert_snapshot("real/03-approval/02-decline-selected");
+    decline.wait_for_screen_to_omit("/policy to change permissions");
+    decline.wait_for_stable_screen("> Decline");
+    decline.assert_snapshot("real/03-approval/02-decline-selected", "> Decline");
     decline.enter();
     decline_gate.wait_until_reached();
     decline.wait_for_screen("工具调用被用户拒绝");
@@ -242,7 +258,7 @@ fn actual_tui_sandbox_approves_and_declines_real_file_tool_calls() {
     decline.wait_for_stable_screen("没有写入文件");
     decline.refresh_policy_tip();
     decline.wait_for_stable_screen("ask permissions on");
-    decline.assert_snapshot("real/03-approval/03-declined-final");
+    decline.assert_snapshot("real/03-approval/03-declined-final", "没有写入文件");
     assert!(decline_fixture.find_file("declined-by-tui.txt").is_none());
     assert!(decline_server.request_bodies()[1].contains("declin"));
     decline.quit();
@@ -283,11 +299,17 @@ fn actual_tui_sandbox_approval_modes_change_file_tool_authority() {
     auto.wait_for_screen("自动审查拒绝了工具");
     auto_gate.wait_until_reached();
     assert!(auto_fixture.find_file("auto-reviewed.txt").is_none());
-    auto.submit("/policy bypass-permissions");
+    auto.type_text("/policy bypass-permissions");
+    // Input progress is separate from observing the transient policy hint during this Turn.
+    auto.enter();
     auto.wait_for_screen("current: auto review on");
+    auto.wait_for_screen("next: bypass permissions on");
+    assert!(auto.screen().contains("current: auto review on"));
+    assert!(auto_fixture.find_file("auto-reviewed.txt").is_none());
     // Inspect the review result after the follow-up turn can finish.
     auto_gate.release();
     auto.wait_for_stable_screen("文件没有写入");
+    assert!(auto_fixture.find_file("auto-reviewed.txt").is_none());
     auto.control_up();
     auto.up();
     auto.space();
@@ -322,14 +344,17 @@ fn actual_tui_sandbox_approval_modes_change_file_tool_authority() {
     bypass.wait_for_stable_screen("文件直接写入完成");
     bypass.refresh_policy_tip();
     bypass.wait_for_stable_screen("bypass permissions on");
-    bypass.assert_snapshot("real/03-approval/07-bypass-final");
+    bypass.assert_snapshot("real/03-approval/07-bypass-final", "文件直接写入完成");
     bypass.control_up();
     bypass.up();
     bypass.space();
     bypass.wait_for_screen("written with permission bypass");
     bypass.refresh_policy_tip();
     bypass.wait_for_stable_screen("/policy to change permissions");
-    bypass.assert_snapshot("real/03-approval/08-bypass-details");
+    bypass.assert_snapshot(
+        "real/03-approval/08-bypass-details",
+        "written with permission bypass",
+    );
     let bypassed_thread_path = bypass_fixture.find_file("permission-bypassed.txt").unwrap();
     assert_eq!(
         fs::read_to_string(bypassed_thread_path).unwrap(),

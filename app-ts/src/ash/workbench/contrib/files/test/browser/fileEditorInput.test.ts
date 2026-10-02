@@ -6,7 +6,7 @@ import { FileEditorInputSerializer } from '../../browser/editors/fileEditorHandl
 import { FILE_EDITOR_INPUT_ID, FileEditorInput } from '../../browser/editors/fileEditorInput.js';
 
 test('File editor input restores its file identity and selected language after a working-set round trip', () => {
-	const resource = URI.file('C:\\project\\notes.txt');
+	const resource = URI.file('C:/project/notes.txt');
 	const input = new FileEditorInput(resource, { label: 'Notes', languageId: 'markdown', readOnly: true });
 	const serialized = EditorInputSerializers.serialize(input);
 	assert.equal(serialized.typeId, FILE_EDITOR_INPUT_ID);
@@ -20,8 +20,8 @@ test('File editor input restores its file identity and selected language after a
 });
 
 test('File editor input rejects non-file resources and corrupt restored data', () => {
-	assert.equal(new FileEditorInput(URI.file('C:\\project\\hello %中.txt')).label, 'hello %中.txt');
+	assert.equal(new FileEditorInput(URI.file('C:/project/hello %中.txt')).label, 'hello %中.txt');
 	assert.throws(() => new FileEditorInput(URI.parse('untitled:/draft')), /file resource/);
 	assert.throws(() => new FileEditorInputSerializer().deserialize({ resource: 'untitled:/draft' }), /file resource/);
-	assert.throws(() => new FileEditorInputSerializer().deserialize({ resource: URI.file('C:\\project\\notes.txt').toString(), readOnly: 'yes' }), /boolean/);
+	assert.throws(() => new FileEditorInputSerializer().deserialize({ resource: URI.file('C:/project/notes.txt').toString(), readOnly: 'yes' }), /boolean/);
 });

@@ -6,4 +6,6 @@
 
 显式设置 `SHERPA_ONNX_LIB_DIR` 时使用调用方提供的库目录。`SHERPA_ONNX_ARCHIVE_DIR` 可以提供锁定归档的本地副本，仍须匹配大小与哈希。直接调用 Cargo 不经过资源准备入口，遵循上游构建脚本的下载行为。预热共享资源后，仓库入口的离线构建无需再下载 Sherpa。
 
+Bazel 的 Linux GNU 目标通过 [`BUILD.bazel`](BUILD.bazel) 为 `sherpa-onnx-sys` 提供锁定 LLVM 工具链从源码构建的 `libstdc++`，同时声明链接名称与运行时 SONAME。Sherpa 预编译库使用 GNU C++ ABI，不能用默认 `libc++` 替代；这项依赖随 Sherpa 传播，不读取宿主机 C++ 库目录，也不切换其他依赖的工具链。
+
 目标到资源的映射沿用当前上游 `sherpa-onnx-sys`；Linux GNU 与 musl 使用相同归档，这不表示 musl 链接已通过验证。升级时同步审阅上游构建脚本的链接输入、所有目标资源和 Cargo.lock，并运行资源测试及目标平台构建。

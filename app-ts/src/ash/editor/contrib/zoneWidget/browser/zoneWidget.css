@@ -15,8 +15,8 @@
 }
 
 .stanza-editor-zone-widget.show-frame .stanza-editor-zone-widget-container {
-  border-top-color: var(--stanza-zone-widget-frame-color, var(--ash-focus-border));
-  border-bottom-color: var(--stanza-zone-widget-frame-color, var(--ash-focus-border));
+  border-top-color: var(--stanza-zone-widget-frame-color, var(--ash-focusBorder));
+  border-bottom-color: var(--stanza-zone-widget-frame-color, var(--ash-focusBorder));
 }
 
 .stanza-editor-zone-widget-arrow {
@@ -27,7 +27,7 @@
   border-style: solid;
   border-color: transparent;
   border-width: var(--stanza-zone-widget-arrow-size);
-  border-bottom-color: var(--stanza-zone-widget-arrow-color, var(--ash-focus-border));
+  border-bottom-color: var(--stanza-zone-widget-arrow-color, var(--ash-focusBorder));
   transform: translate(-50%, -50%);
   pointer-events: none;
 }

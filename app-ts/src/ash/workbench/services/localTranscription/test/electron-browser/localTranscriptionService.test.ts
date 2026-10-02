@@ -165,7 +165,7 @@ suite('LocalTranscriptionService', () => {
 		fixture.transcript('late', true);
 		assert.deepEqual({ requests: fixture.client.requests, results }, {
 			requests: [
-				{ method: 'dictation/start', resourceId: fixture.resourceId, backend: { type: 'local', modelId: 'selected-model' } },
+				{ method: 'dictation/start', resourceId: fixture.resourceId, backend: { type: 'local', modelId: 'selected-model' }, inputDevice: null, language: null },
 				{ method: 'dictation/stop', resourceId: fixture.resourceId },
 			],
 			results: [{ text: 'interim', isFinal: false }, { text: 'final text', isFinal: true }],

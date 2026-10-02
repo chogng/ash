@@ -30,6 +30,7 @@ fn timeline_groups_shell_result_under_its_tool_call() {
             turn_id: TurnId::new("turn").unwrap(),
             status: TurnStatus::Completed,
             kind: ash_protocol::TurnKind::Coding,
+            mode: ash_protocol::CollaborationMode::Agent,
             instructions: None,
             model: None,
             reasoning_effort: None,

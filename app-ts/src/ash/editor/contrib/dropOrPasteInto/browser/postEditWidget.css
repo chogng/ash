@@ -2,18 +2,18 @@
 	max-width: min(240px, calc(100vw - 16px));
 	padding: 4px 8px;
 	color: var(--ash-editor-foreground);
-	background: var(--ash-editor-hover-background, var(--ash-editor-background));
-	border: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-	border-radius: var(--ash-corner-radius-small);
-	font-size: var(--ash-font-size-body2);
+	background: var(--ash-editor-hoverBackground, var(--ash-editor-background));
+	border: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	border-radius: var(--ash-cornerRadius-small);
+	font-size: var(--ash-fontSize-body2);
 }
 
 .stanza-editor-post-edit-selector:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: 2px;
 }
 
 [data-color-scheme="high-contrast-dark"] .stanza-editor-post-edit-selector,
 [data-color-scheme="high-contrast-light"] .stanza-editor-post-edit-selector {
-	border-color: var(--ash-focus-border);
+	border-color: var(--ash-focusBorder);
 }

@@ -297,24 +297,26 @@ export class ScrollableElement extends Disposable {
 		const elementBounds = element.getBoundingClientRect();
 		let left = this._state.left;
 		let top = this._state.top;
+		// Layout edges stay fractional even when the browser quantizes scroll offsets.
+		// Round toward the reveal direction so the requested edge remains fully visible.
 		if (this.options.direction !== "vertical") {
 			const viewportLeft = viewportBounds.left;
-			const viewportRight = viewportBounds.left + this._state.width -
+			const viewportRight = viewportBounds.right -
 				(this.vertical.rendered ? this.options.scrollbarSize : 0);
 			if (elementBounds.left < viewportLeft) {
-				left += elementBounds.left - viewportLeft;
+				left = Math.floor(left + elementBounds.left - viewportLeft);
 			} else if (elementBounds.right > viewportRight) {
-				left += elementBounds.right - viewportRight;
+				left = Math.ceil(left + elementBounds.right - viewportRight);
 			}
 		}
 		if (this.options.direction !== "horizontal") {
 			const viewportTop = viewportBounds.top;
-			const viewportBottom = viewportBounds.top + this._state.height -
+			const viewportBottom = viewportBounds.bottom -
 				(this.horizontal.rendered ? this.options.scrollbarSize : 0);
 			if (elementBounds.top < viewportTop) {
-				top += elementBounds.top - viewportTop;
+				top = Math.floor(top + elementBounds.top - viewportTop);
 			} else if (elementBounds.bottom > viewportBottom) {
-				top += elementBounds.bottom - viewportBottom;
+				top = Math.ceil(top + elementBounds.bottom - viewportBottom);
 			}
 		}
 		this.setScrollPosition(left, top);
@@ -439,6 +441,9 @@ export class ScrollableElement extends Disposable {
 		if (left === this._state.left && top === this._state.top) return false;
 		this.scrollableElement.scrollLeft = left;
 		this.scrollableElement.scrollTop = top;
+		left = this.scrollableElement.scrollLeft;
+		top = this.scrollableElement.scrollTop;
+		if (left === this._state.left && top === this._state.top) return false;
 		this.commitState({ ...this._state, left, top });
 		this.showScrollbars();
 		return true;

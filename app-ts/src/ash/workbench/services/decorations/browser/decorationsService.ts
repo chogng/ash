@@ -1,3 +1,4 @@
+import { h as createDomElement, } from '../../../../base/browser/dom.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
@@ -38,7 +39,7 @@ export class DecorationsService extends Disposable implements IDecorationsServic
 
 	constructor(document: Document, @ILogService private readonly logService: ILogService) {
 		super();
-		this.style = document.createElement('style');
+		this.style = createDomElement(document, 'style');
 		this.style.dataset.ashDecorations = '';
 		document.head.append(this.style);
 		this._register(toDisposable(() => this.style.remove()));
@@ -104,10 +105,10 @@ export class DecorationsService extends Disposable implements IDecorationsServic
 				rules.push(`.ash-icon-label.${className}-color > .ash-icon-label-container { color: var(${colorCssVariable(data.color)}); }`);
 			}
 			if (typeof data.letter === 'string') {
-				rules.push(`.ash-icon-label.${className}-badge::after { content: ${cssString(data.letter)}; flex: 0 0 auto; font-size: var(--ash-font-size-label2); color: ${data.color ? `var(${colorCssVariable(data.color)})` : 'inherit'}; }`);
+				rules.push(`.ash-icon-label.${className}-badge::after { content: ${cssString(data.letter)}; flex: 0 0 auto; font-size: var(--ash-fontSize-label2); color: ${data.color ? `var(${colorCssVariable(data.color)})` : 'inherit'}; }`);
 			} else if (data.letter) {
 				const artwork = encodeURIComponent(resolveIconDefinition(data.letter)());
-				rules.push(`.ash-icon-label.${className}-icon::after { content: ''; flex: 0 0 auto; width: var(--ash-lxicon-font-size-compact); height: var(--ash-lxicon-font-size-compact); background-color: ${data.color ? `var(${colorCssVariable(data.color)})` : 'currentColor'}; mask: url("data:image/svg+xml,${artwork}") center / contain no-repeat; }`);
+				rules.push(`.ash-icon-label.${className}-icon::after { content: ''; flex: 0 0 auto; width: var(--ash-lxiconFontSize-compact); height: var(--ash-lxiconFontSize-compact); background-color: ${data.color ? `var(${colorCssVariable(data.color)})` : 'currentColor'}; mask: url("data:image/svg+xml,${artwork}") center / contain no-repeat; }`);
 			}
 			style = { className, css: rules.join('\n'), references: 0 };
 			this.styles.set(signature, style);

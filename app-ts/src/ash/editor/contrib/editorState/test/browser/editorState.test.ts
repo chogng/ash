@@ -1,3 +1,4 @@
+import { h as createDomElement } from '../../../../../base/browser/dom.js';
 import '../../../../test/browser/testEditorDom.js';
 import { browserEnvironment as environment } from '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
@@ -13,7 +14,7 @@ import { EditorKeybindingCancellationTokenSource } from '../../browser/keybindin
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 
 function createEditor(model: TextModel): ReturnType<typeof createTestCodeEditor> {
-	const container = environment.window.document.createElement('div');
+	const container = createDomElement(environment.window.document, 'div');
 	environment.window.document.body.append(container);
 	const editor = createTestCodeEditor({
 		container,

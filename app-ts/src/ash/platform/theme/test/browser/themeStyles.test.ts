@@ -50,6 +50,12 @@ test("color theme binding applies changes and restores prior root styles", () =>
 	assert.equal(target.style.getPropertyValue(asCssVariableName("spacing.size80")), "8px");
 	assert.equal(target.style.getPropertyValue(asCssVariableName("cornerRadius.circle")), "9999px");
 	assert.equal(target.style.getPropertyValue(asCssVariableName("lxiconFontSize.compact")), "12px");
+	assert.deepEqual([
+		target.style.getPropertyValue('--ash-focusBorder'),
+		target.style.getPropertyValue('--ash-fontSize-body1'),
+		target.style.getPropertyValue('--ash-focus-border'),
+		target.style.getPropertyValue('--ash-font-size-body1'),
+	], ['#007fd4', '13px', '', '']);
 	assert.equal(target.getAttribute("data-color-theme"), "ash-dark");
 
 	service.setColorTheme(lightColorTheme);

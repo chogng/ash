@@ -19,8 +19,9 @@ export class ModelCard extends Disposable {
 	private readonly error: HTMLElement;
 	private selectedEffort: ModelReasoningEffort | undefined;
 
-	constructor(private readonly options: IModelCardOptions, ownerDocument: Document) {
+	constructor(container: HTMLElement, private readonly options: IModelCardOptions) {
 		super();
+		const ownerDocument = container.ownerDocument;
 		const { entry } = options;
 		this.selectedEffort = options.selectedEffort;
 		this.domNode = h(ownerDocument, 'section');

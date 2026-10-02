@@ -47,7 +47,7 @@ impl Server {
             .arg("--config")
             .arg(&config)
             .stdin(Stdio::null())
-            .stdout(Stdio::null())
+            .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .spawn()
             .unwrap();
@@ -402,7 +402,23 @@ async fn screen_share_transmits_decoded_frames_and_republishes_after_stop() {
         let track = timeout(Duration::from_secs(15), async {
             let mut received = 0;
             loop {
-                if let Some(livekit_client::MediaEvent::Video(frame)) = viewer.next_event().await {
+                let event = tokio::select! {
+                    event = presenter.next_event() => {
+                        eprintln!("presenter event: {event:?}");
+                        assert!(
+                            !matches!(event, None | Some(livekit_client::MediaEvent::ScreenStopped { .. } | livekit_client::MediaEvent::Disconnected)),
+                            "screen publisher stopped before delivering frames: {event:?}"
+                        );
+                        continue;
+                    }
+                    event = viewer.next_event() => event,
+                };
+                if !matches!(event, Some(livekit_client::MediaEvent::Video(_))) {
+                    eprintln!("viewer event: {event:?}");
+                }
+                assert!(event.is_some(), "viewer event stream closed");
+                if let Some(livekit_client::MediaEvent::Video(frame)) = event {
+                    eprintln!("decoded screen frame: {} {}x{}", frame.track_id, frame.width, frame.height);
                     assert_eq!(frame.participant_id, "presenter");
                     assert_eq!(
                         (frame.width, frame.height, frame.rgba.len()),

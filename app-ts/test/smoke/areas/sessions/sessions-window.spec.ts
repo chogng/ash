@@ -4,7 +4,7 @@ import type { Locator, Page } from '@playwright/test';
 import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
-import { launchElectron } from '../../../automation/playwrightElectron.js';
+import { launchElectron, waitForNewElectronWindow } from '../../../automation/playwrightElectron.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 
@@ -67,7 +67,7 @@ async function rightClickCanvasShape(shape: Locator): Promise<void> {
 }
 
 async function replaceChatInput(editor: Editor, text: string): Promise<void> {
-	await editor.waitForEditorFocus();
+	await editor.focus();
 	await editor.input.page().keyboard.press('ControlOrMeta+A');
 	await editor.input.page().keyboard.press('Backspace');
 	await editor.input.page().keyboard.insertText(text);
@@ -76,7 +76,7 @@ async function replaceChatInput(editor: Editor, text: string): Promise<void> {
 test('Sessions dictation introduction preserves the draft and restores focus after accessible help', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'Uses the Sessions desktop window.');
 	if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
-	const opened = application.waitForEvent('window');
+	const opened = waitForNewElectronWindow(application, 'sessions');
 	await workbench.page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 	const page = await opened;
 	const chat = page.locator('.ash-sessions-chat-slot .ash-chat:visible').first();
@@ -193,7 +193,7 @@ test('Sessions Design canvas keeps grid and cursor readable across themes', asyn
 			if (!('windows' in application)) {
 				throw new Error('Expected Electron windows');
 			}
-			const opened = application.waitForEvent('window');
+			const opened = waitForNewElectronWindow(application, 'sessions');
 			await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 			page = await opened;
 		}
@@ -212,7 +212,7 @@ test('Sessions Design canvas keeps grid and cursor readable across themes', asyn
 			probe.style.color = 'var(--ash-foreground)';
 			const foreground = getComputedStyle(probe).color;
 			probe.remove();
-			return { cursorColor, foreground, grid: styles.getPropertyValue('--ash-sessions-design-grid-line').trim(), contrast: styles.getPropertyValue('--ash-contrast-border').trim() };
+			return { cursorColor, foreground, grid: styles.getPropertyValue('--ash-sessions-design-grid-line').trim(), contrast: styles.getPropertyValue('--ash-contrastBorder').trim() };
 		});
 		expect(colors.cursorColor).toBe(colors.foreground);
 		if (scheme.startsWith('high-contrast')) {
@@ -237,7 +237,7 @@ test('Sessions Design contribution keeps its viewport and applies canvas cursor 
 		if (!('windows' in application)) {
 			throw new Error('Expected Electron windows');
 		}
-		const opened = application.waitForEvent('window');
+		const opened = waitForNewElectronWindow(application, 'sessions');
 		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 		page = await opened;
 	}
@@ -357,7 +357,7 @@ test('Sessions Design floating tools draw, edit motion and expose reusable code'
 		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	} else {
 		if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
-		const opened = application.waitForEvent('window');
+		const opened = waitForNewElectronWindow(application, 'sessions');
 		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 		page = await opened;
 	}
@@ -365,6 +365,8 @@ test('Sessions Design floating tools draw, edit motion and expose reusable code'
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	const tools = canvas.locator('.ash-design-tools-widget');
 	const viewport = canvas.locator('.ash-sessions-design-viewport');
+	await expect(canvas).toBeVisible();
+	await expect(tools).toBeVisible();
 	const viewportBounds = (await viewport.boundingBox())!;
 	const toolsBounds = (await tools.boundingBox())!;
 	expect(toolsBounds.height).toBeLessThanOrEqual(48);
@@ -468,6 +470,23 @@ test('Sessions Design floating tools draw, edit motion and expose reusable code'
 		expect(narrowBounds.x).toBeGreaterThanOrEqual(narrowViewport.x);
 		expect(narrowBounds.x + narrowBounds.width).toBeLessThanOrEqual(narrowViewport.x + narrowViewport.width);
 	}
+	const toolsViewport = tools.locator('.ash-scrollbar-viewport');
+	const drawMode = tools.getByRole('button', { name: 'Draw', exact: true });
+	const codeMode = tools.getByRole('button', { name: 'Code', exact: true });
+	await drawMode.focus();
+	await page.keyboard.press('End');
+	await expect(codeMode).toBeFocused();
+	const scrollBounds = (await toolsViewport.boundingBox())!;
+	const codeBounds = (await codeMode.boundingBox())!;
+	expect(codeBounds.x).toBeGreaterThanOrEqual(scrollBounds.x);
+	expect(codeBounds.x + codeBounds.width).toBeLessThanOrEqual(scrollBounds.x + scrollBounds.width);
+	await page.keyboard.press('Home');
+	await expect(drawMode).toBeFocused();
+	const drawBounds = (await drawMode.boundingBox())!;
+	expect(drawBounds.x).toBeGreaterThanOrEqual(scrollBounds.x);
+	expect(drawBounds.x + drawBounds.width).toBeLessThanOrEqual(scrollBounds.x + scrollBounds.width);
+	expect((await tools.boundingBox())!.height).toBeLessThanOrEqual(48);
+	expect(await tools.getByRole('button').evaluateAll(buttons => [...new Set(buttons.map(button => Math.round(button.getBoundingClientRect().top)))])).toHaveLength(1);
 });
 
 test('Sessions Design canvas context menu edits the pointed object and preserves keyboard focus', async ({ application, target, workbench }) => {
@@ -477,7 +496,7 @@ test('Sessions Design canvas context menu edits the pointed object and preserves
 		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	} else {
 		if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
-		const opened = application.waitForEvent('window');
+		const opened = waitForNewElectronWindow(application, 'sessions');
 		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 		page = await opened;
 	}
@@ -535,7 +554,7 @@ test('Sessions Design canvas context menu edits the pointed object and preserves
 test('Sessions Design macOS canvas menu dispatches editing through Main', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code' || process.platform !== 'darwin');
 	if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
-	const opened = application.waitForEvent('window');
+	const opened = waitForNewElectronWindow(application, 'sessions');
 	await workbench.page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 	const page = await opened;
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
@@ -575,7 +594,7 @@ test('Sessions Design edits vector geometry and preserves a complete undo gestur
 		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	} else {
 		if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
-		const opened = application.waitForEvent('window');
+		const opened = waitForNewElectronWindow(application, 'sessions');
 		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 		page = await opened;
 	}
@@ -643,7 +662,7 @@ test('Sessions Design saves and reopens an editable file through App Server', as
 		dialog.showSaveDialog = async () => ({ canceled: false, filePath: path });
 		dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
 	}, filePath);
-	const opened = application.waitForEvent('window');
+	const opened = waitForNewElectronWindow(application, 'sessions');
 	await workbench.page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 	const page = await opened;
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
@@ -746,7 +765,7 @@ test('Sessions Design edits text and Bézier handles and transforms groups with 
 		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	} else {
 		if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
-		const opened = application.waitForEvent('window');
+		const opened = waitForNewElectronWindow(application, 'sessions');
 		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 		page = await opened;
 	}
@@ -844,7 +863,7 @@ test('Sessions Design exports SVG and HTML and reopens grouped text and paths th
 			dialog.showSaveDialog = async () => ({ canceled: false, filePath: `${folder}/design.ash-design.json` });
 			dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [`${folder}/design.ash-design.json`] });
 		}, directory);
-		const opened = application.waitForEvent('window');
+		const opened = waitForNewElectronWindow(application, 'sessions');
 		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 		page = await opened;
 	}
@@ -925,7 +944,7 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	} else {
 		if (!('windows' in application)) throw new Error('Expected Electron windows');
-		const opened = application.waitForEvent('window');
+		const opened = waitForNewElectronWindow(application, 'sessions');
 		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 		page = await opened;
 	}
@@ -969,7 +988,7 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 	await expect(composer.getByRole('button', { name: 'Remove dropped.md', exact: true })).toHaveCount(0);
 	await composer.getByRole('button', { name: 'Dismiss tip', exact: true }).click();
 	await expect(composer.locator('.ash-chat-input-tip')).toHaveCount(0);
-	await editor.waitForEditorFocus();
+	await editor.focus();
 	await page.reload({ waitUntil: 'domcontentloaded' });
 	await new Editor(composer).waitForEditorContents(contents => contents === 'Keep the attached draft');
 	await expect(composer.getByRole('button', { name: 'Remove context.ts', exact: true })).toBeVisible();
@@ -999,7 +1018,7 @@ test('Sessions composer configuration leaves Workbench input defaults unchanged'
 	await defaultInput.getByRole('textbox', { name: 'Chat message' }).focus();
 	const focusBorder = await defaultInput.evaluate(element => {
 		const probe = document.createElement('span');
-		probe.style.color = 'var(--ash-focus-border)';
+		probe.style.color = 'var(--ash-focusBorder)';
 		element.append(probe);
 		const color = getComputedStyle(probe).color;
 		probe.remove();
@@ -1015,7 +1034,7 @@ test('Sessions composer configuration leaves Workbench input defaults unchanged'
 		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	} else {
 		if (!('windows' in application)) throw new Error('Expected Electron windows');
-		const opened = application.waitForEvent('window');
+		const opened = waitForNewElectronWindow(application, 'sessions');
 		await parent.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 		page = await opened;
 	}
@@ -1048,7 +1067,7 @@ test('Sessions chat fills its content area without a duplicate session title', a
 		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	} else {
 		if (!('windows' in application)) throw new Error('Expected Electron windows');
-		const opened = application.waitForEvent('window');
+		const opened = waitForNewElectronWindow(application, 'sessions');
 		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 		page = await opened;
 	}
@@ -1075,7 +1094,7 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	} else {
 		if (!('windows' in application)) throw new Error('Expected Electron windows');
-		const opened = application.waitForEvent('window');
+		const opened = waitForNewElectronWindow(application, 'sessions');
 		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 		page = await opened;
 	}
@@ -1163,7 +1182,7 @@ test('Sessions input card keeps a visible border without shadow or focus outline
 			await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 		} else {
 			if (!('windows' in application)) throw new Error('Expected Electron windows');
-			const opened = application.waitForEvent('window');
+			const opened = waitForNewElectronWindow(application, 'sessions');
 			await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 			page = await opened;
 		}
@@ -1197,7 +1216,7 @@ test.describe('Notification Center', () => {
 			await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 		} else {
 			if (!('windows' in application)) throw new Error('Expected an Electron application');
-			const opened = application.waitForEvent('window');
+			const opened = waitForNewElectronWindow(application, 'sessions');
 			await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 			page = await opened;
 		}
@@ -1254,7 +1273,7 @@ test('Code chat mode menu shows the available icons and selection', async ({ app
 		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	} else {
 		if (!('windows' in application)) throw new Error('Expected an Electron application');
-		const sessionPagePromise = application.waitForEvent('window');
+		const sessionPagePromise = waitForNewElectronWindow(application, 'sessions');
 		await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 		page = await sessionPagePromise;
 	}
@@ -1272,7 +1291,7 @@ test('Code chat mode menu shows the available icons and selection', async ({ app
 	const inputContainer = page.locator('.ash-chat-input-container').filter({ has: modeButton });
 	await inputContainer.evaluate(element => element.style.width = '230px');
 	await expect(modeButton.locator('.ash-chat-input-mode-action-label')).toBeHidden();
-	await expect(modeButton).toHaveAttribute('aria-label', 'Agent');
+	await expect(modeButton).toHaveAttribute('aria-label', 'Mode: Agent');
 	await inputContainer.evaluate(element => element.style.width = '');
 	await expect(modeButton.locator('.ash-chat-input-mode-action-label')).toBeVisible();
 	await modeButton.click();
@@ -1293,9 +1312,9 @@ test('Code chat mode menu shows the available icons and selection', async ({ app
 		await expect(item.locator('.ash-menu-leading-slot .ash-icon-label-icon svg.ash-icon')).toHaveCount(iconId ? 1 : 0);
 		if (iconId) await expect(item.locator('.ash-menu-leading-slot .ash-icon-label-icon svg.ash-icon')).toHaveAttribute('data-ash-icon-id', iconId);
 	}
-	await expect(menu.getByRole('menuitemradio', { name: 'Agent' })).toHaveAttribute('aria-checked', 'true');
+	await expect(menu.getByRole('menuitemradio', { name: 'Agent', exact: true })).toHaveAttribute('aria-checked', 'true');
 	await expect(menu.locator("[data-action-id='ash.chat.input.agent.error']")).toHaveCount(0);
-	const selectedAgent = menu.getByRole('menuitemradio', { name: 'Agent' });
+	const selectedAgent = menu.getByRole('menuitemradio', { name: 'Agent', exact: true });
 	const agentIcon = selectedAgent.locator('.ash-icon-label-icon svg.ash-icon');
 	const selectionCheck = selectedAgent.locator('.ash-menu-leading-check > svg.ash-icon');
 	await expect(agentIcon).toBeVisible();
@@ -1411,7 +1430,7 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await expect(settings.locator('.ash-dialog-title')).toBeHidden();
 	await expect(settings).toHaveCSS('border-top-width', '1px');
 	await expect(settings.locator('.ash-sessions-settings')).toHaveCSS('border-top-width', '0px');
-	await expect(settings.locator('.ash-sessions-settings-list').first()).toHaveCSS('border-top-width', '0px');
+	await expect(settings.locator('.ash-sessions-settings-page-content > .ash-sessions-settings-list')).toHaveCSS('border-top-width', '0px');
 	const settingsCard = settings.locator('.ash-sessions-settings-list.ash-settings-card');
 	for (const card of await settingsCard.all()) { await expect(card).toHaveCSS('border-radius', '8px'); }
 	for (const card of await settingsCard.all()) { await expect(card).toHaveCSS('background-color', /rgb\(/); }
@@ -1653,7 +1672,7 @@ test('Browser Models Settings controls which models appear in the picker', async
 test('Electron Code Sessions Activity Bar follows its position and size settings', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'Requires the Code Sessions window');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
-	const sessionPagePromise = application.waitForEvent('window');
+	const sessionPagePromise = waitForNewElectronWindow(application, 'sessions');
 	await workbench.page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 	const page = await sessionPagePromise;
 	const original = await page.evaluate(async () => {
@@ -1732,7 +1751,7 @@ test('Electron Sessions account menu opens the Sessions settings page', async ({
 			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });
 		});
 	}
-	const sessionPagePromise = application.waitForEvent('window');
+	const sessionPagePromise = waitForNewElectronWindow(application, 'sessions');
 	await workbench.page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 	const page = await sessionPagePromise;
 	const accountButton = page.locator('[data-part="activitybar"] .ash-sessions-activity-bottom button').last();
@@ -1803,7 +1822,7 @@ test('Electron Sessions account menu opens the Sessions settings page', async ({
 test('Sessions and IDE layout styles switch independently', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'Requires the Code Sessions window');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
-	const sessionsPagePromise = application.waitForEvent('window');
+	const sessionsPagePromise = waitForNewElectronWindow(application, 'sessions');
 	await workbench.page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 	const sessionsPage = await sessionsPagePromise;
 	const sessionsWindow = sessionsPage.locator('.ash-sessions-window');
@@ -1862,7 +1881,7 @@ test('Sessions applies an installed extension color theme', async ({ application
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires Code Sessions and App Server extension resources');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const openSessions = workbench.page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button");
-	const sessionPagePromise = application.waitForEvent('window');
+	const sessionPagePromise = waitForNewElectronWindow(application, 'sessions');
 	await openSessions.click();
 	const sessionsPage = await sessionPagePromise;
 	await expect(sessionsPage.locator('.ash-code-sessions-window')).toBeVisible();
@@ -1896,7 +1915,7 @@ test('Open in Agents moves the IDE chat draft into the Agents Window', async ({ 
 	const auxiliaryBar = workbenchPage.locator('[data-part="auxiliarybar"]');
 	await expect(auxiliaryBar).toBeHidden();
 
-	const sessionsPagePromise = application.waitForEvent('window');
+	const sessionsPagePromise = waitForNewElectronWindow(application, 'sessions');
 	await workbenchPage.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 	const sessionsPage = await sessionsPagePromise;
 	const targetEditor = new Editor(sessionsPage.locator('.ash-sessions-chat-slot.active:visible'));
@@ -1938,7 +1957,7 @@ test('Open in Agents selects the same session thread in the Agents Window', asyn
 	expect(sessionId).toBeTruthy();
 	expect(threadId).toBeTruthy();
 
-	const sessionsPagePromise = application.waitForEvent('window');
+	const sessionsPagePromise = waitForNewElectronWindow(application, 'sessions');
 	await workbenchPage.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 	const sessionsPage = await sessionsPagePromise;
 	const targetChat = sessionsPage.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
@@ -1977,10 +1996,9 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	const workbenchPage = workbench.page;
 	const openSessions = workbenchPage.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button");
 	await expect(openSessions).toBeVisible();
-	const sessionPagePromise = application.waitForEvent("window");
+	const sessionPagePromise = waitForNewElectronWindow(application, 'sessions');
 	await openSessions.click();
 	const sessionsPage = await sessionPagePromise;
-	await sessionsPage.waitForLoadState("domcontentloaded");
 	await expect(sessionsPage.locator(".ash-code-sessions-window")).toBeVisible();
 	const resources = await sessionsPage.evaluate(async () => {
 		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
@@ -2050,12 +2068,12 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-workbench-mode", "code");
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-runtime", "electron");
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-workbench-state", "empty");
-	await sessionsPage.emulateMedia({ colorScheme: "dark" });
+	await application.evaluate(({ nativeTheme }) => { nativeTheme.themeSource = 'dark'; });
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-color-theme", "ash-dark");
-	await expect.poll(() => sessionsPage.locator("#app").evaluate(element => getComputedStyle(element).getPropertyValue("--ash-title-bar-background").trim())).toBe("#1e1e1e");
-	await sessionsPage.emulateMedia({ colorScheme: "light" });
+	await expect.poll(() => sessionsPage.locator("#app").evaluate(element => getComputedStyle(element).getPropertyValue("--ash-titleBar-background").trim())).toBe("#1e1e1e");
+	await application.evaluate(({ nativeTheme }) => { nativeTheme.themeSource = 'light'; });
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-color-theme", "ash-light");
-	await expect.poll(() => sessionsPage.locator("#app").evaluate(element => getComputedStyle(element).getPropertyValue("--ash-title-bar-background").trim())).toBe("#ffffff");
+	await expect.poll(() => sessionsPage.locator("#app").evaluate(element => getComputedStyle(element).getPropertyValue("--ash-titleBar-background").trim())).toBe("#ffffff");
 	const originalThemeSettings = await sessionsPage.evaluate(async () => {
 		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
 		const snapshot = await ipc.invoke('ash:configuration:read') as { readonly revision: number; readonly document: { readonly version: 1; readonly source: string } };
@@ -2066,7 +2084,7 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	});
 	await expect(sessionsPage.locator('#app')).toHaveAttribute('data-color-theme', 'ash-dark');
 	await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-dark');
-	await sessionsPage.emulateMedia({ colorScheme: 'dark' });
+	await application.evaluate(({ nativeTheme }) => { nativeTheme.themeSource = 'dark'; });
 	await sessionsPage.evaluate(async document => {
 		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
 		const snapshot = await ipc.invoke('ash:configuration:read') as { readonly revision: number };
@@ -2126,8 +2144,9 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 		await expect(spacer).toBeVisible();
 	}
 	await expect(sessionsPage.locator("[data-part='activitybar']")).toBeVisible();
-	const activityButtons = sessionsPage.locator("[data-part='activitybar'] button");
-	expect(await activityButtons.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['chat-2-filled', 'colab', 'library', 'device-mobile', 'account']);
+	const activityBar = sessionsPage.locator("[data-part='activitybar']");
+	const activityButtons = activityBar.getByRole('button');
+	expect(await activityButtons.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['chat-2-filled', 'colab', 'library', 'code', 'symbol-color', 'device-mobile', 'account']);
 	await expect(sessionsPage.locator('.ash-sessions-activity-bottom button')).toHaveCount(2);
 	const chatButton = activityButtons.first();
 	const chatButtonBounds = await chatButton.boundingBox();
@@ -2138,12 +2157,14 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	expect(chatButtonBounds!.height).toBe(36);
 	expect(Math.abs(chatIconBounds!.x + chatIconBounds!.width / 2 - (chatButtonBounds!.x + chatButtonBounds!.width / 2))).toBeLessThanOrEqual(1);
 	expect(Math.abs(chatIconBounds!.y + chatIconBounds!.height / 2 - (chatButtonBounds!.y + chatButtonBounds!.height / 2))).toBeLessThanOrEqual(1);
-	await expect(activityButtons.nth(1)).toBeEnabled();
-	await expect(activityButtons.nth(2)).toBeEnabled();
-	await expect(activityButtons.nth(3)).toBeDisabled();
+	for (const name of ['Collaboration', 'Library', 'Code']) {
+		await expect(activityBar.getByRole('button', { name, exact: true })).toBeEnabled();
+	}
+	await expect(activityBar.getByRole('button', { name: 'Mobile devices (coming soon)', exact: true })).toBeDisabled();
 	if (target.appServerMode === 'required') {
-		await activityButtons.nth(4).click();
-		await expect(activityButtons.nth(4)).toHaveAttribute('aria-expanded', 'true');
+		const accountsButton = activityBar.getByRole('button', { name: 'Accounts', exact: true });
+		await accountsButton.click();
+		await expect(accountsButton).toHaveAttribute('aria-expanded', 'true');
 		if (process.platform !== 'darwin') {
 			await expect(sessionsPage.getByRole('menuitem', { name: 'Settings' })).toBeVisible();
 			await expect(sessionsPage.getByRole('menuitem', { name: 'Return to Workbench' })).toBeVisible();
@@ -2268,7 +2289,7 @@ test('Sessions menus and history actions stay independent from Workbench', async
 		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	} else {
 		if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
-		const opened = application.waitForEvent('window');
+		const opened = waitForNewElectronWindow(application, 'sessions');
 		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 		page = await opened;
 	}
@@ -2306,7 +2327,7 @@ test('Sessions menus and history actions stay independent from Workbench', async
 test('Sessions titlebar aligns its application menu and actions', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code');
 	if (target.kind !== 'electron' || !('windows' in application)) return;
-	const sessionsPagePromise = application.waitForEvent('window');
+	const sessionsPagePromise = waitForNewElectronWindow(application, 'sessions');
 	await workbench.page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 	const sessionsPage = await sessionsPagePromise;
 	const toolbar = sessionsPage.locator('[data-part="titlebar"] .ash-toolbar');
@@ -2374,7 +2395,7 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	} else {
 		if (!('windows' in application)) throw new Error('Expected Electron windows');
-		const opened = application.waitForEvent('window');
+		const opened = waitForNewElectronWindow(application, 'sessions');
 		await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 		page = await opened;
 	}
@@ -2385,7 +2406,11 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 	const library = navigation.getByRole('button', { name: 'Library' });
 	const menu = page.getByRole('button', { name: 'Application menu', exact: true });
 	for (const colorScheme of ['light', 'dark'] as const) {
-		await page.emulateMedia({ colorScheme });
+		if ('windows' in application) {
+			await application.evaluate(({ nativeTheme }, source) => { nativeTheme.themeSource = source; }, colorScheme);
+		} else {
+			await page.emulateMedia({ colorScheme });
+		}
 		await expect(page.locator('#app')).toHaveAttribute('data-color-theme', `ash-${colorScheme}`);
 		await page.mouse.move(400, 180);
 		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
@@ -2460,7 +2485,7 @@ test('Sessions titlebar sidebar toggle stays transparent at rest with hover and 
 			await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 		} else {
 			if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
-			const opened = application.waitForEvent('window');
+			const opened = waitForNewElectronWindow(application, 'sessions');
 			await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 			page = await opened;
 		}
@@ -2523,7 +2548,7 @@ test('Sessions Activity Bar tooltips follow side, top and bottom placement witho
 		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	} else {
 		if (!('windows' in application)) throw new Error('Expected Electron windows');
-		const opened = application.waitForEvent('window');
+		const opened = waitForNewElectronWindow(application, 'sessions');
 		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 		page = await opened;
 	}
@@ -2599,7 +2624,7 @@ test('Sessions Activity Bar switches Chat and Code with the keyboard with indepe
 		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	} else {
 		if (!('windows' in application)) throw new Error('Expected Electron windows');
-		const opened = application.waitForEvent('window');
+		const opened = waitForNewElectronWindow(application, 'sessions');
 		await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 		page = await opened;
 	}
@@ -2702,7 +2727,7 @@ test('closing the Workbench keeps Sessions usable and Return to Workbench reopen
 		const { application, driver, close } = await launchElectron({ appServerMode: target.appServerMode, workbenchMode: 'code', userDataDirectory });
 		try {
 			const parent = driver.workbench.page;
-			const childPromise = application.waitForEvent('window');
+			const childPromise = waitForNewElectronWindow(application, 'sessions');
 			await parent.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 			const child = await childPromise;
 			await expect(child.locator('.ash-code-sessions-window')).toBeVisible();
@@ -2716,7 +2741,7 @@ test('closing the Workbench keeps Sessions usable and Return to Workbench reopen
 				return { titles: list.map(window => window.title), configurationRevision: configuration.revision, connectionKind: connection.kind };
 			});
 			expect(windows).toEqual({ titles: [expect.stringContaining('Sessions')], configurationRevision: expect.any(Number), connectionKind: 'local' });
-			const workbenchPromise = application.waitForEvent('window');
+			const workbenchPromise = waitForNewElectronWindow(application, 'workbench');
 			await returnFromSessions(child);
 			const reopened = await workbenchPromise;
 			await expect(reopened.locator('.ash-workbench')).toBeVisible();

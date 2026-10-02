@@ -10,7 +10,7 @@ import { LanguageDiagnosticsMarkerBridge } from "../../browser/languageDiagnosti
 import type { ILanguageDiagnosticsService, LanguageDiagnosticSnapshot } from "../../common/languageDiagnosticsService.js";
 
 test("language diagnostics bridge projects current diagnostics into markers", () => {
-	const resource = URI.file("C:\\project\\src\\main.rs");
+	const resource = URI.file("C:/project/src/main.rs");
 	const changes = new Emitter<URI>();
 	let snapshots: readonly LanguageDiagnosticSnapshot[] = [snapshot(resource, LanguageDiagnosticSeverity.Error, "broken")];
 	const diagnostics = {

@@ -16,10 +16,10 @@
 	width: 320px;
 	padding: 10px;
 	color: var(--ash-editor-foreground);
-	background: var(--ash-editor-widget-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-editor-widget-border);
-	border-radius: var(--ash-corner-radius-small);
-	box-shadow: 0 4px 12px var(--ash-editor-widget-shadow);
+	background: var(--ash-editor-widgetBackground);
+	border: var(--ash-strokeThickness) solid var(--ash-editor-widgetBorder);
+	border-radius: var(--ash-cornerRadius-small);
+	box-shadow: 0 4px 12px var(--ash-editor-widgetShadow);
 }
 
 .stanza-editor-color-picker-header,
@@ -45,8 +45,8 @@
 		linear-gradient(45deg, #808080 25%, #fff 25%, #fff 75%, #808080 75%);
 	background-position: 0 0, 4px 4px;
 	background-size: 8px 8px;
-	border: var(--ash-stroke-thickness) solid var(--ash-editor-widget-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-editor-widgetBorder);
+	border-radius: var(--ash-cornerRadius-small);
 }
 
 .stanza-editor-color-picker-preview::after {
@@ -63,26 +63,26 @@
 	height: 28px;
 	padding: 0 6px;
 	color: var(--ash-input-foreground);
-	background: var(--ash-editor-input-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-	border-radius: var(--ash-corner-radius-small);
+	background: var(--ash-editor-inputBackground);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-small);
 }
 
 .stanza-editor-color-picker-close {
 	flex: 0 0 28px;
 	height: 28px;
 	padding: 0;
-	font-size: var(--ash-font-size-heading2);
+	font-size: var(--ash-fontSize-heading2);
 	line-height: 1;
 	color: var(--ash-button-foreground);
 	background: transparent;
 	border: 0;
-	border-radius: var(--ash-corner-radius-small);
+	border-radius: var(--ash-cornerRadius-small);
 	cursor: pointer;
 }
 
 .stanza-editor-color-picker-close:hover {
-	background: var(--ash-toolbar-hover-background);
+	background: var(--ash-toolbar-hoverBackground);
 }
 
 .stanza-editor-color-picker-controls {
@@ -96,7 +96,7 @@
 
 .stanza-editor-color-picker-control > span {
 	flex: 0 0 16px;
-	color: var(--ash-editor-description-foreground);
+	color: var(--ash-editor-descriptionForeground);
 	text-align: center;
 }
 
@@ -134,8 +134,8 @@
 	min-width: 72px;
 	height: 28px;
 	padding: 0 10px;
-	border: var(--ash-stroke-thickness) solid transparent;
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid transparent;
+	border-radius: var(--ash-cornerRadius-small);
 	cursor: pointer;
 }
 
@@ -145,19 +145,19 @@
 }
 
 .stanza-editor-color-picker-apply {
-	color: var(--ash-button-primary-foreground);
-	background: var(--ash-button-primary-background);
+	color: var(--ash-button-primaryForeground);
+	background: var(--ash-button-primaryBackground);
 }
 
 .stanza-editor-color-picker-apply:hover {
-	background: var(--ash-button-primary-hover-background);
+	background: var(--ash-button-primaryHoverBackground);
 }
 
 .stanza-editor-color-picker button:focus-visible,
 .stanza-editor-color-picker select:focus-visible,
 .stanza-editor-color-picker input:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-	outline-offset: var(--ash-stroke-thickness);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: var(--ash-strokeThickness);
 }
 
 .stanza-editor-color-picker button:disabled {

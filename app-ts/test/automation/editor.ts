@@ -1,5 +1,30 @@
 import { expect, type Locator } from '@playwright/test';
 
+/** Browser evaluator for UTF-16 ranges across an editor line's token and decoration spans. */
+export function measureRenderedTextRanges(element: Element, ranges: readonly { start: number; end: number }[]): { left: number; top: number; width: number; height: number }[] {
+	const document = element.ownerDocument;
+	function boundary(offset: number): { node: Node; offset: number } {
+		const walker = document.createTreeWalker(element, document.defaultView!.NodeFilter.SHOW_TEXT);
+		let remaining = offset;
+		for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+			const length = node.textContent!.length;
+			if (length > 0 && remaining <= length) return { node, offset: remaining };
+			remaining -= length;
+		}
+		throw new RangeError(`Rendered text offset ${offset} exceeds line length ${element.textContent!.length}`);
+	}
+	return ranges.map(({ start, end }) => {
+		if (start < 0 || end < start) throw new RangeError(`Invalid rendered text range ${start}:${end}`);
+		const from = boundary(start);
+		const to = boundary(end);
+		const range = document.createRange();
+		range.setStart(from.node, from.offset);
+		range.setEnd(to.node, to.offset);
+		const { left, top, width, height } = range.getBoundingClientRect();
+		return { left, top, width, height };
+	});
+}
+
 /** Text editing automation scoped to the active editor in one group. */
 export class Editor {
 	readonly element: Locator;
@@ -13,9 +38,15 @@ export class Editor {
 		this.lines = this.element.locator('.view-lines > .view-line .stanza-editor-line-text');
 	}
 
-	async waitForEditorFocus(): Promise<void> {
+	async focus(): Promise<void> {
 		await expect(this.element).toBeVisible();
 		await this.input.focus();
+		await this.waitForEditorFocus();
+	}
+
+	/** Observes focus without changing which editor or control owns it. */
+	async waitForEditorFocus(): Promise<void> {
+		await expect(this.element).toBeVisible();
 		await expect(this.input).toBeFocused();
 	}
 

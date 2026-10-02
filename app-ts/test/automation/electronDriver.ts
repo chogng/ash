@@ -19,7 +19,7 @@ export class ElectronPlaywrightDriver extends PlaywrightDriver {
 			const bounds = window.getBounds();
 			return { width: bounds.width, height: bounds.height };
 		}, size);
-		await this.workbench.waitForUiIdle();
+		await this.workbench.waitForAnimationFrames();
 		return actualSize;
 	}
 }

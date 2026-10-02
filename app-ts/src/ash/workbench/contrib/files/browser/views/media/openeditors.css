@@ -17,7 +17,7 @@
 }
 
 .ash-open-editors-empty:focus-visible {
-	outline: var(--ash-strokeThickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 
@@ -77,10 +77,10 @@
 }
 
 .ash-open-editors-close:hover {
-	background: var(--ash-list-hover-background);
+	background: var(--ash-list-hoverBackground);
 }
 
 .ash-open-editors-close:focus-visible {
-	outline: var(--ash-strokeThickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }

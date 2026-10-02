@@ -14,7 +14,7 @@
 }
 
 .ash-side-by-side-editor-secondary {
-	border-right: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-right: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
 @media (max-width: 500px) {

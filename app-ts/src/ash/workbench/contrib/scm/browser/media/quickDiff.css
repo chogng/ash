@@ -5,11 +5,11 @@
 }
 
 .stanza-editor-line-decoration.ash-quick-diff-added {
-  background: var(--ash-diff-editor-inserted-line-marker);
+  background: var(--ash-diffEditor-insertedLineMarker);
 }
 
 .stanza-editor-line-decoration.ash-quick-diff-modified {
-  background: var(--ash-focus-border);
+  background: var(--ash-focusBorder);
 }
 
 .stanza-editor-line-decoration.ash-quick-diff-deleted {
@@ -18,7 +18,7 @@
   top: 50%;
   border-top: 4px solid transparent;
   border-bottom: 4px solid transparent;
-  border-left: 5px solid var(--ash-diff-editor-removed-line-marker);
+  border-left: 5px solid var(--ash-diffEditor-removedLineMarker);
   transform: translateY(-50%);
 }
 
@@ -45,7 +45,7 @@
   justify-content: flex-end;
   gap: 2px;
   padding: 2px 4px;
-  border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+  border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
 }
 
 .ash-quick-diff-peek-action {
@@ -55,13 +55,13 @@
   font: inherit;
   background: transparent;
   border: 0;
-  border-radius: var(--ash-corner-radius-x-small);
+  border-radius: var(--ash-cornerRadius-xSmall);
 }
 
 .ash-quick-diff-peek-action:hover,
 .ash-quick-diff-peek-action:focus-visible {
-  background: var(--ash-list-hover-background);
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  background: var(--ash-list-hoverBackground);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 }
 
 .ash-quick-diff-peek-diff {

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { Separator } from '../../../base/common/actions.js';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
+import { h } from '../../../base/browser/dom.js';
 import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../platform/configuration/common/configuration.js';
@@ -56,7 +57,8 @@ services.registerInstance(IContextKeyService, contextKeys);
 services.registerSingleton(IWorkingCopyService, () => new BrowserWorkingCopyService());
 services.registerInstance(IConfigurationService, configuration);
 services.registerInstance(IThemeService, theme);
-services.registerInstance(IWorkspaceContextService, new WorkspaceContextService({ id: 'design-test', folders: [] }));
+const workspace = new WorkspaceContextService({ id: 'design-test', folders: [] });
+services.registerInstance(IWorkspaceContextService, workspace);
 const resource = URI.file('/design.ash-design.json');
 let fileContent = '';
 let revision = '0';
@@ -95,6 +97,7 @@ suiteTeardown(() => {
 	contextKeys.dispose();
 	configuration.dispose();
 	theme.dispose();
+	workspace.dispose();
 	browser.window.close();
 });
 
@@ -107,19 +110,19 @@ class DesignEditorFixture extends Disposable {
 	readonly propertiesDomNode: HTMLElement;
 	readonly layersDomNode: HTMLElement;
 
-	constructor() {
+	constructor(container: HTMLElement = browser.window.document.body) {
 		super();
 		const child = services.createChild();
 		this.designEditors = this._register(child.createInstance(DesignEditorService));
 		child.registerInstance(IDesignEditorService, this.designEditors);
-		const ownerDocument = browser.window.document;
-		const editorHost = ownerDocument.createElement('section');
+		const ownerDocument = container.ownerDocument;
+		const editorHost = h(ownerDocument, 'section');
 		editorHost.dataset.part = 'editor';
-		this.propertiesDomNode = ownerDocument.createElement('section');
+		this.propertiesDomNode = h(ownerDocument, 'section');
 		this.propertiesDomNode.dataset.part = 'auxiliarybar';
-		this.layersDomNode = ownerDocument.createElement('section');
+		this.layersDomNode = h(ownerDocument, 'section');
 		this.layersDomNode.dataset.part = 'sidebar';
-		ownerDocument.body.append(editorHost, this.propertiesDomNode, this.layersDomNode);
+		container.append(editorHost, this.propertiesDomNode, this.layersDomNode);
 		this.pane = this._register(EditorPanes.getEditorPane({ resource: DESIGN_EDITOR_RESOURCE })!.create({ instantiationService: child }) as InstanceType<typeof DesignEditorPage>);
 		this.pane.create(editorHost);
 		this.domNode = this.pane.domNode;
@@ -495,8 +498,8 @@ test('Chinese Design actions and new property labels are localized', async () =>
 
 test('Design editors share document edits and history while keeping selection, camera and lifetime separate', () => {
 	using document = services.createInstance(DesignDocumentController);
-	using first = services.createInstance(DesignEditorWidget, browser.window.document, document, createDesignEditorContributions);
-	using second = services.createInstance(DesignEditorWidget, browser.window.document, document, createDesignEditorContributions);
+	using first = services.createInstance(DesignEditorWidget, browser.window.document.body, document, createDesignEditorContributions);
+	using second = services.createInstance(DesignEditorWidget, browser.window.document.body, document, createDesignEditorContributions);
 	for (const editor of [first, second]) {
 		editor.initialize();
 		editor.layout({ width: 400, height: 300 });
@@ -577,6 +580,32 @@ test('Design tool contribution draws a shape at document coordinates and hand ge
 	assert.equal(view.domNode.querySelectorAll('path[data-shape-id]').length, 2);
 	DesignEditorWidget.getFocused(view.domNode)!.undo();
 	assert.equal(view.domNode.querySelectorAll('path[data-shape-id]').length, 1);
+});
+
+test('Design tools reveal keyboard destinations within a narrow horizontal viewport', () => {
+	using view = createView();
+	const tools = view.domNode.querySelector<HTMLElement>('.ash-design-tools-widget')!;
+	const scrollViewport = tools.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
+	assert.ok(scrollViewport, 'Floating tools use the shared scrollbar rather than an OS-sized overflow bar');
+	Object.defineProperties(scrollViewport, {
+		clientWidth: { configurable: true, value: 100 },
+		clientHeight: { configurable: true, value: 40 },
+		scrollWidth: { configurable: true, value: 560 },
+		scrollHeight: { configurable: true, value: 40 },
+	});
+	scrollViewport.getBoundingClientRect = () => new browser.window.DOMRect(0, 0, 100, 40);
+	const modes = tools.querySelector<HTMLElement>('.ash-design-modes')!;
+	const buttons = [...modes.querySelectorAll('button')];
+	for (const [index, button] of buttons.entries()) {
+		button.getBoundingClientRect = () => new browser.window.DOMRect(300 + index * 60 - scrollViewport.scrollLeft, 6, 60, 28);
+	}
+	buttons[0]!.focus();
+	assert.equal(scrollViewport.scrollLeft, 260);
+	buttons[0]!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
+	assert.deepEqual({ focused: browser.window.document.activeElement === buttons[3], left: scrollViewport.scrollLeft, top: scrollViewport.scrollTop }, { focused: true, left: 440, top: 0 });
+	buttons[3]!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }));
+	assert.deepEqual({ focused: browser.window.document.activeElement === buttons[0], left: scrollViewport.scrollLeft, top: scrollViewport.scrollTop }, { focused: true, left: 300, top: 0 });
+	assert.equal(tools.querySelector<HTMLElement>('.ash-scrollbar-track-vertical')!.hidden, true);
 });
 
 test('Motion keyframes round trip, scrub without editing, undo and export runnable code with design identities', async () => {
@@ -676,7 +705,7 @@ test('Design panels share the editor selection and detach when the pane hides', 
 });
 
 test('Design editor tabs use shared save, cancel and discard confirmation', async () => {
-	using child = createTestEditorServices(configuration, services);
+	using child = createTestEditorServices(browser.window.document, configuration, services);
 	using designEditors = child.createInstance(DesignEditorService);
 	child.registerInstance(IDesignEditorService, designEditors);
 	using part = child.createInstance(EditorPart, browser.window.document.body, {
@@ -722,7 +751,7 @@ test('Design panel labels and empty states follow Chinese localization', async (
 
 
 test('Design split panes share the window document and retain independent editing state', async () => {
-	using child = createTestEditorServices(configuration, services);
+	using child = createTestEditorServices(browser.window.document, configuration, services);
 	using designEditors = child.createInstance(DesignEditorService);
 	child.registerInstance(IDesignEditorService, designEditors);
 	using part = child.createInstance(EditorPart, browser.window.document.body, { workingCopyService: services.get(IWorkingCopyService) });
@@ -745,4 +774,103 @@ test('Design split panes share the window document and retain independent editin
 	first.focus();
 	assert.equal(designEditors.activeEditor.get(), first);
 	assert.equal(first.selection.ids.size, 1);
+});
+
+
+test('Design canvas derives its document and focus from the host in another window', () => {
+	const otherWindow = new JSDOM('<!doctype html><body></body>', { url: 'https://other.ash.test' });
+	try {
+		const container = h(otherWindow.window.document, 'div');
+		otherWindow.window.document.body.append(container);
+		using view = new DesignEditorFixture(container);
+		assert.equal(view.domNode.ownerDocument, container.ownerDocument);
+		assert.notEqual(view.domNode.ownerDocument, document);
+		view.focus();
+		assert.equal(container.ownerDocument.activeElement, view.domNode);
+		const press = (key: string): void => { view.domNode.dispatchEvent(new otherWindow.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })); };
+		const viewport = view.domNode.querySelector<HTMLElement>('.ash-sessions-design-viewport')!;
+		let captured: number | undefined;
+		viewport.setPointerCapture = id => { captured = id; };
+		viewport.hasPointerCapture = id => captured === id;
+		viewport.releasePointerCapture = () => { captured = undefined; };
+		view.domNode.querySelector<HTMLButtonElement>('.ash-design-tools-widget button[aria-label="Rectangle"]')!.click();
+		for (const type of ['pointerdown', 'pointermove']) {
+			viewport.dispatchEvent(new otherWindow.window.PointerEvent(type, { pointerId: 1, isPrimary: true, button: 0, clientX: type === 'pointerdown' ? 10 : 30, clientY: 20, bubbles: true, cancelable: true }));
+		}
+		const draft = view.domNode.querySelector('.ash-design-drawing-preview')!;
+		assert.ok(draft instanceof otherWindow.window.SVGElement);
+		assert.equal(draft.ownerDocument, container.ownerDocument);
+		assert.equal(view.domNode.querySelector('[data-shape-id]'), null);
+		press('Escape');
+		assert.equal(view.domNode.querySelector('.ash-design-drawing-preview'), null);
+		for (const key of ['r', 'e', 't', 'p']) { press(key); }
+		assert.deepEqual(Array.from(view.domNode.querySelectorAll('.ash-sessions-design-shapes > [data-shape-id]'), element => element.tagName), ['rect', 'ellipse', 'svg', 'path']);
+		assert.ok(view.domNode.querySelector('.ash-sessions-design-path-handle'));
+		for (const grouped of [false, true]) {
+			if (grouped) {
+				for (const key of ['n', 'n', 'n', 'g']) { press(key); }
+				assert.equal(view.domNode.querySelectorAll('.ash-sessions-design-shapes > svg > [data-shape-id]').length, 4);
+			}
+			for (const element of view.domNode.querySelectorAll('svg, svg *')) {
+				assert.equal(element.ownerDocument, container.ownerDocument);
+				assert.ok(element instanceof otherWindow.window.SVGElement, element.tagName);
+			}
+		}
+	} finally {
+		otherWindow.window.close();
+	}
+});
+
+
+test('Motion playback follows its host clock and cancels queued frames on pause and disposal', () => {
+	const otherWindow = new JSDOM('<!doctype html><body></body>', { url: 'https://motion.ash.test' });
+	let now = 0;
+	let nextFrame = 0;
+	const frames = new Map<number, FrameRequestCallback>();
+	Object.defineProperty(otherWindow.window.performance, 'now', { value: () => now });
+	otherWindow.window.requestAnimationFrame = callback => { frames.set(++nextFrame, callback); return nextFrame; };
+	const advance = (time: number): void => {
+		now = time;
+		const callbacks = [...frames.values()];
+		frames.clear();
+		for (const callback of callbacks) { callback(now); }
+	};
+	try {
+		using view = new DesignEditorFixture(otherWindow.window.document.body);
+		view.layout({ width: 400, height: 300 });
+		const click = (name: string): void => { Array.from(view.domNode.querySelectorAll('button')).find(button => button.textContent === name)!.click(); };
+		view.domNode.dispatchEvent(new otherWindow.window.KeyboardEvent('keydown', { key: 'r', bubbles: true, cancelable: true }));
+		click('Motion');
+		const motion = view.domNode.querySelector<HTMLElement>('.ash-design-motion-widget')!;
+		motion.checkVisibility = () => true;
+		click('Add keyframe');
+		const x = motion.querySelector<HTMLInputElement>('input[aria-label="Keyframe X"]')!;
+		x.value = '240';
+		x.dispatchEvent(new otherWindow.window.Event('change', { bubbles: true }));
+		const timeline = motion.querySelector<HTMLInputElement>('input[aria-label="Animation time (ms)"]')!;
+		timeline.value = '0';
+		timeline.dispatchEvent(new otherWindow.window.Event('input', { bubbles: true }));
+		const rectangle = view.domNode.querySelector('[data-shape-id]')!;
+		click('Play');
+		assert.equal(rectangle.getAttribute('x'), '140');
+		assert.equal(frames.size, 1);
+		advance(500);
+		assert.equal(rectangle.getAttribute('x'), '190');
+		click('Pause');
+		advance(750);
+		assert.equal(rectangle.getAttribute('x'), '190');
+		assert.equal(frames.size, 0);
+		click('Play');
+		advance(1250);
+		assert.equal(rectangle.getAttribute('x'), '240');
+		assert.equal(timeline.value, '1000');
+		assert.equal(frames.size, 0);
+		click('Play');
+		view.dispose();
+		// Pane disposal hides the editor and restores the document scene before releasing its clock.
+		assert.equal(rectangle.getAttribute('x'), '140');
+		advance(1500);
+		assert.equal(rectangle.getAttribute('x'), '140');
+		assert.equal(frames.size, 0);
+	} finally { otherWindow.window.close(); }
 });

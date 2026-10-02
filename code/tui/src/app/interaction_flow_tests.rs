@@ -119,6 +119,51 @@ fn approval_renders_submission_and_failure_while_preserving_the_chat_draft() {
 }
 
 #[test]
+fn policy_tip_expiry_preserves_approval_selection_and_response() {
+    for arrival_seconds in [1, 6] {
+        let mut app = App::new();
+        let started = std::time::Instant::now();
+        app.show_policy_tip(started);
+        app.handle_tick(started + std::time::Duration::from_secs(arrival_seconds));
+        app.update(ThreadEvent::ApprovalRequested(Approval::new(
+            ApprovalSpec {
+                title: "Approval required".into(),
+                reason: "Create the requested file?".into(),
+                details: Vec::new(),
+            },
+        )));
+        app.handle_key(key(KeyCode::Down));
+        assert_eq!(
+            app.approval_view().unwrap().selected,
+            crate::thread::interaction::approval::ApprovalDecision::Decline
+        );
+        assert_eq!(
+            render(&app, 100, 32).contains("/policy to change permissions"),
+            arrival_seconds < 5
+        );
+        app.handle_tick(started + std::time::Duration::from_secs(7));
+        let expired = render(&app, 100, 32);
+        assert!(!expired.contains("/policy to change permissions"));
+        assert!(expired.contains("> Decline"));
+        assert!(!app.approval_view().unwrap().submitting);
+        let Some(AppCommand::Thread(ThreadCommand::ResolveRequest(response))) =
+            app.handle_key(key(KeyCode::Enter))
+        else {
+            panic!("the selected approval must still resolve after the hint expires");
+        };
+        assert_eq!(response.kind, ThreadRequestKind::Approval);
+        assert_eq!(
+            response.response,
+            AgentResponse::Approval {
+                response: ash_protocol::ActionApprovalResponse {
+                    decision: ash_protocol::ActionApprovalDecision::Decline,
+                },
+            }
+        );
+    }
+}
+
+#[test]
 fn connection_recovery_restores_home_and_conversation_drafts() {
     let mut previous = App::new();
     previous.insert_text("conversation draft");

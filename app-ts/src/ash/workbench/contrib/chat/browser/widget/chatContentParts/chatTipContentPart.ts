@@ -10,8 +10,9 @@ import type { IChatTip } from '../../chatTipService.js';
 export class ChatTipContentPart extends Disposable {
 	public readonly domNode: HTMLElement;
 
-	constructor(document: Document, tip: IChatTip, dismiss: () => void) {
+	constructor(container: HTMLElement, tip: IChatTip, dismiss: () => void) {
 		super();
+		const document = container.ownerDocument;
 		this.domNode = h(document, 'div');
 		this.domNode.className = 'ash-chat-input-tip';
 		this.domNode.setAttribute('role', 'note');

@@ -127,7 +127,7 @@ export class IconLabel extends Disposable {
 		this.iconElement.classList.toggle('is-reserved', reserveIconSpace);
 		if (hideIcon) return;
 		if (iconPath) {
-			const image = this.element.ownerDocument.createElement('img');
+			const image = h(this.element.ownerDocument, 'img');
 			image.className = 'ash-icon-label-image';
 			image.alt = '';
 			image.src = iconPath.toString();

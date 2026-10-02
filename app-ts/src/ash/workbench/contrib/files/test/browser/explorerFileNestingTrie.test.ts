@@ -23,11 +23,11 @@ test('Explorer file nesting resolves captures, transitive children, and cycles',
 });
 
 test('Explorer data source nests configured files and keeps folders separate', async () => {
-	const folder = URI.file('C:\\project');
+	const folder = URI.file('C:/project');
 	const fileService = {
 		readDirectory: async () => ['src', 'app.js', 'app.ts', 'readme.md'].map(name => ({
 			name,
-			resource: URI.file(`C:\\project\\${name}`),
+			resource: URI.file(`C:/project/${name}`),
 			kind: name === 'src' ? FileKind.Directory : FileKind.File,
 		})),
 	} as unknown as IFileService;

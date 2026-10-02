@@ -20,19 +20,18 @@ const STORE_NAME = "backups";
 
 /** IndexedDB-backed working-copy backups shared by browser and Electron renderers. */
 export class IndexedDbWorkingCopyBackupService extends Disposable implements IWorkingCopyBackupService {
-	private readonly database: Promise<IDBDatabase | undefined>;
+	private database: Promise<IDBDatabase> | undefined;
 	private readonly fallback = new Map<string, StoredBackup>();
 
-	constructor(private workspaceId: string, factory: IDBFactory | undefined = globalThis.indexedDB) {
+	constructor(private workspaceId: string, private readonly factory: IDBFactory | undefined = globalThis.indexedDB) {
 		super();
 		if (!workspaceId.trim()) throw new TypeError("Working-copy backup service requires a workspace id");
-		this.database = factory ? openDatabase(factory) : Promise.resolve(undefined);
-		this._register(toDisposable(() => { void this.database.then(database => database?.close()).catch(() => undefined); }));
+		this._register(toDisposable(() => { void this.database?.then(database => database.close()).catch(() => undefined); }));
 	}
 
 	async list(): Promise<readonly WorkingCopyBackup[]> {
 		const workspaceId = this.workspaceId;
-		const database = await this.database;
+		const database = await this.getDatabase(false);
 		if (!database) return deserialize([...this.fallback.values()].filter(record => record.workspaceId === workspaceId));
 		const records = await request<StoredBackup[]>(database.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).index("workspaceId").getAll(workspaceId));
 		return deserialize(records);
@@ -41,7 +40,7 @@ export class IndexedDbWorkingCopyBackupService extends Disposable implements IWo
 	async store(backup: WorkingCopyBackup): Promise<void> {
 		validateBackup(backup);
 		const workspaceId = this.workspaceId;
-		const database = await this.database;
+		const database = await this.getDatabase(true);
 		const record = { key: backupKey(workspaceId, backup.resource), workspaceId, resource: backup.resource.toString(), kind: backup.kind, content: backup.content, updatedAt: backup.updatedAt, ...(backup.languageId ? { languageId: backup.languageId } : {}), ...(backup.contentType ? { contentType: backup.contentType } : {}), ...(backup.label ? { label: backup.label } : {}) } satisfies StoredBackup;
 		if (!database) { this.fallback.set(record.key, record); return; }
 		const transaction = database.transaction(STORE_NAME, "readwrite");
@@ -51,7 +50,7 @@ export class IndexedDbWorkingCopyBackupService extends Disposable implements IWo
 
 	async delete(resource: URI): Promise<void> {
 		const workspaceId = this.workspaceId;
-		const database = await this.database;
+		const database = await this.getDatabase(false);
 		if (!database) { this.fallback.delete(backupKey(workspaceId, resource)); return; }
 		const transaction = database.transaction(STORE_NAME, "readwrite");
 		transaction.objectStore(STORE_NAME).delete(backupKey(workspaceId, resource));
@@ -61,6 +60,19 @@ export class IndexedDbWorkingCopyBackupService extends Disposable implements IWo
 	switchWorkspace(workspaceId: string): void {
 		if (!workspaceId.trim()) throw new TypeError("Working-copy backup service requires a workspace id");
 		this.workspaceId = workspaceId;
+	}
+
+	private async getDatabase(create: boolean): Promise<IDBDatabase | undefined> {
+		this.assertNotDisposed();
+		const factory = this.factory;
+		if (!factory) return undefined;
+		if (!create && !this.database) {
+			// Reading an empty profile must not create a disk-backed database just to restore zero backups.
+			const databases = await factory.databases();
+			this.assertNotDisposed();
+			if (!databases.some(database => database.name === DATABASE_NAME)) return this.database;
+		}
+		return this.database ??= openDatabase(factory);
 	}
 }
 

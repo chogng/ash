@@ -66,7 +66,6 @@ export class SessionsList extends Disposable {
 	}
 
 	private render(): void {
-		const ownerDocument = this.domNode.ownerDocument;
 		const ordered: SessionListItem[] = [];
 		const present = new Set<string>();
 		const activeSelection = this.viewService.activeSelection;
@@ -77,7 +76,7 @@ export class SessionsList extends Disposable {
 			if (query && !session.title.toLocaleLowerCase().includes(query)) continue;
 			const selected = activeSelection?.kind === "untitled" && activeSelection.session.untitledSessionId === session.untitledSessionId;
 			const key = `untitled:${session.untitledSessionId}`;
-			const item = this.items.get(key) ?? this.items.set(key, new SessionListItem(ownerDocument));
+			const item = this.items.get(key) ?? this.items.set(key, new SessionListItem(this.list));
 			item.update(session.title || "New Session", selected, () => this.viewService.openUntitledSession(session.untitledSessionId));
 			ordered.push(item);
 			present.add(key);
@@ -90,7 +89,7 @@ export class SessionsList extends Disposable {
 				: session.chats.find(candidate => candidate.status === "active" && candidate.origin.type === "root") ?? session.chats.find(candidate => candidate.status === "active");
 			if (!thread || session.status !== "active") continue;
 			const key = `session:${session.sessionId}`;
-			const item = this.items.get(key) ?? this.items.set(key, new SessionListItem(ownerDocument));
+			const item = this.items.get(key) ?? this.items.set(key, new SessionListItem(this.list));
 			item.update(session.title || "Untitled Session", current !== undefined, () => this.viewService.openSession(session.sessionId, thread.threadId));
 			ordered.push(item);
 			present.add(key);
@@ -119,8 +118,9 @@ class SessionListItem extends AbstractDisposable {
 	private open: () => void = () => {};
 	private readonly clickListener;
 
-	constructor(ownerDocument: Document) {
+	constructor(container: HTMLElement) {
 		super();
+		const ownerDocument = container.ownerDocument;
 		this.domNode = h(ownerDocument, "button");
 		this.domNode.type = "button";
 		this.domNode.className = "ash-sessions-list-item";

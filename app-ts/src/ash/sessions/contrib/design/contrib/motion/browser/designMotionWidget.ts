@@ -1,8 +1,9 @@
 import './designMotionWidget.css';
 import { addDisposableListener, getWindow, h } from '../../../../../../base/browser/dom.js';
+import { AnimationFrameScheduler } from '../../../../../../base/browser/scheduler.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
 import { Emitter } from '../../../../../../base/common/event.js';
-import { Disposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../nls.js';
 import type { DocumentCommands } from '../../../common/commands/documentCommands.js';
 import type { DesignModel } from '../../../common/model/designModel.js';
@@ -28,12 +29,13 @@ export class DesignMotionWidget extends Disposable {
 	private shape: DesignShape | undefined;
 	private frameIndex = 0;
 	private time = 0;
-	private animationFrame: number | undefined;
+	private readonly animationFrame = this._register(new MutableDisposable<AnimationFrameScheduler>());
 	private isActive = false;
 	private isBusy = false;
 
-	constructor(ownerDocument: Document, private readonly model: DesignModel, private readonly commands: DocumentCommands) {
+	constructor(container: HTMLElement, private readonly model: DesignModel, private readonly commands: DocumentCommands) {
 		super();
+		const ownerDocument = container.ownerDocument;
 		this.domNode = h(ownerDocument, 'section', { className: 'ash-design-motion-widget', attributes: { 'aria-label': localize('sessions.design.motionTimeline', 'Animation timeline') } });
 		const playback = h(ownerDocument, 'div', { className: 'ash-design-motion-row' });
 		const properties = h(ownerDocument, 'div', { className: 'ash-design-motion-row' });
@@ -173,23 +175,25 @@ export class DesignMotionWidget extends Disposable {
 	}
 
 	private togglePlayback(): void {
-		if (this.animationFrame !== undefined) { this.stop(); return; }
+		if (this.animationFrame.value !== undefined) { this.stop(); return; }
 		const window = getWindow(this.domNode);
 		const duration = designMotionDuration(this.model.value.shapes);
 		const isLooping = this.hasLoop(this.model.value.shapes);
 		const start = window.performance.now() - (this.time >= duration ? 0 : this.time);
 		this.playButton.label = localize('sessions.design.pauseMotion', 'Pause');
-		const tick = (timestamp: number): void => {
+		const scheduler = new AnimationFrameScheduler(window, () => {
+			const timestamp = window.performance.now();
 			if (!this.isActive || !this.domNode.checkVisibility()) { this.stop(); return; }
 			this.setTime(isLooping ? timestamp - start : Math.min(duration, timestamp - start));
 			if (!isLooping && this.time >= duration) { this.stop(); return; }
-			this.animationFrame = window.requestAnimationFrame(tick);
-		};
-		this.animationFrame = window.requestAnimationFrame(tick);
+			scheduler.schedule();
+		});
+		this.animationFrame.value = scheduler;
+		scheduler.schedule();
 	}
 
 	private stop(): void {
-		if (this.animationFrame !== undefined) { getWindow(this.domNode).cancelAnimationFrame(this.animationFrame); this.animationFrame = undefined; }
+		this.animationFrame.clear();
 		this.playButton.label = localize('sessions.design.playMotion', 'Play');
 	}
 }

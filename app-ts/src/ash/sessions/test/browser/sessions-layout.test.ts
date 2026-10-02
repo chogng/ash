@@ -84,6 +84,41 @@ test("Sessions layout owns a fixed Sessions-first Part topology", () => {
 	dom.window.close();
 });
 
+test('Sessions startup preserves side-part widths when the initial page hides auxiliary content', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	class StartupPart extends TestSessionsPart {
+		override get minimumWidth(): number {
+			if (this.id === 'sidebar') return 240;
+			if (this.id === 'sessions') return 420;
+			return super.minimumWidth;
+		}
+	}
+	const parts = new Map(sessionsPartIds.map(partId => [partId, new StartupPart(partId, dom.window.document.body)]));
+	const layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
+	try {
+		// The Chat page applies availability immediately after the Part grid is created.
+		layout.setPartAvailable('auxiliarybar', false);
+		layout.setPartAvailable('editor', false);
+		layout.layout(new Dimension(1_200, 800));
+		assert.deepEqual(layout.state, {
+			version: 1,
+			sidebar: { width: 260, visible: true },
+			auxiliarybar: { width: 200, visible: true },
+		});
+		assert.equal(layout.isPartVisible('auxiliarybar'), false);
+		layout.setPartAvailable('auxiliarybar', true);
+		assert.deepEqual({
+			sidebarWidth: layout.getPartSize('sidebar').width,
+			auxiliaryWidth: layout.getPartSize('auxiliarybar').width,
+			auxiliaryVisible: layout.isPartVisible('auxiliarybar'),
+		}, { sidebarWidth: 260, auxiliaryWidth: 200, auxiliaryVisible: true });
+	} finally {
+		layout.dispose();
+		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
+});
+
 test('Sessions layout style changes without changing the IDE preference or visible Parts', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const container = h(dom.window.document, 'main');

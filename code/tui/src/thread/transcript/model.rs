@@ -834,7 +834,11 @@ fn cell_from_entry(entry: &ThreadTranscriptEntry, render_revision: u64) -> Trans
 fn pretty_json(value: &str) -> String {
     serde_json::from_str::<serde_json::Value>(value)
         .ok()
-        .and_then(|value| serde_json::to_string_pretty(&value).ok())
+        .and_then(|mut value| {
+            // Detail ordering must not depend on serde_json's unified preserve_order feature.
+            value.sort_all_objects();
+            serde_json::to_string_pretty(&value).ok()
+        })
         .unwrap_or_else(|| value.to_owned())
 }
 

@@ -1,3 +1,5 @@
+import { LocalAccessibilityHelpContext } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IBrowserViewApi, type IBrowserViewState } from '../../../../platform/browser/common/browserView.js';
@@ -33,6 +35,7 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 		@IDialogService private readonly dialogService: IDialogService,
 		@IDialogsModel private readonly dialogs: IDialogsModel,
 		@IContextMenuService menus: IContextMenuService,
+		@IContextKeyService private readonly contextKeys: IContextKeyService,
 	) {
 		super();
 		this._register(dialogs.onWillShowDialog(() => this.refreshLayout()));
@@ -87,6 +90,7 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 		this.viewportDomNode.setAttribute('aria-label', 'Webpage. Press F6 to return to the address field.');
 		this._register(addDisposableListener(this.viewportDomNode, 'focus', () => { this.focusOutside = false; this.refreshLayout(); void this.update.then(() => this.api.focus(this.target())).catch(error => this.report(error)); }));
 		this.domNode.append(toolbar, this.statusDomNode, this.viewportDomNode); container.append(this.domNode);
+		LocalAccessibilityHelpContext.bindTo(this._register(this.contextKeys.createScoped(this.domNode))).set(true);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(addDisposableListener<KeyboardEvent>(this.domNode, 'keydown', event => {
 			if (event.key === 'Enter' && event.target === this.addressDomNode) { event.preventDefault(); void this.navigate().catch(error => this.report(error)); }

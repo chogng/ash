@@ -13,7 +13,7 @@
 }
 
 .stanza-diff-editor:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 
@@ -25,7 +25,7 @@
 }
 
 .stanza-diff-editor-side.original {
-	border-right: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	border-right: var(--ash-strokeThickness) solid var(--ash-widget-border);
 }
 
 .stanza-diff-editor-side.modified {
@@ -53,53 +53,53 @@
 	white-space: pre;
 	font: inherit;
 	color: var(--ash-editor-foreground);
-	background: var(--ash-diff-editor-removed-line-background);
-	border-left: var(--ash-stroke-thickness) solid var(--ash-diff-editor-removed-line-marker);
+	background: var(--ash-diffEditor-removedLineBackground);
+	border-left: var(--ash-strokeThickness) solid var(--ash-diffEditor-removedLineMarker);
 }
 
 .stanza-diff-line-removed {
-	background: var(--ash-diff-editor-removed-line-background);
+	background: var(--ash-diffEditor-removedLineBackground);
 }
 
 .stanza-diff-line-added {
-	background: var(--ash-diff-editor-inserted-line-background);
+	background: var(--ash-diffEditor-insertedLineBackground);
 }
 
 .stanza-diff-line-active {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 
 .stanza-diff-inline-removed {
-	background: var(--ash-diff-editor-removed-text-background);
+	background: var(--ash-diffEditor-removedTextBackground);
 }
 
 .stanza-diff-inline-added {
-	background: var(--ash-diff-editor-inserted-text-background);
+	background: var(--ash-diffEditor-insertedTextBackground);
 }
 
 .stanza-diff-inline-removed-empty,
 .stanza-diff-inline-added-empty {
 	box-sizing: border-box;
-	border-left: var(--ash-stroke-thickness) solid;
+	border-left: var(--ash-strokeThickness) solid;
 }
 
 .stanza-diff-inline-removed-empty {
-	border-color: var(--ash-diff-editor-removed-line-marker);
-	background: var(--ash-diff-editor-removed-text-background);
+	border-color: var(--ash-diffEditor-removedLineMarker);
+	background: var(--ash-diffEditor-removedTextBackground);
 }
 
 .stanza-diff-inline-added-empty {
-	border-color: var(--ash-diff-editor-inserted-line-marker);
-	background: var(--ash-diff-editor-inserted-text-background);
+	border-color: var(--ash-diffEditor-insertedLineMarker);
+	background: var(--ash-diffEditor-insertedTextBackground);
 }
 
 .stanza-diff-editor .stanza-diff-gutter-removed {
-	background: var(--ash-diff-editor-gutter-removed-line-background);
+	background: var(--ash-diffEditorGutter-removedLineBackground);
 }
 
 .stanza-diff-editor .stanza-diff-gutter-added {
-	background: var(--ash-diff-editor-gutter-inserted-line-background);
+	background: var(--ash-diffEditorGutter-insertedLineBackground);
 }
 
 .stanza-diff-editor .stanza-diff-remove-sign,
@@ -110,24 +110,24 @@
 }
 
 .stanza-diff-editor .stanza-diff-remove-sign {
-	color: var(--ash-diff-editor-removed-line-marker);
+	color: var(--ash-diffEditor-removedLineMarker);
 }
 
 .stanza-diff-editor .stanza-diff-insert-sign {
-	color: var(--ash-diff-editor-inserted-line-marker);
+	color: var(--ash-diffEditor-insertedLineMarker);
 }
 
 .stanza-diff-editor .stanza-diff-remove-sign .ash-icon,
 .stanza-diff-editor .stanza-diff-insert-sign .ash-icon {
-	width: var(--ash-lxicon-font-size-compact);
-	height: var(--ash-lxicon-font-size-compact);
+	width: var(--ash-lxiconFontSize-compact);
+	height: var(--ash-lxiconFontSize-compact);
 }
 
 [data-color-scheme="high-contrast-dark"] .stanza-diff-line-removed,
 [data-color-scheme="high-contrast-dark"] .stanza-diff-line-added,
 [data-color-scheme="high-contrast-light"] .stanza-diff-line-removed,
 [data-color-scheme="high-contrast-light"] .stanza-diff-line-added {
-	outline: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
 	outline-offset: -1px;
 }
 
@@ -165,11 +165,11 @@
 }
 
 .stanza-diff-overview-marker.removed {
-	background: var(--ash-diff-editor-overview-removed-foreground);
+	background: var(--ash-diffEditorOverview-removedForeground);
 }
 
 .stanza-diff-overview-marker.inserted {
-	background: var(--ash-diff-editor-overview-inserted-foreground);
+	background: var(--ash-diffEditorOverview-insertedForeground);
 }
 
 .stanza-diff-overview-viewport {
@@ -179,7 +179,7 @@
 	left: 0;
 	z-index: 2;
 	min-height: 2px;
-	background: var(--ash-scrollbar-slider-background, color-mix(in srgb, currentColor 12%, transparent));
+	background: var(--ash-scrollbarSlider-background, color-mix(in srgb, currentColor 12%, transparent));
 	will-change: transform;
 }
 
@@ -202,7 +202,7 @@
 	padding: 4px 8px;
 	color: var(--ash-warning-foreground);
 	background: var(--ash-editor-background);
-	border-bottom: var(--ash-stroke-thickness) solid currentColor;
+	border-bottom: var(--ash-strokeThickness) solid currentColor;
 	white-space: normal;
 	pointer-events: none;
 }
@@ -218,9 +218,9 @@
 	overflow: hidden;
 	color: var(--ash-description-foreground);
 	background: var(--ash-editor-background);
-	border-top: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	font-size: var(--ash-font-size-label2);
+	border-top: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	font-size: var(--ash-fontSize-label2);
 	white-space: nowrap;
 }
 
@@ -250,7 +250,7 @@
 	color: var(--ash-editor-foreground);
 	background: transparent;
 	border: 0;
-	border-radius: var(--ash-corner-radius-small);
+	border-radius: var(--ash-cornerRadius-small);
 	font: inherit;
 	cursor: pointer;
 }
@@ -260,7 +260,7 @@
 }
 
 .ash-diff-hidden-region button:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 
@@ -274,5 +274,5 @@
 
 [data-color-scheme="high-contrast-dark"] .ash-diff-hidden-region-content,
 [data-color-scheme="high-contrast-light"] .ash-diff-hidden-region-content {
-	border-color: var(--ash-contrast-border);
+	border-color: var(--ash-contrastBorder);
 }

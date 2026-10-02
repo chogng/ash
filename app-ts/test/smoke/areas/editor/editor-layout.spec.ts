@@ -19,9 +19,8 @@ for (const groupCount of [1, 2]) {
 		if (await sidebar.isHidden()) {
 			await page.locator('[data-action-id="workbench.action.toggleSideBar"] button').click();
 		}
-		await page.keyboard.press('ControlOrMeta+N');
+		await workbench.editors.newUntitledFile();
 		const editor = workbench.editors.groupAt(0).content.locator('.stanza-editor');
-		await editor.locator('.stanza-editor-input').focus();
 		await page.keyboard.insertText(Array.from({ length: 100 }, (_, index) => `line ${index}: resize`).join('\n'));
 		await page.keyboard.press('ControlOrMeta+Home');
 		await expect(editor.locator('.stanza-editor-line-text').first()).toContainText('line 0:');
@@ -162,7 +161,7 @@ test.describe('startup layout defaults', () => {
 		const page = workbench.page;
 		await page.getByRole('tab', { name: 'Git', exact: true }).click();
 		await expect(page.locator('[data-view-container-id="ash.git"]')).toHaveClass(/ash-scm-viewlet/u);
-		await expect(page.locator('.ash-scm-status')).toHaveText('Open a folder to use Git.');
+		await expect(page.locator('.ash-scm-status')).toHaveText('Open a folder to use source control.');
 		await expect(page.locator('.ash-scm-change')).toHaveCount(0);
 		const sidebar = page.locator('[data-part="sidebar"]');
 		const sash = sidebar.locator('xpath=../../..').locator(':scope > .ash-sash').first();
@@ -459,17 +458,24 @@ test.describe('welcome brand', () => {
 			return {
 				cardWidth: Math.round(first.width),
 				secondCardOnFirstRow: first.top === second.top,
-				labelOverflow: Math.max(0, ...cards.map(card => {
+				labelsFitCards: cards.every(card => {
 					const label = card.querySelector<HTMLElement>('.ash-getting-started-card-label')!;
-					return label.scrollWidth - label.clientWidth;
-				})),
+					const labelBounds = label.getBoundingClientRect();
+					const cardBounds = card.getBoundingClientRect();
+					return labelBounds.width > 0 && labelBounds.left >= cardBounds.left && labelBounds.right <= cardBounds.right;
+				}),
+				labelsUseEllipsis: cards.every(card => {
+					const label = card.querySelector<HTMLElement>('.ash-getting-started-card-label')!;
+					const style = getComputedStyle(label);
+					return style.overflowX === 'hidden' && style.textOverflow === 'ellipsis' && style.whiteSpace === 'nowrap';
+				}),
 			};
 		});
 
 		await welcome.evaluate(element => { element.style.width = '364px'; });
-		expect(await cardGeometry()).toEqual({ cardWidth: 160, secondCardOnFirstRow: true, labelOverflow: 0 });
+		expect(await cardGeometry()).toEqual({ cardWidth: 160, secondCardOnFirstRow: true, labelsFitCards: true, labelsUseEllipsis: true });
 		await welcome.evaluate(element => { element.style.width = '350px'; });
-		expect(await cardGeometry()).toEqual({ cardWidth: 180, secondCardOnFirstRow: false, labelOverflow: 0 });
+		expect(await cardGeometry()).toEqual({ cardWidth: 180, secondCardOnFirstRow: false, labelsFitCards: true, labelsUseEllipsis: true });
 	});
 
 	test('welcome uses the theme-colored mark without a filled icon tile', async ({ workbench }) => {
@@ -545,7 +551,7 @@ test("split editor groups keep visible boundaries", async ({ target, workbench }
 	await expect(borderedPanes).toHaveCount(2);
 	const borderColor = await editors.element.evaluate(element => {
 		const probe = element.ownerDocument.createElement("span");
-		probe.style.color = "var(--ash-editor-group-border)";
+		probe.style.color = "var(--ash-editorGroup-border)";
 		element.append(probe);
 		const color = getComputedStyle(probe).color;
 		probe.remove();

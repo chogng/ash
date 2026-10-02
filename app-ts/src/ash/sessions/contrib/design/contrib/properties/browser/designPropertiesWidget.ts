@@ -24,8 +24,9 @@ export class DesignPropertiesWidget extends Disposable {
 	private readonly closedInput: HTMLInputElement;
 	private readonly pathInputs = new Map<string, HTMLInputElement>();
 
-	constructor(ownerDocument: Document, private readonly documentController: DesignDocumentController, private readonly commands: DocumentCommands, private readonly selection: DesignSelection, private readonly refresh: () => void) {
+	constructor(container: HTMLElement, private readonly documentController: DesignDocumentController, private readonly commands: DocumentCommands, private readonly selection: DesignSelection, private readonly refresh: () => void) {
 		super();
+		const ownerDocument = container.ownerDocument;
 		this.domNode = h(ownerDocument, 'div', { className: 'ash-sessions-design-properties', attributes: { role: 'group', 'aria-label': localize('sessions.design.properties', 'Shape properties') } });
 		for (const [field, label] of [
 			['x', localize('sessions.design.x', 'X')],

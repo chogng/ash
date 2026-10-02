@@ -2,7 +2,7 @@
   z-index: 9;
   background: var(--ash-editor-background);
   box-shadow: 0 6px 18px var(--ash-widget-shadow);
-  outline: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
+  outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
 }
 
 .stanza-editor-peek-view > .stanza-editor-zone-widget-container {
@@ -15,7 +15,7 @@
   padding: 4px 8px;
   color: var(--ash-description-foreground);
   font-size: 11px;
-  border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+  border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
 }
 
 .stanza-editor-peek-view-body {
@@ -38,13 +38,13 @@
   text-align: left;
   background: transparent;
   border: 0;
-  border-radius: var(--ash-corner-radius-x-small);
+  border-radius: var(--ash-cornerRadius-xSmall);
 }
 
 .stanza-editor-language-location:hover,
 .stanza-editor-language-location:focus-visible {
-  background: var(--ash-list-hover-background);
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  background: var(--ash-list-hoverBackground);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 }
 
 .stanza-editor-language-hierarchy,
@@ -73,7 +73,7 @@
   text-align: left;
   background: transparent;
   border: 0;
-  border-radius: var(--ash-corner-radius-x-small);
+  border-radius: var(--ash-cornerRadius-xSmall);
 }
 
 .stanza-editor-language-hierarchy-item {
@@ -93,12 +93,12 @@
 .stanza-editor-language-hierarchy-item:focus-visible,
 .stanza-editor-language-hierarchy-expand:hover,
 .stanza-editor-language-hierarchy-expand:focus-visible {
-  background: var(--ash-list-hover-background);
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  background: var(--ash-list-hoverBackground);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 }
 
 .stanza-editor-language-preview {
   height: 180px;
   min-width: 0;
-  border-top: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+  border-top: var(--ash-strokeThickness) solid var(--ash-widget-border);
 }

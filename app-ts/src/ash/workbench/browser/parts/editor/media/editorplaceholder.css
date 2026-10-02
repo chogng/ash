@@ -31,13 +31,13 @@
 }
 
 .ash-editor-open-error h2 {
-	font-size: var(--ash-font-size-heading2);
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-size: var(--ash-fontSize-heading2);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-editor-open-error-severity {
 	color: var(--ash-error-foreground);
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-editor-open-error.warning .ash-editor-open-error-severity {

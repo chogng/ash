@@ -2,6 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { getAxeResults, injectAxe } from "axe-playwright";
 import { ScrollType, type IEditor } from '../../../src/ash/editor/common/editorCommon.js';
 import { fileURLToPath } from 'node:url';
+import { measureRenderedTextRanges } from '../../automation/editor.js';
+import { installClock } from '../../automation/clock.js';
 
 const pageErrors = new WeakMap<object, string[]>();
 
@@ -193,7 +195,7 @@ test('modern minimap corners apply to main and auxiliary hosts and leave flat ho
 	await page.addStyleTag({ path: fileURLToPath(new URL('../../../src/ash/workbench/contrib/modernUI/browser/media/roundedCorners.css', import.meta.url)) });
 	const host = page.locator('body');
 	// This editor fixture has no Workbench theme service; provide its size token.
-	await host.evaluate(element => element.style.setProperty('--ash-corner-radius-small', '4px'));
+	await host.evaluate(element => element.style.setProperty('--ash-cornerRadius-small', '4px'));
 	const slider = page.locator('.stanza-editor-minimap-slider');
 	for (const root of ['ash-workbench', 'ash-auxiliary-window-container']) {
 		await host.evaluate((element, root) => element.setAttribute('class', `${root} modern-ui`), root);
@@ -418,16 +420,8 @@ for (const theme of ['light', 'dark', 'contrast', 'contrastLight'] as const) {
 		}, theme);
 		const line = page.locator('.view-lines .stanza-editor-line-text').first();
 		await expect(line).toHaveText('session rename > selected content');
-		const points = await line.evaluate(element => {
-			const node = element.firstChild!.firstChild!;
-			return [17, 33].map(offset => {
-				const range = document.createRange();
-				range.setStart(node, offset);
-				range.collapse(true);
-				const rect = range.getBoundingClientRect();
-				return { x: rect.left - 0.25, y: rect.top + rect.height / 2 };
-			});
-		});
+		const rects = await line.evaluate(measureRenderedTextRanges, [17, 33].map(offset => ({ start: offset, end: offset })));
+		const points = rects.map(rect => ({ x: rect.left - 0.25, y: rect.top + rect.height / 2 }));
 		await page.mouse.move(points[0]!.x, points[0]!.y);
 		await page.mouse.down();
 		await page.mouse.move(points[1]!.x, points[1]!.y, { steps: 8 });
@@ -453,7 +447,7 @@ for (const theme of ['light', 'dark', 'contrast', 'contrastLight'] as const) {
 					const textIndex = stack.findIndex(node => node.closest('.view-lines'));
 					const backgroundIndex = stack.indexOf(element);
 					const root = element.closest('.stanza-editor')!;
-					const backgroundToken = focused ? '--ash-editor-selection-background' : '--ash-editor-inactive-selection-background';
+					const backgroundToken = focused ? '--ash-editor-selectionBackground' : '--ash-editor-inactiveSelectionBackground';
 					return {
 						textAboveBackground: textIndex >= 0 && backgroundIndex > textIndex,
 						hasBackground: getComputedStyle(element).backgroundColor !== 'rgba(0, 0, 0, 0)',
@@ -513,16 +507,8 @@ for (const theme of ['light', 'dark', 'contrast', 'contrastLight'] as const) {
 		}, { text, theme });
 		const line = page.locator('.view-lines .stanza-editor-line-text').first();
 		await expect(line).toHaveText(text);
-		const points = await line.evaluate(element => {
-			const node = element.firstChild!.firstChild!;
-			return [0, 3, 8, 12].map(offset => {
-				const range = document.createRange();
-				range.setStart(node, offset);
-				range.setEnd(node, offset + 1);
-				const rect = range.getBoundingClientRect();
-				return { x: rect.left + rect.width / 2 + 0.25, y: rect.top + rect.height / 2, width: rect.width };
-			});
-		});
+		const rects = await line.evaluate(measureRenderedTextRanges, [0, 3, 8, 12].map(offset => ({ start: offset, end: offset + 1 })));
+		const points = rects.map(rect => ({ x: rect.left + rect.width / 2 + 0.25, y: rect.top + rect.height / 2, width: rect.width }));
 		for (const point of points) {
 			await page.mouse.move(point.x, point.y);
 			await page.mouse.down();
@@ -572,22 +558,8 @@ for (const proportional of [false, true]) {
 		const line = page.locator('.view-lines > .view-line .stanza-editor-line-text').nth(1);
 		await expect(line).toHaveText(text);
 		for (const offset of [text.length, 24, 18]) {
-			const point = await line.evaluate((element, offset) => {
-				const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-				let remaining = offset;
-				for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-					const length = node.textContent!.length;
-					if (remaining <= length) {
-						const range = document.createRange();
-						range.setStart(node, remaining);
-						range.collapse(true);
-						const rect = range.getBoundingClientRect();
-						return { x: rect.left - 0.5, y: rect.top + rect.height / 2 };
-					}
-					remaining -= length;
-				}
-				throw new Error(`Missing rendered offset ${offset}`);
-			}, offset);
+			const [rect] = await line.evaluate(measureRenderedTextRanges, [{ start: offset, end: offset }]);
+			const point = { x: rect!.left - 0.5, y: rect!.top + rect!.height / 2 };
 			await page.mouse.click(point.x, point.y);
 			await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getPosition())).toEqual({ lineNumber: 2, column: offset + 1 });
 			await expect.poll(async () => {
@@ -627,23 +599,12 @@ for (const proportional of [false, true]) {
 		}, { text, proportional });
 		const line = page.locator('.view-lines > .view-line .stanza-editor-line-text').first();
 		await expect(line).toHaveText(text);
-		const points = await line.evaluate(element => [18, 24].map(offset => {
-			const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-			let remaining = offset;
-			for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-				const length = node.textContent!.length;
-				if (remaining <= length) {
-					const range = document.createRange();
-					range.setStart(node, remaining);
-					range.collapse(true);
-					const rect = range.getBoundingClientRect();
-					const row = element.closest('.view-line')!.getBoundingClientRect();
-					return { x: rect.left, y: rect.top + rect.height / 2, top: row.top, height: row.height };
-				}
-				remaining -= length;
-			}
-			throw new Error(`Missing rendered offset ${offset}`);
-		}));
+		const rects = await line.evaluate(measureRenderedTextRanges, [18, 24].map(offset => ({ start: offset, end: offset })));
+		const row = await line.evaluate(element => {
+			const { top, height } = element.closest('.view-line')!.getBoundingClientRect();
+			return { top, height };
+		});
+		const points = rects.map(rect => ({ x: rect.left, y: rect.top + rect.height / 2, top: row.top, height: row.height }));
 		for (const gesture of ['forward', 'backward', 'keyboard'] as const) {
 			const anchor = gesture === 'backward' ? 1 : 0;
 			const active = 1 - anchor;
@@ -698,19 +659,16 @@ test('dragging across wrapped rows selects exact model columns in both direction
 		editor.setValue(text);
 	}, text);
 	await expect.poll(() => page.locator('.view-lines > .view-line').count()).toBeGreaterThan(2);
-	const rows = await page.locator('.view-lines > .view-line').evaluateAll(elements => elements.slice(0, 3).map((row, index) => {
-		const text = row.querySelector('.stanza-editor-line-text')!;
-		const node = text.firstChild!.firstChild!;
-		const length = text.textContent!.length;
-		const start = index === 0 ? 3 : 0;
-		const end = index === 2 ? 7 : length;
-		const range = document.createRange();
-		range.setStart(node, start);
-		range.setEnd(node, end);
-		const selected = range.getBoundingClientRect();
-		const bounds = row.getBoundingClientRect();
-		return { length, x: selected.left, width: selected.width, y: bounds.top, height: bounds.height };
-	}));
+	const rows: { length: number; x: number; width: number; y: number; height: number }[] = [];
+	for (let index = 0; index < 3; index++) {
+		const row = page.locator('.view-lines > .view-line').nth(index);
+		const line = row.locator('.stanza-editor-line-text');
+		const length = (await line.textContent())!.length;
+		const [selected] = await line.evaluate(measureRenderedTextRanges, [{ start: index === 0 ? 3 : 0, end: index === 2 ? 7 : length }]);
+		const bounds = await row.boundingBox();
+		assertBox(bounds, 'wrapped text row');
+		rows.push({ length, x: selected!.left, width: selected!.width, y: bounds.y, height: bounds.height });
+	}
 	const endOffset = rows[0]!.length + rows[1]!.length + 7;
 	const points = [
 		{ x: rows[0]!.x - 0.25, y: rows[0]!.y + rows[0]!.height / 2 },
@@ -909,8 +867,8 @@ test("cursor layer retains nodes, animates stable moves, and resolves multi-curs
 	await expect(retainedCaret).toHaveAttribute("data-retained-identity", "true");
 
 	await editor.evaluate(element => {
-		element.style.setProperty("--ash-editor-multi-cursor-primary-foreground", "#010203");
-		element.style.setProperty("--ash-editor-multi-cursor-secondary-foreground", "#040506");
+		element.style.setProperty("--ash-editorMultiCursor-primary-foreground", "#010203");
+		element.style.setProperty("--ash-editorMultiCursor-secondary-foreground", "#040506");
 	});
 	const countChangeTransitions = await page.evaluate(() => {
 		window.ashTextModelIntegration.setCursors([
@@ -1000,9 +958,9 @@ test("short documents have no false scroll range and use a proportional hover sl
 	const minimap = page.locator('.minimap');
 	const slider = page.locator('.stanza-editor-minimap-slider');
 	await page.locator('.stanza-editor').evaluate(element => {
-		element.style.setProperty('--ash-minimap-slider-background', '#010203');
-		element.style.setProperty('--ash-minimap-slider-hover-background', '#040506');
-		element.style.setProperty('--ash-minimap-slider-active-background', '#070809');
+		element.style.setProperty('--ash-minimapSlider-background', '#010203');
+		element.style.setProperty('--ash-minimapSlider-hoverBackground', '#040506');
+		element.style.setProperty('--ash-minimapSlider-activeBackground', '#070809');
 	});
 	await expect(slider).toHaveCSS('opacity', '0');
 	await expect(slider).toHaveCSS('background-color', 'rgb(1, 2, 3)');
@@ -1177,6 +1135,7 @@ test('editor scrollbar uses wheel policy, slider dimensions and page clicks from
 });
 
 test('smooth scrolling keeps continuous and subpixel wheel input immediate', async ({ page }) => {
+	const pauseClock = await installClock(page);
 	await openEditor(page);
 	await page.evaluate(() => {
 		window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'x'.repeat(200)).join('\n'));
@@ -1184,8 +1143,7 @@ test('smooth scrolling keeps continuous and subpixel wheel input immediate', asy
 	});
 	const editor = page.locator('.stanza-editor');
 	await expect(editor.getByRole('scrollbar', { name: 'Vertical scrollbar' })).toBeVisible();
-	await page.clock.install();
-	await page.clock.pauseAt(new Date());
+	await pauseClock();
 	for (const [deltaY, expected] of [[12, 12], [0.2, 13], [-0.2, 12]]) {
 		await editor.dispatchEvent('wheel', { deltaY, deltaMode: 0 });
 		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(expected);
@@ -1265,14 +1223,14 @@ test('editor scrollbar arrows support click, hold, keyboard and runtime removal'
 });
 
 test('editor inertial scrolling decays and stops on reversal, direct input and configuration changes', async ({ page }) => {
+	const pauseClock = await installClock(page);
 	await openEditor(page);
 	await page.evaluate(() => {
 		window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'x'.repeat(200)).join('\n'));
 		window.ashTextModelIntegration.updateOptions({ inertialScroll: true, smoothScrolling: false });
 	});
 	const editor = page.locator('.stanza-editor');
-	await page.clock.install();
-	await page.clock.pauseAt(new Date());
+	await pauseClock();
 	await editor.dispatchEvent('wheel', { deltaY: 12, deltaMode: 0 });
 	await page.clock.runFor(160);
 	const forward = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
@@ -1321,13 +1279,13 @@ test('editor inertial scrolling decays and stops on reversal, direct input and c
 });
 
 test('editor distinguishes accelerating pixel input from fixed wheel steps before applying sensitivity', async ({ page }) => {
+	const pauseClock = await installClock(page);
 	await openEditor(page);
 	await page.evaluate(() => {
 		window.ashTextModelIntegration.setValue(Array.from({ length: 1000 }, () => 'x'.repeat(200)).join('\n'));
 		window.ashTextModelIntegration.updateOptions({ inertialScroll: true, smoothScrolling: false, mouseWheelScrollSensitivity: 2 });
 	});
-	await page.clock.install();
-	await page.clock.pauseAt(new Date());
+	await pauseClock();
 	const editor = page.locator('.stanza-editor');
 	// At the top edge the same unconsumed event reaches both wheel listeners.
 	await editor.dispatchEvent('wheel', { deltaY: -60, deltaMode: 0 });
@@ -1440,11 +1398,11 @@ test('selection, gutter, whitespace and line numbers resolve editor colors in al
 			await expect(editor.locator('.view-overlays').first()).toHaveClass(focused ? /\bfocused\b/u : /^(?!.*\bfocused\b)/u);
 			const colors = await editor.evaluate((element, focused) => {
 				const entries = [
-					['.stanza-editor-selection', 'background-color', focused ? '--ash-editor-selection-background' : '--ash-editor-inactive-selection-background'],
-					['.margin', 'background-color', '--ash-editor-gutter-background'],
-					['.stanza-editor-whitespace', 'color', '--ash-editor-whitespace-foreground'],
-					['.line-numbers.active-line-number', 'color', '--ash-editor-line-number-active-foreground'],
-					['.line-numbers:not(.active-line-number)', 'color', '--ash-editor-line-number-foreground'],
+					['.stanza-editor-selection', 'background-color', focused ? '--ash-editor-selectionBackground' : '--ash-editor-inactiveSelectionBackground'],
+					['.margin', 'background-color', '--ash-editorGutter-background'],
+					['.stanza-editor-whitespace', 'color', '--ash-editorWhitespace-foreground'],
+					['.line-numbers.active-line-number', 'color', '--ash-editorLineNumber-activeForeground'],
+					['.line-numbers:not(.active-line-number)', 'color', '--ash-editorLineNumber-foreground'],
 				];
 				return entries.map(([selector, property, token]) => {
 					const target = element.querySelector(selector!);

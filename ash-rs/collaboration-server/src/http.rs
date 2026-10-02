@@ -164,6 +164,11 @@ fn handle_connection(
     mut stream: TcpStream,
     runtime: &HttpRuntime,
 ) -> Result<(), CollaborationServerError> {
+    // Windows accepts inherit the listener's nonblocking mode. The connection
+    // worker reads complete requests synchronously under the read timeout.
+    stream
+        .set_nonblocking(false)
+        .map_err(CollaborationServerError::http)?;
     stream
         .set_read_timeout(Some(Duration::from_secs(30)))
         .map_err(CollaborationServerError::http)?;

@@ -21,7 +21,7 @@ import { IMemoryDiagnosticsService } from '../../platform/memory/common/memoryDi
 import "./style.js";
 import { IAutomationService } from '../../platform/automation/common/automationService.js';
 import { disposableWindowTimeout } from "../../base/browser/scheduler.js";
-import { getWindow } from '../../base/browser/dom.js';
+import { h as createDomElement, getWindow } from '../../base/browser/dom.js';
 import { mainWindow } from "../../base/browser/window.js";
 import { PixelRatio } from '../../base/browser/pixelRatio.js';
 import {
@@ -436,6 +436,7 @@ export class Workbench extends Disposable {
 		createWindow?: (services: IInstantiationService) => IDisposable,
 	) {
 		super();
+		workbenchRoot.setAttribute('aria-busy', 'true');
 		this._register(themes);
 		this._register(FormattingConflicts.setFormatterSelector(async formatters => formatters[0]));
 		const mode = WorkbenchModeRegistry.get(modeId);
@@ -643,7 +644,7 @@ export class Workbench extends Disposable {
 			throw new Error("Workbench requires an owner window");
 		}
 		this.ownerWindow = ownerWindow;
-		const feedbackHost = ownerDocument.createElement('div');
+		const feedbackHost = createDomElement(ownerDocument, 'div');
 		feedbackHost.className = 'ash-feedback-host';
 		feedbackHost.style.setProperty('--ash-feedback-statusbar-height', `${StatusbarHeight}px`);
 		workbenchRoot.append(feedbackHost);
@@ -1221,7 +1222,9 @@ export class Workbench extends Disposable {
 		lifecycleService.phase = LifecyclePhase.Ready;
 		contributions.advance(WorkbenchPhase.BlockRestore);
 		layoutService.layout();
-		this.whenRestored = this.completeStartupRestoration([extensionReady, ...serviceContributionReady], workingCopyBackups, editor, editorParts, contributions);
+		this.whenRestored = this.completeStartupRestoration([extensionReady, ...serviceContributionReady], workingCopyBackups, editor, editorParts, contributions).then(() => {
+			if (!this.isDisposed) workbenchRoot.setAttribute('aria-busy', 'false');
+		});
 		if (createWindow) {
 			this._register(createWindow(services));
 		}
@@ -1265,6 +1268,8 @@ export class Workbench extends Disposable {
 		if (this.isDisposed) return;
 		this.lifecycleService.phase = LifecyclePhase.Restored;
 		contributions.advance(WorkbenchPhase.AfterRestored);
+		// Initial startup and workspace switches await the same contribution-owned editor restoration.
+		await contributions.workspaceRestored();
 	}
 
 	private async restoreEditorParts(editorParts: IEditorPartsService): Promise<void> {

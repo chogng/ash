@@ -35,7 +35,7 @@
   flex: 1 1 auto;
   padding: 2px 0 8px;
   overflow: auto;
-  scrollbar-color: var(--ash-scrollbar-slider-background) transparent;
+  scrollbar-color: var(--ash-scrollbarSlider-background) transparent;
   scrollbar-width: thin;
 }
 
@@ -51,16 +51,16 @@
 
 .ash-scm-graph::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
-  border-radius: var(--ash-corner-radius-medium);
-  background: var(--ash-scrollbar-slider-background) padding-box;
+  border-radius: var(--ash-cornerRadius-medium);
+  background: var(--ash-scrollbarSlider-background) padding-box;
 }
 
 .ash-scm-graph::-webkit-scrollbar-thumb:hover {
-  background: var(--ash-scrollbar-slider-hover-background) padding-box;
+  background: var(--ash-scrollbarSlider-hoverBackground) padding-box;
 }
 
 .ash-scm-graph::-webkit-scrollbar-thumb:active {
-  background: var(--ash-scrollbar-slider-active-background) padding-box;
+  background: var(--ash-scrollbarSlider-activeBackground) padding-box;
 }
 
 .ash-scm-graph > .ash-scm-command {
@@ -80,7 +80,7 @@
 }
 
 .ash-scm-graph-commit {
-  --scm-graph-row-background: var(--ash-side-bar-background);
+  --scm-graph-row-background: var(--ash-sideBar-background);
   position: relative;
   min-width: 0;
 }
@@ -101,12 +101,12 @@
 }
 
 .ash-scm-graph-commit:focus-visible > .ash-scm-graph-row {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
   outline-offset: -1px;
 }
 
 .ash-scm-graph-row:hover {
-  background: linear-gradient(to right, transparent var(--scm-graph-content-x, 22px), var(--ash-list-hover-background) var(--scm-graph-content-x, 22px));
+  background: linear-gradient(to right, transparent var(--scm-graph-content-x, 22px), var(--ash-list-hoverBackground) var(--scm-graph-content-x, 22px));
 }
 
 .ash-scm-graph-graph {
@@ -173,7 +173,7 @@
 }
 
 .ash-scm-graph-commit.current .ash-scm-graph-subject {
-  font-weight: var(--ash-font-weight-semi-bold);
+  font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-scm-graph-label-container {
@@ -192,13 +192,13 @@
   max-width: 180px;
   align-items: center;
   border: 0;
-  border-radius: var(--ash-corner-radius-circle);
+  border-radius: var(--ash-cornerRadius-circle);
   gap: 2px;
   padding: 0 6px 0 4px;
   overflow: hidden;
   color: var(--scm-graph-ref-color);
   background: color-mix(in srgb, var(--scm-graph-ref-color) 14%, transparent);
-  font-size: var(--ash-font-size-label2);
+  font-size: var(--ash-fontSize-label2);
   line-height: 18px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -217,7 +217,7 @@
 
 .ash-scm-graph-label.head {
   --scm-graph-ref-color: var(--scm-graph-accent);
-  color: var(--ash-list-active-selection-foreground);
+  color: var(--ash-list-activeSelectionForeground);
   background: var(--scm-graph-accent);
 }
 
@@ -235,12 +235,12 @@
   gap: 4px;
   padding: 0 8px 6px;
   color: var(--ash-muted-foreground);
-  font-size: var(--ash-font-size-label2);
+  font-size: var(--ash-fontSize-label2);
 }
 
 .ash-scm-graph-remote {
-  border: var(--ash-stroke-thickness) solid color-mix(in srgb, currentColor 28%, transparent);
-  border-radius: var(--ash-corner-radius-small);
+  border: var(--ash-strokeThickness) solid color-mix(in srgb, currentColor 28%, transparent);
+  border-radius: var(--ash-cornerRadius-small);
   padding: 2px 6px;
 }
 
@@ -249,7 +249,7 @@
   margin-left: 8px;
   overflow: hidden;
   color: var(--ash-muted-foreground);
-  font-size: var(--ash-font-size-label2);
+  font-size: var(--ash-fontSize-label2);
   font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -291,18 +291,18 @@
   min-width: 0;
   overflow: hidden;
   color: var(--ash-muted-foreground);
-  font-size: var(--ash-font-size-label2);
+  font-size: var(--ash-fontSize-label2);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .ash-scm-graph-change:hover,
 .ash-scm-graph-change:focus-visible {
-  background: var(--ash-list-hover-background);
+  background: var(--ash-list-hoverBackground);
 }
 
 .ash-scm-graph-change:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
   outline-offset: -1px;
 }
 
@@ -310,8 +310,8 @@
   flex: 0 0 auto;
   margin-left: 8px;
   color: var(--ash-muted-foreground);
-  font-size: var(--ash-font-size-label2);
-  font-weight: var(--ash-font-weight-semi-bold);
+  font-size: var(--ash-fontSize-label2);
+  font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-scm-graph-change-status.added { color: var(--ash-success-foreground); }
@@ -323,7 +323,7 @@
   padding-left: calc(var(--scm-graph-node-x, 11px) + 11px);
   overflow: hidden;
   color: var(--ash-muted-foreground);
-  font-size: var(--ash-font-size-label2);
+  font-size: var(--ash-fontSize-label2);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -357,13 +357,13 @@
 }
 
 .ash-scm-graph-hover-subject {
-  font-weight: var(--ash-font-weight-semi-bold);
+  font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-scm-graph-hover-metadata {
   overflow-wrap: anywhere;
   color: var(--ash-muted-foreground);
-  font-size: var(--ash-font-size-label2);
+  font-size: var(--ash-fontSize-label2);
 }
 
 .ash-scm-remote-actions {
@@ -372,8 +372,8 @@
 
 .ash-scm-command {
   margin-left: auto;
-  border: var(--ash-stroke-thickness) solid color-mix(in srgb, currentColor 22%, transparent);
-  border-radius: var(--ash-corner-radius-small);
+  border: var(--ash-strokeThickness) solid color-mix(in srgb, currentColor 22%, transparent);
+  border-radius: var(--ash-cornerRadius-small);
   padding: 4px 8px;
   color: inherit;
   background: transparent;
@@ -386,8 +386,8 @@
 }
 
 .ash-scm-command:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: var(--ash-stroke-thickness);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+  outline-offset: var(--ash-strokeThickness);
 }
 
 .ash-scm-command:disabled {
@@ -420,20 +420,20 @@
   padding: 0 24px 0 8px;
   color: var(--ash-input-foreground);
   background: var(--ash-input-background);
-  border: var(--ash-stroke-thickness) solid var(--ash-input-border, transparent);
-  border-radius: var(--ash-corner-radius-x-small);
+  border: var(--ash-strokeThickness) solid var(--ash-input-border, transparent);
+  border-radius: var(--ash-cornerRadius-xSmall);
 }
 
 .ash-scm-repository-selector > select:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
   outline-offset: -1px;
 }
 
 .ash-scm-commit-input {
   min-width: 0;
   resize: vertical;
-  border: var(--ash-stroke-thickness) solid color-mix(in srgb, currentColor 25%, transparent);
-  border-radius: var(--ash-corner-radius-small);
+  border: var(--ash-strokeThickness) solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: var(--ash-cornerRadius-small);
   padding: 6px 8px;
   color: inherit;
   background: color-mix(in srgb, currentColor 6%, transparent);
@@ -441,20 +441,20 @@
 }
 
 .ash-scm-commit-input:focus {
-  border-color: var(--ash-focus-border);
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  border-color: var(--ash-focusBorder);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 }
 
 .ash-scm-commit.ash-button,
 .ash-scm-find-issues.ash-button {
   width: 100%;
-  color: var(--ash-button-primary-foreground);
-  background: var(--ash-files-empty-explorer-open-folder-background);
+  color: var(--ash-button-primaryForeground);
+  background: var(--ash-files-emptyExplorerOpenFolderBackground);
 }
 
 .ash-scm-commit.ash-button:not(:disabled):hover,
 .ash-scm-find-issues.ash-button:not(:disabled):hover {
-  background: var(--ash-files-empty-explorer-open-folder-hover-background);
+  background: var(--ash-files-emptyExplorerOpenFolderHoverBackground);
 }
 
 .ash-scm-find-issues.ash-button {
@@ -481,8 +481,8 @@
   align-items: center;
   margin: 0;
   padding: 0;
-  font-size: var(--ash-font-size-label1);
-  font-weight: var(--ash-font-weight-semi-bold);
+  font-size: var(--ash-fontSize-label1);
+  font-weight: var(--ash-fontWeight-semiBold);
   line-height: 22px;
 }
 
@@ -546,11 +546,11 @@
 }
 
 .ash-scm-change:hover {
-  background: var(--ash-list-hover-background);
+  background: var(--ash-list-hoverBackground);
 }
 
 .ash-scm-change-open:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
   outline-offset: -1px;
 }
 
@@ -580,7 +580,7 @@
   width: 16px;
   margin-left: 4px;
   color: color-mix(in srgb, currentColor 78%, transparent);
-  font-weight: var(--ash-font-weight-semi-bold);
+  font-weight: var(--ash-fontWeight-semiBold);
   text-align: center;
 }
 

@@ -9,16 +9,16 @@
 	height: min(60vh, 32rem);
 	padding: var(--ash-spacing-size120);
 	resize: none;
-	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-	border-radius: var(--ash-corner-radius-medium);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-medium);
 	color: var(--ash-foreground);
 	background: var(--ash-editor-background);
 	font: inherit;
-	font-size: var(--ash-font-size-body1);
+	font-size: var(--ash-fontSize-body1);
 	line-height: 1.4;
 }
 
 .ash-accessible-view-content:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }

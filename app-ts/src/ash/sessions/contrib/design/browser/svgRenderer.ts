@@ -1,13 +1,12 @@
 import { mainWindow } from '../../../../base/browser/window.js';
+import { svg } from '../../../../base/browser/dom.js';
 import type { DesignDocument, DesignShape } from '../common/model/document.js';
 import { designBounds } from '../common/core/geometry.js';
 
-const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
-
 /** Canvas and export share SVG construction; user text never becomes markup. */
-export function renderDesignShape(shape: DesignShape, previous?: SVGGraphicsElement): SVGGraphicsElement {
+export function renderDesignShape(container: SVGElement, shape: DesignShape, previous?: SVGGraphicsElement): SVGGraphicsElement {
 	const tag = ({ rectangle: 'rect', ellipse: 'ellipse', path: 'path', text: 'svg', group: 'svg' } as const)[shape.kind];
-	const element = previous?.tagName === tag ? previous : mainWindow.document.createElementNS(SVG_NAMESPACE, tag);
+	const element = previous?.tagName === tag ? previous : svg(container.ownerDocument, tag);
 	element.dataset.shapeId = shape.id;
 	element.setAttribute('transform', `rotate(${shape.rotation} ${shape.x + shape.width / 2} ${shape.y + shape.height / 2})`);
 	element.setAttribute('fill', shape.fill);
@@ -31,7 +30,7 @@ export function renderDesignShape(shape: DesignShape, previous?: SVGGraphicsElem
 		if (shape.kind === 'group') {
 			element.setAttribute('viewBox', `0 0 ${shape.contentWidth} ${shape.contentHeight}`);
 			element.setAttribute('overflow', 'visible');
-			const children = shape.children.map((child, index) => renderDesignShape(child, element.children[index] as SVGGraphicsElement | undefined));
+			const children = shape.children.map((child, index) => renderDesignShape(element, child, element.children[index] as SVGGraphicsElement | undefined));
 			for (const [index, child] of children.entries()) {
 				const previous = element.children[index];
 				if (!previous) { element.append(child); }
@@ -41,13 +40,13 @@ export function renderDesignShape(shape: DesignShape, previous?: SVGGraphicsElem
 		} else if (shape.kind === 'text') {
 			element.setAttribute('overflow', 'hidden');
 			element.setAttribute('viewBox', `0 0 ${shape.width} ${shape.height}`);
-			const text = element.firstElementChild?.tagName === 'text' ? element.firstElementChild : mainWindow.document.createElementNS(SVG_NAMESPACE, 'text');
+			const text = element.firstElementChild?.tagName === 'text' ? element.firstElementChild : svg(element.ownerDocument, 'text');
 			text.setAttribute('font-family', 'sans-serif');
 			text.setAttribute('font-size', `${shape.fontSize}`);
 			text.setAttribute('xml:space', 'preserve');
 			const lines = shape.text.split('\n');
 			for (const [index, line] of lines.entries()) {
-				const span = text.children[index] ?? mainWindow.document.createElementNS(SVG_NAMESPACE, 'tspan');
+				const span = text.children[index] ?? svg(text.ownerDocument, 'tspan');
 				span.setAttribute('x', '0');
 				span.setAttribute('y', `${shape.fontSize * (1 + index * 1.2)}`);
 				if (span.textContent !== line) { span.textContent = line; }
@@ -61,7 +60,7 @@ export function renderDesignShape(shape: DesignShape, previous?: SVGGraphicsElem
 }
 
 export function exportDesignSvg(document: DesignDocument): string {
-	const svg = mainWindow.document.createElementNS(SVG_NAMESPACE, 'svg');
+	const root = svg(mainWindow.document, 'svg');
 	const bounds = designBounds(document.shapes);
 	function strokePadding(shape: DesignShape): number {
 		if (shape.kind === 'path') { return shape.strokeWidth; }
@@ -69,10 +68,10 @@ export function exportDesignSvg(document: DesignDocument): string {
 		return 0;
 	}
 	const padding = Math.max(0, ...document.shapes.map(strokePadding));
-	svg.setAttribute('viewBox', `${bounds.x - padding} ${bounds.y - padding} ${bounds.width + padding * 2} ${bounds.height + padding * 2}`);
-	svg.setAttribute('width', `${bounds.width + padding * 2}`);
-	svg.setAttribute('height', `${bounds.height + padding * 2}`);
-	for (const shape of document.shapes) { svg.append(renderDesignShape(shape)); }
-	for (const element of svg.querySelectorAll('[data-shape-id]')) { element.removeAttribute('data-shape-id'); }
-	return new mainWindow.XMLSerializer().serializeToString(svg) + '\n';
+	root.setAttribute('viewBox', `${bounds.x - padding} ${bounds.y - padding} ${bounds.width + padding * 2} ${bounds.height + padding * 2}`);
+	root.setAttribute('width', `${bounds.width + padding * 2}`);
+	root.setAttribute('height', `${bounds.height + padding * 2}`);
+	for (const shape of document.shapes) { root.append(renderDesignShape(root, shape)); }
+	for (const element of root.querySelectorAll('[data-shape-id]')) { element.removeAttribute('data-shape-id'); }
+	return new mainWindow.XMLSerializer().serializeToString(root) + '\n';
 }

@@ -3,8 +3,8 @@
 	box-sizing: border-box;
 	width: 44px;
 	height: 40px;
-	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-small);
 	background: var(--ash-editor-background);
 }
 
@@ -43,11 +43,11 @@
 }
 
 .stanza-editor .stanza-editor-show-keyboard:focus-within {
-	outline: 2px solid var(--ash-focus-border);
+	outline: 2px solid var(--ash-focusBorder);
 	outline-offset: 2px;
 }
 
 [data-color-scheme='high-contrast-dark'] .stanza-editor .stanza-editor-show-keyboard,
 [data-color-scheme='high-contrast-light'] .stanza-editor .stanza-editor-show-keyboard {
-	border-color: var(--ash-focus-border);
+	border-color: var(--ash-focusBorder);
 }

@@ -1,3 +1,5 @@
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { DialogService } from '../../../dialogs/common/dialogService.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -144,6 +146,8 @@ test("Command Palette filters, executes, closes, and restores focus", async () =
 	services.registerInstance(IContextKeyService, contextKeys);
 	const commands = new CommandService(services);
 	services.registerInstance(ICommandService, commands);
+	using dialogs = new DialogService();
+	services.registerInstance(IDialogService, dialogs);
 	const menus = new MenuService(commands, contextKeys);
 	services.registerInstance(IMenuService, menus);
 	const quickInput = new WorkbenchQuickInputService({
@@ -216,6 +220,8 @@ test('Quick Access switches search modes in one picker and restores focus on clo
 		services.registerInstance(IContextKeyService, contextKeys);
 		using commands = new CommandService(services);
 		services.registerInstance(ICommandService, commands);
+		using dialogs = new DialogService();
+		services.registerInstance(IDialogService, dialogs);
 		services.registerInstance(IMenuService, new MenuService(commands, contextKeys));
 		services.registerInstance(IKeybindingService, emptyKeybindingService());
 		using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });

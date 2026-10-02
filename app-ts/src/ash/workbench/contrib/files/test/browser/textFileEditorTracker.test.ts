@@ -13,7 +13,7 @@ import { TextFileEditorTracker } from '../../browser/editors/textFileEditorTrack
 
 test('File editor tracker reloads clean visible files after window focus and keeps dirty edits', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
-	const resource = URI.file('C:\\project\\notes.txt');
+	const resource = URI.file('C:/project/notes.txt');
 	let diskText = 'first';
 	let revision = 1;
 	const textFiles: ITextFileService = {

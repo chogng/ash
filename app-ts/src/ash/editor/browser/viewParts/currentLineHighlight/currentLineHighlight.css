@@ -5,11 +5,11 @@
 	top: 0;
 	box-sizing: border-box;
 	height: 100%;
-	background-color: var(--ash-editor-inactive-line-highlight-background);
+	background-color: var(--ash-editor-inactiveLineHighlightBackground);
 }
 
 .stanza-editor .view-overlays.focused .current-line {
-	background-color: var(--ash-editor-line-highlight-background);
+	background-color: var(--ash-editor-lineHighlightBackground);
 }
 
 .stanza-editor .margin-view-overlays .current-line {
@@ -23,23 +23,23 @@
 }
 
 .stanza-editor .margin-view-overlays .current-line-margin {
-	background-color: var(--ash-editor-inactive-line-highlight-background);
+	background-color: var(--ash-editor-inactiveLineHighlightBackground);
 }
 
 .stanza-editor .margin-view-overlays.focused .current-line-margin {
-	background-color: var(--ash-editor-line-highlight-background);
+	background-color: var(--ash-editor-lineHighlightBackground);
 }
 
 .stanza-editor .view-overlays .current-line-exact,
 .stanza-editor .margin-view-overlays .current-line-exact-margin {
-	border: 2px solid var(--ash-editor-line-highlight-border);
+	border: 2px solid var(--ash-editor-lineHighlightBorder);
 }
 
 [data-color-scheme="high-contrast-dark"] .stanza-editor .view-overlays .current-line-exact,
 [data-color-scheme="high-contrast-dark"] .stanza-editor .margin-view-overlays .current-line-exact-margin,
 [data-color-scheme="high-contrast-light"] .stanza-editor .view-overlays .current-line-exact,
 [data-color-scheme="high-contrast-light"] .stanza-editor .margin-view-overlays .current-line-exact-margin {
-	border-width: var(--ash-stroke-thickness);
+	border-width: var(--ash-strokeThickness);
 }
 
 .stanza-editor

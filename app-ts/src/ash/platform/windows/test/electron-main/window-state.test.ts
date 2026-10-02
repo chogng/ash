@@ -15,11 +15,11 @@ const primaryDisplay: IWindowDisplay = {
 };
 const folderWorkspace: ISingleFolderWorkspaceIdentifier = Object.freeze({
 	id: "folder-project",
-	uri: URI.file("C:\\projects\\folder"),
+	uri: URI.file("C:/projects/folder"),
 });
 const multiRootWorkspace: IWorkspaceIdentifier = Object.freeze({
 	id: "multi-root-project",
-	configPath: URI.file("C:\\projects\\team.ash-workspace"),
+	configPath: URI.file("C:/projects/team.ash-workspace"),
 });
 
 class TestStateService implements IStateService {
@@ -299,7 +299,7 @@ test("first unmatched window inherits the last active window state", () => {
 			workspaceIdentifier: {
 				id: "other-project",
 				configURIPath: URI.file(
-					"C:\\projects\\other.ash-workspace",
+					"C:/projects/other.ash-workspace",
 				).toString(),
 			},
 			uiState: {

@@ -30,15 +30,15 @@ test("Stanza opens text files while registered languages own resource detection"
 	using tsx = languages.registerLanguage({ id: 'typescriptreact', extensions: ['.tsx'] });
 	using jsonc = languages.registerLanguage({ id: 'jsonc', extensions: ['.jsonc'] });
 	assert.equal(CODE_EDITOR_ID, "stanza.editor.code");
-	assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\view.tsx") }), EditorPaneMatch.Builtin);
-	assert.equal(languageForEditorInput({ resource: URI.file("C:\\project\\view.tsx") }, languages), "typescriptreact");
-	assert.equal(languageForEditorInput({ resource: URI.file("C:\\project\\settings.jsonc") }, languages), "jsonc");
+	assert.equal(matchCodeEditor({ resource: URI.file("C:/project/view.tsx") }), EditorPaneMatch.Builtin);
+	assert.equal(languageForEditorInput({ resource: URI.file("C:/project/view.tsx") }, languages), "typescriptreact");
+	assert.equal(languageForEditorInput({ resource: URI.file("C:/project/settings.jsonc") }, languages), "jsonc");
 	assert.equal(matchCodeEditor({ resource: URI.parse("untitled:/Untitled-1") }), EditorPaneMatch.Default);
 	assert.equal(languageForEditorInput({ resource: URI.parse("untitled:/Untitled-1"), languageId: "typescript" }), "typescript");
-	assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\script") }), EditorPaneMatch.Builtin);
-	assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\script.cgi") }), EditorPaneMatch.Builtin);
-	assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\.env") }), EditorPaneMatch.Builtin);
-	assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\binary.bin") }), EditorPaneMatch.Builtin);
+	assert.equal(matchCodeEditor({ resource: URI.file("C:/project/script") }), EditorPaneMatch.Builtin);
+	assert.equal(matchCodeEditor({ resource: URI.file("C:/project/script.cgi") }), EditorPaneMatch.Builtin);
+	assert.equal(matchCodeEditor({ resource: URI.file("C:/project/.env") }), EditorPaneMatch.Builtin);
+	assert.equal(matchCodeEditor({ resource: URI.file("C:/project/binary.bin") }), EditorPaneMatch.Builtin);
 });
 
 test('resource detection follows registrations instead of a hardcoded MIME or suffix table', () => {
@@ -53,14 +53,14 @@ test('resource detection follows registrations instead of a hardcoded MIME or su
 
 test("Stanza excludes structured Academic documents", () => {
 	assert.equal(matchCodeEditor({
-		resource: URI.file("C:\\papers\\research.ash-paper"),
+		resource: URI.file("C:/papers/research.ash-paper"),
 		contentType: ACADEMIC_DOCUMENT_CONTENT_TYPE,
 	}), EditorPaneMatch.None);
 });
 
 test("Stanza diff inputs have one stable tab identity and select only the diff pane", () => {
-	const original = { resource: URI.file("C:\\project\\before.ts"), label: "before.ts" };
-	const modified = { resource: URI.file("C:\\project\\after.ts"), label: "after.ts" };
+	const original = { resource: URI.file("C:/project/before.ts"), label: "before.ts" };
+	const modified = { resource: URI.file("C:/project/after.ts"), label: "after.ts" };
 	const input = createDiffEditorInput(original, modified, "Review changes");
 
 	assert.equal(DIFF_EDITOR_ID, "stanza.editor.diff");

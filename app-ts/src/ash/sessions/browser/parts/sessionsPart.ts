@@ -38,6 +38,8 @@ export class SessionsPart extends WorkbenchPart {
 	private readonly views: Record<SessionsPage, SessionsChatView>;
 	private page: SessionsPage | 'design' | 'empty' = 'chat';
 	private readonly codePage: HTMLDivElement;
+	private dimension: Dimension | undefined;
+	private isChangingPage = false;
 	private readonly contributedPages = new Map<string, { readonly container: HTMLElement; readonly view: ISessionsPageView }>();
 
 	override get minimumWidth(): number { return 420; }
@@ -70,7 +72,7 @@ export class SessionsPart extends WorkbenchPart {
 			const container = h(ownerDocument, 'div', { className: 'ash-sessions-contributed-page' });
 			container.dataset.sessionsPage = id;
 			container.hidden = true;
-			const view = this._register(services.createInstance(descriptor, ownerDocument));
+			const view = this._register(services.createInstance(descriptor, container));
 			container.append(view.domNode);
 			this.contentDomNode.append(container);
 			this.contributedPages.set(id, { container, view });
@@ -91,18 +93,29 @@ export class SessionsPart extends WorkbenchPart {
 
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>, page: SessionsPage = this.page === 'code' ? 'code' : 'chat'): void { this.views[page].restoreDraft(draft); }
 
-	setPage(page: 'chat' | 'code' | 'design' | 'empty'): void {
-		this.page = page;
-		this.contentDomNode.classList.toggle('empty-page', page === 'empty');
-		this.views.chat.domNode.hidden = page !== 'chat';
-		this.views.code.domNode.hidden = page !== 'code';
-		this.views.chat.setVisible(page === 'chat');
-		this.views.code.setVisible(page === 'code');
-		this.codePage.hidden = page !== 'code';
-		for (const [id, contributedPage] of this.contributedPages) {
-			contributedPage.container.hidden = page !== id;
+	setPage(page: 'chat' | 'code' | 'design' | 'empty', updateLayout?: () => void): void {
+		if (page === this.page) {
+			updateLayout?.();
+			return;
 		}
-		if (page !== 'empty') this.layout(new Dimension(this.contentDomNode.clientWidth, this.contentDomNode.clientHeight));
+		// Side-part policy must settle before either retained page receives the new geometry.
+		this.isChangingPage = true;
+		try {
+			updateLayout?.();
+			this.page = page;
+			this.contentDomNode.classList.toggle('empty-page', page === 'empty');
+			this.views.chat.domNode.hidden = page !== 'chat';
+			this.views.code.domNode.hidden = page !== 'code';
+			this.views.chat.setVisible(page === 'chat');
+			this.views.code.setVisible(page === 'code');
+			this.codePage.hidden = page !== 'code';
+			for (const [id, contributedPage] of this.contributedPages) {
+				contributedPage.container.hidden = page !== id;
+			}
+		} finally {
+			this.isChangingPage = false;
+		}
+		if (page !== 'empty') this.layout(this.dimension ?? new Dimension(this.contentDomNode.clientWidth, this.contentDomNode.clientHeight));
 	}
 
 	updateVisibleSelections(selections: readonly SessionsViewSelection[], active: SessionsViewSelection | undefined, page: SessionsPage = "chat"): void {
@@ -110,8 +123,9 @@ export class SessionsPart extends WorkbenchPart {
 	}
 
 	override layout(dimension: Dimension): void {
+		this.dimension = dimension;
 		// Empty pages resize the Part, not the retained Chat or Code geometry beneath it.
-		if (this.page === 'empty') {
+		if (this.page === 'empty' || this.isChangingPage) {
 			return;
 		}
 		const contributedPage = this.contributedPages.get(this.page);

@@ -245,8 +245,9 @@ export class Viewport {
 	readonly height: number;
 
 	constructor(top: number, left: number, width: number, height: number) {
-		this.top = top | 0;
-		this.left = left | 0;
+		// Scroll positions retain subpixel precision; reveal requests write them back.
+		this.top = top;
+		this.left = left;
 		this.width = width | 0;
 		this.height = height | 0;
 	}

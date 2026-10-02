@@ -1,5 +1,6 @@
 import { expect, test } from '../../../automation/test.js';
-import type { ElectronApplication, Page } from '@playwright/test';
+import { hasWorkingCopyBackup } from '../../../automation/workingCopyBackups.js';
+import type { ElectronApplication } from '@playwright/test';
 import type { BrowserWindow, MessageBoxOptions } from 'electron';
 
 test.use({ openWorkspace: false });
@@ -115,26 +116,6 @@ test('browser Save As writes an untitled editor to the selected folder', async (
 		return (await (await folder.getFileHandle('draft.txt')).getFile()).text();
 	}, folderName)).toBe('saved through the file dialog');
 });
-
-async function hasWorkingCopyBackup(page: Page, content: string): Promise<boolean> {
-	return page.evaluate(async expectedContent => {
-		const database = await new Promise<IDBDatabase>((resolve, reject) => {
-			const request = indexedDB.open('ash-working-copy-backups', 1);
-			request.onsuccess = () => resolve(request.result);
-			request.onerror = () => reject(request.error ?? new Error('Could not read working-copy backups'));
-		});
-		try {
-			const records = await new Promise<Array<{ readonly content?: string }>>((resolve, reject) => {
-				const request = database.transaction('backups', 'readonly').objectStore('backups').getAll();
-				request.onsuccess = () => resolve(request.result);
-				request.onerror = () => reject(request.error ?? new Error('Could not read working-copy backups'));
-			});
-			return records.some(record => record.content === expectedContent);
-		} finally {
-			database.close();
-		}
-	}, content);
-}
 
 test('browser Open File selects multiple files from the current workspace', async ({ target, workbench }) => {
 	test.skip(target.kind !== 'browser' || target.workbenchMode !== 'code' || target.appServerMode !== 'disabled', 'This scenario requires the standalone Code browser');

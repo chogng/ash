@@ -422,18 +422,23 @@ export class Workbench extends Disposable {
 		const selectActivityPage = (page: SessionsActivityPage): void => {
 			activityPage = page;
 			activitybar.selectPage(page);
-			sidebar.setEmptyPage(page === 'colab' || page === 'library');
-			if (page === 'chat' || page === 'code') {
-				view.selectPage(page);
-				sessionsPart?.setPage(page);
-				if (sidebar.currentView === 'views') sidebar.selectView('chats');
-			} else sessionsPart?.setPage('empty');
-			layout.setPartAvailable('sidebar', page === 'chat' || page === 'code' || page === 'design');
-			layout.setPartAvailable('auxiliarybar', page === 'code' || page === 'design');
-			// Attach the replacement center before hiding Sessions so panel widths stay stable.
-			if (page === 'design') { layout.setPartAvailable('editor', true); layout.showPart('editor'); }
-			layout.setPartAvailable('sessions', page !== 'design');
-			layout.setPartAvailable('editor', page === 'design' || (page === 'code' && editor.activeInput?.resource.toString() !== DESIGN_EDITOR_RESOURCE.toString()));
+			// Activation can re-enter this callback; settle it before the page-layout transaction.
+			if (page === 'code' && codeEditor && editor.activeInput?.resource.toString() === DESIGN_EDITOR_RESOURCE.toString()) editor.activateEditor(codeEditor);
+			const updateLayout = (): void => {
+				sidebar.setEmptyPage(page === 'colab' || page === 'library');
+				if (page === 'chat' || page === 'code') {
+					view.selectPage(page);
+					if (sidebar.currentView === 'views') sidebar.selectView('chats');
+				}
+				layout.setPartAvailable('sidebar', page === 'chat' || page === 'code' || page === 'design');
+				layout.setPartAvailable('auxiliarybar', page === 'code' || page === 'design');
+				// Attach the replacement center before hiding Sessions so panel widths stay stable.
+				if (page === 'design') { layout.setPartAvailable('editor', true); layout.showPart('editor'); }
+				layout.setPartAvailable('sessions', page !== 'design');
+				layout.setPartAvailable('editor', page === 'design' || (page === 'code' && editor.activeInput?.resource.toString() !== DESIGN_EDITOR_RESOURCE.toString()));
+			};
+			if (sessionsPart) sessionsPart.setPage(page === 'chat' || page === 'code' ? page : 'empty', updateLayout);
+			else updateLayout();
 			if (page === 'design') {
 				if (auxiliarybar!.activeCompositeId && auxiliarybar!.activeCompositeId !== DESIGN_PROPERTIES_CONTAINER_ID) codeComposite = auxiliarybar!.activeCompositeId;
 				sidebar.showComposite(DESIGN_LAYERS_CONTAINER_ID);
@@ -449,7 +454,6 @@ export class Workbench extends Disposable {
 				}
 			} else if (page === 'code') {
 				if (auxiliarybar!.activeCompositeId === DESIGN_PROPERTIES_CONTAINER_ID) auxiliarybar!.showComposite(codeComposite);
-				if (codeEditor && editor.activeInput?.resource.toString() === DESIGN_EDITOR_RESOURCE.toString()) editor.activateEditor(codeEditor);
 			}
 		};
 		this.showChat = () => selectActivityPage('chat');
@@ -900,6 +904,8 @@ export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAg
 			createSessionsWorkbenchGridDescriptor(this.views, this.initialDimension, state, this.activityBarLocation),
 			{ fromJSON: data => this.view(parseSessionsPartId(data)) },
 		));
+		// Page availability must not relayout the non-proportional grid at its uninitialized zero size.
+		this.grid.layout(this.initialDimension.width, this.initialDimension.height);
 		// Save before the Grid is disposed; hidden views retain their cached user sizes.
 		this._register(toDisposable(() => this.saveState()));
 	}

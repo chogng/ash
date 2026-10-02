@@ -93,6 +93,88 @@ test("ScrollableElement reveals a descendant at the nearest horizontal edge", ()
 	dom.window.close();
 });
 
+for (const direction of ['horizontal', 'vertical'] as const) {
+	for (const edge of ['start', 'end'] as const) {
+		test(`ScrollableElement fully reveals a fractional ${edge} edge with quantized ${direction} scrolling`, () => {
+			const dom = new JSDOM('<!doctype html><body></body>');
+			try {
+				using scrollable = new ScrollableElement(dom.window.document.body, { direction });
+				const viewport = scrollable.scrollableElement;
+				const horizontal = direction === 'horizontal';
+				installMetrics(viewport, { width: horizontal ? 520 : 50, height: horizontal ? 50 : 520, scrollWidth: horizontal ? 530 : 50, scrollHeight: horizontal ? 50 : 530 });
+				// At scale 1 Chromium can quantize offsets, even though text layout keeps fractional edges.
+				let position = 0;
+				Object.defineProperty(viewport, horizontal ? 'scrollLeft' : 'scrollTop', {
+					get: () => position,
+					set: (value: number) => { position = Math.round(value); },
+				});
+				const viewportBounds = horizontal ? rect(302, 100, 822, 150) : rect(100, 302, 150, 822);
+				viewport.getBoundingClientRect = () => viewportBounds;
+				const item = h(dom.window.document, 'span');
+				const start = edge === 'end' ? 478 : 2.65625;
+				const end = edge === 'end' ? 524.34375 : 40;
+				item.getBoundingClientRect = () => horizontal
+					? rect(302 + start - position, 100, 302 + end - position, 120)
+					: rect(100, 302 + start - position, 120, 302 + end - position);
+				scrollable.append(item);
+				if (edge === 'start') { scrollable.scrollTo(horizontal ? 6 : 0, horizontal ? 0 : 6); }
+
+				scrollable.reveal(item);
+
+				const itemBounds = item.getBoundingClientRect();
+				assert.ok(itemBounds.left >= viewportBounds.left && itemBounds.right <= viewportBounds.right);
+				assert.ok(itemBounds.top >= viewportBounds.top && itemBounds.bottom <= viewportBounds.bottom);
+				assert.equal(position, edge === 'end' ? 5 : 2);
+				assert.equal(horizontal ? scrollable.state.left : scrollable.state.top, position);
+			} finally {
+				dom.window.close();
+			}
+		});
+	}
+}
+
+test('ScrollableElement reveals against the fractional viewport boundary rather than its rounded client size', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using scrollable = new ScrollableElement(dom.window.document.body, { direction: 'horizontal' });
+		const viewport = scrollable.scrollableElement;
+		installMetrics(viewport, { width: 100, height: 50, scrollWidth: 300, scrollHeight: 50 });
+		viewport.getBoundingClientRect = () => rect(0, 0, 99.65625, 50);
+		const item = h(dom.window.document, 'span');
+		item.getBoundingClientRect = () => rect(60 - viewport.scrollLeft, 0, 99.875 - viewport.scrollLeft, 20);
+		scrollable.append(item);
+
+		scrollable.reveal(item);
+
+		assert.ok(item.getBoundingClientRect().right <= viewport.getBoundingClientRect().right);
+		assert.equal(scrollable.state.left, 1);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('ScrollableElement publishes the accepted scroll position once when the viewport quantizes it', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using scrollable = new ScrollableElement(dom.window.document.body, { direction: 'horizontal' });
+		const viewport = scrollable.scrollableElement;
+		installMetrics(viewport, { width: 520, height: 50, scrollWidth: 530, scrollHeight: 50 });
+		let left = 0;
+		Object.defineProperty(viewport, 'scrollLeft', { get: () => left, set: (value: number) => { left = Math.round(value); } });
+		scrollable.layout();
+		const positions: number[] = [];
+		using listener = scrollable.onDidScroll(event => positions.push(event.current.left));
+
+		scrollable.scrollTo(4.34375, 0);
+		viewport.dispatchEvent(new dom.window.Event('scroll'));
+		scrollable.scrollTo(4.4, 0);
+
+		assert.deepEqual({ left: scrollable.state.left, positions }, { left: 4, positions: [4] });
+	} finally {
+		dom.window.close();
+	}
+});
+
 test('ScrollableElement updates thin scrollbar presentation without replacing scroll state or focus', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using scrollable = new ScrollableElement(dom.window.document.body, { direction: 'horizontal', scrollbarSize: 3 });

@@ -1,8 +1,8 @@
-.ash-action-bar { display: flex; align-items: stretch; gap: var(--ash-action-bar-gap); }
+.ash-action-bar { display: flex; align-items: stretch; gap: var(--ash-actionBar-gap); }
 .ash-action-bar.vertical { flex-direction: column; }
 .ash-action-bar.highlight-toggled .ash-button.checked,
 .ash-action-bar.highlight-toggled .ash-action-label.checked {
-  background: var(--ash-action-bar-toggled-background);
+  background: var(--ash-actionBar-toggledBackground);
 }
 .ash-action-view-item { display: flex; align-items: stretch; }
 .ash-action-label {
@@ -12,8 +12,8 @@
   justify-content: center;
   gap: 4px;
   padding: 0 4px;
-  border: var(--ash-stroke-thickness) solid transparent;
-  border-radius: var(--ash-corner-radius-small);
+  border: var(--ash-strokeThickness) solid transparent;
+  border-radius: var(--ash-cornerRadius-small);
   color: var(--ash-button-foreground);
   background: transparent;
   font: inherit;
@@ -41,7 +41,7 @@
   white-space: nowrap;
 }
 .ash-action-label:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
   outline-offset: -1px;
 }
 .ash-action-label:disabled {

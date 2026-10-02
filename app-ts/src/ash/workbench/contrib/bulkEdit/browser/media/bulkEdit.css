@@ -13,8 +13,8 @@
 }
 
 .ash-bulk-edit-toolbar button {
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-small);
+  border: var(--ash-strokeThickness) solid var(--ash-border);
+  border-radius: var(--ash-cornerRadius-small);
   padding: 4px 8px;
   color: inherit;
   background: var(--ash-input-background);
@@ -23,12 +23,12 @@
 }
 
 .ash-bulk-edit-toolbar button:hover:not(:disabled) {
-  background: var(--ash-toolbar-hover-background);
+  background: var(--ash-toolbar-hoverBackground);
 }
 
 .ash-bulk-edit-toolbar button:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: var(--ash-stroke-thickness);
+  outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+  outline-offset: var(--ash-strokeThickness);
 }
 
 .ash-bulk-edit-toolbar button:disabled {
@@ -53,8 +53,8 @@
 
 .ash-bulk-edit-entry {
   margin-bottom: 6px;
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-small);
+  border: var(--ash-strokeThickness) solid var(--ash-border);
+  border-radius: var(--ash-cornerRadius-small);
   padding: 8px;
   background: var(--ash-editor-background);
 }
@@ -102,7 +102,7 @@
   max-height: 180px;
   margin: 6px 0 0;
   overflow: auto;
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
+  border: var(--ash-strokeThickness) solid var(--ash-border);
   padding: 6px;
   color: var(--ash-editor-foreground);
   background: var(--ash-editor-background);

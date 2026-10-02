@@ -5,8 +5,8 @@
 	padding: var(--ash-spacing-size160);
 	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
 	border-radius: var(--ash-cornerRadius-large);
-	background: var(--ash-editorWidget-background);
-	color: var(--ash-editorWidget-foreground);
+	background: var(--ash-editor-widgetBackground);
+	color: var(--ash-foreground);
 	font-size: var(--ash-fontSize-body1);
 }
 .ash-dictation-onboarding h3, .ash-dictation-onboarding p { margin: 0; }

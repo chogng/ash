@@ -27,7 +27,11 @@ use tempfile::TempDir;
 const PROCESS_TIMEOUT: Duration = Duration::from_secs(20);
 const STATE_TIMEOUT: Duration = Duration::from_secs(30);
 const REDRAW_QUIET_PERIOD: Duration = Duration::from_millis(40);
+const SCREEN_QUIET_PERIOD: Duration = Duration::from_millis(250);
 const OUTPUT_LIMIT: usize = 512 * 1024;
+
+#[path = "tui_process_tests.rs"]
+mod synchronization_tests;
 pub const LARGE_SIZE: PtySize = PtySize {
     rows: 32,
     cols: 100,
@@ -61,6 +65,18 @@ fn app_server_executable() -> PathBuf {
         None => ash_executable()
             .with_file_name(format!("ash-app-server{}", std::env::consts::EXE_SUFFIX)),
     }
+}
+
+fn cpp_runtime_environment(library: &Path) -> (&'static str, PathBuf) {
+    assert!(
+        library.is_file(),
+        "missing declared C++ runtime: {}",
+        library.display()
+    );
+    (
+        "LD_LIBRARY_PATH",
+        library.parent().expect("C++ runtime directory").to_owned(),
+    )
 }
 
 struct StagedBinaries {
@@ -228,6 +244,13 @@ impl Fixture {
             ("CODEX_HOME", self.codex_home()),
             ("ASH_APP_SERVER_PATH", self.app_server.clone()),
         ];
+        if let Some(path) = option_env!("ASH_BAZEL_LIBSTDCXX") {
+            // Staged executables no longer have Bazel's relative library layout.
+            // Keep every child on the declared runtime instead of the host copy.
+            let library = cargo_bin::find_resource!(path, path)
+                .expect("resolve declared C++ runtime resource");
+            environment.push(cpp_runtime_environment(&library));
+        }
         if let Some(path) = &self.product_services {
             environment.push(("ASH_PRODUCT_SERVICES_PATH", path.clone()));
         }
@@ -355,17 +378,11 @@ baseUrl = "{base_url}"
 impl Drop for Fixture {
     fn drop(&mut self) {
         if thread::panicking() {
-            if let Ok(entries) = fs::read_dir(self.profile.join("run")) {
-                for entry in entries.flatten() {
-                    if entry
-                        .path()
-                        .extension()
-                        .is_some_and(|extension| extension == "log")
-                    {
-                        if let Ok(log) = fs::read_to_string(entry.path()) {
-                            eprintln!("Test daemon log ({}):\n{log}", entry.path().display());
-                        }
-                    }
+            if let Ok(endpoint) = ash_app_server_daemon::daemon_endpoint_path(&self.profile) {
+                // Unix uses the daemon's private runtime directory, not profile/run.
+                let log = endpoint.with_extension("log");
+                if let Ok(contents) = fs::read_to_string(&log) {
+                    eprintln!("Test daemon log ({}):\n{contents}", log.display());
                 }
             }
         }
@@ -422,31 +439,8 @@ impl TuiProcess {
         let capture = Arc::new(Mutex::new(TerminalCapture::new(size)));
         let reader_capture = Arc::clone(&capture);
         let reader_thread = thread::spawn(move || {
-            let mut buffer = [0_u8; 8_192];
-            loop {
-                match reader.read(&mut buffer) {
-                    Ok(0) => break,
-                    Ok(read) => {
-                        let replies = {
-                            let mut capture = reader_capture.lock().unwrap();
-                            capture.push(&buffer[..read]);
-                            capture.core.take_reply_bytes()
-                        };
-                        if !replies.is_empty() {
-                            let mut writer = reply_writer.lock().unwrap();
-                            if writer
-                                .write_all(&replies)
-                                .and_then(|_| writer.flush())
-                                .is_err()
-                            {
-                                break;
-                            }
-                        }
-                    }
-                    Err(error) if error.kind() == ErrorKind::Interrupted => continue,
-                    Err(_) => break,
-                }
-            }
+            let state = capture_terminal_output(&mut *reader, &reply_writer, &reader_capture);
+            reader_capture.lock().unwrap().output_state = state;
         });
         let mut command = CommandBuilder::new(&fixture.ash);
         command.args(args);
@@ -589,35 +583,13 @@ impl TuiProcess {
     fn send_input(&mut self, bytes: &[u8]) {
         let revision = self.capture.lock().unwrap().revision();
         self.send(bytes);
-        self.wait_for_redraw_after(revision);
+        self.wait_for_output_after(revision);
     }
 
-    fn wait_for_redraw_after(&mut self, revision: u64) {
-        let deadline = Instant::now() + STATE_TIMEOUT;
-        let mut observed_revision = None;
-        loop {
-            assert!(
-                Instant::now() < deadline,
-                "TUI did not settle after input; screen:\n{}",
-                self.screen()
-            );
-            let current_revision = self.capture.lock().unwrap().revision();
-            if current_revision > revision {
-                if observed_revision == Some(current_revision) {
-                    return;
-                }
-                observed_revision = Some(current_revision);
-                thread::sleep(REDRAW_QUIET_PERIOD);
-                continue;
-            }
-            if let Some(status) = self.child.try_wait().unwrap() {
-                panic!("TUI exited before redrawing after input: {status:?}");
-            }
-            if Instant::now() >= deadline {
-                panic!("TUI did not redraw after input");
-            }
-            thread::sleep(Duration::from_millis(20));
-        }
+    fn wait_for_output_after(&mut self, revision: u64) {
+        // Pace separate input writes, but do not interpret an animation frame as an input
+        // acknowledgement. Callers must wait for their screen state or protocol/side effect.
+        self.wait_for_terminal(TerminalWaitFor::OutputAfter(revision));
     }
 
     pub fn resize(&mut self, size: PtySize) {
@@ -634,61 +606,23 @@ impl TuiProcess {
             .expect("running PTY")
             .resize(size)
             .unwrap();
-        self.wait_for_redraw_after(revision);
+        self.wait_for_output_after(revision);
     }
 
+    /// Observe a business marker immediately, including a short-lived hint during animation.
+    /// The marker must distinguish the target from the screen before the action.
     pub fn wait_for_screen(&mut self, expected: &str) {
-        let deadline = Instant::now() + STATE_TIMEOUT;
-        loop {
-            let screen = self.screen();
-            if screen.contains(expected) {
-                return;
-            }
-            if let Some(status) = self.child.try_wait().unwrap() {
-                self.close_terminal();
-                panic!(
-                    "TUI exited before drawing {expected:?}: {status:?}; raw:\n{}",
-                    self.raw_text()
-                );
-            }
-            if Instant::now() >= deadline {
-                panic!(
-                    "TUI screen did not contain {expected:?}; screen:\n{screen}\nraw:\n{}",
-                    self.raw_text()
-                );
-            }
-            thread::sleep(Duration::from_millis(20));
-        }
+        self.wait_for_terminal(TerminalWaitFor::ScreenContains(expected));
     }
 
+    /// Wait for a settled queue row, including the absence of its optimistic pending suffix.
+    pub fn wait_for_queued_message(&mut self, position: usize, text: &str) {
+        self.wait_for_terminal(TerminalWaitFor::QueuedMessageReady { position, text });
+    }
+
+    /// Wait for the target state and stable visible text; raw ANSI activity is irrelevant.
     pub fn wait_for_stable_screen(&mut self, expected: &str) {
-        let deadline = Instant::now() + STATE_TIMEOUT;
-        loop {
-            let (screen, revision) = {
-                let capture = self.capture.lock().unwrap();
-                (capture.screen(), capture.revision())
-            };
-            if screen.contains(expected) {
-                thread::sleep(Duration::from_millis(250));
-                let capture = self.capture.lock().unwrap();
-                if capture.revision() == revision && capture.screen().contains(expected) {
-                    return;
-                }
-            }
-            if let Some(status) = self.child.try_wait().unwrap() {
-                panic!(
-                    "TUI exited before stabilizing {expected:?}: {status:?}; raw:\n{}",
-                    self.raw_text()
-                );
-            }
-            if Instant::now() >= deadline {
-                panic!(
-                    "TUI screen did not stabilize with {expected:?}; screen:\n{}",
-                    self.screen()
-                );
-            }
-            thread::sleep(Duration::from_millis(20));
-        }
+        self.wait_for_terminal(TerminalWaitFor::StableScreenContains(expected));
     }
 
     pub fn screen(&self) -> String {
@@ -696,32 +630,19 @@ impl TuiProcess {
     }
 
     pub fn wait_for_screen_to_omit(&mut self, unexpected: &str) {
-        let deadline = Instant::now() + STATE_TIMEOUT;
+        self.wait_for_terminal(TerminalWaitFor::StableScreenOmits(unexpected));
+    }
+
+    fn wait_for_terminal(&mut self, condition: TerminalWaitFor<'_>) -> String {
+        let mut wait = TerminalWait::new(condition, Instant::now());
         loop {
-            let (screen, revision) = {
-                let capture = self.capture.lock().unwrap();
-                (capture.screen(), capture.revision())
-            };
-            if !screen.contains(unexpected) {
-                thread::sleep(Duration::from_millis(250));
-                let capture = self.capture.lock().unwrap();
-                if capture.revision() == revision && !capture.screen().contains(unexpected) {
-                    return;
-                }
+            let exited = self.child.try_wait().unwrap();
+            let result = wait.observe(&self.capture.lock().unwrap(), exited, Instant::now());
+            match result {
+                Ok(Some(screen)) => return screen,
+                Ok(None) => thread::sleep(Duration::from_millis(20)),
+                Err(error) => panic!("{error}"),
             }
-            if let Some(status) = self.child.try_wait().unwrap() {
-                panic!(
-                    "TUI exited before removing {unexpected:?}: {status:?}; raw:\n{}",
-                    self.raw_text()
-                );
-            }
-            if Instant::now() >= deadline {
-                panic!(
-                    "TUI screen still contained {unexpected:?}; screen:\n{}",
-                    self.screen()
-                );
-            }
-            thread::sleep(Duration::from_millis(20));
         }
     }
 
@@ -742,18 +663,19 @@ impl TuiProcess {
             .join("\n")
     }
 
-    pub fn assert_snapshot(&self, name: &str) {
+    /// Snapshot only a settled target state. Animated states belong in fixed-clock App tests.
+    pub fn assert_snapshot(&mut self, name: &str, expected: &str) {
         self.wait_for_clipboard_tip_to_expire();
-        let screen = normalize_snapshot(self.screen(), &self.snapshot_paths);
+        let screen = self.wait_for_terminal(TerminalWaitFor::StableScreenContains(expected));
+        // Use the exact frame that satisfied the predicate and stability check, not a later read.
+        let screen = normalize_snapshot(screen, &self.snapshot_paths);
         assert_named_snapshot(name, screen);
     }
 
-    fn wait_for_clipboard_tip_to_expire(&self) {
+    fn wait_for_clipboard_tip_to_expire(&mut self) {
         // The host clipboard belongs to the user, not these conversation fixtures.
-        let deadline = Instant::now() + STATE_TIMEOUT;
-        while self.screen().contains("image in clipboard") {
-            assert!(Instant::now() < deadline, "clipboard tip did not expire");
-            thread::sleep(Duration::from_millis(20));
+        if self.screen().contains("image in clipboard") {
+            self.wait_for_screen_to_omit("image in clipboard");
         }
     }
 
@@ -807,6 +729,121 @@ impl TuiProcess {
             if let Err(error) = reader.join() {
                 if !thread::panicking() {
                     std::panic::resume_unwind(error);
+                }
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum TerminalWaitFor<'a> {
+    OutputAfter(u64),
+    ScreenContains(&'a str),
+    QueuedMessageReady { position: usize, text: &'a str },
+    StableScreenContains(&'a str),
+    StableScreenOmits(&'a str),
+}
+
+struct TerminalWait<'a> {
+    condition: TerminalWaitFor<'a>,
+    deadline: Instant,
+    matching_text: Option<(u64, Instant)>,
+}
+
+impl<'a> TerminalWait<'a> {
+    fn new(condition: TerminalWaitFor<'a>, now: Instant) -> Self {
+        Self {
+            condition,
+            deadline: now + STATE_TIMEOUT,
+            matching_text: None,
+        }
+    }
+
+    fn observe(
+        &mut self,
+        capture: &TerminalCapture,
+        exited: Option<ExitStatus>,
+        now: Instant,
+    ) -> Result<Option<String>, String> {
+        // A matching last frame cannot turn an exited process into a successful interaction.
+        if let Some(status) = exited {
+            return Err(format!(
+                "TUI exited while waiting for {:?}: {status:?}; screen:\n{}\nraw:\n{}",
+                self.condition,
+                capture.screen(),
+                capture.raw_text(),
+            ));
+        }
+        let output_failure = match &capture.output_state {
+            TerminalOutputState::Reading => None,
+            TerminalOutputState::Closed => Some("PTY output closed before the child exited"),
+            TerminalOutputState::Failed(error) => Some(error.as_str()),
+        };
+        if let Some(error) = output_failure {
+            return Err(format!(
+                "{error} while waiting for {:?}; screen:\n{}\nraw:\n{}",
+                self.condition,
+                capture.screen(),
+                capture.raw_text(),
+            ));
+        }
+        if now >= self.deadline {
+            return Err(format!(
+                "TUI timed out waiting for {:?}; screen:\n{}\nraw:\n{}",
+                self.condition,
+                capture.screen(),
+                capture.raw_text(),
+            ));
+        }
+        let screen = capture.screen();
+        if matches!(self.condition, TerminalWaitFor::QueuedMessageReady { .. })
+            && screen.contains("could not update the queue:")
+        {
+            return Err(format!(
+                "TUI queue operation failed while waiting for {:?}; screen:\n{}\nraw:\n{}",
+                self.condition,
+                screen,
+                capture.raw_text(),
+            ));
+        }
+        let mut matching_revision = capture.text_revision();
+        let matches = match self.condition {
+            TerminalWaitFor::OutputAfter(revision) => capture.revision() > revision,
+            TerminalWaitFor::QueuedMessageReady { position, text } => {
+                let next = if position == 1 { " · next" } else { "" };
+                let expected = format!("Queue {position}: {text}{next}");
+                if let Some(row) = screen.lines().position(|line| line.trim() == expected) {
+                    matching_revision = capture.line_revisions[row];
+                    true
+                } else {
+                    false
+                }
+            }
+            TerminalWaitFor::ScreenContains(expected)
+            | TerminalWaitFor::StableScreenContains(expected) => screen.contains(expected),
+            TerminalWaitFor::StableScreenOmits(unexpected) => !screen.contains(unexpected),
+        };
+        if !matches {
+            self.matching_text = None;
+            return Ok(None);
+        }
+        match self.condition {
+            TerminalWaitFor::OutputAfter(_) | TerminalWaitFor::ScreenContains(_) => {
+                Ok(Some(screen))
+            }
+            TerminalWaitFor::StableScreenContains(_)
+            | TerminalWaitFor::StableScreenOmits(_)
+            | TerminalWaitFor::QueuedMessageReady { .. } => {
+                let revision = matching_revision;
+                match self.matching_text {
+                    Some((observed, since)) if observed == revision => {
+                        Ok((now.duration_since(since) >= SCREEN_QUIET_PERIOD).then_some(screen))
+                    }
+                    _ => {
+                        // Revision, rather than text equality, catches A→B→A between polls.
+                        self.matching_text = Some((revision, now));
+                        Ok(None)
+                    }
                 }
             }
         }
@@ -1020,6 +1057,35 @@ fn terminal_revision_advances_after_raw_capture_reaches_its_limit() {
 }
 
 #[test]
+fn terminal_text_revision_ignores_cursor_and_style_only_redraws() {
+    let mut capture = TerminalCapture::new(LARGE_SIZE);
+    capture.push(b"> Approve once\r\n/policy to change permissions");
+    capture.push(b"\r\x1b[2K");
+    let text_revision = capture.text_revision();
+    let output_revision = capture.revision();
+    for _ in 0..20 {
+        capture.push(b"\x1b[?25l\x1b[2;1H\x1b[0m");
+    }
+    assert_eq!(capture.text_revision(), text_revision);
+    assert_eq!(capture.revision(), output_revision + 20);
+    assert!(capture.screen().contains("> Approve once"));
+    assert!(!capture.screen().contains("/policy to change permissions"));
+}
+
+#[test]
+fn terminal_text_revision_tracks_changes_even_when_the_text_returns() {
+    let mut capture = TerminalCapture::new(LARGE_SIZE);
+    capture.push(b"old");
+    let screen = capture.screen();
+    let revision = capture.text_revision();
+    capture.push(b"\rnew");
+    assert_eq!(capture.text_revision(), revision + 1);
+    capture.push(b"\rold");
+    assert_eq!(capture.screen(), screen);
+    assert_eq!(capture.text_revision(), revision + 2);
+}
+
+#[test]
 fn terminal_capture_answers_fragmented_cursor_queries() {
     let mut capture = TerminalCapture::new(LARGE_SIZE);
     capture.push(b"\x1b[");
@@ -1063,10 +1129,49 @@ impl Drop for TuiProcess {
     }
 }
 
+#[derive(Debug)]
+enum TerminalOutputState {
+    Reading,
+    Closed,
+    Failed(String),
+}
+
+fn capture_terminal_output(
+    reader: &mut dyn Read,
+    writer: &Arc<Mutex<Box<dyn Write + Send>>>,
+    capture: &Arc<Mutex<TerminalCapture>>,
+) -> TerminalOutputState {
+    let mut buffer = [0_u8; 8_192];
+    loop {
+        let read = match reader.read(&mut buffer) {
+            Ok(0) => return TerminalOutputState::Closed,
+            Ok(read) => read,
+            Err(error) if error.kind() == ErrorKind::Interrupted => continue,
+            Err(error) => {
+                return TerminalOutputState::Failed(format!("PTY output read failed: {error}"));
+            }
+        };
+        let replies = {
+            let mut capture = capture.lock().unwrap();
+            capture.push(&buffer[..read]);
+            capture.core.take_reply_bytes()
+        };
+        if !replies.is_empty() {
+            let mut writer = writer.lock().unwrap();
+            if let Err(error) = writer.write_all(&replies).and_then(|_| writer.flush()) {
+                return TerminalOutputState::Failed(format!("PTY terminal reply failed: {error}"));
+            }
+        }
+    }
+}
+
 struct TerminalCapture {
     core: TerminalCore,
     raw: Vec<u8>,
     revision: u64,
+    text_revision: u64,
+    line_revisions: Vec<u64>,
+    output_state: TerminalOutputState,
     size: PtySize,
 }
 
@@ -1076,20 +1181,42 @@ impl TerminalCapture {
             core: TerminalCore::new(GridSize::new(size.rows, size.cols)),
             raw: Vec::new(),
             revision: 0,
+            text_revision: 0,
+            line_revisions: vec![0; usize::from(size.rows)],
+            output_state: TerminalOutputState::Reading,
             size,
         }
     }
 
     fn push(&mut self, bytes: &[u8]) {
+        let previous_screen = self.screen();
         self.revision += 1;
         let remaining = OUTPUT_LIMIT.saturating_sub(self.raw.len());
         self.raw
             .extend_from_slice(&bytes[..bytes.len().min(remaining)]);
         self.core.process_output(bytes);
+        // Cursor/style-only redraws must not prevent a text snapshot from settling.
+        let screen = self.screen();
+        if screen != previous_screen {
+            self.text_revision += 1;
+            // Track individual rows so a queue operation can settle while an unrelated
+            // spinner redraws. Revisions also catch a fragmented row changing A→B→A.
+            for (row, (before, after)) in previous_screen
+                .split('\n')
+                .zip(screen.split('\n'))
+                .enumerate()
+            {
+                if before != after {
+                    self.line_revisions[row] = self.text_revision;
+                }
+            }
+        }
     }
 
     fn resize(&mut self, size: PtySize) {
         self.revision += 1;
+        self.text_revision += 1;
+        self.line_revisions = vec![self.text_revision; usize::from(size.rows)];
         self.core.resize(GridSize::new(size.rows, size.cols));
         self.size = size;
     }
@@ -1110,6 +1237,10 @@ impl TerminalCapture {
 
     fn revision(&self) -> u64 {
         self.revision
+    }
+
+    fn text_revision(&self) -> u64 {
+        self.text_revision
     }
 }
 

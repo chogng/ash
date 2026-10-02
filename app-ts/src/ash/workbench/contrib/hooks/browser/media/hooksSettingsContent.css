@@ -25,7 +25,7 @@
 	padding: var(--ash-spacing-size120);
 	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
 	border-radius: var(--ash-cornerRadius-medium);
-	background: var(--ash-editorWidget-background);
+	background: var(--ash-editor-widgetBackground);
 }
 
 .ash-hooks-event summary {

@@ -19,7 +19,7 @@ import type { LanguageTokenResult } from '../../../../../editor/common/tokens/la
 test("Stanza text model service shares one model and preserves edits across panes", async () => {
 	const textFiles = new TestTextFileService("from disk");
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
-	const input = { resource: URI.file("C:\\project\\main.ts"), initialText: "bootstrap" };
+	const input = { resource: URI.file("C:/project/main.ts"), initialText: "bootstrap" };
 	const first = await models.acquire(input, new AbortController().signal);
 	const second = await models.acquire({ ...input, initialText: "stale" }, new AbortController().signal);
 
@@ -97,14 +97,14 @@ test("Stanza text model service creates the model with its resource and resolved
 	using demo = languageService.registerLanguage({ id: "demo", firstLine: "#!.*\\bdemo" });
 	using rust = languageService.registerLanguage({ id: "rust", extensions: [".rs"] });
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles), { languageService });
-	const resource = URI.file("C:\\project\\script.cgi");
+	const resource = URI.file("C:/project/script.cgi");
 	const inferred = await models.acquire({ resource }, new AbortController().signal);
 
 	assert.equal(inferred.model.uri.toString(), resource.toString());
 	assert.equal(inferred.model.getLanguageId(), "demo");
 	inferred.dispose();
 
-	const explicitResource = URI.file("C:\\project\\explicit.txt");
+	const explicitResource = URI.file("C:/project/explicit.txt");
 	const explicit = await models.acquire({ resource: explicitResource, languageId: "rust" }, new AbortController().signal);
 	assert.equal(explicit.model.getLanguageId(), "rust");
 	explicit.dispose();
@@ -113,7 +113,7 @@ test("Stanza text model service creates the model with its resource and resolved
 test("Stanza text model acquisition delegates absent bootstrap content and observes cancellation", async () => {
 	const textFiles = new TestTextFileService("from disk");
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
-	const resource = URI.file("C:\\project\\main.ts");
+	const resource = URI.file("C:/project/main.ts");
 	const reference = await models.acquire({ resource }, new AbortController().signal);
 	assert.equal(reference.model.getText(), "from disk");
 	reference.dispose();
@@ -124,7 +124,7 @@ test("Stanza text model acquisition delegates absent bootstrap content and obser
 });
 
 test('Stanza text model service restores undo and redo after the final reference is released', async () => {
-	const resource = URI.file('C:\\project\\history.ts');
+	const resource = URI.file('C:/project/history.ts');
 	const textFiles = new TestTextFileService('alpha');
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
 	let reference = await models.acquire({ resource }, new AbortController().signal);
@@ -149,7 +149,7 @@ test('Stanza text model service restores undo and redo after the final reference
 });
 
 test('Stanza text model service drops retained history when persisted content changed', async () => {
-	const resource = URI.file('C:\\project\\history.ts');
+	const resource = URI.file('C:/project/history.ts');
 	const textFiles = new TestTextFileService('alpha');
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
 	const first = await models.acquire({ resource }, new AbortController().signal);
@@ -167,7 +167,7 @@ test('Stanza text model service drops retained history when persisted content ch
 test("Stanza text model references track dirty content, save snapshots, and explicitly revert", async () => {
 	const textFiles = new TestTextFileService("from disk");
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
-	const reference = await models.acquire({ resource: URI.file("C:\\project\\main.ts") }, new AbortController().signal);
+	const reference = await models.acquire({ resource: URI.file("C:/project/main.ts") }, new AbortController().signal);
 	let dirtyChanges = 0;
 	using listener = reference.onDidChangeDirty(() => dirtyChanges += 1);
 
@@ -240,7 +240,7 @@ test("Stanza text model save tolerates its final reference closing before I/O co
 		},
 	};
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
-	const reference = await models.acquire({ resource: URI.file("C:\\project\\main.ts") }, new AbortController().signal);
+	const reference = await models.acquire({ resource: URI.file("C:/project/main.ts") }, new AbortController().signal);
 	reference.model.applyEdits([{
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
 		text: "edited ",
@@ -254,7 +254,7 @@ test("Stanza text model save tolerates its final reference closing before I/O co
 test("Stanza text model preserves the source CRLF convention when saving", async () => {
 	const textFiles = new TestTextFileService("first\r\nsecond");
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
-	const reference = await models.acquire({ resource: URI.file("C:\\project\\main.ts") }, new AbortController().signal);
+	const reference = await models.acquire({ resource: URI.file("C:/project/main.ts") }, new AbortController().signal);
 	assert.equal(reference.model.getText(), "first\r\nsecond");
 	reference.model.applyEdits([{
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)),
@@ -268,7 +268,7 @@ test("Stanza text model preserves the source CRLF convention when saving", async
 test("Stanza text model refuses to overwrite externally changed content", async () => {
 	const textFiles = new TestTextFileService("from disk");
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
-	const reference = await models.acquire({ resource: URI.file("C:\\project\\main.ts") }, new AbortController().signal);
+	const reference = await models.acquire({ resource: URI.file("C:/project/main.ts") }, new AbortController().signal);
 	reference.model.applyEdits([{
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
 		text: "local ",
@@ -281,7 +281,7 @@ test("Stanza text model refuses to overwrite externally changed content", async 
 });
 
 test("Stanza text model reloads clean external changes and marks dirty models conflicted", async () => {
-	const resource = URI.file("C:\\project\\main.ts");
+	const resource = URI.file("C:/project/main.ts");
 	const textFiles = new TestTextFileService("from disk");
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
 	const reference = await models.acquire({ resource }, new AbortController().signal);

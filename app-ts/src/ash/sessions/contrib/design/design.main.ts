@@ -10,11 +10,11 @@ import { generateDesignCode } from './contrib/code/browser/designCodeGenerator.j
 /** Product assembly selects concrete features; the browser editor consumes only their contracts. */
 export function createDesignEditorContributions(context: DesignEditorContributionContext): IDesignEditorContributions {
 	const resources = new DisposableStore();
-	const { ownerDocument, documentController, commands, selection } = context;
+	const { container, documentController, commands, selection } = context;
 	const drawing = resources.add(new DesignDrawingController(context, commands));
-	const properties = resources.add(new DesignPropertiesWidget(ownerDocument, documentController, commands, selection, () => context.renderCanvas()));
-	const motion = resources.add(new DesignMotionWidget(ownerDocument, documentController.model, commands));
-	const code = resources.add(new DesignCodeWidget(ownerDocument, () => context.runFileOperation(() => documentController.exportDocument({
+	const properties = resources.add(new DesignPropertiesWidget(container, documentController, commands, selection, () => context.renderCanvas()));
+	const motion = resources.add(new DesignMotionWidget(container, documentController.model, commands));
+	const code = resources.add(new DesignCodeWidget(container, () => context.runFileOperation(() => documentController.exportDocument({
 		title: localize('sessions.design.exportCode', 'Export code'),
 		filename: 'design.html',
 		extension: 'html',

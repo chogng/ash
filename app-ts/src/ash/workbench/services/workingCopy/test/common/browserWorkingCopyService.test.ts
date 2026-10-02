@@ -8,7 +8,7 @@ import type { IWorkingCopy } from "../../common/workingCopyService.js";
 
 test("BrowserWorkingCopyService indexes and unregisters format-specific copies", () => {
 	using service = new BrowserWorkingCopyService();
-	using copy = new FakeWorkingCopy(URI.file("C:\\project\\paper.ash-academic"));
+	using copy = new FakeWorkingCopy(URI.file("C:/project/paper.ash-academic"));
 	const registered: IWorkingCopy[] = [];
 	const unregistered: IWorkingCopy[] = [];
 	using registeredListener = service.onDidRegister(value => registered.push(value));
@@ -25,8 +25,8 @@ test("BrowserWorkingCopyService indexes and unregisters format-specific copies",
 
 test('BrowserWorkingCopyService publishes every working copy dirty state change', () => {
 	using service = new BrowserWorkingCopyService();
-	using first = new FakeWorkingCopy(URI.file('C:\\project\\first.ts'));
-	using second = new FakeWorkingCopy(URI.file('C:\\project\\second.ts'));
+	using first = new FakeWorkingCopy(URI.file('C:/project/first.ts'));
+	using second = new FakeWorkingCopy(URI.file('C:/project/second.ts'));
 	const changes: boolean[] = [];
 	using listener = service.onDidChangeDirty(() => changes.push(service.hasDirtyWorkingCopies));
 	using firstRegistration = service.register(first);
@@ -42,7 +42,7 @@ test('BrowserWorkingCopyService publishes every working copy dirty state change'
 
 test('BrowserWorkingCopyService reports initially dirty registrations and removal', () => {
 	using service = new BrowserWorkingCopyService();
-	using copy = new FakeWorkingCopy(URI.file('C:\\project\\draft.ts'));
+	using copy = new FakeWorkingCopy(URI.file('C:/project/draft.ts'));
 	copy.setDirty(true);
 	const changes: boolean[] = [];
 	using listener = service.onDidChangeDirty(() => changes.push(service.hasDirtyWorkingCopies));

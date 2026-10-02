@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { Emitter, Event } from "../../../../../base/common/event.js";
+import { DeferredPromise } from '../../../../../base/common/async.js';
+import { h } from '../../../../../base/browser/dom.js';
+import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { isCancellationError } from '../../../../../base/common/errors.js';
 import { URI } from "../../../../../base/common/uri.js";
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
 import { IQuickInputService, type IQuickInputService as IQuickInputServiceContract, type IQuickPick, type IQuickPickItem } from "../../../../../platform/quickinput/common/quickInput.js";
@@ -13,14 +17,19 @@ import { IUntitledTextEditorService } from "../../common/untitledTextEditorServi
 import { CommandService } from "../../../commands/common/commandService.js";
 import { BrowserWorkingCopyService } from "../../../workingCopy/browser/browserWorkingCopyService.js";
 import { IWorkingCopyService, type IWorkingCopy } from "../../../workingCopy/common/workingCopyService.js";
+import { IEditorService } from '../../../editor/common/editorService.js';
+import { ITextModelResourceService, type ITextResourceStore } from '../../../textmodelResolver/common/textModelResourceService.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
 	Node: browserEnvironment.window.Node,
 	Element: browserEnvironment.window.Element,
 	HTMLElement: browserEnvironment.window.HTMLElement,
+	Event: browserEnvironment.window.Event,
+	InputEvent: browserEnvironment.window.InputEvent,
 })) {
 	Object.defineProperty(globalThis, name, {
 		configurable: true,
@@ -28,7 +37,14 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { IEditorPart } = await import("../../../../browser/parts/editor/editorPart.js");
+const { EditorPart, IEditorPart } = await import("../../../../browser/parts/editor/editorPart.js");
+const { BrowserEditorService } = await import('../../../editor/browser/browserEditorService.js');
+const { BrowserTextModelService } = await import('../../../textmodelResolver/browser/browserTextModelService.js');
+const { createTestEditorServices } = await import('../../../../test/common/testEditorServices.js');
+const { createCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
+const { EditorPaneRegistry } = await import('../../../../browser/editor.js');
+const { EditorPaneMatch } = await import('../../../../browser/parts/editor/editorPane.js');
+const { CODE_EDITOR_ID, TextResourceEditor } = await import('../../../../browser/parts/editor/textResourceEditor.js');
 const { NewFileFromTemplateCommandId } = await import("../../../../browser/parts/editor/editorActions.js");
 const { NEW_UNTITLED_FILE_COMMAND_ID } = await import("../../../../contrib/files/browser/fileConstants.js");
 await import("../../../../contrib/files/browser/fileActions.contribution.js");
@@ -50,9 +66,9 @@ test("untitled service creates stable virtual editor identities", () => {
 	assert.equal(second.initialText, "draft");
 	assert.equal(second.languageId, "typescript");
 	assert.equal(service.get(first.resource), first);
-	assert.equal(service.get(URI.file("C:\\project\\main.ts")), undefined);
+	assert.equal(service.get(URI.file("C:/project/main.ts")), undefined);
 	assert.equal(service.isUntitled(first.resource), true);
-	assert.equal(service.isUntitled(URI.file("C:\\project\\main.ts")), false);
+	assert.equal(service.isUntitled(URI.file("C:/project/main.ts")), false);
 });
 
 test("untitled service publishes display-label changes without changing resource identity", () => {
@@ -72,7 +88,7 @@ test("untitled service publishes display-label changes without changing resource
 	assert.equal(editor.label, "Scratch");
 	assert.equal(service.get(editor.resource)?.label, "Scratch");
 	assert.deepEqual(changes, ["input:Scratch", "Scratch"]);
-	assert.equal(service.rename(URI.file("C:\\project\\main.ts"), "Other"), undefined);
+	assert.equal(service.rename(URI.file("C:/project/main.ts"), "Other"), undefined);
 });
 
 test("restored untitled resources are reused and reserve their document numbers", () => {
@@ -128,9 +144,9 @@ test("New Untitled Text Editor opens a compatible text editor input", async () =
 	services.registerInstance(IWorkingCopyService, workingCopies);
 	using untitled = services.createInstance(BrowserUntitledTextEditorService);
 	const opened: Array<{ readonly resource: URI; readonly label?: string; readonly initialText?: string }> = [];
-	const editorPart = { openEditor: async (input: typeof opened[number]) => { opened.push(input); } } as unknown as IEditorPartContract;
+	const editors = { openEditor: async (input: typeof opened[number]) => { opened.push(input); } } as unknown as IEditorService;
 	services.registerInstance(IUntitledTextEditorService, untitled);
-	services.registerInstance(IEditorPart, editorPart);
+	services.registerInstance(IEditorService, editors);
 	using commands = new CommandService(services);
 
 	await commands.executeCommand(NEW_UNTITLED_FILE_COMMAND_ID);
@@ -140,6 +156,125 @@ test("New Untitled Text Editor opens a compatible text editor input", async () =
 	assert.equal(opened[0]?.label, "Untitled-1");
 	assert.equal(opened[0]?.initialText, "");
 });
+
+for (const count of [1, 2, 9]) {
+	test(`New Untitled focuses the final text input after ${count} queued creation commands`, async () => {
+		const container = h(document, 'div');
+		const caller = h(document, 'button', {}, 'New file');
+		document.body.append(caller, container);
+		using cleanup = toDisposable(() => { caller.remove(); container.remove(); });
+		using resources = new DisposableStore();
+		using services = createTestEditorServices(document, undefined, createCodeEditorServices(resources));
+		const firstLoad = new DeferredPromise<void>();
+		const loading = new DeferredPromise<void>();
+		const store: ITextResourceStore = {
+			onDidChange: Event.None,
+			resolve: async request => {
+				if (request.resource.path === '/Untitled-1') {
+					await loading.complete();
+					await firstLoad.p;
+				}
+				return { resource: request.resource, text: request.bootstrapText ?? '', revision: undefined };
+			},
+			save: async () => ({ revision: undefined }),
+		};
+		using models = new BrowserTextModelService(store);
+		services.registerInstance(ITextModelResourceService, models);
+		const registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane({
+			id: CODE_EDITOR_ID,
+			name: 'Code editor',
+			canOpen: () => EditorPaneMatch.Default,
+			create: () => services.createInstance(TextResourceEditor, store, { minimap: { enabled: false } }),
+		});
+		using part = services.createInstance(EditorPart, container, { registry });
+		using editors = new BrowserEditorService(part);
+		services.registerInstance(IEditorPart, part);
+		services.registerInstance(IEditorService, editors);
+		using commands = new CommandService(services);
+		caller.focus();
+		const pending = Array.from({ length: count }, () => commands.executeCommand(NEW_UNTITLED_FILE_COMMAND_ID));
+		await loading.p;
+		assert.equal(document.activeElement, caller);
+		await firstLoad.complete();
+		await Promise.all(pending);
+		const finalInput = container.querySelector<HTMLElement>(`.stanza-editor-input[aria-label="Untitled-${count}"]`);
+		assert.ok(finalInput);
+		assert.deepEqual(part.activeGroup.inputs.map(input => input.label), Array.from({ length: count }, (_, index) => `Untitled-${index + 1}`));
+		assert.equal(document.activeElement, finalInput);
+	});
+}
+
+test('Repeated New Untitled commands preserve every document while the first editor is loading', async () => {
+	using workingCopies = new BrowserWorkingCopyService();
+	using services = new InstantiationService();
+	services.registerInstance(IWorkingCopyService, workingCopies);
+	using untitled = services.createInstance(BrowserUntitledTextEditorService);
+	const firstLoad = new DeferredPromise<void>();
+	const opened: string[] = [];
+	services.registerInstance(IUntitledTextEditorService, untitled);
+	services.registerInstance(IEditorService, { openEditor: async (input: { label: string }) => {
+		opened.push(input.label);
+		if (opened.length === 1) await firstLoad.p;
+	} } as unknown as IEditorService);
+	using commands = new CommandService(services);
+	const requests = Array.from({ length: 3 }, () => commands.executeCommand(NEW_UNTITLED_FILE_COMMAND_ID));
+	const beforeFirstLoad = [...opened];
+	await firstLoad.complete();
+	await Promise.all(requests);
+	assert.deepEqual({ beforeFirstLoad, opened }, { beforeFirstLoad: ['Untitled-1'], opened: ['Untitled-1', 'Untitled-2', 'Untitled-3'] });
+});
+
+test('New Untitled continues opening queued documents after an editor fails', async () => {
+	using workingCopies = new BrowserWorkingCopyService();
+	using services = new InstantiationService();
+	services.registerInstance(IWorkingCopyService, workingCopies);
+	using untitled = services.createInstance(BrowserUntitledTextEditorService);
+	const firstLoad = new DeferredPromise<void>();
+	const opened: string[] = [];
+	services.registerInstance(IUntitledTextEditorService, untitled);
+	services.registerInstance(IEditorService, { openEditor: async (input: { label: string }) => {
+		opened.push(input.label);
+		if (opened.length === 1) await firstLoad.p;
+	} } as unknown as IEditorService);
+	using commands = new CommandService(services);
+	const failed = assert.rejects(commands.executeCommand(NEW_UNTITLED_FILE_COMMAND_ID), /First editor failed/);
+	const second = commands.executeCommand(NEW_UNTITLED_FILE_COMMAND_ID);
+	const beforeFailure = [...opened];
+	await firstLoad.error(new Error('First editor failed'));
+	await Promise.all([failed, second]);
+	assert.deepEqual({ beforeFailure, opened }, { beforeFailure: ['Untitled-1'], opened: ['Untitled-1', 'Untitled-2'] });
+});
+
+for (const boundary of ['workspace reset', 'window disposal'] as const) {
+	test(`New Untitled cancels queued documents after ${boundary}`, async () => {
+		using workingCopies = new BrowserWorkingCopyService();
+		using services = new InstantiationService();
+		services.registerInstance(IWorkingCopyService, workingCopies);
+		using untitled = services.createInstance(BrowserUntitledTextEditorService);
+		const firstLoad = new DeferredPromise<void>();
+		const opened: string[] = [];
+		services.registerInstance(IUntitledTextEditorService, untitled);
+		services.registerInstance(IEditorService, { openEditor: async (input: { label: string }) => {
+			opened.push(input.label);
+			if (opened.length === 1) await firstLoad.p;
+		} } as unknown as IEditorService);
+		using commands = new CommandService(services);
+		const first = commands.executeCommand(NEW_UNTITLED_FILE_COMMAND_ID);
+		const pending = commands.executeCommand(NEW_UNTITLED_FILE_COMMAND_ID);
+		const cancelled = assert.rejects(pending, isCancellationError);
+		if (boundary === 'workspace reset') {
+			untitled.reset();
+			untitled.create();
+			untitled.create();
+		} else {
+			untitled.dispose();
+		}
+		await firstLoad.complete();
+		await Promise.all([first, cancelled]);
+		assert.deepEqual(opened, ['Untitled-1']);
+	});
+}
 
 test("New File from Template opens the selected extension template as an untitled editor", async () => {
 	using workingCopies = new BrowserWorkingCopyService();

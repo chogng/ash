@@ -27,13 +27,13 @@
 	min-height: 28px;
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
 	border-radius: var(--ash-cornerRadius-small);
 	font: inherit;
 }
 
 .ash-sessions-design-properties input:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 
@@ -56,7 +56,7 @@
 	min-height: var(--ash-spacing-size280);
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
 	border-radius: var(--ash-cornerRadius-small);
 	font: inherit;
 }
@@ -68,7 +68,7 @@
 
 .ash-sessions-design-properties textarea:focus-visible,
 .ash-sessions-design-properties select:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 

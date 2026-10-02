@@ -2,6 +2,7 @@ import { mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ElectronApplication, Page } from "@playwright/test";
 import { expect, test } from "../../../automation/test.js";
+import { hasWorkingCopyBackup } from "../../../automation/workingCopyBackups.js";
 
 test('large YAML lockfiles highlight text and minimap without editor interaction', async ({ target, testWorkspace, workbench }, testInfo) => {
 	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Bundled language grammars require the Code App Server product.');
@@ -177,7 +178,7 @@ test('file tab copy and reveal actions target inactive and selected files', asyn
 	await expect(file).toHaveAttribute('aria-selected', 'true');
 	await expect(explorer.locator('.ash-tree')).toBeFocused();
 	await expect(clicked).toHaveAttribute('aria-selected', 'false');
-	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.newUntitledFile();
 	const untitled = group.tabs.filter({ hasText: /Untitled-/u });
 	await expect(untitled).toHaveAttribute('aria-selected', 'true');
 	await clicked.focus();
@@ -740,9 +741,9 @@ test('minimap slider follows its theme color in the running editor', async ({ ta
 	const colors = await slider.evaluate(element => {
 		const minimap = element.parentElement!;
 		const initial = getComputedStyle(element).backgroundColor;
-		minimap.style.setProperty('--ash-minimap-slider-background', '#123456');
+		minimap.style.setProperty('--ash-minimapSlider-background', '#123456');
 		const overridden = getComputedStyle(element).backgroundColor;
-		minimap.style.removeProperty('--ash-minimap-slider-background');
+		minimap.style.removeProperty('--ash-minimapSlider-background');
 		return { initial, overridden, restored: getComputedStyle(element).backgroundColor };
 	});
 	expect(colors.initial).not.toBe('rgba(0, 0, 0, 0)');
@@ -1248,46 +1249,25 @@ test("Code restores an untitled draft and opens the next document separately", a
 
 	const page = workbench.page;
 	const group = workbench.editors.groupAt(0);
-	await page.keyboard.press("ControlOrMeta+N");
+	expect(await hasWorkingCopyBackup(page, "recovered untitled draft")).toBe(false);
+	expect(await page.evaluate(async () => (await indexedDB.databases()).some(database => database.name === "ash-working-copy-backups"))).toBe(false);
+	await workbench.editors.newUntitledFile();
 	const input = group.content.locator(".stanza-editor-input");
-	await expect(input).toBeVisible();
-	await input.focus();
 	await input.type("recovered untitled draft");
 	await expect.poll(() => hasWorkingCopyBackup(page, "recovered untitled draft"), { message: "untitled draft reaches IndexedDB" }).toBe(true);
 
 	await page.reload({ waitUntil: "domcontentloaded" });
-	await expect(page.locator(".ash-workbench")).toBeVisible();
+	await workbench.waitForReady();
 	const restoredTab = group.tabs.filter({ hasText: "Untitled-1" });
 	await expect(restoredTab).toHaveCount(1);
 	await expect(group.content.locator(".stanza-editor-line-text").first()).toContainText("recovered untitled draft");
 
-	await page.keyboard.press("ControlOrMeta+N");
+	await workbench.editors.newUntitledFile();
 	await expect(group.tabs).toHaveCount(2);
 	await expect(group.tabs.filter({ hasText: "Untitled-2" })).toHaveCount(1);
 	await restoredTab.click();
 	await expect(group.content.locator(".stanza-editor-line-text").first()).toContainText("recovered untitled draft");
 });
-
-async function hasWorkingCopyBackup(page: Page, content: string): Promise<boolean> {
-	return page.evaluate(async expectedContent => {
-		const database = await new Promise<IDBDatabase>((resolve, reject) => {
-			const opening = indexedDB.open("ash-working-copy-backups", 1);
-			opening.onsuccess = () => resolve(opening.result);
-			opening.onerror = () => reject(opening.error ?? new Error("Could not inspect working-copy backups"));
-		});
-		try {
-			const records = await new Promise<Array<{ readonly content?: string }>>((resolve, reject) => {
-				const request = database.transaction("backups", "readonly").objectStore("backups").getAll();
-				request.onsuccess = () => resolve(request.result);
-				request.onerror = () => reject(request.error ?? new Error("Could not read working-copy backups"));
-			});
-			return records.some(record => record.content === expectedContent);
-		} finally {
-			database.close();
-		}
-	}, content);
-}
-
 
 test('Code editor scrollbar follows wheel, keyboard and thumb dragging in the desktop window', async ({ target, testWorkspace, workbench }) => {
 	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires a Code workspace');

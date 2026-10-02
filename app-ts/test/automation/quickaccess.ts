@@ -25,6 +25,7 @@ export class QuickAccess {
 		await this.items.filter({ has: this.page.locator('.ash-quick-pick-row-label').getByText(label, { exact: true }) }).click();
 	}
 
+	/** Dispatches a command; callers must await its domain-specific result before another action. */
 	public async runCommand(commandId: string): Promise<void> {
 		await this.open(`>${commandId}`);
 		const commandList = this.page.locator(`[id="${await this.input.getAttribute('aria-controls')}"]`);
